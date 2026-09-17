@@ -1,4 +1,5 @@
 import {
+  applyView,
   BoardTemplateSchema,
   buildRecordSchema,
   effectiveFields,
@@ -227,28 +228,14 @@ export async function listViewRecords(
   const readable = new Set(
     board.fields.filter((f) => canRead(board.role, f.read)).map((f) => f.key),
   );
-  let records: Array<Record<string, unknown> & { id: string }> = rows.map((r) => {
+  const masked = rows.map((r) => {
     const data = r.data as Record<string, unknown>;
     const out: Record<string, unknown> & { id: string } = { id: r.id as string };
     for (const key of Object.keys(data)) if (readable.has(key)) out[key] = data[key];
     return out;
   });
-  for (const f of view.filter) {
-    records = records.filter((rec) => {
-      const v = rec[f.field];
-      if (f.op === "eq") return v === f.value;
-      if (f.op === "neq") return v !== f.value;
-      return Array.isArray(f.value) && f.value.includes(String(v));
-    });
-  }
-  if (view.sort) {
-    const { field, dir } = view.sort;
-    records.sort((a, b) => {
-      const av = String(a[field] ?? "");
-      const bv = String(b[field] ?? "");
-      return dir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
-    });
-  }
+  // One view semantics for server and browser (shared applyView).
+  const records = applyView(view, masked);
   const columns = view.columns.filter((c) => readable.has(c));
   return { view: view.key, columns, records };
 }

@@ -160,3 +160,17 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Facets:** F1 `implemented`; INV-5 and INV-6 groundwork enforced by schema (no-code designer UI is VEOC-10).
 - **Rollback:** revert the VEOC-09 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-10: Board runtime and no-code designer
+
+- **Session:** VEOC-10, executed 2026-09-17 ~06:10 UTC
+- **Starting HEAD:** `d939ce278aac9f546b53e6beb5183de0178da03b`
+- **Files created:** `shared/src/boards/view.ts` (one applyView implementation shared by server and browser so a view can never mean two things; server refactored onto it), `shared/src/boards/diff.ts` (structural template diff; rollback as forward-motion to old content under a new version, history never rewritten), `web/src/boards/RecordForm.tsx` (input view rendered from field definitions; enum controls fed by the dictionary; client validation is the same shared schema the server enforces), `web/src/boards/BoardView.tsx` (display view as a pure function of records, ready for the sync layer to drive), `web/src/boards/Designer.tsx` (structured controls only: fields, enum sources, required, read/write levels, views with column pickers; live diff panel; version bump on save), tests `designer.test.tsx` and `runtime.test.tsx`, `docs/DESIGNER-USABILITY-SCRIPT.md` (the timed ten-minute shelter-board walkthrough for VEOC-39's audit).
+- **Acceptance proven by test:** an administrator builds a working shelter board from nothing through UI interactions alone and the saved output is a valid v1 template with the EDXL-HAVE status enumeration attached; the escape hatch is absent by construction (no textarea, no contenteditable, only text/checkbox/select controls); an invalid draft is refused with a visible reason; editing an existing template shows the structural diff ("added: generator") and bumps the version; the record form submits exactly the valid record and blocks invalid ones with visible errors; the display view filters (closed shelter hidden from the open view), renders labels not keys, and re-renders on record changes; diff reports added/removed/changed; rollback restores content under a new version.
+- **Verification:** `pnpm check` fully green; 82/82 tests across 11 files.
+- **Deferred:** view filter/sort editing in the designer covers columns today, filter-condition editing UI follows with the app shell; browser-level (non-jsdom) E2E arrives with the offline client work (VEOC-21); "live-update" means reactive rendering now, push arrives at VEOC-13 as planned.
+- **Facets:** F1 `implemented` end to end; INV-6 `implemented` (no-code is real and tested).
+- **Rollback:** revert the VEOC-10 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

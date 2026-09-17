@@ -1,0 +1,91 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { STANDARD_TEMPLATES, templateDiff, rollbackDraft } from "@openeoc/shared";
+import { BoardView } from "../BoardView.js";
+import { RecordForm } from "../RecordForm.js";
+
+afterEach(cleanup);
+
+const shelters = STANDARD_TEMPLATES.find((t) => t.key === "shelters")!;
+
+describe("RecordForm (input view)", () => {
+  it("renders enumerated controls from the dictionary and submits a valid record", () => {
+    const onSubmit = vi.fn();
+    render(<RecordForm fields={shelters.fields} onSubmit={onSubmit} />);
+    const status = screen.getByLabelText("Status") as HTMLSelectElement;
+    expect([...status.options].map((o) => o.value)).toContain("evacuating");
+    fireEvent.change(screen.getByLabelText("Shelter"), { target: { value: "Hoopa High Gym" } });
+    fireEvent.change(status, { target: { value: "normal" } });
+    fireEvent.change(screen.getByLabelText("Capacity"), { target: { value: "150" } });
+    fireEvent.change(screen.getByLabelText("Occupancy"), { target: { value: "112" } });
+    fireEvent.click(screen.getByText("Save record"));
+    expect(onSubmit).toHaveBeenCalledWith({
+      name: "Hoopa High Gym",
+      status: "normal",
+      capacity: 150,
+      occupancy: 112,
+    });
+  });
+
+  it("blocks an invalid record with a visible error and no submit", () => {
+    const onSubmit = vi.fn();
+    render(<RecordForm fields={shelters.fields} onSubmit={onSubmit} />);
+    fireEvent.click(screen.getByText("Save record"));
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getAllByRole("alert").length).toBeGreaterThan(0);
+  });
+});
+
+describe("BoardView (display view)", () => {
+  const records = [
+    { id: "1", name: "Hoopa High Gym", status: "normal", capacity: 150, occupancy: 112 },
+    { id: "2", name: "Closed Hall", status: "closed", capacity: 40, occupancy: 0 },
+  ];
+
+  it("applies the view filter and renders labels, not keys", () => {
+    render(<BoardView template={shelters} viewKey="open" records={records} />);
+    expect(screen.getByText("Hoopa High Gym")).toBeTruthy();
+    expect(screen.queryByText("Closed Hall")).toBeNull();
+    expect(screen.getByText("Shelter")).toBeTruthy();
+  });
+
+  it("re-renders when records change (the live loop's rendering half)", () => {
+    const { rerender } = render(
+      <BoardView template={shelters} viewKey="all" records={records} />,
+    );
+    expect(screen.queryByText("New Shelter")).toBeNull();
+    rerender(
+      <BoardView
+        template={shelters}
+        viewKey="all"
+        records={[...records, { id: "3", name: "New Shelter", status: "normal", capacity: 10, occupancy: 1 }]}
+      />,
+    );
+    expect(screen.getByText("New Shelter")).toBeTruthy();
+  });
+});
+
+describe("diff and rollback", () => {
+  it("reports added, removed, and changed structure", () => {
+    const v2 = {
+      ...shelters,
+      version: 2,
+      fields: [
+        ...shelters.fields.filter((f) => f.key !== "pets_accepted"),
+        { ...shelters.fields.find((f) => f.key === "capacity")!, label: "Max capacity" },
+        { key: "generator", label: "Generator", type: "text" as const, required: false, read: "any" as const, write: "member" as const },
+      ],
+    };
+    const diff = templateDiff(shelters, v2);
+    expect(diff.addedFields).toEqual(["generator"]);
+    expect(diff.removedFields).toEqual(["pets_accepted"]);
+    expect(diff.changedFields).toEqual(["capacity"]);
+  });
+
+  it("rollback restores old content under a new version, never rewriting history", () => {
+    const draft = rollbackDraft(shelters, 5);
+    expect(draft.version).toBe(6);
+    expect(draft.fields).toEqual(shelters.fields);
+  });
+});

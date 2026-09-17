@@ -11,3 +11,6 @@ export * from "./design/tokens.js";
 export * from "./design/components.js";
 export * from "./design/layout.js";
 export { Gallery } from "./design/gallery.js";
+export { RecordForm } from "./boards/RecordForm.js";
+export { BoardView } from "./boards/BoardView.js";
+export { Designer } from "./boards/Designer.js";
