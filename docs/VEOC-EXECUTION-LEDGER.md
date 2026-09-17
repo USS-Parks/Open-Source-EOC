@@ -73,3 +73,14 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Facets/requirements:** groundwork for F5, F8, F10, F11, F19, F20 (schemas exist; nothing closed).
 - **Rollback:** revert the VEOC-03 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-04: Architecture decision records and threat model baseline
+
+- **Session:** VEOC-04, executed 2026-09-17 ~03:05 UTC
+- **Starting HEAD:** `79ef36943321a735c40e4f6bdbe85138aca71cfe`
+- **Files created:** `docs/adr/ADR-0001` (Fastify over NestJS/Express/Hono), `ADR-0002` (versioned REST + WebSocket + signed webhooks; GraphQL/gRPC rejected), `ADR-0003` (Yjs CRDT over WebSocket, Postgres as truth, visible conflict surfacing; LWW rejected as silent-loss), `ADR-0004` (QuickJS-in-WASM plugin sandbox with capability-only API; isolated-vm rejected on native-module and browser grounds), `ADR-0005` (single database, jurisdiction_id on every row, RLS as second wall; db-per-tenant rejected), `ADR-0006` (Ed25519 instance identity, human-approved peering, store-and-forward, signature-derived trust; central broker rejected), `ADR-0007` (compose-first, single-node installer, air-gap bundle; Kubernetes-first and SaaS-first rejected); `docs/THREAT-MODEL.md` (assets A1-A6, attacker classes T1-T6, trust boundary table B1-B12 covering every external surface planned in phases B-F, standing adversarial test policy).
+- **Verification:** each ADR states decision, alternatives, and reversal cost; threat model rows cross-checked against roster sessions 07-33 (every session opening a surface maps to a row); style scan clean; no code changes, `pnpm check` unaffected.
+- **Deferred/blockers:** none. Rollback: revert the VEOC-04 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.
