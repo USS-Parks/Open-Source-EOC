@@ -8,6 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "fast-xml-parser": "^5.11.1",
     "zod": "^4.6.5"
   }
 }

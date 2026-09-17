@@ -409,3 +409,17 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred:** cross-jurisdiction/mutual-aid reunification (a guest `tracking:reunify` scope so a partner agency queries whereabouts across a conglomerate) rides the federation work (Phase E) and VEOC-08 guest scoping — within-jurisdiction roles carry the permission model now; scenario-specific minimal capture forms reuse the VEOC-22 form runner at the shell; QR/barcode encoding is a client concern (the tag is the tested handle).
 - **Rollback:** revert the VEOC-25 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-26: CAP 1.2 in and out
+
+- **Session:** VEOC-26, executed 2026-09-17. Phase E opens.
+- **Starting HEAD:** `60475f8968c570158037842832f18ca5aed38e38`
+- **Files created/changed:** `shared/src/cap/model.ts` (CAP 1.2 alert/info/area model and zod schema with the standard's enumerations), `shared/src/cap/validate.ts` (base CAP 1.2 structural validation and, layered on it, the FEMA IPAWS Profile v1.0 checks — the IPAWS code, and per-info expires/effective/senderName/description, a SAME eventCode, and a targeted area), `shared/src/cap/xml.ts` (full-fidelity CAP-namespaced XML serialize and parse via fast-xml-parser, repeatable elements forced to arrays so single and multiple parse identically), `server/migrations/0018_cap.sql` (cap_alerts storing structured form and XML, origin authored/ingested, computed IPAWS eligibility, under RLS), `server/src/cap/service.ts` (author-and-publish from incident context with validation and a notification; full-fidelity ingest of external CAP XML, idempotent on identifier), `server/src/cap/routes.ts` (author, ingest, list, get with an `?format=xml` view), app wiring. fast-xml-parser (MIT) added to shared so authoring and validation run offline in the field client too (INV-3).
+- **Acceptance proven by test (F20 partial, INV-4):** a golden alert validates against base CAP 1.2 and the IPAWS profile, and round-trips model→XML→model with full fidelity (including multiple info blocks, multiple areas, polygons, circles, and SAME geocodes); profile violations (missing IPAWS code, expires, SAME eventCode, targeted area) are each caught; on the server, authoring stamps identifier and sent, validates, stores with XML, and marks IPAWS eligibility (true for a profile-complete alert, false for a valid-but-non-profile one), an invalid alert is 422 with issues, external CAP XML ingests with full fidelity and idempotently and lands as a notification, and unparseable XML is refused.
+- **Verification:** `pnpm check` fully green; 217/217 tests across 37 files; license-scan clean at 300 packages.
+- **Facets:** F20 (native standards interchange) advanced — CAP in and out is live; F20 stays `open` until EDXL (VEOC-27), facility status (VEOC-28), sensor/GIS standards (VEOC-29), and IPAWS transmission (VEOC-31) complete the set.
+- **Deferred:** actual IPAWS-OPEN transmission (COG credentials, the enable-at-will switch, R2) to VEOC-31 — eligibility is computed and stored now; scheduled polling of external CAP endpoints reuses the VEOC-19 feed framework (which already renders CAP as map layers), so this session focused on authoring/publishing and fidelity; the authoring UI rides the app shell.
+- **Rollback:** revert the VEOC-26 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

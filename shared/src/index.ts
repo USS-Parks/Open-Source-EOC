@@ -14,6 +14,9 @@ export * from "./forms/expr.js";
 export * from "./forms/xlsform.js";
 export * from "./forms/runner.js";
 export * from "./damage/summary.js";
+export * from "./cap/model.js";
+export * from "./cap/validate.js";
+export * from "./cap/xml.js";
 
 export const OPENEOC_VERSION = "0.0.0" as const;
 

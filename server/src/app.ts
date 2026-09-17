@@ -22,6 +22,7 @@ import { createGuestGrant, listPositions, provisionJurisdiction, revokeGuestGran
 import { OidcClient, oidcSettingsFromEnv, type OidcSettings } from "./auth/oidc.js";
 import { auditRoutes } from "./audit/routes.js";
 import { boardRoutes } from "./boards/routes.js";
+import { capRoutes } from "./cap/routes.js";
 import { dashboardRoutes } from "./dashboards/routes.js";
 import { damageRoutes } from "./damage/routes.js";
 import { incidentRoutes } from "./incidents/routes.js";
@@ -238,6 +239,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
     trustedTemplateKeys: options.trustedTemplateKeys ?? [],
   });
   auditRoutes(app, sql, authenticate);
+  capRoutes(app, sql, authenticate);
   dashboardRoutes(app, sql, authenticate);
   damageRoutes(app, sql, authenticate);
   feedRoutes(app, sql, authenticate);
