@@ -17,6 +17,9 @@ import {
   signOutPosition,
 } from "./auth/service.js";
 import { checkAllowed, recordFailure, recordSuccess } from "./auth/rate-limit.js";
+import { createGuestGrant, listPositions, provisionJurisdiction, revokeGuestGrant } from "./auth/authz.js";
+import { OidcClient, oidcSettingsFromEnv, type OidcSettings } from "./auth/oidc.js";
+import { withPerson } from "./db/context.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -35,9 +38,25 @@ const CreatePersonBody = z.object({
   jurisdictionId: z.string().uuid(),
   role: z.enum(["admin", "member", "viewer"]),
 });
+const ProvisionBody = z.object({
+  slug: z.string().min(1),
+  name: z.string().min(1),
+  adminPersonId: z.string().uuid(),
+});
+const GuestGrantBody = z.object({
+  personId: z.string().uuid(),
+  scopes: z.array(z.string().min(1)).min(1),
+  expiresAt: z.coerce.date(),
+});
 
-export function buildApp(sql: Sql): FastifyInstance {
+export interface BuildAppOptions {
+  readonly oidc?: OidcSettings | null;
+}
+
+export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: false });
+  const oidcSettings = options.oidc === undefined ? oidcSettingsFromEnv() : options.oidc;
+  const oidc = oidcSettings ? new OidcClient(oidcSettings) : null;
 
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof AuthError) return reply.status(err.status).send({ error: err.message });
@@ -77,9 +96,17 @@ export function buildApp(sql: Sql): FastifyInstance {
   });
 
   app.post("/api/v1/auth/logout", { preHandler: authenticate }, async (req, reply) => {
-    await logout(sql, req.principal.sessionId);
+    await withPerson(sql, req.principal.person.id, (tx) => logout(tx, req.principal.sessionId));
     return reply.send({ ok: true });
   });
+
+  if (oidc) {
+    app.get("/api/v1/auth/oidc/start", async (_req, reply) => reply.send(await oidc.start()));
+    app.get("/api/v1/auth/oidc/callback", async (req, reply) => {
+      const search = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+      return reply.send(await oidc.callback(sql, oidcSettings!.redirectUri + search));
+    });
+  }
 
   app.get("/api/v1/me", { preHandler: authenticate }, async (req, reply) => {
     const { person, position, memberships, sessionId } = req.principal;
@@ -92,8 +119,55 @@ export function buildApp(sql: Sql): FastifyInstance {
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
       const body = CreatePositionBody.parse(req.body);
-      const id = await createPosition(sql, req.principal, jurisdictionId, body.key, body.title);
+      const id = await withPerson(sql, req.principal.person.id, (tx) =>
+        createPosition(tx, req.principal, jurisdictionId, body.key, body.title),
+      );
       return reply.status(201).send({ id });
+    },
+  );
+
+  app.get(
+    "/api/v1/jurisdictions/:jurisdictionId/positions",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const rows = await withPerson(sql, req.principal.person.id, (tx) =>
+        listPositions(tx, req.principal, jurisdictionId),
+      );
+      return reply.send({ positions: rows });
+    },
+  );
+
+  app.post("/api/v1/provision/jurisdictions", { preHandler: authenticate }, async (req, reply) => {
+    const body = ProvisionBody.parse(req.body);
+    const result = await withPerson(sql, req.principal.person.id, (tx) =>
+      provisionJurisdiction(tx, req.principal, body),
+    );
+    return reply.status(201).send(result);
+  });
+
+  app.post(
+    "/api/v1/jurisdictions/:jurisdictionId/guests",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const body = GuestGrantBody.parse(req.body);
+      const id = await withPerson(sql, req.principal.person.id, (tx) =>
+        createGuestGrant(tx, req.principal, { jurisdictionId, ...body }),
+      );
+      return reply.status(201).send({ id });
+    },
+  );
+
+  app.delete(
+    "/api/v1/guests/:grantId",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { grantId } = req.params as { grantId: string };
+      await withPerson(sql, req.principal.person.id, (tx) =>
+        revokeGuestGrant(tx, req.principal, grantId),
+      );
+      return reply.send({ ok: true });
     },
   );
 
@@ -103,7 +177,9 @@ export function buildApp(sql: Sql): FastifyInstance {
     async (req, reply) => {
       const { positionId } = req.params as { positionId: string };
       const body = AssignBody.parse(req.body);
-      await assignPosition(sql, req.principal, positionId, body.personId);
+      await withPerson(sql, req.principal.person.id, (tx) =>
+        assignPosition(tx, req.principal, positionId, body.personId),
+      );
       return reply.status(201).send({ ok: true });
     },
   );
@@ -113,13 +189,15 @@ export function buildApp(sql: Sql): FastifyInstance {
     { preHandler: authenticate },
     async (req, reply) => {
       const { positionId } = req.params as { positionId: string };
-      await signInPosition(sql, req.principal, positionId);
+      await withPerson(sql, req.principal.person.id, (tx) =>
+        signInPosition(tx, req.principal, positionId),
+      );
       return reply.send({ ok: true });
     },
   );
 
   app.post("/api/v1/positions/sign-out", { preHandler: authenticate }, async (req, reply) => {
-    await signOutPosition(sql, req.principal);
+    await withPerson(sql, req.principal.person.id, (tx) => signOutPosition(tx, req.principal));
     return reply.send({ ok: true });
   });
 
@@ -128,8 +206,11 @@ export function buildApp(sql: Sql): FastifyInstance {
     const body = CreatePersonBody.parse(req.body);
     const m = req.principal.memberships.find((x) => x.jurisdictionId === body.jurisdictionId);
     if (!m || m.role !== "admin") throw new AuthError(403, "requires jurisdiction admin");
-    const personId = await createPerson(sql, body);
-    await addMembership(sql, personId, body.jurisdictionId, body.role);
+    const personId = await withPerson(sql, req.principal.person.id, async (tx) => {
+      const id = await createPerson(tx, body);
+      await addMembership(tx, id, body.jurisdictionId, body.role);
+      return id;
+    });
     return reply.status(201).send({ id: personId });
   });
 

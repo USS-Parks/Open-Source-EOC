@@ -4,19 +4,21 @@ import { buildApp } from "../app.js";
 import { resetRateLimits } from "../auth/rate-limit.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
-let sql: Sql;
+let admin: Sql;
+let runtime: Sql;
 let app: FastifyInstance;
 let seed: Awaited<ReturnType<typeof seedIdentity>>;
 
 beforeAll(async () => {
-  sql = await freshDb();
-  seed = await seedIdentity(sql);
-  app = buildApp(sql);
+  ({ admin, runtime } = await freshDb());
+  seed = await seedIdentity(admin);
+  app = buildApp(runtime, { oidc: null });
 });
 
 afterAll(async () => {
   await app.close();
-  await sql.end();
+  await runtime.end();
+  await admin.end();
 });
 
 beforeEach(() => resetRateLimits());
@@ -90,7 +92,7 @@ describe("principal and position login", () => {
   it("refuses sign-in without an active assignment", async () => {
     const { body } = await loginAs("member@example.org", "another-good-password");
     const auth = { authorization: `Bearer ${body.accessToken}` };
-    const [pos] = await sql`select id from positions where key = 'ops_chief'`;
+    const [pos] = await admin`select id from positions where key = 'ops_chief'`;
     const res = await app.inject({
       method: "POST",
       url: `/api/v1/positions/${pos!.id as string}/sign-in`,
@@ -109,7 +111,7 @@ describe("principal and position login", () => {
       payload: { key: "self_made", title: "Self Made Chief" },
     });
     expect(create.statusCode).toBe(403);
-    const [pos] = await sql`select id from positions where key = 'ops_chief'`;
+    const [pos] = await admin`select id from positions where key = 'ops_chief'`;
     const assign = await app.inject({
       method: "POST",
       url: `/api/v1/positions/${pos!.id as string}/assignments`,
@@ -124,7 +126,7 @@ describe("session continuity (INV-8)", () => {
   it("an expired access token renews via resume with position retained", async () => {
     const { body } = await loginAs("admin@example.org", "correct-horse-battery");
     const auth = { authorization: `Bearer ${body.accessToken}` };
-    const [pos] = await sql`select id from positions where key = 'ops_chief'`;
+    const [pos] = await admin`select id from positions where key = 'ops_chief'`;
     await app.inject({
       method: "POST",
       url: `/api/v1/positions/${pos!.id as string}/sign-in`,
@@ -132,7 +134,7 @@ describe("session continuity (INV-8)", () => {
     });
 
     // Force expiry server-side, as a long shift would.
-    await sql`
+    await admin`
       update auth_sessions set access_expires_at = now() - interval '1 minute'
       where id = ${body.sessionId}`;
     const expired = await app.inject({ method: "GET", url: "/api/v1/me", headers: auth });
@@ -162,7 +164,7 @@ describe("session continuity (INV-8)", () => {
     await app.inject({ method: "POST", url: "/api/v1/auth/logout", headers: auth });
     const me = await app.inject({ method: "GET", url: "/api/v1/me", headers: auth });
     expect(me.statusCode).toBe(401);
-    const open = await sql`
+    const open = await admin`
       select count(*)::int as n from position_signins
       where session_id = ${body.sessionId} and signed_out_at is null`;
     expect(open[0]!.n).toBe(0);

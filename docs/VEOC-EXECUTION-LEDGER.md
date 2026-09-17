@@ -129,3 +129,19 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Threat rows exercised:** B11 partially (rate-limited login, no self-assigned authority, session fixation prevented by server-side tokens).
 - **Rollback:** revert the VEOC-07 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-08: Authorization, tenancy, and one-click role provisioning
+
+- **Session:** VEOC-08, executed 2026-09-17 ~04:40 UTC
+- **Starting HEAD:** `ee830181d77a8aac93924c2c4b27f20625caab43`
+- **Files created:** `server/migrations/0002_authz.sql` (person_identities for OIDC, time-boxed scope-limited guest_grants, app_runtime role, security-definer helper functions, RLS policies on positions, assignments, sign-ins, memberships, and grants), `server/src/db/context.ts` (`withPerson`: every principal-scoped service call runs in a transaction with the actor bound for RLS), `server/src/auth/authz.ts` (one-action jurisdiction provisioning with the eight ICS Command/General Staff positions from the dictionary; guest grant issue/revoke; guest-aware position listing), `server/src/auth/oidc.ts` (openid-client code flow with PKCE, server-held state/nonce/verifier, provisioned-persons-only entry, identity linking), tests `authz.test.ts` and `oidc.test.ts` (with a jose-signed fake OIDC issuer serving discovery, JWKS, and tokens).
+- **Files changed:** `service.ts` (Principal gains isInstanceAdmin and guests; principal derivation runs under the person's own RLS context; extracted `createSession` for OIDC reuse), `app.ts` (all principal-scoped routes wrapped in withPerson; new routes: list positions, provision jurisdiction, guest grant/revoke, OIDC start/callback), `helpers.ts` (per-test-file throwaway databases; RLS-bound runtime connection distinct from the superuser assertion connection), `auth.test.ts` (two-connection model).
+- **Dependencies:** openid-client (MIT), jose dev-only (MIT). License scan green, 240 packages.
+- **Two-wall proof (INV-7):** cross-jurisdiction API read 403 at the service wall; the same read as a direct SQL query under the actor's RLS context returns zero rows while the superuser sees eight; a query with no person context sees no tenant rows at all.
+- **Acceptance proven by test:** instance admin provisions a functional jurisdiction (8 ICS positions) in one action and its admin lists them; non-instance-admin provisioning 403; guest with positions:read reads, cannot write, cannot self-grant, and an expired grant fails at both walls; OIDC login works for a provisioned person, links the identity, refuses unknown identities (403) and forged/replayed state (401). 57/57 tests, three consecutive full-suite runs green after fixing a shared-catalog race in test setup (serialized under an advisory lock).
+- **Deferred:** grant expiry is time-boxed now; automatic expiry-at-incident-closure attaches when incidents exist (VEOC-12). Auth-role privilege split (login queries vs general runtime) revisited at VEOC-37.
+- **Facets/requirements:** F16 `implemented`; R3 `implemented` (guest machinery; COP scope extends at VEOC-16/17); threat rows B1/B11 exercised.
+- **Rollback:** revert the VEOC-08 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.
