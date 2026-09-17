@@ -3,6 +3,7 @@ import {
   BoardTemplateSchema,
   buildRecordSchema,
   effectiveFields,
+  geometryFieldKey,
   LocalFieldSchema,
   STANDARD_TEMPLATES,
   type BoardTemplate,
@@ -189,8 +190,9 @@ export async function createRecord(
   checkFieldWrites(board, Object.keys(data));
   const parsed = buildRecordSchema(board.fields).parse(data);
   const [row] = await sql`
-    insert into board_records (board_id, data, created_by, created_by_position)
-    values (${boardId}, ${sql.json(parsed as never)}, ${actor.person.id}, ${actor.position?.id ?? null})
+    insert into board_records (board_id, data, created_by, created_by_position, geom)
+    values (${boardId}, ${sql.json(parsed as never)}, ${actor.person.id},
+            ${actor.position?.id ?? null}, ${geomExpr(sql, board.fields, parsed)})
     returning id`;
   const id = row!.id as string;
   await recordAudit(sql, actor, {
@@ -221,7 +223,8 @@ export async function updateRecord(
   const parsed = buildRecordSchema(board.fields).parse(merged);
   await sql`
     update board_records
-    set data = ${sql.json(parsed as never)}, updated_by = ${actor.person.id}, updated_at = now()
+    set data = ${sql.json(parsed as never)}, updated_by = ${actor.person.id},
+        updated_at = now(), geom = ${geomExpr(sql, board.fields, parsed)}
     where id = ${recordId}`;
   await recordAudit(sql, actor, {
     jurisdictionId: board.jurisdictionId,
@@ -303,6 +306,18 @@ function canRead(role: BoardRole, level: FieldDef["read"]): boolean {
 /** The field set as the acting role is allowed to see it. */
 export function visibleFields(board: EffectiveBoard): FieldDef[] {
   return board.fields.filter((f) => canRead(board.role, f.read));
+}
+
+/** PostGIS expression fragment for a record's geometry field, or null. */
+export function geomExpr(
+  sql: Sql,
+  fields: readonly FieldDef[],
+  data: Record<string, unknown>,
+): never {
+  const key = geometryFieldKey(fields);
+  const g = key ? data[key] : null;
+  // A query fragment; typed as never so it slots into any template position.
+  return (g ? sql`ST_SetSRID(ST_GeomFromGeoJSON(${JSON.stringify(g)}), 4326)` : null) as never;
 }
 
 function checkFieldWrites(board: EffectiveBoard, keys: readonly string[]): void {

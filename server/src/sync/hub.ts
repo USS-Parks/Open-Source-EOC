@@ -3,7 +3,7 @@ import { buildRecordSchema } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import type { Principal } from "../auth/service.js";
-import { getEffectiveBoard, type EffectiveBoard } from "../boards/service.js";
+import { geomExpr, getEffectiveBoard, type EffectiveBoard } from "../boards/service.js";
 import { recordAudit } from "../audit/service.js";
 import { notifyBoardEvent } from "../notify/engine.js";
 
@@ -134,13 +134,14 @@ export class BoardSyncHub {
           await tx`
             update board_records
             set data = ${tx.json(parsed.data as never)}, updated_by = ${actor.person.id},
-                updated_at = now()
+                updated_at = now(), geom = ${geomExpr(tx, entry.board.fields, parsed.data)}
             where id = ${recordId}`;
         } else {
           await tx`
-            insert into board_records (id, board_id, data, created_by, created_by_position)
+            insert into board_records (id, board_id, data, created_by, created_by_position, geom)
             values (${recordId}, ${entry.board.id}, ${tx.json(parsed.data as never)},
-                    ${actor.person.id}, ${actor.position?.id ?? null})`;
+                    ${actor.person.id}, ${actor.position?.id ?? null},
+                    ${geomExpr(tx, entry.board.fields, parsed.data)})`;
         }
         await recordAudit(tx, actor, {
           jurisdictionId: entry.board.jurisdictionId,

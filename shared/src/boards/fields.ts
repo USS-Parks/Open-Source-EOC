@@ -8,7 +8,37 @@ import { allEnums } from "../dictionary/citations.js";
  * template upgrade can never collide with them (INV-5).
  */
 
-export const FIELD_TYPES = ["text", "number", "boolean", "datetime", "enum", "person_ref"] as const;
+export const FIELD_TYPES = [
+  "text",
+  "number",
+  "boolean",
+  "datetime",
+  "enum",
+  "person_ref",
+  "geometry",
+] as const;
+
+/** GeoJSON geometry kinds a geometry field may constrain itself to. */
+export const GEOMETRY_KINDS = ["any", "point", "linestring", "polygon"] as const;
+
+const position = z.tuple([z.number().finite(), z.number().finite()]);
+const GeoJsonGeometrySchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("Point"), coordinates: position }),
+  z.object({ type: z.literal("LineString"), coordinates: z.array(position).min(2) }),
+  z.object({
+    type: z.literal("Polygon"),
+    coordinates: z.array(z.array(position).min(4)).min(1),
+  }),
+]);
+export type GeoJsonGeometry = z.infer<typeof GeoJsonGeometrySchema>;
+
+function geometrySchema(kind: (typeof GEOMETRY_KINDS)[number]): z.ZodType {
+  if (kind === "point") return GeoJsonGeometrySchema.refine((g) => g.type === "Point");
+  if (kind === "linestring")
+    return GeoJsonGeometrySchema.refine((g) => g.type === "LineString");
+  if (kind === "polygon") return GeoJsonGeometrySchema.refine((g) => g.type === "Polygon");
+  return GeoJsonGeometrySchema;
+}
 
 /** Read visibility levels; write authority levels. Guests never write. */
 export const READ_LEVELS = ["any", "member", "admin"] as const;
@@ -23,6 +53,8 @@ export const FieldDefSchema = z
     /** For enum fields: a dictionary enumeration id, or inline values. */
     enumId: z.string().optional(),
     values: z.array(z.string().min(1)).optional(),
+    /** For geometry fields: the GeoJSON kind this field accepts. */
+    geometryKind: z.enum(GEOMETRY_KINDS).optional(),
     read: z.enum(READ_LEVELS).default("any"),
     write: z.enum(WRITE_LEVELS).default("member"),
     maxLength: z.number().int().positive().optional(),
@@ -105,7 +137,14 @@ function fieldValueSchema(f: FieldDef): z.ZodType {
       const values = f.enumId ? (dictionaryValues(f.enumId) ?? []) : (f.values ?? []);
       return z.enum(values as [string, ...string[]]);
     }
+    case "geometry":
+      return geometrySchema(f.geometryKind ?? "any");
   }
+}
+
+/** The key of a board's first geometry field, if any (its map layer). */
+export function geometryFieldKey(fields: readonly FieldDef[]): string | null {
+  return fields.find((f) => f.type === "geometry")?.key ?? null;
 }
 
 /**

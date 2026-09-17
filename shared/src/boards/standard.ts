@@ -85,6 +85,7 @@ export const STANDARD_TEMPLATES: readonly BoardTemplate[] = [
       { key: "reason", label: "Reason", type: "text", required: true },
       { key: "status", label: "Status", type: "enum", values: ["closed", "one_lane", "reopened"], required: true },
       { key: "reopen_estimate", label: "Estimated reopening", type: "datetime" },
+      { key: "location", label: "Location", type: "geometry", geometryKind: "any" },
     ],
     views: [
       { key: "active", title: "Active closures", columns: ["road", "reason", "status"], filter: [{ field: "status", op: "neq", value: "reopened" }] },

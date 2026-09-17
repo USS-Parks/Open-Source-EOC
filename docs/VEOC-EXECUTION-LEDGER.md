@@ -265,3 +265,18 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Facets:** R6 `implemented` (native lane).
 - **Rollback:** revert the VEOC-15A commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-16: Geo-enabled boards and standards-facing publishing
+
+- **Session:** VEOC-16, executed 2026-09-17. Phase C opens.
+- **Starting HEAD:** `5572913ac02dd6ddbd42a7e50e80f6ef99e48406`
+- **Infrastructure:** PostGIS 3 installed into the sandbox cluster (apt); CI service image switched to postgis/postgis:16-3.4.
+- **Files created/changed:** shared field model gains the `geometry` type with strict GeoJSON validation (Point/LineString/Polygon, finite coordinates, optional kind constraint) and a `geometryFieldKey` helper; the standard road_closures template carries an optional location geometry; `server/migrations/0010_geo.sql` (postgis extension, `geom geometry(Geometry,4326)` column on board_records, partial GIST index); both write paths (REST service and sync hub checkpoint) populate `geom` from the record's geometry field via one shared PostGIS expression helper; `server/src/geo/routes.ts` (OGC API - Features read surface: landing, conformance for the Core and GeoJSON classes, collections listing every visible board that has a geometry field, items as GeoJSON FeatureCollection with bbox and limit); `server/src/__tests__/geo.test.ts`.
+- **Acceptance proven by test (F6, INV-4):** a road closure posted through the ordinary board API appears in the OGC items feed on the immediately following request as a valid RFC 7946 Feature with masked properties and its geometry, and the PostGIS column holds `POINT(-123.61 41.29)`; bbox filtering returns only the feature inside the envelope; landing/conformance/collections describe the service; an outsider gets 404 on items and an empty collections list, the same wall as everywhere else; malformed geometry (Infinity coordinates, unknown types) is rejected at the schema.
+- **Verification:** `pnpm check` fully green; 120/120 tests across 18 files.
+- **Deferred:** the interactive COP map over this surface is VEOC-17; real QGIS client consumption is exercised at deployment/pilot (structural GeoJSON conformance asserted now); WFS-T-style writes are out of scope by design (writes go through the board API where validation and audit live).
+- **Facets:** F6 `implemented` (publishing half); INV-4 first native standards surface live.
+- **Rollback:** revert the VEOC-16 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.
