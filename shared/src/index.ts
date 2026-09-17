@@ -1,8 +1,9 @@
 /**
  * @openeoc/shared
  * Schemas and types shared by the server and web packages.
- * The domain data dictionary lands here in roster session VEOC-03.
  */
+
+export * from "./dictionary/index.js";
 
 export const OPENEOC_VERSION = "0.0.0" as const;
 
