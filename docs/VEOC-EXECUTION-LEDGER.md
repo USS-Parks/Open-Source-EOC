@@ -174,3 +174,19 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Facets:** F1 `implemented` end to end; INV-6 `implemented` (no-code is real and tested).
 - **Rollback:** revert the VEOC-10 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-11: Immutable audit and the activity log family
+
+- **Session:** VEOC-11, executed 2026-09-17 ~06:40 UTC
+- **Starting HEAD:** `6c085c2533edf62afdbdc1c75a1aca09aba46182`
+- **Files created:** `server/migrations/0004_audit.sql` (audit_events with monotonic seq, server-side timestamps, and three walls against rewrite: no UPDATE/DELETE privilege for the runtime role, a trigger that rejects UPDATE/DELETE from any role including the owner, and RLS binding appends to the acting person inside their jurisdiction), `server/src/audit/service.ts` (recordAudit with never-caller-supplied attribution; correctAudit as a new event referencing the original; exportChronology producing the ordered, attributed, line-rendered record), `server/src/audit/routes.ts` (chronology GET, corrections POST), `server/src/__tests__/audit.test.ts`.
+- **Files changed:** board record create/update now emit audit events atomically in the same transaction; `app.ts` and server index wiring.
+- **Design note:** the Activity Log and Significant Events boards from the standard library are the UX; their state changes flow into audit_events automatically through the board engine, so there is one chronology store, not two.
+- **Acceptance proven by test:** creation and update events carry person, position (Operations Section Chief captured on the signed-in admin, null on the positionless member), and server timestamps; UPDATE and DELETE on audit_events fail for the runtime role (privilege) and for the owner (trigger message "append-only"), the contract-item-10 proof at both layers; a correction leaves the original byte-identical and references it; the exported chronology reproduces the scripted incident in seq order with the line format `<ISO> Admin (Operations Section Chief): board.record.created`; an outsider sees zero events through the RLS wall.
+- **Verification:** `pnpm check` fully green; 88/88 tests across 12 files.
+- **Facets:** F2 `implemented` (position login was VEOC-07; the immutable chronology completes it); INV-2 `implemented`.
+- **Deferred:** incident_id column exists and populates once incidents arrive (VEOC-12); CSV/PDF packaging of the chronology joins the FEMA paperwork exports at VEOC-23/34.
+- **Rollback:** revert the VEOC-11 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

@@ -11,6 +11,7 @@ import {
 import { verifyPackage } from "./package.js";
 import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
+import { recordAudit } from "../audit/service.js";
 
 export type BoardRole = "admin" | "member" | "viewer" | "guest";
 
@@ -183,7 +184,15 @@ export async function createRecord(
     insert into board_records (board_id, data, created_by, created_by_position)
     values (${boardId}, ${sql.json(parsed as never)}, ${actor.person.id}, ${actor.position?.id ?? null})
     returning id`;
-  return row!.id as string;
+  const id = row!.id as string;
+  await recordAudit(sql, actor, {
+    jurisdictionId: board.jurisdictionId,
+    category: "board.record.created",
+    subjectTable: "board_records",
+    subjectId: id,
+    payload: { board: board.template.key, data: parsed },
+  });
+  return id;
 }
 
 export async function updateRecord(
@@ -205,6 +214,13 @@ export async function updateRecord(
     update board_records
     set data = ${sql.json(parsed as never)}, updated_by = ${actor.person.id}, updated_at = now()
     where id = ${recordId}`;
+  await recordAudit(sql, actor, {
+    jurisdictionId: board.jurisdictionId,
+    category: "board.record.updated",
+    subjectTable: "board_records",
+    subjectId: recordId,
+    payload: { board: board.template.key, patch },
+  });
 }
 
 export interface ViewRecords {

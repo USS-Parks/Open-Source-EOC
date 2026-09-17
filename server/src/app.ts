@@ -19,6 +19,7 @@ import {
 import { checkAllowed, recordFailure, recordSuccess } from "./auth/rate-limit.js";
 import { createGuestGrant, listPositions, provisionJurisdiction, revokeGuestGrant } from "./auth/authz.js";
 import { OidcClient, oidcSettingsFromEnv, type OidcSettings } from "./auth/oidc.js";
+import { auditRoutes } from "./audit/routes.js";
 import { boardRoutes } from "./boards/routes.js";
 import { withPerson } from "./db/context.js";
 
@@ -219,6 +220,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   boardRoutes(app, sql, authenticate, {
     trustedTemplateKeys: options.trustedTemplateKeys ?? [],
   });
+  auditRoutes(app, sql, authenticate);
 
   return app;
 }
