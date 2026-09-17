@@ -205,3 +205,19 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred:** collaboration-space provisioning fires from collab_requested at VEOC-32; guest-grant auto-expiry at incident closure lands when grants gain incident scope (noted since VEOC-08); IAP and 213RR flows build on these positions at VEOC-34/35.
 - **Rollback:** revert the VEOC-12 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-13: Real-time sync and the offline queue
+
+- **Session:** VEOC-13, executed 2026-09-17 (spanning a sandbox pause; local Postgres restarted from preserved data, no state lost)
+- **Starting HEAD:** `71e3b1eb48b24f49a00151e6a3a74d35c3757eeb`
+- **Files created:** `server/migrations/0006_sync.sql` (append-only sync_updates CRDT log under the same three anti-rewrite walls as the audit stream, reusing its trigger; sync_conflicts with admin-resolvable rows), `server/src/sync/hub.ts` (one Y.Doc per board hydrated from the update log and merged with REST-created records; every applied update durably appended, then checkpointed into board_records under the originating principal with audit events), `server/src/sync/routes.ts` (WebSocket endpoint, auth-first frame protocol, state push on join, peer broadcast), `server/src/__tests__/sync.test.ts` (headless offline-capable client, seeded randomized convergence property over 25 interleavings, the scripted 24-hour partition test, conflict surfacing, live peer delivery).
+- **Two design findings fixed during the session, both caught by the partition test:** (1) records are stored as FLAT `recordId/field` keys because nested Y.Maps created concurrently by partitioned clients replace wholesale instead of merging, losing fields; flat keys give field-level merge whatever the creation order; (2) a record missing required fields mid-reconciliation is a normal intermediate that stays in the CRDT log and projects when complete, while VALUE violations (bad enum) are true conflicts, so the checkpoint classifies with a relaxed schema instead of flagging every partial state.
+- **Acceptance proven by test:** two clients edit through a partition (each creating a record and cross-editing the other's), reconnect in either order, converge to identical state including both cross-edits; Postgres truth holds both records attributed to their actual creators; every change carries an attributed audit event; a schema-violating merge surfaces one conflict row plus a sync.conflict audit event and never lands in board_records; live peers receive pushed updates; 25 randomized interleavings converge identically.
+- **Verification:** `pnpm check` fully green; 97/97 tests across 14 files.
+- **Dependencies:** yjs, @fastify/websocket, ws (+types), all MIT; 257 packages license-clean.
+- **Deferred:** client IndexedDB persistence and the PWA wrapper are VEOC-21 (the headless client proves queue semantics); Yjs update-log compaction (checkpoint + vacuum) revisited at VEOC-38 with volume targets; awareness/presence indicators arrive with the app shell.
+- **Facets:** INV-3 core `implemented` for boards; ADR-0003 proven in practice.
+- **Rollback:** revert the VEOC-13 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

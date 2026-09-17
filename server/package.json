@@ -5,14 +5,18 @@
   "license": "Apache-2.0",
   "type": "module",
   "dependencies": {
+    "@fastify/websocket": "^11.3.0",
     "@openeoc/shared": "workspace:*",
     "fastify": "^5.12.5",
     "openid-client": "^6.8.8",
     "postgres": "^3.4.9",
+    "ws": "^8.21.3",
+    "yjs": "^13.6.32",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^22.20.3",
+    "@types/ws": "^8.18.1",
     "jose": "^6.2.12"
   }
 }

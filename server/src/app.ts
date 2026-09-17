@@ -22,6 +22,8 @@ import { OidcClient, oidcSettingsFromEnv, type OidcSettings } from "./auth/oidc.
 import { auditRoutes } from "./audit/routes.js";
 import { boardRoutes } from "./boards/routes.js";
 import { incidentRoutes } from "./incidents/routes.js";
+import { BoardSyncHub } from "./sync/hub.js";
+import { registerSyncRoutes } from "./sync/routes.js";
 import { withPerson } from "./db/context.js";
 
 declare module "fastify" {
@@ -223,6 +225,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   });
   auditRoutes(app, sql, authenticate);
   incidentRoutes(app, sql, authenticate);
+  registerSyncRoutes(app, sql, new BoardSyncHub(sql));
 
   return app;
 }
