@@ -159,12 +159,12 @@ export class BoardSyncHub {
     return { conflicts, committed };
   }
 
+  private async requireBoardAccess(actor: Principal, boardId: string): Promise<EffectiveBoard> {
+    return withPerson(this.sql, actor.person.id, (tx) => getEffectiveBoard(tx, actor, boardId));
+  }
+
   private async entry(actor: Principal, boardId: string): Promise<HubEntry> {
-    // Authorize every open and apply. A cached doc must not skip the wall
-    // for a later caller from another jurisdiction (INV-7).
-    const board = await withPerson(this.sql, actor.person.id, (tx) =>
-      getEffectiveBoard(tx, actor, boardId),
-    );
+    const board = await this.requireBoardAccess(actor, boardId);
     const cached = this.entries.get(boardId);
     if (cached) return cached;
     const doc = new Y.Doc();
