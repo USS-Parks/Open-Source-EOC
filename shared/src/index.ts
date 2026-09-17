@@ -13,6 +13,7 @@ export * from "./sitreps/def.js";
 export * from "./forms/expr.js";
 export * from "./forms/xlsform.js";
 export * from "./forms/runner.js";
+export * from "./damage/summary.js";
 
 export const OPENEOC_VERSION = "0.0.0" as const;
 

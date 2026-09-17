@@ -23,6 +23,7 @@ import { OidcClient, oidcSettingsFromEnv, type OidcSettings } from "./auth/oidc.
 import { auditRoutes } from "./audit/routes.js";
 import { boardRoutes } from "./boards/routes.js";
 import { dashboardRoutes } from "./dashboards/routes.js";
+import { damageRoutes } from "./damage/routes.js";
 import { incidentRoutes } from "./incidents/routes.js";
 import { feedRoutes } from "./feeds/routes.js";
 import { fileRoutes } from "./files/routes.js";
@@ -236,6 +237,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   });
   auditRoutes(app, sql, authenticate);
   dashboardRoutes(app, sql, authenticate);
+  damageRoutes(app, sql, authenticate);
   feedRoutes(app, sql, authenticate);
   formRoutes(app, sql, authenticate);
   sitrepRoutes(app, sql, authenticate);
