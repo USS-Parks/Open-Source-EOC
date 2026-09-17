@@ -19,3 +19,4 @@ export * from "./cop/symbology.js";
 export * from "./cop/layers.js";
 export * from "./cop/feeds.js";
 export { Dashboard } from "./dashboards/Dashboard.js";
+export { BriefingView } from "./sitreps/BriefingView.js";

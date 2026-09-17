@@ -324,3 +324,17 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred:** NWS/IPAWS-specific endpoint catalogs and CAP geocode (SAME/FIPS) resolution to VEOC-31 (IPAWS session); feed layers in the CopMap screen wiring at VEOC-21 app shell (the layer construction and tagging are the tested surface now); WMS/WFS upstream sources considered out of scope for the framework (GeoJSON export exists on the other side).
 - **Rollback:** revert the VEOC-19 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-20: Situation reporting and briefing views
+
+- **Session:** VEOC-20, executed 2026-09-17
+- **Starting HEAD:** `76d49b461d03028bfab6c6040c117b95b1fe9889`
+- **Files created/changed:** `shared/src/sitreps/def.ts` (sitrep content schema: frozen lifelines-current, per-board summaries, significant-event lines), `server/migrations/0013_sitreps.sql` (sitreps table under the audit substrate's three walls: no UPDATE/DELETE grant to the runtime role, the shared immutability trigger, RLS), `server/src/sitreps/service.ts` (lifelines-current as latest-entry-per-lifeline over the jurisdiction's lifelines board with all eight always present; single-lifeline set that leaves the rest untouched; one-action sitrep composition freezing current board state; list and get for the briefing), `server/src/sitreps/routes.ts` (lifelines GET/PUT, sitrep compose/list/get), `web/src/sitreps/BriefingView.tsx` (the Incident Status Dashboard read: lifeline conditions in doctrine colors, board status, significant events, rendered from the archive), tests both sides.
+- **Acceptance proven by test (F8 lifelines/sitrep half):** all eight lifelines return, unknown until entered; setting `water_systems` leaves a prior `energy` entry and its note intact, and re-setting `energy` updates only it (newest entry wins, the rest remembered); unknown lifeline or status is 400; a sitrep composes from live board state in one POST (lifelines frozen at current condition, shelters summarized 2 records = {normal:1, closed:1}, the significant event carried in); after composing, adding a shelter does NOT change the archived sitrep (still 2 records) and the database refuses both UPDATE and DELETE on the sitrep row; list is newest-first and an outsider gets 403; the briefing view renders lifelines, board status, and events for an executive read.
+- **Verification:** `pnpm check` fully green; 156/156 tests across 26 files.
+- **Facets:** F8 lifelines-and-sitrep half delivered; F8 stays `open` in the register until VEOC-23 adds the PDA-outputs half (the register has no partial disposition, and PDA is a distinct large piece). The `lifelines` board from VEOC-18 is now the doctrine-as-schema substrate for lifeline entry.
+- **Deferred:** PDA (preliminary damage assessment) outputs and pre-disaster baseline to VEOC-23; sitrep PDF/print export and PIO statement templating to VEOC-33A (JIC); sitrep composition currently summarizes every non-archived board, incident-scoped composition (via the optional incidentId) narrows once the app shell passes it.
+- **Rollback:** revert the VEOC-20 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.
