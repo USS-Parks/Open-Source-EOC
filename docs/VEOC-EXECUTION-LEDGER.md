@@ -395,3 +395,17 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred:** the check-in kiosk and staffing-dashboard UIs ride the app shell (VEOC-33/41); QR encoding/printing of badges is a client concern (the badge token and scan resolution are the tested surface); shift-coverage gap detection against required incident positions is a thin extension once incident-scoped staffing is wired at VEOC-33.
 - **Rollback:** revert the VEOC-24 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-25: Tracking objects and reunification
+
+- **Session:** VEOC-25, executed 2026-09-17. Phase D closes.
+- **Starting HEAD:** `fecd2ebba8f2d2206f9b68753988da9013df9785`
+- **Files created/changed:** `server/migrations/0017_tracking.sql` (tracked_objects anchored by a scan tag with a separate `restricted` jsonb column, and tracking_events forming the custody chain, under RLS), `server/src/tracking/service.ts` (register an object and open its chain; a scan by tag that any agency appends to; get-object with the restricted column masked for anyone below operational staff — the need-to-know wall, matching the board field-masking pattern; and a reunification query that reads whereabouts by tag or label search and never touches the restricted column), `server/src/tracking/routes.ts`, app wiring. Built on the existing tracking dictionary (kinds, custody states) without narrowing it.
+- **Acceptance proven by test (F11):** a patient registered with restricted health/identity gets a tag; scans at field, transport, receiving facility, shelter, and discharge — each a different agency — form one continuous ordered custody chain under that one tag; operational staff see the restricted details, a viewer (reunification desk) sees the chain and whereabouts but the restricted column is redacted; a reunification query by tag returns the latest custody state and location with no restricted data in the payload (asserted by absence of the name and condition strings), and a label search finds the object; unknown kinds/states are 400, an unknown tag scan is 404, an outsider is 403, and a viewer cannot register or scan.
+- **Verification:** `pnpm check` fully green; 206/206 tests across 35 files; license-scan clean.
+- **Facets:** F11 `implemented` (scan-first tracking objects with a cross-agency custody chain, field-level need-to-know, and reunification).
+- **Deferred:** cross-jurisdiction/mutual-aid reunification (a guest `tracking:reunify` scope so a partner agency queries whereabouts across a conglomerate) rides the federation work (Phase E) and VEOC-08 guest scoping — within-jurisdiction roles carry the permission model now; scenario-specific minimal capture forms reuse the VEOC-22 form runner at the shell; QR/barcode encoding is a client concern (the tag is the tested handle).
+- **Rollback:** revert the VEOC-25 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

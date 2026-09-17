@@ -17,7 +17,7 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 | F8 | FEMA doctrine as schema: Lifelines, PDA outputs | VEOC-20, VEOC-23 | implemented |
 | F9 | Pre-disaster baseline data for damage assessment | VEOC-23 | implemented |
 | F10 | Always-on facility status networks + status queries | VEOC-28 | open |
-| F11 | Scan-first tracking objects + reunification | VEOC-25 | open |
+| F11 | Scan-first tracking objects + reunification | VEOC-25 | implemented |
 | F12 | Incident templates instantiating ICS org + checklists | VEOC-12 | implemented |
 | F13 | Scenario libraries, reference libraries, checklists | VEOC-12 | implemented |
 | F14 | Calm-screen map-first SPA discipline | VEOC-05, VEOC-17 | implemented |
