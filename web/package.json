@@ -6,6 +6,8 @@
   "type": "module",
   "dependencies": {
     "@openeoc/shared": "workspace:*",
+    "maplibre-gl": "^6.10.0",
+    "pmtiles": "^4.5.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

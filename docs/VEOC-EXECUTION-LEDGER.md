@@ -280,3 +280,18 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Facets:** F6 `implemented` (publishing half); INV-4 first native standards surface live.
 - **Rollback:** revert the VEOC-16 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-17: The common operating picture
+
+- **Session:** VEOC-17, executed 2026-09-17
+- **Starting HEAD:** `f86ce7623bfa3df0050c46b13f3a7cdc885f2f05`
+- **Files created/changed:** `web/src/cop/symbology.ts` (NAPSG-aligned status framing: domain enum values map to normal/warning/critical/unknown frames, colorblind-safe status colors per theme, a MapLibre color expression driven by the tagged status), `web/src/cop/layers.ts` (feature tagging, fill/line/circle layer specs per board, the offline-first base style with an optional PMTiles vector basemap underneath), `web/src/cop/CopMap.tsx` (the COP React component: every geo board is a togglable live layer over the OGC items feed, polling now, push riding the app shell at VEOC-21), `web/cop-demo/` (the E2E harness page), `web/src/vite-env.d.ts`, `server/src/__tests__/cop-e2e.test.ts`; maplibre-gl 6 and pmtiles enter web dependencies, playwright-core enters server dev dependencies.
+- **Acceptance proven by test (F6, F14, F19, INV-3):** unit tests pin the symbology mapping, tagging, layer construction, and the base style's zero external references; the real-browser test builds the demo with vite, boots headless Chromium against the live API with every non-local request blocked, and proves the closure renders on the map (`queryRenderedFeatures` on the point layer returns the feature with its critical status tag) and that a closure posted through the field API appears on the rendered map inside the 5-second budget, with zero external network requests observed.
+- **Verification:** `pnpm check` fully green; 128/128 tests across 20 files.
+- **Defect found and fixed (the whole session's fight):** MapLibre v6 resolves its web worker from a sibling URL of the executing bundle, so under any bundler the worker request 404s, the dispatcher waits forever, and the map silently never loads a single tile: source object populated, layers present, canvas black. Every deployment would have shipped a dead map. The fix routes the worker through the bundler (`?worker&url` emit plus `setWorkerUrl`) in the one place maps are constructed. The E2E test is the standing regression guard: a broken worker setup fails it in seconds. An earlier diagnosis blamed headless GPU rasterization; that was wrong, and the browser test was almost weakened to accommodate the exact bug it existed to catch.
+- **Facets:** F6 `implemented` end to end (field-to-COP loop proven in a real browser); F14 `implemented`; F19 `implemented` (status framing; the full symbol set grows with F8 at VEOC-20); register drift corrected (dispositions declared by earlier receipts now reflected in the table).
+- **Deferred:** vector basemap packaging for deployments (PMTiles wiring is live behind a URL) to VEOC-21/deploy; sensor and drone feeds to VEOC-19; Lifelines overlays to VEOC-20.
+- **Rollback:** revert the VEOC-17 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

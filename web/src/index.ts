@@ -14,3 +14,6 @@ export { Gallery } from "./design/gallery.js";
 export { RecordForm } from "./boards/RecordForm.js";
 export { BoardView } from "./boards/BoardView.js";
 export { Designer } from "./boards/Designer.js";
+export { CopMap } from "./cop/CopMap.js";
+export * from "./cop/symbology.js";
+export * from "./cop/layers.js";
