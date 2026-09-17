@@ -381,3 +381,17 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred:** real GIS parcel-roll ingestion (shapefile/GeoJSON parcel import) to pilot — the row shape, upsert, and CSV pipeline are fixed and tested now; PA category work-type cost tracking (categories A–G) is a thin extension of the same aggregation when a jurisdiction needs PA project worksheets; the field-assessment and public-report UIs ride the app shell (VEOC-33/41); population and the PA per-capita indicator are request inputs (FEMA sets the indicator annually) rather than hardcoded.
 - **Rollback:** revert the VEOC-23 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-24: Check-in, staffing, and scheduling
+
+- **Session:** VEOC-24, executed 2026-09-17
+- **Starting HEAD:** `aeae317c835853858cbc78adbb6fa74a4452f618`
+- **Files created/changed:** `server/migrations/0016_staffing.sql` (badges, staff_checkins with a `client_checkin_id` for offline idempotence, and shifts, all under RLS), `server/src/staffing/service.ts` (badge issue; check-in bound to a position, idempotent on the client id and refusing a second open check-in for the same person+position, feeding the activity log; scan check-in resolving the person from a badge; check-out; shift scheduling with same-position and same-person overlap conflict detection; and a live staffing summary of on-duty, vacancies, and upcoming shifts), `server/src/staffing/routes.ts`, app wiring.
+- **Acceptance proven by test (supports F2, R4):** a member checks in to a position, shows on the staffing summary as on duty while other positions read vacant, and the check-in lands in the activity log; check-out returns the position to vacant; a badge scan checks the person in, and a replayed offline scan with the same client id reconciles to exactly one row (the offline path), while an unknown badge is 401; overlapping shifts for the same position or the same person are refused 409, back-to-back shifts are allowed, and a shift that ends before it starts is 400.
+- **Verification:** `pnpm check` fully green; 200/200 tests across 34 files; license-scan clean.
+- **Facets:** no dedicated register row; reinforces F2 (position-bound activity logging) and R4 (fluid Command and General Staff work) — dispositions unchanged, recorded here.
+- **Deferred:** the check-in kiosk and staffing-dashboard UIs ride the app shell (VEOC-33/41); QR encoding/printing of badges is a client concern (the badge token and scan resolution are the tested surface); shift-coverage gap detection against required incident positions is a thin extension once incident-scoped staffing is wired at VEOC-33.
+- **Rollback:** revert the VEOC-24 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

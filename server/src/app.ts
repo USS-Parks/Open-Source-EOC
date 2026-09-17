@@ -29,6 +29,7 @@ import { feedRoutes } from "./feeds/routes.js";
 import { fileRoutes } from "./files/routes.js";
 import { formRoutes } from "./forms/routes.js";
 import { sitrepRoutes } from "./sitreps/routes.js";
+import { staffingRoutes } from "./staffing/routes.js";
 import { BlobStore } from "./files/service.js";
 import { geoRoutes } from "./geo/routes.js";
 import { messagingRoutes } from "./messaging/routes.js";
@@ -241,6 +242,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   feedRoutes(app, sql, authenticate);
   formRoutes(app, sql, authenticate);
   sitrepRoutes(app, sql, authenticate);
+  staffingRoutes(app, sql, authenticate);
   incidentRoutes(app, sql, authenticate);
   notifyRoutes(app, sql, authenticate);
   messagingRoutes(app, sql, authenticate);
