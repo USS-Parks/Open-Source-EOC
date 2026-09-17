@@ -158,10 +158,13 @@ describe("direct threads (R6, no external backend)", () => {
     const otherAdminId = await createPerson(admin, {
       email: "resighini-admin@example.org",
       displayName: "Resighini Admin",
-      password: "resighini-admin-1",
+      password: "resighini-admin-pass1",
     });
     await addMembership(admin, otherAdminId, otherJurisdiction, "admin");
-    const otherAdminToken = await tokenFor("resighini-admin@example.org", "resighini-admin-1");
+    const otherAdminToken = await tokenFor(
+      "resighini-admin@example.org",
+      "resighini-admin-pass1",
+    );
     const foreignIncident = await app.inject({
       method: "POST",
       url: `/api/v1/jurisdictions/${otherJurisdiction}/incidents`,
