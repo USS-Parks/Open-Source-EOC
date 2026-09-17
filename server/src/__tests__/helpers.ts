@@ -32,11 +32,13 @@ export async function freshDb(): Promise<TestDb> {
   await bootstrap`select pg_advisory_lock(421)`;
   try {
     await bootstrap.unsafe(`create database ${dbName}`);
-    await bootstrap.unsafe(`alter role app_runtime login password '${RUNTIME_TEST_PASSWORD}'`);
     admin = url
       ? connect({ url: withUrlParts(url, { database: dbName }) })
       : connect({ database: dbName });
+    // Migrations create the app_runtime role (0002); the password can only
+    // be set after they have run. A fresh CI cluster proves the order.
     await migrate(admin, MIGRATIONS);
+    await bootstrap.unsafe(`alter role app_runtime login password '${RUNTIME_TEST_PASSWORD}'`);
   } finally {
     await bootstrap`select pg_advisory_unlock(421)`;
     await bootstrap.end();
