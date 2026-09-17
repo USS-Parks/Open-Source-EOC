@@ -310,3 +310,17 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred:** dashboard definition UI (no-code designer parity) rides VEOC-41 polish; per-widget refresh over Yjs awareness is unnecessary while snapshots are cheap; briefing view composition is VEOC-20.
 - **Rollback:** revert the VEOC-18 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-19: Live feeds and sensor ingestion
+
+- **Session:** VEOC-19, executed 2026-09-17
+- **Starting HEAD:** `39122f202ab78ac7bbfe7cd98b2012b346179e28`
+- **Files created/changed:** `server/migrations/0012_feeds.sql` (feeds + feed_items with RLS; a documented server-internal scheduler lane lets the process list due feeds while every actual poll runs under the feed creator's authority), `server/src/feeds/parse.ts` (CAP 1.2 subset with lat,lon polygon/circle handling, GeoRSS points, Cursor-on-Target events, GeoJSON collections; anything unparseable throws so it alarms instead of yielding a quiet empty), `server/src/feeds/service.ts` (poll and push ingestion, bounded per-target track history for position streams, health with staleness, the failure alarm as notification + audit + counters while the feed stays enabled), `server/src/feeds/routes.ts` (CRUD, poll-now, GeoJSON items with provenance and staleness on every feature, token-authenticated push endpoint taking XML or JSON), `principalForPerson` in the auth service (session-less principal for server-internal acts), `web/src/cop/feeds.ts` (feed layer tagging: stale features drop to the unknown frame whatever their severity claimed, with source and human age on every feature; layer specs mirror board layers), tests both sides. fast-xml-parser (MIT) enters server dependencies.
+- **Acceptance proven by test (F18):** a simulated NWS CAP flood warning polls in and renders as a polygon layer carrying source, severity, and freshness; a simulated drone pushes two CoT positions through the token wall and renders as ONE aircraft at its latest position with a chronological track; a feed past its freshness window flags stale at the feed and feature level, and the web tagging forces stale features to the unknown frame; a 500 from the source marks the feed, raises a notification and an audit event, leaves the feed enabled, and the next good poll clears the flags; an HTML maintenance page is a parse failure, not an empty success; the scheduler polls due feeds under their creators' authority and the interval gates the next round; members read feed layers, outsiders cannot; wrong or missing push tokens are 401.
+- **Verification:** `pnpm check` fully green; 149/149 tests across 24 files.
+- **Facets:** F18 `implemented`; F19 symbology extended to feed provenance.
+- **Deferred:** NWS/IPAWS-specific endpoint catalogs and CAP geocode (SAME/FIPS) resolution to VEOC-31 (IPAWS session); feed layers in the CopMap screen wiring at VEOC-21 app shell (the layer construction and tagging are the tested surface now); WMS/WFS upstream sources considered out of scope for the framework (GeoJSON export exists on the other side).
+- **Rollback:** revert the VEOC-19 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

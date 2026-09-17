@@ -17,4 +17,5 @@ export { Designer } from "./boards/Designer.js";
 export { CopMap } from "./cop/CopMap.js";
 export * from "./cop/symbology.js";
 export * from "./cop/layers.js";
+export * from "./cop/feeds.js";
 export { Dashboard } from "./dashboards/Dashboard.js";

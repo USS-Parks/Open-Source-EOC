@@ -172,6 +172,39 @@ export async function principalFromToken(sql: Sql, token: string): Promise<Princ
   }) as Promise<Principal>;
 }
 
+/**
+ * Session-less principal for server-internal acts that run AS a person
+ * (scheduled feed polls execute under the feed creator's authority). No
+ * auth session exists; everything else derives exactly as for a login.
+ */
+export async function principalForPerson(sql: Sql, personId: string): Promise<Principal> {
+  return sql.begin(async (tx) => {
+    await tx`select set_config('app.person_id', ${personId}, true)`;
+    const [person] = await tx`
+      select id, email, display_name, disabled, is_instance_admin
+      from persons where id = ${personId}`;
+    if (!person || person.disabled) throw new AuthError(401, "person unavailable");
+    const memberships = await tx`
+      select jurisdiction_id, role from jurisdiction_memberships
+      where person_id = ${personId}`;
+    return {
+      sessionId: "system",
+      person: {
+        id: personId,
+        email: person.email as string,
+        displayName: person.display_name as string,
+      },
+      position: null,
+      memberships: memberships.map((m) => ({
+        jurisdictionId: m.jurisdiction_id as string,
+        role: m.role as string,
+      })),
+      isInstanceAdmin: Boolean(person.is_instance_admin),
+      guests: [],
+    } satisfies Principal;
+  }) as Promise<Principal>;
+}
+
 export async function createPosition(
   sql: Sql,
   actor: Principal,

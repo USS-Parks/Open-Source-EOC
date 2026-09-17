@@ -24,7 +24,7 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 | F15 | Per-incident auto-provisioned collaboration space | VEOC-32, VEOC-33 | open |
 | F16 | One-click role-based provisioning; ten-minute viewer path | VEOC-08, VEOC-41 | open |
 | F17 | Daily-ops usability against skill decay | VEOC-05, VEOC-41 | open |
-| F18 | Sensor and drone live feeds into the COP | VEOC-19 | open |
+| F18 | Sensor and drone live feeds into the COP | VEOC-19 | implemented |
 | F19 | NAPSG/DHS incident symbology shipped | VEOC-17 | implemented |
 | F20 | Native standards interchange | VEOC-26..29, VEOC-31 | open |
 
