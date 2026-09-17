@@ -1,0 +1,56 @@
+#!/bin/sh
+# commit-msg hook for Open-Source-EOC.
+# Enforces the commit hygiene canon (Basho Parks, 2026-09-17):
+#   1. No co-authorship trailers.
+#   2. No AI attribution, tool signatures, or session links.
+#   3. Every commit message ends with the footer: Copyright Basho Parks - <year>
+#      (appended automatically with the current year when missing).
+# Activate once per clone: git config core.hooksPath .githooks
+
+set -eu
+
+MSG_FILE="$1"
+FOOTER_RE='^Copyright Basho Parks - [0-9][0-9][0-9][0-9]$'
+SCISSORS_RE='^# -+ >8 -+'
+
+# Message body as git will keep it: comment lines and any verbose-diff
+# scissors section do not count.
+clean_message() {
+    awk '
+        /^# -+ >8 -+/ { exit }
+        /^#/ { next }
+        { print }
+    ' "$MSG_FILE"
+}
+
+# 1) Reject co-authorship trailers.
+if clean_message | grep -qiE '^[[:space:]]*Co-Authored-By[[:space:]]*:'; then
+    echo "commit-msg: rejected. Co-authorship trailers are not allowed in this repository." >&2
+    echo "commit-msg: remove the Co-Authored-By line and commit again." >&2
+    exit 1
+fi
+
+# 2) Reject AI attribution and artifact noise.
+if clean_message | grep -qiE 'generated (with|by).*(claude|copilot|chatgpt|gpt|gemini|cursor|ai)|claude\.ai/|claude\.com/|anthropic\.com|Claude-Session[[:space:]]*:|Signed-off-by:.*noreply@anthropic|🤖'; then
+    echo "commit-msg: rejected. AI attribution or tool-signature noise found in the message." >&2
+    echo "commit-msg: commit messages here are plain language plus the copyright footer, nothing else." >&2
+    exit 1
+fi
+
+# 3) Require the authorship footer; append with the current year when absent.
+if ! clean_message | grep -qE "$FOOTER_RE"; then
+    YEAR=$(date +%Y)
+    SCISSORS_LINE=$(grep -nE "$SCISSORS_RE" "$MSG_FILE" | head -n1 | cut -d: -f1 || true)
+    if [ -n "${SCISSORS_LINE:-}" ]; then
+        # Insert the footer above the scissors section so git cleanup keeps it.
+        TMP_FILE="${MSG_FILE}.footer.tmp"
+        head -n "$((SCISSORS_LINE - 1))" "$MSG_FILE" > "$TMP_FILE"
+        printf '\nCopyright Basho Parks - %s\n' "$YEAR" >> "$TMP_FILE"
+        tail -n "+$SCISSORS_LINE" "$MSG_FILE" >> "$TMP_FILE"
+        mv "$TMP_FILE" "$MSG_FILE"
+    else
+        printf '\nCopyright Basho Parks - %s\n' "$YEAR" >> "$MSG_FILE"
+    fi
+fi
+
+exit 0
