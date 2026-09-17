@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
+import websocket from "@fastify/websocket";
 import { z } from "zod";
 import type { Sql } from "./db/client.js";
 import {
@@ -21,6 +22,7 @@ import { createGuestGrant, listPositions, provisionJurisdiction, revokeGuestGran
 import { OidcClient, oidcSettingsFromEnv, type OidcSettings } from "./auth/oidc.js";
 import { auditRoutes } from "./audit/routes.js";
 import { boardRoutes } from "./boards/routes.js";
+import { dashboardRoutes } from "./dashboards/routes.js";
 import { incidentRoutes } from "./incidents/routes.js";
 import { fileRoutes } from "./files/routes.js";
 import { BlobStore } from "./files/service.js";
@@ -66,6 +68,7 @@ export interface BuildAppOptions {
 
 export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: false });
+  void app.register(websocket);
   const oidcSettings = options.oidc === undefined ? oidcSettingsFromEnv() : options.oidc;
   const oidc = oidcSettings ? new OidcClient(oidcSettings) : null;
 
@@ -229,6 +232,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
     trustedTemplateKeys: options.trustedTemplateKeys ?? [],
   });
   auditRoutes(app, sql, authenticate);
+  dashboardRoutes(app, sql, authenticate);
   incidentRoutes(app, sql, authenticate);
   notifyRoutes(app, sql, authenticate);
   messagingRoutes(app, sql, authenticate);

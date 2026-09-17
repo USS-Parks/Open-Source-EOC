@@ -15,6 +15,7 @@ describe("standard board library (F1: boards as data)", () => {
       "resource_request",
       "shelters",
       "road_closures",
+      "lifelines",
       "sign_in_out",
       "situation_report",
       "press_releases",

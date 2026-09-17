@@ -295,3 +295,18 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred:** vector basemap packaging for deployments (PMTiles wiring is live behind a URL) to VEOC-21/deploy; sensor and drone feeds to VEOC-19; Lifelines overlays to VEOC-20.
 - **Rollback:** revert the VEOC-17 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-18: Dashboards without the join trap
+
+- **Session:** VEOC-18, executed 2026-09-17
+- **Starting HEAD:** `3a8244c0786e1c664a7954b46339c3b4b0e37386`
+- **Files created/changed:** `shared/src/dashboards/def.ts` (dashboard definitions as versioned templates: tile, chart, status, and list widgets bound to board TEMPLATE keys with jsonb filters; snapshot result types; the standard `eoc_status` dashboard), a `lifelines` standard board template (lifeline + condition enums straight from the FEMA dictionary, newest entry per lifeline is current), `server/migrations/0011_dashboards.sql` (dashboard_templates and dashboards tables under the same RLS shape as boards), `server/src/events/bus.ts` (in-process post-commit board event bus; REST and sync writes both publish), `server/src/dashboards/service.ts` (every widget is one server-side SQL aggregate under the caller's RLS context; latest-per-group via a window function; list columns masked by field readability; a widget whose board is absent reports itself missing instead of failing the picture), `server/src/dashboards/routes.ts` (REST plus a WebSocket stream that pushes a debounced recomputed snapshot on every bound-board change), `web/src/dashboards/Dashboard.tsx` (renders the snapshot: tiles with threshold levels, bar chart, lifeline status grid with doctrine colors, record lists; no fetching of raw rows, ever), tests both sides. The @fastify/websocket plugin registration moved from the sync routes to the app root so multiple WS surfaces share it.
+- **Acceptance proven by test (AR6, R-none, INV-8):** a lifelines status dashboard over three related boards (lifelines, shelters, road closures) computes entirely server-side in one snapshot: closed-road tile with thresholds, shelters-by-status chart, latest-condition-per-lifeline status widget (a later energy entry supersedes the earlier one while all history rows remain), filtered closure list; a field edit pushes a recomputed snapshot over the stream inside a 2-second budget (measured); definitions export byte-equal, re-import under a new key, and stand up in a second jurisdiction where a missing board yields a marked-missing widget, not a failure; template registration is instance-admin gated; an outsider gets 404.
+- **Verification:** `pnpm check` fully green; 136/136 tests across 22 files.
+- **Defect found and fixed:** parameterized `DISTINCT ON` expressions cannot match the ORDER BY syntactically under a driver that numbers each interpolation, so latest-per-group uses `row_number()`; jsonb-typed filter equality misbehaved under parameter type inference, so filters compare the field's text projection, proven by test.
+- **Facets:** AR6 partially discharged (the join-poor-dashboard half; session-timeout and free-text-drift halves remain with their sessions); groundwork for F8 (VEOC-20 builds lifelines entry UX on the new board and widgets).
+- **Deferred:** dashboard definition UI (no-code designer parity) rides VEOC-41 polish; per-widget refresh over Yjs awareness is unnecessary while snapshots are cheap; briefing view composition is VEOC-20.
+- **Rollback:** revert the VEOC-18 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

@@ -93,6 +93,20 @@ export const STANDARD_TEMPLATES: readonly BoardTemplate[] = [
     ],
   }),
   t({
+    key: "lifelines",
+    version: 1,
+    title: "Community Lifelines",
+    description: "Lifeline condition entries; the newest entry per lifeline is current.",
+    fields: [
+      { key: "lifeline", label: "Lifeline", type: "enum", enumId: "lifelines.lifelines", required: true },
+      { key: "status", label: "Condition", type: "enum", enumId: "lifelines.status", required: true },
+      { key: "note", label: "Note", type: "text" },
+    ],
+    views: [
+      { key: "all", title: "All entries", columns: ["lifeline", "status", "note"] },
+    ],
+  }),
+  t({
     key: "sign_in_out",
     version: 1,
     title: "Sign In/Out",

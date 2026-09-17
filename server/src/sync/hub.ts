@@ -5,7 +5,8 @@ import { withPerson } from "../db/context.js";
 import type { Principal } from "../auth/service.js";
 import { geomExpr, getEffectiveBoard, type EffectiveBoard } from "../boards/service.js";
 import { recordAudit } from "../audit/service.js";
-import { notifyBoardEvent } from "../notify/engine.js";
+import { notifyBoardEvent, type BoardEvent } from "../notify/engine.js";
+import { publishBoardEvent } from "../events/bus.js";
 
 /**
  * The board sync hub (ADR-0003). One Y.Doc per board; the durable state is
@@ -80,7 +81,7 @@ export class BoardSyncHub {
     for (const fn of entry.subscribers) fn(update, originSession);
     // Post-commit notification fan-out for sync-originated changes.
     for (const c of committed) {
-      await notifyBoardEvent(this.sql, actor, {
+      const event: BoardEvent = {
         jurisdictionId: entry.board.jurisdictionId,
         boardId: entry.board.id,
         boardKey: entry.board.template.key,
@@ -88,7 +89,9 @@ export class BoardSyncHub {
         event: c.existing ? "record.updated" : "record.created",
         record: after.get(c.recordId)!,
         previous: before.get(c.recordId),
-      });
+      };
+      await notifyBoardEvent(this.sql, actor, event);
+      publishBoardEvent(event);
     }
     return { seq: Number(row!.seq), conflicts };
   }

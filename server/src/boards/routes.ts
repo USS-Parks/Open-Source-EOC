@@ -2,7 +2,8 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
-import { notifyBoardEvent } from "../notify/engine.js";
+import { notifyBoardEvent, type BoardEvent } from "../notify/engine.js";
+import { publishBoardEvent } from "../events/bus.js";
 import {
   addLocalField,
   createBoard,
@@ -105,14 +106,16 @@ export function boardRoutes(
       createRecord(tx, req.principal, boardId, data),
     );
     // Post-commit fan-out: delivery never runs inside the mutating tx.
-    await notifyBoardEvent(sql, req.principal, {
+    const event: BoardEvent = {
       jurisdictionId: result.jurisdictionId,
       boardId,
       boardKey: result.boardKey,
       recordId: result.id,
       event: "record.created",
       record: result.data,
-    });
+    };
+    await notifyBoardEvent(sql, req.principal, event);
+    publishBoardEvent(event);
     return reply.status(201).send({ id: result.id });
   });
 
@@ -125,7 +128,7 @@ export function boardRoutes(
       const result = await withPerson(sql, req.principal.person.id, (tx) =>
         updateRecord(tx, req.principal, boardId, recordId, patch),
       );
-      await notifyBoardEvent(sql, req.principal, {
+      const event: BoardEvent = {
         jurisdictionId: result.jurisdictionId,
         boardId,
         boardKey: result.boardKey,
@@ -133,7 +136,9 @@ export function boardRoutes(
         event: "record.updated",
         record: result.data,
         previous: result.previous,
-      });
+      };
+      await notifyBoardEvent(sql, req.principal, event);
+      publishBoardEvent(event);
       return reply.send({ ok: true });
     },
   );

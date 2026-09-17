@@ -1,5 +1,4 @@
 import type { FastifyInstance } from "fastify";
-import websocket from "@fastify/websocket";
 import type { WebSocket } from "ws";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
@@ -19,7 +18,6 @@ const UpdateMessage = z.object({ type: z.literal("update"), update: z.string().m
  *   server -> {type:"error", error}         then close, on any failure
  */
 export function registerSyncRoutes(app: FastifyInstance, sql: Sql, hub: BoardSyncHub): void {
-  void app.register(websocket);
   void app.register(async (scoped) => {
     scoped.get("/api/v1/sync/boards/:boardId", { websocket: true }, (socket: WebSocket, req) => {
     const { boardId } = req.params as { boardId: string };
