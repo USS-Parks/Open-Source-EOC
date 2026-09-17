@@ -39,6 +39,11 @@ fi
 
 # 3) Require the authorship footer; append with the current year when absent.
 if ! clean_message | grep -qE "$FOOTER_RE"; then
+    if [ -n "${COMMIT_MSG_VERIFY:-}" ]; then
+        # Verify-only mode (CI): a missing footer is a failure, not a fix-up.
+        echo "commit-msg: rejected. Missing authorship footer: Copyright Basho Parks - <year>." >&2
+        exit 1
+    fi
     YEAR=$(date +%Y)
     SCISSORS_LINE=$(grep -nE "$SCISSORS_RE" "$MSG_FILE" | head -n1 | cut -d: -f1 || true)
     if [ -n "${SCISSORS_LINE:-}" ]; then
