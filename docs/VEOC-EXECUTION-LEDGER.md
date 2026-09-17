@@ -250,3 +250,18 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred:** multipart streaming upload replaces base64 JSON with the app shell (VEOC-21); storage quota accounting per jurisdiction at VEOC-38; attachment rendering never happens server-side by policy (B10), enforced by absence.
 - **Rollback:** revert the VEOC-15 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-15A: Native private and group messaging
+
+- **Session:** VEOC-15A, executed 2026-09-17
+- **Starting HEAD:** `4a7694d707633a870571af323efea16545b1ef7c`
+- **Files created:** `server/migrations/0009_messaging.sql` (threads with person AND position members; append-only messages with a unique client-message index for offline idempotence; jurisdiction_settings holding retention days and the incident-record flag; participation resolves at read time through active position assignments), `server/src/messaging/service.ts` (direct/group threads, idempotent posting, retention-windowed reads, thread export as record lines, admin settings), `server/src/messaging/routes.ts`, `server/src/__tests__/messaging.test.ts`.
+- **Acceptance proven by test (R6):** two people message with no collaboration backend configured anywhere, and a non-participant (even an admin) cannot post into their direct thread; a message to the Operations Section Chief seat reaches the current holder, and after a shift change the new holder reads the full seat history while the old holder loses the thread entirely (RLS hides it); a retried client message id lands exactly one row (the offline queue's idempotence); messages cannot be edited by anyone including the table owner; incident-thread traffic lands in the chronology as message.sent events by default, stays out when the jurisdiction turns the records flag off, and exports as ordered attributed lines; the retention window hides expired messages from reads while destruction remains a separate out-of-band records act (rows persist).
+- **Verification:** `pnpm check` fully green; 115/115 tests across 17 files.
+- **Defect found and fixed:** Postgres applies SELECT policies to INSERT..RETURNING, so thread creation failed before the creator's member row existed; creators now have standing read on threads they created, which the operational-record posture wants anyway. (A first debug attempt asserted nothing and looked green; noted as a reminder that such a test proves nothing.)
+- **Design notes:** live push for messages rides the app shell at VEOC-21 (the since-cursor endpoint plus idempotent posting already gives offline-first semantics); VEOC-32 adapters remain the path to full Teams-parity chat per the roster.
+- **Facets:** R6 `implemented` (native lane).
+- **Rollback:** revert the VEOC-15A commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

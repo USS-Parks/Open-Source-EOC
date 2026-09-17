@@ -24,6 +24,7 @@ import { boardRoutes } from "./boards/routes.js";
 import { incidentRoutes } from "./incidents/routes.js";
 import { fileRoutes } from "./files/routes.js";
 import { BlobStore } from "./files/service.js";
+import { messagingRoutes } from "./messaging/routes.js";
 import { notifyRoutes } from "./notify/routes.js";
 import { BoardSyncHub } from "./sync/hub.js";
 import { registerSyncRoutes } from "./sync/routes.js";
@@ -229,6 +230,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   auditRoutes(app, sql, authenticate);
   incidentRoutes(app, sql, authenticate);
   notifyRoutes(app, sql, authenticate);
+  messagingRoutes(app, sql, authenticate);
   fileRoutes(
     app,
     sql,
