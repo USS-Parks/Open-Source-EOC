@@ -19,7 +19,19 @@ import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 const DIST = "/tmp/cop-demo-dist";
 const LATENCY_BUDGET_MS = 5000;
-const CHROMIUM = "/opt/pw-browsers/chromium";
+
+/** The sandbox pre-installs Chromium; CI runners ship Chrome. */
+function chromiumPath(): string {
+  const candidates = [
+    process.env["OPENEOC_CHROMIUM"],
+    "/opt/pw-browsers/chromium",
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+  ];
+  for (const c of candidates) if (c && existsSync(c)) return c;
+  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
+}
 
 let admin: Sql;
 let runtime: Sql;
@@ -83,7 +95,7 @@ beforeAll(async () => {
   boardId = board.json().id as string;
   await postClosure("SR-169 at Pecwan", [-123.61, 41.29]);
 
-  browser = await chromium.launch({ executablePath: CHROMIUM });
+  browser = await chromium.launch({ executablePath: chromiumPath() });
 }, 120000);
 
 afterAll(async () => {
