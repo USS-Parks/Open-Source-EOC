@@ -221,3 +221,18 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Facets:** INV-3 core `implemented` for boards; ADR-0003 proven in practice.
 - **Rollback:** revert the VEOC-13 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-14: Notification engine
+
+- **Session:** VEOC-14, executed 2026-09-17
+- **Starting HEAD:** `4c67a0cab88409a058f4eac2e763b5be21e1988c`
+- **Files created:** `server/migrations/0007_notifications.sql` (rules as per-jurisdiction data; notifications as the delivery log and in-app tray; tray RLS lets a person read their own entries plus those aimed at positions they hold active assignments for), `server/src/notify/engine.ts` (pure condition matcher with any/eq/changed_to; channel fan-out to in-app, HMAC-SHA256-signed webhooks, and ntfy-pattern self-hosted push; every attempt logged delivered or failed; post-commit delivery, never inside the mutating transaction; scheduled rules with an interval guard), `server/src/notify/routes.ts` (rule creation returning the webhook secret exactly once, tray, mark-read, scheduled-run trigger), `server/src/__tests__/notify.test.ts` (local receiver capturing raw bytes).
+- **Files changed:** board record create/update return full write results and routes fan out after commit; the sync hub notifies for sync-originated changes the same way, so both write paths feed one engine.
+- **Acceptance proven by test (the 213RR lane):** a rule on state changed_to "assigned" stays silent through creation and a non-matching transition, then fires on the real transition across all three channels: the requesting position (record creator, Operations Section Chief) gets a tray entry, the webhook arrives with a signature the consumer verifies against the raw body (and tampering breaks it), the push lands on the topic, and all three log delivered; a dead webhook port fails visibly with the error recorded while the surviving channel still delivers and the API call is unaffected; scheduled rules fire once per interval with the guard proven by a second immediate run firing zero.
+- **Verification:** `pnpm check` fully green; 101/101 tests across 15 files. One test-harness fix: the receiver's default JSON parser consumed the raw bytes signature verification needs; raw-string parsing restored them.
+- **Deferred:** email/SMS channels ride the webhook adapter pointed at an Apprise sidecar (ADR-pattern, documented at VEOC-40 deployment); a production timer loop for scheduled rules lands with the app runtime at VEOC-21; notification bombing caps (threat B7) tighten at VEOC-37.
+- **Facets:** F4 `implemented`.
+- **Rollback:** revert the VEOC-14 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

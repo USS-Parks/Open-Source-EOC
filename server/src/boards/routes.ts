@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
+import { notifyBoardEvent } from "../notify/engine.js";
 import {
   addLocalField,
   createBoard,
@@ -100,10 +101,19 @@ export function boardRoutes(
   app.post("/api/v1/boards/:boardId/records", { preHandler: authenticate }, async (req, reply) => {
     const { boardId } = req.params as { boardId: string };
     const data = RecordBody.parse(req.body);
-    const id = await withPerson(sql, req.principal.person.id, (tx) =>
+    const result = await withPerson(sql, req.principal.person.id, (tx) =>
       createRecord(tx, req.principal, boardId, data),
     );
-    return reply.status(201).send({ id });
+    // Post-commit fan-out: delivery never runs inside the mutating tx.
+    await notifyBoardEvent(sql, req.principal, {
+      jurisdictionId: result.jurisdictionId,
+      boardId,
+      boardKey: result.boardKey,
+      recordId: result.id,
+      event: "record.created",
+      record: result.data,
+    });
+    return reply.status(201).send({ id: result.id });
   });
 
   app.patch(
@@ -112,9 +122,18 @@ export function boardRoutes(
     async (req, reply) => {
       const { boardId, recordId } = req.params as { boardId: string; recordId: string };
       const patch = RecordBody.parse(req.body);
-      await withPerson(sql, req.principal.person.id, (tx) =>
+      const result = await withPerson(sql, req.principal.person.id, (tx) =>
         updateRecord(tx, req.principal, boardId, recordId, patch),
       );
+      await notifyBoardEvent(sql, req.principal, {
+        jurisdictionId: result.jurisdictionId,
+        boardId,
+        boardKey: result.boardKey,
+        recordId,
+        event: "record.updated",
+        record: result.data,
+        previous: result.previous,
+      });
       return reply.send({ ok: true });
     },
   );

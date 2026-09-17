@@ -170,12 +170,20 @@ export async function upgradeBoard(
   return { dropped };
 }
 
+export interface RecordWriteResult {
+  readonly id: string;
+  readonly data: Record<string, unknown>;
+  readonly previous?: Record<string, unknown> | undefined;
+  readonly boardKey: string;
+  readonly jurisdictionId: string;
+}
+
 export async function createRecord(
   sql: Sql,
   actor: Principal,
   boardId: string,
   data: Record<string, unknown>,
-): Promise<string> {
+): Promise<RecordWriteResult> {
   const board = await getEffectiveBoard(sql, actor, boardId);
   requireWriter(board.role);
   checkFieldWrites(board, Object.keys(data));
@@ -192,7 +200,7 @@ export async function createRecord(
     subjectId: id,
     payload: { board: board.template.key, data: parsed },
   });
-  return id;
+  return { id, data: parsed, boardKey: board.template.key, jurisdictionId: board.jurisdictionId };
 }
 
 export async function updateRecord(
@@ -201,14 +209,15 @@ export async function updateRecord(
   boardId: string,
   recordId: string,
   patch: Record<string, unknown>,
-): Promise<void> {
+): Promise<RecordWriteResult> {
   const board = await getEffectiveBoard(sql, actor, boardId);
   requireWriter(board.role);
   checkFieldWrites(board, Object.keys(patch));
   const [existing] = await sql`
     select data from board_records where id = ${recordId} and board_id = ${boardId}`;
   if (!existing) throw new AuthError(404, "record not found");
-  const merged = { ...(existing.data as Record<string, unknown>), ...patch };
+  const previous = existing.data as Record<string, unknown>;
+  const merged = { ...previous, ...patch };
   const parsed = buildRecordSchema(board.fields).parse(merged);
   await sql`
     update board_records
@@ -221,6 +230,13 @@ export async function updateRecord(
     subjectId: recordId,
     payload: { board: board.template.key, patch },
   });
+  return {
+    id: recordId,
+    data: parsed,
+    previous,
+    boardKey: board.template.key,
+    jurisdictionId: board.jurisdictionId,
+  };
 }
 
 export interface ViewRecords {

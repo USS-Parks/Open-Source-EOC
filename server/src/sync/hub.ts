@@ -5,6 +5,7 @@ import { withPerson } from "../db/context.js";
 import type { Principal } from "../auth/service.js";
 import { getEffectiveBoard, type EffectiveBoard } from "../boards/service.js";
 import { recordAudit } from "../audit/service.js";
+import { notifyBoardEvent } from "../notify/engine.js";
 
 /**
  * The board sync hub (ADR-0003). One Y.Doc per board; the durable state is
@@ -72,10 +73,23 @@ export class BoardSyncHub {
     const after = snapshotRecords(entry.doc);
     const changed = changedRecordIds(before, after);
     let conflicts = 0;
+    let committed: Array<{ recordId: string; existing: boolean }> = [];
     if (changed.length > 0) {
-      conflicts = await this.checkpoint(actor, entry, changed, after);
+      ({ conflicts, committed } = await this.checkpoint(actor, entry, changed, after));
     }
     for (const fn of entry.subscribers) fn(update, originSession);
+    // Post-commit notification fan-out for sync-originated changes.
+    for (const c of committed) {
+      await notifyBoardEvent(this.sql, actor, {
+        jurisdictionId: entry.board.jurisdictionId,
+        boardId: entry.board.id,
+        boardKey: entry.board.template.key,
+        recordId: c.recordId,
+        event: c.existing ? "record.updated" : "record.created",
+        record: after.get(c.recordId)!,
+        previous: before.get(c.recordId),
+      });
+    }
     return { seq: Number(row!.seq), conflicts };
   }
 
@@ -84,7 +98,8 @@ export class BoardSyncHub {
     entry: HubEntry,
     recordIds: readonly string[],
     state: Map<string, Record<string, unknown>>,
-  ): Promise<number> {
+  ): Promise<{ conflicts: number; committed: Array<{ recordId: string; existing: boolean }> }> {
+    const committed: Array<{ recordId: string; existing: boolean }> = [];
     const schema = buildRecordSchema(entry.board.fields);
     // A record missing required fields mid-reconciliation is a normal
     // intermediate (the rest is still in flight on another client): it
@@ -134,9 +149,10 @@ export class BoardSyncHub {
           subjectId: recordId,
           payload: { board: entry.board.template.key, via: "sync" },
         });
+        committed.push({ recordId, existing: Boolean(existing) });
       }
     });
-    return conflicts;
+    return { conflicts, committed };
   }
 
   private async entry(actor: Principal, boardId: string): Promise<HubEntry> {
