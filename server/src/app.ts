@@ -21,6 +21,7 @@ import { createGuestGrant, listPositions, provisionJurisdiction, revokeGuestGran
 import { OidcClient, oidcSettingsFromEnv, type OidcSettings } from "./auth/oidc.js";
 import { auditRoutes } from "./audit/routes.js";
 import { boardRoutes } from "./boards/routes.js";
+import { incidentRoutes } from "./incidents/routes.js";
 import { withPerson } from "./db/context.js";
 
 declare module "fastify" {
@@ -221,6 +222,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
     trustedTemplateKeys: options.trustedTemplateKeys ?? [],
   });
   auditRoutes(app, sql, authenticate);
+  incidentRoutes(app, sql, authenticate);
 
   return app;
 }

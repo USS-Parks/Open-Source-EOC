@@ -190,3 +190,18 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred:** incident_id column exists and populates once incidents arrive (VEOC-12); CSV/PDF packaging of the chronology joins the FEMA paperwork exports at VEOC-23/34.
 - **Rollback:** revert the VEOC-11 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-12: Incident lifecycle, templates, and libraries
+
+- **Session:** VEOC-12, executed 2026-09-17 ~07:10 UTC
+- **Starting HEAD:** `37461870d99693e4a00b3c5ddfefc04903d25114`
+- **Files created:** `server/migrations/0005_incidents.sql` (incident templates, incidents with kind flag and collab_requested marker for VEOC-32, incident positions/boards links, position-owned checklist items, jurisdiction libraries with template auto-attach, full RLS), `server/src/incidents/service.ts` (standard scenario templates as data incl. wildfire and daily_ops; one-action activation creating org chart, boards, checklists, and attaching scenario libraries, audited with incident context; position-attributed checklist completion; audited closure; library creation), `server/src/incidents/routes.ts`, `server/src/__tests__/incidents.test.ts`.
+- **Files changed:** `authz.ts` exports STANDARD_TITLES; `app.ts` wiring.
+- **Acceptance proven by test:** activating "Bald Hills Fire" from the wildfire template yields 8 ICS positions, 6 boards, 7 checklist items, and the attached pre-plan library in one action with an `incident.activated` audit event carrying the incident id; members cannot activate (403); a daily-ops incident runs the same machinery differing only by kind; checklist completion is refused until the actor signs into the owning position, then records "Incident Commander" as the completing position, and double-completion is 409; closure is admin-gated, audited, and idempotent-guarded.
+- **Verification:** `pnpm check` fully green; 93/93 tests across 13 files. One test-authoring arithmetic error (checklist count) corrected against the template's actual content.
+- **Facets:** F12 `implemented`; F13 `implemented` (scenario/plan/reference libraries with template auto-attach); F17 groundwork (daily-ops flag live).
+- **Deferred:** collaboration-space provisioning fires from collab_requested at VEOC-32; guest-grant auto-expiry at incident closure lands when grants gain incident scope (noted since VEOC-08); IAP and 213RR flows build on these positions at VEOC-34/35.
+- **Rollback:** revert the VEOC-12 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

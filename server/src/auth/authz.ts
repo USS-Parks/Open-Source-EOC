@@ -3,7 +3,7 @@ import type { Sql } from "../db/client.js";
 import { addMembership, AuthError, createJurisdiction, type Principal } from "./service.js";
 
 /** Human titles for the standard ICS position set (keys from the dictionary). */
-const STANDARD_TITLES: Readonly<Record<string, string>> = {
+export const STANDARD_TITLES: Readonly<Record<string, string>> = {
   incident_commander: "Incident Commander",
   public_information_officer: "Public Information Officer",
   safety_officer: "Safety Officer",
