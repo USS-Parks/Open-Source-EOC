@@ -19,6 +19,7 @@ import {
 import { checkAllowed, recordFailure, recordSuccess } from "./auth/rate-limit.js";
 import { createGuestGrant, listPositions, provisionJurisdiction, revokeGuestGrant } from "./auth/authz.js";
 import { OidcClient, oidcSettingsFromEnv, type OidcSettings } from "./auth/oidc.js";
+import { boardRoutes } from "./boards/routes.js";
 import { withPerson } from "./db/context.js";
 
 declare module "fastify" {
@@ -51,6 +52,7 @@ const GuestGrantBody = z.object({
 
 export interface BuildAppOptions {
   readonly oidc?: OidcSettings | null;
+  readonly trustedTemplateKeys?: readonly string[];
 }
 
 export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstance {
@@ -212,6 +214,10 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
       return id;
     });
     return reply.status(201).send({ id: personId });
+  });
+
+  boardRoutes(app, sql, authenticate, {
+    trustedTemplateKeys: options.trustedTemplateKeys ?? [],
   });
 
   return app;

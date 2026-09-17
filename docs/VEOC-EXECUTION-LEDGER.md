@@ -145,3 +145,18 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Facets/requirements:** F16 `implemented`; R3 `implemented` (guest machinery; COP scope extends at VEOC-16/17); threat rows B1/B11 exercised.
 - **Rollback:** revert the VEOC-08 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+- **Post-receipt CI note:** first CI run red: the test helper set the runtime role password before the migration that creates the role, masked by the warm local cluster. Reproduced on a rebuilt-from-scratch local cluster, reordered (`4642c16`), CI green.
+
+---
+
+## VEOC-09: Board engine, versioned schemas and views
+
+- **Session:** VEOC-09, executed 2026-09-17 ~05:30 UTC
+- **Starting HEAD:** `4642c1622f8789a2280d71613df2503449596c65`
+- **Files created:** `shared/src/boards/fields.ts` (declarative field/view/template model with zod validation; enum fields resolve dictionary enumerations; local fields confined to the x_ namespace, additive-only; record validators reject unknown keys; effectiveFields implements upgrade merge and re-convergence), `shared/src/boards/standard.ts` (the ten-board standard library as pure data: activity log, significant events, 213RR resource requests, shelters, road closures, sign in/out, sitrep, press releases, checklists, AAR), `server/src/boards/package.ts` (Ed25519-signed regional template packages over canonical JSON; moved out of shared because node:crypto must not reach the browser package), `server/migrations/0003_boards.sql` (templates, boards, records; RLS: templates readable to any principal and writable by instance admins, boards/records member-or-designated-guest readable, writer-role insert/update), `server/src/boards/service.ts` (create/effective/local-field/upgrade/record CRUD with field-level read filtering and admin-only field writes; view filtering and sorting), `server/src/boards/routes.ts`, tests in shared and server plus `package.test.ts`.
+- **Acceptance proven by test:** the standard set is data, validated at load, and every template builds a working record validator; dictionary drift rejected ("catastrophic" severity fails; unknown keys fail; required enforced); a v1-to-v2 upgrade keeps records untouched, keeps x_tribal_notes, adopts the new field, and drops the now-covered x_source (re-convergence); admin-only fields refuse member writes at 403; viewers read but cannot write; a guest with a board-scoped grant reads exactly that board; an outsider gets 404 because RLS hides existence itself; signed package import works under a trusted key and a tampered package is refused (400); untrusted publisher keys are refused.
+- **Verification:** `pnpm check` fully green; 72/72 tests across 9 files.
+- **Deferred:** SQL push-down of view filters (in-process today; revisit at VEOC-38 with volume targets); board archival flow UI; template export API endpoint (export exists as a signed-package function; the endpoint follows when instance identity keys land properly at VEOC-30).
+- **Facets:** F1 `implemented`; INV-5 and INV-6 groundwork enforced by schema (no-code designer UI is VEOC-10).
+- **Rollback:** revert the VEOC-09 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

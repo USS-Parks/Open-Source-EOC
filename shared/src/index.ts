@@ -4,6 +4,8 @@
  */
 
 export * from "./dictionary/index.js";
+export * from "./boards/fields.js";
+export * from "./boards/standard.js";
 
 export const OPENEOC_VERSION = "0.0.0" as const;
 
