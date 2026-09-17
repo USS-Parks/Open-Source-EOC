@@ -423,3 +423,18 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred:** actual IPAWS-OPEN transmission (COG credentials, the enable-at-will switch, R2) to VEOC-31 — eligibility is computed and stored now; scheduled polling of external CAP endpoints reuses the VEOC-19 feed framework (which already renders CAP as map layers), so this session focused on authoring/publishing and fidelity; the authoring UI rides the app shell.
 - **Rollback:** revert the VEOC-26 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-27: EDXL envelope and resource messaging
+
+- **Session:** VEOC-27, executed 2026-09-17
+- **Starting HEAD:** `ee063d05b0d36a8fcc61710a9af80d6f83ca1ea6`
+- **Files created/changed:** `shared/src/edxl/edxl.ts` (EDXL-DE 1.0 distribution envelope and EDXL-RM 1.0 resource-message models with zod; the documented, bijective 213RR↔EDXL-RM field mapping; nested-XML serialize/parse that embeds the RM as real XML inside the DE contentObject with full fidelity; and `addressedTo` for explicit-address routing scope), `server/src/edxl/service.ts` (emit a resource-request board record as an EDXL-DE(+RM) envelope stamped with the jurisdiction's slug as sender and optional recipient addresses; import an envelope, refusing one not addressed to the importing jurisdiction, and land the RM back on that jurisdiction's resource-request board through the schema engine), `server/src/edxl/routes.ts` (emit from a record, import to a jurisdiction), app wiring. Reuses fast-xml-parser already in shared; no new dependencies.
+- **Acceptance proven by test (F20 partial, INV-4):** a 213RR maps to EDXL-RM and back with no loss; the DE envelope serializes to DE/RM-namespaced XML and parses back identically (embedded RM intact); explicit addressing gates consumption (addressed-to true/false, empty = broadcast); on the server, a request emitted from one jurisdiction re-imports on a second jurisdiction and the reconstructed board record equals the original field-for-field; an envelope addressed elsewhere is refused 403 by the intended recipient's own instance, a broadcast imports anywhere, and unparseable EDXL is 400.
+- **Verification:** `pnpm check` fully green; 224/224 tests across 39 files; license-scan clean.
+- **Facets:** F20 advanced (EDXL-DE enveloping and EDXL-RM resource messaging on the 213RR lane); stays `open` until facility status (VEOC-28), the remaining standards surfaces (VEOC-29), and IPAWS (VEOC-31).
+- **Defect found and fixed:** the first server test omitted `ensureStandardTemplates`, so the resource-request board never created and emit 500'd on an undefined board id; added the seed. (The bug was in the test setup, not the EDXL code.)
+- **Deferred:** the full EDXL-RM message set beyond RequestResource (ResponseToRequestResource, RequisitionResource, commit/release) extends the same model as the 213RR lifecycle drives them; targetArea and recipientRole routing beyond explicitAddress are additive to `addressedTo`; a transport/broker for actually moving envelopes between instances (vs. copy-paste/file exchange) is a deployment concern.
+- **Rollback:** revert the VEOC-27 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

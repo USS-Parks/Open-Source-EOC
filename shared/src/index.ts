@@ -17,6 +17,7 @@ export * from "./damage/summary.js";
 export * from "./cap/model.js";
 export * from "./cap/validate.js";
 export * from "./cap/xml.js";
+export * from "./edxl/edxl.js";
 
 export const OPENEOC_VERSION = "0.0.0" as const;
 

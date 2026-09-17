@@ -25,6 +25,7 @@ import { boardRoutes } from "./boards/routes.js";
 import { capRoutes } from "./cap/routes.js";
 import { dashboardRoutes } from "./dashboards/routes.js";
 import { damageRoutes } from "./damage/routes.js";
+import { edxlRoutes } from "./edxl/routes.js";
 import { incidentRoutes } from "./incidents/routes.js";
 import { feedRoutes } from "./feeds/routes.js";
 import { fileRoutes } from "./files/routes.js";
@@ -242,6 +243,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   capRoutes(app, sql, authenticate);
   dashboardRoutes(app, sql, authenticate);
   damageRoutes(app, sql, authenticate);
+  edxlRoutes(app, sql, authenticate);
   feedRoutes(app, sql, authenticate);
   formRoutes(app, sql, authenticate);
   sitrepRoutes(app, sql, authenticate);
