@@ -236,3 +236,17 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Facets:** F4 `implemented`.
 - **Rollback:** revert the VEOC-14 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-15: File library and search
+
+- **Session:** VEOC-15, executed 2026-09-17
+- **Starting HEAD:** `d778ced2018f67cd51b1872d7f64df27fd1164bf`
+- **Files created:** `server/migrations/0008_files.sql` (immutable file rows under the append-only trigger; version chains via supersedes; GIN full-text indexes over records, libraries, file names, and the chronology), `server/src/files/service.ts` (content-addressed BlobStore on plain disk keyed by SHA-256, atomic tmp-rename writes, dedupe by construction; upload with type allowlist, size cap, empty-file rejection, audit event; permission-aware search running entirely under the actor's RLS context), `server/src/files/routes.ts` (base64-JSON upload, metadata, content download, search), `server/src/__tests__/files.test.ts`.
+- **Acceptance proven by test (R5, threat B10, AR7):** upload/download byte-identical round trip; identical content stored twice is one blob under two rows; a superseding version leaves version 1 downloadable byte-identical; UPDATE and DELETE on file rows rejected even for the table owner; executables refused; search returns records, libraries, files, and chronology entries for a member, a board-scoped guest gets exactly that board's records and nothing else, and an outsider gets 403; storage is a plain directory (temp dir in tests), no external service anywhere.
+- **Verification:** `pnpm check` fully green; 107/107 tests across 16 files. One search defect found by test and fixed: Postgres tokenizes filenames as single file-type tokens, so separators normalize to spaces in both the index expression and the query.
+- **Facets:** R5 `implemented`; F1 attachments groundwork.
+- **Deferred:** multipart streaming upload replaces base64 JSON with the app shell (VEOC-21); storage quota accounting per jurisdiction at VEOC-38; attachment rendering never happens server-side by policy (B10), enforced by absence.
+- **Rollback:** revert the VEOC-15 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

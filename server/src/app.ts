@@ -22,6 +22,8 @@ import { OidcClient, oidcSettingsFromEnv, type OidcSettings } from "./auth/oidc.
 import { auditRoutes } from "./audit/routes.js";
 import { boardRoutes } from "./boards/routes.js";
 import { incidentRoutes } from "./incidents/routes.js";
+import { fileRoutes } from "./files/routes.js";
+import { BlobStore } from "./files/service.js";
 import { notifyRoutes } from "./notify/routes.js";
 import { BoardSyncHub } from "./sync/hub.js";
 import { registerSyncRoutes } from "./sync/routes.js";
@@ -227,6 +229,12 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   auditRoutes(app, sql, authenticate);
   incidentRoutes(app, sql, authenticate);
   notifyRoutes(app, sql, authenticate);
+  fileRoutes(
+    app,
+    sql,
+    new BlobStore(process.env.OPENEOC_DATA_DIR ?? "./data/blobs"),
+    authenticate,
+  );
   registerSyncRoutes(app, sql, new BoardSyncHub(sql));
 
   return app;
