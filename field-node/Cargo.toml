@@ -1,0 +1,8 @@
+[package]
+name = "openeoc-field-node"
+version = "0.0.0"
+edition = "2021"
+description = "Placeholder for the optional single-binary field gateway (decision at VEOC-29)."
+publish = false
+
+[dependencies]

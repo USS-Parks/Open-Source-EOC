@@ -31,3 +31,17 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred work / blockers:** none. Rollback: revert the VEOC-00 commit.
 - **git status at close:** two new untracked docs files, staged individually for the VEOC-00 commit.
 - **Commit/push:** performed under Basho's 2026-09-17 full-execution authorization. No branch created.
+
+---
+
+## VEOC-01: Confirm project placement and scaffold the workspace
+
+- **Session:** VEOC-01, executed 2026-09-17 ~02:30 UTC
+- **Starting HEAD:** `4bd8ca146f386332083933fbee3b4361dbbdb9a4`
+- **Basho decisions recorded:** package namespace `@openeoc`; all work on `main`; project home settled (github.com/USS-Parks/Open-Source-EOC).
+- **Files created:** `README.md`, `.gitignore`, `pnpm-workspace.yaml`, `package.json`, `tsconfig.base.json`, `pnpm-lock.yaml`; `shared/`, `server/`, `web/` packages (package.json, tsconfig.json, src/index.ts each); `field-node/` Rust placeholder crate; `deploy/README.md`. No functionality, wiring proof only.
+- **Dependencies added:** typescript 5.9.3 (Apache-2.0) as root devDependency. Nothing else.
+- **Verification:** `pnpm install` exit 0; `pnpm check` (`pnpm -r exec tsc --noEmit`) exit 0 on clean tree; seeded type defect in `shared/src` made `pnpm check` fail with TS2322, then removed and the gate returned green; `cargo check --manifest-path field-node/Cargo.toml` exit 0.
+- **Facets/requirements:** none closed; scaffold only.
+- **Deferred/blockers:** none. Rollback: revert the VEOC-01 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

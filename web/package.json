@@ -1,0 +1,9 @@
+{
+  "name": "@openeoc/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@openeoc/shared": "workspace:*"
+  }
+}
