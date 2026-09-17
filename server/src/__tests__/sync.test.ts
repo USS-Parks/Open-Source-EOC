@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import WebSocket from "ws";
 import * as Y from "yjs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { addMembership, createJurisdiction, createPerson } from "../auth/service.js";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
@@ -268,5 +269,27 @@ describe("partition and reconnect (the 24-hour test, scripted)", () => {
     expect(clientB.json()[liveRec]).toMatchObject({ summary: "Live update test" });
     clientA.disconnect();
     clientB.disconnect();
+  });
+});
+
+describe("sync authorization (INV-7)", () => {
+  it("an outsider cannot read a board after a member has already opened it", async () => {
+    const member = new TestSyncClient();
+    await member.connect(adminToken);
+
+    const otherJurisdiction = await createJurisdiction(admin, "hoopa", "Hoopa Valley Tribe");
+    const outsiderId = await createPerson(admin, {
+      email: "outsider@example.org",
+      displayName: "Outsider",
+      password: "outsider-good-pass",
+    });
+    await addMembership(admin, outsiderId, otherJurisdiction, "admin");
+    const outsiderToken = await tokenFor("outsider@example.org", "outsider-good-pass");
+
+    const outsider = new TestSyncClient();
+    await expect(outsider.connect(outsiderToken)).rejects.toThrow(
+      /board not found|no access to this board/,
+    );
+    member.disconnect();
   });
 });

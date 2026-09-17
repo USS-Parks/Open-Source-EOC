@@ -159,12 +159,14 @@ export class BoardSyncHub {
     return { conflicts, committed };
   }
 
+  private async requireBoardAccess(actor: Principal, boardId: string): Promise<EffectiveBoard> {
+    return withPerson(this.sql, actor.person.id, (tx) => getEffectiveBoard(tx, actor, boardId));
+  }
+
   private async entry(actor: Principal, boardId: string): Promise<HubEntry> {
+    const board = await this.requireBoardAccess(actor, boardId);
     const cached = this.entries.get(boardId);
     if (cached) return cached;
-    const board = await withPerson(this.sql, actor.person.id, (tx) =>
-      getEffectiveBoard(tx, actor, boardId),
-    );
     const doc = new Y.Doc();
     const updates = await withPerson(this.sql, actor.person.id, (tx) => {
       return tx`

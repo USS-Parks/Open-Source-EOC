@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
-import { createPerson, addMembership } from "../auth/service.js";
+import { addMembership, createJurisdiction, createPerson } from "../auth/service.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
@@ -132,6 +132,60 @@ describe("direct threads (R6, no external backend)", () => {
 
   it("messages cannot be edited by anyone (operational record)", async () => {
     await expect(admin`update messages set body = 'rewritten'`).rejects.toThrow(/append-only/);
+  });
+
+  it("refuses a thread member who belongs to another jurisdiction", async () => {
+    const otherJurisdiction = await createJurisdiction(admin, "karuk", "Karuk Tribe OES");
+    const outsiderId = await createPerson(admin, {
+      email: "foreign@example.org",
+      displayName: "Foreign Member",
+      password: "foreign-member-pass",
+    });
+    await addMembership(admin, outsiderId, otherJurisdiction, "member");
+
+    const create = await app.inject({
+      method: "POST",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/threads`,
+      headers: auth(memberToken),
+      payload: { kind: "direct", members: [{ kind: "person", id: outsiderId }] },
+    });
+    expect(create.statusCode).toBe(403);
+    expect(create.json().error).toBe("member is not in this jurisdiction");
+  });
+
+  it("refuses an incident that belongs to another jurisdiction", async () => {
+    const otherJurisdiction = await createJurisdiction(admin, "resighini", "Resighini Rancheria");
+    const otherAdminId = await createPerson(admin, {
+      email: "resighini-admin@example.org",
+      displayName: "Resighini Admin",
+      password: "resighini-admin-pass1",
+    });
+    await addMembership(admin, otherAdminId, otherJurisdiction, "admin");
+    const otherAdminToken = await tokenFor(
+      "resighini-admin@example.org",
+      "resighini-admin-pass1",
+    );
+    const foreignIncident = await app.inject({
+      method: "POST",
+      url: `/api/v1/jurisdictions/${otherJurisdiction}/incidents`,
+      headers: auth(otherAdminToken),
+      payload: { templateKey: "wildfire", name: "Foreign Fire" },
+    });
+    expect(foreignIncident.statusCode).toBe(201);
+
+    const create = await app.inject({
+      method: "POST",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/threads`,
+      headers: auth(adminToken),
+      payload: {
+        kind: "group",
+        title: "Crossed wire",
+        incidentId: foreignIncident.json().incidentId as string,
+        members: [{ kind: "person", id: seed.memberId }],
+      },
+    });
+    expect(create.statusCode).toBe(400);
+    expect(create.json().error).toBe("incident not found in this jurisdiction");
   });
 });
 
