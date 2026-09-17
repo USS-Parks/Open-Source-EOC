@@ -20,3 +20,12 @@ export * from "./cop/layers.js";
 export * from "./cop/feeds.js";
 export { Dashboard } from "./dashboards/Dashboard.js";
 export { BriefingView } from "./sitreps/BriefingView.js";
+export { openOfflineStore, type OfflineStore } from "./offline/store.js";
+export {
+  FieldClient,
+  type FieldSession,
+  type CachedBoard,
+  type SyncAck,
+  type PushFn,
+} from "./offline/field-client.js";
+export { registerFieldWorker } from "./offline/register.js";

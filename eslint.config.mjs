@@ -29,4 +29,16 @@ export default tseslint.config(
       "no-console": "off",
     },
   },
+  {
+    // The service worker is a classic worker script with its own globals.
+    files: ["web/public/sw.js"],
+    languageOptions: {
+      globals: {
+        self: "readonly",
+        caches: "readonly",
+        fetch: "readonly",
+        URL: "readonly",
+      },
+    },
+  },
 );

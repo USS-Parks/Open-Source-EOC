@@ -48,7 +48,7 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 | AR3 | No admin customization requiring hand-written HTML/JS | INV-6 | open |
 | AR4 | No in-place-upgrade dead ends | INV-5 | open |
 | AR5 | No proprietary-only interchange, substrate lock-in, or unbundling | INV-4, INV-9 | open |
-| AR6 | No session timeouts mid-incident, free-text drift, join-poor dashboards | INV-8 | open |
+| AR6 | No session timeouts mid-incident, free-text drift, join-poor dashboards | INV-8 | implemented |
 | AR7 | Full function disconnected, including provisioning | INV-3 | open |
 
 ## Invariants (PSPR §3)
@@ -57,7 +57,7 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 |---|---|---|
 | INV-1 | Viewers are structurally free | open |
 | INV-2 | Attribution is total | implemented |
-| INV-3 | Disconnection is the normal case | open |
+| INV-3 | Disconnection is the normal case | implemented |
 | INV-4 | Standards are native | open |
 | INV-5 | Boards are versioned schemas | open |
 | INV-6 | No-code is real | implemented |
