@@ -45,3 +45,17 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Facets/requirements:** none closed; scaffold only.
 - **Deferred/blockers:** none. Rollback: revert the VEOC-01 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-02: License, governance, and the anti-Sahana contribution model
+
+- **Session:** VEOC-02, executed 2026-09-17 ~02:40 UTC
+- **Starting HEAD:** `42c2b23759853f3afebb450b0802365210ee0032`
+- **Basho decision applied:** Apache-2.0 (chosen in-session over MIT and AGPL-3.0 with trade-offs presented).
+- **Files created:** `LICENSE` (canonical apache.org text, 202 lines / 11,358 bytes verified), `NOTICE`, `GOVERNANCE.md` (succession rule: two maintainers before 1.0; 12-month inactivity handover; archive-and-invite-fork as last resort), `CONTRIBUTING.md` (DCO 1.1 sign-off for external contributors; commit hygiene; license hygiene; no per-file headers policy), `CODE_OF_CONDUCT.md`, `ROADMAP.md`, `scripts/license-scan.mjs`.
+- **Files changed:** root and package `package.json` files gained `license: Apache-2.0` and the scan wired into `pnpm check`; `field-node/Cargo.toml` gained the license field; `field-node/Cargo.lock` tracked (housekeeping from VEOC-01's cargo check).
+- **Verification:** `pnpm check` green (typecheck + license scan); seeded AGPL-3.0 package via `LICENSE_SCAN_EXTRA` made the scan exit 1 naming the package, then clean run green again; `cargo check` green; all governance cross-references resolve to existing files; style scan clean.
+- **Facets/requirements:** INV-10 groundwork (succession rule in force as policy).
+- **Deferred/blockers:** none. Rollback: revert the VEOC-02 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.
