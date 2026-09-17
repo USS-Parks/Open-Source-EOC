@@ -29,6 +29,13 @@ export async function createThread(
   if (input.members.length === 0) throw new AuthError(400, "a thread needs members");
   if (input.kind === "direct" && input.members.length !== 1)
     throw new AuthError(400, "a direct thread has exactly one member besides its creator");
+  if (input.incidentId) {
+    const [incident] = await sql`
+      select id from incidents
+      where id = ${input.incidentId} and jurisdiction_id = ${input.jurisdictionId}`;
+    if (!incident) throw new AuthError(400, "incident not found in this jurisdiction");
+  }
+  await assertMembersInJurisdiction(sql, input.jurisdictionId, input.members);
   const [thread] = await sql`
     insert into threads (jurisdiction_id, kind, incident_id, title, created_by)
     values (${input.jurisdictionId}, ${input.kind}, ${input.incidentId ?? null},
@@ -179,6 +186,30 @@ export async function setMessagingSettings(
       messages_in_incident_record = ${input.inIncidentRecord ?? true},
       updated_by = ${actor.person.id},
       updated_at = now()`;
+}
+
+async function assertMembersInJurisdiction(
+  sql: Sql,
+  jurisdictionId: string,
+  members: readonly ThreadMemberInput[],
+): Promise<void> {
+  for (const member of members) {
+    if (member.kind === "person") {
+      const [row] = await sql`
+        select 1 from jurisdiction_memberships
+        where person_id = ${member.id} and jurisdiction_id = ${jurisdictionId}
+        union
+        select 1 from guest_grants
+        where person_id = ${member.id} and jurisdiction_id = ${jurisdictionId}
+          and revoked_at is null and expires_at > now()`;
+      if (!row) throw new AuthError(403, "member is not in this jurisdiction");
+      continue;
+    }
+    const [row] = await sql`
+      select 1 from positions
+      where id = ${member.id} and jurisdiction_id = ${jurisdictionId}`;
+    if (!row) throw new AuthError(403, "position is not in this jurisdiction");
+  }
 }
 
 function requireMember(actor: Principal, jurisdictionId: string): void {
