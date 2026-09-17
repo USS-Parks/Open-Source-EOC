@@ -1,0 +1,165 @@
+import * as XLSX from "xlsx";
+import type { FastifyInstance } from "fastify";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { buildApp } from "../app.js";
+import { ensureStandardTemplates } from "../boards/service.js";
+import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+
+/**
+ * Smart forms (VEOC-22, F7): a real XLSForm .xlsx imports, and a capture
+ * runs through the form logic and lands on a board with geometry. The
+ * offline runner semantics (relevance, calculations, constraints) are
+ * proven exhaustively in the shared package; here we prove the binary
+ * import and the capture-to-board-with-geometry path against a real DB.
+ */
+
+let admin: Sql;
+let runtime: Sql;
+let app: FastifyInstance;
+let seed: Awaited<ReturnType<typeof seedIdentity>>;
+let adminToken: string;
+let memberToken: string;
+let boardId: string;
+
+/** Build a representative PDA-style XLSForm workbook as a real .xlsx. */
+function pdaWorkbookBase64(): string {
+  const wb = XLSX.utils.book_new();
+  const survey = XLSX.utils.aoa_to_sheet([
+    ["type", "name", "label", "required", "relevant", "constraint", "constraint_message"],
+    ["text", "road", "Road", "yes", "", "", ""],
+    ["text", "reason", "Reason", "yes", "", "", ""],
+    ["select_one closure_status", "status", "Status", "yes", "", "", ""],
+    ["geopoint", "location", "Location", "yes", "", "", ""],
+    ["note", "thanks", "Report filed", "", "", "", ""],
+  ]);
+  XLSX.utils.book_append_sheet(wb, survey, "survey");
+  const choices = XLSX.utils.aoa_to_sheet([
+    ["list_name", "name", "label"],
+    ["closure_status", "closed", "Closed"],
+    ["closure_status", "one_lane", "One lane"],
+    ["closure_status", "reopened", "Reopened"],
+  ]);
+  XLSX.utils.book_append_sheet(wb, choices, "choices");
+  const settings = XLSX.utils.aoa_to_sheet([
+    ["form_title", "form_id"],
+    ["Road Closure Report", "closure_report"],
+  ]);
+  XLSX.utils.book_append_sheet(wb, settings, "settings");
+  const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+  return Buffer.from(buffer).toString("base64");
+}
+
+beforeAll(async () => {
+  ({ admin, runtime } = await freshDb());
+  seed = await seedIdentity(admin);
+  await ensureStandardTemplates(admin);
+  app = buildApp(runtime, { oidc: null });
+  await app.listen({ port: 0, host: "127.0.0.1" });
+
+  adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
+  memberToken = await tokenFor("member@example.org", "another-good-password");
+  const board = await app.inject({
+    method: "POST",
+    url: `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`,
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: { templateKey: "road_closures" },
+  });
+  boardId = board.json().id as string;
+});
+
+afterAll(async () => {
+  await app.close();
+  await runtime.end();
+  await admin.end();
+});
+
+async function tokenFor(email: string, password: string): Promise<string> {
+  const res = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/login",
+    payload: { email, password },
+  });
+  return res.json().accessToken as string;
+}
+
+describe("importing a real XLSForm workbook", () => {
+  it("parses the survey, choices, and settings sheets into a stored form", async () => {
+    const xlsxBase64 = pdaWorkbookBase64();
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/forms/import`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { key: "closure_report", boardTemplate: "road_closures", xlsxBase64 },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toEqual({ key: "closure_report", version: 1 });
+
+    const fetched = await app.inject({
+      method: "GET",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/forms/closure_report`,
+      headers: { authorization: `Bearer ${memberToken}` },
+    });
+    const def = fetched.json() as {
+      title: string;
+      nodes: Array<{ name: string; type?: string; choices?: { name: string }[] }>;
+    };
+    expect(def.title).toBe("Road Closure Report");
+    const status = def.nodes.find((n) => n.name === "status")!;
+    expect(status.type).toBe("select_one");
+    expect(status.choices?.map((c) => c.name)).toEqual(["closed", "one_lane", "reopened"]);
+
+    // Import is admin-only.
+    const denied = await app.inject({
+      method: "POST",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/forms/import`,
+      headers: { authorization: `Bearer ${memberToken}` },
+      payload: { key: "sneaky", xlsxBase64 },
+    });
+    expect(denied.statusCode).toBe(403);
+  });
+});
+
+describe("submitting a capture", () => {
+  it("lands on the board with geometry and masked fields", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/forms/closure_report/submit",
+      headers: { authorization: `Bearer ${memberToken}` },
+      payload: {
+        jurisdictionId: seed.jurisdictionId,
+        boardId,
+        answers: {
+          road: "SR-169 at Pecwan",
+          reason: "landslide",
+          status: "closed",
+          location: "41.29 -123.61 0 5",
+        },
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const recordId = res.json().recordId as string;
+
+    const [row] = await admin`
+      select data, ST_AsText(geom) as geom from board_records where id = ${recordId}`;
+    expect((row!.data as Record<string, unknown>).road).toBe("SR-169 at Pecwan");
+    expect((row!.data as Record<string, unknown>).status).toBe("closed");
+    // The geopoint became the board's geometry (lon lat order).
+    expect(row!.geom).toBe("POINT(-123.61 41.29)");
+  });
+
+  it("rejects a capture that fails form validation with the field errors", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/forms/closure_report/submit",
+      headers: { authorization: `Bearer ${memberToken}` },
+      payload: {
+        jurisdictionId: seed.jurisdictionId,
+        boardId,
+        answers: { reason: "no road named", status: "closed", location: "41.29 -123.61" },
+      },
+    });
+    expect(res.statusCode).toBe(422);
+    const errors = res.json().errors as Array<{ field: string; message: string }>;
+    expect(errors).toContainEqual({ field: "road", message: "required" });
+  });
+});

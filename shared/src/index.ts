@@ -10,6 +10,9 @@ export * from "./boards/view.js";
 export * from "./boards/diff.js";
 export * from "./dashboards/def.js";
 export * from "./sitreps/def.js";
+export * from "./forms/expr.js";
+export * from "./forms/xlsform.js";
+export * from "./forms/runner.js";
 
 export const OPENEOC_VERSION = "0.0.0" as const;
 

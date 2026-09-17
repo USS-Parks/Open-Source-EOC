@@ -13,7 +13,7 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 | F4 | Board-triggered notifications, webhooks, multi-channel | VEOC-14 | implemented |
 | F5 | ICS forms, IAP builder, 213RR lifecycle | VEOC-34, VEOC-35 | open |
 | F6 | Any board as a live geospatial layer; field-to-COP loop | VEOC-16, VEOC-17 | implemented |
-| F7 | Offline XLSForm-compatible smart forms | VEOC-22 | open |
+| F7 | Offline XLSForm-compatible smart forms | VEOC-22 | implemented |
 | F8 | FEMA doctrine as schema: Lifelines, PDA outputs | VEOC-20, VEOC-23 | open |
 | F9 | Pre-disaster baseline data for damage assessment | VEOC-23 | open |
 | F10 | Always-on facility status networks + status queries | VEOC-28 | open |
