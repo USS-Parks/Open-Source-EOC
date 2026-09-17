@@ -1,9 +1,13 @@
 /**
  * @openeoc/server
- * Node backend. Framework decision (Fastify vs NestJS) lands in VEOC-04;
- * until then this package holds only the workspace wiring proof.
+ * Node backend (Fastify, per ADR-0001).
  */
 
 import { workspaceInfo } from "@openeoc/shared";
 
 export const serverInfo = workspaceInfo("@openeoc/server");
+
+export { buildApp } from "./app.js";
+export { connect, type Sql } from "./db/client.js";
+export { migrate } from "./db/migrate.js";
+export * from "./auth/service.js";

@@ -6,8 +6,8 @@ Live status per capability: `docs/FACET-STATUS.md`.
 
 | Phase | Scope | Status |
 |---|---|---|
-| A | Foundation and governance: scaffold, license, data dictionary, architecture decisions, design system, CI gates | in progress |
-| B | Core primitives: identity and positions, boards, immutable audit, incidents, real-time sync, notifications, files, search, native messaging | not started |
+| A | Foundation and governance: scaffold, license, data dictionary, architecture decisions, design system, CI gates | complete |
+| B | Core primitives: identity and positions, boards, immutable audit, incidents, real-time sync, notifications, files, search, native messaging | in progress |
 | C | Geospatial COP: geo-enabled boards, the map, dashboards, live feeds, situation reporting | not started |
 | D | Field and offline: offline-first client, smart forms, damage assessment, check-in, tracking and reunification | not started |
 | E | Interop and federation: CAP, EDXL, facility status networks, CoT/TAK, instance federation, public API, IPAWS connector | not started |
