@@ -83,8 +83,32 @@ floor; database connections queue and drain quickly.
   filter push-down. Tracked as the next scaling step; the shared limiter for
   rate limiting (RA-1 in the security audit) lands with the same work.
 
+## Real distributed load verification (run before release)
+
+The CI benchmark drives the app in-process; it proves the request and volume
+paths do not blow up, but it does not open 150 real WebSocket connections over
+a network. The honest 150-user proof runs against a live deployment on real
+hardware with `scripts/load-harness.mjs`, which is dependency-free (Node 22
+`fetch` and `WebSocket`) and can be run from one machine or several to reach
+and exceed 150 concurrent users:
+
+```
+node scripts/load-harness.mjs --url http://HOST:8080 \
+  --email admin@example.org --password '...' --board BOARD_ID \
+  --users 150 --duration 20 --http-p95-ms 1500
+```
+
+It logs in, fires a concurrent HTTP read burst (latency percentiles and error
+rate), then opens and holds one board sync WebSocket per user for the duration
+(how many of the 150 connections stay up, and auth latency), and exits non-zero
+if a budget is breached. Run it against the home deployment as the real
+150-concurrency and WebSocket check before any 1.0 announcement.
+
 ## Risk acceptances
 
-- **Single-node measurement.** The published numbers are single-instance. The
-  R1 floor is per instance, which is what the requirement commits to;
-  horizontal scaling is additive and out of scope for this floor.
+- **Single-node measurement.** The published in-process numbers are
+  single-instance. The R1 floor is per instance, which is what the requirement
+  commits to; horizontal scaling is additive and out of scope for this floor.
+- **Real-network 150-user proof runs out of band.** The distributed harness
+  above is the verification on real hardware; CI cannot open 150 network
+  sockets, so that run is a release-time step, not a CI gate.

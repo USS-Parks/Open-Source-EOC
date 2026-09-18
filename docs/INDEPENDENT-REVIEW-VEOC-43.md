@@ -91,4 +91,19 @@ governance cadence is Basho's, to be recorded here verbatim. No release act
 (tag, publish, announcement) has been or will be performed without Basho's
 explicit approval.
 
-> Basho's 1.0 decision (to be recorded verbatim): _pending_.
+> Basho's 1.0 decision (recorded verbatim, 2026-09-18): "It can be an 1.0
+> release, but I'll need to return home in order to test it on my machine
+> before any announcements."
+
+Interpretation and standing conditions:
+
+- **1.0 is approved in principle.** The scope above is the 1.0 content.
+- **No public announcement, and no release act, until Basho's home-machine
+  verification passes.** No git tag, GitHub release, or announcement has been
+  performed. The version tag will be cut only after Basho confirms the home
+  test and explicitly authorizes it.
+- **The 150-concurrency and WebSocket claim must be verified out of band on
+  real hardware**, not only by the in-process CI benchmark. The distributed
+  load harness for that is `scripts/load-harness.mjs` (see
+  [CAPACITY-VEOC-38.md](./CAPACITY-VEOC-38.md)); run it against the home
+  deployment before the announcement.
