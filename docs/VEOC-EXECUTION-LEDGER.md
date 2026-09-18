@@ -567,3 +567,17 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred:** production outbound escalation stores the upstream tier's base URL and token in a peer registry rather than passing them per call (the receive/report token lanes and the delivery seam are proven; the outbound credential store rides the VEOC-30 deferral); multi-hop escalation beyond two tiers chains the same receive/report pair; EDXL-RM emission of an escalated request reuses the VEOC-27 bridge.
 - **Rollback:** revert the VEOC-35 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-36: After-action and improvement planning
+
+- **Session:** VEOC-36, executed 2026-09-18
+- **Starting HEAD:** `a014c26e8d9b1f235033ee3daa46e0e41aec7213`
+- **Files created/changed:** `shared/src/aar/aar.ts` (pure `composeAar` splitting observations into strengths and areas for improvement and carrying the chronology as evidence, plus an HSEEP-ordered `aarToTextLines`), exported from `shared/src/index.ts`; `shared/src/aar/__tests__/aar.test.ts`; `server/migrations/0027_aar.sql` (observations captured during the incident, jurisdiction-scoped corrective actions that outlive it, and stored AARs, all under RLS); `server/src/aar/service.ts` (record and list observations, create and status-track corrective actions, compose an AAR from observations plus the VEOC-11 exported chronology, and render it to PDF); `server/src/aar/routes.ts`; app wiring; `server/src/__tests__/aar.test.ts`.
+- **Acceptance proven by test (F16-adjacent, AAR):** an AAR composes from observations captured during the incident (one strength, one area for improvement) plus the exported chronology as evidence and the incident's corrective actions, and exports to a valid PDF; corrective actions are jurisdiction-scoped, so after the incident closes they remain listed, report status through open → in_progress → complete, and completed ones drop from the default view but return when asked, which is the daily-ops corrective-action tracking the roster requires.
+- **Verification:** `pnpm check` fully green; 306/306 tests across 56 files; license-scan clean (300 packages, unchanged); check-links clean; tsc and eslint clean.
+- **Facets:** the AAR closes Phase F's operational circle; INV-2 reinforced (observations and corrective-action changes are attributed and the AAR embeds the immutable chronology as evidence).
+- **Deferred:** an HSEEP core-capability taxonomy picker (capabilities are free text today); linking each corrective action back to the specific observation that spawned it; and scheduled reminders on a corrective action's due date reuse the VEOC-14 scheduler.
+- **Rollback:** revert the VEOC-36 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

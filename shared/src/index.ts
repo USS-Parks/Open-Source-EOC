@@ -25,6 +25,7 @@ export * from "./collab/plan.js";
 export * from "./ics/forms.js";
 export * from "./ics/pdf.js";
 export * from "./resource/lifecycle.js";
+export * from "./aar/aar.js";
 
 export const OPENEOC_VERSION = "0.0.0" as const;
 

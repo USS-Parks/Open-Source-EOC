@@ -21,6 +21,7 @@ import {
 import { checkAllowed, recordFailure, recordSuccess } from "./auth/rate-limit.js";
 import { createGuestGrant, listPositions, provisionJurisdiction, revokeGuestGrant } from "./auth/authz.js";
 import { OidcClient, oidcSettingsFromEnv, type OidcSettings } from "./auth/oidc.js";
+import { aarRoutes } from "./aar/routes.js";
 import { auditRoutes } from "./audit/routes.js";
 import { boardRoutes } from "./boards/routes.js";
 import { capRoutes } from "./cap/routes.js";
@@ -291,6 +292,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   jicRoutes(app, sql, authenticate);
   iapRoutes(app, sql, authenticate);
   resourceRoutes(app, sql, authenticate);
+  aarRoutes(app, sql, authenticate);
   dashboardRoutes(app, sql, authenticate);
   damageRoutes(app, sql, authenticate);
   edxlRoutes(app, sql, authenticate);
