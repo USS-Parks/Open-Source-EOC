@@ -438,3 +438,17 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred:** the full EDXL-RM message set beyond RequestResource (ResponseToRequestResource, RequisitionResource, commit/release) extends the same model as the 213RR lifecycle drives them; targetArea and recipientRole routing beyond explicitAddress are additive to `addressedTo`; a transport/broker for actually moving envelopes between instances (vs. copy-paste/file exchange) is a deployment concern.
 - **Rollback:** revert the VEOC-27 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-28: Facility status networks
+
+- **Session:** VEOC-28, executed 2026-09-18
+- **Starting HEAD:** `d711e5bed7529963afd52e0b728086a9e8153d08`
+- **Files created/changed:** `shared/src/have/have.ts` (EDXL-HAVE 2.0 export from a facility-status snapshot: organization, EMS traffic, bed capacity per type, facility status, service coverage, staleness), `server/migrations/0019_facilities.sql` (standing facilities registry, append-only status reports, status_queries and status_query_targets for fan-out and response tracking, all under RLS on the EDXL-HAVE dictionary), `server/src/facilities/service.ts` (register a facility; report status, which also closes any open query target for that facility; the always-on board computing current status and per-facility staleness against each facility's freshness window; launch a query that fans out to a facility kind; query completeness with the outstanding list; EDXL-HAVE export), `server/src/facilities/routes.ts`, app wiring. Uses the existing EDXL-HAVE dictionary (facility kinds, operating status, EMS traffic, bed types).
+- **Acceptance proven by test (F10):** the always-on board shows each facility's current status and flags staleness (a facility reported two hours ago is stale against a one-hour window, a never-reported facility is stale); a "report now" query fans out to a kind (both hospitals, not the shelter), tracks completeness as responded/total with the outstanding list, advances as each facility reports, and reads complete when all have; the current picture exports as EDXL-HAVE-namespaced XML with organization names, facility status, EMS traffic, and bed capacity.
+- **Verification:** `pnpm check` fully green; 227/227 tests across 40 files; license-scan clean.
+- **Facets:** F10 `implemented` (always-on facility status networks with event-driven queries and HAVE export); F20 advanced further (HAVE export is another native standards surface).
+- **Deferred:** HAVE import/round-trip (this session exports; ingesting a partner's HAVE feed reuses the VEOC-19 feed framework and the same dictionary); auto-launching a status query on a schedule reuses the notification scheduler; the status-board and query UIs ride the app shell.
+- **Rollback:** revert the VEOC-28 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

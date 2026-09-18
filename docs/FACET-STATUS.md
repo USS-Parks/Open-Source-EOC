@@ -16,7 +16,7 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 | F7 | Offline XLSForm-compatible smart forms | VEOC-22 | implemented |
 | F8 | FEMA doctrine as schema: Lifelines, PDA outputs | VEOC-20, VEOC-23 | implemented |
 | F9 | Pre-disaster baseline data for damage assessment | VEOC-23 | implemented |
-| F10 | Always-on facility status networks + status queries | VEOC-28 | open |
+| F10 | Always-on facility status networks + status queries | VEOC-28 | implemented |
 | F11 | Scan-first tracking objects + reunification | VEOC-25 | implemented |
 | F12 | Incident templates instantiating ICS org + checklists | VEOC-12 | implemented |
 | F13 | Scenario libraries, reference libraries, checklists | VEOC-12 | implemented |

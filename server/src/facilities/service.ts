@@ -1,0 +1,230 @@
+import { haveToXml, type FacilitySnapshot } from "@openeoc/shared";
+import type { Sql } from "../db/client.js";
+import { AuthError, type Principal } from "../auth/service.js";
+import { recordAudit } from "../audit/service.js";
+
+/**
+ * Facility status networks (VEOC-28, F10) — the EMResource pattern. A
+ * standing registry, an always-on status board, event-driven "report now"
+ * queries with response tracking, and EDXL-HAVE export. Staleness is
+ * computed against each facility's freshness window.
+ */
+
+export interface FacilityInput {
+  readonly name: string;
+  readonly kind: string;
+  readonly contact?: string | undefined;
+  readonly staleAfterSeconds?: number | undefined;
+  readonly location?: { lon: number; lat: number } | undefined;
+}
+
+export async function registerFacility(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+  input: FacilityInput,
+): Promise<{ id: string }> {
+  requireWriter(actor, jurisdictionId);
+  const geom = input.location
+    ? sql`ST_SetSRID(ST_MakePoint(${input.location.lon}, ${input.location.lat}), 4326)`
+    : null;
+  const [row] = await sql`
+    insert into facilities (jurisdiction_id, name, kind, contact, geom, stale_after_seconds, created_by)
+    values (${jurisdictionId}, ${input.name}, ${input.kind}, ${input.contact ?? null}, ${geom},
+            ${input.staleAfterSeconds ?? 3600}, ${actor.person.id})
+    returning id`;
+  return { id: row!.id as string };
+}
+
+export interface StatusInput {
+  readonly operatingStatus: string;
+  readonly emsTraffic?: string | undefined;
+  readonly beds?: ReadonlyArray<{ bedType: string; available: number; baseline: number }> | undefined;
+  readonly capabilities?: readonly string[] | undefined;
+  readonly note?: string | undefined;
+}
+
+/**
+ * Report a facility's current status. If any open query targets this
+ * facility, the report answers it (response tracking closes the loop).
+ */
+export async function reportStatus(
+  sql: Sql,
+  actor: Principal,
+  facilityId: string,
+  input: StatusInput,
+): Promise<{ reportId: string }> {
+  const [facility] = await sql`select jurisdiction_id from facilities where id = ${facilityId}`;
+  if (!facility) throw new AuthError(404, "facility not found");
+  const jurisdictionId = facility.jurisdiction_id as string;
+  requireWriter(actor, jurisdictionId);
+  const [row] = await sql`
+    insert into facility_status_reports
+      (facility_id, jurisdiction_id, operating_status, ems_traffic, beds, capabilities, note,
+       reported_by)
+    values
+      (${facilityId}, ${jurisdictionId}, ${input.operatingStatus}, ${input.emsTraffic ?? null},
+       ${sql.json((input.beds ?? []) as never)}, ${sql.json((input.capabilities ?? []) as never)},
+       ${input.note ?? null}, ${actor.person.id})
+    returning id`;
+  const reportId = row!.id as string;
+  // Close out any open query targets for this facility.
+  await sql`
+    update status_query_targets t
+    set responded_report = ${reportId}, responded_at = now()
+    from status_queries q
+    where t.query_id = q.id and q.jurisdiction_id = ${jurisdictionId}
+      and t.facility_id = ${facilityId} and t.responded_at is null`;
+  await recordAudit(sql, actor, {
+    jurisdictionId,
+    category: "facility.status.reported",
+    subjectTable: "facilities",
+    subjectId: facilityId,
+    payload: { operatingStatus: input.operatingStatus },
+  });
+  return { reportId };
+}
+
+async function currentSnapshots(
+  sql: Sql,
+  jurisdictionId: string,
+  kind: string | undefined,
+  now: Date,
+): Promise<FacilitySnapshot[]> {
+  const facilities = kind
+    ? await sql`
+        select id, name, kind, stale_after_seconds from facilities
+        where jurisdiction_id = ${jurisdictionId} and kind = ${kind} order by name`
+    : await sql`
+        select id, name, kind, stale_after_seconds from facilities
+        where jurisdiction_id = ${jurisdictionId} order by name`;
+  const snapshots: FacilitySnapshot[] = [];
+  for (const f of facilities) {
+    const [latest] = await sql`
+      select operating_status, ems_traffic, beds, capabilities, reported_at
+      from facility_status_reports where facility_id = ${f.id as string}
+      order by reported_at desc limit 1`;
+    const reportedAt = latest ? new Date(latest.reported_at as string) : null;
+    const ageSec = reportedAt ? (now.getTime() - reportedAt.getTime()) / 1000 : Infinity;
+    snapshots.push({
+      organizationId: f.id as string,
+      organizationName: f.name as string,
+      facilityKind: f.kind as string,
+      operatingStatus: (latest?.operating_status as string) ?? "unknown",
+      emsTraffic: (latest?.ems_traffic as string | null) ?? undefined,
+      beds: (latest?.beds as { bedType: string; available: number; baseline: number }[]) ?? [],
+      capabilities: (latest?.capabilities as string[]) ?? [],
+      lastUpdate: reportedAt ? reportedAt.toISOString() : "",
+      stale: ageSec > (f.stale_after_seconds as number),
+    });
+  }
+  return snapshots;
+}
+
+/** The always-on status board: every facility's current status + staleness. */
+export async function statusBoard(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+  kind?: string,
+  now = new Date(),
+): Promise<FacilitySnapshot[]> {
+  requireMember(actor, jurisdictionId);
+  return currentSnapshots(sql, jurisdictionId, kind, now);
+}
+
+export async function exportHave(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+  kind?: string,
+  now = new Date(),
+): Promise<string> {
+  requireMember(actor, jurisdictionId);
+  return haveToXml(await currentSnapshots(sql, jurisdictionId, kind, now));
+}
+
+/** Launch a "report now" query, fanning out to facilities of a kind. */
+export async function launchQuery(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+  input: { prompt: string; kind?: string | undefined; dueInSeconds?: number | undefined; incidentId?: string | undefined },
+): Promise<{ id: string; targets: number }> {
+  requireWriter(actor, jurisdictionId);
+  const dueAt = input.dueInSeconds
+    ? new Date(Date.now() + input.dueInSeconds * 1000).toISOString()
+    : null;
+  const [q] = await sql`
+    insert into status_queries (jurisdiction_id, incident_id, prompt, target_kind, due_at, created_by)
+    values (${jurisdictionId}, ${input.incidentId ?? null}, ${input.prompt},
+            ${input.kind ?? null}, ${dueAt}, ${actor.person.id})
+    returning id`;
+  const queryId = q!.id as string;
+  const targets = input.kind
+    ? await sql`
+        insert into status_query_targets (query_id, facility_id)
+        select ${queryId}, id from facilities
+        where jurisdiction_id = ${jurisdictionId} and kind = ${input.kind}
+        returning facility_id`
+    : await sql`
+        insert into status_query_targets (query_id, facility_id)
+        select ${queryId}, id from facilities where jurisdiction_id = ${jurisdictionId}
+        returning facility_id`;
+  await recordAudit(sql, actor, {
+    jurisdictionId,
+    ...(input.incidentId ? { incidentId: input.incidentId } : {}),
+    category: "facility.query.launched",
+    subjectTable: "status_queries",
+    subjectId: queryId,
+    payload: { prompt: input.prompt, kind: input.kind, targets: targets.length },
+  });
+  return { id: queryId, targets: targets.length };
+}
+
+export interface QueryStatus {
+  readonly id: string;
+  readonly prompt: string;
+  readonly total: number;
+  readonly responded: number;
+  readonly complete: boolean;
+  readonly outstanding: ReadonlyArray<{ facilityId: string; name: string }>;
+}
+
+/** Response completeness for a query: who has reported, who is outstanding. */
+export async function queryStatus(
+  sql: Sql,
+  actor: Principal,
+  queryId: string,
+): Promise<QueryStatus> {
+  const [q] = await sql`
+    select id, jurisdiction_id, prompt from status_queries where id = ${queryId}`;
+  if (!q) throw new AuthError(404, "query not found");
+  requireMember(actor, q.jurisdiction_id as string);
+  const targets = await sql`
+    select t.facility_id, t.responded_at, f.name
+    from status_query_targets t join facilities f on f.id = t.facility_id
+    where t.query_id = ${queryId} order by f.name`;
+  const responded = targets.filter((t) => t.responded_at !== null).length;
+  return {
+    id: queryId,
+    prompt: q.prompt as string,
+    total: targets.length,
+    responded,
+    complete: targets.length > 0 && responded === targets.length,
+    outstanding: targets
+      .filter((t) => t.responded_at === null)
+      .map((t) => ({ facilityId: t.facility_id as string, name: t.name as string })),
+  };
+}
+
+function requireWriter(actor: Principal, jurisdictionId: string): void {
+  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
+  if (!m || (m.role !== "admin" && m.role !== "member"))
+    throw new AuthError(403, "requires write access to this jurisdiction");
+}
+
+function requireMember(actor: Principal, jurisdictionId: string): void {
+  if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
+    throw new AuthError(403, "no access to this jurisdiction");
+}
