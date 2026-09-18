@@ -166,6 +166,7 @@ export async function createIap(
   input: CreateIapInput,
 ): Promise<{ id: string; content: IapDocument }> {
   const { jurisdictionId, ctx } = await gatherContext(sql, actor, incidentId, input);
+  requireWriter(actor, jurisdictionId);
   const formIds = (input.formIds ?? []).filter(isFormId);
   const iap = formIds.length > 0 ? assembleIap(ctx, formIds) : assembleIap(ctx);
   const [row] = await sql`
@@ -243,4 +244,10 @@ function requireAdmin(actor: Principal, jurisdictionId: string): void {
 function requireMember(actor: Principal, jurisdictionId: string): void {
   if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
     throw new AuthError(403, "no access to this jurisdiction");
+}
+
+function requireWriter(actor: Principal, jurisdictionId: string): void {
+  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
+  if (!m || (m.role !== "admin" && m.role !== "member"))
+    throw new AuthError(403, "requires write access to this jurisdiction");
 }

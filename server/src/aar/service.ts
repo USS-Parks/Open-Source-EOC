@@ -32,7 +32,7 @@ export async function recordObservation(
   input: { capability: string; kind: "strength" | "improvement"; observation: string; recommendation?: string | undefined },
 ): Promise<{ id: string }> {
   const { jurisdictionId } = await incidentJurisdiction(sql, incidentId);
-  requireMember(actor, jurisdictionId);
+  requireWriter(actor, jurisdictionId);
   const [row] = await sql`
     insert into aar_observations
       (jurisdiction_id, incident_id, capability, kind, observation, recommendation, created_by)
@@ -82,7 +82,7 @@ export async function createCorrectiveAction(
     dueDate?: string | undefined;
   },
 ): Promise<{ id: string }> {
-  requireMember(actor, jurisdictionId);
+  requireWriter(actor, jurisdictionId);
   const [row] = await sql`
     insert into corrective_actions
       (jurisdiction_id, incident_id, capability, recommendation, owner_position, owner_person,
@@ -111,7 +111,7 @@ export async function setCorrectiveActionStatus(
 ): Promise<void> {
   const [row] = await sql`select jurisdiction_id from corrective_actions where id = ${id}`;
   if (!row) throw new AuthError(404, "corrective action not found");
-  requireMember(actor, row.jurisdiction_id as string);
+  requireWriter(actor, row.jurisdiction_id as string);
   await sql`
     update corrective_actions
     set status = ${status}, updated_at = now(),
@@ -175,7 +175,7 @@ export async function composeAndStoreAar(
   input: { overview: string; objectives?: readonly string[]; period?: string },
 ): Promise<{ id: string; content: AarDocument }> {
   const { jurisdictionId, name } = await incidentJurisdiction(sql, incidentId);
-  requireMember(actor, jurisdictionId);
+  requireWriter(actor, jurisdictionId);
   const observations = await listObservations(sql, actor, incidentId);
   const caRows = await listCorrectiveActions(sql, actor, jurisdictionId, { includeComplete: true });
   const correctiveActions: AarCorrectiveAction[] = caRows
@@ -233,4 +233,10 @@ export async function exportAarPdf(
 function requireMember(actor: Principal, jurisdictionId: string): void {
   if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
     throw new AuthError(403, "no access to this jurisdiction");
+}
+
+function requireWriter(actor: Principal, jurisdictionId: string): void {
+  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
+  if (!m || (m.role !== "admin" && m.role !== "member"))
+    throw new AuthError(403, "requires write access to this jurisdiction");
 }

@@ -111,7 +111,7 @@ export async function openBridge(
     select jurisdiction_id, name from incidents where id = ${incidentId}`;
   if (!incident) throw new AuthError(404, "incident not found");
   const jurisdictionId = incident.jurisdiction_id as string;
-  requireMember(actor, jurisdictionId);
+  requireWriter(actor, jurisdictionId);
   const cfg = await loadConfig(sql, jurisdictionId);
   if (!cfg || !cfg.enabled) throw new AuthError(409, "meeting bridge is not configured");
 
@@ -202,7 +202,7 @@ export async function scheduleBriefing(
   const [incident] = await sql`select jurisdiction_id from incidents where id = ${incidentId}`;
   if (!incident) throw new AuthError(404, "incident not found");
   const jurisdictionId = incident.jurisdiction_id as string;
-  requireMember(actor, jurisdictionId);
+  requireWriter(actor, jurisdictionId);
   const [row] = await sql`
     insert into briefings (incident_id, title, section, scheduled_at, created_by)
     values (${incidentId}, ${input.title}, ${input.section ?? null},
@@ -301,4 +301,10 @@ function requireAdmin(actor: Principal, jurisdictionId: string): void {
 function requireMember(actor: Principal, jurisdictionId: string): void {
   if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
     throw new AuthError(403, "no access to this jurisdiction");
+}
+
+function requireWriter(actor: Principal, jurisdictionId: string): void {
+  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
+  if (!m || (m.role !== "admin" && m.role !== "member"))
+    throw new AuthError(403, "requires write access to this jurisdiction");
 }

@@ -61,7 +61,7 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 | INV-4 | Standards are native | implemented |
 | INV-5 | Boards are versioned schemas | open |
 | INV-6 | No-code is real | implemented |
-| INV-7 | Fail closed | open |
+| INV-7 | Fail closed | implemented |
 | INV-8 | Calm under stress | open |
 | INV-9 | Core is never unbundled | implemented |
 | INV-10 | The codebase outlives any one maintainer | open |

@@ -30,7 +30,7 @@ export async function submitRequest(
   jurisdictionId: string,
   input: SubmitInput,
 ): Promise<{ id: string }> {
-  requireMember(actor, jurisdictionId);
+  requireWriter(actor, jurisdictionId);
   const [row] = await sql`
     insert into resource_requests
       (jurisdiction_id, incident_id, origin, item, quantity, priority, state, notes,
@@ -80,7 +80,7 @@ export async function transition(
   note?: string,
 ): Promise<{ state: string }> {
   const req = await loadRequest(sql, requestId);
-  requireMember(actor, req.jurisdiction_id);
+  requireWriter(actor, req.jurisdiction_id);
   if (!canTransition(req.state, toState))
     throw new AuthError(409, `cannot move a request from ${req.state} to ${toState}`);
   await sql`update resource_requests set state = ${toState}, updated_at = now() where id = ${requestId}`;
@@ -105,7 +105,7 @@ export async function assign(
   positionId: string,
 ): Promise<{ state: string }> {
   const req = await loadRequest(sql, requestId);
-  requireMember(actor, req.jurisdiction_id);
+  requireWriter(actor, req.jurisdiction_id);
   await sql`update resource_requests set assigned_position = ${positionId} where id = ${requestId}`;
   return transition(sql, actor, requestId, "assigned", `assigned to a position`);
 }
@@ -136,7 +136,7 @@ export async function escalate(
     select jurisdiction_id, state, item, quantity, priority, notes from resource_requests
     where id = ${requestId}`;
   if (!full) throw new AuthError(404, "resource request not found");
-  requireMember(actor, full.jurisdiction_id as string);
+  requireWriter(actor, full.jurisdiction_id as string);
   await deliver({
     originRequestId: requestId,
     item: full.item as string,
@@ -241,7 +241,7 @@ export async function addCost(
   input: { category: string; description?: string; amountCents: number; incurredAt?: string | undefined },
 ): Promise<{ id: string }> {
   const req = await loadRequest(sql, requestId);
-  requireMember(actor, req.jurisdiction_id);
+  requireWriter(actor, req.jurisdiction_id);
   const [row] = await sql`
     insert into rr_costs (request_id, category, description, amount_cents, incurred_at, recorded_by)
     values (${requestId}, ${input.category}, ${input.description ?? ""}, ${input.amountCents},
@@ -334,4 +334,10 @@ async function notify(
 function requireMember(actor: Principal, jurisdictionId: string): void {
   if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
     throw new AuthError(403, "no access to this jurisdiction");
+}
+
+function requireWriter(actor: Principal, jurisdictionId: string): void {
+  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
+  if (!m || (m.role !== "admin" && m.role !== "member"))
+    throw new AuthError(403, "requires write access to this jurisdiction");
 }

@@ -287,7 +287,7 @@ export async function postAnnouncement(
   transport: HttpTransport = httpTransport,
 ): Promise<{ degraded: boolean }> {
   const ctx = await loadIncidentContext(sql, incidentId);
-  requireMember(actor, ctx.jurisdictionId);
+  requireWriter(actor, ctx.jurisdictionId);
   const [space] = await sql`
     select id, status from collab_spaces where incident_id = ${incidentId}`;
   const live = await loadLiveBackend(sql, ctx.jurisdictionId, transport);
@@ -406,4 +406,10 @@ function requireAdmin(actor: Principal, jurisdictionId: string): void {
 function requireMember(actor: Principal, jurisdictionId: string): void {
   if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
     throw new AuthError(403, "no access to this jurisdiction");
+}
+
+function requireWriter(actor: Principal, jurisdictionId: string): void {
+  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
+  if (!m || (m.role !== "admin" && m.role !== "member"))
+    throw new AuthError(403, "requires write access to this jurisdiction");
 }

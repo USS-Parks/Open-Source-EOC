@@ -28,7 +28,7 @@ export async function draftRelease(
   jurisdictionId: string,
   input: DraftInput,
 ): Promise<{ id: string }> {
-  requireMember(actor, jurisdictionId);
+  requireWriter(actor, jurisdictionId);
   const [row] = await sql`
     insert into press_releases
       (jurisdiction_id, incident_id, title, body, required_agencies, created_by, created_by_position)
@@ -51,7 +51,7 @@ export async function draftRelease(
 
 export async function submitRelease(sql: Sql, actor: Principal, releaseId: string): Promise<void> {
   const rel = await loadRelease(sql, releaseId);
-  requireMember(actor, rel.jurisdiction_id);
+  requireWriter(actor, rel.jurisdiction_id);
   if (rel.status !== "draft") throw new AuthError(409, "only a draft can be submitted");
   await sql`update press_releases set status = 'pending', submitted_at = now() where id = ${releaseId}`;
   await recordAudit(sql, actor, {
@@ -72,7 +72,7 @@ export async function decideLocal(
   note?: string,
 ): Promise<{ status: string }> {
   const rel = await loadRelease(sql, releaseId);
-  requireMember(actor, rel.jurisdiction_id);
+  requireWriter(actor, rel.jurisdiction_id);
   await recordDecision(sql, releaseId, agency, decision, note, actor.person.id, null);
   const status = await recomputeStatus(sql, releaseId);
   await recordAudit(sql, actor, {
@@ -132,7 +132,7 @@ export async function publishRelease(
   options: PublishOptions = {},
 ): Promise<{ status: string; channels: string[] }> {
   const rel = await loadRelease(sql, releaseId);
-  requireMember(actor, rel.jurisdiction_id);
+  requireWriter(actor, rel.jurisdiction_id);
   if (rel.status !== "approved")
     throw new AuthError(409, "only an approved release can publish");
 
@@ -186,7 +186,7 @@ export async function logInquiry(
   jurisdictionId: string,
   input: { outlet: string; subject: string; question: string; incidentId?: string | undefined },
 ): Promise<{ id: string }> {
-  requireMember(actor, jurisdictionId);
+  requireWriter(actor, jurisdictionId);
   const [row] = await sql`
     insert into media_inquiries
       (jurisdiction_id, incident_id, outlet, subject, question, created_by)
@@ -213,7 +213,7 @@ export async function assignInquiry(
 ): Promise<void> {
   const [inq] = await sql`select jurisdiction_id from media_inquiries where id = ${inquiryId}`;
   if (!inq) throw new AuthError(404, "inquiry not found");
-  requireMember(actor, inq.jurisdiction_id as string);
+  requireWriter(actor, inq.jurisdiction_id as string);
   await sql`
     update media_inquiries set assigned_position = ${positionId}, status = 'assigned'
     where id = ${inquiryId}`;
@@ -235,7 +235,7 @@ export async function answerInquiry(
   const [inq] = await sql`
     select jurisdiction_id from media_inquiries where id = ${inquiryId}`;
   if (!inq) throw new AuthError(404, "inquiry not found");
-  requireMember(actor, inq.jurisdiction_id as string);
+  requireWriter(actor, inq.jurisdiction_id as string);
   const [rel] = await sql`
     select jurisdiction_id, status from press_releases where id = ${responseReleaseId}`;
   if (!rel) throw new AuthError(404, "response release not found");
@@ -342,4 +342,10 @@ async function recordPublication(
 function requireMember(actor: Principal, jurisdictionId: string): void {
   if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
     throw new AuthError(403, "no access to this jurisdiction");
+}
+
+function requireWriter(actor: Principal, jurisdictionId: string): void {
+  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
+  if (!m || (m.role !== "admin" && m.role !== "member"))
+    throw new AuthError(403, "requires write access to this jurisdiction");
 }

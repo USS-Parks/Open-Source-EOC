@@ -581,3 +581,18 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred:** an HSEEP core-capability taxonomy picker (capabilities are free text today); linking each corrective action back to the specific observation that spawned it; and scheduled reminders on a corrective action's due date reuse the VEOC-14 scheduler.
 - **Rollback:** revert the VEOC-36 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-37: Security audit and adversarial pass
+
+- **Session:** VEOC-37, executed 2026-09-18
+- **Starting HEAD:** `fa41ca3dc97912aacffc75fa8b284b33c407aa1d`
+- **Files created/changed:** `docs/SECURITY-AUDIT-VEOC-37.md` (findings, verified controls, dependency/license posture, and written risk acceptances); `server/src/__tests__/security.test.ts` (the seeded adversarial suite that runs in CI thereafter); and the write-path guards in `server/src/collab/service.ts`, `server/src/meetings/service.ts`, `server/src/jic/service.ts`, `server/src/resource/service.ts`, `server/src/iap/service.ts`, `server/src/aar/service.ts` changed from `requireMember` to `requireWriter` (finding F-1).
+- **Finding fixed (F-1):** the Phase-F modules guarded write actions with a membership-only check, which admitted the read-only viewer role, contradicting the `requireWriter` contract used elsewhere (INV-7, INV-1). Write paths now require admin or member; pure reads still allow viewers; peer-token lanes are unaffected. Proven by the suite's viewer-read-only cases.
+- **Acceptance proven by test (INV-7):** no unauthenticated request reaches any authority endpoint (401 across representative routes); an admin of one jurisdiction is refused on another's boards, IPAWS, resource requests, corrective actions, and JIC releases (403); a viewer reads but cannot write (403); federation, JIC-approval, and resource-escalation receive lanes and the public damage intake reject forged or missing tokens (401); the audit log refuses update and delete from the runtime role; IPAWS, collaboration, and meeting secrets never appear in status responses; and login backoff locks an email after repeated failures (429).
+- **Verification:** `pnpm check` fully green; 313/313 tests across 57 files (the seeded suite included); license-scan clean (300 packages, unchanged, no new dependency); check-links clean; tsc and eslint clean.
+- **Facets:** INV-7 `implemented` (fail closed: the authorization matrix is re-verified and enforced, token lanes fail closed, the audit log is tamper-evident); AR6 reinforced.
+- **Risk-accepted (in `docs/SECURITY-AUDIT-VEOC-37.md`):** RA-1 in-process rate limiters until the VEOC-38 shared limiter; RA-2 no network vulnerability scan in the air-gapped CI gate (the lockfile plus license scan hold the supply-chain line; `pnpm audit` runs at release time).
+- **Rollback:** revert the VEOC-37 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.
