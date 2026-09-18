@@ -28,6 +28,7 @@ import { dashboardRoutes } from "./dashboards/routes.js";
 import { damageRoutes } from "./damage/routes.js";
 import { edxlRoutes } from "./edxl/routes.js";
 import { facilityRoutes } from "./facilities/routes.js";
+import { federationRoutes } from "./federation/routes.js";
 import { incidentRoutes } from "./incidents/routes.js";
 import { feedRoutes } from "./feeds/routes.js";
 import { fileRoutes } from "./files/routes.js";
@@ -263,7 +264,9 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
     new BlobStore(process.env.OPENEOC_DATA_DIR ?? "./data/blobs"),
     authenticate,
   );
-  registerSyncRoutes(app, sql, new BoardSyncHub(sql));
+  const hub = new BoardSyncHub(sql);
+  registerSyncRoutes(app, sql, hub);
+  federationRoutes(app, sql, hub, authenticate);
 
   return app;
 }

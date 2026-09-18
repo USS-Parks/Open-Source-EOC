@@ -9,7 +9,7 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 |---|---|---:|---|
 | F1 | Board primitive: versioned schema, input + display views | VEOC-09, VEOC-10 | implemented |
 | F2 | Position login + immutable activity/position logs | VEOC-07, VEOC-11 | implemented |
-| F3 | Store-and-forward federation, local replication | VEOC-30 | open |
+| F3 | Store-and-forward federation, local replication | VEOC-30 | implemented |
 | F4 | Board-triggered notifications, webhooks, multi-channel | VEOC-14 | implemented |
 | F5 | ICS forms, IAP builder, 213RR lifecycle | VEOC-34, VEOC-35 | open |
 | F6 | Any board as a live geospatial layer; field-to-COP loop | VEOC-16, VEOC-17 | implemented |
@@ -34,7 +34,7 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 |---|---|---:|---|
 | R1 | At least 150 concurrent users per instance | VEOC-38 | open |
 | R2 | IPAWS integration enable-at-will | VEOC-31 | open |
-| R3 | Agency, organization, and volunteer conglomerate COP access | VEOC-08, VEOC-30 | open |
+| R3 | Agency, organization, and volunteer conglomerate COP access | VEOC-08, VEOC-30 | implemented |
 | R4 | Fluid Command and General Staff work; JIC component | VEOC-12, VEOC-33A, VEOC-34 | open |
 | R5 | File sharing | VEOC-15 | implemented |
 | R6 | Private and group messaging | VEOC-15A, VEOC-32 | implemented |

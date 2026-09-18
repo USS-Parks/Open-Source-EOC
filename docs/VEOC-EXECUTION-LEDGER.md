@@ -467,3 +467,18 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred:** a live TCP/UDP/multicast CoT transport and TLS to a real TAK server is a deployment/gateway-runner concern (the translation and relay semantics are proven here); if a native field node is later adopted, ADR-0008 is revisited and the Rust crate implements the same contract.
 - **Rollback:** revert the VEOC-29 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-30: Instance federation, store-and-forward
+
+- **Session:** VEOC-30, executed 2026-09-18
+- **Starting HEAD:** `aae4f48a9328afeb1916c0a8417591ffe6efacd9`
+- **Files created/changed:** `server/migrations/0020_federation.sql` (mutually authenticated peers, per-board sharing agreements, and a store-and-forward outbox, under RLS with the token-authenticated receive lane allowed to resolve a peer with no person context), `server/src/federation/service.ts` (register a peer and mint its token; per-board agreements; queue a board's Yjs update for every peer allowed to read it; list pending; and receive a peer's forwarded batch, authenticated by token, scoped by agreement, applied through the VEOC-13 sync hub so it reconciles and checkpoints, with the convergence attributed to the peer in the audit trail), `server/src/federation/routes.ts` (peer/agreement management, queue, pending, and a peer-token receive endpoint), app wiring that now shares one sync hub between the sync routes and federation.
+- **Acceptance proven by test (F3, R3):** two genuinely separate instances (separate databases and app processes) share a board; a scripted partition strands one edit in each instance's outbox while each board holds only its own record; on reconnect the batches deliver over HTTP and both instances converge to the union with zero conflicts and neither loses its own data; each side audits a `federation.received` attributed to the sending peer; an unknown peer token is 401 and a peer aimed at a board it has no agreement for is 403 — delivery is asynchronous store-and-forward with no synchronous dual-commit anywhere.
+- **Verification:** `pnpm check` fully green; 238/238 tests across 43 files; license-scan clean.
+- **Defect found and fixed (in the test, not the design):** a first single-database test collapsed the two instances into one `board_records` table, whose id is a global primary key, so replicating a record onto the second board updated the original row instead of inserting — a PK collision that cannot occur between real separate-instance databases. Rewrote the test to stand up two independent databases and apps, the honest federation model, and it converges.
+- **Facets:** F3 `implemented` (store-and-forward federation with local replication and CRDT convergence); R3 `implemented` (agency/organization/volunteer conglomerate COP access — VEOC-08 guest scoping within an instance plus VEOC-30 federation across instances).
+- **Deferred:** the outbox flusher/transport that actually POSTs batches to peer URLs on a schedule (the queue, pending, and receive semantics are proven; wiring a delivery loop is a runner/deploy concern); mutual TLS and key rotation for peer auth is a deployment hardening item on top of the token model; conflict surfacing to operators reuses the VEOC-13 sync_conflicts surface.
+- **Rollback:** revert the VEOC-30 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.
