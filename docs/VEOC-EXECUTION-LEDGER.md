@@ -611,3 +611,18 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Risk-accepted (in `docs/CAPACITY-VEOC-38.md`):** the published numbers are single-instance; the R1 floor is per instance, which is what the requirement commits to.
 - **Rollback:** revert the VEOC-38 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-39: Accessibility and stress-UX audit
+
+- **Session:** VEOC-39, executed 2026-09-18
+- **Starting HEAD:** `9f43b48d783983f22dbb5d314b2fc2ea0b8b7218`
+- **Files created/changed:** `web/src/design/components.tsx` (buttons, text fields, and selects given a 44px minimum touch target, finding A11Y-1); `web/src/design/__tests__/operational-a11y.test.tsx` (axe over the operational briefing view in both themes, heading structure, and the touch-target assertions); `docs/ACCESSIBILITY-VEOC-39.md` (the WCAG 2.1 AA audit record and the stress-UX pass).
+- **Acceptance proven by test (508/WCAG 2.1 AA, stress-UX):** axe reports zero violations over both the component gallery and a real operational screen (the briefing view) in the light and dark themes; keyboard order follows document order behind a skip link with no positive tabindex; labels are wired to controls; token contrast meets AA for both themes with a seeded-defect proof; and interactive controls meet a 44px glove/touchscreen target. Stress-UX findings are fixed (A11Y-1) or ticketed with rationale (A11Y-T1 manual screen-reader pass, A11Y-T2 reduced-motion), and the ten-minute viewer path, low-bandwidth (local PMTiles, no external calls), and night-shift dark mode are recorded in the audit.
+- **Verification:** `pnpm check` fully green; 319/319 tests across 59 files; license-scan clean (300 packages, unchanged, axe-core already present); check-links clean; tsc and eslint clean.
+- **Facets:** accessibility is cross-cutting; the stress-UX fixes reinforce F14 (calm, map-first discipline) and AR6 (calm under stress); the timed naive-user viewer walkthrough is executed with the VEOC-41 demo.
+- **Finding fixed (A11Y-1):** interactive controls below a comfortable gloved touch target, raised to a 44px minimum.
+- **Ticketed (in `docs/ACCESSIBILITY-VEOC-39.md`):** A11Y-T1 full manual screen-reader pass with the VEOC-41 walkthrough; A11Y-T2 reduced-motion/prefers-contrast handling with the VEOC-41 polish pass.
+- **Rollback:** revert the VEOC-39 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.
