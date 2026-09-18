@@ -640,3 +640,17 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred / out-of-band:** actual clean-machine and networking-disabled install timings are validated on real hosts, not in CI; the web static-serving sidecar is shown but commented in compose until an operator wires their basemap.
 - **Rollback:** revert the VEOC-40 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-41: Documentation, training paths, and the demo
+
+- **Session:** VEOC-41, executed 2026-09-18
+- **Starting HEAD:** `37cdeebf6ce53c5dafb2abf4aa688b3e52ec4dc2`
+- **Files created/changed:** `docs/guides/ADMIN.md`, `DESIGNER.md`, `VIEWER-QUICKSTART.md`, `FIELD-USER.md`, `FEDERATION-SETUP.md`, `STANDARDS-INTEROP.md` (the operational guides); `docs/DEMO-SCENARIO.md` (the scripted functional exercise with a facet-coverage checklist mapping every step to F1-F20); `server/src/demo/seed.ts` (the demo dataset built with the real services: jurisdiction, admin/operator/viewer, an activated wildfire incident with boards and a log, a public CAP evacuation alert, a 213RR in flight, a JIC release, and an AAR observation); `server/src/__tests__/demo.test.ts` (the dataset loads and the scenario covers every facet); FACET-STATUS updates.
+- **Acceptance proven by test and artifact:** the demo dataset loads through the real services and creates the incident, boards, records, CAP alert, triaged resource request, press release, and AAR observation; the scripted scenario references every facet F1 through F20, guarded in CI so a facet can never be silently dropped; the link checker is green across all 26 markdown files, so the guides cross-link cleanly. The cold-start "a stranger deploys and runs it from docs alone" walkthrough is executed by a fresh reader against these guides (out-of-band by nature); the guides and the demo make that path concrete.
+- **Verification:** `pnpm check` fully green; 323/323 tests across 61 files; license-scan clean (300 packages, unchanged, no new dependency); check-links clean (26 files); tsc and eslint clean.
+- **Facets:** F16 `implemented` (one-click role-based provisioning plus the documented ten-minute viewer quickstart); F17 `implemented` (daily-ops mode exercised in the scenario and documented against skill decay).
+- **Deferred / out-of-band:** the timed cold-start run with a genuinely fresh human executor is scheduled with the VEOC-42 exercise; a PMTiles demo basemap file is provided by the operator per the deploy guide.
+- **Rollback:** revert the VEOC-41 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.
