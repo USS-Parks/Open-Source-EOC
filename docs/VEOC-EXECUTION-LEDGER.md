@@ -452,3 +452,18 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred:** HAVE import/round-trip (this session exports; ingesting a partner's HAVE feed reuses the VEOC-19 feed framework and the same dictionary); auto-launching a status query on a schedule reuses the notification scheduler; the status-board and query UIs ride the app shell.
 - **Rollback:** revert the VEOC-28 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-29: CoT/TAK gateway and the field-node decision
+
+- **Session:** VEOC-29, executed 2026-09-18
+- **Starting HEAD:** `8a906997b7f797b6dfadc4d8d9ae72cdf28f9f80`
+- **Files created/changed:** `docs/adr/ADR-0008-cot-gateway-and-field-node.md` (the field-node language decision), `shared/src/cot/cot.ts` (CoT event model, XML serialize/parse with attributes, and the bidirectional mapping: inbound CoT → COP GeoJSON feature, VEOC geo record → CoT event), `server/src/cot/service.ts` (ingest a CoT event onto a per-jurisdiction CoT feed layer; emit a geo board record as CoT), `server/src/cot/routes.ts`, app wiring.
+- **The decision (ADR-0008):** the CoT/TAK gateway is implemented in TypeScript, not as a Rust single binary. The gateway is I/O-bound XML translation at the scale in scope, the CoT model is already TypeScript and reused offline by the field client, and a single-language stack is the project's posture (INV-10). The `field-node/` Rust crate stays a documented, CI-compiled placeholder so the native single-binary path remains open and reversible; a future native relay consumes the same CoT model and API. **This decision was flagged in the roster for Basho; he was away under the standing authorization, so ADR-0008 records the reversible default and rationale for his review — he can direct the Rust path without changing the gateway's semantics.**
+- **Acceptance proven by test (F20 partial; ADR present):** a CoT event round-trips XML→model→XML with attributes and detail intact; an inbound ATAK track maps to a COP feature and, through the ingest endpoint, lands on the CoT feed layer that the COP renders (GeoJSON with the right coordinates and a CoT/TAK provenance tag); a VEOC geo board record emits as CoT XML that a TAK fixture (parsing it back) sees with the record's uid, position, and callsign; non-point geometry and a record with no geometry are refused.
+- **Verification:** `pnpm check` fully green; 235/235 tests across 42 files; license-scan clean; the field-node Rust crate remains under `cargo check`/`clippy` in CI (ADR-0008 keeps it alive).
+- **Facets:** F20 advanced (CoT/TAK bidirectional bridge); F18 reinforced (CoT sensor/track ingestion onto the COP alongside VEOC-19).
+- **Deferred:** a live TCP/UDP/multicast CoT transport and TLS to a real TAK server is a deployment/gateway-runner concern (the translation and relay semantics are proven here); if a native field node is later adopted, ADR-0008 is revisited and the Rust crate implements the same contract.
+- **Rollback:** revert the VEOC-29 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.
