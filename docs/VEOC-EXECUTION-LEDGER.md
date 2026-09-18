@@ -511,3 +511,17 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred:** the outbound delivery of assignment-driven sync in production uses the default HTTP transport best-effort (the sync semantics are proven against fake backends); a real-time membership webhook back from the backend, and mutual-TLS/bot-token rotation, are deployment hardening on top of the encrypted-token model; VEOC-33 adds the one-click meeting bridge under the same boundary rules.
 - **Rollback:** revert the VEOC-32 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-33: Meetings and briefing bridges
+
+- **Session:** VEOC-33, executed 2026-09-18
+- **Starting HEAD:** `8253b382a8512ad0142e60ac6e7734da958d8473`
+- **Files created/changed:** `server/migrations/0023_meetings.sql` (per-jurisdiction Jitsi config disabled by default with the JWT secret held only as an envelope; per-incident/section meeting rooms with a stable name; and briefings as scheduled items, all under RLS); `server/src/meetings/jitsi.ts` (HS256 JWT mint and verify and the join-URL builder, no external dependency, so nothing from Jitsi is vendored); `server/src/meetings/service.ts` (configure the bridge; one-click open-or-reuse a room and mint a per-caller token scoped to the room with a moderator flag; list bridges for the dashboard; schedule and list briefings; and fire due briefings, notifying holders through the VEOC-14 notifications substrate); `server/src/meetings/routes.ts`; app wiring; `server/src/__tests__/meetings.test.ts`.
+- **Acceptance proven by test (F15, R4):** opening a bridge before the deployment is configured is refused; once configured, one action yields a joinable URL and the same room comes back on the next click (a stable link the dashboard can surface); with a JWT secret configured the URL carries a per-caller token that verifies, names the exact room, marks an admin as moderator and a plain member as not, and a forged token (wrong secret) does not verify; a non-member of the incident's jurisdiction is denied (audience scoping); a due briefing fires once, notifying both incident holders through the VEOC-14 notifications table, is stamped so a second run fires nothing, and a future briefing stays pending on the calendar.
+- **Verification:** `pnpm check` fully green; 278/278 tests across 49 files; license-scan clean (300 packages, unchanged, no new dependency); check-links clean; tsc and eslint clean.
+- **Facets:** F15 reinforced (one-click meeting bridges on top of the VEOC-32 incident spaces); R4 advanced (coordinated briefings; the JIC component follows in VEOC-33A and ICS forms/IAP in VEOC-34).
+- **Deferred:** a real Jitsi deployment handshake is the configured base URL plus the JWT the platform mints (the token semantics are proven by verify); a recurring-briefing schedule and calendar (ICS/iCal) export layer on the one-shot briefing model; auto-firing due briefings on a timer reuses the same runner the notification scheduler uses.
+- **Rollback:** revert the VEOC-33 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.
