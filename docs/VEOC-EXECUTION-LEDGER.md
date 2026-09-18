@@ -539,3 +539,17 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred:** cross-instance coordinated fan-out of one approved message to many peer outlets (the peer-approval boundary and single-instance publication are proven; the outbound fan-out reuses the VEOC-30 outbox); a first-class talking-points approval workflow beyond the board template; requiring the acting position to be a PIO (attribution is recorded via the audit position today); and per-outlet distribution beyond the public feed, CAP, and collaboration channels.
 - **Rollback:** revert the VEOC-33A commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-34: ICS forms and the IAP builder
+
+- **Session:** VEOC-34, executed 2026-09-18
+- **Starting HEAD:** `a7dd882c29f8ba633e45c8953d4c674143608d12`
+- **Files created/changed:** `shared/src/ics/forms.ts` (a normalized incident context and pure builders for all twelve electronic ICS forms 201/202/203/204/205/206/207/208/211/213/214/215, plus `assembleIap` and a deterministic `iapToTextLines`); `shared/src/ics/pdf.ts` (a dependency-free, deterministic PDF writer: standard Helvetica, pagination, valid xref/trailer, no vendored library); exported from `shared/src/index.ts`; `shared/src/ics/__tests__/forms.test.ts`; `server/migrations/0025_iap.sql` (IAPs stored as assembled content with a draft/approved workflow, under RLS); `server/src/iap/service.ts` (gather the live context, the org chart from positions and current holders, the 214 from the activity-log board, check-ins, resources, comms, and hand it to the shared builders; create, fetch, approve, and render an IAP to PDF); `server/src/iap/routes.ts`; app wiring; `server/src/__tests__/iap.test.ts`.
+- **Acceptance proven by test (F5 part one):** an IAP for the demo incident assembles the default form set in order from the current org chart and assignments with only objectives and the operational period supplied by hand; the 203 carries the assigned Incident Commander and Operations chief; the 214 derives from the activity-log board automatically; command approval is required and recorded; and the plan exports as a valid PDF (`%PDF-1.4`, containing the incident name), byte-identical on re-render and paginating long documents.
+- **Verification:** `pnpm check` fully green; 295/295 tests across 52 files; license-scan clean (300 packages, unchanged, no new dependency); check-links clean; tsc and eslint clean.
+- **Facets:** F5 advanced (ICS forms and the IAP builder, part one; the 213RR resource lifecycle is part two in VEOC-35); R4 `implemented` (Command and General Staff work fluidly with ICS org/checklists from VEOC-12, the JIC from VEOC-33A, and ICS forms/IAP here).
+- **Deferred:** pixel-faithful reproductions of the official FEMA form layouts (the prefilled content and a clean PDF are proven; exact box-for-box facsimiles are a rendering-template concern); comms-plan (205) and medical-plan (206) prefill draw from boards when present and are otherwise header-only until those boards are standardized; the 213RR general-message flow is the VEOC-35 lifecycle.
+- **Rollback:** revert the VEOC-34 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

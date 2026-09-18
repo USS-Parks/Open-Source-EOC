@@ -33,6 +33,7 @@ import { federationRoutes } from "./federation/routes.js";
 import { collabRoutes } from "./collab/routes.js";
 import { syncPositionIncidents } from "./collab/service.js";
 import { incidentRoutes } from "./incidents/routes.js";
+import { iapRoutes } from "./iap/routes.js";
 import { ipawsRoutes } from "./ipaws/routes.js";
 import { jicRoutes } from "./jic/routes.js";
 import { meetingRoutes } from "./meetings/routes.js";
@@ -287,6 +288,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   collabRoutes(app, sql, authenticate);
   meetingRoutes(app, sql, authenticate);
   jicRoutes(app, sql, authenticate);
+  iapRoutes(app, sql, authenticate);
   dashboardRoutes(app, sql, authenticate);
   damageRoutes(app, sql, authenticate);
   edxlRoutes(app, sql, authenticate);

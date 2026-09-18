@@ -35,7 +35,7 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 | R1 | At least 150 concurrent users per instance | VEOC-38 | open |
 | R2 | IPAWS integration enable-at-will | VEOC-31 | implemented |
 | R3 | Agency, organization, and volunteer conglomerate COP access | VEOC-08, VEOC-30 | implemented |
-| R4 | Fluid Command and General Staff work; JIC component | VEOC-12, VEOC-33A, VEOC-34 | open |
+| R4 | Fluid Command and General Staff work; JIC component | VEOC-12, VEOC-33A, VEOC-34 | implemented |
 | R5 | File sharing | VEOC-15 | implemented |
 | R6 | Private and group messaging | VEOC-15A, VEOC-32 | implemented |
 
