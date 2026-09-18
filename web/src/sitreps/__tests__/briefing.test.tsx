@@ -23,6 +23,9 @@ const sitrep: SitrepRow = {
     significantEvents: [
       { occurredAt: "2026-09-17T09:00:00Z", summary: "Levee overtopping", severity: "critical" },
     ],
+    rumorControl: [
+      { rumor: "The dam has failed", status: "false", response: "The dam is intact and monitored." },
+    ],
   },
 };
 
@@ -42,5 +45,9 @@ describe("the briefing view renders an archived sitrep", () => {
     expect(screen.getByText(/2 records/)).toBeTruthy();
     expect(screen.getByText(/1 normal, 1 closed/)).toBeTruthy();
     expect(screen.getByText(/Levee overtopping/)).toBeTruthy();
+    // JIC rumor-control entries surface on the briefing view (VEOC-33A).
+    const rumor = screen.getByTestId("rumor-0");
+    expect(rumor.textContent).toContain("The dam has failed");
+    expect(rumor.textContent).toContain("The dam is intact");
   });
 });

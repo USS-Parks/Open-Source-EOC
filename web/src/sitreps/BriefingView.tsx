@@ -94,6 +94,23 @@ export function BriefingView(props: { sitrep: SitrepRow }) {
           </ol>
         )}
       </section>
+
+      {content.rumorControl.length > 0 && (
+        <section aria-label="Rumor control" style={{ marginTop: 16 }}>
+          <h3 style={{ margin: "0 0 8px" }}>Rumor control</h3>
+          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
+            {content.rumorControl.map((r, i) => (
+              <li key={i} data-testid={`rumor-${i}`}>
+                <StatusBadge status={r.status === "false" ? "critical" : "warning"}>
+                  {r.status}
+                </StatusBadge>{" "}
+                {r.rumor}
+                {r.response ? `: ${r.response}` : ""}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </article>
   );
 }

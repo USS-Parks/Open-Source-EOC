@@ -21,6 +21,8 @@ describe("standard board library (F1: boards as data)", () => {
       "press_releases",
       "checklists",
       "after_action_review",
+      "rumor_control",
+      "talking_points",
     ]);
   });
 

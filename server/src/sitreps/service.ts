@@ -119,12 +119,14 @@ export async function composeSitrep(
   const lifelines = await currentLifelines(sql, actor, jurisdictionId);
   const boards = await summarizeBoards(sql, jurisdictionId);
   const significantEvents = await recentSignificantEvents(sql, jurisdictionId);
+  const rumorControl = await recentRumorControl(sql, jurisdictionId);
   const content: SitrepContent = SitrepContentSchema.parse({
     period: input.period,
     composedAt,
     lifelines,
     boards,
     significantEvents,
+    rumorControl,
   });
   const [row] = await sql`
     insert into sitreps
@@ -196,6 +198,28 @@ async function recentSignificantEvents(
       occurredAt: String(data.occurred_at ?? ""),
       summary: String(data.summary ?? ""),
       severity: data.severity ? String(data.severity) : null,
+    };
+  });
+}
+
+/** Rumor-control entries from the JIC board, surfaced on the briefing view. */
+async function recentRumorControl(
+  sql: Sql,
+  jurisdictionId: string,
+): Promise<SitrepContent["rumorControl"]> {
+  const rows = await sql`
+    select r.data from board_records r
+    join boards b on b.id = r.board_id
+    where b.jurisdiction_id = ${jurisdictionId} and b.template_key = 'rumor_control'
+      and b.archived_at is null
+    order by r.created_at desc
+    limit 20`;
+  return rows.map((r) => {
+    const data = r.data as Record<string, unknown>;
+    return {
+      rumor: String(data.rumor ?? ""),
+      status: String(data.status ?? ""),
+      response: data.response ? String(data.response) : null,
     };
   });
 }

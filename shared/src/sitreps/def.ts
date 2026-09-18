@@ -29,12 +29,21 @@ export const SignificantEventLineSchema = z.object({
   severity: z.string().nullable(),
 });
 
+export const RumorControlLineSchema = z.object({
+  rumor: z.string(),
+  status: z.string(),
+  response: z.string().nullable(),
+});
+export type RumorControlLine = z.infer<typeof RumorControlLineSchema>;
+
 export const SitrepContentSchema = z.object({
   period: z.string().min(1),
   composedAt: z.string(),
   lifelines: z.array(LifelineCurrentSchema),
   boards: z.array(BoardSummarySchema),
   significantEvents: z.array(SignificantEventLineSchema),
+  // JIC rumor-control entries surface on the briefing view (VEOC-33A).
+  rumorControl: z.array(RumorControlLineSchema).default([]),
 });
 export type SitrepContent = z.infer<typeof SitrepContentSchema>;
 

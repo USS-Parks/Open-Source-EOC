@@ -525,3 +525,17 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred:** a real Jitsi deployment handshake is the configured base URL plus the JWT the platform mints (the token semantics are proven by verify); a recurring-briefing schedule and calendar (ICS/iCal) export layer on the one-shot briefing model; auto-firing due briefings on a timer reuses the same runner the notification scheduler uses.
 - **Rollback:** revert the VEOC-33 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-33A: Joint Information Center
+
+- **Session:** VEOC-33A, executed 2026-09-18
+- **Starting HEAD:** `a2abcb2c26a4ee8443dd2ad83901e96cfef418f2`
+- **Files created/changed:** `shared/src/boards/standard.ts` (two JIC board templates, `rumor_control` and `talking_points`); `shared/src/sitreps/def.ts` (a `rumorControl` line on the sitrep content); `server/migrations/0024_jic.sql` (press releases with a configurable required-agency list, an append-only approval chain, per-channel publication records, the public-message feed, and media inquiries, all under RLS); `server/src/jic/service.ts` (draft, submit, local decision, cross-boundary peer decision authenticated by a federation peer token and run under the receiving registrar, status recomputation, publication to the public feed plus CAP and best-effort collaboration, and the media-inquiry lifecycle that ties an answer to approved language); `server/src/jic/routes.ts`; `server/src/sitreps/service.ts` (surface rumor-control on the composed briefing); `web/src/sitreps/BriefingView.tsx` (render the rumor-control section); app wiring; `server/src/__tests__/jic.test.ts`; and the board-list and briefing-view tests updated for the additions.
+- **Acceptance proven by test (R4):** a press release routes through two agencies, a local one and a federation peer that approves across the boundary with its token, and only once both have approved does it publish, to the public feed and to CAP (a stamped `authored` alert); an unapproved draft is refused publication at every stage (409); the approval chain records both agencies immutably and marks the peer decision; a media inquiry is logged and answered with a published release, while an unapproved draft is refused as an answer (409); and a rumor-control board entry surfaces in a composed sitrep and on the briefing view.
+- **Verification:** `pnpm check` fully green; 282/282 tests across 50 files; license-scan clean (300 packages, unchanged); check-links clean; tsc and eslint clean.
+- **Facets:** R4 advanced (the JIC component: multi-agency approval, coordinated public messaging, media-inquiry tracking, rumor control; the ICS forms and IAP that complete R4 are VEOC-34); INV-2 reinforced (every JIC act is attributed and the approval chain is immutable record).
+- **Deferred:** cross-instance coordinated fan-out of one approved message to many peer outlets (the peer-approval boundary and single-instance publication are proven; the outbound fan-out reuses the VEOC-30 outbox); a first-class talking-points approval workflow beyond the board template; requiring the acting position to be a PIO (attribution is recorded via the audit position today); and per-outlet distribution beyond the public feed, CAP, and collaboration channels.
+- **Rollback:** revert the VEOC-33A commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

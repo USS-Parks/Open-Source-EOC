@@ -178,4 +178,35 @@ export const STANDARD_TEMPLATES: readonly BoardTemplate[] = [
       { key: "all", title: "All observations", columns: ["observation", "kind", "resolved"] },
     ],
   }),
+  t({
+    key: "rumor_control",
+    version: 1,
+    title: "Rumor Control",
+    description: "Circulating rumors and the confirmed public response (JIC).",
+    fields: [
+      { key: "rumor", label: "Rumor", type: "text", required: true, maxLength: 500 },
+      { key: "status", label: "Status", type: "enum", values: ["unverified", "true", "false", "addressed"], required: true },
+      { key: "response", label: "Public response", type: "text" },
+      { key: "source", label: "Source", type: "text" },
+    ],
+    views: [
+      { key: "active", title: "Active rumors", columns: ["rumor", "status"], filter: [{ field: "status", op: "neq", value: "addressed" }] },
+      { key: "all", title: "All rumors", columns: ["rumor", "status", "response"] },
+    ],
+  }),
+  t({
+    key: "talking_points",
+    version: 1,
+    title: "Talking Points",
+    description: "Approved talking points by topic for spokespeople (JIC).",
+    fields: [
+      { key: "topic", label: "Topic", type: "text", required: true },
+      { key: "point", label: "Talking point", type: "text", required: true },
+      { key: "approved", label: "Approved", type: "boolean", write: "admin" },
+    ],
+    views: [
+      { key: "approved", title: "Approved points", columns: ["topic", "point"], filter: [{ field: "approved", op: "eq", value: true }] },
+      { key: "all", title: "All points", columns: ["topic", "point", "approved"] },
+    ],
+  }),
 ];
