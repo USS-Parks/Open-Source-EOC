@@ -668,3 +668,18 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Blocked on Basho (not a defect):** the live pilot with real users on a named jurisdiction (contract item 12 authorization; standing question 6 jurisdiction selection). The mechanism it will use is proven here.
 - **Rollback:** revert the VEOC-42 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created. No external engagement performed.
+
+---
+
+## VEOC-43: Independent re-review and 1.0 disposition (release decision Basho's)
+
+- **Session:** VEOC-43, executed 2026-09-18
+- **Starting HEAD:** `e489f7ee70ea6a7c26d1a850f797de05b7f38a29`
+- **Files created/changed:** `docs/INDEPENDENT-REVIEW-VEOC-43.md` (per-item verification against the code and its tests, and the proposed 1.0 disposition presented to Basho); `server/src/__tests__/reproducible-deploy.test.ts` (the INV-10 second independent deploy proof); `docs/FACET-STATUS.md` (dispositions set to `verified` for every facet, requirement, anti-requirement, and invariant except AR7, which is `deferred`, with a header note pointing to the review).
+- **Boundary respected:** no release act (tag, publish, announcement) has been or will be performed. The 1.0 decision, what it contains, what is deferred, and the governance cadence are Basho's, to be recorded verbatim in the review document; this session presents the disposition, it does not decide it.
+- **Acceptance proven by test and review:** every facet F1-F20, requirement R1-R6, anti-requirement (AR1-AR6), and invariant (INV-1 through INV-10) is verified against CI-green tests, with evidence cited per item; INV-10 is verified by a second independent deploy from source (two instances built from the migrations and code alone produce byte-identical template libraries and each serves a working API); AR7 (disconnected provisioning) is explicitly deferred to post-1.0 with rationale.
+- **Verification:** `pnpm check` fully green; 326/326 tests across 63 files; license-scan clean (300 packages, unchanged); check-links clean; tsc and eslint clean.
+- **Disposition:** FACET-STATUS now shows verified across the board except AR7 (deferred). Post-1.0 items recorded: disconnected provisioning (AR7), server-side pagination for very long incidents, a shared rate limiter, a manual screen-reader pass, live IPAWS/FEMA credentialing, and mutual-TLS peer hardening.
+- **Pending Basho:** the 1.0 release decision (recorded verbatim in the review), the live pilot (VEOC-42, contract item 12 and the pilot jurisdiction), and the open standing questions (product name; whether to commission a fully independent human review before release).
+- **Rollback:** revert the VEOC-43 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created. No release act performed.
