@@ -39,9 +39,13 @@ export async function createAgreement(
   const [peer] = await sql`select jurisdiction_id from peers where id = ${peerId}`;
   if (!peer) throw new AuthError(404, "peer not found");
   requireAdmin(actor, peer.jurisdiction_id as string);
+  const [board] = await sql`select jurisdiction_id from boards where id = ${boardId}`;
+  if (!board) throw new AuthError(404, "board not found");
+  if ((board.jurisdiction_id as string) !== (peer.jurisdiction_id as string))
+    throw new AuthError(403, "board is not in this jurisdiction");
   const [row] = await sql`
     insert into sharing_agreements (peer_id, board_id, can_read, can_write, created_by)
-    values (${peerId}, ${boardId}, ${perms.canRead ?? true}, ${perms.canWrite ?? true},
+    values (${peerId}, ${boardId}, ${perms.canRead ?? true}, ${perms.canWrite ?? false},
             ${actor.person.id})
     returning id`;
   return { id: row!.id as string };

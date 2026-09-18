@@ -14,6 +14,9 @@ secret; only its hash is stored.
 
 Create a sharing agreement scoping which board a peer may read or write. An
 agreement is per board, so you share exactly what you intend and nothing more.
+Write access is opt-in: omit `canWrite` (or set it false) and the peer can
+receive the board but cannot push updates. The board must belong to the same
+jurisdiction as the peer record.
 
 ## How updates flow
 

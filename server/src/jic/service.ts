@@ -73,6 +73,13 @@ export async function decideLocal(
 ): Promise<{ status: string }> {
   const rel = await loadRelease(sql, releaseId);
   requireWriter(actor, rel.jurisdiction_id);
+  const [peerAgency] = await sql`
+    select 1 from peers where jurisdiction_id = ${rel.jurisdiction_id} and name = ${agency}`;
+  if (peerAgency) throw new AuthError(403, "that agency must approve over its peer token");
+  const [prior] = await sql`
+    select 1 from press_release_approvals
+    where release_id = ${releaseId} and decided_by_person = ${actor.person.id}`;
+  if (prior) throw new AuthError(409, "this person already recorded a decision on this release");
   await recordDecision(sql, releaseId, agency, decision, note, actor.person.id, null);
   const status = await recomputeStatus(sql, releaseId);
   await recordAudit(sql, actor, {

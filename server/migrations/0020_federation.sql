@@ -19,7 +19,7 @@ create table sharing_agreements (
   peer_id uuid not null references peers (id),
   board_id uuid not null references boards (id),
   can_read boolean not null default true,
-  can_write boolean not null default true,
+  can_write boolean not null default false,
   created_by uuid not null references persons (id),
   created_at timestamptz not null default now(),
   unique (peer_id, board_id)
