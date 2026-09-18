@@ -47,6 +47,7 @@ import { BlobStore } from "./files/service.js";
 import { geoRoutes } from "./geo/routes.js";
 import { messagingRoutes } from "./messaging/routes.js";
 import { notifyRoutes } from "./notify/routes.js";
+import { resourceRoutes } from "./resource/routes.js";
 import { BoardSyncHub } from "./sync/hub.js";
 import { registerSyncRoutes } from "./sync/routes.js";
 import { withPerson } from "./db/context.js";
@@ -289,6 +290,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   meetingRoutes(app, sql, authenticate);
   jicRoutes(app, sql, authenticate);
   iapRoutes(app, sql, authenticate);
+  resourceRoutes(app, sql, authenticate);
   dashboardRoutes(app, sql, authenticate);
   damageRoutes(app, sql, authenticate);
   edxlRoutes(app, sql, authenticate);

@@ -553,3 +553,17 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred:** pixel-faithful reproductions of the official FEMA form layouts (the prefilled content and a clean PDF are proven; exact box-for-box facsimiles are a rendering-template concern); comms-plan (205) and medical-plan (206) prefill draw from boards when present and are otherwise header-only until those boards are standardized; the 213RR general-message flow is the VEOC-35 lifecycle.
 - **Rollback:** revert the VEOC-34 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-35: The 213RR resource lifecycle
+
+- **Session:** VEOC-35, executed 2026-09-18
+- **Starting HEAD:** `ec7a73b60b716eff3125560d225ae7d0c70ce8ed`
+- **Files created/changed:** `shared/src/resource/lifecycle.ts` (`canTransition`/`nextStates` over the dictionary transition table, and `formatCostExport`, a deterministic reimbursement CSV), exported from `shared/src/index.ts`; `shared/src/resource/__tests__/lifecycle.test.ts`; `server/migrations/0026_resource_requests.sql` (a first-class resource request, an append-only chronology, and cost capture, all under RLS); `server/src/resource/service.ts` (submit, guarded transitions, assignment, escalation to a peer tier with an injected delivery, receive-escalation and report-back over peer tokens run under the receiving registrar, cost capture, and the CSV export); `server/src/resource/routes.ts`; app wiring; `server/src/__tests__/resource.test.ts`.
+- **Acceptance proven by test (F5 part two):** a request walks the full NIMS ordering cycle (submitted → triaged → sourcing → assigned → deployed → demobilizing → closed) with skips refused by the state machine (409), every change appended to the chronology, and a notification per change; a request escalates field-to-state over a peer token, the state tier works it and reports fulfillment back down to the originating request so the county request advances to deployed and its chronology carries the escalation and the peer's reports, while the state-side request records where it came from; and costs export as a reimbursement CSV with a correct total.
+- **Verification:** `pnpm check` fully green; 302/302 tests across 54 files; license-scan clean (300 packages, unchanged); check-links clean; tsc and eslint clean.
+- **Facets:** F5 `implemented` (ICS forms and the IAP builder from VEOC-34 plus the full 213RR lifecycle here); INV-2 reinforced (the request chronology is immutable and attributed, peer decisions included).
+- **Deferred:** production outbound escalation stores the upstream tier's base URL and token in a peer registry rather than passing them per call (the receive/report token lanes and the delivery seam are proven; the outbound credential store rides the VEOC-30 deferral); multi-hop escalation beyond two tiers chains the same receive/report pair; EDXL-RM emission of an escalated request reuses the VEOC-27 bridge.
+- **Rollback:** revert the VEOC-35 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

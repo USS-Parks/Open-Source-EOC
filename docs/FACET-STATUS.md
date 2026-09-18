@@ -11,7 +11,7 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 | F2 | Position login + immutable activity/position logs | VEOC-07, VEOC-11 | implemented |
 | F3 | Store-and-forward federation, local replication | VEOC-30 | implemented |
 | F4 | Board-triggered notifications, webhooks, multi-channel | VEOC-14 | implemented |
-| F5 | ICS forms, IAP builder, 213RR lifecycle | VEOC-34, VEOC-35 | open |
+| F5 | ICS forms, IAP builder, 213RR lifecycle | VEOC-34, VEOC-35 | implemented |
 | F6 | Any board as a live geospatial layer; field-to-COP loop | VEOC-16, VEOC-17 | implemented |
 | F7 | Offline XLSForm-compatible smart forms | VEOC-22 | implemented |
 | F8 | FEMA doctrine as schema: Lifelines, PDA outputs | VEOC-20, VEOC-23 | implemented |
