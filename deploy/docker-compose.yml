@@ -1,0 +1,53 @@
+# OpenEOC single-node reference (VEOC-40). Postgres/PostGIS plus the API.
+# Air-gap friendly: images are pinned by digest-able tags and can be
+# pre-loaded with `docker load`; nothing here calls out at runtime. The web
+# bundle is built with `pnpm --filter @openeoc/web build` and served by any
+# static host (an nginx service is shown commented below).
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: openeoc_owner
+      POSTGRES_PASSWORD: ${OPENEOC_DB_PASSWORD:-change-me-in-.env}
+      POSTGRES_DB: openeoc
+    volumes:
+      - openeoc-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openeoc_owner -d openeoc"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Owner connection: runs migrations and seeds templates.
+      OPENEOC_DATABASE_URL: postgres://openeoc_owner:${OPENEOC_DB_PASSWORD:-change-me-in-.env}@db:5432/openeoc
+      # App connection: app_runtime, so Row-Level Security applies. The
+      # migrations create the app_runtime role; set its password once and put
+      # the URL here (see deploy/README.md, "Runtime role").
+      OPENEOC_RUNTIME_URL: ${OPENEOC_RUNTIME_URL:-}
+      # Server-side secret key for credential envelopes (IPAWS, collab, Jitsi).
+      OPENEOC_SECRET_KEY: ${OPENEOC_SECRET_KEY:-}
+      HOST: 0.0.0.0
+      PORT: 8080
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  # web:
+  #   image: nginx:1.27-alpine
+  #   volumes:
+  #     - ../web/dist:/usr/share/nginx/html:ro
+  #   ports:
+  #     - "8081:80"
+  #   depends_on: [api]
+
+volumes:
+  openeoc-db:

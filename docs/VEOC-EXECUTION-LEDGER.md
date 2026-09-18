@@ -626,3 +626,17 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Ticketed (in `docs/ACCESSIBILITY-VEOC-39.md`):** A11Y-T1 full manual screen-reader pass with the VEOC-41 walkthrough; A11Y-T2 reduced-motion/prefers-contrast handling with the VEOC-41 polish pass.
 - **Rollback:** revert the VEOC-39 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-40: Packaging and the air-gap install
+
+- **Session:** VEOC-40, executed 2026-09-18
+- **Starting HEAD:** `d5baf5990fc236e6c29eb9775c8cd20a0db914c6`
+- **Files created/changed:** `server/src/main.ts` (production entrypoint: owner connection migrates and seeds, app runs on the app_runtime connection so RLS applies, boots only when run directly); `deploy/Dockerfile` (API image, TypeScript run with tsx installed into the image so the repo lockfile is untouched); `deploy/docker-compose.yml` (PostGIS + API, air-gap friendly, web sidecar shown); `deploy/install.sh` (single-node installer: prereq checks, first-run secret generation, up, health wait); `deploy/backup.sh` and `deploy/restore.sh` (gzip pg_dump and a guarded destructive restore); `deploy/README.md` (connected and air-gapped install, the two DB identities, web bundle, backup/restore, and the upgrade procedure); `server/src/__tests__/upgrade.test.ts` (the INV-5 upgrade drill).
+- **Acceptance proven by test (INV-5 / upgrade) and by artifact (install/air-gap):** re-running the forward-only migration runner on a customized instance applies nothing new and leaves the board's local `x_` field and records intact; a board template version upgrade re-converges to the new template while preserving the local field and all records; the install path (compose + installer), the air-gap path (load images, vendored pnpm store, local PMTiles, no runtime external calls), and the backup/restore drill are shipped as runnable artifacts with a county-IT-level guide. The clean-machine and air-gapped install runs are validated out of band (CI cannot provision a fresh host); the upgrade-preserves-customization acceptance is proven in CI.
+- **Verification:** `pnpm check` fully green; 321/321 tests across 60 files; license-scan clean (300 packages, unchanged, no new repo dependency; tsx is installed only into the deployment image); check-links clean; tsc and eslint clean.
+- **Facets:** INV-5 `implemented` (boards are versioned schemas and the upgrade preserves customization end to end); AR2 `implemented` (no unconstrained board divergence: locals re-converge on upgrade); AR4 `implemented` (no in-place-upgrade dead ends).
+- **Deferred / out-of-band:** actual clean-machine and networking-disabled install timings are validated on real hosts, not in CI; the web static-serving sidecar is shown but commented in compose until an operator wires their basemap.
+- **Rollback:** revert the VEOC-40 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.

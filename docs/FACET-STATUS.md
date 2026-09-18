@@ -44,9 +44,9 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 | ID | Anti-requirement | Guarded by | Status |
 |---|---|---|---|
 | AR1 | No per-seat surge pricing structure | INV-1 | open |
-| AR2 | No unconstrained board divergence | INV-5 | open |
+| AR2 | No unconstrained board divergence | INV-5 | implemented |
 | AR3 | No admin customization requiring hand-written HTML/JS | INV-6 | open |
-| AR4 | No in-place-upgrade dead ends | INV-5 | open |
+| AR4 | No in-place-upgrade dead ends | INV-5 | implemented |
 | AR5 | No proprietary-only interchange, substrate lock-in, or unbundling | INV-4, INV-9 | implemented |
 | AR6 | No session timeouts mid-incident, free-text drift, join-poor dashboards | INV-8 | implemented |
 | AR7 | Full function disconnected, including provisioning | INV-3 | open |
@@ -59,7 +59,7 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 | INV-2 | Attribution is total | implemented |
 | INV-3 | Disconnection is the normal case | implemented |
 | INV-4 | Standards are native | implemented |
-| INV-5 | Boards are versioned schemas | open |
+| INV-5 | Boards are versioned schemas | implemented |
 | INV-6 | No-code is real | implemented |
 | INV-7 | Fail closed | implemented |
 | INV-8 | Calm under stress | open |
