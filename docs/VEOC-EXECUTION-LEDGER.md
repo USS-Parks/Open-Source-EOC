@@ -596,3 +596,18 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Risk-accepted (in `docs/SECURITY-AUDIT-VEOC-37.md`):** RA-1 in-process rate limiters until the VEOC-38 shared limiter; RA-2 no network vulnerability scan in the air-gapped CI gate (the lockfile plus license scan hold the supply-chain line; `pnpm audit` runs at release time).
 - **Rollback:** revert the VEOC-37 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-38: Load, scale, and the long incident
+
+- **Session:** VEOC-38, executed 2026-09-18
+- **Starting HEAD:** `43ecb1c8365239ab8d476a77214905eeaa754d76`
+- **Files created/changed:** `server/src/__tests__/load.test.ts` (the reproducible load harness and CI regression guard: a 5,000-record board view and a 150-operation concurrent mixed burst against the real app and PostgreSQL); `docs/CAPACITY-VEOC-38.md` (the committed floor, the budgets, the measured numbers, federation/sync notes, and the headroom item).
+- **Acceptance proven by test (R1):** a board loaded with 5,000 records serves a view within budget (measured ~65 ms against a 5,000 ms ceiling, the SharePoint 5,000-item lesson addressed by the board-records index); a 150-operation concurrent activation profile (mixed session reads, view reads, and record writes) returns 2xx for every operation and finishes within budget (measured ~1,310 ms wall, ~1,237 ms p95, against 30,000 ms / 6,000 ms ceilings); the harness is reproducible and the budgets run in CI so no target regresses.
+- **Verification:** `pnpm check` fully green; 315/315 tests across 58 files (the load benchmarks included); license-scan clean (300 packages, unchanged, no new dependency); check-links clean; tsc and eslint clean.
+- **Facets:** R1 `implemented` (at least 150 concurrent users per instance, with measured headroom published and a CI benchmark guarding it).
+- **Found and fixed / accepted:** no target missed at the R1 floor in this environment; the volume path was already indexed and the concurrent path already pooled. Headroom item recorded: `listViewRecords` returns a board's full record set and applies the view in memory (fast well past 5,000 records; a months-long incident with tens of thousands of records on one board should move to server-side pagination and filter push-down, landing with the shared rate limiter from RA-1).
+- **Risk-accepted (in `docs/CAPACITY-VEOC-38.md`):** the published numbers are single-instance; the R1 floor is per instance, which is what the requirement commits to.
+- **Rollback:** revert the VEOC-38 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created.
