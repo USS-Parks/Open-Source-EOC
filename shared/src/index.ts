@@ -21,6 +21,7 @@ export * from "./edxl/edxl.js";
 export * from "./have/have.js";
 export * from "./cot/cot.js";
 export * from "./api/contract.js";
+export * from "./collab/plan.js";
 
 export const OPENEOC_VERSION = "0.0.0" as const;
 

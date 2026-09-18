@@ -13,6 +13,7 @@ import {
   logout,
   type Principal,
   principalFromToken,
+  reassignPosition,
   resume,
   signInPosition,
   signOutPosition,
@@ -29,6 +30,8 @@ import { damageRoutes } from "./damage/routes.js";
 import { edxlRoutes } from "./edxl/routes.js";
 import { facilityRoutes } from "./facilities/routes.js";
 import { federationRoutes } from "./federation/routes.js";
+import { collabRoutes } from "./collab/routes.js";
+import { syncPositionIncidents } from "./collab/service.js";
 import { incidentRoutes } from "./incidents/routes.js";
 import { ipawsRoutes } from "./ipaws/routes.js";
 import { feedRoutes } from "./feeds/routes.js";
@@ -101,6 +104,21 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
     const token = header.startsWith("Bearer ") ? header.slice(7) : "";
     if (!token) throw new AuthError(401, "not authenticated");
     req.principal = await principalFromToken(sql, token);
+  }
+
+  /**
+   * Best-effort collaboration membership sync after an assignment change.
+   * Runs in its own transaction so a backend hiccup never fails the
+   * assignment, and no-ops when no collaboration backend is configured.
+   */
+  async function syncCollabForPosition(principal: Principal, positionId: string): Promise<void> {
+    try {
+      await withPerson(sql, principal.person.id, (tx) =>
+        syncPositionIncidents(tx, principal, positionId),
+      );
+    } catch {
+      // Membership sync is advisory; the assignment itself already committed.
+    }
   }
 
   app.post("/api/v1/auth/login", async (req, reply) => {
@@ -206,6 +224,23 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
       await withPerson(sql, req.principal.person.id, (tx) =>
         assignPosition(tx, req.principal, positionId, body.personId),
       );
+      await syncCollabForPosition(req.principal, positionId);
+      return reply.status(201).send({ ok: true });
+    },
+  );
+
+  // Reassign a position (shift change): the incoming holder replaces the
+  // current one, and any active incident's collaboration membership follows.
+  app.post(
+    "/api/v1/positions/:positionId/reassignments",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { positionId } = req.params as { positionId: string };
+      const body = AssignBody.parse(req.body);
+      await withPerson(sql, req.principal.person.id, (tx) =>
+        reassignPosition(tx, req.principal, positionId, body.personId),
+      );
+      await syncCollabForPosition(req.principal, positionId);
       return reply.status(201).send({ ok: true });
     },
   );
@@ -247,6 +282,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   capRoutes(app, sql, authenticate);
   cotRoutes(app, sql, authenticate);
   ipawsRoutes(app, sql, authenticate);
+  collabRoutes(app, sql, authenticate);
   dashboardRoutes(app, sql, authenticate);
   damageRoutes(app, sql, authenticate);
   edxlRoutes(app, sql, authenticate);

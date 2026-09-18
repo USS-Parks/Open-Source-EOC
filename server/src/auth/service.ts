@@ -234,6 +234,29 @@ export async function assignPosition(
     values (${positionId}, ${personId}, ${actor.person.id})`;
 }
 
+/**
+ * Reassign a position at shift change: revoke whoever holds it now and
+ * assign the incoming person. Distinct from {@link assignPosition}, which is
+ * additive; this makes the current holder unambiguous so downstream
+ * membership (VEOC-32 collaboration channels) tracks the handover.
+ */
+export async function reassignPosition(
+  sql: Sql,
+  actor: Principal,
+  positionId: string,
+  personId: string,
+): Promise<void> {
+  const [pos] = await sql`select jurisdiction_id from positions where id = ${positionId}`;
+  if (!pos) throw new AuthError(404, "position not found");
+  requireAdmin(actor, pos.jurisdiction_id as string);
+  await sql`
+    update position_assignments set revoked_at = now()
+    where position_id = ${positionId} and revoked_at is null`;
+  await sql`
+    insert into position_assignments (position_id, person_id, assigned_by)
+    values (${positionId}, ${personId}, ${actor.person.id})`;
+}
+
 /** Signing into a position requires an active assignment; holding follows. */
 export async function signInPosition(
   sql: Sql,

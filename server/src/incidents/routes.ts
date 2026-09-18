@@ -9,6 +9,11 @@ import {
   createLibrary,
   getIncident,
 } from "./service.js";
+import {
+  archiveForIncident,
+  isBackendEnabled,
+  provisionForIncident,
+} from "../collab/service.js";
 
 const ActivateBody = z.object({
   templateKey: z.string().min(1),
@@ -37,6 +42,16 @@ export function incidentRoutes(
       const result = await withPerson(sql, req.principal.person.id, (tx) =>
         activateIncident(tx, req.principal, jurisdictionId, body),
       );
+      // Provision the collaboration space when a backend is enabled. Runs in
+      // its own transaction, best-effort, so activation never depends on it.
+      try {
+        await withPerson(sql, req.principal.person.id, async (tx) => {
+          if (await isBackendEnabled(tx, jurisdictionId))
+            await provisionForIncident(tx, req.principal, result.incidentId);
+        });
+      } catch {
+        // The incident is already activated; the space can be provisioned later.
+      }
       return reply.status(201).send(result);
     },
   );
@@ -69,6 +84,14 @@ export function incidentRoutes(
       await withPerson(sql, req.principal.person.id, (tx) =>
         closeIncident(tx, req.principal, incidentId),
       );
+      // Deactivation archives the collaboration space (no-op if none exists).
+      try {
+        await withPerson(sql, req.principal.person.id, (tx) =>
+          archiveForIncident(tx, req.principal, incidentId),
+        );
+      } catch {
+        // The incident is closed; archiving can be retried.
+      }
       return reply.send({ ok: true });
     },
   );
