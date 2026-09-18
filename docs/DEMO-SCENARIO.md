@@ -9,7 +9,7 @@ facet.
 
 ## Setup
 
-Deploy per [../../deploy/README.md](../../deploy/README.md) and load the demo
+Deploy per [../deploy/README.md](../deploy/README.md) and load the demo
 dataset. Sign in as `demo-admin@example.org`. The exercise runs about 45
 minutes.
 

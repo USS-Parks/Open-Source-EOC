@@ -35,7 +35,6 @@ export async function start(): Promise<StartResult> {
   if (runtimeUrl === ownerUrl) {
     // Dev/single-user convenience only; production sets a distinct
     // app_runtime URL so RLS is the second wall it is meant to be.
-    // eslint-disable-next-line no-console
     console.warn(
       "[openeoc] OPENEOC_RUNTIME_URL is unset; running the app on the owner connection. " +
         "Set a distinct app_runtime URL in production so Row-Level Security applies.",
@@ -62,7 +61,6 @@ export async function start(): Promise<StartResult> {
 // Boot only when run directly, never on import (tests import buildApp instead).
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   start().catch((err: unknown) => {
-    // eslint-disable-next-line no-console
     console.error(err);
     process.exit(1);
   });
