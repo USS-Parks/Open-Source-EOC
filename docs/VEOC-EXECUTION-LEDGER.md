@@ -654,3 +654,17 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Deferred / out-of-band:** the timed cold-start run with a genuinely fresh human executor is scheduled with the VEOC-42 exercise; a PMTiles demo basemap file is provided by the operator per the deploy guide.
 - **Rollback:** revert the VEOC-41 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created.
+
+---
+
+## VEOC-42: Pilot activation exercise (design + dry-run; live pilot gated on Basho)
+
+- **Session:** VEOC-42, executed 2026-09-18
+- **Starting HEAD:** `17252c5f5349956f51b0904b36cd959ac9528dad`
+- **Files created/changed:** `docs/EXERCISE-VEOC-42.md` (HSEEP objectives, Exercise Evaluation Guides mapped to facets, the data-collection plan through the platform's own modules, and the dry-run results with findings triaged fix/accept/roadmap/blocked); `server/src/__tests__/exercise.test.ts` (the platform produces its own exercise AAR).
+- **Boundary respected (contract item 12):** the exercise on a real deployment with real users is an external engagement; it does not run until Basho authorizes it and selects the pilot jurisdiction (standing question 6, open). This session delivered only the preparation and an internal dry-run against the demo activation; nothing contacted anyone or stood up anything outside the repository.
+- **Acceptance proven by test (the parts not gated on Basho):** the functional exercise runs on the demo activation and the platform composes its own after-action report from the exercise's observations (captured during play) plus the immutable chronology as evidence, and exports it as a PDF, which is VEOC-36 eating its own cooking; findings are triaged in the exercise document (the accessibility touch-target fix already done; rate limiter and single-node capacity accepted; pagination and manual screen-reader pass on the roadmap; the live pilot blocked on Basho).
+- **Verification:** `pnpm check` fully green; 324/324 tests across 62 files; license-scan clean (300 packages, unchanged); check-links clean; tsc and eslint clean.
+- **Blocked on Basho (not a defect):** the live pilot with real users on a named jurisdiction (contract item 12 authorization; standing question 6 jurisdiction selection). The mechanism it will use is proven here.
+- **Rollback:** revert the VEOC-42 commit.
+- **Commit/push:** performed under the standing full-execution authorization. No branch created. No external engagement performed.
