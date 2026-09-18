@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <postCAPResponse xmlns="http://www.integratedpublicalertsystem.gov/IPAWS_CAPService/">
+      <return>
+        <errorCount>0</errorCount>
+        <messageId>IPAWS-OPEN-TEST-ACK-2026-0918-001</messageId>
+      </return>
+    </postCAPResponse>
+  </soap:Body>
+</soap:Envelope>

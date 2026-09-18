@@ -30,6 +30,7 @@ import { edxlRoutes } from "./edxl/routes.js";
 import { facilityRoutes } from "./facilities/routes.js";
 import { federationRoutes } from "./federation/routes.js";
 import { incidentRoutes } from "./incidents/routes.js";
+import { ipawsRoutes } from "./ipaws/routes.js";
 import { feedRoutes } from "./feeds/routes.js";
 import { fileRoutes } from "./files/routes.js";
 import { formRoutes } from "./forms/routes.js";
@@ -245,6 +246,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   auditRoutes(app, sql, authenticate);
   capRoutes(app, sql, authenticate);
   cotRoutes(app, sql, authenticate);
+  ipawsRoutes(app, sql, authenticate);
   dashboardRoutes(app, sql, authenticate);
   damageRoutes(app, sql, authenticate);
   edxlRoutes(app, sql, authenticate);

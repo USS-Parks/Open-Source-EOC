@@ -26,14 +26,14 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 | F17 | Daily-ops usability against skill decay | VEOC-05, VEOC-41 | open |
 | F18 | Sensor and drone live feeds into the COP | VEOC-19 | implemented |
 | F19 | NAPSG/DHS incident symbology shipped | VEOC-17 | implemented |
-| F20 | Native standards interchange | VEOC-26..29, VEOC-31 | open |
+| F20 | Native standards interchange | VEOC-26..29, VEOC-31 | implemented |
 
 ## Requirements (Basho, 2026-09-17)
 
 | ID | Requirement | Primary session | Status |
 |---|---|---:|---|
 | R1 | At least 150 concurrent users per instance | VEOC-38 | open |
-| R2 | IPAWS integration enable-at-will | VEOC-31 | open |
+| R2 | IPAWS integration enable-at-will | VEOC-31 | implemented |
 | R3 | Agency, organization, and volunteer conglomerate COP access | VEOC-08, VEOC-30 | implemented |
 | R4 | Fluid Command and General Staff work; JIC component | VEOC-12, VEOC-33A, VEOC-34 | open |
 | R5 | File sharing | VEOC-15 | implemented |
@@ -47,7 +47,7 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 | AR2 | No unconstrained board divergence | INV-5 | open |
 | AR3 | No admin customization requiring hand-written HTML/JS | INV-6 | open |
 | AR4 | No in-place-upgrade dead ends | INV-5 | open |
-| AR5 | No proprietary-only interchange, substrate lock-in, or unbundling | INV-4, INV-9 | open |
+| AR5 | No proprietary-only interchange, substrate lock-in, or unbundling | INV-4, INV-9 | implemented |
 | AR6 | No session timeouts mid-incident, free-text drift, join-poor dashboards | INV-8 | implemented |
 | AR7 | Full function disconnected, including provisioning | INV-3 | open |
 
@@ -58,10 +58,10 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 | INV-1 | Viewers are structurally free | open |
 | INV-2 | Attribution is total | implemented |
 | INV-3 | Disconnection is the normal case | implemented |
-| INV-4 | Standards are native | open |
+| INV-4 | Standards are native | implemented |
 | INV-5 | Boards are versioned schemas | open |
 | INV-6 | No-code is real | implemented |
 | INV-7 | Fail closed | open |
 | INV-8 | Calm under stress | open |
-| INV-9 | Core is never unbundled | open |
+| INV-9 | Core is never unbundled | implemented |
 | INV-10 | The codebase outlives any one maintainer | open |
