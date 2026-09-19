@@ -196,6 +196,12 @@ describe("the operations console in a real browser, offline", () => {
     await page.waitForTimeout(1500);
     await page.screenshot({ path: join(SHOTS, "app-map-light.png"), fullPage: false });
 
+    // Open a board from the dock: its live view renders as a data table.
+    await page.getByRole("button", { name: "Road Closures" }).first().click();
+    await page.getByText("SR-169 at Pecwan").first().waitFor({ state: "visible", timeout: 20000 });
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: join(SHOTS, "app-board-light.png"), fullPage: false });
+
     // The dashboard surface renders its widgets.
     await page.getByRole("button", { name: "Dashboard" }).click();
     await page.getByText("EOC Status").first().waitFor({ state: "visible", timeout: 20000 });

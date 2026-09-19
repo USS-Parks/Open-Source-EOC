@@ -66,6 +66,42 @@ textarea {
   background: transparent;
 }
 
+/* Data tables: uppercase muted headers, zebra rows, hover highlight. */
+.eoc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.eoc-table thead th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--eoc-text-muted);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--eoc-border);
+}
+.eoc-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--eoc-border);
+}
+.eoc-table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--eoc-surface-raised) 45%, transparent);
+}
+.eoc-table tbody tr:hover {
+  background: color-mix(in srgb, var(--eoc-focus) 8%, transparent);
+}
+
+/* The COP layer panel: a calm sidebar rail beside the map. */
+.eoc-map-panel {
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border);
+  border-radius: var(--eoc-radius-md);
+  padding: 12px;
+  overflow: auto;
+}
+
 /* MapLibre popup and scale, themed to the current surface. */
 .maplibregl-popup-content {
   background: var(--eoc-surface);

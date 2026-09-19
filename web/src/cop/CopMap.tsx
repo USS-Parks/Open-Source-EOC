@@ -168,7 +168,10 @@ export function CopMap(props: CopMapProps) {
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 8, height: "100%" }}>
-      <nav aria-label="Map layers">
+      <nav aria-label="Map layers" className="eoc-map-panel">
+        <h3 style={{ margin: "0 0 6px", fontSize: "0.85em", color: "var(--eoc-text-muted)" }}>
+          Layers
+        </h3>
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
           {props.boards.map((b) => (
             <li key={b.id}>

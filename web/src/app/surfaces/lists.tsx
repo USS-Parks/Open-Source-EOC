@@ -16,30 +16,30 @@ export function BoardsIndex(props: {
       {props.boards.length === 0 ? (
         <EmptyState label="No boards in this jurisdiction yet." />
       ) : (
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <table className="eoc-table">
           <thead>
             <tr>
-              <th style={th}>Board</th>
-              <th style={th}>Type</th>
-              <th style={th}>On map</th>
-              <th style={th} aria-label="Open" />
+              <th>Board</th>
+              <th>Type</th>
+              <th>On map</th>
+              <th aria-label="Open" />
             </tr>
           </thead>
           <tbody>
             {props.boards.map((b) => (
               <tr key={b.id}>
-                <td style={td}>{b.title}</td>
-                <td style={td}>
+                <td>{b.title}</td>
+                <td>
                   <code style={{ color: "var(--eoc-text-muted)" }}>{b.templateKey}</code>
                 </td>
-                <td style={td}>
+                <td>
                   {b.hasGeometry ? (
                     <StatusBadge status="info">layer</StatusBadge>
                   ) : (
                     <span style={{ color: "var(--eoc-text-muted)" }}>—</span>
                   )}
                 </td>
-                <td style={td}>
+                <td>
                   <Button onClick={() => props.onOpen(b.id)}>Open</Button>
                 </td>
               </tr>
@@ -118,15 +118,6 @@ export function AlertsSurface(props: { client: ApiClient }) {
   );
 }
 
-const th: CSSProperties = {
-  textAlign: "left",
-  borderBottom: "2px solid var(--eoc-border)",
-  padding: "6px 8px",
-};
-const td: CSSProperties = {
-  borderBottom: "1px solid var(--eoc-border)",
-  padding: "6px 8px",
-};
 const rowButton: CSSProperties = {
   width: "100%",
   textAlign: "left",

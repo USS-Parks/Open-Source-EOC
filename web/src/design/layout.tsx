@@ -83,22 +83,14 @@ export function BoardTable(props: {
   rows: readonly (readonly ReactNode[])[];
 }) {
   return (
-    <table style={{ borderCollapse: "collapse", width: "100%" }}>
+    <table className="eoc-table">
       <caption style={{ textAlign: "left", fontWeight: 600, paddingBottom: 8 }}>
         {props.caption}
       </caption>
       <thead>
         <tr>
           {props.columns.map((c) => (
-            <th
-              key={c}
-              scope="col"
-              style={{
-                textAlign: "left",
-                borderBottom: "2px solid var(--eoc-border)",
-                padding: "6px 8px",
-              }}
-            >
+            <th key={c} scope="col">
               {c}
             </th>
           ))}
@@ -108,12 +100,7 @@ export function BoardTable(props: {
         {props.rows.map((r, i) => (
           <tr key={i}>
             {r.map((cell, j) => (
-              <td
-                key={j}
-                style={{ borderBottom: "1px solid var(--eoc-border)", padding: "6px 8px" }}
-              >
-                {cell}
-              </td>
+              <td key={j}>{cell}</td>
             ))}
           </tr>
         ))}
