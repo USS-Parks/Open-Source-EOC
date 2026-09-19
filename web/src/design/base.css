@@ -1,0 +1,87 @@
+/*
+ * Base stylesheet: the parts of the design system that inline styles cannot
+ * express, keyed off the theme's CSS variables. Component sizing and color
+ * stay inline (and testable); this adds focus rings, hover and active
+ * states, calm scrollbars, and themed map popups. Color stays reserved for
+ * status (INV-8): nothing here introduces a new accent.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: var(--eoc-font, system-ui, sans-serif);
+}
+
+/* One keyboard focus ring, everywhere. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--eoc-focus);
+  outline-offset: 2px;
+  border-radius: var(--eoc-radius-sm, 4px);
+}
+
+/* Buttons: quiet motion, clear hover and active. */
+.eoc-btn {
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    box-shadow 0.12s ease,
+    filter 0.12s ease;
+}
+.eoc-btn:not(:disabled):hover {
+  filter: brightness(0.97);
+}
+.eoc-btn:not(:disabled):active {
+  filter: brightness(0.93);
+}
+
+/* Selectable rows lift toward the focus color on hover. */
+.eoc-row {
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease;
+}
+.eoc-row:hover {
+  border-color: var(--eoc-focus);
+}
+
+/* Calm scrollbars that read as part of the surface. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--eoc-border) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--eoc-border);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* MapLibre popup and scale, themed to the current surface. */
+.maplibregl-popup-content {
+  background: var(--eoc-surface);
+  color: var(--eoc-text);
+  border: 1px solid var(--eoc-border);
+  border-radius: var(--eoc-radius-md, 6px);
+  box-shadow: var(--eoc-shadow-lg);
+  padding: 10px 12px;
+}
+.maplibregl-popup-close-button {
+  color: var(--eoc-text-muted);
+  font-size: 16px;
+  padding: 0 6px;
+}
+.maplibregl-ctrl-scale {
+  background: color-mix(in srgb, var(--eoc-surface) 80%, transparent);
+  color: var(--eoc-text-muted);
+  border-color: var(--eoc-border);
+}

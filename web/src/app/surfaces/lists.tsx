@@ -72,7 +72,7 @@ export function SitrepsIndex(props: {
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
           {items.map((s) => (
             <li key={s.id}>
-              <button type="button" onClick={() => props.onOpen(s.id)} style={rowButton}>
+              <button type="button" className="eoc-row" onClick={() => props.onOpen(s.id)} style={rowButton}>
                 <span style={{ fontWeight: 600 }}>Operational period {s.period}</span>
                 <span style={{ color: "var(--eoc-text-muted)" }}>
                   {new Date(s.composedAt).toLocaleString()} · {s.composedBy}
@@ -146,5 +146,6 @@ const card: CSSProperties = {
   padding: "10px 12px",
   background: "var(--eoc-surface)",
   border: "1px solid var(--eoc-border)",
-  borderRadius: 4,
+  borderRadius: "var(--eoc-radius-md)",
+  boxShadow: "var(--eoc-shadow-sm)",
 };

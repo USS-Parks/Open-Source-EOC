@@ -102,9 +102,11 @@ const commandBar: CSSProperties = {
   justifyContent: "space-between",
   alignItems: "center",
   gap: 16,
-  padding: "8px 16px",
+  padding: "10px 16px",
   borderBottom: "1px solid var(--eoc-border)",
   background: "var(--eoc-surface)",
+  boxShadow: "var(--eoc-shadow-sm)",
+  zIndex: 1,
 };
 
 const rail: CSSProperties = {

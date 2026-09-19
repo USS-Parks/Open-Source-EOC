@@ -47,6 +47,7 @@ export function BoardList(props: {
           <li key={b.id}>
             <button
               type="button"
+              className="eoc-row"
               onClick={() => props.onOpen(b.id)}
               style={{
                 width: "100%",
@@ -57,11 +58,12 @@ export function BoardList(props: {
                 background: "var(--eoc-surface)",
                 color: "var(--eoc-text)",
                 border: "1px solid var(--eoc-border)",
-                borderRadius: 4,
+                borderRadius: "var(--eoc-radius-sm)",
                 cursor: "pointer",
                 display: "flex",
                 justifyContent: "space-between",
                 gap: 8,
+                alignItems: "center",
               }}
             >
               <span>{b.name}</span>

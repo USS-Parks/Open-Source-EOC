@@ -42,12 +42,24 @@ function Widget(props: { widget: WidgetResult }) {
       aria-label={w.title}
       style={{
         border: "1px solid var(--eoc-border)",
-        borderRadius: 6,
-        padding: 12,
+        borderRadius: "var(--eoc-radius-md)",
+        boxShadow: "var(--eoc-shadow-sm)",
+        padding: 14,
         background: "var(--eoc-surface)",
       }}
     >
-      <h3 style={{ margin: "0 0 8px", fontSize: 14 }}>{w.title}</h3>
+      <h3
+        style={{
+          margin: "0 0 10px",
+          fontSize: 12,
+          fontWeight: 600,
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
+          color: "var(--eoc-text-muted)",
+        }}
+      >
+        {w.title}
+      </h3>
       {w.missing ? (
         <p style={{ margin: 0, color: "var(--eoc-text-muted)" }}>
           No matching board in this jurisdiction.

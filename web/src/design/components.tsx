@@ -74,7 +74,13 @@ export function Button(props: {
           : "var(--eoc-text)",
   };
   return (
-    <button type={props.type ?? "button"} onClick={props.onClick} disabled={props.disabled} style={style}>
+    <button
+      type={props.type ?? "button"}
+      className="eoc-btn"
+      onClick={props.onClick}
+      disabled={props.disabled}
+      style={style}
+    >
       {props.children}
     </button>
   );
@@ -165,11 +171,12 @@ export function Panel(props: { title: string; children: ReactNode }) {
       style={{
         background: "var(--eoc-surface)",
         border: "1px solid var(--eoc-border)",
-        borderRadius: 6,
+        borderRadius: "var(--eoc-radius-md)",
+        boxShadow: "var(--eoc-shadow-sm)",
         padding: 16,
       }}
     >
-      <h2 style={{ marginTop: 0, fontSize: "1.05em" }}>{props.title}</h2>
+      <h2 style={{ marginTop: 0, fontSize: "1.05em", letterSpacing: "-0.01em" }}>{props.title}</h2>
       {props.children}
     </section>
   );

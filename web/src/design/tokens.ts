@@ -58,6 +58,30 @@ export const spacing = [0, 4, 8, 12, 16, 24, 32, 48] as const;
 export const fontStack =
   'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif';
 
+/** Corner radii. A single scale keeps the surface visually consistent. */
+export const radii = { sm: 4, md: 6, lg: 10, pill: 999 } as const;
+
+/** Type scale in px: one ramp for every size on the surface. */
+export const typeScale = { xs: 12, sm: 13, md: 14, lg: 16, xl: 20, xxl: 28 } as const;
+
+/**
+ * Elevation. Shadows are the only depth cue (color stays reserved for
+ * status, INV-8), and they are tuned per theme so dark mode lifts without
+ * glowing.
+ */
+export const shadows: Record<ThemeName, { sm: string; md: string; lg: string }> = {
+  light: {
+    sm: "0 1px 2px rgba(16,24,32,0.06)",
+    md: "0 2px 6px rgba(16,24,32,0.08), 0 1px 2px rgba(16,24,32,0.06)",
+    lg: "0 8px 24px rgba(16,24,32,0.12)",
+  },
+  dark: {
+    sm: "0 1px 2px rgba(0,0,0,0.40)",
+    md: "0 2px 8px rgba(0,0,0,0.50)",
+    lg: "0 12px 32px rgba(0,0,0,0.60)",
+  },
+};
+
 /** Emit the theme as CSS custom properties for a style attribute or tag. */
 export function toCssVariables(theme: ThemeName): Record<string, string> {
   const t = themes[theme];
@@ -74,6 +98,13 @@ export function toCssVariables(theme: ThemeName): Record<string, string> {
     "--eoc-status-critical": t.statusCritical,
     "--eoc-status-success": t.statusSuccess,
     "--eoc-status-unknown": t.statusUnknown,
+    "--eoc-radius-sm": `${radii.sm}px`,
+    "--eoc-radius-md": `${radii.md}px`,
+    "--eoc-radius-lg": `${radii.lg}px`,
+    "--eoc-shadow-sm": shadows[theme].sm,
+    "--eoc-shadow-md": shadows[theme].md,
+    "--eoc-shadow-lg": shadows[theme].lg,
+    "--eoc-font": fontStack,
   };
 }
 
