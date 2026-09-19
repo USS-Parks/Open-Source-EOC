@@ -118,6 +118,34 @@ export async function getDashboard(
   };
 }
 
+export interface DashboardListItem {
+  readonly id: string;
+  readonly title: string;
+  readonly templateKey: string;
+}
+
+/**
+ * The active dashboards in a jurisdiction the caller belongs to. Discovery
+ * for the app shell: any membership role may list, and RLS is the second wall.
+ */
+export async function listDashboards(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+): Promise<DashboardListItem[]> {
+  if (!actor.memberships.some((m) => m.jurisdictionId === jurisdictionId))
+    throw new AuthError(403, "no access to this jurisdiction");
+  const rows = await sql`
+    select id, title, template_key from dashboards
+    where jurisdiction_id = ${jurisdictionId} and archived_at is null
+    order by title`;
+  return rows.map((r) => ({
+    id: r.id as string,
+    title: r.title as string,
+    templateKey: r.template_key as string,
+  }));
+}
+
 /** Board template keys a dashboard is bound to (for live invalidation). */
 export function boundBoardKeys(template: DashboardTemplate): ReadonlySet<string> {
   return new Set(template.widgets.map((w) => w.board));

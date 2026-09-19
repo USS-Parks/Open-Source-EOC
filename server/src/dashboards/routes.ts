@@ -11,6 +11,7 @@ import {
   createDashboard,
   exportDashboardTemplate,
   getDashboard,
+  listDashboards,
   registerDashboardTemplate,
 } from "./service.js";
 
@@ -64,6 +65,18 @@ export function dashboardRoutes(
         createDashboard(tx, req.principal, jurisdictionId, body.templateKey, body.version, body.title),
       );
       return reply.status(201).send({ id });
+    },
+  );
+
+  app.get(
+    "/api/v1/jurisdictions/:jurisdictionId/dashboards",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const dashboards = await withPerson(sql, req.principal.person.id, (tx) =>
+        listDashboards(tx, req.principal, jurisdictionId),
+      );
+      return reply.send({ dashboards });
     },
   );
 

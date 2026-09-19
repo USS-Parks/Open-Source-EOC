@@ -275,6 +275,48 @@ export async function listViewRecords(
   return { view: view.key, columns, records };
 }
 
+export interface BoardListItem {
+  readonly id: string;
+  readonly title: string;
+  readonly templateKey: string;
+  readonly templateVersion: number;
+  /** Whether the board carries a geometry field (so it appears on the COP). */
+  readonly hasGeometry: boolean;
+}
+
+/**
+ * The active boards in a jurisdiction the caller belongs to. Discovery for
+ * the app shell's navigation: any membership role may list (viewers included),
+ * and RLS is the second wall. `hasGeometry` mirrors the OGC collections rule
+ * so the client can mark which boards also render as a COP layer.
+ */
+export async function listBoards(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+): Promise<BoardListItem[]> {
+  if (!actor.memberships.some((m) => m.jurisdictionId === jurisdictionId))
+    throw new AuthError(403, "no access to this jurisdiction");
+  const rows = await sql`
+    select b.id, b.title, b.template_key, b.template_version, b.local_fields, t.definition
+    from boards b join board_templates t
+      on t.key = b.template_key and t.version = b.template_version
+    where b.jurisdiction_id = ${jurisdictionId} and b.archived_at is null
+    order by b.title`;
+  return rows.map((r) => {
+    const template = BoardTemplateSchema.parse(r.definition);
+    const locals = (r.local_fields as FieldDef[]) ?? [];
+    const { fields } = effectiveFields(template, locals);
+    return {
+      id: r.id as string,
+      title: r.title as string,
+      templateKey: r.template_key as string,
+      templateVersion: r.template_version as number,
+      hasGeometry: geometryFieldKey(fields) !== null,
+    };
+  });
+}
+
 function roleFor(actor: Principal, jurisdictionId: string, boardId: string): BoardRole | null {
   const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
   if (m) return m.role as BoardRole;

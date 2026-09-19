@@ -10,6 +10,7 @@ import {
   createRecord,
   getEffectiveBoard,
   importTemplatePackage,
+  listBoards,
   listViewRecords,
   registerTemplate,
   updateRecord,
@@ -59,6 +60,18 @@ export function boardRoutes(
         createBoard(tx, req.principal, jurisdictionId, body.templateKey, body.version, body.title),
       );
       return reply.status(201).send({ id });
+    },
+  );
+
+  app.get(
+    "/api/v1/jurisdictions/:jurisdictionId/boards",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const boards = await withPerson(sql, req.principal.person.id, (tx) =>
+        listBoards(tx, req.principal, jurisdictionId),
+      );
+      return reply.send({ boards });
     },
   );
 

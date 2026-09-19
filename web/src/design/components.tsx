@@ -88,6 +88,7 @@ export function TextField(props: {
   value: string;
   onChange: (v: string) => void;
   required?: boolean;
+  type?: "text" | "password";
 }) {
   const id = `tf-${fieldSeq++}`;
   return (
@@ -95,6 +96,7 @@ export function TextField(props: {
       <label htmlFor={id}>{props.label}</label>
       <input
         id={id}
+        type={props.type ?? "text"}
         value={props.value}
         required={props.required}
         onChange={(e) => props.onChange(e.target.value)}
