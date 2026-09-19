@@ -9,8 +9,11 @@ import {
   buildCopStyle,
   sourceId,
   tagFeatures,
+  type BasemapConfig,
   type CopFeatureCollection,
 } from "./layers.js";
+import { NATURAL_EARTH_ATTRIBUTION } from "./basemap.js";
+import { statusColor, type SymbolStatus } from "./symbology.js";
 
 export interface CopBoard {
   readonly id: string;
@@ -21,7 +24,10 @@ export interface CopMapProps {
   readonly theme: ThemeName;
   readonly boards: readonly CopBoard[];
   readonly fetchItems: (boardId: string) => Promise<CopFeatureCollection>;
-  readonly basemapUrl?: string | undefined;
+  /** The bundled basemap, when one should render under the layers. */
+  readonly basemap?: BasemapConfig | undefined;
+  /** A deployment's own MapLibre style URL, which replaces the basemap. */
+  readonly basemapStyleUrl?: string | undefined;
   readonly pollMs?: number | undefined;
   readonly center?: [number, number] | undefined;
   readonly zoom?: number | undefined;
@@ -30,6 +36,28 @@ export interface CopMapProps {
 }
 
 let pmtilesRegistered = false;
+
+const LEGEND: readonly SymbolStatus[] = ["critical", "warning", "normal", "unknown"];
+
+function esc(value: string): string {
+  return value.replace(
+    /[&<>"]/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c,
+  );
+}
+
+/** A record's readable properties as a small table for the map popup. */
+function featureHtml(properties: Record<string, unknown>): string {
+  const rows = Object.entries(properties)
+    .filter(([key]) => !key.startsWith("_"))
+    .map(
+      ([key, value]) =>
+        `<tr><th style="text-align:left;padding-right:8px;vertical-align:top">${esc(key)}</th>` +
+        `<td>${esc(String(value))}</td></tr>`,
+    )
+    .join("");
+  return `<table style="font:12px system-ui,sans-serif;border-collapse:collapse">${rows}</table>`;
+}
 
 /**
  * The common operating picture (F6, F14). Every geo board is a togglable
@@ -56,13 +84,41 @@ export function CopMap(props: CopMapProps) {
     }
     const map = new maplibregl.Map({
       container: container.current,
-      style: buildCopStyle(props.theme, props.basemapUrl) as never,
+      style: (props.basemapStyleUrl ?? buildCopStyle(props.theme, props.basemap)) as never,
       center: props.center ?? [-123.5, 41.3],
       zoom: props.zoom ?? 9,
       attributionControl: false,
     });
     mapRef.current = map;
     props.onMap?.(map);
+
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-left");
+    map.addControl(
+      new maplibregl.AttributionControl({
+        compact: true,
+        customAttribution: props.basemap?.kind === "natural-earth" ? NATURAL_EARTH_ATTRIBUTION : "",
+      }),
+      "bottom-right",
+    );
+
+    // Click any operational feature to inspect its record; a plain map click
+    // dismisses. queryRenderedFeatures keeps this working as layers come and
+    // go on the poll, with no per-layer handler churn.
+    const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, maxWidth: "280px" });
+    map.on("click", (e) => {
+      const hit = map
+        .queryRenderedFeatures(e.point)
+        .find((f) => f.layer.id.startsWith(sourceId("")));
+      if (!hit) return;
+      popup.setLngLat(e.lngLat).setHTML(featureHtml(hit.properties ?? {})).addTo(map);
+    });
+    map.on("mousemove", (e) => {
+      const over = map
+        .queryRenderedFeatures(e.point)
+        .some((f) => f.layer.id.startsWith(sourceId("")));
+      map.getCanvas().style.cursor = over ? "pointer" : "";
+    });
 
     const refresh = async () => {
       for (const board of props.boards) {
@@ -129,6 +185,28 @@ export function CopMap(props: CopMapProps) {
             </li>
           ))}
         </ul>
+        <div style={{ marginTop: 12 }}>
+          <h3 style={{ margin: "0 0 6px", fontSize: "0.85em", color: "var(--eoc-text-muted)" }}>
+            Status
+          </h3>
+          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
+            {LEGEND.map((s) => (
+              <li key={s} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.85em" }}>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: 6,
+                    background: statusColor(s, props.theme),
+                    display: "inline-block",
+                  }}
+                />
+                {s}
+              </li>
+            ))}
+          </ul>
+        </div>
       </nav>
       <div
         ref={container}

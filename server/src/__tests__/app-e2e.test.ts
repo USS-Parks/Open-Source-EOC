@@ -39,6 +39,7 @@ const TYPES: Record<string, string> = {
   ".mjs": "text/javascript",
   ".css": "text/css",
   ".json": "application/json",
+  ".geojson": "application/geo+json",
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".woff2": "font/woff2",
@@ -184,13 +185,15 @@ describe("the operations console in a real browser, offline", () => {
     await page.getByLabel("Password").fill("another-good-password");
     await page.getByRole("button", { name: "Sign in" }).click();
 
-    // Console-only markers: the live COP and the board dock.
+    // Console-only markers: the live COP, its controls and legend, the dock.
     await page.waitForSelector('[data-testid="cop-map"]', { timeout: 20000 });
+    await page.waitForSelector(".maplibregl-ctrl-zoom-in", { timeout: 20000 });
+    await page.getByText("Status", { exact: true }).first().waitFor({ state: "visible", timeout: 20000 });
     await page
       .getByRole("button", { name: /road closures/i })
       .first()
       .waitFor({ state: "visible", timeout: 20000 });
-    await page.waitForTimeout(800);
+    await page.waitForTimeout(1500);
     await page.screenshot({ path: join(SHOTS, "app-map-light.png"), fullPage: false });
 
     // The dashboard surface renders its widgets.

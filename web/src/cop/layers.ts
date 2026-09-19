@@ -1,5 +1,6 @@
 import { themes, type ThemeName } from "../design/tokens.js";
 import { statusColorExpression, symbolStatusFor } from "./symbology.js";
+import { basemapBackground, naturalEarthLayers, naturalEarthSources } from "./basemap.js";
 
 /**
  * COP layer construction: pure functions from board data to MapLibre
@@ -72,25 +73,26 @@ export function boardLayerSpecs(boardId: string, theme: ThemeName): unknown[] {
   ];
 }
 
+/** The COP base map: bundled Natural Earth, or a plain canvas as a floor. */
+export type BasemapConfig = { readonly kind: "natural-earth"; readonly assetBase: string };
+
 /**
- * The base style: a calm neutral canvas that renders with zero network
- * (INV-3). A PMTiles vector basemap, when configured, mounts underneath
- * the board layers; its absence never blocks the COP.
+ * The base style. With the bundled basemap it is a calm land/water canvas
+ * that renders with zero external network (INV-3); without it, a neutral
+ * background floor. Board layers mount on top at runtime, so the basemap
+ * never blocks the COP. A deployment's own MapLibre style replaces this
+ * entirely (handled by the caller), for street-level detail.
  */
-export function buildCopStyle(theme: ThemeName, basemapUrl?: string): Record<string, unknown> {
+export function buildCopStyle(theme: ThemeName, basemap?: BasemapConfig): Record<string, unknown> {
   const t = themes[theme];
-  const style: Record<string, unknown> = {
-    version: 8,
-    sources: {},
-    layers: [
-      { id: "background", type: "background", paint: { "background-color": t.surfaceRaised } },
-    ],
-  };
-  if (basemapUrl) {
-    (style.sources as Record<string, unknown>)["basemap"] = {
-      type: "vector",
-      url: `pmtiles://${basemapUrl}`,
-    };
+  const bg = basemap?.kind === "natural-earth" ? basemapBackground(theme) : t.surfaceRaised;
+  const sources: Record<string, unknown> = {};
+  const layers: unknown[] = [
+    { id: "background", type: "background", paint: { "background-color": bg } },
+  ];
+  if (basemap?.kind === "natural-earth") {
+    Object.assign(sources, naturalEarthSources(basemap.assetBase));
+    layers.push(...naturalEarthLayers(theme));
   }
-  return style;
+  return { version: 8, sources, layers };
 }

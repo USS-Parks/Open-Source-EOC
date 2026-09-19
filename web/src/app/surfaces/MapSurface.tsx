@@ -1,6 +1,7 @@
 import { CopMap } from "../../cop/CopMap.js";
 import type { ThemeName } from "../../design/tokens.js";
 import type { ApiClient, CollectionRef } from "../api/client.js";
+import { assetBase, basemapStyleUrl } from "../config.js";
 import { EmptyState } from "../screens/parts.js";
 
 /**
@@ -26,6 +27,8 @@ export function MapSurface(props: {
           theme={props.theme}
           boards={props.collections.map((c) => ({ id: c.id, title: c.title }))}
           fetchItems={(id) => props.client.collectionItems(id)}
+          basemap={{ kind: "natural-earth", assetBase: assetBase() }}
+          basemapStyleUrl={basemapStyleUrl()}
         />
       )}
     </div>

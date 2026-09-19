@@ -69,10 +69,14 @@ describe("layer construction", () => {
     expect(style).toContain("background-color");
   });
 
-  it("a configured PMTiles basemap mounts as a pmtiles:// vector source", () => {
-    const style = buildCopStyle("light", "/basemaps/county.pmtiles") as {
-      sources: Record<string, { url: string }>;
+  it("the bundled Natural Earth basemap mounts as offline geojson sources", () => {
+    const style = buildCopStyle("light", { kind: "natural-earth", assetBase: "/" }) as {
+      sources: Record<string, { type: string; data: string }>;
+      layers: Array<{ id: string }>;
     };
-    expect(style.sources.basemap!.url).toBe("pmtiles:///basemaps/county.pmtiles");
+    expect(style.sources.ne_land!.type).toBe("geojson");
+    expect(style.sources.ne_land!.data).toBe("/basemap/ne_50m_land.geojson");
+    expect(JSON.stringify(style)).not.toContain("http");
+    expect(style.layers.some((l) => l.id === "ne-land")).toBe(true);
   });
 });
