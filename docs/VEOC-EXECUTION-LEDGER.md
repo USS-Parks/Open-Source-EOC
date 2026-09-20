@@ -1203,3 +1203,42 @@ unchanged; all work on `main`.
 - **Facets:** completes Phase D operator UI (tracking/reunification); F20.
 - **Rollback:** revert the VEOC-65 commit.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-66: Incident lockdown (guest/public read suspended)
+
+- **Session:** VEOC-66, executed 2026-09-20
+- **Starting HEAD:** `6c53188` (smart forms + tracking)
+- **New requirement (Basho, 2026-09-20):** when a jurisdiction/org opens an
+  incident, the dashboard goes into lockdown. Clarified with Basho: lockdown
+  suspends guest and public read while an incident is open; members are
+  unaffected; it engages automatically on incident open and an admin can lift
+  or re-apply it.
+- **Files created/changed:** `server/migrations/0028_lockdown.sql` (a `locked`
+  flag on jurisdictions and a redefined `has_guest_scope` that yields no guest
+  scope while locked, so guest read is suspended at the RLS wall across every
+  guest-readable surface at once); `server/src/incidents/service.ts` (activation
+  sets locked; closing the last open incident clears it; getLockdown/setLockdown
+  with admin override, audited); `server/src/incidents/routes.ts` (GET/POST
+  `/api/v1/jurisdictions/:id/lockdown`); `web/src/app/api/client.ts`
+  (getLockdown, setLockdown); `web/src/app/screens/Console.tsx` (a lockdown
+  banner across the console while locked); `web/src/app/surfaces/IncidentsSurface.tsx`
+  (an admin lockdown state + lift/apply control). Tests: incidents.test.ts
+  (activation locks; admin lifts; member cannot set; and the RLS proof that
+  has_guest_scope returns false while locked), client.test.ts (get/set), and the
+  browser E2E now asserts the lockdown banner is visible with the incident open.
+- **Acceptance proven by test:** opening an incident sets the jurisdiction
+  locked; a member is refused the toggle (403) while an admin lifts it; at the
+  RLS wall a guest with a valid grant reads while unlocked and is suspended
+  while locked; the console shows the lockdown banner.
+- **Verification:** `pnpm check` green; 380 tests / 71 files.
+- **Facets:** an information-management/operational-security control layered on
+  the two-wall tenancy (INV-7); open source, but a live incident is not exposed
+  to guests or the public.
+- **Deferred (honest):** anonymous/public read is not a shipped surface, so
+  "public" suspension is covered by the same guest wall; a per-incident (rather
+  than per-jurisdiction) lockdown scope can follow if a jurisdiction runs
+  concurrent incidents with different exposure.
+- **Rollback:** revert the VEOC-66 commit.
+- **Commit/push:** under standing authorization. No branch created.

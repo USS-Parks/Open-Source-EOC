@@ -315,6 +315,22 @@ describe("ApiClient", () => {
     expect((await client.reunify("j", { label: "Jane" }))[0]!.label).toBe("Jane");
   });
 
+  it("reads and sets the jurisdiction lockdown", async () => {
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      const u = String(url);
+      if (u.endsWith("/auth/login"))
+        return res(200, { accessToken: "A", resumeToken: "R", sessionId: "S" });
+      if (u.endsWith("/lockdown") && init.method === "POST") return res(200, { locked: false });
+      if (u.endsWith("/lockdown")) return res(200, { locked: true });
+      return res(404, { error: "nope" });
+    }) as unknown as typeof fetch;
+
+    const client = new ApiClient({ fetchImpl });
+    await client.login("e@x.org", "pw");
+    expect((await client.getLockdown("j")).locked).toBe(true);
+    expect((await client.setLockdown("j", false)).locked).toBe(false);
+  });
+
   it("surfaces the server error envelope as a typed ApiError", async () => {
     const fetchImpl = (async (url: string) => {
       const u = String(url);

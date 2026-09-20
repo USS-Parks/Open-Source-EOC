@@ -64,6 +64,11 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
     [jurisdictionId],
   );
   const notifications = usePolled(() => client.notifications(), 8000, []);
+  const lockdown = usePolled(
+    () => (jurisdictionId ? client.getLockdown(jurisdictionId) : Promise.resolve({ locked: false })),
+    10000,
+    [jurisdictionId],
+  );
 
   if (!jurisdictionId) {
     return (
@@ -115,6 +120,22 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       onLogout={() => void session.logout()}
       rightDock={dock}
     >
+      {lockdown.data?.locked ? (
+        <div
+          role="status"
+          style={{
+            background: "var(--eoc-surface-raised)",
+            border: "1px solid var(--eoc-status-critical)",
+            color: "var(--eoc-status-critical)",
+            padding: "8px 12px",
+            borderRadius: 6,
+            margin: "0 12px 8px",
+            fontWeight: 600,
+          }}
+        >
+          Incident lockdown active. Guest and public access is suspended until the incident closes.
+        </div>
+      ) : null}
       <Center
         surface={surface}
         theme={props.theme}

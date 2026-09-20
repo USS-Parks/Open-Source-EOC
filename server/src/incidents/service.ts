@@ -153,6 +153,10 @@ export async function activateIncident(
     where jurisdiction_id = ${jurisdictionId} and for_template = ${template.key}
     returning library_id`;
 
+  // Opening an incident locks the jurisdiction down: guest/public read is
+  // suspended until the incident closes (an admin can override in between).
+  await sql`update jurisdictions set locked = true where id = ${jurisdictionId}`;
+
   await recordAudit(sql, actor, {
     jurisdictionId,
     incidentId,
@@ -313,6 +317,13 @@ export async function closeIncident(
   await sql`
     update incidents set closed_at = now(), closed_by = ${actor.person.id}
     where id = ${incidentId}`;
+  // Lift lockdown when no open incident remains in the jurisdiction.
+  await sql`
+    update jurisdictions set locked = false
+    where id = ${incident.jurisdiction_id as string}
+      and not exists (
+        select 1 from incidents
+        where jurisdiction_id = ${incident.jurisdiction_id as string} and closed_at is null)`;
   await recordAudit(sql, actor, {
     jurisdictionId: incident.jurisdiction_id as string,
     incidentId,
@@ -320,6 +331,34 @@ export async function closeIncident(
     subjectTable: "incidents",
     subjectId: incidentId,
   });
+}
+
+export async function getLockdown(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+): Promise<{ locked: boolean }> {
+  requireMember(actor, jurisdictionId);
+  const [row] = await sql`select locked from jurisdictions where id = ${jurisdictionId}`;
+  return { locked: Boolean(row?.locked) };
+}
+
+/** Admin override: lift or re-apply lockdown while incidents run. */
+export async function setLockdown(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+  locked: boolean,
+): Promise<{ locked: boolean }> {
+  requireAdmin(actor, jurisdictionId);
+  await sql`update jurisdictions set locked = ${locked} where id = ${jurisdictionId}`;
+  await recordAudit(sql, actor, {
+    jurisdictionId,
+    category: locked ? "jurisdiction.locked" : "jurisdiction.unlocked",
+    subjectTable: "jurisdictions",
+    subjectId: jurisdictionId,
+  });
+  return { locked };
 }
 
 export async function createLibrary(

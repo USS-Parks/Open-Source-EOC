@@ -447,6 +447,19 @@ export class ApiClient {
   closeIncident(incidentId: string): Promise<{ ok: true }> {
     return this.request<{ ok: true }>("POST", `/api/v1/incidents/${incidentId}/close`);
   }
+  getLockdown(jurisdictionId: string): Promise<{ locked: boolean }> {
+    return this.request<{ locked: boolean }>(
+      "GET",
+      `/api/v1/jurisdictions/${jurisdictionId}/lockdown`,
+    );
+  }
+  setLockdown(jurisdictionId: string, locked: boolean): Promise<{ locked: boolean }> {
+    return this.request<{ locked: boolean }>(
+      "POST",
+      `/api/v1/jurisdictions/${jurisdictionId}/lockdown`,
+      { locked },
+    );
+  }
   async listResourceRequests(jurisdictionId: string): Promise<ResourceRequestSummary[]> {
     const r = await this.request<{ requests: ResourceRequestSummary[] }>(
       "GET",
