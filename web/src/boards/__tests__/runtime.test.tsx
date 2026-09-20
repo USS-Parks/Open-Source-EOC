@@ -35,6 +35,30 @@ describe("RecordForm (input view)", () => {
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getAllByRole("alert").length).toBeGreaterThan(0);
   });
+
+  it("prefills a geometry point (the map tap) and submits it as GeoJSON", () => {
+    const roads = STANDARD_TEMPLATES.find((t) => t.key === "road_closures")!;
+    const onSubmit = vi.fn();
+    render(
+      <RecordForm
+        fields={roads.fields}
+        initial={{ location: { type: "Point", coordinates: [-123.6, 41.3] } }}
+        onSubmit={onSubmit}
+      />,
+    );
+    expect((screen.getByLabelText("Longitude") as HTMLInputElement).value).toBe("-123.6");
+    expect((screen.getByLabelText("Latitude") as HTMLInputElement).value).toBe("41.3");
+    fireEvent.change(screen.getByLabelText("Road"), { target: { value: "SR-169" } });
+    fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Slide" } });
+    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "closed" } });
+    fireEvent.click(screen.getByText("Save record"));
+    expect(onSubmit).toHaveBeenCalledWith({
+      road: "SR-169",
+      reason: "Slide",
+      status: "closed",
+      location: { type: "Point", coordinates: [-123.6, 41.3] },
+    });
+  });
 });
 
 describe("BoardView (display view)", () => {

@@ -263,6 +263,26 @@ describe("the operations console in a real browser, offline", () => {
     await page.waitForTimeout(300);
     await page.screenshot({ path: join(SHOTS, "app-forms-light.png"), fullPage: false });
 
+    // Field capture: drop a point on the map and save it as a road-closure
+    // record, the Field Maps gesture, entirely in the browser.
+    await page.getByRole("button", { name: "Map" }).click();
+    await page.waitForSelector('[data-testid="cop-map"]', { timeout: 20000 });
+    await page.getByRole("button", { name: "Add point" }).click();
+    await page.locator("select").first().selectOption({ label: "Road Closures" });
+    await page
+      .locator('[data-testid="cop-map"] canvas')
+      .first()
+      .click({ position: { x: 320, y: 300 } });
+    await page.getByText("New map record").waitFor({ state: "visible", timeout: 20000 });
+    const recordPanel = page.getByRole("region", { name: "New map record" });
+    await recordPanel.getByLabel("Road").fill("SR-96 at Weitchpec");
+    await recordPanel.getByLabel("Reason").fill("Rockslide");
+    await recordPanel.getByLabel("Status").selectOption("closed");
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: join(SHOTS, "app-map-add.png"), fullPage: false });
+    await recordPanel.getByRole("button", { name: "Save record" }).click();
+    await page.getByText("New map record").waitFor({ state: "hidden", timeout: 20000 });
+
     // Dark theme, for the night-shift EOC.
     await page.getByRole("button", { name: "Dark" }).click();
     await page.waitForTimeout(400);

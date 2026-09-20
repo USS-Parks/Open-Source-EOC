@@ -43,6 +43,9 @@ export interface CopMapProps {
   readonly pollMs?: number | undefined;
   readonly center?: [number, number] | undefined;
   readonly zoom?: number | undefined;
+  /** When true, a map click reports its position instead of inspecting. */
+  readonly picking?: boolean | undefined;
+  readonly onPickPoint?: ((lngLat: [number, number]) => void) | undefined;
   /** Test/instrumentation hook: receives the live map instance. */
   readonly onMap?: ((map: maplibregl.Map) => void) | undefined;
 }
@@ -85,6 +88,9 @@ function featureHtml(properties: Record<string, unknown>): string {
 export function CopMap(props: CopMapProps) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const pickingRef = useRef(false);
+  const onPickRef = useRef<CopMapProps["onPickPoint"]>(props.onPickPoint);
+  onPickRef.current = props.onPickPoint;
   const [visible, setVisible] = useState<Record<string, boolean>>(
     Object.fromEntries(props.boards.map((b) => [b.id, true])),
   );
@@ -127,11 +133,17 @@ export function CopMap(props: CopMapProps) {
     // go on the poll, with no per-layer handler churn.
     const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, maxWidth: "280px" });
     map.on("click", (e) => {
+      // Add-point mode: report the position for a new record, never inspect.
+      if (pickingRef.current && onPickRef.current) {
+        onPickRef.current([e.lngLat.lng, e.lngLat.lat]);
+        return;
+      }
       const hit = map.queryRenderedFeatures(e.point).find((f) => isCopLayerId(f.layer.id));
       if (!hit) return;
       popup.setLngLat(e.lngLat).setHTML(featureHtml(hit.properties ?? {})).addTo(map);
     });
     map.on("mousemove", (e) => {
+      if (pickingRef.current) return; // crosshair stays while placing a point
       const over = map.queryRenderedFeatures(e.point).some((f) => isCopLayerId(f.layer.id));
       map.getCanvas().style.cursor = over ? "pointer" : "";
     });
@@ -199,6 +211,12 @@ export function CopMap(props: CopMapProps) {
       }
     }
   }, [visible, props.boards]);
+
+  useEffect(() => {
+    pickingRef.current = !!props.picking;
+    const map = mapRef.current;
+    if (map) map.getCanvas().style.cursor = props.picking ? "crosshair" : "";
+  }, [props.picking]);
 
   useEffect(() => {
     const map = mapRef.current;

@@ -814,3 +814,35 @@ unchanged; all work on `main`.
   editing of objectives and the safety message is next.
 - **Rollback:** revert the VEOC-51 commit.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-52: Map field capture (drop a point, fill the form)
+
+- **Session:** VEOC-52, executed 2026-09-20
+- **Starting HEAD:** `2ceb525` (Forms screen)
+- **Operator gap closed:** the map could display and inspect geometry but not
+  create it; a location could only be entered as raw coordinates in a board
+  form. This adds the Field Maps gesture: tap the map, the record form opens
+  with the location prefilled.
+- **Files created/changed:** `web/src/boards/RecordForm.tsx` (a geometry
+  control: longitude/latitude point entry, prefilled from the tap and still
+  editable, submitting GeoJSON the shared schema validates); `web/src/cop/CopMap.tsx`
+  (an add-point mode: `picking` shows a crosshair and a click reports its
+  position through `onPickPoint` instead of inspecting); `web/src/app/surfaces/MapSurface.tsx`
+  (an Add-point toggle, a geo-board picker, and the record form in a map
+  overlay, saving through `createRecord`). Tests: runtime.test.tsx (the
+  geometry control prefills a point and submits it as GeoJSON) and the browser
+  E2E now drops a point on the map and saves a road-closure record end to end.
+- **Acceptance proven by test:** the geometry control renders longitude and
+  latitude prefilled from a Point and submits `{type:"Point",coordinates}`; the
+  browser E2E enters add-point mode, clicks the map, and the New map record
+  panel opens with the tapped coordinates, which saves as a road closure,
+  offline.
+- **Verification:** `pnpm check` green; 363 tests / 71 files.
+- **Facets:** part of the Phase D field-capture gap the roadmap names; the
+  first draw-on-map interaction.
+- **Deferred (honest):** photo capture and attaching a photo to a placed point
+  (needs the file-upload UI) is next; line and polygon drawing is later.
+- **Rollback:** revert the VEOC-52 commit.
+- **Commit/push:** under standing authorization. No branch created.

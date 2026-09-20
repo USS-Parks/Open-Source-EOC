@@ -110,6 +110,8 @@ function FieldControl(props: {
           onChange={(v) => props.onChange(v === "" ? undefined : v)}
         />
       );
+    case "geometry":
+      return <GeometryControl field={field} value={props.value} onChange={props.onChange} />;
     default:
       return (
         <TextField
@@ -119,4 +121,55 @@ function FieldControl(props: {
         />
       );
   }
+}
+
+interface PointGeometry {
+  readonly type: "Point";
+  readonly coordinates: readonly [number, number];
+}
+function isPoint(v: unknown): v is PointGeometry {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    (v as { type?: unknown }).type === "Point" &&
+    Array.isArray((v as { coordinates?: unknown }).coordinates)
+  );
+}
+
+/**
+ * Point entry for a geometry field. The map's "add point" mode fills this
+ * from a tap; it stays editable so a coordinate can be corrected by hand.
+ */
+function GeometryControl(props: {
+  field: FieldDef;
+  value: unknown;
+  onChange: (v: unknown) => void;
+}) {
+  const coords = isPoint(props.value) ? props.value.coordinates : undefined;
+  const lng = coords?.[0];
+  const lat = coords?.[1];
+  const update = (nlng: number | undefined, nlat: number | undefined) => {
+    if (nlng === undefined || nlat === undefined || Number.isNaN(nlng) || Number.isNaN(nlat)) {
+      props.onChange(undefined);
+    } else {
+      props.onChange({ type: "Point", coordinates: [nlng, nlat] });
+    }
+  };
+  return (
+    <div>
+      <span style={{ display: "block", marginBottom: 4 }}>{props.field.label} (point)</span>
+      <div style={{ display: "flex", gap: 8 }}>
+        <TextField
+          label="Longitude"
+          value={lng === undefined ? "" : String(lng)}
+          onChange={(v) => update(v === "" ? undefined : Number(v), lat)}
+        />
+        <TextField
+          label="Latitude"
+          value={lat === undefined ? "" : String(lat)}
+          onChange={(v) => update(lng, v === "" ? undefined : Number(v))}
+        />
+      </div>
+    </div>
+  );
 }
