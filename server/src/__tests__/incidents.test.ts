@@ -113,6 +113,19 @@ describe("one-action activation (F12, F13)", () => {
     expect(detail.json().kind).toBe("daily_ops");
     expect(detail.json().boards.length).toBeGreaterThan(0);
   });
+
+  it("lists a jurisdiction's incidents for a member", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/incidents`,
+      headers: auth(memberToken),
+    });
+    expect(res.statusCode).toBe(200);
+    const incidents = res.json().incidents as Array<{ name: string; closedAt: string | null }>;
+    expect(incidents.length).toBeGreaterThanOrEqual(2);
+    expect(incidents.map((i) => i.name)).toContain("Bald Hills Fire");
+    expect(incidents.every((i) => i.closedAt === null)).toBe(true);
+  });
 });
 
 describe("position-attributed checklists (F12)", () => {

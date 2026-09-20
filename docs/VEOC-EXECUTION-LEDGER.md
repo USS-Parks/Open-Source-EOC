@@ -782,3 +782,35 @@ unchanged; all work on `main`.
 - **Facets:** completes the F18 feed surface in the UI, which VEOC-45 had deferred.
 - **Rollback:** revert the VEOC-50 commit.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-51: ICS Forms and IAP operator screen
+
+- **Session:** VEOC-51, executed 2026-09-20
+- **Starting HEAD:** `7561066` (roadmap rewrite)
+- **Operator gap closed:** the forms engine and PDF export existed only behind
+  the API (VEOC-34); the console had no way to reach them. This adds the screen.
+- **Files created/changed:** `web/src/app/surfaces/FormsSurface.tsx` (pick an
+  incident and operational period, preview any of the twelve ICS forms
+  prefilled from live incident data, assemble the operational period's IAP,
+  download it as a PDF, and, as an admin, approve it); `web/src/app/api/client.ts`
+  (listIncidents, getIcsForm, createIap, getIap, approveIap, and an authed
+  downloadIapPdf returning a Blob with one-shot 401 renewal); `web/src/app/router.tsx`
+  and `web/src/app/screens/Console.tsx` (a Forms rail entry and route, isAdmin
+  threaded through); server `incidents/service.ts` and `incidents/routes.ts`
+  (listIncidents plus `GET /api/v1/jurisdictions/:id/incidents`, member-scoped
+  under RLS). Tests: incidents.test.ts (list), client.test.ts (PDF blob +
+  bearer), and the browser E2E now activates an incident, previews ICS-201, and
+  assembles an IAP.
+- **Acceptance proven by test:** a member lists a jurisdiction's incidents; the
+  client downloads a PDF blob carrying the bearer token; the browser E2E signs
+  in, opens Forms, previews ICS-201 with the eight-position org chart, and
+  assembles the IAP with its ICS-202 objectives form, offline.
+- **Verification:** `pnpm check` green; 362 tests / 71 files.
+- **Facets:** F5 now reaches the operator (the engine was VEOC-34).
+- **Deferred (honest):** the ICS-204 assignment list is still shallow
+  (operations positions only, not division/group/strike-team detail); in-browser
+  editing of objectives and the safety message is next.
+- **Rollback:** revert the VEOC-51 commit.
+- **Commit/push:** under standing authorization. No branch created.

@@ -188,6 +188,32 @@ export interface IncidentDetail {
   readonly libraries: ReadonlyArray<{ id: string; title: string; kind: string }>;
 }
 
+export interface IncidentSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: string;
+  readonly closedAt: string | null;
+}
+
+/** Open incidents first, for the operator to pick one (forms, IAP, ops). */
+export async function listIncidents(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+): Promise<IncidentSummary[]> {
+  requireMember(actor, jurisdictionId);
+  const rows = await sql`
+    select id, name, kind, closed_at from incidents
+    where jurisdiction_id = ${jurisdictionId}
+    order by closed_at nulls first, name`;
+  return rows.map((r) => ({
+    id: r.id as string,
+    name: r.name as string,
+    kind: r.kind as string,
+    closedAt: (r.closed_at as string | null) ?? null,
+  }));
+}
+
 export async function getIncident(
   sql: Sql,
   actor: Principal,

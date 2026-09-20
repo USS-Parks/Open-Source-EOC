@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardDashboards } from "../dashboards/service.js";
+import { ensureStandardIncidentTemplates } from "../incidents/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
@@ -101,6 +102,7 @@ beforeAll(async () => {
   seed = await seedIdentity(admin);
   await ensureStandardTemplates(admin);
   await ensureStandardDashboards(admin);
+  await ensureStandardIncidentTemplates(admin);
   app = buildApp(runtime, { oidc: null });
 
   app.get("/app/*", (req, reply) => {
@@ -153,6 +155,15 @@ beforeAll(async () => {
       lifeline: lifelineValues[1],
       status: statusValues[statusValues.length - 1],
     });
+
+  // Activate an incident so the Forms/IAP screen has one to build from.
+  const activation = await app.inject({
+    method: "POST",
+    url: `/api/v1/jurisdictions/${seed.jurisdictionId}/incidents`,
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: { templateKey: "wildfire", name: "Bald Hills Fire" },
+  });
+  if (activation.statusCode !== 201) throw new Error(`activation failed: ${activation.body}`);
 
   // A push feed with one point, so the COP shows a live external feed layer.
   const feed = await app.inject({
@@ -238,6 +249,19 @@ describe("the operations console in a real browser, offline", () => {
     await page.getByText("Closed roads").first().waitFor({ state: "visible", timeout: 20000 });
     await page.waitForTimeout(400);
     await page.screenshot({ path: join(SHOTS, "app-dashboard-light.png"), fullPage: false });
+
+    // The Forms surface previews an ICS form and assembles an IAP from the
+    // live incident, all through the browser.
+    await page.getByRole("button", { name: "Forms" }).click();
+    await page.getByRole("button", { name: "Assemble IAP" }).waitFor({ state: "visible", timeout: 20000 });
+    await page.getByRole("button", { name: "Preview form" }).click();
+    await page.getByText("ICS-201 Incident Briefing").first().waitFor({ state: "visible", timeout: 20000 });
+    await page.getByRole("button", { name: "Assemble IAP" }).click();
+    await page.getByText("Incident Action Plan").first().waitFor({ state: "visible", timeout: 20000 });
+    await page.getByText("ICS-202 Incident Objectives").first().waitFor({ state: "visible", timeout: 20000 });
+    await page.getByRole("button", { name: "Download PDF" }).first().waitFor({ state: "visible", timeout: 20000 });
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: join(SHOTS, "app-forms-light.png"), fullPage: false });
 
     // Dark theme, for the night-shift EOC.
     await page.getByRole("button", { name: "Dark" }).click();

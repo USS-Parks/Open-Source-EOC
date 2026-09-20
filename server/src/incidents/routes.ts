@@ -8,6 +8,7 @@ import {
   completeChecklistItem,
   createLibrary,
   getIncident,
+  listIncidents,
 } from "./service.js";
 import {
   archiveForIncident,
@@ -53,6 +54,18 @@ export function incidentRoutes(
         // The incident is already activated; the space can be provisioned later.
       }
       return reply.status(201).send(result);
+    },
+  );
+
+  app.get(
+    "/api/v1/jurisdictions/:jurisdictionId/incidents",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const incidents = await withPerson(sql, req.principal.person.id, (tx) =>
+        listIncidents(tx, req.principal, jurisdictionId),
+      );
+      return reply.send({ incidents });
     },
   );
 

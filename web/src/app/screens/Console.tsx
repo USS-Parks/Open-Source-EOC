@@ -11,6 +11,7 @@ import { MapSurface } from "../surfaces/MapSurface.js";
 import { DashboardSurface } from "../surfaces/DashboardSurface.js";
 import { BoardSurface } from "../surfaces/BoardSurface.js";
 import { SitrepSurface } from "../surfaces/SitrepSurface.js";
+import { FormsSurface } from "../surfaces/FormsSurface.js";
 import { AlertsSurface, BoardsIndex, SitrepsIndex } from "../surfaces/lists.js";
 
 const NAV: readonly NavItem[] = [
@@ -18,6 +19,7 @@ const NAV: readonly NavItem[] = [
   { key: "dashboard", label: "Dashboard" },
   { key: "boards", label: "Boards" },
   { key: "sitreps", label: "SITREP" },
+  { key: "forms", label: "Forms" },
   { key: "alerts", label: "Alerts" },
 ];
 
@@ -105,6 +107,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         boards={boardItems}
         collections={collections.data ?? []}
         feeds={feeds.data ?? []}
+        isAdmin={session.role === "admin"}
         collectionsError={collections.error}
         firstDashboardId={dashboards.data?.[0]?.id}
         onOpenBoard={(id) => navigate({ kind: "board", id })}
@@ -122,6 +125,8 @@ function sectionForNav(key: string): Surface {
       return { kind: "boards" };
     case "sitreps":
       return { kind: "sitreps" };
+    case "forms":
+      return { kind: "forms" };
     case "alerts":
       return { kind: "alerts" };
     default:
@@ -137,6 +142,7 @@ function Center(props: {
   boards: readonly BoardListItem[];
   collections: readonly CollectionRef[];
   feeds: readonly FeedHealth[];
+  isAdmin: boolean;
   collectionsError: string | null;
   firstDashboardId: string | undefined;
   onOpenBoard: (id: string) => void;
@@ -175,6 +181,14 @@ function Center(props: {
       );
     case "sitrep":
       return <SitrepSurface client={props.client} sitrepId={s.id} />;
+    case "forms":
+      return (
+        <FormsSurface
+          client={props.client}
+          jurisdictionId={props.jurisdictionId}
+          isAdmin={props.isAdmin}
+        />
+      );
     case "alerts":
       return <AlertsSurface client={props.client} />;
   }

@@ -1,4 +1,12 @@
-import type { FieldDef, ViewDef, ViewRecord, DashboardSnapshot, SitrepRow } from "@openeoc/shared";
+import type {
+  FieldDef,
+  ViewDef,
+  ViewRecord,
+  DashboardSnapshot,
+  SitrepRow,
+  IcsFormContent,
+  IapDocument,
+} from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
 
 /**
@@ -92,6 +100,25 @@ export interface FeedHealth {
   readonly ageSeconds: number | null;
 }
 export type FeedItemsResponse = CopFeatureCollection & { readonly feed: FeedHealth };
+export interface IncidentSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: string;
+  readonly closedAt: string | null;
+}
+export interface IapResult {
+  readonly id: string;
+  readonly status: string;
+  readonly operationalPeriod: string;
+  readonly content: IapDocument;
+}
+export interface CreateIapBody {
+  readonly operationalPeriod: string;
+  readonly objectives?: readonly string[];
+  readonly preparedBy?: string;
+  readonly safetyMessage?: string;
+  readonly formIds?: readonly string[];
+}
 
 export class ApiError extends Error {
   constructor(
@@ -295,5 +322,57 @@ export class ApiClient {
   }
   feedItems(feedId: string): Promise<FeedItemsResponse> {
     return this.request<FeedItemsResponse>("GET", `/api/v1/feeds/${feedId}/items`);
+  }
+  async listIncidents(jurisdictionId: string): Promise<IncidentSummary[]> {
+    const r = await this.request<{ incidents: IncidentSummary[] }>(
+      "GET",
+      `/api/v1/jurisdictions/${jurisdictionId}/incidents`,
+    );
+    return r.incidents;
+  }
+  getIcsForm(
+    incidentId: string,
+    formId: string,
+    period: string,
+    preparedBy?: string,
+  ): Promise<IcsFormContent> {
+    const q = new URLSearchParams({ period });
+    if (preparedBy) q.set("preparedBy", preparedBy);
+    return this.request<IcsFormContent>(
+      "GET",
+      `/api/v1/incidents/${incidentId}/ics-forms/${formId}?${q.toString()}`,
+    );
+  }
+  createIap(incidentId: string, body: CreateIapBody): Promise<{ id: string; content: IapDocument }> {
+    return this.request<{ id: string; content: IapDocument }>(
+      "POST",
+      `/api/v1/incidents/${incidentId}/iap`,
+      body as unknown as Record<string, unknown>,
+    );
+  }
+  getIap(iapId: string): Promise<IapResult> {
+    return this.request<IapResult>("GET", `/api/v1/iap/${iapId}`);
+  }
+  approveIap(iapId: string): Promise<{ ok: true }> {
+    return this.request<{ ok: true }>("POST", `/api/v1/iap/${iapId}/approve`);
+  }
+  async downloadIapPdf(iapId: string): Promise<Blob> {
+    const once = (): Promise<Response> => {
+      const headers: Record<string, string> = {};
+      if (this.accessToken) headers["authorization"] = `Bearer ${this.accessToken}`;
+      return this.fetchImpl(`${this.baseUrl}/api/v1/iap/${iapId}/pdf`, { method: "GET", headers });
+    };
+    let res = await once();
+    if (res.status === 401 && this.resumeToken) {
+      try {
+        await this.resume();
+      } catch {
+        this.clearTokens();
+        throw new SessionExpiredError();
+      }
+      res = await once();
+    }
+    if (!res.ok) throw new ApiError(res.status, res.statusText || `HTTP ${res.status}`);
+    return res.blob();
   }
 }

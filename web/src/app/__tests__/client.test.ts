@@ -84,6 +84,28 @@ describe("ApiClient", () => {
     expect(tokenEvents[tokenEvents.length - 1]).toBeNull();
   });
 
+  it("downloads an IAP PDF as a blob carrying the bearer token", async () => {
+    const calls: Call[] = [];
+    const pdf = new Blob([new Uint8Array([0x25, 0x50, 0x44, 0x46])], { type: "application/pdf" });
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      const u = String(url);
+      if (u.endsWith("/auth/login"))
+        return res(200, { accessToken: "A", resumeToken: "R", sessionId: "S" });
+      if (u.endsWith("/pdf")) {
+        calls.push({ url: u, init });
+        return { ok: true, status: 200, statusText: "OK", blob: async () => pdf };
+      }
+      return res(404, { error: "nope" });
+    }) as unknown as typeof fetch;
+
+    const client = new ApiClient({ fetchImpl });
+    await client.login("e@x.org", "pw");
+    const blob = await client.downloadIapPdf("iap1");
+    expect(blob.type).toBe("application/pdf");
+    const headers = calls[0]!.init.headers as Record<string, string>;
+    expect(headers["authorization"]).toBe("Bearer A");
+  });
+
   it("surfaces the server error envelope as a typed ApiError", async () => {
     const fetchImpl = (async (url: string) => {
       const u = String(url);
