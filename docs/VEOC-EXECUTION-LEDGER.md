@@ -1498,3 +1498,47 @@ unchanged; all work on `main`.
 - **Verification:** `pnpm check` green; 383 tests / 71 files.
 - **Rollback:** revert the VEOC-73 commit; additive assets and UI only.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-74: self-hosted street basemap engine and California PMTiles pipeline
+
+- **Session:** VEOC-74, executed 2026-09-20
+- **Starting HEAD:** `dad8501` (CA counties and map tools)
+- **Direction (Basho):** the COP basemap should reach Esri/WebEOC-grade street
+  detail via self-hosted PMTiles, covering California, keeping the offline and
+  data-sovereignty posture (no third-party tile provider).
+- **What this delivers:** the app-side engine and the tile pipeline that turn
+  the COP into a real street map. It renders the moment the tiles are hosted;
+  the tiles themselves are generated on a build machine, not in this sandbox
+  (the OSM extract source is proxy-blocked here and a state build exceeds the
+  sandbox's disk).
+- **Files created:**
+  - `web/src/cop/streetstyle.ts` (`buildStreetStyle`): a themed light/dark
+    MapLibre style over an OpenMapTiles-schema PMTiles vector source, with
+    water, waterways, parks, buildings, roads by class (casing + minor + major),
+    admin boundaries, and road and place labels. Labels appear only when a glyph
+    stack is configured; the palette stays calm so status symbology reads first
+    (INV-8). Declares OpenStreetMap/ODbL attribution.
+  - `deploy/basemap/generate-california.sh`: a planetiler one-shot that downloads
+    the California OSM extract and writes `california.pmtiles`.
+  - `deploy/basemap/README.md`: the full pipeline (generate, build a glyph stack,
+    optional sprite, host over HTTP range requests, wire the OPENEOC_BASEMAP_*
+    settings), and why generation runs off the CI sandbox.
+- **Files changed:** `web/src/app/config.ts` (PMTiles/glyphs/sprite settings and
+  a `streetBasemap()` accessor); `web/src/cop/CopMap.tsx` (build the street style
+  when configured, and OSM attribution when it is active); `web/src/app/surfaces/
+  MapSurface.tsx` (pass the config through); `web/src/cop/__tests__/cop.test.ts`
+  (street-style structure and the no-glyphs case).
+- **Acceptance proven by test:** the unit tests assert the style mounts a vector
+  PMTiles source (pmtiles:// url, OSM attribution), sets the glyph URL and
+  sprite, builds road/water/label layers, and omits labels when no glyph stack
+  is given. The engine is proven; the rendered street map appears once a
+  deployment hosts the tiles produced by the pipeline.
+- **Honest limitation:** no street-map screenshot from this sandbox, by the
+  environment constraints above. Selection precedence: an external style URL, then
+  the self-hosted PMTiles street style, then the bundled offline basemap.
+- **Verification:** `pnpm check` green; 385 tests / 71 files.
+- **Rollback:** revert the VEOC-74 commit; the street style is inert until a
+  deployment sets the PMTiles settings, so nothing changes for existing installs.
+- **Commit/push:** under standing authorization. No branch created.

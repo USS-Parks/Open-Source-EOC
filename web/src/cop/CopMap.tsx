@@ -13,6 +13,7 @@ import {
   type CopFeatureCollection,
 } from "./layers.js";
 import { NATURAL_EARTH_ATTRIBUTION } from "./basemap.js";
+import { buildStreetStyle, OSM_ATTRIBUTION, type StreetBasemapConfig } from "./streetstyle.js";
 import { statusColor, type SymbolStatus } from "./symbology.js";
 import {
   feedLayerIds,
@@ -40,6 +41,9 @@ export interface CopMapProps {
   readonly basemap?: BasemapConfig | undefined;
   /** A deployment's own MapLibre style URL, which replaces the basemap. */
   readonly basemapStyleUrl?: string | undefined;
+  /** A self-hosted OpenMapTiles PMTiles basemap; the app builds the street
+   * style over it (used only when basemapStyleUrl is not set). */
+  readonly streetBasemap?: StreetBasemapConfig | undefined;
   /** A raster imagery tile template offered as a switchable basemap. */
   readonly imageryUrl?: string | undefined;
   readonly imageryAttribution?: string | undefined;
@@ -155,7 +159,9 @@ export function CopMap(props: CopMapProps) {
     const map = new maplibregl.Map({
       container: container.current,
       style: (props.basemapStyleUrl ??
-        buildCopStyle(props.theme, props.basemap, props.imageryUrl)) as never,
+        (props.streetBasemap
+          ? buildStreetStyle(props.streetBasemap, props.theme)
+          : buildCopStyle(props.theme, props.basemap, props.imageryUrl))) as never,
       center: props.center ?? [-123.5, 41.3],
       zoom: props.zoom ?? 9,
       attributionControl: false,
@@ -169,7 +175,15 @@ export function CopMap(props: CopMapProps) {
       new maplibregl.AttributionControl({
         compact: true,
         customAttribution: [
-          props.basemap?.kind === "natural-earth" ? NATURAL_EARTH_ATTRIBUTION : "",
+          // The active basemap's attribution: an external style carries its
+          // own; the street PMTiles is OSM/ODbL; otherwise the bundled basemap.
+          props.basemapStyleUrl
+            ? ""
+            : props.streetBasemap
+              ? OSM_ATTRIBUTION
+              : props.basemap?.kind === "natural-earth"
+                ? NATURAL_EARTH_ATTRIBUTION
+                : "",
           props.imageryAttribution ?? "",
         ]
           .filter(Boolean)

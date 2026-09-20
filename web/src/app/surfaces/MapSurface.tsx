@@ -5,7 +5,13 @@ import { RecordForm } from "../../boards/RecordForm.js";
 import { Button, Panel } from "../../design/components.js";
 import type { ThemeName } from "../../design/tokens.js";
 import type { ApiClient, CollectionRef, FeedHealth } from "../api/client.js";
-import { assetBase, basemapStyleUrl, imageryAttribution, imageryTileUrl } from "../config.js";
+import {
+  assetBase,
+  basemapStyleUrl,
+  imageryAttribution,
+  imageryTileUrl,
+  streetBasemap,
+} from "../config.js";
 import { useAsync } from "../data/hooks.js";
 import { uploadPickedFile } from "../data/files.js";
 import { EmptyState, Loading } from "../screens/parts.js";
@@ -146,6 +152,7 @@ export function MapSurface(props: {
           fetchFeedItems={(id) => props.client.feedItems(id)}
           basemap={{ kind: "natural-earth", assetBase: assetBase() }}
           basemapStyleUrl={basemapStyleUrl()}
+          streetBasemap={streetBasemap()}
           imageryUrl={imageryTileUrl()}
           imageryAttribution={imageryAttribution()}
           picking={adding && !point}

@@ -9,6 +9,7 @@ import {
   tagFeatures,
 } from "../layers.js";
 import { statusColor, symbolStatusFor, VALUE_STATUS } from "../symbology.js";
+import { buildStreetStyle } from "../streetstyle.js";
 
 describe("NAPSG status symbology (F19, F14)", () => {
   it("every status frame resolves to a distinct token color in both themes", () => {
@@ -83,6 +84,46 @@ describe("layer construction", () => {
     expect(style.sources.ca_counties!.data).toBe("/basemap/ca_counties.geojson");
     expect(style.layers.some((l) => l.id === "ca-counties-line")).toBe(true);
     expect(style.layers.some((l) => l.id === "ca-state-outline")).toBe(true);
+  });
+
+  it("builds a themed street style over a self-hosted OpenMapTiles PMTiles source", () => {
+    const style = buildStreetStyle(
+      {
+        pmtilesUrl: "https://tiles.eoc.example/california.pmtiles",
+        glyphsUrl: "https://tiles.eoc.example/fonts/{fontstack}/{range}.pbf",
+        spriteUrl: "https://tiles.eoc.example/sprite",
+      },
+      "dark",
+    ) as {
+      glyphs: string;
+      sprite?: string;
+      sources: Record<string, { type: string; url: string; attribution: string }>;
+      layers: Array<{ id: string; "source-layer"?: string }>;
+    };
+    const omt = style.sources.openmaptiles!;
+    expect(omt.type).toBe("vector");
+    expect(omt.url).toBe("pmtiles://https://tiles.eoc.example/california.pmtiles");
+    expect(omt.attribution).toContain("OpenStreetMap");
+    expect(style.glyphs).toContain("{fontstack}");
+    expect(style.sprite).toBe("https://tiles.eoc.example/sprite");
+    // Real street content: roads by class, water, boundaries, and labels.
+    const ids = style.layers.map((l) => l.id);
+    expect(ids).toContain("road-major");
+    expect(ids).toContain("water");
+    expect(ids).toContain("road-label");
+    expect(ids).toContain("place-label");
+    expect(style.layers.some((l) => l["source-layer"] === "transportation")).toBe(true);
+  });
+
+  it("omits label layers when no glyph stack is available", () => {
+    const style = buildStreetStyle(
+      { pmtilesUrl: "https://t/x.pmtiles", glyphsUrl: "" },
+      "light",
+    ) as { layers: Array<{ id: string }> };
+    const ids = style.layers.map((l) => l.id);
+    expect(ids).toContain("road-major");
+    expect(ids).not.toContain("road-label");
+    expect(ids).not.toContain("place-label");
   });
 
   it("adds a hidden imagery raster basemap when a tile URL is configured", () => {
