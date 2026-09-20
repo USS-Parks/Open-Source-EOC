@@ -126,6 +126,45 @@ describe("press release approval and publication", () => {
     expect(chain.find((a) => a.agency === "state")!.decided_by_peer).toBe("state");
   });
 
+  it("refuses a local writer impersonating a registered peer agency", async () => {
+    await req("POST", `/api/v1/jurisdictions/${jurisdictionId}/peers`, { name: "cal-oes" });
+    const release = (
+      await req("POST", `/api/v1/jurisdictions/${jurisdictionId}/jic/releases`, {
+        title: "Evacuation lifted",
+        body: "Residents may return.",
+        requiredAgencies: ["yurok", "cal-oes"],
+      })
+    ).json();
+    const spoof = await req("POST", `/api/v1/jic/releases/${release.id}/decisions`, {
+      agency: "cal-oes",
+      decision: "approve",
+    });
+    expect(spoof.statusCode).toBe(403);
+    expect(spoof.json().error).toBe("that agency must approve over its peer token");
+  });
+
+  it("refuses a second local decision from the same person on one release", async () => {
+    const release = (
+      await req("POST", `/api/v1/jurisdictions/${jurisdictionId}/jic/releases`, {
+        title: "Road closed at the river",
+        body: "Use the north detour.",
+        requiredAgencies: ["fire", "sheriff"],
+      })
+    ).json();
+    const first = await req("POST", `/api/v1/jic/releases/${release.id}/decisions`, {
+      agency: "fire",
+      decision: "approve",
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json().status).toBe("pending");
+    const second = await req("POST", `/api/v1/jic/releases/${release.id}/decisions`, {
+      agency: "sheriff",
+      decision: "approve",
+    });
+    expect(second.statusCode).toBe(409);
+    expect(second.json().error).toBe("this person already recorded a decision on this release");
+  });
+
   it("refuses a peer decision on a release from another jurisdiction path with a bad token", async () => {
     const release = (
       await req("POST", `/api/v1/jurisdictions/${jurisdictionId}/jic/releases`, {

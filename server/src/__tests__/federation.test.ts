@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import WebSocket from "ws";
 import * as Y from "yjs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { addMembership, createJurisdiction } from "../auth/service.js";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
@@ -238,5 +239,54 @@ describe("agreement scope", () => {
       payload: { boardId: other.json().id as string, updates: [] },
     });
     expect(res.statusCode).toBe(403);
+  });
+
+  it("defaults a sharing agreement to read-only when canWrite is omitted", async () => {
+    const board = await county.app.inject({
+      method: "POST",
+      url: `/api/v1/jurisdictions/${county.jurisdictionId}/boards`,
+      headers: { authorization: `Bearer ${county.adminToken}` },
+      payload: { templateKey: "activity_log" },
+    });
+    const boardId = board.json().id as string;
+    const peer = await registerPeer(county, "read-only-neighbor");
+    const agreement = await county.app.inject({
+      method: "POST",
+      url: `/api/v1/peers/${peer.id}/agreements`,
+      headers: { authorization: `Bearer ${county.adminToken}` },
+      payload: { boardId, canRead: true },
+    });
+    expect(agreement.statusCode).toBe(201);
+
+    const res = await county.app.inject({
+      method: "POST",
+      url: "/api/v1/federation/receive",
+      headers: { "x-peer-token": peer.token },
+      payload: { boardId, updates: [] },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe("agreement does not permit writes to that board");
+  });
+
+  it("refuses an agreement that points at another jurisdiction's board", async () => {
+    const [adminRow] = await county.admin`select id from persons where email = 'admin@example.org'`;
+    const otherJur = await createJurisdiction(county.admin, "neighbor-oes", "Neighbor OES");
+    await addMembership(county.admin, adminRow!.id as string, otherJur, "admin");
+    const otherBoard = await county.app.inject({
+      method: "POST",
+      url: `/api/v1/jurisdictions/${otherJur}/boards`,
+      headers: { authorization: `Bearer ${county.adminToken}` },
+      payload: { templateKey: "activity_log" },
+    });
+    expect(otherBoard.statusCode).toBe(201);
+
+    const res = await county.app.inject({
+      method: "POST",
+      url: `/api/v1/peers/${peerCountySide}/agreements`,
+      headers: { authorization: `Bearer ${county.adminToken}` },
+      payload: { boardId: otherBoard.json().id as string, canRead: true, canWrite: true },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe("board is not in this jurisdiction");
   });
 });
