@@ -54,6 +54,7 @@ import { registerSyncRoutes } from "./sync/routes.js";
 import { withPerson } from "./db/context.js";
 import { applySecurityHeaders } from "./security/headers.js";
 import { rateLimit } from "./security/rate-limit.js";
+import { exportRoutes } from "./export/routes.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -342,6 +343,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   notifyRoutes(app, sql, authenticate);
   messagingRoutes(app, sql, authenticate);
   geoRoutes(app, sql, authenticate);
+  exportRoutes(app, sql, authenticate);
   fileRoutes(
     app,
     sql,
