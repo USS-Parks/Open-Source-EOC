@@ -270,6 +270,7 @@ const GROUP_BY_LAYER: Readonly<Record<string, BasemapGroup>> = {
   "road-major": "roads",
   "boundary-admin": "boundaries",
   "water-label": "labels",
+  "water-label-line": "labels",
   "peak-label": "labels",
   "facility-label": "facilities",
   // Fallback GeoJSON canvas.

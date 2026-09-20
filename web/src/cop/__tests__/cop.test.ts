@@ -12,6 +12,7 @@ import {
 import { statusColor, symbolStatusFor, VALUE_STATUS } from "../symbology.js";
 import { buildStreetStyle, CRITICAL_FACILITY_TAGS } from "../streetstyle.js";
 import { buildBundledVectorStyle } from "../bundledbasemap.js";
+import { validateStyleMin } from "@maplibre/maplibre-gl-style-spec";
 import {
   formatArea,
   geometryBounds,
@@ -318,6 +319,35 @@ describe("layer construction", () => {
     const style = JSON.stringify(buildBundledVectorStyle({ assetBase: "/" }, "light"));
     expect(style).not.toContain("raster-");
     expect(style).not.toContain("http");
+  });
+});
+
+describe("style validity", () => {
+  it("every basemap style, fully configured, passes the MapLibre style spec", () => {
+    const rasters = [
+      { id: "imagery", title: "Imagery", tiles: "https://t.gov/i/{z}/{y}/{x}" },
+      { id: "hydro", title: "Hydrography", tiles: "https://t.gov/h/{z}/{y}/{x}", overlay: true },
+    ];
+    const terrain = { tiles: "https://dem/{z}/{x}/{y}.png", encoding: "terrarium" as const };
+    const styles = {
+      bundled: buildBundledVectorStyle({ assetBase: "/" }, "light", rasters, terrain),
+      fallback: buildCopStyle("dark", { kind: "natural-earth", assetBase: "/" }, rasters, terrain),
+      street: buildStreetStyle(
+        { pmtilesUrl: "https://t/x.pmtiles", glyphsUrl: "/f/{fontstack}/{range}.pbf" },
+        "dark",
+        rasters,
+        terrain,
+      ),
+    };
+    for (const [name, style] of Object.entries(styles)) {
+      const errors = validateStyleMin(style as never).map((e) => e.message);
+      expect(errors, name).toEqual([]);
+    }
+    // The operational layers too, over the font the styles declare.
+    for (const spec of boardLayerSpecs("b1", "light", "Liberation Sans Regular")) {
+      const style = { version: 8, sources: { "board-b1": { type: "geojson", data: { type: "FeatureCollection", features: [] } } }, glyphs: "/f/{fontstack}/{range}.pbf", layers: [spec] };
+      expect(validateStyleMin(style as never).map((e) => e.message)).toEqual([]);
+    }
   });
 });
 

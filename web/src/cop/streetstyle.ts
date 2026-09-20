@@ -239,7 +239,17 @@ export function buildStreetStyle(
       filter: ["in", ["get", "class"], ["literal", ["runway", "taxiway"]]],
       paint: {
         "line-color": p.aeroway,
-        "line-width": ["case", ["==", ["get", "class"], "runway"], width([[10, 1], [16, 12]]), width([[10, 0.5], [16, 4]])],
+        // One zoom curve, runway or taxiway width at each stop (MapLibre allows
+        // a single zoom interpolation per expression).
+        "line-width": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          10,
+          ["case", ["==", ["get", "class"], "runway"], 1, 0.5],
+          16,
+          ["case", ["==", ["get", "class"], "runway"], 12, 4],
+        ],
       },
     },
     {
@@ -334,14 +344,27 @@ export function buildStreetStyle(
         },
         paint: { "text-color": p.label, "text-halo-color": p.labelHalo, "text-halo-width": 1.4 },
       },
+      // Water names: lakes and bays as point labels, rivers along the line
+      // (symbol placement cannot vary per feature, so two layers).
       {
         id: "water-label",
         type: "symbol",
         source: src,
         "source-layer": "water_name",
         minzoom: 9,
+        filter: ["==", ["geometry-type"], "Point"],
+        layout: { "text-field": ["get", "name"], "text-font": [font], "text-size": 11 },
+        paint: { "text-color": p.waterLabel, "text-halo-color": p.labelHalo, "text-halo-width": 1.2 },
+      },
+      {
+        id: "water-label-line",
+        type: "symbol",
+        source: src,
+        "source-layer": "water_name",
+        minzoom: 9,
+        filter: ["==", ["geometry-type"], "LineString"],
         layout: {
-          "symbol-placement": ["case", ["==", ["geometry-type"], "Point"], "point", "line"],
+          "symbol-placement": "line",
           "text-field": ["get", "name"],
           "text-font": [font],
           "text-size": 11,
