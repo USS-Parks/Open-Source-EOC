@@ -16,6 +16,7 @@ import { FilesSurface } from "../surfaces/FilesSurface.js";
 import { IncidentsSurface } from "../surfaces/IncidentsSurface.js";
 import { ResourcesSurface } from "../surfaces/ResourcesSurface.js";
 import { AarSurface } from "../surfaces/AarSurface.js";
+import { FeedsSurface } from "../surfaces/FeedsSurface.js";
 import { AlertsSurface, BoardsIndex, SitrepsIndex } from "../surfaces/lists.js";
 
 const NAV: readonly NavItem[] = [
@@ -27,6 +28,7 @@ const NAV: readonly NavItem[] = [
   { key: "forms", label: "Forms" },
   { key: "resources", label: "Resources" },
   { key: "aar", label: "AAR" },
+  { key: "feeds", label: "Feeds" },
   { key: "files", label: "Files" },
   { key: "alerts", label: "Alerts" },
 ];
@@ -143,6 +145,8 @@ function sectionForNav(key: string): Surface {
       return { kind: "resources" };
     case "aar":
       return { kind: "aar" };
+    case "feeds":
+      return { kind: "feeds" };
     case "alerts":
       return { kind: "alerts" };
     default:
@@ -212,6 +216,14 @@ function Center(props: {
       return <ResourcesSurface client={props.client} jurisdictionId={props.jurisdictionId} />;
     case "aar":
       return <AarSurface client={props.client} jurisdictionId={props.jurisdictionId} />;
+    case "feeds":
+      return (
+        <FeedsSurface
+          client={props.client}
+          jurisdictionId={props.jurisdictionId}
+          isAdmin={props.isAdmin}
+        />
+      );
     case "incidents":
       return (
         <IncidentsSurface

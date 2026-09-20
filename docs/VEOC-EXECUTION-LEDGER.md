@@ -1017,3 +1017,29 @@ unchanged; all work on `main`.
   improvement plan) is API-complete and is the next screen.
 - **Rollback:** revert the VEOC-58 commit.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-59: Live feeds administration screen
+
+- **Session:** VEOC-59, executed 2026-09-20
+- **Starting HEAD:** `9014840` (after-action review)
+- **Operator gap closed:** feeds could be created and polled only through the API
+  (VEOC-19); the console had no interop admin surface. Adds one.
+- **Files created/changed:** `web/src/app/surfaces/FeedsSurface.tsx` (register a
+  polled upstream by URL or a push feed over a one-time token, see each feed's
+  freshness, and force a poll; the create panel is admin-gated to match the
+  server); `web/src/app/api/client.ts` (createFeed, pollFeed; listFeeds already
+  existed); `web/src/app/router.tsx` and `web/src/app/screens/Console.tsx` (a
+  Feeds rail entry and route). Tests: client.test.ts (create returns the ingest
+  token, poll) and the browser E2E now opens Feeds and sees the seeded feed.
+- **Acceptance proven by test:** the client creates a feed and receives its
+  ingest token and polls it; the browser E2E opens the Feeds screen and the
+  seeded "NWS Alerts" feed is listed, offline.
+- **Verification:** `pnpm check` green; 372 tests / 71 files.
+- **Facets:** F18 feeds now administered from the console; part of the Phase E
+  interop operator surface.
+- **Deferred (honest):** IPAWS live credentialing and the CAP geocode catalog
+  remain external/gated; enable/disable and delete of a feed are follow-ups.
+- **Rollback:** revert the VEOC-59 commit.
+- **Commit/push:** under standing authorization. No branch created.

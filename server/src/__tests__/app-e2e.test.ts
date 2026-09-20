@@ -349,6 +349,11 @@ describe("the operations console in a real browser, offline", () => {
       .first()
       .waitFor({ state: "visible", timeout: 20000 });
 
+    // Feeds: the seeded push feed is listed on the Feeds admin screen.
+    await page.getByRole("button", { name: "Feeds" }).click();
+    await page.getByText("Live Feeds").waitFor({ state: "visible", timeout: 20000 });
+    await page.getByText("NWS Alerts").first().waitFor({ state: "visible", timeout: 20000 });
+
     // Dark theme, for the night-shift EOC.
     await page.getByRole("button", { name: "Dark" }).click();
     await page.waitForTimeout(400);

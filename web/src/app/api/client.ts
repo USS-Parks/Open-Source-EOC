@@ -357,6 +357,29 @@ export class ApiClient {
   feedItems(feedId: string): Promise<FeedItemsResponse> {
     return this.request<FeedItemsResponse>("GET", `/api/v1/feeds/${feedId}/items`);
   }
+  createFeed(
+    jurisdictionId: string,
+    spec: {
+      name: string;
+      kind: "cap" | "geojson" | "georss" | "cot";
+      url?: string;
+      pollIntervalSeconds?: number;
+      staleAfterSeconds?: number;
+      push?: boolean;
+    },
+  ): Promise<{ id: string; ingestToken?: string }> {
+    return this.request<{ id: string; ingestToken?: string }>(
+      "POST",
+      `/api/v1/jurisdictions/${jurisdictionId}/feeds`,
+      spec as unknown as Record<string, unknown>,
+    );
+  }
+  pollFeed(feedId: string): Promise<{ ingested?: number } & Record<string, unknown>> {
+    return this.request<{ ingested?: number } & Record<string, unknown>>(
+      "POST",
+      `/api/v1/feeds/${feedId}/poll`,
+    );
+  }
   async listIncidents(jurisdictionId: string): Promise<IncidentSummary[]> {
     const r = await this.request<{ incidents: IncidentSummary[] }>(
       "GET",

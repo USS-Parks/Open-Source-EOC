@@ -202,6 +202,25 @@ describe("ApiClient", () => {
     expect((await client.downloadAarPdf(id)).type).toBe("application/pdf");
   });
 
+  it("creates and polls a feed", async () => {
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      const u = String(url);
+      if (u.endsWith("/auth/login"))
+        return res(200, { accessToken: "A", resumeToken: "R", sessionId: "S" });
+      if (u.endsWith("/feeds") && init.method === "POST")
+        return res(201, { id: "fd1", ingestToken: "tok-123" });
+      if (u.endsWith("/poll")) return res(200, { ok: true, items: 2 });
+      return res(404, { error: "nope" });
+    }) as unknown as typeof fetch;
+
+    const client = new ApiClient({ fetchImpl });
+    await client.login("e@x.org", "pw");
+    const created = await client.createFeed("j", { name: "NWS", kind: "cap", url: "https://x/cap", push: false });
+    expect(created.id).toBe("fd1");
+    expect(created.ingestToken).toBe("tok-123");
+    expect((await client.pollFeed("fd1")).items).toBe(2);
+  });
+
   it("surfaces the server error envelope as a typed ApiError", async () => {
     const fetchImpl = (async (url: string) => {
       const u = String(url);
