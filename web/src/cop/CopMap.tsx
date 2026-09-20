@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 
 import * as maplibregl from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { Protocol } from "pmtiles";
+import { withJurisdictionOverlays, readOverlayCoverage, type OverlayCoverage, VECTOR_OVERLAYS, ROAD_OVERLAYS, OWNERSHIP_LEVELS, overlayGroupOf, type JurisdictionOverlays } from "./overlays.js";
 import { themes, type ThemeName } from "../design/tokens.js";
 import {
   boardLayerIds,
@@ -86,9 +87,11 @@ export interface CopMapProps {
   /** A buildings archive: footprints by use, colored by the status of the
    * records that fall inside them. */
   readonly buildings?: BuildingsConfig | undefined;
+  readonly jurisdictionOverlays?: JurisdictionOverlays | undefined;
   readonly pollMs?: number | undefined;
   readonly center?: [number, number] | undefined;
   readonly zoom?: number | undefined;
+  readonly initialBounds?: [number, number, number, number] | undefined;
   /** When true, a map click reports its position instead of inspecting. */
   readonly picking?: boolean | undefined;
   readonly onPickPoint?: ((lngLat: [number, number]) => void) | undefined;
@@ -101,8 +104,8 @@ let pmtilesRegistered = false;
 const LEGEND: readonly SymbolStatus[] = ["critical", "warning", "normal", "unknown"];
 
 const EMPTY_FC = { type: "FeatureCollection", features: [] as unknown[] };
-const DEFAULT_CENTER: [number, number] = [-123.5, 41.3];
-const DEFAULT_ZOOM = 9;
+const DEFAULT_CENTER: [number, number] = [-119.3, 37.2];
+const DEFAULT_ZOOM = 6;
 const BOOKMARKS_KEY = "openeoc.cop.bookmarks";
 
 type MeasureMode = "off" | "distance" | "area";
@@ -124,9 +127,9 @@ interface FindResult {
   readonly properties?: Record<string, unknown> | undefined;
 }
 
-/** A rendered feature belonging to a board or feed layer (inspectable). */
+/** A rendered operational or jurisdiction feature (inspectable). */
 function isCopLayerId(id: string): boolean {
-  return id.startsWith(sourceId("")) || id.startsWith(feedSourceId(""));
+  return id.startsWith(sourceId("")) || id.startsWith(feedSourceId("")) || id.startsWith("overlay-");
 }
 
 function esc(value: string): string {
@@ -194,6 +197,23 @@ export function CopMap(props: CopMapProps) {
   const [overlayOn, setOverlayOn] = useState<Record<string, boolean>>({});
   const terrain = props.basemapStyleUrl ? undefined : props.terrain;
   const buildings = props.basemapStyleUrl ? undefined : props.buildings;
+  const vectors = props.jurisdictionOverlays;
+  const [vectorOn, setVectorOn] = useState<Record<string, boolean>>({});
+  const [coverage, setCoverage] = useState<Record<string, OverlayCoverage>>({});
+  useEffect(() => {
+    if (!vectors?.manifestUrl) return;
+    const abort = new AbortController();
+    void fetch(vectors.manifestUrl, { signal: abort.signal }).then((response) => {
+      if (!response.ok) throw new Error("Coverage manifest unavailable");
+      return response.json() as Promise<unknown>;
+    }).then((value) => {
+      const next = readOverlayCoverage(value);
+      setCoverage(next);
+      setVectorOn((current) => Object.fromEntries(Object.entries(current).map(([id, on]) =>
+        [id, on && next[id]?.available !== false])));
+    }).catch(() => { /* Unknown coverage remains explicit. */ });
+    return () => abort.abort();
+  }, [vectors?.manifestUrl]);
   const [hillshade, setHillshade] = useState(false);
   // Basemap layer groups present in the active style (discovered on load),
   // each switchable like an operational layer.
@@ -258,18 +278,28 @@ export function CopMap(props: CopMapProps) {
     const map = new maplibregl.Map({
       container: container.current,
       style: (props.basemapStyleUrl ??
-        (props.streetBasemap
+        withJurisdictionOverlays(props.streetBasemap
           ? buildStreetStyle(props.streetBasemap, props.theme, rasters, terrain, buildings)
           : props.bundledBasemap
             ? buildBundledVectorStyle(props.bundledBasemap, props.theme, rasters, terrain, buildings)
-            : buildCopStyle(props.theme, props.basemap, rasters, terrain))) as never,
+            : buildCopStyle(props.theme, props.basemap, rasters, terrain), vectors, props.theme)) as never,
       center: home.center,
       zoom: home.zoom,
+      ...(props.initialBounds ? { bounds: props.initialBounds, fitBoundsOptions: { padding: 24 } } : {}),
       attributionControl: false,
       // Keeps the drawn frame readable for the image export.
       canvasContextAttributes: { preserveDrawingBuffer: true },
     });
     mapRef.current = map;
+    // MapLibre resolves the external style and its relative asset URLs. Mount
+    // jurisdiction layers after that style parses, before operational records.
+    if (props.basemapStyleUrl && vectors) map.once("style.load", () => {
+      const additions = withJurisdictionOverlays({ sources: {}, layers: [] }, vectors, props.theme);
+      for (const [id, source] of Object.entries(additions.sources as Record<string, unknown>)) {
+        map.addSource(id, source as never);
+      }
+      for (const layer of additions.layers as maplibregl.LayerSpecification[]) map.addLayer(layer);
+    });
     props.onMap?.(map);
 
     map.addControl(
@@ -539,7 +569,8 @@ export function CopMap(props: CopMapProps) {
   };
 
   const goHome = () => {
-    mapRef.current?.flyTo({ center: home.center, zoom: home.zoom, bearing: 0, pitch: 0 });
+    if (props.initialBounds) mapRef.current?.fitBounds(props.initialBounds, { padding: 24, bearing: 0, pitch: 0 });
+    else mapRef.current?.flyTo({ center: home.center, zoom: home.zoom, bearing: 0, pitch: 0 });
   };
 
   /** Save the current frame as a PNG (the print/export gesture). */
@@ -685,6 +716,22 @@ export function CopMap(props: CopMapProps) {
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!map || !vectors) return;
+    const apply = () => {
+      for (const layer of map.getStyle().layers) {
+        const group = overlayGroupOf(layer);
+        if (group) map.setLayoutProperty(layer.id, "visibility", vectorOn[group] ? "visible" : "none");
+      }
+    };
+    // Tile loading can make isStyleLoaded false after the one-time load event.
+    // Existing layers can still accept visibility changes during that work.
+    if (map.getLayer("overlay-land_ownership")) apply();
+    else map.once("load", apply);
+    return () => { map.off("load", apply); };
+  }, [vectorOn]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
     for (const layer of map.getStyle().layers) {
       const g = basemapGroupOf(layer);
@@ -759,10 +806,21 @@ export function CopMap(props: CopMapProps) {
             </div>
           </div>
         ) : null}
-        {overlays.length > 0 || terrain ? (
+        {overlays.length > 0 || terrain || vectors ? (
           <div style={{ marginBottom: 12 }}>
             <h3 style={headingStyle}>Overlays</h3>
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
+              {vectors ? VECTOR_OVERLAYS.map((o) => (
+                <li key={o.id}>
+                  <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input type="checkbox" disabled={coverage[o.id]?.available === false} checked={!!vectorOn[o.id]}
+                      onChange={() => setVectorOn((v) => ({ ...v, [o.id]: !v[o.id] }))} />
+                    {o.title}
+                  </label>
+                  <small style={{ display: "block", marginLeft: 24, color: "var(--eoc-text-muted)" }}>{coverage[o.id]?.coverage ?? "Coverage unverified: source manifest unavailable"}</small>
+                  {vectorOn[o.id] && coverage[o.id]?.attribution ? <details style={{ marginLeft: 24, fontSize: "0.8em", color: "var(--eoc-text-muted)" }}><summary>Source</summary>{coverage[o.id]?.attribution}</details> : null}
+                </li>
+              )) : null}
               {terrain ? (
                 <li>
                   <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -788,6 +846,20 @@ export function CopMap(props: CopMapProps) {
                 </li>
               ))}
             </ul>
+          </div>
+        ) : null}
+        {vectors && Object.values(vectorOn).some(Boolean) ? (
+          <div style={{ marginBottom: 12 }}>
+            <h3 style={headingStyle}>Road jurisdiction and land ownership</h3>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+              {ROAD_OVERLAYS.filter((r) => vectorOn[r.id]).map((r) => (
+                <li key={r.id}><span aria-hidden="true" style={{ display: "inline-block", width: 14, marginRight: 8, borderTop: "3px solid " + r[props.theme] }} />{r.title}</li>
+              ))}
+              {vectorOn.land_ownership ? OWNERSHIP_LEVELS.map((level) => (
+                <li key={level.id}><span aria-hidden="true" style={{ display: "inline-block", width: 12, height: 12, marginRight: 8, background: level[props.theme] }} />{level.id}</li>
+              )) : null}
+            </ul>
+            <p style={{ fontSize: "0.8em", color: "var(--eoc-text-muted)" }}>Coverage follows the configured source. Unmapped land does not imply private ownership.</p>
           </div>
         ) : null}
         {buildings ? (

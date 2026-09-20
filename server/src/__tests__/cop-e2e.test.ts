@@ -17,7 +17,9 @@ import { freshDb, seedIdentity, type Sql } from "./helpers.js";
  * setup shows up here as a map that never loads a tile.
  */
 
-const DIST = "/tmp/cop-demo-dist";
+const DIST = process.env["OPENEOC_TEST_BUILD_ROOT"]
+  ? join(process.env["OPENEOC_TEST_BUILD_ROOT"], "cop-demo-dist")
+  : "/tmp/cop-demo-dist";
 const LATENCY_BUDGET_MS = 5000;
 
 /** The sandbox pre-installs Chromium; CI runners ship Chrome. */

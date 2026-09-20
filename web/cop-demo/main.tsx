@@ -1,16 +1,19 @@
 import { createRoot } from "react-dom/client";
 import "maplibre-gl/dist/maplibre-gl.css";
+import "../src/design/base.css";
 import { CopMap } from "../src/cop/CopMap.js";
 import type { CopFeatureCollection } from "../src/cop/layers.js";
 import {
   assetBase,
   basemapStyleUrl,
   buildingsSource,
+  jurisdictionOverlays,
+  jurisdictionMapBounds,
   rasterBasemaps,
   streetBasemap,
   terrainSource,
 } from "../src/app/config.js";
-import type { ThemeName } from "../src/design/tokens.js";
+import { toCssVariables, themes, fontStack, type ThemeName } from "../src/design/tokens.js";
 
 // E2E harness page: renders the real CopMap against the live API using a
 // token and board id from the query string, and exposes the map instance
@@ -43,7 +46,7 @@ async function fetchItems(id: string): Promise<CopFeatureCollection> {
 }
 
 createRoot(document.getElementById("app")!).render(
-  <div style={{ height: "100vh" }}>
+  <div style={{ height: "100vh", ...toCssVariables(theme), fontFamily: fontStack, color: themes[theme].text, background: themes[theme].bg }}>
     <CopMap
       theme={theme}
       boards={boardId ? [{ id: boardId, title }] : []}
@@ -57,6 +60,8 @@ createRoot(document.getElementById("app")!).render(
       rasterBasemaps={rasterBasemaps()}
       terrain={terrainSource()}
       buildings={buildingsSource()}
+      jurisdictionOverlays={jurisdictionOverlays()}
+      initialBounds={runtimeConfig.OPENEOC_MAP_BOUNDS ? jurisdictionMapBounds() : undefined}
       onMap={(map) => {
         window.__map = map;
       }}

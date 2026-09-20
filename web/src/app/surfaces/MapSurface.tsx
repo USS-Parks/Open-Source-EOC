@@ -9,6 +9,8 @@ import {
   assetBase,
   basemapStyleUrl,
   buildingsSource,
+  jurisdictionOverlays,
+  jurisdictionMapBounds,
   rasterBasemaps,
   streetBasemap,
   terrainSource,
@@ -83,17 +85,6 @@ export function MapSurface(props: {
       .finally(() => setBusy(false));
   };
 
-  if (empty) {
-    return (
-      <div style={{ flex: 1, minHeight: 0, padding: 12 }}>
-        <EmptyState
-          label="No map layers yet"
-          hint="Boards with a location field and live feeds appear here as COP layers."
-        />
-      </div>
-    );
-  }
-
   const fields = board.data?.fields ?? [];
   const geomKey = fields.length ? geometryFieldKey(fields) : null;
 
@@ -109,6 +100,7 @@ export function MapSurface(props: {
         gap: 8,
       }}
     >
+      {empty ? <EmptyState label="No operational layers yet" hint="The basemap is available. Add a geo-enabled board or feed to show incident information." /> : null}
       {geoBoards.length > 0 ? (
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <Button
@@ -146,6 +138,7 @@ export function MapSurface(props: {
 
       <div style={{ flex: 1, minHeight: 0 }}>
         <CopMap
+          key={JSON.stringify([props.jurisdictionId, props.theme, geoBoards.map((b) => b.id), feedLayers.map((f) => f.id)])}
           theme={props.theme}
           boards={geoBoards.map((c) => ({ id: c.id, title: c.title }))}
           fetchItems={(id) => props.client.collectionItems(id)}
@@ -158,6 +151,8 @@ export function MapSurface(props: {
           rasterBasemaps={rasterBasemaps()}
           terrain={terrainSource()}
           buildings={buildingsSource()}
+          jurisdictionOverlays={jurisdictionOverlays()}
+          initialBounds={jurisdictionMapBounds()}
           picking={adding && !point}
           onPickPoint={(p) => setPoint(p)}
         />

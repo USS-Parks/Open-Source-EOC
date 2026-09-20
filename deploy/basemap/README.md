@@ -193,6 +193,75 @@ external requests and browser/map errors fail the run. Four PNGs and
 This verifies archive rendering, not the live record-to-building status join.
 That integration still requires board records from a running backend.
 
+## 9. California road jurisdiction and public land overlays
+
+Run `node deploy/basemap/build-overlays.mjs` (or `overlays.sh`) on the build
+machine with Node, Java 21, GDAL and the existing Planetiler JAR available.
+Set `OPENEOC_JAVA`, `OPENEOC_OGR2OGR`, `OPENEOC_OGRINFO` and
+`OPENEOC_PLANETILER_JAR` when those tools are not on PATH. The default build
+covers California; `OPENEOC_OVERLAY_BBOX=west,south,east,north` restricts it
+to a chosen build extent. This reference archive does not define an incident
+operational area. Output stays under `deploy/basemap/out/`. ZIP source
+inspection also uses the operating system tar command; GDAL reads archives
+directly without extraction. Builds fetch current data by default. To resume
+an interrupted build using its validated source cache, set
+`OPENEOC_OVERLAY_RESUME=1`; the manifest retains per-source validation times.
+
+Host `overlays.pmtiles` with byte ranges and its adjacent
+`overlays-manifest.json`. Configure:
+
+```js
+window.OPENEOC = {
+  OPENEOC_OVERLAYS_PMTILES_URL: "/basemap/overlays.pmtiles",
+  OPENEOC_MAP_BOUNDS: "-124.5,32.5,-114.1,42.01"
+};
+```
+
+The manifest URL is derived from the archive URL; override it with
+`OPENEOC_OVERLAYS_MANIFEST_URL`. Each overlay control shows its source
+coverage, with unavailable layers disabled. Without a manifest, coverage
+is explicitly unverified. Overlay feature clicks inspect source attributes.
+Map bounds configure the current fallback view; Home returns to that extent.
+They are not incident scope or access control. Incident-selected operational
+areas and shared participant records have separate acceptance gates in the
+continuation roster. The map remains available before operational records exist.
+These overlays also mount on a configured external basemap style.
+
+State highways and the USFS, BLM and NPS road layers use source agency,
+jurisdiction or maintainer fields. They do not establish legal ownership.
+CAL FIRE public-land polygons retain all seven published ownership levels;
+unmapped land is not classified as private. This archive has no dedicated
+tribal-road adapter; that data gap does not exclude tribal nations or their
+authorized contributions from incident operations.
+
+The manifest retains service copyright text and source URLs. Generated data
+is a local deployment artifact, outside the software license. Review the
+[CAL FIRE conditions of use](https://www.fire.ca.gov/conditions-of-use) and
+its named input sources before redistributing a compiled data pack; its
+general public-domain statement does not grant rights to third-party inputs.
+
+The default county-road adapter covers Humboldt only. Other California
+jurisdictions use `OPENEOC_COUNTY_ROADS_CONFIG`, a JSON array of county source
+definitions with name, path, sourceUrl, attribution, jurisdictionField,
+countyValues, fields and a fieldMap with id, roadName and roadClass source
+field names. The builder validates named fields, selects explicit
+county-jurisdiction values, reprojects and clips to California and the build
+extent. The manifest records exactly which counties contributed data.
+The geographic build envelope is statewide; county source availability is
+reported separately. This does not establish multi-organization incident
+workflow parity. Do not treat a missing layer as zero roads or zero risk.
+
+With the Vite testbed running, `node deploy/basemap/prove-overlays.mjs`
+checks both themes over California, Humboldt and San Diego, plus a Nevada
+interior exclusion check, including real
+archive range responses, source coverage, independent toggles and no external
+requests. Its PNGs and JSON receipt land in `out/proof-8/`.
+`node deploy/basemap/prove-overlay-modes.mjs` additionally verifies external
+style mounting and late coverage disabling previously selected empty layers.
+It expects a real regional archive and manifest at
+`out/proof-8-san-diego-pack/` with empty NPS and county layers. Its minimal
+external style is a UI test fixture, not a visual-parity reference.
+
 ## Attribution
 
 OpenStreetMap data is ODbL: the map must display "© OpenStreetMap contributors".

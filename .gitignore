@@ -12,6 +12,12 @@ target/
 # Generated street-tile artifacts (deploy/basemap/generate-california.sh),
 # and a local copy served by the dev server for the basemap testbed.
 deploy/basemap/out/
+# Portable, loopback-only database runtime and ephemeral test data.
+deploy/test-runtime/out/
+# Local application attachment storage (including test uploads).
+data/blobs/
 web/public/basemap/california.pmtiles
 web/public/basemap/buildings.pmtiles
+web/public/basemap/overlays.pmtiles
+web/public/basemap/overlays-manifest.json
 .DS_Store

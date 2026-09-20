@@ -1883,3 +1883,143 @@ roadmap toward Esri/WebEOC parity, after the staged prompt 9b commit request.
 Execution, focused prompt commits and publication proceed under that approval.
 Existing source, geography and release constraints remain; external credentials
 and the live operator pilot require evidence before closure.
+
+### Scope correction and verification checkpoint, 2026-09-20
+
+Basho clarified incident-specific participation: one or several involved
+organizations, with no mandatory tribal, municipal, county or agency participant
+and no automatic unified command. The continuation roster now records this.
+Reference screenshot locations are not product scopes or pilot selections.
+
+Fresh read-only reviewer overlay_final_review returned ship for bounded prompt
+8 reference layers, with no blocking findings. Requested gpt-5.6-sol/high;
+actual runtime model/effort unobservable. This is not incident workflow parity.
+Final archive and mode proof passed; the full prompt receipt remains in
+deploy/basemap/out/receipt-8.txt pending closeout. No prompt-8 commit yet.
+
+Docker Desktop startup was attempted for local database tests. Following
+Basho's objection, docker desktop stop --timeout 20 returned exit 0 and
+reported Docker Desktop is not running. No test container was created.
+
+## VEOC-78 prompt 8: California geographic reference overlays (2026-09-20)
+
+- **Authority:** Basho approved the remaining roadmap and explicitly expanded
+  scope to all California, plug-and-play for any jurisdiction. The handoff
+  addendum supersedes its Humboldt-only restriction. County source coverage
+  remains explicit. Basho then clarified incident-centered, multi-organization
+  operations: screenshot locations are references, not jurisdiction-specific
+  product scope. The continuation now prioritizes incident area, participating
+  entities, shared operational context and an integrated cross-boundary exercise
+  before further visual extensions. This prompt proves reference layers only.
+- **Previous publication:** prompt 9b is committed and pushed as
+  e4fd4aa54f007ccae3a4d102fde4546f0a54c786. Hosted CI passed:
+  [35536665017](https://github.com/USS-Parks/Open-Source-EOC/actions/runs/35536665017).
+- **Files:** .gitignore; deploy/basemap/README.md, build-overlays.mjs,
+  overlays-schema.yml, overlays.sh, prove-overlays.mjs, prove-overlay-modes.mjs;
+  docs/VEOC-77-HANDOFF-PSPR-2026-09-20.md,
+  docs/VEOC-PARITY-CONTINUATION-2026-09-20.md; web/cop-demo/main.tsx;
+  web/src/app/config.ts, surfaces/MapSurface.tsx,
+  __tests__/map-surface.test.tsx; web/src/cop/CopMap.tsx, overlays.ts,
+  __tests__/overlays.test.ts; eslint.config.mjs; server/src/__tests__/app-e2e.test.ts
+  and cop-e2e.test.ts; deploy/test-runtime/README.md; this execution ledger.
+- **Behavior:** six optional, independently toggleable vector overlays with
+  muted road-agency colors, seven public-land classes, source attributes in
+  click popups, coverage text and expandable credits. Unknown coverage stays
+  explicit and unavailable source layers are disabled. California is the
+  initial app extent, with a per-deployment override and Home return. Empty
+  jurisdictions still have a map. Theme and operational-layer changes remount
+  the map so asynchronously loaded boards appear.
+- **Live pipeline:** fetched Caltrans, USFS, BLM, NPS, CAL FIRE and Humboldt
+  GIS data, then reprojected and clipped it with GDAL and built PMTiles using
+  existing Java 21/Planetiler 0.9.0. No new npm dependency. Final counts:
+  state 5,258; USFS 28,854; BLM 6,573; NPS 975; Humboldt county 16,037;
+  ownership 51,181. County membership uses explicit COUNTY/County source
+  values. Road agency/designation is not represented as legal title.
+- **Archive:** 85,793,945 bytes, built and served SHA-256
+  efecacf4b04b49bde71fe73dacd9e7276858ad77bf90a4c9b2d592f3711316a0.
+  Header bounds are California, zooms 5-14; six source layers and their fields
+  are present. Manifest includes provenance, counts, coverage and archive hash.
+  Fresh fetch is the default; OPENEOC_OVERLAY_RESUME=1 is explicit cache reuse.
+- **Defects caught and fixed:** short ArcGIS offset pages repeated an ID,
+  so fetching now validates an object-ID snapshot with bounded POST batches.
+  Zero-count services skip the inconsistent empty-ID operation. Separate
+  state-polygon and bbox clipping passes fix the first build's Nevada leak;
+  all six final inputs have zero features inside [-116,39,-115,40]. Zoom 5
+  tiles support the actual whole-state fit at z5.804. Rapid toggles now apply
+  while tiles are loading instead of waiting for an already-fired load event.
+- **Regional proof:** a San Diego pack built with state 126, USFS 31, BLM 9,
+  ownership 1,604, NPS 0 and county 0. Both absent layers report unavailable.
+  USFS queries began failing even for statewide count queries after the
+  successful live statewide fetch. This regional test used the validated
+  statewide USFS GeoJSON cropped locally, with derivedFrom in its receipt.
+  That is a resumed-data test, not a successful fresh regional USFS query.
+  The final regional run configured an empty county-source array; its county
+  attribution and source notes contain no Humboldt claim.
+- **Browser proof:** node deploy/basemap/prove-overlays.mjs, exit 0 in Chrome
+  153.0.8010.50. California, Humboldt, San Diego and a Nevada exclusion frame
+  in both themes; eight PNGs and evidence.json in out/proof-8. Full-state
+  initial extent, real rendered overlays, property popup, independent rapid
+  toggles, all-hidden zero features and HTTP 206 passed. Nevada has zero
+  features in all six layers. Zero browser/map errors and external requests.
+  Final California/Humboldt/San Diego screenshots inspected in both themes.
+- **Local gates:** pnpm -r exec tsc --noEmit; pnpm exec eslint .;
+  pnpm exec vitest run web/src shared/src (207 tests, 29 files);
+  node scripts/license-scan.mjs (300 packages); node scripts/check-links.mjs
+  (40 Markdown files after staging); git diff --check. All exited 0.
+  Full pnpm check --maxWorkers=2 then passed: 425 tests in 74 files, including
+  real database and both browser E2Es. The specific record-to-building status
+  join is still not a dedicated verified scenario and remains open.
+- **Review corrections:** the first read-only review returned fix-first for
+  external styles suppressing overlays, unconditional Humboldt accuracy text,
+  and late coverage leaving unavailable selections active. All three fixed.
+  prove-overlay-modes.mjs passed in both themes with a minimal external style
+  fixture and the real regional archive: 157 state-road rendered fragments,
+  late NPS/county disable/uncheck/hide, HTTP 206, zero errors/external requests.
+- **Source limits:** county data defaults to Humboldt. The CAL FIRE manifest
+  and README retain the third-party-input rights caveat. Generated archives
+  are local deployment artifacts, not distributed under the code license.
+- **Review:** overlay_final_review returned ship for bounded reference layers.
+  No blocking findings. Requested gpt-5.6-sol/high; actual runtime unobservable.
+  A subsequent two-line test-path override per browser suite enables project-local
+  Windows test output. Full database verification passed before publication.
+- **Storage:** one canonical main checkout; no extra worktree or dependency
+  tree. At verification, out held 4.36 GiB and served basemaps 1.12 GiB.
+  These support the active mapping work. Retained stale NPS scratch is about
+  3.4 MB; the earlier county ZIP/extraction is also retained and unused by
+  the direct-ZIP builder. User reference files, .claude and .vitest preserved.
+- **Portable test runtime:** Basho explicitly approved official PostgreSQL
+  16.15 and PostGIS 3.6.2 Windows binaries. One ignored project-local runtime,
+  loopback 127.0.0.1:55439 with SCRAM authentication, no Windows service and
+  no Docker. Only bin/lib/share were extracted. Test credentials remain local.
+  PostgreSQL archive SHA-256:
+  f5f55b03bd54ce0dd1c51d524b54c7e015abd4d620af27d6971288a2dbe4a8f8.
+  PostGIS archive SHA-256:
+  9f4e8a30d69ed7cc0088dd3d218ac65bd4e26aa5b7bffcb2ebd7dcb74a4ff2a6.
+  Its published MD5 matched; SHA-256 values are local fingerprints. Runtime,
+  retained isolated test databases and outputs total 4.87 GiB, supporting the
+  next active incident prompts. Two small generated uploads under data/blobs
+  are ignored; subsequent runs route attachments inside the test-runtime tree.
+- **Failed runs preserved:** the first full run passed 422 tests, but a native
+  Windows worker crash left three resource tests unfinished (exit 3221226505).
+  The three passed independently. The next attempt stopped at lint because
+  generated bundles were scanned; excluding only the generated runtime fixed
+  that boundary. The final complete run passed with two workers, exit 0.
+  Logs are retained under deploy/test-runtime/out/. No failed result is counted
+  as a pass. The native crash cause is unconfirmed.
+- **Rollback:** revert this focused code/configuration change; optional archive
+  URLs can be unset. Preserve pre-existing archives and user reference files.
+
+### STS publication authority and pre-push gate
+
+Basho explicitly directed continued STS execution until finished, verification
+and validation before every push to main, then commit and push of all session
+work. The 21-file prompt-8 change is staged under that authorization. Starting
+HEAD and remote main are e4fd4aa54f007ccae3a4d102fde4546f0a54c786.
+The complete local gate passed before committing. Generated reference archives,
+test runtime, credentials, uploads and user reference screenshots are excluded.
+Final commit SHA and hosted checks will be recorded in the next receipt.
+
+Fresh prepush_review returned ship with no blocking findings after inspecting
+the complete change and final test/evidence logs. Requested gpt-5.6-sol/high;
+actual runtime model/effort unobservable. Parent staged the latest ignore,
+runtime documentation and ledger changes and reran diff/link checks.

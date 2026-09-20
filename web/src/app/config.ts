@@ -1,3 +1,4 @@
+import type { JurisdictionOverlays } from "../cop/overlays.js";
 import { BUNDLED_FONT_STACK } from "../cop/bundledbasemap.js";
 import type { BuildingsConfig, RasterBasemap, TerrainSource } from "../cop/layers.js";
 
@@ -8,6 +9,10 @@ import type { BuildingsConfig, RasterBasemap, TerrainSource } from "../cop/layer
  */
 
 interface RuntimeConfig {
+  readonly OPENEOC_OVERLAYS_PMTILES_URL?: string;
+  readonly OPENEOC_OVERLAYS_MANIFEST_URL?: string;
+  /** Optional jurisdiction extent: west,south,east,north in WGS84. */
+  readonly OPENEOC_MAP_BOUNDS?: string;
   /** A full MapLibre style URL that replaces the bundled basemap. */
   readonly OPENEOC_BASEMAP_STYLE_URL?: string;
   /** A self-hosted OpenMapTiles-schema PMTiles archive (produced by
@@ -79,6 +84,28 @@ export function streetBasemap(): StreetBasemapSettings | undefined {
   const fontStack = setting(r.OPENEOC_BASEMAP_FONT) ?? BUNDLED_FONT_STACK;
   const spriteUrl = setting(r.OPENEOC_BASEMAP_SPRITE_URL);
   return { pmtilesUrl, glyphsUrl, fontStack, ...(spriteUrl ? { spriteUrl } : {}) };
+}
+
+/** California is the default operating area; a deployment can name its jurisdiction extent. */
+export function jurisdictionMapBounds(): [number, number, number, number] {
+  const fallback: [number, number, number, number] = [-124.5, 32.5, -114.1, 42.01];
+  const value = setting(runtime().OPENEOC_MAP_BOUNDS);
+  if (!value) return fallback;
+  const parts = value.split(",").map((part) => part.trim());
+  const numbers = parts.map(Number);
+  if (parts.length !== 4 || parts.some((part) => part === "") || numbers.some((n) => !Number.isFinite(n))) return fallback;
+  const [west, south, east, north] = numbers as [number, number, number, number];
+  if (west >= east || south >= north || west < -180 || east > 180 || south < -85 || north > 85) return fallback;
+  return [west, south, east, north];
+}
+
+/** Optional authoritative road and land ownership layers. */
+export function jurisdictionOverlays(): JurisdictionOverlays | undefined {
+  const pmtilesUrl = setting(runtime().OPENEOC_OVERLAYS_PMTILES_URL);
+  if (!pmtilesUrl) return undefined;
+  const derived = pmtilesUrl.replace(/\.pmtiles(?=$|[?#])/, "-manifest.json");
+  const manifestUrl = setting(runtime().OPENEOC_OVERLAYS_MANIFEST_URL) ?? (derived !== pmtilesUrl ? derived : undefined);
+  return { pmtilesUrl, manifestUrl };
 }
 
 /** The buildings archive, if the deployment configured one. */

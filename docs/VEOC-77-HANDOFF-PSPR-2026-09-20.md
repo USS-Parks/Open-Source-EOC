@@ -203,3 +203,29 @@ propose per prompt.
    request to the county).
 3. NAPSG packs to include in the sprite.
 4. Whether to install DuckDB for the Overture prompt now or later.
+
+## 7. Superseding execution scope, 2026-09-20
+
+Basho authorized execution of the entire remaining roadmap and corrected the
+geography: all of California, plug-and-play for any jurisdiction in the state.
+The earlier Humboldt-only restriction is superseded. State and federal layers
+must support statewide coverage; local county data must state its actual
+coverage and support jurisdiction-specific configuration. Missing county data
+must never be presented as statewide coverage. Default map extent is California,
+with a deployment setting for a jurisdiction extent.
+
+The eleven files in `Reference Screenshots/` (eight distinct images) are visual
+acceptance references for maps, dashboards, checklists, AAR and IAP workflows.
+Screenshot appearance and working tool behavior are separate acceptance checks.
+The recorded prompt order remains 9b, 8, 10 through 15. Broader parity gaps and
+external release gates remain explicit until verified.
+
+## 8. Incident-centered scope correction, 2026-09-20
+
+Basho clarified that the incident operational area, which may include multiple
+jurisdictions, tribal nations, entities and agencies, is the organizing scope.
+California is the geographic envelope; reference screenshots do not select a
+pilot jurisdiction. Section 7 map bounds are only a basemap fallback, not an
+incident boundary. Jurisdiction data packs alone cannot establish parity.
+The continuation roster records the superseding incident model, participation,
+shared workspace and integrated exercise gates before further visual work.

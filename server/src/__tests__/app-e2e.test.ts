@@ -19,7 +19,9 @@ import { freshDb, seedIdentity, type Sql } from "./helpers.js";
  * no external dependency. Screenshots are written for manual review.
  */
 
-const DIST = "/tmp/openeoc-app-dist";
+const DIST = process.env["OPENEOC_TEST_BUILD_ROOT"]
+  ? join(process.env["OPENEOC_TEST_BUILD_ROOT"], "app-dist")
+  : "/tmp/openeoc-app-dist";
 const SHOTS = process.env["OPENEOC_SHOT_DIR"] ?? "/tmp/openeoc-app-shots";
 
 function chromiumPath(): string {

@@ -1,0 +1,116 @@
+schema_name: Open Source EOC California jurisdiction overlays
+schema_description: >-
+  California state and federal road agency layers, configured county-jurisdiction
+  roads, and CAL FIRE public land ownership. Source counts and geographic coverage
+  are recorded in overlays-manifest.json. Road layer membership follows explicit
+  source fields and is not a legal-title determination.
+attribution: >-
+  California Department of Transportation (Caltrans); USDA Forest Service;
+  Bureau of Land Management; National Park Service; configured county GIS
+  sources; CAL FIRE public land ownership view (CPAD, FWS,
+  DOD, BIA inputs). See overlays-manifest.json for source URLs and coverage.
+sources:
+  roads_state:
+    type: geojson
+    local_path: overlay-input/roads_state.geojson
+  roads_usfs:
+    type: geojson
+    local_path: overlay-input/roads_usfs.geojson
+  roads_blm:
+    type: geojson
+    local_path: overlay-input/roads_blm.geojson
+  roads_nps:
+    type: geojson
+    local_path: overlay-input/roads_nps.geojson
+  roads_county:
+    type: geojson
+    local_path: overlay-input/roads_county.geojson
+  land_ownership:
+    type: geojson
+    local_path: overlay-input/land_ownership.geojson
+layers:
+  - id: roads_state
+    features:
+      - source: roads_state
+        geometry: line
+        min_zoom: 5
+        attributes:
+          - { key: OBJECTID, tag_value: OBJECTID }
+          - { key: Route, tag_value: Route }
+          - { key: RouteS, tag_value: RouteS }
+          - { key: County, tag_value: County }
+          - { key: District, tag_value: District }
+          - { key: RouteType, tag_value: RouteType }
+          - { key: Direction, tag_value: Direction }
+          - { key: PMRouteID, tag_value: PMRouteID }
+  - id: roads_usfs
+    features:
+      - source: roads_usfs
+        geometry: line
+        min_zoom: 5
+        attributes:
+          - { key: objectid, tag_value: objectid }
+          - { key: id, tag_value: id }
+          - { key: name, tag_value: name }
+          - { key: jurisdiction, tag_value: jurisdiction }
+          - { key: primary_maintainer, tag_value: primary_maintainer }
+          - { key: route_status, tag_value: route_status }
+          - { key: oper_maint_level, tag_value: oper_maint_level }
+          - { key: county, tag_value: county }
+  - id: roads_blm
+    features:
+      - source: roads_blm
+        geometry: line
+        min_zoom: 5
+        attributes:
+          - { key: OBJECTID, tag_value: OBJECTID }
+          - { key: ADMIN_ST, tag_value: ADMIN_ST }
+          - { key: PLAN_ROUTE_DSGNTN_AUTH, tag_value: PLAN_ROUTE_DSGNTN_AUTH }
+          - { key: PLAN_ASSET_CLASS, tag_value: PLAN_ASSET_CLASS }
+          - { key: PLAN_OHV_ROUTE_DSGNTN, tag_value: PLAN_OHV_ROUTE_DSGNTN }
+          - { key: PLAN_ACCESS_RSTRCT, tag_value: PLAN_ACCESS_RSTRCT }
+          - { key: ROUTE_PRMRY_NM, tag_value: ROUTE_PRMRY_NM }
+          - { key: EXSTNG_AUTH_CODE, tag_value: EXSTNG_AUTH_CODE }
+  - id: roads_nps
+    features:
+      - source: roads_nps
+        geometry: line
+        min_zoom: 5
+        attributes:
+          - { key: OBJECTID, tag_value: OBJECTID }
+          - { key: RDMAINTAINER, tag_value: RDMAINTAINER }
+          - { key: RDNAME, tag_value: RDNAME }
+          - { key: RDSTATUS, tag_value: RDSTATUS }
+          - { key: RDCLASS, tag_value: RDCLASS }
+          - { key: RDSURFACE, tag_value: RDSURFACE }
+          - { key: UNITCODE, tag_value: UNITCODE }
+          - { key: UNITNAME, tag_value: UNITNAME }
+          - { key: OPENTOPUBLIC, tag_value: OPENTOPUBLIC }
+  - id: roads_county
+    features:
+      - source: roads_county
+        geometry: line
+        min_zoom: 5
+        attributes:
+          - { key: OBJECTID, tag_value: OBJECTID }
+          - { key: JURIS, tag_value: JURIS }
+          - { key: STREETNAME, tag_value: STREETNAME }
+          - { key: FULLRDNAME, tag_value: FULLRDNAME }
+          - { key: FUNCCLASS, tag_value: FUNCCLASS }
+          - { key: SOURCE, tag_value: SOURCE }
+          - { key: LASTUPDATE, tag_value: LASTUPDATE }
+          - { key: county_name, tag_value: county_name }
+          - { key: county_jurisdiction, tag_value: county_jurisdiction }
+          - { key: road_name, tag_value: road_name }
+          - { key: road_class, tag_value: road_class }
+          - { key: source_object_id, tag_value: source_object_id }
+  - id: land_ownership
+    features:
+      - source: land_ownership
+        geometry: polygon
+        min_zoom: 5
+        attributes:
+          - { key: OBJECTID, tag_value: OBJECTID }
+          - { key: Own_Level, tag_value: Own_Level }
+          - { key: Own_Agency, tag_value: Own_Agency }
+          - { key: Own_Group, tag_value: Own_Group }
