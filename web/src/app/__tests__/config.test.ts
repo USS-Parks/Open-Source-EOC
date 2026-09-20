@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { rasterBasemaps, streetBasemap, terrainSource } from "../config.js";
+import { buildingsSource, rasterBasemaps, streetBasemap, terrainSource } from "../config.js";
 
 type Runtime = { OPENEOC?: Record<string, string> };
 const g = globalThis as unknown as Runtime;
@@ -59,6 +59,12 @@ describe("basemap gallery runtime config", () => {
     expect(list[1]!.attribution).toBe("USGS The National Map");
     expect(list[0]!.attribution).toBeUndefined();
     expect(list.map((b) => !!b.overlay)).toEqual([false, false, true]);
+  });
+
+  it("reads the buildings archive when configured", () => {
+    expect(buildingsSource()).toBeUndefined();
+    g.OPENEOC = { OPENEOC_BUILDINGS_PMTILES_URL: "https://tiles/buildings.pmtiles" };
+    expect(buildingsSource()).toEqual({ pmtilesUrl: "https://tiles/buildings.pmtiles" });
   });
 
   it("reads the terrain DEM with terrarium encoding by default", () => {

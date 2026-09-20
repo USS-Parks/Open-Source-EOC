@@ -1,0 +1,33 @@
+schema_name: Open Source EOC buildings
+schema_description: >-
+  Building footprints with their OpenStreetMap building tag as `class`, keyed
+  by osm_id, for the COP's building-use delineation and per-building status
+  coloring (web/src/cop/layers.ts, buildingSpecs). Built by planetiler's
+  custom-schema runner; see generate-california.sh.
+attribution: <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>
+sources:
+  osm:
+    type: osm
+    url: geofabrik:us/california
+layers:
+  - id: buildings
+    features:
+      - source: osm
+        geometry: polygon
+        min_zoom: 13
+        include_when:
+          building: __any__
+        exclude_when:
+          building: "no"
+        attributes:
+          - key: class
+            tag_value: building
+          - key: osm_id
+            value: ${feature.id}
+          - key: name
+            tag_value: name
+            min_zoom: 15
+          - key: levels
+            tag_value: building:levels
+            type: integer
+            min_zoom: 15

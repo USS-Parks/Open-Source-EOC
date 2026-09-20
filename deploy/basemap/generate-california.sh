@@ -51,8 +51,21 @@ java -Xmx4g -jar "${PLANETILER_JAR}" \
   --output=california.pmtiles \
   --force
 
+# Second archive: building footprints classed by their OpenStreetMap building
+# tag and keyed by osm_id (buildings-schema.yml), for the COP's building-use
+# delineation and per-building status coloring. Reuses the extract just
+# downloaded. Skip with OPENEOC_SKIP_BUILDINGS=1.
+if [ "${OPENEOC_SKIP_BUILDINGS:-0}" != "1" ]; then
+  echo "Building buildings.pmtiles..."
+  java -Xmx4g -jar "${PLANETILER_JAR}" generate-custom \
+    --schema="${HERE}/buildings-schema.yml" \
+    --output=buildings.pmtiles \
+    --force
+fi
+
 echo
 echo "Done: ${OUT_DIR}/california.pmtiles"
+echo "      ${OUT_DIR}/buildings.pmtiles (unless skipped)"
 echo "Next: build a glyph stack and (optionally) a sprite, host all three over"
 echo "HTTP with range requests, and set the OPENEOC_BASEMAP_* settings."
 echo "See deploy/basemap/README.md."

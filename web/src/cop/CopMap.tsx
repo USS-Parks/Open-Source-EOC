@@ -9,12 +9,17 @@ import {
   BASEMAP_GROUPS,
   basemapGroupOf,
   buildCopStyle,
+  BUILDING_USE_COLORS,
+  BUILDING_USE_LAYER_ID,
+  BUILDING_USE_LEGEND,
+  BUILDINGS_SOURCE_ID,
   DEM_SOURCE_ID,
   HILLSHADE_LAYER_ID,
   rasterLayerId,
   sourceId,
   tagFeatures,
   type BasemapConfig,
+  type BuildingsConfig,
   type CopFeatureCollection,
   type RasterBasemap,
   type TerrainSource,
@@ -78,6 +83,9 @@ export interface CopMapProps {
   readonly rasterBasemaps?: readonly RasterBasemap[] | undefined;
   /** A DEM tile set enabling the hillshade toggle and the 3D terrain control. */
   readonly terrain?: TerrainSource | undefined;
+  /** A buildings archive: footprints by use, colored by the status of the
+   * records that fall inside them. */
+  readonly buildings?: BuildingsConfig | undefined;
   readonly pollMs?: number | undefined;
   readonly center?: [number, number] | undefined;
   readonly zoom?: number | undefined;
@@ -185,6 +193,7 @@ export function CopMap(props: CopMapProps) {
   const [basemapMode, setBasemapMode] = useState("vector");
   const [overlayOn, setOverlayOn] = useState<Record<string, boolean>>({});
   const terrain = props.basemapStyleUrl ? undefined : props.terrain;
+  const buildings = props.basemapStyleUrl ? undefined : props.buildings;
   const [hillshade, setHillshade] = useState(false);
   // Basemap layer groups present in the active style (discovered on load),
   // each switchable like an operational layer.
@@ -250,9 +259,9 @@ export function CopMap(props: CopMapProps) {
       container: container.current,
       style: (props.basemapStyleUrl ??
         (props.streetBasemap
-          ? buildStreetStyle(props.streetBasemap, props.theme, rasters, terrain)
+          ? buildStreetStyle(props.streetBasemap, props.theme, rasters, terrain, buildings)
           : props.bundledBasemap
-            ? buildBundledVectorStyle(props.bundledBasemap, props.theme, rasters, terrain)
+            ? buildBundledVectorStyle(props.bundledBasemap, props.theme, rasters, terrain, buildings)
             : buildCopStyle(props.theme, props.basemap, rasters, terrain))) as never,
       center: home.center,
       zoom: home.zoom,
@@ -361,6 +370,30 @@ export function CopMap(props: CopMapProps) {
       map.getCanvas().style.cursor = over ? "pointer" : "";
     });
 
+    // Color building footprints by the status of the point records inside
+    // them: each visible point is hit-tested against the rendered footprints
+    // and the hit gets the record's status as feature state.
+    // ponytail: viewport-only, client-side join, one query per point record
+    // per idle; a server-side PostGIS join if record counts outgrow it.
+    const joinBuildings = () => {
+      if (!buildings || !map.getLayer(BUILDING_USE_LAYER_ID)) return;
+      const target = { source: BUILDINGS_SOURCE_ID, sourceLayer: "buildings" };
+      map.removeFeatureState(target);
+      for (const fc of Object.values(dataRef.current)) {
+        for (const f of fc.features) {
+          const g = f.geometry as { type?: string; coordinates?: [number, number] };
+          if (g.type !== "Point" || !g.coordinates) continue;
+          const hit = map
+            .queryRenderedFeatures(map.project(g.coordinates), { layers: [BUILDING_USE_LAYER_ID] })
+            .find((h) => h.id !== undefined);
+          if (!hit) continue;
+          map.setFeatureState({ ...target, id: hit.id as string | number }, {
+            status: f.properties._symbolStatus,
+          });
+        }
+      }
+    };
+
     const refresh = async () => {
       for (const board of props.boards) {
         try {
@@ -397,6 +430,7 @@ export function CopMap(props: CopMapProps) {
           }
         }
       }
+      if (map.isStyleLoaded()) joinBuildings();
     };
 
     map.on("load", () => {
@@ -437,6 +471,8 @@ export function CopMap(props: CopMapProps) {
       const c = map.getCenter();
       paintReadout(c.lng, c.lat, map.getZoom());
     });
+    // Newly rendered footprints become hit-testable once the map is idle.
+    map.on("idle", joinBuildings);
     const timer = setInterval(() => void refresh(), props.pollMs ?? 2000);
     return () => {
       clearInterval(timer);
@@ -749,6 +785,28 @@ export function CopMap(props: CopMapProps) {
                     />
                     {o.title}
                   </label>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {buildings ? (
+          <div style={{ marginBottom: 12 }}>
+            <h3 style={headingStyle}>Building use</h3>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
+              {BUILDING_USE_LEGEND.map((u) => (
+                <li key={u.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.85em" }}>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: 2,
+                      background: BUILDING_USE_COLORS[props.theme][u.id],
+                      display: "inline-block",
+                    }}
+                  />
+                  {u.title}
                 </li>
               ))}
             </ul>

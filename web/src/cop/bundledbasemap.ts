@@ -1,8 +1,10 @@
 import type { ThemeName } from "../design/tokens.js";
 import {
+  buildingSpecs,
   rasterBasemapSpecs,
   terrainSpecs,
   withBasemapGroups,
+  type BuildingsConfig,
   type RasterBasemap,
   type TerrainSource,
 } from "./layers.js";
@@ -88,6 +90,7 @@ export function buildBundledVectorStyle(
   theme: ThemeName,
   rasters: readonly RasterBasemap[] = [],
   terrain?: TerrainSource,
+  buildings?: BuildingsConfig,
 ): Record<string, unknown> {
   const p = PALETTE[theme];
   const base = config.assetBase.endsWith("/") ? config.assetBase : `${config.assetBase}/`;
@@ -106,6 +109,9 @@ export function buildBundledVectorStyle(
   // Hillshade sits over the land fills and under water, roads, and labels.
   const relief = terrainSpecs(terrain, theme);
   Object.assign(sources, relief.sources);
+  // A buildings archive draws footprints over this basemap too.
+  const built = buildingSpecs(buildings, theme);
+  Object.assign(sources, built.sources);
   return {
     version: 8,
     glyphs: `${base}fonts/{fontstack}/{range}.pbf`,
@@ -163,6 +169,7 @@ export function buildBundledVectorStyle(
         filter: ["in", ["get", "type"], ["literal", MAJOR_ROAD_TYPES]],
         paint: { "line-color": p.roadMajor, "line-width": zoomWidth([[4, 0.6], [10, 2.6], [14, 7]]) },
       },
+      ...built.layers,
       {
         id: "place-dots",
         type: "circle",

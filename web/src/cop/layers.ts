@@ -212,6 +212,174 @@ export function terrainSpecs(
 }
 
 /**
+ * Building use, from the OpenStreetMap building tag carried as `class` by
+ * the buildings archive (deploy/basemap/buildings-schema.yml). The commercial
+ * COPs delineate structures by use; this is the free, license-clean source,
+ * with untyped footprints (building=yes) left neutral over the landuse fill.
+ */
+export type BuildingUse =
+  | "residential"
+  | "commercial"
+  | "industrial"
+  | "civic"
+  | "religious"
+  | "agricultural"
+  | "other";
+
+const BUILDING_USE_TAGS: Readonly<Record<BuildingUse, readonly string[]>> = {
+  residential: [
+    "house",
+    "residential",
+    "apartments",
+    "detached",
+    "semidetached_house",
+    "terrace",
+    "bungalow",
+    "cabin",
+    "dormitory",
+    "static_caravan",
+    "hut",
+  ],
+  commercial: ["commercial", "retail", "office", "supermarket", "kiosk", "hotel", "motel"],
+  industrial: ["industrial", "warehouse", "manufacture", "factory", "hangar", "service", "transportation"],
+  civic: [
+    "civic",
+    "public",
+    "government",
+    "school",
+    "university",
+    "college",
+    "kindergarten",
+    "hospital",
+    "fire_station",
+    "police",
+    "train_station",
+    "community_centre",
+    "library",
+    "townhall",
+    "stadium",
+    "sports_hall",
+  ],
+  religious: ["church", "chapel", "cathedral", "mosque", "synagogue", "temple", "religious", "shrine"],
+  agricultural: ["barn", "farm", "farm_auxiliary", "greenhouse", "stable", "silo", "cowshed", "sty"],
+  other: [],
+};
+
+/** The use bucket for a building tag value; unknown or plain tags are other. */
+export function buildingUseOf(tag: string | undefined): BuildingUse {
+  if (!tag) return "other";
+  for (const [use, tags] of Object.entries(BUILDING_USE_TAGS)) {
+    if (tags.includes(tag)) return use as BuildingUse;
+  }
+  return "other";
+}
+
+/** Use colors: muted per theme so status colors still read first (INV-8). */
+export const BUILDING_USE_COLORS: Readonly<Record<ThemeName, Readonly<Record<BuildingUse, string>>>> = {
+  light: {
+    residential: "#d9c9a3",
+    commercial: "#b9c7dd",
+    industrial: "#c9bfd6",
+    civic: "#b8d1c4",
+    religious: "#d8c3d0",
+    agricultural: "#cfd6b3",
+    other: "#d4d4d0",
+  },
+  dark: {
+    residential: "#6b5a34",
+    commercial: "#3e5577",
+    industrial: "#574a6e",
+    civic: "#3d6b55",
+    religious: "#6a4a5e",
+    agricultural: "#5c6636",
+    other: "#3b4046",
+  },
+};
+
+export const BUILDING_USE_LEGEND: readonly { readonly id: BuildingUse; readonly title: string }[] = [
+  { id: "residential", title: "Residential" },
+  { id: "commercial", title: "Commercial" },
+  { id: "industrial", title: "Industrial" },
+  { id: "civic", title: "Civic, schools, health" },
+  { id: "religious", title: "Religious" },
+  { id: "agricultural", title: "Agricultural" },
+  { id: "other", title: "Untyped" },
+];
+
+/** A self-hosted buildings PMTiles archive (deploy/basemap, buildings schema). */
+export interface BuildingsConfig {
+  readonly pmtilesUrl: string;
+}
+
+export const BUILDINGS_SOURCE_ID = "buildings";
+export const BUILDING_USE_LAYER_ID = "building-use";
+
+/** MapLibre match expression: building tag -> use color for the theme. */
+function buildingUseColorExpression(theme: ThemeName): unknown[] {
+  const colors = BUILDING_USE_COLORS[theme];
+  const branches: unknown[] = [];
+  for (const [use, tags] of Object.entries(BUILDING_USE_TAGS)) {
+    if (tags.length === 0) continue;
+    branches.push([...tags], colors[use as BuildingUse]);
+  }
+  return ["match", ["get", "class"], ...branches, colors.other];
+}
+
+/**
+ * The buildings source and its layers: a fill colored by use, or by the
+ * operational status a record has set on the footprint (feature state), and
+ * an outline at street zoom. Footprints are keyed by osm_id so status can be
+ * set per building at runtime.
+ */
+export function buildingSpecs(
+  config: BuildingsConfig | undefined,
+  theme: ThemeName,
+): { sources: Record<string, unknown>; layers: unknown[] } {
+  if (!config) return { sources: {}, layers: [] };
+  const t = themes[theme];
+  return {
+    sources: {
+      [BUILDINGS_SOURCE_ID]: {
+        type: "vector",
+        url: `pmtiles://${config.pmtilesUrl}`,
+        promoteId: "osm_id",
+        attribution: "Buildings: © OpenStreetMap contributors (ODbL)",
+      },
+    },
+    layers: [
+      {
+        id: BUILDING_USE_LAYER_ID,
+        type: "fill",
+        source: BUILDINGS_SOURCE_ID,
+        "source-layer": "buildings",
+        minzoom: 13,
+        paint: {
+          "fill-color": [
+            "case",
+            ["==", ["coalesce", ["feature-state", "status"], ""], "critical"],
+            t.statusCritical,
+            ["==", ["coalesce", ["feature-state", "status"], ""], "warning"],
+            t.statusWarning,
+            ["==", ["coalesce", ["feature-state", "status"], ""], "normal"],
+            t.statusSuccess,
+            buildingUseColorExpression(theme),
+          ],
+          "fill-opacity": ["case", ["to-boolean", ["feature-state", "status"]], 0.85, 0.75],
+        },
+      },
+      {
+        id: "building-outline",
+        type: "line",
+        source: BUILDINGS_SOURCE_ID,
+        "source-layer": "buildings",
+        minzoom: 15,
+        paint: { "line-color": t.border, "line-width": 0.5, "line-opacity": 0.6 },
+      },
+    ],
+  };
+}
+
+/**
  * Basemap layer groups. Every basemap layer belongs to one group so the
  * operator can switch any part of the base map off (buildings, roads, labels,
  * and so on) the same way as an operational layer. The group rides on the
@@ -264,6 +432,8 @@ const GROUP_BY_LAYER: Readonly<Record<string, BasemapGroup>> = {
   "aeroway-area": "airfields",
   "aeroway-line": "airfields",
   building: "buildings",
+  "building-use": "buildings",
+  "building-outline": "buildings",
   rail: "rail",
   "road-casing": "roads",
   "road-minor": "roads",

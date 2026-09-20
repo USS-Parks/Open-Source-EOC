@@ -5,6 +5,7 @@ import type { CopFeatureCollection } from "../src/cop/layers.js";
 import {
   assetBase,
   basemapStyleUrl,
+  buildingsSource,
   rasterBasemaps,
   streetBasemap,
   terrainSource,
@@ -55,6 +56,7 @@ createRoot(document.getElementById("app")!).render(
       streetBasemap={streetBasemap()}
       rasterBasemaps={rasterBasemaps()}
       terrain={terrainSource()}
+      buildings={buildingsSource()}
       onMap={(map) => {
         window.__map = map;
       }}

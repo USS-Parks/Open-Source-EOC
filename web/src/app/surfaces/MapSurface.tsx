@@ -8,6 +8,7 @@ import type { ApiClient, CollectionRef, FeedHealth } from "../api/client.js";
 import {
   assetBase,
   basemapStyleUrl,
+  buildingsSource,
   rasterBasemaps,
   streetBasemap,
   terrainSource,
@@ -156,6 +157,7 @@ export function MapSurface(props: {
           streetBasemap={streetBasemap()}
           rasterBasemaps={rasterBasemaps()}
           terrain={terrainSource()}
+          buildings={buildingsSource()}
           picking={adding && !point}
           onPickPoint={(p) => setPoint(p)}
         />

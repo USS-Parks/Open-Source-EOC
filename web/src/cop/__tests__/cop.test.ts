@@ -6,6 +6,8 @@ import {
   boardLayerIds,
   boardLayerSpecs,
   buildCopStyle,
+  buildingSpecs,
+  buildingUseOf,
   sourceId,
   tagFeatures,
 } from "../layers.js";
@@ -329,14 +331,16 @@ describe("style validity", () => {
       { id: "hydro", title: "Hydrography", tiles: "https://t.gov/h/{z}/{y}/{x}", overlay: true },
     ];
     const terrain = { tiles: "https://dem/{z}/{x}/{y}.png", encoding: "terrarium" as const };
+    const buildings = { pmtilesUrl: "https://t/buildings.pmtiles" };
     const styles = {
-      bundled: buildBundledVectorStyle({ assetBase: "/" }, "light", rasters, terrain),
+      bundled: buildBundledVectorStyle({ assetBase: "/" }, "light", rasters, terrain, buildings),
       fallback: buildCopStyle("dark", { kind: "natural-earth", assetBase: "/" }, rasters, terrain),
       street: buildStreetStyle(
         { pmtilesUrl: "https://t/x.pmtiles", glyphsUrl: "/f/{fontstack}/{range}.pbf" },
         "dark",
         rasters,
         terrain,
+        buildings,
       ),
     };
     for (const [name, style] of Object.entries(styles)) {
@@ -348,6 +352,52 @@ describe("style validity", () => {
       const style = { version: 8, sources: { "board-b1": { type: "geojson", data: { type: "FeatureCollection", features: [] } } }, glyphs: "/f/{fontstack}/{range}.pbf", layers: [spec] };
       expect(validateStyleMin(style as never).map((e) => e.message)).toEqual([]);
     }
+  });
+});
+
+describe("building use and status (the structure delineation layer)", () => {
+  it("buckets OpenStreetMap building tags into use classes", () => {
+    expect(buildingUseOf("house")).toBe("residential");
+    expect(buildingUseOf("apartments")).toBe("residential");
+    expect(buildingUseOf("retail")).toBe("commercial");
+    expect(buildingUseOf("warehouse")).toBe("industrial");
+    expect(buildingUseOf("school")).toBe("civic");
+    expect(buildingUseOf("church")).toBe("religious");
+    expect(buildingUseOf("barn")).toBe("agricultural");
+    expect(buildingUseOf("yes")).toBe("other");
+    expect(buildingUseOf(undefined)).toBe("other");
+  });
+
+  it("mounts the buildings archive keyed by osm_id, colored by status first and use second", () => {
+    const spec = buildingSpecs({ pmtilesUrl: "https://t/buildings.pmtiles" }, "light") as {
+      sources: Record<string, { type: string; url: string; promoteId?: string }>;
+      layers: Array<{ id: string; type: string; "source-layer": string; minzoom?: number; paint: Record<string, unknown> }>;
+    };
+    expect(spec.sources.buildings!.url).toBe("pmtiles://https://t/buildings.pmtiles");
+    expect(spec.sources.buildings!.promoteId).toBe("osm_id");
+    const use = spec.layers.find((l) => l.id === "building-use")!;
+    expect(use["source-layer"]).toBe("buildings");
+    expect(use.minzoom).toBe(13);
+    const color = JSON.stringify(use.paint["fill-color"]);
+    expect(color).toContain("feature-state");
+    expect(color.indexOf("feature-state")).toBeLessThan(color.indexOf("apartments"));
+    expect(spec.layers.some((l) => l.id === "building-outline")).toBe(true);
+    expect(buildingSpecs(undefined, "dark").layers).toEqual([]);
+  });
+
+  it("is in the buildings group on the street style", () => {
+    const style = buildStreetStyle(
+      { pmtilesUrl: "https://t/x.pmtiles", glyphsUrl: "/f/{fontstack}/{range}.pbf" },
+      "light",
+      [],
+      undefined,
+      { pmtilesUrl: "https://t/buildings.pmtiles" },
+    ) as { layers: Array<{ id: string; metadata?: unknown }> };
+    const use = style.layers.find((l) => l.id === "building-use")!;
+    expect(basemapGroupOf(use)).toBe("buildings");
+    const ids = style.layers.map((l) => l.id);
+    expect(ids.indexOf("building")).toBeLessThan(ids.indexOf("building-use"));
+    expect(ids.indexOf("building-use")).toBeLessThan(ids.indexOf("road-casing"));
   });
 });
 

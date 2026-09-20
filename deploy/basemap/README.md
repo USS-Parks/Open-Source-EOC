@@ -155,6 +155,27 @@ into a PMTiles raster archive (the `pmtiles` CLI converts a tile directory or
 MBTiles) and serve it the same way as the street tiles; set the encoding to
 match the source (`terrarium` or `mapbox`).
 
+## 8. Buildings by use and status
+
+`generate-california.sh` also writes `buildings.pmtiles` from
+`buildings-schema.yml`: every OpenStreetMap building footprint with its
+`building` tag as `class` and its `osm_id`. Host it beside the street tiles
+and set:
+
+```html
+<script>
+  window.OPENEOC = { OPENEOC_BUILDINGS_PMTILES_URL: "https://<host>/buildings.pmtiles" };
+</script>
+```
+
+The COP then draws footprints colored by use (residential, commercial,
+industrial, civic, religious, agricultural; untyped footprints neutral) from
+zoom 13, with a Building use legend, and colors any footprint by the status
+of the point record that falls inside it (a damage assessment, a field
+report), the way the commercial COPs show impacted structures. Untyped
+footprints are common in bulk imports; a later roster prompt adds Overture
+Maps building subtypes for coverage.
+
 ## Attribution
 
 OpenStreetMap data is ODbL: the map must display "© OpenStreetMap contributors".
