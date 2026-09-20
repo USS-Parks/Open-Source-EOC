@@ -117,6 +117,12 @@ export interface ResourceRequestSummary {
   readonly priority: string;
   readonly state: string;
 }
+export interface AarObservation {
+  readonly capability: string;
+  readonly kind: "strength" | "improvement";
+  readonly observation: string;
+  readonly recommendation: string | null;
+}
 export interface IapResult {
   readonly id: string;
   readonly status: string;
@@ -400,6 +406,36 @@ export class ApiClient {
       toState,
       ...(note ? { note } : {}),
     });
+  }
+  async listAarObservations(incidentId: string): Promise<AarObservation[]> {
+    const r = await this.request<{ observations: AarObservation[] }>(
+      "GET",
+      `/api/v1/incidents/${incidentId}/aar/observations`,
+    );
+    return r.observations;
+  }
+  recordAarObservation(
+    incidentId: string,
+    body: { capability: string; kind: "strength" | "improvement"; observation: string; recommendation?: string },
+  ): Promise<unknown> {
+    return this.request<unknown>(
+      "POST",
+      `/api/v1/incidents/${incidentId}/aar/observations`,
+      body as unknown as Record<string, unknown>,
+    );
+  }
+  composeAar(
+    incidentId: string,
+    body: { overview: string; objectives?: readonly string[]; period?: string },
+  ): Promise<{ id: string }> {
+    return this.request<{ id: string }>(
+      "POST",
+      `/api/v1/incidents/${incidentId}/aar`,
+      body as unknown as Record<string, unknown>,
+    );
+  }
+  downloadAarPdf(aarId: string): Promise<Blob> {
+    return this.requestBlob(`/api/v1/aar/${aarId}/pdf`);
   }
   getIcsForm(
     incidentId: string,

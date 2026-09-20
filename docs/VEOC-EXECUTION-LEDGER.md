@@ -990,3 +990,30 @@ unchanged; all work on `main`.
   cost capture/export are API-complete and are follow-up screens.
 - **Rollback:** revert the VEOC-57 commit.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-58: After-action review operator screen
+
+- **Session:** VEOC-58, executed 2026-09-20
+- **Starting HEAD:** `b1ae7fb` (resource requests)
+- **Operator gap closed:** AAR observations and the composed report existed only
+  behind the API (VEOC-36); the console could not capture observations or export
+  the report. Adds the screen.
+- **Files created/changed:** `web/src/app/surfaces/AarSurface.tsx` (pick an
+  incident, record capability observations as strength or improvement, list
+  them, and compile the AAR, which the platform assembles from the observations
+  plus the chronology and exports as a PDF); `web/src/app/api/client.ts`
+  (listAarObservations, recordAarObservation, composeAar, downloadAarPdf);
+  `web/src/app/router.tsx` and `web/src/app/screens/Console.tsx` (an AAR rail
+  entry and route). Tests: client.test.ts (record, list, compose, PDF) and the
+  browser E2E now records an observation for the incident.
+- **Acceptance proven by test:** the client records and lists observations,
+  composes an AAR, and downloads its PDF; the browser E2E records a Mass Care
+  observation on the incident, offline.
+- **Verification:** `pnpm check` green; 371 tests / 71 files.
+- **Facets:** F after-action now reaches the operator (the engine was VEOC-36).
+- **Deferred (honest):** the corrective-action tracker (jurisdiction-scoped
+  improvement plan) is API-complete and is the next screen.
+- **Rollback:** revert the VEOC-58 commit.
+- **Commit/push:** under standing authorization. No branch created.

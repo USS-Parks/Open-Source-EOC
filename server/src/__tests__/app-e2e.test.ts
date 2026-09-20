@@ -338,6 +338,17 @@ describe("the operations console in a real browser, offline", () => {
     // The row's state badge flips to "triaged" (the first allowed transition).
     await page.getByText("triaged", { exact: true }).first().waitFor({ state: "visible", timeout: 20000 });
 
+    // After-action review: record an observation against the incident.
+    await page.getByRole("button", { name: "AAR" }).click();
+    await page.getByText("After-Action Review").waitFor({ state: "visible", timeout: 20000 });
+    await page.getByLabel("Capability", { exact: true }).fill("Mass Care");
+    await page.getByLabel("Observation", { exact: true }).fill("Shelter stood up within two hours.");
+    await page.getByRole("button", { name: "Add observation" }).click();
+    await page
+      .getByText("Shelter stood up within two hours.")
+      .first()
+      .waitFor({ state: "visible", timeout: 20000 });
+
     // Dark theme, for the night-shift EOC.
     await page.getByRole("button", { name: "Dark" }).click();
     await page.waitForTimeout(400);

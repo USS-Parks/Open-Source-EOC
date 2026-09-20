@@ -15,6 +15,7 @@ import { FormsSurface } from "../surfaces/FormsSurface.js";
 import { FilesSurface } from "../surfaces/FilesSurface.js";
 import { IncidentsSurface } from "../surfaces/IncidentsSurface.js";
 import { ResourcesSurface } from "../surfaces/ResourcesSurface.js";
+import { AarSurface } from "../surfaces/AarSurface.js";
 import { AlertsSurface, BoardsIndex, SitrepsIndex } from "../surfaces/lists.js";
 
 const NAV: readonly NavItem[] = [
@@ -25,6 +26,7 @@ const NAV: readonly NavItem[] = [
   { key: "sitreps", label: "SITREP" },
   { key: "forms", label: "Forms" },
   { key: "resources", label: "Resources" },
+  { key: "aar", label: "AAR" },
   { key: "files", label: "Files" },
   { key: "alerts", label: "Alerts" },
 ];
@@ -139,6 +141,8 @@ function sectionForNav(key: string): Surface {
       return { kind: "incidents" };
     case "resources":
       return { kind: "resources" };
+    case "aar":
+      return { kind: "aar" };
     case "alerts":
       return { kind: "alerts" };
     default:
@@ -206,6 +210,8 @@ function Center(props: {
       return <FilesSurface client={props.client} jurisdictionId={props.jurisdictionId} />;
     case "resources":
       return <ResourcesSurface client={props.client} jurisdictionId={props.jurisdictionId} />;
+    case "aar":
+      return <AarSurface client={props.client} jurisdictionId={props.jurisdictionId} />;
     case "incidents":
       return (
         <IncidentsSurface

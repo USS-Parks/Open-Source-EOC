@@ -175,6 +175,33 @@ describe("ApiClient", () => {
     expect((await client.transitionResourceRequest("r1", "triaged")).state).toBe("triaged");
   });
 
+  it("records observations, composes an AAR, and downloads its PDF", async () => {
+    const pdf = new Blob([new Uint8Array([0x25, 0x50])], { type: "application/pdf" });
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      const u = String(url);
+      if (u.endsWith("/auth/login"))
+        return res(200, { accessToken: "A", resumeToken: "R", sessionId: "S" });
+      if (u.endsWith("/aar/observations") && init.method === "POST") return res(201, { ok: true });
+      if (u.endsWith("/aar/observations"))
+        return res(200, {
+          observations: [
+            { capability: "Mass Care", kind: "strength", observation: "Fast", recommendation: null },
+          ],
+        });
+      if (u.endsWith("/aar") && init.method === "POST") return res(201, { id: "a1" });
+      if (u.endsWith("/aar/a1/pdf")) return { ok: true, status: 200, statusText: "OK", blob: async () => pdf };
+      return res(404, { error: "nope" });
+    }) as unknown as typeof fetch;
+
+    const client = new ApiClient({ fetchImpl });
+    await client.login("e@x.org", "pw");
+    await client.recordAarObservation("i1", { capability: "Mass Care", kind: "strength", observation: "Fast" });
+    expect((await client.listAarObservations("i1"))[0]!.capability).toBe("Mass Care");
+    const { id } = await client.composeAar("i1", { overview: "Solid response." });
+    expect(id).toBe("a1");
+    expect((await client.downloadAarPdf(id)).type).toBe("application/pdf");
+  });
+
   it("surfaces the server error envelope as a typed ApiError", async () => {
     const fetchImpl = (async (url: string) => {
       const u = String(url);
