@@ -3,6 +3,7 @@ import { BUNDLED_FONT_STACK } from "./bundledbasemap.js";
 import {
   rasterBasemapSpecs,
   terrainSpecs,
+  withBasemapGroups,
   type RasterBasemap,
   type TerrainSource,
 } from "./layers.js";
@@ -410,7 +411,7 @@ export function buildStreetStyle(
       ...raster.sources,
       ...relief.sources,
     },
-    layers,
+    layers: withBasemapGroups(layers),
   };
   if (config.spriteUrl) style["sprite"] = config.spriteUrl;
   return style;

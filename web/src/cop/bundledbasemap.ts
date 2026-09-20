@@ -2,6 +2,7 @@ import type { ThemeName } from "../design/tokens.js";
 import {
   rasterBasemapSpecs,
   terrainSpecs,
+  withBasemapGroups,
   type RasterBasemap,
   type TerrainSource,
 } from "./layers.js";
@@ -109,7 +110,7 @@ export function buildBundledVectorStyle(
     version: 8,
     glyphs: `${base}fonts/{fontstack}/{range}.pbf`,
     sources,
-    layers: [
+    layers: withBasemapGroups([
       { id: "background", type: "background", paint: { "background-color": p.background } },
       { id: "land", type: "fill", source: src, "source-layer": "land", paint: { "fill-color": p.land } },
       {
@@ -211,6 +212,6 @@ export function buildBundledVectorStyle(
         paint: { "text-color": p.label, "text-halo-color": p.labelHalo, "text-halo-width": 1.5 },
       },
       ...raster.layers,
-    ],
+    ]),
   };
 }

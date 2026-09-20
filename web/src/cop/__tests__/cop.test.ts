@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SYMBOL_STATUS } from "@openeoc/shared";
 import { themes } from "../../design/tokens.js";
 import {
+  basemapGroupOf,
   boardLayerIds,
   boardLayerSpecs,
   buildCopStyle,
@@ -281,6 +282,36 @@ describe("layer construction", () => {
       expect(ids.indexOf("hillshade")).toBeLessThan(ids.indexOf("water"));
     }
     expect(JSON.stringify(buildBundledVectorStyle({ assetBase: "/" }, "light"))).not.toContain("hillshade");
+  });
+
+  it("puts every basemap layer in a switchable group on every style", () => {
+    const styles = {
+      bundled: buildBundledVectorStyle({ assetBase: "/" }, "light"),
+      fallback: buildCopStyle("light", { kind: "natural-earth", assetBase: "/" }),
+      street: buildStreetStyle(
+        { pmtilesUrl: "https://t/x.pmtiles", glyphsUrl: "/f/{fontstack}/{range}.pbf" },
+        "dark",
+      ),
+    } as unknown as Record<string, { layers: Array<{ id: string; type: string; metadata?: unknown }> }>;
+    const expected: Record<string, string[]> = {
+      bundled: ["land", "water", "roads", "boundaries", "labels"],
+      fallback: ["land", "water", "boundaries"],
+      street: ["land", "water", "buildings", "roads", "rail", "airfields", "boundaries", "labels", "facilities"],
+    };
+    for (const [name, style] of Object.entries(styles)) {
+      const groups = new Set<string>();
+      for (const layer of style.layers) {
+        const g = basemapGroupOf(layer);
+        if (layer.type === "background") {
+          expect(g, `${name}:${layer.id}`).toBeUndefined();
+          continue;
+        }
+        // Every drawn basemap layer is switchable.
+        expect(g, `${name}:${layer.id}`).toBeDefined();
+        groups.add(g!);
+      }
+      expect([...groups].sort()).toEqual(expected[name]!.sort());
+    }
   });
 
   it("keeps every style free of rasters when none are configured", () => {

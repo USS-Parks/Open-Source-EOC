@@ -212,6 +212,95 @@ export function terrainSpecs(
 }
 
 /**
+ * Basemap layer groups. Every basemap layer belongs to one group so the
+ * operator can switch any part of the base map off (buildings, roads, labels,
+ * and so on) the same way as an operational layer. The group rides on the
+ * layer's metadata, which MapLibre preserves, so CopMap discovers the groups
+ * present in whichever style is active.
+ */
+export type BasemapGroup =
+  | "land"
+  | "water"
+  | "buildings"
+  | "roads"
+  | "rail"
+  | "airfields"
+  | "boundaries"
+  | "labels"
+  | "facilities";
+
+export const BASEMAP_GROUPS: readonly { readonly id: BasemapGroup; readonly title: string }[] = [
+  { id: "land", title: "Land cover and use" },
+  { id: "water", title: "Water" },
+  { id: "buildings", title: "Buildings" },
+  { id: "roads", title: "Roads" },
+  { id: "rail", title: "Rail" },
+  { id: "airfields", title: "Airfields" },
+  { id: "boundaries", title: "Boundaries" },
+  { id: "labels", title: "Labels" },
+  { id: "facilities", title: "Critical facilities" },
+];
+
+const GROUP_KEY = "openeoc:group";
+
+const GROUP_BY_LAYER: Readonly<Record<string, BasemapGroup>> = {
+  // Bundled Natural Earth vector basemap.
+  land: "land",
+  urban: "land",
+  water: "water",
+  rivers: "water",
+  counties: "boundaries",
+  "roads-casing": "roads",
+  "roads-minor": "roads",
+  "roads-major": "roads",
+  "place-dots": "labels",
+  "road-label": "labels",
+  "place-label": "labels",
+  // Self-hosted OpenStreetMap street basemap.
+  landcover: "land",
+  landuse: "land",
+  "landuse-park": "land",
+  waterway: "water",
+  "aeroway-area": "airfields",
+  "aeroway-line": "airfields",
+  building: "buildings",
+  rail: "rail",
+  "road-casing": "roads",
+  "road-minor": "roads",
+  "road-major": "roads",
+  "boundary-admin": "boundaries",
+  "water-label": "labels",
+  "peak-label": "labels",
+  "facility-label": "facilities",
+  // Fallback GeoJSON canvas.
+  "ne-land": "land",
+  "ne-coast": "land",
+  "ca-counties-fill": "land",
+  "ne-lakes": "water",
+  "ne-rivers": "water",
+  "ca-counties-line": "boundaries",
+  "ne-admin1": "boundaries",
+  "ne-admin0": "boundaries",
+  "ca-state-outline": "boundaries",
+};
+
+/** Stamp each known basemap layer with its group. Unknown ids pass through. */
+export function withBasemapGroups(layers: readonly unknown[]): unknown[] {
+  return layers.map((layer) => {
+    const l = layer as { id?: string; metadata?: Record<string, unknown> };
+    const group = l.id ? GROUP_BY_LAYER[l.id] : undefined;
+    return group ? { ...l, metadata: { ...(l.metadata ?? {}), [GROUP_KEY]: group } } : layer;
+  });
+}
+
+/** The group a rendered layer belongs to, if it is a basemap layer. */
+export function basemapGroupOf(layer: { readonly metadata?: unknown }): BasemapGroup | undefined {
+  const m = layer.metadata as Record<string, unknown> | undefined;
+  const g = m?.[GROUP_KEY];
+  return typeof g === "string" ? (g as BasemapGroup) : undefined;
+}
+
+/**
  * The base style. With the bundled basemap it is a calm land/water canvas
  * that renders with zero external network (INV-3); without it, a neutral
  * background floor. Board layers mount on top at runtime, so the basemap
@@ -244,5 +333,5 @@ export function buildCopStyle(
   const raster = rasterBasemapSpecs(rasters);
   Object.assign(sources, raster.sources);
   layers.push(...raster.layers);
-  return { version: 8, ...(glyphs ? { glyphs } : {}), sources, layers };
+  return { version: 8, ...(glyphs ? { glyphs } : {}), sources, layers: withBasemapGroups(layers) };
 }

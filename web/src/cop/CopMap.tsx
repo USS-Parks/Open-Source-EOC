@@ -6,6 +6,8 @@ import { themes, type ThemeName } from "../design/tokens.js";
 import {
   boardLayerIds,
   boardLayerSpecs,
+  BASEMAP_GROUPS,
+  basemapGroupOf,
   buildCopStyle,
   DEM_SOURCE_ID,
   HILLSHADE_LAYER_ID,
@@ -184,6 +186,10 @@ export function CopMap(props: CopMapProps) {
   const [overlayOn, setOverlayOn] = useState<Record<string, boolean>>({});
   const terrain = props.basemapStyleUrl ? undefined : props.terrain;
   const [hillshade, setHillshade] = useState(false);
+  // Basemap layer groups present in the active style (discovered on load),
+  // each switchable like an operational layer.
+  const [groups, setGroups] = useState<readonly (typeof BASEMAP_GROUPS)[number][]>([]);
+  const [groupOn, setGroupOn] = useState<Record<string, boolean>>({});
   const readoutRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<MeasureMode>("off");
   const measureCoordsRef = useRef<[number, number][]>([]);
@@ -421,6 +427,8 @@ export function CopMap(props: CopMapProps) {
           paint: { "circle-radius": 4, "circle-color": ink },
         });
       }
+      const present = new Set(map.getStyle().layers.map((l) => basemapGroupOf(l)));
+      setGroups(BASEMAP_GROUPS.filter((g) => present.has(g.id)));
       const c = map.getCenter();
       paintReadout(c.lng, c.lat, map.getZoom());
       void refresh();
@@ -641,6 +649,16 @@ export function CopMap(props: CopMapProps) {
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    for (const layer of map.getStyle().layers) {
+      const g = basemapGroupOf(layer);
+      if (!g) continue;
+      map.setLayoutProperty(layer.id, "visibility", (groupOn[g] ?? true) ? "visible" : "none");
+    }
+  }, [groupOn]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!map) return;
     for (const feed of props.feeds ?? []) {
       for (const layerId of feedLayerIds(feed.id)) {
@@ -730,6 +748,25 @@ export function CopMap(props: CopMapProps) {
                       onChange={() => setOverlayOn((v) => ({ ...v, [o.id]: !v[o.id] }))}
                     />
                     {o.title}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {groups.length > 0 ? (
+          <div style={{ marginBottom: 12 }}>
+            <h3 style={headingStyle}>Basemap layers</h3>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
+              {groups.map((g) => (
+                <li key={g.id}>
+                  <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={groupOn[g.id] ?? true}
+                      onChange={() => setGroupOn((v) => ({ ...v, [g.id]: !(v[g.id] ?? true) }))}
+                    />
+                    {g.title}
                   </label>
                 </li>
               ))}
