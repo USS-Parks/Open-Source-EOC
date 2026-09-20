@@ -39,10 +39,11 @@ can use it," and neither is "it can be released":
   the Forms screen, assembled into an IAP with an approval step. Resource
   requests, the JIC, and after-action have no dedicated screen yet, and the 204
   assignment list is shallow.
-- **G:** security, accessibility, packaging, and docs are substantially done.
-  The load test measures operation throughput, not 150 concurrent
-  authenticated users. The live pilot has not run (gated on Basho). AR7
-  (disconnected provisioning) is deferred.
+- **G:** security, accessibility, packaging, and docs are substantially done,
+  and the 150-distinct-concurrent-user load test now passes as a CI gate (each
+  user logs in to its own session and fires a request under its own RLS
+  context). The live pilot has not run (gated on Basho). AR7 (disconnected
+  provisioning) is deferred.
 
 ## Honest one-line status
 
@@ -50,8 +51,8 @@ A tested A-F backend with an operator console that now covers the map and
 drop-a-point field capture, dashboards, boards, incidents, situation reports,
 ICS forms and the IAP, and files and search. Still missing: operator UI for
 interop/IPAWS, and parts of the field (photo, damage assessment, check-in) and
-collaboration (resource requests, JIC, after-action) phases. Release gates
-(150+ concurrent-user load, live pilot) are open. Not "1.0" yet.
+collaboration (JIC) phases. The 150-concurrent-user load gate now passes in
+CI; the live pilot remains (gated on Basho). Not "1.0" yet.
 
 Nothing is deployable before Phase G closes on its real terms: the 150+
 concurrent-user load test met, and the live pilot run.

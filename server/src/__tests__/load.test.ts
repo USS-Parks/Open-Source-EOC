@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
+import { addMembership, createPerson } from "../auth/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
@@ -119,4 +120,67 @@ describe("150-concurrent activation profile", () => {
     expect(wall).toBeLessThan(BURST_WALL_BUDGET_MS);
     expect(p95).toBeLessThan(BURST_P95_BUDGET_MS);
   }, 60000);
+});
+
+describe("150 distinct concurrent users (the release gate)", () => {
+  it(`logs in ${CONCURRENCY} separate users and serves a request from each within budget`, async () => {
+    // Provision the members directly (this is setup, not the measured path).
+    const emails: string[] = [];
+    for (let i = 0; i < CONCURRENCY; i += 1) {
+      const email = `loaduser${i}@example.org`;
+      const pid = await createPerson(admin, {
+        email,
+        displayName: `Load User ${i}`,
+        password: "another-good-password",
+      });
+      await addMembership(admin, pid, jurisdictionId, "member");
+      emails.push(email);
+    }
+
+    // Each user opens its own session: CONCURRENCY distinct authenticated tokens.
+    const tokens = await Promise.all(
+      emails.map(async (email) => {
+        const r = await app.inject({
+          method: "POST",
+          url: "/api/v1/auth/login",
+          payload: { email, password: "another-good-password" },
+        });
+        return r.json().accessToken as string;
+      }),
+    );
+    expect(tokens.every((t) => typeof t === "string" && t.length > 0)).toBe(true);
+
+    // One concurrent request per distinct user, each under its own RLS context,
+    // a mix of a read and a write, the shape of a real 150-user activation.
+    const durations: number[] = [];
+    const codes = await Promise.all(
+      tokens.map((token, i) =>
+        (async () => {
+          const t0 = performance.now();
+          const res =
+            i % 2 === 0
+              ? await app.inject({
+                  method: "GET",
+                  url: "/api/v1/me",
+                  headers: { authorization: `Bearer ${token}` },
+                })
+              : await app.inject({
+                  method: "POST",
+                  url: `/api/v1/boards/${boardId}/records`,
+                  headers: { authorization: `Bearer ${token}` },
+                  payload: { entry: `user ${i} entry` },
+                });
+          durations.push(performance.now() - t0);
+          return res.statusCode;
+        })(),
+      ),
+    );
+    const p95 = percentile(durations, 95);
+    // eslint-disable-next-line no-console
+    console.log(
+      `[load] ${CONCURRENCY} distinct users: p95=${p95.toFixed(0)}ms max=${Math.max(...durations).toFixed(0)}ms`,
+    );
+    expect(codes.every((c) => c >= 200 && c < 300)).toBe(true);
+    expect(p95).toBeLessThan(BURST_P95_BUDGET_MS);
+  }, 180000);
 });

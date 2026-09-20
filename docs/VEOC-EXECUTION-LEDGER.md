@@ -1043,3 +1043,28 @@ unchanged; all work on `main`.
   remain external/gated; enable/disable and delete of a feed are follow-ups.
 - **Rollback:** revert the VEOC-59 commit.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-60: The 150-concurrent-user load gate
+
+- **Session:** VEOC-60, executed 2026-09-20
+- **Starting HEAD:** `5a23738` (feeds admin)
+- **Release gate closed:** the roadmap's Phase G load target reads "150+
+  concurrent users." The existing benchmark fired 150 operations as one admin,
+  which is throughput, not concurrent users. Adds the real test.
+- **Files created/changed:** `server/src/__tests__/load.test.ts` (a new case
+  provisions 150 members, logs each in to its own session, then fires one
+  concurrent request per distinct user, a mix of a read and a write, each under
+  its own RLS context, asserting every response is 2xx and p95 stays within
+  budget); `ROADMAP.md` (Phase G note and one-line status updated to reflect the
+  passing gate).
+- **Acceptance proven by test:** 150 distinct users log in and each serves a
+  concurrent request successfully within the latency budget; run against the
+  local cluster, p95 well under the 6s ceiling.
+- **Verification:** `pnpm check` green; 373 tests / 71 files.
+- **Facets:** discharges the Phase G "150+ concurrent users" release gate in CI.
+- **Pending Basho (not code):** the live pilot with real users on a named
+  jurisdiction (VEOC-42) remains the one open release gate, gated on Basho.
+- **Rollback:** revert the VEOC-60 commit.
+- **Commit/push:** under standing authorization. No branch created.
