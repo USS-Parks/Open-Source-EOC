@@ -1,7 +1,7 @@
 import { BoardList, NotificationTray } from "../../design/layout.js";
 import type { Status } from "../../design/components.js";
 import type { ThemeName } from "../../design/tokens.js";
-import type { ApiClient, BoardListItem, CollectionRef } from "../api/client.js";
+import type { ApiClient, BoardListItem, CollectionRef, FeedHealth } from "../api/client.js";
 import { useSession } from "../auth/session.js";
 import { useAsync, usePolled } from "../data/hooks.js";
 import { AppShell, type NavItem } from "../layout/AppShell.js";
@@ -37,6 +37,10 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
     [jurisdictionId],
   );
   const collections = useAsync(() => client.listCollections(), []);
+  const feeds = useAsync(
+    () => (jurisdictionId ? client.listFeeds(jurisdictionId) : Promise.resolve([])),
+    [jurisdictionId],
+  );
   const dashboards = useAsync(
     () => (jurisdictionId ? client.listDashboards(jurisdictionId) : Promise.resolve([])),
     [jurisdictionId],
@@ -100,6 +104,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         jurisdictionId={jurisdictionId}
         boards={boardItems}
         collections={collections.data ?? []}
+        feeds={feeds.data ?? []}
         collectionsError={collections.error}
         firstDashboardId={dashboards.data?.[0]?.id}
         onOpenBoard={(id) => navigate({ kind: "board", id })}
@@ -131,6 +136,7 @@ function Center(props: {
   jurisdictionId: string;
   boards: readonly BoardListItem[];
   collections: readonly CollectionRef[];
+  feeds: readonly FeedHealth[];
   collectionsError: string | null;
   firstDashboardId: string | undefined;
   onOpenBoard: (id: string) => void;
@@ -142,7 +148,12 @@ function Center(props: {
       return props.collectionsError ? (
         <ErrorNote message={props.collectionsError} />
       ) : (
-        <MapSurface client={props.client} theme={props.theme} collections={props.collections} />
+        <MapSurface
+          client={props.client}
+          theme={props.theme}
+          collections={props.collections}
+          feeds={props.feeds}
+        />
       );
     case "dashboard": {
       const id = s.id ?? props.firstDashboardId;

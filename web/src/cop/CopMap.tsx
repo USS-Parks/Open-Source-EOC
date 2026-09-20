@@ -14,16 +14,28 @@ import {
 } from "./layers.js";
 import { NATURAL_EARTH_ATTRIBUTION } from "./basemap.js";
 import { statusColor, type SymbolStatus } from "./symbology.js";
+import {
+  feedLayerIds,
+  feedLayerSpecs,
+  feedSourceId,
+  tagFeedFeatures,
+  type FeedLayerHealth,
+} from "./feeds.js";
 
 export interface CopBoard {
   readonly id: string;
   readonly title: string;
 }
 
+export type FeedItemsData = CopFeatureCollection & { readonly feed: FeedLayerHealth };
+
 export interface CopMapProps {
   readonly theme: ThemeName;
   readonly boards: readonly CopBoard[];
   readonly fetchItems: (boardId: string) => Promise<CopFeatureCollection>;
+  /** External/sensor feeds rendered as read-only layers, with staleness. */
+  readonly feeds?: readonly CopBoard[] | undefined;
+  readonly fetchFeedItems?: ((feedId: string) => Promise<FeedItemsData>) | undefined;
   /** The bundled basemap, when one should render under the layers. */
   readonly basemap?: BasemapConfig | undefined;
   /** A deployment's own MapLibre style URL, which replaces the basemap. */
@@ -38,6 +50,11 @@ export interface CopMapProps {
 let pmtilesRegistered = false;
 
 const LEGEND: readonly SymbolStatus[] = ["critical", "warning", "normal", "unknown"];
+
+/** A rendered feature belonging to a board or feed layer (inspectable). */
+function isCopLayerId(id: string): boolean {
+  return id.startsWith(sourceId("")) || id.startsWith(feedSourceId(""));
+}
 
 function esc(value: string): string {
   return value.replace(
@@ -70,6 +87,9 @@ export function CopMap(props: CopMapProps) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [visible, setVisible] = useState<Record<string, boolean>>(
     Object.fromEntries(props.boards.map((b) => [b.id, true])),
+  );
+  const [feedVisible, setFeedVisible] = useState<Record<string, boolean>>(
+    Object.fromEntries((props.feeds ?? []).map((f) => [f.id, true])),
   );
 
   useEffect(() => {
@@ -107,16 +127,12 @@ export function CopMap(props: CopMapProps) {
     // go on the poll, with no per-layer handler churn.
     const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, maxWidth: "280px" });
     map.on("click", (e) => {
-      const hit = map
-        .queryRenderedFeatures(e.point)
-        .find((f) => f.layer.id.startsWith(sourceId("")));
+      const hit = map.queryRenderedFeatures(e.point).find((f) => isCopLayerId(f.layer.id));
       if (!hit) return;
       popup.setLngLat(e.lngLat).setHTML(featureHtml(hit.properties ?? {})).addTo(map);
     });
     map.on("mousemove", (e) => {
-      const over = map
-        .queryRenderedFeatures(e.point)
-        .some((f) => f.layer.id.startsWith(sourceId("")));
+      const over = map.queryRenderedFeatures(e.point).some((f) => isCopLayerId(f.layer.id));
       map.getCanvas().style.cursor = over ? "pointer" : "";
     });
 
@@ -134,6 +150,24 @@ export function CopMap(props: CopMapProps) {
           }
         } catch {
           // A failed refresh keeps the last good picture; never blank the COP.
+        }
+      }
+      if (props.fetchFeedItems) {
+        for (const feed of props.feeds ?? []) {
+          try {
+            const res = await props.fetchFeedItems(feed.id);
+            const fc = tagFeedFeatures(res, res.feed);
+            const source = map.getSource(feedSourceId(feed.id)) as maplibregl.GeoJSONSource | undefined;
+            if (source) source.setData(fc as never);
+            else if (map.isStyleLoaded() || map.loaded()) {
+              map.addSource(feedSourceId(feed.id), { type: "geojson", data: fc as never });
+              for (const spec of feedLayerSpecs(feed.id, props.theme)) {
+                map.addLayer(spec as never);
+              }
+            }
+          } catch {
+            // A stale or failed feed keeps its last features; never blank the COP.
+          }
         }
       }
     };
@@ -159,12 +193,28 @@ export function CopMap(props: CopMapProps) {
           map.setLayoutProperty(
             layerId,
             "visibility",
-            visible[board.id] ? "visible" : "none",
+            (visible[board.id] ?? true) ? "visible" : "none",
           );
         }
       }
     }
   }, [visible, props.boards]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    for (const feed of props.feeds ?? []) {
+      for (const layerId of feedLayerIds(feed.id)) {
+        if (map.getLayer(layerId)) {
+          map.setLayoutProperty(
+            layerId,
+            "visibility",
+            (feedVisible[feed.id] ?? true) ? "visible" : "none",
+          );
+        }
+      }
+    }
+  }, [feedVisible, props.feeds]);
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 8, height: "100%" }}>
@@ -188,6 +238,29 @@ export function CopMap(props: CopMapProps) {
             </li>
           ))}
         </ul>
+        {(props.feeds ?? []).length > 0 ? (
+          <div style={{ marginTop: 12 }}>
+            <h3 style={{ margin: "0 0 6px", fontSize: "0.85em", color: "var(--eoc-text-muted)" }}>
+              Feeds
+            </h3>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
+              {(props.feeds ?? []).map((f) => (
+                <li key={f.id}>
+                  <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={feedVisible[f.id] ?? true}
+                      onChange={() =>
+                        setFeedVisible((v) => ({ ...v, [f.id]: !(v[f.id] ?? true) }))
+                      }
+                    />
+                    {f.title}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <div style={{ marginTop: 12 }}>
           <h3 style={{ margin: "0 0 6px", fontSize: "0.85em", color: "var(--eoc-text-muted)" }}>
             Status

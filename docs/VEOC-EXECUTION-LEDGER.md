@@ -769,3 +769,16 @@ unchanged; all work on `main`.
 - **Facets:** testing reliability; documented controls (itself an information-management control).
 - **Rollback:** revert `605962c`, `6bdec85`.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-50: Feed layers on the common operating picture
+
+- **Session:** VEOC-50, executed 2026-09-20
+- **Starting HEAD:** `62d1440faa7cb933384a56611aaa2e33e714ee0c`
+- **Files created/changed:** `web/src/app/api/client.ts` (`listFeeds`, `feedItems`, and the FeedHealth/FeedItemsResponse types); `web/src/cop/feeds.ts` (`feedLayerIds`); `web/src/cop/CopMap.tsx` (feeds rendered and toggled alongside boards, click-to-inspect and the hover cursor extended to feed features, a Feeds section in the layer panel); `web/src/app/surfaces/MapSurface.tsx` and `web/src/app/screens/Console.tsx` (load a jurisdiction's feeds and pass the enabled ones to the map); tests `web/src/cop/__tests__/feeds.test.ts` (feedLayerIds) and the browser E2E, which now ingests a push feed and asserts the Feeds layer group renders.
+- **Acceptance proven by test:** feed features carry provenance and staleness and a stale feed drops to the unknown frame (unit tests); the browser E2E signs in, ingests a push GeoJSON feed, and confirms the "Feeds" panel with the "NWS Alerts" toggle renders beside the board layers, offline.
+- **Verification:** `pnpm check` green; 360 tests / 71 files.
+- **Facets:** completes the F18 feed surface in the UI, which VEOC-45 had deferred.
+- **Rollback:** revert the VEOC-50 commit.
+- **Commit/push:** under standing authorization. No branch created.

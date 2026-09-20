@@ -82,6 +82,16 @@ export interface LifelineCurrent {
   readonly note: string | null;
   readonly at: string | null;
 }
+export interface FeedHealth {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: string;
+  readonly mode: "poll" | "push";
+  readonly enabled: boolean;
+  readonly stale: boolean;
+  readonly ageSeconds: number | null;
+}
+export type FeedItemsResponse = CopFeatureCollection & { readonly feed: FeedHealth };
 
 export class ApiError extends Error {
   constructor(
@@ -275,5 +285,15 @@ export class ApiClient {
   }
   markNotificationRead(id: string): Promise<{ ok: true }> {
     return this.request<{ ok: true }>("POST", `/api/v1/notifications/${id}/read`);
+  }
+  async listFeeds(jurisdictionId: string): Promise<FeedHealth[]> {
+    const r = await this.request<{ feeds: FeedHealth[] }>(
+      "GET",
+      `/api/v1/jurisdictions/${jurisdictionId}/feeds`,
+    );
+    return r.feeds;
+  }
+  feedItems(feedId: string): Promise<FeedItemsResponse> {
+    return this.request<FeedItemsResponse>("GET", `/api/v1/feeds/${feedId}/items`);
   }
 }

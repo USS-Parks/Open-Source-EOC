@@ -40,6 +40,11 @@ export function feedSourceId(feedId: string): string {
   return `feed-${feedId}`;
 }
 
+export function feedLayerIds(feedId: string): string[] {
+  const src = feedSourceId(feedId);
+  return [`${src}-fill`, `${src}-line`, `${src}-point`];
+}
+
 /** Same three-layer shape as boards, under the feed's own source id. */
 export function feedLayerSpecs(feedId: string, theme: ThemeName): unknown[] {
   return boardLayerSpecs(feedId, theme).map((spec) => {

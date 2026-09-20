@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { feedLayerSpecs, feedSourceId, formatAge, tagFeedFeatures } from "../feeds.js";
+import { feedLayerIds, feedLayerSpecs, feedSourceId, formatAge, tagFeedFeatures } from "../feeds.js";
 import type { CopFeatureCollection } from "../layers.js";
 
 const fc: CopFeatureCollection = {
@@ -36,6 +36,10 @@ describe("feed layers carry provenance and staleness (VEOC-19)", () => {
     const specs = feedLayerSpecs("f1", "light") as Array<Record<string, unknown>>;
     expect(specs.map((s) => s.id)).toEqual(["feed-f1-fill", "feed-f1-line", "feed-f1-point"]);
     for (const s of specs) expect(s.source).toBe(feedSourceId("f1"));
+  });
+
+  it("names the feed layer ids for visibility toggling", () => {
+    expect(feedLayerIds("f1")).toEqual(["feed-f1-fill", "feed-f1-line", "feed-f1-point"]);
   });
 
   it("formats ages for the provenance line", () => {

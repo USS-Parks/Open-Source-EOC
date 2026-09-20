@@ -154,6 +154,33 @@ beforeAll(async () => {
       status: statusValues[statusValues.length - 1],
     });
 
+  // A push feed with one point, so the COP shows a live external feed layer.
+  const feed = await app.inject({
+    method: "POST",
+    url: `/api/v1/jurisdictions/${seed.jurisdictionId}/feeds`,
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: { name: "NWS Alerts", kind: "geojson", push: true, staleAfterSeconds: 3600 },
+  });
+  if (feed.statusCode === 201) {
+    const feedId = feed.json().id as string;
+    const feedToken = feed.json().ingestToken as string;
+    await app.inject({
+      method: "POST",
+      url: `/api/v1/feeds/${feedId}/ingest`,
+      headers: { "x-feed-token": feedToken },
+      payload: {
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [-123.7, 41.4] },
+            properties: { title: "Flood Warning", severity: "critical" },
+          },
+        ],
+      },
+    });
+  }
+
   browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
 }, 120000);
 
@@ -193,6 +220,9 @@ describe("the operations console in a real browser, offline", () => {
       .getByRole("button", { name: /road closures/i })
       .first()
       .waitFor({ state: "visible", timeout: 20000 });
+    // The external feed appears as its own togglable COP layer group.
+    await page.getByText("Feeds", { exact: true }).first().waitFor({ state: "visible", timeout: 20000 });
+    await page.getByText("NWS Alerts").first().waitFor({ state: "visible", timeout: 20000 });
     await page.waitForTimeout(1500);
     await page.screenshot({ path: join(SHOTS, "app-map-light.png"), fullPage: false });
 
