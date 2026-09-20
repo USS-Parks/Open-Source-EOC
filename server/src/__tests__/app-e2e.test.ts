@@ -468,12 +468,39 @@ describe("the operations console in a real browser, offline", () => {
       .first()
       .waitFor({ state: "visible", timeout: 20000 });
 
-    // Dark theme, for the night-shift EOC.
+    // Gallery: every side tab, in light and then in dark (the night-shift EOC).
+    // This is the visual sample set; content is proven by the assertions above.
+    const TABS: ReadonlyArray<readonly [string, string]> = [
+      ["Map", "map"],
+      ["Dashboard", "dashboard"],
+      ["Incidents", "incidents"],
+      ["Boards", "boards"],
+      ["SITREP", "sitreps"],
+      ["Forms", "forms"],
+      ["IAP", "iap"],
+      ["Smart Forms", "smartforms"],
+      ["Resources", "resources"],
+      ["Tracking", "tracking"],
+      ["AAR", "aar"],
+      ["Feeds", "feeds"],
+      ["Messages", "messages"],
+      ["Files", "files"],
+      ["Alerts", "alerts"],
+    ];
+    const gallery = async (theme: string) => {
+      for (const [label, key] of TABS) {
+        await page.getByRole("button", { name: label, exact: true }).click();
+        await page.waitForTimeout(label === "Map" ? 1600 : 800);
+        await page.screenshot({ path: join(SHOTS, `tab-${key}-${theme}.png`), fullPage: false });
+      }
+    };
+    await gallery("light");
+    // The header toggle reads "Dark" in the light theme; flip it and sweep again.
     await page.getByRole("button", { name: "Dark" }).click();
-    await page.waitForTimeout(400);
-    await page.screenshot({ path: join(SHOTS, "app-dashboard-dark.png"), fullPage: false });
+    await page.waitForTimeout(500);
+    await gallery("dark");
 
     expect(external).toEqual([]);
     await page.close();
-  }, 90000);
+  }, 180000);
 });

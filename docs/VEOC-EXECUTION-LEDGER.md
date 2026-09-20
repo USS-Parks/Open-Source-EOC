@@ -1427,3 +1427,33 @@ unchanged; all work on `main`.
 - **Rollback:** revert the VEOC-71 commit; migration 0030 only widens a check
   constraint and is safe to leave in place.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-72: full side-tab screenshot gallery, light and dark
+
+- **Session:** VEOC-72, executed 2026-09-20
+- **Starting HEAD:** `55c78e5` (IAP working list)
+- **Request:** Basho asked to see screenshots of every side tab, dark mode
+  included.
+- **What changed:** the browser E2E, which already builds the SPA offline, seeds
+  a realistic incident, and signs a member in, now ends with a gallery pass. It
+  walks all fifteen side tabs (Map, Dashboard, Incidents, Boards, SITREP, Forms,
+  IAP, Smart Forms, Resources, Tracking, AAR, Feeds, Messages, Files, Alerts) in
+  the light theme, flips the header theme toggle, and walks them again in dark,
+  writing `tab-<key>-<light|dark>.png` for each. The lone earlier dark shot is
+  replaced by this consistent set; the test timeout rises to accommodate the
+  thirty captures.
+- **Files changed:** `server/src/__tests__/app-e2e.test.ts` (the gallery loop).
+- **Acceptance proven by test:** the E2E passes offline (asserts no external
+  request escaped), producing 30 tab screenshots plus the interaction shots; the
+  IAP, AAR, and dark dashboard captures were reviewed and render as designed
+  (Core Capability and element dropdowns, the IAP working list with status,
+  progress bar and chips, and the dark-theme lifeline/ESF cards, donut, and KPI
+  trend tile).
+- **Verification:** `pnpm check` green; 383 tests / 71 files.
+- **Facets:** the visual sample set proving the whole console, both themes, from
+  one offline browser run.
+- **Rollback:** revert the VEOC-72 commit; test-only, no schema or runtime
+  change.
+- **Commit/push:** under standing authorization. No branch created.
