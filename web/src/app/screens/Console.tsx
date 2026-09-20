@@ -281,6 +281,7 @@ function Center(props: {
           client={props.client}
           jurisdictionId={props.jurisdictionId}
           isAdmin={props.isAdmin}
+          theme={props.theme}
         />
       );
     case "alerts":

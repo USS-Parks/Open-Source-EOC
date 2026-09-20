@@ -117,3 +117,11 @@ No tribal nation, county, city or agency is automatically involved because its
 type appears in a test scenario or because an incident is in California.
 Multiple entities may coordinate selected information while retaining separate
 command structures; participation does not imply unified command.
+
+
+## Verification clarification, 2026-09-20
+
+Basho directs proportionate testing and steady roster execution. Use focused
+checks for each change and one required pre-push gate. Repeat only for a
+concrete failure or material correction. Do not expand verification on vague
+suspicion or repeatedly re-prove passing behavior.

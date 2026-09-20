@@ -1,4 +1,6 @@
 import { useState } from "react";
+import type { ThemeName } from "../../design/tokens.js";
+import { IncidentAreaEditor } from "./IncidentAreaEditor.js";
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../../design/components.js";
 import type { ApiClient } from "../api/client.js";
 import { useAsync } from "../data/hooks.js";
@@ -14,8 +16,10 @@ export function IncidentsSurface(props: {
   client: ApiClient;
   jurisdictionId: string;
   isAdmin: boolean;
+  theme: ThemeName;
 }) {
   const [reload, setReload] = useState(0);
+  const [areaIncident, setAreaIncident] = useState<string | null>(null);
   const incidents = useAsync(
     () => props.client.listIncidents(props.jurisdictionId),
     [props.jurisdictionId, reload],
@@ -64,7 +68,7 @@ export function IncidentsSurface(props: {
   return (
     <Scroll>
       <SurfaceHeader title="Incidents" />
-      <div style={{ display: "grid", gap: 16, maxWidth: 760 }}>
+      <div style={{ display: "grid", gap: 16, maxWidth: areaIncident ? 1320 : 760 }}>
         {props.isAdmin && tpls.length > 0 ? (
           <Panel title="Activate an incident">
             <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
@@ -133,6 +137,7 @@ export function IncidentsSurface(props: {
                   </StatusBadge>
                   <span style={{ flex: 1 }}>{i.name}</span>
                   <span style={{ color: "var(--eoc-text-muted)", fontSize: "0.9em" }}>{i.kind}</span>
+                  <Button onClick={() => setAreaIncident(i.id)}>Operational area</Button>
                   {props.isAdmin && !i.closedAt ? (
                     <Button onClick={() => run(() => props.client.closeIncident(i.id))} disabled={busy}>
                       Close
@@ -143,6 +148,11 @@ export function IncidentsSurface(props: {
             </ul>
           ) : null}
         </Panel>
+
+        {list.filter((i) => i.id === areaIncident).map((incident) => (
+          <IncidentAreaEditor key={incident.id} client={props.client} incidentId={incident.id}
+            incidentName={incident.name} theme={props.theme} canEdit={props.isAdmin && !incident.closedAt} />
+        ))}
 
         {error ? (
           <p role="alert" style={{ color: "var(--eoc-status-critical)" }}>

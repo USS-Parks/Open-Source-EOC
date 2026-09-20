@@ -1,7 +1,9 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { IncidentAreaUpdateSchema } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
+import { getIncidentArea, listIncidentAreaHistory, reviseIncidentArea } from "./area.js";
 import {
   STANDARD_INCIDENT_TEMPLATES,
   activateIncident,
@@ -31,6 +33,7 @@ const LibraryBody = z.object({
   body: z.string().default(""),
   forTemplate: z.string().optional(),
 });
+const IncidentId = z.string().uuid();
 
 export function incidentRoutes(
   app: FastifyInstance,
@@ -108,6 +111,29 @@ export function incidentRoutes(
       getIncident(tx, req.principal, incidentId),
     );
     return reply.send(detail);
+  });
+
+  app.get("/api/v1/incidents/:incidentId/operational-area", { preHandler: authenticate }, async (req) => {
+    const incidentId = IncidentId.parse((req.params as { incidentId: string }).incidentId);
+    return withPerson(sql, req.principal.person.id, (tx) =>
+      getIncidentArea(tx, req.principal, incidentId));
+  });
+
+  app.get("/api/v1/incidents/:incidentId/operational-area/history", { preHandler: authenticate }, async (req) => {
+    const incidentId = IncidentId.parse((req.params as { incidentId: string }).incidentId);
+    const { beforeRevision } = z.object({
+      beforeRevision: z.coerce.number().int().positive().max(2147483647).optional(),
+    }).strict().parse(req.query);
+    const revisions = await withPerson(sql, req.principal.person.id, (tx) =>
+      listIncidentAreaHistory(tx, req.principal, incidentId, beforeRevision));
+    return { revisions };
+  });
+
+  app.put("/api/v1/incidents/:incidentId/operational-area", { preHandler: authenticate }, async (req) => {
+    const incidentId = IncidentId.parse((req.params as { incidentId: string }).incidentId);
+    const input = IncidentAreaUpdateSchema.parse(req.body);
+    return withPerson(sql, req.principal.person.id, (tx) =>
+      reviseIncidentArea(tx, req.principal, incidentId, input));
   });
 
   app.post(

@@ -7,6 +7,8 @@ import type {
   IcsFormContent,
   IapDocument,
   FormDefinition,
+  IncidentAreaRevision,
+  IncidentAreaUpdate,
 } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
 
@@ -456,6 +458,19 @@ export class ApiClient {
       `/api/v1/jurisdictions/${jurisdictionId}/incidents`,
       body as unknown as Record<string, unknown>,
     );
+  }
+  getIncidentArea(incidentId: string): Promise<IncidentAreaRevision> {
+    return this.request("GET", `/api/v1/incidents/${incidentId}/operational-area`);
+  }
+  updateIncidentArea(incidentId: string, body: IncidentAreaUpdate): Promise<IncidentAreaRevision> {
+    return this.request("PUT", `/api/v1/incidents/${incidentId}/operational-area`, body);
+  }
+  async incidentAreaHistory(incidentId: string, beforeRevision?: number): Promise<IncidentAreaRevision[]> {
+    const query = beforeRevision === undefined ? "" : `?beforeRevision=${beforeRevision}`;
+    const result = await this.request<{ revisions: IncidentAreaRevision[] }>(
+      "GET", `/api/v1/incidents/${incidentId}/operational-area/history${query}`,
+    );
+    return result.revisions;
   }
   closeIncident(incidentId: string): Promise<{ ok: true }> {
     return this.request<{ ok: true }>("POST", `/api/v1/incidents/${incidentId}/close`);

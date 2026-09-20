@@ -548,4 +548,72 @@ describe("the operations console in a real browser, offline", () => {
     expect(external).toEqual([]);
     await page.close();
   }, 180000);
+
+  it("records incident areas through the map and keeps another incident separate", async () => {
+    const activate = async (name: string) => {
+      const response = await app.inject({ method: "POST", url: `/api/v1/jurisdictions/${seed.jurisdictionId}/incidents`,
+        headers: { authorization: `Bearer ${adminToken}` }, payload: { templateKey: "daily_ops", name } });
+      expect(response.statusCode).toBe(201); return response.json().incidentId as string;
+    };
+    const first = await activate("Area proof Alpha"), second = await activate("Area proof Bravo");
+    const page = await browser.newPage({ viewport: { width: 1600, height: 1800 } });
+    const errors: string[] = [], external: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.route("**/*", (route) => {
+      const url = route.request().url();
+      if (url.startsWith(baseUrl) || url.startsWith("data:") || url.startsWith("blob:")) return route.continue();
+      external.push(url); return route.abort();
+    });
+    try {
+      await page.goto(`${baseUrl}/app/index.html`);
+      await page.getByLabel("Email").fill("admin@example.org");
+      await page.getByLabel("Password").fill("correct-horse-battery");
+      await page.getByRole("button", { name: "Sign in" }).click();
+      await page.getByRole("button", { name: "Incidents", exact: true }).click();
+      const openArea = async (name: string) => {
+        await page.locator("li").filter({ hasText: name }).getByRole("button", { name: "Operational area" }).click();
+        return page.getByRole("region", { name: name + ": operational area", exact: true });
+      };
+      const area = await openArea("Area proof Alpha");
+      await area.getByRole("button", { name: "Draw replacement boundary" }).click();
+      const canvas = area.locator(".maplibregl-canvas");
+      await canvas.scrollIntoViewIfNeeded();
+      const box = await canvas.boundingBox();
+      expect(box).not.toBeNull();
+      for (const [x, y] of [[0.35, 0.3], [0.7, 0.3], [0.7, 0.65]])
+        await canvas.click({ position: { x: box!.width * x!, y: box!.height * y! } });
+      await area.getByRole("button", { name: "Close boundary" }).click();
+      await area.getByLabel("Operational period", { exact: true }).fill("OP 1");
+      await area.getByLabel("Period starts").fill("2026-09-20T08:00");
+      await area.getByLabel("Period ends").fill("2026-09-20T20:00");
+      await area.getByLabel("Reason for revision").fill("Initial operational area");
+      await area.getByRole("button", { name: "Save area revision" }).click();
+      await area.getByText(/^Revision 1\./).waitFor();
+      await area.screenshot({ path: join(SHOTS, "incident-area-light.png") });
+      const polygon = [[[-122, 38], [-121.8, 38], [-121.8, 38.2], [-122, 38]]];
+      const multi = { type: "MultiPolygon", coordinates: [polygon,
+        [[[-121.7, 38.3], [-121.5, 38.3], [-121.5, 38.5], [-121.7, 38.3]]]] };
+      await area.getByLabel("Import operational area").setInputFiles({ name: "area.geojson", mimeType: "application/geo+json", buffer: Buffer.from(JSON.stringify(multi)) });
+      await area.getByText(/Imported area: area.geojson/).waitFor();
+      await area.getByLabel("Reason for revision").fill("Separate response areas confirmed");
+      await area.getByRole("button", { name: "Save area revision" }).click();
+      await area.getByText(/^Revision 2\./).waitFor();
+      await page.getByRole("button", { name: "Dark", exact: true }).click();
+      await area.locator(".maplibregl-canvas").waitFor();
+      await area.screenshot({ path: join(SHOTS, "incident-area-dark.png") });
+      await area.getByRole("button", { name: "View revision 1" }).click();
+      await area.getByText(/Viewing revision 1/).waitFor();
+      expect(await area.getByRole("button", { name: "Save area revision" }).count()).toBe(0);
+      await area.getByRole("button", { name: "Return to current draft" }).click();
+      const other = await openArea("Area proof Bravo");
+      await other.getByText(/^Revision 0\./).waitFor();
+      expect(await other.getByLabel("Operational period", { exact: true }).inputValue()).toBe("");
+      expect(await other.getByLabel("Reason for revision").inputValue()).toBe("");
+      const read = async (id: string) => (await app.inject({ method: "GET", url: `/api/v1/incidents/${id}/operational-area`, headers: { authorization: `Bearer ${adminToken}` } })).json();
+      expect((await read(first)).geometry).toEqual(multi);
+      expect((await read(first)).operationalPeriod.label).toBe("OP 1");
+      expect((await read(second)).geometry).toBeNull();
+      expect(errors).toEqual([]); expect(external).toEqual([]);
+    } finally { await page.close(); }
+  }, 90000);
 });

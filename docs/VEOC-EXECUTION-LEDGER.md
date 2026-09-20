@@ -2023,3 +2023,47 @@ Fresh prepush_review returned ship with no blocking findings after inspecting
 the complete change and final test/evidence logs. Requested gpt-5.6-sol/high;
 actual runtime model/effort unobservable. Parent staged the latest ignore,
 runtime documentation and ledger changes and reran diff/link checks.
+
+
+## VEOC-79: Incident operational areas and revision history
+
+- **Authority and baseline:** Basho authorized continued sequential execution,
+  verification, commit and push. Starting HEAD f86863a61f64a1b040a39083857d5ebcf3939e00;
+  that publication passed hosted CI run 35540109621. Canonical main checkout.
+- **Scope:** F6/F12 implemented for incident geometry and operational-period
+  snapshots. Polygon/MultiPolygon drawing/import, undefined areas, revision
+  history and conflict retention. Administrative boundaries do not constrain
+  an incident. Separate incidents retain separate areas and periods.
+- **Changes:** migration 0031, shared area schemas, incident area service/routes,
+  typed API client, incident editor and navigation, focused contract/UI/database
+  cases and one real browser workflow. No dependencies added. Operator/API
+  notes: VEOC-79-INCIDENT-AREAS.md.
+- **Attribution and integrity:** authenticated person and active position, reason
+  and server timestamp; append-only snapshots and audit. Database constraints
+  reject malformed geometry, incomplete periods and mutation. Row locking
+  serializes revisions and closure. Current owner membership/admin boundaries
+  stay in force; no geography-based access.
+- **Evidence:** focused contract/UI suite 12 passed; real PostgreSQL/PostGIS
+  area suite 7 passed; real Chrome workflow passed against the real server:
+  draw/save, period, MultiPolygon import, history and second-incident isolation.
+  Light/dark PNGs: deploy/test-runtime/out/browser-shots/incident-area-*.png.
+  Initial cropped capture framing corrected in the required full gate.
+- **Verification discipline:** Basho clarified that checks must be proportionate.
+  Run the required session gate once; repeat only for a concrete failure or
+  material correction. Avoid speculative test expansion and roster drift.
+- **Limits:** explicit participating organizations are next at VEOC-79A; shared
+  workspace incident context is VEOC-79B. This does not close hybrid parity.
+  Area editing requires a server connection; offline reconciliation remains open.
+- **Rollback:** revert this focused application change; preserve recorded area
+  revisions. Do not drop the append-only table as a routine rollback.
+- **Workspace:** one canonical checkout, no new worktree or dependency tree.
+  User-owned .claude, .vitest and Reference Screenshots remain untracked.
+  Docker remains off; the approved project-local database supports active work.
+- **Final local gate:** pnpm check --maxWorkers=2 exited 0: 445 tests in
+  77 files; typecheck, lint, license scan (300 packages), and links passed.
+  Real database and browser scenarios included. Log: deploy/test-runtime/out/veoc-79-check.log.
+  Active runtime and retained outputs: 5.17 GiB; free disk 241.65 GiB.
+- **Review:** area_publish_review returned ship, no material findings. Requested
+  gpt-5.6-sol/high; actual model/effort unobservable. Both final PNGs inspected.
+  Verification completed 2026-09-20 about 22:10 UTC / 15:10 PDT.
+  Ending commit is this receipt commit, to be recorded by the next receipt.
