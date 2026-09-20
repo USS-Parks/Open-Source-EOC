@@ -683,3 +683,89 @@ Branch posture: all work on `main`. License decision: Apache-2.0 (Basho,
 - **Pending Basho:** the 1.0 release decision (recorded verbatim in the review), the live pilot (VEOC-42, contract item 12 and the pilot jurisdiction), and the open standing questions (product name; whether to commission a fully independent human review before release).
 - **Rollback:** revert the VEOC-43 commit.
 - **Commit/push:** performed under the standing full-execution authorization. No branch created. No release act performed.
+
+---
+
+## Phase H: The integrated application and further hardening
+
+Post-roster continuation, authorized by Basho in-session (2026-09-19/20). The
+numbered roster VEOC-00..43 reached its 1.0 disposition; that review recorded
+the platform as a tested backend plus a component library with no assembled
+application. These sessions build the application and discharge hardening the
+review had deferred. Standing full-execution authorization and commit hygiene
+unchanged; all work on `main`.
+
+## VEOC-44: Operations console app shell
+
+- **Session:** VEOC-44, executed 2026-09-19
+- **Starting HEAD:** `1de5d5e26ed3ffcc5ca32a5932d9d4bfb6f0d8bc`
+- **Commit:** `c3fbd2e`
+- **Files created/changed:** `web/src/app/` (fetch API client with bearer auth and one-shot token renewal, session/login context, hash router, map-first AppShell, Login and Console screens, per-surface components), `web/src/main.tsx`, `web/index.html`, `web/vite.config.ts`, `web/package.json` (the build scripts the deploy docs assumed but were missing); two read-only discovery endpoints (`GET /api/v1/jurisdictions/:id/boards` and `.../dashboards`) added to the boards and dashboards services/routes; `web/src/design/components.tsx` gained a password field type; tests `server/src/__tests__/discovery.test.ts` and `app-e2e.test.ts` plus `web/src/app/__tests__/{client,router,session}`.
+- **Acceptance proven by test:** discovery endpoints list a jurisdiction's boards (flagging geometry) and dashboards for a member and refuse a non-member (403); the client's bearer/renewal/error handling, the hash router, and the session lifecycle are unit-tested; a browser E2E builds the SPA, blocks all external network, signs in as a member, and renders the COP, the board dock, and the dashboard.
+- **Verification:** `pnpm check` green; 342 tests / 68 files; CI run 51 green.
+- **Facets:** closes the gap the VEOC-43 review named (no assembled application); the running app exercises F1/F6/F8/F14/F16 through a real login.
+- **Rollback:** revert `c3fbd2e`.
+- **Commit/push:** under standing authorization. No branch created.
+
+## VEOC-45: COP basemap, map controls, and inspection
+
+- **Session:** VEOC-45, executed 2026-09-19
+- **Starting HEAD:** `c3fbd2e0239baf3aad244aa9f2e5e5a69e1a5793`
+- **Commit:** `d8b7b70`
+- **Basho decisions applied:** map stack is open MapLibre + PostGIS/GeoJSON (not embedded Esri); basemap bundled-minimal with override.
+- **Files created/changed:** `web/src/cop/basemap.ts` and `web/public/basemap/*.geojson` (a bundled, minified, public-domain Natural Earth basemap served as static GeoJSON, offline); `web/src/cop/{layers,CopMap}.tsx` (basemap config, zoom/scale controls, attribution, click-to-inspect popups, a status legend); `web/src/app/config.ts` and MapSurface wiring; a deployment can replace the basemap wholesale with its own MapLibre style (`OPENEOC_BASEMAP_STYLE_URL`).
+- **Acceptance proven by test:** the COP unit test pins the bundled-basemap style (offline, no external references); the browser E2E confirms the basemap, controls, legend, and board layers render.
+- **Verification:** `pnpm check` green; CI run 52 green.
+- **Facets:** the F6/F14 map-first surface now carries geographic context.
+- **Deferred (honest):** an MVT vector-tile overlay endpoint (live overlays stay GeoJSON to preserve field-to-COP latency; MVT is the large-static-layer scaling step); feed layers in the COP UI.
+- **Rollback:** revert `d8b7b70`.
+- **Commit/push:** under standing authorization. No branch created.
+
+## VEOC-46: Design system elevation, typography, and tables
+
+- **Session:** VEOC-46, executed 2026-09-19
+- **Starting HEAD:** `d8b7b706f2561a33c251353cebbb83c415b88437`
+- **Commits:** `13a1751`, `b55dfea`
+- **Files created/changed:** `web/src/design/tokens.ts` (radii, a shadow scale, and a type scale as tokens plus CSS variables), `web/src/design/base.css` (one focus ring, hover/active states, calm scrollbars, themed map popups, and data-table/map-panel treatments), applied across the components, dashboard widgets, command bar, board views, and board index. Color stays reserved for status (INV-8); depth and typography carry the hierarchy.
+- **Acceptance proven by test:** contrast (26 pairs), axe a11y, operational-a11y (44px targets), and dashboard tests remain green in both themes; the browser E2E captures the styled dashboard and board table.
+- **Verification:** `pnpm check` green; CI runs 53 and 54 green.
+- **Facets:** F14/F17 calm-screen discipline preserved while raising the finish.
+- **Rollback:** revert `b55dfea` then `13a1751`.
+- **Commit/push:** under standing authorization. No branch created.
+
+## VEOC-47: API hardening (headers, probes, flood limiter, timeout, CORS)
+
+- **Session:** VEOC-47, executed 2026-09-19/20
+- **Starting HEAD:** `b55dfea4b05485490f8d1d160f7347d6ad8f8af3`
+- **Commits:** `3e99735`, `b63e144`, `2e09fe9`
+- **Files created/changed:** `server/src/security/{headers,rate-limit,cors}.ts`, the `onRequest` hook and health/readiness routes in `server/src/app.ts`, and tests `server/src/__tests__/{security-headers,cors}.test.ts`. Security headers with a strict CSP on the data API; liveness and readiness probes; a shared per-client flood limiter (discharges the VEOC-37 RA-1 item) with a high default ceiling and env tuning; a 30-second request timeout; a hot-path latency guard in CI; allowlisted CORS, off by default, never a wildcard.
+- **Acceptance proven by test:** headers ride success and error responses; probes return ok/ready; the limiter allows heavy legitimate volume and blocks past the ceiling; CORS echoes only exact configured origins and answers preflight; the 150-op load test still clears budget.
+- **Verification:** `pnpm check` green; CI runs 56 and 59 green (run 55 was an environmental test-timeout flake, root-caused in VEOC-49).
+- **Facets:** discharges the VEOC-37 RA-1 shared limiter; INV-7/INV-8 posture unchanged.
+- **Deferred:** mutual-TLS peer hardening and a shared rate-limit store (horizontal scaling) remain infrastructure.
+- **Rollback:** revert `2e09fe9`, `b63e144`, `3e99735`.
+- **Commit/push:** under standing authorization. No branch created.
+
+## VEOC-48: Portable jurisdiction data export
+
+- **Session:** VEOC-48, executed 2026-09-20
+- **Starting HEAD:** `b63e1447632ab3fd87bbaf048fa190450ffe2577`
+- **Commit:** `6e56be8`
+- **Files created/changed:** `server/src/export/{service,routes}.ts` (`GET /api/v1/jurisdictions/:id/export`, admin-only, RLS behind it) returning boards with records (geometry as GeoJSON), the sitrep archive, and current lifelines as plain JSON; `server/src/__tests__/export.test.ts`.
+- **Acceptance proven by test:** an admin receives the full operational record as a downloadable archive with geometry; a member is refused (403).
+- **Verification:** `pnpm check` green; CI run 57 green.
+- **Facets:** makes INV-9/INV-10 no-lock-in concrete; a continuity and migration companion to the database backup.
+- **Rollback:** revert `6e56be8`.
+- **Commit/push:** under standing authorization. No branch created.
+
+## VEOC-49: Test stabilization and the security/continuity posture
+
+- **Session:** VEOC-49, executed 2026-09-20
+- **Starting HEAD:** `6e56be8b8e5bacfff98fff28448f8c6e310eb62e`
+- **Commits:** `6bdec85`, `605962c`
+- **Files created/changed:** `vitest.config.mjs` (generous test and hook timeouts so database-heavy setup never flakes under a loaded CI runner); `docs/SECURITY-CONTINUITY.md` (an operator- and auditor-facing reference for the implemented controls and their configuration knobs).
+- **Incident recorded honestly:** CI run 55 went red on an IPAWS test that stands up a second throwaway database mid-test and exceeded vitest's 5-second default on a slow runner; not a defect (the same code passed on the next commit and locally), fixed for the whole class by the config above. Separately, the session's writable disk filled to 100% from 1,389 accumulated throwaway test databases (30G); freed cache, dropped every `t_*` database, and recovered to 29G free with no committed work affected.
+- **Verification:** `pnpm check` green; 359 tests / 71 files.
+- **Facets:** testing reliability; documented controls (itself an information-management control).
+- **Rollback:** revert `605962c`, `6bdec85`.
+- **Commit/push:** under standing authorization. No branch created.
