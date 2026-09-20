@@ -1,8 +1,64 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../../design/components.js";
-import type { ApiClient, AarObservation } from "../api/client.js";
+import type { ApiClient, AarObservation, CorrectiveAction } from "../api/client.js";
 import { useAsync } from "../data/hooks.js";
 import { EmptyState, ErrorNote, Loading, Scroll, SurfaceHeader } from "../screens/parts.js";
+
+const caSelectStyle: CSSProperties = {
+  fontFamily: "inherit",
+  fontSize: "1em",
+  padding: 6,
+  minHeight: 44,
+  borderRadius: 4,
+  border: "1px solid var(--eoc-border)",
+  background: "var(--eoc-surface)",
+  color: "var(--eoc-text)",
+};
+
+function CaRow(props: {
+  ca: CorrectiveAction;
+  busy: boolean;
+  onStatus: (id: string, status: "open" | "in_progress" | "complete") => void;
+}) {
+  const [status, setStatus] = useState(props.ca.status);
+  const badge =
+    props.ca.status === "complete" ? "success" : props.ca.status === "in_progress" ? "info" : "warning";
+  return (
+    <li
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "8px 10px",
+        border: "1px solid var(--eoc-border)",
+        borderRadius: 4,
+      }}
+    >
+      <StatusBadge status={badge}>{props.ca.status}</StatusBadge>
+      <span style={{ flex: 1 }}>
+        <strong>{props.ca.capability}</strong>: {props.ca.recommendation}
+      </span>
+      <select
+        aria-label={`Status for ${props.ca.capability}`}
+        value={status}
+        onChange={(e) => setStatus(e.target.value)}
+        style={caSelectStyle}
+      >
+        {["open", "in_progress", "complete"].map((s) => (
+          <option key={s} value={s}>
+            {s}
+          </option>
+        ))}
+      </select>
+      <Button
+        onClick={() => props.onStatus(props.ca.id, status as "open" | "in_progress" | "complete")}
+        disabled={props.busy}
+      >
+        Update
+      </Button>
+    </li>
+  );
+}
 
 /**
  * After-action review (F, VEOC-36). Capture observations against capabilities
@@ -30,6 +86,13 @@ export function AarSurface(props: { client: ApiClient; jurisdictionId: string })
   const observations = useAsync(
     () => (active ? props.client.listAarObservations(active) : Promise.resolve([] as AarObservation[])),
     [active, reload],
+  );
+  const [caReload, setCaReload] = useState(0);
+  const [caCapability, setCaCapability] = useState("");
+  const [caRecommendation, setCaRecommendation] = useState("");
+  const correctiveActions = useAsync(
+    () => props.client.listCorrectiveActions(props.jurisdictionId),
+    [props.jurisdictionId, caReload],
   );
 
   if (incidents.loading && !incidents.data) return <Loading label="Loading incidents…" />;
@@ -86,7 +149,34 @@ export function AarSurface(props: { client: ApiClient; jurisdictionId: string })
       setMsg("AAR compiled and downloaded.");
     }, false);
 
+  const runCa = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+      setCaReload((n) => n + 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addCorrectiveAction = () =>
+    runCa(async () => {
+      if (!caCapability.trim() || !caRecommendation.trim())
+        throw new Error("Capability and recommendation are required.");
+      await props.client.createCorrectiveAction(props.jurisdictionId, {
+        capability: caCapability.trim(),
+        recommendation: caRecommendation.trim(),
+        ...(active ? { incidentId: active } : {}),
+      });
+      setCaCapability("");
+      setCaRecommendation("");
+    });
+
   const rows = observations.data ?? [];
+  const cas = correctiveActions.data ?? [];
 
   return (
     <Scroll>
@@ -167,6 +257,34 @@ export function AarSurface(props: { client: ApiClient; jurisdictionId: string })
           </div>
           {msg ? (
             <p style={{ color: "var(--eoc-status-success)", margin: "8px 0 0" }}>{msg}</p>
+          ) : null}
+        </Panel>
+
+        <Panel title="Corrective actions (improvement plan)">
+          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 2fr auto" }}>
+            <TextField label="Capability area" value={caCapability} onChange={setCaCapability} />
+            <TextField label="Recommended action" value={caRecommendation} onChange={setCaRecommendation} />
+            <div style={{ display: "flex", alignItems: "flex-end" }}>
+              <Button kind="primary" onClick={addCorrectiveAction} disabled={busy}>
+                Add action
+              </Button>
+            </div>
+          </div>
+          {correctiveActions.loading && !correctiveActions.data ? <Loading label="Loading…" /> : null}
+          {correctiveActions.data && cas.length === 0 ? (
+            <p style={{ color: "var(--eoc-text-muted)", margin: "12px 0 0" }}>No corrective actions.</p>
+          ) : null}
+          {cas.length > 0 ? (
+            <ul style={{ listStyle: "none", margin: "12px 0 0", padding: 0, display: "grid", gap: 6 }}>
+              {cas.map((ca) => (
+                <CaRow
+                  key={ca.id}
+                  ca={ca}
+                  busy={busy}
+                  onStatus={(id, s) => runCa(() => props.client.setCorrectiveActionStatus(id, s))}
+                />
+              ))}
+            </ul>
           ) : null}
         </Panel>
 

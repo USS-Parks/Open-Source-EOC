@@ -348,6 +348,14 @@ describe("the operations console in a real browser, offline", () => {
       .getByText("Shelter stood up within two hours.")
       .first()
       .waitFor({ state: "visible", timeout: 20000 });
+    // A corrective action in the improvement plan.
+    await page.getByLabel("Capability area").fill("Communications");
+    await page.getByLabel("Recommended action").fill("Add a backup repeater at the EOC.");
+    await page.getByRole("button", { name: "Add action" }).click();
+    await page
+      .getByText("Add a backup repeater at the EOC.")
+      .first()
+      .waitFor({ state: "visible", timeout: 20000 });
 
     // Feeds: the seeded push feed is listed on the Feeds admin screen.
     await page.getByRole("button", { name: "Feeds" }).click();

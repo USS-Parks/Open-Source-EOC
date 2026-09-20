@@ -1068,3 +1068,28 @@ unchanged; all work on `main`.
   jurisdiction (VEOC-42) remains the one open release gate, gated on Basho.
 - **Rollback:** revert the VEOC-60 commit.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-61: Corrective-action tracker (improvement plan)
+
+- **Session:** VEOC-61, executed 2026-09-20
+- **Starting HEAD:** `e1652cd` (load gate)
+- **Operator gap closed:** corrective actions (the jurisdiction-scoped
+  improvement plan that outlives an incident) existed only behind the API
+  (VEOC-36); the console could not create or track them. Adds them to the AAR
+  screen.
+- **Files created/changed:** `web/src/app/surfaces/AarSurface.tsx` (a corrective
+  actions panel: create an action against a capability, list open ones, and move
+  each through open / in progress / complete); `web/src/app/api/client.ts`
+  (listCorrectiveActions, createCorrectiveAction, setCorrectiveActionStatus).
+  Tests: client.test.ts (create, list, status) and the browser E2E now adds a
+  corrective action.
+- **Acceptance proven by test:** the client creates, lists, and updates a
+  corrective action; the browser E2E adds "Add a backup repeater at the EOC" to
+  the improvement plan, offline.
+- **Verification:** `pnpm check` green; 374 tests / 71 files.
+- **Facets:** completes the Phase F after-action / improvement-planning operator
+  surface.
+- **Rollback:** revert the VEOC-61 commit.
+- **Commit/push:** under standing authorization. No branch created.

@@ -221,6 +221,29 @@ describe("ApiClient", () => {
     expect((await client.pollFeed("fd1")).items).toBe(2);
   });
 
+  it("creates, lists, and updates a corrective action", async () => {
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      const u = String(url);
+      if (u.endsWith("/auth/login"))
+        return res(200, { accessToken: "A", resumeToken: "R", sessionId: "S" });
+      if (u.endsWith("/corrective-actions") && init.method === "POST") return res(201, { id: "c1" });
+      if (u.includes("/corrective-actions?"))
+        return res(200, {
+          correctiveActions: [
+            { id: "c1", capability: "Comms", recommendation: "Repeater", owner: null, dueDate: null, status: "open", incidentId: null },
+          ],
+        });
+      if (u.endsWith("/status")) return res(200, { ok: true });
+      return res(404, { error: "nope" });
+    }) as unknown as typeof fetch;
+
+    const client = new ApiClient({ fetchImpl });
+    await client.login("e@x.org", "pw");
+    expect((await client.createCorrectiveAction("j", { capability: "Comms", recommendation: "Repeater" })).id).toBe("c1");
+    expect((await client.listCorrectiveActions("j"))[0]!.status).toBe("open");
+    expect((await client.setCorrectiveActionStatus("c1", "complete")).ok).toBe(true);
+  });
+
   it("surfaces the server error envelope as a typed ApiError", async () => {
     const fetchImpl = (async (url: string) => {
       const u = String(url);

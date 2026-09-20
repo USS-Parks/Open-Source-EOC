@@ -123,6 +123,15 @@ export interface AarObservation {
   readonly observation: string;
   readonly recommendation: string | null;
 }
+export interface CorrectiveAction {
+  readonly id: string;
+  readonly capability: string;
+  readonly recommendation: string;
+  readonly owner: string | null;
+  readonly dueDate: string | null;
+  readonly status: string;
+  readonly incidentId: string | null;
+}
 export interface IapResult {
   readonly id: string;
   readonly status: string;
@@ -459,6 +468,32 @@ export class ApiClient {
   }
   downloadAarPdf(aarId: string): Promise<Blob> {
     return this.requestBlob(`/api/v1/aar/${aarId}/pdf`);
+  }
+  async listCorrectiveActions(
+    jurisdictionId: string,
+    includeComplete = true,
+  ): Promise<CorrectiveAction[]> {
+    const r = await this.request<{ correctiveActions: CorrectiveAction[] }>(
+      "GET",
+      `/api/v1/jurisdictions/${jurisdictionId}/corrective-actions?includeComplete=${includeComplete}`,
+    );
+    return r.correctiveActions;
+  }
+  createCorrectiveAction(
+    jurisdictionId: string,
+    body: { capability: string; recommendation: string; incidentId?: string; dueDate?: string },
+  ): Promise<{ id: string }> {
+    return this.request<{ id: string }>(
+      "POST",
+      `/api/v1/jurisdictions/${jurisdictionId}/corrective-actions`,
+      body as unknown as Record<string, unknown>,
+    );
+  }
+  setCorrectiveActionStatus(
+    id: string,
+    status: "open" | "in_progress" | "complete",
+  ): Promise<{ ok: true }> {
+    return this.request<{ ok: true }>("POST", `/api/v1/corrective-actions/${id}/status`, { status });
   }
   getIcsForm(
     incidentId: string,
