@@ -9,7 +9,7 @@ import {
   tagFeatures,
 } from "../layers.js";
 import { statusColor, symbolStatusFor, VALUE_STATUS } from "../symbology.js";
-import { buildStreetStyle } from "../streetstyle.js";
+import { buildStreetStyle, CRITICAL_FACILITY_TAGS } from "../streetstyle.js";
 import { buildBundledVectorStyle } from "../bundledbasemap.js";
 import {
   formatArea,
@@ -180,6 +180,38 @@ describe("layer construction", () => {
     expect(style.layers.some((l) => l["source-layer"] === "transportation")).toBe(true);
     const placeLabel = style.layers.find((l) => l.id === "place-label")!;
     expect(placeLabel.layout?.["text-font"]).toEqual(["Noto Sans Regular"]);
+  });
+
+  it("draws the EOC context layers: landcover, landuse, rail, airfields, and facility labels", () => {
+    const style = buildStreetStyle(
+      { pmtilesUrl: "https://t/x.pmtiles", glyphsUrl: "/fonts/{fontstack}/{range}.pbf" },
+      "light",
+    ) as {
+      layers: Array<{ id: string; "source-layer"?: string; minzoom?: number; filter?: unknown }>;
+    };
+    const ids = style.layers.map((l) => l.id);
+    for (const id of [
+      "landcover",
+      "landuse",
+      "aeroway-area",
+      "aeroway-line",
+      "rail",
+      "water-label",
+      "peak-label",
+      "facility-label",
+    ]) {
+      expect(ids, id).toContain(id);
+    }
+    // Layer order: context under roads, labels on top.
+    expect(ids.indexOf("landcover")).toBeLessThan(ids.indexOf("water"));
+    expect(ids.indexOf("rail")).toBeLessThan(ids.indexOf("road-casing"));
+    expect(ids.indexOf("road-major")).toBeLessThan(ids.indexOf("facility-label"));
+    const facilities = style.layers.find((l) => l.id === "facility-label")!;
+    expect(facilities["source-layer"]).toBe("poi");
+    expect(facilities.minzoom).toBe(13);
+    expect(JSON.stringify(facilities.filter)).toContain("fire_station");
+    expect(CRITICAL_FACILITY_TAGS).toContain("hospital");
+    expect(CRITICAL_FACILITY_TAGS).toContain("shelter");
   });
 
   it("labels the street style with the bundled glyph stack by default", () => {
