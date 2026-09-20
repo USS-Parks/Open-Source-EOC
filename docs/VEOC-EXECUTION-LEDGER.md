@@ -2174,4 +2174,42 @@ verified against source before the change.
 - **Gate:** pnpm check --maxWorkers=2 exited 0; 451 tests in 78 files passed
   (the added download-header test included). Log:
   deploy/test-runtime/out/veoc-hardening-check.log.
+- **Ending commit:** 451ed166de79214d2301574b070111f4a303bd8c, pushed
+  (ca0d130..451ed16), preceded by the .prettierignore hygiene commit
+  19b8d9c that stops a user-level Prettier config from reflowing edited files.
+
+## Security hardening pass 2: identity-table RLS (parity audit finding 1)
+
+Enabled row-level security on the last four unprotected tables. Every other
+table already had it.
+
+- **Baseline:** 451ed166de79214d2301574b070111f4a303bd8c on canonical main.
+- **Design:** persons and jurisdictions are read across tenants by design
+  (attribution names, federation, incident participation), so their SELECT
+  wall is "an authenticated person is acting"; persons INSERT is
+  authenticated (the /persons route is admin-gated as the first wall) and has
+  no app-role UPDATE path; jurisdictions INSERT is instance-admin and its
+  locked flag updates under jurisdiction admin. auth_sessions and
+  person_identities hold per-person secrets and are scoped to current_person.
+- **Pre-auth paths:** login by email, session resolve by access-hash, resume
+  by resume-hash, and OIDC by issuer/subject all read a row before a person
+  context exists. Migration 0034 adds SECURITY DEFINER helpers
+  (find_person_by_email, create_auth_session, resume_auth_session,
+  resolve_auth_session, resolve_identity, link_identity), the only paths that
+  see these rows before current_person() is set; auth/service.ts and
+  auth/oidc.ts now call them instead of selecting the tables directly.
+- **One real defect surfaced and fixed:** the FEMA declaration export read the
+  jurisdiction name on the base connection, outside the actor's transaction;
+  RLS correctly denied it and the name fell back to a placeholder. The read
+  now runs inside withPerson. This is the class of context-less access the
+  wall is meant to catch.
+- **Evidence:** new authz tests assert sessions and identity links are visible
+  only to their own person, that persons/jurisdictions read cross-tenant for
+  an authenticated actor but return nothing without a context, and that the
+  app role cannot rewrite a person row.
+- **Gate:** pnpm check --maxWorkers=2 exited 0; 453 tests in 78 files passed,
+  including the auth, federation, OIDC and cross-tenant suites unchanged.
+  Log: deploy/test-runtime/out/veoc-rls-check2.log.
+- **Deferred:** MFA and SAML (finding 6) remain a design decision for Basho
+  (identity-provider choice), not a hardening patch.
 - **Ending commit:** this receipt commit, recorded by the next receipt.

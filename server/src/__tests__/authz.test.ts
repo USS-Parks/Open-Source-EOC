@@ -116,6 +116,57 @@ describe("cross-jurisdiction default deny (INV-7)", () => {
   });
 });
 
+describe("identity-table RLS (parity audit finding 1)", () => {
+  it("sessions are visible only to their own person, and never without a context", async () => {
+    await tokenFor("admin@example.org", "correct-horse-battery"); // mints an admin session
+    await tokenFor("member@example.org", "another-good-password"); // mints a member session
+    const adminSessions = await withPerson(
+      runtime,
+      seed.adminId,
+      (tx) => tx`select person_id from auth_sessions`,
+    );
+    expect(adminSessions.length).toBeGreaterThan(0);
+    expect(adminSessions.every((r) => (r.person_id as string) === seed.adminId)).toBe(true);
+    // The member cannot see the admin's session rows.
+    const memberSees = await withPerson(
+      runtime,
+      seed.memberId,
+      (tx) => tx`select id from auth_sessions where person_id = ${seed.adminId}`,
+    );
+    expect(memberSees).toHaveLength(0);
+    // No person context: fail closed.
+    expect(await runtime`select id from auth_sessions`).toHaveLength(0);
+  });
+
+  it("persons and jurisdictions read across tenants when authenticated, deny without a context, and the app role cannot rewrite a person", async () => {
+    // Cross-tenant attribution needs any authenticated actor to read names.
+    const [people] = await withPerson(
+      runtime,
+      seed.memberId,
+      (tx) => tx`select count(*)::int as n from persons`,
+    );
+    expect(people!.n as number).toBeGreaterThan(1);
+    const [juris] = await withPerson(
+      runtime,
+      seed.memberId,
+      (tx) => tx`select count(*)::int as n from jurisdictions`,
+    );
+    expect(juris!.n as number).toBeGreaterThan(0);
+    // No person context: fail closed.
+    expect(await runtime`select id from persons`).toHaveLength(0);
+    expect(await runtime`select id from jurisdictions`).toHaveLength(0);
+    // The app role has no update path on persons: the write silently affects
+    // no rows (RLS grants none), so the record is unchanged.
+    await withPerson(
+      runtime,
+      seed.adminId,
+      (tx) => tx`update persons set display_name = 'hacked' where id = ${seed.memberId}`,
+    );
+    const [row] = await admin`select display_name from persons where id = ${seed.memberId}`;
+    expect(row!.display_name).not.toBe("hacked");
+  });
+});
+
 describe("mutual-aid guest access (R3)", () => {
   let grantId: string;
 

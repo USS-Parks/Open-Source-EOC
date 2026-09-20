@@ -96,18 +96,16 @@ export class OidcClient {
     const subject = String(claims.sub);
     const email = typeof claims.email === "string" ? claims.email : null;
 
-    const [linked] = await sql`
-      select person_id from person_identities
-      where issuer = ${issuer} and subject = ${subject}`;
+    // OIDC login resolves the person before any context exists, so identity
+    // lookup, the email fallback and the link insert all go through the
+    // SECURITY DEFINER helpers (0034) rather than direct table access.
+    const [linked] = await sql`select resolve_identity(${issuer}, ${subject}) as person_id`;
     let personId = linked?.person_id as string | undefined;
     if (!personId && email) {
-      const [person] = await sql`
-        select id, disabled from persons where lower(email) = lower(${email})`;
+      const [person] = await sql`select id, disabled from find_person_by_email(${email})`;
       if (person && !person.disabled) {
         personId = person.id as string;
-        await sql`
-          insert into person_identities (person_id, issuer, subject)
-          values (${personId}, ${issuer}, ${subject})`;
+        await sql`select link_identity(${personId}, ${issuer}, ${subject})`;
       }
     }
     if (!personId) throw new AuthError(403, "identity not provisioned for this instance");

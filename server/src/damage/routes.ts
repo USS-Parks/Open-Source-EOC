@@ -160,9 +160,11 @@ export function damageRoutes(
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
       const body = DeclarationBody.parse(req.body);
-      const [jur] = await sql`select name from jurisdictions where id = ${jurisdictionId}`;
-      const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        exportDeclaration(
+      const result = await withPerson(sql, req.principal.person.id, async (tx) => {
+        // Read the name inside the actor's context so jurisdictions RLS admits
+        // it; a bare read on the base connection now returns nothing.
+        const [jur] = await tx`select name from jurisdictions where id = ${jurisdictionId}`;
+        return exportDeclaration(
           tx,
           req.principal,
           jurisdictionId,
@@ -172,8 +174,8 @@ export function damageRoutes(
             iaResidenceThreshold: body.iaResidenceThreshold,
           },
           { jurisdiction: (jur?.name as string) ?? "Jurisdiction", incident: body.incident },
-        ),
-      );
+        );
+      });
       return reply.send(result);
     },
   );

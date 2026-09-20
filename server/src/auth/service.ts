@@ -61,8 +61,11 @@ export async function addMembership(
 }
 
 export async function login(sql: Sql, email: string, password: string): Promise<LoginResult> {
+  // Pre-authentication read: no person context exists yet, so this goes
+  // through the SECURITY DEFINER helper (0034) rather than a direct select,
+  // which row-level security would now deny.
   const [person] = await sql`
-    select id, password_hash, disabled from persons where lower(email) = lower(${email})`;
+    select id, password_hash, disabled from find_person_by_email(${email})`;
   // Verify against a constant dummy hash when the user is unknown so the
   // response time does not disclose account existence.
   const stored =
@@ -77,11 +80,11 @@ export async function login(sql: Sql, email: string, password: string): Promise<
 export async function createSession(sql: Sql, personId: string): Promise<LoginResult> {
   const access = newToken();
   const resume = newToken();
+  // Session rows are minted before a person context exists, through the
+  // definer helper (0034); the app role has no direct insert on auth_sessions.
   const [session] = await sql`
-    insert into auth_sessions (person_id, access_hash, resume_hash, access_expires_at)
-    values (${personId}, ${access.hash}, ${resume.hash},
-            ${new Date(Date.now() + ACCESS_TTL_MS)})
-    returning id`;
+    select create_auth_session(${personId}, ${access.hash}, ${resume.hash},
+      ${new Date(Date.now() + ACCESS_TTL_MS)}) as id`;
   return { accessToken: access.token, resumeToken: resume.token, sessionId: session!.id as string };
 }
 
@@ -92,14 +95,12 @@ export async function createSession(sql: Sql, personId: string): Promise<LoginRe
  */
 export async function resume(sql: Sql, resumeToken: string): Promise<LoginResult> {
   const access = newToken();
+  // Resume runs on the resume-token hash alone, before a person context, so
+  // it goes through the definer helper (0034); a null id means no live match.
   const [session] = await sql`
-    update auth_sessions
-    set access_hash = ${access.hash},
-        access_expires_at = ${new Date(Date.now() + ACCESS_TTL_MS)},
-        resumed_at = now()
-    where resume_hash = ${hashToken(resumeToken)} and ended_at is null
-    returning id, resume_hash`;
-  if (!session) throw new AuthError(401, "invalid resume token");
+    select resume_auth_session(${hashToken(resumeToken)}, ${access.hash},
+      ${new Date(Date.now() + ACCESS_TTL_MS)}) as id`;
+  if (!session?.id) throw new AuthError(401, "invalid resume token");
   return {
     accessToken: access.token,
     resumeToken,
@@ -116,11 +117,10 @@ export async function logout(sql: Sql, sessionId: string): Promise<void> {
 
 /** Derive the principal from a bearer token. Server-side only (INV-7). */
 export async function principalFromToken(sql: Sql, token: string): Promise<Principal> {
-  const [row] = await sql`
-    select s.id as session_id, s.access_expires_at, s.active_position_id,
-           p.id as person_id, p.email, p.display_name, p.disabled
-    from auth_sessions s join persons p on p.id = s.person_id
-    where s.access_hash = ${hashToken(token)} and s.ended_at is null`;
+  // Token resolution precedes the person context, so the session/person join
+  // runs through the definer helper (0034); RLS then applies to every read
+  // below, once the context is set.
+  const [row] = await sql`select * from resolve_auth_session(${hashToken(token)})`;
   if (!row || row.disabled) throw new AuthError(401, "not authenticated");
   if (new Date(row.access_expires_at as string) < new Date())
     throw new AuthError(401, "session expired");
