@@ -129,3 +129,48 @@ describe("IAP assembly, approval, and PDF export", () => {
     expect(pdf.rawPayload.toString("latin1")).toContain("Bald Hills Fire");
   });
 });
+
+describe("the IAP working list and its five-state workflow", () => {
+  let iapId: string;
+
+  const findIap = async (id: string) => {
+    const list = (await api("GET", `/api/v1/incidents/${incidentId}/iaps`)).json();
+    return list.iaps.find((i: { id: string }) => i.id === id);
+  };
+
+  it("lists a fresh plan as in progress with a full progress bar", async () => {
+    iapId = (
+      await api("POST", `/api/v1/incidents/${incidentId}/iap`, {
+        operationalPeriod: "OP 2 (1800-0600)",
+        objectives: ["Hold the line"],
+      })
+    ).json().id as string;
+    const row = await findIap(iapId);
+    expect(row.status).toBe("in_progress");
+    expect(row.formCount).toBe(7);
+    expect(row.targetForms).toBe(7);
+    expect(row.preparedBy).toBe("Admin");
+    expect(row.approvedBy).toBeNull();
+  });
+
+  it("advances submit -> approve -> complete and blocks illegal transitions", async () => {
+    // Complete cannot skip approval.
+    expect((await api("POST", `/api/v1/iap/${iapId}/complete`)).statusCode).toBe(409);
+
+    expect((await api("POST", `/api/v1/iap/${iapId}/submit`)).statusCode).toBe(200);
+    expect((await findIap(iapId)).status).toBe("in_approval");
+    // A plan already in approval cannot be submitted again.
+    expect((await api("POST", `/api/v1/iap/${iapId}/submit`)).statusCode).toBe(409);
+
+    expect((await api("POST", `/api/v1/iap/${iapId}/approve`)).statusCode).toBe(200);
+    let row = await findIap(iapId);
+    expect(row.status).toBe("approved");
+    expect(row.approvedBy).toBe("Admin");
+
+    expect((await api("POST", `/api/v1/iap/${iapId}/complete`)).statusCode).toBe(200);
+    row = await findIap(iapId);
+    expect(row.status).toBe("complete");
+    // A complete plan cannot be approved again.
+    expect((await api("POST", `/api/v1/iap/${iapId}/approve`)).statusCode).toBe(409);
+  });
+});

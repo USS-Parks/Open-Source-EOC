@@ -152,6 +152,17 @@ export interface IapResult {
   readonly operationalPeriod: string;
   readonly content: IapDocument;
 }
+export interface IapListItem {
+  readonly id: string;
+  readonly operationalPeriod: string;
+  readonly status: string;
+  readonly formCount: number;
+  readonly targetForms: number;
+  readonly preparedBy: string | null;
+  readonly approvedBy: string | null;
+  readonly approvedAt: string | null;
+  readonly createdAt: string;
+}
 export interface CreateIapBody {
   readonly operationalPeriod: string;
   readonly objectives?: readonly string[];
@@ -672,11 +683,24 @@ export class ApiClient {
       body as unknown as Record<string, unknown>,
     );
   }
+  async listIaps(incidentId: string): Promise<IapListItem[]> {
+    const r = await this.request<{ iaps: IapListItem[] }>(
+      "GET",
+      `/api/v1/incidents/${incidentId}/iaps`,
+    );
+    return r.iaps;
+  }
   getIap(iapId: string): Promise<IapResult> {
     return this.request<IapResult>("GET", `/api/v1/iap/${iapId}`);
   }
+  submitIap(iapId: string): Promise<{ ok: true }> {
+    return this.request<{ ok: true }>("POST", `/api/v1/iap/${iapId}/submit`);
+  }
   approveIap(iapId: string): Promise<{ ok: true }> {
     return this.request<{ ok: true }>("POST", `/api/v1/iap/${iapId}/approve`);
+  }
+  completeIap(iapId: string): Promise<{ ok: true }> {
+    return this.request<{ ok: true }>("POST", `/api/v1/iap/${iapId}/complete`);
   }
   downloadIapPdf(iapId: string): Promise<Blob> {
     return this.requestBlob(`/api/v1/iap/${iapId}/pdf`);

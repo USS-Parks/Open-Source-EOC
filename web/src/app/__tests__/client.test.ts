@@ -106,6 +106,42 @@ describe("ApiClient", () => {
     expect(headers["authorization"]).toBe("Bearer A");
   });
 
+  it("lists IAPs and advances the workflow", async () => {
+    const fetchImpl = (async (url: string) => {
+      const u = String(url);
+      if (u.endsWith("/auth/login"))
+        return res(200, { accessToken: "A", resumeToken: "R", sessionId: "S" });
+      if (u.endsWith("/iaps"))
+        return res(200, {
+          iaps: [
+            {
+              id: "iap1",
+              operationalPeriod: "OP 1",
+              status: "in_progress",
+              formCount: 7,
+              targetForms: 7,
+              preparedBy: "Admin",
+              approvedBy: null,
+              approvedAt: null,
+              createdAt: "2026-09-20T00:00:00Z",
+            },
+          ],
+        });
+      if (u.endsWith("/submit") || u.endsWith("/approve") || u.endsWith("/complete"))
+        return res(200, { ok: true });
+      return res(404, { error: "nope" });
+    }) as unknown as typeof fetch;
+
+    const client = new ApiClient({ fetchImpl });
+    await client.login("e@x.org", "pw");
+    const iaps = await client.listIaps("i1");
+    expect(iaps[0]!.status).toBe("in_progress");
+    expect(iaps[0]!.targetForms).toBe(7);
+    expect((await client.submitIap("iap1")).ok).toBe(true);
+    expect((await client.approveIap("iap1")).ok).toBe(true);
+    expect((await client.completeIap("iap1")).ok).toBe(true);
+  });
+
   it("uploads a file, searches, and downloads content", async () => {
     const blob = new Blob([new Uint8Array([1, 2, 3])], { type: "application/octet-stream" });
     const fetchImpl = (async (url: string, init: RequestInit) => {

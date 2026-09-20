@@ -312,6 +312,22 @@ describe("the operations console in a real browser, offline", () => {
     await page.waitForTimeout(300);
     await page.screenshot({ path: join(SHOTS, "app-forms-light.png"), fullPage: false });
 
+    // The IAP working list: the assembled plan shows as In Progress with a full
+    // progress bar, then advances through submit and command approval. Status
+    // assertions are scoped to the working list so they do not match the
+    // always-present KPI count chips above it.
+    await page.getByRole("button", { name: "IAP", exact: true }).click();
+    await page.getByText("Incident Action Plans").waitFor({ state: "visible", timeout: 20000 });
+    const iapList = page.getByRole("region", { name: "Working list" });
+    await iapList.getByText("In Progress", { exact: true }).first().waitFor({ state: "visible", timeout: 20000 });
+    await iapList.getByText(/7 \/ 7 forms/).first().waitFor({ state: "visible", timeout: 20000 });
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: join(SHOTS, "app-iap-light.png"), fullPage: false });
+    // The member (a writer, not an admin) can submit the plan for approval;
+    // approval and completion are admin-only and covered by the server tests.
+    await page.getByRole("button", { name: "Submit for approval" }).first().click();
+    await iapList.getByText("In Approval", { exact: true }).first().waitFor({ state: "visible", timeout: 20000 });
+
     // Field capture: drop a point on the map and save it as a road-closure
     // record, the Field Maps gesture, entirely in the browser.
     await page.getByRole("button", { name: "Map" }).click();

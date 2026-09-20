@@ -12,6 +12,7 @@ import { DashboardSurface } from "../surfaces/DashboardSurface.js";
 import { BoardSurface } from "../surfaces/BoardSurface.js";
 import { SitrepSurface } from "../surfaces/SitrepSurface.js";
 import { FormsSurface } from "../surfaces/FormsSurface.js";
+import { IapSurface } from "../surfaces/IapSurface.js";
 import { FilesSurface } from "../surfaces/FilesSurface.js";
 import { IncidentsSurface } from "../surfaces/IncidentsSurface.js";
 import { ResourcesSurface } from "../surfaces/ResourcesSurface.js";
@@ -29,6 +30,7 @@ const NAV: readonly NavItem[] = [
   { key: "boards", label: "Boards" },
   { key: "sitreps", label: "SITREP" },
   { key: "forms", label: "Forms" },
+  { key: "iap", label: "IAP" },
   { key: "smartforms", label: "Smart Forms" },
   { key: "resources", label: "Resources" },
   { key: "tracking", label: "Tracking" },
@@ -164,6 +166,8 @@ function sectionForNav(key: string): Surface {
       return { kind: "sitreps" };
     case "forms":
       return { kind: "forms" };
+    case "iap":
+      return { kind: "iap" };
     case "files":
       return { kind: "files" };
     case "incidents":
@@ -238,6 +242,14 @@ function Center(props: {
     case "forms":
       return (
         <FormsSurface
+          client={props.client}
+          jurisdictionId={props.jurisdictionId}
+          isAdmin={props.isAdmin}
+        />
+      );
+    case "iap":
+      return (
+        <IapSurface
           client={props.client}
           jurisdictionId={props.jurisdictionId}
           isAdmin={props.isAdmin}

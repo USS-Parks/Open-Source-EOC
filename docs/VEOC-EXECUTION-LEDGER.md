@@ -1379,3 +1379,51 @@ unchanged; all work on `main`.
 - **Rollback:** revert the VEOC-70 commit; migration 0029 is additive
   (columns default `none`) and safe to leave in place.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-71: IAP working list with a five-state workflow and progress
+
+- **Session:** VEOC-71, executed 2026-09-20
+- **Starting HEAD:** `6c36bc7` (Core Capabilities in the AAR)
+- **Reference studied:** the WebEOC Incident Action Plan screen Basho attached, a
+  table of plans by operational period with a status icon (Not Started, In
+  Progress, In Approval, Approved, Complete), a progress bar, prepared-by and
+  approved-by, and count chips across the top. The build could assemble and
+  approve a single IAP but had no working list and only two states.
+- **Decision recorded (open question Basho left to the build):** IAP progress is
+  two honest axes, not one, because `createIap` assembles the standard forms in
+  one shot. The colored status is the five-state approval workflow; the progress
+  bar is the plan's forms against the seven-form standard IAP set (x/N, %).
+- **Gap closed:** the IAP status widens to draft / in_approval / approved /
+  complete, with "not started" and "in progress" derived from a draft's form
+  count. New transitions: submit for approval (writer), approve (admin, from
+  draft or in_approval), mark complete (admin, from approved), each guarded so
+  illegal jumps return 409. A list endpoint returns every plan for an incident
+  with its display status, form count, target, and who prepared and approved it.
+  A new IAP surface renders the working list: KPI count chips by status, a
+  colored status per row, a progress bar, prepared/approved chips, and the
+  workflow actions gated by role.
+- **Files created:** `server/migrations/0030_iap_workflow.sql` (widen the status
+  check); `web/src/app/surfaces/IapSurface.tsx` (the working list).
+- **Files changed:** `server/src/iap/service.ts` (submit/approve/complete guards,
+  `listIaps`, display-status derivation, target-forms constant);
+  `server/src/iap/routes.ts` (list, submit, complete routes);
+  `web/src/app/api/client.ts` (`IapListItem`, `listIaps`, `submitIap`,
+  `completeIap`); `web/src/app/router.tsx` and `web/src/app/screens/Console.tsx`
+  (an IAP nav tab and surface); server `iap.test.ts` (working-list and workflow
+  transitions, including the 409 guards), web `client.test.ts` (list + workflow),
+  and the browser E2E (a member sees the plan In Progress at 7/7 and submits it).
+- **Acceptance proven by test:** the server test walks a plan from in_progress
+  through submit, approve, and complete, and proves complete cannot skip
+  approval, a plan in approval cannot be resubmitted, and a complete plan cannot
+  be approved again; the E2E shows the working list in the browser and a member
+  submitting a plan for approval.
+- **Verification:** `pnpm check` green; tsc, eslint, license-scan, check-links
+  all pass; 383 tests / 71 files.
+- **Facets:** the WebEOC IAP module's working-list idiom over the platform's own
+  approval workflow, with role-gated actions and the design system's status
+  tokens (color reserved for status, INV-8).
+- **Rollback:** revert the VEOC-71 commit; migration 0030 only widens a check
+  constraint and is safe to leave in place.
+- **Commit/push:** under standing authorization. No branch created.

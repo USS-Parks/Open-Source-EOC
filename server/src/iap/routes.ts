@@ -2,7 +2,16 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
-import { approveIap, buildForm, createIap, exportIapPdf, getIap } from "./service.js";
+import {
+  approveIap,
+  buildForm,
+  createIap,
+  exportIapPdf,
+  getIap,
+  listIaps,
+  markIapComplete,
+  submitIapForApproval,
+} from "./service.js";
 
 /**
  * ICS form and IAP routes (VEOC-34, F5). Forms prefill from live incident
@@ -58,15 +67,39 @@ export function iapRoutes(
     },
   );
 
+  app.get(
+    "/api/v1/incidents/:incidentId/iaps",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { incidentId } = req.params as { incidentId: string };
+      const iaps = await withPerson(sql, req.principal.person.id, (tx) =>
+        listIaps(tx, req.principal, incidentId),
+      );
+      return reply.send({ iaps });
+    },
+  );
+
   app.get("/api/v1/iap/:iapId", { preHandler: authenticate }, async (req, reply) => {
     const { iapId } = req.params as { iapId: string };
     const iap = await withPerson(sql, req.principal.person.id, (tx) => getIap(tx, req.principal, iapId));
     return reply.send(iap);
   });
 
+  app.post("/api/v1/iap/:iapId/submit", { preHandler: authenticate }, async (req, reply) => {
+    const { iapId } = req.params as { iapId: string };
+    await withPerson(sql, req.principal.person.id, (tx) => submitIapForApproval(tx, req.principal, iapId));
+    return reply.send({ ok: true });
+  });
+
   app.post("/api/v1/iap/:iapId/approve", { preHandler: authenticate }, async (req, reply) => {
     const { iapId } = req.params as { iapId: string };
     await withPerson(sql, req.principal.person.id, (tx) => approveIap(tx, req.principal, iapId));
+    return reply.send({ ok: true });
+  });
+
+  app.post("/api/v1/iap/:iapId/complete", { preHandler: authenticate }, async (req, reply) => {
+    const { iapId } = req.params as { iapId: string };
+    await withPerson(sql, req.principal.person.id, (tx) => markIapComplete(tx, req.principal, iapId));
     return reply.send({ ok: true });
   });
 

@@ -14,6 +14,7 @@ export type Surface =
   | { readonly kind: "sitreps" }
   | { readonly kind: "sitrep"; readonly id: string }
   | { readonly kind: "forms" }
+  | { readonly kind: "iap" }
   | { readonly kind: "files" }
   | { readonly kind: "incidents" }
   | { readonly kind: "resources" }
@@ -54,6 +55,8 @@ export function parseHash(hash: string): Surface {
       return id ? { kind: "sitrep", id } : { kind: "sitreps" };
     case "forms":
       return { kind: "forms" };
+    case "iap":
+      return { kind: "iap" };
     case "files":
       return { kind: "files" };
     case "incidents":
@@ -93,6 +96,8 @@ export function surfaceHash(surface: Surface): string {
       return `#/sitrep/${surface.id}`;
     case "forms":
       return "#/forms";
+    case "iap":
+      return "#/iap";
     case "files":
       return "#/files";
     case "incidents":

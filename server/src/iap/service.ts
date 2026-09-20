@@ -4,6 +4,7 @@ import {
   iapToTextLines,
   renderPdf,
   sectionForPosition,
+  DEFAULT_IAP_FORMS,
   ICS_FORM_IDS,
   type ActivityLogEntry,
   type CheckInEntry,
@@ -204,22 +205,126 @@ export async function getIap(
   };
 }
 
+/** Submit a draft plan for command approval (writer). */
+export async function submitIapForApproval(sql: Sql, actor: Principal, iapId: string): Promise<void> {
+  const row = await iapWorkflowRow(sql, iapId);
+  requireWriter(actor, row.jurisdictionId);
+  if (row.status !== "draft")
+    throw new AuthError(409, "only a draft plan can be submitted for approval");
+  await sql`update iaps set status = 'in_approval' where id = ${iapId}`;
+  await recordAudit(sql, actor, {
+    jurisdictionId: row.jurisdictionId,
+    incidentId: row.incidentId,
+    category: "iap.submitted",
+    subjectTable: "iaps",
+    subjectId: iapId,
+  });
+}
+
 export async function approveIap(sql: Sql, actor: Principal, iapId: string): Promise<void> {
-  const [row] = await sql`
-    select i.status, inc.jurisdiction_id, i.incident_id
-    from iaps i join incidents inc on inc.id = i.incident_id where i.id = ${iapId}`;
-  if (!row) throw new AuthError(404, "IAP not found");
-  requireAdmin(actor, row.jurisdiction_id as string);
-  if (row.status === "approved") throw new AuthError(409, "already approved");
+  const row = await iapWorkflowRow(sql, iapId);
+  requireAdmin(actor, row.jurisdictionId);
+  if (row.status !== "draft" && row.status !== "in_approval")
+    throw new AuthError(409, "only a draft or in-approval plan can be approved");
   await sql`
     update iaps set status = 'approved', approved_by = ${actor.person.id}, approved_at = now()
     where id = ${iapId}`;
   await recordAudit(sql, actor, {
-    jurisdictionId: row.jurisdiction_id as string,
-    incidentId: row.incident_id as string,
+    jurisdictionId: row.jurisdictionId,
+    incidentId: row.incidentId,
     category: "iap.approved",
     subjectTable: "iaps",
     subjectId: iapId,
+  });
+}
+
+/** Mark an approved plan complete once its operational period has ended (admin). */
+export async function markIapComplete(sql: Sql, actor: Principal, iapId: string): Promise<void> {
+  const row = await iapWorkflowRow(sql, iapId);
+  requireAdmin(actor, row.jurisdictionId);
+  if (row.status !== "approved")
+    throw new AuthError(409, "only an approved plan can be marked complete");
+  await sql`update iaps set status = 'complete' where id = ${iapId}`;
+  await recordAudit(sql, actor, {
+    jurisdictionId: row.jurisdictionId,
+    incidentId: row.incidentId,
+    category: "iap.completed",
+    subjectTable: "iaps",
+    subjectId: iapId,
+  });
+}
+
+async function iapWorkflowRow(
+  sql: Sql,
+  iapId: string,
+): Promise<{ status: string; jurisdictionId: string; incidentId: string }> {
+  const [row] = await sql`
+    select i.status, inc.jurisdiction_id, i.incident_id
+    from iaps i join incidents inc on inc.id = i.incident_id where i.id = ${iapId}`;
+  if (!row) throw new AuthError(404, "IAP not found");
+  return {
+    status: row.status as string,
+    jurisdictionId: row.jurisdiction_id as string,
+    incidentId: row.incident_id as string,
+  };
+}
+
+/** The standard IAP is complete when it carries all of the default forms. */
+export const IAP_TARGET_FORMS = DEFAULT_IAP_FORMS.length;
+
+export interface IapListItem {
+  readonly id: string;
+  readonly operationalPeriod: string;
+  /** Display state: not_started, in_progress, in_approval, approved, complete. */
+  readonly status: string;
+  readonly formCount: number;
+  readonly targetForms: number;
+  readonly preparedBy: string | null;
+  readonly approvedBy: string | null;
+  readonly approvedAt: string | null;
+  readonly createdAt: string;
+}
+
+/** Derive the working-list display state from the stored status and form count. */
+function displayStatus(stored: string, formCount: number): string {
+  if (stored === "draft") return formCount === 0 ? "not_started" : "in_progress";
+  return stored;
+}
+
+/**
+ * Every IAP for an incident, newest first: the WebEOC-style working list. The
+ * stored draft/in_approval/approved/complete becomes a five-state display
+ * status, and the form count against the standard set drives a progress bar.
+ */
+export async function listIaps(
+  sql: Sql,
+  actor: Principal,
+  incidentId: string,
+): Promise<IapListItem[]> {
+  const [incident] = await sql`select jurisdiction_id from incidents where id = ${incidentId}`;
+  if (!incident) throw new AuthError(404, "incident not found");
+  requireMember(actor, incident.jurisdiction_id as string);
+  const rows = await sql`
+    select i.id, i.operational_period, i.status, i.form_ids, i.created_at, i.approved_at,
+           prep.display_name as prepared_by, appr.display_name as approved_by
+    from iaps i
+    left join persons prep on prep.id = i.prepared_by
+    left join persons appr on appr.id = i.approved_by
+    where i.incident_id = ${incidentId}
+    order by i.created_at desc`;
+  return rows.map((r) => {
+    const formCount = (r.form_ids as string[] | null)?.length ?? 0;
+    return {
+      id: r.id as string,
+      operationalPeriod: r.operational_period as string,
+      status: displayStatus(r.status as string, formCount),
+      formCount,
+      targetForms: IAP_TARGET_FORMS,
+      preparedBy: (r.prepared_by as string | null) ?? null,
+      approvedBy: (r.approved_by as string | null) ?? null,
+      approvedAt: r.approved_at ? new Date(r.approved_at as string).toISOString() : null,
+      createdAt: new Date(r.created_at as string).toISOString(),
+    };
   });
 }
 
