@@ -53,6 +53,7 @@ import { BoardSyncHub } from "./sync/hub.js";
 import { registerSyncRoutes } from "./sync/routes.js";
 import { withPerson } from "./db/context.js";
 import { applySecurityHeaders } from "./security/headers.js";
+import { applyCors } from "./security/cors.js";
 import { rateLimit } from "./security/rate-limit.js";
 import { exportRoutes } from "./export/routes.js";
 
@@ -107,6 +108,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
     if (req.headers.upgrade?.toLowerCase() === "websocket") return;
     const path = req.url.split("?")[0] ?? "";
     applySecurityHeaders(reply, { api: path.startsWith("/api/") });
+    if (applyCors(req, reply)) return; // CORS preflight fully answered
     if (path === "/api/v1/health" || path === "/api/v1/ready") return;
     const decision = rateLimit(req.ip);
     if (!decision.allowed) {
