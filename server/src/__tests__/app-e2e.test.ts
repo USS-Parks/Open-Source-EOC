@@ -157,6 +157,11 @@ beforeAll(async () => {
       status: statusValues[statusValues.length - 1],
     });
 
+  // ESF conditions, so the dashboard shows the ESF status cards.
+  const esfBoard = await createBoard("esf_status");
+  await addRecord(esfBoard, { esf: "esf_8_public_health_medical", status: "stressed" });
+  await addRecord(esfBoard, { esf: "esf_1_transportation", status: "normal" });
+
   // Activate an incident so the Forms/IAP screen has one to build from.
   const activation = await app.inject({
     method: "POST",
@@ -282,6 +287,10 @@ describe("the operations console in a real browser, offline", () => {
     await page.getByRole("button", { name: "Dashboard" }).click();
     await page.getByText("EOC Status").first().waitFor({ state: "visible", timeout: 20000 });
     await page.getByText("Closed roads").first().waitFor({ state: "visible", timeout: 20000 });
+    await page
+      .getByText("Emergency Support Functions")
+      .first()
+      .waitFor({ state: "visible", timeout: 20000 });
     await page.waitForTimeout(400);
     await page.screenshot({ path: join(SHOTS, "app-dashboard-light.png"), fullPage: false });
 

@@ -25,6 +25,7 @@ describe("standard board library (F1: boards as data)", () => {
       "talking_points",
       "field_reports",
       "damage_assessment",
+      "esf_status",
     ]);
   });
 

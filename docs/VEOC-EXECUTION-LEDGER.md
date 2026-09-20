@@ -1273,3 +1273,31 @@ unchanged; all work on `main`.
   further build, not a claim of done.
 - **Rollback:** revert the VEOC-67 commit.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-68: Emergency Support Functions status cards
+
+- **Session:** VEOC-68, executed 2026-09-20
+- **Starting HEAD:** `79f0d9b` (dashboard parity)
+- **Clarification (Basho):** the color-coded status cards are Community
+  Lifelines AND ESFs. The build had lifelines; ESFs were missing.
+- **Files created/changed:** `shared/src/dictionary/esf.ts` (the fifteen NRF
+  Emergency Support Functions and an ESF condition enum with the same
+  green/yellow/red/gray scale as the lifelines, both cited to the National
+  Response Framework) and its index registration; `shared/src/boards/standard.ts`
+  (an `esf_status` board mirroring the lifelines board) and the standard-set test;
+  `shared/src/dashboards/def.ts` (an ESF status widget added to the EOC Status
+  dashboard beside the lifelines); `web/src/dashboards/Dashboard.tsx` (the status
+  cards color from a merged lifeline+ESF condition map); tests updated
+  (dashboards widget count, the E2E seeds ESF conditions and asserts the ESF
+  cards render).
+- **Acceptance proven by test:** the standard set includes esf_status and its
+  template validates; the dashboard snapshot carries the ESF status widget; the
+  browser E2E shows the "Emergency Support Functions" cards (ESF-1 normal green,
+  ESF-8 stressed) alongside the lifelines, offline.
+- **Verification:** `pnpm check` green; 380 tests / 71 files.
+- **Facets:** completes the incident-status board parity (Lifelines + ESFs) with
+  Esri EM Solutions.
+- **Rollback:** revert the VEOC-68 commit.
+- **Commit/push:** under standing authorization. No branch created.

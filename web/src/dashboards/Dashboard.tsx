@@ -1,5 +1,5 @@
 import { StatusBadge, type Status } from "../design/components.js";
-import { LIFELINE_STATUS_COLOR } from "@openeoc/shared";
+import { LIFELINE_STATUS_COLOR, ESF_STATUS_COLOR } from "@openeoc/shared";
 import type {
   ChartResult,
   DashboardSnapshot,
@@ -134,6 +134,9 @@ const LIFELINE_DOT: Record<string, string> = {
   gray: "var(--eoc-status-unknown)",
 };
 
+// Lifelines and ESFs share the green/yellow/red/gray condition scale.
+const CONDITION_COLOR: Record<string, string> = { ...LIFELINE_STATUS_COLOR, ...ESF_STATUS_COLOR };
+
 /**
  * Community Lifelines as condition cards (the FEMA Incident Status board): one
  * card per lifeline, a colored status ring, and its current condition. The
@@ -149,7 +152,7 @@ function StatusGrid(props: { widget: StatusResult }) {
       }}
     >
       {props.widget.groups.map((g) => {
-        const color = g.value ? (LIFELINE_STATUS_COLOR[g.value] ?? "gray") : "gray";
+        const color = g.value ? (CONDITION_COLOR[g.value] ?? "gray") : "gray";
         return (
           <div
             key={g.group}

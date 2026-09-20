@@ -157,6 +157,14 @@ export const STANDARD_DASHBOARDS: readonly DashboardTemplate[] = [
         valueField: "status",
       },
       {
+        kind: "status",
+        key: "esfs",
+        title: "Emergency Support Functions",
+        board: "esf_status",
+        groupBy: "esf",
+        valueField: "status",
+      },
+      {
         kind: "tile",
         key: "closed_roads",
         title: "Closed roads",

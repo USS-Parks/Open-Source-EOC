@@ -147,7 +147,7 @@ interface List { columns: string[]; records: Record<string, unknown>[] }
 describe("server-side aggregation (AR6: no join trap)", () => {
   it("computes tiles, charts, status, and lists across three boards in one snapshot", async () => {
     const snap = await snapshot(memberToken);
-    expect(snap.widgets).toHaveLength(4);
+    expect(snap.widgets).toHaveLength(5);
 
     const tile = widget<Tile>(snap, "closed_roads");
     expect(tile.value).toBe(2);

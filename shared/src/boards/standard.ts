@@ -240,4 +240,16 @@ export const STANDARD_TEMPLATES: readonly BoardTemplate[] = [
       { key: "destroyed", title: "Destroyed", columns: ["structure_type"], filter: [{ field: "degree", op: "eq", value: "destroyed" }] },
     ],
   }),
+  t({
+    key: "esf_status",
+    version: 1,
+    title: "ESF Status",
+    description: "Emergency Support Function activation and condition (NRF ESF #1-#15).",
+    fields: [
+      { key: "esf", label: "ESF", type: "enum", enumId: "esf.functions", required: true },
+      { key: "status", label: "Condition", type: "enum", enumId: "esf.status", required: true },
+      { key: "note", label: "Note", type: "text" },
+    ],
+    views: [{ key: "all", title: "All ESFs", columns: ["esf", "status"] }],
+  }),
 ];
