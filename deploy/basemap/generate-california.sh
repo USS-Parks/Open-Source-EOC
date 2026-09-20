@@ -13,13 +13,17 @@
 # Usage:
 #   deploy/basemap/generate-california.sh [output_dir]
 #
+# The default output directory, deploy/basemap/out, is gitignored: the tiles
+# are a deploy artifact, never a committed file.
+#
 # The result, california.pmtiles, is served over HTTP with range requests and
 # wired into the app via the OPENEOC_BASEMAP_* settings (see README.md).
 
 set -euo pipefail
 
-OUT_DIR="${1:-./basemap-out}"
-PLANETILER_VERSION="0.8.3"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+OUT_DIR="${1:-${HERE}/out}"
+PLANETILER_VERSION="0.9.0"
 PLANETILER_JAR="planetiler-${PLANETILER_VERSION}.jar"
 PLANETILER_URL="https://github.com/onthegomap/planetiler/releases/download/v${PLANETILER_VERSION}/planetiler.jar"
 
@@ -36,13 +40,14 @@ if [ ! -f "${PLANETILER_JAR}" ]; then
   curl -fSL "${PLANETILER_URL}" -o "${PLANETILER_JAR}"
 fi
 
-# --download fetches the California extract from Geofabrik; --area names it.
+# --download fetches the California extract from Geofabrik; --area names it
+# by its Geofabrik path ("california" alone is ambiguous in Geofabrik's index).
 # The OpenMapTiles profile is planetiler's default schema, which our style
 # (streetstyle.ts) is written against.
 echo "Building california.pmtiles (this takes several minutes)..."
 java -Xmx4g -jar "${PLANETILER_JAR}" \
   --download \
-  --area=california \
+  --area=us/california \
   --output=california.pmtiles \
   --force
 

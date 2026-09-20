@@ -1685,3 +1685,93 @@ unchanged; all work on `main`.
   the proof for the E2E, recorded on the next receipt.
 - **Rollback:** revert the VEOC-76a commit.
 - **Commit/push:** under Basho's express session authorization (2026-09-20).
+
+---
+
+## VEOC-77: the basemap reaches the commercial COPs, on real tiles
+
+- **Session:** VEOC-77, executed 2026-09-20 from Basho's desktop (network,
+  disk, and a JDK available, unlike the sandbox sessions VEOC-73 to 75).
+- **Starting HEAD:** `a0f5df2` (VEOC-76).
+- **Authorization:** Basho approved the six-prompt roster and, separately,
+  commit and push of each prompt's verified work for the session. Two
+  amendments were put to Basho and approved mid-session (below).
+- **Prompts 1 to 7, each its own commit, pushed, CI green unless noted:**
+  1. **Real street tiles.** `deploy/basemap/generate-california.sh` now names
+     the Geofabrik area as `us/california` (the bare name is ambiguous in
+     Geofabrik's index and the first run failed on it), defaults its output to
+     the gitignored `deploy/basemap/out/`, and requires Java only. Planetiler
+     0.9.0 built `california.pmtiles` (734 MB, OpenMapTiles schema) in 20
+     minutes on a Temurin 21 JDK extracted to a user folder. The tiles are a
+     deploy artifact, not committed. A Docker fallback I had added without
+     asking was stripped on Basho's instruction; Docker is not part of the
+     pipeline.
+  2. **Zero-config street labels.** The street style falls back to the
+     bundled Liberation Sans glyphs; `OPENEOC_BASEMAP_GLYPHS_URL` and the new
+     `OPENEOC_BASEMAP_FONT` name a deployment's own stack. Runtime config
+     gained its own test file.
+  3. **EOC context layers on the street style:** landcover, residential and
+     civic landuse, airfields, rail, water names, peaks with elevation in
+     feet, and text labels for critical facilities (hospitals, clinics, fire
+     and police stations, schools, shelters, town halls, places of worship,
+     stadiums, airports, helipads) from the OpenMapTiles poi layer.
+  4. **Basemap gallery.** Map, Imagery, Topo as basemaps and Hydrography as
+     an overlay, each a runtime tile URL with its own attribution, on all
+     three vector styles; rasters mount hidden and carry attribution on the
+     source. Proven against the USGS National Map services (public domain).
+  5. **Terrain.** `OPENEOC_TERRAIN_TILE_URL` (Terrarium by default) mounts a
+     DEM and a hidden hillshade under water and roads on every style; the COP
+     offers a Hillshade toggle and MapLibre's 3D terrain control. Proven
+     against the AWS Open Data elevation tiles.
+  7. **Every basemap layer switchable** (added mid-session at Basho's
+     direction): each basemap layer carries a group on its metadata (land,
+     water, buildings, roads, rail, airfields, boundaries, labels, critical
+     facilities); the COP discovers the groups in the active style and offers
+     a checkbox each.
+  - **Correction (this receipt's last commit):** the real-browser proof
+     exposed two expressions MapLibre rejects (a nested zoom interpolation
+     and a data-driven symbol placement), which made the street style draw
+     nothing while unit tests stayed green. Fixed, and every style now passes
+     the MapLibre style-spec validator in the test suite
+     (`@maplibre/maplibre-gl-style-spec`, BSD-3, dev dependency).
+- **Proof:** `web/cop-demo/main.tsx` doubles as a basemap testbed (any
+  `OPENEOC_*` query parameter becomes runtime config; `bundled=1`;
+  `theme=dark`); a headless Chrome run over the Vite dev server captured the
+  street map light and dark at region and street zoom (Eureka: building
+  footprints, the street grid, facility labels), USGS topo and imagery,
+  the hydrography overlay, hillshade, 3D terrain over Weitchpec, and the
+  layer-group toggles. Captures live in `deploy/basemap/out/shots/`
+  (gitignored) and were delivered to Basho in-session.
+- **Verification:** per prompt, `pnpm -r exec tsc --noEmit`, `eslint .`,
+  license scan, link check, and the web unit suite (now 15 files); server
+  tests and the browser E2E run in CI on each push (no PostgreSQL on this
+  workstation). CI: VEOC-76 was red on the go-to marker swallowing a click
+  (fixed in VEOC-76a); prompts 2 and 3 green; later runs recorded in the
+  next receipt.
+- **Roster amendment 1 (Basho, mid-session):** add prompt 7 (above) and
+  prompt 8, road jurisdiction overlays (Federal, state, county) plus the CAL
+  FIRE land ownership overlay, from authoritative sources.
+- **Roster amendment 2 (Basho, from Juvare and Esri reference screenshots):**
+  add prompts 9 to 13: building footprints colored by the intersecting
+  damage or field record; a county parcels overlay; hatched hazard areas
+  with FEMA flood zones; map-view driven dashboard KPIs; and a facility
+  icon sprite from the NAPSG symbol set. Basho then narrowed the priority:
+  skip tribal roads for now, and focus on parity with layers delineating
+  commercial and residential structures.
+- **Data sources verified for prompts 8 to 13 (endpoints answer, fields
+  inspected):** Caltrans State Highway Network (`CHhighway/SHN_Lines`);
+  USFS National Forest System Roads (EDW, with jurisdiction and maintainer);
+  BLM GTLF Public Motorized Roads; NPS public roads; Humboldt County parcel
+  and road-centerline shapefiles; CAL FIRE California Land Ownership public
+  view (57,404 polygons; Own_Level City, County, Federal, Non Profit,
+  Special District, State, Tribal); FEMA NFHL Flood Hazard Zones (layer 28,
+  FLD_ZONE, SFHA_TF); NAPSG symbol catalog (1,192 PNG icons across 13
+  packs, CC BY 4.0 per napsgfoundation.org). **Not usable:** the NAPSG
+  GitHub repository (Distribution Statement C, all rights reserved); the
+  FHWA HPMS public-release services (dead links); the BIA tribal road
+  inventory (PDF only); the CAL FIRE statewide parcels view (vendor-derived
+  parcel IDs, no license text). Caltrans publishes no road-ownership GIS.
+- **Deferred, named:** tribal roads (Basho); prompts 8 to 13 execute next;
+  dark-theme road contrast at region zoom could rise a step.
+- **Rollback:** revert the prompt commits in reverse order; the tiles and
+  captures are local artifacts.

@@ -2,15 +2,31 @@ import { createRoot } from "react-dom/client";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { CopMap } from "../src/cop/CopMap.js";
 import type { CopFeatureCollection } from "../src/cop/layers.js";
+import {
+  assetBase,
+  basemapStyleUrl,
+  rasterBasemaps,
+  streetBasemap,
+  terrainSource,
+} from "../src/app/config.js";
+import type { ThemeName } from "../src/design/tokens.js";
 
 // E2E harness page: renders the real CopMap against the live API using a
 // token and board id from the query string, and exposes the map instance
-// for the test to interrogate.
+// for the test to interrogate. It doubles as the basemap testbed: any
+// OPENEOC_* query parameter becomes runtime config (street PMTiles, gallery
+// rasters, terrain), `bundled=1` mounts the bundled offline basemap, and
+// `theme=dark` flips the theme, so a basemap can be proven in a real browser
+// with no API running (leave `board` unset).
 
 const params = new URLSearchParams(location.search);
 const token = params.get("token") ?? "";
 const boardId = params.get("board") ?? "";
 const title = params.get("title") ?? "Road Closures";
+const theme: ThemeName = params.get("theme") === "dark" ? "dark" : "light";
+const runtimeConfig: Record<string, string> = {};
+for (const [key, value] of params) if (key.startsWith("OPENEOC_")) runtimeConfig[key] = value;
+(globalThis as { OPENEOC?: Record<string, string> }).OPENEOC = runtimeConfig;
 
 declare global {
   interface Window {
@@ -28,12 +44,17 @@ async function fetchItems(id: string): Promise<CopFeatureCollection> {
 createRoot(document.getElementById("app")!).render(
   <div style={{ height: "100vh" }}>
     <CopMap
-      theme="light"
-      boards={[{ id: boardId, title }]}
+      theme={theme}
+      boards={boardId ? [{ id: boardId, title }] : []}
       fetchItems={fetchItems}
       pollMs={1000}
       center={[-123.61, 41.29]}
       zoom={11}
+      bundledBasemap={params.get("bundled") === "1" ? { assetBase: assetBase() } : undefined}
+      basemapStyleUrl={basemapStyleUrl()}
+      streetBasemap={streetBasemap()}
+      rasterBasemaps={rasterBasemaps()}
+      terrain={terrainSource()}
       onMap={(map) => {
         window.__map = map;
       }}

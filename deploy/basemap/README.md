@@ -31,8 +31,7 @@ it into the app.
 
 ## 1. Generate the tiles
 
-On a machine with Java 21+ or Docker, about 10 GB of free disk, and network
-access:
+On a machine with Java 21+, about 10 GB of free disk, and network access:
 
 ```
 deploy/basemap/generate-california.sh
@@ -40,11 +39,10 @@ deploy/basemap/generate-california.sh
 
 This uses [planetiler](https://github.com/onthegomap/planetiler) to download the
 California extract from Geofabrik and write `california.pmtiles` in the
-OpenMapTiles schema, which the app's street style is written against. With no
-Java on the machine the script runs the same planetiler release in its Docker
-image. Output lands in `deploy/basemap/out/` (gitignored) unless a directory is
-given. For a different area, change `--area` in the script (any Geofabrik
-region name), or point planetiler at a local `.osm.pbf` with `--osm-path`.
+OpenMapTiles schema, which the app's street style is written against. Output
+lands in `deploy/basemap/out/` (gitignored) unless a directory is given. For a
+different area, change `--area` in the script (a Geofabrik region path such as
+`us/oregon`), or point planetiler at a local `.osm.pbf` with `--osm-path`.
 
 ## 2. Labels (optional: your own glyph stack)
 
@@ -110,7 +108,55 @@ top. Leave it unset and the app uses the bundled offline basemap. A full
 external style URL (`OPENEOC_BASEMAP_STYLE_URL`) still takes precedence over
 both.
 
+## 6. Basemap gallery: imagery, topo, hydrography
+
+Beside the vector map the COP can offer raster basemaps and overlays. Each is
+a runtime setting with an attribution shown while it is visible; leave any
+unset and it is simply not offered. The USGS National Map services are US
+government work (public domain) and need no key:
+
+```html
+<script>
+  window.OPENEOC = {
+    OPENEOC_IMAGERY_TILE_URL:
+      "https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}",
+    OPENEOC_IMAGERY_ATTRIBUTION: "Imagery: USGS The National Map",
+    OPENEOC_TOPO_TILE_URL:
+      "https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}",
+    OPENEOC_TOPO_ATTRIBUTION: "Topo: USGS The National Map",
+    OPENEOC_HYDRO_TILE_URL:
+      "https://basemap.nationalmap.gov/arcgis/rest/services/USGSHydroCached/MapServer/tile/{z}/{y}/{x}",
+    OPENEOC_HYDRO_ATTRIBUTION: "Hydrography: USGS The National Map"
+  };
+</script>
+```
+
+An air-gapped install points these at a self-hosted mirror instead (any XYZ
+tile directory or a tile server over a PMTiles raster archive).
+
+## 7. Terrain: hillshade and 3D
+
+With a raster DEM tile set configured, the COP gains a Hillshade overlay and
+MapLibre's 3D terrain control. The AWS Open Data elevation tiles (Terrarium
+encoding; SRTM, USGS 3DEP, and other public sources) work directly:
+
+```html
+<script>
+  window.OPENEOC = {
+    OPENEOC_TERRAIN_TILE_URL: "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
+    OPENEOC_TERRAIN_ENCODING: "terrarium",
+    OPENEOC_TERRAIN_ATTRIBUTION: "Terrain: Mapzen/AWS Open Data elevation tiles"
+  };
+</script>
+```
+
+For an air-gapped install, mirror the DEM tiles for your area of operations
+into a PMTiles raster archive (the `pmtiles` CLI converts a tile directory or
+MBTiles) and serve it the same way as the street tiles; set the encoding to
+match the source (`terrarium` or `mapbox`).
+
 ## Attribution
 
 OpenStreetMap data is ODbL: the map must display "© OpenStreetMap contributors".
-The app adds this automatically whenever the PMTiles basemap is active.
+The app adds this automatically whenever the PMTiles basemap is active. Gallery
+rasters and the DEM carry the attribution you configure, shown while visible.

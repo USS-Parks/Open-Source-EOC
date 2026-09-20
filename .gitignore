@@ -9,4 +9,8 @@ target/
 .env.*
 !.env.example
 *.log
+# Generated street-tile artifacts (deploy/basemap/generate-california.sh),
+# and a local copy served by the dev server for the basemap testbed.
+deploy/basemap/out/
+web/public/basemap/california.pmtiles
 .DS_Store
