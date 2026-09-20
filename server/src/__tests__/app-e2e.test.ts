@@ -332,6 +332,15 @@ describe("the operations console in a real browser, offline", () => {
     // record, the Field Maps gesture, entirely in the browser.
     await page.getByRole("button", { name: "Map" }).click();
     await page.waitForSelector('[data-testid="cop-map"]', { timeout: 20000 });
+
+    // Map operator tools: the cursor/zoom readout, zoom-to-extent, and measure.
+    await page.waitForSelector('[data-testid="cop-readout"]', { timeout: 20000 });
+    await page.getByRole("button", { name: "Zoom to extent" }).click();
+    await page.getByRole("button", { name: "Measure", exact: true }).click();
+    await page.getByRole("button", { name: "Measuring…" }).waitFor({ state: "visible", timeout: 20000 });
+    await page.getByRole("button", { name: "Measuring…" }).click();
+    await page.getByRole("button", { name: "Measure", exact: true }).waitFor({ state: "visible", timeout: 20000 });
+
     await page.getByRole("button", { name: "Add point" }).click();
     await page.locator("select").first().selectOption({ label: "Road Closures" });
     await page

@@ -78,6 +78,11 @@ describe("layer construction", () => {
     expect(style.sources.ne_land!.data).toBe("/basemap/ne_50m_land.geojson");
     expect(JSON.stringify(style)).not.toContain("http");
     expect(style.layers.some((l) => l.id === "ne-land")).toBe(true);
+    // Local detail: California counties and the state outline mount offline too.
+    expect(style.sources.ca_counties!.type).toBe("geojson");
+    expect(style.sources.ca_counties!.data).toBe("/basemap/ca_counties.geojson");
+    expect(style.layers.some((l) => l.id === "ca-counties-line")).toBe(true);
+    expect(style.layers.some((l) => l.id === "ca-state-outline")).toBe(true);
   });
 
   it("adds a hidden imagery raster basemap when a tile URL is configured", () => {

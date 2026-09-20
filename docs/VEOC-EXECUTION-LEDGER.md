@@ -1457,3 +1457,44 @@ unchanged; all work on `main`.
 - **Rollback:** revert the VEOC-72 commit; test-only, no schema or runtime
   change.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-73: local map detail (CA counties) and operator map tools
+
+- **Session:** VEOC-73, executed 2026-09-20
+- **Starting HEAD:** `4b4d091` (screenshot gallery)
+- **Problem (Basho):** the Map tab looked low-effort next to Esri and WebEOC. It
+  was: the offline basemap was Natural Earth at 1:50-million scale, which is
+  blank at county zoom, so the COP was a beige box with one faint line.
+- **Root cause, stated honestly:** the map plumbing (MapLibre, popups,
+  symbology, layer toggles, pin-drop) was fine; the basemap DATA had no local
+  detail. Full street parity needs OpenStreetMap vector tiles, which cannot be
+  generated in this sandbox (the extract source is proxy-blocked, no tiler is
+  installed, and disk is too small); that is a build-machine job, handled in the
+  next receipt.
+- **What changed here (the parts that ARE doable and verifiable offline):**
+  1. Bundled California county boundaries and the state outline from the US
+     Census cartographic files (10m, public domain, ~120 KB total), rendered as
+     a faint county fill, a county mesh, and a stronger state outline. The COP
+     now shows recognizable local geography (Del Norte, Humboldt, Siskiyou,
+     Trinity around the Klamath) with zero external network.
+  2. Operator map tools: a cursor position and zoom readout, zoom-to-extent
+     (fits every feature on the visible layers, viewport-independent), and a
+     measure tool (click a path, cumulative miles, neutral color per INV-8).
+- **Files created:** `web/public/basemap/ca_counties.geojson`,
+  `web/public/basemap/ca_state.geojson`.
+- **Files changed:** `web/src/cop/basemap.ts` (county sources, layers, palette,
+  attribution); `web/src/cop/CopMap.tsx` (readout, zoom-to-extent, measure);
+  `web/src/cop/__tests__/cop.test.ts` (county source/layer assertions); the
+  browser E2E (exercises the three tools).
+- **Acceptance proven by test:** the COP unit test asserts the county sources
+  and layers mount offline; the E2E clicks zoom-to-extent and toggles measure,
+  and the regenerated map screenshot shows the county mesh under the incident
+  points.
+- **Honest limitation:** this is a real offline improvement, not Esri parity.
+  Street-level detail, labels, terrain, and satellite need the OSM PMTiles from
+  VEOC-74's pipeline, run on a networked build box.
+- **Verification:** `pnpm check` green; 383 tests / 71 files.
+- **Rollback:** revert the VEOC-73 commit; additive assets and UI only.
+- **Commit/push:** under standing authorization. No branch created.

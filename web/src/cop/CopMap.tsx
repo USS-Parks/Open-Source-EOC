@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import * as maplibregl from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { Protocol } from "pmtiles";
-import type { ThemeName } from "../design/tokens.js";
+import { themes, type ThemeName } from "../design/tokens.js";
 import {
   boardLayerIds,
   boardLayerSpecs,
@@ -57,6 +57,27 @@ let pmtilesRegistered = false;
 
 const LEGEND: readonly SymbolStatus[] = ["critical", "warning", "normal", "unknown"];
 
+const EMPTY_FC = { type: "FeatureCollection", features: [] as unknown[] };
+const EARTH_MI = 3958.8;
+
+/** Great-circle distance between two lng/lat points, in statute miles. */
+function haversineMiles(a: [number, number], b: [number, number]): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b[1] - a[1]);
+  const dLng = toRad(b[0] - a[0]);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * Math.sin(dLng / 2) ** 2;
+  return 2 * EARTH_MI * Math.asin(Math.sqrt(h));
+}
+
+/** Cumulative length of a measured path, in miles. */
+function totalMiles(coords: readonly [number, number][]): number {
+  let d = 0;
+  for (let i = 1; i < coords.length; i++) d += haversineMiles(coords[i - 1]!, coords[i]!);
+  return d;
+}
+
 /** A rendered feature belonging to a board or feed layer (inspectable). */
 function isCopLayerId(id: string): boolean {
   return id.startsWith(sourceId("")) || id.startsWith(feedSourceId(""));
@@ -102,6 +123,24 @@ export function CopMap(props: CopMapProps) {
   );
   const [basemapMode, setBasemapMode] = useState<"vector" | "imagery">("vector");
   const imageryAvailable = !!props.imageryUrl && !props.basemapStyleUrl;
+  const readoutRef = useRef<HTMLDivElement>(null);
+  const measuringRef = useRef(false);
+  const measureCoordsRef = useRef<[number, number][]>([]);
+  const [measuring, setMeasuring] = useState(false);
+  // The last fetched features per source, so zoom-to-extent fits every feature,
+  // not just those in the current viewport (querySourceFeatures is viewport-bound).
+  const dataRef = useRef<Record<string, CopFeatureCollection>>({});
+
+  /** Paint the corner readout: cursor position, zoom, and measured distance. */
+  const paintReadout = (lng: number, lat: number, zoom: number) => {
+    const el = readoutRef.current;
+    if (!el) return;
+    const coords = measureCoordsRef.current;
+    const dist =
+      measuringRef.current && coords.length >= 2 ? ` · ${totalMiles(coords).toFixed(2)} mi` : "";
+    const hint = measuringRef.current && coords.length < 2 ? " · click to measure" : "";
+    el.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)} · z${zoom.toFixed(1)}${dist}${hint}`;
+  };
 
   useEffect(() => {
     if (!container.current) return;
@@ -142,6 +181,27 @@ export function CopMap(props: CopMapProps) {
     // Click any operational feature to inspect its record; a plain map click
     // dismisses. queryRenderedFeatures keeps this working as layers come and
     // go on the poll, with no per-layer handler churn.
+    // Push the current measure path (a line plus a vertex marker per click)
+    // into the measure source so the tool draws as the operator clicks.
+    const updateMeasure = () => {
+      const coords = measureCoordsRef.current;
+      const src = map.getSource("measure") as maplibregl.GeoJSONSource | undefined;
+      if (!src) return;
+      const features: unknown[] = coords.map((c) => ({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: c },
+        properties: {},
+      }));
+      if (coords.length >= 2) {
+        features.push({
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: coords },
+          properties: {},
+        });
+      }
+      src.setData({ type: "FeatureCollection", features } as never);
+    };
+
     const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, maxWidth: "280px" });
     map.on("click", (e) => {
       // Add-point mode: report the position for a new record, never inspect.
@@ -149,12 +209,20 @@ export function CopMap(props: CopMapProps) {
         onPickRef.current([e.lngLat.lng, e.lngLat.lat]);
         return;
       }
+      // Measure mode: each click extends the path; nothing is inspected.
+      if (measuringRef.current) {
+        measureCoordsRef.current = [...measureCoordsRef.current, [e.lngLat.lng, e.lngLat.lat]];
+        updateMeasure();
+        paintReadout(e.lngLat.lng, e.lngLat.lat, map.getZoom());
+        return;
+      }
       const hit = map.queryRenderedFeatures(e.point).find((f) => isCopLayerId(f.layer.id));
       if (!hit) return;
       popup.setLngLat(e.lngLat).setHTML(featureHtml(hit.properties ?? {})).addTo(map);
     });
     map.on("mousemove", (e) => {
-      if (pickingRef.current) return; // crosshair stays while placing a point
+      paintReadout(e.lngLat.lng, e.lngLat.lat, map.getZoom());
+      if (pickingRef.current || measuringRef.current) return; // tool cursors win
       const over = map.queryRenderedFeatures(e.point).some((f) => isCopLayerId(f.layer.id));
       map.getCanvas().style.cursor = over ? "pointer" : "";
     });
@@ -163,6 +231,7 @@ export function CopMap(props: CopMapProps) {
       for (const board of props.boards) {
         try {
           const fc = tagFeatures(await props.fetchItems(board.id));
+          dataRef.current[sourceId(board.id)] = fc;
           const source = map.getSource(sourceId(board.id)) as maplibregl.GeoJSONSource | undefined;
           if (source) source.setData(fc as never);
           else if (map.isStyleLoaded() || map.loaded()) {
@@ -180,6 +249,7 @@ export function CopMap(props: CopMapProps) {
           try {
             const res = await props.fetchFeedItems(feed.id);
             const fc = tagFeedFeatures(res, res.feed);
+            dataRef.current[feedSourceId(feed.id)] = fc;
             const source = map.getSource(feedSourceId(feed.id)) as maplibregl.GeoJSONSource | undefined;
             if (source) source.setData(fc as never);
             else if (map.isStyleLoaded() || map.loaded()) {
@@ -196,7 +266,33 @@ export function CopMap(props: CopMapProps) {
     };
 
     map.on("load", () => {
+      // The measure tool's own source and layers (a neutral color, not a
+      // status color, so it never reads as an operational condition, INV-8).
+      if (!map.getSource("measure")) {
+        map.addSource("measure", { type: "geojson", data: EMPTY_FC as never });
+        const ink = themes[props.theme].text;
+        map.addLayer({
+          id: "measure-line",
+          type: "line",
+          source: "measure",
+          filter: ["==", ["geometry-type"], "LineString"],
+          paint: { "line-color": ink, "line-width": 2, "line-dasharray": [2, 1] },
+        });
+        map.addLayer({
+          id: "measure-points",
+          type: "circle",
+          source: "measure",
+          filter: ["==", ["geometry-type"], "Point"],
+          paint: { "circle-radius": 4, "circle-color": ink },
+        });
+      }
+      const c = map.getCenter();
+      paintReadout(c.lng, c.lat, map.getZoom());
       void refresh();
+    });
+    map.on("moveend", () => {
+      const c = map.getCenter();
+      paintReadout(c.lng, c.lat, map.getZoom());
     });
     const timer = setInterval(() => void refresh(), props.pollMs ?? 2000);
     return () => {
@@ -228,6 +324,43 @@ export function CopMap(props: CopMapProps) {
     const map = mapRef.current;
     if (map) map.getCanvas().style.cursor = props.picking ? "crosshair" : "";
   }, [props.picking]);
+
+  useEffect(() => {
+    measuringRef.current = measuring;
+    const map = mapRef.current;
+    if (!map) return;
+    map.getCanvas().style.cursor = measuring ? "crosshair" : "";
+    if (!measuring) {
+      // Leaving measure mode clears the path.
+      measureCoordsRef.current = [];
+      const src = map.getSource("measure") as maplibregl.GeoJSONSource | undefined;
+      src?.setData(EMPTY_FC as never);
+    }
+  }, [measuring]);
+
+  /** Fit the viewport to every feature on the visible operational layers. */
+  const fitToFeatures = () => {
+    const map = mapRef.current;
+    if (!map) return;
+    const bounds = new maplibregl.LngLatBounds();
+    let any = false;
+    const walk = (c: unknown): void => {
+      if (Array.isArray(c) && typeof c[0] === "number" && typeof c[1] === "number") {
+        bounds.extend(c as [number, number]);
+        any = true;
+      } else if (Array.isArray(c)) {
+        for (const inner of c) walk(inner);
+      }
+    };
+    const consider = (id: string, on: boolean) => {
+      if (!on) return;
+      const fc = dataRef.current[id];
+      for (const f of fc?.features ?? []) walk((f.geometry as { coordinates?: unknown }).coordinates);
+    };
+    for (const b of props.boards) consider(sourceId(b.id), visible[b.id] ?? true);
+    for (const f of props.feeds ?? []) consider(feedSourceId(f.id), feedVisible[f.id] ?? true);
+    if (any) map.fitBounds(bounds, { padding: 64, maxZoom: 14, duration: 500 });
+  };
 
   useEffect(() => {
     const map = mapRef.current;
@@ -354,12 +487,62 @@ export function CopMap(props: CopMapProps) {
             ))}
           </ul>
         </div>
+        <div style={{ marginTop: 12 }}>
+          <h3 style={{ margin: "0 0 6px", fontSize: "0.85em", color: "var(--eoc-text-muted)" }}>
+            Tools
+          </h3>
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            <button type="button" onClick={fitToFeatures} style={toolButtonStyle(false)}>
+              Zoom to extent
+            </button>
+            <button
+              type="button"
+              aria-pressed={measuring}
+              onClick={() => setMeasuring((m) => !m)}
+              style={toolButtonStyle(measuring)}
+            >
+              {measuring ? "Measuring…" : "Measure"}
+            </button>
+          </div>
+        </div>
       </nav>
-      <div
-        ref={container}
-        data-testid="cop-map"
-        style={{ minHeight: 400, borderRadius: 6, overflow: "hidden" }}
-      />
+      <div style={{ position: "relative", minHeight: 400, height: "100%" }}>
+        <div
+          ref={container}
+          data-testid="cop-map"
+          style={{ position: "absolute", inset: 0, borderRadius: 6, overflow: "hidden" }}
+        />
+        <div
+          ref={readoutRef}
+          data-testid="cop-readout"
+          style={{
+            position: "absolute",
+            top: 8,
+            left: 8,
+            padding: "2px 8px",
+            fontSize: 12,
+            fontVariantNumeric: "tabular-nums",
+            color: "var(--eoc-text)",
+            background: "color-mix(in srgb, var(--eoc-surface) 85%, transparent)",
+            border: "1px solid var(--eoc-border)",
+            borderRadius: 4,
+            pointerEvents: "none",
+          }}
+        />
+      </div>
     </div>
   );
+}
+
+/** Shared style for the map's tool buttons (pressed state is a filled chip). */
+function toolButtonStyle(pressed: boolean): CSSProperties {
+  return {
+    padding: "4px 8px",
+    minHeight: 32,
+    borderRadius: 4,
+    cursor: "pointer",
+    border: "1px solid var(--eoc-border)",
+    background: pressed ? "var(--eoc-text)" : "var(--eoc-surface)",
+    color: pressed ? "var(--eoc-surface)" : "var(--eoc-text)",
+  };
 }
