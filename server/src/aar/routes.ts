@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { CAPABILITY_ELEMENT, CORE_CAPABILITIES } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import {
@@ -13,6 +14,14 @@ import {
 } from "./service.js";
 
 /**
+ * Capability is one of the 32 National Preparedness Goal Core Capabilities;
+ * the element is an HSEEP POETE element (or none). Both come from the
+ * dictionary so the API rejects anything off-doctrine.
+ */
+const capabilitySchema = z.enum(CORE_CAPABILITIES.values as [string, ...string[]]);
+const capabilityElementSchema = z.enum(CAPABILITY_ELEMENT.values as [string, ...string[]]);
+
+/**
  * After-action and improvement-planning routes (VEOC-36). Observations are
  * captured during the incident; the AAR composes from them plus the
  * chronology; corrective actions are jurisdiction-scoped and outlive the
@@ -20,7 +29,8 @@ import {
  */
 
 const ObservationBody = z.object({
-  capability: z.string().min(1),
+  capability: capabilitySchema,
+  capabilityElement: capabilityElementSchema.optional(),
   kind: z.enum(["strength", "improvement"]),
   observation: z.string().min(1),
   recommendation: z.string().optional(),
@@ -32,7 +42,8 @@ const AarBody = z.object({
 });
 const CaBody = z.object({
   incidentId: z.string().uuid().optional(),
-  capability: z.string().min(1),
+  capability: capabilitySchema,
+  capabilityElement: capabilityElementSchema.optional(),
   recommendation: z.string().min(1),
   ownerPosition: z.string().uuid().optional(),
   ownerPerson: z.string().uuid().optional(),
@@ -54,6 +65,7 @@ export function aarRoutes(
       const result = await withPerson(sql, req.principal.person.id, (tx) =>
         recordObservation(tx, req.principal, incidentId, {
           capability: body.capability,
+          ...(body.capabilityElement !== undefined ? { capabilityElement: body.capabilityElement } : {}),
           kind: body.kind,
           observation: body.observation,
           ...(body.recommendation !== undefined ? { recommendation: body.recommendation } : {}),
@@ -108,6 +120,7 @@ export function aarRoutes(
       const result = await withPerson(sql, req.principal.person.id, (tx) =>
         createCorrectiveAction(tx, req.principal, jurisdictionId, {
           capability: body.capability,
+          ...(body.capabilityElement !== undefined ? { capabilityElement: body.capabilityElement } : {}),
           recommendation: body.recommendation,
           ...(body.incidentId !== undefined ? { incidentId: body.incidentId } : {}),
           ...(body.ownerPosition !== undefined ? { ownerPosition: body.ownerPosition } : {}),

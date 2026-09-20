@@ -120,6 +120,7 @@ export interface ResourceRequestSummary {
 }
 export interface AarObservation {
   readonly capability: string;
+  readonly capabilityElement: string;
   readonly kind: "strength" | "improvement";
   readonly observation: string;
   readonly recommendation: string | null;
@@ -127,6 +128,7 @@ export interface AarObservation {
 export interface CorrectiveAction {
   readonly id: string;
   readonly capability: string;
+  readonly capabilityElement: string;
   readonly recommendation: string;
   readonly owner: string | null;
   readonly dueDate: string | null;
@@ -492,7 +494,13 @@ export class ApiClient {
   }
   recordAarObservation(
     incidentId: string,
-    body: { capability: string; kind: "strength" | "improvement"; observation: string; recommendation?: string },
+    body: {
+      capability: string;
+      capabilityElement?: string;
+      kind: "strength" | "improvement";
+      observation: string;
+      recommendation?: string;
+    },
   ): Promise<unknown> {
     return this.request<unknown>(
       "POST",
@@ -525,7 +533,13 @@ export class ApiClient {
   }
   createCorrectiveAction(
     jurisdictionId: string,
-    body: { capability: string; recommendation: string; incidentId?: string; dueDate?: string },
+    body: {
+      capability: string;
+      capabilityElement?: string;
+      recommendation: string;
+      incidentId?: string;
+      dueDate?: string;
+    },
   ): Promise<{ id: string }> {
     return this.request<{ id: string }>(
       "POST",

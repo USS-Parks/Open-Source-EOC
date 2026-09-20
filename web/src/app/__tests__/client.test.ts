@@ -185,7 +185,7 @@ describe("ApiClient", () => {
       if (u.endsWith("/aar/observations"))
         return res(200, {
           observations: [
-            { capability: "Mass Care", kind: "strength", observation: "Fast", recommendation: null },
+            { capability: "mass_care_services", capabilityElement: "none", kind: "strength", observation: "Fast", recommendation: null },
           ],
         });
       if (u.endsWith("/aar") && init.method === "POST") return res(201, { id: "a1" });
@@ -196,7 +196,7 @@ describe("ApiClient", () => {
     const client = new ApiClient({ fetchImpl });
     await client.login("e@x.org", "pw");
     await client.recordAarObservation("i1", { capability: "Mass Care", kind: "strength", observation: "Fast" });
-    expect((await client.listAarObservations("i1"))[0]!.capability).toBe("Mass Care");
+    expect((await client.listAarObservations("i1"))[0]!.capability).toBe("mass_care_services");
     const { id } = await client.composeAar("i1", { overview: "Solid response." });
     expect(id).toBe("a1");
     expect((await client.downloadAarPdf(id)).type).toBe("application/pdf");
@@ -230,7 +230,7 @@ describe("ApiClient", () => {
       if (u.includes("/corrective-actions?"))
         return res(200, {
           correctiveActions: [
-            { id: "c1", capability: "Comms", recommendation: "Repeater", owner: null, dueDate: null, status: "open", incidentId: null },
+            { id: "c1", capability: "operational_communications", capabilityElement: "equipment", recommendation: "Repeater", owner: null, dueDate: null, status: "open", incidentId: null },
           ],
         });
       if (u.endsWith("/status")) return res(200, { ok: true });

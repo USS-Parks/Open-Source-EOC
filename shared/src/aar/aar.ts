@@ -1,12 +1,17 @@
+import { CAPABILITY_ELEMENT_LABELS, CORE_CAPABILITY_LABELS } from "../dictionary/core-capabilities.js";
+
 /**
  * After-action review composition (VEOC-36, F16-adjacent, HSEEP-shaped). An
  * AAR is composed purely from observations captured during the incident, the
  * corrective actions, and the exported chronology used as evidence. Keeping
  * composition pure makes it golden-testable and lets the PDF writer render it.
+ * Capabilities are stored as National Preparedness Goal core-capability ids;
+ * the text projection maps them to their proper labels for the finished report.
  */
 
 export interface AarObservation {
   readonly capability: string;
+  readonly capabilityElement: string;
   readonly kind: "strength" | "improvement";
   readonly observation: string;
   readonly recommendation: string | null;
@@ -14,10 +19,22 @@ export interface AarObservation {
 
 export interface AarCorrectiveAction {
   readonly capability: string;
+  readonly capabilityElement: string;
   readonly recommendation: string;
   readonly owner: string | null;
   readonly dueDate: string | null;
   readonly status: string;
+}
+
+/**
+ * Bracket tag for a capability: the capability's proper label (falling back to
+ * the raw id for anything outside the dictionary), plus the POETE element label
+ * when one is set.
+ */
+function capabilityTag(capability: string, element: string): string {
+  const cap = CORE_CAPABILITY_LABELS[capability] ?? capability;
+  if (!element || element === "none") return cap;
+  return `${cap} / ${CAPABILITY_ELEMENT_LABELS[element] ?? element}`;
 }
 
 export interface AarComposeInput {
@@ -71,18 +88,19 @@ export function aarToTextLines(doc: AarDocument): string[] {
   for (const o of doc.objectives) lines.push(`  - ${o}`);
   lines.push("");
   lines.push("3. Strengths");
-  for (const s of doc.strengths) lines.push(`  [${s.capability}] ${s.observation}`);
+  for (const s of doc.strengths)
+    lines.push(`  [${capabilityTag(s.capability, s.capabilityElement)}] ${s.observation}`);
   lines.push("");
   lines.push("4. Areas for Improvement");
   for (const i of doc.improvements) {
-    lines.push(`  [${i.capability}] ${i.observation}`);
+    lines.push(`  [${capabilityTag(i.capability, i.capabilityElement)}] ${i.observation}`);
     if (i.recommendation) lines.push(`    Recommendation: ${i.recommendation}`);
   }
   lines.push("");
   lines.push("5. Improvement Plan (Corrective Actions)");
   for (const c of doc.correctiveActions) {
     lines.push(
-      `  [${c.capability}] ${c.recommendation} ` +
+      `  [${capabilityTag(c.capability, c.capabilityElement)}] ${c.recommendation} ` +
         `(owner: ${c.owner ?? "unassigned"}; due: ${c.dueDate ?? "TBD"}; status: ${c.status})`,
     );
   }

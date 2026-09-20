@@ -39,12 +39,13 @@ describe("the platform produces its own exercise AAR", () => {
   it("composes an AAR from the exercise observations and chronology and exports it", async () => {
     // Evaluators capture observations during the exercise, not after.
     await recordObservation(admin, actor, demo.incidentId, {
-      capability: "Operational Coordination",
+      capability: "operational_coordination",
       kind: "strength",
       observation: "Command was established and the evacuation ordered within the first period.",
     });
     await recordObservation(admin, actor, demo.incidentId, {
-      capability: "Public Information and Warning",
+      capability: "public_information_and_warning",
+      capabilityElement: "planning",
       kind: "improvement",
       observation: "The press release drafted but was not yet approved when the alert went out.",
       recommendation: "Pre-stage an approval chain for evacuation messaging.",

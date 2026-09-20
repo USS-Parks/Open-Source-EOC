@@ -1,8 +1,22 @@
 import { useState, type CSSProperties } from "react";
+import {
+  CAPABILITY_ELEMENT,
+  CAPABILITY_ELEMENT_LABELS,
+  CORE_CAPABILITIES,
+  CORE_CAPABILITY_LABELS,
+} from "@openeoc/shared";
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../../design/components.js";
 import type { ApiClient, AarObservation, CorrectiveAction } from "../api/client.js";
 import { useAsync } from "../data/hooks.js";
 import { EmptyState, ErrorNote, Loading, Scroll, SurfaceHeader } from "../screens/parts.js";
+
+const CAPABILITY_VALUES = CORE_CAPABILITIES.values as readonly string[];
+const ELEMENT_VALUES = CAPABILITY_ELEMENT.values as readonly string[];
+
+/** Human label for a capability id, falling back to the id if unmapped. */
+function capabilityLabel(id: string): string {
+  return CORE_CAPABILITY_LABELS[id] ?? id;
+}
 
 const caSelectStyle: CSSProperties = {
   fontFamily: "inherit",
@@ -36,10 +50,17 @@ function CaRow(props: {
     >
       <StatusBadge status={badge}>{props.ca.status}</StatusBadge>
       <span style={{ flex: 1 }}>
-        <strong>{props.ca.capability}</strong>: {props.ca.recommendation}
+        <strong>{capabilityLabel(props.ca.capability)}</strong>
+        {props.ca.capabilityElement && props.ca.capabilityElement !== "none" ? (
+          <span style={{ color: "var(--eoc-text-muted)" }}>
+            {" "}
+            ({CAPABILITY_ELEMENT_LABELS[props.ca.capabilityElement] ?? props.ca.capabilityElement})
+          </span>
+        ) : null}
+        : {props.ca.recommendation}
       </span>
       <select
-        aria-label={`Status for ${props.ca.capability}`}
+        aria-label={`Status for ${capabilityLabel(props.ca.capability)}`}
         value={status}
         onChange={(e) => setStatus(e.target.value)}
         style={caSelectStyle}
@@ -73,7 +94,8 @@ export function AarSurface(props: { client: ApiClient; jurisdictionId: string })
   const list = incidents.data ?? [];
   const [incidentId, setIncidentId] = useState("");
   const [reload, setReload] = useState(0);
-  const [capability, setCapability] = useState("");
+  const [capability, setCapability] = useState<string>(CAPABILITY_VALUES[0] ?? "");
+  const [element, setElement] = useState<string>("none");
   const [kind, setKind] = useState<"strength" | "improvement">("improvement");
   const [observation, setObservation] = useState("");
   const [recommendation, setRecommendation] = useState("");
@@ -88,7 +110,8 @@ export function AarSurface(props: { client: ApiClient; jurisdictionId: string })
     [active, reload],
   );
   const [caReload, setCaReload] = useState(0);
-  const [caCapability, setCaCapability] = useState("");
+  const [caCapability, setCaCapability] = useState<string>(CAPABILITY_VALUES[0] ?? "");
+  const [caElement, setCaElement] = useState<string>("none");
   const [caRecommendation, setCaRecommendation] = useState("");
   const correctiveActions = useAsync(
     () => props.client.listCorrectiveActions(props.jurisdictionId),
@@ -120,17 +143,18 @@ export function AarSurface(props: { client: ApiClient; jurisdictionId: string })
 
   const addObservation = () =>
     run(async () => {
-      if (!capability.trim() || !observation.trim())
+      if (!capability || !observation.trim())
         throw new Error("Capability and observation are required.");
       await props.client.recordAarObservation(active, {
-        capability: capability.trim(),
+        capability,
+        capabilityElement: element,
         kind,
         observation: observation.trim(),
         ...(recommendation.trim() ? { recommendation: recommendation.trim() } : {}),
       });
-      setCapability("");
       setObservation("");
       setRecommendation("");
+      setElement("none");
     });
 
   const compile = () =>
@@ -164,15 +188,16 @@ export function AarSurface(props: { client: ApiClient; jurisdictionId: string })
 
   const addCorrectiveAction = () =>
     runCa(async () => {
-      if (!caCapability.trim() || !caRecommendation.trim())
+      if (!caCapability || !caRecommendation.trim())
         throw new Error("Capability and recommendation are required.");
       await props.client.createCorrectiveAction(props.jurisdictionId, {
-        capability: caCapability.trim(),
+        capability: caCapability,
+        capabilityElement: caElement,
         recommendation: caRecommendation.trim(),
         ...(active ? { incidentId: active } : {}),
       });
-      setCaCapability("");
       setCaRecommendation("");
+      setCaElement("none");
     });
 
   const rows = observations.data ?? [];
@@ -194,8 +219,21 @@ export function AarSurface(props: { client: ApiClient; jurisdictionId: string })
 
         <Panel title="Record an observation">
           <div style={{ display: "grid", gap: 12 }}>
-            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "2fr 1fr" }}>
-              <TextField label="Capability" value={capability} onChange={setCapability} />
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "2fr 1fr 1fr" }}>
+              <EnumSelect
+                label="Core Capability"
+                values={CAPABILITY_VALUES}
+                value={capability}
+                onChange={setCapability}
+                labels={CORE_CAPABILITY_LABELS}
+              />
+              <EnumSelect
+                label="Capability element"
+                values={ELEMENT_VALUES}
+                value={element}
+                onChange={setElement}
+                labels={CAPABILITY_ELEMENT_LABELS}
+              />
               <EnumSelect
                 label="Kind"
                 values={["improvement", "strength"]}
@@ -236,7 +274,13 @@ export function AarSurface(props: { client: ApiClient; jurisdictionId: string })
                     {o.kind}
                   </StatusBadge>
                   <div style={{ flex: 1 }}>
-                    <strong>{o.capability}</strong>
+                    <strong>{capabilityLabel(o.capability)}</strong>
+                    {o.capabilityElement && o.capabilityElement !== "none" ? (
+                      <span style={{ color: "var(--eoc-text-muted)" }}>
+                        {" "}
+                        ({CAPABILITY_ELEMENT_LABELS[o.capabilityElement] ?? o.capabilityElement})
+                      </span>
+                    ) : null}
                     <div>{o.observation}</div>
                     {o.recommendation ? (
                       <div style={{ color: "var(--eoc-text-muted)" }}>Rec: {o.recommendation}</div>
@@ -261,8 +305,21 @@ export function AarSurface(props: { client: ApiClient; jurisdictionId: string })
         </Panel>
 
         <Panel title="Corrective actions (improvement plan)">
-          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 2fr auto" }}>
-            <TextField label="Capability area" value={caCapability} onChange={setCaCapability} />
+          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr 2fr auto" }}>
+            <EnumSelect
+              label="Core Capability"
+              values={CAPABILITY_VALUES}
+              value={caCapability}
+              onChange={setCaCapability}
+              labels={CORE_CAPABILITY_LABELS}
+            />
+            <EnumSelect
+              label="Capability element"
+              values={ELEMENT_VALUES}
+              value={caElement}
+              onChange={setCaElement}
+              labels={CAPABILITY_ELEMENT_LABELS}
+            />
             <TextField label="Recommended action" value={caRecommendation} onChange={setCaRecommendation} />
             <div style={{ display: "flex", alignItems: "flex-end" }}>
               <Button kind="primary" onClick={addCorrectiveAction} disabled={busy}>

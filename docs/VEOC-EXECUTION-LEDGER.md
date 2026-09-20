@@ -1336,3 +1336,46 @@ unchanged; all work on `main`.
   bars, and the anonymous public-information map remain further parity items.
 - **Rollback:** revert the VEOC-69 commit.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-70: National Preparedness Goal Core Capabilities in the AAR
+
+- **Session:** VEOC-70, executed 2026-09-20
+- **Starting HEAD:** `bc350c5` (WebEOC donut charts)
+- **Reference studied:** the WebEOC After-Action Reviews screens Basho attached,
+  which score observations against a fixed capability taxonomy and carry a
+  "Capability Element" field. The build captured capability as free text, so
+  AARs were not comparable across incidents or jurisdictions.
+- **Gap closed:** the 32 National Preparedness Goal Core Capabilities become a
+  cited dictionary enum (`npg.core_capabilities`), and the HSEEP POETE elements
+  become `npg.capability_element` (none, planning, organization, equipment,
+  training, exercises). AAR observations and corrective actions now carry a
+  validated capability and element. Capabilities are stored as machine ids and
+  render as their proper labels in the finished report and PDF; the operator UI
+  selects them from doctrine, not free text.
+- **Files created:** `shared/src/dictionary/core-capabilities.ts` (the two
+  enums, labels, and the mission-area map, cited to the NPG 2nd edition and
+  HSEEP); `server/migrations/0029_core_capabilities.sql` (a `capability_element`
+  column on `aar_observations` and `corrective_actions`, default `none`).
+- **Files changed:** `shared/src/dictionary/index.ts` (register the enums);
+  `shared/src/aar/aar.ts` (carry the element, render ids as labels in the text
+  projection); `server/src/aar/service.ts` (read/write the element);
+  `server/src/aar/routes.ts` (validate capability and element against the
+  dictionary; off-doctrine values are rejected 400); `web/src/app/api/client.ts`
+  (types and bodies); `web/src/app/surfaces/AarSurface.tsx` (capability and
+  element are dictionary dropdowns, shown by label); tests across shared, server,
+  and web updated to the doctrinal ids, with the browser E2E selecting a
+  capability from the dropdown.
+- **Acceptance proven by test:** the shared golden test renders a capability id
+  as its label with the POETE element tag; the server AAR test proves an
+  off-doctrine capability is rejected 400 and the element survives composition;
+  the browser E2E records an observation and a corrective action by selecting a
+  Core Capability and element, and the observation shows its proper label.
+- **Verification:** `pnpm check` green; tsc, eslint, license-scan, check-links
+  all pass; 380 tests / 71 files.
+- **Facets:** combines the WebEOC AAR taxonomy with the platform's cited
+  dictionary discipline (every enum carries an authority and document).
+- **Rollback:** revert the VEOC-70 commit; migration 0029 is additive
+  (columns default `none`) and safe to leave in place.
+- **Commit/push:** under standing authorization. No branch created.

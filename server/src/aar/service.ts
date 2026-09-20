@@ -29,16 +29,23 @@ export async function recordObservation(
   sql: Sql,
   actor: Principal,
   incidentId: string,
-  input: { capability: string; kind: "strength" | "improvement"; observation: string; recommendation?: string | undefined },
+  input: {
+    capability: string;
+    capabilityElement?: string | undefined;
+    kind: "strength" | "improvement";
+    observation: string;
+    recommendation?: string | undefined;
+  },
 ): Promise<{ id: string }> {
   const { jurisdictionId } = await incidentJurisdiction(sql, incidentId);
   requireWriter(actor, jurisdictionId);
   const [row] = await sql`
     insert into aar_observations
-      (jurisdiction_id, incident_id, capability, kind, observation, recommendation, created_by)
+      (jurisdiction_id, incident_id, capability, capability_element, kind, observation,
+       recommendation, created_by)
     values
-      (${jurisdictionId}, ${incidentId}, ${input.capability}, ${input.kind}, ${input.observation},
-       ${input.recommendation ?? null}, ${actor.person.id})
+      (${jurisdictionId}, ${incidentId}, ${input.capability}, ${input.capabilityElement ?? "none"},
+       ${input.kind}, ${input.observation}, ${input.recommendation ?? null}, ${actor.person.id})
     returning id`;
   await recordAudit(sql, actor, {
     jurisdictionId,
@@ -59,10 +66,11 @@ export async function listObservations(
   const { jurisdictionId } = await incidentJurisdiction(sql, incidentId);
   requireMember(actor, jurisdictionId);
   const rows = await sql`
-    select capability, kind, observation, recommendation from aar_observations
+    select capability, capability_element, kind, observation, recommendation from aar_observations
     where incident_id = ${incidentId} order by created_at`;
   return rows.map((r) => ({
     capability: r.capability as string,
+    capabilityElement: (r.capability_element as string | null) ?? "none",
     kind: r.kind as "strength" | "improvement",
     observation: r.observation as string,
     recommendation: (r.recommendation as string | null) ?? null,
@@ -76,6 +84,7 @@ export async function createCorrectiveAction(
   input: {
     incidentId?: string | undefined;
     capability: string;
+    capabilityElement?: string | undefined;
     recommendation: string;
     ownerPosition?: string | undefined;
     ownerPerson?: string | undefined;
@@ -85,10 +94,11 @@ export async function createCorrectiveAction(
   requireWriter(actor, jurisdictionId);
   const [row] = await sql`
     insert into corrective_actions
-      (jurisdiction_id, incident_id, capability, recommendation, owner_position, owner_person,
-       due_date, created_by)
+      (jurisdiction_id, incident_id, capability, capability_element, recommendation,
+       owner_position, owner_person, due_date, created_by)
     values
-      (${jurisdictionId}, ${input.incidentId ?? null}, ${input.capability}, ${input.recommendation},
+      (${jurisdictionId}, ${input.incidentId ?? null}, ${input.capability},
+       ${input.capabilityElement ?? "none"}, ${input.recommendation},
        ${input.ownerPosition ?? null}, ${input.ownerPerson ?? null}, ${input.dueDate ?? null},
        ${actor.person.id})
     returning id`;
@@ -129,6 +139,7 @@ export async function setCorrectiveActionStatus(
 export interface CorrectiveActionRow {
   readonly id: string;
   readonly capability: string;
+  readonly capabilityElement: string;
   readonly recommendation: string;
   readonly owner: string | null;
   readonly dueDate: string | null;
@@ -148,7 +159,8 @@ export async function listCorrectiveActions(
 ): Promise<CorrectiveActionRow[]> {
   requireMember(actor, jurisdictionId);
   const rows = await sql`
-    select ca.id, ca.capability, ca.recommendation, ca.due_date, ca.status, ca.incident_id,
+    select ca.id, ca.capability, ca.capability_element, ca.recommendation, ca.due_date,
+           ca.status, ca.incident_id,
            coalesce(pos.title, per.display_name) as owner
     from corrective_actions ca
     left join positions pos on pos.id = ca.owner_position
@@ -160,6 +172,7 @@ export async function listCorrectiveActions(
   return rows.map((r) => ({
     id: r.id as string,
     capability: r.capability as string,
+    capabilityElement: (r.capability_element as string | null) ?? "none",
     recommendation: r.recommendation as string,
     owner: (r.owner as string | null) ?? null,
     dueDate: r.due_date ? (r.due_date as Date).toISOString().slice(0, 10) : null,
@@ -182,6 +195,7 @@ export async function composeAndStoreAar(
     .filter((c) => c.incidentId === incidentId)
     .map((c) => ({
       capability: c.capability,
+      capabilityElement: c.capabilityElement,
       recommendation: c.recommendation,
       owner: c.owner,
       dueDate: c.dueDate,

@@ -386,18 +386,29 @@ describe("the operations console in a real browser, offline", () => {
     // The row's state badge flips to "triaged" (the first allowed transition).
     await page.getByText("triaged", { exact: true }).first().waitFor({ state: "visible", timeout: 20000 });
 
-    // After-action review: record an observation against the incident.
+    // After-action review: record an observation against a Core Capability.
     await page.getByRole("button", { name: "AAR" }).click();
     await page.getByText("After-Action Review").waitFor({ state: "visible", timeout: 20000 });
-    await page.getByLabel("Capability", { exact: true }).fill("Mass Care");
+    const obsPanel = page.getByRole("region", { name: "Record an observation" });
+    await obsPanel.getByLabel("Core Capability").selectOption("mass_care_services");
+    await obsPanel.getByLabel("Capability element").selectOption("training");
     await page.getByLabel("Observation", { exact: true }).fill("Shelter stood up within two hours.");
     await page.getByRole("button", { name: "Add observation" }).click();
     await page
       .getByText("Shelter stood up within two hours.")
       .first()
       .waitFor({ state: "visible", timeout: 20000 });
-    // A corrective action in the improvement plan.
-    await page.getByLabel("Capability area").fill("Communications");
+    // The observation renders the capability's proper label (scoped to the
+    // Observations list so it does not match the select's hidden <option>).
+    await page
+      .getByRole("region", { name: "Observations" })
+      .getByText("Mass Care Services")
+      .first()
+      .waitFor({ state: "visible", timeout: 20000 });
+    // A corrective action in the improvement plan, against a Core Capability.
+    const caPanel = page.getByRole("region", { name: "Corrective actions (improvement plan)" });
+    await caPanel.getByLabel("Core Capability").selectOption("operational_communications");
+    await caPanel.getByLabel("Capability element").selectOption("equipment");
     await page.getByLabel("Recommended action").fill("Add a backup repeater at the EOC.");
     await page.getByRole("button", { name: "Add action" }).click();
     await page

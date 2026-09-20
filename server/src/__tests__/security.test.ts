@@ -99,7 +99,7 @@ describe("no jurisdiction reaches another's authority", () => {
       ["POST", `/api/v1/jurisdictions/${jurB}/boards`, { templateKey: "activity_log" }],
       ["GET", `/api/v1/jurisdictions/${jurB}/ipaws`],
       ["POST", `/api/v1/jurisdictions/${jurB}/resource-requests`, { origin: "eoc", item: "x" }],
-      ["POST", `/api/v1/jurisdictions/${jurB}/corrective-actions`, { capability: "x", recommendation: "y" }],
+      ["POST", `/api/v1/jurisdictions/${jurB}/corrective-actions`, { capability: "planning", recommendation: "y" }],
       ["POST", `/api/v1/jurisdictions/${jurB}/jic/releases`, { title: "x", body: "y" }],
     ];
     for (const [method, url, body] of attempts) {
@@ -117,7 +117,7 @@ describe("viewers are read-only (INV-1)", () => {
     const writes: Array<[string, string, Record<string, unknown>]> = [
       ["POST", `/api/v1/jurisdictions/${jurA}/resource-requests`, { origin: "eoc", item: "x" }],
       ["POST", `/api/v1/jurisdictions/${jurA}/jic/releases`, { title: "x", body: "y" }],
-      ["POST", `/api/v1/jurisdictions/${jurA}/corrective-actions`, { capability: "x", recommendation: "y" }],
+      ["POST", `/api/v1/jurisdictions/${jurA}/corrective-actions`, { capability: "planning", recommendation: "y" }],
       ["POST", `/api/v1/jurisdictions/${jurA}/boards`, { templateKey: "activity_log" }],
     ];
     for (const [method, url, body] of writes) {

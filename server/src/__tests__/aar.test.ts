@@ -61,22 +61,32 @@ afterAll(async () => {
 describe("AAR composition", () => {
   it("composes from observations captured during the incident plus chronology", async () => {
     await api("POST", `/api/v1/incidents/${incidentId}/aar/observations`, {
-      capability: "Operational Communications",
+      capability: "operational_communications",
       kind: "strength",
       observation: "The radio net held throughout the operational period.",
     });
     await api("POST", `/api/v1/incidents/${incidentId}/aar/observations`, {
-      capability: "Mass Care",
+      capability: "mass_care_services",
+      capabilityElement: "training",
       kind: "improvement",
       observation: "The shelter opened two hours late.",
       recommendation: "Pre-stage shelter kits at the community center.",
     });
     await api("POST", `/api/v1/jurisdictions/${jurisdictionId}/corrective-actions`, {
       incidentId,
-      capability: "Mass Care",
+      capability: "mass_care_services",
+      capabilityElement: "equipment",
       recommendation: "Pre-stage shelter kits",
       dueDate: "2026-12-01",
     });
+
+    // An off-doctrine capability is rejected at the API boundary.
+    const bad = await api("POST", `/api/v1/incidents/${incidentId}/aar/observations`, {
+      capability: "Made Up Capability",
+      kind: "improvement",
+      observation: "Should not be accepted.",
+    });
+    expect(bad.statusCode).toBe(400);
 
     const res = await api("POST", `/api/v1/incidents/${incidentId}/aar`, {
       overview: "A fast-moving wildfire above the lower service area.",
@@ -87,7 +97,9 @@ describe("AAR composition", () => {
     const content = res.json().content;
     expect(content.strengths).toHaveLength(1);
     expect(content.improvements).toHaveLength(1);
+    expect(content.improvements[0].capabilityElement).toBe("training");
     expect(content.correctiveActions).toHaveLength(1);
+    expect(content.correctiveActions[0].capabilityElement).toBe("equipment");
     expect(content.chronologyCount).toBeGreaterThan(0);
 
     const pdf = await api("GET", `/api/v1/aar/${res.json().id}/pdf`);
@@ -101,7 +113,7 @@ describe("corrective actions outlive the incident", () => {
     const caId = (
       await api("POST", `/api/v1/jurisdictions/${jurisdictionId}/corrective-actions`, {
         incidentId,
-        capability: "Planning",
+        capability: "planning",
         recommendation: "Revise the evacuation annex",
         dueDate: "2027-01-15",
       })
