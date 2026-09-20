@@ -563,9 +563,14 @@ export function CopMap(props: CopMapProps) {
     markerRef.current?.remove();
     markerRef.current = null;
     if (r.kind === "coordinate") {
-      markerRef.current = new maplibregl.Marker({ color: themes[props.theme].text })
+      const marker = new maplibregl.Marker({ color: themes[props.theme].text })
         .setLngLat(center)
         .addTo(map);
+      // The marker is a DOM element over the canvas; it must not swallow the
+      // next map click (an operator goes to a coordinate, then drops a point
+      // there).
+      marker.getElement().style.pointerEvents = "none";
+      markerRef.current = marker;
     }
     if (r.kind === "feature" && r.properties && popupRef.current) {
       popupRef.current.setLngLat(center).setHTML(featureHtml(r.properties)).addTo(map);

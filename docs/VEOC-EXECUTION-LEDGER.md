@@ -1665,3 +1665,23 @@ unchanged; all work on `main`.
 - **Commit/push:** proposed to Basho at session end; not performed. No
   branch created; the working folder was cloned from origin on Basho's
   instruction at session start (it was empty).
+
+---
+
+## VEOC-76a: correction to VEOC-76 (CI red on the E2E)
+
+- **Session:** VEOC-76a, executed 2026-09-20, from Basho's desktop
+- **Starting HEAD:** `a0f5df2` (VEOC-76, committed and pushed on Basho's
+  instruction)
+- **What CI found:** the browser E2E timed out on the "Add point" map click
+  after the new find-on-map steps. The "Go to" coordinate marker is a DOM
+  element over the canvas and intercepted the click. That is an operator bug,
+  not a test artifact: go to a coordinate, then try to drop a point there, and
+  the tap is swallowed.
+- **Fix:** the coordinate marker's element is set to ignore pointer events in
+  `web/src/cop/CopMap.tsx` (`goTo`). No test change; the existing E2E sequence
+  is the regression check.
+- **Verification:** tsc, eslint, and the web unit suite green locally; CI is
+  the proof for the E2E, recorded on the next receipt.
+- **Rollback:** revert the VEOC-76a commit.
+- **Commit/push:** under Basho's express session authorization (2026-09-20).
