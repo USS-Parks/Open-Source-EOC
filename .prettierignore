@@ -1,0 +1,5 @@
+# This repository's TypeScript is hand-formatted to a compact style and
+# governed by ESLint, not Prettier (Prettier is not a project dependency).
+# A global editor/agent autoformatter must not reflow the tree, so ignore
+# everything here. Style is enforced by `eslint .` in `pnpm check`.
+**
