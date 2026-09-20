@@ -24,6 +24,7 @@ describe("standard board library (F1: boards as data)", () => {
       "rumor_control",
       "talking_points",
       "field_reports",
+      "damage_assessment",
     ]);
   });
 

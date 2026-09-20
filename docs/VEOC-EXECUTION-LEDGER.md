@@ -1122,3 +1122,34 @@ unchanged; all work on `main`.
   a people picker are follow-ups.
 - **Rollback:** revert the VEOC-62 commit.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-63: Damage-assessment board and roadmap finalization
+
+- **Session:** VEOC-63, executed 2026-09-20
+- **Starting HEAD:** `6a5106a` (native messaging)
+- **Operator gap closed:** damage assessment (PDA) had no board and so no
+  operator path. Adds a standard damage-assessment board that is reachable in
+  Boards and captured with the map's drop-a-point-plus-photo flow, closing the
+  last Phase D field-capture gap. Finalizes the roadmap to the true state.
+- **Files created/changed:** `shared/src/boards/standard.ts` (a
+  `damage_assessment` board: structure type, ownership, damage degree from the
+  PDA dictionary enums, notes, photo attachment, point location);
+  `shared/src/boards/__tests__/boards.test.ts` (the board joins the standard-set
+  assertion); `ROADMAP.md` (D "mostly", E "partial", F "yes", with honest
+  per-phase notes and the one-line status rewritten to what an operator can do
+  and what is backend-only or gated).
+- **Acceptance proven by test:** the standard set includes damage_assessment and
+  every template still builds a working record validator; the board carries the
+  cited PDA enums, a photo attachment, and a point geometry, so it captures on
+  the map like the field-reports board.
+- **Verification:** `pnpm check` green; 375 tests / 71 files.
+- **Facets:** closes the Phase D damage-assessment operator path (F6/F8/PDA).
+- **Roadmap state after this prompt:** operator UI is A complete, B/C/F yes,
+  D mostly (smart-form runner and tracking/reunification remain backend-only),
+  E partial (feeds admin present; federation and EDXL/CoT are machine APIs; IPAWS
+  live is gated), G's load gate met. The only true remainders are external and
+  gated on Basho: IPAWS live credentialing and the live pilot (VEOC-42).
+- **Rollback:** revert the VEOC-63 commit.
+- **Commit/push:** under standing authorization. No branch created.

@@ -222,4 +222,22 @@ export const STANDARD_TEMPLATES: readonly BoardTemplate[] = [
     ],
     views: [{ key: "all", title: "All reports", columns: ["summary", "category"] }],
   }),
+  t({
+    key: "damage_assessment",
+    version: 1,
+    title: "Damage Assessment",
+    description: "Individual-assistance damage survey (PDA), geotagged with a photo.",
+    fields: [
+      { key: "structure_type", label: "Structure type", type: "enum", enumId: "pda.ia_structure_types", required: true },
+      { key: "ownership", label: "Ownership", type: "enum", enumId: "pda.ia_ownership" },
+      { key: "degree", label: "Damage degree", type: "enum", enumId: "pda.damage_degrees", required: true },
+      { key: "notes", label: "Notes", type: "text" },
+      { key: "photo", label: "Photo", type: "attachment" },
+      { key: "location", label: "Location", type: "geometry", geometryKind: "point" },
+    ],
+    views: [
+      { key: "all", title: "All assessments", columns: ["structure_type", "degree"] },
+      { key: "destroyed", title: "Destroyed", columns: ["structure_type"], filter: [{ field: "degree", op: "eq", value: "destroyed" }] },
+    ],
+  }),
 ];
