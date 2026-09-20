@@ -141,13 +141,32 @@ describe("layer construction", () => {
     expect(JSON.stringify(style)).not.toContain("http");
   });
 
-  it("adds the imagery raster to the bundled style when a tile URL is set", () => {
-    const style = buildBundledVectorStyle({ assetBase: "/" }, "light", "https://t.gov/{z}/{x}/{y}.png") as {
-      sources: Record<string, { type: string }>;
-      layers: Array<{ id: string }>;
-    };
-    expect(style.sources.imagery!.type).toBe("raster");
-    expect(style.layers.some((l) => l.id === "imagery")).toBe(true);
+  it("mounts the basemap gallery rasters hidden, basemaps before overlays, on every style", () => {
+    const rasters = [
+      { id: "hydro", title: "Hydrography", tiles: "https://t.gov/h/{z}/{y}/{x}", overlay: true },
+      { id: "imagery", title: "Imagery", tiles: "https://t.gov/i/{z}/{y}/{x}", attribution: "USGS" },
+      { id: "topo", title: "Topo", tiles: "https://t.gov/t/{z}/{y}/{x}" },
+    ];
+    const styles = [
+      buildBundledVectorStyle({ assetBase: "/" }, "light", rasters),
+      buildCopStyle("dark", { kind: "natural-earth", assetBase: "/" }, rasters),
+      buildStreetStyle({ pmtilesUrl: "https://t/x.pmtiles", glyphsUrl: "/f/{fontstack}/{range}.pbf" }, "light", rasters),
+    ] as Array<{
+      sources: Record<string, { type: string; tiles?: string[]; attribution?: string }>;
+      layers: Array<{ id: string; type: string; layout?: { visibility?: string } }>;
+    }>;
+    for (const style of styles) {
+      const ids = style.layers.map((l) => l.id);
+      expect(style.sources["raster-imagery"]!.type).toBe("raster");
+      expect(style.sources["raster-imagery"]!.tiles).toEqual(["https://t.gov/i/{z}/{y}/{x}"]);
+      expect(style.sources["raster-imagery"]!.attribution).toBe("USGS");
+      for (const id of ["raster-imagery", "raster-topo", "raster-hydro"]) {
+        expect(style.layers.find((l) => l.id === id)!.layout?.visibility).toBe("none");
+      }
+      // The overlay draws above both basemaps, and every raster above the vector map.
+      expect(ids.indexOf("raster-hydro")).toBeGreaterThan(ids.indexOf("raster-topo"));
+      expect(ids.indexOf("raster-imagery")).toBeGreaterThan(ids.indexOf("water"));
+    }
   });
 
   it("builds a themed street style over a self-hosted OpenMapTiles PMTiles source", () => {
@@ -234,16 +253,10 @@ describe("layer construction", () => {
     expect(ids).not.toContain("place-label");
   });
 
-  it("adds a hidden imagery raster basemap when a tile URL is configured", () => {
-    const url = "https://tiles.example.gov/{z}/{x}/{y}.png";
-    const style = buildCopStyle("light", { kind: "natural-earth", assetBase: "/" }, url) as {
-      sources: Record<string, { type: string; tiles?: string[] }>;
-      layers: Array<{ id: string; layout?: { visibility?: string } }>;
-    };
-    expect(style.sources.imagery!.type).toBe("raster");
-    expect(style.sources.imagery!.tiles).toEqual([url]);
-    const imagery = style.layers.find((l) => l.id === "imagery")!;
-    expect(imagery.layout?.visibility).toBe("none");
+  it("keeps every style free of rasters when none are configured", () => {
+    const style = JSON.stringify(buildBundledVectorStyle({ assetBase: "/" }, "light"));
+    expect(style).not.toContain("raster-");
+    expect(style).not.toContain("http");
   });
 });
 

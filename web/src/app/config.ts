@@ -1,4 +1,5 @@
 import { BUNDLED_FONT_STACK } from "../cop/bundledbasemap.js";
+import type { RasterBasemap } from "../cop/layers.js";
 
 /**
  * Runtime deployment config. A host can inject `window.OPENEOC = { ... }`
@@ -21,11 +22,17 @@ interface RuntimeConfig {
   readonly OPENEOC_BASEMAP_FONT?: string;
   /** Optional sprite base URL for the street style's icons. */
   readonly OPENEOC_BASEMAP_SPRITE_URL?: string;
-  /** A raster XYZ tile template (e.g. satellite/aerial imagery) offered as a
-   * switchable basemap. The deployment provides it (self-hosted keeps the COP
-   * offline; a public provider is the deployment's choice). */
+  /** Raster XYZ tile templates offered in the basemap gallery beside the
+   * vector map: aerial imagery, a topographic map, and a hydrography overlay.
+   * The deployment provides each (self-hosted keeps the COP offline; a public
+   * service such as the USGS National Map is the deployment's choice). Each
+   * has an attribution shown while it is visible. */
   readonly OPENEOC_IMAGERY_TILE_URL?: string;
   readonly OPENEOC_IMAGERY_ATTRIBUTION?: string;
+  readonly OPENEOC_TOPO_TILE_URL?: string;
+  readonly OPENEOC_TOPO_ATTRIBUTION?: string;
+  readonly OPENEOC_HYDRO_TILE_URL?: string;
+  readonly OPENEOC_HYDRO_ATTRIBUTION?: string;
 }
 
 export interface StreetBasemapSettings {
@@ -66,15 +73,18 @@ export function streetBasemap(): StreetBasemapSettings | undefined {
   return { pmtilesUrl, glyphsUrl, fontStack, ...(spriteUrl ? { spriteUrl } : {}) };
 }
 
-/** A raster imagery tile template offered as a switchable basemap, if set. */
-export function imageryTileUrl(): string | undefined {
-  const value = runtime().OPENEOC_IMAGERY_TILE_URL;
-  return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
-export function imageryAttribution(): string | undefined {
-  const value = runtime().OPENEOC_IMAGERY_ATTRIBUTION;
-  return typeof value === "string" && value.length > 0 ? value : undefined;
+/** The raster basemaps and overlays the deployment configured, in gallery order. */
+export function rasterBasemaps(): RasterBasemap[] {
+  const r = runtime();
+  const out: RasterBasemap[] = [];
+  const add = (id: string, title: string, tiles?: string, attribution?: string, overlay = false) => {
+    const url = setting(tiles);
+    if (url) out.push({ id, title, tiles: url, attribution: setting(attribution), overlay });
+  };
+  add("imagery", "Imagery", r.OPENEOC_IMAGERY_TILE_URL, r.OPENEOC_IMAGERY_ATTRIBUTION);
+  add("topo", "Topo", r.OPENEOC_TOPO_TILE_URL, r.OPENEOC_TOPO_ATTRIBUTION);
+  add("hydro", "Hydrography", r.OPENEOC_HYDRO_TILE_URL, r.OPENEOC_HYDRO_ATTRIBUTION, true);
+  return out;
 }
 
 /** The base path the app is served under; bundled assets live beneath it. */

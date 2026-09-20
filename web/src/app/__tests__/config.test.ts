@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { streetBasemap } from "../config.js";
+import { rasterBasemaps, streetBasemap } from "../config.js";
 
 type Runtime = { OPENEOC?: Record<string, string> };
 const g = globalThis as unknown as Runtime;
@@ -35,5 +35,29 @@ describe("street basemap runtime config", () => {
     expect(s.glyphsUrl).toBe("https://tiles/fonts/{fontstack}/{range}.pbf");
     expect(s.fontStack).toBe("Noto Sans Regular");
     expect(s.spriteUrl).toBe("https://tiles/sprite");
+  });
+});
+
+describe("basemap gallery runtime config", () => {
+  afterEach(() => {
+    delete g.OPENEOC;
+  });
+
+  it("is empty until a raster is configured", () => {
+    expect(rasterBasemaps()).toEqual([]);
+  });
+
+  it("lists imagery, topo, and the hydrography overlay in gallery order", () => {
+    g.OPENEOC = {
+      OPENEOC_TOPO_TILE_URL: "https://usgs/topo/{z}/{y}/{x}",
+      OPENEOC_TOPO_ATTRIBUTION: "USGS The National Map",
+      OPENEOC_IMAGERY_TILE_URL: "https://usgs/img/{z}/{y}/{x}",
+      OPENEOC_HYDRO_TILE_URL: "https://usgs/hydro/{z}/{y}/{x}",
+    };
+    const list = rasterBasemaps();
+    expect(list.map((b) => b.id)).toEqual(["imagery", "topo", "hydro"]);
+    expect(list[1]!.attribution).toBe("USGS The National Map");
+    expect(list[0]!.attribution).toBeUndefined();
+    expect(list.map((b) => !!b.overlay)).toEqual([false, false, true]);
   });
 });

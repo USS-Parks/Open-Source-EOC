@@ -7,10 +7,12 @@ import {
   boardLayerIds,
   boardLayerSpecs,
   buildCopStyle,
+  rasterLayerId,
   sourceId,
   tagFeatures,
   type BasemapConfig,
   type CopFeatureCollection,
+  type RasterBasemap,
 } from "./layers.js";
 import { NATURAL_EARTH_ATTRIBUTION } from "./basemap.js";
 import {
@@ -66,9 +68,9 @@ export interface CopMapProps {
   /** The bundled Natural Earth PMTiles vector basemap (the default offline
    * basemap), used when no external style or self-hosted street tiles are set. */
   readonly bundledBasemap?: BundledBasemapConfig | undefined;
-  /** A raster imagery tile template offered as a switchable basemap. */
-  readonly imageryUrl?: string | undefined;
-  readonly imageryAttribution?: string | undefined;
+  /** Raster basemaps and overlays (imagery, topo, hydrography) offered in
+   * the gallery beside the vector map. */
+  readonly rasterBasemaps?: readonly RasterBasemap[] | undefined;
   readonly pollMs?: number | undefined;
   readonly center?: [number, number] | undefined;
   readonly zoom?: number | undefined;
@@ -169,8 +171,12 @@ export function CopMap(props: CopMapProps) {
   const [feedVisible, setFeedVisible] = useState<Record<string, boolean>>(
     Object.fromEntries((props.feeds ?? []).map((f) => [f.id, true])),
   );
-  const [basemapMode, setBasemapMode] = useState<"vector" | "imagery">("vector");
-  const imageryAvailable = !!props.imageryUrl && !props.basemapStyleUrl;
+  // The gallery: an external style carries its own basemap, so no rasters there.
+  const rasters = props.basemapStyleUrl ? [] : (props.rasterBasemaps ?? []);
+  const rasterBases = rasters.filter((r) => !r.overlay);
+  const overlays = rasters.filter((r) => r.overlay);
+  const [basemapMode, setBasemapMode] = useState("vector");
+  const [overlayOn, setOverlayOn] = useState<Record<string, boolean>>({});
   const readoutRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<MeasureMode>("off");
   const measureCoordsRef = useRef<[number, number][]>([]);
@@ -231,10 +237,10 @@ export function CopMap(props: CopMapProps) {
       container: container.current,
       style: (props.basemapStyleUrl ??
         (props.streetBasemap
-          ? buildStreetStyle(props.streetBasemap, props.theme)
+          ? buildStreetStyle(props.streetBasemap, props.theme, rasters)
           : props.bundledBasemap
-            ? buildBundledVectorStyle(props.bundledBasemap, props.theme, props.imageryUrl)
-            : buildCopStyle(props.theme, props.basemap, props.imageryUrl))) as never,
+            ? buildBundledVectorStyle(props.bundledBasemap, props.theme, rasters)
+            : buildCopStyle(props.theme, props.basemap, rasters))) as never,
       center: home.center,
       zoom: home.zoom,
       attributionControl: false,
@@ -260,22 +266,18 @@ export function CopMap(props: CopMapProps) {
     map.addControl(
       new maplibregl.AttributionControl({
         compact: true,
-        customAttribution: [
-          // The active basemap's attribution: an external style carries its
-          // own; the street PMTiles is OSM/ODbL; otherwise the bundled basemap.
-          props.basemapStyleUrl
-            ? ""
-            : props.streetBasemap
-              ? OSM_ATTRIBUTION
-              : props.bundledBasemap
-                ? BUNDLED_BASEMAP_ATTRIBUTION
-                : props.basemap?.kind === "natural-earth"
-                  ? NATURAL_EARTH_ATTRIBUTION
-                  : "",
-          props.imageryAttribution ?? "",
-        ]
-          .filter(Boolean)
-          .join(" · "),
+        // The vector basemap's attribution: an external style carries its
+        // own; the street PMTiles is OSM/ODbL; otherwise the bundled basemap.
+        // Gallery rasters carry theirs on the source, shown while visible.
+        customAttribution: props.basemapStyleUrl
+          ? ""
+          : props.streetBasemap
+            ? OSM_ATTRIBUTION
+            : props.bundledBasemap
+              ? BUNDLED_BASEMAP_ATTRIBUTION
+              : props.basemap?.kind === "natural-earth"
+                ? NATURAL_EARTH_ATTRIBUTION
+                : "",
       }),
       "bottom-right",
     );
@@ -598,15 +600,18 @@ export function CopMap(props: CopMapProps) {
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !imageryAvailable) return;
+    if (!map || rasters.length === 0) return;
     const apply = () => {
-      if (map.getLayer("imagery")) {
-        map.setLayoutProperty("imagery", "visibility", basemapMode === "imagery" ? "visible" : "none");
+      for (const r of rasters) {
+        const id = rasterLayerId(r.id);
+        if (!map.getLayer(id)) continue;
+        const on = r.overlay ? !!overlayOn[r.id] : basemapMode === r.id;
+        map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
       }
     };
     if (map.isStyleLoaded()) apply();
     else map.once("load", apply);
-  }, [basemapMode, imageryAvailable]);
+  }, [basemapMode, overlayOn]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -656,22 +661,41 @@ export function CopMap(props: CopMapProps) {
             </ul>
           ) : null}
         </form>
-        {imageryAvailable ? (
+        {rasterBases.length > 0 ? (
           <div style={{ marginBottom: 12 }}>
             <h3 style={headingStyle}>Basemap</h3>
-            <div style={{ display: "flex", gap: 4 }}>
-              {(["vector", "imagery"] as const).map((mode) => (
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+              {[{ id: "vector", title: "Map" }, ...rasterBases].map((b) => (
                 <button
-                  key={mode}
+                  key={b.id}
                   type="button"
-                  aria-pressed={basemapMode === mode}
-                  onClick={() => setBasemapMode(mode)}
-                  style={{ ...toolButtonStyle(basemapMode === mode), flex: 1, textTransform: "capitalize" }}
+                  aria-pressed={basemapMode === b.id}
+                  onClick={() => setBasemapMode(b.id)}
+                  style={{ ...toolButtonStyle(basemapMode === b.id), flex: 1 }}
                 >
-                  {mode}
+                  {b.title}
                 </button>
               ))}
             </div>
+          </div>
+        ) : null}
+        {overlays.length > 0 ? (
+          <div style={{ marginBottom: 12 }}>
+            <h3 style={headingStyle}>Overlays</h3>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
+              {overlays.map((o) => (
+                <li key={o.id}>
+                  <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={!!overlayOn[o.id]}
+                      onChange={() => setOverlayOn((v) => ({ ...v, [o.id]: !v[o.id] }))}
+                    />
+                    {o.title}
+                  </label>
+                </li>
+              ))}
+            </ul>
           </div>
         ) : null}
         <h3 style={headingStyle}>Layers</h3>

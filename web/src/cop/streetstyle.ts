@@ -1,5 +1,6 @@
 import type { ThemeName } from "../design/tokens.js";
 import { BUNDLED_FONT_STACK } from "./bundledbasemap.js";
+import { rasterBasemapSpecs, type RasterBasemap } from "./layers.js";
 
 /**
  * A themed MapLibre street style over a self-hosted OpenMapTiles-schema PMTiles
@@ -137,6 +138,7 @@ function width(stops: [number, number][]): unknown {
 export function buildStreetStyle(
   config: StreetBasemapConfig,
   theme: ThemeName,
+  rasters: readonly RasterBasemap[] = [],
 ): Record<string, unknown> {
   const p = PALETTE[theme];
   const src = "openmaptiles";
@@ -383,6 +385,10 @@ export function buildStreetStyle(
     );
   }
 
+  // Gallery rasters: hidden until chosen; above the street map, below the
+  // runtime operational layers.
+  const raster = rasterBasemapSpecs(rasters);
+  layers.push(...raster.layers);
   const style: Record<string, unknown> = {
     version: 8,
     glyphs: config.glyphsUrl,
@@ -392,6 +398,7 @@ export function buildStreetStyle(
         url: `pmtiles://${config.pmtilesUrl}`,
         attribution: OSM_ATTRIBUTION,
       },
+      ...raster.sources,
     },
     layers,
   };

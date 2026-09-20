@@ -1,4 +1,5 @@
 import type { ThemeName } from "../design/tokens.js";
+import { rasterBasemapSpecs, type RasterBasemap } from "./layers.js";
 
 /**
  * The bundled offline vector basemap (VEOC-75). Natural Earth 10m and US Census
@@ -79,7 +80,7 @@ function zoomWidth(stops: [number, number][]): unknown {
 export function buildBundledVectorStyle(
   config: BundledBasemapConfig,
   theme: ThemeName,
-  imageryUrl?: string,
+  rasters: readonly RasterBasemap[] = [],
 ): Record<string, unknown> {
   const p = PALETTE[theme];
   const base = config.assetBase.endsWith("/") ? config.assetBase : `${config.assetBase}/`;
@@ -91,19 +92,10 @@ export function buildBundledVectorStyle(
       attribution: BUNDLED_BASEMAP_ATTRIBUTION,
     },
   };
-  const imageryLayer: unknown[] = [];
-  if (imageryUrl) {
-    sources["imagery"] = { type: "raster", tiles: [imageryUrl], tileSize: 256 };
-    // Hidden until the operator switches to imagery; above the vector basemap,
-    // below the runtime operational layers.
-    imageryLayer.push({
-      id: "imagery",
-      type: "raster",
-      source: "imagery",
-      layout: { visibility: "none" },
-      paint: {},
-    });
-  }
+  // Gallery rasters: hidden until chosen; above the vector basemap, below the
+  // runtime operational layers.
+  const raster = rasterBasemapSpecs(rasters);
+  Object.assign(sources, raster.sources);
   return {
     version: 8,
     glyphs: `${base}fonts/{fontstack}/{range}.pbf`,
@@ -208,7 +200,7 @@ export function buildBundledVectorStyle(
         },
         paint: { "text-color": p.label, "text-halo-color": p.labelHalo, "text-halo-width": 1.5 },
       },
-      ...imageryLayer,
+      ...raster.layers,
     ],
   };
 }
