@@ -185,7 +185,10 @@ async function computeWidget(
 
   if (widget.kind === "tile") {
     const [row] = await sql`
-      select count(*)::int as n from board_records
+      select
+        count(*)::int as n,
+        count(*) filter (where created_at > now() - interval '24 hours')::int as recent
+      from board_records
       where board_id = ${boardId} ${filterFragment(sql, widget.filter)}`;
     const value = (row?.n as number) ?? 0;
     return {
@@ -194,6 +197,7 @@ async function computeWidget(
       title: widget.title,
       value,
       level: tileLevel(value, widget.thresholds),
+      trend: (row?.recent as number) ?? 0,
     } satisfies TileResult;
   }
 

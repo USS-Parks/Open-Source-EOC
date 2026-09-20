@@ -1242,3 +1242,34 @@ unchanged; all work on `main`.
   concurrent incidents with different exposure.
 - **Rollback:** revert the VEOC-66 commit.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-67: Dashboard parity pass against Esri EM Solutions
+
+- **Session:** VEOC-67, executed 2026-09-20
+- **Starting HEAD:** `52f76cf` (lockdown)
+- **Reference studied:** the Esri EM Solutions dashboards Basho attached (flood
+  insights indicator, incident KPI dashboard, public information map, and the
+  Community Lifelines incident-status board). The linked WebEOC video and the
+  Google image link could not be opened from this environment (no outbound
+  browsing, no video); parity is grounded in the attached screenshot.
+- **Gaps closed:** (1) KPI tiles now carry a 24-hour trend delta ("+N last 24h"),
+  the Esri indicator pattern; (2) the Community Lifelines status widget renders
+  as condition cards with a colored status ring per lifeline, matching the FEMA
+  incident-status board.
+- **Files created/changed:** `shared/src/dashboards/def.ts` (a `trend` on the
+  tile result); `server/src/dashboards/service.ts` (the tile compute counts
+  matching records created in the last 24 hours as the trend); `web/src/dashboards/Dashboard.tsx`
+  (tiles show the trend; the lifelines status widget renders as ringed condition
+  cards). Test: dashboard.test.tsx asserts the trend renders.
+- **Acceptance proven by test:** the tile shows "+3 last 24h"; the lifelines
+  widget still renders each lifeline's condition; server snapshot and app E2E
+  green.
+- **Verification:** `pnpm check` green; 380 tests / 71 files.
+- **Deferred parity (honest):** the anonymous public-information map, the
+  flood/raster analytic overlays with an extent-bound indicator, and on-map
+  marker clustering are the remaining Esri-dashboard parity items; each is a
+  further build, not a claim of done.
+- **Rollback:** revert the VEOC-67 commit.
+- **Commit/push:** under standing authorization. No branch created.

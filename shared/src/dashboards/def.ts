@@ -89,6 +89,8 @@ export interface TileResult {
   readonly missing?: boolean;
   readonly value: number;
   readonly level: TileLevel;
+  /** Net new matching records in the last 24 hours (the KPI trend delta). */
+  readonly trend?: number;
 }
 export interface ChartResult {
   readonly kind: "chart";

@@ -10,7 +10,7 @@ const snapshot: DashboardSnapshot = {
   title: "EOC Status",
   computedAt: new Date().toISOString(),
   widgets: [
-    { kind: "tile", key: "closed_roads", title: "Closed roads", value: 2, level: "warn" },
+    { kind: "tile", key: "closed_roads", title: "Closed roads", value: 2, level: "warn", trend: 3 },
     {
       kind: "chart",
       key: "shelters_by_status",
@@ -51,6 +51,7 @@ describe("the dashboard renders a computed snapshot and nothing else", () => {
     );
     expect(screen.getByTestId("tile-closed_roads-value").textContent).toBe("2");
     expect(screen.getByText("warn")).toBeTruthy();
+    expect(screen.getByText("+3 last 24h")).toBeTruthy();
     expect(screen.getByLabelText("normal: 2")).toBeTruthy();
     expect(screen.getByText("unstable")).toBeTruthy();
     expect(screen.getByText("SR-169")).toBeTruthy();
