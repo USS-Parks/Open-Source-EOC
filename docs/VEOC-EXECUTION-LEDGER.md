@@ -1542,3 +1542,56 @@ unchanged; all work on `main`.
 - **Rollback:** revert the VEOC-74 commit; the street style is inert until a
   deployment sets the PMTiles settings, so nothing changes for existing installs.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-75: real vector-tile basemap, built in-sandbox with tippecanoe
+
+- **Session:** VEOC-75, executed 2026-09-20
+- **Starting HEAD:** `0ca9f93` (street engine + CA pipeline)
+- **Basho's push:** install tippecanoe; the map must have robust ArcGIS-grade
+  capability, not a flat canvas.
+- **Done, and proven with a rendered screenshot from this sandbox:**
+  1. Built and installed tippecanoe v2.82.0 from source (the proxy blocks the
+     bulk geodata hosts, but git-to-GitHub works, so the source clone and build
+     succeed here).
+  2. Established which real data is reachable: only GitHub (git + raw). Natural
+     Earth's full dataset lives in `nvkelso/natural-earth-vector` (public
+     domain), so it is obtainable; OpenStreetMap extracts (Geofabrik, Overpass,
+     Protomaps, Census) are all 403 through the proxy.
+  3. Fetched Natural Earth 10m (land, water, rivers, urban areas, roads,
+     populated places), clipped to California, and tiled it with tippecanoe into
+     `web/public/basemap/basemap.pmtiles` (1.4 MB), one tile layer per source,
+     alongside the CA county outlines.
+  4. Generated a label glyph stack from Liberation Sans (SIL OFL) with fontnik
+     into `web/public/fonts`.
+  5. Wrote `bundledbasemap.ts`, a themed light/dark MapLibre style over the
+     PMTiles (land, urban, water, rivers, county lines, roads by class with
+     casing, place dots, and road and place labels), and made it the app's
+     default offline basemap.
+  6. Made the browser E2E's static handler honor HTTP Range so the PMTiles
+     loads, as any real host must; the map now renders labeled state highways
+     (SR-96, SR-299), the county mesh, and towns, offline, light and dark.
+- **Reproducible:** `deploy/basemap/build-bundled-basemap.sh` and
+  `build-glyphs.mjs` regenerate the committed tiles and glyphs from source, so
+  the binaries are not mystery files.
+- **Files created:** `web/src/cop/bundledbasemap.ts`,
+  `web/public/basemap/basemap.pmtiles`, `web/public/fonts/Liberation Sans
+  Regular/*.pbf`, `deploy/basemap/build-bundled-basemap.sh`,
+  `deploy/basemap/build-glyphs.mjs`.
+- **Files changed:** `web/src/cop/CopMap.tsx` (prefer the bundled vector style;
+  its attribution), `web/src/app/surfaces/MapSurface.tsx` (pass the config),
+  `web/src/cop/__tests__/cop.test.ts` (bundled-style structure and imagery),
+  `server/src/__tests__/app-e2e.test.ts` (Range support), `eslint.config.mjs`
+  (lint deploy `.mjs`), `deploy/basemap/README.md` (both basemaps).
+- **Honest scope:** this is Natural Earth 10m detail (state highways, towns,
+  counties), not residential streets or parcels. Those need OpenStreetMap or
+  parcel data, which the proxy blocks here; the same tippecanoe/planetiler
+  pipelines produce them on a networked build box, and `streetstyle.ts` already
+  renders full OSM street tiles when hosted. What changed today is that the
+  offline default is now a real, labeled vector map instead of a blank canvas,
+  and the tiling toolchain is installed and proven end to end.
+- **Verification:** `pnpm check` green; 387 tests / 71 files; map render
+  confirmed by screenshot in both themes.
+- **Rollback:** revert the VEOC-75 commit; assets and an additive style only.
+- **Commit/push:** under standing authorization. No branch created.

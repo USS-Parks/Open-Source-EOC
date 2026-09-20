@@ -13,6 +13,11 @@ import {
   type CopFeatureCollection,
 } from "./layers.js";
 import { NATURAL_EARTH_ATTRIBUTION } from "./basemap.js";
+import {
+  buildBundledVectorStyle,
+  BUNDLED_BASEMAP_ATTRIBUTION,
+  type BundledBasemapConfig,
+} from "./bundledbasemap.js";
 import { buildStreetStyle, OSM_ATTRIBUTION, type StreetBasemapConfig } from "./streetstyle.js";
 import { statusColor, type SymbolStatus } from "./symbology.js";
 import {
@@ -44,6 +49,9 @@ export interface CopMapProps {
   /** A self-hosted OpenMapTiles PMTiles basemap; the app builds the street
    * style over it (used only when basemapStyleUrl is not set). */
   readonly streetBasemap?: StreetBasemapConfig | undefined;
+  /** The bundled Natural Earth PMTiles vector basemap (the default offline
+   * basemap), used when no external style or self-hosted street tiles are set. */
+  readonly bundledBasemap?: BundledBasemapConfig | undefined;
   /** A raster imagery tile template offered as a switchable basemap. */
   readonly imageryUrl?: string | undefined;
   readonly imageryAttribution?: string | undefined;
@@ -161,7 +169,9 @@ export function CopMap(props: CopMapProps) {
       style: (props.basemapStyleUrl ??
         (props.streetBasemap
           ? buildStreetStyle(props.streetBasemap, props.theme)
-          : buildCopStyle(props.theme, props.basemap, props.imageryUrl))) as never,
+          : props.bundledBasemap
+            ? buildBundledVectorStyle(props.bundledBasemap, props.theme, props.imageryUrl)
+            : buildCopStyle(props.theme, props.basemap, props.imageryUrl))) as never,
       center: props.center ?? [-123.5, 41.3],
       zoom: props.zoom ?? 9,
       attributionControl: false,
@@ -181,9 +191,11 @@ export function CopMap(props: CopMapProps) {
             ? ""
             : props.streetBasemap
               ? OSM_ATTRIBUTION
-              : props.basemap?.kind === "natural-earth"
-                ? NATURAL_EARTH_ATTRIBUTION
-                : "",
+              : props.bundledBasemap
+                ? BUNDLED_BASEMAP_ATTRIBUTION
+                : props.basemap?.kind === "natural-earth"
+                  ? NATURAL_EARTH_ATTRIBUTION
+                  : "",
           props.imageryAttribution ?? "",
         ]
           .filter(Boolean)

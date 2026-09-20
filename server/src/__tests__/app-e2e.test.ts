@@ -110,9 +110,24 @@ beforeAll(async () => {
     const path = join(DIST, rel.replaceAll("..", ""));
     if (!existsSync(path)) return reply.status(404).send("missing");
     const ext = path.slice(path.lastIndexOf("."));
-    return reply
-      .header("content-type", TYPES[ext] ?? "application/octet-stream")
-      .send(readFileSync(path));
+    const type = TYPES[ext] ?? "application/octet-stream";
+    const buf = readFileSync(path);
+    // Honor HTTP Range so the PMTiles basemap (which reads byte ranges) loads,
+    // as any real static host must (see deploy/basemap/README.md).
+    const range = req.headers.range;
+    const m = range ? /^bytes=(\d+)-(\d*)$/.exec(range) : null;
+    if (m) {
+      const start = Number(m[1]);
+      const end = m[2] ? Number(m[2]) : buf.length - 1;
+      const slice = buf.subarray(start, Math.min(end, buf.length - 1) + 1);
+      return reply
+        .status(206)
+        .header("content-type", type)
+        .header("accept-ranges", "bytes")
+        .header("content-range", `bytes ${start}-${start + slice.length - 1}/${buf.length}`)
+        .send(slice);
+    }
+    return reply.header("content-type", type).header("accept-ranges", "bytes").send(buf);
   });
   await app.listen({ port: 0, host: "127.0.0.1" });
   const addr = app.server.address();

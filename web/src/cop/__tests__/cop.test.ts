@@ -10,6 +10,7 @@ import {
 } from "../layers.js";
 import { statusColor, symbolStatusFor, VALUE_STATUS } from "../symbology.js";
 import { buildStreetStyle } from "../streetstyle.js";
+import { buildBundledVectorStyle } from "../bundledbasemap.js";
 
 describe("NAPSG status symbology (F19, F14)", () => {
   it("every status frame resolves to a distinct token color in both themes", () => {
@@ -84,6 +85,34 @@ describe("layer construction", () => {
     expect(style.sources.ca_counties!.data).toBe("/basemap/ca_counties.geojson");
     expect(style.layers.some((l) => l.id === "ca-counties-line")).toBe(true);
     expect(style.layers.some((l) => l.id === "ca-state-outline")).toBe(true);
+  });
+
+  it("builds the bundled Natural Earth vector style over the offline PMTiles", () => {
+    const style = buildBundledVectorStyle({ assetBase: "/" }, "dark") as {
+      glyphs: string;
+      sources: Record<string, { type: string; url: string; attribution: string }>;
+      layers: Array<{ id: string; "source-layer"?: string }>;
+    };
+    expect(style.sources.basemap!.type).toBe("vector");
+    expect(style.sources.basemap!.url).toBe("pmtiles:///basemap/basemap.pmtiles");
+    expect(style.sources.basemap!.attribution).toContain("Natural Earth");
+    expect(style.glyphs).toBe("/fonts/{fontstack}/{range}.pbf");
+    const ids = style.layers.map((l) => l.id);
+    // Real vector content: land, water, roads (major + minor), counties, labels.
+    for (const id of ["land", "water", "roads-major", "roads-minor", "counties", "place-label"]) {
+      expect(ids, id).toContain(id);
+    }
+    expect(style.layers.some((l) => l["source-layer"] === "places")).toBe(true);
+    expect(JSON.stringify(style)).not.toContain("http");
+  });
+
+  it("adds the imagery raster to the bundled style when a tile URL is set", () => {
+    const style = buildBundledVectorStyle({ assetBase: "/" }, "light", "https://t.gov/{z}/{x}/{y}.png") as {
+      sources: Record<string, { type: string }>;
+      layers: Array<{ id: string }>;
+    };
+    expect(style.sources.imagery!.type).toBe("raster");
+    expect(style.layers.some((l) => l.id === "imagery")).toBe(true);
   });
 
   it("builds a themed street style over a self-hosted OpenMapTiles PMTiles source", () => {

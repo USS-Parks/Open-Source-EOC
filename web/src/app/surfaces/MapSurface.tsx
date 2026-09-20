@@ -151,6 +151,7 @@ export function MapSurface(props: {
           feeds={feedLayers}
           fetchFeedItems={(id) => props.client.feedItems(id)}
           basemap={{ kind: "natural-earth", assetBase: assetBase() }}
+          bundledBasemap={{ assetBase: assetBase() }}
           basemapStyleUrl={basemapStyleUrl()}
           streetBasemap={streetBasemap()}
           imageryUrl={imageryTileUrl()}

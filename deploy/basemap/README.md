@@ -1,22 +1,33 @@
-# Self-hosted street basemap (California)
+# Basemaps
 
-The common operating picture ships with an offline fallback basemap (Natural
-Earth plus US county boundaries), which is deliberately low detail. For
-street-level detail, terrain context, and place labels, a deployment hosts its
-own OpenStreetMap-derived vector tiles as a PMTiles archive. This keeps the map
-self-hosted, offline-capable, and license-clean (OpenStreetMap data under the
-ODbL), with no third-party tile provider, API key, or usage terms.
+The common operating picture has two self-hosted basemaps, both offline-capable
+with no third-party tile provider:
 
-This directory produces that basemap for California and explains how to wire it
-into the app.
+1. **Bundled vector basemap (ships in the app).** Natural Earth 10m plus US
+   Census county outlines, clipped to California and tiled to PMTiles with
+   tippecanoe, with a label glyph stack. It renders as real vector tiles
+   (labeled highways, towns, county lines, water) light and dark, offline, out
+   of the box. It is public domain and about 1.4 MB. Regenerate it with
+   `build-bundled-basemap.sh` (needs tippecanoe and the `fontnik` npm package);
+   the output lands in `web/public/basemap/basemap.pmtiles` and
+   `web/public/fonts`. The style is `web/src/cop/bundledbasemap.ts`.
+2. **Self-hosted street basemap (deploy-time).** Full OpenStreetMap street-level
+   detail for California, hosted by the deployment. This is the ArcGIS-grade
+   basemap: streets, buildings, terrain context, place and road labels, under
+   the ODbL. The rest of this document covers it. The style is
+   `web/src/cop/streetstyle.ts`.
 
-## Why this is not built in CI
+## Why the street tiles are not built in CI
 
-Generating statewide tiles downloads a roughly 1 GB OpenStreetMap extract and
+Generating statewide OpenStreetMap tiles downloads a roughly 1 GB extract and
 writes a multi-GB archive. That exceeds a constrained CI sandbox's network and
-disk, so tile generation is a build-machine job run out of band. The app code
-that renders the tiles (`web/src/cop/streetstyle.ts`) is unit-tested in CI; the
-tiles themselves are a deploy artifact, not committed to the repository.
+disk, so street-tile generation is a build-machine job run out of band. The app
+code that renders the tiles is unit-tested in CI; the street tiles themselves
+are a deploy artifact, not committed to the repository. (The bundled vector
+basemap above IS committed, since it is small.)
+
+This section produces the street basemap for California and explains how to wire
+it into the app.
 
 ## 1. Generate the tiles
 
