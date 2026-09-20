@@ -244,6 +244,29 @@ describe("ApiClient", () => {
     expect((await client.setCorrectiveActionStatus("c1", "complete")).ok).toBe(true);
   });
 
+  it("lists positions, creates a thread, posts and reads messages", async () => {
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      const u = String(url);
+      if (u.endsWith("/auth/login"))
+        return res(200, { accessToken: "A", resumeToken: "R", sessionId: "S" });
+      if (u.endsWith("/positions"))
+        return res(200, { positions: [{ id: "p1", key: "ops", title: "Operations Section Chief" }] });
+      if (u.endsWith("/threads") && init.method === "POST") return res(201, { id: "t1" });
+      if (u.endsWith("/threads")) return res(200, { threads: [{ id: "t1", kind: "group", title: "Ops", incidentId: null }] });
+      if (u.includes("/messages") && init.method === "POST") return res(201, { id: "m1", deduplicated: false });
+      if (u.includes("/messages"))
+        return res(200, { messages: [{ id: "m1", seq: 1, sender: "Duty", body: "Hi", at: "2026-09-20T00:00:00Z" }] });
+      return res(404, { error: "nope" });
+    }) as unknown as typeof fetch;
+
+    const client = new ApiClient({ fetchImpl });
+    await client.login("e@x.org", "pw");
+    expect((await client.listPositions("j"))[0]!.title).toBe("Operations Section Chief");
+    expect((await client.createThread("j", { kind: "group", members: [{ kind: "position", id: "p1" }] })).id).toBe("t1");
+    expect((await client.postMessage("t1", "Hi")).id).toBe("m1");
+    expect((await client.listMessages("t1"))[0]!.body).toBe("Hi");
+  });
+
   it("surfaces the server error envelope as a typed ApiError", async () => {
     const fetchImpl = (async (url: string) => {
       const u = String(url);

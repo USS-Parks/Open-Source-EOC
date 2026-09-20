@@ -1093,3 +1093,32 @@ unchanged; all work on `main`.
   surface.
 - **Rollback:** revert the VEOC-61 commit.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-62: Native messaging operator screen
+
+- **Session:** VEOC-62, executed 2026-09-20
+- **Starting HEAD:** `bf7e185` (corrective actions)
+- **Operator gap closed:** native messaging (R6) is the one core subsystem that
+  is not a board and had no operator path; the API existed (VEOC-15A). Adds the
+  screen, closing the last Phase B UI gap.
+- **Files created/changed:** `web/src/app/surfaces/MessagesSurface.tsx` (start a
+  position-addressed group thread, list threads, and read and post messages,
+  polling for new ones; a message to a seat reaches its current holder);
+  `web/src/app/api/client.ts` (listPositions, listThreads, createThread,
+  listMessages, postMessage, and the Thread/Message/PositionRef types);
+  `web/src/app/router.tsx` and `web/src/app/screens/Console.tsx` (a Messages rail
+  entry and route); `ROADMAP.md` (Phase B operator UI now "yes"). Tests:
+  client.test.ts (positions, thread, post, read) and the browser E2E now starts
+  a thread and posts a message.
+- **Acceptance proven by test:** the client lists positions, creates a thread,
+  posts and reads a message; the browser E2E starts "Ops coordination" and posts
+  to it, offline.
+- **Verification:** `pnpm check` green; 375 tests / 71 files.
+- **Facets:** R6 now reaches the operator; closes the Phase B UI gap.
+- **Deferred (honest):** live push over the sync socket (the since-cursor poll is
+  the offline-first path today) and direct person-to-person thread creation from
+  a people picker are follow-ups.
+- **Rollback:** revert the VEOC-62 commit.
+- **Commit/push:** under standing authorization. No branch created.

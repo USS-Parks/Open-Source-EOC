@@ -15,7 +15,7 @@ can use it," and neither is "it can be released":
 | Phase | Scope | Backend | Operator UI |
 |---|---|---|---|
 | A | Foundation and governance: scaffold, license, data dictionary, architecture decisions, design system, CI gates | complete | n/a |
-| B | Core primitives: identity and positions, boards, immutable audit, incidents, real-time sync, notifications, files, search, native messaging | complete | mostly |
+| B | Core primitives: identity and positions, boards, immutable audit, incidents, real-time sync, notifications, files, search, native messaging | complete | yes |
 | C | Geospatial COP: geo-enabled boards, the map, dashboards, live feeds, situation reporting | complete | yes |
 | D | Field and offline: offline-first client, smart forms, damage assessment, check-in, tracking and reunification | complete | partial |
 | E | Interop and federation: CAP, EDXL, facility status networks, CoT/TAK, instance federation, public API, IPAWS connector | complete | none |
@@ -24,9 +24,9 @@ can use it," and neither is "it can be released":
 
 ## Where the bars actually sit
 
-- **B:** boards, the activity log, incidents, file upload, and platform search
-  are reachable in the console. Native messaging exists server-side with no UI
-  yet.
+- **B:** boards, the activity log, incidents, file upload, platform search, and
+  native messaging (direct and position-addressed threads) are all reachable in
+  the console.
 - **C:** the map, dashboards, situation reports, and external feed layers are
   live in the app, with drop-a-point field capture and a switchable
   satellite/imagery basemap.

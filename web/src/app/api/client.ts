@@ -163,6 +163,25 @@ export interface UploadResult {
   readonly version: number;
 }
 
+export interface PositionRef {
+  readonly id: string;
+  readonly key: string;
+  readonly title: string;
+}
+export interface Thread {
+  readonly id: string;
+  readonly kind: string;
+  readonly title: string;
+  readonly incidentId: string | null;
+}
+export interface Message {
+  readonly id: string;
+  readonly seq: number;
+  readonly sender: string | null;
+  readonly body: string;
+  readonly at: string;
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -494,6 +513,49 @@ export class ApiClient {
     status: "open" | "in_progress" | "complete",
   ): Promise<{ ok: true }> {
     return this.request<{ ok: true }>("POST", `/api/v1/corrective-actions/${id}/status`, { status });
+  }
+  async listPositions(jurisdictionId: string): Promise<PositionRef[]> {
+    const r = await this.request<{ positions: PositionRef[] }>(
+      "GET",
+      `/api/v1/jurisdictions/${jurisdictionId}/positions`,
+    );
+    return r.positions;
+  }
+  async listThreads(jurisdictionId: string): Promise<Thread[]> {
+    const r = await this.request<{ threads: Thread[] }>(
+      "GET",
+      `/api/v1/jurisdictions/${jurisdictionId}/threads`,
+    );
+    return r.threads;
+  }
+  createThread(
+    jurisdictionId: string,
+    body: {
+      kind: "direct" | "group";
+      title?: string;
+      incidentId?: string;
+      members: ReadonlyArray<{ kind: "person" | "position"; id: string }>;
+    },
+  ): Promise<{ id: string }> {
+    return this.request<{ id: string }>(
+      "POST",
+      `/api/v1/jurisdictions/${jurisdictionId}/threads`,
+      body as unknown as Record<string, unknown>,
+    );
+  }
+  async listMessages(threadId: string, after = 0): Promise<Message[]> {
+    const r = await this.request<{ messages: Message[] }>(
+      "GET",
+      `/api/v1/threads/${threadId}/messages?after=${after}`,
+    );
+    return r.messages;
+  }
+  postMessage(threadId: string, body: string): Promise<{ id: string; deduplicated: boolean }> {
+    return this.request<{ id: string; deduplicated: boolean }>(
+      "POST",
+      `/api/v1/threads/${threadId}/messages`,
+      { body },
+    );
   }
   getIcsForm(
     incidentId: string,

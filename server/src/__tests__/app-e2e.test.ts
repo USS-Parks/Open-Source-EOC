@@ -362,6 +362,19 @@ describe("the operations console in a real browser, offline", () => {
     await page.getByText("Live Feeds").waitFor({ state: "visible", timeout: 20000 });
     await page.getByText("NWS Alerts").first().waitFor({ state: "visible", timeout: 20000 });
 
+    // Messages: start a position-addressed thread and post to it.
+    await page.getByRole("button", { name: "Messages" }).click();
+    await page.getByText("New thread").waitFor({ state: "visible", timeout: 20000 });
+    await page.getByLabel("Title", { exact: true }).fill("Ops coordination");
+    await page.getByRole("button", { name: "Start thread" }).click();
+    await page.getByText("Ops coordination").first().waitFor({ state: "visible", timeout: 20000 });
+    await page.getByLabel("Message", { exact: true }).fill("Staging established at rodeo grounds.");
+    await page.getByRole("button", { name: "Send" }).click();
+    await page
+      .getByText("Staging established at rodeo grounds.")
+      .first()
+      .waitFor({ state: "visible", timeout: 20000 });
+
     // Dark theme, for the night-shift EOC.
     await page.getByRole("button", { name: "Dark" }).click();
     await page.waitForTimeout(400);
