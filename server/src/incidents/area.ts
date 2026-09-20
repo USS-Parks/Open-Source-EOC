@@ -2,33 +2,25 @@ import type { IncidentAreaGeometry, IncidentAreaRevision, IncidentAreaUpdate } f
 import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
-
-function requireMember(actor: Principal, jurisdictionId: string): void {
-  if (!actor.memberships.some((m) => m.jurisdictionId === jurisdictionId))
-    throw new AuthError(403, "no access to this jurisdiction");
-}
-
-function requireAdmin(actor: Principal, jurisdictionId: string): void {
-  if (!actor.memberships.some((m) => m.jurisdictionId === jurisdictionId && m.role === "admin"))
-    throw new AuthError(403, "requires jurisdiction admin");
-}
+import { getIncidentAuthority } from "./participation.js";
 
 async function incident(sql: Sql, actor: Principal, incidentId: string) {
-  const [row] = await sql`
-    select jurisdiction_id, closed_at from incidents where id = ${incidentId}`;
-  if (!row) throw new AuthError(404, "incident not found");
-  requireMember(actor, row.jurisdiction_id as string);
-  return row;
+  return getIncidentAuthority(sql, actor, incidentId);
 }
 
 const revisionSelect = `
   select a.incident_id, a.revision, ST_AsGeoJSON(a.geometry)::jsonb as geometry,
          a.period_label, a.period_starts_at, a.period_ends_at, a.reason,
          a.created_at, a.created_by, p.display_name as created_by_name,
-         a.position_id, pos.title as position_title
+         a.position_id, pos.title as position_title,
+         coalesce(home.name, owner.name) as home_organization_name,
+         coalesce(a.incident_position_title, pos.title) as incident_position_title
   from incident_area_revisions a
   join persons p on p.id = a.created_by
-  left join positions pos on pos.id = a.position_id`;
+  left join positions pos on pos.id = a.position_id
+  left join jurisdictions home on home.id = a.home_organization_id
+  join incidents i on i.id = a.incident_id
+  join jurisdictions owner on owner.id = i.jurisdiction_id`;
 
 function toRevision(row: Record<string, unknown>, incidentId: string): IncidentAreaRevision {
   return {
@@ -46,6 +38,8 @@ function toRevision(row: Record<string, unknown>, incidentId: string): IncidentA
     createdByName: row.created_by_name as string,
     positionId: (row.position_id as string | null) ?? null,
     positionTitle: (row.position_title as string | null) ?? null,
+    homeOrganizationName: (row.home_organization_name as string | null) ?? null,
+    incidentPositionTitle: (row.incident_position_title as string | null) ?? null,
   };
 }
 
@@ -53,6 +47,7 @@ function initialRevision(incidentId: string): IncidentAreaRevision {
   return {
     incidentId, revision: 0, geometry: null, operationalPeriod: null, reason: "",
     createdAt: null, createdBy: null, createdByName: null, positionId: null, positionTitle: null,
+    homeOrganizationName: null, incidentPositionTitle: null,
   };
 }
 
@@ -78,15 +73,16 @@ export async function listIncidentAreaHistory(
 export async function reviseIncidentArea(
   sql: Sql, actor: Principal, incidentId: string, input: IncidentAreaUpdate,
 ): Promise<IncidentAreaRevision> {
-  const owner = await incident(sql, actor, incidentId);
-  const jurisdictionId = owner.jurisdiction_id as string;
-  requireAdmin(actor, jurisdictionId);
-  if (actor.position && actor.position.jurisdictionId !== jurisdictionId)
+  const authority = await incident(sql, actor, incidentId);
+  const jurisdictionId = authority.jurisdictionId;
+  if (!authority.canEditArea)
+    throw new AuthError(403, "requires incident area coordinator");
+  if (authority.canManageParticipation && actor.position &&
+      actor.position.jurisdictionId !== jurisdictionId)
     throw new AuthError(403, "sign into a position in the incident jurisdiction");
   const [locked] = await sql`
-    select closed_at from incidents where id = ${incidentId} for update`;
-  if (!locked) throw new AuthError(403, "requires jurisdiction admin");
-  if (locked.closed_at) throw new AuthError(409, "incident is closed");
+    select lock_incident_area(${incidentId}) as closed_at`;
+  if (locked?.closed_at) throw new AuthError(409, "incident is closed");
   const [latest] = await sql`
     select revision from incident_area_revisions where incident_id = ${incidentId}
     order by revision desc limit 1`;
@@ -108,16 +104,24 @@ export async function reviseIncidentArea(
   await sql`
     insert into incident_area_revisions
       (incident_id, revision, geometry, period_label, period_starts_at,
-       period_ends_at, reason, created_by, position_id)
+       period_ends_at, reason, created_by, position_id,
+       home_organization_id, incident_position_title, participation_id)
     values (${incidentId}, ${revision}, ST_GeomFromGeoJSON(${geojson}),
       ${input.operationalPeriod?.label ?? null},
       ${input.operationalPeriod ? new Date(input.operationalPeriod.startsAt) : null},
       ${input.operationalPeriod ? new Date(input.operationalPeriod.endsAt) : null},
-      ${input.reason}, ${actor.person.id}, ${actor.position?.id ?? null})`;
+      ${input.reason}, ${actor.person.id},
+      ${authority.canManageParticipation ? actor.position?.id ?? null : null},
+      ${authority.canManageParticipation ? jurisdictionId : authority.participation?.organizationId ?? null},
+      ${authority.canManageParticipation ? actor.position?.title ?? null : authority.participation?.incidentPositionTitle ?? null},
+      ${authority.canManageParticipation ? null : authority.participation?.id ?? null})`;
   await recordAudit(sql, actor, {
     jurisdictionId, incidentId, category: "incident.area.revised",
     subjectTable: "incident_area_revisions", subjectId: incidentId,
-    payload: { revision, reason: input.reason },
+    payload: { revision, reason: input.reason,
+      homeOrganizationId: authority.canManageParticipation ? jurisdictionId : authority.participation?.organizationId,
+      incidentPositionTitle: authority.canManageParticipation ? actor.position?.title ?? null : authority.participation?.incidentPositionTitle,
+      participationId: authority.canManageParticipation ? null : authority.participation?.id },
   });
   const [row] = await sql.unsafe(`${revisionSelect} where a.incident_id = $1 and a.revision = $2`, [incidentId, revision]);
   return toRevision(row!, incidentId);

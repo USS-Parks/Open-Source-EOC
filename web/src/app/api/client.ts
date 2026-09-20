@@ -9,6 +9,8 @@ import type {
   FormDefinition,
   IncidentAreaRevision,
   IncidentAreaUpdate,
+  IncidentParticipantGrant,
+  IncidentParticipantGrantInput,
 } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
 
@@ -108,6 +110,8 @@ export interface IncidentSummary {
   readonly name: string;
   readonly kind: string;
   readonly closedAt: string | null;
+  readonly canManageParticipation: boolean;
+  readonly canEditArea: boolean;
 }
 export interface IncidentTemplateOption {
   readonly key: string;
@@ -458,6 +462,17 @@ export class ApiClient {
       `/api/v1/jurisdictions/${jurisdictionId}/incidents`,
       body as unknown as Record<string, unknown>,
     );
+  }
+  async listIncidentParticipants(incidentId: string): Promise<IncidentParticipantGrant[]> {
+    const result = await this.request<{ participants: IncidentParticipantGrant[] }>(
+      "GET", `/api/v1/incidents/${incidentId}/participants`);
+    return result.participants;
+  }
+  addIncidentParticipant(incidentId: string, body: IncidentParticipantGrantInput): Promise<{ participant: IncidentParticipantGrant }> {
+    return this.request("POST", `/api/v1/incidents/${incidentId}/participants`, body);
+  }
+  revokeIncidentParticipant(incidentId: string, participantId: string, reason: string): Promise<{ participant: IncidentParticipantGrant }> {
+    return this.request("POST", `/api/v1/incidents/${incidentId}/participants/${participantId}/revoke`, { reason });
   }
   getIncidentArea(incidentId: string): Promise<IncidentAreaRevision> {
     return this.request("GET", `/api/v1/incidents/${incidentId}/operational-area`);

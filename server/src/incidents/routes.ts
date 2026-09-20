@@ -4,6 +4,7 @@ import { IncidentAreaUpdateSchema } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import { getIncidentArea, listIncidentAreaHistory, reviseIncidentArea } from "./area.js";
+import { incidentParticipationRoutes } from "./participation-routes.js";
 import {
   STANDARD_INCIDENT_TEMPLATES,
   activateIncident,
@@ -40,6 +41,7 @@ export function incidentRoutes(
   sql: Sql,
   authenticate: (req: FastifyRequest) => Promise<void>,
 ): void {
+  incidentParticipationRoutes(app, sql, authenticate);
   app.post(
     "/api/v1/jurisdictions/:jurisdictionId/incidents",
     { preHandler: authenticate },

@@ -52,4 +52,6 @@ export interface IncidentAreaRevision {
   readonly positionId: string | null;
   readonly createdByName: string | null;
   readonly positionTitle: string | null;
+  readonly homeOrganizationName?: string | null;
+  readonly incidentPositionTitle?: string | null;
 }

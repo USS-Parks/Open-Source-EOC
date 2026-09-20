@@ -5,6 +5,7 @@ import { AuthError, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 import { STANDARD_TITLES } from "../auth/authz.js";
 import { createBoard } from "../boards/service.js";
+import { getIncidentAuthority } from "./participation.js";
 
 export const IncidentTemplateSchema = z.object({
   key: z.string().regex(/^[a-z][a-z0-9_]*$/),
@@ -180,6 +181,8 @@ export interface IncidentDetail {
   readonly name: string;
   readonly kind: string;
   readonly closedAt: string | null;
+  readonly canManageParticipation: boolean;
+  readonly canEditArea: boolean;
   readonly positions: ReadonlyArray<{ id: string; key: string; title: string }>;
   readonly boards: ReadonlyArray<{ id: string; title: string }>;
   readonly checklists: ReadonlyArray<{
@@ -197,6 +200,8 @@ export interface IncidentSummary {
   readonly name: string;
   readonly kind: string;
   readonly closedAt: string | null;
+  readonly canManageParticipation: boolean;
+  readonly canEditArea: boolean;
 }
 
 /** Open incidents first, for the operator to pick one (forms, IAP, ops). */
@@ -207,14 +212,24 @@ export async function listIncidents(
 ): Promise<IncidentSummary[]> {
   requireMember(actor, jurisdictionId);
   const rows = await sql`
-    select id, name, kind, closed_at from incidents
+    select id, name, kind, closed_at,
+      is_admin_of(jurisdiction_id) as can_manage,
+      can_revise_incident_area(id) as can_edit
+    from incidents
     where jurisdiction_id = ${jurisdictionId}
+      or exists (select 1 from incident_participants ip
+        where ip.incident_id = incidents.id and ip.organization_id = ${jurisdictionId}
+          and ip.person_id = ${actor.person.id} and ip.revoked_at is null
+          and ip.expires_at > now()
+          and eligible_incident_person(ip.person_id, ip.organization_id))
     order by closed_at nulls first, name`;
   return rows.map((r) => ({
     id: r.id as string,
     name: r.name as string,
     kind: r.kind as string,
     closedAt: (r.closed_at as string | null) ?? null,
+    canManageParticipation: Boolean(r.can_manage),
+    canEditArea: Boolean(r.can_edit),
   }));
 }
 
@@ -223,10 +238,10 @@ export async function getIncident(
   actor: Principal,
   incidentId: string,
 ): Promise<IncidentDetail> {
+  const authority = await getIncidentAuthority(sql, actor, incidentId);
   const [incident] = await sql`
     select id, jurisdiction_id, name, kind, closed_at from incidents where id = ${incidentId}`;
   if (!incident) throw new AuthError(404, "incident not found");
-  requireMember(actor, incident.jurisdiction_id as string);
   const positions = await sql`
     select p.id, p.key, p.title from incident_positions ip
     join positions p on p.id = ip.position_id
@@ -251,6 +266,8 @@ export async function getIncident(
     name: incident.name as string,
     kind: incident.kind as string,
     closedAt: (incident.closed_at as string | null) ?? null,
+    canManageParticipation: authority.canManageParticipation,
+    canEditArea: authority.canEditArea,
     positions: positions.map((p) => ({
       id: p.id as string,
       key: p.key as string,

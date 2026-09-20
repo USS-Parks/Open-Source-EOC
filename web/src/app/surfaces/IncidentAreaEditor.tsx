@@ -162,7 +162,8 @@ export function IncidentAreaEditor(props: {
       {revisions.length === 0 ? <p>No area revisions yet.</p> : <ol style={{ paddingLeft: 24 }}>
         {revisions.map((revision) => <li key={revision.revision} style={{ marginBottom: 10 }}>
           <Button onClick={() => { setPreview(revision); setDrawing(false); setPoints([]); fit(revision.geometry); }}>View revision {revision.revision}</Button>
-          {" "}{revision.reason} · {revision.createdByName ?? "Operator"}{revision.positionTitle ? " / " + revision.positionTitle : ""}
+          {" "}{revision.reason} · {revision.createdByName ?? "Operator"}{revision.homeOrganizationName ? " / " + revision.homeOrganizationName : ""}
+          {(revision.incidentPositionTitle ?? revision.positionTitle) ? " / " + (revision.incidentPositionTitle ?? revision.positionTitle) : ""}
           {revision.createdAt ? " · " + new Date(revision.createdAt).toLocaleString() : ""}
         </li>)}
       </ol>}

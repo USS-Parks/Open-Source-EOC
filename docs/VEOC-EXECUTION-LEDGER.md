@@ -2067,3 +2067,73 @@ runtime documentation and ledger changes and reran diff/link checks.
   gpt-5.6-sol/high; actual model/effort unobservable. Both final PNGs inspected.
   Verification completed 2026-09-20 about 22:10 UTC / 15:10 PDT.
   Ending commit is this receipt commit, to be recorded by the next receipt.
+
+
+### VEOC-79 publication and integration receipt
+
+Published a9931f810a6083d98f45386dfdb055274623de0b to origin/main. A concurrent
+federation/JIC fix arrived as b2fdae6 during verification; the first push was
+rejected without changing remote history. Rebased the local commit, preserved
+the remote fix, and ran only the affected incident-area/federation/JIC suites:
+18 tests in three files passed, exit 0. The old remote merge CI failed only
+its missing commit-message footer; this publication has the required footer.
+Hosted run 35540941329 passed the combined change, including Rust and message
+hygiene. No branch/worktree created.
+
+
+## VEOC-79A: Selected incident participants and authority
+
+- **Baseline:** a9931f810a6083d98f45386dfdb055274623de0b on canonical main.
+  Same approved sequential implementation and publication authority.
+- **Scope:** R3/F2/F12, explicit named-person participation with home organization,
+  incident position, role, expiry and reason. Existing jurisdiction identities
+  represent independent organizations. No required organization type or implied
+  unified command. A grant does not enroll other members of that organization.
+- **Changes:** migration 0032, shared participation contract, incident authority
+  helper, participant routes/services and incident/area integration; typed API
+  and Participants panel. Existing browser incident workflow extended with
+  grant, separate-incident denial and revocation. Operator notes in
+  VEOC-79A-PARTICIPATION.md. No dependencies added.
+- **Authority:** owner administrators manage grants; coordinators can revise
+  area geometry with home-organization and incident-position attribution.
+  Read-only grants cannot write. Expiry/revocation and continued organization
+  membership are evaluated for each request and by database policies.
+- **Limits:** shared board/COP/planning workspace is next at VEOC-79B.
+  Activation-time entity onboarding is VEOC-79C. This closes neither the
+  integrated incident exercise nor whole-system hybrid parity.
+- **Preservation:** historical area rows are not rewritten by the migration.
+  One canonical checkout; user-owned references and local tool files preserved.
+  Approved portable database remains active; Docker remains off.
+
+### User stop point, 2026-09-20
+
+Basho directed: stop after VEOC-79 has been pushed to main. HEAD and remote
+main both verified a9931f810a6083d98f45386dfdb055274623de0b; hosted CI passed.
+VEOC-79A was interrupted during implementation. Its tracked and new files
+are preserved locally, unstaged and uncommitted. Do not treat the draft
+VEOC-79A receipt above as completion or verification. Resume from this tree
+only on a new user instruction. No further prompt execution is authorized
+by the earlier STS directive while this stop remains in effect.
+The project-local PostgreSQL process was stopped cleanly; Docker remains off.
+Only the canonical worktree is retained. Its uncommitted work is VEOC-79A;
+there are no unpublished commits. Runtime/output storage last measured
+5.17 GiB and remains local for continuation; nothing was deleted.
+
+### Resumption and verification, 2026-09-20
+
+Basho lifted the stop with a new instruction: resume roster execution in the
+audit's recommended order and fold in the parity-audit findings, with full
+authorization to commit and push. The preserved VEOC-79A tree was reviewed and
+found complete across every layer (migration 0032, shared contract, incident
+authority helper, participant routes and service, area attribution, typed web
+client and Participants panel, real-database participation suite). No further
+code was needed.
+
+- **Baseline:** a9931f810a6083d98f45386dfdb055274623de0b on canonical main.
+- **Gate:** pnpm check --maxWorkers=2 exited 0 against the approved project-local
+  PostgreSQL/PostGIS cluster. Typecheck, lint, license scan (300 packages) and
+  link check passed; 450 tests in 78 files passed, including the new
+  incident-participation suite and the existing real-database and browser
+  scenarios. Log: deploy/test-runtime/out/veoc-79a-check.log.
+- **Scope discipline:** verification ran once; no speculative test expansion.
+- **Ending commit:** this receipt commit, recorded by the next receipt.

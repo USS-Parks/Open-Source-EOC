@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ThemeName } from "../../design/tokens.js";
 import { IncidentAreaEditor } from "./IncidentAreaEditor.js";
+import { IncidentParticipants } from "./IncidentParticipants.js";
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../../design/components.js";
 import type { ApiClient } from "../api/client.js";
 import { useAsync } from "../data/hooks.js";
@@ -20,6 +21,7 @@ export function IncidentsSurface(props: {
 }) {
   const [reload, setReload] = useState(0);
   const [areaIncident, setAreaIncident] = useState<string | null>(null);
+  const [participantIncident, setParticipantIncident] = useState<string | null>(null);
   const incidents = useAsync(
     () => props.client.listIncidents(props.jurisdictionId),
     [props.jurisdictionId, reload],
@@ -137,8 +139,9 @@ export function IncidentsSurface(props: {
                   </StatusBadge>
                   <span style={{ flex: 1 }}>{i.name}</span>
                   <span style={{ color: "var(--eoc-text-muted)", fontSize: "0.9em" }}>{i.kind}</span>
-                  <Button onClick={() => setAreaIncident(i.id)}>Operational area</Button>
-                  {props.isAdmin && !i.closedAt ? (
+                  <Button onClick={() => { setAreaIncident(i.id); setParticipantIncident(null); }}>Operational area</Button>
+                  <Button onClick={() => { setParticipantIncident(i.id); setAreaIncident(null); }}>Participants</Button>
+                  {i.canManageParticipation && !i.closedAt ? (
                     <Button onClick={() => run(() => props.client.closeIncident(i.id))} disabled={busy}>
                       Close
                     </Button>
@@ -151,7 +154,12 @@ export function IncidentsSurface(props: {
 
         {list.filter((i) => i.id === areaIncident).map((incident) => (
           <IncidentAreaEditor key={incident.id} client={props.client} incidentId={incident.id}
-            incidentName={incident.name} theme={props.theme} canEdit={props.isAdmin && !incident.closedAt} />
+            incidentName={incident.name} theme={props.theme} canEdit={incident.canEditArea && !incident.closedAt} />
+        ))}
+
+        {list.filter((i) => i.id === participantIncident).map((incident) => (
+          <IncidentParticipants key={incident.id} client={props.client} incidentId={incident.id}
+            incidentName={incident.name} canManage={incident.canManageParticipation} closed={Boolean(incident.closedAt)} />
         ))}
 
         {error ? (
