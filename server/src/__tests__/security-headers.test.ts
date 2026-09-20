@@ -37,6 +37,25 @@ describe("security headers", () => {
     expect(String(res.headers["strict-transport-security"])).toContain("max-age=");
     expect(String(res.headers["content-security-policy"])).toContain("default-src 'none'");
   });
+
+  it("keeps the hardening headers on error responses", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/v1/me" });
+    expect(res.statusCode).toBe(401);
+    expect(res.headers["x-content-type-options"]).toBe("nosniff");
+    expect(String(res.headers["content-security-policy"])).toContain("default-src 'none'");
+  });
+});
+
+describe("hot-path latency", () => {
+  it("keeps the hardened health path fast under repeated calls", async () => {
+    await app.inject({ method: "GET", url: "/api/v1/health" }); // warm
+    const count = 200;
+    const start = performance.now();
+    for (let i = 0; i < count; i++) await app.inject({ method: "GET", url: "/api/v1/health" });
+    const perCall = (performance.now() - start) / count;
+    // Generous: only a pathological regression in the hook or router trips it.
+    expect(perCall).toBeLessThan(15);
+  });
 });
 
 describe("health and readiness", () => {

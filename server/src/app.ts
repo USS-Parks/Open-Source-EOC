@@ -89,7 +89,10 @@ export interface BuildAppOptions {
 }
 
 export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstance {
-  const app = Fastify({ logger: false });
+  // requestTimeout caps how long an unfinished request may occupy a
+  // connection (slowloris defense and continuity under load); it applies to
+  // request receipt, not to established WebSocket sessions.
+  const app = Fastify({ logger: false, requestTimeout: 30_000 });
   void app.register(websocket);
   const oidcSettings = options.oidc === undefined ? oidcSettingsFromEnv() : options.oidc;
   const oidc = oidcSettings ? new OidcClient(oidcSettings) : null;
