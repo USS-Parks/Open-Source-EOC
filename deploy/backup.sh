@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# OpenEOC backup (VEOC-40). A consistent logical dump of the whole database,
-# gzip-compressed and timestamped. The database is the whole system of record
-# (boards, records, audit log, files metadata), so this one dump is the
-# backup. Run on a schedule; keep copies off the box.
+# OpenEOC backup (VEOC-40). The system of record is two parts: the database
+# (boards, records, audit log, file metadata) AND the uploaded file blobs,
+# which live on disk in the api container's OPENEOC_DATA_DIR, not in Postgres.
+# A database-only dump restores file rows that point at missing bytes, so this
+# writes both a database dump and a blob archive under one timestamp. Run on a
+# schedule; keep both files together and off the box.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$here"
@@ -10,9 +12,15 @@ cd "$here"
 out_dir="${1:-./backups}"
 mkdir -p "$out_dir"
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-file="$out_dir/openeoc-$stamp.sql.gz"
+db_file="$out_dir/openeoc-$stamp.sql.gz"
+blob_file="$out_dir/openeoc-$stamp.blobs.tar.gz"
 
 docker compose exec -T db pg_dump -U openeoc_owner -d openeoc --no-owner \
-  | gzip > "$file"
+  | gzip > "$db_file"
+printf '[openeoc] database backup written: %s\n' "$db_file"
 
-printf '[openeoc] backup written: %s\n' "$file"
+# Stream the blob directory out of the api container. The bytes are
+# content-addressed and immutable, so a plain archive is a consistent copy.
+docker compose exec -T api tar -C /data/blobs -cf - . \
+  | gzip > "$blob_file"
+printf '[openeoc] blob backup written: %s\n' "$blob_file"

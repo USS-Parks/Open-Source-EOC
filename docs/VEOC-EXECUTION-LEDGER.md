@@ -2136,4 +2136,42 @@ code was needed.
   incident-participation suite and the existing real-database and browser
   scenarios. Log: deploy/test-runtime/out/veoc-79a-check.log.
 - **Scope discipline:** verification ran once; no speculative test expansion.
+- **Ending commit:** ca0d130b842ee2697112ed25d8de5a85d129ebe5, pushed to
+  origin/main (a9931f8..ca0d130).
+
+## Security hardening pass 1 (parity audit section 3)
+
+Fixed the small, unambiguous, high-value findings from the parity audit's
+security section, ahead of the roster (audit section 9 order). Each was
+verified against source before the change.
+
+- **Baseline:** ca0d130b842ee2697112ed25d8de5a85d129ebe5 on canonical main.
+- **File tenant check (finding 2):** getFileMeta now filters on
+  is_member_of(jurisdiction_id) in the query itself, so a file never crosses
+  tenants even under the owner-connection first boot where table RLS does not
+  apply. This mirrors the files_read policy exactly.
+- **Download header injection (finding 4):** the download filename is built
+  through attachmentHeader, an RFC 6266 value with an ASCII fallback and an
+  RFC 5987 UTF-8 form, so a stored name holding a quote, CR or LF can no longer
+  inject response headers. Upload still accepts any name; the fix is at the
+  sink and covers already-stored names. Regression test added.
+- **Backups lose file blobs (finding 3):** the compose api service now mounts a
+  named openeoc-blobs volume at OPENEOC_DATA_DIR, so uploads survive container
+  recreation (previously the ephemeral container layer). backup.sh writes a
+  blob archive beside the database dump under one timestamp; restore.sh
+  restores both. The false "the database is the whole backup" header is
+  corrected. Not executable here (Docker is off); reviewed, not run.
+- **Duplicate migration 0028 (finding 5):** 0028_federation_write_default.sql
+  renamed to 0033; the two migrations are mutually independent and nothing in
+  0029-0032 depends on the federation default's order, so it runs last with no
+  behavior change. Only throwaway test databases have applied migrations, so
+  no schema_migrations history breaks.
+- **Deferred to a focused change:** row-level security on the four identity
+  tables (finding 1) needs SECURITY DEFINER helpers for the pre-auth login,
+  resume and OIDC paths and is done next as its own verified commit. MFA and
+  SAML (finding 6) need Basho's identity-provider decision and are not a
+  hardening patch.
+- **Gate:** pnpm check --maxWorkers=2 exited 0; 451 tests in 78 files passed
+  (the added download-header test included). Log:
+  deploy/test-runtime/out/veoc-hardening-check.log.
 - **Ending commit:** this receipt commit, recorded by the next receipt.

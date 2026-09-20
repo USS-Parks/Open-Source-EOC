@@ -119,9 +119,13 @@ export interface FileMeta {
 }
 
 export async function getFileMeta(sql: Sql, fileId: string): Promise<FileMeta> {
+  // The jurisdiction wall lives in the query itself, not only in the files
+  // RLS policy, so a file never crosses tenants even under the owner
+  // connection (first boot, main.ts) where RLS does not apply. This mirrors
+  // the files_read policy exactly: membership of the file's jurisdiction.
   const [row] = await sql`
     select id, name, content_type, size, sha256, version, supersedes
-    from files where id = ${fileId}`;
+    from files where id = ${fileId} and is_member_of(jurisdiction_id)`;
   if (!row) throw new AuthError(404, "file not found");
   return {
     id: row.id as string,

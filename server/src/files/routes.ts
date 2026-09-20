@@ -15,6 +15,21 @@ const UploadBody = z.object({
 
 const SearchQuery = z.object({ q: z.string().min(2).max(200) });
 
+/**
+ * Build a Content-Disposition value a stored filename can never break out of.
+ * Upload accepts any characters in the name, so a name holding a quote, CR or
+ * LF would otherwise inject header syntax. The ASCII fallback strips quotes,
+ * backslashes and non-printables; the RFC 5987 form percent-encodes the rest.
+ */
+function attachmentHeader(name: string): string {
+  const fallback = name.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
+  const encoded = encodeURIComponent(name).replace(
+    /['()*!]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
+
 export function fileRoutes(
   app: FastifyInstance,
   sql: Sql,
@@ -62,7 +77,7 @@ export function fileRoutes(
       const content = await store.get(meta.sha256);
       return reply
         .header("content-type", meta.contentType)
-        .header("content-disposition", `attachment; filename="${meta.name}"`)
+        .header("content-disposition", attachmentHeader(meta.name))
         .send(content);
     },
   );

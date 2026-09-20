@@ -35,10 +35,17 @@ services:
       OPENEOC_RUNTIME_URL: ${OPENEOC_RUNTIME_URL:-}
       # Server-side secret key for credential envelopes (IPAWS, collab, Jitsi).
       OPENEOC_SECRET_KEY: ${OPENEOC_SECRET_KEY:-}
+      # Uploaded file blobs live on disk, not in Postgres. Persist them in a
+      # named volume so they survive container recreation and are backed up
+      # (see deploy/backup.sh); without this the store is the ephemeral
+      # container layer and every upload is lost on the next `up`.
+      OPENEOC_DATA_DIR: /data/blobs
       HOST: 0.0.0.0
       PORT: 8080
     ports:
       - "8080:8080"
+    volumes:
+      - openeoc-blobs:/data/blobs
     restart: unless-stopped
 
   # web:
@@ -51,3 +58,4 @@ services:
 
 volumes:
   openeoc-db:
+  openeoc-blobs:

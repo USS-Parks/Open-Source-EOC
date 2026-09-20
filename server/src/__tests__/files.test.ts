@@ -82,6 +82,25 @@ describe("content-addressed, immutable file storage", () => {
     expect(dup.json().sha256).toBe(sha); // same blob, second row
   });
 
+  it("sanitizes the download filename so it cannot inject response headers", async () => {
+    // A name holding a quote and a CRLF would break out of the header and
+    // inject one of its own; upload does not restrict the characters.
+    const nasty = 'evil".txt\r\nSet-Cookie: pwn=1';
+    const up = await upload(nasty, "payload");
+    expect(up.statusCode).toBe(201);
+    const dl = await app.inject({
+      method: "GET",
+      url: `/api/v1/files/${up.json().id as string}/content`,
+      headers: auth(memberToken),
+    });
+    // Before the fix, Node rejects the CRLF header value and the download 500s.
+    expect(dl.statusCode).toBe(200);
+    const disp = dl.headers["content-disposition"] as string;
+    expect(disp).not.toMatch(/[\r\n]/); // no injected line break
+    expect(disp).toContain('filename="evil_.txt'); // quote and CRLF neutralized
+    expect(disp).toContain("filename*=UTF-8''"); // RFC 5987 form present
+  });
+
   it("a new version supersedes without touching the old, which stays byte-identical", async () => {
     const v2 = await upload("iap-draft.txt", "Operational period 2 objectives", {
       supersedes: fileV1,
