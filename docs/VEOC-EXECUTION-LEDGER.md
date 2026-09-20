@@ -1775,3 +1775,32 @@ unchanged; all work on `main`.
   dark-theme road contrast at region zoom could rise a step.
 - **Rollback:** revert the prompt commits in reverse order; the tiles and
   captures are local artifacts.
+
+---
+
+## VEOC-77b: prompt 9 shipped, session handed off
+
+- **Session:** VEOC-77b, executed 2026-09-20 (same desktop session, after
+  the VEOC-77 receipt was written).
+- **Prompt 9, buildings by use and status (commit `e737f1a`):** a planetiler
+  custom schema (`deploy/basemap/buildings-schema.yml`) cuts every
+  OpenStreetMap footprint with its building tag as `class` and its `osm_id`
+  into `buildings.pmtiles`; the pipeline script builds it after the street
+  archive. With `OPENEOC_BUILDINGS_PMTILES_URL` set, every vector style
+  mounts the archive (keyed by osm_id), draws footprints colored by use with
+  a legend, and colors any footprint by the status of the point record
+  inside it through feature state (viewport-scoped client-side join, ceiling
+  noted in code). Basho chose OpenStreetMap tags now and Overture later, and
+  GDAL as the overlay converter (installed, 3.12.1). Unit-tested (119 web
+  tests, style-spec validation included); tsc, eslint, license scan, and
+  link check green; CI pending at handoff.
+- **Honest state:** the buildings archive build failed once on a filename
+  mismatch (the custom runner expects `geofabrik_us_california.osm.pbf`;
+  the first build saved `us_california.osm.pbf`), was restarted with an
+  explicit `--osm_path`, and was still running at handoff; the script now
+  passes that path. The building-use and status rendering is therefore
+  unproven in a browser. Proving it is the first item of the handoff roster.
+- **Handoff:** `docs/VEOC-77-HANDOFF-PSPR-2026-09-20.md` carries the state,
+  the environment, the verified data sources, and the ordered remainder
+  (prompts 9b, 8, 10 to 15) for the next session.
+- **Commit/push:** under Basho's express session authorization.

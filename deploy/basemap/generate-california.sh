@@ -57,8 +57,11 @@ java -Xmx4g -jar "${PLANETILER_JAR}" \
 # downloaded. Skip with OPENEOC_SKIP_BUILDINGS=1.
 if [ "${OPENEOC_SKIP_BUILDINGS:-0}" != "1" ]; then
   echo "Building buildings.pmtiles..."
+  # The schema names the same Geofabrik area; point it at the extract the
+  # first build downloaded (the custom runner expects a different filename).
   java -Xmx4g -jar "${PLANETILER_JAR}" generate-custom \
     --schema="${HERE}/buildings-schema.yml" \
+    --osm_path=data/sources/us_california.osm.pbf \
     --output=buildings.pmtiles \
     --force
 fi
