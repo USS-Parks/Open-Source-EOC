@@ -40,6 +40,9 @@ export interface CopMapProps {
   readonly basemap?: BasemapConfig | undefined;
   /** A deployment's own MapLibre style URL, which replaces the basemap. */
   readonly basemapStyleUrl?: string | undefined;
+  /** A raster imagery tile template offered as a switchable basemap. */
+  readonly imageryUrl?: string | undefined;
+  readonly imageryAttribution?: string | undefined;
   readonly pollMs?: number | undefined;
   readonly center?: [number, number] | undefined;
   readonly zoom?: number | undefined;
@@ -97,6 +100,8 @@ export function CopMap(props: CopMapProps) {
   const [feedVisible, setFeedVisible] = useState<Record<string, boolean>>(
     Object.fromEntries((props.feeds ?? []).map((f) => [f.id, true])),
   );
+  const [basemapMode, setBasemapMode] = useState<"vector" | "imagery">("vector");
+  const imageryAvailable = !!props.imageryUrl && !props.basemapStyleUrl;
 
   useEffect(() => {
     if (!container.current) return;
@@ -110,7 +115,8 @@ export function CopMap(props: CopMapProps) {
     }
     const map = new maplibregl.Map({
       container: container.current,
-      style: (props.basemapStyleUrl ?? buildCopStyle(props.theme, props.basemap)) as never,
+      style: (props.basemapStyleUrl ??
+        buildCopStyle(props.theme, props.basemap, props.imageryUrl)) as never,
       center: props.center ?? [-123.5, 41.3],
       zoom: props.zoom ?? 9,
       attributionControl: false,
@@ -123,7 +129,12 @@ export function CopMap(props: CopMapProps) {
     map.addControl(
       new maplibregl.AttributionControl({
         compact: true,
-        customAttribution: props.basemap?.kind === "natural-earth" ? NATURAL_EARTH_ATTRIBUTION : "",
+        customAttribution: [
+          props.basemap?.kind === "natural-earth" ? NATURAL_EARTH_ATTRIBUTION : "",
+          props.imageryAttribution ?? "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
       }),
       "bottom-right",
     );
@@ -220,6 +231,18 @@ export function CopMap(props: CopMapProps) {
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!map || !imageryAvailable) return;
+    const apply = () => {
+      if (map.getLayer("imagery")) {
+        map.setLayoutProperty("imagery", "visibility", basemapMode === "imagery" ? "visible" : "none");
+      }
+    };
+    if (map.isStyleLoaded()) apply();
+    else map.once("load", apply);
+  }, [basemapMode, imageryAvailable]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!map) return;
     for (const feed of props.feeds ?? []) {
       for (const layerId of feedLayerIds(feed.id)) {
@@ -237,6 +260,36 @@ export function CopMap(props: CopMapProps) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 8, height: "100%" }}>
       <nav aria-label="Map layers" className="eoc-map-panel">
+        {imageryAvailable ? (
+          <div style={{ marginBottom: 12 }}>
+            <h3 style={{ margin: "0 0 6px", fontSize: "0.85em", color: "var(--eoc-text-muted)" }}>
+              Basemap
+            </h3>
+            <div style={{ display: "flex", gap: 4 }}>
+              {(["vector", "imagery"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={basemapMode === mode}
+                  onClick={() => setBasemapMode(mode)}
+                  style={{
+                    flex: 1,
+                    textTransform: "capitalize",
+                    padding: "4px 8px",
+                    minHeight: 32,
+                    borderRadius: 4,
+                    cursor: "pointer",
+                    border: "1px solid var(--eoc-border)",
+                    background: basemapMode === mode ? "var(--eoc-text)" : "var(--eoc-surface)",
+                    color: basemapMode === mode ? "var(--eoc-surface)" : "var(--eoc-text)",
+                  }}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <h3 style={{ margin: "0 0 6px", fontSize: "0.85em", color: "var(--eoc-text-muted)" }}>
           Layers
         </h3>

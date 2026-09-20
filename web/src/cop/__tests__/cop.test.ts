@@ -79,4 +79,16 @@ describe("layer construction", () => {
     expect(JSON.stringify(style)).not.toContain("http");
     expect(style.layers.some((l) => l.id === "ne-land")).toBe(true);
   });
+
+  it("adds a hidden imagery raster basemap when a tile URL is configured", () => {
+    const url = "https://tiles.example.gov/{z}/{x}/{y}.png";
+    const style = buildCopStyle("light", { kind: "natural-earth", assetBase: "/" }, url) as {
+      sources: Record<string, { type: string; tiles?: string[] }>;
+      layers: Array<{ id: string; layout?: { visibility?: string } }>;
+    };
+    expect(style.sources.imagery!.type).toBe("raster");
+    expect(style.sources.imagery!.tiles).toEqual([url]);
+    const imagery = style.layers.find((l) => l.id === "imagery")!;
+    expect(imagery.layout?.visibility).toBe("none");
+  });
 });

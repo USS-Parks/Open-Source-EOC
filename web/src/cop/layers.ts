@@ -83,7 +83,11 @@ export type BasemapConfig = { readonly kind: "natural-earth"; readonly assetBase
  * never blocks the COP. A deployment's own MapLibre style replaces this
  * entirely (handled by the caller), for street-level detail.
  */
-export function buildCopStyle(theme: ThemeName, basemap?: BasemapConfig): Record<string, unknown> {
+export function buildCopStyle(
+  theme: ThemeName,
+  basemap?: BasemapConfig,
+  imageryUrl?: string,
+): Record<string, unknown> {
   const t = themes[theme];
   const bg = basemap?.kind === "natural-earth" ? basemapBackground(theme) : t.surfaceRaised;
   const sources: Record<string, unknown> = {};
@@ -93,6 +97,18 @@ export function buildCopStyle(theme: ThemeName, basemap?: BasemapConfig): Record
   if (basemap?.kind === "natural-earth") {
     Object.assign(sources, naturalEarthSources(basemap.assetBase));
     layers.push(...naturalEarthLayers(theme));
+  }
+  // Optional raster imagery basemap, hidden until the operator switches to it.
+  // It mounts above the vector basemap and below the runtime operational layers.
+  if (imageryUrl) {
+    sources["imagery"] = { type: "raster", tiles: [imageryUrl], tileSize: 256 };
+    layers.push({
+      id: "imagery",
+      type: "raster",
+      source: "imagery",
+      layout: { visibility: "none" },
+      paint: {},
+    });
   }
   return { version: 8, sources, layers };
 }

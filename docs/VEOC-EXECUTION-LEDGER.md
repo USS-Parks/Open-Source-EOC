@@ -901,3 +901,32 @@ unchanged; all work on `main`.
   incident detail view (org chart, checklists) are later.
 - **Rollback:** revert the VEOC-54 commit.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-55: Switchable satellite/imagery basemap
+
+- **Session:** VEOC-55, executed 2026-09-20
+- **Starting HEAD:** `d667379` (Incidents screen)
+- **Gap closed:** the COP had only the muted vector basemap; there was no
+  satellite/aerial option. Adds one, switchable, without breaking the offline
+  default.
+- **Files created/changed:** `web/src/app/config.ts` (OPENEOC_IMAGERY_TILE_URL
+  and OPENEOC_IMAGERY_ATTRIBUTION runtime config); `web/src/cop/layers.ts`
+  (buildCopStyle mounts a hidden raster imagery source and layer when a tile
+  URL is set, above the vector basemap and below the operational layers);
+  `web/src/cop/CopMap.tsx` (a Basemap switch, Vector or Imagery, in the layer
+  panel, toggling the raster's visibility, with imagery attribution shown);
+  `web/src/app/surfaces/MapSurface.tsx` (passes the config through). Test:
+  cop.test.ts asserts the imagery raster mounts hidden with the configured
+  tiles.
+- **Acceptance proven by test:** buildCopStyle adds a `raster` imagery source
+  with the exact tile template and an `imagery` layer hidden by default; the
+  offline vector default is unchanged when no tile URL is configured.
+- **Verification:** `pnpm check` green; 366 tests / 71 files.
+- **Design note (honest):** imagery tiles are the deployment's to provide; a
+  self-hosted raster keeps the COP offline, a public provider is the
+  deployment's choice. No imagery ships in the bundle, so the air-gap default
+  holds.
+- **Rollback:** revert the VEOC-55 commit.
+- **Commit/push:** under standing authorization. No branch created.
