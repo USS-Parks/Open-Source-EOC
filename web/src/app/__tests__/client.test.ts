@@ -106,6 +106,35 @@ describe("ApiClient", () => {
     expect(headers["authorization"]).toBe("Bearer A");
   });
 
+  it("uploads a file, searches, and downloads content", async () => {
+    const blob = new Blob([new Uint8Array([1, 2, 3])], { type: "application/octet-stream" });
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      const u = String(url);
+      if (u.endsWith("/auth/login"))
+        return res(200, { accessToken: "A", resumeToken: "R", sessionId: "S" });
+      if (u.endsWith("/files") && init.method === "POST")
+        return res(201, { id: "f1", sha256: "abc", version: 1 });
+      if (u.includes("/search?q="))
+        return res(200, { hits: [{ kind: "file", id: "f1", title: "plan.pdf" }] });
+      if (u.endsWith("/files/f1/content"))
+        return { ok: true, status: 200, statusText: "OK", blob: async () => blob };
+      return res(404, { error: "nope" });
+    }) as unknown as typeof fetch;
+
+    const client = new ApiClient({ fetchImpl });
+    await client.login("e@x.org", "pw");
+    const up = await client.uploadFile("j", {
+      name: "plan.pdf",
+      contentType: "application/pdf",
+      dataBase64: "AQID",
+    });
+    expect(up.id).toBe("f1");
+    const hits = await client.searchJurisdiction("j", "plan");
+    expect(hits[0]!.kind).toBe("file");
+    const dl = await client.downloadFile("f1");
+    expect(dl.type).toBe("application/octet-stream");
+  });
+
   it("surfaces the server error envelope as a typed ApiError", async () => {
     const fetchImpl = (async (url: string) => {
       const u = String(url);

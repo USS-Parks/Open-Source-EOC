@@ -12,6 +12,7 @@ import { DashboardSurface } from "../surfaces/DashboardSurface.js";
 import { BoardSurface } from "../surfaces/BoardSurface.js";
 import { SitrepSurface } from "../surfaces/SitrepSurface.js";
 import { FormsSurface } from "../surfaces/FormsSurface.js";
+import { FilesSurface } from "../surfaces/FilesSurface.js";
 import { AlertsSurface, BoardsIndex, SitrepsIndex } from "../surfaces/lists.js";
 
 const NAV: readonly NavItem[] = [
@@ -20,6 +21,7 @@ const NAV: readonly NavItem[] = [
   { key: "boards", label: "Boards" },
   { key: "sitreps", label: "SITREP" },
   { key: "forms", label: "Forms" },
+  { key: "files", label: "Files" },
   { key: "alerts", label: "Alerts" },
 ];
 
@@ -127,6 +129,8 @@ function sectionForNav(key: string): Surface {
       return { kind: "sitreps" };
     case "forms":
       return { kind: "forms" };
+    case "files":
+      return { kind: "files" };
     case "alerts":
       return { kind: "alerts" };
     default:
@@ -189,6 +193,8 @@ function Center(props: {
           isAdmin={props.isAdmin}
         />
       );
+    case "files":
+      return <FilesSurface client={props.client} jurisdictionId={props.jurisdictionId} />;
     case "alerts":
       return <AlertsSurface client={props.client} />;
   }

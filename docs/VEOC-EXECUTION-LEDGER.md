@@ -846,3 +846,30 @@ unchanged; all work on `main`.
   (needs the file-upload UI) is next; line and polygon drawing is later.
 - **Rollback:** revert the VEOC-52 commit.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-53: Files and search operator screen
+
+- **Session:** VEOC-53, executed 2026-09-20
+- **Starting HEAD:** `6c4e72f` (map field capture)
+- **Operator gap closed:** the file store and platform search existed only
+  behind the API (VEOC-15); the console had no way to upload, find, or download
+  anything. This adds the screen.
+- **Files created/changed:** `web/src/app/surfaces/FilesSurface.tsx` (upload a
+  document or photo to the content-addressed store, search records, libraries,
+  files, and the chronology, and download a file); `web/src/app/api/client.ts`
+  (searchJurisdiction, uploadFile, fileMeta, downloadFile, and a shared authed
+  `requestBlob` the IAP PDF download now also uses); `web/src/app/router.tsx`
+  and `web/src/app/screens/Console.tsx` (a Files rail entry and route). Tests:
+  client.test.ts (upload, search, and blob download) and the browser E2E now
+  uploads a file and finds it through search.
+- **Acceptance proven by test:** the client uploads a file, searches, and
+  downloads its content as a blob; the browser E2E uploads a text note and the
+  platform search returns it, offline.
+- **Verification:** `pnpm check` green; 364 tests / 71 files.
+- **Facets:** R5 now reaches the operator; closes the Phase B files/search UI gap.
+- **Deferred (honest):** attaching an uploaded photo to a placed map point (the
+  attachment field type) and multipart streaming upload are later.
+- **Rollback:** revert the VEOC-53 commit.
+- **Commit/push:** under standing authorization. No branch created.

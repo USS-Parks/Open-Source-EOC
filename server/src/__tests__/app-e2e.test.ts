@@ -283,6 +283,22 @@ describe("the operations console in a real browser, offline", () => {
     await recordPanel.getByRole("button", { name: "Save record" }).click();
     await page.getByText("New map record").waitFor({ state: "hidden", timeout: 20000 });
 
+    // Files: upload a document and find it through platform search.
+    await page.getByRole("button", { name: "Files" }).click();
+    await page.getByText("Files & Search").waitFor({ state: "visible", timeout: 20000 });
+    await page.getByLabel("File to upload").setInputFiles({
+      name: "sitrep-note.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("Evacuation staging at the rodeo grounds."),
+    });
+    await page.getByRole("button", { name: "Upload", exact: true }).click();
+    await page.getByText(/Uploaded sitrep-note\.txt/).waitFor({ state: "visible", timeout: 20000 });
+    await page.getByLabel("Query").fill("sitrep");
+    await page.getByRole("button", { name: "Search" }).click();
+    await page.getByText("sitrep-note.txt").first().waitFor({ state: "visible", timeout: 20000 });
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: join(SHOTS, "app-files-light.png"), fullPage: false });
+
     // Dark theme, for the night-shift EOC.
     await page.getByRole("button", { name: "Dark" }).click();
     await page.waitForTimeout(400);

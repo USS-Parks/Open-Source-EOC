@@ -119,6 +119,23 @@ export interface CreateIapBody {
   readonly safetyMessage?: string;
   readonly formIds?: readonly string[];
 }
+export interface SearchHit {
+  readonly kind: "record" | "library" | "file" | "chronology";
+  readonly id: string;
+  readonly title: string;
+}
+export interface FileMetaRef {
+  readonly id: string;
+  readonly name: string;
+  readonly contentType: string;
+  readonly size: number;
+  readonly version: number;
+}
+export interface UploadResult {
+  readonly id: string;
+  readonly sha256: string;
+  readonly version: number;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -356,11 +373,43 @@ export class ApiClient {
   approveIap(iapId: string): Promise<{ ok: true }> {
     return this.request<{ ok: true }>("POST", `/api/v1/iap/${iapId}/approve`);
   }
-  async downloadIapPdf(iapId: string): Promise<Blob> {
+  downloadIapPdf(iapId: string): Promise<Blob> {
+    return this.requestBlob(`/api/v1/iap/${iapId}/pdf`);
+  }
+  async searchJurisdiction(jurisdictionId: string, q: string): Promise<SearchHit[]> {
+    const r = await this.request<{ hits: SearchHit[] }>(
+      "GET",
+      `/api/v1/jurisdictions/${jurisdictionId}/search?q=${encodeURIComponent(q)}`,
+    );
+    return r.hits;
+  }
+  uploadFile(
+    jurisdictionId: string,
+    body: {
+      name: string;
+      contentType: string;
+      dataBase64: string;
+      attachedKind?: "none" | "board" | "incident" | "library";
+      attachedId?: string;
+    },
+  ): Promise<UploadResult> {
+    return this.request<UploadResult>(
+      "POST",
+      `/api/v1/jurisdictions/${jurisdictionId}/files`,
+      body as unknown as Record<string, unknown>,
+    );
+  }
+  fileMeta(fileId: string): Promise<FileMetaRef> {
+    return this.request<FileMetaRef>("GET", `/api/v1/files/${fileId}`);
+  }
+  downloadFile(fileId: string): Promise<Blob> {
+    return this.requestBlob(`/api/v1/files/${fileId}/content`);
+  }
+  private async requestBlob(path: string): Promise<Blob> {
     const once = (): Promise<Response> => {
       const headers: Record<string, string> = {};
       if (this.accessToken) headers["authorization"] = `Bearer ${this.accessToken}`;
-      return this.fetchImpl(`${this.baseUrl}/api/v1/iap/${iapId}/pdf`, { method: "GET", headers });
+      return this.fetchImpl(`${this.baseUrl}${path}`, { method: "GET", headers });
     };
     let res = await once();
     if (res.status === 401 && this.resumeToken) {
