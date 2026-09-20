@@ -110,6 +110,13 @@ export interface IncidentTemplateOption {
   readonly key: string;
   readonly title: string;
 }
+export interface ResourceRequestSummary {
+  readonly id: string;
+  readonly item: string;
+  readonly quantity: number;
+  readonly priority: string;
+  readonly state: string;
+}
 export interface IapResult {
   readonly id: string;
   readonly status: string;
@@ -370,6 +377,29 @@ export class ApiClient {
   }
   closeIncident(incidentId: string): Promise<{ ok: true }> {
     return this.request<{ ok: true }>("POST", `/api/v1/incidents/${incidentId}/close`);
+  }
+  async listResourceRequests(jurisdictionId: string): Promise<ResourceRequestSummary[]> {
+    const r = await this.request<{ requests: ResourceRequestSummary[] }>(
+      "GET",
+      `/api/v1/jurisdictions/${jurisdictionId}/resource-requests`,
+    );
+    return r.requests;
+  }
+  submitResourceRequest(
+    jurisdictionId: string,
+    body: { origin: "field" | "eoc"; item: string; quantity?: number; priority?: string; notes?: string },
+  ): Promise<{ id: string }> {
+    return this.request<{ id: string }>(
+      "POST",
+      `/api/v1/jurisdictions/${jurisdictionId}/resource-requests`,
+      body as unknown as Record<string, unknown>,
+    );
+  }
+  transitionResourceRequest(id: string, toState: string, note?: string): Promise<{ state: string }> {
+    return this.request<{ state: string }>("POST", `/api/v1/resource-requests/${id}/transition`, {
+      toState,
+      ...(note ? { note } : {}),
+    });
   }
   getIcsForm(
     incidentId: string,

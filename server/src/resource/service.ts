@@ -282,6 +282,33 @@ export interface ChronologyEntry {
   readonly at: string;
 }
 
+export interface RequestSummary {
+  readonly id: string;
+  readonly item: string;
+  readonly quantity: number;
+  readonly priority: string;
+  readonly state: string;
+}
+
+/** Resource requests visible in a jurisdiction, for the 213RR board. */
+export async function listRequests(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+): Promise<RequestSummary[]> {
+  requireMember(actor, jurisdictionId);
+  const rows = await sql`
+    select id, item, quantity, priority, state from resource_requests
+    where jurisdiction_id = ${jurisdictionId} order by item`;
+  return rows.map((r) => ({
+    id: r.id as string,
+    item: r.item as string,
+    quantity: r.quantity as number,
+    priority: r.priority as string,
+    state: r.state as string,
+  }));
+}
+
 export async function getRequest(
   sql: Sql,
   actor: Principal,

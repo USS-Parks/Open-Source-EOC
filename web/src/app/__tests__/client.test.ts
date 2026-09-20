@@ -154,6 +154,27 @@ describe("ApiClient", () => {
     expect((await client.closeIncident("i1")).ok).toBe(true);
   });
 
+  it("submits, lists, and advances a resource request", async () => {
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      const u = String(url);
+      if (u.endsWith("/auth/login"))
+        return res(200, { accessToken: "A", resumeToken: "R", sessionId: "S" });
+      if (u.endsWith("/resource-requests") && init.method === "POST") return res(201, { id: "r1" });
+      if (u.endsWith("/resource-requests"))
+        return res(200, {
+          requests: [{ id: "r1", item: "Cots", quantity: 50, priority: "routine", state: "submitted" }],
+        });
+      if (u.endsWith("/transition")) return res(200, { state: "triaged" });
+      return res(404, { error: "nope" });
+    }) as unknown as typeof fetch;
+
+    const client = new ApiClient({ fetchImpl });
+    await client.login("e@x.org", "pw");
+    expect((await client.submitResourceRequest("j", { origin: "eoc", item: "Cots", quantity: 50 })).id).toBe("r1");
+    expect((await client.listResourceRequests("j"))[0]!.state).toBe("submitted");
+    expect((await client.transitionResourceRequest("r1", "triaged")).state).toBe("triaged");
+  });
+
   it("surfaces the server error envelope as a typed ApiError", async () => {
     const fetchImpl = (async (url: string) => {
       const u = String(url);

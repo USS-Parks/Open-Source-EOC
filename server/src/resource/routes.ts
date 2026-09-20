@@ -9,6 +9,7 @@ import {
   escalate,
   exportCosts,
   getRequest,
+  listRequests,
   receiveEscalation,
   reportBack,
   submitRequest,
@@ -81,6 +82,18 @@ export function resourceRoutes(
         }),
       );
       return reply.status(201).send(result);
+    },
+  );
+
+  app.get(
+    "/api/v1/jurisdictions/:jurisdictionId/resource-requests",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const requests = await withPerson(sql, req.principal.person.id, (tx) =>
+        listRequests(tx, req.principal, jurisdictionId),
+      );
+      return reply.send({ requests });
     },
   );
 

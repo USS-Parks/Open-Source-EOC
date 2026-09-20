@@ -328,6 +328,16 @@ describe("the operations console in a real browser, offline", () => {
       .first()
       .waitFor({ state: "visible", timeout: 20000 });
 
+    // Resource requests (213RR): submit one and advance its lifecycle state.
+    await page.getByRole("button", { name: "Resources" }).click();
+    await page.getByText("Resource Requests (213RR)").waitFor({ state: "visible", timeout: 20000 });
+    await page.getByLabel("Requested item").fill("Sandbags, 500 ct");
+    await page.getByRole("button", { name: "Submit request" }).click();
+    await page.getByText("Sandbags, 500 ct").first().waitFor({ state: "visible", timeout: 20000 });
+    await page.getByRole("button", { name: "Advance" }).first().click();
+    // The row's state badge flips to "triaged" (the first allowed transition).
+    await page.getByText("triaged", { exact: true }).first().waitFor({ state: "visible", timeout: 20000 });
+
     // Dark theme, for the night-shift EOC.
     await page.getByRole("button", { name: "Dark" }).click();
     await page.waitForTimeout(400);

@@ -962,3 +962,31 @@ unchanged; all work on `main`.
   later.
 - **Rollback:** revert the VEOC-56 commit.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-57: Resource requests (213RR) operator screen
+
+- **Session:** VEOC-57, executed 2026-09-20
+- **Starting HEAD:** `456f650` (photo attachment)
+- **Operator gap closed:** the 213RR lifecycle existed only behind the API
+  (VEOC-35); the console could not submit or advance a request. Adds the screen.
+- **Files created/changed:** `web/src/app/surfaces/ResourcesSurface.tsx` (submit
+  a request, and advance each one through the NIMS ordering states; the allowed
+  next states come from the dictionary transition table so the UI can only
+  offer legal moves, which the server independently enforces); server
+  `resource/service.ts` and `resource/routes.ts` (listRequests plus
+  `GET /api/v1/jurisdictions/:id/resource-requests`); `web/src/app/api/client.ts`
+  (listResourceRequests, submitResourceRequest, transitionResourceRequest);
+  `web/src/app/router.tsx` and `web/src/app/screens/Console.tsx` (a Resources
+  rail entry and route). Tests: client.test.ts (submit, list, advance) and the
+  browser E2E now submits a request and advances it to triaged.
+- **Acceptance proven by test:** the client submits, lists, and advances a
+  request; the browser E2E submits "Sandbags, 500 ct", sees it, and advances its
+  state to triaged, offline.
+- **Verification:** `pnpm check` green; 370 tests / 71 files.
+- **Facets:** F5 213RR now reaches the operator (the engine was VEOC-35).
+- **Deferred (honest):** assignment to a position, escalation to a peer tier, and
+  cost capture/export are API-complete and are follow-up screens.
+- **Rollback:** revert the VEOC-57 commit.
+- **Commit/push:** under standing authorization. No branch created.
