@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import * as maplibregl from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { Protocol } from "pmtiles";
@@ -16,9 +16,15 @@ import { NATURAL_EARTH_ATTRIBUTION } from "./basemap.js";
 import {
   buildBundledVectorStyle,
   BUNDLED_BASEMAP_ATTRIBUTION,
+  BUNDLED_FONT_STACK,
   type BundledBasemapConfig,
 } from "./bundledbasemap.js";
-import { buildStreetStyle, OSM_ATTRIBUTION, type StreetBasemapConfig } from "./streetstyle.js";
+import {
+  buildStreetStyle,
+  OSM_ATTRIBUTION,
+  STREET_FONT_STACK,
+  type StreetBasemapConfig,
+} from "./streetstyle.js";
 import { statusColor, type SymbolStatus } from "./symbology.js";
 import {
   feedLayerIds,
@@ -27,6 +33,14 @@ import {
   tagFeedFeatures,
   type FeedLayerHealth,
 } from "./feeds.js";
+import {
+  formatArea,
+  geometryBounds,
+  parseCoordinate,
+  polygonAreaSqMi,
+  searchFeatures,
+  totalMiles,
+} from "./tools.js";
 
 export interface CopBoard {
   readonly id: string;
@@ -70,24 +84,27 @@ let pmtilesRegistered = false;
 const LEGEND: readonly SymbolStatus[] = ["critical", "warning", "normal", "unknown"];
 
 const EMPTY_FC = { type: "FeatureCollection", features: [] as unknown[] };
-const EARTH_MI = 3958.8;
+const DEFAULT_CENTER: [number, number] = [-123.5, 41.3];
+const DEFAULT_ZOOM = 9;
+const BOOKMARKS_KEY = "openeoc.cop.bookmarks";
 
-/** Great-circle distance between two lng/lat points, in statute miles. */
-function haversineMiles(a: [number, number], b: [number, number]): number {
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b[1] - a[1]);
-  const dLng = toRad(b[0] - a[0]);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * Math.sin(dLng / 2) ** 2;
-  return 2 * EARTH_MI * Math.asin(Math.sqrt(h));
+type MeasureMode = "off" | "distance" | "area";
+type Bounds = [number, number, number, number];
+
+interface Bookmark {
+  readonly name: string;
+  readonly center: [number, number];
+  readonly zoom: number;
 }
 
-/** Cumulative length of a measured path, in miles. */
-function totalMiles(coords: readonly [number, number][]): number {
-  let d = 0;
-  for (let i = 1; i < coords.length; i++) d += haversineMiles(coords[i - 1]!, coords[i]!);
-  return d;
+/** One row in the find-on-map results: a record, a county, or a coordinate. */
+interface FindResult {
+  readonly key: string;
+  readonly kind: "feature" | "county" | "coordinate";
+  readonly title: string;
+  readonly detail: string;
+  readonly bounds: Bounds;
+  readonly properties?: Record<string, unknown> | undefined;
 }
 
 /** A rendered feature belonging to a board or feed layer (inspectable). */
@@ -115,6 +132,25 @@ function featureHtml(properties: Record<string, unknown>): string {
   return `<table style="font:12px system-ui,sans-serif;border-collapse:collapse">${rows}</table>`;
 }
 
+function loadBookmarks(): Bookmark[] {
+  try {
+    const raw = globalThis.localStorage?.getItem(BOOKMARKS_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? (parsed as Bookmark[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function storeBookmarks(list: readonly Bookmark[]): void {
+  try {
+    globalThis.localStorage?.setItem(BOOKMARKS_KEY, JSON.stringify(list));
+  } catch {
+    // Storage may be unavailable (private mode, quota); the list still works
+    // for the session.
+  }
+}
+
 /**
  * The common operating picture (F6, F14). Every geo board is a togglable
  * layer; data refreshes on a poll (push riding the sync layer follows at
@@ -136,22 +172,49 @@ export function CopMap(props: CopMapProps) {
   const [basemapMode, setBasemapMode] = useState<"vector" | "imagery">("vector");
   const imageryAvailable = !!props.imageryUrl && !props.basemapStyleUrl;
   const readoutRef = useRef<HTMLDivElement>(null);
-  const measuringRef = useRef(false);
+  const measureRef = useRef<MeasureMode>("off");
   const measureCoordsRef = useRef<[number, number][]>([]);
-  const [measuring, setMeasuring] = useState(false);
-  // The last fetched features per source, so zoom-to-extent fits every feature,
-  // not just those in the current viewport (querySourceFeatures is viewport-bound).
+  const [measure, setMeasure] = useState<MeasureMode>("off");
+  // The last fetched features per source, so zoom-to-extent and search cover
+  // every feature, not just those in the current viewport (querySourceFeatures
+  // is viewport-bound).
   const dataRef = useRef<Record<string, CopFeatureCollection>>({});
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<FindResult[]>([]);
+  const countiesRef = useRef<Record<string, Bounds> | null>(null);
+  const markerRef = useRef<maplibregl.Marker | null>(null);
+  const popupRef = useRef<maplibregl.Popup | null>(null);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>(loadBookmarks);
+  const [bookmarkName, setBookmarkName] = useState("");
 
-  /** Paint the corner readout: cursor position, zoom, and measured distance. */
+  const home = { center: props.center ?? DEFAULT_CENTER, zoom: props.zoom ?? DEFAULT_ZOOM };
+  const assetBase = props.bundledBasemap?.assetBase ?? props.basemap?.assetBase;
+  // The label layers need the glyph stack of whichever basemap style is
+  // active; an external style's fonts are unknown, so labels stay off there.
+  const labelFont = props.basemapStyleUrl
+    ? undefined
+    : props.streetBasemap
+      ? STREET_FONT_STACK
+      : assetBase
+        ? BUNDLED_FONT_STACK
+        : undefined;
+
+  /** Paint the corner readout: cursor position, zoom, and the measurement. */
   const paintReadout = (lng: number, lat: number, zoom: number) => {
     const el = readoutRef.current;
     if (!el) return;
     const coords = measureCoordsRef.current;
-    const dist =
-      measuringRef.current && coords.length >= 2 ? ` · ${totalMiles(coords).toFixed(2)} mi` : "";
-    const hint = measuringRef.current && coords.length < 2 ? " · click to measure" : "";
-    el.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)} · z${zoom.toFixed(1)}${dist}${hint}`;
+    const mode = measureRef.current;
+    let tail = "";
+    if (mode === "distance") {
+      tail = coords.length >= 2 ? ` · ${totalMiles(coords).toFixed(2)} mi` : " · click to measure";
+    } else if (mode === "area") {
+      tail =
+        coords.length >= 3
+          ? ` · ${formatArea(polygonAreaSqMi(coords))}`
+          : " · click three or more points";
+    }
+    el.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)} · z${zoom.toFixed(1)}${tail}`;
   };
 
   useEffect(() => {
@@ -172,14 +235,27 @@ export function CopMap(props: CopMapProps) {
           : props.bundledBasemap
             ? buildBundledVectorStyle(props.bundledBasemap, props.theme, props.imageryUrl)
             : buildCopStyle(props.theme, props.basemap, props.imageryUrl))) as never,
-      center: props.center ?? [-123.5, 41.3],
-      zoom: props.zoom ?? 9,
+      center: home.center,
+      zoom: home.zoom,
       attributionControl: false,
+      // Keeps the drawn frame readable for the image export.
+      canvasContextAttributes: { preserveDrawingBuffer: true },
     });
     mapRef.current = map;
     props.onMap?.(map);
 
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    map.addControl(
+      new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }),
+      "top-right",
+    );
+    map.addControl(new maplibregl.FullscreenControl(), "top-right");
+    map.addControl(
+      new maplibregl.GeolocateControl({
+        positionOptions: { enableHighAccuracy: true },
+        trackUserLocation: true,
+      }),
+      "top-right",
+    );
     map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-left");
     map.addControl(
       new maplibregl.AttributionControl({
@@ -204,11 +280,9 @@ export function CopMap(props: CopMapProps) {
       "bottom-right",
     );
 
-    // Click any operational feature to inspect its record; a plain map click
-    // dismisses. queryRenderedFeatures keeps this working as layers come and
-    // go on the poll, with no per-layer handler churn.
-    // Push the current measure path (a line plus a vertex marker per click)
-    // into the measure source so the tool draws as the operator clicks.
+    // Push the current measure path into the measure source so the tool
+    // draws as the operator clicks: vertices, the path, and for area the
+    // closed ring with a fill.
     const updateMeasure = () => {
       const coords = measureCoordsRef.current;
       const src = map.getSource("measure") as maplibregl.GeoJSONSource | undefined;
@@ -218,7 +292,15 @@ export function CopMap(props: CopMapProps) {
         geometry: { type: "Point", coordinates: c },
         properties: {},
       }));
-      if (coords.length >= 2) {
+      const area = measureRef.current === "area" && coords.length >= 3;
+      if (area) {
+        const ring = [...coords, coords[0]!];
+        features.push({
+          type: "Feature",
+          geometry: { type: "Polygon", coordinates: [ring] },
+          properties: {},
+        });
+      } else if (coords.length >= 2) {
         features.push({
           type: "Feature",
           geometry: { type: "LineString", coordinates: coords },
@@ -228,7 +310,11 @@ export function CopMap(props: CopMapProps) {
       src.setData({ type: "FeatureCollection", features } as never);
     };
 
+    // Click any operational feature to inspect its record; a plain map click
+    // dismisses. queryRenderedFeatures keeps this working as layers come and
+    // go on the poll, with no per-layer handler churn.
     const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, maxWidth: "280px" });
+    popupRef.current = popup;
     map.on("click", (e) => {
       // Add-point mode: report the position for a new record, never inspect.
       if (pickingRef.current && onPickRef.current) {
@@ -236,7 +322,7 @@ export function CopMap(props: CopMapProps) {
         return;
       }
       // Measure mode: each click extends the path; nothing is inspected.
-      if (measuringRef.current) {
+      if (measureRef.current !== "off") {
         measureCoordsRef.current = [...measureCoordsRef.current, [e.lngLat.lng, e.lngLat.lat]];
         updateMeasure();
         paintReadout(e.lngLat.lng, e.lngLat.lat, map.getZoom());
@@ -248,7 +334,7 @@ export function CopMap(props: CopMapProps) {
     });
     map.on("mousemove", (e) => {
       paintReadout(e.lngLat.lng, e.lngLat.lat, map.getZoom());
-      if (pickingRef.current || measuringRef.current) return; // tool cursors win
+      if (pickingRef.current || measureRef.current !== "off") return; // tool cursors win
       const over = map.queryRenderedFeatures(e.point).some((f) => isCopLayerId(f.layer.id));
       map.getCanvas().style.cursor = over ? "pointer" : "";
     });
@@ -262,7 +348,7 @@ export function CopMap(props: CopMapProps) {
           if (source) source.setData(fc as never);
           else if (map.isStyleLoaded() || map.loaded()) {
             map.addSource(sourceId(board.id), { type: "geojson", data: fc as never });
-            for (const spec of boardLayerSpecs(board.id, props.theme)) {
+            for (const spec of boardLayerSpecs(board.id, props.theme, labelFont)) {
               map.addLayer(spec as never);
             }
           }
@@ -280,7 +366,7 @@ export function CopMap(props: CopMapProps) {
             if (source) source.setData(fc as never);
             else if (map.isStyleLoaded() || map.loaded()) {
               map.addSource(feedSourceId(feed.id), { type: "geojson", data: fc as never });
-              for (const spec of feedLayerSpecs(feed.id, props.theme)) {
+              for (const spec of feedLayerSpecs(feed.id, props.theme, labelFont)) {
                 map.addLayer(spec as never);
               }
             }
@@ -298,10 +384,17 @@ export function CopMap(props: CopMapProps) {
         map.addSource("measure", { type: "geojson", data: EMPTY_FC as never });
         const ink = themes[props.theme].text;
         map.addLayer({
+          id: "measure-fill",
+          type: "fill",
+          source: "measure",
+          filter: ["==", ["geometry-type"], "Polygon"],
+          paint: { "fill-color": ink, "fill-opacity": 0.12 },
+        });
+        map.addLayer({
           id: "measure-line",
           type: "line",
           source: "measure",
-          filter: ["==", ["geometry-type"], "LineString"],
+          filter: ["in", ["geometry-type"], ["literal", ["LineString", "Polygon"]]],
           paint: { "line-color": ink, "line-width": 2, "line-dasharray": [2, 1] },
         });
         map.addLayer({
@@ -352,17 +445,17 @@ export function CopMap(props: CopMapProps) {
   }, [props.picking]);
 
   useEffect(() => {
-    measuringRef.current = measuring;
+    measureRef.current = measure;
     const map = mapRef.current;
     if (!map) return;
-    map.getCanvas().style.cursor = measuring ? "crosshair" : "";
-    if (!measuring) {
-      // Leaving measure mode clears the path.
-      measureCoordsRef.current = [];
-      const src = map.getSource("measure") as maplibregl.GeoJSONSource | undefined;
-      src?.setData(EMPTY_FC as never);
-    }
-  }, [measuring]);
+    map.getCanvas().style.cursor = measure === "off" ? "" : "crosshair";
+    // Switching mode or leaving the tool clears the path.
+    measureCoordsRef.current = [];
+    const src = map.getSource("measure") as maplibregl.GeoJSONSource | undefined;
+    src?.setData(EMPTY_FC as never);
+    const c = map.getCenter();
+    paintReadout(c.lng, c.lat, map.getZoom());
+  }, [measure]);
 
   /** Fit the viewport to every feature on the visible operational layers. */
   const fitToFeatures = () => {
@@ -370,22 +463,132 @@ export function CopMap(props: CopMapProps) {
     if (!map) return;
     const bounds = new maplibregl.LngLatBounds();
     let any = false;
-    const walk = (c: unknown): void => {
-      if (Array.isArray(c) && typeof c[0] === "number" && typeof c[1] === "number") {
-        bounds.extend(c as [number, number]);
-        any = true;
-      } else if (Array.isArray(c)) {
-        for (const inner of c) walk(inner);
-      }
-    };
     const consider = (id: string, on: boolean) => {
       if (!on) return;
       const fc = dataRef.current[id];
-      for (const f of fc?.features ?? []) walk((f.geometry as { coordinates?: unknown }).coordinates);
+      for (const f of fc?.features ?? []) {
+        const b = geometryBounds(f.geometry);
+        if (!b) continue;
+        bounds.extend([b[0], b[1]]).extend([b[2], b[3]]);
+        any = true;
+      }
     };
     for (const b of props.boards) consider(sourceId(b.id), visible[b.id] ?? true);
     for (const f of props.feeds ?? []) consider(feedSourceId(f.id), feedVisible[f.id] ?? true);
     if (any) map.fitBounds(bounds, { padding: 64, maxZoom: 14, duration: 500 });
+  };
+
+  const goHome = () => {
+    mapRef.current?.flyTo({ center: home.center, zoom: home.zoom, bearing: 0, pitch: 0 });
+  };
+
+  /** Save the current frame as a PNG (the print/export gesture). */
+  const exportImage = () => {
+    const map = mapRef.current;
+    if (!map) return;
+    const a = document.createElement("a");
+    a.href = map.getCanvas().toDataURL("image/png");
+    a.download = `cop-${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
+    a.click();
+  };
+
+  /** County bounds for the find box, read once from the bundled boundaries. */
+  const loadCounties = async (): Promise<Record<string, Bounds>> => {
+    if (countiesRef.current) return countiesRef.current;
+    const out: Record<string, Bounds> = {};
+    if (assetBase) {
+      try {
+        const res = await fetch(`${assetBase}basemap/ca_counties.geojson`);
+        const fc = (await res.json()) as {
+          features?: Array<{ properties?: { name?: string }; geometry?: unknown }>;
+        };
+        for (const f of fc.features ?? []) {
+          const b = geometryBounds(f.geometry);
+          if (f.properties?.name && b) out[f.properties.name] = b;
+        }
+      } catch {
+        // Without the boundaries the find box still covers records and coordinates.
+      }
+    }
+    countiesRef.current = out;
+    return out;
+  };
+
+  const find = async (e: FormEvent) => {
+    e.preventDefault();
+    const q = query.trim();
+    if (!q) {
+      setResults([]);
+      return;
+    }
+    const out: FindResult[] = [];
+    const coord = parseCoordinate(q);
+    if (coord) {
+      out.push({
+        key: "coord",
+        kind: "coordinate",
+        title: `Go to ${coord[1].toFixed(4)}, ${coord[0].toFixed(4)}`,
+        detail: "coordinate",
+        bounds: [coord[0], coord[1], coord[0], coord[1]],
+      });
+    }
+    for (const h of searchFeatures(dataRef.current, q)) {
+      out.push({
+        key: `${h.sourceId}/${h.featureId}`,
+        kind: "feature",
+        title: h.title,
+        detail: h.detail,
+        bounds: h.bounds,
+        properties: h.properties,
+      });
+    }
+    const counties = await loadCounties();
+    const ql = q.toLowerCase();
+    for (const [name, bounds] of Object.entries(counties)) {
+      if (out.length >= 12) break;
+      if (name.toLowerCase().includes(ql)) {
+        out.push({ key: `county/${name}`, kind: "county", title: name, detail: "county", bounds });
+      }
+    }
+    setResults(out);
+  };
+
+  const goTo = (r: FindResult) => {
+    const map = mapRef.current;
+    if (!map) return;
+    const center: [number, number] = [(r.bounds[0] + r.bounds[2]) / 2, (r.bounds[1] + r.bounds[3]) / 2];
+    const isPoint = r.bounds[0] === r.bounds[2] && r.bounds[1] === r.bounds[3];
+    if (isPoint) map.flyTo({ center, zoom: Math.max(map.getZoom(), 13), duration: 600 });
+    else map.fitBounds(r.bounds, { padding: 64, maxZoom: 14, duration: 600 });
+    markerRef.current?.remove();
+    markerRef.current = null;
+    if (r.kind === "coordinate") {
+      markerRef.current = new maplibregl.Marker({ color: themes[props.theme].text })
+        .setLngLat(center)
+        .addTo(map);
+    }
+    if (r.kind === "feature" && r.properties && popupRef.current) {
+      popupRef.current.setLngLat(center).setHTML(featureHtml(r.properties)).addTo(map);
+    }
+  };
+
+  const saveBookmark = (e: FormEvent) => {
+    e.preventDefault();
+    const map = mapRef.current;
+    if (!map) return;
+    const c = map.getCenter();
+    const name = bookmarkName.trim() || `${c.lat.toFixed(3)}, ${c.lng.toFixed(3)}`;
+    const mark: Bookmark = { name, center: [c.lng, c.lat], zoom: map.getZoom() };
+    const next = [...bookmarks.filter((b) => b.name !== name), mark];
+    setBookmarks(next);
+    storeBookmarks(next);
+    setBookmarkName("");
+  };
+
+  const removeBookmark = (name: string) => {
+    const next = bookmarks.filter((b) => b.name !== name);
+    setBookmarks(next);
+    storeBookmarks(next);
   };
 
   useEffect(() => {
@@ -419,11 +622,38 @@ export function CopMap(props: CopMapProps) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 8, height: "100%" }}>
       <nav aria-label="Map layers" className="eoc-map-panel">
+        <form onSubmit={(e) => void find(e)} style={{ marginBottom: 12 }}>
+          <h3 style={headingStyle}>Find</h3>
+          <input
+            type="search"
+            aria-label="Find on map"
+            placeholder="Record, county, or lat, lng"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            style={inputStyle}
+          />
+          {results.length > 0 ? (
+            <ul style={{ listStyle: "none", margin: "6px 0 0", padding: 0, display: "grid", gap: 2 }}>
+              {results.map((r) => (
+                <li key={r.key}>
+                  <button
+                    type="button"
+                    onClick={() => goTo(r)}
+                    style={{ ...toolButtonStyle(false), width: "100%", textAlign: "left" }}
+                  >
+                    <span style={{ display: "block" }}>{r.title}</span>
+                    <span style={{ display: "block", fontSize: "0.8em", color: "var(--eoc-text-muted)" }}>
+                      {r.detail}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </form>
         {imageryAvailable ? (
           <div style={{ marginBottom: 12 }}>
-            <h3 style={{ margin: "0 0 6px", fontSize: "0.85em", color: "var(--eoc-text-muted)" }}>
-              Basemap
-            </h3>
+            <h3 style={headingStyle}>Basemap</h3>
             <div style={{ display: "flex", gap: 4 }}>
               {(["vector", "imagery"] as const).map((mode) => (
                 <button
@@ -431,17 +661,7 @@ export function CopMap(props: CopMapProps) {
                   type="button"
                   aria-pressed={basemapMode === mode}
                   onClick={() => setBasemapMode(mode)}
-                  style={{
-                    flex: 1,
-                    textTransform: "capitalize",
-                    padding: "4px 8px",
-                    minHeight: 32,
-                    borderRadius: 4,
-                    cursor: "pointer",
-                    border: "1px solid var(--eoc-border)",
-                    background: basemapMode === mode ? "var(--eoc-text)" : "var(--eoc-surface)",
-                    color: basemapMode === mode ? "var(--eoc-surface)" : "var(--eoc-text)",
-                  }}
+                  style={{ ...toolButtonStyle(basemapMode === mode), flex: 1, textTransform: "capitalize" }}
                 >
                   {mode}
                 </button>
@@ -449,9 +669,7 @@ export function CopMap(props: CopMapProps) {
             </div>
           </div>
         ) : null}
-        <h3 style={{ margin: "0 0 6px", fontSize: "0.85em", color: "var(--eoc-text-muted)" }}>
-          Layers
-        </h3>
+        <h3 style={headingStyle}>Layers</h3>
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
           {props.boards.map((b) => (
             <li key={b.id}>
@@ -470,9 +688,7 @@ export function CopMap(props: CopMapProps) {
         </ul>
         {(props.feeds ?? []).length > 0 ? (
           <div style={{ marginTop: 12 }}>
-            <h3 style={{ margin: "0 0 6px", fontSize: "0.85em", color: "var(--eoc-text-muted)" }}>
-              Feeds
-            </h3>
+            <h3 style={headingStyle}>Feeds</h3>
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
               {(props.feeds ?? []).map((f) => (
                 <li key={f.id}>
@@ -492,9 +708,7 @@ export function CopMap(props: CopMapProps) {
           </div>
         ) : null}
         <div style={{ marginTop: 12 }}>
-          <h3 style={{ margin: "0 0 6px", fontSize: "0.85em", color: "var(--eoc-text-muted)" }}>
-            Status
-          </h3>
+          <h3 style={headingStyle}>Status</h3>
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
             {LEGEND.map((s) => (
               <li key={s} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.85em" }}>
@@ -514,22 +728,75 @@ export function CopMap(props: CopMapProps) {
           </ul>
         </div>
         <div style={{ marginTop: 12 }}>
-          <h3 style={{ margin: "0 0 6px", fontSize: "0.85em", color: "var(--eoc-text-muted)" }}>
-            Tools
-          </h3>
+          <h3 style={headingStyle}>Tools</h3>
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            <button type="button" onClick={goHome} style={toolButtonStyle(false)}>
+              Home
+            </button>
             <button type="button" onClick={fitToFeatures} style={toolButtonStyle(false)}>
               Zoom to extent
             </button>
             <button
               type="button"
-              aria-pressed={measuring}
-              onClick={() => setMeasuring((m) => !m)}
-              style={toolButtonStyle(measuring)}
+              aria-pressed={measure === "distance"}
+              onClick={() => setMeasure((m) => (m === "distance" ? "off" : "distance"))}
+              style={toolButtonStyle(measure === "distance")}
             >
-              {measuring ? "Measuring…" : "Measure"}
+              {measure === "distance" ? "Measuring…" : "Measure"}
+            </button>
+            <button
+              type="button"
+              aria-pressed={measure === "area"}
+              onClick={() => setMeasure((m) => (m === "area" ? "off" : "area"))}
+              style={toolButtonStyle(measure === "area")}
+            >
+              {measure === "area" ? "Measuring area…" : "Measure area"}
+            </button>
+            <button type="button" onClick={exportImage} style={toolButtonStyle(false)}>
+              Export image
             </button>
           </div>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <h3 style={headingStyle}>Bookmarks</h3>
+          <form onSubmit={saveBookmark} style={{ display: "flex", gap: 4 }}>
+            <input
+              type="text"
+              aria-label="Bookmark name"
+              placeholder="Name this view"
+              value={bookmarkName}
+              onChange={(e) => setBookmarkName(e.target.value)}
+              style={{ ...inputStyle, flex: 1, minWidth: 0 }}
+            />
+            <button type="submit" style={toolButtonStyle(false)}>
+              Save view
+            </button>
+          </form>
+          {bookmarks.length > 0 ? (
+            <ul style={{ listStyle: "none", margin: "6px 0 0", padding: 0, display: "grid", gap: 2 }}>
+              {bookmarks.map((b) => (
+                <li key={b.name} style={{ display: "flex", gap: 4 }}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      mapRef.current?.flyTo({ center: b.center, zoom: b.zoom, duration: 600 })
+                    }
+                    style={{ ...toolButtonStyle(false), flex: 1, textAlign: "left", minWidth: 0 }}
+                  >
+                    {b.name}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Remove bookmark ${b.name}`}
+                    onClick={() => removeBookmark(b.name)}
+                    style={toolButtonStyle(false)}
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       </nav>
       <div style={{ position: "relative", minHeight: 400, height: "100%" }}>
@@ -559,6 +826,25 @@ export function CopMap(props: CopMapProps) {
     </div>
   );
 }
+
+const headingStyle: CSSProperties = {
+  margin: "0 0 6px",
+  fontSize: "0.85em",
+  color: "var(--eoc-text-muted)",
+};
+
+const inputStyle: CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  fontFamily: "inherit",
+  fontSize: "0.9em",
+  padding: "4px 8px",
+  minHeight: 32,
+  borderRadius: 4,
+  border: "1px solid var(--eoc-border)",
+  background: "var(--eoc-surface)",
+  color: "var(--eoc-text)",
+};
 
 /** Shared style for the map's tool buttons (pressed state is a filled chip). */
 function toolButtonStyle(pressed: boolean): CSSProperties {

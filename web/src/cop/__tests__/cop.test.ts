@@ -11,6 +11,15 @@ import {
 import { statusColor, symbolStatusFor, VALUE_STATUS } from "../symbology.js";
 import { buildStreetStyle } from "../streetstyle.js";
 import { buildBundledVectorStyle } from "../bundledbasemap.js";
+import {
+  formatArea,
+  geometryBounds,
+  labelFor,
+  parseCoordinate,
+  polygonAreaSqMi,
+  searchFeatures,
+  totalMiles,
+} from "../tools.js";
 
 describe("NAPSG status symbology (F19, F14)", () => {
   it("every status frame resolves to a distinct token color in both themes", () => {
@@ -52,17 +61,41 @@ describe("layer construction", () => {
     expect(fc.features[0]!.properties._symbolStatus).toBe("critical");
   });
 
-  it("builds fill, line, and point layers over one source per board", () => {
-    const specs = boardLayerSpecs("b1", "light") as Array<{
+  it("tags features with a display label from their naming field", () => {
+    const fc = tagFeatures({
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          id: "a",
+          geometry: { type: "Point", coordinates: [0, 0] },
+          properties: { road: "SR-96 at Weitchpec", status: "closed" },
+        },
+      ],
+    });
+    expect(fc.features[0]!.properties._label).toBe("SR-96 at Weitchpec");
+  });
+
+  it("builds fill, line, point, and label layers over one source per board", () => {
+    const specs = boardLayerSpecs("b1", "light", "Liberation Sans Regular") as Array<{
       id: string;
       source: string;
       type: string;
       paint: Record<string, unknown>;
+      layout?: Record<string, unknown>;
     }>;
     expect(specs.map((s) => s.id)).toEqual(boardLayerIds("b1"));
     for (const s of specs) expect(s.source).toBe(sourceId("b1"));
     const point = specs.find((s) => s.type === "circle")!;
     expect(JSON.stringify(point.paint["circle-color"])).toContain("_symbolStatus");
+    const label = specs.find((s) => s.type === "symbol")!;
+    expect(label.layout?.["text-font"]).toEqual(["Liberation Sans Regular"]);
+    expect(JSON.stringify(label.layout?.["text-field"])).toContain("_label");
+  });
+
+  it("leaves the label layer out when no glyph stack is known", () => {
+    const specs = boardLayerSpecs("b1", "dark") as Array<{ type: string }>;
+    expect(specs.map((s) => s.type)).toEqual(["fill", "line", "circle"]);
   });
 
   it("the base style renders with zero network references (INV-3)", () => {
@@ -73,9 +106,11 @@ describe("layer construction", () => {
 
   it("the bundled Natural Earth basemap mounts as offline geojson sources", () => {
     const style = buildCopStyle("light", { kind: "natural-earth", assetBase: "/" }) as {
+      glyphs?: string;
       sources: Record<string, { type: string; data: string }>;
       layers: Array<{ id: string }>;
     };
+    expect(style.glyphs).toBe("/fonts/{fontstack}/{range}.pbf");
     expect(style.sources.ne_land!.type).toBe("geojson");
     expect(style.sources.ne_land!.data).toBe("/basemap/ne_50m_land.geojson");
     expect(JSON.stringify(style)).not.toContain("http");
@@ -165,5 +200,94 @@ describe("layer construction", () => {
     expect(style.sources.imagery!.tiles).toEqual([url]);
     const imagery = style.layers.find((l) => l.id === "imagery")!;
     expect(imagery.layout?.visibility).toBe("none");
+  });
+});
+
+describe("operator map tools", () => {
+  const sf: [number, number] = [-122.4194, 37.7749];
+  const la: [number, number] = [-118.2437, 34.0522];
+
+  it("measures a path in statute miles", () => {
+    expect(totalMiles([sf])).toBe(0);
+    expect(totalMiles([sf, la])).toBeCloseTo(347.4, 0);
+    expect(totalMiles([sf, la, sf])).toBeCloseTo(694.8, 0);
+  });
+
+  it("measures a ring's area on the sphere", () => {
+    // A one-degree square at the equator is about 4,770 square miles.
+    const square: [number, number][] = [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ];
+    const sqMi = polygonAreaSqMi(square);
+    expect(sqMi).toBeGreaterThan(4700);
+    expect(sqMi).toBeLessThan(4850);
+    expect(polygonAreaSqMi([sf, la])).toBe(0);
+    expect(formatArea(0.5)).toBe("320.0 ac");
+    expect(formatArea(2)).toBe("2.00 sq mi (1,280 ac)");
+  });
+
+  it("parses lat, lng the way an operator types it", () => {
+    expect(parseCoordinate("41.3, -123.5")).toEqual([-123.5, 41.3]);
+    expect(parseCoordinate("41.3 -123.5")).toEqual([-123.5, 41.3]);
+    // A pair that only fits as lng, lat is taken that way.
+    expect(parseCoordinate("-123.5, 41.3")).toEqual([-123.5, 41.3]);
+    expect(parseCoordinate("Hoopa")).toBeNull();
+    expect(parseCoordinate("200, 300")).toBeNull();
+  });
+
+  it("labels a record from its first naming field", () => {
+    expect(labelFor({ name: "Hoopa High Gym", status: "normal" })).toBe("Hoopa High Gym");
+    expect(labelFor({ road: "SR-96", reason: "Rockslide" })).toBe("SR-96");
+    expect(labelFor({ status: "closed" })).toBe("");
+  });
+
+  it("bounds any geometry kind", () => {
+    expect(geometryBounds({ type: "Point", coordinates: [1, 2] })).toEqual([1, 2, 1, 2]);
+    expect(
+      geometryBounds({
+        type: "Polygon",
+        coordinates: [
+          [
+            [0, 0],
+            [2, 0],
+            [2, 3],
+            [0, 0],
+          ],
+        ],
+      }),
+    ).toEqual([0, 0, 2, 3]);
+    expect(geometryBounds(null)).toBeNull();
+  });
+
+  it("finds records by any readable property, never by hidden tags", () => {
+    const collections = {
+      "board-shelters": {
+        type: "FeatureCollection" as const,
+        features: [
+          {
+            type: "Feature" as const,
+            id: "s1",
+            geometry: { type: "Point", coordinates: [-123.6, 41.1] },
+            properties: { name: "Weitchpec Center", status: "evacuating", _symbolStatus: "critical" },
+          },
+          {
+            type: "Feature" as const,
+            id: "s2",
+            geometry: { type: "Point", coordinates: [-123.5, 41.2] },
+            properties: { name: "Klamath Hall", status: "closed", _symbolStatus: "critical" },
+          },
+        ],
+      },
+    };
+    const hits = searchFeatures(collections, "weitch");
+    expect(hits.map((h) => h.featureId)).toEqual(["s1"]);
+    expect(hits[0]!.title).toBe("Weitchpec Center");
+    expect(hits[0]!.bounds).toEqual([-123.6, 41.1, -123.6, 41.1]);
+    expect(searchFeatures(collections, "critical")).toEqual([]);
+    expect(searchFeatures(collections, "a", 1)).toHaveLength(1);
+    expect(searchFeatures(collections, "  ")).toEqual([]);
   });
 });

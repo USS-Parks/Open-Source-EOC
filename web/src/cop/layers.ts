@@ -1,6 +1,7 @@
 import { themes, type ThemeName } from "../design/tokens.js";
 import { statusColorExpression, symbolStatusFor } from "./symbology.js";
 import { basemapBackground, naturalEarthLayers, naturalEarthSources } from "./basemap.js";
+import { labelFor } from "./tools.js";
 
 /**
  * COP layer construction: pure functions from board data to MapLibre
@@ -21,13 +22,20 @@ export interface CopFeatureCollection {
   readonly features: readonly CopFeature[];
 }
 
-/** Tag features with their status frame so paint expressions stay static. */
+/**
+ * Tag features with their status frame and display label so paint and
+ * layout expressions stay static.
+ */
 export function tagFeatures(fc: CopFeatureCollection): CopFeatureCollection {
   return {
     type: "FeatureCollection",
     features: fc.features.map((f) => ({
       ...f,
-      properties: { ...f.properties, _symbolStatus: symbolStatusFor(f.properties) },
+      properties: {
+        ...f.properties,
+        _symbolStatus: symbolStatusFor(f.properties),
+        _label: labelFor(f.properties),
+      },
     })),
   };
 }
@@ -37,12 +45,42 @@ export function sourceId(boardId: string): string {
 }
 
 export function boardLayerIds(boardId: string): string[] {
-  return [`${sourceId(boardId)}-fill`, `${sourceId(boardId)}-line`, `${sourceId(boardId)}-point`];
+  const src = sourceId(boardId);
+  return [`${src}-fill`, `${src}-line`, `${src}-point`, `${src}-label`];
 }
 
-export function boardLayerSpecs(boardId: string, theme: ThemeName): unknown[] {
+/**
+ * The layers for one board. The label layer needs a glyph stack, which the
+ * active basemap style provides; with no font (an external style whose
+ * fonts are unknown) the label layer is left out and the map stays quiet
+ * rather than logging a glyph error per tile.
+ */
+export function boardLayerSpecs(boardId: string, theme: ThemeName, labelFont?: string): unknown[] {
   const src = sourceId(boardId);
   const color = statusColorExpression(theme);
+  const label = labelFont
+    ? [
+        {
+          id: `${src}-label`,
+          type: "symbol",
+          source: src,
+          minzoom: 9,
+          layout: {
+            "text-field": ["get", "_label"],
+            "text-font": [labelFont],
+            "text-size": 11,
+            "text-anchor": "top",
+            "text-offset": [0, 0.9],
+            "text-optional": true,
+          },
+          paint: {
+            "text-color": themes[theme].text,
+            "text-halo-color": themes[theme].surface,
+            "text-halo-width": 1.2,
+          },
+        },
+      ]
+    : [];
   return [
     {
       id: `${src}-fill`,
@@ -70,6 +108,7 @@ export function boardLayerSpecs(boardId: string, theme: ThemeName): unknown[] {
         "circle-stroke-color": themes[theme].surface,
       },
     },
+    ...label,
   ];
 }
 
@@ -94,6 +133,10 @@ export function buildCopStyle(
   const layers: unknown[] = [
     { id: "background", type: "background", paint: { "background-color": bg } },
   ];
+  // The bundled glyph stack ships next to the basemap assets, so feature
+  // labels render on this fallback canvas too.
+  const glyphs =
+    basemap?.kind === "natural-earth" ? `${basemap.assetBase}fonts/{fontstack}/{range}.pbf` : undefined;
   if (basemap?.kind === "natural-earth") {
     Object.assign(sources, naturalEarthSources(basemap.assetBase));
     layers.push(...naturalEarthLayers(theme));
@@ -110,5 +153,5 @@ export function buildCopStyle(
       paint: {},
     });
   }
-  return { version: 8, sources, layers };
+  return { version: 8, ...(glyphs ? { glyphs } : {}), sources, layers };
 }

@@ -25,6 +25,9 @@ export interface StreetBasemapConfig {
 
 export const OSM_ATTRIBUTION = "© OpenStreetMap contributors (ODbL)";
 
+/** The glyph stack the street style's labels request (see deploy/basemap). */
+export const STREET_FONT_STACK = "Noto Sans Regular";
+
 interface StreetPalette {
   readonly background: string;
   readonly water: string;
@@ -165,7 +168,7 @@ export function buildStreetStyle(
         layout: {
           "symbol-placement": "line",
           "text-field": ["coalesce", ["get", "name"], ["get", "ref"]],
-          "text-font": ["Noto Sans Regular"],
+          "text-font": [STREET_FONT_STACK],
           "text-size": 11,
         },
         paint: { "text-color": p.label, "text-halo-color": p.labelHalo, "text-halo-width": 1.2 },
@@ -178,7 +181,7 @@ export function buildStreetStyle(
         filter: ["in", ["get", "class"], ["literal", ["city", "town", "village", "hamlet"]]],
         layout: {
           "text-field": ["get", "name"],
-          "text-font": ["Noto Sans Regular"],
+          "text-font": [STREET_FONT_STACK],
           "text-size": ["interpolate", ["linear"], ["zoom"], 6, 11, 12, 16],
         },
         paint: { "text-color": p.label, "text-halo-color": p.labelHalo, "text-halo-width": 1.4 },

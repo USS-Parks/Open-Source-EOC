@@ -1595,3 +1595,73 @@ unchanged; all work on `main`.
   confirmed by screenshot in both themes.
 - **Rollback:** revert the VEOC-75 commit; assets and an additive style only.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-76: Esri-parity operator map tools on the COP
+
+- **Session:** VEOC-76, executed 2026-09-20
+- **Starting HEAD:** `e898226` (bundled vector-tile basemap)
+- **Direction (Basho):** continue the ESRI-parity mapping features of the
+  dashboard. The basemap track (VEOC-73 to 75) gave the COP real geography;
+  this receipt gives the operator the tool set the ArcGIS map widgets and
+  WebEOC's mapping ship, without leaving the calm-screen discipline.
+- **What changed:**
+  1. **Feature labels.** Every board and feed layer gains a symbol layer
+     naming each record (the first of name, title, label, road, location,
+     facility, summary), halo'd in the surface color and hidden below zoom 9.
+     The label font follows the active basemap's glyph stack (bundled
+     Liberation Sans, or the street style's Noto Sans); an external style URL
+     has unknown fonts, so labels stay off there rather than logging glyph
+     errors. The fallback GeoJSON canvas now declares the bundled glyphs too.
+  2. **Find on map.** A search box over the loaded operational features (any
+     readable property, case-insensitive; hidden underscore tags excluded),
+     the bundled California county boundaries (read once, offline), and typed
+     coordinates (lat, lng first per EM convention; lng, lat accepted when
+     only that fits). A result flies to a point or fits a bounds, opens the
+     record popup for a feature, and drops a neutral marker for a coordinate.
+  3. **Area measurement** beside the distance tool: three or more clicks close
+     a ring, drawn with a faint neutral fill, and the readout reports acres
+     below a square mile and both units above it (spherical area, Chamberlain
+     and Duquette). Switching modes clears the path.
+  4. **Bookmarks.** Save the current view under a name (defaults to the
+     center), fly back to it, remove it; stored per browser in localStorage,
+     failing soft when storage is unavailable.
+  5. **Native controls.** Compass with pitch (rotation was disabled), a
+     fullscreen control, a geolocate control that tracks the user for field
+     use, and a Home button that resets the incident view, bearing, and pitch.
+  6. **Export image.** Saves the current frame as a PNG (the print gesture);
+     the canvas keeps its drawing buffer for this.
+- **Files created:** `web/src/cop/tools.ts` (haversine and path length,
+  spherical ring area and its formatter, coordinate parsing, record labels,
+  geometry bounds, feature search; pure, no GPU).
+- **Files changed:** `web/src/cop/layers.ts` (`_label` tag, the label layer
+  and its id, glyphs on the fallback style); `web/src/cop/feeds.ts` (label id
+  and font pass-through); `web/src/cop/streetstyle.ts` (exports its font
+  stack); `web/src/cop/CopMap.tsx` (the tools, controls, find box, bookmarks,
+  export; distance math moved to tools.ts); `web/src/cop/__tests__/cop.test.ts`
+  and `feeds.test.ts` (label layer, glyphs, and eight tool tests: path length
+  SF to LA, a one-degree square's area, coordinate parsing both orders,
+  labels, bounds, search including the hidden-tag exclusion and cap);
+  `server/src/__tests__/app-e2e.test.ts` (Home, area measure, find by record
+  and by coordinate, bookmark save, and an `app-map-tools.png` capture);
+  `ROADMAP.md` (Phase C and the one-line status).
+- **Acceptance proven by test:** the unit tests assert the four-layer shape
+  per board and feed with the label font, the label omission with no font,
+  the glyph URL on the fallback style, and every tools.ts function against
+  known values; tsc and eslint are clean across all workspaces.
+- **Verification, stated honestly:** run on Basho's Windows workstation,
+  which has no PostgreSQL and no Linux Chromium path, so `pnpm check` cannot
+  go fully green here. Ran: `pnpm -r exec tsc --noEmit` (exit 0), `eslint .`
+  (exit 0), `vitest run web/src` (14 files, 104 tests, all passing), the
+  license scan and link check (below). NOT run locally: the server test
+  files and the browser E2E, including the new E2E steps; those execute in
+  CI on push. No screenshot of the new tools exists yet for the same reason.
+- **Deferred, named:** point clustering at low zoom (needs a point-only
+  source per layer), a USNG/MGRS coordinate readout (needs an MGRS library),
+  per-layer opacity, and a time slider over record timestamps.
+- **Rollback:** revert the VEOC-76 commit; UI and tests only, no schema or
+  API change.
+- **Commit/push:** proposed to Basho at session end; not performed. No
+  branch created; the working folder was cloned from origin on Basho's
+  instruction at session start (it was empty).

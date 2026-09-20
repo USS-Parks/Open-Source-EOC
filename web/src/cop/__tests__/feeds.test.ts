@@ -32,14 +32,21 @@ describe("feed layers carry provenance and staleness (VEOC-19)", () => {
     expect(p._ageLabel).toBe("2h ago");
   });
 
-  it("builds the three layer specs against the feed source", () => {
-    const specs = feedLayerSpecs("f1", "light") as Array<Record<string, unknown>>;
-    expect(specs.map((s) => s.id)).toEqual(["feed-f1-fill", "feed-f1-line", "feed-f1-point"]);
+  it("builds the layer specs against the feed source", () => {
+    const specs = feedLayerSpecs("f1", "light", "Liberation Sans Regular") as Array<
+      Record<string, unknown>
+    >;
+    expect(specs.map((s) => s.id)).toEqual(feedLayerIds("f1"));
     for (const s of specs) expect(s.source).toBe(feedSourceId("f1"));
   });
 
   it("names the feed layer ids for visibility toggling", () => {
-    expect(feedLayerIds("f1")).toEqual(["feed-f1-fill", "feed-f1-line", "feed-f1-point"]);
+    expect(feedLayerIds("f1")).toEqual([
+      "feed-f1-fill",
+      "feed-f1-line",
+      "feed-f1-point",
+      "feed-f1-label",
+    ]);
   });
 
   it("formats ages for the provenance line", () => {

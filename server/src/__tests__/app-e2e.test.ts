@@ -348,13 +348,32 @@ describe("the operations console in a real browser, offline", () => {
     await page.getByRole("button", { name: "Map" }).click();
     await page.waitForSelector('[data-testid="cop-map"]', { timeout: 20000 });
 
-    // Map operator tools: the cursor/zoom readout, zoom-to-extent, and measure.
+    // Map operator tools: the cursor/zoom readout, zoom-to-extent, home,
+    // distance and area measure, find-on-map, and bookmarks.
     await page.waitForSelector('[data-testid="cop-readout"]', { timeout: 20000 });
     await page.getByRole("button", { name: "Zoom to extent" }).click();
+    await page.getByRole("button", { name: "Home", exact: true }).click();
     await page.getByRole("button", { name: "Measure", exact: true }).click();
     await page.getByRole("button", { name: "Measuring…" }).waitFor({ state: "visible", timeout: 20000 });
     await page.getByRole("button", { name: "Measuring…" }).click();
     await page.getByRole("button", { name: "Measure", exact: true }).waitFor({ state: "visible", timeout: 20000 });
+    await page.getByRole("button", { name: "Measure area", exact: true }).click();
+    await page.getByRole("button", { name: "Measuring area…" }).waitFor({ state: "visible", timeout: 20000 });
+    await page.getByRole("button", { name: "Measuring area…" }).click();
+    // Find a seeded road closure by its reason and a typed coordinate, and
+    // jump to each.
+    await page.getByLabel("Find on map").fill("Downed lines");
+    await page.getByLabel("Find on map").press("Enter");
+    await page.getByRole("button", { name: /Downed lines/ }).click();
+    await page.getByLabel("Find on map").fill("41.3, -123.5");
+    await page.getByLabel("Find on map").press("Enter");
+    await page.getByRole("button", { name: /Go to 41.3000, -123.5000/ }).click();
+    // Bookmark the view and confirm it lists.
+    await page.getByLabel("Bookmark name").fill("Weitchpec");
+    await page.getByRole("button", { name: "Save view" }).click();
+    await page.getByRole("button", { name: "Weitchpec", exact: true }).waitFor({ state: "visible", timeout: 20000 });
+    await page.waitForTimeout(700);
+    await page.screenshot({ path: join(SHOTS, "app-map-tools.png"), fullPage: false });
 
     await page.getByRole("button", { name: "Add point" }).click();
     await page.locator("select").first().selectOption({ label: "Road Closures" });

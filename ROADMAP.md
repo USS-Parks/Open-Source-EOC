@@ -28,8 +28,11 @@ can use it," and neither is "it can be released":
   native messaging (direct and position-addressed threads) are all reachable in
   the console.
 - **C:** the map, dashboards, situation reports, and external feed layers are
-  live in the app, with drop-a-point field capture and a switchable
-  satellite/imagery basemap.
+  live in the app, with drop-a-point field capture, a switchable
+  satellite/imagery basemap, and the operator tool set the commercial COPs
+  ship: feature labels, find-on-map (records, counties, coordinates),
+  distance and area measurement, bookmarks, home and zoom-to-extent, compass,
+  fullscreen, geolocate, and image export.
 - **D:** complete for the operator: drop-a-point map capture with a photo,
   the field-reports and damage-assessment (PDA) and check-in boards, the XLSForm
   smart-form runner (renders an imported form and submits to a board), and
@@ -52,7 +55,8 @@ can use it," and neither is "it can be released":
 ## Honest one-line status
 
 A tested A-F backend with an operator console covering the map (with photo
-field capture and a switchable imagery basemap), dashboards, boards, incidents,
+field capture, a switchable imagery basemap, labels, search, measurement, and
+bookmarks), dashboards, boards, incidents,
 situation reports, ICS forms and the IAP, the 213RR resource lifecycle,
 after-action and corrective actions, files and search, feeds administration, and
 native messaging, smart forms, and object tracking/reunification. What remains

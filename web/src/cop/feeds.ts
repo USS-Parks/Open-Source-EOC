@@ -42,12 +42,12 @@ export function feedSourceId(feedId: string): string {
 
 export function feedLayerIds(feedId: string): string[] {
   const src = feedSourceId(feedId);
-  return [`${src}-fill`, `${src}-line`, `${src}-point`];
+  return [`${src}-fill`, `${src}-line`, `${src}-point`, `${src}-label`];
 }
 
-/** Same three-layer shape as boards, under the feed's own source id. */
-export function feedLayerSpecs(feedId: string, theme: ThemeName): unknown[] {
-  return boardLayerSpecs(feedId, theme).map((spec) => {
+/** Same layer shape as boards, under the feed's own source id. */
+export function feedLayerSpecs(feedId: string, theme: ThemeName, labelFont?: string): unknown[] {
+  return boardLayerSpecs(feedId, theme, labelFont).map((spec) => {
     const s = spec as Record<string, unknown>;
     const id = (s.id as string).replace(/^board-/, "feed-");
     return { ...s, id, source: feedSourceId(feedId) };
