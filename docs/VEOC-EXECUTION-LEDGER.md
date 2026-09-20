@@ -1153,3 +1153,53 @@ unchanged; all work on `main`.
   gated on Basho: IPAWS live credentialing and the live pilot (VEOC-42).
 - **Rollback:** revert the VEOC-63 commit.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-64: Smart-form (XLSForm) runner screen
+
+- **Session:** VEOC-64, executed 2026-09-20
+- **Starting HEAD:** `beeb451` (damage board)
+- **Operator gap closed:** imported XLSForms (VEOC-22) could be stored and
+  submitted only through the API; there was no runner. Adds one.
+- **Files created/changed:** `web/src/app/surfaces/SmartFormsSurface.tsx` (lists
+  stored forms, renders a form's flattened fields by XLSForm type, picks a target
+  board of the form's template, and submits the answers, which the server
+  validates and maps); `web/src/app/api/client.ts` (listForms, getForm,
+  submitForm); `web/src/app/router.tsx` and `web/src/app/screens/Console.tsx` (a
+  Smart Forms rail entry and route). Tests: client.test.ts (list, get, submit)
+  and the browser E2E now renders a seeded form and submits it to a board.
+- **Acceptance proven by test:** the client lists forms, loads a definition, and
+  submits; the browser E2E fills the "Rapid Needs Survey" and submits it to the
+  field-reports board, offline.
+- **Verification:** `pnpm check` green; 377 tests / 71 files.
+- **Facets:** F7 smart forms now reach the operator (the engine was VEOC-22).
+- **Deferred (honest):** in-runner XLSForm skip logic (relevant/constraint) is
+  evaluated server-side on submit, not previewed live; image questions defer to
+  the file-upload flow.
+- **Rollback:** revert the VEOC-64 commit.
+- **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-65: Tracking and reunification screen
+
+- **Session:** VEOC-65, executed 2026-09-20
+- **Starting HEAD:** `beeb451` (built alongside VEOC-64, same push)
+- **Operator gap closed:** object tracking and reunification (VEOC-25) existed
+  only behind the API. Adds the screen, the last Phase D operator surface.
+- **Files created/changed:** `web/src/app/surfaces/TrackingSurface.tsx` (register
+  a patient/evacuee/animal/asset with a tag, record custody scans through the
+  NIMS custody states, and search the chain by name or tag to reunify);
+  `web/src/app/api/client.ts` (registerTrackedObject, scanTrackedObject, reunify,
+  and the ReunificationAnswer type); `web/src/app/router.tsx` and
+  `web/src/app/screens/Console.tsx` (a Tracking rail entry and route). Tests:
+  client.test.ts (register, scan, reunify) and the browser E2E now registers an
+  object and finds it by name.
+- **Acceptance proven by test:** the client registers, scans, and reunifies; the
+  browser E2E registers "Jane Doe" and the reunification search returns her,
+  offline.
+- **Verification:** `pnpm check` green; 377 tests / 71 files.
+- **Facets:** completes Phase D operator UI (tracking/reunification); F20.
+- **Rollback:** revert the VEOC-65 commit.
+- **Commit/push:** under standing authorization. No branch created.

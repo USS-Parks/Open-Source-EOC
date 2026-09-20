@@ -6,6 +6,7 @@ import type {
   SitrepRow,
   IcsFormContent,
   IapDocument,
+  FormDefinition,
 } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
 
@@ -131,6 +132,17 @@ export interface CorrectiveAction {
   readonly dueDate: string | null;
   readonly status: string;
   readonly incidentId: string | null;
+}
+export interface ReunificationAnswer {
+  readonly tag: string;
+  readonly kind: string;
+  readonly label: string;
+  readonly latest: {
+    readonly custodyState: string;
+    readonly station: string | null;
+    readonly location: string | null;
+    readonly occurredAt: string;
+  };
 }
 export interface IapResult {
   readonly id: string;
@@ -556,6 +568,62 @@ export class ApiClient {
       `/api/v1/threads/${threadId}/messages`,
       { body },
     );
+  }
+  async listForms(jurisdictionId: string): Promise<Array<{ key: string; version: number; title: string }>> {
+    const r = await this.request<{ forms: Array<{ key: string; version: number; title: string }> }>(
+      "GET",
+      `/api/v1/jurisdictions/${jurisdictionId}/forms`,
+    );
+    return r.forms;
+  }
+  getForm(jurisdictionId: string, key: string): Promise<FormDefinition> {
+    return this.request<FormDefinition>(
+      "GET",
+      `/api/v1/jurisdictions/${jurisdictionId}/forms/${key}`,
+    );
+  }
+  submitForm(
+    key: string,
+    body: { jurisdictionId: string; boardId: string; answers: Record<string, unknown> },
+  ): Promise<{ recordId: string }> {
+    return this.request<{ recordId: string }>(
+      "POST",
+      `/api/v1/forms/${key}/submit`,
+      body as unknown as Record<string, unknown>,
+    );
+  }
+  registerTrackedObject(
+    jurisdictionId: string,
+    body: { kind: string; label: string; tag?: string; station?: string; agency?: string; location?: string },
+  ): Promise<{ id: string; tag: string }> {
+    return this.request<{ id: string; tag: string }>(
+      "POST",
+      `/api/v1/jurisdictions/${jurisdictionId}/tracked-objects`,
+      body as unknown as Record<string, unknown>,
+    );
+  }
+  scanTrackedObject(
+    jurisdictionId: string,
+    body: { tag: string; custodyState: string; station?: string; location?: string; note?: string },
+  ): Promise<{ eventId: string }> {
+    return this.request<{ eventId: string }>(
+      "POST",
+      `/api/v1/jurisdictions/${jurisdictionId}/tracked-objects/scan`,
+      body as unknown as Record<string, unknown>,
+    );
+  }
+  async reunify(
+    jurisdictionId: string,
+    query: { tag?: string; label?: string },
+  ): Promise<ReunificationAnswer[]> {
+    const q = new URLSearchParams();
+    if (query.tag) q.set("tag", query.tag);
+    if (query.label) q.set("label", query.label);
+    const r = await this.request<{ answers: ReunificationAnswer[] }>(
+      "GET",
+      `/api/v1/jurisdictions/${jurisdictionId}/reunification?${q.toString()}`,
+    );
+    return r.answers;
   }
   getIcsForm(
     incidentId: string,

@@ -267,6 +267,54 @@ describe("ApiClient", () => {
     expect((await client.listMessages("t1"))[0]!.body).toBe("Hi");
   });
 
+  it("lists smart forms, loads a definition, and submits", async () => {
+    const fetchImpl = (async (url: string) => {
+      const u = String(url);
+      if (u.endsWith("/auth/login"))
+        return res(200, { accessToken: "A", resumeToken: "R", sessionId: "S" });
+      if (u.endsWith("/submit")) return res(201, { recordId: "rec1" });
+      if (u.endsWith("/forms/rn")) return res(200, { key: "rn", version: 1, title: "Rapid Needs", nodes: [] });
+      if (u.endsWith("/forms")) return res(200, { forms: [{ key: "rn", version: 1, title: "Rapid Needs" }] });
+      return res(404, { error: "nope" });
+    }) as unknown as typeof fetch;
+
+    const client = new ApiClient({ fetchImpl });
+    await client.login("e@x.org", "pw");
+    expect((await client.listForms("j"))[0]!.key).toBe("rn");
+    expect((await client.getForm("j", "rn")).title).toBe("Rapid Needs");
+    expect(
+      (await client.submitForm("rn", { jurisdictionId: "j", boardId: "b", answers: { summary: "x" } })).recordId,
+    ).toBe("rec1");
+  });
+
+  it("registers, scans, and reunifies a tracked object", async () => {
+    const fetchImpl = (async (url: string) => {
+      const u = String(url);
+      if (u.endsWith("/auth/login"))
+        return res(200, { accessToken: "A", resumeToken: "R", sessionId: "S" });
+      if (u.endsWith("/scan")) return res(201, { eventId: "e1" });
+      if (u.endsWith("/tracked-objects")) return res(201, { id: "o1", tag: "T-1" });
+      if (u.includes("/reunification"))
+        return res(200, {
+          answers: [
+            {
+              tag: "T-1",
+              kind: "patient",
+              label: "Jane",
+              latest: { custodyState: "registered", station: null, location: null, occurredAt: "2026-09-20T00:00:00Z" },
+            },
+          ],
+        });
+      return res(404, { error: "nope" });
+    }) as unknown as typeof fetch;
+
+    const client = new ApiClient({ fetchImpl });
+    await client.login("e@x.org", "pw");
+    expect((await client.registerTrackedObject("j", { kind: "patient", label: "Jane" })).tag).toBe("T-1");
+    expect((await client.scanTrackedObject("j", { tag: "T-1", custodyState: "in_transit" })).eventId).toBe("e1");
+    expect((await client.reunify("j", { label: "Jane" }))[0]!.label).toBe("Jane");
+  });
+
   it("surfaces the server error envelope as a typed ApiError", async () => {
     const fetchImpl = (async (url: string) => {
       const u = String(url);

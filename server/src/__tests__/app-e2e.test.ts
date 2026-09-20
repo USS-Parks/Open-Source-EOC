@@ -193,6 +193,34 @@ beforeAll(async () => {
     });
   }
 
+  // A stored smart form (JSON path) that maps to the field-reports board.
+  await app.inject({
+    method: "POST",
+    url: `/api/v1/jurisdictions/${seed.jurisdictionId}/forms`,
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      key: "rapid_needs",
+      version: 1,
+      title: "Rapid Needs Survey",
+      boardTemplate: "field_reports",
+      nodes: [
+        { kind: "field", name: "summary", type: "text", required: true, label: "Summary" },
+        {
+          kind: "field",
+          name: "category",
+          type: "select_one",
+          label: "Category",
+          choices: [
+            { name: "hazard", label: "Hazard" },
+            { name: "damage", label: "Damage" },
+            { name: "resource", label: "Resource" },
+            { name: "other", label: "Other" },
+          ],
+        },
+      ],
+    },
+  });
+
   browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
 }, 120000);
 
@@ -253,7 +281,7 @@ describe("the operations console in a real browser, offline", () => {
 
     // The Forms surface previews an ICS form and assembles an IAP from the
     // live incident, all through the browser.
-    await page.getByRole("button", { name: "Forms" }).click();
+    await page.getByRole("button", { name: "Forms", exact: true }).click();
     await page.getByRole("button", { name: "Assemble IAP" }).waitFor({ state: "visible", timeout: 20000 });
     await page.getByRole("button", { name: "Preview form" }).click();
     await page.getByText("ICS-201 Incident Briefing").first().waitFor({ state: "visible", timeout: 20000 });
@@ -361,6 +389,24 @@ describe("the operations console in a real browser, offline", () => {
     await page.getByRole("button", { name: "Feeds" }).click();
     await page.getByText("Live Feeds").waitFor({ state: "visible", timeout: 20000 });
     await page.getByText("NWS Alerts").first().waitFor({ state: "visible", timeout: 20000 });
+
+    // Smart Forms: render an imported XLSForm and submit it to a board.
+    await page.getByRole("button", { name: "Smart Forms" }).click();
+    await page.getByRole("heading", { name: "Rapid Needs Survey" }).waitFor({ state: "visible", timeout: 20000 });
+    await page.getByLabel("Summary", { exact: true }).fill("Two homes flooded on the flat");
+    await page.getByLabel("Category", { exact: true }).selectOption("damage");
+    await page.getByRole("button", { name: "Submit form" }).click();
+    await page.getByText("Form submitted to the board.").waitFor({ state: "visible", timeout: 20000 });
+
+    // Tracking & Reunification: register an object and find it by name.
+    await page.getByRole("button", { name: "Tracking" }).click();
+    await page.getByText("Tracking & Reunification").waitFor({ state: "visible", timeout: 20000 });
+    await page.getByLabel("Label", { exact: true }).fill("Jane Doe");
+    await page.getByRole("button", { name: "Register" }).click();
+    await page.getByText(/Registered "Jane Doe"/).waitFor({ state: "visible", timeout: 20000 });
+    await page.getByLabel("Name, or #tag").fill("Jane");
+    await page.getByRole("button", { name: "Search" }).click();
+    await page.getByText("Jane Doe").first().waitFor({ state: "visible", timeout: 20000 });
 
     // Messages: start a position-addressed thread and post to it.
     await page.getByRole("button", { name: "Messages" }).click();
