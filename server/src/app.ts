@@ -52,6 +52,8 @@ import { resourceRoutes } from "./resource/routes.js";
 import { BoardSyncHub } from "./sync/hub.js";
 import { registerSyncRoutes } from "./sync/routes.js";
 import { withPerson } from "./db/context.js";
+import { applySecurityHeaders } from "./security/headers.js";
+import { rateLimit } from "./security/rate-limit.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -91,6 +93,37 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   void app.register(websocket);
   const oidcSettings = options.oidc === undefined ? oidcSettingsFromEnv() : options.oidc;
   const oidc = oidcSettings ? new OidcClient(oidcSettings) : null;
+
+  /**
+   * Security headers on every response, and a shared flood limiter in front
+   * of the API. Health probes and the WebSocket upgrade are exempt from the
+   * limiter so monitoring and live sync are never throttled.
+   */
+  app.addHook("onRequest", async (req, reply) => {
+    if (req.headers.upgrade?.toLowerCase() === "websocket") return;
+    const path = req.url.split("?")[0] ?? "";
+    applySecurityHeaders(reply, { api: path.startsWith("/api/") });
+    if (path === "/api/v1/health" || path === "/api/v1/ready") return;
+    const decision = rateLimit(req.ip);
+    if (!decision.allowed) {
+      return reply
+        .header("retry-after", String(Math.ceil(decision.retryAfterMs / 1000)))
+        .code(429)
+        .send({ error: "rate limit exceeded" });
+    }
+  });
+
+  // Liveness (no dependencies) and readiness (database reachable), for load
+  // balancers and orchestration. No auth, and exempt from the flood limiter.
+  app.get("/api/v1/health", async () => ({ status: "ok" }));
+  app.get("/api/v1/ready", async (_req, reply) => {
+    try {
+      await sql`select 1`;
+      return { status: "ready" };
+    } catch {
+      return reply.code(503).send({ status: "unavailable" });
+    }
+  });
 
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof AuthError) return reply.status(err.status).send({ error: err.message });
