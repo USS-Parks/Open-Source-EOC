@@ -22,7 +22,7 @@ import {
 import {
   buildStreetStyle,
   OSM_ATTRIBUTION,
-  STREET_FONT_STACK,
+  streetFontStack,
   type StreetBasemapConfig,
 } from "./streetstyle.js";
 import { statusColor, type SymbolStatus } from "./symbology.js";
@@ -194,7 +194,7 @@ export function CopMap(props: CopMapProps) {
   const labelFont = props.basemapStyleUrl
     ? undefined
     : props.streetBasemap
-      ? STREET_FONT_STACK
+      ? streetFontStack(props.streetBasemap)
       : assetBase
         ? BUNDLED_FONT_STACK
         : undefined;

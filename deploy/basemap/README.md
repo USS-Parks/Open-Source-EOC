@@ -31,32 +31,40 @@ it into the app.
 
 ## 1. Generate the tiles
 
-On a machine with Java 21+, about 10 GB of free disk, and network access:
+On a machine with Java 21+ or Docker, about 10 GB of free disk, and network
+access:
 
 ```
-deploy/basemap/generate-california.sh ./basemap-out
+deploy/basemap/generate-california.sh
 ```
 
 This uses [planetiler](https://github.com/onthegomap/planetiler) to download the
 California extract from Geofabrik and write `california.pmtiles` in the
-OpenMapTiles schema, which the app's street style is written against. For a
-different area, change `--area` in the script (any Geofabrik region name), or
-point planetiler at a local `.osm.pbf` with `--osm-path`.
+OpenMapTiles schema, which the app's street style is written against. With no
+Java on the machine the script runs the same planetiler release in its Docker
+image. Output lands in `deploy/basemap/out/` (gitignored) unless a directory is
+given. For a different area, change `--area` in the script (any Geofabrik
+region name), or point planetiler at a local `.osm.pbf` with `--osm-path`.
 
-## 2. Build a glyph stack (labels)
+## 2. Labels (optional: your own glyph stack)
 
-Labels need a self-hosted glyph (font) stack served as PBF ranges. Use an
-open-licensed font (for example Noto Sans, under the SIL Open Font License) and
-a glyph builder such as [`build-glyphs`](https://github.com/gmac/build-glyphs)
-or [`font-maker`](https://github.com/maplibre/font-maker):
+Labels render out of the box: the street style uses the glyph stack the app
+already ships (Liberation Sans, SIL OFL, under `web/public/fonts`). Nothing to
+build or host.
+
+To use another face, build a glyph (font) stack served as PBF ranges from an
+open-licensed font (for example Noto Sans, SIL OFL) with a glyph builder such
+as [`build-glyphs`](https://github.com/gmac/build-glyphs) or
+[`font-maker`](https://github.com/maplibre/font-maker):
 
 ```
 npx build-glyphs NotoSans-Regular.ttf ./fonts/"Noto Sans Regular"
 ```
 
-Serve the result so that `{fontstack}/{range}.pbf` resolves, e.g.
-`https://<host>/fonts/{fontstack}/{range}.pbf`. The style requests the
-`Noto Sans Regular` stack; match the directory name to that.
+Serve it so that `{fontstack}/{range}.pbf` resolves, e.g.
+`https://<host>/fonts/{fontstack}/{range}.pbf`, and set both
+`OPENEOC_BASEMAP_GLYPHS_URL` and `OPENEOC_BASEMAP_FONT` (the stack name, here
+`Noto Sans Regular`) in step 5.
 
 ## 3. Build a sprite (optional icons)
 
@@ -86,19 +94,21 @@ Set the runtime config before the app loads (for example, inject
 <script>
   window.OPENEOC = {
     OPENEOC_BASEMAP_PMTILES_URL: "https://<host>/california.pmtiles",
+    // optional, only with your own glyph stack (step 2):
     OPENEOC_BASEMAP_GLYPHS_URL: "https://<host>/fonts/{fontstack}/{range}.pbf",
+    OPENEOC_BASEMAP_FONT: "Noto Sans Regular",
     // optional:
     OPENEOC_BASEMAP_SPRITE_URL: "https://<host>/sprite"
   };
 </script>
 ```
 
-When `OPENEOC_BASEMAP_PMTILES_URL` and `OPENEOC_BASEMAP_GLYPHS_URL` are set, the
-app builds a themed street style over the PMTiles (`buildStreetStyle` in
-`web/src/cop/streetstyle.ts`) and the COP renders a full street map, light and
-dark, with the operational layers on top. Leave them unset and the app uses the
-bundled offline basemap. A full external style URL
-(`OPENEOC_BASEMAP_STYLE_URL`) still takes precedence over both.
+When `OPENEOC_BASEMAP_PMTILES_URL` is set, the app builds a themed street style
+over the PMTiles (`buildStreetStyle` in `web/src/cop/streetstyle.ts`) and the
+COP renders a full street map, light and dark, with the operational layers on
+top. Leave it unset and the app uses the bundled offline basemap. A full
+external style URL (`OPENEOC_BASEMAP_STYLE_URL`) still takes precedence over
+both.
 
 ## Attribution
 

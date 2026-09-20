@@ -155,6 +155,7 @@ describe("layer construction", () => {
       {
         pmtilesUrl: "https://tiles.eoc.example/california.pmtiles",
         glyphsUrl: "https://tiles.eoc.example/fonts/{fontstack}/{range}.pbf",
+        fontStack: "Noto Sans Regular",
         spriteUrl: "https://tiles.eoc.example/sprite",
       },
       "dark",
@@ -162,7 +163,7 @@ describe("layer construction", () => {
       glyphs: string;
       sprite?: string;
       sources: Record<string, { type: string; url: string; attribution: string }>;
-      layers: Array<{ id: string; "source-layer"?: string }>;
+      layers: Array<{ id: string; "source-layer"?: string; layout?: Record<string, unknown> }>;
     };
     const omt = style.sources.openmaptiles!;
     expect(omt.type).toBe("vector");
@@ -177,6 +178,17 @@ describe("layer construction", () => {
     expect(ids).toContain("road-label");
     expect(ids).toContain("place-label");
     expect(style.layers.some((l) => l["source-layer"] === "transportation")).toBe(true);
+    const placeLabel = style.layers.find((l) => l.id === "place-label")!;
+    expect(placeLabel.layout?.["text-font"]).toEqual(["Noto Sans Regular"]);
+  });
+
+  it("labels the street style with the bundled glyph stack by default", () => {
+    const style = buildStreetStyle(
+      { pmtilesUrl: "https://t/x.pmtiles", glyphsUrl: "/fonts/{fontstack}/{range}.pbf" },
+      "light",
+    ) as { layers: Array<{ id: string; layout?: Record<string, unknown> }> };
+    const roadLabel = style.layers.find((l) => l.id === "road-label")!;
+    expect(roadLabel.layout?.["text-font"]).toEqual(["Liberation Sans Regular"]);
   });
 
   it("omits label layers when no glyph stack is available", () => {

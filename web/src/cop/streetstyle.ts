@@ -1,4 +1,5 @@
 import type { ThemeName } from "../design/tokens.js";
+import { BUNDLED_FONT_STACK } from "./bundledbasemap.js";
 
 /**
  * A themed MapLibre street style over a self-hosted OpenMapTiles-schema PMTiles
@@ -17,16 +18,21 @@ import type { ThemeName } from "../design/tokens.js";
 export interface StreetBasemapConfig {
   /** URL of the OpenMapTiles-schema PMTiles archive (pmtiles:// is added here). */
   readonly pmtilesUrl: string;
-  /** URL template for the self-hosted glyph (font) PBF ranges. */
+  /** URL template for the glyph (font) PBF ranges; the app's bundled stack
+   * by default, so a deployment needs only the PMTiles URL. */
   readonly glyphsUrl: string;
+  /** The font stack name inside that glyph URL (default: the bundled one). */
+  readonly fontStack?: string | undefined;
   /** Optional sprite base URL for icons (labels render without it). */
   readonly spriteUrl?: string | undefined;
 }
 
 export const OSM_ATTRIBUTION = "© OpenStreetMap contributors (ODbL)";
 
-/** The glyph stack the street style's labels request (see deploy/basemap). */
-export const STREET_FONT_STACK = "Noto Sans Regular";
+/** The font stack the street style's labels request. */
+export function streetFontStack(config: Pick<StreetBasemapConfig, "fontStack">): string {
+  return config.fontStack || BUNDLED_FONT_STACK;
+}
 
 interface StreetPalette {
   readonly background: string;
@@ -83,6 +89,7 @@ export function buildStreetStyle(
 ): Record<string, unknown> {
   const p = PALETTE[theme];
   const src = "openmaptiles";
+  const font = streetFontStack(config);
   const layers: unknown[] = [
     { id: "background", type: "background", paint: { "background-color": p.background } },
     {
@@ -168,7 +175,7 @@ export function buildStreetStyle(
         layout: {
           "symbol-placement": "line",
           "text-field": ["coalesce", ["get", "name"], ["get", "ref"]],
-          "text-font": [STREET_FONT_STACK],
+          "text-font": [font],
           "text-size": 11,
         },
         paint: { "text-color": p.label, "text-halo-color": p.labelHalo, "text-halo-width": 1.2 },
@@ -181,7 +188,7 @@ export function buildStreetStyle(
         filter: ["in", ["get", "class"], ["literal", ["city", "town", "village", "hamlet"]]],
         layout: {
           "text-field": ["get", "name"],
-          "text-font": [STREET_FONT_STACK],
+          "text-font": [font],
           "text-size": ["interpolate", ["linear"], ["zoom"], 6, 11, 12, 16],
         },
         paint: { "text-color": p.label, "text-halo-color": p.labelHalo, "text-halo-width": 1.4 },
