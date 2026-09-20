@@ -1804,3 +1804,82 @@ unchanged; all work on `main`.
   the environment, the verified data sources, and the ordered remainder
   (prompts 9b, 8, 10 to 15) for the next session.
 - **Commit/push:** under Basho's express session authorization.
+
+---
+
+## VEOC-78: prompt 9b, buildings archive browser proof
+
+- **Session:** 2026-09-20, 20:38 UTC / 13:38 PDT. Starting and ending HEAD:
+  `0daf86a6283f1e4b5359e4660c7eba929467ba52`; no commit made.
+- **Authority:** Basho requested resumption from the VEOC-77 handoff and
+  supplied the last commentary confirming Claude had already rendered the
+  buildings and was capturing PNGs. Prompt 9b is the next roster item.
+- **Baseline preservation:** the building archive, served copy, three PNGs
+  under `deploy/basemap/out/shots/`, the buildings ignore entry in
+  `.gitignore`, and untracked `.claude/` and `.vitest/` pre-existed.
+  All were preserved. No archive rebuild or additional served copy needed.
+- **Archive:** the build log ends with FINISHED, 38,107 tiles and 13,526,876
+  tile features. It reports source-geometry repairs/skips (15,376 snap
+  repairs, four missing multipolygon ways, two empty invalid multipolygons),
+  not a fatal exception. Built and served copies are each 340,507,913 bytes,
+  SHA-256 `6e39bdccf59ef3502e4a805e0ade14c41f84061f0eab83d310da5311ec4a4e58`.
+- **Files:** added `deploy/basemap/prove-buildings.mjs`; documented its use in
+  `deploy/basemap/README.md`; appended this receipt. The inherited
+  `.gitignore` change belongs to this prompt. No app, schema, contract,
+  dependency, license, data-source, or tooling-install changes.
+- **Reproducible proof:** `node deploy/basemap/prove-buildings.mjs`, exit 0,
+  against the local Vite testbed in installed headless Chrome. Real street
+  and building PMTiles both returned 206. At Eureka z15, both themes rendered
+  2,570 unique footprint IDs, correctly promoted from osm_id, including
+  residential and commercial tags; 2,356 were building=yes, kept neutral.
+  Building use legend and OSM attribution present. Buildings off hid the
+  street fill, use fill, and outline; on restored footprints. Zero browser
+  or map errors, zero external requests. Visually inspected light, dark, and
+  hidden-building PNGs. Existing tag buckets match the observed typed data.
+- **Observed warning:** Vite relayed MapLibre boundary-admin filter warnings
+  for null numeric attributes, falling back to false. These affect the
+  existing boundary layer; no building-render errors occurred.
+- **Artifacts:** four PNGs plus `evidence.json` in
+  `deploy/basemap/out/proof-9b/`; original Claude PNGs remain in `shots/`.
+  The testbed screenshot proves the map layers, not full-console styling.
+- **Local gates:** `pnpm exec vitest run web/src/cop/__tests__/cop.test.ts
+  web/src/app/__tests__/config.test.ts`: exit 0, 35 tests / 2 files.
+  `pnpm -r exec tsc --noEmit`: exit 0.
+  `pnpm exec eslint .`: exit 0 after correcting browser globals in the
+  new proof script (initial lint run failed, no product defect).
+  `node scripts/license-scan.mjs`: exit 0, 300 packages.
+  `node scripts/check-links.mjs`: exit 0, 38 Markdown files.
+  `pnpm exec vitest run web/src shared/src`: exit 0, 192 tests / 27 files.
+  The proof script also passed after its lint correction.
+- **Hosted baseline:** live GitHub check found origin/main identical to HEAD.
+  CI for both e737f1a and 0daf86a passed; latest run:
+  [35531782658](https://github.com/USS-Parks/Open-Source-EOC/actions/runs/35531782658).
+  This is evidence for the existing commits, not these uncommitted additions.
+- **Verification limits:** full local `pnpm check`, server tests and both
+  database-backed E2Es skipped because PostgreSQL is unavailable. The live
+  record-to-building status join remains unverified, explicitly skipped
+  locally as prompt 9b permits. No simulated records claimed as live proof.
+  The inherited `.integrity/scripts/verify-tree.sh` reference has no file in
+  this repository; line-count checks and `git diff --check` used instead.
+- **Disposition:** F6/F14 building archive rendering verified; F9 status join
+  remains open. INV-3 local-only map rendering and INV-8 muted use coloring
+  checked. No requirement or anti-requirement newly closed. Prompt 9b remains
+  awaiting commit authorization; prompt 8 has not started.
+- **Storage:** one registered worktree, the canonical main checkout, dirty
+  with this prompt and preserved local files; no unpublished commits.
+  Generated data: node_modules about 195 MiB; basemap out about 3.72 GiB;
+  served basemaps about 1.04 GiB; .vitest about 7.4 KiB. Build inputs and
+  archive/served copies support the active mapping work; no cleanup performed.
+- **Rollback:** remove this prompt's proof script and revert its documentation
+  additions; retain all pre-existing files and archives. No product rollback
+  is required.
+- **Commit/push:** No commit or push performed; no branch created. The local
+  repository requires distinct express approval for commit and push.
+
+### VEOC-78 authorization update
+
+Basho subsequently granted full approval to execute the entire remaining
+roadmap toward Esri/WebEOC parity, after the staged prompt 9b commit request.
+Execution, focused prompt commits and publication proceed under that approval.
+Existing source, geography and release constraints remain; external credentials
+and the live operator pilot require evidence before closure.

@@ -176,6 +176,23 @@ report), the way the commercial COPs show impacted structures. Untyped
 footprints are common in bulk imports; a later roster prompt adds Overture
 Maps building subtypes for coverage.
 
+### Verify the local buildings archive
+
+With the street and building archives in `web/public/basemap/`, run
+`pnpm --dir web exec vite --host 127.0.0.1 --port 5173 --strictPort`, then
+`node deploy/basemap/prove-buildings.mjs` from the repository root. The proof
+uses the existing server Playwright dependency and installed Chrome; set
+`OPENEOC_CHROMIUM` to an executable path if Chrome is elsewhere. An optional
+first argument selects another local testbed URL.
+
+The proof renders Eureka at zoom 15 in both themes, checks typed and untyped
+footprints, promoted OSM IDs, attribution, the Building use legend, and the
+Buildings group toggled off and back on. Both archives must return HTTP 206;
+external requests and browser/map errors fail the run. Four PNGs and
+`evidence.json` land in `deploy/basemap/out/proof-9b/` (gitignored).
+This verifies archive rendering, not the live record-to-building status join.
+That integration still requires board records from a running backend.
+
 ## Attribution
 
 OpenStreetMap data is ODbL: the map must display "© OpenStreetMap contributors".

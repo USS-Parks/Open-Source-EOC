@@ -13,4 +13,5 @@ target/
 # and a local copy served by the dev server for the basemap testbed.
 deploy/basemap/out/
 web/public/basemap/california.pmtiles
+web/public/basemap/buildings.pmtiles
 .DS_Store
