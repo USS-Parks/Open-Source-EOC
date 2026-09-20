@@ -299,6 +299,13 @@ describe("the operations console in a real browser, offline", () => {
     await page.waitForTimeout(200);
     await page.screenshot({ path: join(SHOTS, "app-files-light.png"), fullPage: false });
 
+    // Incidents: the activated incident is listed.
+    await page.getByRole("button", { name: "Incidents" }).click();
+    await page
+      .getByText("Bald Hills Fire", { exact: true })
+      .first()
+      .waitFor({ state: "visible", timeout: 20000 });
+
     // Dark theme, for the night-shift EOC.
     await page.getByRole("button", { name: "Dark" }).click();
     await page.waitForTimeout(400);

@@ -15,6 +15,7 @@ export type Surface =
   | { readonly kind: "sitrep"; readonly id: string }
   | { readonly kind: "forms" }
   | { readonly kind: "files" }
+  | { readonly kind: "incidents" }
   | { readonly kind: "alerts" };
 
 /** The rail section a surface belongs to (board detail lives under boards). */
@@ -49,6 +50,8 @@ export function parseHash(hash: string): Surface {
       return { kind: "forms" };
     case "files":
       return { kind: "files" };
+    case "incidents":
+      return { kind: "incidents" };
     case "alerts":
       return { kind: "alerts" };
     default:
@@ -74,6 +77,8 @@ export function surfaceHash(surface: Surface): string {
       return "#/forms";
     case "files":
       return "#/files";
+    case "incidents":
+      return "#/incidents";
     case "alerts":
       return "#/alerts";
   }

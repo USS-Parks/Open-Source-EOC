@@ -135,6 +135,25 @@ describe("ApiClient", () => {
     expect(dl.type).toBe("application/octet-stream");
   });
 
+  it("lists incident templates, activates, and closes an incident", async () => {
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      const u = String(url);
+      if (u.endsWith("/auth/login"))
+        return res(200, { accessToken: "A", resumeToken: "R", sessionId: "S" });
+      if (u.endsWith("/incident-templates"))
+        return res(200, { templates: [{ key: "wildfire", title: "Wildfire" }] });
+      if (u.endsWith("/incidents") && init.method === "POST") return res(201, { incidentId: "i1" });
+      if (u.endsWith("/close")) return res(200, { ok: true });
+      return res(404, { error: "nope" });
+    }) as unknown as typeof fetch;
+
+    const client = new ApiClient({ fetchImpl });
+    await client.login("e@x.org", "pw");
+    expect((await client.listIncidentTemplates())[0]!.key).toBe("wildfire");
+    expect((await client.activateIncident("j", { templateKey: "wildfire", name: "Fire" })).incidentId).toBe("i1");
+    expect((await client.closeIncident("i1")).ok).toBe(true);
+  });
+
   it("surfaces the server error envelope as a typed ApiError", async () => {
     const fetchImpl = (async (url: string) => {
       const u = String(url);

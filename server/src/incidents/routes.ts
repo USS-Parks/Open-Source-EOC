@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import {
+  STANDARD_INCIDENT_TEMPLATES,
   activateIncident,
   closeIncident,
   completeChecklistItem,
@@ -56,6 +57,11 @@ export function incidentRoutes(
       return reply.status(201).send(result);
     },
   );
+
+  app.get("/api/v1/incident-templates", { preHandler: authenticate }, async (_req, reply) => {
+    const templates = STANDARD_INCIDENT_TEMPLATES.map((t) => ({ key: t.key, title: t.title }));
+    return reply.send({ templates });
+  });
 
   app.get(
     "/api/v1/jurisdictions/:jurisdictionId/incidents",

@@ -873,3 +873,31 @@ unchanged; all work on `main`.
   attachment field type) and multipart streaming upload are later.
 - **Rollback:** revert the VEOC-53 commit.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-54: Incident lifecycle operator screen
+
+- **Session:** VEOC-54, executed 2026-09-20
+- **Starting HEAD:** `7a6f0fb` (Files and search)
+- **Operator gap closed:** incidents could be activated and closed only through
+  the API (VEOC-12); nothing else in the console works without an incident, so
+  this is foundational. Adds the screen.
+- **Files created/changed:** `web/src/app/surfaces/IncidentsSurface.tsx`
+  (activate an incident from a scenario template in one action, see the open
+  and closed incidents, and close one; activation and closure admin-gated);
+  `web/src/app/api/client.ts` (listIncidentTemplates, activateIncident,
+  closeIncident); server `incidents/routes.ts` (`GET /api/v1/incident-templates`
+  returning the standard scenarios); `web/src/app/router.tsx` and
+  `web/src/app/screens/Console.tsx` (an Incidents rail entry and route). Tests:
+  client.test.ts (templates, activate, close) and the browser E2E now opens
+  Incidents and sees the activated incident listed.
+- **Acceptance proven by test:** the client lists templates and activates and
+  closes an incident; the browser E2E opens Incidents and the activated "Bald
+  Hills Fire" is listed, offline.
+- **Verification:** `pnpm check` green; 365 tests / 71 files.
+- **Facets:** F12 now reaches the operator (the engine was VEOC-12).
+- **Deferred (honest):** custom template authoring in the browser and the
+  incident detail view (org chart, checklists) are later.
+- **Rollback:** revert the VEOC-54 commit.
+- **Commit/push:** under standing authorization. No branch created.

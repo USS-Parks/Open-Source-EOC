@@ -106,6 +106,10 @@ export interface IncidentSummary {
   readonly kind: string;
   readonly closedAt: string | null;
 }
+export interface IncidentTemplateOption {
+  readonly key: string;
+  readonly title: string;
+}
 export interface IapResult {
   readonly id: string;
   readonly status: string;
@@ -346,6 +350,26 @@ export class ApiClient {
       `/api/v1/jurisdictions/${jurisdictionId}/incidents`,
     );
     return r.incidents;
+  }
+  async listIncidentTemplates(): Promise<IncidentTemplateOption[]> {
+    const r = await this.request<{ templates: IncidentTemplateOption[] }>(
+      "GET",
+      "/api/v1/incident-templates",
+    );
+    return r.templates;
+  }
+  activateIncident(
+    jurisdictionId: string,
+    body: { templateKey: string; name: string; kind?: "incident" | "daily_ops" | "planned_event" },
+  ): Promise<{ incidentId: string }> {
+    return this.request<{ incidentId: string }>(
+      "POST",
+      `/api/v1/jurisdictions/${jurisdictionId}/incidents`,
+      body as unknown as Record<string, unknown>,
+    );
+  }
+  closeIncident(incidentId: string): Promise<{ ok: true }> {
+    return this.request<{ ok: true }>("POST", `/api/v1/incidents/${incidentId}/close`);
   }
   getIcsForm(
     incidentId: string,
