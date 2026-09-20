@@ -7,12 +7,15 @@ import {
   boardLayerIds,
   boardLayerSpecs,
   buildCopStyle,
+  DEM_SOURCE_ID,
+  HILLSHADE_LAYER_ID,
   rasterLayerId,
   sourceId,
   tagFeatures,
   type BasemapConfig,
   type CopFeatureCollection,
   type RasterBasemap,
+  type TerrainSource,
 } from "./layers.js";
 import { NATURAL_EARTH_ATTRIBUTION } from "./basemap.js";
 import {
@@ -71,6 +74,8 @@ export interface CopMapProps {
   /** Raster basemaps and overlays (imagery, topo, hydrography) offered in
    * the gallery beside the vector map. */
   readonly rasterBasemaps?: readonly RasterBasemap[] | undefined;
+  /** A DEM tile set enabling the hillshade toggle and the 3D terrain control. */
+  readonly terrain?: TerrainSource | undefined;
   readonly pollMs?: number | undefined;
   readonly center?: [number, number] | undefined;
   readonly zoom?: number | undefined;
@@ -177,6 +182,8 @@ export function CopMap(props: CopMapProps) {
   const overlays = rasters.filter((r) => r.overlay);
   const [basemapMode, setBasemapMode] = useState("vector");
   const [overlayOn, setOverlayOn] = useState<Record<string, boolean>>({});
+  const terrain = props.basemapStyleUrl ? undefined : props.terrain;
+  const [hillshade, setHillshade] = useState(false);
   const readoutRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<MeasureMode>("off");
   const measureCoordsRef = useRef<[number, number][]>([]);
@@ -237,10 +244,10 @@ export function CopMap(props: CopMapProps) {
       container: container.current,
       style: (props.basemapStyleUrl ??
         (props.streetBasemap
-          ? buildStreetStyle(props.streetBasemap, props.theme, rasters)
+          ? buildStreetStyle(props.streetBasemap, props.theme, rasters, terrain)
           : props.bundledBasemap
-            ? buildBundledVectorStyle(props.bundledBasemap, props.theme, rasters)
-            : buildCopStyle(props.theme, props.basemap, rasters))) as never,
+            ? buildBundledVectorStyle(props.bundledBasemap, props.theme, rasters, terrain)
+            : buildCopStyle(props.theme, props.basemap, rasters, terrain))) as never,
       center: home.center,
       zoom: home.zoom,
       attributionControl: false,
@@ -262,6 +269,13 @@ export function CopMap(props: CopMapProps) {
       }),
       "top-right",
     );
+    if (terrain) {
+      // MapLibre's own 3D terrain toggle, over the same DEM as the hillshade.
+      map.addControl(
+        new maplibregl.TerrainControl({ source: DEM_SOURCE_ID, exaggeration: 1.3 }),
+        "top-right",
+      );
+    }
     map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-left");
     map.addControl(
       new maplibregl.AttributionControl({
@@ -615,6 +629,18 @@ export function CopMap(props: CopMapProps) {
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!map || !terrain) return;
+    const apply = () => {
+      if (map.getLayer(HILLSHADE_LAYER_ID)) {
+        map.setLayoutProperty(HILLSHADE_LAYER_ID, "visibility", hillshade ? "visible" : "none");
+      }
+    };
+    if (map.isStyleLoaded()) apply();
+    else map.once("load", apply);
+  }, [hillshade]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!map) return;
     for (const feed of props.feeds ?? []) {
       for (const layerId of feedLayerIds(feed.id)) {
@@ -679,10 +705,22 @@ export function CopMap(props: CopMapProps) {
             </div>
           </div>
         ) : null}
-        {overlays.length > 0 ? (
+        {overlays.length > 0 || terrain ? (
           <div style={{ marginBottom: 12 }}>
             <h3 style={headingStyle}>Overlays</h3>
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
+              {terrain ? (
+                <li>
+                  <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={hillshade}
+                      onChange={() => setHillshade((h) => !h)}
+                    />
+                    Hillshade
+                  </label>
+                </li>
+              ) : null}
               {overlays.map((o) => (
                 <li key={o.id}>
                   <label style={{ display: "flex", gap: 8, alignItems: "center" }}>

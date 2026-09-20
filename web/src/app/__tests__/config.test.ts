@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { rasterBasemaps, streetBasemap } from "../config.js";
+import { rasterBasemaps, streetBasemap, terrainSource } from "../config.js";
 
 type Runtime = { OPENEOC?: Record<string, string> };
 const g = globalThis as unknown as Runtime;
@@ -59,5 +59,22 @@ describe("basemap gallery runtime config", () => {
     expect(list[1]!.attribution).toBe("USGS The National Map");
     expect(list[0]!.attribution).toBeUndefined();
     expect(list.map((b) => !!b.overlay)).toEqual([false, false, true]);
+  });
+
+  it("reads the terrain DEM with terrarium encoding by default", () => {
+    expect(terrainSource()).toBeUndefined();
+    g.OPENEOC = { OPENEOC_TERRAIN_TILE_URL: "https://dem/{z}/{x}/{y}.png" };
+    expect(terrainSource()).toEqual({
+      tiles: "https://dem/{z}/{x}/{y}.png",
+      encoding: "terrarium",
+      attribution: undefined,
+    });
+    g.OPENEOC = {
+      OPENEOC_TERRAIN_TILE_URL: "https://dem/{z}/{x}/{y}.png",
+      OPENEOC_TERRAIN_ENCODING: "mapbox",
+      OPENEOC_TERRAIN_ATTRIBUTION: "USGS 3DEP",
+    };
+    expect(terrainSource()?.encoding).toBe("mapbox");
+    expect(terrainSource()?.attribution).toBe("USGS 3DEP");
   });
 });

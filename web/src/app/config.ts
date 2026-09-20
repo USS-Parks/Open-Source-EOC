@@ -1,5 +1,5 @@
 import { BUNDLED_FONT_STACK } from "../cop/bundledbasemap.js";
-import type { RasterBasemap } from "../cop/layers.js";
+import type { RasterBasemap, TerrainSource } from "../cop/layers.js";
 
 /**
  * Runtime deployment config. A host can inject `window.OPENEOC = { ... }`
@@ -33,6 +33,11 @@ interface RuntimeConfig {
   readonly OPENEOC_TOPO_ATTRIBUTION?: string;
   readonly OPENEOC_HYDRO_TILE_URL?: string;
   readonly OPENEOC_HYDRO_ATTRIBUTION?: string;
+  /** A raster DEM XYZ tile template for hillshade and 3D terrain, with its
+   * encoding ("terrarium", the default, or "mapbox") and attribution. */
+  readonly OPENEOC_TERRAIN_TILE_URL?: string;
+  readonly OPENEOC_TERRAIN_ENCODING?: string;
+  readonly OPENEOC_TERRAIN_ATTRIBUTION?: string;
 }
 
 export interface StreetBasemapSettings {
@@ -71,6 +76,15 @@ export function streetBasemap(): StreetBasemapSettings | undefined {
   const fontStack = setting(r.OPENEOC_BASEMAP_FONT) ?? BUNDLED_FONT_STACK;
   const spriteUrl = setting(r.OPENEOC_BASEMAP_SPRITE_URL);
   return { pmtilesUrl, glyphsUrl, fontStack, ...(spriteUrl ? { spriteUrl } : {}) };
+}
+
+/** The DEM tile set for hillshade and 3D terrain, if the deployment configured one. */
+export function terrainSource(): TerrainSource | undefined {
+  const r = runtime();
+  const tiles = setting(r.OPENEOC_TERRAIN_TILE_URL);
+  if (!tiles) return undefined;
+  const encoding = r.OPENEOC_TERRAIN_ENCODING === "mapbox" ? "mapbox" : "terrarium";
+  return { tiles, encoding, attribution: setting(r.OPENEOC_TERRAIN_ATTRIBUTION) };
 }
 
 /** The raster basemaps and overlays the deployment configured, in gallery order. */

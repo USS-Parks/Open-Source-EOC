@@ -253,6 +253,36 @@ describe("layer construction", () => {
     expect(ids).not.toContain("place-label");
   });
 
+  it("mounts the DEM and a hidden hillshade under water and roads on every style", () => {
+    const terrain = {
+      tiles: "https://dem.example/{z}/{x}/{y}.png",
+      encoding: "terrarium" as const,
+      attribution: "Terrain tiles: AWS Open Data",
+    };
+    const styles = [
+      buildBundledVectorStyle({ assetBase: "/" }, "light", [], terrain),
+      buildCopStyle("dark", { kind: "natural-earth", assetBase: "/" }, [], terrain),
+      buildStreetStyle({ pmtilesUrl: "https://t/x.pmtiles", glyphsUrl: "/f/{fontstack}/{range}.pbf" }, "dark", [], terrain),
+    ] as Array<{
+      sources: Record<string, { type: string; encoding?: string; attribution?: string }>;
+      layers: Array<{ id: string; type: string; layout?: { visibility?: string } }>;
+    }>;
+    for (const style of styles) {
+      expect(style.sources.dem!.type).toBe("raster-dem");
+      expect(style.sources.dem!.encoding).toBe("terrarium");
+      expect(style.sources.dem!.attribution).toContain("AWS");
+      const hs = style.layers.find((l) => l.id === "hillshade")!;
+      expect(hs.type).toBe("hillshade");
+      expect(hs.layout?.visibility).toBe("none");
+    }
+    // On the vector basemaps the relief sits under water, roads, and labels.
+    for (const style of [styles[0]!, styles[2]!]) {
+      const ids = style.layers.map((l) => l.id);
+      expect(ids.indexOf("hillshade")).toBeLessThan(ids.indexOf("water"));
+    }
+    expect(JSON.stringify(buildBundledVectorStyle({ assetBase: "/" }, "light"))).not.toContain("hillshade");
+  });
+
   it("keeps every style free of rasters when none are configured", () => {
     const style = JSON.stringify(buildBundledVectorStyle({ assetBase: "/" }, "light"));
     expect(style).not.toContain("raster-");

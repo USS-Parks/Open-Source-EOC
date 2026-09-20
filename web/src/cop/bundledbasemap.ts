@@ -1,5 +1,10 @@
 import type { ThemeName } from "../design/tokens.js";
-import { rasterBasemapSpecs, type RasterBasemap } from "./layers.js";
+import {
+  rasterBasemapSpecs,
+  terrainSpecs,
+  type RasterBasemap,
+  type TerrainSource,
+} from "./layers.js";
 
 /**
  * The bundled offline vector basemap (VEOC-75). Natural Earth 10m and US Census
@@ -81,6 +86,7 @@ export function buildBundledVectorStyle(
   config: BundledBasemapConfig,
   theme: ThemeName,
   rasters: readonly RasterBasemap[] = [],
+  terrain?: TerrainSource,
 ): Record<string, unknown> {
   const p = PALETTE[theme];
   const base = config.assetBase.endsWith("/") ? config.assetBase : `${config.assetBase}/`;
@@ -96,6 +102,9 @@ export function buildBundledVectorStyle(
   // runtime operational layers.
   const raster = rasterBasemapSpecs(rasters);
   Object.assign(sources, raster.sources);
+  // Hillshade sits over the land fills and under water, roads, and labels.
+  const relief = terrainSpecs(terrain, theme);
+  Object.assign(sources, relief.sources);
   return {
     version: 8,
     glyphs: `${base}fonts/{fontstack}/{range}.pbf`,
@@ -110,6 +119,7 @@ export function buildBundledVectorStyle(
         "source-layer": "urban",
         paint: { "fill-color": p.urban },
       },
+      ...relief.layers,
       { id: "water", type: "fill", source: src, "source-layer": "water", paint: { "fill-color": p.water } },
       {
         id: "rivers",

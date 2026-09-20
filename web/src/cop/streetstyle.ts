@@ -1,6 +1,11 @@
 import type { ThemeName } from "../design/tokens.js";
 import { BUNDLED_FONT_STACK } from "./bundledbasemap.js";
-import { rasterBasemapSpecs, type RasterBasemap } from "./layers.js";
+import {
+  rasterBasemapSpecs,
+  terrainSpecs,
+  type RasterBasemap,
+  type TerrainSource,
+} from "./layers.js";
 
 /**
  * A themed MapLibre street style over a self-hosted OpenMapTiles-schema PMTiles
@@ -139,10 +144,13 @@ export function buildStreetStyle(
   config: StreetBasemapConfig,
   theme: ThemeName,
   rasters: readonly RasterBasemap[] = [],
+  terrain?: TerrainSource,
 ): Record<string, unknown> {
   const p = PALETTE[theme];
   const src = "openmaptiles";
   const font = streetFontStack(config);
+  // Hillshade sits over the land fills and under water, roads, and labels.
+  const relief = terrainSpecs(terrain, theme);
   const layers: unknown[] = [
     { id: "background", type: "background", paint: { "background-color": p.background } },
     // Landcover and landuse first: the wildland-urban context an EOC reads
@@ -198,6 +206,7 @@ export function buildStreetStyle(
       "source-layer": "park",
       paint: { "fill-color": p.park, "fill-opacity": 0.6 },
     },
+    ...relief.layers,
     {
       id: "water",
       type: "fill",
@@ -399,6 +408,7 @@ export function buildStreetStyle(
         attribution: OSM_ATTRIBUTION,
       },
       ...raster.sources,
+      ...relief.sources,
     },
     layers,
   };

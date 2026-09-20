@@ -158,6 +158,60 @@ export function rasterBasemapSpecs(rasters: readonly RasterBasemap[]): {
 }
 
 /**
+ * A raster DEM tile set for hillshade and 3D terrain. Terrarium encoding is
+ * what the public-domain AWS Open Data elevation tiles use; a deployment can
+ * mirror them into PMTiles for an air-gapped install.
+ */
+export interface TerrainSource {
+  readonly tiles: string;
+  readonly encoding: "terrarium" | "mapbox";
+  readonly attribution?: string | undefined;
+  readonly maxzoom?: number | undefined;
+}
+
+export const DEM_SOURCE_ID = "dem";
+export const HILLSHADE_LAYER_ID = "hillshade";
+
+/**
+ * The DEM source and a hidden hillshade layer over it. The same source feeds
+ * MapLibre's 3D terrain control. Shading is faint and themed so it reads as
+ * relief, never as a status color (INV-8).
+ */
+export function terrainSpecs(
+  terrain: TerrainSource | undefined,
+  theme: ThemeName,
+): { sources: Record<string, unknown>; layers: unknown[] } {
+  if (!terrain) return { sources: {}, layers: [] };
+  const dark = theme === "dark";
+  return {
+    sources: {
+      [DEM_SOURCE_ID]: {
+        type: "raster-dem",
+        tiles: [terrain.tiles],
+        encoding: terrain.encoding,
+        tileSize: 256,
+        maxzoom: terrain.maxzoom ?? 15,
+        ...(terrain.attribution ? { attribution: terrain.attribution } : {}),
+      },
+    },
+    layers: [
+      {
+        id: HILLSHADE_LAYER_ID,
+        type: "hillshade",
+        source: DEM_SOURCE_ID,
+        layout: { visibility: "none" },
+        paint: {
+          "hillshade-exaggeration": dark ? 0.5 : 0.35,
+          "hillshade-shadow-color": dark ? "#000000" : "#4b5563",
+          "hillshade-highlight-color": dark ? "#6b7280" : "#ffffff",
+          "hillshade-accent-color": dark ? "#000000" : "#4b5563",
+        },
+      },
+    ],
+  };
+}
+
+/**
  * The base style. With the bundled basemap it is a calm land/water canvas
  * that renders with zero external network (INV-3); without it, a neutral
  * background floor. Board layers mount on top at runtime, so the basemap
@@ -168,6 +222,7 @@ export function buildCopStyle(
   theme: ThemeName,
   basemap?: BasemapConfig,
   rasters: readonly RasterBasemap[] = [],
+  terrain?: TerrainSource,
 ): Record<string, unknown> {
   const t = themes[theme];
   const bg = basemap?.kind === "natural-earth" ? basemapBackground(theme) : t.surfaceRaised;
@@ -183,6 +238,9 @@ export function buildCopStyle(
     Object.assign(sources, naturalEarthSources(basemap.assetBase));
     layers.push(...naturalEarthLayers(theme));
   }
+  const relief = terrainSpecs(terrain, theme);
+  Object.assign(sources, relief.sources);
+  layers.push(...relief.layers);
   const raster = rasterBasemapSpecs(rasters);
   Object.assign(sources, raster.sources);
   layers.push(...raster.layers);

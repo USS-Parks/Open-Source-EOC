@@ -5,7 +5,13 @@ import { RecordForm } from "../../boards/RecordForm.js";
 import { Button, Panel } from "../../design/components.js";
 import type { ThemeName } from "../../design/tokens.js";
 import type { ApiClient, CollectionRef, FeedHealth } from "../api/client.js";
-import { assetBase, basemapStyleUrl, rasterBasemaps, streetBasemap } from "../config.js";
+import {
+  assetBase,
+  basemapStyleUrl,
+  rasterBasemaps,
+  streetBasemap,
+  terrainSource,
+} from "../config.js";
 import { useAsync } from "../data/hooks.js";
 import { uploadPickedFile } from "../data/files.js";
 import { EmptyState, Loading } from "../screens/parts.js";
@@ -149,6 +155,7 @@ export function MapSurface(props: {
           basemapStyleUrl={basemapStyleUrl()}
           streetBasemap={streetBasemap()}
           rasterBasemaps={rasterBasemaps()}
+          terrain={terrainSource()}
           picking={adding && !point}
           onPickPoint={(p) => setPoint(p)}
         />
