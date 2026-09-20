@@ -12,6 +12,8 @@ export function RecordForm(props: {
   fields: readonly FieldDef[];
   initial?: Record<string, unknown>;
   onSubmit: (data: Record<string, unknown>) => void;
+  /** Uploads a picked file and resolves its stored id (for attachment fields). */
+  onUpload?: (file: File) => Promise<string>;
 }) {
   const [values, setValues] = useState<Record<string, unknown>>(props.initial ?? {});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -48,7 +50,12 @@ export function RecordForm(props: {
     >
       {props.fields.map((f) => (
         <div key={f.key}>
-          <FieldControl field={f} value={values[f.key]} onChange={(v) => set(f.key, v)} />
+          <FieldControl
+            field={f}
+            value={values[f.key]}
+            onChange={(v) => set(f.key, v)}
+            {...(props.onUpload ? { onUpload: props.onUpload } : {})}
+          />
           {errors[f.key] ? (
             <p role="alert" style={{ color: "var(--eoc-status-critical)", margin: "4px 0 0" }}>
               {f.label}: {errors[f.key]}
@@ -69,6 +76,7 @@ function FieldControl(props: {
   field: FieldDef;
   value: unknown;
   onChange: (v: unknown) => void;
+  onUpload?: (file: File) => Promise<string>;
 }) {
   const { field } = props;
   switch (field.type) {
@@ -112,6 +120,15 @@ function FieldControl(props: {
       );
     case "geometry":
       return <GeometryControl field={field} value={props.value} onChange={props.onChange} />;
+    case "attachment":
+      return (
+        <AttachmentControl
+          field={field}
+          value={props.value}
+          onChange={props.onChange}
+          {...(props.onUpload ? { onUpload: props.onUpload } : {})}
+        />
+      );
     default:
       return (
         <TextField
@@ -170,6 +187,66 @@ function GeometryControl(props: {
           onChange={(v) => update(lng, v === "" ? undefined : Number(v))}
         />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Attachment (photo or document) entry. Picking a file uploads it at once and
+ * stores its id on the record. Used by the map's field-capture flow, which
+ * supplies the upload function; without one the field is inert.
+ */
+function AttachmentControl(props: {
+  field: FieldDef;
+  value: unknown;
+  onChange: (v: unknown) => void;
+  onUpload?: (file: File) => Promise<string>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const hasFile = typeof props.value === "string" && props.value.length > 0;
+
+  if (!props.onUpload) {
+    return (
+      <p style={{ color: "var(--eoc-text-muted)", margin: 0 }}>
+        {props.field.label}: attachment upload is not available here.
+      </p>
+    );
+  }
+
+  const pick = async (file: File | null) => {
+    if (!file) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const id = await props.onUpload!(file);
+      props.onChange(id);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div>
+      <span style={{ display: "block", marginBottom: 4 }}>{props.field.label}</span>
+      <input
+        type="file"
+        aria-label={props.field.label}
+        disabled={busy}
+        onChange={(e) => pick(e.target.files?.[0] ?? null)}
+      />
+      {busy ? (
+        <span style={{ color: "var(--eoc-text-muted)" }}> uploading…</span>
+      ) : hasFile ? (
+        <span style={{ color: "var(--eoc-status-success)" }}> attached ✓</span>
+      ) : null}
+      {err ? (
+        <p role="alert" style={{ color: "var(--eoc-status-critical)", margin: "4px 0 0" }}>
+          {err}
+        </p>
+      ) : null}
     </div>
   );
 }

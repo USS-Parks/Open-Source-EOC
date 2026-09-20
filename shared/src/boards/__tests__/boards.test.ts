@@ -23,7 +23,22 @@ describe("standard board library (F1: boards as data)", () => {
       "after_action_review",
       "rumor_control",
       "talking_points",
+      "field_reports",
     ]);
+  });
+
+  it("the field-reports board takes a photo attachment as a file id", () => {
+    const fr = STANDARD_TEMPLATES.find((t) => t.key === "field_reports")!;
+    const schema = buildRecordSchema(fr.fields);
+    const good = schema.safeParse({
+      summary: "Culvert washout",
+      category: "damage",
+      photo: "11111111-1111-4111-8111-111111111111",
+      location: { type: "Point", coordinates: [-123.6, 41.3] },
+    });
+    expect(good.success).toBe(true);
+    const bad = schema.safeParse({ summary: "x", category: "damage", photo: "not-a-uuid" });
+    expect(bad.success).toBe(false);
   });
 
   it("every template builds a working record validator", () => {

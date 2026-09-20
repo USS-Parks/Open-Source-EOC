@@ -126,6 +126,7 @@ beforeAll(async () => {
   const lifelines = await createBoard("lifelines");
   await createBoard("significant_events");
   await createBoard("resource_request");
+  await createBoard("field_reports");
   await app.inject({
     method: "POST",
     url: `/api/v1/jurisdictions/${seed.jurisdictionId}/dashboards`,
@@ -281,6 +282,27 @@ describe("the operations console in a real browser, offline", () => {
     await page.waitForTimeout(200);
     await page.screenshot({ path: join(SHOTS, "app-map-add.png"), fullPage: false });
     await recordPanel.getByRole("button", { name: "Save record" }).click();
+    await page.getByText("New map record").waitFor({ state: "hidden", timeout: 20000 });
+
+    // A geotagged field report with a photo attachment, dropped on the map.
+    await page.getByRole("button", { name: "Add point" }).click();
+    await page.locator("select").first().selectOption({ label: "Field Reports" });
+    await page
+      .locator('[data-testid="cop-map"] canvas')
+      .first()
+      .click({ position: { x: 360, y: 340 } });
+    const reportPanel = page.getByRole("region", { name: "New map record" });
+    await reportPanel.getByLabel("Summary").fill("Culvert washout on Bald Hills Rd");
+    await reportPanel.getByLabel("Category").selectOption("damage");
+    await reportPanel.getByLabel("Photo").setInputFiles({
+      name: "washout.jpg",
+      mimeType: "image/jpeg",
+      buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    });
+    await reportPanel.getByText("attached", { exact: false }).waitFor({ state: "visible", timeout: 20000 });
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: join(SHOTS, "app-map-photo.png"), fullPage: false });
+    await reportPanel.getByRole("button", { name: "Save record" }).click();
     await page.getByText("New map record").waitFor({ state: "hidden", timeout: 20000 });
 
     // Files: upload a document and find it through platform search.

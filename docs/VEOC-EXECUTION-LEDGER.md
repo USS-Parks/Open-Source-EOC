@@ -930,3 +930,35 @@ unchanged; all work on `main`.
   holds.
 - **Rollback:** revert the VEOC-55 commit.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-56: Photo attachment on a placed map point
+
+- **Session:** VEOC-56, executed 2026-09-20
+- **Starting HEAD:** `02deb05` (roadmap refresh)
+- **Gap closed:** the last piece of the Field Maps answer. A dropped point could
+  carry attributes but no photo. Adds an attachment field type and wires photo
+  capture into the map's field-capture flow.
+- **Files created/changed:** `shared/src/boards/fields.ts` (a new `attachment`
+  field type storing a file id, validated as a uuid); `shared/src/boards/standard.ts`
+  (a `field_reports` board: summary, category, photo attachment, point
+  location); `web/src/boards/RecordForm.tsx` (an attachment control that uploads
+  the picked file at once and stores its id, driven by an `onUpload` hook);
+  `web/src/app/data/files.ts` (a shared readAsBase64 / uploadPickedFile helper,
+  now used by the Files screen too); `web/src/app/surfaces/MapSurface.tsx` (passes
+  the upload hook, given the jurisdiction id threaded from the console). Tests:
+  boards.test.ts (the field-reports schema takes a uuid photo, rejects a
+  non-uuid), runtime.test.tsx (the control uploads and submits the id), and the
+  browser E2E now drops a field report with a photo attachment and saves it.
+- **Acceptance proven by test:** the attachment field validates a file id; the
+  record form uploads a picked file and submits its id; the browser E2E places a
+  field-report point, attaches a JPEG, and saves it, offline.
+- **Verification:** `pnpm check` green; 369 tests / 72 files.
+- **Facets:** completes the Field Maps parity for capture (pin + attributes +
+  photo + GPS); F1 attachments now real.
+- **Deferred (honest):** inline photo display in the popup and board table needs
+  an authenticated blob load and is the follow-up; line and polygon capture
+  later.
+- **Rollback:** revert the VEOC-56 commit.
+- **Commit/push:** under standing authorization. No branch created.

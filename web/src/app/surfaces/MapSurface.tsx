@@ -7,6 +7,7 @@ import type { ThemeName } from "../../design/tokens.js";
 import type { ApiClient, CollectionRef, FeedHealth } from "../api/client.js";
 import { assetBase, basemapStyleUrl, imageryAttribution, imageryTileUrl } from "../config.js";
 import { useAsync } from "../data/hooks.js";
+import { uploadPickedFile } from "../data/files.js";
 import { EmptyState, Loading } from "../screens/parts.js";
 
 const selectStyle: CSSProperties = {
@@ -39,6 +40,7 @@ const overlayStyle: CSSProperties = {
 export function MapSurface(props: {
   client: ApiClient;
   theme: ThemeName;
+  jurisdictionId: string;
   collections: readonly CollectionRef[];
   feeds: readonly FeedHealth[];
 }) {
@@ -161,6 +163,7 @@ export function MapSurface(props: {
                   fields={fields}
                   initial={{ [geomKey]: { type: "Point", coordinates: point } }}
                   onSubmit={save}
+                  onUpload={(file) => uploadPickedFile(props.client, props.jurisdictionId, file)}
                 />
               ) : (
                 <p style={{ color: "var(--eoc-text-muted)" }}>This board has no location field.</p>

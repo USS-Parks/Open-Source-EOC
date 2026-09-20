@@ -16,6 +16,7 @@ export const FIELD_TYPES = [
   "enum",
   "person_ref",
   "geometry",
+  "attachment",
 ] as const;
 
 /** GeoJSON geometry kinds a geometry field may constrain itself to. */
@@ -139,6 +140,9 @@ function fieldValueSchema(f: FieldDef): z.ZodType {
     }
     case "geometry":
       return geometrySchema(f.geometryKind ?? "any");
+    case "attachment":
+      // Stores the id of an uploaded file (photo or document) in the store.
+      return z.uuid();
   }
 }
 

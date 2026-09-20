@@ -209,4 +209,17 @@ export const STANDARD_TEMPLATES: readonly BoardTemplate[] = [
       { key: "all", title: "All points", columns: ["topic", "point", "approved"] },
     ],
   }),
+  t({
+    key: "field_reports",
+    version: 1,
+    title: "Field Reports",
+    description: "Geotagged field observations with a photo (field capture).",
+    fields: [
+      { key: "summary", label: "Summary", type: "text", required: true, maxLength: 500 },
+      { key: "category", label: "Category", type: "enum", values: ["hazard", "damage", "resource", "other"], required: true },
+      { key: "photo", label: "Photo", type: "attachment" },
+      { key: "location", label: "Location", type: "geometry", geometryKind: "point" },
+    ],
+    views: [{ key: "all", title: "All reports", columns: ["summary", "category"] }],
+  }),
 ];

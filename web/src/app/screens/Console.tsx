@@ -165,6 +165,7 @@ function Center(props: {
         <MapSurface
           client={props.client}
           theme={props.theme}
+          jurisdictionId={props.jurisdictionId}
           collections={props.collections}
           feeds={props.feeds}
         />

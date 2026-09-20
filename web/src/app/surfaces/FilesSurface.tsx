@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { Button, Panel, StatusBadge, TextField } from "../../design/components.js";
 import type { ApiClient, SearchHit } from "../api/client.js";
+import { readAsBase64 } from "../data/files.js";
 import { Scroll, SurfaceHeader } from "../screens/parts.js";
 
 const row: CSSProperties = {
@@ -11,19 +12,6 @@ const row: CSSProperties = {
   border: "1px solid var(--eoc-border)",
   borderRadius: 4,
 };
-
-function readAsBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const s = String(reader.result);
-      const comma = s.indexOf(",");
-      resolve(comma === -1 ? s : s.slice(comma + 1));
-    };
-    reader.onerror = () => reject(reader.error ?? new Error("read failed"));
-    reader.readAsDataURL(file);
-  });
-}
 
 /**
  * The file library and platform search (R5, B10). Upload a document or photo

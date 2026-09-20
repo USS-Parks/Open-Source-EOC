@@ -59,6 +59,27 @@ describe("RecordForm (input view)", () => {
       location: { type: "Point", coordinates: [-123.6, 41.3] },
     });
   });
+
+  it("uploads a photo attachment through the capture hook and submits its id", async () => {
+    const fr = STANDARD_TEMPLATES.find((t) => t.key === "field_reports")!;
+    const onSubmit = vi.fn();
+    const onUpload = vi.fn(async () => "22222222-2222-4222-8222-222222222222");
+    render(<RecordForm fields={fr.fields} onSubmit={onSubmit} onUpload={onUpload} />);
+    fireEvent.change(screen.getByLabelText("Summary"), { target: { value: "Washout" } });
+    fireEvent.change(screen.getByLabelText("Category"), { target: { value: "damage" } });
+    const file = new File(["x"], "photo.jpg", { type: "image/jpeg" });
+    fireEvent.change(screen.getByLabelText("Photo"), { target: { files: [file] } });
+    await screen.findByText("attached ✓", { exact: false });
+    fireEvent.click(screen.getByText("Save record"));
+    expect(onUpload).toHaveBeenCalled();
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        summary: "Washout",
+        category: "damage",
+        photo: "22222222-2222-4222-8222-222222222222",
+      }),
+    );
+  });
 });
 
 describe("BoardView (display view)", () => {
