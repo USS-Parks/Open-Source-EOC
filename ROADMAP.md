@@ -15,26 +15,30 @@ can use it," and neither is "it can be released":
 | Phase | Scope | Backend | Operator UI |
 |---|---|---|---|
 | A | Foundation and governance: scaffold, license, data dictionary, architecture decisions, design system, CI gates | complete | n/a |
-| B | Core primitives: identity and positions, boards, immutable audit, incidents, real-time sync, notifications, files, search, native messaging | complete | partial |
-| C | Geospatial COP: geo-enabled boards, the map, dashboards, live feeds, situation reporting | complete | mostly |
-| D | Field and offline: offline-first client, smart forms, damage assessment, check-in, tracking and reunification | complete | not built |
+| B | Core primitives: identity and positions, boards, immutable audit, incidents, real-time sync, notifications, files, search, native messaging | complete | mostly |
+| C | Geospatial COP: geo-enabled boards, the map, dashboards, live feeds, situation reporting | complete | yes |
+| D | Field and offline: offline-first client, smart forms, damage assessment, check-in, tracking and reunification | complete | partial |
 | E | Interop and federation: CAP, EDXL, facility status networks, CoT/TAK, instance federation, public API, IPAWS connector | complete | none |
-| F | Collaboration and ICS operations: incident spaces, meetings, the JIC, ICS forms and IAP, resource requests, after-action | complete | none |
+| F | Collaboration and ICS operations: incident spaces, meetings, the JIC, ICS forms and IAP, resource requests, after-action | complete | partial |
 | G | Hardening and release: security, load (150+ concurrent users), accessibility, packaging, docs, pilot exercise, 1.0 disposition | partial | n/a |
 
 ## Where the bars actually sit
 
-- **B:** boards, the activity log, and incidents are reachable in the console.
-  Files, search, and native messaging exist server-side with no UI yet.
+- **B:** boards, the activity log, incidents, file upload, and platform search
+  are reachable in the console. Native messaging exists server-side with no UI
+  yet.
 - **C:** the map, dashboards, situation reports, and external feed layers are
-  live in the app. There is no draw-on-map or pin-drop.
-- **D:** offline sync semantics are built and tested. No field-capture UI:
-  no pin-drop, no photo capture, no smart-form runner in the app.
+  live in the app, with drop-a-point field capture and a switchable
+  satellite/imagery basemap.
+- **D:** offline sync semantics are built and tested, and the map has
+  drop-a-point capture. Still missing: photo capture, the smart-form runner,
+  and the damage-assessment and check-in screens.
 - **E:** standards in and out and instance federation work server-side. No
   operator UI. IPAWS is a scaffold, not live-credentialed.
-- **F:** ICS forms 201-208, 211, 213-215 build and export to PDF through the
-  API, assembled into an IAP with an approval step. There is no Forms or IAP
-  screen in the console, and the 204 assignment list is shallow.
+- **F:** ICS forms 201-208, 211, 213-215 build, preview, and export to PDF from
+  the Forms screen, assembled into an IAP with an approval step. Resource
+  requests, the JIC, and after-action have no dedicated screen yet, and the 204
+  assignment list is shallow.
 - **G:** security, accessibility, packaging, and docs are substantially done.
   The load test measures operation throughput, not 150 concurrent
   authenticated users. The live pilot has not run (gated on Basho). AR7
@@ -42,9 +46,12 @@ can use it," and neither is "it can be released":
 
 ## Honest one-line status
 
-A tested A-F backend with a working but partial operator console, hardening
-mostly in place, release gates open. Not "1.0"; a 1.0 backend candidate with
-a half-built front end.
+A tested A-F backend with an operator console that now covers the map and
+drop-a-point field capture, dashboards, boards, incidents, situation reports,
+ICS forms and the IAP, and files and search. Still missing: operator UI for
+interop/IPAWS, and parts of the field (photo, damage assessment, check-in) and
+collaboration (resource requests, JIC, after-action) phases. Release gates
+(150+ concurrent-user load, live pilot) are open. Not "1.0" yet.
 
 Nothing is deployable before Phase G closes on its real terms: the 150+
 concurrent-user load test met, and the live pilot run.
