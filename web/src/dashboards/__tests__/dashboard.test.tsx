@@ -15,6 +15,7 @@ const snapshot: DashboardSnapshot = {
       kind: "chart",
       key: "shelters_by_status",
       title: "Shelters by status",
+      display: "donut",
       groups: [
         { value: "normal", count: 2 },
         { value: "closed", count: 1 },
@@ -52,7 +53,7 @@ describe("the dashboard renders a computed snapshot and nothing else", () => {
     expect(screen.getByTestId("tile-closed_roads-value").textContent).toBe("2");
     expect(screen.getByText("warn")).toBeTruthy();
     expect(screen.getByText("+3 last 24h")).toBeTruthy();
-    expect(screen.getByLabelText("normal: 2")).toBeTruthy();
+    expect(screen.getByLabelText("Shelters by status: 3 total")).toBeTruthy();
     expect(screen.getByText("unstable")).toBeTruthy();
     expect(screen.getByText("SR-169")).toBeTruthy();
   });

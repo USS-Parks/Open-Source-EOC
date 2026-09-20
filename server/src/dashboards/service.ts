@@ -211,6 +211,7 @@ async function computeWidget(
       kind: "chart",
       key: widget.key,
       title: widget.title,
+      display: widget.display,
       groups: rows.map((r) => ({ value: r.v as string, count: r.n as number })),
     } satisfies ChartResult;
   }
@@ -267,7 +268,7 @@ async function computeWidget(
 function missingResult(widget: DashboardWidget): WidgetResult {
   const base = { key: widget.key, title: widget.title, missing: true as const };
   if (widget.kind === "tile") return { kind: "tile", ...base, value: 0, level: "normal" };
-  if (widget.kind === "chart") return { kind: "chart", ...base, groups: [] };
+  if (widget.kind === "chart") return { kind: "chart", ...base, display: widget.display, groups: [] };
   if (widget.kind === "status") return { kind: "status", ...base, groups: [] };
   return { kind: "list", ...base, columns: widget.columns, records: [] };
 }

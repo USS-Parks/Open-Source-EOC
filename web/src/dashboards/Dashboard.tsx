@@ -101,7 +101,22 @@ function Tile(props: { widget: TileResult }) {
   );
 }
 
+// A small categorical set drawn from the status tokens, so the donut stays on
+// the design system's palette (color reserved for status, INV-8) while giving
+// the WebEOC ring-chart form.
+const DONUT_COLORS = [
+  "var(--eoc-status-info)",
+  "var(--eoc-status-warning)",
+  "var(--eoc-status-success)",
+  "var(--eoc-status-critical)",
+  "var(--eoc-status-unknown)",
+];
+
 function Chart(props: { widget: ChartResult }) {
+  return props.widget.display === "donut" ? <Donut widget={props.widget} /> : <BarChart widget={props.widget} />;
+}
+
+function BarChart(props: { widget: ChartResult }) {
   const max = Math.max(1, ...props.widget.groups.map((g) => g.count));
   return (
     <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
@@ -124,6 +139,73 @@ function Chart(props: { widget: ChartResult }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** WebEOC-style ring chart: a donut with the total in the center and a legend
+ * of counts and percentages. */
+function Donut(props: { widget: ChartResult }) {
+  const groups = props.widget.groups;
+  const total = groups.reduce((s, g) => s + g.count, 0);
+  const R = 16;
+  const C = 2 * Math.PI * R;
+  let offset = 0;
+  return (
+    <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+      <svg
+        width="96"
+        height="96"
+        viewBox="0 0 40 40"
+        role="img"
+        aria-label={`${props.widget.title}: ${total} total`}
+      >
+        <circle cx="20" cy="20" r={R} fill="none" stroke="var(--eoc-border)" strokeWidth="6" />
+        {total > 0
+          ? groups.map((g, i) => {
+              const dash = (g.count / total) * C;
+              const seg = (
+                <circle
+                  key={g.value}
+                  cx="20"
+                  cy="20"
+                  r={R}
+                  fill="none"
+                  stroke={DONUT_COLORS[i % DONUT_COLORS.length]}
+                  strokeWidth="6"
+                  strokeDasharray={`${dash} ${C - dash}`}
+                  strokeDashoffset={-offset}
+                  transform="rotate(-90 20 20)"
+                />
+              );
+              offset += dash;
+              return seg;
+            })
+          : null}
+        <text x="20" y="21.5" textAnchor="middle" fontSize="9" fontWeight="700" fill="var(--eoc-text)">
+          {total}
+        </text>
+      </svg>
+      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4, minWidth: 0 }}>
+        {groups.map((g, i) => (
+          <li key={g.value} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+            <span
+              aria-hidden="true"
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: 2,
+                background: DONUT_COLORS[i % DONUT_COLORS.length],
+                flex: "0 0 auto",
+              }}
+            />
+            <span style={{ flex: 1, minWidth: 0 }}>{g.value || "(none)"}</span>
+            <span style={{ color: "var(--eoc-text-muted)" }}>
+              {g.count} ({total > 0 ? Math.round((g.count / total) * 100) : 0}%)
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

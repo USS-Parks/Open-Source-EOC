@@ -122,7 +122,7 @@ beforeAll(async () => {
   memberToken = await login("member@example.org", "another-good-password");
 
   const roads = await createBoard("road_closures");
-  await createBoard("shelters");
+  const shelters = await createBoard("shelters");
   const lifelines = await createBoard("lifelines");
   await createBoard("significant_events");
   await createBoard("resource_request");
@@ -156,6 +156,11 @@ beforeAll(async () => {
       lifeline: lifelineValues[1],
       status: statusValues[statusValues.length - 1],
     });
+
+  // Shelter postures, so the shelters-by-status donut shows segments.
+  await addRecord(shelters, { name: "Hoopa High Gym", status: "normal", capacity: 200, occupancy: 84 });
+  await addRecord(shelters, { name: "Weitchpec Center", status: "evacuating", capacity: 60, occupancy: 12 });
+  await addRecord(shelters, { name: "Klamath Hall", status: "closed", capacity: 40, occupancy: 0 });
 
   // ESF conditions, so the dashboard shows the ESF status cards.
   const esfBoard = await createBoard("esf_status");

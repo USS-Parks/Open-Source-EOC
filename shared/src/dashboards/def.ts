@@ -36,11 +36,12 @@ export const TileWidgetSchema = z.object({
     .optional(),
 });
 
-/** Record counts grouped by one field. */
+/** Record counts grouped by one field, drawn as bars or a donut. */
 export const ChartWidgetSchema = z.object({
   ...widgetBase,
   kind: z.literal("chart"),
   groupBy: z.string().regex(KEY),
+  display: z.enum(["bar", "donut"]).default("bar"),
 });
 
 /**
@@ -97,6 +98,7 @@ export interface ChartResult {
   readonly key: string;
   readonly title: string;
   readonly missing?: boolean;
+  readonly display: "bar" | "donut";
   readonly groups: ReadonlyArray<{ readonly value: string; readonly count: number }>;
 }
 export interface StatusResult {
@@ -178,6 +180,7 @@ export const STANDARD_DASHBOARDS: readonly DashboardTemplate[] = [
         title: "Shelters by status",
         board: "shelters",
         groupBy: "status",
+        display: "donut",
       },
       {
         kind: "list",

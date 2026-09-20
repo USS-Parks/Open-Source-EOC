@@ -1301,3 +1301,38 @@ unchanged; all work on `main`.
   Esri EM Solutions.
 - **Rollback:** revert the VEOC-68 commit.
 - **Commit/push:** under standing authorization. No branch created.
+
+---
+
+## VEOC-69: WebEOC donut charts on the dashboard
+
+- **Session:** VEOC-69, executed 2026-09-20
+- **Starting HEAD:** `f949124` (ESF cards)
+- **Reference studied:** the WebEOC screenshots Basho attached (After Action
+  Reviews, Checklists, Incident Action Plan). The signature WebEOC dashboard
+  idiom is the ring/donut chart with a center total and a legend of counts and
+  percentages; the build had bar charts only. (The WebEOC video/site still could
+  not be opened here; parity is grounded in the screenshots.)
+- **Gap closed:** the chart widget gains a `display` mode, and a donut renders
+  as a ring with the total in the center and a legend of each group's count and
+  percentage. Segments use the status-token palette so the donut stays on the
+  design system (color reserved for status, INV-8) while matching WebEOC's form.
+  The standard shelters-by-status chart now renders as a donut.
+- **Files created/changed:** `shared/src/dashboards/def.ts` (chart `display`:
+  bar or donut, on the widget and the result); `server/src/dashboards/service.ts`
+  (carries display through the compute and the missing fallback);
+  `web/src/dashboards/Dashboard.tsx` (a Donut renderer beside the bar chart);
+  tests updated (dashboard.test asserts the donut's center total; the E2E seeds
+  shelters so the donut shows segments).
+- **Acceptance proven by test:** the donut renders with the correct center total
+  and legend; the browser E2E shows the shelters-by-status donut with three
+  colored segments and percentages, offline.
+- **Verification:** `pnpm check` green; 380 tests / 71 files.
+- **Facets:** blends the WebEOC ring-chart idiom with the Esri KPI tiles and the
+  Lifeline/ESF condition cards already built.
+- **Deferred parity (honest, from the WebEOC screens):** the IAP working-list
+  view (status icon + progress bar + assigned/approved chips + KPI count chips),
+  the Core Capabilities taxonomy for the AAR, per-module sub-tabs and filter
+  bars, and the anonymous public-information map remain further parity items.
+- **Rollback:** revert the VEOC-69 commit.
+- **Commit/push:** under standing authorization. No branch created.
