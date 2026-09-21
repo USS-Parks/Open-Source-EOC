@@ -114,9 +114,12 @@ export function boardRoutes(
 
   app.post("/api/v1/boards/:boardId/records", { preHandler: authenticate }, async (req, reply) => {
     const { boardId } = req.params as { boardId: string };
+    // Optional incident scope: a participant contributes a record to a board
+    // the incident uses (VEOC-79B1). Absent, the record is jurisdiction-local.
+    const { incidentId } = z.object({ incidentId: z.string().uuid().optional() }).parse(req.query);
     const data = RecordBody.parse(req.body);
     const result = await withPerson(sql, req.principal.person.id, (tx) =>
-      createRecord(tx, req.principal, boardId, data),
+      createRecord(tx, req.principal, boardId, data, incidentId),
     );
     // Post-commit fan-out: delivery never runs inside the mutating tx.
     const event: BoardEvent = {

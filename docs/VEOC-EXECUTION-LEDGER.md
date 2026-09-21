@@ -2474,4 +2474,45 @@ authority document. Executed the amended roster's first step.
   resolve) and license-scan exited 0. No em-dashes. Documentation only: no
   code, schema, API or dependency changed, so the application test suite was
   not rerun.
+- **Ending commit:** 91360e228524c46a999fd8bf549ab00e312817ef, pushed
+  (a9173c2..91360e2).
+
+## VEOC-79B1: Incident association and server-side scope (board records)
+
+Gave board records an explicit incident scope so authorized participants,
+including other organizations, can read and contribute records on the boards an
+incident uses, without changing the board's source ownership.
+
+- **Baseline:** 91360e2 on canonical main.
+- **Finding:** checklist_items (0005) and resource_requests (0026) already
+  carry incident_id; the operational-record gap was board_records, which was
+  board-scoped only. This increment closes that.
+- **Data model (migration 0037):** board_records gains a nullable incident_id.
+  Legacy and reusable reference records keep it null and are never silently
+  assigned to an incident. A record's incident_id, when set, must name an
+  incident whose incident_boards include the record's board, so a record cannot
+  be tagged into a foreign incident.
+- **Row-level security:** boards_read now also admits a participant who can
+  read an incident the board serves; board_records read/write admit an incident
+  participant (contributor) for records on the incident's boards, alongside the
+  jurisdiction members and scoped guests who already could. The 79A functions
+  can_read_incident and has_incident_participation are reused.
+- **Service:** getEffectiveBoard is split so a role-less loadBoardShape reads a
+  board under the caller's RLS; createRecord takes an optional incidentId and,
+  on that path, authorizes an incident contributor (or owner writer), requires
+  the board to belong to the incident, tags the record, and treats a partner as
+  a non-admin writer so admin-only fields stay closed. The record's audit is
+  attributed to the contributing partner's own organization when the actor is
+  not a member of the board's jurisdiction, so the audit membership wall does
+  not reject a partner contribution. The route accepts ?incidentId=.
+- **Scope boundary:** feeds and dashboard-aggregate incident scoping, and the
+  full frontend wiring (writes/counts/URLs/subscriptions), are VEOC-79B2.
+- **Evidence:** a real-database test proves a partner contributes a record to
+  the incident with the board's ownership unchanged, reads the incident record
+  and board but not the owner's jurisdiction-local record, that a legacy record
+  is not auto-assigned, that a record cannot be tagged into an incident whose
+  boards exclude it, and that a second incident, an outsider organization and a
+  revoked grant are all denied.
+- **Gate:** pnpm check --maxWorkers=2 exited 0; 470 tests in 84 files passed.
+  Log: deploy/test-runtime/out/veoc-79b1-check.log.
 - **Ending commit:** this receipt commit, recorded by the next receipt.

@@ -13,6 +13,7 @@ import { verifyPackage } from "./package.js";
 import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
+import { getIncidentAuthority } from "../incidents/participation.js";
 
 export type BoardRole = "admin" | "member" | "viewer" | "guest";
 
@@ -99,19 +100,26 @@ export async function createBoard(
   return row!.id as string;
 }
 
-export async function getEffectiveBoard(
-  sql: Sql,
-  actor: Principal,
-  boardId: string,
-): Promise<EffectiveBoard> {
+interface BoardShape {
+  readonly id: string;
+  readonly jurisdictionId: string;
+  readonly title: string;
+  readonly template: BoardTemplate;
+  readonly fields: readonly FieldDef[];
+}
+
+/**
+ * Load a board's shape under the caller's row-level security, without a
+ * membership role. A caller with no read access (not a member, guest, or
+ * participant of an incident the board serves) sees no row and gets a 404.
+ */
+async function loadBoardShape(sql: Sql, boardId: string): Promise<BoardShape> {
   const [board] = await sql`
     select b.id, b.jurisdiction_id, b.title, b.local_fields, t.definition
     from boards b join board_templates t
       on t.key = b.template_key and t.version = b.template_version
     where b.id = ${boardId} and b.archived_at is null`;
   if (!board) throw new AuthError(404, "board not found");
-  const role = roleFor(actor, board.jurisdiction_id as string, boardId);
-  if (!role) throw new AuthError(403, "no access to this board");
   const template = BoardTemplateSchema.parse(board.definition);
   const locals = (board.local_fields as FieldDef[]) ?? [];
   const { fields } = effectiveFields(template, locals);
@@ -121,8 +129,18 @@ export async function getEffectiveBoard(
     title: board.title as string,
     template,
     fields,
-    role,
   };
+}
+
+export async function getEffectiveBoard(
+  sql: Sql,
+  actor: Principal,
+  boardId: string,
+): Promise<EffectiveBoard> {
+  const shape = await loadBoardShape(sql, boardId);
+  const role = roleFor(actor, shape.jurisdictionId, boardId);
+  if (!role) throw new AuthError(403, "no access to this board");
+  return { ...shape, role };
 }
 
 export async function addLocalField(
@@ -184,19 +202,48 @@ export async function createRecord(
   actor: Principal,
   boardId: string,
   data: Record<string, unknown>,
+  incidentId?: string,
 ): Promise<RecordWriteResult> {
-  const board = await getEffectiveBoard(sql, actor, boardId);
-  requireWriter(board.role);
+  let board: EffectiveBoard;
+  let participantOrg: string | undefined;
+  if (incidentId) {
+    // Incident contribution (VEOC-79B1): a contributor participant, or an
+    // owner writer, adds a record to a board the incident uses. Source
+    // ownership (the board's jurisdiction) is unchanged; the record is tagged
+    // with the incident so it is shared to that incident and no other. A
+    // participant acts as a non-admin writer, so admin-only fields stay closed.
+    const authority = await getIncidentAuthority(sql, actor, incidentId);
+    if (!authority.canContribute) throw new AuthError(403, "requires incident contributor");
+    const [attached] = await sql`
+      select 1 as ok from incident_boards
+      where incident_id = ${incidentId} and board_id = ${boardId}`;
+    if (!attached) throw new AuthError(400, "board is not part of this incident");
+    participantOrg = authority.participation?.organizationId;
+    board = { ...(await loadBoardShape(sql, boardId)), role: "member" };
+  } else {
+    const effective = await getEffectiveBoard(sql, actor, boardId);
+    requireWriter(effective.role);
+    board = effective;
+  }
   checkFieldWrites(board, Object.keys(data));
   const parsed = buildRecordSchema(board.fields).parse(data);
   const [row] = await sql`
-    insert into board_records (board_id, data, created_by, created_by_position, geom)
+    insert into board_records
+      (board_id, data, created_by, created_by_position, geom, incident_id)
     values (${boardId}, ${sql.json(parsed as never)}, ${actor.person.id},
-            ${actor.position?.id ?? null}, ${geomExpr(sql, board.fields, parsed)})
+            ${actor.position?.id ?? null}, ${geomExpr(sql, board.fields, parsed)},
+            ${incidentId ?? null})
     returning id`;
   const id = row!.id as string;
+  // Attribute the audit to a jurisdiction the actor belongs to: the board's
+  // owner when the actor is a member, otherwise the contributing partner's own
+  // organization, so the audit membership wall never rejects the write.
+  const isOwnerMember = actor.memberships.some((m) => m.jurisdictionId === board.jurisdictionId);
+  const auditJurisdiction =
+    isOwnerMember || !participantOrg ? board.jurisdictionId : participantOrg;
   await recordAudit(sql, actor, {
-    jurisdictionId: board.jurisdictionId,
+    jurisdictionId: auditJurisdiction,
+    ...(incidentId ? { incidentId } : {}),
     category: "board.record.created",
     subjectTable: "board_records",
     subjectId: id,
