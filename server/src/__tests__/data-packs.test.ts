@@ -125,11 +125,11 @@ describe("activation-time data-pack onboarding", () => {
     const ownerPack = pack({
       name: "City GIS",
       organizationSlug: "valley-city",
-      datasets: [{ key: "city-roads", name: "City roads", kind: "geojson",
+      datasets: [{ key: "city_roads", name: "City roads", kind: "geojson",
         url: "https://example.org/city.json", fieldMapping: { title: "properties.name" } }],
     });
     expect((await register(firstIncident, ownerToken, ownerPack)).statusCode).toBe(201);
-    const cityDatasetId = (await admin`select id from data_pack_datasets where key = 'city-roads'`)[0]!.id as string;
+    const cityDatasetId = (await admin`select id from data_pack_datasets where key = 'city_roads'`)[0]!.id as string;
     const wipe = await app.inject({
       method: "POST",
       url: `/api/v1/data-packs/datasets/${cityDatasetId}/load`,
