@@ -108,6 +108,13 @@ export interface FeedHealth {
   readonly ageSeconds: number | null;
 }
 export type FeedItemsResponse = CopFeatureCollection & { readonly feed: FeedHealth };
+export type DatasetItemsPageResponse = CopFeatureCollection & {
+  readonly page: { readonly limit: number; readonly offset: number; readonly returned: number; readonly hasMore: boolean };
+};
+export type DatasetItemsAggregate = CopFeatureCollection & {
+  readonly incomplete: boolean;
+  readonly pages: number;
+};
 export interface IncidentSummary {
   readonly id: string;
   readonly name: string;
@@ -507,6 +514,38 @@ export class ApiClient {
   }
   datasetItems(datasetId: string): Promise<CopFeatureCollection> {
     return this.request<CopFeatureCollection>("GET", `/api/v1/datasets/${datasetId}/items`);
+  }
+  datasetItemsPage(
+    datasetId: string,
+    options: { bbox?: readonly [number, number, number, number]; limit?: number; offset?: number } = {},
+  ): Promise<DatasetItemsPageResponse> {
+    const query = new URLSearchParams();
+    if (options.bbox) query.set("bbox", options.bbox.join(","));
+    if (options.limit !== undefined) query.set("limit", String(options.limit));
+    if (options.offset !== undefined) query.set("offset", String(options.offset));
+    const suffix = query.size ? `?${query.toString()}` : "";
+    return this.request<DatasetItemsPageResponse>("GET", `/api/v1/datasets/${datasetId}/items${suffix}`);
+  }
+  async datasetItemsInArea(
+    datasetId: string,
+    bbox?: readonly [number, number, number, number],
+    options: { pageSize?: number; maxPages?: number } = {},
+  ): Promise<DatasetItemsAggregate> {
+    const pageSize = options.pageSize ?? 1000;
+    const maxPages = options.maxPages ?? 50;
+    const features: CopFeatureCollection["features"][number][] = [];
+    let offset = 0;
+    let pages = 0;
+    let hasMore: boolean;
+    do {
+      const page = await this.datasetItemsPage(datasetId, { ...(bbox ? { bbox } : {}), limit: pageSize, offset });
+      features.push(...page.features);
+      pages += 1;
+      hasMore = page.page.hasMore;
+      offset += page.page.returned;
+      if (page.page.returned === 0) break;
+    } while (hasMore && pages < maxPages);
+    return { type: "FeatureCollection", features, pages, incomplete: hasMore };
   }
   async incidentCatalog(incidentId: string): Promise<CatalogEntryStatus[]> {
     const r = await this.request<{ sources: CatalogEntryStatus[] }>(

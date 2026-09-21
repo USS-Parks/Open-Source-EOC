@@ -2,6 +2,7 @@ import { themes, type ThemeName } from "../design/tokens.js";
 import { statusColorExpression, symbolStatusFor } from "./symbology.js";
 import { basemapBackground, naturalEarthLayers, naturalEarthSources } from "./basemap.js";
 import { labelFor } from "./tools.js";
+import { statusPatternExpression } from "./hazards.js";
 
 /**
  * COP layer construction: pure functions from board data to MapLibre
@@ -46,7 +47,7 @@ export function sourceId(boardId: string): string {
 
 export function boardLayerIds(boardId: string): string[] {
   const src = sourceId(boardId);
-  return [`${src}-fill`, `${src}-line`, `${src}-point`, `${src}-label`];
+  return [`${src}-fill`, `${src}-hatch`, `${src}-line`, `${src}-point`, `${src}-label`];
 }
 
 /**
@@ -88,6 +89,13 @@ export function boardLayerSpecs(boardId: string, theme: ThemeName, labelFont?: s
       source: src,
       filter: ["==", ["geometry-type"], "Polygon"],
       paint: { "fill-color": color, "fill-opacity": 0.25 },
+    },
+    {
+      id: `${src}-hatch`,
+      type: "fill",
+      source: src,
+      filter: ["==", ["geometry-type"], "Polygon"],
+      paint: { "fill-pattern": statusPatternExpression(theme), "fill-opacity": 0.75 },
     },
     {
       id: `${src}-line`,

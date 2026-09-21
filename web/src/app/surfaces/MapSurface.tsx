@@ -1,6 +1,8 @@
 import { useState, type CSSProperties } from "react";
 import { geometryFieldKey } from "@openeoc/shared";
 import { CopMap } from "../../cop/CopMap.js";
+import { FEMA_NFHL_ATTRIBUTION, FEMA_NFHL_DATASET_KEY } from "../../cop/hazards.js";
+import { geometryBounds } from "../../cop/tools.js";
 import { RecordForm } from "../../boards/RecordForm.js";
 import { Button, Panel } from "../../design/components.js";
 import type { ThemeName } from "../../design/tokens.js";
@@ -84,10 +86,27 @@ export function MapSurface(props: {
     () => (props.incidentId ? props.client.listIncidentDatasets(props.incidentId) : Promise.resolve([])),
     [props.incidentId],
   );
+  const incidentArea = useAsync(
+    () => (props.incidentId && typeof props.client.getIncidentArea === "function"
+      ? props.client.getIncidentArea(props.incidentId)
+      : Promise.resolve(null)),
+    [props.incidentId],
+  );
+  const areaBbox = geometryBounds(incidentArea.data?.geometry ?? null);
   const mapDatasets = (datasets.data ?? []).filter(
     (d) => d.availability === "available" || d.availability === "stale",
   );
-  const datasetLayers = mapDatasets.map((d) => ({ id: d.id, title: d.name }));
+  const datasetLayers = mapDatasets.map((d) => ({
+    id: d.id,
+    title: d.name,
+    kind: d.key === FEMA_NFHL_DATASET_KEY ? "fema-flood" as const : "standard" as const,
+    coverage: d.coverageArea === null
+      ? "Coverage unknown: mapped panel coverage was not supplied"
+      : areaBbox
+        ? "Configured source coverage; retrieval clipped to the selected incident area"
+        : "Configured source coverage; no incident area is selected",
+    attribution: d.key === FEMA_NFHL_DATASET_KEY ? FEMA_NFHL_ATTRIBUTION : undefined,
+  }));
   const datasetIds = new Set(mapDatasets.map((d) => d.id));
   const datasetById = new Map(mapDatasets.map((d) => [d.id, d]));
   const feedAndDatasetLayers = [...feedLayers, ...datasetLayers];
@@ -183,19 +202,22 @@ export function MapSurface(props: {
 
       <div style={{ flex: 1, minHeight: 0 }}>
         <CopMap
-          key={JSON.stringify([props.jurisdictionId, props.incidentId ?? null, props.theme, geoBoards.map((b) => b.id), feedAndDatasetLayers.map((f) => f.id)])}
+          key={JSON.stringify([props.jurisdictionId, props.incidentId ?? null, props.theme, areaBbox, geoBoards.map((b) => b.id), feedAndDatasetLayers.map((f) => f.id)])}
           theme={props.theme}
           boards={geoBoards.map((c) => ({ id: c.id, title: c.title }))}
           fetchItems={(id) => props.client.collectionItems(id)}
           feeds={feedAndDatasetLayers}
           fetchFeedItems={(id) =>
             datasetIds.has(id)
-              ? props.client.datasetItems(id).then((fc) => ({
+              ? props.client.datasetItemsInArea(id, areaBbox ?? undefined).then((fc) => ({
                   ...fc,
                   feed: {
                     name: datasetById.get(id)!.name,
                     stale: datasetById.get(id)!.availability === "stale",
                     ageSeconds: ageSeconds(datasetById.get(id)!.lastSuccessAt),
+                    incomplete: fc.incomplete,
+                    coverage: datasetLayers.find((layer) => layer.id === id)?.coverage,
+                    attribution: datasetLayers.find((layer) => layer.id === id)?.attribution,
                   },
                 }))
               : props.client.feedItems(id)

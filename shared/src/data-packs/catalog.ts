@@ -196,7 +196,7 @@ export const CALIFORNIA_CATALOG: readonly CatalogSource[] = [
     cadenceSeconds: null,
     staleAfterSeconds: 604800,
     available: false,
-    notes: "Named gap: flood overlay delivery is Handoff 11; NFHL coverage is by mapped panel, not universal.",
+    notes: "Named gap: live NFHL fetching is not implemented. A local data pack may supply layer 28 fields FLD_ZONE, ZONE_SUBTY and SFHA_TF by paginated bbox. Coverage is by mapped panel, not universal.",
   },
   {
     id: "statewide-shelters",

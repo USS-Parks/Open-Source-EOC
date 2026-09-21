@@ -217,6 +217,18 @@ export interface DatasetFeatureCollection {
     readonly geometry: unknown;
     readonly properties: Record<string, unknown>;
   }>;
+  readonly page: {
+    readonly limit: number;
+    readonly offset: number;
+    readonly returned: number;
+    readonly hasMore: boolean;
+  };
+}
+
+export interface DatasetItemsQuery {
+  readonly bbox?: Bbox | undefined;
+  readonly limit?: number | undefined;
+  readonly offset?: number | undefined;
 }
 
 /**
@@ -229,27 +241,37 @@ export async function listDatasetItems(
   sql: Sql,
   actor: Principal,
   datasetId: string,
-  limit = 2000,
+  query: DatasetItemsQuery = {},
 ): Promise<DatasetFeatureCollection> {
+  const limit = query.limit ?? 2000;
+  const offset = query.offset ?? 0;
   const [ds] = await sql`
     select p.incident_id from data_pack_datasets d
     join data_packs p on p.id = d.pack_id
     where d.id = ${datasetId}`;
   if (!ds) throw new AuthError(404, "dataset not found");
   await getIncidentAuthority(sql, actor, ds.incident_id as string);
+  const area = query.bbox
+    ? sql`and ST_Intersects(geom, ST_MakeEnvelope(
+        ${query.bbox[0]}, ${query.bbox[1]}, ${query.bbox[2]}, ${query.bbox[3]}, 4326))`
+    : sql``;
   const rows = await sql`
     select source_id, data, ST_AsGeoJSON(geom) as geom
     from data_pack_items
     where dataset_id = ${datasetId} and geom is not null
-    order by last_loaded_at desc limit ${limit}`;
+    ${area}
+    order by source_id asc
+    limit ${limit + 1} offset ${offset}`;
+  const pageRows = rows.slice(0, limit);
   return {
     type: "FeatureCollection",
-    features: rows.map((r) => ({
+    features: pageRows.map((r) => ({
       type: "Feature" as const,
       id: r.source_id as string,
       geometry: JSON.parse(r.geom as string),
       properties: (r.data as Record<string, unknown>) ?? {},
     })),
+    page: { limit, offset, returned: pageRows.length, hasMore: rows.length > limit },
   };
 }
 

@@ -2,6 +2,7 @@ import type { ThemeName } from "../design/tokens.js";
 import { boardLayerSpecs } from "./layers.js";
 import { symbolStatusFor } from "./symbology.js";
 import type { CopFeatureCollection } from "./layers.js";
+import { floodLayerIds, floodLayerSpecs } from "./hazards.js";
 
 /**
  * Feed layers on the COP (VEOC-19, F18). Feed features are read-only:
@@ -14,6 +15,9 @@ export interface FeedLayerHealth {
   readonly name: string;
   readonly stale: boolean;
   readonly ageSeconds: number | null;
+  readonly incomplete?: boolean | undefined;
+  readonly coverage?: string | undefined;
+  readonly attribution?: string | undefined;
 }
 
 export function tagFeedFeatures(
@@ -40,13 +44,20 @@ export function feedSourceId(feedId: string): string {
   return `feed-${feedId}`;
 }
 
-export function feedLayerIds(feedId: string): string[] {
+export function feedLayerIds(feedId: string, kind: "standard" | "fema-flood" = "standard"): string[] {
+  if (kind === "fema-flood") return floodLayerIds(feedId);
   const src = feedSourceId(feedId);
-  return [`${src}-fill`, `${src}-line`, `${src}-point`, `${src}-label`];
+  return [`${src}-fill`, `${src}-hatch`, `${src}-line`, `${src}-point`, `${src}-label`];
 }
 
 /** Same layer shape as boards, under the feed's own source id. */
-export function feedLayerSpecs(feedId: string, theme: ThemeName, labelFont?: string): unknown[] {
+export function feedLayerSpecs(
+  feedId: string,
+  theme: ThemeName,
+  labelFont?: string,
+  kind: "standard" | "fema-flood" = "standard",
+): unknown[] {
+  if (kind === "fema-flood") return floodLayerSpecs(feedId, theme, labelFont);
   return boardLayerSpecs(feedId, theme, labelFont).map((spec) => {
     const s = spec as Record<string, unknown>;
     const id = (s.id as string).replace(/^board-/, "feed-");

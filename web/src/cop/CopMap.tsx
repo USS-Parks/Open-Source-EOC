@@ -43,9 +43,17 @@ import {
   feedLayerIds,
   feedLayerSpecs,
   feedSourceId,
+  formatAge,
   tagFeedFeatures,
   type FeedLayerHealth,
 } from "./feeds.js";
+import {
+  ensureHazardPatterns,
+  FEMA_NFHL_ATTRIBUTION,
+  FLOOD_LEGEND,
+  floodColor,
+  tagFloodFeatures,
+} from "./hazards.js";
 import {
   formatArea,
   geometryBounds,
@@ -58,6 +66,9 @@ import {
 export interface CopBoard {
   readonly id: string;
   readonly title: string;
+  readonly kind?: "standard" | "fema-flood" | undefined;
+  readonly coverage?: string | undefined;
+  readonly attribution?: string | undefined;
 }
 
 export type FeedItemsData = CopFeatureCollection & { readonly feed: FeedLayerHealth };
@@ -189,6 +200,7 @@ export function CopMap(props: CopMapProps) {
   const [feedVisible, setFeedVisible] = useState<Record<string, boolean>>(
     Object.fromEntries((props.feeds ?? []).map((f) => [f.id, true])),
   );
+  const [feedHealth, setFeedHealth] = useState<Record<string, FeedLayerHealth>>({});
   // The gallery: an external style carries its own basemap, so no rasters there.
   const rasters = props.basemapStyleUrl ? [] : (props.rasterBasemaps ?? []);
   const rasterBases = rasters.filter((r) => !r.overlay);
@@ -291,6 +303,7 @@ export function CopMap(props: CopMapProps) {
       canvasContextAttributes: { preserveDrawingBuffer: true },
     });
     mapRef.current = map;
+    let styleReady = false;
     // MapLibre resolves the external style and its relative asset URLs. Mount
     // jurisdiction layers after that style parses, before operational records.
     if (props.basemapStyleUrl && vectors) map.once("style.load", () => {
@@ -425,13 +438,14 @@ export function CopMap(props: CopMapProps) {
     };
 
     const refresh = async () => {
+      if (!styleReady) return;
       for (const board of props.boards) {
         try {
           const fc = tagFeatures(await props.fetchItems(board.id));
           dataRef.current[sourceId(board.id)] = fc;
           const source = map.getSource(sourceId(board.id)) as maplibregl.GeoJSONSource | undefined;
           if (source) source.setData(fc as never);
-          else if (map.isStyleLoaded() || map.loaded()) {
+          else {
             map.addSource(sourceId(board.id), { type: "geojson", data: fc as never });
             for (const spec of boardLayerSpecs(board.id, props.theme, labelFont)) {
               map.addLayer(spec as never);
@@ -445,16 +459,19 @@ export function CopMap(props: CopMapProps) {
         for (const feed of props.feeds ?? []) {
           try {
             const res = await props.fetchFeedItems(feed.id);
-            const fc = tagFeedFeatures(res, res.feed);
+            const fc = feed.kind === "fema-flood"
+              ? tagFloodFeatures(res, res.feed)
+              : tagFeedFeatures(res, res.feed);
             dataRef.current[feedSourceId(feed.id)] = fc;
             const source = map.getSource(feedSourceId(feed.id)) as maplibregl.GeoJSONSource | undefined;
             if (source) source.setData(fc as never);
-            else if (map.isStyleLoaded() || map.loaded()) {
+            else {
               map.addSource(feedSourceId(feed.id), { type: "geojson", data: fc as never });
-              for (const spec of feedLayerSpecs(feed.id, props.theme, labelFont)) {
+              for (const spec of feedLayerSpecs(feed.id, props.theme, labelFont, feed.kind)) {
                 map.addLayer(spec as never);
               }
             }
+            setFeedHealth((current) => ({ ...current, [feed.id]: res.feed }));
           } catch {
             // A stale or failed feed keeps its last features; never blank the COP.
           }
@@ -464,6 +481,8 @@ export function CopMap(props: CopMapProps) {
     };
 
     map.on("load", () => {
+      styleReady = true;
+      ensureHazardPatterns(map, props.theme);
       // The measure tool's own source and layers (a neutral color, not a
       // status color, so it never reads as an operational condition, INV-8).
       if (!map.getSource("measure")) {
@@ -506,6 +525,7 @@ export function CopMap(props: CopMapProps) {
     const timer = setInterval(() => void refresh(), props.pollMs ?? 2000);
     return () => {
       clearInterval(timer);
+      styleReady = false;
       map.remove();
       mapRef.current = null;
     };
@@ -744,7 +764,7 @@ export function CopMap(props: CopMapProps) {
     const map = mapRef.current;
     if (!map) return;
     for (const feed of props.feeds ?? []) {
-      for (const layerId of feedLayerIds(feed.id)) {
+      for (const layerId of feedLayerIds(feed.id, feed.kind)) {
         if (map.getLayer(layerId)) {
           map.setLayoutProperty(
             layerId,
@@ -936,9 +956,50 @@ export function CopMap(props: CopMapProps) {
                     />
                     {f.title}
                   </label>
+                  <small style={{ display: "block", marginLeft: 24, color: "var(--eoc-text-muted)" }}>
+                    {f.coverage ?? feedHealth[f.id]?.coverage ?? "Coverage unknown"}
+                  </small>
+                  {feedHealth[f.id] ? (
+                    <small style={{ display: "block", marginLeft: 24, color: "var(--eoc-text-muted)" }}>
+                      {feedHealth[f.id]!.stale ? "Stale last-good data" : `Freshness: ${formatAge(feedHealth[f.id]!.ageSeconds)}`}
+                    </small>
+                  ) : null}
+                  {feedHealth[f.id]?.incomplete ? (
+                    <small role="status" style={{ display: "block", marginLeft: 24, color: "var(--eoc-status-warning)" }}>
+                      Display incomplete: bounded page limit reached.
+                    </small>
+                  ) : null}
+                  {f.attribution || feedHealth[f.id]?.attribution ? (
+                    <details style={{ marginLeft: 24, fontSize: "0.8em", color: "var(--eoc-text-muted)" }}>
+                      <summary>Source</summary>{f.attribution ?? feedHealth[f.id]?.attribution}
+                    </details>
+                  ) : null}
                 </li>
               ))}
             </ul>
+          </div>
+        ) : null}
+        {(props.feeds ?? []).some((feed) => feed.kind === "fema-flood") ? (
+          <div style={{ marginTop: 12 }}>
+            <h3 style={headingStyle}>Flood hazard (static reference)</h3>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
+              {FLOOD_LEGEND.map((entry) => (
+                <li key={entry.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.85em" }}>
+                  <span aria-hidden="true" style={{
+                    width: 16, height: 12, display: "inline-block",
+                    backgroundColor: floodColor(entry.id, props.theme),
+                    backgroundImage: "repeating-linear-gradient(135deg, transparent 0 3px, currentColor 3px 4px)",
+                  }} />
+                  {entry.title}
+                </li>
+              ))}
+            </ul>
+            <p style={{ fontSize: "0.8em", color: "var(--eoc-text-muted)" }}>
+              Static FEMA reference, separate from current incident status. Unmapped or unclassified areas remain unknown.
+            </p>
+            <details style={{ fontSize: "0.8em", color: "var(--eoc-text-muted)" }}>
+              <summary>Source</summary>{FEMA_NFHL_ATTRIBUTION}
+            </details>
           </div>
         ) : null}
         <div style={{ marginTop: 12 }}>
@@ -953,6 +1014,7 @@ export function CopMap(props: CopMapProps) {
                     height: 12,
                     borderRadius: 6,
                     background: statusColor(s, props.theme),
+                    backgroundImage: "repeating-linear-gradient(135deg, transparent 0 3px, currentColor 3px 4px)",
                     display: "inline-block",
                   }}
                 />

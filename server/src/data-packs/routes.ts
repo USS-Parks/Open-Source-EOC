@@ -14,6 +14,23 @@ import {
 
 const IncidentId = z.string().uuid();
 const DatasetId = z.string().uuid();
+const BboxParam = z.string().transform((raw, ctx) => {
+  const values = raw.split(",").map((value) => Number(value.trim()));
+  if (
+    values.length !== 4 || values.some((value) => !Number.isFinite(value)) ||
+    values[0]! < -180 || values[2]! > 180 || values[1]! < -90 || values[3]! > 90 ||
+    values[0]! >= values[2]! || values[1]! >= values[3]!
+  ) {
+    ctx.addIssue({ code: "custom", message: "bbox must be west,south,east,north in WGS84" });
+    return z.NEVER;
+  }
+  return values as [number, number, number, number];
+});
+const ItemsQuery = z.object({
+  bbox: BboxParam.optional(),
+  limit: z.coerce.number().int().min(1).max(2000).optional(),
+  offset: z.coerce.number().int().min(0).max(1_000_000).optional(),
+}).strict();
 const LoadBody = z.union([
   z.object({ records: z.array(z.unknown()).max(10000) }).strict(),
   z.object({ error: z.string().trim().min(1).max(1000) }).strict(),
@@ -60,8 +77,9 @@ export function dataPackRoutes(
 
   app.get("/api/v1/datasets/:datasetId/items", { preHandler: authenticate }, async (req, reply) => {
     const datasetId = DatasetId.parse((req.params as { datasetId: string }).datasetId);
+    const query = ItemsQuery.parse(req.query);
     const fc = await withPerson(sql, req.principal.person.id, (tx) =>
-      listDatasetItems(tx, req.principal, datasetId),
+      listDatasetItems(tx, req.principal, datasetId, query),
     );
     return reply.header("content-type", "application/geo+json").send(fc);
   });
