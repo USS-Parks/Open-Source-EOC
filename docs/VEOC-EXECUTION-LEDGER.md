@@ -3186,3 +3186,31 @@ increment proves it and that coverage follows the incident area.
   Each lane's node_modules measured 195 MiB logical at the current inventory;
   all have active work, and none has an unpublished commit ahead of main.
   No worktree, cache or preserved 80b stash was removed. No push occurred.
+
+## H11: operational hazards and local flood reference
+
+- **Files:** 13 files across data-pack read service/routes, shared catalog and
+  symbology, map/client integration, hatch construction and three focused tests.
+  API client changes are additive. No migration, dependency or external fetch.
+- **Behavior:** incident-area bbox reads use stable source-ID pagination and
+  expose remaining pages. Client aggregation is bounded at 50,000 features and
+  visibly reports incompleteness. Operational hatches remain distinct from
+  static A/AE/AO and shaded-X flood categories; unmapped or unclassified areas
+  remain unknown. Source, coverage and freshness stay visible.
+- **Gate:** affected TypeScript and ESLint passed after recorded corrections.
+  Focused shared/map, real PostGIS and browser suites passed 13/13. Parent
+  inspection found that the initial browser screenshots did not show flood
+  polygons. The render-readiness defect was corrected; the dedicated browser
+  rerun passed 1/1 with both layer toggles proved on settled canvases in both
+  themes, zero page errors and zero external requests. Final proof log:
+  deploy/test-runtime/out/lanes/c/logs/h11-browser-proof-repair-20260921-134240.log.
+- **Review:** parent reviewed the full diff and the corrected two screenshots.
+  Initial independent review returned fix-first for render readiness; fresh
+  bounded review of the correction returned ship. Passing unaffected gates
+  were not repeated. Rebase over main was documentation-only.
+- **Integration:** exact fast-forward to eb876ec4b4c754bf8fe870dc3506c37c3605191d.
+  Evidence is integrated local rendering and retrieval with synthetic polygons.
+  G-FLOOD remains partial for the separately gated live NFHL source; catalog
+  availability remains false. P-COP owns final workspace presentation.
+- **Next:** existing lane c continues H12-CB from current main. Other lanes
+  retain their active units. No new worktree, dependency copy or push.
