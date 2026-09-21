@@ -14,6 +14,9 @@ import type {
   DatasetStatus,
   DataPack,
   CatalogEntryStatus,
+  SavedStateListPage,
+  SavedStateRecord,
+  SavedStateWrite,
 } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
 
@@ -870,6 +873,39 @@ export class ApiClient {
   }
   fileMeta(fileId: string): Promise<FileMetaRef> {
     return this.request<FileMetaRef>("GET", `/api/v1/files/${fileId}`);
+  }
+  listTableViewStates(
+    incidentId: string,
+    options: { cursor?: string; limit?: number } = {},
+  ): Promise<SavedStateListPage> {
+    const query = new URLSearchParams({ kind: "table_view" });
+    if (options.cursor !== undefined) query.set("cursor", options.cursor);
+    if (options.limit !== undefined) query.set("limit", String(options.limit));
+    return this.request<SavedStateListPage>(
+      "GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/saved-state?${query}`,
+    );
+  }
+  async getTableViewState(incidentId: string, key: string): Promise<SavedStateRecord> {
+    const result = await this.request<{ state: SavedStateRecord }>(
+      "GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/saved-state/table_view/${encodeURIComponent(key)}`,
+    );
+    return result.state;
+  }
+  async saveTableViewState(
+    incidentId: string, key: string, input: SavedStateWrite,
+  ): Promise<SavedStateRecord> {
+    const result = await this.request<{ state: SavedStateRecord }>(
+      "PUT", `/api/v1/incidents/${encodeURIComponent(incidentId)}/saved-state/table_view/${encodeURIComponent(key)}`,
+      { ...input },
+    );
+    return result.state;
+  }
+  async deleteTableViewState(
+    incidentId: string, key: string, expectedRevision: number,
+  ): Promise<void> {
+    await this.request<{ ok: true }>(
+      "DELETE", `/api/v1/incidents/${encodeURIComponent(incidentId)}/saved-state/table_view/${encodeURIComponent(key)}?expectedRevision=${encodeURIComponent(String(expectedRevision))}`,
+    );
   }
   downloadFile(fileId: string): Promise<Blob> {
     return this.requestBlob(`/api/v1/files/${fileId}/content`);

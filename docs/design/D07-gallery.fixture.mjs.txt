@@ -1,0 +1,117 @@
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+const { chromium } = await import("../../../../server/node_modules/playwright-core/index.mjs");
+
+const reviewUrl = process.env.D07_REVIEW_URL ?? "http://127.0.0.1:5175/docs/design/D07-gallery.html";
+const reviewOrigin = new URL(reviewUrl).origin;
+const shotDir = process.env.D07_SHOT_DIR ?? "C:/Users/17076/Documents/Open Source EOC/deploy/test-runtime/out/lanes/b/browser-shots/d07";
+const resultPath = process.env.D07_RESULT ?? "C:/Users/17076/Documents/Open Source EOC/deploy/test-runtime/out/lanes/b/d07-browser-result.json";
+const executablePath = [
+  process.env.OPENEOC_CHROMIUM,
+  "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+].filter(Boolean).find((candidate) => existsSync(candidate));
+if (!executablePath) throw new Error("No Chromium found; set OPENEOC_CHROMIUM");
+
+mkdirSync(shotDir, { recursive: true });
+const browser = await chromium.launch({ executablePath, headless: true });
+const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+const page = await context.newPage();
+const pageErrors = [];
+const externalRequests = [];
+page.on("pageerror", (error) => pageErrors.push(String(error)));
+page.on("request", (request) => {
+  if (!request.url().startsWith(`${reviewOrigin}/`)) externalRequests.push(request.url());
+});
+await context.route("**/*", async (route) => {
+  if (route.request().url().startsWith(`${reviewOrigin}/`)) await route.continue();
+  else await route.abort();
+});
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+async function assertContained(label) {
+  const geometry = await page.evaluate(() => ({
+    viewport: window.innerWidth,
+    documentWidth: document.documentElement.scrollWidth,
+    tableClient: document.querySelector(".eoc-operational-table")?.clientWidth ?? 0,
+    tableScroll: document.querySelector(".eoc-operational-table-scroll")?.scrollWidth ?? null,
+  }));
+  assert(geometry.documentWidth <= geometry.viewport + 1, `${label} page overflow: ${geometry.documentWidth}px > ${geometry.viewport}px`);
+  if (geometry.tableScroll !== null) assert(geometry.tableScroll >= geometry.tableClient, `${label} table did not retain a bounded scroll surface`);
+}
+
+async function capture(name) {
+  await page.screenshot({ path: join(shotDir, `${name}.png`), fullPage: true });
+}
+
+try {
+  await page.goto(reviewUrl, { waitUntil: "networkidle" });
+  await page.locator(".d07-gallery").waitFor();
+  assert(await page.getByRole("table", { name: "Priority work" }).isVisible(), "Priority work table is missing");
+  assert(await page.getByText("Not provided").count() >= 1, "Explicit missing-value text is missing");
+  assert((await page.getByText("Coordinate generator delivery", { exact: false }).textContent())?.length > 50, "Long request fixture is missing");
+  assert(await page.locator('.eoc-operational-table[data-density="compact"]').count() === 1, "Compact density is not the default");
+  await assertContained("wide light priority");
+  await capture("wide-light-priority");
+
+  const requestResize = page.getByRole("separator", { name: "Resize Priority request column" });
+  await requestResize.focus();
+  const beforeWidth = Number(await requestResize.getAttribute("aria-valuenow"));
+  await page.keyboard.press("Shift+ArrowRight");
+  assert(Number(await requestResize.getAttribute("aria-valuenow")) === beforeWidth + 24, "Keyboard resize did not use the large step");
+  assert(await requestResize.evaluate((element) => element === document.activeElement), "Resize lost keyboard focus");
+  await page.getByRole("searchbox", { name: "Filter Status" }).fill("Open");
+  await page.getByRole("checkbox", { name: "Select all records on this page" }).check();
+  await page.getByRole("button", { name: "Assign selected" }).click();
+  const exactNotice = await page.getByRole("status").last().textContent();
+  assert(exactNotice?.includes("REQ-1048") && exactNotice.includes("REQ-1064"), "Bulk action omitted filtered record IDs");
+  assert(!exactNotice?.includes("REQ-1051"), "Bulk action included a hidden record ID");
+  await page.getByRole("button", { name: "Use dark theme" }).click();
+  assert(await page.locator(".d07-gallery").getAttribute("data-review-theme") === "dark", "Dark navy theme did not activate");
+  await assertContained("wide dark filtered priority");
+  await capture("wide-dark-filtered-priority");
+
+  await page.getByRole("button", { name: "Related ESFs" }).click();
+  await page.getByLabel("Density").selectOption("comfortable");
+  assert(await page.getByRole("table", { name: "Related ESF coordination" }).isVisible(), "Related ESF table is missing");
+  assert(await page.getByText("CA ESF 8 — Public Health and Medical").isVisible(), "California ESF name is missing");
+  assert(await page.locator('.eoc-operational-table[data-density="comfortable"]').count() === 1, "Comfortable density did not activate");
+  await assertContained("wide dark related ESFs");
+  await capture("wide-dark-related-esfs");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Use light theme" }).click();
+  await page.getByRole("button", { name: "Error" }).click();
+  assert(await page.getByRole("alert").isVisible(), "Explicit failed state is missing");
+  assert(await page.getByRole("button", { name: "Assign selected" }).isDisabled(), "Bulk action stayed enabled during failure");
+  await assertContained("narrow light failed");
+  await capture("narrow-light-failed");
+
+  assert(pageErrors.length === 0, `Page errors: ${pageErrors.join(" | ")}`);
+  assert(externalRequests.length === 0, `External requests: ${externalRequests.join(" | ")}`);
+  const result = {
+    status: "passed",
+    reviewUrl,
+    screenshots: 4,
+    views: ["wide-light-priority", "wide-dark-filtered-priority", "wide-dark-related-esfs", "narrow-light-failed"],
+    themes: ["light", "dark"],
+    densities: ["compact", "comfortable"],
+    exactFilteredBulkIdsChecked: true,
+    keyboardResizeAndFocusChecked: true,
+    longAndMissingValuesChecked: true,
+    boundedOverflowChecked: true,
+    pageErrors,
+    externalRequests,
+  };
+  writeFileSync(resultPath, JSON.stringify(result, null, 2));
+  console.log(JSON.stringify(result));
+} catch (error) {
+  console.error(JSON.stringify({ status: "failed", error: String(error), pageErrors, externalRequests }));
+  throw error;
+} finally {
+  await browser.close();
+}
