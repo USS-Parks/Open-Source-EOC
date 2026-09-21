@@ -156,11 +156,14 @@ export async function computeDashboard(
   actor: Principal,
   dashboardId: string,
   runtimeFilter?: WidgetFilter,
+  incidentId?: string,
 ): Promise<DashboardSnapshot> {
   const dashboard = await getDashboard(sql, actor, dashboardId);
   const widgets: WidgetResult[] = [];
   for (const widget of dashboard.template.widgets) {
-    widgets.push(await computeWidget(sql, actor, dashboard.jurisdictionId, widget, runtimeFilter));
+    widgets.push(
+      await computeWidget(sql, actor, dashboard.jurisdictionId, widget, runtimeFilter, incidentId),
+    );
   }
   return {
     dashboardId: dashboard.id,
@@ -177,14 +180,30 @@ async function computeWidget(
   jurisdictionId: string,
   widget: DashboardWidget,
   runtimeFilter?: WidgetFilter,
+  incidentId?: string,
 ): Promise<WidgetResult> {
-  const [board] = await sql`
-    select id from boards
-    where jurisdiction_id = ${jurisdictionId} and template_key = ${widget.board}
-      and archived_at is null
-    order by created_at limit 1`;
+  // Board selection. An incident-scoped dashboard (VEOC-79B2) aggregates over
+  // the board THIS incident uses for the widget's template, because activation
+  // gives each incident its own board instance; scoping by incident_id alone
+  // would read a sibling incident's board. Having selected the incident's
+  // board, the incident clause below narrows to its incident-tagged records so
+  // the totals reconcile with the scoped board view. Unscoped keeps the
+  // jurisdiction's first board of the template.
+  const [board] = incidentId
+    ? await sql`
+        select b.id from boards b
+        join incident_boards ib on ib.board_id = b.id
+        where ib.incident_id = ${incidentId} and b.template_key = ${widget.board}
+          and b.archived_at is null
+        order by b.created_at limit 1`
+    : await sql`
+        select id from boards
+        where jurisdiction_id = ${jurisdictionId} and template_key = ${widget.board}
+          and archived_at is null
+        order by created_at limit 1`;
   if (!board) return missingResult(widget);
   const boardId = board.id as string;
+  const incidentClause = incidentFragment(sql, incidentId);
 
   if (widget.kind === "tile") {
     const [row] = await sql`
@@ -192,7 +211,7 @@ async function computeWidget(
         count(*)::int as n,
         count(*) filter (where created_at > now() - interval '24 hours')::int as recent
       from board_records
-      where board_id = ${boardId} ${filterFragment(sql, widget.filter)} ${filterFragment(sql, runtimeFilter)}`;
+      where board_id = ${boardId} ${filterFragment(sql, widget.filter)} ${filterFragment(sql, runtimeFilter)} ${incidentClause}`;
     const value = (row?.n as number) ?? 0;
     return {
       kind: "tile",
@@ -208,7 +227,7 @@ async function computeWidget(
     const rows = await sql`
       select coalesce(data ->> ${widget.groupBy}, '') as v, count(*)::int as n
       from board_records
-      where board_id = ${boardId} ${filterFragment(sql, widget.filter)} ${filterFragment(sql, runtimeFilter)}
+      where board_id = ${boardId} ${filterFragment(sql, widget.filter)} ${filterFragment(sql, runtimeFilter)} ${incidentClause}
       group by 1 order by 1`;
     return {
       kind: "chart",
@@ -232,7 +251,7 @@ async function computeWidget(
                  order by coalesce(updated_at, created_at) desc
                ) as rn
         from board_records
-        where board_id = ${boardId} and data ? ${widget.groupBy}
+        where board_id = ${boardId} and data ? ${widget.groupBy} ${incidentClause}
       ) latest where rn = 1 order by g`;
     return {
       kind: "status",
@@ -252,7 +271,7 @@ async function computeWidget(
   const columns = widget.columns.filter((c) => readable.has(c));
   const rows = await sql`
     select id, data from board_records
-    where board_id = ${boardId} ${filterFragment(sql, widget.filter)} ${filterFragment(sql, runtimeFilter)}
+    where board_id = ${boardId} ${filterFragment(sql, widget.filter)} ${filterFragment(sql, runtimeFilter)} ${incidentClause}
     order by coalesce(updated_at, created_at) desc
     limit ${widget.limit}`;
   return {
@@ -285,4 +304,13 @@ function filterFragment(sql: Sql, filter: WidgetFilter | undefined): never {
   return (
     filter ? sql`and data ->> ${filter.field} = ${String(filter.equals)}` : sql``
   ) as never;
+}
+
+/**
+ * Narrow an aggregate to one incident's tagged records, or no-op when the
+ * dashboard is unscoped. Row-level security is still the access wall; this
+ * only filters within what the actor may already read (VEOC-79B2).
+ */
+function incidentFragment(sql: Sql, incidentId: string | undefined): never {
+  return (incidentId ? sql`and incident_id = ${incidentId}` : sql``) as never;
 }

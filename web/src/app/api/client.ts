@@ -393,10 +393,15 @@ export class ApiClient {
   dashboardData(
     dashboardId: string,
     filter?: { field: string; equals: string } | null,
+    incidentId?: string | null,
   ): Promise<DashboardSnapshot> {
-    const query = filter
-      ? `?field=${encodeURIComponent(filter.field)}&equals=${encodeURIComponent(filter.equals)}`
-      : "";
+    const params = new URLSearchParams();
+    if (filter) {
+      params.set("field", filter.field);
+      params.set("equals", filter.equals);
+    }
+    if (incidentId) params.set("incidentId", incidentId);
+    const query = params.toString() ? `?${params.toString()}` : "";
     return this.request<DashboardSnapshot>("GET", `/api/v1/dashboards/${dashboardId}/data${query}`);
   }
   async listSitreps(jurisdictionId: string): Promise<SitrepListItem[]> {

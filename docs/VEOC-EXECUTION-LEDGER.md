@@ -2589,3 +2589,33 @@ side: an operator sees the records an incident holds on its boards.
   (a flaky Windows worker crash on aar.test.ts cleared on re-run). Log:
   deploy/test-runtime/out/veoc-79b2-reads-check2.log.
 - **Ending commit:** this receipt commit, recorded by the next receipt.
+
+## VEOC-79B2 increment: incident-scoped dashboard counts
+
+Continues 79B2 with the counts side: a dashboard scoped to the selected incident
+counts only that incident's records, so the displayed totals reconcile with the
+incident's boards.
+
+- **Baseline:** 4ea2b44 on canonical main (after the 79B2 reads increment).
+- **Change:** computeDashboard and computeWidget take an optional incidentId.
+  Because activation gives each incident its own board instance, a scoped widget
+  selects the board this incident uses (via incident_boards) and then narrows the
+  tile, chart, status and list aggregates to that incident's tagged records, so
+  the totals reconcile with the scoped board view. The /dashboards/:id/data route
+  and the live dashboard stream both accept ?incidentId=. Row-level security
+  stays the access wall; the incident clause only narrows within what the actor
+  may already read. On the web, ApiClient.dashboardData and DashboardSurface pass
+  the selected incident, so the displayed totals rescope when the operator
+  switches incident.
+- **Evidence:** a new real-database test activates two concurrent wildfire
+  incidents, posts owner and authorized-partner records to each, and asserts the
+  scoped dashboard's shelter chart and closed-road tile reconcile with the
+  incident's shelter board view (four records for A, one for B) and never leak
+  across incidents. A jsdom DashboardSurface test asserts the request carries the
+  selected incident and the displayed total switches when the incident changes.
+- **Remaining for 79B2:** resource-request list reads are still jurisdiction
+  scoped (the schema already carries incident_id); scoping that read is the next
+  increment. Tasks (incident checklist items) and planning (IAP) reads are
+  already incident-bound. Only then does the 79B gate close.
+- **Gate:** pnpm check --maxWorkers=2 exited 0; 474 tests in 86 files passed.
+- **Ending commit:** this receipt commit, recorded by the next receipt.

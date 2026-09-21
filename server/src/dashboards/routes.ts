@@ -102,6 +102,10 @@ export function dashboardRoutes(
             .regex(/^[a-z][a-z0-9_]*$/)
             .optional(),
           equals: z.string().max(200).optional(),
+          // Optional incident scope: totals count only this incident's tagged
+          // records, so displayed counts reconcile with the incident's boards
+          // (VEOC-79B2).
+          incidentId: z.string().uuid().optional(),
         })
         .parse(req.query);
       const runtimeFilter =
@@ -109,7 +113,7 @@ export function dashboardRoutes(
           ? { field: q.field, equals: q.equals }
           : undefined;
       const snapshot = await withPerson(sql, req.principal.person.id, (tx) =>
-        computeDashboard(tx, req.principal, dashboardId, runtimeFilter),
+        computeDashboard(tx, req.principal, dashboardId, runtimeFilter, q.incidentId),
       );
       return reply.send(snapshot);
     },
@@ -121,6 +125,13 @@ export function dashboardRoutes(
       { websocket: true },
       (socket: WebSocket, req) => {
         const { dashboardId } = req.params as { dashboardId: string };
+        // A live dashboard opened in an incident context stays scoped to it, so
+        // pushed recomputes count the same incident's records as the REST read
+        // (VEOC-79B2). An absent or malformed value leaves the stream unscoped.
+        const incidentQuery = z
+          .object({ incidentId: z.string().uuid().optional() })
+          .safeParse(req.query);
+        const incidentId = incidentQuery.success ? incidentQuery.data.incidentId : undefined;
         let principal: Principal | null = null;
         let unsubscribe: (() => void) | null = null;
         let timer: NodeJS.Timeout | null = null;
@@ -134,7 +145,7 @@ export function dashboardRoutes(
         const push = async () => {
           if (closed || !principal) return;
           const snapshot = await withPerson(sql, principal.person.id, (tx) =>
-            computeDashboard(tx, principal!, dashboardId),
+            computeDashboard(tx, principal!, dashboardId, undefined, incidentId),
           );
           if (!closed && socket.readyState === socket.OPEN) {
             socket.send(JSON.stringify({ type: "snapshot", data: snapshot }));

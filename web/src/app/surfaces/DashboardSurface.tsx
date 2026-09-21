@@ -8,18 +8,21 @@ import { ErrorNote, Loading, Scroll } from "../screens/parts.js";
  * The dashboard surface (the ArcGIS-Dashboards-style read). The snapshot is
  * computed server-side; here it is fetched over REST and refreshed on a short
  * poll. A runtime filter (carried in the URL) scopes every counting widget, so
- * a drilldown and a deep link reconcile to the same records (VEOC-81).
+ * a drilldown and a deep link reconcile to the same records (VEOC-81). The
+ * selected incident scopes the same widgets to that incident's records, so the
+ * displayed totals reconcile with its boards (VEOC-79B2).
  */
 export function DashboardSurface(props: {
   client: ApiClient;
   dashboardId: string;
   filter: { field: string; equals: string } | null;
+  incidentId: string | null;
   onFilter: (filter: { field: string; equals: string } | null) => void;
 }) {
   const { data, error, loading } = usePolled(
-    () => props.client.dashboardData(props.dashboardId, props.filter),
+    () => props.client.dashboardData(props.dashboardId, props.filter, props.incidentId),
     5000,
-    [props.dashboardId, props.filter?.field, props.filter?.equals],
+    [props.dashboardId, props.filter?.field, props.filter?.equals, props.incidentId],
   );
   if (loading && !data) return <Loading label="Loading dashboard…" />;
   if (error && !data) return <ErrorNote message={error} />;

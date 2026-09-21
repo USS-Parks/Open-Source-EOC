@@ -240,6 +240,7 @@ function Center(props: {
           client={props.client}
           dashboardId={id}
           filter={filter}
+          incidentId={props.incidentId}
           onFilter={(f) => props.onDashboardFilter(id, f)}
         />
       );
