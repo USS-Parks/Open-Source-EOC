@@ -11,8 +11,10 @@ import {
   type ImpactSourceAggregate,
   type ImpactUnit,
   type IncidentImpactResponse,
+  type ViewportBbox,
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
+import { analysisArea, spatialScope } from "./bbox.js";
 
 const CATEGORY_MAP: Readonly<Record<ImpactCategory, readonly CatalogCategory[]>> = {
   structures_parcels: ["parcels_buildings"],
@@ -84,9 +86,11 @@ function blankResponse(
   incidentId: string,
   areaRevision: number | null,
   reason: string,
+  bbox?: ViewportBbox,
 ): IncidentImpactResponse {
   return {
     incidentId,
+    scope: spatialScope(bbox),
     areaRevision,
     areaGeometryAvailable: false,
     categories: {
@@ -117,10 +121,12 @@ async function observeDataset(
   incidentId: string,
   revision: number,
   category: ImpactCategory,
+  bbox: ViewportBbox | undefined,
 ): Promise<ObservedAggregate> {
   const [row] = await sql`
     with area as (
-      select geometry from incident_area_revisions
+      select geometry as incident_geometry, ${analysisArea(sql, bbox)} as geometry
+      from incident_area_revisions
       where incident_id = ${incidentId} and revision = ${revision}
     ), source as (
       select d.coverage, i.source_id, i.data, i.geom, i.last_loaded_at
@@ -131,6 +137,8 @@ async function observeDataset(
     select
       case
         when bool_and(s.coverage is null) then 'unknown'
+        when ST_IsEmpty(a.geometry)
+          and bool_or(ST_Covers(s.coverage, a.incident_geometry)) then 'complete'
         when bool_or(ST_Covers(s.coverage, a.geometry)) then 'complete'
         when bool_or(ST_Intersects(s.coverage, a.geometry)) then 'partial'
         else 'none'
@@ -174,7 +182,7 @@ async function observeDataset(
           and count(distinct s.data->>'occurredAt') = 1
         then min(s.data->>'occurredAt') else null end as source_vintage
     from area a cross join source s
-    group by a.geometry`;
+    group by a.geometry, a.incident_geometry`;
 
   if (!row) {
     return { coverage: "unknown", value: null, contributingRecords: 0,
@@ -188,8 +196,8 @@ async function observeDataset(
   const populationContributing = Number(row.population_contributing);
   let reason: string | null = null;
   if (coverage === "unknown") reason = "dataset coverage geometry is missing";
-  else if (coverage === "partial") reason = "dataset coverage only partially contains the incident area";
-  else if (coverage === "none") reason = "dataset coverage does not contain the incident area";
+  else if (coverage === "partial") reason = "dataset coverage only partially contains the analysis area";
+  else if (coverage === "none") reason = "dataset coverage does not contain the analysis area";
   else if (totalRecords === 0) reason = "successful load contains no source records";
   else if (totalRecords !== spatialRecords) reason = "one or more source records lack geometry";
   else if (category === "population" && totalRecords !== populationRecords)
@@ -233,10 +241,11 @@ async function sourceAggregate(
   revision: number,
   category: ImpactCategory,
   now: Date,
+  bbox: ViewportBbox | undefined,
 ): Promise<ImpactSourceAggregate> {
   const selected = newestSuccessful(registrations);
   if (!selected) return missingSource(source, registrations.length);
-  const observed = await observeDataset(sql, selected.id, incidentId, revision, category);
+  const observed = await observeDataset(sql, selected.id, incidentId, revision, category, bbox);
   const availability: DatasetAvailability = datasetAvailability({
     lastSuccessAt: new Date(selected.last_success_at!),
     lastError: selected.last_error,
@@ -286,7 +295,7 @@ function combineCategory(
   if (sources.some((source) => source.datasetId === null))
     reasons.push("one or more catalog baselines are missing");
   if (sources.some((source) => source.coverage !== "complete"))
-    reasons.push("one or more source coverages are missing, partial, or outside the incident area");
+    reasons.push("one or more source coverages are missing, partial, or outside the analysis area");
   if (sources.some((source) => source.datasetId !== null && source.reason !== null))
     reasons.push("one or more source baselines are incomplete");
   if (sources.some((source) => source.availability !== "available"))
@@ -317,6 +326,7 @@ export async function computeSpatialImpact(
   revision?: number,
   now = new Date(),
   catalog: readonly CatalogSource[] = CALIFORNIA_CATALOG,
+  bbox?: ViewportBbox,
 ): Promise<IncidentImpactResponse> {
   const rows = revision === undefined
     ? await sql`select revision, geometry is not null as has_geometry
@@ -325,10 +335,10 @@ export async function computeSpatialImpact(
     : await sql`select revision, geometry is not null as has_geometry
         from incident_area_revisions where incident_id = ${incidentId} and revision = ${revision}`;
   const area = rows[0];
-  if (!area) return blankResponse(incidentId, null, "incident has no requested area revision");
+  if (!area) return blankResponse(incidentId, null, "incident has no requested area revision", bbox);
   const areaRevision = Number(area.revision);
   if (!area.has_geometry)
-    return blankResponse(incidentId, areaRevision, "selected area revision has no geometry");
+    return blankResponse(incidentId, areaRevision, "selected area revision has no geometry", bbox);
 
   const datasetRows = await sql`
     select d.id, d.key, d.name, d.last_success_at, d.last_error,
@@ -347,10 +357,17 @@ export async function computeSpatialImpact(
       const key = canonicalDatasetKey(source);
       const registrations = datasetRows.filter((dataset) => dataset.key === key);
       sourceResults.push(await sourceAggregate(
-        sql, source, registrations, incidentId, areaRevision, category, now,
+        sql, source, registrations, incidentId, areaRevision, category, now, bbox,
       ));
     }
     categories[category] = combineCategory(category, sourceResults);
   }
-  return { incidentId, areaRevision, areaGeometryAvailable: true, categories, method: METHOD };
+  return {
+    incidentId,
+    scope: spatialScope(bbox),
+    areaRevision,
+    areaGeometryAvailable: true,
+    categories,
+    method: METHOD,
+  };
 }

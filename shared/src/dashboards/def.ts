@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { SpatialQueryScope } from "../impact/contract.js";
 
 /**
  * Dashboard definitions (VEOC-18). A dashboard is data, versioned and
@@ -126,6 +127,7 @@ export type WidgetResult = TileResult | ChartResult | StatusResult | ListResult;
 
 export interface DashboardSnapshot {
   readonly dashboardId: string;
+  readonly scope?: SpatialQueryScope;
   readonly title: string;
   readonly computedAt: string;
   readonly widgets: readonly WidgetResult[];

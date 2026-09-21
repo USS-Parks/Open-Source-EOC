@@ -5,6 +5,7 @@ import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import { principalFromToken, type Principal } from "../auth/service.js";
 import { onBoardEvent } from "../events/bus.js";
+import { ViewportBboxParam } from "../impact/bbox.js";
 import {
   boundBoardKeys,
   computeDashboard,
@@ -22,6 +23,7 @@ const CreateDashboardBody = z.object({
 });
 const AuthMessage = z.object({ type: z.literal("auth"), token: z.string().min(1) });
 const IncidentQuery = z.object({ incidentId: z.string().uuid().optional() }).strict();
+const DashboardStreamQuery = IncidentQuery.extend({ bbox: ViewportBboxParam.optional() }).strict();
 
 const RECOMPUTE_DEBOUNCE_MS = 50;
 
@@ -109,6 +111,7 @@ export function dashboardRoutes(
           // records, so displayed counts reconcile with the incident's boards
           // (VEOC-79B2).
           incidentId: z.string().uuid().optional(),
+          bbox: ViewportBboxParam.optional(),
         })
         .parse(req.query);
       const runtimeFilter =
@@ -116,7 +119,7 @@ export function dashboardRoutes(
           ? { field: q.field, equals: q.equals }
           : undefined;
       const snapshot = await withPerson(sql, req.principal.person.id, (tx) =>
-        computeDashboard(tx, req.principal, dashboardId, runtimeFilter, q.incidentId),
+        computeDashboard(tx, req.principal, dashboardId, runtimeFilter, q.incidentId, q.bbox),
       );
       return reply.send(snapshot);
     },
@@ -131,13 +134,14 @@ export function dashboardRoutes(
         // A live dashboard opened in an incident context stays scoped to it, so
         // pushed recomputes count the same incident's records as the REST read
         // (VEOC-79B2). An absent value stays unscoped; malformed scope fails closed.
-        const incidentQuery = IncidentQuery.safeParse(req.query);
+        const incidentQuery = DashboardStreamQuery.safeParse(req.query);
         if (!incidentQuery.success) {
           socket.send(JSON.stringify({ type: "error", error: "invalid incident scope" }));
           socket.close();
           return;
         }
         const incidentId = incidentQuery.data.incidentId;
+        const bbox = incidentQuery.data.bbox;
         let principal: Principal | null = null;
         let unsubscribe: (() => void) | null = null;
         let timer: NodeJS.Timeout | null = null;
@@ -151,7 +155,7 @@ export function dashboardRoutes(
         const push = async () => {
           if (closed || !principal) return;
           const snapshot = await withPerson(sql, principal.person.id, (tx) =>
-            computeDashboard(tx, principal!, dashboardId, undefined, incidentId),
+            computeDashboard(tx, principal!, dashboardId, undefined, incidentId, bbox),
           );
           if (!closed && socket.readyState === socket.OPEN) {
             socket.send(JSON.stringify({ type: "snapshot", data: snapshot }));

@@ -7,19 +7,22 @@ import {
   getIncidentImpact,
   listImpactContributions,
 } from "./service.js";
+import { ViewportBboxParam } from "./bbox.js";
 
 const IncidentId = z.string().uuid();
 const DatasetId = z.string().uuid();
 const Revision = z.coerce.number().int().positive();
-const ImpactQuery = z.object({ revision: Revision.optional() });
+const ImpactQuery = z.object({ revision: Revision.optional(), bbox: ViewportBboxParam.optional() });
 const CompareQuery = z.object({
   fromRevision: Revision,
   toRevision: Revision.optional(),
+  bbox: ViewportBboxParam.optional(),
 });
 const ContributionQuery = z.object({
   revision: Revision.optional(),
   cursor: z.string().min(1).max(512).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
+  bbox: ViewportBboxParam.optional(),
 });
 
 export function impactRoutes(
@@ -34,7 +37,7 @@ export function impactRoutes(
       const incidentId = IncidentId.parse((req.params as { incidentId: string }).incidentId);
       const query = ImpactQuery.parse(req.query);
       return withPerson(sql, req.principal.person.id, (tx) =>
-        getIncidentImpact(tx, req.principal, incidentId, query.revision),
+        getIncidentImpact(tx, req.principal, incidentId, query.revision, query.bbox),
       );
     },
   );
@@ -48,6 +51,7 @@ export function impactRoutes(
       return withPerson(sql, req.principal.person.id, (tx) =>
         compareIncidentImpact(
           tx, req.principal, incidentId, query.fromRevision, query.toRevision,
+          query.bbox,
         ),
       );
     },
@@ -64,7 +68,7 @@ export function impactRoutes(
       return withPerson(sql, req.principal.person.id, (tx) =>
         listImpactContributions(
           tx, req.principal, incidentId, datasetId,
-          query.revision, query.cursor, query.limit,
+          query.revision, query.cursor, query.limit, query.bbox,
         ),
       );
     },

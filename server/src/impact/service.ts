@@ -11,12 +11,14 @@ import {
   type IncidentImpactAnalysis,
   type IncidentImpactComparison,
   type IncidentImpactResponse,
+  type ViewportBbox,
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
 import { getIncidentAuthority } from "../incidents/participation.js";
 import { getIncidentBoardReadShape, visibleFields } from "../boards/service.js";
 import { computeSpatialImpact } from "./spatial.js";
+import { analysisArea } from "./bbox.js";
 
 const LIFELINE_INTERPRETATION =
   "reported incident status only; geographic exposure does not imply lifeline failure" as const;
@@ -28,9 +30,10 @@ async function authorizedImpact(
   actor: Principal,
   incidentId: string,
   revision: number | undefined,
+  bbox?: ViewportBbox,
 ): Promise<IncidentImpactResponse> {
   await getIncidentAuthority(sql, actor, incidentId);
-  const impact = await computeSpatialImpact(sql, incidentId, revision);
+  const impact = await computeSpatialImpact(sql, incidentId, revision, undefined, undefined, bbox);
   if (revision !== undefined && impact.areaRevision === null)
     throw new AuthError(404, "impact revision not found");
   return impact;
@@ -106,8 +109,9 @@ export async function getIncidentImpact(
   actor: Principal,
   incidentId: string,
   revision?: number,
+  bbox?: ViewportBbox,
 ): Promise<IncidentImpactAnalysis> {
-  const impact = await authorizedImpact(sql, actor, incidentId, revision);
+  const impact = await authorizedImpact(sql, actor, incidentId, revision, bbox);
   return {
     impact,
     lifelines: await incidentLifelines(sql, actor, incidentId),
@@ -178,10 +182,11 @@ export async function compareIncidentImpact(
   incidentId: string,
   fromRevision: number,
   toRevision?: number,
+  bbox?: ViewportBbox,
 ): Promise<IncidentImpactComparison> {
   await getIncidentAuthority(sql, actor, incidentId);
-  const from = await computeSpatialImpact(sql, incidentId, fromRevision);
-  const to = await computeSpatialImpact(sql, incidentId, toRevision);
+  const from = await computeSpatialImpact(sql, incidentId, fromRevision, undefined, undefined, bbox);
+  const to = await computeSpatialImpact(sql, incidentId, toRevision, undefined, undefined, bbox);
   if (from.areaRevision === null || to.areaRevision === null)
     throw new AuthError(404, "impact revision not found");
   const categories = {} as Record<ImpactCategory, ImpactCategoryDelta>;
@@ -189,6 +194,7 @@ export async function compareIncidentImpact(
     categories[category] = categoryDelta(category, from.categories[category], to.categories[category]);
   return {
     incidentId,
+    scope: from.scope!,
     fromRevision: from.areaRevision,
     toRevision: to.areaRevision,
     baselineStatement: BASELINE_STATEMENT,
@@ -215,8 +221,9 @@ export async function listImpactContributions(
   revision: number | undefined,
   cursor: string | undefined,
   limit: number,
+  bbox?: ViewportBbox,
 ): Promise<ImpactContributionPage> {
-  const impact = await authorizedImpact(sql, actor, incidentId, revision);
+  const impact = await authorizedImpact(sql, actor, incidentId, revision, bbox);
   if (impact.areaRevision === null || !impact.areaGeometryAvailable)
     throw new AuthError(409, "incident impact area is unavailable");
   const selected = selectedSource(impact, datasetId);
@@ -224,7 +231,7 @@ export async function listImpactContributions(
   const population = selected.category === "population";
   const rows = await sql`
     with area as (
-      select geometry from incident_area_revisions
+      select ${analysisArea(sql, bbox)} as geometry from incident_area_revisions
       where incident_id = ${incidentId} and revision = ${impact.areaRevision}
     )
     select i.source_id, i.data, ST_AsGeoJSON(i.geom)::jsonb as geometry,
@@ -251,6 +258,7 @@ export async function listImpactContributions(
   const page = rows.slice(0, limit);
   return {
     incidentId,
+    scope: impact.scope!,
     areaRevision: impact.areaRevision,
     category: selected.category,
     source: selected.source,

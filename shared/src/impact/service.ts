@@ -2,6 +2,7 @@ import type {
   ImpactCategory,
   ImpactSourceAggregate,
   IncidentImpactResponse,
+  SpatialQueryScope,
 } from "./contract.js";
 
 export interface ImpactReporter {
@@ -52,6 +53,7 @@ export interface ImpactCategoryDelta {
 
 export interface IncidentImpactComparison {
   readonly incidentId: string;
+  readonly scope?: SpatialQueryScope;
   readonly fromRevision: number;
   readonly toRevision: number;
   readonly baselineStatement:
@@ -69,6 +71,7 @@ export interface ImpactContribution {
 
 export interface ImpactContributionPage {
   readonly incidentId: string;
+  readonly scope?: SpatialQueryScope;
   readonly areaRevision: number;
   readonly category: ImpactCategory;
   readonly source: ImpactSourceAggregate;

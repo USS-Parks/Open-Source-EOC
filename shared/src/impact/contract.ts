@@ -15,6 +15,11 @@ export type ImpactUnit = "records" | "people";
 export type ImpactCoverage = "complete" | "partial" | "none" | "unknown";
 export type ImpactAvailability = DatasetAvailability | "mixed";
 
+export type ViewportBbox = readonly [west: number, south: number, east: number, north: number];
+export type SpatialQueryScope =
+  | { readonly kind: "incident-area"; readonly bbox: null }
+  | { readonly kind: "viewport"; readonly bbox: ViewportBbox };
+
 /** Provenance and the independently useful aggregate for one upstream source. */
 export interface ImpactSourceAggregate {
   readonly catalogSourceId: string;
@@ -51,6 +56,7 @@ export interface ImpactCategoryAggregate {
 
 export interface IncidentImpactResponse {
   readonly incidentId: string;
+  readonly scope?: SpatialQueryScope;
   /** The selected revision, or null when the incident has no area revision. */
   readonly areaRevision: number | null;
   readonly areaGeometryAvailable: boolean;

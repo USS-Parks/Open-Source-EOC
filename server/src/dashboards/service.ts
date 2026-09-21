@@ -1,5 +1,6 @@
 import {
   DashboardTemplateSchema,
+  geometryFieldKey,
   STANDARD_DASHBOARDS,
   tileLevel,
   type ChartResult,
@@ -11,6 +12,7 @@ import {
   type TileResult,
   type WidgetFilter,
   type WidgetResult,
+  type ViewportBbox,
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
@@ -20,6 +22,7 @@ import {
   visibleFields,
 } from "../boards/service.js";
 import { getIncidentAuthority } from "../incidents/participation.js";
+import { bboxEnvelope, spatialScope } from "../impact/bbox.js";
 
 /**
  * Dashboard service (VEOC-18). Definitions are versioned templates bound
@@ -172,16 +175,20 @@ export async function computeDashboard(
   dashboardId: string,
   runtimeFilter?: WidgetFilter,
   incidentId?: string,
+  bbox?: ViewportBbox,
 ): Promise<DashboardSnapshot> {
   const dashboard = await getDashboard(sql, actor, dashboardId, incidentId);
   const widgets: WidgetResult[] = [];
   for (const widget of dashboard.template.widgets) {
     widgets.push(
-      await computeWidget(sql, actor, dashboard.jurisdictionId, widget, runtimeFilter, incidentId),
+      await computeWidget(
+        sql, actor, dashboard.jurisdictionId, widget, runtimeFilter, incidentId, bbox,
+      ),
     );
   }
   return {
     dashboardId: dashboard.id,
+    ...(incidentId || bbox ? { scope: spatialScope(bbox) } : {}),
     title: dashboard.title,
     computedAt: new Date().toISOString(),
     widgets,
@@ -196,6 +203,7 @@ async function computeWidget(
   widget: DashboardWidget,
   runtimeFilter?: WidgetFilter,
   incidentId?: string,
+  bbox?: ViewportBbox,
 ): Promise<WidgetResult> {
   // Board selection. An incident-scoped dashboard (VEOC-79B2) aggregates over
   // the board THIS incident uses for the widget's template, because activation
@@ -224,7 +232,11 @@ async function computeWidget(
   const readable = new Set(visibleFields(effective).map((field) => field.key));
   if (!widgetFieldsReadable(widget, runtimeFilter, readable))
     return missingResult(widget, readable);
+  const geometryKey = geometryFieldKey(effective.fields);
+  if (bbox && (!geometryKey || !readable.has(geometryKey)))
+    return missingResult(widget, readable);
   const incidentClause = incidentFragment(sql, incidentId);
+  const viewportClause = viewportFragment(sql, bbox);
 
   if (widget.kind === "tile") {
     const [row] = await sql`
@@ -232,7 +244,7 @@ async function computeWidget(
         count(*)::int as n,
         count(*) filter (where created_at > now() - interval '24 hours')::int as recent
       from board_records
-      where board_id = ${boardId} ${filterFragment(sql, widget.filter)} ${filterFragment(sql, runtimeFilter)} ${incidentClause}`;
+      where board_id = ${boardId} ${filterFragment(sql, widget.filter)} ${filterFragment(sql, runtimeFilter)} ${incidentClause} ${viewportClause}`;
     const value = (row?.n as number) ?? 0;
     return {
       kind: "tile",
@@ -248,7 +260,7 @@ async function computeWidget(
     const rows = await sql`
       select coalesce(data ->> ${widget.groupBy}, '') as v, count(*)::int as n
       from board_records
-      where board_id = ${boardId} ${filterFragment(sql, widget.filter)} ${filterFragment(sql, runtimeFilter)} ${incidentClause}
+      where board_id = ${boardId} ${filterFragment(sql, widget.filter)} ${filterFragment(sql, runtimeFilter)} ${incidentClause} ${viewportClause}
       group by 1 order by 1`;
     return {
       kind: "chart",
@@ -272,7 +284,7 @@ async function computeWidget(
                  order by coalesce(updated_at, created_at) desc
                ) as rn
         from board_records
-        where board_id = ${boardId} and data ? ${widget.groupBy} ${incidentClause}
+        where board_id = ${boardId} and data ? ${widget.groupBy} ${incidentClause} ${viewportClause}
       ) latest where rn = 1 order by g`;
     return {
       kind: "status",
@@ -290,7 +302,7 @@ async function computeWidget(
   const columns = widget.columns.filter((c) => readable.has(c));
   const rows = await sql`
     select id, data from board_records
-    where board_id = ${boardId} ${filterFragment(sql, widget.filter)} ${filterFragment(sql, runtimeFilter)} ${incidentClause}
+    where board_id = ${boardId} ${filterFragment(sql, widget.filter)} ${filterFragment(sql, runtimeFilter)} ${incidentClause} ${viewportClause}
     order by coalesce(updated_at, created_at) desc
     limit ${widget.limit}`;
   return {
@@ -351,4 +363,10 @@ function filterFragment(sql: Sql, filter: WidgetFilter | undefined): never {
  */
 function incidentFragment(sql: Sql, incidentId: string | undefined): never {
   return (incidentId ? sql`and incident_id = ${incidentId}` : sql``) as never;
+}
+
+function viewportFragment(sql: Sql, bbox: ViewportBbox | undefined): never {
+  if (!bbox) return sql`` as never;
+  const envelope = bboxEnvelope(sql, bbox);
+  return sql`and geom is not null and geom && ${envelope} and ST_Intersects(geom, ${envelope})` as never;
 }
