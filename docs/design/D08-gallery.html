@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Recoverable form and overlay review</title>
+    <style>html, body, #form-review-root { min-height: 100%; margin: 0; }</style>
+  </head>
+  <body>
+    <div id="form-review-root"></div>
+    <script type="module">
+      import "../../web/src/design/base.css";
+      import { mountFormReview } from "../../web/src/design/form-gallery.tsx";
+      const root = document.querySelector("#form-review-root");
+      if (!root) throw new Error("Form review root is missing");
+      mountFormReview(root);
+    </script>
+  </body>
+</html>

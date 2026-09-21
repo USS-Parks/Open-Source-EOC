@@ -1,0 +1,18 @@
+.form-review { min-height: 100vh; color: var(--eoc-text); background: var(--eoc-bg); font-family: var(--eoc-font); }
+.form-review-command { min-height: 58px; padding: 8px 18px; display: flex; align-items: center; justify-content: space-between; gap: 16px; color: var(--eoc-brand-navy-text); background: var(--eoc-brand-navy); }
+.form-review-command > div { display: grid; gap: 2px; }.form-review-command span { color: color-mix(in srgb, var(--eoc-brand-navy-text) 72%, transparent); font-size: 12px; }
+.form-review-command button { min-height: 44px; padding: 7px 12px; color: var(--eoc-brand-teal-text); background: var(--eoc-brand-signal); border: 2px solid var(--eoc-brand-navy-text); border-radius: var(--eoc-radius-sm); font: inherit; font-weight: 750; }
+.form-review-body { width: min(1180px, 100%); margin: 0 auto; padding: 22px; display: grid; gap: 18px; }
+.form-review-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; }.form-review-heading p { margin: 0; color: var(--eoc-brand-teal); font-size: 12px; font-weight: 750; text-transform: uppercase; letter-spacing: .06em; }.form-review-heading h1 { margin: 4px 0 0; color: var(--eoc-text-strong); font-size: 28px; }
+.form-review-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; }
+.form-review-panel { min-width: 0; padding: 16px; background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: var(--eoc-radius-md); box-shadow: var(--eoc-shadow-sm); }.form-review-panel h2 { margin: 0 0 8px; color: var(--eoc-text-strong); font-size: 17px; }.form-review-panel p, .form-review-panel li { line-height: 1.5; }.form-review-panel ul { margin: 0; padding-left: 20px; }
+.form-review-actions { margin-top: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }.form-review-actions label { min-height: 44px; display: flex; align-items: center; gap: 7px; }.form-review-actions input { width: 18px; height: 18px; accent-color: var(--eoc-brand-teal); }
+.form-review-activity { color: var(--eoc-text-muted); font-size: 12px; }
+.form-review-geometry { min-width: 0; margin: 0; padding: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; border: 1px solid var(--eoc-border); border-radius: var(--eoc-radius-sm); }.form-review-geometry legend { padding: 0 4px; font-size: 13px; font-weight: 650; }.form-review-geometry label { display: grid; gap: 4px; font-size: 12px; }.form-review-geometry input { min-width: 0; min-height: 44px; width: 100%; color: var(--eoc-text); background: var(--eoc-surface); border: 1px solid var(--eoc-border-strong); border-radius: var(--eoc-radius-sm); }
+.form-review-dialog-field { display: grid; gap: 5px; }.form-review-dialog-field input { min-height: 44px; padding: 8px; color: var(--eoc-text); background: var(--eoc-surface); border: 1px solid var(--eoc-border-strong); border-radius: var(--eoc-radius-sm); }
+@media (max-width: 640px) {
+  .form-review-command { align-items: stretch; flex-direction: column; }.form-review-command button { width: 100%; }
+  .form-review-body { padding: 10px; }.form-review-heading { align-items: stretch; flex-direction: column; }.form-review-heading h1 { font-size: 24px; }
+  .form-review-layout { grid-template-columns: 1fr; }.form-review-actions { align-items: stretch; flex-direction: column; }.form-review-actions .eoc-kit-button { width: 100%; }
+  .form-review-geometry { grid-template-columns: 1fr; }
+}

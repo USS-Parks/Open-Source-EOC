@@ -1,0 +1,116 @@
+.eoc-form {
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+  color: var(--eoc-text);
+}
+.eoc-form-storage,
+.eoc-form-submit-error,
+.eoc-form-success {
+  padding: 9px 11px;
+  border: 1px solid var(--eoc-border-strong);
+  border-radius: var(--eoc-radius-sm);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.eoc-form-storage { color: var(--eoc-text-muted); background: var(--eoc-surface-raised); }
+.eoc-form-storage.is-error,
+.eoc-form-submit-error { color: var(--eoc-status-critical); border: 2px solid currentColor; background: color-mix(in srgb, var(--eoc-status-critical) 7%, var(--eoc-surface)); }
+.eoc-form-submit-error::before { content: "! "; font-weight: 750; }
+.eoc-form-success { color: var(--eoc-status-success); border: 2px solid currentColor; background: color-mix(in srgb, var(--eoc-status-success) 7%, var(--eoc-surface)); font-weight: 650; }
+.eoc-form-success::before { content: "✓ "; }
+.eoc-form-error-summary {
+  padding: 12px;
+  color: var(--eoc-status-critical);
+  background: color-mix(in srgb, var(--eoc-status-critical) 7%, var(--eoc-surface));
+  border: 2px solid currentColor;
+  border-radius: var(--eoc-radius-sm);
+}
+.eoc-form-error-summary:focus { outline: 3px solid var(--eoc-focus); outline-offset: 2px; }
+.eoc-form-error-summary ul { margin: 7px 0 0; padding-left: 22px; }
+.eoc-form-error-summary a { color: inherit; font-weight: 650; }
+.eoc-form-section { min-width: 0; margin: 0; padding: 14px; border: 1px solid var(--eoc-border); border-radius: var(--eoc-radius-md); }
+.eoc-form-section > legend { padding: 0 5px; color: var(--eoc-text-strong); font-size: 15px; font-weight: 750; }
+.eoc-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.eoc-form-field { min-width: 0; }
+.eoc-form-field > label,
+.eoc-form-field > div > label,
+.eoc-form-checkbox {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  color: var(--eoc-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.eoc-form-field textarea,
+.eoc-form-field input:not([type="checkbox"]):not([type="file"]),
+.eoc-form-field select,
+.eoc-form-field output {
+  min-height: 44px;
+  width: 100%;
+  padding: 8px 9px;
+  color: var(--eoc-text);
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border-strong);
+  border-radius: var(--eoc-radius-sm);
+  font: inherit;
+  font-weight: 400;
+}
+.eoc-form-field textarea { min-height: 86px; resize: vertical; }
+.eoc-form-field output { display: flex; align-items: center; background: var(--eoc-surface-raised); }
+.eoc-form-field [aria-invalid="true"] { border: 2px solid var(--eoc-status-critical); }
+.eoc-form-checkbox { min-height: 44px; grid-template-columns: 22px minmax(0, 1fr); align-items: center; }
+.eoc-form-checkbox input { width: 20px; height: 20px; margin: 0; accent-color: var(--eoc-brand-teal); }
+.eoc-form-inline-error { margin: 5px 0 0; color: var(--eoc-status-critical); font-size: 12px; font-weight: 650; }
+.eoc-form-inline-error::before { content: "! "; }
+.eoc-form-unavailable { min-height: 66px; padding: 9px; display: grid; align-content: center; gap: 4px; color: var(--eoc-text-muted); background: var(--eoc-surface-raised); border: 1px dashed var(--eoc-border-strong); border-radius: var(--eoc-radius-sm); }
+.eoc-form-unavailable strong { color: var(--eoc-text); font-size: 13px; }
+.eoc-form-unavailable span { font-size: 12px; line-height: 1.35; }
+.eoc-form-actions { position: sticky; bottom: 0; z-index: 2; padding: 10px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--eoc-surface); border-top: 1px solid var(--eoc-border); }
+.eoc-form-dirty-state { color: var(--eoc-text-muted); font-size: 12px; }
+
+.eoc-overlay-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: flex;
+  justify-content: end;
+  background: color-mix(in srgb, var(--eoc-brand-navy) 48%, transparent);
+}
+.eoc-overlay-backdrop[data-kind="modal"] { align-items: center; justify-content: center; padding: 20px; }
+.eoc-overlay-panel {
+  min-width: 0;
+  max-height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  color: var(--eoc-text);
+  background: var(--eoc-surface-overlay);
+  border: 1px solid var(--eoc-border-strong);
+  box-shadow: var(--eoc-shadow-lg);
+}
+.eoc-drawer { width: 340px; height: 100%; border-block: 0; border-right: 0; }
+.eoc-modal { width: min(620px, 100%); max-height: min(760px, calc(100vh - 40px)); border-radius: var(--eoc-radius-md); }
+.eoc-overlay-header { min-height: 58px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--eoc-text); background: var(--eoc-surface); border-bottom: 1px solid var(--eoc-border); }
+.eoc-overlay-header h2 { margin: 0; color: var(--eoc-text-strong); font-size: 20px; line-height: 1.25; }
+.eoc-overlay-close { width: 44px; height: 44px; flex: 0 0 44px; color: var(--eoc-text); background: transparent; border: 1px solid transparent; border-radius: var(--eoc-radius-sm); font: inherit; font-size: 24px; cursor: pointer; }
+.eoc-overlay-close:hover { background: var(--eoc-surface-raised); }
+.eoc-overlay-body { min-width: 0; overflow: auto; padding: 14px; }
+.eoc-overlay-footer { padding: 10px 14px; display: flex; justify-content: end; gap: 8px; background: var(--eoc-surface); border-top: 1px solid var(--eoc-border); }
+.eoc-unsaved-guard { position: absolute; z-index: 2; inset: 0; padding: 24px; display: grid; place-content: center; gap: 10px; text-align: center; color: var(--eoc-text); background: color-mix(in srgb, var(--eoc-surface-overlay) 96%, transparent); }
+.eoc-unsaved-guard strong { color: var(--eoc-text-strong); font-size: 18px; }
+.eoc-unsaved-guard p { max-width: 42ch; margin: 0; color: var(--eoc-text-muted); line-height: 1.45; }
+.eoc-unsaved-guard > div { margin-top: 8px; display: flex; justify-content: center; gap: 8px; }
+.eoc-overlay-panel:has(.eoc-unsaved-guard) > :not(.eoc-unsaved-guard) { visibility: hidden; }
+
+@media (max-width: 640px) {
+  .eoc-form-grid { grid-template-columns: 1fr; }
+  .eoc-form-section { padding: 10px; }
+  .eoc-form-actions { align-items: stretch; flex-direction: column; }
+  .eoc-form-actions .eoc-kit-button { width: 100%; }
+  .eoc-overlay-backdrop,
+  .eoc-overlay-backdrop[data-kind="modal"] { align-items: stretch; padding: 0; }
+  .eoc-drawer,
+  .eoc-modal { width: 100%; height: 100%; max-height: 100%; border: 0; border-radius: 0; }
+  .eoc-unsaved-guard > div { flex-direction: column; }
+}
