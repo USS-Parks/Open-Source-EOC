@@ -63,7 +63,7 @@ accordingly, so parity against "WebEOC" is not overstated.
 | F16 | One-click role-based provisioning; ten-minute viewer path | WebEOC-core | Provision a jurisdiction and admin in one action | One-action provisioning (VEOC-08/41) | verified | - |
 | F17 | Daily-ops usability against skill decay | WebEOC-core | Routine daily-ops use keeps skills fresh | Daily-ops surfaces (VEOC-05/41); workspace usability depth open | partial | VEOC-81C |
 | F18 | Sensor and drone live feeds into the COP | Esri-EMO | External hazard/position feeds appear as COP layers | CAP/GeoRSS/CoT/GeoJSON feeds retain staleness and failure reporting. VEOC-79C1/C2 deliver durable mapped items, tolerant refresh tallies, last-good preservation and COP layers/inspection. Dataset source-URL polling, live outbound evidence and dedicated legend/symbology remain open | partial | VEOC-79C1/C2 |
-| F19 | NAPSG/DHS incident symbology shipped | Esri-EMO | Incident symbols render from a NAPSG set | Sprite pipeline exists (VEOC-17); the NAPSG facility subset is not yet shipped (audit §6) | open | Handoff 13 |
+| F19 | NAPSG/DHS incident symbology shipped | Esri-EMO | Incident symbols render from a NAPSG set | Local asset/license inventory integrated (`61233fc`); only a sprite configuration seam exists. NAPSG files, identifier mapping and local license/attribution evidence are absent; rendering acceptance is blocked on supplied assets or separate outbound approval | open | Handoff 13 |
 | F20 | Native standards interchange | WebEOC-core / Esri-EMO | Import/export CAP, EDXL, CoT, GeoJSON natively | CAP/EDXL/CoT/HAVE/GeoJSON models and endpoints (VEOC-26..29/31) | verified | - |
 
 ## Requirements (R1-R6)

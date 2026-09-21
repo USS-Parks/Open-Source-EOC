@@ -3262,3 +3262,22 @@ increment proves it and that coverage follows the incident area.
   6cb0500c90eb9c44633119a2a5910abe687e3bc3. Evidence level is integrated
   callback. G-KPIMAP remains partial. Existing lane c next takes H13 from
   current main; no additional checkout, dependency copy or push.
+
+## H13 prerequisite receipt: facility assets are absent
+
+- **Files:** new docs/ASSET-LICENSES.md and a comment-only correction in the
+  shared symbology dictionary. The comment no longer claims an SVG library
+  was shipped. No rendering or authorization behavior changed.
+- **Finding:** no local NAPSG symbols, catalog, sprite, identifier mapping,
+  vendored license/attribution text or provenance manifest. Existing handoff
+  URLs and license observations are explicitly project-recorded, not new
+  upstream verification. Generic icons would not satisfy H13.
+- **Gate:** local inventory, full parent diff review, check-links and diff
+  checks passed. No application test was warranted for documents/comments.
+  Exact fast-forward: 61233fc3e70f75d9e6b4973fa5306ec75342f376.
+- **Disposition:** inventory integrated; H13 symbol/type/status/legend/browser
+  acceptance remains blocked. Resume after local assets are supplied or A6
+  acquisition is approved. H14 remains behind that dependency. No external
+  requests or invented license claims; F19 stays open.
+- Existing lane c can take the next independent ready engine, SEAM, while
+  preserving this named blocker. No new worktree or push.
