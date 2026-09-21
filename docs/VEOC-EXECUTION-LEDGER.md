@@ -3749,3 +3749,26 @@ increment proves it and that coverage follows the incident area.
 - **Unit commit:** 03e42ad883152af7d6a98a54057353bc250ae186, exact fast-forward.
   Gallery is synthetic kit proof, not final screen composition. Four existing
   lanes retained, no new worktree or push. Lane d next: P-SHELL frame/context.
+
+## D07: operational tables and scoped saved views
+
+- **Serves/lane:** D07 in lane b, refreshed to d7a2a69. Controlled queries,
+  sorting, filtering, density, column sizing/pinning/order and exact page-only
+  selection. Saved views reuse typed ApiClient and SEAM with person, incident,
+  table and schema scope, revisions and stale-completion invalidation.
+- **Gate:** root full read; workspace TypeScript and tree ESLint passed.
+  Table/saved/axe/real PostgreSQL plus H14 tests 24/24, replayed icons 12/12,
+  desktop 10/10 and D08 21/21 passed. Root identified overlapping-ID selection
+  surviving dataset change; owner repair and 8/8 affected tests passed before
+  integration. Four browser captures prove light/navy-dark, resizing and focus,
+  exact filtered bulk IDs, long/missing values and containment; zero external
+  requests/errors. Root viewed wide light and dark. Fresh review: SHIP.
+- **Evidence:** deploy/test-runtime/out/lanes/b/logs/D07-root-integration.log,
+  out/d07-review/result.json, browser-state-repair.log and shots. Two owner
+  runner path/extension attempts did not execute UI; root ran from the existing
+  runtime folder. Root corrected the fixture's absent-table error-state check.
+- **Unit commit:** 263c30abb6b8d0ba85a183870dc3090903a714ad, exact fast-forward.
+  Consumer surfaces remain responsible for query implementation/dataset keys.
+  California sample rows use California titles; the full 18-entry workspace
+  remains P-LIFE-3. Four existing lanes retained; no new worktree or push.
+  Next lane b: 84-E, then separately gated 84A-E.
