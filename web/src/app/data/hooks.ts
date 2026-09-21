@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ApiError, SessionExpiredError } from "../api/client.js";
 
 /**
  * Small data-fetching helpers. `useAsync` runs a promise when its deps
@@ -15,8 +16,12 @@ export interface AsyncState<T> {
   readonly reload: () => void;
 }
 
+function sameDeps(a: readonly unknown[], b: readonly unknown[]): boolean {
+  return a.length === b.length && a.every((value, index) => Object.is(value, b[index]));
+}
+
 export function useAsync<T>(fn: () => Promise<T>, deps: readonly unknown[]): AsyncState<T> {
-  const [data, setData] = useState<T | null>(null);
+  const [result, setResult] = useState<{ deps: readonly unknown[]; data: T } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [nonce, setNonce] = useState(0);
@@ -28,11 +33,16 @@ export function useAsync<T>(fn: () => Promise<T>, deps: readonly unknown[]): Asy
     fn()
       .then((value) => {
         if (cancelled) return;
-        setData(value);
+        setResult({ deps: [...deps], data: value });
         setError(null);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
+        if (
+          err instanceof SessionExpiredError ||
+          (err instanceof ApiError && [401, 403, 404].includes(err.status))
+        )
+          setResult(null);
         setError(err instanceof Error ? err.message : String(err));
       })
       .finally(() => {
@@ -43,7 +53,7 @@ export function useAsync<T>(fn: () => Promise<T>, deps: readonly unknown[]): Asy
     };
   }, [...deps, nonce]);
 
-  return { data, error, loading, reload };
+  return { data: result && sameDeps(result.deps, deps) ? result.data : null, error, loading, reload };
 }
 
 export function usePolled<T>(

@@ -29,6 +29,7 @@ export function DashboardSurface(props: {
   if (!data) return null;
   return (
     <Scroll>
+      {error ? <ErrorNote message={`Dashboard refresh failed: ${error}`} /> : null}
       {props.filter ? (
         <div
           role="status"
