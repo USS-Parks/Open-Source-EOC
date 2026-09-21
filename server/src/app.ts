@@ -58,6 +58,7 @@ import { applyCors } from "./security/cors.js";
 import { rateLimit } from "./security/rate-limit.js";
 import { exportRoutes } from "./export/routes.js";
 import { impactRoutes } from "./impact/routes.js";
+import { savedStateRoutes } from "./saved-state/routes.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -346,6 +347,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   incidentRoutes(app, sql, authenticate);
   dataPackRoutes(app, sql, authenticate);
   impactRoutes(app, sql, authenticate);
+  savedStateRoutes(app, sql, authenticate);
   notifyRoutes(app, sql, authenticate);
   messagingRoutes(app, sql, authenticate);
   geoRoutes(app, sql, authenticate);
