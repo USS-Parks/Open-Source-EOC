@@ -30,6 +30,7 @@ export * from "./incidents/area.js";
 export * from "./incidents/participation.js";
 export * from "./data-packs/pack.js";
 export * from "./data-packs/catalog.js";
+export * from "./impact/contract.js";
 
 export const OPENEOC_VERSION = "0.0.0" as const;
 
