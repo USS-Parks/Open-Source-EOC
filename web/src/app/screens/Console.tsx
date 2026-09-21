@@ -133,6 +133,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         incidentId={incident.selectedIncidentId}
         incidentName={incident.selectedIncident?.name ?? null}
         incidentCanManage={incident.selectedIncident?.canEditArea ?? false}
+        incidentBoardIds={incident.incidentBoardIds}
         boards={boardItems}
         collections={collections.data ?? []}
         feeds={feeds.data ?? []}
@@ -198,6 +199,7 @@ function Center(props: {
   incidentId: string | null;
   incidentName: string | null;
   incidentCanManage: boolean;
+  incidentBoardIds: ReadonlySet<string>;
   boards: readonly BoardListItem[];
   collections: readonly CollectionRef[];
   feeds: readonly FeedHealth[];
@@ -222,6 +224,7 @@ function Center(props: {
           feeds={props.feeds}
           incidentId={props.incidentId}
           incidentName={props.incidentName}
+          incidentBoardIds={props.incidentBoardIds}
         />
       );
     case "dashboard": {

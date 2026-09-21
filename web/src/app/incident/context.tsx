@@ -21,6 +21,7 @@ import { useAsync } from "../data/hooks.js";
  */
 
 const EMPTY: readonly IncidentSummary[] = [];
+const EMPTY_IDS: readonly string[] = [];
 
 export interface IncidentValue {
   readonly incidents: readonly IncidentSummary[];
@@ -28,6 +29,9 @@ export interface IncidentValue {
   readonly error: string | null;
   readonly selectedIncidentId: string | null;
   readonly selectedIncident: IncidentSummary | null;
+  /** Board ids the selected incident uses, so a surface can tag a contributed
+   *  record with the incident only when its board belongs to it (VEOC-79B2). */
+  readonly incidentBoardIds: ReadonlySet<string>;
   readonly selectIncident: (id: string | null) => void;
   readonly reload: () => void;
 }
@@ -69,6 +73,15 @@ export function IncidentProvider(props: { children: ReactNode }) {
     });
   }, [list]);
 
+  // The boards the selected incident uses, so a contributed record is tagged
+  // with the incident only when its board belongs to it.
+  const activeId = list.find((i) => i.id === selectedId)?.id ?? null;
+  const boardIds = useAsync(
+    () => (activeId ? client.incidentBoardIds(activeId) : Promise.resolve(EMPTY_IDS)),
+    [activeId],
+  );
+  const incidentBoardIds = useMemo(() => new Set(boardIds.data ?? EMPTY_IDS), [boardIds.data]);
+
   const value = useMemo<IncidentValue>(() => {
     const selected = list.find((i) => i.id === selectedId) ?? null;
     return {
@@ -77,10 +90,11 @@ export function IncidentProvider(props: { children: ReactNode }) {
       error: incidents.error,
       selectedIncidentId: selected?.id ?? null,
       selectedIncident: selected,
+      incidentBoardIds,
       selectIncident: setSelectedId,
       reload: incidents.reload,
     };
-  }, [list, selectedId, incidents.loading, incidents.error, incidents.reload]);
+  }, [list, selectedId, incidentBoardIds, incidents.loading, incidents.error, incidents.reload]);
 
   return <IncidentContext.Provider value={value}>{props.children}</IncidentContext.Provider>;
 }

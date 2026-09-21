@@ -375,8 +375,20 @@ export class ApiClient {
       `/api/v1/boards/${boardId}/views/${viewKey}`,
     );
   }
-  createRecord(boardId: string, data: Record<string, unknown>): Promise<{ id: string }> {
-    return this.request<{ id: string }>("POST", `/api/v1/boards/${boardId}/records`, data);
+  createRecord(
+    boardId: string,
+    data: Record<string, unknown>,
+    incidentId?: string,
+  ): Promise<{ id: string }> {
+    const query = incidentId ? `?incidentId=${encodeURIComponent(incidentId)}` : "";
+    return this.request<{ id: string }>("POST", `/api/v1/boards/${boardId}/records${query}`, data);
+  }
+  async incidentBoardIds(incidentId: string): Promise<string[]> {
+    const r = await this.request<{ boards: { id: string }[] }>(
+      "GET",
+      `/api/v1/incidents/${incidentId}`,
+    );
+    return r.boards.map((b) => b.id);
   }
   dashboardData(
     dashboardId: string,

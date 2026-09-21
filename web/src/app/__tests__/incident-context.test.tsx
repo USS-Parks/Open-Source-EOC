@@ -35,6 +35,8 @@ function makeClient(): ApiClient {
       json: async () => body,
     });
     if (u.endsWith("/api/v1/jurisdictions/j1/incidents")) return res(200, { incidents: INCIDENTS });
+    if (/\/api\/v1\/incidents\/[^/]+$/.test(u))
+      return res(200, { boards: [{ id: "board-1" }, { id: "board-2" }] });
     if (u.endsWith("/api/v1/me"))
       return res(200, {
         person: { id: "p", email: "e@x.org", displayName: "Duty Officer" },
@@ -48,8 +50,13 @@ function makeClient(): ApiClient {
 }
 
 function Probe() {
-  const { selectedIncidentId } = useIncident();
-  return <span data-testid="selected">{selectedIncidentId ?? ""}</span>;
+  const { selectedIncidentId, incidentBoardIds } = useIncident();
+  return (
+    <>
+      <span data-testid="selected">{selectedIncidentId ?? ""}</span>
+      <span data-testid="boards">{[...incidentBoardIds].sort().join(",")}</span>
+    </>
+  );
 }
 
 function mount() {
@@ -80,5 +87,10 @@ describe("IncidentProvider", () => {
     await waitFor(() => expect(screen.getByTestId("selected").textContent).toBe("open-1"));
     fireEvent.change(screen.getByLabelText("Selected incident"), { target: { value: "open-2" } });
     await waitFor(() => expect(screen.getByTestId("selected").textContent).toBe("open-2"));
+  });
+
+  it("exposes the selected incident's board ids for incident-scoped contribution", async () => {
+    mount();
+    await waitFor(() => expect(screen.getByTestId("boards").textContent).toBe("board-1,board-2"));
   });
 });

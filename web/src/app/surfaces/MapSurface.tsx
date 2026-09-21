@@ -54,6 +54,7 @@ export function MapSurface(props: {
   feeds: readonly FeedHealth[];
   incidentId?: string | null;
   incidentName?: string | null;
+  incidentBoardIds?: ReadonlySet<string>;
 }) {
   const [adding, setAdding] = useState(false);
   const [boardId, setBoardId] = useState("");
@@ -80,8 +81,13 @@ export function MapSurface(props: {
   const save = (data: Record<string, unknown>) => {
     setBusy(true);
     setError(null);
+    // Field-to-COP loop (VEOC-79B2): a point dropped onto one of the selected
+    // incident's boards is contributed to that incident; other boards stay
+    // jurisdiction-local.
+    const scopedIncident =
+      props.incidentId && props.incidentBoardIds?.has(activeBoard) ? props.incidentId : undefined;
     props.client
-      .createRecord(activeBoard, data)
+      .createRecord(activeBoard, data, scopedIncident)
       .then(() => reset())
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setBusy(false));

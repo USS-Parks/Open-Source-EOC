@@ -2515,4 +2515,34 @@ incident uses, without changing the board's source ownership.
   revoked grant are all denied.
 - **Gate:** pnpm check --maxWorkers=2 exited 0; 470 tests in 84 files passed.
   Log: deploy/test-runtime/out/veoc-79b1-check.log.
+- **Ending commit:** f324cbbec55c500c0551734871e21feeeb340586, pushed
+  (91360e2..f324cbb).
+
+## VEOC-79B2 increment: COP field-to-COP incident contribution
+
+Basho asked what Esri Emergency Management Operations does in this context: it
+runs the field-to-COP loop, capturing field features into incident-scoped
+operational layers the COP and dashboards read (WebEOC's analogue is the
+incident-tagged board record, built in 79B1). This increment wires that Esri
+loop for the map.
+
+- **Baseline:** f324cbb on canonical main.
+- **Change:** the incident context now exposes the selected incident's board
+  ids (fetched from the incident detail). The COP map's field capture tags a
+  dropped record with the selected incident when its target board belongs to
+  the incident, and leaves other boards jurisdiction-local; the API client's
+  createRecord carries the optional incident. The server (79B1) already
+  enforces board-belongs-to-incident and participant authority, so an
+  ineligible board is never tagged.
+- **Evidence:** a provider test asserts the selected incident's board ids are
+  exposed; the 79B1 real-database test proves the server contribution,
+  isolation and denial; the existing browser end-to-end still passes (its map
+  boards are not incident boards, so its field capture stays untagged).
+- **Not yet done (79B2 stays open):** scoping reads, counts and lists to the
+  incident across boards, feeds, resources, tasks, planning and dashboards; the
+  cross-incident browser scenario reconciling totals and partner contributions.
+  This increment delivers the Esri field-to-COP write loop, not the full 79B
+  close.
+- **Gate:** pnpm check --maxWorkers=2 exited 0; 471 tests in 84 files passed.
+  Log: deploy/test-runtime/out/veoc-79b2-check.log.
 - **Ending commit:** this receipt commit, recorded by the next receipt.
