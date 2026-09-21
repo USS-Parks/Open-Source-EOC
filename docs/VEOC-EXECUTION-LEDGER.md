@@ -3281,3 +3281,31 @@ increment proves it and that coverage follows the incident area.
   requests or invented license claims; F19 stays open.
 - Existing lane c can take the next independent ready engine, SEAM, while
   preserving this named blocker. No new worktree or push.
+
+## D03: representative composition package
+
+- **Files:** additive CompositionReview export in gallery.tsx, composition
+  review document, isolated HTML/Vite entry and browser fixture. Five files;
+  644 added and zero deleted gallery lines. Supplied reference images remain
+  user-owned and untracked. No operational route or production surface changed.
+- **Deliverable:** supplied wide Overview concepts plus coded narrow Overview,
+  Map, ESFs/Lifelines, dense Board, Resource drawer and IAP Planning proposals.
+  Themes, compact/full navigation, five groups, FOUO, status distinctions,
+  sequential narrow details and keyboard form controls are demonstrated with
+  labeled synthetic data. Compass identity and other G-A defaults are concrete.
+- **Gate:** TypeScript, ESLint and eight existing gallery tests passed. Parent
+  browser inspection identified real Board and Lifeline grid overflow, which
+  was corrected with bounded evidence. Fresh review returned ship. After the
+  code rebase, TypeScript and ESLint passed; ten gallery and affected engine
+  suites passed 51/51. The prescribed integration fixture passed all eighteen
+  compositions at 1440x900 and 390x844 with both themes, keyboard/nav/overflow
+  checks, zero page errors and zero external requests. Logs/results:
+  deploy/test-runtime/out/d03-review/integration.log and result-integration.json.
+  Earlier failed/partial runs remain recorded; no false full-run claim.
+- **Integration:** exact fast-forward to
+  e834975c347957a42fbc7456e2c1fadef786660d. Evidence level is designed with
+  browser-reviewed compositions, not implemented production presentation.
+- **Next gate:** G-A requires Basho's review of D00, D01, D02 and this package.
+  D04 and all presentation remain held until that answer. Existing lane d may
+  take isolated 85-A provisioning while otherwise idle under section 8.4.
+  No new worktree, external action or push.
