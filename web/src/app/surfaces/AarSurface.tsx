@@ -8,7 +8,7 @@ import {
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../../design/components.js";
 import type { ApiClient, AarObservation, CorrectiveAction } from "../api/client.js";
 import { useAsync } from "../data/hooks.js";
-import { EmptyState, ErrorNote, Loading, Scroll, SurfaceHeader } from "../screens/parts.js";
+import { EmptyState, Loading, Scroll, SurfaceHeader } from "../screens/parts.js";
 
 const CAPABILITY_VALUES = CORE_CAPABILITIES.values as readonly string[];
 const ELEMENT_VALUES = CAPABILITY_ELEMENT.values as readonly string[];
@@ -86,13 +86,11 @@ function CaRow(props: {
  * during or after an incident, then compile the AAR: the platform assembles it
  * from these observations plus the immutable chronology and exports a PDF.
  */
-export function AarSurface(props: { client: ApiClient; jurisdictionId: string }) {
-  const incidents = useAsync(
-    () => props.client.listIncidents(props.jurisdictionId),
-    [props.jurisdictionId],
-  );
-  const list = incidents.data ?? [];
-  const [incidentId, setIncidentId] = useState("");
+export function AarSurface(props: {
+  client: ApiClient;
+  jurisdictionId: string;
+  incidentId: string | null;
+}) {
   const [reload, setReload] = useState(0);
   const [capability, setCapability] = useState<string>(CAPABILITY_VALUES[0] ?? "");
   const [element, setElement] = useState<string>("none");
@@ -104,7 +102,7 @@ export function AarSurface(props: { client: ApiClient; jurisdictionId: string })
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const active = incidentId || list[0]?.id || "";
+  const active = props.incidentId;
   const observations = useAsync(
     () => (active ? props.client.listAarObservations(active) : Promise.resolve([] as AarObservation[])),
     [active, reload],
@@ -118,13 +116,11 @@ export function AarSurface(props: { client: ApiClient; jurisdictionId: string })
     [props.jurisdictionId, caReload],
   );
 
-  if (incidents.loading && !incidents.data) return <Loading label="Loading incidents…" />;
-  if (incidents.error && !incidents.data) return <ErrorNote message={incidents.error} />;
-  if (list.length === 0)
+  if (!active)
     return (
       <EmptyState
-        label="No incidents to review."
-        hint="Activate an incident; its after-action report assembles from observations and the chronology here."
+        label="No incident selected."
+        hint="Choose an incident in the command bar; its after-action report assembles from observations and the chronology here."
       />
     );
 
@@ -207,16 +203,6 @@ export function AarSurface(props: { client: ApiClient; jurisdictionId: string })
     <Scroll>
       <SurfaceHeader title="After-Action Review" />
       <div style={{ display: "grid", gap: 16, maxWidth: 820 }}>
-        <Panel title="Incident">
-          <EnumSelect
-            label="Incident"
-            values={list.map((i) => i.id)}
-            value={active}
-            onChange={setIncidentId}
-            labels={Object.fromEntries(list.map((i) => [i.id, i.name]))}
-          />
-        </Panel>
-
         <Panel title="Record an observation">
           <div style={{ display: "grid", gap: 12 }}>
             <div style={{ display: "grid", gap: 12, gridTemplateColumns: "2fr 1fr 1fr" }}>

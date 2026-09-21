@@ -52,6 +52,8 @@ export function MapSurface(props: {
   jurisdictionId: string;
   collections: readonly CollectionRef[];
   feeds: readonly FeedHealth[];
+  incidentId?: string | null;
+  incidentName?: string | null;
 }) {
   const [adding, setAdding] = useState(false);
   const [boardId, setBoardId] = useState("");
@@ -100,6 +102,21 @@ export function MapSurface(props: {
         gap: 8,
       }}
     >
+      <div
+        role="status"
+        style={{
+          color: "var(--eoc-text-muted)",
+          fontSize: "0.9em",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        <span style={{ fontWeight: 600, color: "var(--eoc-text)" }}>
+          {props.incidentName ?? "No incident selected"}
+        </span>
+        <span>· common operating picture</span>
+      </div>
       {empty ? <EmptyState label="No operational layers yet" hint="The basemap is available. Add a geo-enabled board or feed to show incident information." /> : null}
       {geoBoards.length > 0 ? (
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -114,6 +131,7 @@ export function MapSurface(props: {
               <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <span style={{ color: "var(--eoc-text-muted)" }}>Board</span>
                 <select
+                  aria-label="Map record board"
                   value={activeBoard}
                   onChange={(e) => {
                     setBoardId(e.target.value);
@@ -138,7 +156,7 @@ export function MapSurface(props: {
 
       <div style={{ flex: 1, minHeight: 0 }}>
         <CopMap
-          key={JSON.stringify([props.jurisdictionId, props.theme, geoBoards.map((b) => b.id), feedLayers.map((f) => f.id)])}
+          key={JSON.stringify([props.jurisdictionId, props.incidentId ?? null, props.theme, geoBoards.map((b) => b.id), feedLayers.map((f) => f.id)])}
           theme={props.theme}
           boards={geoBoards.map((c) => ({ id: c.id, title: c.title }))}
           fetchItems={(id) => props.client.collectionItems(id)}

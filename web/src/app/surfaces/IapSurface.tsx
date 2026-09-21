@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Button, EnumSelect, Panel, StatusBadge, type Status } from "../../design/components.js";
-import type { ApiClient, IapListItem, IncidentSummary } from "../api/client.js";
+import { Button, Panel, StatusBadge, type Status } from "../../design/components.js";
+import type { ApiClient, IapListItem } from "../api/client.js";
 import { useAsync } from "../data/hooks.js";
-import { EmptyState, ErrorNote, Loading, Scroll, SurfaceHeader } from "../screens/parts.js";
+import { EmptyState, Loading, Scroll, SurfaceHeader } from "../screens/parts.js";
 
 /**
  * The IAP working list (F5, VEOC-71). WebEOC's Incident Action Plan module is
@@ -31,10 +31,6 @@ const STATUS_TONE: Record<string, Status> = {
   approved: "success",
   complete: "success",
 };
-
-function incidentLabel(i: IncidentSummary): string {
-  return `${i.name}${i.closedAt ? " (closed)" : ""}`;
-}
 
 function ProgressBar(props: { value: number; target: number }) {
   const pct = props.target > 0 ? Math.min(100, Math.round((props.value / props.target) * 100)) : 0;
@@ -137,30 +133,22 @@ function IapRow(props: {
   );
 }
 
-export function IapSurface(props: { client: ApiClient; jurisdictionId: string; isAdmin: boolean }) {
-  const incidents = useAsync(
-    () => props.client.listIncidents(props.jurisdictionId),
-    [props.jurisdictionId],
-  );
-  const list = incidents.data ?? [];
-  const [incidentId, setIncidentId] = useState("");
+export function IapSurface(props: { client: ApiClient; incidentId: string | null; isAdmin: boolean }) {
   const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const active = incidentId || list[0]?.id || "";
+  const active = props.incidentId;
   const iaps = useAsync(
     () => (active ? props.client.listIaps(active) : Promise.resolve([] as IapListItem[])),
     [active, reload],
   );
 
-  if (incidents.loading && !incidents.data) return <Loading label="Loading incidents…" />;
-  if (incidents.error && !incidents.data) return <ErrorNote message={incidents.error} />;
-  if (list.length === 0)
+  if (!active)
     return (
       <EmptyState
-        label="No incidents."
-        hint="Activate an incident, assemble its IAP in the ICS Forms surface, then manage it here."
+        label="No incident selected."
+        hint="Choose an incident in the command bar, assemble its IAP in the ICS Forms surface, then manage it here."
       />
     );
 
@@ -202,16 +190,6 @@ export function IapSurface(props: { client: ApiClient; jurisdictionId: string; i
     <Scroll>
       <SurfaceHeader title="Incident Action Plans" />
       <div style={{ display: "grid", gap: 16, maxWidth: 980 }}>
-        <Panel title="Incident">
-          <EnumSelect
-            label="Incident"
-            values={list.map((i) => i.id)}
-            value={active}
-            onChange={setIncidentId}
-            labels={Object.fromEntries(list.map((i) => [i.id, incidentLabel(i)]))}
-          />
-        </Panel>
-
         <Panel title="Plans by status">
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {counts.map((c) => (

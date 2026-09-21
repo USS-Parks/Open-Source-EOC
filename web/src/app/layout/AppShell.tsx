@@ -17,7 +17,7 @@ export interface NavItem {
 
 export function AppShell(props: {
   product: string;
-  context: string;
+  context: ReactNode;
   nav: readonly NavItem[];
   activeNav: string;
   onNavigate: (key: string) => void;
@@ -37,9 +37,7 @@ export function AppShell(props: {
       <header style={commandBar}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 12, minWidth: 0 }}>
           <strong style={{ fontSize: "1.05em", whiteSpace: "nowrap" }}>{props.product}</strong>
-          <span style={{ color: "var(--eoc-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {props.context}
-          </span>
+          <div style={{ minWidth: 0, display: "flex", alignItems: "center" }}>{props.context}</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <StatusBadge status="success">live</StatusBadge>

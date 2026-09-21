@@ -379,7 +379,7 @@ describe("the operations console in a real browser, offline", () => {
     await page.screenshot({ path: join(SHOTS, "app-map-tools.png"), fullPage: false });
 
     await page.getByRole("button", { name: "Add point" }).click();
-    await page.locator("select").first().selectOption({ label: "Road Closures" });
+    await page.getByLabel("Map record board").selectOption({ label: "Road Closures" });
     await page
       .locator('[data-testid="cop-map"] canvas')
       .first()
@@ -396,7 +396,7 @@ describe("the operations console in a real browser, offline", () => {
 
     // A geotagged field report with a photo attachment, dropped on the map.
     await page.getByRole("button", { name: "Add point" }).click();
-    await page.locator("select").first().selectOption({ label: "Field Reports" });
+    await page.getByLabel("Map record board").selectOption({ label: "Field Reports" });
     await page
       .locator('[data-testid="cop-map"] canvas')
       .first()
@@ -431,9 +431,12 @@ describe("the operations console in a real browser, offline", () => {
     await page.waitForTimeout(200);
     await page.screenshot({ path: join(SHOTS, "app-files-light.png"), fullPage: false });
 
-    // Incidents: the activated incident is listed.
+    // Incidents: the activated incident is listed. Scope to the main content
+    // so the match is the list entry, not the hidden incident-switcher option
+    // that carries the same name in the command bar.
     await page.getByRole("button", { name: "Incidents" }).click();
     await page
+      .getByRole("main")
       .getByText("Bald Hills Fire", { exact: true })
       .first()
       .waitFor({ state: "visible", timeout: 20000 });

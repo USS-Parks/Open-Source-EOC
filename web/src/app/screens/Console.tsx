@@ -3,6 +3,7 @@ import type { Status } from "../../design/components.js";
 import type { ThemeName } from "../../design/tokens.js";
 import type { ApiClient, BoardListItem, CollectionRef, FeedHealth } from "../api/client.js";
 import { useSession } from "../auth/session.js";
+import { IncidentSwitcher, useIncident } from "../incident/context.js";
 import { useAsync, usePolled } from "../data/hooks.js";
 import { AppShell, type NavItem } from "../layout/AppShell.js";
 import { sectionOf, useSurface, type Surface } from "../router.js";
@@ -50,6 +51,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
   const session = useSession();
   const { client } = session;
   const jurisdictionId = session.jurisdictionId;
+  const incident = useIncident();
   const { surface, navigate } = useSurface();
 
   const boards = useAsync(
@@ -111,7 +113,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
   return (
     <AppShell
       product="Open Source EOC"
-      context="Operational picture"
+      context={<IncidentSwitcher />}
       nav={NAV}
       activeNav={sectionOf(surface)}
       onNavigate={(key) => navigate(sectionForNav(key))}
@@ -139,10 +141,16 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         </div>
       ) : null}
       <Center
+        // Remount the whole center when the incident changes, so no records,
+        // cached responses or polling timers from the previous incident
+        // survive the switch (VEOC-79B teardown).
+        key={incident.selectedIncidentId ?? "no-incident"}
         surface={surface}
         theme={props.theme}
         client={client}
         jurisdictionId={jurisdictionId}
+        incidentId={incident.selectedIncidentId}
+        incidentName={incident.selectedIncident?.name ?? null}
         boards={boardItems}
         collections={collections.data ?? []}
         feeds={feeds.data ?? []}
@@ -196,6 +204,8 @@ function Center(props: {
   theme: ThemeName;
   client: ApiClient;
   jurisdictionId: string;
+  incidentId: string | null;
+  incidentName: string | null;
   boards: readonly BoardListItem[];
   collections: readonly CollectionRef[];
   feeds: readonly FeedHealth[];
@@ -217,6 +227,8 @@ function Center(props: {
           jurisdictionId={props.jurisdictionId}
           collections={props.collections}
           feeds={props.feeds}
+          incidentId={props.incidentId}
+          incidentName={props.incidentName}
         />
       );
     case "dashboard": {
@@ -243,24 +255,26 @@ function Center(props: {
       return (
         <FormsSurface
           client={props.client}
-          jurisdictionId={props.jurisdictionId}
+          incidentId={props.incidentId}
           isAdmin={props.isAdmin}
         />
       );
     case "iap":
       return (
-        <IapSurface
-          client={props.client}
-          jurisdictionId={props.jurisdictionId}
-          isAdmin={props.isAdmin}
-        />
+        <IapSurface client={props.client} incidentId={props.incidentId} isAdmin={props.isAdmin} />
       );
     case "files":
       return <FilesSurface client={props.client} jurisdictionId={props.jurisdictionId} />;
     case "resources":
       return <ResourcesSurface client={props.client} jurisdictionId={props.jurisdictionId} />;
     case "aar":
-      return <AarSurface client={props.client} jurisdictionId={props.jurisdictionId} />;
+      return (
+        <AarSurface
+          client={props.client}
+          jurisdictionId={props.jurisdictionId}
+          incidentId={props.incidentId}
+        />
+      );
     case "feeds":
       return (
         <FeedsSurface

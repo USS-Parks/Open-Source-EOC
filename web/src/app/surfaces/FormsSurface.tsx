@@ -1,9 +1,8 @@
 import { useState, type CSSProperties } from "react";
 import { ICS_FORM_IDS, type IcsFormContent } from "@openeoc/shared";
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../../design/components.js";
-import type { ApiClient, IapResult, IncidentSummary } from "../api/client.js";
-import { useAsync } from "../data/hooks.js";
-import { EmptyState, ErrorNote, Loading, Scroll, SurfaceHeader } from "../screens/parts.js";
+import type { ApiClient, IapResult } from "../api/client.js";
+import { EmptyState, Scroll, SurfaceHeader } from "../screens/parts.js";
 
 /**
  * ICS forms and the IAP, for an operator (F5). The forms engine and PDF
@@ -37,10 +36,6 @@ const cell: CSSProperties = {
 
 function formLabel(id: string): string {
   return FORM_TITLES[id] ? `${id} ${FORM_TITLES[id]}` : id;
-}
-
-function incidentLabel(i: IncidentSummary): string {
-  return `${i.name}${i.closedAt ? " (closed)" : ""}`;
 }
 
 /** One prefilled ICS form rendered as its sections. */
@@ -106,13 +101,7 @@ function FormView(props: { form: IcsFormContent }) {
   );
 }
 
-export function FormsSurface(props: { client: ApiClient; jurisdictionId: string; isAdmin: boolean }) {
-  const incidents = useAsync(
-    () => props.client.listIncidents(props.jurisdictionId),
-    [props.jurisdictionId],
-  );
-  const list = incidents.data ?? [];
-  const [incidentId, setIncidentId] = useState("");
+export function FormsSurface(props: { client: ApiClient; incidentId: string | null; isAdmin: boolean }) {
   const [period, setPeriod] = useState("");
   const [formId, setFormId] = useState<string>(ICS_FORM_IDS[0]);
   const [preview, setPreview] = useState<IcsFormContent | null>(null);
@@ -120,17 +109,14 @@ export function FormsSurface(props: { client: ApiClient; jurisdictionId: string;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (incidents.loading && !incidents.data) return <Loading label="Loading incidents…" />;
-  if (incidents.error && !incidents.data) return <ErrorNote message={incidents.error} />;
-  if (list.length === 0)
+  const active = props.incidentId;
+  if (!active)
     return (
       <EmptyState
-        label="No incidents to build forms for."
-        hint="Activate an incident, then its ICS forms and IAP assemble from live data here."
+        label="No incident selected."
+        hint="Choose an incident in the command bar; its ICS forms and IAP assemble from live data here."
       />
     );
-
-  const active = incidentId || list[0]!.id;
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -180,13 +166,6 @@ export function FormsSurface(props: { client: ApiClient; jurisdictionId: string;
       <div style={{ display: "grid", gap: 16, maxWidth: 920 }}>
         <Panel title="Build">
           <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
-            <EnumSelect
-              label="Incident"
-              values={list.map((i) => i.id)}
-              value={active}
-              onChange={setIncidentId}
-              labels={Object.fromEntries(list.map((i) => [i.id, incidentLabel(i)]))}
-            />
             <TextField label="Operational period" value={period} onChange={setPeriod} />
             <EnumSelect
               label="ICS form"

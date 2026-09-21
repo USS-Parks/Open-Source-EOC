@@ -2212,4 +2212,40 @@ table already had it.
   Log: deploy/test-runtime/out/veoc-rls-check2.log.
 - **Deferred:** MFA and SAML (finding 6) remain a design decision for Basho
   (identity-provider choice), not a hardening patch.
+- **Ending commit:** 9466ed2a1d19567c05ac656ed94f6051d0984332, pushed
+  (451ed16..9466ed2).
+
+## VEOC-79B: Shared incident context across the operator workspace
+
+Replaced the four unsynchronized per-surface incident dropdowns with one
+selected incident for the whole console, and made switching incidents tear the
+previous incident's view down.
+
+- **Baseline:** 9466ed2a1d19567c05ac656ed94f6051d0984332 on canonical main.
+- **Shared context:** a new IncidentProvider (web/src/app/incident/context.tsx,
+  modeled on SessionProvider) owns the one selected incident, defaulting to the
+  first open incident, resetting when the jurisdiction changes, and never
+  keeping a selection that has left the list. An IncidentSwitcher in the
+  command bar replaces the fixed "Operational picture" string and the Forms,
+  IAP and AAR surfaces' own dropdowns, which are removed; those surfaces now
+  take the selected incident as a prop.
+- **COP:** the map receives the selected incident, names it above the common
+  operating picture, and folds it into the CopMap remount key.
+- **Teardown:** the center surface is keyed by the selected incident id, so a
+  switch unmounts the previous incident's subtree; with no ApiClient response
+  cache, that discards its records, in-flight reads and polling timers. The
+  offline Yjs client is not wired into the console, so there is no separate
+  subscription to close.
+- **Scope boundary:** boards, feeds, dashboards and resources stay
+  jurisdiction-scoped; their records carry no incident association yet, so
+  per-incident filtering of those surfaces is a later data-model change, not
+  part of this context layer (reuse ledger: extend seams, no new stores).
+- **Evidence:** new incident-context tests (default selection, switching);
+  a map-surface test asserting the COP remounts on incident change and not
+  when it stays; the real-browser end-to-end console test passes with the
+  header switcher present (its board picker retargeted to an explicit label,
+  and the incidents-list assertion scoped to main so it does not match the
+  hidden switcher option).
+- **Gate:** pnpm check --maxWorkers=2 exited 0; 456 tests in 79 files passed.
+  Log: deploy/test-runtime/out/veoc-79b-check-final.log.
 - **Ending commit:** this receipt commit, recorded by the next receipt.

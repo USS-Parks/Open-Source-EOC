@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Theme } from "../design/components.js";
 import type { ThemeName } from "../design/tokens.js";
 import { SessionProvider, useSession } from "./auth/session.js";
+import { IncidentProvider } from "./incident/context.js";
 import { Console } from "./screens/Console.js";
 import { Login } from "./screens/Login.js";
 import { Loading } from "./screens/parts.js";
@@ -36,7 +37,11 @@ function Gate(props: { theme: ThemeName; onToggleTheme: () => void }) {
   const { status } = useSession();
   if (status === "loading") return <Loading label="Starting…" />;
   if (status === "anon") return <Login />;
-  return <Console theme={props.theme} onToggleTheme={props.onToggleTheme} />;
+  return (
+    <IncidentProvider>
+      <Console theme={props.theme} onToggleTheme={props.onToggleTheme} />
+    </IncidentProvider>
+  );
 }
 
 export function App() {
