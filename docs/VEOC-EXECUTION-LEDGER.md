@@ -3535,3 +3535,27 @@ increment proves it and that coverage follows the incident area.
 - **Boundary:** production shell adoption, icon registry, control migration and
   export branding remain downstream. Four existing lanes retained; lane d takes
   D06. No new worktree or push.
+
+## H13: licensed facility symbology
+
+- **Serves/baseline/lane:** Handoff 13; lane c from 0cc43d5, replayed over
+  a849890. Evidence level: integrated with real browser presentation proof.
+- **Change:** nine original manifest-verified NAPSG PNGs and local CC BY 4.0
+  legal text; conservative shared facility vocabulary; separate facility icons
+  and operational status frames; matching legend/inspection and persistent map
+  attribution. Offline Node builder reproducibly emits 1x/2x sprite pairs with
+  source URLs/hashes and license metadata. Runtime images preserve external
+  styles' own sprite. Generic clinic, airport and EOC-like labels are not guessed.
+- **Gate:** deterministic sprite rebuild, license/link checks, focused unit and
+  real MapLibre browser proof passed. All-workspace TypeScript and all-tree
+  ESLint passed. Root inspected both theme captures and complete diff; fresh
+  review is SHIP. Post-rebase TypeScript/lint and eight suites passed 117/117,
+  including map rendering and changed authorization/workflow/viewport/token
+  dependencies. Actual logs: deploy/test-runtime/out/lanes/c/logs/
+  h13-facility-symbols-gate.log and h13-integration.log. Earlier fixture and
+  sprite-order assertion failures remain recorded with their focused repairs.
+- **Unit commit:** 389afe1b1907679a374ecb2006e6b74fbddc64b5, exact fast-forward.
+- **Boundary:** the agreed subset is proven, not the entire NAPSG catalog.
+  Catalog creation date is distinct from acquisition date. P-COP owns the final
+  workspace composition. Four existing lanes remain; lane c next takes H14
+  using the separately authorized Overture acquisition. No new worktree or push.
