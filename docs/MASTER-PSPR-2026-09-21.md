@@ -886,6 +886,12 @@ the existing incident authority, attachment check and field-read rules. Unit
 This closes the observed Lifeline field-visibility bypass without a second
 access model. Board authoring takes ownership after E2 lands.
 
+Execution split, 2026-09-21: `80a` is the independently gated client-cache
+correction in data/hooks.ts, DashboardSurface.tsx and its new hook test.
+The remaining `80b` access work is preserved separately while the policy
+decision is pending. Its next clean unit boundary incorporates E2's helper.
+VEOC-80 remains open; the opening ramp still waits for full unit 80 acceptance.
+
 ### 8.6 Migration blocks
 
 | Block | Holder |

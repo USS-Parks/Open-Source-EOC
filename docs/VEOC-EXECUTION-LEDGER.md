@@ -3079,3 +3079,32 @@ increment proves it and that coverage follows the incident area.
 - **Scope allocation:** E2 may add the incident-board read-shape helper to
   the existing board service; unit 80 consumes it after landing. The Master
   records this exclusive ownership and the observed field-read defect.
+
+## 79G-E2: authorized impact analysis and source drilldown
+
+- **Change:** authenticated incident impact, comparison and paginated source
+  endpoints reuse E1. Comparisons explicitly use current loaded baselines for
+  both area revisions. Unknown inputs produce unknown deltas. Reported
+  Lifeline conditions retain provenance and never derive failure from exposure.
+- **Files:** server/src/impact/routes.ts and service.ts, shared/src/impact/service.ts,
+  server/src/__tests__/impact-service.test.ts, one additive board read-shape
+  helper, and additive app/shared registrations. No dependency or SQL migration.
+- **Correction:** parent review found direct Lifeline SQL could bypass field
+  visibility. The helper reuses incident authority, attached-board validation
+  and effective fields; existing visibleFields masks the returned report.
+  A real regression with admin-only status/note covers members and participants.
+- **Gate:** pnpm -r exec tsc --noEmit and pnpm exec eslint . exited 0.
+  Initial impact-spatial plus impact-service PostGIS run passed 14/14.
+  After the field correction, impact-service alone passed 6/6, exit 0.
+  Evidence: deploy/test-runtime/out/lanes/a/logs/79G-E2-field-visibility-fix.log.
+  Parent full diff review and fresh independent review returned ship.
+- **Evidence level:** integrated API on real PostGIS. Same-owner incident
+  isolation, member/participant allow, outsider/anonymous/revoked denial,
+  expansion/shrinkage and paginated record reconciliation are proven.
+  Population drilldown was source-reviewed against E1; no dedicated drilldown
+  population fixture or live ACS acquisition is claimed. P-DASH remains open.
+- **Integration:** documentation-only rebase; exact fast-forward to
+  71c42f277907204a202bf88ab6cc484144b85026. No repeated application gate.
+- **Retained lanes:** a proceeds to 81A-E; b holds the policy-gated access work
+  and independent cache correction; c remains reserved; d continues D02.
+  No new worktree, dependency copy or push. User-owned files remain untouched.
