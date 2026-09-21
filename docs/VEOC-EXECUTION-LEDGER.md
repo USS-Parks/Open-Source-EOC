@@ -3133,3 +3133,23 @@ increment proves it and that coverage follows the incident area.
   They will resume as 80b on the new base with E2's helper, not be reimplemented.
 - **Retained lanes:** a board authoring, b access continuation, c reserved
   until full 80 acceptance, d navigation/design. No extra checkout or push.
+
+## D02: operator navigation and workspace arrangements
+
+- **File:** docs/design/D02-NAVIGATION-AND-INFORMATION-ARCHITECTURE.md,
+  238 lines. All 16 current destinations remain addressable under the five
+  approved groups and command-bar utilities. Nine target destinations,
+  cross-links and all six D01 journey routes are specified.
+- **Contract:** Map, Boards and Planning share incident/period context,
+  protected-draft and return rules. Role presets are preferences only.
+  Host, owner, participant and command relationships remain distinct.
+  Contextual D32 guidance adds no unsupported standalone Help route.
+- **Gate:** parent full document review, source/path checks and fresh
+  independent review passed with no findings. Documentation integration
+  check passed, 50 Markdown files. No application tests were warranted.
+- **Evidence level:** designed and source-reconciled only. Responsive behavior,
+  focus, persistence, authority enforcement and operator validation remain
+  implementation gates for the named owners.
+- **Integration:** exact fast-forward to 73bcd67227fe71c85cfb6214fb2ed0100d281e57.
+  Lane d proceeds to D03 and the G-A package. Lanes a/b remain active;
+  c remains reserved. No new worktree, generated dependency tree or push.
