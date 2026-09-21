@@ -43,7 +43,8 @@ it("remounts when operational layers arrive after the empty map", () => {
 });
 
 it("remounts the COP when the selected incident changes, and not when it stays", () => {
-  const props = { client: {} as ApiClient, jurisdictionId: "j1", theme: "light" as const, collections: [], feeds: [] };
+  const client = { listIncidentDatasets: vi.fn().mockResolvedValue([]) } as unknown as ApiClient;
+  const props = { client, jurisdictionId: "j1", theme: "light" as const, collections: [], feeds: [] };
   const view = render(<MapSurface {...props} incidentId="a" incidentName="Fire A" />);
   const first = screen.getByTestId("map").getAttribute("data-mount-id");
   view.rerender(<MapSurface {...props} incidentId="a" incidentName="Fire A" />);
