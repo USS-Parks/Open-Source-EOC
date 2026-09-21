@@ -3108,3 +3108,28 @@ increment proves it and that coverage follows the incident area.
 - **Retained lanes:** a proceeds to 81A-E; b holds the policy-gated access work
   and independent cache correction; c remains reserved; d continues D02.
   No new worktree, dependency copy or push. User-owned files remain untouched.
+
+## VEOC-80a: keep cached data within its viewing context
+
+- **Scope:** the independent client-cache correction split from VEOC-80.
+  Full dashboard participant authorization remains open as 80b; no rejected
+  SQL migration was applied, and the explicit policy question remains pending.
+- **Files:** web/src/app/data/hooks.ts, DashboardSurface.tsx under surfaces,
+  and web/src/app/__tests__/authorized-viewing-hooks.test.tsx.
+- **Behavior:** a dependency/context change hides the previous context's data
+  immediately. Authorization/not-found failures clear protected last-good
+  data; transport failures retain only the same context's data with a visible
+  refresh error. No server permission or policy changes are in this increment.
+- **Gate:** writer hook tests passed 3/3. Parent isolated-subset TypeScript and
+  all-tree ESLint passed; full diff review and independent review returned ship.
+  After replay over E1/E2 code, TypeScript, ESLint and the hook plus both impact
+  suites passed 18/18, exit 0. Log:
+  deploy/test-runtime/out/lanes/b/logs/veoc-80a-integration.log.
+- **Evidence level:** tested client behavior. Full real-browser guest access,
+  policy allow/deny and widget masking are still unit 80b's required gate.
+- **Integration:** exact fast-forward to 36b5d62a85ae36d9c5b7ad23f09d6a0756770224.
+  The other nine owned files were preserved in path-scoped stash
+  e00a3d7ef0107d0355f799ff2aaf7c8a86524b6f before this completed unit's rebase.
+  They will resume as 80b on the new base with E2's helper, not be reimplemented.
+- **Retained lanes:** a board authoring, b access continuation, c reserved
+  until full 80 acceptance, d navigation/design. No extra checkout or push.
