@@ -3796,3 +3796,30 @@ increment proves it and that coverage follows the incident area.
 - **Unit commit:** e6c746a93ee4f1234c58be12bab928d0806ad196, exact fast-forward.
   P-AAR owns final presentation. Four existing lanes retained; no new worktree
   or push. The tracked replay stash is retained until lane retirement.
+
+## 82-E: assigned tasks and durable completion receipts
+
+- **Serves/lane:** VEOC-82 engine in lane a, refreshed to 6e08849. Declarative
+  template category/due rules reuse the workflow seam; legacy string templates
+  still activate. Status/category/assignment/due filters and analytics share
+  the same complete rows. The next-24-hours label is an explicit rolling window.
+- **Authority:** owner-admin metadata CAS, current-assignee status CAS, fresh
+  position/grant checks, serialized incident mutation and immutable completion
+  identity. Exact operation retries return their original receipt with current
+  incident read access even after the actor changes position. Full receipt
+  attribution is bound to the completed row. Separate narrow audit policies
+  preserve participant follow-through without broadening existing audit access.
+- **Offline/client:** person/incident-scoped commands persist before success and
+  are removed only on matching receipts. Authenticated client renewal preserves
+  the operation ID. Browser continuity remains 85-B and 85-PROOF.
+- **Gate:** parent full read; initial root types stopped on a test-only spread
+  inference, repaired with the typed receipt. Workspace TypeScript/tree ESLint
+  and eight suites 57/57 passed. Reviewer found direct assignee UPDATE could
+  change task ID/creation time; explicit immutability and raw-runtime denial
+  assertions repaired it. Affected types/lint and task/AAR replay 8/8 passed.
+  Fresh bounded correction review: SHIP.
+- **Evidence:** deploy/test-runtime/out/lanes/a/logs/82-E-root-integration.log,
+  82-E-root-integration-retry.log, 82-E-root-review-repair.log.
+- **Unit commit:** ecd52496e1a960d555a9c1cc170d8774ff0d74a5, exact fast-forward.
+  P-TASKS owns presentation. Four existing lanes retained; no new worktree or
+  push. Existing D05 construction scratch and replay stashes remain preserved.
