@@ -3442,3 +3442,46 @@ increment proves it and that coverage follows the incident area.
   6c8dddc648424e71d49c31647ba41ac099fb36a1.
 - **Disposition:** execution engine integrated; no-code workflow configuration
   and presentation remain P-BOARDS-2. Four existing active lanes remain; no push.
+
+## VEOC-85-A: persistent native Windows provisioning
+
+- **Files:** plain CMD/PowerShell entry points, current-source Node loader,
+  bounded desktop host and profile contracts, focused tests, scoped output
+  ignore and Windows guide. Root added the exact generated desktop output
+  directory to ESLint's existing exclusions after integration exposed bundle
+  linting. No dependency, binary, public-tile or node_modules copy was added.
+- **Runtime:** three separate local profiles, private generated credentials,
+  loopback PostgreSQL/HTTP, owner-only migration/bootstrap phase followed by
+  app_runtime serving, local map/font assets and bounded byte ranges. Existing
+  profiles and unknown partial data are preserved. Build stamps use source
+  content; documents alone do not invalidate a build.
+- **Review repairs:** substring process matching could claim another profile's
+  process; exact argument equality now binds launcher/profile/browser URL/data
+  directory. Non-successful stop-token responses are refused. A resulting URL
+  declaration-order defect was corrected. Independent review returned SHIP.
+- **Live evidence:** root cold-provisioned the synthetic acceptance profile,
+  signed in and activated an incident in real Chrome, received seven local
+  PMTiles range responses, created a record and attachment, then stopped and
+  restarted the actual launcher. Incident, record and attachment persisted.
+  The first screenshot preceded map readiness; a bounded diagnostic waited for
+  network idle and visually confirmed California streets with no console errors.
+  No external browser requests occurred in the workflow proof.
+- **Isolation:** root also exercised demo and production bootstrap paths in
+  lane d, with an explicitly named production-path fixture identity and private
+  generated password. Live SQL proved three distinct data stores and app_runtime
+  with rolsuper=false and rolbypassrls=false. These are test-lane profiles, not
+  the user's configured production organization. All three are stopped.
+- **Gate:** syntax/parser/import checks, six node tests, scoped lint and build
+  passed. Post-rebase TypeScript passed; generated-output lint failure was
+  repaired, then ESLint, six node tests and nine affected suites (34/34) passed.
+  Rebased Build, idempotent Setup, Start/current migrations and retained-data
+  proof also passed. Evidence: deploy/test-runtime/out/desktop-acceptance/
+  integration-repair.log, integration-start.log, restart-lane.log,
+  profile-proof.json and map-settled.png. Exact fast-forward:
+  37411003d34e0c21762058fbbc54dbff808ac632.
+- **Boundary/storage:** provisioning on this prepared machine is proven;
+  85-B/D31/85-PROOF and independent transfer/AR7 remain. Four existing lanes
+  remain active, with no unpublished lane commit at this landing. Each retains
+  about 195 MiB logical dependencies; lane d additionally retains 228.1 MiB of
+  stopped proof profiles/build data until its final retirement. C: has 254.5 GiB
+  free. No new worktree, cache copy, deletion or push. Lane d returns to D04.

@@ -88,7 +88,7 @@ accordingly, so parity against "WebEOC" is not overstated.
 | AR4 | No in-place-upgrade dead ends | INV-5 | Versioned schema upgrades preserve records | verified | - |
 | AR5 | No proprietary-only interchange or substrate lock-in | INV-4, INV-9 | Native standards + jurisdiction export; Apache-2.0 | verified | - |
 | AR6 | No session timeouts mid-incident, free-text drift, join-poor dashboards | INV-8 | Session continuity, controlled fields, server-computed dashboards | verified | - |
-| AR7 | Full function disconnected, including provisioning | INV-3 | Offline queue exists; cold air-gapped provisioning not proven | deferred | VEOC-85 |
+| AR7 | Full function disconnected, including provisioning | INV-3 | Native Windows cold setup, local map, runtime RLS, profile isolation and persistent restart proven on this prepared machine (`3741100`); finished offline workflow and independent transfer remain | partial | VEOC-85 / 85-B / 85-PROOF |
 
 ## Assessed gaps beyond the canonical set (audit and amendment)
 
