@@ -3823,3 +3823,27 @@ increment proves it and that coverage follows the incident area.
 - **Unit commit:** ecd52496e1a960d555a9c1cc170d8774ff0d74a5, exact fast-forward.
   P-TASKS owns presentation. Four existing lanes retained; no new worktree or
   push. Existing D05 construction scratch and replay stashes remain preserved.
+
+## 84-E: IAP workspace progress, periods and authority
+
+- **Serves/lane:** VEOC-84 engine, lane b refreshed to d109ad3. Working and
+  published queries retain the five visible workflow states, organization and
+  role filters, and exact unique required-form progress. Period revisions bind
+  to the same incident; legacy unmatched labels stay explicitly unbound.
+- **Authority:** immutable preparation and period identity, current position
+  and participation checks, serialized handoffs, and narrow participant audit.
+  Assembly projects authorized board fields. Named participants can read only
+  their own prepared plans under their exact current writer grant; owner plans
+  and other participants' snapshots remain opaque. Cross-organization sharing
+  of published plans is not introduced by this engine.
+- **Gate:** root full read, workspace TypeScript and tree ESLint passed;
+  IAP workspace, existing IAP, forms, AAR and tasks passed 31/31. Review found
+  draft period binding mutable through direct runtime UPDATE. Unconditional
+  tuple immutability repaired it; actual PostgreSQL replacement, removal and
+  relabel attempts are denied. Affected types/lint and workspace 8/8 passed.
+  Fresh bounded correction review: SHIP.
+- **Evidence:** deploy/test-runtime/out/lanes/b/logs/84E-root-integration.log
+  and 84E-root-period-repair.log. Evidence level: integrated engine.
+- **Unit commit:** fdc81e2ff55a854f60f3bf123bd7b6afe707495c, exact fast-forward.
+  Next: 84A-E authoring; P-IAP owns presentation. Four existing lanes retained,
+  no new worktree or push. Tracked replay stashes remain for retirement review.
