@@ -1,5 +1,10 @@
 # VEOC-77 Handoff: Plan / Sequential Prompt Roster for the next session
 
+**Current order and acceptance:** follow the [focused continuation amendment](./VEOC-PARITY-CONTINUATION-2026-09-20.md#focused-roster-amendment-2026-09-20).
+It retains handoff prompts 10 through 15, strengthens their incident/data
+acceptance and places the integrated exercise after its implementation
+dependencies. Earlier ordering and county-specific examples below are history.
+
 **Prepared:** 2026-09-20, end of the VEOC-77 desktop session.
 **For:** the next executing model (Opus 4.8), on Basho's desktop.
 **Authority:** this roster extends `VIRTUAL-EOC-PSPR-2026-09-17.md` under its

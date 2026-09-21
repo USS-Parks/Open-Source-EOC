@@ -2436,3 +2436,16 @@ same records.
 - **Gate:** pnpm check --maxWorkers=2 exited 0; 469 tests in 83 files passed.
   Log: deploy/test-runtime/out/veoc-81-check.log.
 - **Ending commit:** this receipt commit, recorded by the next receipt.
+
+## Revised roster publication, 2026-09-20
+
+- **Authority:** Basho explicitly requested commit and push of the revised roster.
+- **Baseline:** 7cf879144957a2bc98a956c217144736b5e059a2, confirmed on origin/main.
+- **Scope:** the five pending roadmap/status/roster documents plus this receipt.
+  The earlier planning receipt is already preserved in 8304829. Concurrent
+  79D and 81 increments remain intact and do not close their amended full gates.
+- **Verification:** documentation links and diff checks passed; the prior
+  25-step uniqueness/dependency checks remain applicable to the unchanged plan.
+  Application tests were not rerun for this documentation-only publication.
+- **Ending commit:** this focused documentation commit; report its SHA and the
+  verified remote main SHA after pushing. No implementation prompt is started.

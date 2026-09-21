@@ -1,5 +1,14 @@
 # VEOC Facet, Requirement, and Invariant Status Register
 
+**Status qualification, 2026-09-20:** the verified labels below record earlier
+implementation gates, not demonstrated commercial-product parity. Incident
+data scoping (79B1/B2), durable ingestion (79C1/C2), impact analysis (79G), board
+authoring/routing (81A/B) and workspace usability (81C/81) remain open under the
+[focused roster amendment](./VEOC-PARITY-CONTINUATION-2026-09-20.md#focused-roster-amendment-2026-09-20).
+VEOC-79E must reconcile this register to source-backed capability evidence;
+VEOC-85/86 retain disconnected provisioning and live release gates. Preserve
+earlier receipts, but do not use their labels as current parity certification.
+
 Maintained by roster sessions. Dispositions: `open`, `implemented`, `verified`, `deferred`, `risk-accepted`.
 Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 

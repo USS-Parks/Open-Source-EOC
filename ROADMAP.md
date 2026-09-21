@@ -1,5 +1,21 @@
 # Roadmap
 
+## Current continuation, 2026-09-20
+
+The [focused roster amendment](./docs/VEOC-PARITY-CONTINUATION-2026-09-20.md#focused-roster-amendment-2026-09-20)
+is the current remaining sequence: 25 open steps at baseline `16ce911`.
+It restores incident-scoped operational data and durable ingestion, then adds
+source-backed capability accounting, statewide data readiness, impact analysis,
+board authoring/routing and an adaptable workspace. The integrated exercise
+follows its implementation dependencies; FOUO authorized viewing replaces the
+old anonymous public-map prompt. Planning approval does not restart execution.
+
+The phase table and narrative below are historical implementation summaries.
+Their broad complete/yes labels and code-side release claims do not establish
+current operator parity or readiness. Use the amendment and subsequent ledger
+receipts for current scope and evidence; the identified integration and
+operator-workflow gaps remain open until their explicit acceptance gates pass.
+
 The authoritative sequence is the build roster
 (`docs/VIRTUAL-EOC-PSPR-2026-09-17.md`). Live status per capability is
 `docs/FACET-STATUS.md`, with per-prompt receipts in

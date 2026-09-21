@@ -1,5 +1,10 @@
 # Virtual EOC (VEOC): Canonical Plan / Sequential Prompt Roster
 
+**Current continuation:** the [focused roster amendment](./VEOC-PARITY-CONTINUATION-2026-09-20.md#focused-roster-amendment-2026-09-20)
+records the remaining execution order, restored acceptance criteria and FOUO
+scope as of 2026-09-20. It supersedes conflicting historical sequence/status
+text below; this baseline and its completed prompt IDs remain preserved.
+
 **Created:** 2026-09-17
 **Amended:** 2026-09-17, requirements addendum R1-R6 from Basho; sessions VEOC-15A and VEOC-33A added
 **Working name:** Virtual EOC ("VEOC"; product name to be chosen by Basho before public release)
