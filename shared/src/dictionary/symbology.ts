@@ -6,9 +6,10 @@ const CITATION: Citation = {
 };
 
 /**
- * Top-level NAPSG symbol categories. The full symbol library (hundreds of
- * symbols, shipped as SVG) is imported with the COP map in roster session
- * VEOC-17; these categories are the canonical organizing structure.
+ * Top-level NAPSG symbol categories. These values are the canonical organizing
+ * structure only. The H13 inventory found no NAPSG symbol assets or vendored
+ * license in this repository, so callers must not imply that the library is
+ * shipped until those prerequisites are supplied and verified.
  */
 export const SYMBOL_CATEGORIES = defineEnum(
   "symbology.categories",
