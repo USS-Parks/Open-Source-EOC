@@ -79,9 +79,8 @@ export const iconRegistry = {
   fieldReports: icon("Field reports", "navigation", "Clipboard report", NAV_SIZES, [
     { element: "rect", x: 5, y: 4, width: 14, height: 17, rx: 2 },
     { element: "path", d: "M9 4V2.5h6V4" },
-    { element: "line", x1: 9, y1: 9, x2: 15, y2: 9 },
-    { element: "line", x1: 9, y1: 13, x2: 15, y2: 13 },
-    { element: "line", x1: 9, y1: 17, x2: 13, y2: 17 },
+    { element: "path", d: "M15 11.5c0 2.5-3 5.2-3 5.2s-3-2.7-3-5.2a3 3 0 1 1 6 0Z" },
+    { element: "circle", cx: 12, cy: 11.5, r: 0.8, fill: "currentColor" },
   ]),
   operationalPeriods: icon("Operational periods", "navigation", "Calendar with period marker", NAV_SIZES, [
     { element: "rect", x: 3, y: 5, width: 18, height: 16, rx: 2 },
@@ -139,6 +138,13 @@ export const iconRegistry = {
     { element: "line", x1: 13.5, y1: 11.2, x2: 16, y2: 11.2 },
     { element: "line", x1: 8.5, y1: 16.5, x2: 16, y2: 16.5 },
   ]),
+  smartForms: icon("Smart Forms", "navigation", "Branching form workflow", NAV_SIZES, [
+    { element: "path", d: "M6 2.5h8l4 4V21.5H6ZM14 2.5v4h4" },
+    { element: "circle", cx: 9, cy: 10, r: 1 },
+    { element: "circle", cx: 15, cy: 14, r: 1 },
+    { element: "circle", cx: 9, cy: 18, r: 1 },
+    { element: "path", d: "M10 10h2v8h-2M12 14h2" },
+  ]),
   tracking: icon("Tracking", "navigation", "Location pin with movement trail", NAV_SIZES, [
     { element: "path", d: "M16.5 9.5c0 4-4.5 8.5-4.5 8.5S7.5 13.5 7.5 9.5a4.5 4.5 0 1 1 9 0Z" },
     { element: "circle", cx: 12, cy: 9.5, r: 1.5 },
@@ -173,13 +179,22 @@ export const iconRegistry = {
     { element: "line", x1: 10, y1: 8, x2: 16, y2: 8 },
     { element: "line", x1: 10, y1: 12, x2: 16, y2: 12 },
   ]),
+  boardCustomization: icon("Board customization", "navigation", "Board panel with adjustment sliders", NAV_SIZES, [
+    { element: "rect", x: 3, y: 3, width: 18, height: 18, rx: 2 },
+    { element: "line", x1: 6, y1: 8, x2: 18, y2: 8 },
+    { element: "circle", cx: 9, cy: 8, r: 1.5 },
+    { element: "line", x1: 6, y1: 12, x2: 18, y2: 12 },
+    { element: "circle", cx: 15, cy: 12, r: 1.5 },
+    { element: "line", x1: 6, y1: 16, x2: 18, y2: 16 },
+    { element: "circle", cx: 11, cy: 16, r: 1.5 },
+  ]),
   add: icon("Add", "action", "Plus sign", ACTION_SIZES, [
     { element: "line", x1: 12, y1: 4, x2: 12, y2: 20 },
     { element: "line", x1: 4, y1: 12, x2: 20, y2: 12 },
   ]),
   report: icon("Create report", "action", "Report page", ACTION_SIZES, [
     { element: "path", d: "M6 2.5h8l4 4V21.5H6Z" },
-    { element: "path", d: "M14 2.5v4h4M9 11h6M9 15h6" },
+    { element: "path", d: "M14 2.5v4h4M12 10v7M8.5 13.5h7" },
   ]),
   briefing: icon("Briefing view", "action", "Presentation screen", ACTION_SIZES, [
     { element: "rect", x: 2.5, y: 4, width: 19, height: 13, rx: 1.5 },
@@ -218,7 +233,8 @@ export const iconRegistry = {
   ]),
   foodHydrationShelter: icon("Food, Hydration, Shelter", "lifeline", "Shelter house with doorway", LIFELINE_SIZES, [
     { element: "path", d: "m2.5 11.2 9.5-8 9.5 8" },
-    { element: "path", d: "M5 10v11h14V10M9.5 21v-6h5v6" },
+    { element: "path", d: "M5 10v11h14V10" },
+    { element: "path", d: "M12 12s-2.5 3-2.5 5a2.5 2.5 0 0 0 5 0c0-2-2.5-5-2.5-5Z" },
   ]),
   healthMedical: icon("Health and Medical", "lifeline", "Medical cross", LIFELINE_SIZES, [
     { element: "path", d: "M9 3h6v6h6v6h-6v6H9v-6H3V9h6Z" },
@@ -238,9 +254,9 @@ export const iconRegistry = {
     { element: "line", x1: 12, y1: 17, x2: 12, y2: 21 },
   ]),
   hazardousMaterials: icon("Hazardous Materials", "lifeline", "Three-lobed biohazard mark", LIFELINE_SIZES, [
-    { element: "circle", cx: 12, cy: 12, r: 1.8 },
-    { element: "path", d: "M9.7 9A4 4 0 1 1 14.3 9M10.1 13.4A4 4 0 1 1 8.4 10.3M13.9 13.4A4 4 0 1 0 15.6 10.3" },
-    { element: "path", d: "M10.5 10.8 9.1 8.7M13.5 10.8l1.4-2.1M12 13.8v2.6" },
+    { element: "circle", cx: 12, cy: 12, r: 1.5, fill: "currentColor" },
+    { element: "path", d: "M9 9.5A4.5 4.5 0 1 1 15 9.5M9.8 12.8A4.5 4.5 0 1 1 8.2 9.7M14.2 12.8A4.5 4.5 0 1 0 15.8 9.7" },
+    { element: "path", d: "M10.7 10.8 9 8.3M13.3 10.8 15 8.3M12 13.5v3" },
   ]),
   waterSystems: icon("Water Systems", "lifeline", "Three water drops", LIFELINE_SIZES, [
     { element: "path", d: "M12 2.5s-4 5-4 8a4 4 0 0 0 8 0c0-3-4-8-4-8Z" },
@@ -286,7 +302,7 @@ export const destinationIconByKey = {
   sitrep: "sitrep",
   forms: "forms",
   iap: "iap",
-  smartForms: "forms",
+  smartForms: "smartForms",
   resources: "resources",
   tracking: "tracking",
   aar: "aar",
@@ -302,7 +318,7 @@ export const destinationIconByKey = {
   jic: "jic",
   templates: "templates",
   settings: "settings",
-  boardCustomization: "settings",
+  boardCustomization: "boardCustomization",
 } as const satisfies Readonly<Record<string, IconName>>;
 
 export type DestinationIconKey = keyof typeof destinationIconByKey;

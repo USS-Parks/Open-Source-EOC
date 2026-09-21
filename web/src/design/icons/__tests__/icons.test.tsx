@@ -6,6 +6,7 @@ import { Icon, LifelineIcon } from "../Icon.js";
 import { IconGallery } from "../IconGallery.js";
 import {
   ICON_SIZES,
+  actionIconNames,
   destinationIconByKey,
   iconRegistry,
   lifelineIconByKey,
@@ -46,7 +47,7 @@ describe("D05 icon registry", () => {
   });
 
   it("keeps navigation metadata and supported sizes explicit", () => {
-    expect(navigationIconNames.length).toBeGreaterThanOrEqual(25);
+    expect(navigationIconNames.length).toBeGreaterThanOrEqual(27);
     expect(ICON_SIZES).toEqual([16, 20, 24, 32, 40, 48]);
     for (const name of navigationIconNames) {
       const definition = iconRegistry[name];
@@ -61,8 +62,20 @@ describe("D05 icon registry", () => {
     for (const name of Object.values(destinationIconByKey)) {
       expect(iconRegistry[name]).toBeDefined();
     }
-    expect(destinationIconByKey.smartForms).toBe("forms");
-    expect(destinationIconByKey.boardCustomization).toBe("settings");
+    expect(new Set(Object.values(destinationIconByKey)).size).toBe(25);
+    expect(destinationIconByKey.smartForms).toBe("smartForms");
+    expect(destinationIconByKey.boardCustomization).toBe("boardCustomization");
+  });
+
+  it("gives every named registry icon unique geometry", () => {
+    const signatures = Object.entries(iconRegistry).map(([name, definition]) => ({
+      name,
+      signature: JSON.stringify(definition.primitives),
+    }));
+    const duplicates = signatures.filter(
+      ({ signature }, index) => signatures.findIndex((item) => item.signature === signature) !== index,
+    );
+    expect(duplicates).toEqual([]);
   });
 });
 
@@ -152,6 +165,14 @@ describe("D05 gallery", () => {
     expect(container.querySelectorAll(".d05-lifeline-card .d05-status")).toHaveLength(8);
     expect(
       [...container.querySelectorAll('[data-compact-kind="navigation"] svg')].every(
+        (icon) => icon.getAttribute("width") === "16",
+      ),
+    ).toBe(true);
+    expect(container.querySelectorAll('[data-compact-kind="action"] svg')).toHaveLength(
+      actionIconNames.length,
+    );
+    expect(
+      [...container.querySelectorAll('[data-compact-kind="action"] svg')].every(
         (icon) => icon.getAttribute("width") === "16",
       ),
     ).toBe(true);

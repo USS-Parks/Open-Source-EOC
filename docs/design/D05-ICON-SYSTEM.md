@@ -17,8 +17,8 @@ unchanged; downstream surfaces can adopt this family deliberately in later units
 - An icon next to visible text, or inside an already-labelled control, requires `decorative`. It is
   removed from the accessibility tree with `aria-hidden="true"`.
 - `LifelineIcon` accepts a `LifelineKey` and applies the same accessibility contract.
-- `destinationIconByKey` maps all 16 current D02 destinations and every planned navigation target;
-  related destinations such as Forms and Smart Forms intentionally reuse one registered symbol.
+- `destinationIconByKey` maps all 16 current D02 destinations and every planned navigation target
+  to a distinct registered symbol.
 - The SVG uses `currentColor`; a parent theme or surface controls color.
 - `selected` increases stroke emphasis and exposes a data state for styling. `disabled` reduces
   presentation emphasis. Neither changes the registered symbol or its accessible name.
@@ -43,6 +43,12 @@ The registry contains exactly these eight keys and silhouettes:
 
 These shapes match the visual concepts in the canonical lifeline reference without copying an
 external icon file. Their line treatment is coherent with the compact navigation family.
+
+Every registered name has distinct drawing geometry. Related functions retain one family stroke
+and construction grid while adding a purpose cue: Smart Forms uses a branching workflow, Board
+Customization uses adjustment sliders, Create Report uses a plus, and Field Reports uses a location
+marker. The shelter lifeline retains the canonical house silhouette with a water-drop cue, keeping
+it distinct from Overview.
 
 ## Operational status boundary
 
@@ -79,6 +85,7 @@ shared preview server before running it.
 ## Verification
 
 The focused Vitest suite validates registry completeness, intended sizes, project provenance,
-accessible naming, decorative behavior, independent interaction states, lifeline mapping, both
-themes with axe-core, separate status markup, and all symbols rendered at the smallest intended
-sizes. Workspace TypeScript and all-tree ESLint remain the static gates.
+accessible naming, decorative behavior, independent interaction states, lifeline mapping, distinct
+geometry for every named icon and destination, both themes with axe-core, separate status markup,
+and all navigation, action, and lifeline symbols rendered at the smallest intended sizes. Workspace
+TypeScript and all-tree ESLint remain the static gates.

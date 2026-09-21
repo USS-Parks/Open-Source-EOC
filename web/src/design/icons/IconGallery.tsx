@@ -4,6 +4,7 @@ import { Theme } from "../components.js";
 import type { ThemeName } from "../tokens.js";
 import { Icon, LifelineIcon } from "./Icon.js";
 import {
+  actionIconNames,
   iconRegistry,
   lifelineIconByKey,
   navigationIconNames,
@@ -106,6 +107,13 @@ export function IconGallery() {
           <div aria-label="Navigation icons at 16 pixels" className="d05-compact-strip">
             {navigationIconNames.map((name) => (
               <span data-compact-kind="navigation" key={name} title={iconRegistry[name].label}>
+                <Icon decorative name={name} size={16} />
+              </span>
+            ))}
+          </div>
+          <div aria-label="Action icons at 16 pixels" className="d05-compact-strip">
+            {actionIconNames.map((name) => (
+              <span data-compact-kind="action" key={name} title={iconRegistry[name].label}>
                 <Icon decorative name={name} size={16} />
               </span>
             ))}

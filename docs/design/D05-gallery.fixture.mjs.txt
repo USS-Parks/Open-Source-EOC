@@ -54,12 +54,13 @@ try {
   await page.locator(".d05-icon-gallery").waitFor();
   assert(await page.locator(".d05-icon-gallery").getAttribute("data-review-theme") === "light", "Initial theme is not light");
   assert(await page.locator(".d05-lifeline-card").count() === 8, "All eight lifelines are not visible");
-  assert(await page.locator(".d05-icon-tile").count() >= 25, "Navigation registry is incomplete");
+  assert(await page.locator(".d05-icon-tile").count() >= 27, "Navigation registry is incomplete");
   assert(await page.getByRole("img", { name: "Compare revisions" }).count() === 1, "Meaningful icon accessible name is missing");
   assert(await page.locator('svg[aria-hidden="true"]').count() >= 8, "Decorative icons are not hidden");
   assert(await page.locator(".d05-lifeline-card .d05-status").count() === 8, "Status labels are missing");
   assert(await page.locator(".d05-lifeline-card svg .d05-status").count() === 0, "Status was embedded in an icon");
-  assert(await page.locator('[data-compact-kind="navigation"] svg[width="16"]').count() >= 25, "Compact 16px navigation family is incomplete");
+  assert(await page.locator('[data-compact-kind="navigation"] svg[width="16"]').count() >= 27, "Compact 16px navigation family is incomplete");
+  assert(await page.locator('[data-compact-kind="action"] svg[width="16"]').count() === 9, "Compact 16px action family is incomplete");
   assert(await page.locator('[data-compact-kind="lifeline"] svg[width="20"]').count() === 8, "Compact 20px lifeline family is incomplete");
 
   const iconGeometry = await page.locator(".d05-icon-tile svg").evaluateAll((icons) =>
@@ -99,7 +100,8 @@ try {
     screenshots: 4,
     viewports: ["1440x900", "390x844"],
     themes: ["light", "dark"],
-    navigationMinimum: 25,
+    navigationMinimum: 27,
+    actionCount: 9,
     lifelineCount: 8,
     keyboardFocusChecked: true,
     accessibilityModesChecked: true,
