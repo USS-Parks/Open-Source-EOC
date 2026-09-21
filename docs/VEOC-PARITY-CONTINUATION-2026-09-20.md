@@ -4,6 +4,12 @@
 this document supersedes the earlier sequence and any conflicting completion
 claims. Earlier sections are retained as plan history.
 
+**Proposed design companion:** the [Design PSPR](./VEOC-DESIGN-PSPR-2026-09-20.md)
+contains 36 focused design prompts and five reviewable milestones. It maps
+operator-facing work to the existing implementation owners and specifies the
+ESF/Lifeline workspace. The document is a published draft; execution approval
+and dependency reconciliation remain separate from publication.
+
 ## Authority and scope
 
 Basho authorized the entire remaining roadmap on 2026-09-20 and clarified

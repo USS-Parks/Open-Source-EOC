@@ -10,6 +10,12 @@ board authoring/routing and an adaptable workspace. The integrated exercise
 follows its implementation dependencies; FOUO authorized viewing replaces the
 old anonymous public-map prompt. Planning approval does not restart execution.
 
+The [Design PSPR](./docs/VEOC-DESIGN-PSPR-2026-09-20.md) is published as a
+draft for review. Its 36 prompts cover the operator experience, visual identity,
+and dedicated ESF/Lifeline workspace, with ownership shared explicitly with
+the implementation roster. Publication does not authorize execution or append
+36 new backend features to the roadmap.
+
 The phase table and narrative below are historical implementation summaries.
 Their broad complete/yes labels and code-side release claims do not establish
 current operator parity or readiness. Use the amendment and subsequent ledger

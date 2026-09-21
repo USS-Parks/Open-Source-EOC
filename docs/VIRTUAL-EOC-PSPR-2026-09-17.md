@@ -5,6 +5,11 @@ records the remaining execution order, restored acceptance criteria and FOUO
 scope as of 2026-09-20. It supersedes conflicting historical sequence/status
 text below; this baseline and its completed prompt IDs remain preserved.
 
+**Proposed design companion:** the [Design PSPR](./VEOC-DESIGN-PSPR-2026-09-20.md)
+sets out the visual identity, operator workflows, and ESF/Lifeline workspace
+for review. Publishing this draft does not authorize implementation or change
+the current execution order.
+
 **Created:** 2026-09-17
 **Amended:** 2026-09-17, requirements addendum R1-R6 from Basho; sessions VEOC-15A and VEOC-33A added
 **Working name:** Virtual EOC ("VEOC"; product name to be chosen by Basho before public release)

@@ -2546,3 +2546,21 @@ loop for the map.
 - **Gate:** pnpm check --maxWorkers=2 exited 0; 471 tests in 84 files passed.
   Log: deploy/test-runtime/out/veoc-79b2-check.log.
 - **Ending commit:** this receipt commit, recorded by the next receipt.
+
+## Design PSPR publication, 2026-09-20
+
+- **Authorization:** Basho asked to commit and push the inline Design PSPR to
+  main, using human-written language in the commit and GitHub communication.
+  This publishes the draft for review; it does not start design implementation.
+- **Baseline:** `996f29c3895690501b491c732094794bae954918` on canonical main.
+- **Change:** added [the Design PSPR](./VEOC-DESIGN-PSPR-2026-09-20.md), with
+  36 prompts (D00-D35), five milestones, shared ownership with the existing
+  roster, proportionate gates, and a dedicated ESF/Lifeline workspace contract.
+  Linked it from `ROADMAP.md`, the canonical PSPR, and the parity continuation.
+- **Verification:** checked the complete document copy, sequential prompt IDs,
+  objective/deliverable/acceptance fields, milestone count, tracked Markdown
+  links, and staged whitespace. This is a documentation-only publication.
+- **Scope:** no application, schema, dependency, or runtime changes. Existing
+  user-owned untracked files were preserved. No additional worktree was created.
+- **Ending commit:** this publication commit; its SHA and the matching remote
+  main SHA are reported in the publication closeout.
