@@ -1,0 +1,119 @@
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+const { chromium } = await import("../../../../server/node_modules/playwright-core/index.mjs");
+
+const reviewUrl = process.env.D04_REVIEW_URL ?? "http://127.0.0.1:5175/docs/design/D04-gallery.html";
+const reviewOrigin = new URL(reviewUrl).origin;
+const shotDir = process.env.D04_SHOT_DIR ?? "C:/Users/17076/Documents/Open Source EOC/deploy/test-runtime/out/d04-review/shots";
+const resultPath = process.env.D04_RESULT ?? "C:/Users/17076/Documents/Open Source EOC/deploy/test-runtime/out/d04-review/result.json";
+const candidates = [
+  process.env.OPENEOC_CHROMIUM,
+  "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+].filter(Boolean);
+const executablePath = candidates.find((candidate) => existsSync(candidate));
+if (!executablePath) throw new Error("No Chromium found; set OPENEOC_CHROMIUM");
+
+mkdirSync(shotDir, { recursive: true });
+const browser = await chromium.launch({ executablePath, headless: true });
+const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+const page = await context.newPage();
+const pageErrors = [];
+const externalRequests = [];
+page.on("pageerror", (error) => pageErrors.push(String(error)));
+page.on("request", (request) => {
+  if (!request.url().startsWith(`${reviewOrigin}/`)) externalRequests.push(request.url());
+});
+await context.route("**/*", async (route) => {
+  if (route.request().url().startsWith(`${reviewOrigin}/`)) await route.continue();
+  else await route.abort();
+});
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+async function assertContained(label) {
+  const geometry = await page.evaluate(() => ({
+    viewport: window.innerWidth,
+    documentWidth: document.documentElement.scrollWidth,
+    reviewClient: document.querySelector(".token-review")?.clientWidth ?? 0,
+    reviewScroll: document.querySelector(".token-review")?.scrollWidth ?? 0,
+  }));
+  assert(geometry.documentWidth <= geometry.viewport + 1, `${label} page overflow: ${geometry.documentWidth}px > ${geometry.viewport}px`);
+  assert(geometry.reviewScroll <= geometry.reviewClient + 1, `${label} review overflow: ${geometry.reviewScroll}px > ${geometry.reviewClient}px`);
+}
+
+async function capture(name) {
+  await page.screenshot({ path: join(shotDir, `${name}.png`), fullPage: true });
+}
+
+async function assertTheme(theme) {
+  assert(await page.locator(".token-review").getAttribute("data-review-theme") === theme, `Expected ${theme} theme`);
+}
+
+try {
+  await page.goto(reviewUrl, { waitUntil: "networkidle" });
+  await page.locator(".token-review").waitFor();
+  await assertTheme("light");
+  assert(await page.locator(".eoc-state").count() === 8, "All eight operational/data states are not visible");
+  assert(await page.locator(".eoc-state", { hasText: "Zero" }).getAttribute("data-treatment") === "numeric", "Zero is not presented as neutral numeric data");
+  assert(await page.getByText("Redwood Complex", { exact: true }).isVisible(), "Incident context is missing from identity hierarchy");
+
+  const smallTextSizes = await page.locator("small, .token-review-note, .eoc-organization-identity").evaluateAll((elements) =>
+    elements.map((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+  );
+  assert(smallTextSizes.every((size) => size >= 12), `Small text below 12px: ${smallTextSizes.join(", ")}`);
+
+  await page.locator("body").click({ position: { x: 2, y: 2 } });
+  await page.keyboard.press("Tab");
+  assert((await page.evaluate(() => document.activeElement?.closest("label")?.textContent?.trim() ?? "")).includes("Density"), "Keyboard did not enter at Density");
+  const focusStyle = await page.evaluate(() => {
+    const element = document.activeElement;
+    if (!(element instanceof HTMLElement)) return null;
+    const style = getComputedStyle(element);
+    return { outlineStyle: style.outlineStyle, outlineWidth: Number.parseFloat(style.outlineWidth) };
+  });
+  assert(focusStyle?.outlineStyle !== "none" && (focusStyle?.outlineWidth ?? 0) >= 2, "Visible keyboard focus ring is missing");
+  await capture("wide-light-focus");
+  await assertContained("Wide light");
+
+  await page.keyboard.press("Tab");
+  assert(await page.evaluate(() => document.activeElement?.textContent?.trim()) === "Use dark theme", "Theme control is not next in keyboard order");
+  await page.keyboard.press("Enter");
+  await assertTheme("dark");
+  await assertContained("Wide dark");
+  await capture("wide-dark");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await assertContained("Narrow dark");
+  await capture("narrow-dark");
+  await page.getByRole("button", { name: "Use light theme" }).press("Enter");
+  await assertTheme("light");
+  await assertContained("Narrow light");
+  await capture("narrow-light");
+
+  assert(pageErrors.length === 0, `Page errors: ${pageErrors.join(" | ")}`);
+  assert(externalRequests.length === 0, `External requests: ${externalRequests.join(" | ")}`);
+  const result = {
+    status: "passed",
+    reviewUrl,
+    screenshots: 4,
+    viewports: ["1440x900", "390x844"],
+    themes: ["light", "dark"],
+    keyboardOrderChecked: true,
+    focusRingChecked: true,
+    smallTextMinimumPx: 12,
+    horizontalOverflowChecked: true,
+    pageErrors,
+    externalRequests,
+  };
+  writeFileSync(resultPath, JSON.stringify(result, null, 2));
+  console.log(JSON.stringify(result));
+} catch (error) {
+  console.error(JSON.stringify({ status: "failed", error: String(error), pageErrors, externalRequests }));
+  throw error;
+} finally {
+  await browser.close();
+}

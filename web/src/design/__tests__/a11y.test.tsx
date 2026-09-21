@@ -2,7 +2,8 @@
 import { cleanup, render } from "@testing-library/react";
 import axe from "axe-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { Gallery } from "../gallery.js";
+import { Gallery, TokenReview } from "../gallery.js";
+import { fireEvent } from "@testing-library/react";
 
 afterEach(cleanup);
 
@@ -50,5 +51,24 @@ describe("gallery accessibility", () => {
     const { getByLabelText } = render(<Gallery theme="light" />);
     expect(getByLabelText("Point of contact").tagName).toBe("INPUT");
     expect(getByLabelText("Lifeline status").tagName).toBe("SELECT");
+  });
+});
+
+describe("semantic token review accessibility", () => {
+  for (const theme of ["light", "dark"] as const) {
+    it(`${theme} token review has no axe violations`, async () => {
+      const { container, getByRole } = render(<TokenReview />);
+      if (theme === "dark") fireEvent.click(getByRole("button", { name: "Use dark theme" }));
+      expect(container.querySelector(".token-review")?.getAttribute("data-review-theme")).toBe(theme);
+      const violations = await runAxe(container);
+      const summary = violations.map((v) => `${v.id}: ${v.nodes.length} node(s)`).join("; ");
+      expect(violations, summary).toHaveLength(0);
+    }, 30000);
+  }
+
+  it("keeps neutral zero separate from operational normal", () => {
+    const { getByText } = render(<TokenReview />);
+    expect(getByText("Zero").closest(".eoc-state")?.getAttribute("data-treatment")).toBe("numeric");
+    expect(getByText("Normal").closest(".eoc-state")?.getAttribute("data-treatment")).toBe("solid");
   });
 });

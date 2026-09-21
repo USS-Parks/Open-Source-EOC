@@ -2,8 +2,9 @@
  * Base stylesheet: the parts of the design system that inline styles cannot
  * express, keyed off the theme's CSS variables. Component sizing and color
  * stay inline (and testable); this adds focus rings, hover and active
- * states, calm scrollbars, and themed map popups. Color stays reserved for
- * status (INV-8): nothing here introduces a new accent.
+ * states, calm scrollbars, and themed map popups. Brand, category and
+ * operational colors have separate semantic channels; labels and markers
+ * preserve operational meaning without color.
  */
 
 * {
@@ -100,6 +101,91 @@ textarea {
   border-radius: var(--eoc-radius-md);
   padding: 12px;
   overflow: auto;
+}
+
+/* Identity hierarchy: product, subordinate organization, then incident context. */
+.eoc-identity {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  color: var(--eoc-brand-navy-text);
+  background: var(--eoc-brand-navy);
+}
+.eoc-product-mark {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  color: var(--eoc-brand-signal);
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  font-size: 18px;
+  line-height: 1;
+}
+.eoc-product-identity {
+  color: var(--eoc-brand-navy-text);
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.2;
+}
+.eoc-organization-identity {
+  color: color-mix(in srgb, var(--eoc-brand-navy-text) 76%, transparent);
+  font-size: 12px;
+  line-height: 1.3;
+}
+.eoc-incident-context {
+  margin-left: auto;
+  color: var(--eoc-brand-navy-text);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* Operational states always pair text and marker with their color treatment. */
+.eoc-state {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  color: var(--eoc-state-foreground);
+  background: var(--eoc-state-background);
+  border: 1px solid currentColor;
+  border-radius: var(--eoc-radius-pill, 999px);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+.eoc-state[data-treatment="striped"] {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 5px,
+    color-mix(in srgb, currentColor 10%, transparent) 5px 10px
+  );
+}
+.eoc-state[data-treatment="outline"],
+.eoc-state[data-treatment="numeric"] {
+  background: transparent;
+}
+.eoc-state[data-treatment="muted"] {
+  border-style: dashed;
+}
+.eoc-state-marker {
+  width: 1.15em;
+  flex: 0 0 1.15em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.eoc-category-key {
+  width: 12px;
+  height: 12px;
+  display: inline-block;
+  background: var(--eoc-category-color);
+  border: 1px solid var(--eoc-border-strong);
+  border-radius: 2px;
 }
 
 /* MapLibre popup and scale, themed to the current surface. */

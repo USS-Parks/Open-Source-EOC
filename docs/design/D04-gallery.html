@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Semantic token review</title>
+    <style>html, body, #token-review-root { min-height: 100%; margin: 0; }</style>
+  </head>
+  <body>
+    <div id="token-review-root"></div>
+    <script type="module">
+      import "../../web/src/design/base.css";
+      import { mountTokenReview } from "../../web/src/design/gallery.tsx";
+      const root = document.querySelector("#token-review-root");
+      if (!root) throw new Error("Token review root is missing");
+      mountTokenReview(root);
+    </script>
+  </body>
+</html>

@@ -11,6 +11,15 @@ import {
   NotificationTray,
 } from "./layout.js";
 import type { ThemeName } from "./tokens.js";
+import type { CSSProperties } from "react";
+import {
+  chartCategories,
+  density,
+  identityPlacement,
+  operationalStates,
+  themes,
+  type OperationalState,
+} from "./tokens.js";
 
 /**
  * Component gallery: every design-system piece rendered together. Serves as
@@ -717,5 +726,208 @@ const COMPOSITION_REVIEW_STYLES = String.raw`
   .composition-reviewbar { align-items: stretch; flex-direction: column; padding: 8px; }
   .composition-review-controls { width: 100%; display: grid; grid-template-columns: 1fr; }
   .composition-review-controls label, .composition-review-controls select, .composition-review-controls button { width: 100%; }
+}
+`;
+
+const TOKEN_REVIEW_STATE_ORDER: readonly OperationalState[] = [
+  "normal",
+  "watch",
+  "critical",
+  "unknown",
+  "stale",
+  "unavailable",
+  "notApplicable",
+  "zero",
+];
+
+const TOKEN_REVIEW_MARKS: Readonly<Record<OperationalState, string>> = {
+  normal: "●",
+  watch: "▲",
+  critical: "◆",
+  unknown: "?",
+  stale: "◷",
+  unavailable: "—",
+  notApplicable: "/",
+  zero: "0",
+};
+
+/** Review-only rendering of the shared semantic vocabulary and identity hierarchy. */
+export function TokenReview() {
+  const [theme, setTheme] = useState<ThemeName>("light");
+  const [reviewDensity, setReviewDensity] = useState<"compact" | "comfortable">("compact");
+  const themeTokens = themes[theme];
+  const stateTokens = operationalStates[theme];
+  const rowHeight = density[reviewDensity].rowHeight;
+
+  return (
+    <Theme name={theme}>
+      <style>{TOKEN_REVIEW_STYLES}</style>
+      <main className="token-review" data-review-theme={theme}>
+        <header className="token-review-controls">
+          <div>
+            <strong>Semantic token review</strong>
+            <span> Local synthetic examples</span>
+          </div>
+          <div className="token-review-actions">
+            <label>
+              Density
+              <select
+                value={reviewDensity}
+                onChange={(event) => setReviewDensity(event.target.value as "compact" | "comfortable")}
+              >
+                <option value="compact">Compact</option>
+                <option value="comfortable">Comfortable</option>
+              </select>
+            </label>
+            <button type="button" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
+              Use {theme === "light" ? "dark" : "light"} theme
+            </button>
+          </div>
+        </header>
+
+        <section className="eoc-identity" aria-label="Identity placement example">
+          <span className="eoc-product-mark" aria-hidden="true">⌖</span>
+          <div>
+            <div className="eoc-product-identity">Open Source EOC</div>
+            <div className="eoc-organization-identity">North Coast Operational Area</div>
+          </div>
+          <div className="eoc-incident-context">
+            <strong>Redwood Complex</strong><br />Operational Period 3
+          </div>
+        </section>
+
+        <div className="token-review-body">
+          <section className="token-review-intro" aria-labelledby="token-review-title">
+            <div>
+              <p className="token-review-eyebrow">Shared visual vocabulary</p>
+              <h1 id="token-review-title">Identity supports orientation</h1>
+              <p>Product and organization identity remain visually subordinate to operational state. Incident context identifies the active workspace and does not convey command authority.</p>
+            </div>
+            <dl className="token-review-placement">
+              <div><dt>Product</dt><dd>{identityPlacement.product}</dd></div>
+              <div><dt>Organization</dt><dd>{identityPlacement.organization}</dd></div>
+              <div><dt>Incident</dt><dd>{identityPlacement.incident}</dd></div>
+            </dl>
+          </section>
+
+          <section className="token-review-panel" aria-labelledby="surface-heading">
+            <h2 id="surface-heading">Surfaces and brand accents</h2>
+            <p className="token-review-note">Navy anchors product identity. Teal marks selection and interaction; neither carries an operational condition.</p>
+            <div className="token-review-swatches">
+              {[
+                ["Canvas", themeTokens.bg],
+                ["Surface", themeTokens.surface],
+                ["Raised", themeTokens.surfaceRaised],
+                ["Sunken", themeTokens.surfaceSunken],
+                ["Navy identity", themeTokens.brandNavy],
+                ["Teal interaction", themeTokens.brandTeal],
+              ].map(([label, color]) => (
+                <div key={label} className="token-review-swatch">
+                  <span style={{ background: color }} />
+                  <strong>{label}</strong>
+                  <code>{color}</code>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="token-review-panel" aria-labelledby="condition-heading">
+            <h2 id="condition-heading">Operational conditions and data states</h2>
+            <p className="token-review-note">Every meaning has text and a marker. Zero is a reported quantity, not a favorable condition.</p>
+            <div className="token-review-states">
+              {TOKEN_REVIEW_STATE_ORDER.map((state) => {
+                const token = stateTokens[state];
+                const style = {
+                  "--eoc-state-foreground": token.foreground,
+                  "--eoc-state-background": token.background,
+                } as CSSProperties;
+                return (
+                  <div key={state} className="token-review-state-example">
+                    <span className="eoc-state" data-treatment={token.treatment} style={style}>
+                      <span className="eoc-state-marker" aria-hidden="true">{TOKEN_REVIEW_MARKS[state]}</span>
+                      {token.label}
+                    </span>
+                    <small>{state === "zero" ? "0 shelters reporting; verify scope" : token.treatment}</small>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="token-review-panel" aria-labelledby="chart-heading">
+            <h2 id="chart-heading">Categorical chart palette</h2>
+            <p className="token-review-note">Category color separates series only. The legend supplies meaning and avoids status words.</p>
+            <div className="token-review-chart" role="img" aria-label="Synthetic workload by function: Planning 72, Operations 56, Logistics 44, Finance 31, Public information 24, Liaison 18">
+              {[
+                ["Planning", 72],
+                ["Operations", 56],
+                ["Logistics", 44],
+                ["Finance", 31],
+                ["Public information", 24],
+                ["Liaison", 18],
+              ].map(([label, value], index) => (
+                <div key={label} className="token-review-chart-row">
+                  <span><i className="eoc-category-key" style={{ "--eoc-category-color": chartCategories[theme][index] } as CSSProperties} />{label}</span>
+                  <span className="token-review-bar-track"><i style={{ width: `${value}%`, background: chartCategories[theme][index] }} /></span>
+                  <strong>{value}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="token-review-panel" aria-labelledby="density-heading">
+            <h2 id="density-heading">{reviewDensity === "compact" ? "Compact" : "Comfortable"} operational density</h2>
+            <p className="token-review-note">Rows remain readable at the selected density. Field controls keep their separate 44 px touch contract.</p>
+            <div className="token-review-table" role="table" aria-label="Synthetic assignment records">
+              {[
+                ["Assignment", "Owner", "Updated"],
+                ["Shelter generator", "Logistics", "10:42"],
+                ["Route 96 closure", "Operations", "10:38"],
+                ["Public warning", "PIO", "10:31"],
+              ].map((cells, rowIndex) => (
+                <div key={cells[0]} role="row" data-header={rowIndex === 0 || undefined} style={{ minHeight: rowHeight }}>
+                  {cells.map((cell) => <span key={cell} role={rowIndex === 0 ? "columnheader" : "cell"}>{cell}</span>)}
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="token-review-panel token-review-focus" aria-labelledby="focus-heading">
+            <h2 id="focus-heading">Typography and focus</h2>
+            <p><strong>Strong text</strong> names the task. Body text carries the working detail. <small>Supporting text stays at 12 px or larger.</small></p>
+            <label>Filter assignments<input type="search" placeholder="Try keyboard focus" /></label>
+            <button type="button">Review selected record</button>
+          </section>
+        </div>
+      </main>
+    </Theme>
+  );
+}
+
+export function mountTokenReview(element: Element) {
+  createRoot(element).render(<TokenReview />);
+}
+
+const TOKEN_REVIEW_STYLES = `
+.token-review { min-height: 100vh; color: var(--eoc-text); background: var(--eoc-bg); font-family: var(--eoc-font); }
+.token-review-controls { min-height: 52px; padding: 8px 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; color: var(--eoc-text); background: var(--eoc-surface-overlay); border-bottom: 1px solid var(--eoc-border); }
+.token-review-controls span, .token-review-note { color: var(--eoc-text-muted); font-size: 12px; line-height: 1.45; }
+.token-review-actions { display: flex; align-items: end; gap: 8px; }.token-review-actions label { display: grid; gap: 3px; color: var(--eoc-text-muted); font-size: 12px; }
+.token-review-actions select, .token-review-actions button, .token-review-focus input, .token-review-focus button { min-height: 44px; padding: 7px 10px; color: var(--eoc-text); background: var(--eoc-surface); border: 1px solid var(--eoc-border-strong); border-radius: var(--eoc-radius-sm); }
+.token-review-actions button, .token-review-focus button { color: var(--eoc-brand-teal-text); background: var(--eoc-brand-teal); font-weight: 650; }
+.token-review-body { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 24px 0 40px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.token-review-intro { grid-column: 1 / -1; padding: 4px 0 8px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, .6fr); gap: 24px; align-items: end; }.token-review-intro h1 { margin: 3px 0 8px; color: var(--eoc-text-strong); font-size: clamp(24px, 3vw, 34px); line-height: 1.2; }.token-review-intro p { max-width: 760px; margin: 0; line-height: 1.5; }.token-review-eyebrow { color: var(--eoc-brand-teal) !important; font-size: 12px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.token-review-placement { margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--eoc-border); border: 1px solid var(--eoc-border); }.token-review-placement div { min-width: 0; padding: 8px; background: var(--eoc-surface); }.token-review-placement dt { color: var(--eoc-text-muted); font-size: 12px; }.token-review-placement dd { margin: 3px 0 0; overflow-wrap: anywhere; font-size: 12px; font-weight: 650; }
+.token-review-panel { min-width: 0; padding: 16px; background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: var(--eoc-radius-md); box-shadow: var(--eoc-shadow-sm); }.token-review-panel h2 { margin: 0 0 4px; color: var(--eoc-text-strong); font-size: 17px; }.token-review-panel p { line-height: 1.5; }
+.token-review-swatches { margin-top: 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }.token-review-swatch { min-width: 0; display: grid; gap: 4px; font-size: 12px; }.token-review-swatch > span { height: 42px; border: 1px solid var(--eoc-border-strong); border-radius: var(--eoc-radius-sm); }.token-review-swatch code { color: var(--eoc-text-muted); font-size: 12px; }
+.token-review-states { margin-top: 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }.token-review-state-example { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }.token-review-state-example small { color: var(--eoc-text-muted); font-size: 12px; text-align: right; }
+.token-review-chart { margin-top: 12px; display: grid; gap: 9px; }.token-review-chart-row { display: grid; grid-template-columns: minmax(130px, .9fr) minmax(100px, 1.4fr) 28px; gap: 8px; align-items: center; font-size: 12px; }.token-review-chart-row > span:first-child { display: flex; align-items: center; gap: 7px; }.token-review-bar-track { height: 12px; overflow: hidden; background: var(--eoc-surface-sunken); border-radius: 2px; }.token-review-bar-track i { height: 100%; display: block; }
+.token-review-table { margin-top: 12px; border: 1px solid var(--eoc-border); }.token-review-table [role=row] { padding: 4px 8px; display: grid; grid-template-columns: 1.4fr .8fr .5fr; gap: 8px; align-items: center; border-top: 1px solid var(--eoc-border); font-size: 12px; }.token-review-table [role=row]:first-child { border-top: 0; }.token-review-table [data-header=true] { color: var(--eoc-text-muted); background: var(--eoc-surface-raised); font-weight: 650; text-transform: uppercase; letter-spacing: .04em; }
+.token-review-focus { display: grid; align-content: start; gap: 8px; }.token-review-focus h2, .token-review-focus p { margin: 0; }.token-review-focus small { color: var(--eoc-text-muted); font-size: 12px; }.token-review-focus label { display: grid; gap: 4px; color: var(--eoc-text-muted); font-size: 12px; }.token-review-focus button { justify-self: start; }
+@media (max-width: 640px) {
+  .token-review-controls { align-items: stretch; flex-direction: column; }.token-review-actions { display: grid; grid-template-columns: 1fr 1fr; }.token-review-actions select, .token-review-actions button { width: 100%; }
+  .eoc-identity { align-items: start; flex-wrap: wrap; }.eoc-incident-context { width: 100%; margin: 0; padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--eoc-brand-navy-text) 30%, transparent); }
+  .token-review-body { width: min(100% - 20px, 390px); padding-top: 16px; grid-template-columns: 1fr; }.token-review-intro { grid-column: auto; grid-template-columns: 1fr; gap: 12px; }.token-review-placement { grid-template-columns: 1fr; }
+  .token-review-swatches { grid-template-columns: repeat(2, minmax(0, 1fr)); }.token-review-states { grid-template-columns: 1fr; }.token-review-chart-row { grid-template-columns: minmax(120px, 1fr) minmax(70px, 1fr) 24px; }
 }
 `;
