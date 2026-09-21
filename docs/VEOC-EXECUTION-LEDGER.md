@@ -2870,3 +2870,38 @@ increment proves it and that coverage follows the incident area.
   whole-county statewide scale, and county sources beyond Humboldt, remain named
   gaps. Live outbound fetching stays gated.
 - **Ending commit:** this receipt commit, recorded by the next receipt.
+
+## W0.0: align authority for the approved Master PSPR
+
+- **Authorization:** Basho approved full STS execution of the Master PSPR on
+  2026-09-21 in the integrating session. A0 includes the design roster, the
+  Phase 1 opening and the INV-8 color refinement. A3 commit approval, A5 push,
+  A6 external actions and G-A design review remain separate under section 2.2.
+- **Serves:** Master PSPR Phase 0, W0.0; parity and design execution governance.
+- **Baseline:** 32acaf19b78607d0242ec92e78accb1f547e1c1e on canonical main.
+- **Lane:** main. Recorded at 2026-09-21 18:38 UTC / 11:38 PDT.
+- **Change:** add the Master authority pointer to CLAUDE.md; record A0 in the
+  Master; add the dated lane interpretation to the canonical and continuation
+  rosters; update the Design PSPR approval status; return the standalone Astra
+  plan to its committed text with the required supersession notice. Preserve
+  the pre-existing standing lane grant. Preserve the superseded uncommitted
+  standalone draft in the OS temporary eoc-master-w0-0 directory.
+- **Files:** CLAUDE.md and the Master, standalone Astra, canonical, continuation,
+  Design PSPR and this ledger under docs/. No product or dependency change.
+- **Gate:** `node scripts/check-links.mjs` exited 0, 46 Markdown files scanned.
+  `git diff --cached --check` exited 0. Integrator reviewed the authority diff;
+  independent documentation review returned ship with no findings. No
+  application tests required. Gate passed. Basho subsequently approved this
+  commit and standing gated commits and landings for the approved roster.
+- **Controller:** Ralph was armed for this finite documentation gate, but its
+  status still reports zero observed attempts after the successful command.
+  Native hook enforcement is unproven; the command result above is direct
+  execution evidence, not a controller-generated pass.
+- **Evidence level:** designed; governance alignment only.
+- **Boundary:** no implementation, desktop-app acceptance or release claim.
+  Push, external actions and G-A remain separately gated. Other pre-existing
+  untracked files are excluded from staging.
+- **Rollback:** revert only this unit's authority edits; the superseded draft
+  remains preserved in temporary storage.
+- **Unit commit:** approved; SHA recorded by the next receipt. No push
+  performed; no branch created. One canonical worktree retained, with no lanes.

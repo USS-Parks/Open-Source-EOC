@@ -2,6 +2,7 @@
 
 ## Authority documents
 
+- `docs/MASTER-PSPR-2026-09-21.md` is the approved execution plan for the remaining parity roster and the design roster: order, ownership, delegation and landing. The continuation roster table and the Design PSPR keep the binding acceptance wording.
 - `docs/VIRTUAL-EOC-PSPR-2026-09-17.md` is the canonical Plan / Sequential Prompt Roster. Its universal execution contract binds every session in this repository. Read it before editing anything.
 - `docs/VIRTUAL-EOC-PLATFORM-RESEARCH-2026-09-17.md` is the research basis behind the roster.
 - Session receipts append to `docs/VEOC-EXECUTION-LEDGER.md` (created by VEOC-00).
@@ -22,7 +23,37 @@ action in the current session.
   without a distinct, explicit approval from Basho for that specific action.
   Summarize staged changes and ask separately, every time.
 
+### Standing grant: fan-out lanes and the zipper (set by Basho, 2026-09-21)
+
+Basho grants Astra and this project the standing ability to fan out work across
+git worktrees and lane branches and to zipper that work into `main`, throughout
+the project, for as long as the zipper below is kept. Lane worktrees and lane
+branches need no per-session or per-wave re-approval. Everything outside this
+grant still falls under the rule above.
+
+- Fan-out runs only under a plan Basho has approved for execution. The current
+  plan is `docs/MASTER-PSPR-2026-09-21.md`; its section 7.5 defines the zipper
+  in full.
+- Scope: branches named `lane/*` and their worktrees, created by the
+  integrating session outside the canonical checkout, and their removal once
+  their work is on `main`. Lane branches are local and are never pushed.
+- The zipper is the condition of the grant. `main` moves only by fast-forward
+  to exact commits Basho has approved, one landing at a time, by the
+  integrating session alone. No merge commits anywhere; `main` is never merged
+  into a lane (lanes rebase). No two units in flight own the same file. Every
+  unit starts from current `main`. Sub-agents use git read-only.
+- A broken zipper suspends this grant until Basho restores it: stop launching
+  lanes and report.
+- Unchanged: commit and push stay separately gated exactly as above. For lane
+  work only, this grant supersedes "no new branch or worktree" and "one prompt
+  at a time" in the older roster documents.
+
 ## CRITICAL: Commit & PR Hygiene (ABSOLUTE, set by Basho, 2026-09-17)
+
+Standing execution grant, 2026-09-21: in the Master PSPR execution session,
+Basho approved W0.0 and subsequent commits and fast-forward landings that pass
+their prescribed gates. This overrides per-commit asks for this approved
+roster. Push, external-action and G-A design-review gates remain separate.
 
 Every commit message and pull request is humanized: plain language stating
 what changed and why, nothing else.
@@ -65,7 +96,10 @@ writes before. Follow the same discipline as the Mighty-Eel-OS protocol:
 
 ## Session discipline
 
-- Execute exactly one numbered VEOC prompt at a time, in roster order.
+- Execute one numbered prompt at a time, in roster order, unless work is fanned
+  out under the standing grant above. Under fan-out, each lane executes one
+  unit at a time and work lands on `main` only through the integrating
+  session, in dependency order.
 - Session gate is `pnpm check` once VEOC-06 defines it; until then, verify
   every claim manually and record commands and exit codes in the receipt.
 - No external service registration, API key issuance, FEMA/IPAWS contact, or

@@ -31,6 +31,13 @@ This is the sole top-level execution roster for the Virtual EOC side project. It
 
 ## 1. Universal execution contract
 
+Note, 2026-09-21: under the approved Master PSPR
+(`docs/MASTER-PSPR-2026-09-21.md`), item 6 applies per lane: each lane
+executes one unit at a time and work lands on `main` in dependency order
+through one integrator. Items 3 and 4 are unchanged; Basho's standing grant
+for `lane/*` worktrees is recorded in `CLAUDE.md`. INV-8 is read with the
+refinement in Design PSPR section 3.
+
 Every session executor must obey all of the following:
 
 1. The project home is `github.com/USS-Parks/Open-Source-EOC` (Basho, 2026-09-17); code and canonical project documents live there, at repository root. Never re-nest repositories.

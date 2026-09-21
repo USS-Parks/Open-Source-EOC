@@ -2,7 +2,7 @@
 
 **Initiative:** A unified visual identity and operator experience combining Esri's geographic situational awareness with WebEOC's operational coordination, with a measurable ambition of substantially faster workflows.
 
-**Status:** Draft published for review. Basho authorized committing and pushing this document after reviewing the inline draft. Publication does not authorize implementation, restart STS, or change the existing execution order.
+**Status:** Approved for execution through Basho's Master PSPR approval on 2026-09-21. Execution order, ownership and landing are governed by `docs/MASTER-PSPR-2026-09-21.md`. This document remains the design specification and the binding wording of D00 to D35. The prior publication approval alone did not authorize implementation.
 
 **Scope:** The authenticated California-wide application, including its dashboard, navigation, maps, operational workspaces, forms, icons, branding, reports, and field experience.
 
@@ -564,5 +564,5 @@ The design initiative is complete when:
 - Workflow improvement is measured and reported honestly.
 - The design roster and implementation roster point to the same evidence.
 
-**Execution approval would establish this as the design specification and execution roster.**
-**Until then, it remains a published draft for review.**
+**Execution was approved through the Master PSPR on 2026-09-21.**
+**The Master PSPR governs scheduling and preserves the Milestone A review gate.**
