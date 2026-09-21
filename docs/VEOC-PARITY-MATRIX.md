@@ -104,7 +104,7 @@ accordingly, so parity against "WebEOC" is not overstated.
 | G-BUILDINGS | Enriched building subtypes (Overture) | Esri-EMO | Building archive exists; Overture enrichment open | open | Handoff 14 |
 | G-BOARDROUTE | Configurable board workflow routing | WebEOC-DS | Declarative contract and transactional execution, pinned definitions, current-authority approvals, due/escalation, immutable history and local notifications integrated (`6c8dddc`); no-code configuration/presentation remain | partial | P-BOARDS-2 |
 | G-SHELL | Adaptable, responsive operator shell | Esri-EMO | Personal incident-scoped persistence with RLS, revisions and bounded payloads integrated (`c339761`); responsive shell and consuming controls remain open | partial | VEOC-81C / P-SHELL |
-| G-DASH | Composable saved dashboards + map/chart/list drilldown | Esri-EMO | Runtime filter + drilldown + URL state (`7cf8791`); saved/composable layouts open | partial | VEOC-81 |
+| G-DASH | Composable saved dashboards + map/chart/list drilldown | Esri-EMO | Saved compositions, explicit filter inheritance/clear, period/date/category/viewport scope and masked paged contributions integrated with real PostgreSQL evidence (`6aa5c09`); operational presentation and URL consumption remain | partial | P-DASH |
 | G-MFA | MFA and SAML for IPAWS-authority accounts | WebEOC-core | Password + optional OIDC only (audit §3.6); no MFA/SAML | open | Basho (IdP decision) |
 | G-TILES | Vector-tile path for operational layers past 1,000 features | Esri-EMO | OGC features capped at 1,000; no tile server | open | VEOC-79F |
 

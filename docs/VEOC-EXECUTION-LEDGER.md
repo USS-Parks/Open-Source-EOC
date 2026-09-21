@@ -3635,3 +3635,27 @@ increment proves it and that coverage follows the incident area.
 - **Boundary:** this gallery does not replace the canonical photos or prove
   final operational screen composition. Four existing lanes retained, no new
   worktree or push. Lane d continues to D08.
+
+## 81-E: saved dashboard composition and reconciled queries
+
+- **Serves/lane:** VEOC-81 engine in lane b, refreshed to ef5fdd3.
+  Evidence level: integrated engine; P-DASH owns operational presentation.
+- **Change:** personal incident-scoped compositions use SEAM revisions; panels
+  reuse existing dashboard and impact engines. Category, date, operational
+  period and viewport filters are echoed and reconcile with masked, paged
+  contribution queries. Missing sources remain visible as unavailable.
+- **Gate:** root integration TypeScript and ESLint passed; seven suites passed
+  107/107. Fresh review identified unreadable-source capability and filter-clear
+  defects. Both repaired; owner static checks and root real PostgreSQL focused
+  suite passed 7/7. Final bounded review is SHIP. Evidence under
+  deploy/test-runtime/out/lanes/b/logs: 81e-integration.log,
+  81e-root-review-repair.log, 81e-filtermode-tsc.log and
+  81e-filtermode-eslint.log.
+- **Unit commit:** 6aa5c094e7b27d8afc15a3df74f490dcef94941a, exact fast-forward.
+- **Consumer contract:** operational periods refer to incident area revisions,
+  not IAP IDs. Config reads accept filterMode inherit, replace or clear; replace
+  supplies the complete requested filter set, clear rejects conflicting filter
+  parameters. P-DASH must carry echoed effective filters to contributions.
+  Impact aggregates explicitly report unsupported active nonspatial filters.
+- **Boundary:** no new counting engine or presentation. Four retained lanes,
+  no new worktree or push. Lane b next takes D07.
