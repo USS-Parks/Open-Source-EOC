@@ -1,0 +1,210 @@
+.d05-icon-gallery {
+  min-height: 100vh;
+  padding: 24px;
+  background: var(--eoc-bg);
+  color: var(--eoc-text);
+  font-family: var(--eoc-font);
+}
+
+.d05-gallery-header,
+.d05-gallery-panel {
+  width: min(1120px, 100%);
+  margin: 0 auto 16px;
+  border: 1px solid var(--eoc-border);
+  border-radius: 10px;
+  background: var(--eoc-surface);
+}
+
+.d05-gallery-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px;
+  border-top: 4px solid var(--eoc-brand-teal);
+}
+
+.d05-gallery-header h1,
+.d05-gallery-panel h2,
+.d05-lifeline-card h3 {
+  margin: 0;
+  color: var(--eoc-text-strong);
+}
+
+.d05-gallery-header p,
+.d05-gallery-panel p {
+  max-width: 760px;
+  margin: 8px 0 0;
+  color: var(--eoc-text-muted);
+  line-height: 1.5;
+}
+
+.d05-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.d05-gallery-panel {
+  padding: 20px;
+}
+
+.d05-theme-button,
+.d05-state-button {
+  min-height: 44px;
+  border: 1px solid var(--eoc-border-strong);
+  border-radius: 6px;
+  background: var(--eoc-surface);
+  color: var(--eoc-text);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.d05-theme-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+}
+
+.d05-icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.d05-icon-tile {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--eoc-border);
+  border-radius: 6px;
+  color: var(--eoc-brand-teal);
+}
+
+.d05-icon-tile span {
+  color: var(--eoc-text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.d05-lifeline-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.d05-lifeline-card {
+  display: flex;
+  min-height: 92px;
+  align-items: center;
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid var(--eoc-border);
+  border-left: 4px solid var(--eoc-brand-teal);
+  border-radius: 6px;
+  color: var(--eoc-brand-navy);
+}
+
+[data-theme="dark"] .d05-lifeline-card {
+  color: var(--eoc-brand-signal);
+}
+
+.d05-lifeline-card h3 {
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.d05-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--eoc-text);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.d05-status-dot {
+  width: 9px;
+  height: 9px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+.d05-status-stable { color: var(--eoc-status-success); }
+.d05-status-watch { color: var(--eoc-status-warning); }
+.d05-status-critical { color: var(--eoc-status-critical); }
+.d05-status-unknown { color: var(--eoc-status-unknown); }
+
+.d05-state-row,
+.d05-access-examples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.d05-compact-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.d05-compact-strip > span {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--eoc-border);
+  border-radius: 4px;
+  color: var(--eoc-brand-teal);
+}
+
+.d05-state-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+}
+
+.d05-state-button.selected {
+  border-color: var(--eoc-brand-teal);
+  background: var(--eoc-selection);
+}
+
+.d05-state-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.d05-access-examples > div {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border: 1px solid var(--eoc-border);
+  border-radius: 6px;
+  color: var(--eoc-brand-teal);
+}
+
+.d05-access-examples strong {
+  color: var(--eoc-text);
+  font-size: 13px;
+}
+
+@media (max-width: 600px) {
+  .d05-icon-gallery { padding: 12px; }
+  .d05-gallery-header { align-items: flex-start; flex-direction: column; }
+  .d05-theme-button { width: 100%; justify-content: center; }
+  .d05-lifeline-grid { grid-template-columns: 1fr; }
+}

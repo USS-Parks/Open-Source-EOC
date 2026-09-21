@@ -1,7 +1,7 @@
 # Asset licenses and provenance
 
-Status: 2026-09-21. H13 begins this inventory. D05 and D30 may extend it when
-they add icons or export assets.
+Status: 2026-09-21. H13 begins this inventory and D05 extends it. D30 may
+extend it when it adds export assets.
 
 This file distinguishes assets that are actually distributed by this repository
 from deployment-supplied assets and references recorded in project planning.
@@ -29,6 +29,18 @@ does not establish the license of a separately sourced map, font, or symbol.
 | Self-hosted OpenStreetMap street and building tiles | `deploy/basemap/generate-california.sh`, `deploy/basemap/buildings-schema.yml` | The deployment guide records OpenStreetMap ODbL attribution and requires the map to display `© OpenStreetMap contributors`. The generated statewide archives are not tracked. | Deployment-supplied. |
 | NAPSG MapLibre facility sprite | `web/public/napsg/sprite.json`, `sprite.png`, `sprite@2x.json`, `sprite@2x.png` | `deploy/basemap/build-napsg-sprite.mjs` deterministically builds both pixel ratios from the manifest-verified originals. Every sprite entry carries NAPSG attribution, CC BY 4.0 license URL, original source URL, and source SHA-256. | Distributed with local license text. |
 | Runtime hazard hatches | `web/src/cop/hazards.ts` | Generated in code from project-owned drawing instructions; there is no separate image asset. | Distributed as software under the repository license. |
+| D05 application icon family | `web/src/design/icons/` | Original Open Source EOC SVG path geometry. The repository's Apache-2.0 `LICENSE` and `NOTICE` are local license text. | Distributed as software under Apache-2.0. |
+
+## D05 application icons
+
+The D05 navigation, action, and community-lifeline symbols are original project
+artwork expressed as local SVG drawing instructions. The canonical design
+screenshots informed the compact scale, rounded stroke treatment, and familiar
+lifeline concepts; no third-party icon file was copied or redistributed.
+
+These application icons are distinct from the H13 NAPSG facility symbols.
+NAPSG sprites retain their own CC BY 4.0 provenance and operational map meaning;
+the D05 registry does not replace or relicense them.
 
 ## H13 NAPSG facility symbols
 

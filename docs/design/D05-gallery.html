@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Operational icon family review</title>
+    <style>html, body, #d05-icon-root { min-height: 100%; margin: 0; }</style>
+  </head>
+  <body>
+    <div id="d05-icon-root"></div>
+    <script type="module">
+      import "../../web/src/design/base.css";
+      import { mountIconGallery } from "../../web/src/design/icons/IconGallery.tsx";
+      const root = document.querySelector("#d05-icon-root");
+      if (!root) throw new Error("D05 icon root is missing");
+      mountIconGallery(root);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,118 @@
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+const { chromium } = await import("../../../../server/node_modules/playwright-core/index.mjs");
+
+const reviewUrl = process.env.D05_REVIEW_URL ?? "http://127.0.0.1:5175/docs/design/D05-gallery.html";
+const reviewOrigin = new URL(reviewUrl).origin;
+const shotDir = process.env.D05_SHOT_DIR ?? "C:/Users/17076/Documents/Open Source EOC/deploy/test-runtime/out/lanes/a/browser-shots/d05";
+const resultPath = process.env.D05_RESULT ?? "C:/Users/17076/Documents/Open Source EOC/deploy/test-runtime/out/lanes/a/logs/D05-browser-result.json";
+const candidates = [
+  process.env.OPENEOC_CHROMIUM,
+  "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+].filter(Boolean);
+const executablePath = candidates.find((candidate) => existsSync(candidate));
+if (!executablePath) throw new Error("No Chromium found; set OPENEOC_CHROMIUM");
+
+mkdirSync(shotDir, { recursive: true });
+const browser = await chromium.launch({ executablePath, headless: true });
+const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+const page = await context.newPage();
+const pageErrors = [];
+const externalRequests = [];
+page.on("pageerror", (error) => pageErrors.push(String(error)));
+page.on("request", (request) => {
+  if (!request.url().startsWith(`${reviewOrigin}/`)) externalRequests.push(request.url());
+});
+await context.route("**/*", async (route) => {
+  if (route.request().url().startsWith(`${reviewOrigin}/`)) await route.continue();
+  else await route.abort();
+});
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+async function assertContained(label) {
+  const geometry = await page.evaluate(() => ({
+    viewport: window.innerWidth,
+    documentWidth: document.documentElement.scrollWidth,
+    galleryClient: document.querySelector(".d05-icon-gallery")?.clientWidth ?? 0,
+    galleryScroll: document.querySelector(".d05-icon-gallery")?.scrollWidth ?? 0,
+  }));
+  assert(geometry.documentWidth <= geometry.viewport + 1, `${label} page overflow`);
+  assert(geometry.galleryScroll <= geometry.galleryClient + 1, `${label} gallery overflow`);
+}
+
+async function capture(name) {
+  await page.screenshot({ path: join(shotDir, `${name}.png`), fullPage: true });
+}
+
+try {
+  await page.goto(reviewUrl, { waitUntil: "networkidle" });
+  await page.locator(".d05-icon-gallery").waitFor();
+  assert(await page.locator(".d05-icon-gallery").getAttribute("data-review-theme") === "light", "Initial theme is not light");
+  assert(await page.locator(".d05-lifeline-card").count() === 8, "All eight lifelines are not visible");
+  assert(await page.locator(".d05-icon-tile").count() >= 25, "Navigation registry is incomplete");
+  assert(await page.getByRole("img", { name: "Compare revisions" }).count() === 1, "Meaningful icon accessible name is missing");
+  assert(await page.locator('svg[aria-hidden="true"]').count() >= 8, "Decorative icons are not hidden");
+  assert(await page.locator(".d05-lifeline-card .d05-status").count() === 8, "Status labels are missing");
+  assert(await page.locator(".d05-lifeline-card svg .d05-status").count() === 0, "Status was embedded in an icon");
+  assert(await page.locator('[data-compact-kind="navigation"] svg[width="16"]').count() >= 25, "Compact 16px navigation family is incomplete");
+  assert(await page.locator('[data-compact-kind="lifeline"] svg[width="20"]').count() === 8, "Compact 20px lifeline family is incomplete");
+
+  const iconGeometry = await page.locator(".d05-icon-tile svg").evaluateAll((icons) =>
+    icons.map((icon) => ({ width: icon.getAttribute("width"), viewBox: icon.getAttribute("viewBox") })),
+  );
+  assert(iconGeometry.every((icon) => icon.width === "24" && icon.viewBox === "0 0 24 24"), "Navigation icon geometry is inconsistent");
+  await assertContained("Wide light");
+  await capture("wide-light");
+
+  await page.locator("body").click({ position: { x: 2, y: 2 } });
+  await page.keyboard.press("Tab");
+  assert(await page.evaluate(() => document.activeElement?.textContent?.includes("Use dark theme")), "Theme control is not first in keyboard order");
+  const focus = await page.evaluate(() => {
+    const element = document.activeElement;
+    if (!(element instanceof HTMLElement)) return null;
+    const style = getComputedStyle(element);
+    return { style: style.outlineStyle, width: Number.parseFloat(style.outlineWidth) };
+  });
+  assert(focus?.style !== "none" && (focus?.width ?? 0) >= 2, "Visible keyboard focus is missing");
+  await page.keyboard.press("Enter");
+  assert(await page.locator(".d05-icon-gallery").getAttribute("data-review-theme") === "dark", "Theme did not switch to dark");
+  await assertContained("Wide dark");
+  await capture("wide-dark-focus");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await assertContained("Narrow dark");
+  await capture("narrow-dark");
+  await page.getByRole("button", { name: "Use light theme" }).click();
+  await assertContained("Narrow light");
+  await capture("narrow-light");
+
+  assert(pageErrors.length === 0, `Page errors: ${pageErrors.join(" | ")}`);
+  assert(externalRequests.length === 0, `External requests: ${externalRequests.join(" | ")}`);
+  const result = {
+    status: "passed",
+    reviewUrl,
+    screenshots: 4,
+    viewports: ["1440x900", "390x844"],
+    themes: ["light", "dark"],
+    navigationMinimum: 25,
+    lifelineCount: 8,
+    keyboardFocusChecked: true,
+    accessibilityModesChecked: true,
+    compactSizesChecked: [16, 20],
+    statusIndependenceChecked: true,
+    externalRequests,
+    pageErrors,
+  };
+  writeFileSync(resultPath, JSON.stringify(result, null, 2));
+  console.log(JSON.stringify(result));
+} catch (error) {
+  console.error(JSON.stringify({ status: "failed", error: String(error), pageErrors, externalRequests }));
+  throw error;
+} finally {
+  await browser.close();
+}
