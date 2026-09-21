@@ -3772,3 +3772,27 @@ increment proves it and that coverage follows the incident area.
   California sample rows use California titles; the full 18-entry workspace
   remains P-LIFE-3. Four existing lanes retained; no new worktree or push.
   Next lane b: 84-E, then separately gated 84A-E.
+
+## 83-E: scoped AAR accountability and report snapshots
+
+- **Serves/lane:** VEOC-83 engine in lane c, refreshed to 18fc318. Period
+  references are same-incident immutable revisions; priority/status/capability
+  totals retain contributing IDs. Action assignment reuses workflow authority,
+  revision CAS and first-completion attribution. External assignees can change
+  only their explicitly assigned action status while their grant remains active.
+- **Export:** stored report snapshots preserve period, owner, priority, due,
+  status, revision and completion fields. Chronology is incident scoped with a
+  half-open selected-period window. Root found long fields could clip; AAR-only
+  wrapping now precedes pagination, retaining other PDF consumers' behavior.
+- **Gate:** root full read, workspace TypeScript and tree ESLint passed; seven
+  focused suites passed 48/48, including actual PostgreSQL and D07/D08 replay.
+  Root rendered and viewed the actual two-page server PDF; action fields fit.
+  Reviewer initially raised audit-receipt access after revocation. Root's new
+  runtime-RLS regression proved one receipt before revocation and zero after;
+  reviewer retracted the finding because nested action RLS enforces the grant.
+  Targeted regression 1/1, affected server types/lint passed; final review SHIP.
+- **Evidence:** deploy/test-runtime/out/lanes/c/logs/83e-root-integration.log,
+  83e-root-audit-revocation.log; out/83e-review/accountability.pdf and PNG.
+- **Unit commit:** e6c746a93ee4f1234c58be12bab928d0806ad196, exact fast-forward.
+  P-AAR owns final presentation. Four existing lanes retained; no new worktree
+  or push. The tracked replay stash is retained until lane retirement.
