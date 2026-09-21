@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>D03 composition review</title>
+    <style>
+      html, body, #composition-review-root { min-height: 100%; margin: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="composition-review-root"></div>
+    <script type="module">
+      import { mountCompositionReview } from "../../web/src/design/gallery.tsx";
+      const root = document.querySelector("#composition-review-root");
+      if (!root) throw new Error("Composition review root is missing");
+      mountCompositionReview(root);
+    </script>
+  </body>
+</html>
