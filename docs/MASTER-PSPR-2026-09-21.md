@@ -870,6 +870,15 @@ neighbors, zero deleted lines in the unit's diff for that file. Astra expects
 adjacent-insert conflicts in these files at rebase and resolves them by keeping
 both sides.
 
+Execution allocation, 2026-09-21: unit `80` additionally owns the existing
+dashboard service/routes, `Console.tsx`, `DashboardSurface.tsx` and
+`web/src/app/data/hooks.ts` for the scoped authorization and revoked-data
+corrections exposed by its scouts. No other active unit owns these files.
+This is a focused access correction, not the later shell or dashboard redesign.
+The additive-only rules for `server/src/app.ts` and the API client still apply.
+Named incident participation supplies incident-specific mutual-aid authority;
+an unrelated board or position guest scope does not become incident authority.
+
 ### 8.6 Migration blocks
 
 | Block | Holder |
