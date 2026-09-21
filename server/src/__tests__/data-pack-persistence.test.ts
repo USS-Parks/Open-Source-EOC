@@ -9,8 +9,9 @@ import { freshDb, type Sql } from "./helpers.js";
 /**
  * Durable dataset persistence (VEOC-79C1): a load persists mapped items keyed by
  * source id, with geometry, incident association and provenance; a reload is
- * idempotent; a changed batch updates and prunes; an invalid batch is rejected
- * atomically and leaves the last-good items untouched; two datasets stay apart.
+ * idempotent; a changed batch updates and prunes; a refresh that brings nothing
+ * usable keeps the last-good items rather than wiping them; two datasets stay
+ * apart.
  */
 
 let admin: Sql, runtime: Sql, app: FastifyInstance;
@@ -101,12 +102,15 @@ describe("durable dataset persistence (VEOC-79C1)", () => {
     expect(rows.some((x) => x.source_id === "b")).toBe(false);
   });
 
-  it("rejects an invalid batch atomically and preserves the last-good items", async () => {
+  it("preserves the last-good items when a refresh brings nothing usable", async () => {
     const before = (await items(datasetId)).map((x) => x.source_id);
-    // A non-geometry value in the geometry field rejects the whole load.
-    expect((await load(datasetId, { records: [{ id: "z", title: "Broken", geom: "not-a-geometry" }] })).statusCode).toBe(400);
-    // A source that reuses an id in one batch is rejected too.
-    expect((await load(datasetId, { records: [pt("x", "One"), pt("x", "Two")] })).statusCode).toBe(400);
+    // A present-but-invalid geometry rejects that item; with no item left, the
+    // refresh is non-productive and the last-good items are kept, not wiped.
+    const bad = await load(datasetId, { records: [{ id: "z", title: "Broken", geom: "not-a-geometry" }] });
+    expect(bad.statusCode).toBe(200);
+    expect(bad.json().result).toMatchObject({ received: 1, accepted: 0, rejected: 1 });
+    // An empty source is likewise non-productive.
+    expect((await load(datasetId, { records: [] })).json().result).toMatchObject({ received: 0, accepted: 0 });
     expect((await items(datasetId)).map((x) => x.source_id)).toEqual(before);
   });
 

@@ -150,6 +150,10 @@ export interface DatasetStatus {
   readonly lastSuccessAt: string | null;
   readonly staleAfterSeconds: number;
   readonly reason: string | null;
+  /** The last load's ingest tally (VEOC-79C2): how many items the source sent,
+   *  and how many were not persisted (invalid or duplicate). Null before a load. */
+  readonly lastReceived?: number | null;
+  readonly lastRejected?: number | null;
 }
 
 /**
@@ -166,6 +170,10 @@ export function datasetAvailability(input: {
   now?: Date;
 }): DatasetAvailability {
   if (input.lastSuccessAt === null) return input.lastError ? "unavailable" : "awaiting";
+  // A prior success with a later error is last-good but not confirmed current:
+  // the freshest refresh failed, so the dataset reads stale (never available)
+  // with that error as its reason (VEOC-79C2).
+  if (input.lastError) return "stale";
   const now = input.now ?? new Date();
   const ageSeconds = Math.floor((now.getTime() - input.lastSuccessAt.getTime()) / 1000);
   return ageSeconds > input.staleAfterSeconds ? "stale" : "available";

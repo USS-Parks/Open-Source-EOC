@@ -97,6 +97,7 @@ export async function listIncidentDatasets(
   const rows = await sql`
     select d.key, d.name, d.kind, j.slug as org_slug, j.name as org_name,
            d.last_success_at, d.last_error, d.item_count, d.stale_after_seconds,
+           d.last_received, d.last_rejected,
            ST_Area(d.coverage::geography) as coverage_area
     from data_pack_datasets d
     join data_packs p on p.id = d.pack_id
@@ -124,6 +125,8 @@ export async function listIncidentDatasets(
       lastSuccessAt: lastSuccessAt ? lastSuccessAt.toISOString() : null,
       staleAfterSeconds: r.stale_after_seconds as number,
       reason: (r.last_error as string | null) ?? null,
+      lastReceived: (r.last_received as number | null) ?? null,
+      lastRejected: (r.last_rejected as number | null) ?? null,
     } satisfies DatasetStatus;
   });
 }
@@ -132,14 +135,22 @@ export interface DatasetLoadResult {
   readonly key: string;
   readonly availability: DatasetStatus["availability"];
   readonly itemCount: number | null;
+  /** The ingest tally for this load (VEOC-79C2): items the source sent, items
+   *  persisted, and items not persisted (invalid or a duplicate). */
+  readonly received: number;
+  readonly accepted: number;
+  readonly rejected: number;
   readonly normalized: ReadonlyArray<Partial<Record<string, unknown>>>;
 }
 
 /**
  * Apply a dataset's field mapping to raw source records and record the load.
- * On success the freshness clock and item count are set from the real records;
- * on failure the error is recorded and the item count is never invented. A
- * poll or push runs this under a contributor's authority.
+ * A productive load persists its mapped items and sets the freshness clock and
+ * the received/accepted/rejected tally from the real records. A source fetch
+ * failure, an empty return, or a batch with no usable item is treated as a
+ * failed refresh: the last-good items and count are preserved, the error is
+ * recorded, and the dataset reads stale or unavailable, never wiped to zero
+ * (VEOC-79C2). A poll or push runs this under a contributor's authority.
  */
 export async function loadDataset(
   sql: Sql,
@@ -157,35 +168,67 @@ export async function loadDataset(
 
   if ("error" in outcome) {
     await sql`update data_pack_datasets set last_error = ${outcome.error} where id = ${datasetId}`;
-    const [after] = await sql`
-      select last_success_at, last_error, stale_after_seconds, item_count
-      from data_pack_datasets where id = ${datasetId}`;
-    const availability = datasetAvailability({
-      lastSuccessAt: after!.last_success_at ? new Date(after!.last_success_at as string) : null,
-      lastError: (after!.last_error as string | null) ?? null,
-      staleAfterSeconds: after!.stale_after_seconds as number,
-    });
-    const hasData = availability === "available" || availability === "stale";
-    return {
-      key: ds.key as string,
-      availability,
-      itemCount: hasData ? ((after!.item_count as number | null) ?? null) : null,
-      normalized: [],
-    };
+    return loadStatus(sql, ds, { received: 0, accepted: 0, rejected: 0 });
   }
 
   const mapping = ds.field_mapping as FieldMapping;
   const incidentId = ds.incident_id as string;
-  const persisted = await persistItems(sql, actor, datasetId, incidentId, mapping, outcome.records);
+  const batch = prepareItems(mapping, outcome.records);
+
+  if (batch.items.length === 0) {
+    // No usable item: an empty source, or every record rejected. Preserve the
+    // last-good items and count, and mark the dataset with the reason.
+    const reason =
+      batch.received === 0
+        ? "source returned no items"
+        : `no usable items (${batch.rejected} of ${batch.received} rejected)`;
+    await sql`update data_pack_datasets set last_error = ${reason} where id = ${datasetId}`;
+    return loadStatus(sql, ds, batch);
+  }
+
+  // A productive load replaces the dataset's items with exactly what it carried.
+  await writeItems(sql, actor, datasetId, incidentId, batch.items);
   await sql`
     update data_pack_datasets
-    set last_success_at = now(), item_count = ${persisted.length}, last_error = null
+    set last_success_at = now(), item_count = ${batch.accepted}, last_error = null,
+        last_received = ${batch.received}, last_rejected = ${batch.rejected}
     where id = ${datasetId}`;
   return {
     key: ds.key as string,
     availability: "available",
-    itemCount: persisted.length,
-    normalized: persisted.map((p) => p.data),
+    itemCount: batch.accepted,
+    received: batch.received,
+    accepted: batch.accepted,
+    rejected: batch.rejected,
+    normalized: batch.items.map((p) => p.data),
+  };
+}
+
+/** The load result for a non-productive load (fetch error, empty, or all
+ *  rejected): the dataset's current freshness and last-good count, plus the
+ *  tally of what this attempt carried. */
+async function loadStatus(
+  sql: Sql,
+  ds: Record<string, unknown>,
+  tally: { received: number; accepted: number; rejected: number },
+): Promise<DatasetLoadResult> {
+  const [after] = await sql`
+    select last_success_at, last_error, stale_after_seconds, item_count
+    from data_pack_datasets where id = ${ds.id as string}`;
+  const availability = datasetAvailability({
+    lastSuccessAt: after!.last_success_at ? new Date(after!.last_success_at as string) : null,
+    lastError: (after!.last_error as string | null) ?? null,
+    staleAfterSeconds: after!.stale_after_seconds as number,
+  });
+  const hasData = availability === "available" || availability === "stale";
+  return {
+    key: ds.key as string,
+    availability,
+    itemCount: hasData ? ((after!.item_count as number | null) ?? null) : null,
+    received: tally.received,
+    accepted: tally.accepted,
+    rejected: tally.rejected,
+    normalized: [],
   };
 }
 
@@ -195,40 +238,45 @@ interface PreparedItem {
   readonly geometry: unknown | null;
 }
 
+interface PreparedBatch {
+  readonly received: number;
+  readonly accepted: number;
+  readonly rejected: number;
+  readonly items: PreparedItem[];
+}
+
 /**
- * Persist a dataset's mapped items durably (VEOC-79C1). Each item is keyed by
- * its source id, or a hash of its mapped content when the source names none,
- * and upserted, so a repeated load is idempotent and a changed item updates in
- * place. Items the source no longer sends are pruned, so the persisted set is
- * exactly the last successful load. The batch is validated before any write: a
- * source that reuses an id, or a value that is not GeoJSON geometry, rejects
- * the whole load and leaves the previously persisted items untouched.
+ * Map a raw batch to persistable items (VEOC-79C2), tolerant per item: a record
+ * whose mapped geometry is present but not GeoJSON is rejected and counted,
+ * never failing the whole load. Items are keyed by source id, or a hash of
+ * their mapped content when the source names none, and the last record for a
+ * repeated id wins. received counts the source's records, accepted the distinct
+ * persisted items, and rejected the difference (invalid or duplicate).
  */
-async function persistItems(
+function prepareItems(mapping: FieldMapping, records: readonly unknown[]): PreparedBatch {
+  const received = records.length;
+  const byId = new Map<string, PreparedItem>();
+  for (const rec of records) {
+    const item = mapItem(rec, mapping);
+    if (!isGeometry(item.geometry)) continue; // present-but-invalid geometry: rejected
+    const sourceId = item.sourceId ?? deriveId(item.data);
+    byId.set(sourceId, { sourceId, data: item.data, geometry: item.geometry });
+  }
+  const accepted = byId.size;
+  return { received, accepted, rejected: received - accepted, items: [...byId.values()] };
+}
+
+/** Upsert a productive batch's items and prune the ones the source dropped, so
+ *  the persisted set is exactly this load. Only called for a non-empty batch,
+ *  so the prune never empties a dataset. */
+async function writeItems(
   sql: Sql,
   actor: Principal,
   datasetId: string,
   incidentId: string,
-  mapping: FieldMapping,
-  records: readonly unknown[],
-): Promise<PreparedItem[]> {
-  const prepared: PreparedItem[] = records.map((rec) => {
-    const item = mapItem(rec, mapping);
-    assertGeometry(item.geometry);
-    return { sourceId: item.sourceId ?? deriveId(item.data), data: item.data, geometry: item.geometry };
-  });
-  if (mapping.sourceId) {
-    // A mapped source id is the source's own identity: reusing it for two items
-    // in one batch is ambiguous, so the load is rejected.
-    const ids = new Set<string>();
-    for (const p of prepared) {
-      if (ids.has(p.sourceId)) throw new AuthError(400, "duplicate source id in batch");
-      ids.add(p.sourceId);
-    }
-  }
-  // Derived ids hash the content, so two identical id-less items are one item.
-  const byId = new Map(prepared.map((p) => [p.sourceId, p]));
-  for (const item of byId.values()) {
+  items: readonly PreparedItem[],
+): Promise<void> {
+  for (const item of items) {
     await sql`
       insert into data_pack_items (dataset_id, incident_id, source_id, data, geom, loaded_by)
       values (${datasetId}, ${incidentId}, ${item.sourceId}, ${sql.json(item.data as never)},
@@ -237,15 +285,10 @@ async function persistItems(
         set data = excluded.data, geom = excluded.geom,
             last_loaded_at = now(), loaded_by = ${actor.person.id}`;
   }
-  const keep = [...byId.keys()];
-  if (keep.length === 0) {
-    await sql`delete from data_pack_items where dataset_id = ${datasetId}`;
-  } else {
-    await sql`
-      delete from data_pack_items
-      where dataset_id = ${datasetId} and source_id <> all(${keep})`;
-  }
-  return [...byId.values()];
+  const keep = items.map((i) => i.sourceId);
+  await sql`
+    delete from data_pack_items
+    where dataset_id = ${datasetId} and source_id <> all(${keep})`;
 }
 
 /** A deterministic id for a source item that carries none: a hash of its
@@ -254,10 +297,10 @@ function deriveId(data: Partial<Record<NormalizedField, unknown>>): string {
   return createHash("sha256").update(JSON.stringify(data)).digest("hex");
 }
 
-/** Reject a value that is not a GeoJSON geometry before any write, so an
- *  invalid batch is an attributable 400, not a mid-transaction database error. */
-function assertGeometry(geometry: unknown | null): void {
-  if (geometry === null || geometry === undefined) return;
+/** Whether a mapped geometry value is usable: absent is fine (the item has no
+ *  geometry); a present value must be a structural GeoJSON geometry. */
+function isGeometry(geometry: unknown | null): boolean {
+  if (geometry === null || geometry === undefined) return true;
   const g = geometry as { type?: unknown; coordinates?: unknown; geometries?: unknown };
   const TYPES = [
     "Point",
@@ -268,12 +311,12 @@ function assertGeometry(geometry: unknown | null): void {
     "MultiPolygon",
     "GeometryCollection",
   ];
-  const ok =
+  return (
     typeof g === "object" &&
     typeof g.type === "string" &&
     TYPES.includes(g.type) &&
-    (g.type === "GeometryCollection" ? Array.isArray(g.geometries) : Array.isArray(g.coordinates));
-  if (!ok) throw new AuthError(400, "invalid geometry in dataset batch");
+    (g.type === "GeometryCollection" ? Array.isArray(g.geometries) : Array.isArray(g.coordinates))
+  );
 }
 
 /** PostGIS geometry fragment for an item, or null. */

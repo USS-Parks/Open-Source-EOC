@@ -2679,3 +2679,35 @@ recomputed and discarded each request.
   inspection, refresh, and the received/accepted/rejected count breakdown.
 - **Gate:** pnpm check --maxWorkers=2 exited 0; 479 tests in 88 files passed.
 - **Ending commit:** this receipt commit, recorded by the next receipt.
+
+## VEOC-79C2: tolerant dataset refresh with an ingest tally
+
+Turns the 79C1 load from strict all-or-nothing validation into a per-item
+refresh, and records the received/accepted/rejected breakdown the 79C1 receipt
+deferred.
+
+- **Baseline:** 733dbd1 on canonical main (after 79C1 persisted normalized items).
+- **Change:** loadDataset no longer rejects a whole batch on one bad item. A new
+  prepareItems maps a batch tolerant per item: a record whose mapped geometry is
+  present but not GeoJSON is skipped and counted, and a repeated source id keeps
+  the last record, so received counts the source's records, accepted the distinct
+  persisted items, and rejected the difference. A productive load (at least one
+  usable item) upserts and prunes to exactly that batch; a non-productive load
+  (source fetch error, empty return, or every item rejected) preserves the
+  last-good items and count and records the reason as last_error, never wiping the
+  dataset to zero. datasetAvailability now reads a dataset with a prior success
+  but a later error as stale, so the operator keeps seeing the last known items
+  with the error as the reason. Migration 0039 adds last_received and
+  last_rejected to data_pack_datasets; the load result and the dataset listing
+  carry the tally.
+- **Evidence:** the durable-persistence test asserts a present-but-invalid
+  geometry returns 200 with received 1, accepted 0, rejected 1, and an empty
+  source returns received 0, accepted 0, both leaving the last-good items intact;
+  the idempotent-reload, changed-batch prune, and two-dataset-isolation cases are
+  unchanged.
+- **Gate:** targeted for this increment: pnpm -r exec tsc --noEmit exit 0,
+  eslint exit 0, vitest data-pack-persistence.test.ts 4 passed. The full suite is
+  reserved for section milestones, not re-run per increment.
+- **Boundary:** connecting persisted items to COP layers and record inspection
+  remain deferred (still 79C2 scope, not in this increment).
+- **Ending commit:** this receipt commit, recorded by the next receipt.
