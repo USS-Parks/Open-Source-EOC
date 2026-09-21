@@ -3383,3 +3383,31 @@ increment proves it and that coverage follows the incident area.
 - **Boundary:** persistence engine integrated; shell/table/dashboard consumers
   remain their own prompts. Lane c next resumes approved H13 acquisition/render
   work. Existing four lanes remain active; no new worktree, deletion or push.
+
+## VEOC-80b: authorized incident viewing
+
+- **Files:** migration 0045, dashboard/incident services and routes, additive
+  session/API contracts, incident context and Console, board read-shape helper,
+  two new authorization tests and corrected record-reference regression.
+- **Behavior:** named active incident participants may read same-owner dashboard
+  definitions only through transaction-bound incident scope; widget inputs and
+  records retain incident and field restrictions. Local administrators retain
+  their actual role. Unrelated, anonymous, expired and revoked requests fail;
+  malformed stream scope closes and revoked UI content clears.
+- **Gate:** approved policy, real-database authorization and independent browser
+  matrices passed. Review caught the helper's constant member role hiding admin
+  fields; correction and focused authorization/impact tests passed 16/16.
+  Fresh review returned SHIP. Post-rebase TypeScript and ESLint passed; sixteen
+  suites passed 67/68 initially. The sole failure was an old reference-pagination
+  test expecting an admin-only label to be hidden from an admin. It now proves
+  admin visibility and a real member's masking separately; affected suite passed
+  4/4 and review returned SHIP. All prescribed cases are green, with earlier
+  failure retained in logs, not recast as a clean initial run.
+- **Evidence:** deploy/test-runtime/out/lanes/b/logs/veoc-80-integration.log and
+  veoc-80-integration-reference-repair.log; earlier exact allow/deny proofs in
+  veoc-80-realdb.log and veoc-80-browser.log. Exact fast-forward:
+  dac0667f61b873347368965f114a7a957211a91f.
+- **Boundary:** no anonymous access, write-policy expansion or public facet.
+  The disclosed same-jurisdiction definition visibility is the approved policy.
+  Existing lane b next takes H12-E; the preserved pre-approval stash is retained.
+  Four active lanes remain, no new worktree or push.

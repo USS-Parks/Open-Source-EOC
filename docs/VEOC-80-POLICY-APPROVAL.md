@@ -1,6 +1,8 @@
 # VEOC-80 dashboard read-policy proposal
 
-Status: explicitly approved in-session, 2026-09-21. The user authorized all
+Status: approved and integrated as migration 0045 in `dac0667`, with real
+database and browser allow/deny gates passed. Explicit approval was received
+in-session, 2026-09-21. The user authorized all
 held requests after receiving this concrete policy and risk explanation.
 Implementation and real-database/browser verification now resume; approval is
 not an acceptance result. The prior automatic-review block remains historical.

@@ -17,8 +17,9 @@ rewritten; overbroad status claims are corrected here, not erased there.
 
 - **Public access is an intentional exclusion.** The platform is For Official
   Use Only; there is no anonymous or public-facing facet. Access is binary:
-  members and authorized mutual-aid guests view the incident and dashboard
-  without restriction; everyone else is denied (commit `16ce911`).
+  members and authorized mutual-aid guests view their authorized incident and
+  dashboard with role-based field restrictions; everyone else is denied.
+  VEOC-80 database and browser evidence is integrated (`dac0667`).
 - **Every included gap has an owner** (a roster prompt). A claim with no
   supporting evidence is recorded as `unknown`, not asserted.
 - **A `verified` status** means a CI-green implementation gate was met and the
