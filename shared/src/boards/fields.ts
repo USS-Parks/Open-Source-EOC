@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { allEnums } from "../dictionary/citations.js";
+import { BoardWorkflowSchema } from "./workflow.js";
 
 /**
  * Board field model (F1). A board template is data, never code: fields,
@@ -135,6 +136,7 @@ export const BoardTemplateSchema = z
     views: z.array(ViewDefSchema).min(1),
     inputLayout: FormLayoutSchema.optional(),
     detailLayout: FormLayoutSchema.optional(),
+    workflow: BoardWorkflowSchema.optional(),
   })
   .superRefine((t, ctx) => {
     const keys = new Set<string>();
@@ -157,6 +159,16 @@ export const BoardTemplateSchema = z
         if (!keys.has(key)) ctx.addIssue({ code: "custom", message: `${name} layout references unknown field ${key}` });
         if (used.has(key)) ctx.addIssue({ code: "custom", message: `${name} layout repeats field ${key}` });
         used.add(key);
+      }
+    }
+    for (const transition of t.workflow?.transitions ?? []) {
+      const due = transition.due;
+      if (due?.kind !== "record_field") continue;
+      const dueField = t.fields.find((field) => field.key === due.field);
+      if (!dueField) {
+        ctx.addIssue({ code: "custom", message: `transition ${transition.key} has unknown due field ${due.field}` });
+      } else if (dueField.type !== "datetime") {
+        ctx.addIssue({ code: "custom", message: `transition ${transition.key} due field ${dueField.key} must be datetime` });
       }
     }
     const byKey = new Map(t.fields.map((field) => [field.key, field]));
