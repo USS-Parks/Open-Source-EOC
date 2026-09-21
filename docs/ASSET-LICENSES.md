@@ -27,44 +27,47 @@ does not establish the license of a separately sourced map, font, or symbol.
 | Bundled California basemap | `web/public/basemap/` | `deploy/basemap/build-bundled-basemap.sh` records Natural Earth 10m and California county boundaries; `deploy/basemap/README.md` identifies Natural Earth and US Census inputs as public domain. No separate upstream license text is vendored. | Distributed; provenance and public-domain status are project-recorded. |
 | Liberation Sans glyph PBFs | `web/public/fonts/Liberation Sans Regular/` | The build script and basemap README identify Liberation Sans and state SIL OFL. The source TTF and an OFL text are not present. | Distributed derivative glyphs; license is project-recorded, without local upstream license text. |
 | Self-hosted OpenStreetMap street and building tiles | `deploy/basemap/generate-california.sh`, `deploy/basemap/buildings-schema.yml` | The deployment guide records OpenStreetMap ODbL attribution and requires the map to display `© OpenStreetMap contributors`. The generated statewide archives are not tracked. | Deployment-supplied. |
-| Optional MapLibre sprite | `web/src/cop/streetstyle.ts`, `deploy/basemap/README.md` | A runtime sprite base URL and generic `spreet` instructions exist. No sprite image, metadata, source icon set, or icon license is tracked. | Configuration seam only. |
+| NAPSG MapLibre facility sprite | `web/public/napsg/sprite.json`, `sprite.png`, `sprite@2x.json`, `sprite@2x.png` | `deploy/basemap/build-napsg-sprite.mjs` deterministically builds both pixel ratios from the manifest-verified originals. Every sprite entry carries NAPSG attribution, CC BY 4.0 license URL, original source URL, and source SHA-256. | Distributed with local license text. |
 | Runtime hazard hatches | `web/src/cop/hazards.ts` | Generated in code from project-owned drawing instructions; there is no separate image asset. | Distributed as software under the repository license. |
 
 ## H13 NAPSG facility symbols
 
-The agreed facility subset is hospital, clinic, fire station, police, school,
-shelter, emergency operations center, airport, and helipad. Correct rendering
-requires the actual selected symbols, an asset-identifier mapping for those
-types, and license and attribution evidence for the supplied files.
+Nine original 128 × 128 PNGs are distributed in `web/public/napsg/` with the
+complete CC BY 4.0 legal text and `acquisition-manifest.json`. The files are
+unmodified copies selected from the NAPSG Foundation v4.1.5 JSON catalog.
+The same directory contains deterministic 1x and 2x MapLibre sprite PNG/JSON
+pairs built offline by `deploy/basemap/build-napsg-sprite.mjs`.
+The source page states that its standardized symbology is available for
+commercial use under the Creative Commons Attribution 4.0 International
+License. The application attributes the symbols to NAPSG Foundation in the
+facility legend and keeps type separate from operational status.
 
-The local inventory found none of the following:
+The catalog records `creation_date` as 2020-02-06 09:21:12. This is catalog
+metadata, not the download time. The manifest records the controlled local
+acquisition at 2026-09-21T21:22:18.5843612Z.
 
-- NAPSG PNG or SVG symbol files;
-- a NAPSG catalog JSON file;
-- MapLibre `sprite.json`, `sprite.png`, or their 2x variants built from NAPSG;
-- a symbol-to-facility-type manifest;
-- NAPSG license text or an attribution file;
-- the previously proposed `deploy/basemap/build-napsg-sprite.mjs`.
+| Evidence | Source or repository path | SHA-256 |
+|---|---|---|
+| NAPSG v4.1.5 catalog | `https://napsg-web.s3.amazonaws.com/symbology/napsg_symbology_v4.1.5.json` | `2393DA796A96D4E077A23BF9F51B03165F75CE8C2539E8D790F0DD99AAAE8313` |
+| NAPSG attribution and commercial-use statement | `https://www.napsgfoundation.org/symbology/` (acquisition snapshot: `deploy/basemap/out/napsg-input/napsg-attribution-source.html`) | `FAAA4F52246F1F4F750297738DEBD4F10FDA3E3EA5E17602923C4F9EDE1C3041` |
+| CC BY 4.0 legal text | `web/public/napsg/CC-BY-4.0.txt`, source `https://creativecommons.org/licenses/by/4.0/legalcode.txt` | `9BA9550AD48438D0836DDAB3DA480B3B69FFA0AAC7B7878B5A0039E7AB429411` |
+| Acquisition and per-file provenance | `web/public/napsg/acquisition-manifest.json` | Recorded with the distributed files |
 
-The checked-in `docs/VEOC-77-HANDOFF-PSPR-2026-09-20.md` records, from its
-2026-09-20 inspection, the catalog URL
-`https://napsg-web.s3.amazonaws.com/symbology/napsg_symbology_v4.1.5.json` and
-PNG base path `https://napsg-web.s3.amazonaws.com/symbology/data/PNG9/`. It also
-records “CC BY 4.0 per napsgfoundation.org; attribution required.” That is a
-project-recorded observation, not locally vendored license evidence. H13 made
-no network request and did not download either location.
+| Application type | Distributed file | Original catalog path | SHA-256 |
+|---|---|---|---|
+| Hospital | `hospitals.png` | `infrastructure/CRTINS_PUBHTH/Hospitals_128x128.png` | `06A512262F74BBFB29AA1FA8B31E07C6E96A45021C8396F21B2CD2EA9ED14CC3` |
+| Urgent-care facility | `urgent-care-facilities.png` | `infrastructure/CRTINS_PUBHTH/Urgent-Care-Facilities_128x128.png` | `95720AD846A82EE96D5C134EBF44A5E1DD28635C3D29B747AF899C0DE916CA45` |
+| Fire station | `fire-station.png` | `infrastructure/CRTINS_EMRSVC/Fire-Station_128x128.png` | `C6455836513404646D2C28E03A3A0CFE1B2BC99CCA40C72F7C2FFD7C40AA7522` |
+| Law enforcement | `law-enforcement-locations.png` | `infrastructure/CRTINS_LAWENF/Law-Enforcement-Locations_128x128.png` | `C3519CD9FF1AF7B824BFCD2E738369835DB44E71F6A674B98F1972BD66B38B05` |
+| School | `public-schools.png` | `infrastructure/CRTINS_EDUCAT/School_128x128.png` | `C4722ACE5E9FC51749E26972DC0DBF8F68DB141BE533E7A9DDE51C8EDA3AD0E5` |
+| Shelter | `national-shelter-system-facilities.png` | `infrastructure/CRTINS_EMRSVC/Emergency-Shelter_128x128.png` | `554879D21ADB9D0B776489B0C91A76EB1F7B41B13A62CCA2897BEA0637607C70` |
+| Local EOC | `local-emergency-operations-center-eoc.png` | `infrastructure/CRTINS_EMRSVC/Local-Emergency-Operation-Centers-EOC_128x128.png` | `F3F59993D29215EBB1B8A6173B92DA9A3C4372D1BD34A556A1AE727807F945AC` |
+| Commercial airport | `aircraft-landing-facilities-commercial.png` | `infrastructure/CRTINS_TRNAIR/Airport--Commercial_128x128.png` | `B13E399531F1E8EA6106F29647D2FCF1AB3404DE93312028F8952FF0A77A4B4E` |
+| Heliport | `aircraft-landing-facilities-heliport.png` | `infrastructure/CRTINS_TRNAIR/Airport--Heliport_128x128.png` | `2F8DBFFBDB32EB91C2FE1E17C3B2A6CB2C363522AF2FF4368545E2EF89F1C98F` |
 
-The current street style remains a text-only facility label. It reads the real
-OpenMapTiles `poi.subclass` field for its explicit facility filter; it does not
-use `icon-image` or claim those labels are NAPSG symbols. The catalog's HIFLD
-critical-facilities entry maps its category from `properties.NAICS_DESC`, but
-no local source sample or inspected value vocabulary establishes a safe mapping
-from those values to the agreed symbol subset. Operational record status stays
-on the existing explicit status mapping, where absent or unrecognized values
-remain `unknown`.
-
-H13's symbol, legend, and inspection acceptance gate is therefore blocked. A
-generic icon replacement would not satisfy it. The gate can resume after the
-selected assets, exact identifier mapping, upstream license text, required
-attribution, and a provenance manifest are supplied locally or a separate
-outbound acquisition is approved.
+The mapping is deliberately exact. Generic OpenMapTiles `clinic`, `townhall`,
+`community_centre`, and `airport` values do not prove urgent care, an EOC, or
+a commercial airport, so they keep their text labels without receiving those
+symbols. HIFLD `NAICS_DESC` is accepted only when it exactly matches a selected
+catalog label. Unrecognized types and absent or stale operational status remain
+unknown.

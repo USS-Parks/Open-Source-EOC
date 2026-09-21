@@ -64,17 +64,28 @@ Serve it so that `{fontstack}/{range}.pbf` resolves, e.g.
 `OPENEOC_BASEMAP_GLYPHS_URL` and `OPENEOC_BASEMAP_FONT` (the stack name, here
 `Noto Sans Regular`) in step 5.
 
-## 3. Build a sprite (optional icons)
+## 3. Build the licensed NAPSG facility sprite
 
-Point-of-interest icons are optional; without a sprite the map still renders
-every road, boundary, and label. To add icons, build a sprite from an SVG set
-with [`spreet`](https://github.com/flother/spreet):
+The repository ships the approved H13 facility originals, CC BY 4.0 text, and
+acquisition manifest under `web/public/napsg/`. Rebuild the MapLibre 1x and 2x
+sprite pairs offline with Node only:
 
 ```
-spreet ./icons ./sprite
+node deploy/basemap/build-napsg-sprite.mjs
 ```
 
-Serve `sprite.json` and `sprite.png` under a base URL (e.g. `https://<host>/sprite`).
+The builder verifies every original against the acquisition manifest, accepts
+only the inspected non-interlaced RGBA PNG format, and atomically writes
+`sprite.json`, `sprite.png`, `sprite@2x.json`, and `sprite@2x.png`. Each JSON
+entry retains the source URL and SHA-256 plus NAPSG and CC BY 4.0 attribution.
+Optional arguments select another input and output directory:
+
+```
+node deploy/basemap/build-napsg-sprite.mjs ./approved-napsg-input ./sprite-output
+```
+
+The COP also registers the individual local PNGs at runtime so bundled and
+external styles use the same licensed icons without replacing their own sprite.
 
 ## 4. Host the artifacts
 

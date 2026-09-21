@@ -1,0 +1,91 @@
+{
+  "acquiredAt": "2026-09-21T21:22:18.5843612Z",
+  "catalogUrl": "https://napsg-web.s3.amazonaws.com/symbology/napsg_symbology_v4.1.5.json",
+  "catalogSha256": "2393DA796A96D4E077A23BF9F51B03165F75CE8C2539E8D790F0DD99AAAE8313",
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/legalcode.txt",
+  "licenseSha256": "9BA9550AD48438D0836DDAB3DA480B3B69FFA0AAC7B7878B5A0039E7AB429411",
+  "attributionSource": "https://www.napsgfoundation.org/symbology/",
+  "assets": [
+    {
+      "id": "public-schools",
+      "label": "Public Schools",
+      "catalogPath": "infrastructure/CRTINS_EDUCAT/School_128x128.png",
+      "sourceUrl": "https://napsg-web.s3.amazonaws.com/symbology/data/PNG9/infrastructure/CRTINS_EDUCAT/School_128x128.png",
+      "file": "public-schools.png",
+      "sha256": "C4722ACE5E9FC51749E26972DC0DBF8F68DB141BE533E7A9DDE51C8EDA3AD0E5",
+      "bytes": 4312
+    },
+    {
+      "id": "national-shelter-system-facilities",
+      "label": "National Shelter System Facilities",
+      "catalogPath": "infrastructure/CRTINS_EMRSVC/Emergency-Shelter_128x128.png",
+      "sourceUrl": "https://napsg-web.s3.amazonaws.com/symbology/data/PNG9/infrastructure/CRTINS_EMRSVC/Emergency-Shelter_128x128.png",
+      "file": "national-shelter-system-facilities.png",
+      "sha256": "554879D21ADB9D0B776489B0C91A76EB1F7B41B13A62CCA2897BEA0637607C70",
+      "bytes": 7454
+    },
+    {
+      "id": "fire-station",
+      "label": "Fire Station",
+      "catalogPath": "infrastructure/CRTINS_EMRSVC/Fire-Station_128x128.png",
+      "sourceUrl": "https://napsg-web.s3.amazonaws.com/symbology/data/PNG9/infrastructure/CRTINS_EMRSVC/Fire-Station_128x128.png",
+      "file": "fire-station.png",
+      "sha256": "C6455836513404646D2C28E03A3A0CFE1B2BC99CCA40C72F7C2FFD7C40AA7522",
+      "bytes": 5994
+    },
+    {
+      "id": "local-emergency-operations-center-eoc",
+      "label": "Local Emergency Operations Center (EOC)",
+      "catalogPath": "infrastructure/CRTINS_EMRSVC/Local-Emergency-Operation-Centers-EOC_128x128.png",
+      "sourceUrl": "https://napsg-web.s3.amazonaws.com/symbology/data/PNG9/infrastructure/CRTINS_EMRSVC/Local-Emergency-Operation-Centers-EOC_128x128.png",
+      "file": "local-emergency-operations-center-eoc.png",
+      "sha256": "F3F59993D29215EBB1B8A6173B92DA9A3C4372D1BD34A556A1AE727807F945AC",
+      "bytes": 7476
+    },
+    {
+      "id": "law-enforcement-locations",
+      "label": "Law Enforcement Locations",
+      "catalogPath": "infrastructure/CRTINS_LAWENF/Law-Enforcement-Locations_128x128.png",
+      "sourceUrl": "https://napsg-web.s3.amazonaws.com/symbology/data/PNG9/infrastructure/CRTINS_LAWENF/Law-Enforcement-Locations_128x128.png",
+      "file": "law-enforcement-locations.png",
+      "sha256": "C3519CD9FF1AF7B824BFCD2E738369835DB44E71F6A674B98F1972BD66B38B05",
+      "bytes": 6239
+    },
+    {
+      "id": "hospitals",
+      "label": "Hospitals",
+      "catalogPath": "infrastructure/CRTINS_PUBHTH/Hospitals_128x128.png",
+      "sourceUrl": "https://napsg-web.s3.amazonaws.com/symbology/data/PNG9/infrastructure/CRTINS_PUBHTH/Hospitals_128x128.png",
+      "file": "hospitals.png",
+      "sha256": "06A512262F74BBFB29AA1FA8B31E07C6E96A45021C8396F21B2CD2EA9ED14CC3",
+      "bytes": 2486
+    },
+    {
+      "id": "urgent-care-facilities",
+      "label": "Urgent Care Facilities",
+      "catalogPath": "infrastructure/CRTINS_PUBHTH/Urgent-Care-Facilities_128x128.png",
+      "sourceUrl": "https://napsg-web.s3.amazonaws.com/symbology/data/PNG9/infrastructure/CRTINS_PUBHTH/Urgent-Care-Facilities_128x128.png",
+      "file": "urgent-care-facilities.png",
+      "sha256": "95720AD846A82EE96D5C134EBF44A5E1DD28635C3D29B747AF899C0DE916CA45",
+      "bytes": 3307
+    },
+    {
+      "id": "aircraft-landing-facilities-commercial",
+      "label": "Aircraft Landing Facilities, Commercial",
+      "catalogPath": "infrastructure/CRTINS_TRNAIR/Airport--Commercial_128x128.png",
+      "sourceUrl": "https://napsg-web.s3.amazonaws.com/symbology/data/PNG9/infrastructure/CRTINS_TRNAIR/Airport--Commercial_128x128.png",
+      "file": "aircraft-landing-facilities-commercial.png",
+      "sha256": "B13E399531F1E8EA6106F29647D2FCF1AB3404DE93312028F8952FF0A77A4B4E",
+      "bytes": 5102
+    },
+    {
+      "id": "aircraft-landing-facilities-heliport",
+      "label": "Aircraft Landing Facilities, Heliport",
+      "catalogPath": "infrastructure/CRTINS_TRNAIR/Airport--Heliport_128x128.png",
+      "sourceUrl": "https://napsg-web.s3.amazonaws.com/symbology/data/PNG9/infrastructure/CRTINS_TRNAIR/Airport--Heliport_128x128.png",
+      "file": "aircraft-landing-facilities-heliport.png",
+      "sha256": "2F8DBFFBDB32EB91C2FE1E17C3B2A6CB2C363522AF2FF4368545E2EF89F1C98F",
+      "bytes": 4344
+    }
+  ]
+}

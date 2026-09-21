@@ -1,5 +1,6 @@
 import type { ThemeName } from "../design/tokens.js";
 import { BUNDLED_FONT_STACK } from "./bundledbasemap.js";
+import { STREET_FACILITY_TYPES, streetFacilityIconExpression } from "./facilities.js";
 import {
   buildingSpecs,
   rasterBasemapSpecs,
@@ -398,8 +399,9 @@ export function buildStreetStyle(
         },
         paint: { "text-color": p.peak, "text-halo-color": p.labelHalo, "text-halo-width": 1.2 },
       },
-      // Critical facilities by OSM tag: the places an EOC opens, staffs, or
-      // protects. Text only; no sprite is needed.
+      // Critical facilities by OSM tag. Only source-specific subclasses with
+      // unambiguous meanings receive a licensed NAPSG icon; broader tags keep
+      // their useful text label without being relabeled as another type.
       {
         id: "facility-label",
         type: "symbol",
@@ -412,11 +414,19 @@ export function buildStreetStyle(
           ["in", ["get", "subclass"], ["literal", CRITICAL_FACILITY_TAGS]],
         ],
         layout: {
+          "icon-image": streetFacilityIconExpression(),
+          "icon-size": 0.25,
+          "icon-optional": true,
           "text-field": ["get", "name"],
           "text-font": [font],
           "text-size": 11,
           "text-anchor": "top",
-          "text-offset": [0, 0.3],
+          "text-offset": [
+            "case",
+            ["in", ["get", "subclass"], ["literal", Object.keys(STREET_FACILITY_TYPES)]],
+            ["literal", [0, 2.1]],
+            ["literal", [0, 0.3]],
+          ],
           "text-optional": true,
         },
         paint: { "text-color": p.label, "text-halo-color": p.labelHalo, "text-halo-width": 1.4 },

@@ -92,14 +92,15 @@ describe("layer construction", () => {
     for (const s of specs) expect(s.source).toBe(sourceId("b1"));
     const point = specs.find((s) => s.type === "circle")!;
     expect(JSON.stringify(point.paint["circle-color"])).toContain("_symbolStatus");
-    const label = specs.find((s) => s.type === "symbol")!;
+    const label = specs.find((s) => s.id === "board-b1-label")!;
     expect(label.layout?.["text-font"]).toEqual(["Liberation Sans Regular"]);
     expect(JSON.stringify(label.layout?.["text-field"])).toContain("_label");
   });
 
-  it("leaves the label layer out when no glyph stack is known", () => {
-    const specs = boardLayerSpecs("b1", "dark") as Array<{ type: string }>;
-    expect(specs.map((s) => s.type)).toEqual(["fill", "line", "circle"]);
+  it("leaves the text label out when no glyph stack is known", () => {
+    const specs = boardLayerSpecs("b1", "dark") as Array<{ id: string }>;
+    expect(specs.map((s) => s.id)).toEqual(boardLayerIds("b1").filter((id) => !id.endsWith("-label")));
+    expect(specs.some((s) => s.id.endsWith("-facility-icon"))).toBe(true);
   });
 
   it("the base style renders with zero network references (INV-3)", () => {

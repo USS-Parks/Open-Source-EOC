@@ -3,6 +3,7 @@ import { statusColorExpression, symbolStatusFor } from "./symbology.js";
 import { basemapBackground, naturalEarthLayers, naturalEarthSources } from "./basemap.js";
 import { labelFor } from "./tools.js";
 import { statusPatternExpression } from "./hazards.js";
+import { facilityIconExpression, facilityTypeFor } from "./facilities.js";
 
 /**
  * COP layer construction: pure functions from board data to MapLibre
@@ -35,6 +36,7 @@ export function tagFeatures(fc: CopFeatureCollection): CopFeatureCollection {
       properties: {
         ...f.properties,
         _symbolStatus: symbolStatusFor(f.properties),
+        _facilityType: facilityTypeFor(f.properties),
         _label: labelFor(f.properties),
       },
     })),
@@ -47,7 +49,7 @@ export function sourceId(boardId: string): string {
 
 export function boardLayerIds(boardId: string): string[] {
   const src = sourceId(boardId);
-  return [`${src}-fill`, `${src}-hatch`, `${src}-line`, `${src}-point`, `${src}-label`];
+  return [`${src}-fill`, `${src}-hatch`, `${src}-line`, `${src}-point`, `${src}-facility-icon`, `${src}-label`];
 }
 
 /**
@@ -71,7 +73,12 @@ export function boardLayerSpecs(boardId: string, theme: ThemeName, labelFont?: s
             "text-font": [labelFont],
             "text-size": 11,
             "text-anchor": "top",
-            "text-offset": [0, 0.9],
+            "text-offset": [
+              "case",
+              ["has", "_facilityType"],
+              ["literal", [0, 2.2]],
+              ["literal", [0, 0.9]],
+            ],
             "text-optional": true,
           },
           paint: {
@@ -111,9 +118,25 @@ export function boardLayerSpecs(boardId: string, theme: ThemeName, labelFont?: s
       filter: ["==", ["geometry-type"], "Point"],
       paint: {
         "circle-color": color,
-        "circle-radius": 7,
+        "circle-radius": ["case", ["has", "_facilityType"], 18, 7],
         "circle-stroke-width": 2,
         "circle-stroke-color": themes[theme].surface,
+      },
+    },
+    {
+      id: `${src}-facility-icon`,
+      type: "symbol",
+      source: src,
+      filter: [
+        "all",
+        ["==", ["geometry-type"], "Point"],
+        ["has", "_facilityType"],
+      ],
+      layout: {
+        "icon-image": facilityIconExpression(),
+        "icon-size": 0.25,
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
       },
     },
     ...label,

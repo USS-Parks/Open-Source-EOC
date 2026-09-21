@@ -55,6 +55,13 @@ import {
   tagFloodFeatures,
 } from "./hazards.js";
 import {
+  ensureFacilityImages,
+  FACILITY_SYMBOLS,
+  facilitySymbol,
+  facilityTypeFor,
+  NAPSG_ATTRIBUTION,
+} from "./facilities.js";
+import {
   formatArea,
   geometryBounds,
   parseCoordinate,
@@ -203,7 +210,7 @@ interface FindResult {
 
 /** A rendered operational or jurisdiction feature (inspectable). */
 function isCopLayerId(id: string): boolean {
-  return id.startsWith(sourceId("")) || id.startsWith(feedSourceId("")) || id.startsWith("overlay-");
+  return id === "facility-label" || id.startsWith(sourceId("")) || id.startsWith(feedSourceId("")) || id.startsWith("overlay-");
 }
 
 function esc(value: string): string {
@@ -214,9 +221,19 @@ function esc(value: string): string {
 }
 
 /** A record's readable properties as a small table for the map popup. */
-function featureHtml(properties: Record<string, unknown>): string {
-  const rows = Object.entries(properties)
-    .filter(([key]) => !key.startsWith("_"))
+export function featureHtml(properties: Record<string, unknown>): string {
+  const facility = facilitySymbol(facilityTypeFor(properties));
+  const rawStatus = properties._symbolStatus;
+  const status = typeof rawStatus === "string" && LEGEND.includes(rawStatus as SymbolStatus)
+    ? rawStatus
+    : "unknown";
+  const facilityRows = facility
+    ? [
+        ["Facility type", facility.title],
+        ["Operational status", status],
+      ]
+    : [];
+  const rows = [...facilityRows, ...Object.entries(properties).filter(([key]) => !key.startsWith("_"))]
     .map(
       ([key, value]) =>
         `<tr><th style="text-align:left;padding-right:8px;vertical-align:top">${esc(key)}</th>` +
@@ -314,6 +331,8 @@ export function CopMap(props: CopMapProps) {
 
   const home = { center: props.center ?? DEFAULT_CENTER, zoom: props.zoom ?? DEFAULT_ZOOM };
   const assetBase = props.bundledBasemap?.assetBase ?? props.basemap?.assetBase;
+  const publicAssetBase = (assetBase ?? "/").endsWith("/") ? (assetBase ?? "/") : `${assetBase}/`;
+  const facilityAssetBase = `${publicAssetBase}napsg/`;
   // The label layers need the glyph stack of whichever basemap style is
   // active; an external style's fonts are unknown, so labels stay off there.
   const labelFont = props.basemapStyleUrl
@@ -369,6 +388,7 @@ export function CopMap(props: CopMapProps) {
     });
     mapRef.current = map;
     let styleReady = false;
+    let active = true;
     let unbindBounds: (() => void) | undefined;
     // MapLibre resolves the external style and its relative asset URLs. Mount
     // jurisdiction layers after that style parses, before operational records.
@@ -401,21 +421,22 @@ export function CopMap(props: CopMapProps) {
       );
     }
     map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-left");
+    const basemapAttribution = props.basemapStyleUrl
+      ? ""
+      : props.streetBasemap
+        ? OSM_ATTRIBUTION
+        : props.bundledBasemap
+          ? BUNDLED_BASEMAP_ATTRIBUTION
+          : props.basemap?.kind === "natural-earth"
+            ? NATURAL_EARTH_ATTRIBUTION
+            : "";
     map.addControl(
       new maplibregl.AttributionControl({
         compact: true,
-        // The vector basemap's attribution: an external style carries its
-        // own; the street PMTiles is OSM/ODbL; otherwise the bundled basemap.
-        // Gallery rasters carry theirs on the source, shown while visible.
-        customAttribution: props.basemapStyleUrl
-          ? ""
-          : props.streetBasemap
-            ? OSM_ATTRIBUTION
-            : props.bundledBasemap
-              ? BUNDLED_BASEMAP_ATTRIBUTION
-              : props.basemap?.kind === "natural-earth"
-                ? NATURAL_EARTH_ATTRIBUTION
-                : "",
+        // Gallery rasters carry their own source attribution. The licensed
+        // facility symbols are available on every COP style and are credited
+        // independently from whichever basemap is active.
+        customAttribution: [basemapAttribution, NAPSG_ATTRIBUTION].filter(Boolean),
       }),
       "bottom-right",
     );
@@ -546,9 +567,15 @@ export function CopMap(props: CopMapProps) {
       if (map.isStyleLoaded()) joinBuildings();
     };
 
-    map.on("load", () => {
-      styleReady = true;
+    map.on("load", async () => {
       ensureHazardPatterns(map, props.theme);
+      try {
+        await ensureFacilityImages(map, facilityAssetBase);
+      } catch {
+        // A missing packaged icon must not prevent operational records loading.
+      }
+      if (!active) return;
+      styleReady = true;
       // The measure tool's own source and layers (a neutral color, not a
       // status color, so it never reads as an operational condition, INV-8).
       if (!map.getSource("measure")) {
@@ -591,6 +618,7 @@ export function CopMap(props: CopMapProps) {
     map.on("idle", joinBuildings);
     const timer = setInterval(() => void refresh(), props.pollMs ?? 2000);
     return () => {
+      active = false;
       clearInterval(timer);
       unbindBounds?.();
       styleReady = false;
@@ -1070,6 +1098,20 @@ export function CopMap(props: CopMapProps) {
             </details>
           </div>
         ) : null}
+        <div style={{ marginTop: 12 }}>
+          <details data-testid="facility-legend">
+            <summary style={headingStyle}>Facility types (NAPSG)</summary>
+            <ul style={{ listStyle: "none", margin: "8px 0 0", padding: 0, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6 }}>
+              {FACILITY_SYMBOLS.map((entry) => (
+                <li key={entry.type} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8em" }}>
+                  <img src={`${facilityAssetBase}${entry.assetFile}`} alt="" width={24} height={24} style={{ objectFit: "contain" }} />
+                  {entry.title}
+                </li>
+              ))}
+            </ul>
+            <p style={{ fontSize: "0.75em", color: "var(--eoc-text-muted)" }}>{NAPSG_ATTRIBUTION}</p>
+          </details>
+        </div>
         <div style={{ marginTop: 12 }}>
           <h3 style={headingStyle}>Status</h3>
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>

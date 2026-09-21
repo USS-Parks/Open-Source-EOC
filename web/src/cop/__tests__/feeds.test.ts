@@ -43,8 +43,10 @@ describe("feed layers carry provenance and staleness (VEOC-19)", () => {
   it("names the feed layer ids for visibility toggling", () => {
     expect(feedLayerIds("f1")).toEqual([
       "feed-f1-fill",
+      "feed-f1-hatch",
       "feed-f1-line",
       "feed-f1-point",
+      "feed-f1-facility-icon",
       "feed-f1-label",
     ]);
   });

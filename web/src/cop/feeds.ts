@@ -3,6 +3,7 @@ import { boardLayerSpecs } from "./layers.js";
 import { symbolStatusFor } from "./symbology.js";
 import type { CopFeatureCollection } from "./layers.js";
 import { floodLayerIds, floodLayerSpecs } from "./hazards.js";
+import { facilityTypeFor } from "./facilities.js";
 
 /**
  * Feed layers on the COP (VEOC-19, F18). Feed features are read-only:
@@ -35,6 +36,7 @@ export function tagFeedFeatures(
         _ageSeconds: feed.ageSeconds,
         _ageLabel: formatAge(feed.ageSeconds),
         _symbolStatus: feed.stale ? "unknown" : symbolStatusFor(f.properties),
+        _facilityType: facilityTypeFor(f.properties),
       },
     })),
   };
@@ -47,7 +49,7 @@ export function feedSourceId(feedId: string): string {
 export function feedLayerIds(feedId: string, kind: "standard" | "fema-flood" = "standard"): string[] {
   if (kind === "fema-flood") return floodLayerIds(feedId);
   const src = feedSourceId(feedId);
-  return [`${src}-fill`, `${src}-hatch`, `${src}-line`, `${src}-point`, `${src}-label`];
+  return [`${src}-fill`, `${src}-hatch`, `${src}-line`, `${src}-point`, `${src}-facility-icon`, `${src}-label`];
 }
 
 /** Same layer shape as boards, under the feed's own source id. */

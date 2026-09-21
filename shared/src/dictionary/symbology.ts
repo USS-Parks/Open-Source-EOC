@@ -5,12 +5,7 @@ const CITATION: Citation = {
   document: "Incident Symbology Guideline and Symbol Set v4.0 (March 2020)",
 };
 
-/**
- * Top-level NAPSG symbol categories. These values are the canonical organizing
- * structure only. The H13 inventory found no NAPSG symbol assets or vendored
- * license in this repository, so callers must not imply that the library is
- * shipped until those prerequisites are supplied and verified.
- */
+/** Top-level NAPSG symbol categories used by the locally licensed subset. */
 export const SYMBOL_CATEGORIES = defineEnum(
   "symbology.categories",
   ["incident", "operations", "infrastructure", "damage"],
@@ -24,6 +19,23 @@ export const SYMBOL_CATEGORIES = defineEnum(
 export const SYMBOL_STATUS = defineEnum(
   "symbology.status",
   ["normal", "warning", "critical", "unknown"],
+  CITATION,
+);
+
+/** Facility types with locally shipped, catalog-selected NAPSG symbols. */
+export const FACILITY_TYPE = defineEnum(
+  "symbology.facilityType",
+  [
+    "hospital",
+    "urgent-care",
+    "fire-station",
+    "law-enforcement",
+    "school",
+    "shelter",
+    "local-eoc",
+    "commercial-airport",
+    "heliport",
+  ],
   CITATION,
 );
 
