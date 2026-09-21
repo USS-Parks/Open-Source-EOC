@@ -126,4 +126,21 @@ describe("incident-scoped dashboard counts (VEOC-79B2)", () => {
     expect(widget<Tile>(b, "closed_roads").value).toBe(0);
     expect(await scopedRecordCount(sheltersB, incidentB)).toBe(1);
   });
+
+  it("rejects a malformed or foreign incidentId instead of widening the counts", async () => {
+    const malformed = await app.inject({
+      method: "GET",
+      url: `/api/v1/dashboards/${dashboardId}/data?incidentId=not-a-uuid`,
+      headers: auth(ownerToken),
+    });
+    expect(malformed.statusCode).toBe(400);
+
+    const foreign = await app.inject({
+      method: "GET",
+      url: `/api/v1/dashboards/${dashboardId}/data?incidentId=00000000-0000-4000-8000-000000000001`,
+      headers: auth(ownerToken),
+    });
+    expect(foreign.statusCode).toBe(404);
+    expect(foreign.json().error).toBe("incident not found in this jurisdiction");
+  });
 });

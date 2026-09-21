@@ -120,4 +120,25 @@ describe("activation-time data-pack onboarding", () => {
     const foreign = await register(firstIncident, coordinatorToken, pack({ organizationSlug: "valley-city" }));
     expect(foreign.statusCode).toBe(403);
   });
+
+  it("denies a partner contributor loading another organization's dataset", async () => {
+    const ownerPack = pack({
+      name: "City GIS",
+      organizationSlug: "valley-city",
+      datasets: [{ key: "city-roads", name: "City roads", kind: "geojson",
+        url: "https://example.org/city.json", fieldMapping: { title: "properties.name" } }],
+    });
+    expect((await register(firstIncident, ownerToken, ownerPack)).statusCode).toBe(201);
+    const cityDatasetId = (await admin`select id from data_pack_datasets where key = 'city-roads'`)[0]!.id as string;
+    const wipe = await app.inject({
+      method: "POST",
+      url: `/api/v1/data-packs/datasets/${cityDatasetId}/load`,
+      headers: auth(coordinatorToken),
+      payload: { records: [] },
+    });
+    expect(wipe.statusCode).toBe(403);
+    expect(wipe.json().error).toBe(
+      "requires incident owner admin or a contributor of that organization",
+    );
+  });
 });

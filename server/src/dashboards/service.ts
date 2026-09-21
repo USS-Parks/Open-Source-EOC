@@ -159,6 +159,12 @@ export async function computeDashboard(
   incidentId?: string,
 ): Promise<DashboardSnapshot> {
   const dashboard = await getDashboard(sql, actor, dashboardId);
+  if (incidentId) {
+    const [incident] = await sql`
+      select id from incidents
+      where id = ${incidentId} and jurisdiction_id = ${dashboard.jurisdictionId}`;
+    if (!incident) throw new AuthError(404, "incident not found in this jurisdiction");
+  }
   const widgets: WidgetResult[] = [];
   for (const widget of dashboard.template.widgets) {
     widgets.push(

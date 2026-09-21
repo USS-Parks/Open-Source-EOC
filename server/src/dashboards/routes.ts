@@ -127,11 +127,17 @@ export function dashboardRoutes(
         const { dashboardId } = req.params as { dashboardId: string };
         // A live dashboard opened in an incident context stays scoped to it, so
         // pushed recomputes count the same incident's records as the REST read
-        // (VEOC-79B2). An absent or malformed value leaves the stream unscoped.
+        // (VEOC-79B2). A missing query is unscoped. A malformed id is rejected,
+        // never silently widened to the whole jurisdiction.
         const incidentQuery = z
           .object({ incidentId: z.string().uuid().optional() })
           .safeParse(req.query);
-        const incidentId = incidentQuery.success ? incidentQuery.data.incidentId : undefined;
+        if (!incidentQuery.success) {
+          socket.send(JSON.stringify({ type: "error", error: "invalid incidentId" }));
+          socket.close();
+          return;
+        }
+        const incidentId = incidentQuery.data.incidentId;
         let principal: Principal | null = null;
         let unsubscribe: (() => void) | null = null;
         let timer: NodeJS.Timeout | null = null;

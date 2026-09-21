@@ -165,6 +165,54 @@ describe("press release approval and publication", () => {
     expect(second.json().error).toBe("this person already recorded a decision on this release");
   });
 
+  it("refuses a local writer inventing an agency to veto a pending release", async () => {
+    const release = (
+      await req("POST", `/api/v1/jurisdictions/${jurisdictionId}/jic/releases`, {
+        title: "Shelter capacity update",
+        body: "The community center still has 40 beds.",
+        requiredAgencies: ["yurok", "state"],
+      })
+    ).json();
+    await req("POST", `/api/v1/jic/releases/${release.id}/decisions`, {
+      agency: "yurok",
+      decision: "approve",
+    });
+    const spoof = await req("POST", `/api/v1/jic/releases/${release.id}/decisions`, {
+      agency: "not-in-the-chain",
+      decision: "reject",
+    });
+    expect(spoof.statusCode).toBe(403);
+    expect(spoof.json().error).toBe("agency is not in this release's approval chain");
+    const [row] = await admin`select status from press_releases where id = ${release.id}`;
+    expect(row!.status).toBe("pending");
+    const chain = await admin`
+      select agency from press_release_approvals where release_id = ${release.id}`;
+    expect(chain.map((a) => a.agency)).toEqual(["yurok"]);
+  });
+
+  it("refuses a registered peer that is not on the release approval chain", async () => {
+    const extra = (
+      await req("POST", `/api/v1/jurisdictions/${jurisdictionId}/peers`, { name: "mutual-aid" })
+    ).json();
+    const release = (
+      await req("POST", `/api/v1/jurisdictions/${jurisdictionId}/jic/releases`, {
+        title: "Road reopened",
+        body: "SR-96 is open to residents.",
+        requiredAgencies: ["yurok"],
+      })
+    ).json();
+    const veto = await app.inject({
+      method: "POST",
+      url: "/api/v1/jic/approvals/receive",
+      headers: { "x-peer-token": extra.token as string },
+      payload: { releaseId: release.id, decision: "reject" },
+    });
+    expect(veto.statusCode).toBe(403);
+    expect(veto.json().error).toBe("this peer is not in the release approval chain");
+    const [row] = await admin`select status from press_releases where id = ${release.id}`;
+    expect(row!.status).toBe("draft");
+  });
+
   it("refuses a peer decision on a release from another jurisdiction path with a bad token", async () => {
     const release = (
       await req("POST", `/api/v1/jurisdictions/${jurisdictionId}/jic/releases`, {
