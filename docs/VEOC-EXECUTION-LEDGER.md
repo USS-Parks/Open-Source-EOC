@@ -3358,3 +3358,28 @@ increment proves it and that coverage follows the incident area.
   assets, mapping, attribution and browser evidence.
 - Current units finish at their normal boundaries. No acceptance evidence is
   inferred from this authorization, and no second unit shares an active lane.
+
+## SEAM: personal incident workspace persistence
+
+- **Files:** shared saved-state contract, server routes/service, migration 0060,
+  focused database test and additive application/shared exports. Eight files.
+- **Behavior:** four bounded namespaces for personal workspace preferences,
+  layouts, table views and dashboard configuration; authenticated person and
+  incident scope, optimistic revisions, bounded keyset listing and deletion.
+  Current incident authority and database RLS protect every operation, including
+  personal isolation between administrators and named participants.
+- **Gate:** TypeScript, ESLint, real-database authority/revision/size tests,
+  full parent review and independent SHIP review passed. Parent review found
+  JSONB expansion could reject compact valid payloads; the repair stores exact
+  serialized JSON through text::json, with the same 65,536-byte database bound.
+  Failed diagnostic runs remain in lane c logs. Final regression covers both
+  dense keys and 8,000 large finite numbers without representation expansion.
+- **Integration:** after replay over workflow/gallery code, TypeScript and
+  ESLint passed; five affected suites passed 16/16. The initial gallery filter
+  named no existing file; the two actual gallery suites were then run once.
+  Actual outputs: deploy/test-runtime/out/lanes/c/logs/seam-integration.log
+  and seam-integration-gallery.log. Exact fast-forward:
+  c3397618e36fd81efbf499eb96a50cf0c6ce3e1c.
+- **Boundary:** persistence engine integrated; shell/table/dashboard consumers
+  remain their own prompts. Lane c next resumes approved H13 acquisition/render
+  work. Existing four lanes remain active; no new worktree, deletion or push.

@@ -912,6 +912,14 @@ mutation lock and reload the current shape inside the checkpoint transaction.
 The production write inventory contains only the board service and this hub.
 This completes the upgrade-preservation gate; it adds no offline workflow.
 
+Execution allocation, 2026-09-21: root's `80b` correction also touches only
+getIncidentBoardReadShape in boards/service.ts. Review found its constant
+member role hid local administrators' fields on incident dashboards. Preserve
+the local membership role after existing incident/attachment checks, and retain
+the established member field level for named participants. The active 81B-E2
+unit does not edit that file. H13 may add its licensed local facility PNG subset
+and provenance under web/public/napsg/ for the existing map image pipeline.
+
 ### 8.6 Migration blocks
 
 | Block | Holder |
