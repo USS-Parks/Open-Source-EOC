@@ -3682,3 +3682,20 @@ increment proves it and that coverage follows the incident area.
   final screen composition. Lane a retains 39,062 bytes of construction scratch
   in work/d05, excluded from the commit and disposable at lane retirement.
   Four existing lanes retained; no new worktree or push. Next lane a: 82-E.
+
+## D05 follow-up: distinct symbols for each function
+
+- **Authority:** Basho requested each icon be stylistically unique. This
+  reopened D05 for distinct silhouettes within the canonical visual family.
+- **Change:** all 25 navigation destinations now map to different symbols;
+  Smart Forms, Board customization, Field Reports, Create report and the
+  shelter lifeline have distinct purpose cues. All registered glyphs have
+  distinct geometry; stroke, accessibility and status semantics stay coherent.
+- **Gate:** root TypeScript/ESLint passed, icon tests 12/12, and four browser
+  captures passed 27 navigation, nine action and eight lifeline inventories,
+  minimum sizes, keyboard focus and containment with no errors or external
+  requests. Root viewed the corrected rendering; bounded review is SHIP.
+  Evidence: out/lanes/a/logs/D05-unique-root.log and
+  out/d05-unique-review/{result.json,browser.log,shots}.
+- **Unit commit:** bb329d3a3578ab280afadd11fab83797c6ae807b, exact fast-forward.
+  No new worktree, external asset or push. The approved roster continues.
