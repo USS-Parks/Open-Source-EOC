@@ -2775,3 +2775,30 @@ Closes the 79C2 COP integration: onboarded datasets draw on the map and inspect.
   feed's poll) and a dedicated dataset legend/symbology are follow-ups, not
   required to show onboarded datasets on the COP.
 - **Ending commit:** this receipt commit, recorded by the next receipt.
+
+## VEOC-79F: California operational data catalog (registry)
+
+The catalog foundation: a curated, coverage-aware registry of California
+sources, onboardable through the 79C data-pack path.
+
+- **Baseline:** aeaa375 on canonical main.
+- **Change:** shared/data-packs/catalog.ts defines CatalogSource (category,
+  owner, ownerSlug, license, coverage, kind, url, field mapping, refresh method,
+  cadence, stale window, availability, notes) and CALIFORNIA_CATALOG across
+  boundaries, roads/closures, parcels/buildings, hazards, critical facilities,
+  population and shelters. Coverage is a labeled bounding box with an explicit
+  statewide flag, so a county source (Humboldt parcels) is never labeled
+  statewide. catalogCovers(source, areaBbox) decides applicability by bbox
+  overlap; catalogToDataset maps a source to a schema-valid data-pack dataset for
+  onboarding (stale window clamped to the data-pack maximum; the true long
+  cadence stays in cadenceSeconds). Unavailable sources (FEMA NFHL flood, a
+  statewide shelter feed) are kept as named gaps with notes, not omitted.
+- **Evidence:** a pure test proves a statewide source covers San Diego, the
+  Humboldt source covers Humboldt but not San Diego, no sub-area source is
+  labeled statewide, every source maps to a schema-valid dataset, and every
+  unavailable source carries a gap note. pnpm -r exec tsc --noEmit exit 0,
+  eslint exit 0, catalog test 5 passed.
+- **Boundary:** the server catalog endpoint and onboarding-from-catalog action,
+  and the operator UI, are the next increments; actual outbound polling of these
+  sources stays gated (no external calls this session).
+- **Ending commit:** this receipt commit, recorded by the next receipt.
