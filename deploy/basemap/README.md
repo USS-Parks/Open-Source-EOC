@@ -179,13 +179,67 @@ and set:
 </script>
 ```
 
+H14 can enrich that archive from an already acquired Overture buildings
+GeoParquet without adding a second footprint layer. `build-overture-buildings.ps1`
+first makes a state-clipped lookup from exact root OpenStreetMap way lineage,
+excludes ambiguous IDs, then rebuilds the same OSM geometry. A current typed
+OSM `building` value always wins; only a current `building=yes` way receives
+`overture_use`, `overture_subtype`, `overture_id`, and `overture_release`.
+Relations and unmatched ways remain unchanged. The candidate is written under
+`out/h14/`; the script never replaces the served archive.
+
+The build requires the local Overture GeoParquet, its offline DuckDB spatial
+extension directory, the same California OSM PBF and Planetiler JAR used by the
+base archive, Python with DuckDB, and JDK 21. Pass those paths explicitly:
+
+```powershell
+./deploy/basemap/build-overture-buildings.ps1 `
+  -OverturePath <overture-buildings.geoparquet> `
+  -OsmPath <us_california.osm.pbf> `
+  -PlanetilerJar <planetiler-0.9.0.jar> `
+  -PythonPath <python-with-duckdb.exe> `
+  -JavaHome <jdk-21> `
+  -DuckDbExtensions <duckdb-extensions> `
+  -OutputDirectory <candidate-output-directory>
+```
+
+Review `lookup-manifest.json` and `build-manifest.json`, then publish the
+candidate archive through the deployment's normal artifact process. Configure
+the release beside the URL so the map displays accurate Overture attribution:
+
+```html
+<script>
+  window.OPENEOC = {
+    OPENEOC_BUILDINGS_PMTILES_URL: "https://<host>/buildings.pmtiles",
+    OPENEOC_BUILDINGS_OVERTURE_RELEASE: "2026-08-19.0"
+  };
+</script>
+```
+
+The Windows desktop launcher reads the release only from
+`web/public/basemap/buildings-overture.json` after verifying the installed
+archive's byte count and SHA-256 with a bounded-memory stream. Install this
+sidecar beside `buildings.pmtiles`:
+
+```json
+{
+  "release": "2026-08-19.0",
+  "archive_sha256": "<sha256 of the installed buildings.pmtiles>",
+  "archive_bytes": 343283882
+}
+```
+
+A plain OSM archive needs no sidecar and makes no Overture attribution claim.
+If a sidecar is malformed or no longer matches the archive, the launcher logs
+a diagnostic, omits the release claim, and continues serving the archive.
+
 The COP then draws footprints colored by use (residential, commercial,
 industrial, civic, religious, agricultural; untyped footprints neutral) from
 zoom 13, with a Building use legend, and colors any footprint by the status
 of the point record that falls inside it (a damage assessment, a field
 report), the way the commercial COPs show impacted structures. Untyped
-footprints are common in bulk imports; a later roster prompt adds Overture
-Maps building subtypes for coverage.
+footprints remain neutral when no verified exact-way enrichment exists or the
+source subtype is outside the documented crosswalk.
 
 ### Verify the local buildings archive
 

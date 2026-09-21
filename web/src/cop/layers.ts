@@ -243,10 +243,9 @@ export function terrainSpecs(
 }
 
 /**
- * Building use, from the OpenStreetMap building tag carried as `class` by
- * the buildings archive (deploy/basemap/buildings-schema.yml). The commercial
- * COPs delineate structures by use; this is the free, license-clean source,
- * with untyped footprints (building=yes) left neutral over the landuse fill.
+ * Building use, primarily from the OpenStreetMap building tag carried as
+ * `class` by the buildings archive. An H14 archive can add a conservative
+ * Overture use for an exact OSM-way match that is still building=yes.
  */
 export type BuildingUse =
   | "residential"
@@ -296,11 +295,23 @@ const BUILDING_USE_TAGS: Readonly<Record<BuildingUse, readonly string[]>> = {
   other: [],
 };
 
-/** The use bucket for a building tag value; unknown or plain tags are other. */
-export function buildingUseOf(tag: string | undefined): BuildingUse {
+const OVERTURE_BUILDING_USES: readonly BuildingUse[] = [
+  "residential",
+  "commercial",
+  "industrial",
+  "civic",
+  "religious",
+  "agricultural",
+];
+
+/** Known OSM tags win; only building=yes can accept an Overture enrichment. */
+export function buildingUseOf(tag: string | undefined, overtureUse?: string): BuildingUse {
   if (!tag) return "other";
   for (const [use, tags] of Object.entries(BUILDING_USE_TAGS)) {
     if (tags.includes(tag)) return use as BuildingUse;
+  }
+  if (tag === "yes" && OVERTURE_BUILDING_USES.includes(overtureUse as BuildingUse)) {
+    return overtureUse as BuildingUse;
   }
   return "other";
 }
@@ -340,6 +351,8 @@ export const BUILDING_USE_LEGEND: readonly { readonly id: BuildingUse; readonly 
 /** A self-hosted buildings PMTiles archive (deploy/basemap, buildings schema). */
 export interface BuildingsConfig {
   readonly pmtilesUrl: string;
+  /** Present only when this archive carries the exact-way H14 enrichment. */
+  readonly overtureRelease?: string | undefined;
 }
 
 export const BUILDINGS_SOURCE_ID = "buildings";
@@ -353,7 +366,14 @@ function buildingUseColorExpression(theme: ThemeName): unknown[] {
     if (tags.length === 0) continue;
     branches.push([...tags], colors[use as BuildingUse]);
   }
-  return ["match", ["get", "class"], ...branches, colors.other];
+  const overtureBranches = OVERTURE_BUILDING_USES.flatMap((use) => [use, colors[use]]);
+  const enrichedFallback = [
+    "case",
+    ["==", ["get", "class"], "yes"],
+    ["match", ["get", "overture_use"], ...overtureBranches, colors.other],
+    colors.other,
+  ];
+  return ["match", ["get", "class"], ...branches, enrichedFallback];
 }
 
 /**
@@ -374,7 +394,9 @@ export function buildingSpecs(
         type: "vector",
         url: `pmtiles://${config.pmtilesUrl}`,
         promoteId: "osm_id",
-        attribution: "Buildings: © OpenStreetMap contributors (ODbL)",
+        attribution: config.overtureRelease
+          ? `Buildings: © OpenStreetMap contributors (ODbL); enrichment: © Overture Maps Foundation (ODbL, ${config.overtureRelease})`
+          : "Buildings: © OpenStreetMap contributors (ODbL)",
       },
     },
     layers: [

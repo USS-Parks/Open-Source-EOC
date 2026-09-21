@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { extname, isAbsolute, relative, resolve } from "node:path";
 
@@ -85,6 +86,78 @@ export function parseByteRange(header, size) {
   if (!Number.isSafeInteger(start) || !Number.isSafeInteger(requestedEnd) || start >= size || requestedEnd < start)
     return { unsatisfiable: true };
   return { start, end: Math.min(requestedEnd, size - 1) };
+}
+
+async function hashFile(path) {
+  const hash = createHash("sha256");
+  let bytes = 0;
+  for await (const chunk of createReadStream(path)) {
+    hash.update(chunk);
+    bytes += chunk.length;
+  }
+  return { bytes, sha256: hash.digest("hex") };
+}
+
+async function verifiedBuildingsRelease(archivePath, sidecarPath, diagnostic) {
+  if (!existsSync(sidecarPath)) return undefined;
+  let metadata;
+  try {
+    const sidecar = statSync(sidecarPath);
+    if (!sidecar.isFile() || sidecar.size > 4_096) throw new Error("sidecar must be a JSON file no larger than 4096 bytes");
+    metadata = JSON.parse(readFileSync(sidecarPath, "utf8"));
+  } catch (error) {
+    diagnostic(`BUILDINGS_OVERTURE_METADATA_INVALID reason=${String(error?.message ?? error)}`);
+    return undefined;
+  }
+  const release = typeof metadata?.release === "string" ? metadata.release.trim() : "";
+  const expectedHash = typeof metadata?.archive_sha256 === "string" ? metadata.archive_sha256.toLowerCase() : "";
+  const expectedBytes = metadata?.archive_bytes;
+  if (!/^[a-z0-9._-]{1,64}$/i.test(release)
+    || !/^[0-9a-f]{64}$/.test(expectedHash)
+    || !Number.isSafeInteger(expectedBytes)
+    || expectedBytes <= 0) {
+    diagnostic("BUILDINGS_OVERTURE_METADATA_INVALID reason=release, archive_sha256, or archive_bytes is invalid");
+    return undefined;
+  }
+  try {
+    const archiveBytes = statSync(archivePath).size;
+    if (archiveBytes !== expectedBytes) {
+      diagnostic(`BUILDINGS_OVERTURE_METADATA_STALE reason=archive_bytes expected=${expectedBytes} actual=${archiveBytes}`);
+      return undefined;
+    }
+    const actual = await hashFile(archivePath);
+    if (actual.bytes !== expectedBytes || actual.sha256 !== expectedHash) {
+      diagnostic(`BUILDINGS_OVERTURE_METADATA_STALE reason=archive_sha256 expected=${expectedHash} actual=${actual.sha256}`);
+      return undefined;
+    }
+    return release;
+  } catch (error) {
+    diagnostic(`BUILDINGS_OVERTURE_METADATA_INVALID reason=${String(error?.message ?? error)}`);
+    return undefined;
+  }
+}
+
+export async function desktopRuntimeConfig(publicRoot, { diagnostic = (message) => console.warn(message) } = {}) {
+  const config = {};
+  const optional = [
+    ["OPENEOC_BASEMAP_PMTILES_URL", "basemap/california.pmtiles"],
+    ["OPENEOC_BUILDINGS_PMTILES_URL", "basemap/buildings.pmtiles"],
+    ["OPENEOC_OVERLAYS_PMTILES_URL", "basemap/overlays.pmtiles"],
+    ["OPENEOC_OVERLAYS_MANIFEST_URL", "basemap/overlays-manifest.json"],
+  ];
+  for (const [key, relativePath] of optional)
+    if (existsSync(resolve(publicRoot, relativePath))) config[key] = `/${relativePath.replaceAll("\\", "/")}`;
+  const buildings = resolve(publicRoot, "basemap/buildings.pmtiles");
+  if (existsSync(buildings)) {
+    const release = await verifiedBuildingsRelease(
+      buildings,
+      resolve(publicRoot, "basemap/buildings-overture.json"),
+      diagnostic,
+    );
+    if (release) config.OPENEOC_BUILDINGS_OVERTURE_RELEASE = release;
+  }
+  if (existsSync(resolve(publicRoot, "fonts"))) config.OPENEOC_BASEMAP_GLYPHS_URL = "/fonts/{fontstack}/{range}.pbf";
+  return config;
 }
 
 function runtimeScript(config) {

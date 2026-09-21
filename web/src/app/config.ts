@@ -30,6 +30,9 @@ interface RuntimeConfig {
   /** A self-hosted buildings PMTiles archive (deploy/basemap buildings
    * schema): footprints classed by use, colorable by operational status. */
   readonly OPENEOC_BUILDINGS_PMTILES_URL?: string;
+  /** Overture release carried by an H14-enriched buildings archive. Omit for
+   * a plain OSM archive so attribution never claims enrichment that is absent. */
+  readonly OPENEOC_BUILDINGS_OVERTURE_RELEASE?: string;
   /** Raster XYZ tile templates offered in the basemap gallery beside the
    * vector map: aerial imagery, a topographic map, and a hydrography overlay.
    * The deployment provides each (self-hosted keeps the COP offline; a public
@@ -110,8 +113,11 @@ export function jurisdictionOverlays(): JurisdictionOverlays | undefined {
 
 /** The buildings archive, if the deployment configured one. */
 export function buildingsSource(): BuildingsConfig | undefined {
-  const pmtilesUrl = setting(runtime().OPENEOC_BUILDINGS_PMTILES_URL);
-  return pmtilesUrl ? { pmtilesUrl } : undefined;
+  const r = runtime();
+  const pmtilesUrl = setting(r.OPENEOC_BUILDINGS_PMTILES_URL);
+  if (!pmtilesUrl) return undefined;
+  const overtureRelease = setting(r.OPENEOC_BUILDINGS_OVERTURE_RELEASE);
+  return { pmtilesUrl, ...(overtureRelease ? { overtureRelease } : {}) };
 }
 
 /** The DEM tile set for hillshade and 3D terrain, if the deployment configured one. */

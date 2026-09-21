@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -15,6 +16,7 @@ import {
 } from "./lib/contracts.mjs";
 import {
   DOCUMENT_CSP,
+  desktopRuntimeConfig,
   parseByteRange,
   resolveInside,
   safeRelativePath,
@@ -63,6 +65,63 @@ test("single byte ranges are bounded for PMTiles and invalid ranges are refused"
   assert.deepEqual(parseByteRange("bytes=10-11", 10), { unsatisfiable: true });
   assert.deepEqual(parseByteRange("bytes=5-2", 10), { unsatisfiable: true });
   assert.deepEqual(parseByteRange("bytes=1-2,4-5", 10), { unsatisfiable: true });
+});
+
+test("desktop building attribution requires metadata matching the installed archive", async (t) => {
+  await t.test("matching metadata exposes the verified Overture release", async () => {
+    const files = fixture();
+    try {
+      const archive = Buffer.from("verified-overture-buildings");
+      writeFileSync(resolve(files.publicRoot, "basemap/buildings.pmtiles"), archive);
+      writeFileSync(resolve(files.publicRoot, "basemap/buildings-overture.json"), JSON.stringify({
+        release: "2026-08-19.0",
+        archive_sha256: createHash("sha256").update(archive).digest("hex"),
+        archive_bytes: archive.length,
+      }));
+      const diagnostics = [];
+      const config = await desktopRuntimeConfig(files.publicRoot, { diagnostic: (message) => diagnostics.push(message) });
+      assert.equal(config.OPENEOC_BUILDINGS_PMTILES_URL, "/basemap/buildings.pmtiles");
+      assert.equal(config.OPENEOC_BUILDINGS_OVERTURE_RELEASE, "2026-08-19.0");
+      assert.deepEqual(diagnostics, []);
+    } finally {
+      rmSync(files.root, { recursive: true, force: true });
+    }
+  });
+
+  await t.test("a plain OSM archive remains available without an Overture claim", async () => {
+    const files = fixture();
+    try {
+      writeFileSync(resolve(files.publicRoot, "basemap/buildings.pmtiles"), "plain-osm-buildings");
+      const diagnostics = [];
+      const config = await desktopRuntimeConfig(files.publicRoot, { diagnostic: (message) => diagnostics.push(message) });
+      assert.equal(config.OPENEOC_BUILDINGS_PMTILES_URL, "/basemap/buildings.pmtiles");
+      assert.equal(config.OPENEOC_BUILDINGS_OVERTURE_RELEASE, undefined);
+      assert.deepEqual(diagnostics, []);
+    } finally {
+      rmSync(files.root, { recursive: true, force: true });
+    }
+  });
+
+  await t.test("stale metadata omits the claim and reports the mismatch", async () => {
+    const files = fixture();
+    try {
+      const archive = Buffer.from("changed-overture-buildings");
+      writeFileSync(resolve(files.publicRoot, "basemap/buildings.pmtiles"), archive);
+      writeFileSync(resolve(files.publicRoot, "basemap/buildings-overture.json"), JSON.stringify({
+        release: "2026-08-19.0",
+        archive_sha256: "0".repeat(64),
+        archive_bytes: archive.length,
+      }));
+      const diagnostics = [];
+      const config = await desktopRuntimeConfig(files.publicRoot, { diagnostic: (message) => diagnostics.push(message) });
+      assert.equal(config.OPENEOC_BUILDINGS_PMTILES_URL, "/basemap/buildings.pmtiles");
+      assert.equal(config.OPENEOC_BUILDINGS_OVERTURE_RELEASE, undefined);
+      assert.equal(diagnostics.length, 1);
+      assert.match(diagnostics[0], /BUILDINGS_OVERTURE_METADATA_STALE reason=archive_sha256/);
+    } finally {
+      rmSync(files.root, { recursive: true, force: true });
+    }
+  });
 });
 
 test("document CSP permits local MapLibre workers and fonts without external origins", () => {

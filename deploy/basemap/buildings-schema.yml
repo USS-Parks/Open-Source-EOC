@@ -3,7 +3,9 @@ schema_description: >-
   Building footprints with their OpenStreetMap building tag as `class`, keyed
   by osm_id, for the COP's building-use delineation and per-building status
   coloring (web/src/cop/layers.ts, buildingSpecs). Built by planetiler's
-  custom-schema runner; see generate-california.sh.
+  custom-schema runner; see generate-california.sh. This remains the plain OSM
+  build; H14's build-overture-buildings.ps1 uses the same geometry and identity
+  contract while enriching exact matched building=yes ways.
 attribution: <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>
 sources:
   osm:

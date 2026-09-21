@@ -25,7 +25,7 @@ import {
   validateProfileName,
   validateProfilePlans,
 } from "./lib/contracts.mjs";
-import { registerStaticHost } from "./lib/static-host.mjs";
+import { desktopRuntimeConfig, registerStaticHost } from "./lib/static-host.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = resolve(dirname(scriptPath), "../..");
@@ -424,20 +424,6 @@ async function setupProfile(args) {
   }
 }
 
-function runtimeConfig() {
-  const config = {};
-  const optional = [
-    ["OPENEOC_BASEMAP_PMTILES_URL", "basemap/california.pmtiles"],
-    ["OPENEOC_BUILDINGS_PMTILES_URL", "basemap/buildings.pmtiles"],
-    ["OPENEOC_OVERLAYS_PMTILES_URL", "basemap/overlays.pmtiles"],
-    ["OPENEOC_OVERLAYS_MANIFEST_URL", "basemap/overlays-manifest.json"],
-  ];
-  for (const [key, relativePath] of optional)
-    if (existsSync(resolve(publicRoot, relativePath))) config[key] = `/${relativePath.replaceAll("\\", "/")}`;
-  if (existsSync(resolve(publicRoot, "fonts"))) config.OPENEOC_BASEMAP_GLYPHS_URL = "/fonts/{fontstack}/{range}.pbf";
-  return config;
-}
-
 function processCommandLine(pid) {
   if (!Number.isSafeInteger(pid) || pid <= 0) return null;
   try {
@@ -598,7 +584,7 @@ async function serveProfile(args) {
     void reply.send({ status: "stopping" });
     globalThis.setImmediate(() => void close().then(() => process.exit(0)));
   });
-  registerStaticHost(app, { distRoot, publicRoot, runtimeConfig: runtimeConfig() });
+  registerStaticHost(app, { distRoot, publicRoot, runtimeConfig: await desktopRuntimeConfig(publicRoot) });
   await app.listen({ host: "127.0.0.1", port: config.httpPort });
   console.log(`DESKTOP_READY profile=${profile} url=http://127.0.0.1:${config.httpPort}`);
   process.on("SIGINT", () => void close().then(() => process.exit(0)));
