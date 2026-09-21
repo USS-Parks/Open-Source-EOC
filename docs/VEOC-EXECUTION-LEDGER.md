@@ -2754,3 +2754,24 @@ persisted items are readable as GeoJSON.
 - **Boundary:** rendering these features as a map layer and per-record
   inspection in the COP is the next increment (79C2 web wiring).
 - **Ending commit:** this receipt commit, recorded by the next receipt.
+
+## VEOC-79C2: render dataset layers on the COP
+
+Closes the 79C2 COP integration: onboarded datasets draw on the map and inspect.
+
+- **Baseline:** 5039b27 on canonical main.
+- **Change:** MapSurface fetches the incident's datasets and renders each
+  available or stale one as a read-only COP layer through the existing feed-layer
+  path: features come from GET /datasets/:id/items, the layer carries the
+  dataset's name and staleness, and the shared map-click popup inspects a
+  feature's fields. Unavailable or not-yet-loaded datasets are not drawn. The
+  layer set, the empty-state check, and the CopMap remount key now include
+  datasets, so the map refreshes when the incident or its datasets change.
+- **Evidence:** pnpm -r exec tsc --noEmit exit 0, eslint exit 0. The wiring rides
+  the feed-layer rendering path already covered by the cop layer tests; no new
+  MapSurface integration test, matching the repo's convention for map wiring.
+- **79C2 COP integration done; boundary:** layers, inspection, and view refresh
+  are in. Server-side polling of a dataset's source URL (the equivalent of a
+  feed's poll) and a dedicated dataset legend/symbology are follow-ups, not
+  required to show onboarded datasets on the COP.
+- **Ending commit:** this receipt commit, recorded by the next receipt.

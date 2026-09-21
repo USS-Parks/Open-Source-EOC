@@ -40,6 +40,11 @@ const overlayStyle: CSSProperties = {
   zIndex: 5,
 };
 
+/** Seconds since a dataset's last successful load, for the feed-style age line. */
+function ageSeconds(lastSuccessAt: string | null): number | null {
+  return lastSuccessAt ? Math.floor((Date.now() - Date.parse(lastSuccessAt)) / 1000) : null;
+}
+
 /**
  * The COP surface, plus field capture: an operator can drop a point on the
  * map (the Field Maps gesture), which opens the board's record form with the
@@ -70,7 +75,23 @@ export function MapSurface(props: {
   );
 
   const feedLayers = props.feeds.filter((f) => f.enabled).map((f) => ({ id: f.id, title: f.name }));
-  const empty = geoBoards.length === 0 && feedLayers.length === 0;
+  // Onboarded datasets (VEOC-79C2) ride the read-only feed-layer path: an
+  // available or stale dataset renders as a COP layer whose features are its
+  // persisted items, with the shared inspect popup and staleness treatment.
+  // ponytail: reuse the feed layer path rather than a parallel dataset stack;
+  // a dedicated dataset legend is a later styling refinement.
+  const datasets = useAsync(
+    () => (props.incidentId ? props.client.listIncidentDatasets(props.incidentId) : Promise.resolve([])),
+    [props.incidentId],
+  );
+  const mapDatasets = (datasets.data ?? []).filter(
+    (d) => d.availability === "available" || d.availability === "stale",
+  );
+  const datasetLayers = mapDatasets.map((d) => ({ id: d.id, title: d.name }));
+  const datasetIds = new Set(mapDatasets.map((d) => d.id));
+  const datasetById = new Map(mapDatasets.map((d) => [d.id, d]));
+  const feedAndDatasetLayers = [...feedLayers, ...datasetLayers];
+  const empty = geoBoards.length === 0 && feedAndDatasetLayers.length === 0;
 
   const reset = () => {
     setAdding(false);
@@ -162,12 +183,23 @@ export function MapSurface(props: {
 
       <div style={{ flex: 1, minHeight: 0 }}>
         <CopMap
-          key={JSON.stringify([props.jurisdictionId, props.incidentId ?? null, props.theme, geoBoards.map((b) => b.id), feedLayers.map((f) => f.id)])}
+          key={JSON.stringify([props.jurisdictionId, props.incidentId ?? null, props.theme, geoBoards.map((b) => b.id), feedAndDatasetLayers.map((f) => f.id)])}
           theme={props.theme}
           boards={geoBoards.map((c) => ({ id: c.id, title: c.title }))}
           fetchItems={(id) => props.client.collectionItems(id)}
-          feeds={feedLayers}
-          fetchFeedItems={(id) => props.client.feedItems(id)}
+          feeds={feedAndDatasetLayers}
+          fetchFeedItems={(id) =>
+            datasetIds.has(id)
+              ? props.client.datasetItems(id).then((fc) => ({
+                  ...fc,
+                  feed: {
+                    name: datasetById.get(id)!.name,
+                    stale: datasetById.get(id)!.availability === "stale",
+                    ageSeconds: ageSeconds(datasetById.get(id)!.lastSuccessAt),
+                  },
+                }))
+              : props.client.feedItems(id)
+          }
           basemap={{ kind: "natural-earth", assetBase: assetBase() }}
           bundledBasemap={{ assetBase: assetBase() }}
           basemapStyleUrl={basemapStyleUrl()}
