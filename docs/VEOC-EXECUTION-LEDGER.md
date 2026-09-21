@@ -3576,3 +3576,41 @@ increment proves it and that coverage follows the incident area.
 - **Boundary:** this corrects token fidelity; the forthcoming shell and surface
   units still implement the exact layouts. D06 remains token-driven and will
   inherit the correction at integration. Four existing lanes, no push.
+
+## D13: attributed ESF and Lifeline assessment engine
+
+- **Serves/lane:** D13 in lane a, replayed from d3d865b over b4d4abb.
+  Evidence level: integrated engine; operational presentation remains D14-D17.
+- **Change:** versioned definitions, independent lifeline condition and ESF
+  activation/capacity, immutable reports and decisions, visible conflicts,
+  attributed legacy backfill, source snapshots and shared workflow assignments.
+  Exposure never implies failure. California doctrine gaps remain explicit.
+- **Gate:** focused real PostgreSQL tests 8/8, shared contracts 4/4, TypeScript
+  and ESLint passed. Review required scoped legacy capture, current attribution,
+  masked backfill and superseded-decision repairs; final review is SHIP.
+  Root integration TypeScript/lint and three suites passed 76/76; two incorrectly
+  named replay filters selected no tests, then the exact viewport/COP files
+  passed 31/31. Logs: out/lanes/a/logs/D13-integration.log and
+  D13-integration-replayed.log under deploy/test-runtime.
+- **Unit commit:** 8f0a565cb75a977ef326c64425a3a236e408692f, exact fast-forward.
+- **Boundary:** historical attribution is limited to recorded source facts.
+  Four existing lanes retained; lane a next takes D05. No new worktree or push.
+
+## Overture acquisition receipt
+
+- **Authority:** Basho's explicit installation instruction. Official release
+  2026-08-19.0, building schema v1.18.0; overturemaps 1.0.2 and DuckDB 1.4.4
+  installed in deploy/basemap/out/overture/.venv. Spatial extension query passed.
+- **Data:** california-buildings-2026-08-19.0.geoparquet, 2,883,489,033 bytes,
+  15,664,679 features and unique IDs; SHA-256
+  1c32b65f761899b253387cdf77835c8f12306de6e23aa70d77d634e430ac49af.
+  California envelope [-124.482003,32.528289,-114.131211,42.009518]; H14 clips
+  the derivative against ca_state.geojson. Null classifications were retained.
+- **Provenance:** manifest.json, verification.log, source-profile-stream.log,
+  ODbL-1.0-official.html and license-download.json in the same ignored folder.
+  Overture IDs are unique; source record IDs are lineage and require independent
+  duplicate exclusion for the H14 lookup. No second building geometry layer.
+- **Storage:** acquisition folder 9.65 GB, including 6.44 GB of retained temporary
+  DuckDB profiler data after a capped duplicate query. This is disclosed cleanup
+  debt; the required data itself is 2.88 GB. H14's candidate remains separate
+  from the served archive until its integration gate passes.
