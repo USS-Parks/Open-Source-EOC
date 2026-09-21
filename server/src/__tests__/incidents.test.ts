@@ -212,55 +212,29 @@ describe("closure", () => {
   });
 });
 
-describe("incident lockdown (Basho, 2026-09-20)", () => {
-  it("activation locks the jurisdiction; an admin can lift it; a member cannot set it", async () => {
+describe("authorized guest access during an incident (FOUO, Basho 2026-09-20)", () => {
+  it("keeps an authorized guest's scope while an incident is open (no lockdown)", async () => {
+    // For Official Use Only: there is no public facet, and an authorized
+    // mutual-aid guest keeps unrestricted access even while an incident runs.
     const act = await app.inject({
       method: "POST",
       url: `/api/v1/jurisdictions/${seed.jurisdictionId}/incidents`,
       headers: auth(adminToken),
-      payload: { templateKey: "wildfire", name: "Lockdown Test Fire" },
+      payload: { templateKey: "wildfire", name: "Open Incident" },
     });
     expect(act.statusCode).toBe(201);
-    const state = await app.inject({
-      method: "GET",
-      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/lockdown`,
-      headers: auth(adminToken),
-    });
-    expect(state.json().locked).toBe(true);
-    const memberSet = await app.inject({
-      method: "POST",
-      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/lockdown`,
-      headers: auth(memberToken),
-      payload: { locked: false },
-    });
-    expect(memberSet.statusCode).toBe(403);
-    const lift = await app.inject({
-      method: "POST",
-      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/lockdown`,
-      headers: auth(adminToken),
-      payload: { locked: false },
-    });
-    expect(lift.statusCode).toBe(200);
-    expect(lift.json().locked).toBe(false);
-  });
-
-  it("suspends guest read at the RLS wall while locked", async () => {
     const guestId = await createPerson(admin, {
-      email: "guest-ld@example.org",
-      displayName: "Guest LD",
+      email: "guest-fouo@example.org",
+      displayName: "Guest FOUO",
       password: "guest-good-password",
     });
     await admin`
       insert into guest_grants (person_id, jurisdiction_id, scopes, expires_at, created_by)
       values (${guestId}, ${seed.jurisdictionId}, ${["positions:read"]}, now() + interval '1 day', ${seed.adminId})`;
     await admin`select set_config('app.person_id', ${guestId}, false)`;
-    await admin`update jurisdictions set locked = false where id = ${seed.jurisdictionId}`;
-    const unlocked = await admin`select has_guest_scope(${seed.jurisdictionId}, 'positions:read') as ok`;
-    expect(unlocked[0]!.ok).toBe(true);
-    await admin`update jurisdictions set locked = true where id = ${seed.jurisdictionId}`;
-    const locked = await admin`select has_guest_scope(${seed.jurisdictionId}, 'positions:read') as ok`;
-    expect(locked[0]!.ok).toBe(false);
-    await admin`update jurisdictions set locked = false where id = ${seed.jurisdictionId}`;
+    // The open incident does not suspend the grant: the scope is retained.
+    const ok = await admin`select has_guest_scope(${seed.jurisdictionId}, 'positions:read') as ok`;
+    expect(ok[0]!.ok).toBe(true);
     await admin`select set_config('app.person_id', '', false)`;
   });
 });

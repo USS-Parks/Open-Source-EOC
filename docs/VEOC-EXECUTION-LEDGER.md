@@ -2306,4 +2306,30 @@ reframed as authorized-access viewing (guests included). The incident lockdown
 conflicts with "authorized guests unrestricted" and awaits Basho's direction
 before any change. Recorded in session memory.
 
+- **Ending commit:** 91f588dfc3b388fd794a91fc9d30b8128d8a1c5c, pushed
+  (8c96103..91f588d).
+
+## Remove the incident lockdown (FOUO guest access)
+
+Basho directed the lockdown conflict be resolved now: an authorized mutual-aid
+guest keeps unrestricted access while an incident is open.
+
+- **Baseline:** 91f588dfc3b388fd794a91fc9d30b8128d8a1c5c on canonical main.
+- **Change:** the lockdown's only effect was suspending guest read during an
+  incident (has_guest_scope returned false when the jurisdiction was locked),
+  and there is no public read to protect, so the feature is removed rather than
+  left as a dead flag with a false "access suspended" banner. Migration 0036
+  restores has_guest_scope to its 0002 form and drops the jurisdictions.locked
+  column. Auto-lock on activation and auto-unlift on close are gone, and the
+  getLockdown/setLockdown service, routes and client methods, the Console
+  banner and the IncidentsSurface lockdown panel are removed.
+- **Behavior now:** access is binary. A member or an authorized guest with an
+  unexpired, unrevoked grant reads the incident and dashboard without
+  restriction; only someone without access cannot. This is the FOUO model.
+- **Evidence:** the former lockdown tests are replaced by a positive test that
+  an authorized guest keeps its scope while an incident is open; the e2e no
+  longer asserts a lockdown banner. One flaky Windows worker crash
+  (0xC0000409 in auth.test.ts, unrelated to the change) cleared on re-run.
+- **Gate:** pnpm check --maxWorkers=2 exited 0; 465 tests in 82 files passed.
+  Log: deploy/test-runtime/out/veoc-lockdown-check2.log.
 - **Ending commit:** this receipt commit, recorded by the next receipt.

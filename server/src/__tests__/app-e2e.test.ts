@@ -291,12 +291,6 @@ describe("the operations console in a real browser, offline", () => {
     // The external feed appears as its own togglable COP layer group.
     await page.getByText("Feeds", { exact: true }).first().waitFor({ state: "visible", timeout: 20000 });
     await page.getByText("NWS Alerts").first().waitFor({ state: "visible", timeout: 20000 });
-    // The seeded incident is open, so the jurisdiction is in lockdown: the
-    // banner is visible and guest/public read is suspended.
-    await page
-      .getByText(/Incident lockdown active/)
-      .first()
-      .waitFor({ state: "visible", timeout: 20000 });
     await page.waitForTimeout(1500);
     await page.screenshot({ path: join(SHOTS, "app-map-light.png"), fullPage: false });
 

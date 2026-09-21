@@ -30,10 +30,6 @@ export function IncidentsSurface(props: {
     () => (props.isAdmin ? props.client.listIncidentTemplates() : Promise.resolve([])),
     [props.isAdmin],
   );
-  const lockdown = useAsync(
-    () => props.client.getLockdown(props.jurisdictionId),
-    [props.jurisdictionId, reload],
-  );
   const [templateKey, setTemplateKey] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -86,29 +82,6 @@ export function IncidentsSurface(props: {
             <div style={{ marginTop: 12 }}>
               <Button kind="primary" onClick={activate} disabled={busy}>
                 Activate
-              </Button>
-            </div>
-          </Panel>
-        ) : null}
-
-        {props.isAdmin ? (
-          <Panel title="Dashboard lockdown">
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <StatusBadge status={lockdown.data?.locked ? "critical" : "success"}>
-                {lockdown.data?.locked ? "locked" : "open"}
-              </StatusBadge>
-              <span style={{ flex: 1, color: "var(--eoc-text-muted)" }}>
-                {lockdown.data?.locked
-                  ? "Guest and public read is suspended while an incident is open."
-                  : "Guests read normally; lockdown engages when an incident opens."}
-              </span>
-              <Button
-                onClick={() =>
-                  run(() => props.client.setLockdown(props.jurisdictionId, !lockdown.data?.locked))
-                }
-                disabled={busy}
-              >
-                {lockdown.data?.locked ? "Lift lockdown" : "Lock down"}
               </Button>
             </div>
           </Panel>

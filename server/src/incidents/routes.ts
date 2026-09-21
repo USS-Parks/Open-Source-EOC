@@ -12,9 +12,7 @@ import {
   completeChecklistItem,
   createLibrary,
   getIncident,
-  getLockdown,
   listIncidents,
-  setLockdown,
 } from "./service.js";
 import {
   archiveForIncident,
@@ -79,31 +77,6 @@ export function incidentRoutes(
         listIncidents(tx, req.principal, jurisdictionId),
       );
       return reply.send({ incidents });
-    },
-  );
-
-  app.get(
-    "/api/v1/jurisdictions/:jurisdictionId/lockdown",
-    { preHandler: authenticate },
-    async (req, reply) => {
-      const { jurisdictionId } = req.params as { jurisdictionId: string };
-      const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        getLockdown(tx, req.principal, jurisdictionId),
-      );
-      return reply.send(result);
-    },
-  );
-
-  app.post(
-    "/api/v1/jurisdictions/:jurisdictionId/lockdown",
-    { preHandler: authenticate },
-    async (req, reply) => {
-      const { jurisdictionId } = req.params as { jurisdictionId: string };
-      const body = z.object({ locked: z.boolean() }).parse(req.body);
-      const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        setLockdown(tx, req.principal, jurisdictionId, body.locked),
-      );
-      return reply.send(result);
     },
   );
 
