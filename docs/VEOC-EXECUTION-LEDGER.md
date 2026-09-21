@@ -2847,3 +2847,26 @@ to the incident from the datasets surface.
   polling of the sources stays gated (no external calls this session); a source's
   data still arrives via the existing push/poll seam.
 - **Ending commit:** this receipt commit, recorded by the next receipt.
+
+## Handoff 10: configurable parcel overlays
+
+Parcels are delivered by reusing the catalog and the dataset-COP path; this
+increment proves it and that coverage follows the incident area.
+
+- **Baseline:** 977c6a0 on canonical main.
+- **Reuse, not a new engine:** the Handoff-10 gate is met by the 79F catalog
+  (humboldt-parcels source, owner/license/coverage/APN mapping) and the 79C2
+  dataset-COP path (features on the map with the shared inspect popup and polygon
+  outline). No parcel-specific pipeline was added.
+- **Evidence:** a real-database scenario sets the incident area to Humboldt and
+  the parcel source covers it; moving the area to San Diego makes the same source
+  read uncovered (explicitly unknown, not a fabricated county claim). It then
+  onboards humboldt-parcels from the catalog, loads a parcel Feature (APN
+  511-021-14, a polygon), and reads it back on the COP items endpoint with its APN
+  as the feature title and a Polygon outline. tsc exit 0, eslint exit 0,
+  data-pack-persistence.test.ts 10 passed.
+- **Boundary:** parcels render as GeoJSON features (the OGC/items path, capped at
+  the documented feature limit, see G-TILES); a vector-tile parcel overlay for
+  whole-county statewide scale, and county sources beyond Humboldt, remain named
+  gaps. Live outbound fetching stays gated.
+- **Ending commit:** this receipt commit, recorded by the next receipt.

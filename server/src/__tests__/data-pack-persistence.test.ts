@@ -199,3 +199,89 @@ describe("California catalog onboarding (VEOC-79F)", () => {
     expect(partner.statusCode).toBe(403);
   });
 });
+
+describe("configurable parcel overlays (Handoff 10)", () => {
+  const inBox = (b: readonly [number, number, number, number]) => ({
+    type: "Polygon" as const,
+    coordinates: [
+      [
+        [b[0] + 0.1, b[1] + 0.1],
+        [b[2] - 0.1, b[1] + 0.1],
+        [b[2] - 0.1, b[3] - 0.1],
+        [b[0] + 0.1, b[3] - 0.1],
+        [b[0] + 0.1, b[1] + 0.1],
+      ],
+    ],
+  });
+  const setArea = (geometry: unknown, expectedRevision: number) =>
+    app.inject({
+      method: "PUT",
+      url: `/api/v1/incidents/${incidentId}/operational-area`,
+      headers: auth(ownerToken),
+      payload: { expectedRevision, geometry, operationalPeriod: null, reason: "parcel overlay scenario" },
+    });
+  const coversParcels = async () => {
+    const list = await app.inject({
+      method: "GET",
+      url: `/api/v1/incidents/${incidentId}/catalog`,
+      headers: auth(ownerToken),
+    });
+    return (list.json().sources as Array<{ id: string; coversIncident: boolean }>).find(
+      (s) => s.id === "humboldt-parcels",
+    )!.coversIncident;
+  };
+  const HUMBOLDT: [number, number, number, number] = [-124.44, 40.0, -123.41, 41.47];
+  const SAN_DIEGO: [number, number, number, number] = [-117.6, 32.5, -116.1, 33.5];
+
+  it("parcel coverage follows the incident area, not a hard-coded county", async () => {
+    const r1 = await setArea(inBox(HUMBOLDT), 0);
+    expect(r1.statusCode).toBe(200);
+    expect(await coversParcels()).toBe(true);
+    const r2 = await setArea(inBox(SAN_DIEGO), r1.json().revision as number);
+    expect(r2.statusCode).toBe(200);
+    expect(await coversParcels()).toBe(false); // uncovered area stays explicitly unknown
+  });
+
+  it("renders a configured parcel with its APN and outline on the COP", async () => {
+    const cur = await app.inject({
+      method: "GET",
+      url: `/api/v1/incidents/${incidentId}/operational-area`,
+      headers: auth(ownerToken),
+    });
+    await setArea(inBox(HUMBOLDT), cur.json().revision as number);
+    const onboard = await app.inject({
+      method: "POST",
+      url: `/api/v1/incidents/${incidentId}/catalog/humboldt-parcels/onboard`,
+      headers: auth(ownerToken),
+    });
+    expect(onboard.statusCode).toBe(201);
+    const parcelDatasetId = (await admin`select id from data_pack_datasets where key = 'humboldt_parcels'`)[0]!
+      .id as string;
+    const parcel = {
+      type: "Feature",
+      properties: { APN: "511-021-14", UseCode: "Residential" },
+      geometry: {
+        type: "Polygon",
+        coordinates: [[[-124.1, 40.8], [-124.09, 40.8], [-124.09, 40.81], [-124.1, 40.81], [-124.1, 40.8]]],
+      },
+    };
+    const load = await app.inject({
+      method: "POST",
+      url: `/api/v1/data-packs/datasets/${parcelDatasetId}/load`,
+      headers: auth(ownerToken),
+      payload: { records: [parcel] },
+    });
+    expect(load.statusCode).toBe(200);
+    const feats = await app.inject({
+      method: "GET",
+      url: `/api/v1/datasets/${parcelDatasetId}/items`,
+      headers: auth(ownerToken),
+    });
+    const fc = feats.json() as {
+      features: Array<{ properties: Record<string, unknown>; geometry: { type: string } }>;
+    };
+    expect(fc.features).toHaveLength(1);
+    expect(fc.features[0]!.properties.title).toBe("511-021-14"); // APN via the catalog field mapping
+    expect(fc.features[0]!.geometry.type).toBe("Polygon"); // selectable parcel outline
+  });
+});
