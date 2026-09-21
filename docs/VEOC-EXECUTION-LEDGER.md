@@ -3167,3 +3167,22 @@ increment proves it and that coverage follows the incident area.
   remain compatible; no authority, ingestion or external-source grant changes.
 - The live NFHL source remains a named gap. Local rendering, attribution,
   coverage and retrieval behavior are the authorized H11 deliverable.
+
+## Board upgrade review: include the existing sync writer
+
+- The first fresh review found stale stored values surviving conversion to
+  calculated fields and an upgrade preflight race with REST record writes.
+  Both were corrected with focused shared and real PostgreSQL evidence.
+- The second review identified the remaining direct writer: BoardSyncHub
+  caches a board shape and checkpoints without the new mutation lock. The
+  integrator inventoried production board-record SQL writes; only the board
+  service and this hub write them. The unit now includes the hub checkpoint
+  and its focused regression, with one common lock and current-schema reload.
+- Condition equality operands also require the referenced field's complete
+  value validation, including enum membership and UUID/date-time format.
+  These are acceptance corrections. No board unit has been marked complete
+  or committed, and no broader hardening sweep is authorized by this note.
+- Retained lanes remain a authoring, b held access, c hazards and d design.
+  Each lane's node_modules measured 195 MiB logical at the current inventory;
+  all have active work, and none has an unpublished commit ahead of main.
+  No worktree, cache or preserved 80b stash was removed. No push occurred.

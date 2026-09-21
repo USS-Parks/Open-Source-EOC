@@ -898,6 +898,13 @@ focused tests for area-filtered pagination, because the current read silently
 caps at 2,000 records. Unit 80b's nine restored files do not touch that seam.
 Existing unpaged callers stay compatible; authority and ingestion are unchanged.
 
+Execution allocation, 2026-09-21: `81A-E` also owns the existing sync hub's
+board checkpoint and its focused test. Review found that this direct writer
+retains an old board shape after an upgrade. It must use the same board
+mutation lock and reload the current shape inside the checkpoint transaction.
+The production write inventory contains only the board service and this hub.
+This completes the upgrade-preservation gate; it adds no offline workflow.
+
 ### 8.6 Migration blocks
 
 | Block | Holder |
