@@ -3847,3 +3847,28 @@ increment proves it and that coverage follows the incident area.
 - **Unit commit:** fdc81e2ff55a854f60f3bf123bd7b6afe707495c, exact fast-forward.
   Next: 84A-E authoring; P-IAP owns presentation. Four existing lanes retained,
   no new worktree or push. Tracked replay stashes remain for retirement review.
+
+## P-SHELL-FRAME: responsive operational application frame
+
+- **Serves/lane:** first P-SHELL unit, D09 frame in lane d, refreshed to
+  5d6aa75. Canonical navy command bar and grouped rail, distinct D05 destination
+  symbols, original licensed compass, page headers, context drawer, compact
+  navigation, and real notification freshness. Existing routes remain usable;
+  future workspace routes state availability honestly. Persistent context is
+  the next P-SHELL unit; operational-period selection is not claimed here.
+- **Gate:** full parent read; workspace TypeScript/tree ESLint and final replay
+  passed 31/31 across frame/router, IAP workspace/legacy and three actual Chrome
+  application journeys. The responsive journey covers 1440/1280/900/390 pixels,
+  both themes, keyboard navigation, focus, and content containment. Root viewed
+  wide light and narrow dark. Fixed the observed phone map canvas collapse.
+  Review identified exposed modal background controls; header, skip link, rail
+  and main now respect the modal boundary, with a nonfocusable pointer backdrop.
+  Affected types/lint and focused modal regression passed; fresh review SHIP.
+  Owner also retained a passing backdrop programmatic-focus assertion.
+- **Evidence:** deploy/test-runtime/out/lanes/d/logs/P-SHELL-FRAME-root-84-replay.log,
+  P-SHELL-FRAME-root-backdrop-repair.log and browser-shots/shell-frame. Earlier
+  root browser callback error and phone containment failure were corrected in
+  their focused checks. Evidence level: integrated frame, not operator validation.
+- **Unit commit:** ef13b0c108f025cd7a2830b570ba4c9bb073927d, exact fast-forward.
+  Next: P-SHELL-CONTEXT before the M2 gate and presentation fan-out. Four
+  existing lanes retained; no new worktree or push. Replay stashes preserved.
