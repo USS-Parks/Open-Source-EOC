@@ -23,6 +23,13 @@ their prescribed gates. It supersedes per-commit A3 asks and permits A4 lane
 commits for this roster. A5 push, A6 external actions and G-A design review
 remain separate. The register below preserves the original approval model.
 
+**Held-request approval receipt, 2026-09-21.** Basho subsequently gave full,
+explicit authorization for all requests held in this working session. This
+clears the three concrete pending requests: G-A's recommended design defaults;
+the exact dashboard SELECT policy and tests in VEOC-80-POLICY-APPROVAL.md;
+and read-only NAPSG catalog/selected-symbol/license acquisition from the named
+official sources. G-A is approved. The implementation gates still apply.
+
 **Standing grant, 2026-09-21.** Basho, in the planning session: "I grant
 branches and worktrees, as long as they are cogently 'zippered' into main in
 timely and orderly fashion," and then: "I want Astra and the project to have

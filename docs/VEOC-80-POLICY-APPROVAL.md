@@ -1,6 +1,9 @@
 # VEOC-80 dashboard read-policy proposal
 
-Status: proposed, not applied. Automatic approval review blocked this change.
+Status: explicitly approved in-session, 2026-09-21. The user authorized all
+held requests after receiving this concrete policy and risk explanation.
+Implementation and real-database/browser verification now resume; approval is
+not an acceptance result. The prior automatic-review block remains historical.
 
 The current dashboard policy permits jurisdiction members only. The requested
 change also permits an active named incident participant when the server binds

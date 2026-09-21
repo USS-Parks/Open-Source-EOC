@@ -3336,3 +3336,25 @@ increment proves it and that coverage follows the incident area.
   resolver, with no routing/persistence/history/notification claim. G-BOARDROUTE
   stays partial pending 81B-E2 and P-BOARDS-2. Existing lane a continues E2;
   dependent engines may reuse this one contract. No push occurred.
+
+## Explicit approval of all held requests
+
+- Basho: "You have my full and explicit approval for ALL requests held within
+  this working session. I give my express authorization now."
+- **G-A approved:** D00 inventory, D01 baseline, D02 navigation and D03's
+  reviewed composition package, with its recommended compass mark, navy/teal
+  shell, compact density, expanded/compact navigation, muted basemaps, context
+  drawer, sequential narrow layouts and text-paired operational conditions.
+  No overrides were supplied. D04 and its dependent kit/presentation chain
+  may proceed through their normal gates.
+- **80b policy approved:** the exact migration proposal and disclosed
+  dashboard-definition visibility risk in VEOC-80-POLICY-APPROVAL.md. The
+  previously blocked migration may now be written and tested. Allow/deny,
+  incident data isolation and independent review remain required.
+- **H13 acquisition approved:** read-only NAPSG catalog and selected facility
+  PNGs from napsg-web.s3.amazonaws.com, and official attribution/license
+  pages from napsgfoundation.org and creativecommons.org. No credentials or
+  project data are sent. Rendering acceptance still requires actual licensed
+  assets, mapping, attribution and browser evidence.
+- Current units finish at their normal boundaries. No acceptance evidence is
+  inferred from this authorization, and no second unit shares an active lane.
