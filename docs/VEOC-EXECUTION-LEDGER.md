@@ -3559,3 +3559,20 @@ increment proves it and that coverage follows the incident area.
   Catalog creation date is distinct from acquisition date. P-COP owns the final
   workspace composition. Four existing lanes remain; lane c next takes H14
   using the separately authorized Overture acquisition. No new worktree or push.
+
+## D04 correction: preserve the canonical photo aesthetics
+
+- **Trigger:** Basho reaffirmed three exact style references. Parent and active
+  design owner observed charcoal dark surfaces where Photo 2 specifies navy.
+- **Change:** five dark surface tokens now use blue-navy. Exact attached photos,
+  hashes and precedence are retained under docs/design/canonical-references;
+  original user-owned reference directories remain untouched. The explicitly
+  requested memory note was saved through the memory extension mechanism.
+- **Gate:** all-workspace TypeScript, all-tree ESLint, 64 contrast cases and
+  the bounded four-capture theme/viewport browser fixture passed. Root viewed
+  wide dark. Evidence: deploy/test-runtime/out/d04-navy-correction/gate.log,
+  browser.log, result.json and shots. No additional review or unrelated checks
+  were added for this five-value correction.
+- **Boundary:** this corrects token fidelity; the forthcoming shell and surface
+  units still implement the exact layouts. D06 remains token-driven and will
+  inherit the correction at integration. Four existing lanes, no push.

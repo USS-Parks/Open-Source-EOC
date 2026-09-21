@@ -98,4 +98,15 @@ Actual output and captures are in `deploy/test-runtime/out/d04-review/browser.lo
 
 ## 8. Boundaries
 
+### Canonical-reference correction, 2026-09-21
+
+Basho reaffirmed the [three exact canonical photos](canonical-references/README.md).
+Photo 2 requires blue-navy dark surfaces. The initial charcoal values are
+superseded by canvas `#0b1b2b`, surface `#142738`, raised `#193044`, sunken
+`#091624` and overlay `#20374b`; operational and brand meanings stay intact.
+All-workspace TypeScript, all-tree ESLint and 64 contrast cases passed. The
+bounded browser fixture passed four theme/viewport captures and its existing
+keyboard, focus, text and containment checks; root inspected wide dark.
+Evidence: `deploy/test-runtime/out/d04-navy-correction/`.
+
 No external font, image, package, network service, application route, or command-authority behavior was added. The gallery uses synthetic labels and records. Chart values are demonstration data. Final compass artwork, operational symbols, production shell placement, component migrations, export branding, and human operator validation remain with their named downstream prompts.

@@ -36,6 +36,13 @@ Overture/DuckDB tooling and official California building data for Handoff 14,
 with source, license, release, coverage and storage receipts. Other source
 acquisitions remain separately scoped.
 
+**Canonical aesthetic reaffirmation, 2026-09-21.** Basho identified the three
+attached photos as the canonical UI/UX style guide and directed no aesthetic
+drift. Exact copies and hashes are retained in
+`docs/design/canonical-references/README.md`. These govern visual fidelity;
+component galleries do not supersede them. The dark canvas and cards are
+blue-navy, not charcoal. The approved implementation roster continues.
+
 **Standing grant, 2026-09-21.** Basho, in the planning session: "I grant
 branches and worktrees, as long as they are cogently 'zippered' into main in
 timely and orderly fashion," and then: "I want Astra and the project to have
