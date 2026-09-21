@@ -3699,3 +3699,31 @@ increment proves it and that coverage follows the incident area.
   out/d05-unique-review/{result.json,browser.log,shots}.
 - **Unit commit:** bb329d3a3578ab280afadd11fab83797c6ae807b, exact fast-forward.
   No new worktree, external asset or push. The approved roster continues.
+
+## H14: Overture building uses installed
+
+- **Serves/lane:** Handoff 14 in lane c, refreshed to 792d2dd. OSM remains
+  the sole geometry and identity source. Exact root OSM way lineage supplies
+  uses only for current untyped OSM buildings; known OSM types retain priority.
+- **Data:** Overture 2026-08-19.0 lookup has 25,298 unique California-clipped
+  way IDs; 24,546 current features enriched, 728 typed OSM wins, no duplicate
+  footprints. The archive retains 13,526,876 tile features. Failed bounded
+  lookup and null-name build attempts were repaired without repeating download.
+- **Gate:** root read the full diff; workspace TypeScript, tree ESLint, Python
+  2/2, desktop 10/10 and eight Vitest suites 141/141 passed. Four real MapLibre
+  renders prove exact osm_id 22942679, classification, critical status priority,
+  attribution and range 206 in both themes, with no external requests/errors.
+  Root viewed light/dark renders. Fresh h12_bounds_review verdict: SHIP.
+  Evidence: deploy/test-runtime/out/lanes/c/logs/H14-root-integration.log,
+  H14-root-browser.log and out/h14-root-review/h14/h14-evidence.json.
+- **Unit commit:** 128d7bab980ef61e9ababcb49f45f9693da6b9a4, exact fast-forward.
+- **Installation:** web/public/basemap/buildings.pmtiles is a hard link to the
+  retained candidate, 343,283,882 bytes, SHA-256
+  13c9430acbd361cd226c10d7b13f1d650c201742a8ec21d2c2c9e8bfa7ae1ea7.
+  Matching buildings-overture.json is retained. The actual desktop runtime
+  configuration verified the installed archive hash and exposed release
+  2026-08-19.0. Previous 340,507,913-byte archive is preserved at
+  deploy/basemap/out/h14/pre-overture-buildings.pmtiles until desktop proof.
+- **Boundary:** final operational map composition remains P-COP; this source
+  gate is complete. Four existing lanes retained, no new worktree or push.
+  Acquisition profiler temporary data remains disclosed cleanup debt.
