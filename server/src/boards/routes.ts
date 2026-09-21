@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { WorkflowAssignmentRequestSchema } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import { notifyBoardEvent, type BoardEvent } from "../notify/engine.js";
@@ -21,6 +22,12 @@ import {
   visibleFields,
   visibleLayout,
 } from "./service.js";
+import {
+  approveWorkflowTransition,
+  getRecordWorkflow,
+  processWorkflowEscalation,
+  requestWorkflowTransition,
+} from "./workflow-runtime.js";
 
 const CreateBoardBody = z.object({
   templateKey: z.string().min(1),
@@ -29,6 +36,24 @@ const CreateBoardBody = z.object({
 });
 const UpgradeBody = z.object({ toVersion: z.number().int().positive() });
 const RecordBody = z.record(z.string(), z.unknown());
+const WorkflowKey = z.string().regex(/^[a-z][a-z0-9_]*$/);
+const IdempotencyKey = z.string().trim().min(1).max(200);
+const TransitionBody = z.object({
+  transitionKey: WorkflowKey,
+  assignment: WorkflowAssignmentRequestSchema.optional(),
+  idempotencyKey: IdempotencyKey,
+}).strict();
+const ApprovalBody = z.object({
+  transitionKey: WorkflowKey,
+  ruleKey: WorkflowKey,
+  idempotencyKey: IdempotencyKey,
+}).strict();
+const EscalationBody = z.object({
+  ruleKey: WorkflowKey,
+  occurrence: z.number().int().min(0).max(19),
+  assignment: WorkflowAssignmentRequestSchema.optional(),
+  idempotencyKey: IdempotencyKey,
+}).strict();
 
 export interface BoardRouteOptions {
   readonly trustedTemplateKeys: readonly string[];
@@ -179,6 +204,53 @@ export function boardRoutes(
       await notifyBoardEvent(sql, req.principal, event);
       publishBoardEvent(event);
       return reply.send({ ok: true });
+    },
+  );
+
+  app.get(
+    "/api/v1/boards/:boardId/records/:recordId/workflow",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { boardId, recordId } = req.params as { boardId: string; recordId: string };
+      const result = await withPerson(sql, req.principal.person.id, (tx) =>
+        getRecordWorkflow(tx, req.principal, boardId, recordId));
+      return reply.send(result);
+    },
+  );
+
+  app.post(
+    "/api/v1/boards/:boardId/records/:recordId/workflow/transitions",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { boardId, recordId } = req.params as { boardId: string; recordId: string };
+      const body = TransitionBody.parse(req.body);
+      const result = await withPerson(sql, req.principal.person.id, (tx) =>
+        requestWorkflowTransition(tx, req.principal, boardId, recordId, body));
+      return reply.send(result);
+    },
+  );
+
+  app.post(
+    "/api/v1/boards/:boardId/records/:recordId/workflow/approvals",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { boardId, recordId } = req.params as { boardId: string; recordId: string };
+      const body = ApprovalBody.parse(req.body);
+      const result = await withPerson(sql, req.principal.person.id, (tx) =>
+        approveWorkflowTransition(tx, req.principal, boardId, recordId, body));
+      return reply.send(result);
+    },
+  );
+
+  app.post(
+    "/api/v1/boards/:boardId/records/:recordId/workflow/escalations",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { boardId, recordId } = req.params as { boardId: string; recordId: string };
+      const body = EscalationBody.parse(req.body);
+      const result = await withPerson(sql, req.principal.person.id, (tx) =>
+        processWorkflowEscalation(tx, req.principal, boardId, recordId, body));
+      return reply.send(result);
     },
   );
 
