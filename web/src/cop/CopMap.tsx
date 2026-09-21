@@ -73,6 +73,67 @@ export interface CopBoard {
 
 export type FeedItemsData = CopFeatureCollection & { readonly feed: FeedLayerHealth };
 
+/** A non-wrapping WGS84 bounding box: west, south, east, north. */
+export type CopMapBounds = readonly [number, number, number, number];
+
+interface ReadableMapBounds {
+  getWest(): number;
+  getSouth(): number;
+  getEast(): number;
+  getNorth(): number;
+}
+
+interface BoundsEventSource {
+  getBounds(): ReadableMapBounds;
+  on(type: "moveend", listener: () => void): unknown;
+  off(type: "moveend", listener: () => void): unknown;
+}
+
+function clampLatitude(value: number): number {
+  return Math.max(-90, Math.min(90, value));
+}
+
+function wrapLongitude(value: number): number {
+  return ((value + 180) % 360 + 360) % 360 - 180;
+}
+
+/**
+ * Convert MapLibre's potentially world-copied bounds into one bounded WGS84
+ * box. A viewport spanning or crossing the antimeridian uses world longitude;
+ * a single west/east box cannot represent both wrapped halves without loss.
+ */
+export function normalizeCopMapBounds(bounds: ReadableMapBounds): CopMapBounds {
+  const south = clampLatitude(Math.min(bounds.getSouth(), bounds.getNorth()));
+  const north = clampLatitude(Math.max(bounds.getSouth(), bounds.getNorth()));
+  const west = bounds.getWest();
+  const span = bounds.getEast() - west;
+  if (!Number.isFinite(west) || !Number.isFinite(span) || span <= 0 || span >= 360) {
+    return [-180, south, 180, north];
+  }
+  const normalizedWest = wrapLongitude(west);
+  const normalizedEast = normalizedWest + span;
+  return normalizedEast > 180
+    ? [-180, south, 180, north]
+    : [normalizedWest, south, normalizedEast, north];
+}
+
+/** Bind initial-ready and move-end bounds reports; returns the unmount cleanup. */
+export function bindCopMapBounds(
+  map: BoundsEventSource,
+  currentCallback: () => CopMapProps["onBoundsChange"],
+): () => void {
+  let active = true;
+  const report = () => {
+    if (active) currentCallback()?.(normalizeCopMapBounds(map.getBounds()));
+  };
+  map.on("moveend", report);
+  report();
+  return () => {
+    active = false;
+    map.off("moveend", report);
+  };
+}
+
 export interface CopMapProps {
   readonly theme: ThemeName;
   readonly boards: readonly CopBoard[];
@@ -106,6 +167,8 @@ export interface CopMapProps {
   /** When true, a map click reports its position instead of inspecting. */
   readonly picking?: boolean | undefined;
   readonly onPickPoint?: ((lngLat: [number, number]) => void) | undefined;
+  /** Current non-wrapping WGS84 bounds, reported at ready and after moveend. */
+  readonly onBoundsChange?: ((bounds: CopMapBounds) => void) | undefined;
   /** Test/instrumentation hook: receives the live map instance. */
   readonly onMap?: ((map: maplibregl.Map) => void) | undefined;
 }
@@ -194,6 +257,8 @@ export function CopMap(props: CopMapProps) {
   const pickingRef = useRef(false);
   const onPickRef = useRef<CopMapProps["onPickPoint"]>(props.onPickPoint);
   onPickRef.current = props.onPickPoint;
+  const onBoundsChangeRef = useRef<CopMapProps["onBoundsChange"]>(props.onBoundsChange);
+  onBoundsChangeRef.current = props.onBoundsChange;
   const [visible, setVisible] = useState<Record<string, boolean>>(
     Object.fromEntries(props.boards.map((b) => [b.id, true])),
   );
@@ -304,6 +369,7 @@ export function CopMap(props: CopMapProps) {
     });
     mapRef.current = map;
     let styleReady = false;
+    let unbindBounds: (() => void) | undefined;
     // MapLibre resolves the external style and its relative asset URLs. Mount
     // jurisdiction layers after that style parses, before operational records.
     if (props.basemapStyleUrl && vectors) map.once("style.load", () => {
@@ -514,6 +580,7 @@ export function CopMap(props: CopMapProps) {
       setGroups(BASEMAP_GROUPS.filter((g) => present.has(g.id)));
       const c = map.getCenter();
       paintReadout(c.lng, c.lat, map.getZoom());
+      unbindBounds = bindCopMapBounds(map, () => onBoundsChangeRef.current);
       void refresh();
     });
     map.on("moveend", () => {
@@ -525,6 +592,7 @@ export function CopMap(props: CopMapProps) {
     const timer = setInterval(() => void refresh(), props.pollMs ?? 2000);
     return () => {
       clearInterval(timer);
+      unbindBounds?.();
       styleReady = false;
       map.remove();
       mapRef.current = null;
