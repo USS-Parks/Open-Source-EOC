@@ -3614,3 +3614,24 @@ increment proves it and that coverage follows the incident area.
   DuckDB profiler data after a capped duplicate query. This is disclosed cleanup
   debt; the required data itself is 2.88 GB. H14's candidate remains separate
   from the served archive until its integration gate passes.
+
+## D06: operational cards and shared controls
+
+- **Serves/lane:** D06 in lane d, additive ready tree refreshed to 3da7026.
+  Evidence level: integrated kit with isolated browser presentation proof.
+- **Change:** KPI, condition, record, action and summary cards; controlled tabs,
+  keyboard menus, descriptive tooltips, buttons, progress and feedback states.
+  Numeric zero stays distinct from unknown; primary actions include structural
+  cues. Condition cards accept the future D05 icons and domain labels.
+- **Gate:** root reviewed the complete diff; all-workspace TypeScript and
+  all-tree ESLint passed. Integration tests passed 25/25 including D13 replay.
+  Four real-browser captures at 1440/390 px in light/navy-dark passed focus,
+  menu/tab/tooltip operation, containment, long content and feedback states;
+  no page errors or external requests. Root viewed wide light and narrow dark.
+  Fresh read-only review is SHIP. Evidence: out/lanes/d/logs/D06-integration.log
+  and out/d06-review/{result.json,browser.log,shots} under deploy/test-runtime.
+- **Unit commit:** 474296cea2e93c38f1ca7ae70e597043e6a2d57f, exact fast-forward.
+  Single trailing CRLFs were normalized before commit; no behavior changed.
+- **Boundary:** this gallery does not replace the canonical photos or prove
+  final operational screen composition. Four existing lanes retained, no new
+  worktree or push. Lane d continues to D08.
