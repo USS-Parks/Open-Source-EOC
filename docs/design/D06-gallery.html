@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shared component review</title>
+    <style>html, body, #kit-review-root { min-height: 100%; margin: 0; }</style>
+  </head>
+  <body>
+    <div id="kit-review-root"></div>
+    <script type="module">
+      import "../../web/src/design/base.css";
+      import { mountKitReview } from "../../web/src/design/kit-gallery.tsx";
+      const root = document.querySelector("#kit-review-root");
+      if (!root) throw new Error("Component review root is missing");
+      mountKitReview(root);
+    </script>
+  </body>
+</html>

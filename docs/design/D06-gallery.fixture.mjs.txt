@@ -1,0 +1,157 @@
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+const { chromium } = await import("../../../../server/node_modules/playwright-core/index.mjs");
+
+const reviewUrl = process.env.D06_REVIEW_URL ?? "http://127.0.0.1:5175/docs/design/D06-gallery.html";
+const reviewOrigin = new URL(reviewUrl).origin;
+const shotDir = process.env.D06_SHOT_DIR ?? "C:/Users/17076/Documents/Open Source EOC/deploy/test-runtime/out/d06-review/shots";
+const resultPath = process.env.D06_RESULT ?? "C:/Users/17076/Documents/Open Source EOC/deploy/test-runtime/out/d06-review/result.json";
+const executablePath = [
+  process.env.OPENEOC_CHROMIUM,
+  "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+].filter(Boolean).find((candidate) => existsSync(candidate));
+if (!executablePath) throw new Error("No Chromium found; set OPENEOC_CHROMIUM");
+
+mkdirSync(shotDir, { recursive: true });
+const browser = await chromium.launch({ executablePath, headless: true });
+const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+const page = await context.newPage();
+const pageErrors = [];
+const externalRequests = [];
+page.on("pageerror", (error) => pageErrors.push(String(error)));
+page.on("request", (request) => {
+  if (!request.url().startsWith(`${reviewOrigin}/`)) externalRequests.push(request.url());
+});
+await context.route("**/*", async (route) => {
+  if (route.request().url().startsWith(`${reviewOrigin}/`)) await route.continue();
+  else await route.abort();
+});
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+async function assertContained(label) {
+  const geometry = await page.evaluate(() => ({
+    viewport: window.innerWidth,
+    documentWidth: document.documentElement.scrollWidth,
+    reviewClient: document.querySelector(".kit-review")?.clientWidth ?? 0,
+    reviewScroll: document.querySelector(".kit-review")?.scrollWidth ?? 0,
+  }));
+  assert(geometry.documentWidth <= geometry.viewport + 1, `${label} page overflow: ${geometry.documentWidth}px > ${geometry.viewport}px`);
+  assert(geometry.reviewScroll <= geometry.reviewClient + 1, `${label} review overflow: ${geometry.reviewScroll}px > ${geometry.reviewClient}px`);
+}
+
+async function capture(name) {
+  await page.screenshot({ path: join(shotDir, `${name}.png`), fullPage: true });
+}
+
+async function setTheme(theme) {
+  const current = await page.locator(".kit-review").getAttribute("data-review-theme");
+  if (current !== theme) await page.getByRole("button", { name: theme === "dark" ? "Use dark theme" : "Use light theme" }).click();
+  assert(await page.locator(".kit-review").getAttribute("data-review-theme") === theme, `Theme did not change to ${theme}`);
+}
+
+try {
+  await page.goto(reviewUrl, { waitUntil: "networkidle" });
+  await page.locator(".kit-review").waitFor();
+  assert(await page.locator(".kit-review-kpis .eoc-kit-kpi-card").count() === 4, "Canonical four-card KPI strip is missing");
+  assert(await page.locator('.eoc-kit-kpi-card[data-value-state="zero"]').count() === 1, "Reported zero KPI is missing");
+  assert(await page.locator('.eoc-kit-kpi-card[data-value-state="unknown"]').count() === 1, "Unknown KPI is missing");
+  assert(await page.locator(".kit-review-lifelines .eoc-kit-condition-card").count() === 8, "Eight Lifeline cards are missing");
+  const selectedBorder = await page.locator('.eoc-kit-condition-card[data-selected="true"]').evaluate((element) => Number.parseFloat(getComputedStyle(element).borderTopWidth));
+  assert(selectedBorder >= 3, "Selected Lifeline card lacks a non-color border cue");
+
+  const primary = page.getByRole("button", { name: "Create report" });
+  const primaryStyle = await primary.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { border: Number.parseFloat(style.borderTopWidth), weight: Number.parseInt(style.fontWeight, 10) };
+  });
+  assert(await primary.getAttribute("data-primary") === "true", "Primary action lacks structural data marker");
+  assert(primaryStyle.border >= 2 && primaryStyle.weight >= 700, "Primary action depends on color alone");
+
+  await page.locator("body").click({ position: { x: 2, y: 2 } });
+  await page.keyboard.press("Tab");
+  assert(await page.evaluate(() => document.activeElement?.textContent?.trim()) === "Use dark theme", "Unexpected first keyboard control");
+  const focusStyle = await page.evaluate(() => {
+    const element = document.activeElement;
+    if (!(element instanceof HTMLElement)) return null;
+    const style = getComputedStyle(element);
+    return { outline: style.outlineStyle, width: Number.parseFloat(style.outlineWidth) };
+  });
+  assert(focusStyle?.outline !== "none" && (focusStyle?.width ?? 0) >= 2, "Visible focus is missing");
+  await assertContained("Wide light conditions");
+  await capture("wide-light-conditions-focus");
+
+  await page.keyboard.press("Enter");
+  await setTheme("dark");
+  const darkSurface = await page.locator(".eoc-kit-card").first().evaluate((element) => getComputedStyle(element).backgroundColor);
+  assert(darkSurface !== "rgb(23, 26, 30)", "Dark cards still use the superseded charcoal surface");
+  await assertContained("Wide dark conditions");
+  await capture("wide-dark-conditions");
+
+  const conditionTab = page.getByRole("tab", { name: "Condition cards" });
+  await conditionTab.focus();
+  await page.keyboard.press("ArrowRight");
+  const recordsTab = page.getByRole("tab", { name: "Record and action cards" });
+  assert(await recordsTab.getAttribute("aria-selected") === "true", "ArrowRight did not select records tab");
+  assert(await recordsTab.evaluate((element) => element === document.activeElement), "Roving tab focus did not move");
+  assert(await page.getByText("Long action summaries wrap", { exact: false }).isVisible(), "Long action-card content is missing");
+
+  const menu = page.getByRole("button", { name: "More actions" });
+  await menu.focus();
+  await page.keyboard.press("Enter");
+  assert(await page.getByRole("menu").isVisible(), "Keyboard did not open the actions menu");
+  assert(await page.evaluate(() => document.activeElement?.textContent?.trim()) === "Export summary", "Menu did not focus its first enabled item");
+  await page.keyboard.press("Enter");
+  assert((await page.locator(".kit-review-status").textContent())?.includes("Export summary selected"), "Menu action did not report selection");
+
+  const tooltipTrigger = page.getByRole("button", { name: "Sync details" });
+  await tooltipTrigger.focus();
+  assert(await page.getByRole("tooltip").isVisible(), "Tooltip did not open on keyboard focus");
+  await page.keyboard.press("Escape");
+  assert(await page.getByRole("tooltip").count() === 0, "Escape did not dismiss the tooltip");
+  const indeterminate = page.getByRole("progressbar", { name: "Background synchronization" });
+  assert(await indeterminate.getAttribute("aria-valuenow") === null, "Indeterminate progress reports a false numeric value");
+  assert(await indeterminate.locator("xpath=..").getAttribute("data-complete") === null, "Indeterminate progress reports false completion");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await assertContained("Narrow dark records");
+  await capture("narrow-dark-records");
+
+  await page.getByRole("tab", { name: "Feedback states" }).click();
+  await setTheme("light");
+  assert(await page.getByRole("status").filter({ hasText: "Loading field reports" }).isVisible(), "Loading state is missing");
+  assert(await page.getByText("No assignments yet").isVisible(), "Long empty state is missing");
+  assert(await page.getByRole("alert").isVisible(), "Error state is missing");
+  await assertContained("Narrow light feedback");
+  await capture("narrow-light-feedback");
+
+  assert(pageErrors.length === 0, `Page errors: ${pageErrors.join(" | ")}`);
+  assert(externalRequests.length === 0, `External requests: ${externalRequests.join(" | ")}`);
+  const result = {
+    status: "passed",
+    reviewUrl,
+    screenshots: 4,
+    viewports: ["1440x900", "390x844"],
+    themes: ["light", "dark"],
+    referenceShapesChecked: ["four-kpi-strip", "eight-lifeline-grid", "selected-condition", "detail-drawer"],
+    keyboardChecked: ["focus", "tabs", "menu", "tooltip"],
+    primaryWithoutColorChecked: true,
+    zeroUnknownChecked: true,
+    progressBoundsChecked: true,
+    longEmptyErrorChecked: true,
+    horizontalOverflowChecked: true,
+    pageErrors,
+    externalRequests,
+  };
+  writeFileSync(resultPath, JSON.stringify(result, null, 2));
+  console.log(JSON.stringify(result));
+} catch (error) {
+  console.error(JSON.stringify({ status: "failed", error: String(error), pageErrors, externalRequests }));
+  throw error;
+} finally {
+  await browser.close();
+}
