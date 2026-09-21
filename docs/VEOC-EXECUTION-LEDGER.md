@@ -3050,3 +3050,32 @@ increment proves it and that coverage follows the incident area.
 - Unit 80 continues unaffected service, UI and test preparation in lane b.
   Its full real-database/browser gate and landing remain open. Other approved
   units continue; no approval is inferred from elapsed time or prior general STS.
+
+## D01: reproducible operator workflow baseline
+
+- **Change:** six fixed journeys, executable archived fixture and durable
+  metrics under docs/design/D01*. The current interface completed field
+  reporting, resource coordination, IAP preparation and shift briefing.
+  Lifeline assessment and board customization are recorded as unavailable.
+- **Evidence:** the canonical real database/headless Chromium run at
+  2026-09-21T19:58:17.255Z used af8a0dc471926a2de660f982372caa9d6a34acc2.
+  The focused fixture passed 1/1, exit 0, in 7.50 seconds. Task times and
+  interactions: 681.5 ms/8, 212 ms/6, 303.4 ms/5 and 127.3 ms/2.
+  No browser errors or external requests. Raw output and log remain under
+  deploy/test-runtime/out/d01-baseline/result-corrected.json and run-corrected.log.
+- **Correction:** source review found the report-only acting-position label
+  was incorrect. Durable artifacts say no position selected; raw evidence
+  remains unchanged. No browser rerun for that metadata-only correction.
+- **Gate:** full artifact review, JSON/path checks and staged link check
+  passed. Fresh independent review returned ship with no findings. After
+  rebase, the documentation integration gate passed, 49 Markdown files.
+- **Evidence level:** integrated scripted baseline, not human performance or
+  vendor comparison. Representative operators and licensed vendor baselines
+  remain unavailable. No relative-speed claim is supported.
+- **Integration:** exact fast-forward to 1ca26eb40e5226d178cde7b91c45e64cf27a8008.
+  Lane d continues D02. Lanes a and b retain their active impact/access work;
+  c remains reserved by the opening ramp. No additional worktree, dependency
+  copy or push. Existing user-owned untracked files remain untouched.
+- **Scope allocation:** E2 may add the incident-board read-shape helper to
+  the existing board service; unit 80 consumes it after landing. The Master
+  records this exclusive ownership and the observed field-read defect.

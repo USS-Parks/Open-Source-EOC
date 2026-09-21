@@ -879,6 +879,13 @@ The additive-only rules for `server/src/app.ts` and the API client still apply.
 Named incident participation supplies incident-specific mutual-aid authority;
 an unrelated board or position guest scope does not become incident authority.
 
+Execution allocation, 2026-09-21: `79G-E2` additionally owns one additive
+incident-board read-shape helper in `server/src/boards/service.ts`, reusing
+the existing incident authority, attachment check and field-read rules. Unit
+`80` may consume that helper after it lands; it does not edit the board service.
+This closes the observed Lifeline field-visibility bypass without a second
+access model. Board authoring takes ownership after E2 lands.
+
 ### 8.6 Migration blocks
 
 | Block | Holder |
