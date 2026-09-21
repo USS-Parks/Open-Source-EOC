@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { StatusBadge, type Status } from "../design/components.js";
 import { LIFELINE_STATUS_COLOR, ESF_STATUS_COLOR } from "@openeoc/shared";
 import type {
@@ -15,7 +16,9 @@ import type {
  * Live updates arrive as replacement snapshots over the dashboard stream.
  */
 
-export function Dashboard(props: { snapshot: DashboardSnapshot }) {
+type Drill = (field: string, value: string) => void;
+
+export function Dashboard(props: { snapshot: DashboardSnapshot; onDrill?: Drill | undefined }) {
   return (
     <section aria-label={props.snapshot.title}>
       <h2 style={{ margin: "0 0 8px" }}>{props.snapshot.title}</h2>
@@ -27,14 +30,14 @@ export function Dashboard(props: { snapshot: DashboardSnapshot }) {
         }}
       >
         {props.snapshot.widgets.map((w) => (
-          <Widget key={w.key} widget={w} />
+          <Widget key={w.key} widget={w} onDrill={props.onDrill} />
         ))}
       </div>
     </section>
   );
 }
 
-function Widget(props: { widget: WidgetResult }) {
+function Widget(props: { widget: WidgetResult; onDrill?: Drill | undefined }) {
   const w = props.widget;
   return (
     <article
@@ -65,15 +68,15 @@ function Widget(props: { widget: WidgetResult }) {
           No matching board in this jurisdiction.
         </p>
       ) : (
-        renderBody(w)
+        renderBody(w, props.onDrill)
       )}
     </article>
   );
 }
 
-function renderBody(w: WidgetResult) {
+function renderBody(w: WidgetResult, onDrill?: Drill | undefined) {
   if (w.kind === "tile") return <Tile widget={w} />;
-  if (w.kind === "chart") return <Chart widget={w} />;
+  if (w.kind === "chart") return <Chart widget={w} onDrill={onDrill} />;
   if (w.kind === "status") return <StatusGrid widget={w} />;
   return <List widget={w} />;
 }
@@ -112,41 +115,81 @@ const DONUT_COLORS = [
   "var(--eoc-status-unknown)",
 ];
 
-function Chart(props: { widget: ChartResult }) {
-  return props.widget.display === "donut" ? <Donut widget={props.widget} /> : <BarChart widget={props.widget} />;
+function Chart(props: { widget: ChartResult; onDrill?: Drill | undefined }) {
+  return props.widget.display === "donut" ? (
+    <Donut widget={props.widget} onDrill={props.onDrill} />
+  ) : (
+    <BarChart widget={props.widget} onDrill={props.onDrill} />
+  );
 }
 
-function BarChart(props: { widget: ChartResult }) {
+// A drill affordance for a chart group, when the chart exposes its group field.
+function drillOf(widget: ChartResult, onDrill?: Drill | undefined): ((value: string) => void) | null {
+  return onDrill && widget.field ? (value) => onDrill(widget.field!, value) : null;
+}
+
+const drillButton: CSSProperties = {
+  background: "none",
+  border: "none",
+  font: "inherit",
+  color: "inherit",
+  cursor: "pointer",
+  width: "100%",
+  textAlign: "left",
+  padding: "4px 2px",
+};
+
+function BarChart(props: { widget: ChartResult; onDrill?: Drill | undefined }) {
   const max = Math.max(1, ...props.widget.groups.map((g) => g.count));
+  const drill = drillOf(props.widget, props.onDrill);
   return (
     <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
-      {props.widget.groups.map((g) => (
-        <li key={g.value} style={{ display: "grid", gridTemplateColumns: "1fr 2fr auto", gap: 8 }}>
-          <span>{g.value || "(none)"}</span>
-          <span
-            role="img"
-            aria-label={`${g.value}: ${g.count}`}
-            style={{
-              alignSelf: "center",
-              height: 10,
-              width: `${Math.round((g.count / max) * 100)}%`,
-              minWidth: 2,
-              background: "var(--eoc-status-info)",
-              borderRadius: 2,
-            }}
-          />
-          <span>{g.count}</span>
-        </li>
-      ))}
+      {props.widget.groups.map((g) => {
+        const row = (
+          <span style={{ display: "grid", gridTemplateColumns: "1fr 2fr auto", gap: 8, alignItems: "center" }}>
+            <span>{g.value || "(none)"}</span>
+            <span
+              role="img"
+              aria-label={`${g.value}: ${g.count}`}
+              style={{
+                alignSelf: "center",
+                height: 10,
+                width: `${Math.round((g.count / max) * 100)}%`,
+                minWidth: 2,
+                background: "var(--eoc-status-info)",
+                borderRadius: 2,
+              }}
+            />
+            <span>{g.count}</span>
+          </span>
+        );
+        return (
+          <li key={g.value}>
+            {drill ? (
+              <button
+                type="button"
+                style={drillButton}
+                aria-label={`Filter by ${g.value || "(none)"}`}
+                onClick={() => drill(g.value)}
+              >
+                {row}
+              </button>
+            ) : (
+              row
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
 
 /** WebEOC-style ring chart: a donut with the total in the center and a legend
  * of counts and percentages. */
-function Donut(props: { widget: ChartResult }) {
+function Donut(props: { widget: ChartResult; onDrill?: Drill | undefined }) {
   const groups = props.widget.groups;
   const total = groups.reduce((s, g) => s + g.count, 0);
+  const drill = drillOf(props.widget, props.onDrill);
   const R = 16;
   const C = 2 * Math.PI * R;
   let offset = 0;
@@ -186,24 +229,42 @@ function Donut(props: { widget: ChartResult }) {
         </text>
       </svg>
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4, minWidth: 0 }}>
-        {groups.map((g, i) => (
-          <li key={g.value} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
-            <span
-              aria-hidden="true"
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: 2,
-                background: DONUT_COLORS[i % DONUT_COLORS.length],
-                flex: "0 0 auto",
-              }}
-            />
-            <span style={{ flex: 1, minWidth: 0 }}>{g.value || "(none)"}</span>
-            <span style={{ color: "var(--eoc-text-muted)" }}>
-              {g.count} ({total > 0 ? Math.round((g.count / total) * 100) : 0}%)
+        {groups.map((g, i) => {
+          const legend = (
+            <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, width: "100%" }}>
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: 2,
+                  background: DONUT_COLORS[i % DONUT_COLORS.length],
+                  flex: "0 0 auto",
+                }}
+              />
+              <span style={{ flex: 1, minWidth: 0 }}>{g.value || "(none)"}</span>
+              <span style={{ color: "var(--eoc-text-muted)" }}>
+                {g.count} ({total > 0 ? Math.round((g.count / total) * 100) : 0}%)
+              </span>
             </span>
-          </li>
-        ))}
+          );
+          return (
+            <li key={g.value}>
+              {drill ? (
+                <button
+                  type="button"
+                  style={drillButton}
+                  aria-label={`Filter by ${g.value || "(none)"}`}
+                  onClick={() => drill(g.value)}
+                >
+                  {legend}
+                </button>
+              ) : (
+                legend
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

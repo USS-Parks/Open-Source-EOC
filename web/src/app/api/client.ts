@@ -378,8 +378,14 @@ export class ApiClient {
   createRecord(boardId: string, data: Record<string, unknown>): Promise<{ id: string }> {
     return this.request<{ id: string }>("POST", `/api/v1/boards/${boardId}/records`, data);
   }
-  dashboardData(dashboardId: string): Promise<DashboardSnapshot> {
-    return this.request<DashboardSnapshot>("GET", `/api/v1/dashboards/${dashboardId}/data`);
+  dashboardData(
+    dashboardId: string,
+    filter?: { field: string; equals: string } | null,
+  ): Promise<DashboardSnapshot> {
+    const query = filter
+      ? `?field=${encodeURIComponent(filter.field)}&equals=${encodeURIComponent(filter.equals)}`
+      : "";
+    return this.request<DashboardSnapshot>("GET", `/api/v1/dashboards/${dashboardId}/data${query}`);
   }
   async listSitreps(jurisdictionId: string): Promise<SitrepListItem[]> {
     const r = await this.request<{ sitreps: SitrepListItem[] }>(

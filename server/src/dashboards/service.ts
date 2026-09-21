@@ -155,17 +155,19 @@ export async function computeDashboard(
   sql: Sql,
   actor: Principal,
   dashboardId: string,
+  runtimeFilter?: WidgetFilter,
 ): Promise<DashboardSnapshot> {
   const dashboard = await getDashboard(sql, actor, dashboardId);
   const widgets: WidgetResult[] = [];
   for (const widget of dashboard.template.widgets) {
-    widgets.push(await computeWidget(sql, actor, dashboard.jurisdictionId, widget));
+    widgets.push(await computeWidget(sql, actor, dashboard.jurisdictionId, widget, runtimeFilter));
   }
   return {
     dashboardId: dashboard.id,
     title: dashboard.title,
     computedAt: new Date().toISOString(),
     widgets,
+    filter: runtimeFilter ?? null,
   };
 }
 
@@ -174,6 +176,7 @@ async function computeWidget(
   actor: Principal,
   jurisdictionId: string,
   widget: DashboardWidget,
+  runtimeFilter?: WidgetFilter,
 ): Promise<WidgetResult> {
   const [board] = await sql`
     select id from boards
@@ -189,7 +192,7 @@ async function computeWidget(
         count(*)::int as n,
         count(*) filter (where created_at > now() - interval '24 hours')::int as recent
       from board_records
-      where board_id = ${boardId} ${filterFragment(sql, widget.filter)}`;
+      where board_id = ${boardId} ${filterFragment(sql, widget.filter)} ${filterFragment(sql, runtimeFilter)}`;
     const value = (row?.n as number) ?? 0;
     return {
       kind: "tile",
@@ -205,13 +208,14 @@ async function computeWidget(
     const rows = await sql`
       select coalesce(data ->> ${widget.groupBy}, '') as v, count(*)::int as n
       from board_records
-      where board_id = ${boardId} ${filterFragment(sql, widget.filter)}
+      where board_id = ${boardId} ${filterFragment(sql, widget.filter)} ${filterFragment(sql, runtimeFilter)}
       group by 1 order by 1`;
     return {
       kind: "chart",
       key: widget.key,
       title: widget.title,
       display: widget.display,
+      field: widget.groupBy,
       groups: rows.map((r) => ({ value: r.v as string, count: r.n as number })),
     } satisfies ChartResult;
   }
@@ -248,7 +252,7 @@ async function computeWidget(
   const columns = widget.columns.filter((c) => readable.has(c));
   const rows = await sql`
     select id, data from board_records
-    where board_id = ${boardId} ${filterFragment(sql, widget.filter)}
+    where board_id = ${boardId} ${filterFragment(sql, widget.filter)} ${filterFragment(sql, runtimeFilter)}
     order by coalesce(updated_at, created_at) desc
     limit ${widget.limit}`;
   return {

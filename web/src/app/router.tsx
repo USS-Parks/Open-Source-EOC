@@ -8,7 +8,12 @@ import { useCallback, useEffect, useState } from "react";
  */
 export type Surface =
   | { readonly kind: "map" }
-  | { readonly kind: "dashboard"; readonly id?: string }
+  | {
+      readonly kind: "dashboard";
+      readonly id?: string;
+      readonly filterField?: string;
+      readonly filterEquals?: string;
+    }
   | { readonly kind: "boards" }
   | { readonly kind: "board"; readonly id: string }
   | { readonly kind: "sitreps" }
@@ -44,8 +49,15 @@ export function parseHash(hash: string): Surface {
   const head = slash === -1 ? clean : clean.slice(0, slash);
   const id = slash === -1 ? "" : clean.slice(slash + 1);
   switch (head) {
-    case "dashboard":
-      return id ? { kind: "dashboard", id } : { kind: "dashboard" };
+    case "dashboard": {
+      if (!id) return { kind: "dashboard" };
+      const parts = id.split("/");
+      const dashId = parts[0]!;
+      const [, field, value] = parts;
+      return field && value !== undefined
+        ? { kind: "dashboard", id: dashId, filterField: field, filterEquals: decodeURIComponent(value) }
+        : { kind: "dashboard", id: dashId };
+    }
     case "boards":
       return { kind: "boards" };
     case "board":
@@ -88,7 +100,10 @@ export function surfaceHash(surface: Surface): string {
     case "map":
       return "#/";
     case "dashboard":
-      return surface.id ? `#/dashboard/${surface.id}` : "#/dashboard";
+      if (!surface.id) return "#/dashboard";
+      return surface.filterField && surface.filterEquals !== undefined
+        ? `#/dashboard/${surface.id}/${surface.filterField}/${encodeURIComponent(surface.filterEquals)}`
+        : `#/dashboard/${surface.id}`;
     case "boards":
       return "#/boards";
     case "board":

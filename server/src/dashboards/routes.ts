@@ -93,8 +93,23 @@ export function dashboardRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { dashboardId } = req.params as { dashboardId: string };
+      // Optional runtime filter (?field=&equals=): scopes every counting
+      // widget so drilldown and deep links reconcile to the same records.
+      const q = z
+        .object({
+          field: z
+            .string()
+            .regex(/^[a-z][a-z0-9_]*$/)
+            .optional(),
+          equals: z.string().max(200).optional(),
+        })
+        .parse(req.query);
+      const runtimeFilter =
+        q.field !== undefined && q.equals !== undefined
+          ? { field: q.field, equals: q.equals }
+          : undefined;
       const snapshot = await withPerson(sql, req.principal.person.id, (tx) =>
-        computeDashboard(tx, req.principal, dashboardId),
+        computeDashboard(tx, req.principal, dashboardId, runtimeFilter),
       );
       return reply.send(snapshot);
     },

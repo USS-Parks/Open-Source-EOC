@@ -9,6 +9,8 @@ describe("surface hash routing", () => {
     { kind: "map" },
     { kind: "dashboard" },
     { kind: "dashboard", id: "d1" },
+    { kind: "dashboard", id: "d1", filterField: "severity", filterEquals: "critical" },
+    { kind: "datasets" },
     { kind: "boards" },
     { kind: "board", id: "b1" },
     { kind: "sitreps" },

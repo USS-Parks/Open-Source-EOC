@@ -133,6 +133,16 @@ async function snapshot(token: string): Promise<DashboardSnapshot> {
   return res.json() as DashboardSnapshot;
 }
 
+async function snapshotFiltered(token: string, field: string, equals: string): Promise<DashboardSnapshot> {
+  const res = await app.inject({
+    method: "GET",
+    url: `/api/v1/dashboards/${dashboardId}/data?field=${field}&equals=${equals}`,
+    headers: { authorization: `Bearer ${token}` },
+  });
+  expect(res.statusCode).toBe(200);
+  return res.json() as DashboardSnapshot;
+}
+
 function widget<T>(snap: DashboardSnapshot, key: string): T {
   const found = snap.widgets.find((w) => w.key === key);
   expect(found, `widget ${key}`).toBeDefined();
@@ -301,5 +311,22 @@ describe("definitions travel between jurisdictions", () => {
       payload: { ...STANDARD_DASHBOARDS[0], key: "sneaky" },
     });
     expect(res.statusCode).toBe(403);
+  });
+});
+
+describe("runtime dashboard filter (VEOC-81)", () => {
+  it("scopes the counting widgets, reconciles the totals, and echoes the filter", async () => {
+    // Shelters: two normal, one closed. Unfiltered, all three are counted.
+    const all = await snapshot(memberToken);
+    const chartAll = widget<Chart>(all, "shelters_by_status");
+    expect(chartAll.groups.reduce((s, g) => s + g.count, 0)).toBe(3);
+
+    // Filtered to status=normal, only the two normal shelters remain, and the
+    // applied filter is echoed so the view (and a deep link) can reproduce it.
+    const filtered = await snapshotFiltered(memberToken, "status", "normal");
+    expect(filtered.filter).toEqual({ field: "status", equals: "normal" });
+    const chartFiltered = widget<Chart>(filtered, "shelters_by_status");
+    expect(chartFiltered.groups.every((g) => g.value === "normal")).toBe(true);
+    expect(chartFiltered.groups.reduce((s, g) => s + g.count, 0)).toBe(2);
   });
 });

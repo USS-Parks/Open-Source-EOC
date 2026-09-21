@@ -141,6 +141,13 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         firstDashboardId={dashboards.data?.[0]?.id}
         onOpenBoard={(id) => navigate({ kind: "board", id })}
         onOpenSitrep={(id) => navigate({ kind: "sitrep", id })}
+        onDashboardFilter={(id, f) =>
+          navigate(
+            f
+              ? { kind: "dashboard", id, filterField: f.field, filterEquals: f.equals }
+              : { kind: "dashboard", id },
+          )
+        }
       />
     </AppShell>
   );
@@ -199,6 +206,7 @@ function Center(props: {
   firstDashboardId: string | undefined;
   onOpenBoard: (id: string) => void;
   onOpenSitrep: (id: string) => void;
+  onDashboardFilter: (id: string, filter: { field: string; equals: string } | null) => void;
 }) {
   const s = props.surface;
   switch (s.kind) {
@@ -220,7 +228,18 @@ function Center(props: {
       const id = s.id ?? props.firstDashboardId;
       if (!id)
         return <EmptyState label="No dashboard configured." hint="An admin creates one from a dashboard template." />;
-      return <DashboardSurface client={props.client} dashboardId={id} />;
+      const filter =
+        s.filterField && s.filterEquals !== undefined
+          ? { field: s.filterField, equals: s.filterEquals }
+          : null;
+      return (
+        <DashboardSurface
+          client={props.client}
+          dashboardId={id}
+          filter={filter}
+          onFilter={(f) => props.onDashboardFilter(id, f)}
+        />
+      );
     }
     case "boards":
       return <BoardsIndex boards={props.boards} onOpen={props.onOpenBoard} />;

@@ -2402,3 +2402,37 @@ keep their attribution.
   credentials and live pilot inputs remain explicit gates on affected claims.
   To revise this plan, add a superseding amendment; do not erase prior receipts.
 - **Publication:** No commit or push performed; no branch created.
+
+## VEOC-81: Linked operational dashboard workspace (runtime filter and drilldown)
+
+Added a runtime dashboard filter carried in the URL and a drilldown from chart
+groups, so a dashboard scopes to a subset and a deep link reconciles to the
+same records.
+
+- **Baseline:** 8304829c5f3ec55caa505d6bacf9e319b5fec684 on canonical main.
+- **Concurrency note:** a Basho-directed planning-only roster amendment
+  (recorded above) left ROADMAP.md, docs/FACET-STATUS.md and three roster/PSPR
+  documents modified but uncommitted in this shared checkout. This receipt and
+  its commit touch only the dashboard implementation and this ledger; those
+  five planning documents were left untouched and unstaged for that session to
+  publish.
+- **Server:** computeDashboard takes an optional runtime filter (field/equals)
+  and ANDs it into every counting widget's query, so tile, chart and list
+  totals scope together; the snapshot echoes the applied filter. The chart
+  result now carries its group-by field so a group can be drilled. The data
+  route accepts ?field=&equals=.
+- **Web:** the dashboard surface reads the filter from the URL hash
+  (#/dashboard/<id>/<field>/<value>), shows an active-filter chip with a clear
+  control, and refetches on filter change. Clicking a chart group drills in by
+  setting that filter, which updates the URL. Filter state is deep-linkable and
+  survives reload.
+- **Scope boundary:** map-linked KPIs, named saved layouts and time ranges
+  (the fuller dashboard designer, and the amendment's 81A/B/C) are not in this
+  increment.
+- **Evidence:** a server test proves a status=normal filter drops the closed
+  shelter and the totals reconcile, with the filter echoed; a web test drills a
+  chart group and asserts the field/value callback, and that a fieldless chart
+  offers no drilldown; the router round-trips a filtered dashboard hash.
+- **Gate:** pnpm check --maxWorkers=2 exited 0; 469 tests in 83 files passed.
+  Log: deploy/test-runtime/out/veoc-81-check.log.
+- **Ending commit:** this receipt commit, recorded by the next receipt.

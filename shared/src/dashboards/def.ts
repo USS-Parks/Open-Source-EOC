@@ -99,6 +99,8 @@ export interface ChartResult {
   readonly title: string;
   readonly missing?: boolean;
   readonly display: "bar" | "donut";
+  /** The board field this chart groups by, so a group can be drilled into. */
+  readonly field?: string;
   readonly groups: ReadonlyArray<{ readonly value: string; readonly count: number }>;
 }
 export interface StatusResult {
@@ -127,6 +129,9 @@ export interface DashboardSnapshot {
   readonly title: string;
   readonly computedAt: string;
   readonly widgets: readonly WidgetResult[];
+  /** The runtime filter applied across the counting widgets, echoed so the
+   *  view can show and clear it; null when the dashboard is unfiltered. */
+  readonly filter?: WidgetFilter | null;
 }
 
 export function tileLevel(

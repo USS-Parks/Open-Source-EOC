@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DashboardSnapshot } from "@openeoc/shared";
 import { Theme } from "../../design/components.js";
 import { Dashboard } from "../Dashboard.js";
@@ -66,5 +66,44 @@ describe("the dashboard renders a computed snapshot and nothing else", () => {
     );
     const gone = screen.getByTestId("widget-gone");
     expect(gone.textContent).toContain("No matching board");
+  });
+
+  it("drills into a chart group by its field when onDrill is given", () => {
+    const drillSnap: DashboardSnapshot = {
+      dashboardId: "d1",
+      title: "EOC Status",
+      computedAt: new Date().toISOString(),
+      widgets: [
+        {
+          kind: "chart",
+          key: "shelters_by_status",
+          title: "Shelters by status",
+          display: "bar",
+          field: "status",
+          groups: [
+            { value: "normal", count: 2 },
+            { value: "closed", count: 1 },
+          ],
+        },
+      ],
+    };
+    const onDrill = vi.fn();
+    render(
+      <Theme name="light">
+        <Dashboard snapshot={drillSnap} onDrill={onDrill} />
+      </Theme>,
+    );
+    fireEvent.click(screen.getByLabelText("Filter by normal"));
+    expect(onDrill).toHaveBeenCalledWith("status", "normal");
+  });
+
+  it("does not offer a drilldown when a chart has no group field", () => {
+    render(
+      <Theme name="light">
+        <Dashboard snapshot={snapshot} onDrill={() => undefined} />
+      </Theme>,
+    );
+    // The seeded chart carries no field, so its groups are not buttons.
+    expect(screen.queryByLabelText("Filter by normal")).toBeNull();
   });
 });
