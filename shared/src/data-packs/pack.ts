@@ -34,9 +34,17 @@ export const FieldMappingSchema = z
     occurredAt: mappedPath.optional(),
     status: mappedPath.optional(),
     note: mappedPath.optional(),
+    /**
+     * Stable source identity for idempotent persistence (VEOC-79C1). When the
+     * source carries no id, items are keyed by a hash of their mapped content,
+     * so a reload of the same content stays one row.
+     */
+    sourceId: mappedPath.optional(),
+    /** Dot-path to a GeoJSON geometry on the source record (VEOC-79C1). */
+    geometry: mappedPath.optional(),
   })
   .strict()
-  .refine((m) => Object.values(m).some((v) => v !== undefined), "map at least one field");
+  .refine((m) => NORMALIZED_FIELDS.some((f) => m[f] !== undefined), "map at least one field");
 export type FieldMapping = z.infer<typeof FieldMappingSchema>;
 
 export const DATASET_KINDS = ["geojson", "cap", "georss", "cot", "table"] as const;
@@ -102,6 +110,27 @@ export function applyFieldMapping(
     out[field] = value === undefined ? null : value;
   }
   return out;
+}
+
+export interface MappedItem {
+  /** The source's stable id, or null when the mapping names none. */
+  readonly sourceId: string | null;
+  readonly data: Partial<Record<NormalizedField, unknown>>;
+  /** GeoJSON geometry when the mapping names a geometry path, else null. */
+  readonly geometry: unknown | null;
+}
+
+/**
+ * Map one raw source record to a persistable item (VEOC-79C1): its normalized
+ * fields, its stable source id when the mapping names one (else null, so the
+ * caller derives a content id for idempotent persistence), and its GeoJSON
+ * geometry when a geometry path is mapped.
+ */
+export function mapItem(record: unknown, mapping: FieldMapping): MappedItem {
+  const rawId = mapping.sourceId ? resolvePath(record, mapping.sourceId) : undefined;
+  const sourceId = rawId === undefined || rawId === null ? null : String(rawId);
+  const geometry = mapping.geometry ? (resolvePath(record, mapping.geometry) ?? null) : null;
+  return { sourceId, data: applyFieldMapping(record, mapping), geometry };
 }
 
 // --- Dataset availability (missing is never zero) ---

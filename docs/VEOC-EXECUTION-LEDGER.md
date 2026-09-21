@@ -2649,3 +2649,33 @@ reading jurisdiction-wide.
   adaptable-workspace work (81C/81), not required to close 79B.
 - **Gate:** pnpm check --maxWorkers=2 exited 0; 475 tests in 87 files passed.
 - **Ending commit:** this receipt commit, recorded by the next receipt.
+
+## VEOC-79C1: persist normalized dataset items
+
+Extends the 79C data-pack load path so mapped records are durable, not
+recomputed and discarded each request.
+
+- **Baseline:** 3b1ae19 on canonical main (after 79B closed).
+- **Change:** the field mapping gains optional sourceId and geometry dot-paths,
+  and a new shared mapItem returns an item's source id, normalized data and
+  GeoJSON geometry. Migration 0038 adds data_pack_items (dataset_id,
+  incident_id, source_id, data, geom, first/last_loaded_at, loaded_by, unique
+  per dataset and source id) under incident row-level security. loadDataset now
+  persists each successful load: items are keyed by source id, or by a content
+  hash when the source names none, and upserted, so a reload is idempotent and a
+  changed item updates in place; items the source no longer sends are pruned, so
+  the persisted set is exactly the last successful load. A batch is validated
+  before any write: a source that reuses an id, or a value that is not GeoJSON
+  geometry, rejects the whole load (400) and leaves the last-good items
+  untouched. item_count now counts persisted items.
+- **Evidence:** a new real-database test loads a three-item batch and reads the
+  rows back with their source ids, geometry, incident association and loader;
+  reloads the same batch idempotently with no duplicates; loads a changed batch
+  that updates one item, prunes a removed one and adds a new one; rejects a
+  non-geometry batch and a duplicate-id batch atomically with the last-good
+  items preserved; and keeps two datasets isolated. The existing onboarding test
+  (a mapping with no source id, two distinct records) still reports two items.
+- **Deferred to 79C2:** connecting persisted items to COP layers, record
+  inspection, refresh, and the received/accepted/rejected count breakdown.
+- **Gate:** pnpm check --maxWorkers=2 exited 0; 479 tests in 88 files passed.
+- **Ending commit:** this receipt commit, recorded by the next receipt.

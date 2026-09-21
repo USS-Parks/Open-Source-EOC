@@ -1,9 +1,11 @@
+import { createHash } from "node:crypto";
 import {
-  applyFieldMapping,
   datasetAvailability,
+  mapItem,
   type DataPack,
   type DatasetStatus,
   type FieldMapping,
+  type NormalizedField,
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
@@ -173,10 +175,110 @@ export async function loadDataset(
   }
 
   const mapping = ds.field_mapping as FieldMapping;
-  const normalized = outcome.records.map((rec) => applyFieldMapping(rec, mapping));
+  const incidentId = ds.incident_id as string;
+  const persisted = await persistItems(sql, actor, datasetId, incidentId, mapping, outcome.records);
   await sql`
     update data_pack_datasets
-    set last_success_at = now(), item_count = ${normalized.length}, last_error = null
+    set last_success_at = now(), item_count = ${persisted.length}, last_error = null
     where id = ${datasetId}`;
-  return { key: ds.key as string, availability: "available", itemCount: normalized.length, normalized };
+  return {
+    key: ds.key as string,
+    availability: "available",
+    itemCount: persisted.length,
+    normalized: persisted.map((p) => p.data),
+  };
+}
+
+interface PreparedItem {
+  readonly sourceId: string;
+  readonly data: Partial<Record<NormalizedField, unknown>>;
+  readonly geometry: unknown | null;
+}
+
+/**
+ * Persist a dataset's mapped items durably (VEOC-79C1). Each item is keyed by
+ * its source id, or a hash of its mapped content when the source names none,
+ * and upserted, so a repeated load is idempotent and a changed item updates in
+ * place. Items the source no longer sends are pruned, so the persisted set is
+ * exactly the last successful load. The batch is validated before any write: a
+ * source that reuses an id, or a value that is not GeoJSON geometry, rejects
+ * the whole load and leaves the previously persisted items untouched.
+ */
+async function persistItems(
+  sql: Sql,
+  actor: Principal,
+  datasetId: string,
+  incidentId: string,
+  mapping: FieldMapping,
+  records: readonly unknown[],
+): Promise<PreparedItem[]> {
+  const prepared: PreparedItem[] = records.map((rec) => {
+    const item = mapItem(rec, mapping);
+    assertGeometry(item.geometry);
+    return { sourceId: item.sourceId ?? deriveId(item.data), data: item.data, geometry: item.geometry };
+  });
+  if (mapping.sourceId) {
+    // A mapped source id is the source's own identity: reusing it for two items
+    // in one batch is ambiguous, so the load is rejected.
+    const ids = new Set<string>();
+    for (const p of prepared) {
+      if (ids.has(p.sourceId)) throw new AuthError(400, "duplicate source id in batch");
+      ids.add(p.sourceId);
+    }
+  }
+  // Derived ids hash the content, so two identical id-less items are one item.
+  const byId = new Map(prepared.map((p) => [p.sourceId, p]));
+  for (const item of byId.values()) {
+    await sql`
+      insert into data_pack_items (dataset_id, incident_id, source_id, data, geom, loaded_by)
+      values (${datasetId}, ${incidentId}, ${item.sourceId}, ${sql.json(item.data as never)},
+              ${geomValue(sql, item.geometry)}, ${actor.person.id})
+      on conflict (dataset_id, source_id) do update
+        set data = excluded.data, geom = excluded.geom,
+            last_loaded_at = now(), loaded_by = ${actor.person.id}`;
+  }
+  const keep = [...byId.keys()];
+  if (keep.length === 0) {
+    await sql`delete from data_pack_items where dataset_id = ${datasetId}`;
+  } else {
+    await sql`
+      delete from data_pack_items
+      where dataset_id = ${datasetId} and source_id <> all(${keep})`;
+  }
+  return [...byId.values()];
+}
+
+/** A deterministic id for a source item that carries none: a hash of its
+ *  mapped content, so an identical reload stays one row. */
+function deriveId(data: Partial<Record<NormalizedField, unknown>>): string {
+  return createHash("sha256").update(JSON.stringify(data)).digest("hex");
+}
+
+/** Reject a value that is not a GeoJSON geometry before any write, so an
+ *  invalid batch is an attributable 400, not a mid-transaction database error. */
+function assertGeometry(geometry: unknown | null): void {
+  if (geometry === null || geometry === undefined) return;
+  const g = geometry as { type?: unknown; coordinates?: unknown; geometries?: unknown };
+  const TYPES = [
+    "Point",
+    "MultiPoint",
+    "LineString",
+    "MultiLineString",
+    "Polygon",
+    "MultiPolygon",
+    "GeometryCollection",
+  ];
+  const ok =
+    typeof g === "object" &&
+    typeof g.type === "string" &&
+    TYPES.includes(g.type) &&
+    (g.type === "GeometryCollection" ? Array.isArray(g.geometries) : Array.isArray(g.coordinates));
+  if (!ok) throw new AuthError(400, "invalid geometry in dataset batch");
+}
+
+/** PostGIS geometry fragment for an item, or null. */
+function geomValue(sql: Sql, geometry: unknown | null): never {
+  return (
+    geometry == null ? null : sql`ST_SetSRID(ST_GeomFromGeoJSON(${JSON.stringify(geometry)}), 4326)`
+  ) as never;
 }
