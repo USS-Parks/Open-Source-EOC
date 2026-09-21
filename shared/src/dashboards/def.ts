@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { SpatialQueryScope } from "../impact/contract.js";
+import { IMPACT_CATEGORIES, type ImpactCategoryAggregate, type SpatialQueryScope } from "../impact/contract.js";
 
 /**
  * Dashboard definitions (VEOC-18). A dashboard is data, versioned and
@@ -18,6 +18,90 @@ export const WidgetFilterSchema = z.object({
   equals: z.union([z.string(), z.number(), z.boolean()]),
 });
 export type WidgetFilter = z.infer<typeof WidgetFilterSchema>;
+
+const DashboardDateFilterSchema = z
+  .object({
+    from: z.iso.datetime({ offset: true }).optional(),
+    to: z.iso.datetime({ offset: true }).optional(),
+  })
+  .strict()
+  .refine((value) => value.from !== undefined || value.to !== undefined, "date filter is empty")
+  .refine(
+    (value) => value.from === undefined || value.to === undefined ||
+      Date.parse(value.from) < Date.parse(value.to),
+    "date filter from must precede to",
+  );
+
+export const DashboardFilterSetSchema = z
+  .object({
+    category: WidgetFilterSchema.optional(),
+    operationalPeriod: z.object({
+      field: z.string().regex(KEY),
+      areaRevision: z.number().int().positive(),
+    }).strict().optional(),
+    date: DashboardDateFilterSchema.optional(),
+  })
+  .strict();
+export type DashboardFilterSet = z.infer<typeof DashboardFilterSetSchema>;
+
+export interface DashboardResolvedOperationalPeriod {
+  readonly areaRevision: number;
+  readonly label: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
+}
+
+const DashboardBboxSchema = z
+  .tuple([z.number(), z.number(), z.number(), z.number()])
+  .refine(
+    ([west, south, east, north]) =>
+      [west, south, east, north].every(Number.isFinite) &&
+      west >= -180 && east <= 180 && south >= -90 && north <= 90 &&
+      west < east && south < north,
+    "bbox must be finite ordered WGS84 west,south,east,north",
+  );
+
+const DashboardPresentationSchema = z.enum(["tile", "chart", "list", "map"]);
+const DashboardPanelBase = {
+  key: z.string().regex(KEY),
+  title: z.string().min(1).max(200).optional(),
+  presentation: DashboardPresentationSchema,
+};
+export const DashboardCompositionPanelSchema = z.discriminatedUnion("source", [
+  z.object({
+    ...DashboardPanelBase,
+    source: z.literal("dashboard"),
+    dashboardId: z.string().uuid(),
+    widgetKey: z.string().regex(KEY),
+  }).strict(),
+  z.object({
+    ...DashboardPanelBase,
+    source: z.literal("impact"),
+    category: z.enum(IMPACT_CATEGORIES),
+  }).strict(),
+]);
+export type DashboardCompositionPanel = z.infer<typeof DashboardCompositionPanelSchema>;
+
+export const DashboardCompositionSchema = z
+  .object({
+    title: z.string().min(1).max(200),
+    panels: z.array(DashboardCompositionPanelSchema).min(1).max(24),
+    defaultFilters: DashboardFilterSetSchema.optional(),
+    bbox: DashboardBboxSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const keys = new Set<string>();
+    value.panels.forEach((panel, index) => {
+      if (keys.has(panel.key)) ctx.addIssue({
+        code: "custom",
+        path: ["panels", index, "key"],
+        message: "panel keys must be unique",
+      });
+      keys.add(panel.key);
+    });
+  });
+export type DashboardComposition = z.infer<typeof DashboardCompositionSchema>;
 
 const widgetBase = {
   key: z.string().regex(KEY),
@@ -134,6 +218,54 @@ export interface DashboardSnapshot {
   /** The runtime filter applied across the counting widgets, echoed so the
    *  view can show and clear it; null when the dashboard is unfiltered. */
   readonly filter?: WidgetFilter | null;
+  /** Composable filters applied in addition to the legacy runtime filter. */
+  readonly filters?: DashboardFilterSet | null;
+  readonly resolvedOperationalPeriod?: DashboardResolvedOperationalPeriod | null;
+}
+
+export interface DashboardContributionRecord {
+  readonly id: string;
+  readonly at: string;
+  readonly data: Readonly<Record<string, unknown>>;
+  readonly geometry?: Readonly<Record<string, unknown>> | null;
+}
+
+export interface DashboardContributionPage {
+  readonly dashboardId: string;
+  readonly widgetKey: string;
+  readonly scope: SpatialQueryScope;
+  readonly total: number;
+  readonly records: readonly DashboardContributionRecord[];
+  readonly nextCursor: string | null;
+}
+
+export type DashboardPanelState = "ready" | "stale" | "missing" | "unsupported";
+export type DashboardFilterCapability = "category" | "operationalPeriod" | "date" | "bbox";
+export type DashboardFilterMode = "inherit" | "replace" | "clear";
+
+export interface DashboardPanelSnapshot {
+  readonly key: string;
+  readonly title: string;
+  readonly source: "dashboard" | "impact";
+  readonly presentation: "tile" | "chart" | "list" | "map";
+  readonly state: DashboardPanelState;
+  readonly reason: string | null;
+  readonly filterCapabilities: readonly DashboardFilterCapability[];
+  readonly contributionDrilldown: boolean;
+  readonly notApplied: readonly DashboardFilterCapability[];
+  readonly data: WidgetResult | ImpactCategoryAggregate | null;
+}
+
+export interface DashboardCompositionSnapshot {
+  readonly key: string;
+  readonly revision: number;
+  readonly title: string;
+  readonly computedAt: string;
+  readonly scope: SpatialQueryScope;
+  readonly filterMode: DashboardFilterMode;
+  readonly filters: DashboardFilterSet | null;
+  readonly resolvedOperationalPeriod: DashboardResolvedOperationalPeriod | null;
+  readonly panels: readonly DashboardPanelSnapshot[];
 }
 
 export function tileLevel(

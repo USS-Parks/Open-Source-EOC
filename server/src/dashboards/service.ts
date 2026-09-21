@@ -4,6 +4,9 @@ import {
   STANDARD_DASHBOARDS,
   tileLevel,
   type ChartResult,
+  type DashboardContributionPage,
+  type DashboardFilterSet,
+  type DashboardResolvedOperationalPeriod,
   type DashboardSnapshot,
   type DashboardTemplate,
   type DashboardWidget,
@@ -176,13 +179,21 @@ export async function computeDashboard(
   runtimeFilter?: WidgetFilter,
   incidentId?: string,
   bbox?: ViewportBbox,
+  filters?: DashboardFilterSet,
 ): Promise<DashboardSnapshot> {
   const dashboard = await getDashboard(sql, actor, dashboardId, incidentId);
+  const resolvedOperationalPeriod = await resolveDashboardOperationalPeriod(
+    sql, actor, incidentId, filters?.operationalPeriod,
+  );
+  const operationalPeriodFilter = filters?.operationalPeriod && resolvedOperationalPeriod
+    ? { field: filters.operationalPeriod.field, equals: resolvedOperationalPeriod.label }
+    : undefined;
   const widgets: WidgetResult[] = [];
   for (const widget of dashboard.template.widgets) {
     widgets.push(
       await computeWidget(
         sql, actor, dashboard.jurisdictionId, widget, runtimeFilter, incidentId, bbox,
+        filters, operationalPeriodFilter,
       ),
     );
   }
@@ -193,6 +204,38 @@ export async function computeDashboard(
     computedAt: new Date().toISOString(),
     widgets,
     filter: runtimeFilter ?? null,
+    filters: filters ?? null,
+    resolvedOperationalPeriod,
+  };
+}
+
+export async function resolveDashboardOperationalPeriod(
+  sql: Sql,
+  actor: Principal,
+  incidentId: string | undefined,
+  selection: DashboardFilterSet["operationalPeriod"],
+): Promise<DashboardResolvedOperationalPeriod | null> {
+  if (!selection) return null;
+  if (!incidentId) throw new AuthError(400, "operational period requires an incident scope");
+  await getIncidentAuthority(sql, actor, incidentId);
+  const [period] = await sql`
+    select period_label, period_starts_at, period_ends_at
+    from incident_area_revisions
+    where incident_id = ${incidentId} and revision = ${selection.areaRevision}
+      and period_label is not null`;
+  if (!period) throw new AuthError(400, "operational period revision is unavailable");
+  const variants = await sql`
+    select period_starts_at, period_ends_at
+    from incident_area_revisions
+    where incident_id = ${incidentId} and period_label = ${period.period_label as string}
+    group by period_starts_at, period_ends_at`;
+  if (variants.length > 1)
+    throw new AuthError(400, "operational period label is ambiguous in this incident");
+  return {
+    areaRevision: selection.areaRevision,
+    label: period.period_label as string,
+    startsAt: new Date(period.period_starts_at as Date | string).toISOString(),
+    endsAt: new Date(period.period_ends_at as Date | string).toISOString(),
   };
 }
 
@@ -204,6 +247,8 @@ async function computeWidget(
   runtimeFilter?: WidgetFilter,
   incidentId?: string,
   bbox?: ViewportBbox,
+  filters?: DashboardFilterSet,
+  operationalPeriodFilter?: WidgetFilter,
 ): Promise<WidgetResult> {
   // Board selection. An incident-scoped dashboard (VEOC-79B2) aggregates over
   // the board THIS incident uses for the widget's template, because activation
@@ -212,31 +257,21 @@ async function computeWidget(
   // board, the incident clause below narrows to its incident-tagged records so
   // the totals reconcile with the scoped board view. Unscoped keeps the
   // jurisdiction's first board of the template.
-  const [board] = incidentId
-    ? await sql`
-        select b.id from boards b
-        join incident_boards ib on ib.board_id = b.id
-        where ib.incident_id = ${incidentId} and b.template_key = ${widget.board}
-          and b.archived_at is null
-        order by b.created_at limit 1`
-    : await sql`
-        select id from boards
-        where jurisdiction_id = ${jurisdictionId} and template_key = ${widget.board}
-          and archived_at is null
-        order by created_at limit 1`;
-  if (!board) return missingResult(widget);
-  const boardId = board.id as string;
-  const effective = incidentId
-    ? await getIncidentBoardReadShape(sql, actor, incidentId, boardId)
-    : await getEffectiveBoard(sql, actor, boardId);
-  const readable = new Set(visibleFields(effective).map((field) => field.key));
-  if (!widgetFieldsReadable(widget, runtimeFilter, readable))
+  const resolved = await resolveWidgetBoard(sql, actor, jurisdictionId, widget, incidentId);
+  if (!resolved) return missingResult(widget);
+  const { boardId, effective, readable } = resolved;
+  if (!widgetFieldsReadable(
+    widget, runtimeFilter, filters, operationalPeriodFilter, readable,
+  ))
     return missingResult(widget, readable);
   const geometryKey = geometryFieldKey(effective.fields);
   if (bbox && (!geometryKey || !readable.has(geometryKey)))
     return missingResult(widget, readable);
   const incidentClause = incidentFragment(sql, incidentId);
   const viewportClause = viewportFragment(sql, bbox);
+  const filtersClause = filtersFragment(
+    sql, widget.filter, runtimeFilter, filters, operationalPeriodFilter,
+  );
 
   if (widget.kind === "tile") {
     const [row] = await sql`
@@ -244,7 +279,7 @@ async function computeWidget(
         count(*)::int as n,
         count(*) filter (where created_at > now() - interval '24 hours')::int as recent
       from board_records
-      where board_id = ${boardId} ${filterFragment(sql, widget.filter)} ${filterFragment(sql, runtimeFilter)} ${incidentClause} ${viewportClause}`;
+      where board_id = ${boardId} ${filtersClause} ${incidentClause} ${viewportClause}`;
     const value = (row?.n as number) ?? 0;
     return {
       kind: "tile",
@@ -260,7 +295,7 @@ async function computeWidget(
     const rows = await sql`
       select coalesce(data ->> ${widget.groupBy}, '') as v, count(*)::int as n
       from board_records
-      where board_id = ${boardId} ${filterFragment(sql, widget.filter)} ${filterFragment(sql, runtimeFilter)} ${incidentClause} ${viewportClause}
+      where board_id = ${boardId} ${filtersClause} ${incidentClause} ${viewportClause}
       group by 1 order by 1`;
     return {
       kind: "chart",
@@ -284,7 +319,8 @@ async function computeWidget(
                  order by coalesce(updated_at, created_at) desc
                ) as rn
         from board_records
-        where board_id = ${boardId} and data ? ${widget.groupBy} ${incidentClause} ${viewportClause}
+        where board_id = ${boardId} and data ? ${widget.groupBy}
+          ${filtersClause} ${incidentClause} ${viewportClause}
       ) latest where rn = 1 order by g`;
     return {
       kind: "status",
@@ -302,7 +338,7 @@ async function computeWidget(
   const columns = widget.columns.filter((c) => readable.has(c));
   const rows = await sql`
     select id, data from board_records
-    where board_id = ${boardId} ${filterFragment(sql, widget.filter)} ${filterFragment(sql, runtimeFilter)} ${incidentClause} ${viewportClause}
+    where board_id = ${boardId} ${filtersClause} ${incidentClause} ${viewportClause}
     order by coalesce(updated_at, created_at) desc
     limit ${widget.limit}`;
   return {
@@ -319,14 +355,52 @@ async function computeWidget(
   } satisfies ListResult;
 }
 
+interface ResolvedWidgetBoard {
+  readonly boardId: string;
+  readonly effective: Awaited<ReturnType<typeof getEffectiveBoard>>;
+  readonly readable: ReadonlySet<string>;
+}
+
+async function resolveWidgetBoard(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+  widget: DashboardWidget,
+  incidentId?: string,
+): Promise<ResolvedWidgetBoard | null> {
+  const [board] = incidentId
+    ? await sql`
+        select b.id from boards b
+        join incident_boards ib on ib.board_id = b.id
+        where ib.incident_id = ${incidentId} and b.template_key = ${widget.board}
+          and b.archived_at is null
+        order by b.created_at limit 1`
+    : await sql`
+        select id from boards
+        where jurisdiction_id = ${jurisdictionId} and template_key = ${widget.board}
+          and archived_at is null
+        order by created_at limit 1`;
+  if (!board) return null;
+  const boardId = board.id as string;
+  const effective = incidentId
+    ? await getIncidentBoardReadShape(sql, actor, incidentId, boardId)
+    : await getEffectiveBoard(sql, actor, boardId);
+  const readable = new Set(visibleFields(effective).map((field) => field.key));
+  return { boardId, effective, readable };
+}
+
 /** Reject aggregate inputs that would reveal a field hidden from this role. */
 function widgetFieldsReadable(
   widget: DashboardWidget,
   runtimeFilter: WidgetFilter | undefined,
+  filters: DashboardFilterSet | undefined,
+  operationalPeriodFilter: WidgetFilter | undefined,
   readable: ReadonlySet<string>,
 ): boolean {
   if (widget.filter && !readable.has(widget.filter.field)) return false;
   if (runtimeFilter && !readable.has(runtimeFilter.field)) return false;
+  if (filters?.category && !readable.has(filters.category.field)) return false;
+  if (operationalPeriodFilter && !readable.has(operationalPeriodFilter.field)) return false;
   if (widget.kind === "chart") return readable.has(widget.groupBy);
   if (widget.kind === "status")
     return readable.has(widget.groupBy) && readable.has(widget.valueField);
@@ -354,6 +428,176 @@ function filterFragment(sql: Sql, filter: WidgetFilter | undefined): never {
   return (
     filter ? sql`and data ->> ${filter.field} = ${String(filter.equals)}` : sql``
   ) as never;
+}
+
+function filtersFragment(
+  sql: Sql,
+  staticFilter: WidgetFilter | undefined,
+  runtimeFilter: WidgetFilter | undefined,
+  filters: DashboardFilterSet | undefined,
+  operationalPeriodFilter: WidgetFilter | undefined,
+): never {
+  const dateFrom = filters?.date?.from;
+  const dateTo = filters?.date?.to;
+  return sql`${filterFragment(sql, staticFilter)} ${filterFragment(sql, runtimeFilter)}
+    ${filterFragment(sql, filters?.category)}
+    ${filterFragment(sql, operationalPeriodFilter)}
+    ${dateFrom ? sql`and coalesce(updated_at, created_at) >= ${dateFrom}` : sql``}
+    ${dateTo ? sql`and coalesce(updated_at, created_at) < ${dateTo}` : sql``}` as never;
+}
+
+function cursorValue(cursor: string | undefined): { at: string; id: string } | null {
+  if (!cursor) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as unknown;
+    if (!Array.isArray(parsed) || parsed.length !== 2 ||
+        typeof parsed[0] !== "string" || !Number.isFinite(Date.parse(parsed[0])) ||
+        typeof parsed[1] !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(parsed[1]))
+      throw new Error("bad cursor");
+    return { at: parsed[0], id: parsed[1] };
+  } catch {
+    throw new AuthError(400, "invalid contribution cursor");
+  }
+}
+
+function contributionCursor(at: string, id: string): string {
+  return Buffer.from(JSON.stringify([at, id]), "utf8").toString("base64url");
+}
+
+export async function listDashboardContributions(
+  sql: Sql,
+  actor: Principal,
+  dashboardId: string,
+  widgetKey: string,
+  incidentId: string,
+  runtimeFilter: WidgetFilter | undefined,
+  filters: DashboardFilterSet | undefined,
+  group: string | undefined,
+  cursor: string | undefined,
+  requestedLimit: number,
+  bbox?: ViewportBbox,
+): Promise<DashboardContributionPage> {
+  const dashboard = await getDashboard(sql, actor, dashboardId, incidentId);
+  const widget = dashboard.template.widgets.find((candidate) => candidate.key === widgetKey);
+  if (!widget) throw new AuthError(404, "dashboard widget not found");
+  if (widget.kind === "status")
+    throw new AuthError(409, "status widgets do not expose contributing records");
+  if (group !== undefined && widget.kind !== "chart")
+    throw new AuthError(400, "group drilldown requires a chart widget");
+  const resolvedOperationalPeriod = await resolveDashboardOperationalPeriod(
+    sql, actor, incidentId, filters?.operationalPeriod,
+  );
+  const operationalPeriodFilter = filters?.operationalPeriod && resolvedOperationalPeriod
+    ? { field: filters.operationalPeriod.field, equals: resolvedOperationalPeriod.label }
+    : undefined;
+  const resolved = await resolveWidgetBoard(
+    sql, actor, dashboard.jurisdictionId, widget, incidentId,
+  );
+  if (!resolved) throw new AuthError(404, "dashboard widget source not found");
+  const { boardId, effective, readable } = resolved;
+  if (!widgetFieldsReadable(
+    widget, runtimeFilter, filters, operationalPeriodFilter, readable,
+  ))
+    throw new AuthError(404, "dashboard widget not found");
+  const geometryKey = geometryFieldKey(effective.fields);
+  if (bbox && (!geometryKey || !readable.has(geometryKey)))
+    throw new AuthError(404, "dashboard widget not found");
+  const groupFilter = group === undefined || widget.kind !== "chart"
+    ? undefined
+    : { field: widget.groupBy, equals: group };
+  const baseFilters = filtersFragment(
+    sql, widget.filter, runtimeFilter, filters, operationalPeriodFilter,
+  );
+  const incidentClause = incidentFragment(sql, incidentId);
+  const viewportClause = viewportFragment(sql, bbox);
+  const groupClause = groupFilter === undefined
+    ? sql``
+    : sql`and coalesce(data ->> ${groupFilter.field}, '') = ${String(groupFilter.equals)}`;
+  const parsedCursor = cursorValue(cursor);
+  const limit = Math.max(1, Math.min(requestedLimit, 100));
+  const geometryProjection = geometryKey && readable.has(geometryKey)
+    ? sql`ST_AsGeoJSON(geom)::jsonb`
+    : sql`null::jsonb`;
+  const [countRow] = await sql`
+    select count(*)::int as total from board_records
+    where board_id = ${boardId} ${baseFilters} ${groupClause}
+      ${incidentClause} ${viewportClause}`;
+  const rows = await sql`
+    with matched as (
+      select id, data, coalesce(updated_at, created_at) as at, geom
+      from board_records
+      where board_id = ${boardId} ${baseFilters} ${groupClause}
+        ${incidentClause} ${viewportClause}
+    )
+    select id, data, at, at::text as cursor_at, ${geometryProjection} as geometry
+    from matched
+    where (${parsedCursor?.at ?? null}::timestamptz is null
+      or (at, id) < (${parsedCursor?.at ?? null}::timestamptz, ${parsedCursor?.id ?? null}::uuid))
+    order by at desc, id desc
+    limit ${limit + 1}`;
+  const page = rows.slice(0, limit);
+  const columns = widget.kind === "list"
+    ? widget.columns.filter((column) => readable.has(column))
+    : [...readable];
+  return {
+    dashboardId,
+    widgetKey,
+    scope: spatialScope(bbox),
+    total: (countRow?.total as number | undefined) ?? 0,
+    records: page.map((row) => {
+      const source = row.data as Record<string, unknown>;
+      const data: Record<string, unknown> = {};
+      for (const field of columns) if (field in source) data[field] = source[field];
+      return {
+        id: row.id as string,
+        at: new Date(row.at as Date | string).toISOString(),
+        data,
+        ...(geometryKey && readable.has(geometryKey)
+          ? { geometry: (row.geometry as Record<string, unknown> | null) ?? null }
+          : {}),
+      };
+    }),
+    nextCursor: rows.length > limit
+      ? contributionCursor(
+          page.at(-1)!.cursor_at as string,
+          page.at(-1)!.id as string,
+        )
+      : null,
+  };
+}
+
+export async function dashboardWidgetCapabilities(
+  sql: Sql,
+  actor: Principal,
+  dashboardId: string,
+  widgetKey: string,
+  incidentId: string,
+  runtimeFilter?: WidgetFilter,
+  filters?: DashboardFilterSet,
+): Promise<{ widget: DashboardWidget; readableGeometry: boolean; drilldown: boolean }> {
+  const dashboard = await getDashboard(sql, actor, dashboardId, incidentId);
+  const widget = dashboard.template.widgets.find((candidate) => candidate.key === widgetKey);
+  if (!widget) throw new AuthError(404, "dashboard widget not found");
+  const resolvedOperationalPeriod = await resolveDashboardOperationalPeriod(
+    sql, actor, incidentId, filters?.operationalPeriod,
+  );
+  const operationalPeriodFilter = filters?.operationalPeriod && resolvedOperationalPeriod
+    ? { field: filters.operationalPeriod.field, equals: resolvedOperationalPeriod.label }
+    : undefined;
+  const resolved = await resolveWidgetBoard(
+    sql, actor, dashboard.jurisdictionId, widget, incidentId,
+  );
+  if (!resolved || !widgetFieldsReadable(
+    widget, runtimeFilter, filters, operationalPeriodFilter, resolved.readable,
+  ))
+    return { widget, readableGeometry: false, drilldown: false };
+  const geometryKey = geometryFieldKey(resolved.effective.fields);
+  return {
+    widget,
+    readableGeometry: geometryKey !== null && resolved.readable.has(geometryKey),
+    drilldown: widget.kind !== "status",
+  };
 }
 
 /**
