@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import { Button, StatusBadge } from "../../design/components.js";
 import type { ApiClient, BoardListItem } from "../api/client.js";
 import { useAsync, usePolled } from "../data/hooks.js";
-import { EmptyState, ErrorNote, Loading, Scroll, SurfaceHeader } from "../screens/parts.js";
+import { EmptyState, ErrorNote, Loading, Scroll } from "../screens/parts.js";
 
 /** The list sections: all boards, situation reports, and notifications. */
 
@@ -12,7 +12,6 @@ export function BoardsIndex(props: {
 }) {
   return (
     <Scroll>
-      <SurfaceHeader title="Boards" />
       {props.boards.length === 0 ? (
         <EmptyState label="No boards in this jurisdiction yet." />
       ) : (
@@ -65,7 +64,6 @@ export function SitrepsIndex(props: {
   const items = data ?? [];
   return (
     <Scroll>
-      <SurfaceHeader title="Situation Reports" />
       {items.length === 0 ? (
         <EmptyState label="No situation reports yet." hint="A duty officer composes these from live board state." />
       ) : (
@@ -93,7 +91,6 @@ export function AlertsSurface(props: { client: ApiClient }) {
   const items = data ?? [];
   return (
     <Scroll>
-      <SurfaceHeader title="Notifications" />
       {items.length === 0 ? (
         <EmptyState label="No notifications." hint="Board events and scheduled rules post here." />
       ) : (

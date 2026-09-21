@@ -16,6 +16,18 @@ describe("surface hash routing", () => {
     { kind: "sitreps" },
     { kind: "sitrep", id: "s1" },
     { kind: "alerts" },
+    { kind: "lifelines" },
+    { kind: "lifeline", id: "energy" },
+    { kind: "esf", id: "utilities" },
+    { kind: "tasks" },
+    { kind: "field-reports" },
+    { kind: "periods" },
+    { kind: "participants" },
+    { kind: "jic" },
+    { kind: "templates" },
+    { kind: "settings" },
+    { kind: "board-design", id: "b1" },
+    { kind: "not-found", path: "not-a-workspace" },
   ];
 
   it("round-trips every surface through the hash", () => {
@@ -24,10 +36,10 @@ describe("surface hash routing", () => {
     }
   });
 
-  it("defaults unknown or empty hashes to the map", () => {
+  it("defaults an empty hash to Map and preserves unknown routes for a not-found screen", () => {
     expect(parseHash("")).toEqual({ kind: "map" });
     expect(parseHash("#/")).toEqual({ kind: "map" });
-    expect(parseHash("#/nonsense")).toEqual({ kind: "map" });
+    expect(parseHash("#/nonsense")).toEqual({ kind: "not-found", path: "nonsense" });
   });
 
   it("falls back to the list when a detail id is missing", () => {
@@ -38,6 +50,9 @@ describe("surface hash routing", () => {
   it("maps detail surfaces to their rail section", () => {
     expect(sectionOf({ kind: "board", id: "b1" })).toBe("boards");
     expect(sectionOf({ kind: "sitrep", id: "s1" })).toBe("sitreps");
+    expect(sectionOf({ kind: "dashboard" })).toBe("overview");
+    expect(sectionOf({ kind: "board-design", id: "b1" })).toBe("boards");
+    expect(sectionOf({ kind: "field-reports" })).toBe("fieldReports");
     expect(sectionOf({ kind: "map" })).toBe("map");
   });
 });

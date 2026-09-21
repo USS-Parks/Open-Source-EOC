@@ -44,3 +44,31 @@ export function SurfaceHeader(props: { title: string; actions?: ReactNode }) {
     </div>
   );
 }
+
+export function UnavailableState(props: {
+  readonly title: string;
+  readonly message: string;
+  readonly returnLabel: string;
+  readonly onReturn: () => void;
+}) {
+  return (
+    <section className="eoc-surface-state" aria-labelledby="unavailable-title">
+      <h2 id="unavailable-title">{props.title}</h2>
+      <p>{props.message}</p>
+      <button type="button" className="eoc-btn" onClick={props.onReturn}>{props.returnLabel}</button>
+    </section>
+  );
+}
+
+export function NotFoundState(props: { readonly onMap: () => void; readonly onOverview: () => void }) {
+  return (
+    <section className="eoc-surface-state" aria-labelledby="not-found-title">
+      <h2 id="not-found-title">Page not found</h2>
+      <p>This address does not match an available workspace.</p>
+      <div>
+        <button type="button" className="eoc-btn" onClick={props.onMap}>Open Map</button>
+        <button type="button" className="eoc-btn" onClick={props.onOverview}>Open Overview</button>
+      </div>
+    </section>
+  );
+}

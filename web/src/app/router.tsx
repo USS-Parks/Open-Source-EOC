@@ -29,7 +29,19 @@ export type Surface =
   | { readonly kind: "messages" }
   | { readonly kind: "smartforms" }
   | { readonly kind: "tracking" }
-  | { readonly kind: "alerts" };
+  | { readonly kind: "alerts" }
+  | { readonly kind: "lifelines" }
+  | { readonly kind: "lifeline"; readonly id: string }
+  | { readonly kind: "esf"; readonly id: string }
+  | { readonly kind: "tasks" }
+  | { readonly kind: "field-reports" }
+  | { readonly kind: "periods" }
+  | { readonly kind: "participants" }
+  | { readonly kind: "jic" }
+  | { readonly kind: "templates" }
+  | { readonly kind: "settings" }
+  | { readonly kind: "board-design"; readonly id: string }
+  | { readonly kind: "not-found"; readonly path: string };
 
 /** The rail section a surface belongs to (board detail lives under boards). */
 export function sectionOf(surface: Surface): string {
@@ -38,6 +50,23 @@ export function sectionOf(surface: Surface): string {
       return "boards";
     case "sitrep":
       return "sitreps";
+    case "dashboard":
+      return "overview";
+    case "incidents":
+      return "incidentSetup";
+    case "smartforms":
+      return "smartForms";
+    case "field-reports":
+      return "fieldReports";
+    case "periods":
+      return "operationalPeriods";
+    case "lifeline":
+    case "esf":
+      return "lifelines";
+    case "board-design":
+      return "boards";
+    case "not-found":
+      return "";
     default:
       return surface.kind;
   }
@@ -60,8 +89,11 @@ export function parseHash(hash: string): Surface {
     }
     case "boards":
       return { kind: "boards" };
-    case "board":
-      return id ? { kind: "board", id } : { kind: "boards" };
+    case "board": {
+      const [boardId, child] = id.split("/");
+      if (!boardId) return { kind: "boards" };
+      return child === "design" ? { kind: "board-design", id: boardId } : { kind: "board", id: boardId };
+    }
     case "sitreps":
       return { kind: "sitreps" };
     case "sitrep":
@@ -90,8 +122,28 @@ export function parseHash(hash: string): Surface {
       return { kind: "tracking" };
     case "alerts":
       return { kind: "alerts" };
+    case "lifelines":
+      return { kind: "lifelines" };
+    case "lifeline":
+      return id ? { kind: "lifeline", id } : { kind: "lifelines" };
+    case "esf":
+      return id ? { kind: "esf", id } : { kind: "lifelines" };
+    case "tasks":
+      return { kind: "tasks" };
+    case "field-reports":
+      return { kind: "field-reports" };
+    case "periods":
+      return { kind: "periods" };
+    case "participants":
+      return { kind: "participants" };
+    case "jic":
+      return { kind: "jic" };
+    case "templates":
+      return { kind: "templates" };
+    case "settings":
+      return { kind: "settings" };
     default:
-      return { kind: "map" };
+      return head ? { kind: "not-found", path: clean } : { kind: "map" };
   }
 }
 
@@ -136,6 +188,30 @@ export function surfaceHash(surface: Surface): string {
       return "#/tracking";
     case "alerts":
       return "#/alerts";
+    case "lifelines":
+      return "#/lifelines";
+    case "lifeline":
+      return `#/lifeline/${surface.id}`;
+    case "esf":
+      return `#/esf/${surface.id}`;
+    case "tasks":
+      return "#/tasks";
+    case "field-reports":
+      return "#/field-reports";
+    case "periods":
+      return "#/periods";
+    case "participants":
+      return "#/participants";
+    case "jic":
+      return "#/jic";
+    case "templates":
+      return "#/templates";
+    case "settings":
+      return "#/settings";
+    case "board-design":
+      return `#/board/${surface.id}/design`;
+    case "not-found":
+      return `#/${surface.path}`;
   }
 }
 

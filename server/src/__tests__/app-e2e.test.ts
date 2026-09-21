@@ -59,6 +59,11 @@ let seed: Awaited<ReturnType<typeof seedIdentity>>;
 let adminToken: string;
 let memberToken: string;
 
+const isFocused = (node: unknown) => {
+  const element = node as { ownerDocument: { activeElement: unknown } };
+  return element.ownerDocument.activeElement === element;
+};
+
 async function login(email: string, password: string): Promise<string> {
   const res = await app.inject({
     method: "POST",
@@ -260,6 +265,83 @@ afterAll(async () => {
 });
 
 describe("the operations console in a real browser, offline", () => {
+  it("keeps the branded frame usable across desktop, laptop, tablet and phone", async () => {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const errors: string[] = [];
+    const external: string[] = [];
+    page.on("pageerror", (error) => errors.push(String(error)));
+    await page.route("**/*", (route) => {
+      const url = route.request().url();
+      if (url.startsWith(baseUrl) || url.startsWith("data:") || url.startsWith("blob:")) return route.continue();
+      external.push(url);
+      return route.abort();
+    });
+    try {
+      await page.goto(`${baseUrl}/app/index.html`, { waitUntil: "load" });
+      await page.getByLabel("Email").fill("member@example.org");
+      await page.getByLabel("Password").fill("another-good-password");
+      await page.getByRole("button", { name: "Sign in" }).click();
+      await page.locator('[data-testid="cop-map"]').waitFor();
+      await page.getByRole("button", { name: "Close context drawer" }).click();
+      const originalHash = new URL(page.url()).hash;
+      await page.getByRole("link", { name: "Skip to workspace" }).focus();
+      await page.keyboard.press("Enter");
+      expect(new URL(page.url()).hash).toBe(originalHash);
+      expect(await page.locator("main").evaluate(isFocused)).toBe(true);
+      for (const theme of ["light", "dark"]) {
+        await page.setViewportSize({ width: 1440, height: 900 });
+        if (theme === "dark") {
+          await page.getByRole("button", { name: "Account menu" }).click();
+          await page.getByRole("button", { name: "Use dark theme" }).click();
+          await page.getByRole("button", { name: "Account menu" }).click();
+        }
+        for (const width of [1440, 1280, 900, 390]) {
+          await page.setViewportSize({ width, height: 900 });
+          await page.waitForTimeout(150);
+          expect(await page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")).toBe(true);
+          expect((await page.locator('[data-testid="cop-map"]').boundingBox())!.width).toBeGreaterThan(width < 761 ? 260 : 450);
+          if (width === 390) {
+            expect(await page.locator("#eoc-shell-navigation").getAttribute("inert")).not.toBeNull();
+            await page.getByRole("button", { name: "All sections" }).click();
+            expect(await page.getByRole("button", { name: "Close sections" }).evaluate(isFocused)).toBe(true);
+            await page.keyboard.press("Shift+Tab");
+            expect(await page.getByRole("button", { name: "Settings", exact: true }).evaluate(isFocused)).toBe(true);
+            await page.keyboard.press("Escape");
+            expect(await page.getByRole("button", { name: "All sections" }).evaluate(isFocused)).toBe(true);
+          }
+          await page.getByRole("button", { name: "Open context" }).click();
+          if (width < 1181) {
+            expect(await page.locator("main").getAttribute("inert")).not.toBeNull();
+            const drawer = page.getByRole("dialog", { name: "Context", exact: true });
+            await page.keyboard.press("Tab");
+            expect(await drawer.evaluate((node) => {
+              const element = node as unknown as { contains(value: unknown): boolean; ownerDocument: { activeElement: unknown } };
+              return element.contains(element.ownerDocument.activeElement);
+            })).toBe(true);
+            if (width === 390) expect(await page.getByRole("button", { name: "Close context drawer" }).evaluate(isFocused)).toBe(true);
+          } else {
+            const resize = page.getByRole("separator", { name: "Resize context drawer" });
+            const priorWidth = Number(await resize.getAttribute("aria-valuenow"));
+            await resize.focus();
+            await page.keyboard.press("ArrowLeft");
+            expect(Number(await resize.getAttribute("aria-valuenow"))).toBe(priorWidth + 16);
+            await page.keyboard.press("Home");
+            expect(await resize.getAttribute("aria-valuenow")).toBe("280");
+          }
+          await page.getByRole("button", { name: "Close context drawer" }).click();
+          expect(await page.getByRole("button", { name: "Open context" }).evaluate(isFocused)).toBe(true);
+          await page.screenshot({ path: join(SHOTS, `shell-frame-${theme}-${width}.png`) });
+        }
+      }
+      await page.evaluate("window.location.hash = '#/unknown-workspace'");
+      await page.getByRole("heading", { name: "Page not found", level: 2 }).waitFor();
+      await page.getByRole("button", { name: "Open Map", exact: true }).click();
+      await page.locator('[data-testid="cop-map"]').waitFor();
+      expect(errors).toEqual([]);
+      expect(external).toEqual([]);
+    } finally { await page.close(); }
+  }, 90000);
+
   it("signs in and renders the map-first console and the dashboard", async () => {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
     page.on("pageerror", (e) => console.error("browser pageerror:", String(e).slice(0, 300)));
@@ -301,7 +383,7 @@ describe("the operations console in a real browser, offline", () => {
     await page.screenshot({ path: join(SHOTS, "app-board-light.png"), fullPage: false });
 
     // The dashboard surface renders its widgets.
-    await page.getByRole("button", { name: "Dashboard" }).click();
+    await page.getByRole("button", { name: "Overview" }).click();
     await page.getByText("EOC Status").first().waitFor({ state: "visible", timeout: 20000 });
     await page.getByText("Closed roads").first().waitFor({ state: "visible", timeout: 20000 });
     await page
@@ -313,7 +395,7 @@ describe("the operations console in a real browser, offline", () => {
 
     // The Forms surface previews an ICS form and assembles an IAP from the
     // live incident, all through the browser.
-    await page.getByRole("button", { name: "Forms", exact: true }).click();
+    await page.getByRole("button", { name: "ICS Forms", exact: true }).click();
     await page.getByRole("button", { name: "Assemble IAP" }).waitFor({ state: "visible", timeout: 20000 });
     await page.getByRole("button", { name: "Preview form" }).click();
     await page.getByText("ICS-201 Incident Briefing").first().waitFor({ state: "visible", timeout: 20000 });
@@ -428,7 +510,7 @@ describe("the operations console in a real browser, offline", () => {
     // Incidents: the activated incident is listed. Scope to the main content
     // so the match is the list entry, not the hidden incident-switcher option
     // that carries the same name in the command bar.
-    await page.getByRole("button", { name: "Incidents" }).click();
+    await page.getByRole("button", { name: "Incident Setup" }).click();
     await page
       .getByRole("main")
       .getByText("Bald Hills Fire", { exact: true })
@@ -515,11 +597,11 @@ describe("the operations console in a real browser, offline", () => {
     // This is the visual sample set; content is proven by the assertions above.
     const TABS: ReadonlyArray<readonly [string, string]> = [
       ["Map", "map"],
-      ["Dashboard", "dashboard"],
-      ["Incidents", "incidents"],
+      ["Overview", "dashboard"],
+      ["Incident Setup", "incidents"],
       ["Boards", "boards"],
       ["SITREP", "sitreps"],
-      ["Forms", "forms"],
+      ["ICS Forms", "forms"],
       ["IAP", "iap"],
       ["Smart Forms", "smartforms"],
       ["Resources", "resources"],
@@ -528,18 +610,24 @@ describe("the operations console in a real browser, offline", () => {
       ["Feeds", "feeds"],
       ["Messages", "messages"],
       ["Files", "files"],
-      ["Alerts", "alerts"],
+      ["Notifications", "alerts"],
     ];
     const gallery = async (theme: string) => {
       for (const [label, key] of TABS) {
-        await page.getByRole("button", { name: label, exact: true }).click();
+        if (label === "Notifications") {
+          await page.getByRole("button", { name: /^Notifications, \d+ unread$/ }).click();
+          await page.getByRole("button", { name: "Open center" }).click();
+        } else {
+          await page.getByRole("button", { name: label, exact: true }).click();
+        }
         await page.waitForTimeout(label === "Map" ? 1600 : 800);
         await page.screenshot({ path: join(SHOTS, `tab-${key}-${theme}.png`), fullPage: false });
       }
     };
     await gallery("light");
-    // The header toggle reads "Dark" in the light theme; flip it and sweep again.
-    await page.getByRole("button", { name: "Dark" }).click();
+    // Theme remains an account control in the command bar.
+    await page.getByRole("button", { name: "Account menu" }).click();
+    await page.getByRole("button", { name: "Use dark theme" }).click();
     await page.waitForTimeout(500);
     await gallery("dark");
 
@@ -567,7 +655,7 @@ describe("the operations console in a real browser, offline", () => {
       await page.getByLabel("Email").fill("admin@example.org");
       await page.getByLabel("Password").fill("correct-horse-battery");
       await page.getByRole("button", { name: "Sign in" }).click();
-      await page.getByRole("button", { name: "Incidents", exact: true }).click();
+      await page.getByRole("button", { name: "Incident Setup", exact: true }).click();
       const openArea = async (name: string) => {
         await page.locator("li").filter({ hasText: name }).getByRole("button", { name: "Operational area" }).click();
         return page.getByRole("region", { name: name + ": operational area", exact: true });
@@ -596,7 +684,8 @@ describe("the operations console in a real browser, offline", () => {
       await area.getByLabel("Reason for revision").fill("Separate response areas confirmed");
       await area.getByRole("button", { name: "Save area revision" }).click();
       await area.getByText(/^Revision 2\./).waitFor();
-      await page.getByRole("button", { name: "Dark", exact: true }).click();
+      await page.getByRole("button", { name: "Account menu" }).click();
+      await page.getByRole("button", { name: "Use dark theme", exact: true }).click();
       await area.locator(".maplibregl-canvas").waitFor();
       await area.screenshot({ path: join(SHOTS, "incident-area-dark.png") });
       await area.getByRole("button", { name: "View revision 1" }).click();

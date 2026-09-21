@@ -1,13 +1,20 @@
+import { useEffect, useState } from "react";
 import { BoardList, NotificationTray } from "../../design/layout.js";
-import type { Status } from "../../design/components.js";
+import { Button, type Status } from "../../design/components.js";
 import type { ThemeName } from "../../design/tokens.js";
 import type { ApiClient, BoardListItem, CollectionRef, FeedHealth } from "../api/client.js";
 import { useSession } from "../auth/session.js";
 import { IncidentSwitcher, useIncident } from "../incident/context.js";
 import { useAsync, usePolled } from "../data/hooks.js";
-import { AppShell, type NavItem } from "../layout/AppShell.js";
+import {
+  AppShell,
+  type NavGroup,
+  type ShellPage,
+  type ShellSyncState,
+  type WorkspaceArrangement,
+} from "../layout/AppShell.js";
 import { sectionOf, useSurface, type Surface } from "../router.js";
-import { EmptyState, ErrorNote } from "./parts.js";
+import { EmptyState, ErrorNote, NotFoundState, UnavailableState } from "./parts.js";
 import { MapSurface } from "../surfaces/MapSurface.js";
 import { DashboardSurface } from "../surfaces/DashboardSurface.js";
 import { BoardSurface } from "../surfaces/BoardSurface.js";
@@ -25,23 +32,40 @@ import { SmartFormsSurface } from "../surfaces/SmartFormsSurface.js";
 import { TrackingSurface } from "../surfaces/TrackingSurface.js";
 import { AlertsSurface, BoardsIndex, SitrepsIndex } from "../surfaces/lists.js";
 
-const NAV: readonly NavItem[] = [
-  { key: "map", label: "Map" },
-  { key: "dashboard", label: "Dashboard" },
-  { key: "incidents", label: "Incidents" },
-  { key: "datasets", label: "Datasets" },
-  { key: "boards", label: "Boards" },
-  { key: "sitreps", label: "SITREP" },
-  { key: "forms", label: "Forms" },
-  { key: "iap", label: "IAP" },
-  { key: "smartforms", label: "Smart Forms" },
-  { key: "resources", label: "Resources" },
-  { key: "tracking", label: "Tracking" },
-  { key: "aar", label: "AAR" },
-  { key: "feeds", label: "Feeds" },
-  { key: "messages", label: "Messages" },
-  { key: "files", label: "Files" },
-  { key: "alerts", label: "Alerts" },
+const NAV: readonly NavGroup[] = [
+  { key: "situation", label: "Situation", items: [
+    { key: "overview", label: "Overview", icon: "overview" },
+    { key: "map", label: "Map", icon: "map" },
+    { key: "lifelines", label: "ESFs & Lifelines", icon: "lifelines" },
+    { key: "sitreps", label: "SITREP", icon: "sitrep" },
+  ] },
+  { key: "operations", label: "Operations", items: [
+    { key: "boards", label: "Boards", icon: "boards" },
+    { key: "resources", label: "Resources", icon: "resources" },
+    { key: "tasks", label: "Tasks", icon: "tasks" },
+    { key: "fieldReports", label: "Field Reports", icon: "fieldReports" },
+    { key: "smartForms", label: "Smart Forms", icon: "smartForms" },
+    { key: "tracking", label: "Tracking", icon: "tracking" },
+  ] },
+  { key: "planning", label: "Planning", items: [
+    { key: "operationalPeriods", label: "Operational Periods", icon: "operationalPeriods" },
+    { key: "forms", label: "ICS Forms", icon: "forms" },
+    { key: "iap", label: "IAP", icon: "iap" },
+    { key: "aar", label: "AAR", icon: "aar" },
+  ] },
+  { key: "coordination", label: "Coordination", items: [
+    { key: "participants", label: "Participants", icon: "participants" },
+    { key: "messages", label: "Messages", icon: "messages" },
+    { key: "jic", label: "JIC", icon: "jic" },
+    { key: "files", label: "Files", icon: "files" },
+  ] },
+  { key: "data", label: "Data and administration", items: [
+    { key: "incidentSetup", label: "Incident Setup", icon: "incidentSetup" },
+    { key: "datasets", label: "Datasets", icon: "datasets" },
+    { key: "feeds", label: "Feeds", icon: "feeds" },
+    { key: "templates", label: "Templates", icon: "templates" },
+    { key: "settings", label: "Settings", icon: "settings" },
+  ] },
 ];
 
 /**
@@ -92,6 +116,10 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
     [viewingJurisdictionId, incident.selectedIncidentId],
   );
   const notifications = usePolled(() => client.notifications(), 8000, []);
+  const [lastNotificationCheck, setLastNotificationCheck] = useState<Date | null>(null);
+  useEffect(() => {
+    if (!notifications.loading && !notifications.error && notifications.data) setLastNotificationCheck(new Date());
+  }, [notifications.data, notifications.error, notifications.loading]);
 
   if (!jurisdictionId) {
     return (
@@ -117,7 +145,10 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         )}
       </section>
       <section aria-label="Recent notifications">
-        <h2 style={dockHeading}>Notifications</h2>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+          <h2 style={{ ...dockHeading, margin: 0 }}>Notifications</h2>
+          <Button kind="quiet" onClick={() => navigate({ kind: "alerts" })}>Open center</Button>
+        </div>
         <NotificationTray
           items={(notifications.data ?? []).slice(0, 6).map((n) => ({
             id: n.id,
@@ -129,10 +160,20 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
     </>
   );
 
+  const sync: ShellSyncState = notifications.error
+    ? { state: "error", label: lastNotificationCheck ? `Update failed · checked ${formatTime(lastNotificationCheck)}` : "Updates unavailable" }
+    : notifications.loading && !notifications.data
+      ? { state: "checking", label: "Checking updates" }
+      : { state: "current", label: lastNotificationCheck ? `Checked ${formatTime(lastNotificationCheck)}` : "Update received" };
+  const page = pageFor(surface, incident.selectedIncident?.name ?? "No incident selected");
+
   return (
     <AppShell
       product="Open Source EOC"
+      organization="Emergency coordination"
       context={<IncidentSwitcher />}
+      periodLabel="Not set"
+      positionLabel={session.me?.position?.title ?? "No acting position"}
       nav={NAV}
       activeNav={sectionOf(surface)}
       onNavigate={(key) => navigate(sectionForNav(key))}
@@ -141,6 +182,10 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       theme={props.theme}
       onToggleTheme={props.onToggleTheme}
       onLogout={() => void session.logout()}
+      notificationCount={(notifications.data ?? []).filter((item) => !item.read_at).length}
+      sync={sync}
+      page={page.page}
+      arrangement={page.arrangement}
       rightDock={dock}
     >
       <Center
@@ -162,6 +207,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         isAdmin={viewingMembership?.role === "admin"}
         collectionsError={collections.error}
         firstDashboardId={dashboards.data?.[0]?.id}
+        onNavigate={navigate}
         onOpenBoard={(id) => navigate({ kind: "board", id })}
         onOpenSitrep={(id) => navigate({ kind: "sitrep", id })}
         onDashboardFilter={(id, f) =>
@@ -178,7 +224,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
 
 function sectionForNav(key: string): Surface {
   switch (key) {
-    case "dashboard":
+    case "overview":
       return { kind: "dashboard" };
     case "boards":
       return { kind: "boards" };
@@ -190,7 +236,7 @@ function sectionForNav(key: string): Surface {
       return { kind: "iap" };
     case "files":
       return { kind: "files" };
-    case "incidents":
+    case "incidentSetup":
       return { kind: "incidents" };
     case "datasets":
       return { kind: "datasets" };
@@ -202,12 +248,26 @@ function sectionForNav(key: string): Surface {
       return { kind: "feeds" };
     case "messages":
       return { kind: "messages" };
-    case "smartforms":
+    case "smartForms":
       return { kind: "smartforms" };
     case "tracking":
       return { kind: "tracking" };
-    case "alerts":
-      return { kind: "alerts" };
+    case "lifelines":
+      return { kind: "lifelines" };
+    case "tasks":
+      return { kind: "tasks" };
+    case "fieldReports":
+      return { kind: "field-reports" };
+    case "operationalPeriods":
+      return { kind: "periods" };
+    case "participants":
+      return { kind: "participants" };
+    case "jic":
+      return { kind: "jic" };
+    case "templates":
+      return { kind: "templates" };
+    case "settings":
+      return { kind: "settings" };
     default:
       return { kind: "map" };
   }
@@ -228,6 +288,7 @@ function Center(props: {
   isAdmin: boolean;
   collectionsError: string | null;
   firstDashboardId: string | undefined;
+  onNavigate: (surface: Surface) => void;
   onOpenBoard: (id: string) => void;
   onOpenSitrep: (id: string) => void;
   onDashboardFilter: (id: string, filter: { field: string; equals: string } | null) => void;
@@ -344,7 +405,69 @@ function Center(props: {
       );
     case "alerts":
       return <AlertsSurface client={props.client} />;
+    case "lifelines":
+    case "lifeline":
+    case "esf":
+      return <UnavailableState title="ESFs & Lifelines is unavailable" message="This workspace is not available in the current application." returnLabel="Return to Map" onReturn={() => props.onNavigate({ kind: "map" })} />;
+    case "tasks":
+      return <UnavailableState title="Tasks is unavailable" message="This section is not available in the current application." returnLabel="Return to Boards" onReturn={() => props.onNavigate({ kind: "boards" })} />;
+    case "field-reports":
+      return <UnavailableState title="Field Reports is unavailable" message="This section is not available in the current application. Existing reports remain available through their board." returnLabel="Return to Boards" onReturn={() => props.onNavigate({ kind: "boards" })} />;
+    case "periods":
+      return <UnavailableState title="Operational Periods is unavailable" message="This section is not available in the current application." returnLabel="Open ICS Forms" onReturn={() => props.onNavigate({ kind: "forms" })} />;
+    case "participants":
+      return <UnavailableState title="Participants is unavailable" message="This section is not available in the current application." returnLabel="Open Incident Setup" onReturn={() => props.onNavigate({ kind: "incidents" })} />;
+    case "jic":
+      return <UnavailableState title="JIC is unavailable" message="This section is not available in the current application." returnLabel="Open SITREP" onReturn={() => props.onNavigate({ kind: "sitreps" })} />;
+    case "templates":
+      return <UnavailableState title="Templates is unavailable" message="This section is not available in the current application." returnLabel="Return to Boards" onReturn={() => props.onNavigate({ kind: "boards" })} />;
+    case "settings":
+      return <UnavailableState title="Settings is unavailable" message="This section is not available in the current application." returnLabel="Open Incident Setup" onReturn={() => props.onNavigate({ kind: "incidents" })} />;
+    case "board-design":
+      return <UnavailableState title="Board customization is unavailable" message="This board can be used, but customization is not available in the current application." returnLabel="Return to board" onReturn={() => props.onNavigate({ kind: "board", id: s.id })} />;
+    case "not-found":
+      return <NotFoundState onMap={() => props.onNavigate({ kind: "map" })} onOverview={() => props.onNavigate({ kind: "dashboard" })} />;
   }
+}
+
+function pageFor(surface: Surface, scope: string): { readonly page: ShellPage; readonly arrangement: WorkspaceArrangement } {
+  const result = (group: string, title: string, arrangement: WorkspaceArrangement) => ({ page: { group, title, scope }, arrangement });
+  switch (surface.kind) {
+    case "map": return result("Situation", "Map", "map");
+    case "dashboard": return result("Situation", "Overview", "map");
+    case "lifelines": return result("Situation", "ESFs & Lifelines", "map");
+    case "lifeline": return result("Situation", "Lifeline detail", "map");
+    case "esf": return result("Situation", "ESF coordination", "map");
+    case "sitreps": return result("Situation", "SITREP", "planning");
+    case "sitrep": return result("Situation", "Situation report", "planning");
+    case "boards": return result("Operations", "Boards", "boards");
+    case "board": return result("Operations", "Board detail", "boards");
+    case "board-design": return result("Operations", "Board customization", "boards");
+    case "resources": return result("Operations", "Resources", "boards");
+    case "tasks": return result("Operations", "Tasks", "boards");
+    case "field-reports": return result("Operations", "Field Reports", "boards");
+    case "smartforms": return result("Operations", "Smart Forms", "boards");
+    case "tracking": return result("Operations", "Tracking", "boards");
+    case "periods": return result("Planning", "Operational Periods", "planning");
+    case "forms": return result("Planning", "ICS Forms", "planning");
+    case "iap": return result("Planning", "IAP", "planning");
+    case "aar": return result("Planning", "AAR", "planning");
+    case "participants": return result("Coordination", "Participants", "boards");
+    case "messages": return result("Coordination", "Messages", "boards");
+    case "jic": return result("Coordination", "JIC", "planning");
+    case "files": return result("Coordination", "Files", "boards");
+    case "incidents": return result("Data and administration", "Incident Setup", "boards");
+    case "datasets": return result("Data and administration", "Datasets", "map");
+    case "feeds": return result("Data and administration", "Feeds", "map");
+    case "templates": return result("Data and administration", "Templates", "boards");
+    case "settings": return result("Data and administration", "Settings", "boards");
+    case "alerts": return result("Notifications", "Notification center", "boards");
+    case "not-found": return result("Navigation", "Page not found", "boards");
+  }
+}
+
+function formatTime(value: Date) {
+  return value.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 const dockHeading = { margin: "0 0 8px", fontSize: "1em" } as const;

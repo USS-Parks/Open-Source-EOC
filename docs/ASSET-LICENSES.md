@@ -31,6 +31,7 @@ does not establish the license of a separately sourced map, font, or symbol.
 | NAPSG MapLibre facility sprite | `web/public/napsg/sprite.json`, `sprite.png`, `sprite@2x.json`, `sprite@2x.png` | `deploy/basemap/build-napsg-sprite.mjs` deterministically builds both pixel ratios from the manifest-verified originals. Every sprite entry carries NAPSG attribution, CC BY 4.0 license URL, original source URL, and source SHA-256. | Distributed with local license text. |
 | Runtime hazard hatches | `web/src/cop/hazards.ts` | Generated in code from project-owned drawing instructions; there is no separate image asset. | Distributed as software under the repository license. |
 | D05 application icon family | `web/src/design/icons/` | Original Open Source EOC SVG path geometry. The repository's Apache-2.0 `LICENSE` and `NOTICE` are local license text. | Distributed as software under Apache-2.0. |
+| Application compass mark | `web/src/app/layout/BrandMark.tsx` | Original project SVG geometry extracted from the approved D03 composition. The repository's Apache-2.0 `LICENSE` and `NOTICE` cover the drawing instructions. | Distributed as software under Apache-2.0. |
 
 ## D05 application icons
 
