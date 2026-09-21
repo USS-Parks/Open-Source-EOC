@@ -2732,3 +2732,25 @@ slow.
   teardown dropped the file's database); the data-pack-persistence test still
   passes. pnpm -r exec tsc --noEmit exit 0, eslint exit 0.
 - **Ending commit:** this receipt commit, recorded by the next receipt.
+
+## VEOC-79C2: serve dataset items as COP features
+
+The server half of connecting onboarded datasets to the map: a dataset's
+persisted items are readable as GeoJSON.
+
+- **Baseline:** c32ea9f on canonical main.
+- **Change:** DatasetStatus carries the dataset id, and a new
+  GET /api/v1/datasets/:datasetId/items returns the dataset's data_pack_items as
+  a GeoJSON FeatureCollection (source id, normalized fields as properties, only
+  items with geometry), authorized by the same incident-reader wall as the
+  dataset listing (getIncidentAuthority plus row-level security). The web client
+  gains a datasetItems(datasetId) method returning a CopFeatureCollection.
+- **Evidence:** a real-database test loads two points into a dataset and reads
+  them back through the endpoint as a FeatureCollection with the right geometry
+  and title, and confirms the incident owner reads the same items; the web
+  dataset fixtures carry the new id.
+- **Gate:** pnpm -r exec tsc --noEmit exit 0, eslint exit 0, vitest
+  data-pack-persistence.test.ts 6 passed and incident-datasets.test.tsx 3 passed.
+- **Boundary:** rendering these features as a map layer and per-record
+  inspection in the COP is the next increment (79C2 web wiring).
+- **Ending commit:** this receipt commit, recorded by the next receipt.

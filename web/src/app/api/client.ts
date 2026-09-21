@@ -504,6 +504,9 @@ export class ApiClient {
       "GET", `/api/v1/incidents/${incidentId}/datasets`);
     return result.datasets;
   }
+  datasetItems(datasetId: string): Promise<CopFeatureCollection> {
+    return this.request<CopFeatureCollection>("GET", `/api/v1/datasets/${datasetId}/items`);
+  }
   registerDataPack(incidentId: string, body: DataPack): Promise<{ pack: { id: string; datasetKeys: string[] } }> {
     return this.request("POST", `/api/v1/incidents/${incidentId}/data-packs`, body as unknown as Record<string, unknown>);
   }

@@ -120,3 +120,38 @@ describe("durable dataset persistence (VEOC-79C1)", () => {
     expect((await items(datasetId)).map((x) => x.source_id)).toEqual(["a", "c", "d"]);
   });
 });
+
+describe("dataset items as COP features (VEOC-79C2)", () => {
+  it("serves a dataset's loaded items as GeoJSON to an incident reader", async () => {
+    await load(datasetId, { records: [pt("a", "Culvert"), pt("b", "Bridge")] });
+    const r = await app.inject({
+      method: "GET",
+      url: `/api/v1/datasets/${datasetId}/items`,
+      headers: auth(coordToken),
+    });
+    expect(r.statusCode).toBe(200);
+    const fc = r.json() as {
+      type: string;
+      features: Array<{
+        id: string;
+        geometry: { type: string; coordinates: number[] };
+        properties: Record<string, unknown>;
+      }>;
+    };
+    expect(fc.type).toBe("FeatureCollection");
+    expect(fc.features).toHaveLength(2);
+    const a = fc.features.find((f) => f.id === "a")!;
+    expect(a.geometry).toMatchObject({ type: "Point", coordinates: [-123.6, 41.2] });
+    expect(a.properties.title).toBe("Culvert");
+  });
+
+  it("lets the incident owner read the same items", async () => {
+    const r = await app.inject({
+      method: "GET",
+      url: `/api/v1/datasets/${datasetId}/items`,
+      headers: auth(ownerToken),
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().features).toHaveLength(2);
+  });
+});

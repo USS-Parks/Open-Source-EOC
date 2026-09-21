@@ -138,6 +138,8 @@ export function mapItem(record: unknown, mapping: FieldMapping): MappedItem {
 export type DatasetAvailability = "available" | "stale" | "awaiting" | "unavailable";
 
 export interface DatasetStatus {
+  /** The dataset's id, used to fetch its persisted items as COP features. */
+  readonly id: string;
   readonly key: string;
   readonly name: string;
   readonly kind: string;

@@ -9,13 +9,13 @@ afterEach(() => cleanup());
 
 const datasets: DatasetStatus[] = [
   {
-    key: "closures", name: "Road closures", kind: "geojson",
+    id: "ds-closures", key: "closures", name: "Road closures", kind: "geojson",
     organizationSlug: "valley-mutual-aid", organizationName: "Valley Mutual Aid",
     availability: "available", itemCount: 5, coverageArea: 1234,
     lastSuccessAt: "2026-09-20T10:00:00Z", staleAfterSeconds: 3600, reason: null,
   },
   {
-    key: "sensors", name: "Stream sensors", kind: "geojson",
+    id: "ds-sensors", key: "sensors", name: "Stream sensors", kind: "geojson",
     organizationSlug: "valley-mutual-aid", organizationName: "Valley Mutual Aid",
     availability: "unavailable", itemCount: null, coverageArea: null,
     lastSuccessAt: null, staleAfterSeconds: 3600, reason: "source unreachable",

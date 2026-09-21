@@ -95,7 +95,7 @@ export async function listIncidentDatasets(
 ): Promise<DatasetStatus[]> {
   await getIncidentAuthority(sql, actor, incidentId);
   const rows = await sql`
-    select d.key, d.name, d.kind, j.slug as org_slug, j.name as org_name,
+    select d.id, d.key, d.name, d.kind, j.slug as org_slug, j.name as org_name,
            d.last_success_at, d.last_error, d.item_count, d.stale_after_seconds,
            d.last_received, d.last_rejected,
            ST_Area(d.coverage::geography) as coverage_area
@@ -114,6 +114,7 @@ export async function listIncidentDatasets(
     });
     const hasData = availability === "available" || availability === "stale";
     return {
+      id: r.id as string,
       key: r.key as string,
       name: r.name as string,
       kind: r.kind as string,
@@ -129,6 +130,50 @@ export async function listIncidentDatasets(
       lastRejected: (r.last_rejected as number | null) ?? null,
     } satisfies DatasetStatus;
   });
+}
+
+export interface DatasetFeatureCollection {
+  readonly type: "FeatureCollection";
+  readonly features: ReadonlyArray<{
+    readonly type: "Feature";
+    readonly id: string;
+    readonly geometry: unknown;
+    readonly properties: Record<string, unknown>;
+  }>;
+}
+
+/**
+ * A dataset's persisted items as GeoJSON for the COP map (VEOC-79C2). Only items
+ * with geometry are returned; each feature carries its source id and normalized
+ * fields as properties. Row-level security limits this to a reader of the
+ * dataset's incident, the same wall as the dataset listing.
+ */
+export async function listDatasetItems(
+  sql: Sql,
+  actor: Principal,
+  datasetId: string,
+  limit = 2000,
+): Promise<DatasetFeatureCollection> {
+  const [ds] = await sql`
+    select p.incident_id from data_pack_datasets d
+    join data_packs p on p.id = d.pack_id
+    where d.id = ${datasetId}`;
+  if (!ds) throw new AuthError(404, "dataset not found");
+  await getIncidentAuthority(sql, actor, ds.incident_id as string);
+  const rows = await sql`
+    select source_id, data, ST_AsGeoJSON(geom) as geom
+    from data_pack_items
+    where dataset_id = ${datasetId} and geom is not null
+    order by last_loaded_at desc limit ${limit}`;
+  return {
+    type: "FeatureCollection",
+    features: rows.map((r) => ({
+      type: "Feature" as const,
+      id: r.source_id as string,
+      geometry: JSON.parse(r.geom as string),
+      properties: (r.data as Record<string, unknown>) ?? {},
+    })),
+  };
 }
 
 export interface DatasetLoadResult {

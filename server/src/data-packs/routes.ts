@@ -3,7 +3,7 @@ import { z } from "zod";
 import { DataPackSchema } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
-import { listIncidentDatasets, loadDataset, registerDataPack } from "./service.js";
+import { listDatasetItems, listIncidentDatasets, loadDataset, registerDataPack } from "./service.js";
 
 const IncidentId = z.string().uuid();
 const DatasetId = z.string().uuid();
@@ -50,4 +50,12 @@ export function dataPackRoutes(
       return { result };
     },
   );
+
+  app.get("/api/v1/datasets/:datasetId/items", { preHandler: authenticate }, async (req, reply) => {
+    const datasetId = DatasetId.parse((req.params as { datasetId: string }).datasetId);
+    const fc = await withPerson(sql, req.principal.person.id, (tx) =>
+      listDatasetItems(tx, req.principal, datasetId),
+    );
+    return reply.header("content-type", "application/geo+json").send(fc);
+  });
 }
