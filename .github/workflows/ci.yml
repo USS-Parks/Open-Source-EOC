@@ -6,6 +6,30 @@ on:
   pull_request:
 
 jobs:
+  linear-history:
+    name: Main history contains no merge commits
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reject merge commits in the pushed range
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            range="$AFTER"
+          else
+            range="$BEFORE..$AFTER"
+          fi
+          merges=$(git rev-list --merges "$range")
+          if [ -n "$merges" ]; then
+            echo "Main rejects merge commits: $merges"
+            exit 1
+          fi
+
   check:
     name: Typecheck, lint, licenses, links, tests
     runs-on: ubuntu-latest

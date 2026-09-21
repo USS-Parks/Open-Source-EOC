@@ -9,6 +9,12 @@
 
 set -eu
 
+MERGE_HEAD_PATH=$(git rev-parse --git-path MERGE_HEAD)
+if [ -f "$MERGE_HEAD_PATH" ]; then
+    echo "commit-msg: merge commits are not allowed; rebase the lane and fast-forward main." >&2
+    exit 1
+fi
+
 MSG_FILE="$1"
 FOOTER_RE='^Copyright Basho Parks - [0-9][0-9][0-9][0-9]$'
 SCISSORS_RE='^# -+ >8 -+'

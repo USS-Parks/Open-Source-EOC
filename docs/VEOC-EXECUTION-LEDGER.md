@@ -2946,3 +2946,23 @@ increment proves it and that coverage follows the incident area.
 - **Boundary:** all six rows remain partial at their broader capability scope.
   No historical receipt, accepted implementation or prompt wording is erased.
 - **Unit commit:** recorded by next receipt; standing commit authority applies.
+
+## W0.3: enforce linear integration history
+
+- **Serves:** Master PSPR W0.3. Lane: main. Prior W0.2 commit: d99ae0a.
+- **Change:** pre-merge-commit rejects automatic merge commits; commit-msg
+  rejects manual merge completion using Git's worktree-aware MERGE_HEAD path.
+  CI checks the pushed main range with full history. Local merge.ff and
+  pull.ff are both only. Existing authorship enforcement is preserved.
+- **Files:** .githooks/pre-merge-commit, .githooks/commit-msg,
+  .github/workflows/ci.yml and this receipt; local Git configuration.
+- **Gate:** in an isolated temporary repository, ordinary commit exited 0,
+  non-fast-forward merge failed 128, forced automatic merge was rejected by
+  pre-merge-commit (1), a resolved conflicted merge commit was rejected by
+  commit-msg (1), and exact-SHA fast-forward succeeded (0). No merge commits
+  appeared in the resulting history. The integrator reviewed the complete diff.
+- **Evidence:** OS temporary eoc-zipper-proof-zopulda6/result.json.
+- **Review:** independent review returned ship with no findings.
+- **Evidence level:** integrated local-hook proof; CI job is implemented but
+  has not run on GitHub. GitHub account branch protection was not changed.
+- **Unit commit:** recorded by next receipt; standing commit authority applies.

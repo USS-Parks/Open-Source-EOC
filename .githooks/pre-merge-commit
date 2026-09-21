@@ -1,0 +1,3 @@
+#!/bin/sh
+echo "pre-merge-commit: merge commits are not allowed; rebase the lane and fast-forward main." >&2
+exit 1
