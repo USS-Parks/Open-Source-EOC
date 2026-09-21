@@ -2449,3 +2449,29 @@ same records.
   Application tests were not rerun for this documentation-only publication.
 - **Ending commit:** this focused documentation commit; report its SHA and the
   verified remote main SHA after pushing. No implementation prompt is started.
+
+## VEOC-79E: Source-backed capability inventory
+
+The roster amendment landed as commit a9173c2 ("Restore missing parity work in
+the remaining roster"), which satisfied the hold to execute against a committed
+authority document. Executed the amended roster's first step.
+
+- **Baseline:** a9173c2 on canonical main.
+- **Deliverable:** docs/VEOC-PARITY-MATRIX.md, a new file. It inventories the
+  canonical F1-F20, R1-R6 and AR1-AR7 obligations plus the assessed gaps beyond
+  them, each row carrying a stable ID, the reference product/module it mirrors
+  (WebEOC core vs the optional Maps and DesignStudio modules vs separate Juvare
+  products vs Esri EMO, with primary-source links), the operator behavior, the
+  local implementation and its evidence commit or session, a status, and the
+  owning roster prompt.
+- **Reconciliation:** it corrects FACET-STATUS.md's overbroad `verified` labels
+  to `partial` or `open` where the referenced product's depth is not met
+  (F1/F4/F6/F7/F8/F9/F13/F14/F17/F18/F19, R1/R2/R3, AR3), naming the owning
+  prompt for each, without erasing the historical receipts those labels came
+  from. Every included gap has an owner; unproven depth is left open, not
+  asserted. Public access is recorded as an intentional FOUO exclusion.
+- **Verification:** node scripts/check-links.mjs exited 0 (all markdown links
+  resolve) and license-scan exited 0. No em-dashes. Documentation only: no
+  code, schema, API or dependency changed, so the application test suite was
+  not rerun.
+- **Ending commit:** this receipt commit, recorded by the next receipt.
