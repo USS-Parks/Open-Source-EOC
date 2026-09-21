@@ -3512,3 +3512,26 @@ increment proves it and that coverage follows the incident area.
   Overture and necessary data. A bounded project-local tooling and California
   buildings acquisition is underway; no acquired or integrated data is claimed
   before its receipt.
+
+## D04: semantic tokens and identity hierarchy
+
+- **Serves/baseline/lane:** D04, lane d from 57bf5f4 replayed over ab98694.
+  Evidence level: integrated kit, gallery-validated presentation.
+- **Change:** additive navy/teal identity, surface, type, density, focus and
+  chart-category tokens; explicit text and markers for normal, watch, critical,
+  unknown, stale, unavailable, not-applicable and neutral numeric zero. Existing
+  exports and gallery consumers remain compatible. Identity conveys no authority.
+- **Gate:** all-workspace TypeScript, all-tree ESLint and 75 design cases passed.
+  Root browser fixture passed four captures in light/dark at 1440 and 390 px,
+  keyboard order, focus ring, 12 px review text and containment, with zero page
+  errors or external requests. Root viewed wide light and narrow dark. Review
+  required updating the stale pending-evidence row; corrected review is SHIP.
+  Post-rebase TypeScript, lint and four suites passed 78/78. The first integration
+  invocation lacked its output directory and produced no gate result; after
+  creating that directory the actual run passed.
+- **Evidence/unit commit:** deploy/test-runtime/out/d04-review/result.json,
+  browser.log and shots; out/lanes/d/logs/d04-integration.log. Exact fast-forward
+  38d20f2316fb3fdefb98f433a78ecfbfb76a7482.
+- **Boundary:** production shell adoption, icon registry, control migration and
+  export branding remain downstream. Four existing lanes retained; lane d takes
+  D06. No new worktree or push.
