@@ -3009,3 +3009,32 @@ increment proves it and that coverage follows the incident area.
 - **Retained lanes:** a impact E1, b authorized viewing, c reserved for the
   opening ramp, d design foundation. All remain needed by approved work;
   no extra worktrees or dependency copies were created. No push.
+
+## 79G-E1: source-backed incident-area impact contract
+
+- **Serves:** VEOC-79G engine increment. Lane a, baseline 63fbad8.
+- **Change:** shared response contract and PostGIS query for an explicit or
+  current area revision. Features use ST_Intersects; population uses loaded
+  polygon values weighted by intersected geography area over source area.
+  One newest successful registration per catalog key is used; unsafe
+  cross-source identity, missing coverage, empty or stale baselines withhold
+  headline totals. Source observations and provenance remain visible.
+- **Files:** shared/src/impact/contract.ts, server/src/impact/spatial.ts,
+  server/src/__tests__/impact-spatial.test.ts, one shared index export.
+- **Gate:** TypeScript and ESLint exited 0. Real PostgreSQL/PostGIS tests
+  passed 9/9. Integrator reviewed the full change. Independent findings on
+  missing peer sources, vintage consistency, combined coverage and empty
+  source sets were corrected with focused regressions; final fresh review
+  returned ship. No full-suite or unrelated verification was added.
+- **Evidence:** deploy/test-runtime/out/lanes/a/logs/79G-E1-empty-source-fix.log.
+  Earlier gate/correction logs are retained in the same directory.
+- **Evidence level:** integrated low-level spatial query on real PostGIS.
+  Test population polygons are labeled fixtures; no live ACS pull is claimed.
+- **Boundary:** 79G stays open for E2 authority/routes, drill-down, revision
+  deltas and reported lifeline links, and P-DASH presentation. Exposure does
+  not establish failure. Missing external baselines remain named gaps.
+- **Integration:** rebase replayed over documentation only; no repeated app
+  gate required. Main fast-forwarded to 0a431ae9d3b92290d316288dc2e5e3b44c9af5bf.
+- **Retained lanes:** a continues impact, b access, c awaits the first b
+  landing, d workflow baselines. All are active or reserved by the ramp.
+  No new worktree, dependency copy or push.
