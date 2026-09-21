@@ -164,8 +164,11 @@ export function boardRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { boardId, viewKey } = req.params as { boardId: string; viewKey: string };
+      // Optional incident scope: narrow the view to the records this incident
+      // holds on the board (VEOC-79B2).
+      const { incidentId } = z.object({ incidentId: z.string().uuid().optional() }).parse(req.query);
       const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        listViewRecords(tx, req.principal, boardId, viewKey),
+        listViewRecords(tx, req.principal, boardId, viewKey, incidentId),
       );
       return reply.send(result);
     },

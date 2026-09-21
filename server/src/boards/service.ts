@@ -300,13 +300,30 @@ export async function listViewRecords(
   actor: Principal,
   boardId: string,
   viewKey: string,
+  incidentId?: string,
 ): Promise<ViewRecords> {
-  const board = await getEffectiveBoard(sql, actor, boardId);
+  let board: EffectiveBoard;
+  if (incidentId) {
+    // Incident-scoped read (VEOC-79B2): an authorized participant, or a member,
+    // views the records this incident holds on one of its boards. An authorized
+    // participant reads at member field-level; row-level security still limits
+    // them to the incident's readable records.
+    await getIncidentAuthority(sql, actor, incidentId); // 404s if the actor cannot read the incident
+    const [attached] = await sql`
+      select 1 as ok from incident_boards
+      where incident_id = ${incidentId} and board_id = ${boardId}`;
+    if (!attached) throw new AuthError(400, "board is not part of this incident");
+    board = { ...(await loadBoardShape(sql, boardId)), role: "member" };
+  } else {
+    board = await getEffectiveBoard(sql, actor, boardId);
+  }
   const view = board.template.views.find((v) => v.key === viewKey);
   if (!view) throw new AuthError(404, "view not found");
   const rows = await sql`
     select id, data, created_at from board_records
-    where board_id = ${boardId} order by created_at desc`;
+    where board_id = ${boardId}
+      and (${incidentId ?? null}::uuid is null or incident_id = ${incidentId ?? null})
+    order by created_at desc`;
   const readable = new Set(
     board.fields.filter((f) => canRead(board.role, f.read)).map((f) => f.key),
   );

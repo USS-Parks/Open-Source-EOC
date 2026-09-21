@@ -2564,3 +2564,28 @@ loop for the map.
   user-owned untracked files were preserved. No additional worktree was created.
 - **Ending commit:** this publication commit; its SHA and the matching remote
   main SHA are reported in the publication closeout.
+
+## VEOC-79B2 increment: incident-scoped board-record reads
+
+Continues 79B2 (the field-to-COP write loop landed at 996f29c) with the reads
+side: an operator sees the records an incident holds on its boards.
+
+- **Baseline:** 487e9f5 on canonical main (after the parallel EOC design-plan
+  publication).
+- **Change:** listViewRecords takes an optional incidentId. An authorized
+  participant, or a member, views the records an incident holds on one of its
+  boards; a member can narrow a board to the incident, and unscoped still shows
+  everything. A participant reads at member field-level through loadBoardShape,
+  and row-level security still limits them to the incident's readable records.
+  The board view route accepts ?incidentId=.
+- **Evidence:** the incident-board-scope real-database test now also asserts a
+  partner reads the incident's records through the view endpoint, the owner
+  scoped to the incident sees only incident records while unscoped sees both,
+  and the earlier write/isolation/denial assertions still hold.
+- **Remaining for 79B2:** scoping counts (dashboard aggregates by incident) and
+  the resources/tasks/planning reads, then the compact cross-incident browser
+  scenario. Only then does the 79B gate close.
+- **Gate:** pnpm check --maxWorkers=2 exited 0; 471 tests in 84 files passed
+  (a flaky Windows worker crash on aar.test.ts cleared on re-run). Log:
+  deploy/test-runtime/out/veoc-79b2-reads-check2.log.
+- **Ending commit:** this receipt commit, recorded by the next receipt.

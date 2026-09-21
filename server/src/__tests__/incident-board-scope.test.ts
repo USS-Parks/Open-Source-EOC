@@ -109,6 +109,23 @@ describe("incident-scoped board records", () => {
     expect(await withPerson(runtime, partnerPersonId, (tx) =>
       tx`select id from board_records where id = ${localId}`)).toHaveLength(0);
 
+    // Incident-scoped reads (79B2): the partner views the incident's records
+    // through the board's view endpoint.
+    const partnerView = await app.inject({ method: "GET",
+      url: `/api/v1/boards/${boardA}/views/all?incidentId=${incidentA}`, headers: auth(partnerToken) });
+    expect(partnerView.statusCode).toBe(200);
+    expect(partnerView.json().records.map((r: { summary: string }) => r.summary)).toEqual(["Partner field note"]);
+    // Scoped to the incident, the owner sees only incident records, not the
+    // jurisdiction-local one; unscoped, the owner sees both.
+    const ownerScoped = await app.inject({ method: "GET",
+      url: `/api/v1/boards/${boardA}/views/all?incidentId=${incidentA}`, headers: auth(ownerToken) });
+    expect(ownerScoped.json().records.map((r: { summary: string }) => r.summary)).toEqual(["Partner field note"]);
+    const ownerAll = await app.inject({ method: "GET",
+      url: `/api/v1/boards/${boardA}/views/all`, headers: auth(ownerToken) });
+    const summaries = ownerAll.json().records.map((r: { summary: string }) => r.summary);
+    expect(summaries).toContain("Partner field note");
+    expect(summaries).toContain("Local note");
+
     // Isolation: the partner is not in incident B and cannot contribute there.
     expect((await createRecord(boardB, partnerToken, eventData("B note"), incidentB)).statusCode).toBe(404);
     // An outsider organization cannot contribute to incident A.
