@@ -3411,3 +3411,34 @@ increment proves it and that coverage follows the incident area.
   The disclosed same-jurisdiction definition visibility is the approved policy.
   Existing lane b next takes H12-E; the preserved pre-approval stash is retained.
   Four active lanes remain, no new worktree or push.
+
+## VEOC-81B-E2: transactional board workflow execution
+
+- **Files:** migration 0050, workflow runtime, four additive board routes and
+  real-database tests. Records pin their initial immutable template version;
+  common board locks precede fresh record/incident/authority reads. Transitions,
+  distinct-person approvals, self-approval rules, due calculations, bounded
+  caller-driven escalation, local notifications and append-only history share
+  the transaction. Per-record/actor idempotency prevents duplicate effects.
+- **Review repairs:** cross-organization approvers could not see a source
+  administrator's membership under RLS. A record-bound boolean eligibility
+  helper now derives the pending requester and checks current exact authority;
+  it has a locked search path and no public execution. This narrowly justified
+  helper supersedes the initial implementation preference for no new definers.
+  Local-position identity is retained from the validated resolver snapshot;
+  participant grants remain freshly checked. Pending transitions no longer
+  emit assignment notices before approval.
+- **Notification boundary:** a new additional INSERT policy permits only the
+  exact source-owned assignment notification for the current completing actor,
+  workflow instance, revision, history and transaction; target identity must
+  match the effective assignment. One history event yields one notice. Existing
+  notification policies remain intact; there is no external delivery or new
+  scheduler. Fresh independent review returned SHIP after both corrections.
+- **Gate:** corrected TypeScript/lint and six real-database tests passed.
+  Original timestamp ordering and fixture-version failures remain in lane a
+  logs. After replay over saved-state/authorization code, TypeScript and ESLint
+  passed and eight affected suites passed 30/30. Actual output:
+  deploy/test-runtime/out/lanes/a/logs/81B-E2-integration.log. Exact fast-forward:
+  6c8dddc648424e71d49c31647ba41ac099fb36a1.
+- **Disposition:** execution engine integrated; no-code workflow configuration
+  and presentation remain P-BOARDS-2. Four existing active lanes remain; no push.
