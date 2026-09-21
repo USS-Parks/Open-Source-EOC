@@ -30,6 +30,12 @@ the exact dashboard SELECT policy and tests in VEOC-80-POLICY-APPROVAL.md;
 and read-only NAPSG catalog/selected-symbol/license acquisition from the named
 official sources. G-A is approved. The implementation gates still apply.
 
+**Overture acquisition approval, 2026-09-21.** Basho subsequently instructed
+"Install Overture and necessary data." This authorizes the required local
+Overture/DuckDB tooling and official California building data for Handoff 14,
+with source, license, release, coverage and storage receipts. Other source
+acquisitions remain separately scoped.
+
 **Standing grant, 2026-09-21.** Basho, in the planning session: "I grant
 branches and worktrees, as long as they are cogently 'zippered' into main in
 timely and orderly fashion," and then: "I want Astra and the project to have

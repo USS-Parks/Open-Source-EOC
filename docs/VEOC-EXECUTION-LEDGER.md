@@ -3485,3 +3485,30 @@ increment proves it and that coverage follows the incident area.
   about 195 MiB logical dependencies; lane d additionally retains 228.1 MiB of
   stopped proof profiles/build data until its final retirement. C: has 254.5 GiB
   free. No new worktree, cache copy, deletion or push. Lane d returns to D04.
+
+## H12-E: viewport-scoped KPI query engine
+
+- **Serves/baseline/lane:** Handoff 12 engine; lane b from 2cd0dca, replayed
+  over current main 57bf5f4. Evidence level: integrated.
+- **Change:** finite ordered WGS84 bbox validation; impact totals, revision
+  comparisons and paged source contributions use incident area intersected
+  with viewport. Dashboard REST and stream snapshots apply indexed geometry
+  predicates after incident authority and field masking. Responses distinguish
+  incident-area and viewport scope. No readable geometry fails closed.
+- **Gate:** TypeScript and all-tree ESLint passed. Real-database viewport
+  proof covers 1,001 records, empty/missing coverage, drilldown reconciliation,
+  unauthorized scope, geometry masking and invalid stream bbox. Fresh review
+  returned SHIP. Post-rebase TypeScript/lint and viewport/workflow suites passed
+  9/9. Literal wildcard filters omitted four intended existing suites; those
+  exact files were then run once and passed 23/23. Evidence is actual output in
+  deploy/test-runtime/out/lanes/b/logs/h12e-integration.log and
+  h12e-integration-existing.log.
+- **Unit commit:** 3b5cb38d48fe69958fae7c8ba8999275e3fe0467, exact fast-forward.
+- **Boundary:** P-COP still owns the visible strip and movement linkage.
+  Cross-incident stream events can trigger an extra recomputation, whose query
+  remains incident/viewport scoped. Four existing lanes remain active, no new
+  worktree or push. Lane b next takes 81-E.
+- **New source authorization:** Basho explicitly approved installation of
+  Overture and necessary data. A bounded project-local tooling and California
+  buildings acquisition is underway; no acquired or integrated data is claimed
+  before its receipt.
