@@ -1,7 +1,12 @@
 import { createHash } from "node:crypto";
 import {
+  CALIFORNIA_CATALOG,
+  catalogCovers,
+  catalogToDataset,
   datasetAvailability,
   mapItem,
+  type Bbox,
+  type CatalogEntryStatus,
   type DataPack,
   type DatasetStatus,
   type FieldMapping,
@@ -82,6 +87,78 @@ export async function registerDataPack(
     payload: { organizationId: orgId, name: input.name, datasets: input.datasets.map((d) => d.key) },
   });
   return { id: packId, organizationSlug: input.organizationSlug, datasetKeys: input.datasets.map((d) => d.key) };
+}
+
+// --- California data catalog (VEOC-79F) ---
+
+/** The incident operational area's bounding box, or null when no area geometry
+ *  has been set (coverage is then unknown, never assumed). */
+async function incidentAreaBbox(sql: Sql, incidentId: string): Promise<Bbox | null> {
+  const [row] = await sql`
+    select ST_XMin(e) as w, ST_YMin(e) as s, ST_XMax(e) as x, ST_YMax(e) as n
+    from (
+      select ST_Envelope(geometry) as e from incident_area_revisions
+      where incident_id = ${incidentId} and geometry is not null
+      order by revision desc limit 1
+    ) t`;
+  if (!row || row.w === null) return null;
+  return [Number(row.w), Number(row.s), Number(row.x), Number(row.n)];
+}
+
+/** The catalog annotated for an incident (VEOC-79F): whether each source covers
+ *  the incident's operational area, and whether it is already onboarded. When the
+ *  incident has no area geometry yet, coverage is left unknown (true), never
+ *  assumed absent. */
+export async function listCatalogForIncident(
+  sql: Sql,
+  actor: Principal,
+  incidentId: string,
+): Promise<CatalogEntryStatus[]> {
+  await getIncidentAuthority(sql, actor, incidentId);
+  const bbox = await incidentAreaBbox(sql, incidentId);
+  const onboarded = new Set(
+    (
+      await sql`
+        select d.key from data_pack_datasets d
+        join data_packs p on p.id = d.pack_id
+        where p.incident_id = ${incidentId}`
+    ).map((r) => r.key as string),
+  );
+  return CALIFORNIA_CATALOG.map((s) => ({
+    ...s,
+    coversIncident: bbox === null ? true : catalogCovers(s, bbox),
+    onboarded: onboarded.has(s.id.replace(/-/g, "_")),
+  }));
+}
+
+/**
+ * Onboard a catalog source into an incident (VEOC-79F), reusing the data-pack
+ * path. The onboarded pack is owned by the incident's owner jurisdiction and
+ * records the true upstream source and license as attribution. Only the incident
+ * owner admin may pull in a catalog source, and a named gap cannot be onboarded.
+ */
+export async function onboardCatalogSource(
+  sql: Sql,
+  actor: Principal,
+  incidentId: string,
+  sourceId: string,
+): Promise<RegisteredPack> {
+  const source = CALIFORNIA_CATALOG.find((s) => s.id === sourceId);
+  if (!source) throw new AuthError(404, "catalog source not found");
+  if (!source.available)
+    throw new AuthError(409, `catalog source is a named gap: ${source.notes ?? "not yet integrated"}`);
+  const authority = await getIncidentAuthority(sql, actor, incidentId);
+  if (!authority.canManageParticipation)
+    throw new AuthError(403, "requires incident owner admin to onboard a catalog source");
+  const [owner] = await sql`select slug from jurisdictions where id = ${authority.jurisdictionId}`;
+  if (!owner) throw new AuthError(404, "incident owner jurisdiction not found");
+  const pack: DataPack = {
+    name: `${source.name} (catalog)`,
+    organizationSlug: owner.slug as string,
+    description: `Source: ${source.owner}. License: ${source.license}. Coverage: ${source.coverage.label}.`,
+    datasets: [catalogToDataset(source)],
+  };
+  return registerDataPack(sql, actor, incidentId, pack);
 }
 
 /** Every dataset onboarded into the incident, with its source owner and a

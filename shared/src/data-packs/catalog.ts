@@ -61,6 +61,13 @@ export interface CatalogSource {
   readonly notes?: string;
 }
 
+/** A catalog source annotated for a specific incident (VEOC-79F): whether it
+ *  covers the incident's operational area, and whether it is already onboarded. */
+export interface CatalogEntryStatus extends CatalogSource {
+  readonly coversIncident: boolean;
+  readonly onboarded: boolean;
+}
+
 function statewide(label = "California statewide"): CatalogCoverage {
   return { label, statewide: true, bbox: CALIFORNIA_BBOX };
 }

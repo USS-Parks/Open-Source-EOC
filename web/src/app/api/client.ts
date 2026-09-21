@@ -13,6 +13,7 @@ import type {
   IncidentParticipantGrantInput,
   DatasetStatus,
   DataPack,
+  CatalogEntryStatus,
 } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
 
@@ -506,6 +507,14 @@ export class ApiClient {
   }
   datasetItems(datasetId: string): Promise<CopFeatureCollection> {
     return this.request<CopFeatureCollection>("GET", `/api/v1/datasets/${datasetId}/items`);
+  }
+  async incidentCatalog(incidentId: string): Promise<CatalogEntryStatus[]> {
+    const r = await this.request<{ sources: CatalogEntryStatus[] }>(
+      "GET", `/api/v1/incidents/${incidentId}/catalog`);
+    return r.sources;
+  }
+  onboardCatalogSource(incidentId: string, sourceId: string): Promise<{ pack: { id: string; datasetKeys: string[] } }> {
+    return this.request("POST", `/api/v1/incidents/${incidentId}/catalog/${sourceId}/onboard`);
   }
   registerDataPack(incidentId: string, body: DataPack): Promise<{ pack: { id: string; datasetKeys: string[] } }> {
     return this.request("POST", `/api/v1/incidents/${incidentId}/data-packs`, body as unknown as Record<string, unknown>);

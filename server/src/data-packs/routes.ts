@@ -3,7 +3,14 @@ import { z } from "zod";
 import { DataPackSchema } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
-import { listDatasetItems, listIncidentDatasets, loadDataset, registerDataPack } from "./service.js";
+import {
+  listCatalogForIncident,
+  listDatasetItems,
+  listIncidentDatasets,
+  loadDataset,
+  onboardCatalogSource,
+  registerDataPack,
+} from "./service.js";
 
 const IncidentId = z.string().uuid();
 const DatasetId = z.string().uuid();
@@ -58,4 +65,25 @@ export function dataPackRoutes(
     );
     return reply.header("content-type", "application/geo+json").send(fc);
   });
+
+  app.get("/api/v1/incidents/:incidentId/catalog", { preHandler: authenticate }, async (req) => {
+    const incidentId = IncidentId.parse((req.params as { incidentId: string }).incidentId);
+    const sources = await withPerson(sql, req.principal.person.id, (tx) =>
+      listCatalogForIncident(tx, req.principal, incidentId),
+    );
+    return { sources };
+  });
+
+  app.post(
+    "/api/v1/incidents/:incidentId/catalog/:sourceId/onboard",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const incidentId = IncidentId.parse((req.params as { incidentId: string }).incidentId);
+      const { sourceId } = req.params as { sourceId: string };
+      const pack = await withPerson(sql, req.principal.person.id, (tx) =>
+        onboardCatalogSource(tx, req.principal, incidentId, sourceId),
+      );
+      return reply.status(201).send({ pack });
+    },
+  );
 }

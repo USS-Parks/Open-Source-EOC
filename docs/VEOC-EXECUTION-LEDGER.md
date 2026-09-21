@@ -2802,3 +2802,26 @@ sources, onboardable through the 79C data-pack path.
   and the operator UI, are the next increments; actual outbound polling of these
   sources stays gated (no external calls this session).
 - **Ending commit:** this receipt commit, recorded by the next receipt.
+
+## VEOC-79F: catalog listing and onboarding (server)
+
+Activation without code edits: the catalog is listed per incident with coverage,
+and a source onboards through the data-pack path.
+
+- **Baseline:** f96f235 on canonical main.
+- **Change:** listCatalogForIncident annotates every catalog source with whether
+  it covers the incident's operational area (by bounding box against the current
+  area revision; unknown when no area is set, never assumed absent) and whether
+  it is already onboarded. onboardCatalogSource registers a source as a data pack
+  owned by the incident's owner jurisdiction, recording the true upstream source
+  and license as attribution; only the incident owner admin may onboard, and a
+  named-gap source (available:false) is refused with 409. GET
+  /api/v1/incidents/:id/catalog and POST .../catalog/:sourceId/onboard expose
+  these; the web client gains incidentCatalog and onboardCatalogSource.
+- **Evidence:** a real-database test lists the catalog, onboards
+  ca-county-boundaries and sees it flip to onboarded, and confirms a named gap is
+  refused (409) and a non-owner partner is denied (403). pnpm -r exec tsc
+  --noEmit exit 0, eslint exit 0, data-pack-persistence.test.ts 8 passed.
+- **Boundary:** the operator catalog UI and the parity-matrix gap record are the
+  next increment; outbound polling of these sources stays gated.
+- **Ending commit:** this receipt commit, recorded by the next receipt.

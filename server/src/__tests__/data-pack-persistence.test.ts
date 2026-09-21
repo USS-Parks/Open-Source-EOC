@@ -155,3 +155,47 @@ describe("dataset items as COP features (VEOC-79C2)", () => {
     expect(r.json().features).toHaveLength(2);
   });
 });
+
+describe("California catalog onboarding (VEOC-79F)", () => {
+  it("lists the catalog with coverage and onboards a statewide source", async () => {
+    const list = await app.inject({
+      method: "GET",
+      url: `/api/v1/incidents/${incidentId}/catalog`,
+      headers: auth(ownerToken),
+    });
+    expect(list.statusCode).toBe(200);
+    const sources = list.json().sources as Array<{ id: string; onboarded: boolean; coversIncident: boolean }>;
+    expect(sources.length).toBeGreaterThan(0);
+    expect(sources.find((s) => s.id === "ca-county-boundaries")!.onboarded).toBe(false);
+
+    const onboard = await app.inject({
+      method: "POST",
+      url: `/api/v1/incidents/${incidentId}/catalog/ca-county-boundaries/onboard`,
+      headers: auth(ownerToken),
+    });
+    expect(onboard.statusCode).toBe(201);
+
+    const after = await app.inject({
+      method: "GET",
+      url: `/api/v1/incidents/${incidentId}/catalog`,
+      headers: auth(ownerToken),
+    });
+    const afterSources = after.json().sources as Array<{ id: string; onboarded: boolean }>;
+    expect(afterSources.find((s) => s.id === "ca-county-boundaries")!.onboarded).toBe(true);
+  });
+
+  it("refuses a named-gap source and requires owner admin", async () => {
+    const gap = await app.inject({
+      method: "POST",
+      url: `/api/v1/incidents/${incidentId}/catalog/fema-nfhl-flood/onboard`,
+      headers: auth(ownerToken),
+    });
+    expect(gap.statusCode).toBe(409);
+    const partner = await app.inject({
+      method: "POST",
+      url: `/api/v1/incidents/${incidentId}/catalog/calfire-incidents/onboard`,
+      headers: auth(coordToken),
+    });
+    expect(partner.statusCode).toBe(403);
+  });
+});
