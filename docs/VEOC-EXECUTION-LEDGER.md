@@ -3309,3 +3309,30 @@ increment proves it and that coverage follows the incident area.
   D04 and all presentation remain held until that answer. Existing lane d may
   take isolated 85-A provisioning while otherwise idle under section 8.4.
   No new worktree, external action or push.
+
+## VEOC-81B-E1: shared workflow and assignment contract
+
+- **Files:** shared workflow schema/helpers and tests, BoardTemplate extension,
+  additive shared export, server assignment resolver and real database tests.
+  Six files. No migration or existing policy change.
+- **Contract:** declarative state transitions, actor classes, assignment target
+  requirements, approval rules, due rules and bounded escalation schedules.
+  Timestamp helpers use supplied values, not wall-clock guesses. Template
+  validation binds record-backed due rules to actual datetime fields.
+- **Authority:** local positions require a writer of the exact source
+  organization. Cross-organization targets are exact active incident grants,
+  with eligible contributor/coordinator recipients and incident-owner admin
+  or active source-organization coordinator authority. Raw foreign positions,
+  unrelated incidents, viewer targets and expired/revoked grants fail closed.
+  Consumers bind source/incident to their loaded governed record; resolution
+  alone is not an authorization to mutate that record.
+- **Gate:** TypeScript, ESLint and seven shared/real-database tests passed.
+  Full parent review and fresh independent review returned ship. After code
+  rebase, TypeScript and ESLint passed; five workflow, callback and gallery
+  suites passed 17/17. Actual exits are in
+  deploy/test-runtime/out/lanes/a/logs/81B-E1-integration.log.
+- **Integration:** exact fast-forward to
+  9cfc8f7f923223188357792a892b0801fcfb790b. Integrated contract and read-only
+  resolver, with no routing/persistence/history/notification claim. G-BOARDROUTE
+  stays partial pending 81B-E2 and P-BOARDS-2. Existing lane a continues E2;
+  dependent engines may reuse this one contract. No push occurred.
