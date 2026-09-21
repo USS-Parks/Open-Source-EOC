@@ -43,6 +43,12 @@ drift. Exact copies and hashes are retained in
 component galleries do not supersede them. The dark canvas and cards are
 blue-navy, not charcoal. The approved implementation roster continues.
 
+**California framework clarification, 2026-09-21.** Basho reaffirmed 18
+California ESFs and the three full-resolution PNG design references retained
+in docs/design/canonical-references. Preserve all 18 numbered entries in the
+ESF workspace, distinct from federal ESFs and the eight Lifelines. Merger
+notes do not reduce the inventory; P-LIFE-3 must prove all 18 remain visible.
+
 **Standing grant, 2026-09-21.** Basho, in the planning session: "I grant
 branches and worktrees, as long as they are cogently 'zippered' into main in
 timely and orderly fashion," and then: "I want Astra and the project to have
