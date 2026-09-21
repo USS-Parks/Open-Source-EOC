@@ -2711,3 +2711,24 @@ deferred.
 - **Boundary:** connecting persisted items to COP layers and record inspection
   remain deferred (still 79C2 scope, not in this increment).
 - **Ending commit:** this receipt commit, recorded by the next receipt.
+
+## Test harness: drop leaked per-file databases
+
+Fixes a freshDb leak that had bloated the local test cluster and made the gate
+slow.
+
+- **Baseline:** 0401fcb on canonical main.
+- **Problem:** freshDb() creates one throwaway database per test file
+  (t_<10 base36>) and never drops it; afterAll only closes connections. Every run
+  leaked one database per file; the cluster had accumulated 1369 orphaned t_*
+  databases, which made PostgreSQL startup and crash-recovery fsync take minutes
+  and, on this Windows host, crash under the load (exception 0xC0000142). This is
+  why the gate appeared to take about 20 minutes.
+- **Change:** a vitest globalSetup (server/src/__tests__/globalSetup.ts, wired in
+  vitest.config.mjs) drops every database matching ^t_[0-9a-z]{10}$ on teardown,
+  with teardownTimeout raised to 120s so a full run's cleanup never times out.
+  The 1369 already-leaked databases were dropped out of band.
+- **Evidence:** after a single-file run the count of t_* databases is 0 (the
+  teardown dropped the file's database); the data-pack-persistence test still
+  passes. pnpm -r exec tsc --noEmit exit 0, eslint exit 0.
+- **Ending commit:** this receipt commit, recorded by the next receipt.
