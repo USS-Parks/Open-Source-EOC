@@ -37,9 +37,7 @@ function contentStream(lines: readonly string[]): string {
   return `BT /F1 ${FONT_SIZE} Tf ${LEADING} TL ${LEFT} ${TOP} Td\n${body}\nET`;
 }
 
-/** Render a title and text lines into a deterministic PDF byte array. */
-export function renderPdf(title: string, lines: readonly string[]): Uint8Array {
-  const allLines = [title, "", ...lines];
+function renderPhysicalLines(allLines: readonly string[]): Uint8Array {
   const pages = paginate(allLines);
 
   const objects: string[] = [];
@@ -87,3 +85,34 @@ export function renderPdf(title: string, lines: readonly string[]): Uint8Array {
   for (let i = 0; i < pdf.length; i += 1) bytes[i] = pdf.charCodeAt(i) & 0xff;
   return bytes;
 }
+
+/** Render a title and text lines into a deterministic PDF byte array. */
+export function renderPdf(title: string, lines: readonly string[]): Uint8Array {
+  return renderPhysicalLines([title, "", ...lines]);
+}
+
+const AAR_PHYSICAL_LINE_LIMIT = 50;
+
+function wrapAarLine(line: string): string[] {
+  const wrapped: string[] = [];
+  let remaining = line;
+
+  while (remaining.length > AAR_PHYSICAL_LINE_LIMIT) {
+    let breakAt = remaining.lastIndexOf(" ", AAR_PHYSICAL_LINE_LIMIT);
+    if (breakAt <= 0) breakAt = AAR_PHYSICAL_LINE_LIMIT;
+
+    wrapped.push(remaining.slice(0, breakAt).trimEnd());
+    remaining = remaining.slice(breakAt).trimStart();
+  }
+
+  wrapped.push(remaining);
+  return wrapped;
+}
+
+/** Render an immutable composed AAR snapshot with all operational fields. */
+export function renderAarPdf(document: AarDocument): Uint8Array {
+  const titleLines = wrapAarLine(`AAR: ${document.incidentName}`);
+  const bodyLines = aarToTextLines(document).flatMap(wrapAarLine);
+  return renderPhysicalLines([...titleLines, "", ...bodyLines]);
+}
+import { aarToTextLines, type AarDocument } from "../aar/aar.js";

@@ -1,16 +1,25 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { CAPABILITY_ELEMENT, CORE_CAPABILITIES } from "@openeoc/shared";
+import {
+  AAR_ACTION_PRIORITIES,
+  AAR_ACTION_STATUSES,
+  CAPABILITY_ELEMENT,
+  CORE_CAPABILITIES,
+  WorkflowAssignmentRequestSchema,
+} from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import {
   composeAndStoreAar,
   createCorrectiveAction,
   exportAarPdf,
+  getAarAnalytics,
+  getCorrectiveAction,
   listCorrectiveActions,
   listObservations,
   recordObservation,
   setCorrectiveActionStatus,
+  updateCorrectiveAction,
 } from "./service.js";
 
 /**
@@ -20,6 +29,9 @@ import {
  */
 const capabilitySchema = z.enum(CORE_CAPABILITIES.values as [string, ...string[]]);
 const capabilityElementSchema = z.enum(CAPABILITY_ELEMENT.values as [string, ...string[]]);
+const prioritySchema = z.enum(AAR_ACTION_PRIORITIES);
+const statusSchema = z.enum(AAR_ACTION_STATUSES);
+const periodRevisionSchema = z.coerce.number().int().positive();
 
 /**
  * After-action and improvement-planning routes (VEOC-36). Observations are
@@ -34,22 +46,44 @@ const ObservationBody = z.object({
   kind: z.enum(["strength", "improvement"]),
   observation: z.string().min(1),
   recommendation: z.string().optional(),
+  periodRevision: z.number().int().positive().optional(),
 });
 const AarBody = z.object({
   overview: z.string().min(1),
   objectives: z.array(z.string().min(1)).optional(),
   period: z.string().optional(),
+  periodRevision: z.number().int().positive().optional(),
+}).refine((body) => body.period === undefined || body.periodRevision === undefined, {
+  message: "choose legacy period text or an authoritative period revision",
 });
 const CaBody = z.object({
   incidentId: z.string().uuid().optional(),
   capability: capabilitySchema,
   capabilityElement: capabilityElementSchema.optional(),
   recommendation: z.string().min(1),
+  priority: prioritySchema.optional(),
+  periodRevision: z.number().int().positive().optional(),
+  assignment: WorkflowAssignmentRequestSchema.optional(),
   ownerPosition: z.string().uuid().optional(),
   ownerPerson: z.string().uuid().optional(),
-  dueDate: z.string().optional(),
+  dueDate: z.iso.date().optional(),
+}).superRefine((body, ctx) => {
+  if ([body.assignment, body.ownerPosition, body.ownerPerson].filter((value) => value !== undefined).length > 1)
+    ctx.addIssue({ code: "custom", message: "choose one corrective action owner" });
+  if (body.periodRevision !== undefined && body.incidentId === undefined)
+    ctx.addIssue({ code: "custom", message: "period revision requires an incident" });
 });
-const StatusBody = z.object({ status: z.enum(["open", "in_progress", "complete"]) });
+const StatusBody = z.object({ status: statusSchema });
+const ActionUpdateBody = z.object({
+  expectedRevision: z.number().int().nonnegative(),
+  priority: prioritySchema.optional(),
+  assignment: WorkflowAssignmentRequestSchema.nullable().optional(),
+  dueDate: z.iso.date().nullable().optional(),
+  status: statusSchema.optional(),
+}).refine((body) => body.priority !== undefined || body.assignment !== undefined
+  || body.dueDate !== undefined || body.status !== undefined, {
+  message: "at least one corrective action field must change",
+});
 
 export function aarRoutes(
   app: FastifyInstance,
@@ -69,6 +103,7 @@ export function aarRoutes(
           kind: body.kind,
           observation: body.observation,
           ...(body.recommendation !== undefined ? { recommendation: body.recommendation } : {}),
+          ...(body.periodRevision !== undefined ? { periodRevision: body.periodRevision } : {}),
         }),
       );
       return reply.status(201).send(result);
@@ -80,12 +115,21 @@ export function aarRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { incidentId } = req.params as { incidentId: string };
+      const query = z.object({ periodRevision: periodRevisionSchema.optional() }).parse(req.query);
       const observations = await withPerson(sql, req.principal.person.id, (tx) =>
-        listObservations(tx, req.principal, incidentId),
+        listObservations(tx, req.principal, incidentId, query),
       );
       return reply.send({ observations });
     },
   );
+
+  app.get("/api/v1/incidents/:incidentId/aar/analytics", { preHandler: authenticate }, async (req, reply) => {
+    const { incidentId } = req.params as { incidentId: string };
+    const query = z.object({ periodRevision: periodRevisionSchema.optional() }).parse(req.query);
+    return reply.send(await withPerson(sql, req.principal.person.id, (tx) =>
+      getAarAnalytics(tx, req.principal, incidentId, query),
+    ));
+  });
 
   app.post("/api/v1/incidents/:incidentId/aar", { preHandler: authenticate }, async (req, reply) => {
     const { incidentId } = req.params as { incidentId: string };
@@ -95,6 +139,7 @@ export function aarRoutes(
         overview: body.overview,
         ...(body.objectives !== undefined ? { objectives: body.objectives } : {}),
         ...(body.period !== undefined ? { period: body.period } : {}),
+        ...(body.periodRevision !== undefined ? { periodRevision: body.periodRevision } : {}),
       }),
     );
     return reply.status(201).send(result);
@@ -122,6 +167,9 @@ export function aarRoutes(
           capability: body.capability,
           ...(body.capabilityElement !== undefined ? { capabilityElement: body.capabilityElement } : {}),
           recommendation: body.recommendation,
+          ...(body.priority !== undefined ? { priority: body.priority } : {}),
+          ...(body.periodRevision !== undefined ? { periodRevision: body.periodRevision } : {}),
+          ...(body.assignment !== undefined ? { assignment: body.assignment } : {}),
           ...(body.incidentId !== undefined ? { incidentId: body.incidentId } : {}),
           ...(body.ownerPosition !== undefined ? { ownerPosition: body.ownerPosition } : {}),
           ...(body.ownerPerson !== undefined ? { ownerPerson: body.ownerPerson } : {}),
@@ -141,15 +189,41 @@ export function aarRoutes(
     return reply.send({ ok: true });
   });
 
+  app.get("/api/v1/corrective-actions/:id", { preHandler: authenticate }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    return reply.send(await withPerson(sql, req.principal.person.id, (tx) =>
+      getCorrectiveAction(tx, req.principal, id),
+    ));
+  });
+
+  app.patch("/api/v1/corrective-actions/:id", { preHandler: authenticate }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = ActionUpdateBody.parse(req.body);
+    return reply.send(await withPerson(sql, req.principal.person.id, (tx) =>
+      updateCorrectiveAction(tx, req.principal, id, body),
+    ));
+  });
+
   app.get(
     "/api/v1/jurisdictions/:jurisdictionId/corrective-actions",
     { preHandler: authenticate },
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
-      const query = req.query as { status?: string; includeComplete?: string };
+      const query = z.object({
+        status: statusSchema.optional(),
+        priority: prioritySchema.optional(),
+        capability: capabilitySchema.optional(),
+        incidentId: z.string().uuid().optional(),
+        periodRevision: periodRevisionSchema.optional(),
+        includeComplete: z.enum(["true", "false"]).optional(),
+      }).parse(req.query);
       const actions = await withPerson(sql, req.principal.person.id, (tx) =>
         listCorrectiveActions(tx, req.principal, jurisdictionId, {
           ...(query.status !== undefined ? { status: query.status } : {}),
+          ...(query.priority !== undefined ? { priority: query.priority } : {}),
+          ...(query.capability !== undefined ? { capability: query.capability } : {}),
+          ...(query.incidentId !== undefined ? { incidentId: query.incidentId } : {}),
+          ...(query.periodRevision !== undefined ? { periodRevision: query.periodRevision } : {}),
           includeComplete: query.includeComplete === "true",
         }),
       );
