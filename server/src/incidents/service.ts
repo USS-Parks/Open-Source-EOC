@@ -193,6 +193,7 @@ export interface IncidentDetail {
 
 export interface IncidentSummary {
   readonly id: string;
+  readonly jurisdictionId: string;
   readonly name: string;
   readonly kind: string;
   readonly closedAt: string | null;
@@ -208,7 +209,7 @@ export async function listIncidents(
 ): Promise<IncidentSummary[]> {
   requireMember(actor, jurisdictionId);
   const rows = await sql`
-    select id, name, kind, closed_at,
+    select id, jurisdiction_id, name, kind, closed_at,
       is_admin_of(jurisdiction_id) as can_manage,
       can_revise_incident_area(id) as can_edit
     from incidents
@@ -221,6 +222,7 @@ export async function listIncidents(
     order by closed_at nulls first, name`;
   return rows.map((r) => ({
     id: r.id as string,
+    jurisdictionId: r.jurisdiction_id as string,
     name: r.name as string,
     kind: r.kind as string,
     closedAt: (r.closed_at as string | null) ?? null,

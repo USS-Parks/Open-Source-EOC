@@ -21,6 +21,7 @@ const CreateDashboardBody = z.object({
   title: z.string().min(1).optional(),
 });
 const AuthMessage = z.object({ type: z.literal("auth"), token: z.string().min(1) });
+const IncidentQuery = z.object({ incidentId: z.string().uuid().optional() }).strict();
 
 const RECOMPUTE_DEBOUNCE_MS = 50;
 
@@ -73,8 +74,9 @@ export function dashboardRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const { incidentId } = IncidentQuery.parse(req.query);
       const dashboards = await withPerson(sql, req.principal.person.id, (tx) =>
-        listDashboards(tx, req.principal, jurisdictionId),
+        listDashboards(tx, req.principal, jurisdictionId, incidentId),
       );
       return reply.send({ dashboards });
     },
@@ -82,8 +84,9 @@ export function dashboardRoutes(
 
   app.get("/api/v1/dashboards/:dashboardId", { preHandler: authenticate }, async (req, reply) => {
     const { dashboardId } = req.params as { dashboardId: string };
+    const { incidentId } = IncidentQuery.parse(req.query);
     const dashboard = await withPerson(sql, req.principal.person.id, (tx) =>
-      getDashboard(tx, req.principal, dashboardId),
+      getDashboard(tx, req.principal, dashboardId, incidentId),
     );
     return reply.send(dashboard);
   });
@@ -127,11 +130,14 @@ export function dashboardRoutes(
         const { dashboardId } = req.params as { dashboardId: string };
         // A live dashboard opened in an incident context stays scoped to it, so
         // pushed recomputes count the same incident's records as the REST read
-        // (VEOC-79B2). An absent or malformed value leaves the stream unscoped.
-        const incidentQuery = z
-          .object({ incidentId: z.string().uuid().optional() })
-          .safeParse(req.query);
-        const incidentId = incidentQuery.success ? incidentQuery.data.incidentId : undefined;
+        // (VEOC-79B2). An absent value stays unscoped; malformed scope fails closed.
+        const incidentQuery = IncidentQuery.safeParse(req.query);
+        if (!incidentQuery.success) {
+          socket.send(JSON.stringify({ type: "error", error: "invalid incident scope" }));
+          socket.close();
+          return;
+        }
+        const incidentId = incidentQuery.data.incidentId;
         let principal: Principal | null = null;
         let unsubscribe: (() => void) | null = null;
         let timer: NodeJS.Timeout | null = null;
@@ -160,7 +166,7 @@ export function dashboardRoutes(
               if (!auth.success) return fail("authenticate first");
               principal = await principalFromToken(sql, auth.data.token);
               const dashboard = await withPerson(sql, principal.person.id, (tx) =>
-                getDashboard(tx, principal!, dashboardId),
+                getDashboard(tx, principal!, dashboardId, incidentId),
               );
               const bound = boundBoardKeys(dashboard.template);
               unsubscribe = onBoardEvent((event) => {

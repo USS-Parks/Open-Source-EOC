@@ -191,6 +191,13 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
     return reply.send({ ok: true });
   });
 
+  // Keep the session contract truthful for scope-limited raw guest grants.
+  // Incident participation remains a separate, incident-specific authority.
+  app.addHook("preSerialization", async (req, _reply, payload) => {
+    if (req.routeOptions.url !== "/api/v1/me") return payload;
+    return { ...(payload as object), guests: req.principal.guests };
+  });
+
   if (oidc) {
     app.get("/api/v1/auth/oidc/start", async (_req, reply) => reply.send(await oidc.start()));
     app.get("/api/v1/auth/oidc/callback", async (req, reply) => {

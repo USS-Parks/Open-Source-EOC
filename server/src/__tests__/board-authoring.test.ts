@@ -262,8 +262,16 @@ describe("incident-scoped record references", () => {
     await admin`insert into board_records (id, board_id, data, created_by, incident_id) values
       (${hiddenId}, ${hiddenTargetBoard}, ${admin.json({ name: "Secret pump" })}, ${adminId}, ${pagination}),
       (${visibleId}, ${targetBoard}, ${admin.json({ name: "Public pump" })}, ${adminId}, ${pagination})`;
-    const paged = await app.inject({ method: "GET",
+    const adminPage = await app.inject({ method: "GET",
       url: `/api/v1/boards/${sourceBoard}/record-references/asset?incidentId=${pagination}&limit=1`, headers: headers() });
+    expect(adminPage.statusCode).toBe(200);
+    expect(adminPage.json().options).toEqual([{ id: hiddenId, label: "Secret pump", boardId: hiddenTargetBoard }]);
+    const memberLogin = await app.inject({ method: "POST", url: "/api/v1/auth/login",
+      payload: { email: "member@example.org", password: "another-good-password" } });
+    expect(memberLogin.statusCode).toBe(200);
+    const paged = await app.inject({ method: "GET",
+      url: `/api/v1/boards/${sourceBoard}/record-references/asset?incidentId=${pagination}&limit=1`,
+      headers: { authorization: `Bearer ${memberLogin.json().accessToken as string}` } });
     expect(paged.statusCode).toBe(200);
     expect(paged.json().options).toEqual([{ id: visibleId, label: "Public pump", boardId: targetBoard }]);
     expect(JSON.stringify(paged.json())).not.toContain("Secret pump");

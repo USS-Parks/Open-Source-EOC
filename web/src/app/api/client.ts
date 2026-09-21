@@ -29,12 +29,18 @@ export interface Membership {
   readonly jurisdictionId: string;
   readonly role: "admin" | "member" | "viewer";
 }
+export interface GuestGrant {
+  readonly jurisdictionId: string;
+  readonly scopes: readonly string[];
+  readonly expiresAt: string;
+}
 export interface Me {
   readonly person: { readonly id: string; readonly email: string; readonly displayName: string };
   readonly position:
     | { readonly id: string; readonly key: string; readonly title: string; readonly jurisdictionId: string }
     | null;
   readonly memberships: readonly Membership[];
+  readonly guests: readonly GuestGrant[];
   readonly sessionId: string;
 }
 export interface LoginResult {
@@ -117,11 +123,16 @@ export type DatasetItemsAggregate = CopFeatureCollection & {
 };
 export interface IncidentSummary {
   readonly id: string;
+  readonly jurisdictionId: string;
   readonly name: string;
   readonly kind: string;
   readonly closedAt: string | null;
   readonly canManageParticipation: boolean;
   readonly canEditArea: boolean;
+}
+export interface IncidentBoardRef {
+  readonly id: string;
+  readonly title: string;
 }
 export interface IncidentTemplateOption {
   readonly key: string;
@@ -361,6 +372,16 @@ export class ApiClient {
     );
     return r.dashboards;
   }
+  async listIncidentDashboards(
+    jurisdictionId: string,
+    incidentId: string,
+  ): Promise<DashboardListItem[]> {
+    const r = await this.request<{ dashboards: DashboardListItem[] }>(
+      "GET",
+      `/api/v1/jurisdictions/${jurisdictionId}/dashboards?incidentId=${encodeURIComponent(incidentId)}`,
+    );
+    return r.dashboards;
+  }
   async listCollections(): Promise<CollectionRef[]> {
     const r = await this.request<{ collections: { id: string; title: string }[] }>(
       "GET",
@@ -397,6 +418,13 @@ export class ApiClient {
       `/api/v1/incidents/${incidentId}`,
     );
     return r.boards.map((b) => b.id);
+  }
+  async incidentBoards(incidentId: string): Promise<IncidentBoardRef[]> {
+    const r = await this.request<{ boards: IncidentBoardRef[] }>(
+      "GET",
+      `/api/v1/incidents/${incidentId}`,
+    );
+    return r.boards;
   }
   dashboardData(
     dashboardId: string,

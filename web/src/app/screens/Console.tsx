@@ -55,19 +55,41 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
   const jurisdictionId = session.jurisdictionId;
   const incident = useIncident();
   const { surface, navigate } = useSurface();
+  const viewingJurisdictionId = incident.selectedIncident?.jurisdictionId ?? jurisdictionId;
+  const viewingMembership = session.me?.memberships.find(
+    (membership) => membership.jurisdictionId === viewingJurisdictionId,
+  );
 
   const boards = useAsync(
-    () => (jurisdictionId ? client.listBoards(jurisdictionId) : Promise.resolve([])),
-    [jurisdictionId],
+    () =>
+      viewingJurisdictionId && viewingMembership
+        ? client.listBoards(viewingJurisdictionId)
+        : Promise.resolve(
+            incident.incidentBoards.map((board) => ({
+              ...board,
+              templateKey: "",
+              templateVersion: 0,
+              hasGeometry: false,
+            })),
+          ),
+    [viewingJurisdictionId, viewingMembership?.role, incident.incidentBoards],
   );
-  const collections = useAsync(() => client.listCollections(), []);
+  const collections = useAsync(() => client.listCollections(), [incident.selectedIncidentId]);
   const feeds = useAsync(
-    () => (jurisdictionId ? client.listFeeds(jurisdictionId) : Promise.resolve([])),
-    [jurisdictionId],
+    () =>
+      viewingJurisdictionId && viewingMembership
+        ? client.listFeeds(viewingJurisdictionId)
+        : Promise.resolve([]),
+    [viewingJurisdictionId, viewingMembership?.role],
   );
   const dashboards = useAsync(
-    () => (jurisdictionId ? client.listDashboards(jurisdictionId) : Promise.resolve([])),
-    [jurisdictionId],
+    () =>
+      viewingJurisdictionId
+        ? incident.selectedIncidentId
+          ? client.listIncidentDashboards(viewingJurisdictionId, incident.selectedIncidentId)
+          : client.listDashboards(viewingJurisdictionId)
+        : Promise.resolve([]),
+    [viewingJurisdictionId, incident.selectedIncidentId],
   );
   const notifications = usePolled(() => client.notifications(), 8000, []);
 
@@ -115,7 +137,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       activeNav={sectionOf(surface)}
       onNavigate={(key) => navigate(sectionForNav(key))}
       userName={session.me?.person.displayName ?? ""}
-      roleLabel={session.role ?? "member"}
+      roleLabel={viewingMembership?.role ?? "guest"}
       theme={props.theme}
       onToggleTheme={props.onToggleTheme}
       onLogout={() => void session.logout()}
@@ -129,7 +151,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         surface={surface}
         theme={props.theme}
         client={client}
-        jurisdictionId={jurisdictionId}
+        jurisdictionId={viewingJurisdictionId ?? jurisdictionId}
         incidentId={incident.selectedIncidentId}
         incidentName={incident.selectedIncident?.name ?? null}
         incidentCanManage={incident.selectedIncident?.canEditArea ?? false}
@@ -137,7 +159,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         boards={boardItems}
         collections={collections.data ?? []}
         feeds={feeds.data ?? []}
-        isAdmin={session.role === "admin"}
+        isAdmin={viewingMembership?.role === "admin"}
         collectionsError={collections.error}
         firstDashboardId={dashboards.data?.[0]?.id}
         onOpenBoard={(id) => navigate({ kind: "board", id })}

@@ -14,7 +14,12 @@ import {
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
-import { getEffectiveBoard, visibleFields } from "../boards/service.js";
+import {
+  getEffectiveBoard,
+  getIncidentBoardReadShape,
+  visibleFields,
+} from "../boards/service.js";
+import { getIncidentAuthority } from "../incidents/participation.js";
 
 /**
  * Dashboard service (VEOC-18). Definitions are versioned templates bound
@@ -101,14 +106,19 @@ export async function getDashboard(
   sql: Sql,
   actor: Principal,
   dashboardId: string,
+  incidentId?: string,
 ): Promise<DashboardMeta> {
+  const authority = incidentId ? await getIncidentAuthority(sql, actor, incidentId) : null;
+  if (incidentId) await sql`select set_config('app.incident_id', ${incidentId}, true)`;
   const [row] = await sql`
     select d.id, d.jurisdiction_id, d.title, t.definition
     from dashboards d join dashboard_templates t
       on t.key = d.template_key and t.version = d.template_version
     where d.id = ${dashboardId} and d.archived_at is null`;
   if (!row) throw new AuthError(404, "dashboard not found");
-  if (!actor.memberships.some((m) => m.jurisdictionId === (row.jurisdiction_id as string)))
+  if (authority && authority.jurisdictionId !== (row.jurisdiction_id as string))
+    throw new AuthError(404, "dashboard not found");
+  if (!incidentId && !actor.memberships.some((m) => m.jurisdictionId === (row.jurisdiction_id as string)))
     throw new AuthError(403, "no access to this dashboard");
   return {
     id: row.id as string,
@@ -132,8 +142,13 @@ export async function listDashboards(
   sql: Sql,
   actor: Principal,
   jurisdictionId: string,
+  incidentId?: string,
 ): Promise<DashboardListItem[]> {
-  if (!actor.memberships.some((m) => m.jurisdictionId === jurisdictionId))
+  const authority = incidentId ? await getIncidentAuthority(sql, actor, incidentId) : null;
+  if (authority && authority.jurisdictionId !== jurisdictionId)
+    throw new AuthError(404, "jurisdiction not found");
+  if (incidentId) await sql`select set_config('app.incident_id', ${incidentId}, true)`;
+  if (!incidentId && !actor.memberships.some((m) => m.jurisdictionId === jurisdictionId))
     throw new AuthError(403, "no access to this jurisdiction");
   const rows = await sql`
     select id, title, template_key from dashboards
@@ -158,7 +173,7 @@ export async function computeDashboard(
   runtimeFilter?: WidgetFilter,
   incidentId?: string,
 ): Promise<DashboardSnapshot> {
-  const dashboard = await getDashboard(sql, actor, dashboardId);
+  const dashboard = await getDashboard(sql, actor, dashboardId, incidentId);
   const widgets: WidgetResult[] = [];
   for (const widget of dashboard.template.widgets) {
     widgets.push(
@@ -203,6 +218,12 @@ async function computeWidget(
         order by created_at limit 1`;
   if (!board) return missingResult(widget);
   const boardId = board.id as string;
+  const effective = incidentId
+    ? await getIncidentBoardReadShape(sql, actor, incidentId, boardId)
+    : await getEffectiveBoard(sql, actor, boardId);
+  const readable = new Set(visibleFields(effective).map((field) => field.key));
+  if (!widgetFieldsReadable(widget, runtimeFilter, readable))
+    return missingResult(widget, readable);
   const incidentClause = incidentFragment(sql, incidentId);
 
   if (widget.kind === "tile") {
@@ -266,8 +287,6 @@ async function computeWidget(
   }
 
   // list: newest records, columns masked to what the actor's role may read.
-  const effective = await getEffectiveBoard(sql, actor, boardId);
-  const readable = new Set(visibleFields(effective).map((f) => f.key));
   const columns = widget.columns.filter((c) => readable.has(c));
   const rows = await sql`
     select id, data from board_records
@@ -288,12 +307,31 @@ async function computeWidget(
   } satisfies ListResult;
 }
 
-function missingResult(widget: DashboardWidget): WidgetResult {
+/** Reject aggregate inputs that would reveal a field hidden from this role. */
+function widgetFieldsReadable(
+  widget: DashboardWidget,
+  runtimeFilter: WidgetFilter | undefined,
+  readable: ReadonlySet<string>,
+): boolean {
+  if (widget.filter && !readable.has(widget.filter.field)) return false;
+  if (runtimeFilter && !readable.has(runtimeFilter.field)) return false;
+  if (widget.kind === "chart") return readable.has(widget.groupBy);
+  if (widget.kind === "status")
+    return readable.has(widget.groupBy) && readable.has(widget.valueField);
+  return true;
+}
+
+function missingResult(widget: DashboardWidget, readable?: ReadonlySet<string>): WidgetResult {
   const base = { key: widget.key, title: widget.title, missing: true as const };
   if (widget.kind === "tile") return { kind: "tile", ...base, value: 0, level: "normal" };
   if (widget.kind === "chart") return { kind: "chart", ...base, display: widget.display, groups: [] };
   if (widget.kind === "status") return { kind: "status", ...base, groups: [] };
-  return { kind: "list", ...base, columns: widget.columns, records: [] };
+  return {
+    kind: "list",
+    ...base,
+    columns: readable ? widget.columns.filter((column) => readable.has(column)) : widget.columns,
+    records: [],
+  };
 }
 
 /**

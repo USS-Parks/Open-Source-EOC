@@ -162,9 +162,9 @@ async function loadBoardShape(sql: Sql, boardId: string): Promise<BoardShape> {
 
 /**
  * Load the field-visible shape of a board attached to an incident. Incident
- * readers use the established member field level, including named
- * participants, while RLS and the explicit attachment check keep the board
- * bound to the requested incident.
+ * Local members retain their board role; named incident participants use the
+ * established member field level. RLS and the explicit attachment check keep
+ * the board bound to the requested incident.
  */
 export async function getIncidentBoardReadShape(
   sql: Sql,
@@ -177,7 +177,9 @@ export async function getIncidentBoardReadShape(
     select 1 as ok from incident_boards
     where incident_id = ${incidentId} and board_id = ${boardId}`;
   if (!attached) throw new AuthError(400, "board is not part of this incident");
-  return { ...(await loadBoardShape(sql, boardId)), role: "member" };
+  const shape = await loadBoardShape(sql, boardId);
+  const membership = actor.memberships.find((item) => item.jurisdictionId === shape.jurisdictionId);
+  return { ...shape, role: membership ? membership.role as BoardRole : "member" };
 }
 
 export async function getEffectiveBoard(

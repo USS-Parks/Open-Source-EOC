@@ -7,9 +7,9 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import type { IncidentSummary } from "../api/client.js";
+import type { IncidentBoardRef, IncidentSummary } from "../api/client.js";
 import { useSession } from "../auth/session.js";
-import { useAsync } from "../data/hooks.js";
+import { useAsync, usePolled } from "../data/hooks.js";
 
 /**
  * The one selected incident for the whole operator workspace (VEOC-79B).
@@ -22,6 +22,7 @@ import { useAsync } from "../data/hooks.js";
 
 const EMPTY: readonly IncidentSummary[] = [];
 const EMPTY_IDS: readonly string[] = [];
+const EMPTY_BOARDS: readonly IncidentBoardRef[] = [];
 
 export interface IncidentValue {
   readonly incidents: readonly IncidentSummary[];
@@ -32,6 +33,7 @@ export interface IncidentValue {
   /** Board ids the selected incident uses, so a surface can tag a contributed
    *  record with the incident only when its board belongs to it (VEOC-79B2). */
   readonly incidentBoardIds: ReadonlySet<string>;
+  readonly incidentBoards: readonly IncidentBoardRef[];
   readonly selectIncident: (id: string | null) => void;
   readonly reload: () => void;
 }
@@ -50,8 +52,9 @@ export function incidentLabel(i: IncidentSummary): string {
 
 export function IncidentProvider(props: { children: ReactNode }) {
   const { client, jurisdictionId } = useSession();
-  const incidents = useAsync(
+  const incidents = usePolled(
     () => (jurisdictionId ? client.listIncidents(jurisdictionId) : Promise.resolve(EMPTY)),
+    5000,
     [jurisdictionId],
   );
   const list = incidents.data ?? EMPTY;
@@ -76,11 +79,15 @@ export function IncidentProvider(props: { children: ReactNode }) {
   // The boards the selected incident uses, so a contributed record is tagged
   // with the incident only when its board belongs to it.
   const activeId = list.find((i) => i.id === selectedId)?.id ?? null;
-  const boardIds = useAsync(
-    () => (activeId ? client.incidentBoardIds(activeId) : Promise.resolve(EMPTY_IDS)),
+  const boards = useAsync(
+    () => (activeId ? client.incidentBoards(activeId) : Promise.resolve(EMPTY_BOARDS)),
     [activeId],
   );
-  const incidentBoardIds = useMemo(() => new Set(boardIds.data ?? EMPTY_IDS), [boardIds.data]);
+  const incidentBoards = boards.data ?? EMPTY_BOARDS;
+  const incidentBoardIds = useMemo(
+    () => new Set(incidentBoards.map((board) => board.id) ?? EMPTY_IDS),
+    [incidentBoards],
+  );
 
   const value = useMemo<IncidentValue>(() => {
     const selected = list.find((i) => i.id === selectedId) ?? null;
@@ -91,10 +98,11 @@ export function IncidentProvider(props: { children: ReactNode }) {
       selectedIncidentId: selected?.id ?? null,
       selectedIncident: selected,
       incidentBoardIds,
+      incidentBoards,
       selectIncident: setSelectedId,
       reload: incidents.reload,
     };
-  }, [list, selectedId, incidentBoardIds, incidents.loading, incidents.error, incidents.reload]);
+  }, [list, selectedId, incidentBoardIds, incidentBoards, incidents.loading, incidents.error, incidents.reload]);
 
   return <IncidentContext.Provider value={value}>{props.children}</IncidentContext.Provider>;
 }
