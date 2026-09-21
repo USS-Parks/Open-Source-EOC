@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "measurementId": "D01-current-interface-baseline",
+  "measuredAt": "2026-09-21T19:58:17.255Z",
+  "baselineSha": "af8a0dc471926a2de660f982372caa9d6a34acc2",
+  "evidence": { "testFiles": "1/1", "tests": "1/1", "exitCode": 0, "durationSeconds": 7.5, "runErrors": [], "externalRequests": [] },
+  "operator": { "account": "admin@example.org", "role": "admin", "position": null, "positionNote": "not signed into a position" },
+  "environment": { "browser": "headless Chromium", "viewport": "1440x900", "theme": "light", "database": "fresh throwaway", "network": "local only; external requests blocked" },
+  "tasks": {
+    "BR-01-field-reporting": { "status": "completed-scripted", "elapsedMs": 681.5, "interactions": 8, "duplicateEntry": 0, "assistance": 0, "errors": 0, "stop": "saved report visible on selected-incident Field Reports board" },
+    "BR-02-lifeline-assessment": { "status": "unavailable", "elapsedMs": null, "interactions": null, "duplicateEntry": null, "assistance": null, "errors": 0, "stop": "no current Lifelines destination or assessment control" },
+    "BR-03-resource-coordination": { "status": "completed-scripted", "elapsedMs": 212, "interactions": 6, "duplicateEntry": 0, "assistance": 0, "errors": 0, "stop": "Sandbags request visibly triaged" },
+    "BR-04-board-customization": { "status": "unavailable", "elapsedMs": null, "interactions": null, "discoveryInteractions": 1, "duplicateEntry": null, "assistance": null, "errors": 0, "stop": "Designer exists in source but is not mounted" },
+    "BR-05-iap-preparation": { "status": "completed-scripted", "elapsedMs": 303.4, "interactions": 5, "duplicateEntry": 0, "assistance": 0, "errors": 0, "stop": "In Approval and 7/7 forms visible" },
+    "BR-06-shift-briefing": { "status": "completed-scripted", "elapsedMs": 127.3, "interactions": 2, "duplicateEntry": 0, "assistance": 0, "errors": 0, "stop": "OP-D01 and Energy unstable visible" }
+  },
+  "vendorComparison": { "status": "unavailable", "elapsedMs": null, "interactions": null, "duplicateEntry": null, "assistance": null, "errors": null },
+  "metadataCorrection": "Operator position corrected from Planning Section to null after source review; raw runtime output preserved and no browser rerun performed because measured behavior is unchanged."
+}

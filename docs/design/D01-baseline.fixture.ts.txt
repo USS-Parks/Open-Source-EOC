@@ -1,0 +1,426 @@
+import { execFileSync } from "node:child_process";
+import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import type { FastifyInstance } from "fastify";
+import { chromium, type Browser, type Page } from "playwright-core";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { buildApp } from "../../../../server/src/app.js";
+import { ensureStandardTemplates } from "../../../../server/src/boards/service.js";
+import { ensureStandardIncidentTemplates } from "../../../../server/src/incidents/service.js";
+import { freshDb, seedIdentity, type Sql } from "../../../../server/src/__tests__/helpers.js";
+
+type TaskStatus = "completed" | "unavailable";
+
+interface TaskMetric {
+  task: string;
+  status: TaskStatus;
+  route: string;
+  permission: string;
+  syntheticData: Record<string, unknown>;
+  startCondition: string;
+  stoppingCondition: string;
+  elapsedMs: number | null;
+  interactions: number | null;
+  discoveryInteractions?: number;
+  duplicateEntryCount: number | null;
+  assistanceCount: number | null;
+  errorCount: number;
+  limitation: string | null;
+}
+
+const OUTPUT = process.env.OPENEOC_D01_OUTPUT;
+if (!OUTPUT) throw new Error("OPENEOC_D01_OUTPUT is required");
+const DIST = process.env.OPENEOC_TEST_BUILD_ROOT
+  ? join(process.env.OPENEOC_TEST_BUILD_ROOT, "d01-app-dist")
+  : "/tmp/openeoc-d01-app-dist";
+const TYPES: Record<string, string> = {
+  ".html": "text/html",
+  ".js": "text/javascript",
+  ".mjs": "text/javascript",
+  ".css": "text/css",
+  ".json": "application/json",
+  ".geojson": "application/geo+json",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".woff2": "font/woff2",
+  ".wasm": "application/wasm",
+};
+
+const report: {
+  schemaVersion: 1;
+  measuredAt: string | null;
+  baselineSha: string;
+  evidence: string;
+  operator: Record<string, unknown>;
+  environment: Record<string, unknown>;
+  tasks: TaskMetric[];
+  vendorComparison: Record<string, unknown>;
+  runErrors: string[];
+} = {
+  schemaVersion: 1,
+  measuredAt: null,
+  baselineSha: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
+  evidence: "real database plus headless Chromium against the built current application",
+  operator: { account: "admin@example.org", role: "admin", position: null },
+  environment: {
+    viewport: { width: 1440, height: 900 },
+    syntheticFixture: true,
+    externalNetwork: "blocked",
+    timing: "script wall time from first counted UI action to visible stopping condition",
+  },
+  tasks: [],
+  vendorComparison: {
+    status: "unavailable",
+    reason: "No licensed comparison environment or authorized vendor access was supplied for D01.",
+    elapsedMs: null,
+    interactions: null,
+    duplicateEntryCount: null,
+    assistanceCount: null,
+    errorCount: null,
+  },
+  runErrors: [],
+};
+
+let admin: Sql;
+let runtime: Sql;
+let app: FastifyInstance;
+let browser: Browser;
+let page: Page;
+let baseUrl: string;
+let jurisdictionId: string;
+let adminToken: string;
+const pageErrors: string[] = [];
+const externalRequests: string[] = [];
+
+function chromiumPath(): string {
+  const candidates = [
+    process.env.OPENEOC_CHROMIUM,
+    "/opt/pw-browsers/chromium",
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+  ];
+  for (const candidate of candidates) if (candidate && existsSync(candidate)) return candidate;
+  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
+}
+
+async function login(email: string, password: string): Promise<string> {
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/login",
+    payload: { email, password },
+  });
+  if (response.statusCode !== 200) throw new Error(`login failed: ${response.body}`);
+  return response.json().accessToken as string;
+}
+
+async function post(url: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const response = await app.inject({
+    method: "POST",
+    url,
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload,
+  });
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw new Error(`POST ${url} failed: ${response.statusCode} ${response.body}`);
+  }
+  return response.json() as Record<string, unknown>;
+}
+
+async function createBoard(templateKey: string): Promise<string> {
+  const result = await post(`/api/v1/jurisdictions/${jurisdictionId}/boards`, { templateKey });
+  return result.id as string;
+}
+
+async function addRecord(boardId: string, data: Record<string, unknown>): Promise<void> {
+  await post(`/api/v1/boards/${boardId}/records`, data);
+}
+
+async function completed(
+  metric: Omit<TaskMetric, "status" | "elapsedMs" | "interactions" | "errorCount" | "limitation">,
+  body: (act: (operation: () => Promise<unknown>) => Promise<void>) => Promise<void>,
+): Promise<void> {
+  const errorsBefore = pageErrors.length;
+  let interactions = 0;
+  const start = performance.now();
+  await body(async (operation) => {
+    interactions += 1;
+    await operation();
+  });
+  report.tasks.push({
+    ...metric,
+    status: "completed",
+    elapsedMs: Math.round((performance.now() - start) * 10) / 10,
+    interactions,
+    errorCount: pageErrors.length - errorsBefore,
+    limitation: "Headless scripted timing is environment-specific and is not a human operator time.",
+  });
+}
+
+function unavailable(
+  metric: Omit<TaskMetric, "status" | "elapsedMs" | "interactions" | "errorCount" | "limitation">,
+  limitation: string,
+): void {
+  report.tasks.push({
+    ...metric,
+    status: "unavailable",
+    elapsedMs: null,
+    interactions: null,
+    errorCount: 0,
+    limitation,
+  });
+}
+
+beforeAll(async () => {
+  const webDir = join(process.cwd(), "web");
+  const publicDir = join(webDir, "public");
+  const { build } = await import("../../../../web/node_modules/vite/dist/node/index.js");
+  await build({
+    root: webDir,
+    base: "./",
+    publicDir: false,
+    logLevel: "silent",
+    build: { outDir: DIST, emptyOutDir: true },
+  });
+  expect(existsSync(join(DIST, "index.html"))).toBe(true);
+
+  ({ admin, runtime } = await freshDb());
+  const seed = await seedIdentity(admin);
+  jurisdictionId = seed.jurisdictionId;
+  await ensureStandardTemplates(admin);
+  await ensureStandardIncidentTemplates(admin);
+  app = buildApp(runtime, { oidc: null });
+
+  app.get("/app/*", (request, reply) => {
+    const relative = (request.params as { "*": string })["*"] || "index.html";
+    const safe = relative.replaceAll("..", "");
+    let path = join(DIST, safe);
+    if (!existsSync(path)) path = join(publicDir, safe);
+    if (!existsSync(path)) return reply.status(404).send("missing");
+    const extension = path.slice(path.lastIndexOf("."));
+    const buffer = readFileSync(path);
+    const range = request.headers.range;
+    const match = range ? /^bytes=(\d+)-(\d*)$/.exec(range) : null;
+    if (match) {
+      const start = Number(match[1]);
+      const end = match[2] ? Number(match[2]) : buffer.length - 1;
+      const slice = buffer.subarray(start, Math.min(end, buffer.length - 1) + 1);
+      return reply
+        .status(206)
+        .header("content-type", TYPES[extension] ?? "application/octet-stream")
+        .header("accept-ranges", "bytes")
+        .header("content-range", `bytes ${start}-${start + slice.length - 1}/${buffer.length}`)
+        .send(slice);
+    }
+    return reply
+      .header("content-type", TYPES[extension] ?? "application/octet-stream")
+      .header("accept-ranges", "bytes")
+      .send(buffer);
+  });
+  await app.listen({ port: 0, host: "127.0.0.1" });
+  const address = app.server.address();
+  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+  adminToken = await login("admin@example.org", "correct-horse-battery");
+
+  const fieldReports = await createBoard("field_reports");
+  await createBoard("lifelines");
+  await createBoard("significant_events");
+  await createBoard("resource_request");
+  const activation = await post(`/api/v1/jurisdictions/${jurisdictionId}/incidents`, {
+    templateKey: "wildfire",
+    name: "D01 North Coast Exercise",
+  });
+  const incidentId = activation.incidentId as string;
+  await admin`insert into incident_boards (incident_id, board_id) values (${incidentId}, ${fieldReports})`;
+  await addRecord(fieldReports, {
+    summary: "Bridge approach passable for emergency vehicles",
+    category: "hazard",
+    location: { type: "Point", coordinates: [-123.61, 41.29] },
+  });
+  const lifeline = await app.inject({
+    method: "PUT",
+    url: `/api/v1/jurisdictions/${jurisdictionId}/lifelines`,
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: { lifeline: "energy", status: "unstable", note: "Two substations offline; service disrupted" },
+  });
+  expect(lifeline.statusCode).toBe(200);
+  await post(`/api/v1/jurisdictions/${jurisdictionId}/sitreps`, {
+    period: "OP-D01",
+    incidentId,
+  });
+
+  browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
+  page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await page.route("**/*", (route) => {
+    const url = route.request().url();
+    if (url.startsWith(baseUrl) || url.startsWith("data:") || url.startsWith("blob:")) return route.continue();
+    externalRequests.push(url);
+    return route.abort();
+  });
+  await page.goto(`${baseUrl}/app/index.html`, { waitUntil: "load" });
+  await page.getByLabel("Email").fill("admin@example.org");
+  await page.getByLabel("Password").fill("correct-horse-battery");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.waitForSelector('[data-testid="cop-map"]', { timeout: 20_000 });
+}, 120_000);
+
+afterAll(async () => {
+  report.measuredAt = new Date().toISOString();
+  report.runErrors.push(...pageErrors.map((message) => `browser: ${message}`));
+  report.runErrors.push(...externalRequests.map((url) => `external request blocked: ${url}`));
+  mkdirSync(dirname(OUTPUT), { recursive: true });
+  writeFileSync(OUTPUT, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  await page?.close();
+  await browser?.close();
+  await app?.close();
+  await runtime?.end();
+  await admin?.end();
+});
+
+describe("D01 current-interface scripted baseline", () => {
+  it("measures six fixed tasks and records unavailable paths honestly", async () => {
+    await completed(
+      {
+        task: "field-reporting",
+        route: "Map",
+        permission: "admin",
+        syntheticData: { summary: "Culvert washout on Bald Hills Rd", category: "damage", attachment: "washout.jpg" },
+        startCondition: "Authenticated on Map; Field Reports board is attached to the incident; COP canvas is ready.",
+        stoppingCondition: "Saved report is visible in the Field Reports board.",
+        duplicateEntryCount: 0,
+        assistanceCount: 0,
+      },
+      async (act) => {
+        await act(() => page.getByRole("button", { name: "Add point" }).click());
+        await act(() => page.getByLabel("Map record board").selectOption({ label: "Field Reports" }));
+        await act(() => page.locator('[data-testid="cop-map"] canvas').first().click({ position: { x: 360, y: 340 } }));
+        const panel = page.getByRole("region", { name: "New map record" });
+        await panel.waitFor({ state: "visible", timeout: 20_000 });
+        await act(() => panel.getByLabel("Summary").fill("Culvert washout on Bald Hills Rd"));
+        await act(() => panel.getByLabel("Category").selectOption("damage"));
+        await act(() => panel.getByLabel("Photo").setInputFiles({
+          name: "washout.jpg",
+          mimeType: "image/jpeg",
+          buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+        }));
+        await panel.getByText("attached", { exact: false }).waitFor({ state: "visible", timeout: 20_000 });
+        await act(() => panel.getByRole("button", { name: "Save record" }).click());
+        await panel.waitFor({ state: "hidden", timeout: 20_000 });
+        await act(() => page.getByRole("button", { name: "Field Reports" }).first().click());
+        await page.getByText("Culvert washout on Bald Hills Rd").waitFor({ state: "visible", timeout: 20_000 });
+      },
+    );
+
+    const nav = page.getByRole("navigation", { name: "Sections" });
+    expect(await nav.getByRole("button", { name: "ESFs & Lifelines", exact: true }).count()).toBe(0);
+    unavailable(
+      {
+        task: "lifeline-assessment",
+        route: "No current route",
+        permission: "admin",
+        syntheticData: { lifeline: "Energy", condition: "Disrupted", impact: "Two substations offline" },
+        startCondition: "Authenticated shell with seeded Energy data.",
+        stoppingCondition: "Unavailable before entry: no ESFs & Lifelines destination or assessment control exists.",
+        duplicateEntryCount: null,
+        assistanceCount: null,
+      },
+      "Current SITREP data and dashboard cards are read-only summaries; D13 and P-LIFE units own the missing assessment workspace.",
+    );
+
+    await completed(
+      {
+        task: "resource-coordination",
+        route: "Resources",
+        permission: "admin",
+        syntheticData: { item: "Sandbags", quantity: 500, priority: "immediate", targetState: "triaged" },
+        startCondition: "Authenticated shell; no matching resource request exists.",
+        stoppingCondition: "The request row visibly reaches triaged.",
+        duplicateEntryCount: 0,
+        assistanceCount: 0,
+      },
+      async (act) => {
+        await act(() => nav.getByRole("button", { name: "Resources" }).click());
+        await page.getByText("Resource Requests (213RR)").waitFor({ state: "visible", timeout: 20_000 });
+        await act(() => page.getByLabel("Requested item").fill("Sandbags"));
+        await act(() => page.getByLabel("Quantity").fill("500"));
+        await act(() => page.getByLabel("Priority").selectOption("immediate"));
+        await act(() => page.getByRole("button", { name: "Submit request" }).click());
+        await page.getByLabel("Next state for Sandbags").waitFor({ state: "visible", timeout: 20_000 });
+        await act(() => page.getByRole("button", { name: "Advance" }).first().click());
+        await page.getByText("triaged", { exact: true }).first().waitFor({ state: "visible", timeout: 20_000 });
+      },
+    );
+
+    await nav.getByRole("button", { name: "Boards" }).click();
+    await page.getByText("Boards", { exact: true }).first().waitFor({ state: "visible", timeout: 20_000 });
+    expect(await page.getByRole("main").getByRole("button", { name: /customize|design|create board/i }).count()).toBe(0);
+    unavailable(
+      {
+        task: "board-customization",
+        route: "Boards",
+        permission: "admin",
+        syntheticData: { board: "Shelter Status", requestedChange: "Add generator field and publish a revised view" },
+        startCondition: "Authenticated admin on Boards.",
+        stoppingCondition: "Unavailable before editing: no mounted designer/customize/create-board control exists.",
+        discoveryInteractions: 1,
+        duplicateEntryCount: null,
+        assistanceCount: null,
+      },
+      "A Designer component exists in source but is not mounted in the current application; 81A/81B and P-BOARDS-2 own this path.",
+    );
+
+    await completed(
+      {
+        task: "iap-preparation",
+        route: "Forms, then IAP",
+        permission: "admin",
+        syntheticData: { incident: "D01 North Coast Exercise", formPreview: "ICS-201", assembledForms: 7 },
+        startCondition: "Selected incident is active; no IAP has been assembled.",
+        stoppingCondition: "The assembled IAP visibly reaches In Approval.",
+        duplicateEntryCount: 0,
+        assistanceCount: 0,
+      },
+      async (act) => {
+        await act(() => nav.getByRole("button", { name: "Forms", exact: true }).click());
+        await page.getByRole("button", { name: "Assemble IAP" }).waitFor({ state: "visible", timeout: 20_000 });
+        await act(() => page.getByRole("button", { name: "Preview form" }).click());
+        await page.getByText("ICS-201 Incident Briefing").first().waitFor({ state: "visible", timeout: 20_000 });
+        await act(() => page.getByRole("button", { name: "Assemble IAP" }).click());
+        await page.getByText("Incident Action Plan").first().waitFor({ state: "visible", timeout: 20_000 });
+        await act(() => nav.getByRole("button", { name: "IAP", exact: true }).click());
+        const list = page.getByRole("region", { name: "Working list" });
+        await list.getByText(/7 \/ 7 forms/).waitFor({ state: "visible", timeout: 20_000 });
+        await act(() => list.getByRole("button", { name: "Submit for approval" }).first().click());
+        await list.getByText("In Approval", { exact: true }).first().waitFor({ state: "visible", timeout: 20_000 });
+      },
+    );
+
+    await completed(
+      {
+        task: "shift-briefing",
+        route: "SITREP",
+        permission: "admin",
+        syntheticData: { period: "OP-D01", expectedEnergyCondition: "unstable" },
+        startCondition: "A frozen OP-D01 SITREP exists for the selected incident.",
+        stoppingCondition: "The OP-D01 briefing is open and Energy is visibly unstable.",
+        duplicateEntryCount: 0,
+        assistanceCount: 0,
+      },
+      async (act) => {
+        await act(() => nav.getByRole("button", { name: "SITREP", exact: true }).click());
+        await page.getByText("Situation Reports").waitFor({ state: "visible", timeout: 20_000 });
+        await act(() => page.getByRole("button", { name: /Operational period OP-D01/ }).click());
+        const briefing = page.getByRole("article", { name: "Situation report: OP-D01" });
+        await briefing.waitFor({ state: "visible", timeout: 20_000 });
+        await briefing.getByTestId("lifeline-energy").getByText("unstable").waitFor({ state: "visible", timeout: 20_000 });
+      },
+    );
+
+    expect(report.tasks).toHaveLength(6);
+    expect(report.tasks.filter((task) => task.status === "completed")).toHaveLength(4);
+    expect(report.tasks.filter((task) => task.status === "unavailable")).toHaveLength(2);
+    expect(pageErrors).toEqual([]);
+    expect(externalRequests).toEqual([]);
+  }, 180_000);
+});
