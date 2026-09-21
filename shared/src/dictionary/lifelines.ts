@@ -39,3 +39,24 @@ export const LIFELINE_STATUS_COLOR: Readonly<Record<string, string>> = {
   unstable: "red",
   unknown: "gray",
 };
+
+/** Versioned doctrine identity retained on every operational assessment. */
+export const LIFELINE_DEFINITION = {
+  framework: "fema_community_lifelines",
+  version: 1,
+  source: {
+    authority: "FEMA",
+    title: "Community Lifelines Implementation Toolkit",
+    url: "https://emilms.fema.gov/is_2901/groups/39.html",
+  },
+  lifelines: COMMUNITY_LIFELINES.values,
+} as const;
+
+/**
+ * The repository has no retained authoritative component/subcomponent list.
+ * Local component keys remain supported, but must not be represented as FEMA
+ * doctrine until this gap is resolved from an approved source.
+ */
+export const LIFELINE_DOCTRINE_GAPS = [
+  "Authoritative FEMA component and subcomponent definitions are not retained locally.",
+] as const;

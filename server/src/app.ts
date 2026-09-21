@@ -59,6 +59,8 @@ import { rateLimit } from "./security/rate-limit.js";
 import { exportRoutes } from "./export/routes.js";
 import { impactRoutes } from "./impact/routes.js";
 import { savedStateRoutes } from "./saved-state/routes.js";
+import { lifelineRoutes } from "./lifelines/routes.js";
+import { esfRoutes } from "./esf/routes.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -355,6 +357,8 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   dataPackRoutes(app, sql, authenticate);
   impactRoutes(app, sql, authenticate);
   savedStateRoutes(app, sql, authenticate);
+  lifelineRoutes(app, sql, authenticate);
+  esfRoutes(app, sql, authenticate);
   notifyRoutes(app, sql, authenticate);
   messagingRoutes(app, sql, authenticate);
   geoRoutes(app, sql, authenticate);
