@@ -3214,3 +3214,32 @@ increment proves it and that coverage follows the incident area.
   availability remains false. P-COP owns final workspace presentation.
 - **Next:** existing lane c continues H12-CB from current main. Other lanes
   retain their active units. No new worktree, dependency copy or push.
+
+## VEOC-81A-E: declarative board authoring engine
+
+- **Files:** shared board field/schema definitions and tests; board service,
+  routes and tests; sync checkpoint and regression. Eight files. No migration,
+  dependency or production presentation change.
+- **Contract:** optional input/detail layouts, typed conditional fields,
+  bounded direct-input numeric calculations, incident-scoped related-record
+  choices, immutable version reads and sequential publication. Trusted package
+  imports remain retry-safe. Upgrades preflight retained values and references
+  before changing the board pointer while preserving stored JSON and local
+  customization. Calculated output never reuses a preserved legacy value.
+- **Concurrency:** all production board-record writers share one transaction
+  lock before loading the effective shape. The sync checkpoint reloads the
+  current schema; incomplete old-client data remains durably pending until
+  completed. No alternative assignment or offline engine was introduced.
+- **Gate:** TypeScript and ESLint passed. Focused corrections passed 21 shared,
+  authoring and real WebSocket sync tests; earlier package-import evidence
+  remained valid. After rebase over cache and H11 code, the integrator ran
+  TypeScript, ESLint and eight affected suites: 44/44 passed, exit 0.
+  Evidence: deploy/test-runtime/out/lanes/a/logs/81A-E-integration.log.
+- **Review:** full parent diff inspection, two fix-first reviews, a complete
+  direct-writer inventory and fresh bounded correction review ending in ship.
+  The prior findings and gate repairs remain recorded in their original logs.
+- **Integration:** exact fast-forward to b7cb680137ab8ee52217fd8f97ff0dae68e80df0.
+  Evidence level is integrated engine with real database and sync proof.
+  F1/AR3 and the complete 81A gate remain partial until P-BOARDS implements
+  runtime layouts and the no-code designer. Existing lane a proceeds to
+  81B-E1, the shared assignment and workflow contract. No push occurred.

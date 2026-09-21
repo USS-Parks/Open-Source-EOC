@@ -45,7 +45,7 @@ accordingly, so parity against "WebEOC" is not overstated.
 
 | ID | Capability | Reference | Operator behavior | Local implementation / evidence | Status | Owner |
 |---|---|---|---|---|---|---|
-| F1 | Versioned board schema, input + display views | WebEOC-core / WebEOC-DS | Admin defines a board; operators enter and view records | Board schema + runtime (VEOC-09/10). No-code authoring depth (layouts, conditional fields, calc, lookups) not yet complete | partial | VEOC-81A |
+| F1 | Versioned board schema, input + display views | WebEOC-core / WebEOC-DS | Admin defines a board; operators enter and view records | Board schema + runtime (VEOC-09/10); declarative layouts, conditions, calculations, incident record references and locked upgrade preflight integrated (`b7cb680`). Runtime layouts and designer presentation remain open | partial | VEOC-81A / P-BOARDS-1 / P-BOARDS-2 |
 | F2 | Position login + immutable activity/position logs | WebEOC-core | Sign into a position; every action is attributed and logged | Positions, sign-in, append-only audit (VEOC-07/11); incident-position attribution extended (`ca0d130`) | verified | - |
 | F3 | Store-and-forward federation, local replication | WebEOC-core | Agencies share boards across a federation boundary | Federation service and sharing agreements (VEOC-30) | verified | - |
 | F4 | Board-triggered notifications, webhooks, multi-channel | WebEOC-core | A record change fires a notification/webhook | Notify + webhook delivery (VEOC-14); synchronous webhook robustness is an open backend weakness (audit §4) | partial | VEOC-81B |
@@ -83,7 +83,7 @@ accordingly, so parity against "WebEOC" is not overstated.
 |---|---|---|---|---|---|
 | AR1 | No per-seat surge pricing | INV-1 | Viewers structurally free; no seat metering | verified | - |
 | AR2 | No unconstrained board divergence | INV-5 | Versioned board schemas with migration | verified | - |
-| AR3 | No admin customization requiring hand-written HTML/JS | INV-6 | Board designer exists; full no-code authoring depth open | partial | VEOC-81A |
+| AR3 | No admin customization requiring hand-written HTML/JS | INV-6 | Declarative authoring engine and immutable template-version APIs integrated (`b7cb680`); no-code designer and runtime presentation remain open | partial | VEOC-81A / P-BOARDS-1 / P-BOARDS-2 |
 | AR4 | No in-place-upgrade dead ends | INV-5 | Versioned schema upgrades preserve records | verified | - |
 | AR5 | No proprietary-only interchange or substrate lock-in | INV-4, INV-9 | Native standards + jurisdiction export; Apache-2.0 | verified | - |
 | AR6 | No session timeouts mid-incident, free-text drift, join-poor dashboards | INV-8 | Session continuity, controlled fields, server-computed dashboards | verified | - |
