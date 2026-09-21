@@ -15,10 +15,18 @@ import {
   type IncidentContext,
   type OrgEntry,
   type ResourceLine,
+  type IapDisplayState,
+  type IapPreparedAttribution,
+  type IapProgress,
+  type IapWorkspaceItem,
+  type IapWorkspaceQuery,
+  type IapWorkspaceResponse,
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
+import { getIncidentBoardReadShape, visibleFields } from "../boards/service.js";
+import { getIncidentAuthority, type IncidentAuthority } from "../incidents/participation.js";
 
 /**
  * ICS forms and the IAP builder, server side (VEOC-34, F5). The live
@@ -45,11 +53,11 @@ async function gatherContext(
   actor: Principal,
   incidentId: string,
   extras: ContextExtras,
-): Promise<{ jurisdictionId: string; ctx: IncidentContext }> {
-  const [incident] = await sql`select jurisdiction_id, name from incidents where id = ${incidentId}`;
+): Promise<{ jurisdictionId: string; authority: IncidentAuthority; ctx: IncidentContext }> {
+  const authority = await getIncidentAuthority(sql, actor, incidentId);
+  const [incident] = await sql`select name from incidents where id = ${incidentId}`;
   if (!incident) throw new AuthError(404, "incident not found");
-  const jurisdictionId = incident.jurisdiction_id as string;
-  requireMember(actor, jurisdictionId);
+  const jurisdictionId = authority.jurisdictionId;
 
   const orgRows = await sql`
     select p.key, p.title,
@@ -69,8 +77,16 @@ async function gatherContext(
     select b.id, b.template_key from boards b
     join incident_boards ib on ib.board_id = b.id
     where ib.incident_id = ${incidentId}`;
-  const boardByKey = new Map<string, string>();
-  for (const b of boards) if (!boardByKey.has(b.template_key as string)) boardByKey.set(b.template_key as string, b.id as string);
+  const boardByKey = new Map<string, { id: string; readable: ReadonlySet<string> }>();
+  for (const board of boards) {
+    const key = board.template_key as string;
+    if (boardByKey.has(key)) continue;
+    const shape = await getIncidentBoardReadShape(sql, actor, incidentId, board.id as string);
+    boardByKey.set(key, {
+      id: board.id as string,
+      readable: new Set(visibleFields(shape).map((field) => field.key)),
+    });
+  }
 
   const activityLog = await gatherActivityLog(sql, boardByKey.get("activity_log"));
   const checkIns = await gatherCheckIns(sql, boardByKey.get("sign_in_out"));
@@ -89,15 +105,24 @@ async function gatherContext(
     resources,
     ...(extras.safetyMessage !== undefined ? { safetyMessage: extras.safetyMessage } : {}),
   };
-  return { jurisdictionId, ctx };
+  return { jurisdictionId, authority, ctx };
 }
 
-async function gatherActivityLog(sql: Sql, boardId?: string): Promise<ActivityLogEntry[]> {
-  if (!boardId) return [];
+interface ReadableIapBoard {
+  readonly id: string;
+  readonly readable: ReadonlySet<string>;
+}
+
+function readableData(data: Record<string, unknown>, readable: ReadonlySet<string>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(data).filter(([key]) => readable.has(key)));
+}
+
+async function gatherActivityLog(sql: Sql, board?: ReadableIapBoard): Promise<ActivityLogEntry[]> {
+  if (!board) return [];
   const rows = await sql`
-    select data, created_at from board_records where board_id = ${boardId} order by created_at limit 200`;
+    select data, created_at from board_records where board_id = ${board.id} order by created_at limit 200`;
   return rows.map((r) => {
-    const data = r.data as Record<string, unknown>;
+    const data = readableData(r.data as Record<string, unknown>, board.readable);
     return {
       time: (r.created_at as Date).toISOString().slice(11, 16),
       entry: String(data.entry ?? ""),
@@ -105,11 +130,11 @@ async function gatherActivityLog(sql: Sql, boardId?: string): Promise<ActivityLo
   });
 }
 
-async function gatherCheckIns(sql: Sql, boardId?: string): Promise<CheckInEntry[]> {
-  if (!boardId) return [];
-  const rows = await sql`select data from board_records where board_id = ${boardId} limit 500`;
+async function gatherCheckIns(sql: Sql, board?: ReadableIapBoard): Promise<CheckInEntry[]> {
+  if (!board) return [];
+  const rows = await sql`select data from board_records where board_id = ${board.id} limit 500`;
   return rows.map((r) => {
-    const data = r.data as Record<string, unknown>;
+    const data = readableData(r.data as Record<string, unknown>, board.readable);
     return {
       name: String(data.role_note ?? data.person ?? ""),
       time: String(data.signed_in ?? ""),
@@ -117,11 +142,11 @@ async function gatherCheckIns(sql: Sql, boardId?: string): Promise<CheckInEntry[
   });
 }
 
-async function gatherResources(sql: Sql, boardId?: string): Promise<ResourceLine[]> {
-  if (!boardId) return [];
-  const rows = await sql`select data from board_records where board_id = ${boardId} limit 500`;
+async function gatherResources(sql: Sql, board?: ReadableIapBoard): Promise<ResourceLine[]> {
+  if (!board) return [];
+  const rows = await sql`select data from board_records where board_id = ${board.id} limit 500`;
   return rows.map((r) => {
-    const data = r.data as Record<string, unknown>;
+    const data = readableData(r.data as Record<string, unknown>, board.readable);
     return {
       item: String(data.item ?? ""),
       quantity: String(data.quantity ?? ""),
@@ -130,11 +155,11 @@ async function gatherResources(sql: Sql, boardId?: string): Promise<ResourceLine
   });
 }
 
-async function gatherComms(sql: Sql, boardId?: string): Promise<CommsChannel[]> {
-  if (!boardId) return [];
-  const rows = await sql`select data from board_records where board_id = ${boardId} limit 200`;
+async function gatherComms(sql: Sql, board?: ReadableIapBoard): Promise<CommsChannel[]> {
+  if (!board) return [];
+  const rows = await sql`select data from board_records where board_id = ${board.id} limit 200`;
   return rows.map((r) => {
-    const data = r.data as Record<string, unknown>;
+    const data = readableData(r.data as Record<string, unknown>, board.readable);
     return {
       channel: String(data.channel ?? ""),
       frequency: String(data.frequency ?? ""),
@@ -158,6 +183,136 @@ export async function buildForm(
 
 export interface CreateIapInput extends ContextExtras {
   readonly formIds?: readonly string[];
+  readonly periodRevision?: number;
+}
+
+interface ResolvedPeriod {
+  readonly revision: number;
+  readonly label: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
+}
+
+interface PreparedAttribution {
+  readonly organizationId: string;
+  readonly positionId: string | null;
+  readonly participationId: string | null;
+  readonly roleKey: string;
+  readonly roleLabel: string;
+}
+
+function roleKey(prefix: "incident" | "position", value: string): string {
+  const normalized = value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "").slice(0, 140);
+  return `${prefix}:${normalized || "unspecified"}`;
+}
+
+async function resolvePeriod(
+  sql: Sql,
+  incidentId: string,
+  operationalPeriod: string,
+  requestedRevision?: number,
+): Promise<ResolvedPeriod | null> {
+  const label = operationalPeriod.trim();
+  const rows = requestedRevision === undefined
+    ? await sql`
+        select revision, period_label, period_starts_at, period_ends_at
+        from incident_area_revisions
+        where incident_id = ${incidentId} and trim(period_label) = ${label}
+          and period_starts_at is not null and period_ends_at is not null
+        order by revision desc`
+    : await sql`
+        select revision, period_label, period_starts_at, period_ends_at
+        from incident_area_revisions
+        where incident_id = ${incidentId} and revision = ${requestedRevision}
+          and period_label is not null and period_starts_at is not null and period_ends_at is not null`;
+  if (requestedRevision !== undefined && rows.length === 0)
+    throw new AuthError(400, "operational period revision is not available for this incident");
+  if (rows.length === 0) return null;
+  const periods = rows.map((row) => ({
+    revision: Number(row.revision),
+    label: (row.period_label as string).trim(),
+    startsAt: new Date(row.period_starts_at as string).toISOString(),
+    endsAt: new Date(row.period_ends_at as string).toISOString(),
+  }));
+  if (requestedRevision !== undefined && periods[0]!.label !== label)
+    throw new AuthError(400, "operational period label does not match the selected revision");
+  const triples = new Set(periods.map((period) =>
+    JSON.stringify([period.label, period.startsAt, period.endsAt])));
+  if (triples.size > 1)
+    throw new AuthError(400, "operational period label is ambiguous for this incident");
+  return periods[0]!;
+}
+
+async function resolvePreparedAttribution(
+  sql: Sql,
+  actor: Principal,
+  authority: IncidentAuthority,
+): Promise<PreparedAttribution> {
+  if (!authority.canContribute)
+    throw new AuthError(403, "requires current incident write authority");
+  if (authority.participation) {
+    return {
+      organizationId: authority.participation.organizationId,
+      positionId: null,
+      participationId: authority.participation.id,
+      roleKey: roleKey("incident", authority.participation.incidentPositionTitle),
+      roleLabel: authority.participation.incidentPositionTitle,
+    };
+  }
+  if (actor.position) {
+    const [position] = await sql`
+      select p.id, p.key, p.title from positions p
+      join position_assignments pa on pa.position_id = p.id
+      join auth_sessions s on s.id = ${actor.sessionId}
+      where p.id = ${actor.position.id} and p.jurisdiction_id = ${authority.jurisdictionId}
+        and pa.person_id = ${actor.person.id} and pa.revoked_at is null
+        and s.person_id = ${actor.person.id} and s.ended_at is null
+        and s.active_position_id = p.id`;
+    if (!position) throw new AuthError(403, "active IAP position assignment is no longer current");
+    return {
+      organizationId: authority.jurisdictionId,
+      positionId: position.id as string,
+      participationId: null,
+      roleKey: roleKey("position", position.key as string),
+      roleLabel: position.title as string,
+    };
+  }
+  const membershipRole = authority.canManageParticipation ? "admin" : "member";
+  return {
+    organizationId: authority.jurisdictionId,
+    positionId: null,
+    participationId: null,
+    roleKey: `membership:${membershipRole}`,
+    roleLabel: membershipRole === "admin" ? "Jurisdiction Admin" : "Jurisdiction Member",
+  };
+}
+
+async function recordIapAudit(
+  sql: Sql,
+  actor: Principal,
+  authority: IncidentAuthority,
+  input: {
+    incidentId: string;
+    category: "iap.assembled" | "iap.submitted";
+    subjectId: string;
+    payload?: Record<string, unknown>;
+  },
+): Promise<void> {
+  if (authority.participation) {
+    await sql`select append_iap_participant_audit(
+      ${input.incidentId}, ${input.subjectId}, ${input.category},
+      ${sql.json((input.payload ?? {}) as never)})`;
+    return;
+  }
+  await recordAudit(sql, actor, {
+    jurisdictionId: authority.jurisdictionId,
+    incidentId: input.incidentId,
+    category: input.category,
+    subjectTable: "iaps",
+    subjectId: input.subjectId,
+    ...(input.payload === undefined ? {} : { payload: input.payload }),
+  });
 }
 
 export async function createIap(
@@ -165,26 +320,35 @@ export async function createIap(
   actor: Principal,
   incidentId: string,
   input: CreateIapInput,
-): Promise<{ id: string; content: IapDocument }> {
-  const { jurisdictionId, ctx } = await gatherContext(sql, actor, incidentId, input);
-  requireWriter(actor, jurisdictionId);
-  const formIds = (input.formIds ?? []).filter(isFormId);
-  const iap = formIds.length > 0 ? assembleIap(ctx, formIds) : assembleIap(ctx);
+): Promise<{ id: string; content: IapDocument; periodRevision: number | null }> {
+  const { authority, ctx } = await gatherContext(sql, actor, incidentId, input);
+  const attribution = await resolvePreparedAttribution(sql, actor, authority);
+  const period = await resolvePeriod(sql, incidentId, input.operationalPeriod, input.periodRevision);
+  const formIds = input.formIds?.filter(isFormId);
+  const iap = formIds === undefined ? assembleIap(ctx) : assembleIap(ctx, formIds);
   const [row] = await sql`
-    insert into iaps (incident_id, operational_period, form_ids, content, prepared_by)
+    insert into iaps
+      (incident_id, operational_period, period_revision, form_ids, content, prepared_by,
+       prepared_organization_id, prepared_position_id, prepared_participation_id,
+       prepared_role_key, prepared_role_label)
     values (${incidentId}, ${input.operationalPeriod},
-            ${iap.forms.map((f) => f.id)}, ${sql.json(iap as never)}, ${actor.person.id})
+            ${period?.revision ?? null}, ${iap.forms.map((f) => f.id)},
+            ${sql.json(iap as never)}, ${actor.person.id}, ${attribution.organizationId},
+            ${attribution.positionId}, ${attribution.participationId},
+            ${attribution.roleKey}, ${attribution.roleLabel})
     returning id`;
   const id = row!.id as string;
-  await recordAudit(sql, actor, {
-    jurisdictionId,
+  await recordIapAudit(sql, actor, authority, {
     incidentId,
     category: "iap.assembled",
-    subjectTable: "iaps",
     subjectId: id,
-    payload: { operationalPeriod: input.operationalPeriod, forms: iap.forms.length },
+    payload: {
+      operationalPeriod: input.operationalPeriod, periodRevision: period?.revision ?? null,
+      forms: iap.forms.length, organizationId: attribution.organizationId,
+      role: attribution.roleKey,
+    },
   });
-  return { id, content: iap };
+  return { id, content: iap, periodRevision: period?.revision ?? null };
 }
 
 export async function getIap(
@@ -193,10 +357,10 @@ export async function getIap(
   iapId: string,
 ): Promise<{ id: string; status: string; operationalPeriod: string; content: IapDocument }> {
   const [row] = await sql`
-    select i.id, i.status, i.operational_period, i.content, inc.jurisdiction_id
+    select i.id, i.status, i.operational_period, i.content, i.incident_id
     from iaps i join incidents inc on inc.id = i.incident_id where i.id = ${iapId}`;
   if (!row) throw new AuthError(404, "IAP not found");
-  requireMember(actor, row.jurisdiction_id as string);
+  await getIncidentAuthority(sql, actor, row.incident_id as string);
   return {
     id: row.id as string,
     status: row.status as string,
@@ -208,22 +372,32 @@ export async function getIap(
 /** Submit a draft plan for command approval (writer). */
 export async function submitIapForApproval(sql: Sql, actor: Principal, iapId: string): Promise<void> {
   const row = await iapWorkflowRow(sql, iapId);
-  requireWriter(actor, row.jurisdictionId);
+  const authority = await getIncidentAuthority(sql, actor, row.incidentId);
+  await requireCurrentClaimedPosition(sql, actor, row.jurisdictionId);
+  const ownerWriter = authority.canContribute && authority.participation === null;
+  const participantOwnDraft = authority.canContribute && authority.participation !== null
+    && row.preparedBy === actor.person.id
+    && row.preparedParticipationId === authority.participation.id;
+  if (!ownerWriter && !participantOwnDraft)
+    throw new AuthError(403, "requires owner write authority or the current preparer's incident grant");
   if (row.status !== "draft")
     throw new AuthError(409, "only a draft plan can be submitted for approval");
-  await sql`update iaps set status = 'in_approval' where id = ${iapId}`;
-  await recordAudit(sql, actor, {
-    jurisdictionId: row.jurisdictionId,
+  await sql`
+    update iaps set status = 'in_approval', submitted_by = ${actor.person.id}, submitted_at = now()
+    where id = ${iapId}`;
+  await recordIapAudit(sql, actor, authority, {
     incidentId: row.incidentId,
     category: "iap.submitted",
-    subjectTable: "iaps",
     subjectId: iapId,
   });
 }
 
 export async function approveIap(sql: Sql, actor: Principal, iapId: string): Promise<void> {
   const row = await iapWorkflowRow(sql, iapId);
-  requireAdmin(actor, row.jurisdictionId);
+  const authority = await getIncidentAuthority(sql, actor, row.incidentId);
+  await requireCurrentClaimedPosition(sql, actor, row.jurisdictionId);
+  if (!authority.canManageParticipation)
+    throw new AuthError(403, "requires incident owner admin");
   if (row.status !== "draft" && row.status !== "in_approval")
     throw new AuthError(409, "only a draft or in-approval plan can be approved");
   await sql`
@@ -241,7 +415,10 @@ export async function approveIap(sql: Sql, actor: Principal, iapId: string): Pro
 /** Mark an approved plan complete once its operational period has ended (admin). */
 export async function markIapComplete(sql: Sql, actor: Principal, iapId: string): Promise<void> {
   const row = await iapWorkflowRow(sql, iapId);
-  requireAdmin(actor, row.jurisdictionId);
+  const authority = await getIncidentAuthority(sql, actor, row.incidentId);
+  await requireCurrentClaimedPosition(sql, actor, row.jurisdictionId);
+  if (!authority.canManageParticipation)
+    throw new AuthError(403, "requires incident owner admin");
   if (row.status !== "approved")
     throw new AuthError(409, "only an approved plan can be marked complete");
   await sql`update iaps set status = 'complete' where id = ${iapId}`;
@@ -257,16 +434,43 @@ export async function markIapComplete(sql: Sql, actor: Principal, iapId: string)
 async function iapWorkflowRow(
   sql: Sql,
   iapId: string,
-): Promise<{ status: string; jurisdictionId: string; incidentId: string }> {
+): Promise<{
+  status: string;
+  jurisdictionId: string;
+  incidentId: string;
+  preparedBy: string;
+  preparedParticipationId: string | null;
+}> {
   const [row] = await sql`
-    select i.status, inc.jurisdiction_id, i.incident_id
-    from iaps i join incidents inc on inc.id = i.incident_id where i.id = ${iapId}`;
+    select i.status, inc.jurisdiction_id, i.incident_id, i.prepared_by,
+      i.prepared_participation_id
+    from iaps i join incidents inc on inc.id = i.incident_id
+    where i.id = ${iapId} for update of i`;
   if (!row) throw new AuthError(404, "IAP not found");
   return {
     status: row.status as string,
     jurisdictionId: row.jurisdiction_id as string,
     incidentId: row.incident_id as string,
+    preparedBy: row.prepared_by as string,
+    preparedParticipationId: (row.prepared_participation_id as string | null) ?? null,
   };
+}
+
+async function requireCurrentClaimedPosition(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+): Promise<void> {
+  if (!actor.position) return;
+  const [position] = await sql`
+    select 1 from positions p
+    join position_assignments pa on pa.position_id = p.id
+    join auth_sessions s on s.id = ${actor.sessionId}
+    where p.id = ${actor.position.id} and p.jurisdiction_id = ${jurisdictionId}
+      and pa.person_id = ${actor.person.id} and pa.revoked_at is null
+      and s.person_id = ${actor.person.id} and s.ended_at is null
+      and s.active_position_id = p.id`;
+  if (!position) throw new AuthError(403, "active IAP position assignment is no longer current");
 }
 
 /** The standard IAP is complete when it carries all of the default forms. */
@@ -286,9 +490,140 @@ export interface IapListItem {
 }
 
 /** Derive the working-list display state from the stored status and form count. */
-function displayStatus(stored: string, formCount: number): string {
+function displayStatus(stored: string, formCount: number): IapDisplayState {
   if (stored === "draft") return formCount === 0 ? "not_started" : "in_progress";
-  return stored;
+  if (stored === "in_approval" || stored === "approved" || stored === "complete") return stored;
+  throw new Error(`unsupported IAP status: ${stored}`);
+}
+
+function progressFor(formIds: readonly string[] | null): IapProgress {
+  const requiredFormIds = [...DEFAULT_IAP_FORMS];
+  const completedSet = new Set((formIds ?? []).filter(isFormId));
+  const completedFormIds = requiredFormIds.filter((id) => completedSet.has(id));
+  const missingFormIds = requiredFormIds.filter((id) => !completedSet.has(id));
+  const completed = completedFormIds.length;
+  const required = requiredFormIds.length;
+  return {
+    requiredFormIds,
+    completedFormIds,
+    missingFormIds,
+    completed,
+    required,
+    percent: required === 0 ? 100 : Math.round((completed / required) * 100),
+  };
+}
+
+function iso(value: unknown): string {
+  return new Date(value as string).toISOString();
+}
+
+function facet(values: readonly { key: string; label: string }[]): { key: string; label: string; count: number }[] {
+  const counts = new Map<string, { key: string; label: string; count: number }>();
+  for (const value of values) {
+    const current = counts.get(value.key);
+    if (current) current.count += 1;
+    else counts.set(value.key, { ...value, count: 1 });
+  }
+  return [...counts.values()].sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/** Query the incident-isolated working/published IAP workspace. */
+export async function queryIapWorkspace(
+  sql: Sql,
+  actor: Principal,
+  incidentId: string,
+  query: IapWorkspaceQuery,
+): Promise<IapWorkspaceResponse> {
+  await getIncidentAuthority(sql, actor, incidentId);
+  if (query.periodRevision !== undefined) {
+    const [period] = await sql`
+      select 1 from incident_area_revisions
+      where incident_id = ${incidentId} and revision = ${query.periodRevision}
+        and period_label is not null and period_starts_at is not null and period_ends_at is not null`;
+    if (!period) throw new AuthError(400, "operational period revision is not available for this incident");
+  }
+  const rows = await sql`
+    select i.id, i.operational_period, i.period_revision, i.status, i.form_ids,
+      i.created_at, i.submitted_at, i.approved_at,
+      prep.display_name as prepared_by, submitter.display_name as submitted_by,
+      approver.display_name as approved_by,
+      i.prepared_organization_id, organization.name as prepared_organization_name,
+      i.prepared_position_id, i.prepared_participation_id,
+      i.prepared_role_key, i.prepared_role_label,
+      period.period_label, period.period_starts_at, period.period_ends_at
+    from iaps i
+    join jurisdictions organization on organization.id = i.prepared_organization_id
+    left join persons prep on prep.id = i.prepared_by
+    left join persons submitter on submitter.id = i.submitted_by
+    left join persons approver on approver.id = i.approved_by
+    left join incident_area_revisions period
+      on period.incident_id = i.incident_id and period.revision = i.period_revision
+    where i.incident_id = ${incidentId}
+      and (${query.organizationId ?? null}::uuid is null
+        or i.prepared_organization_id = ${query.organizationId ?? null})
+      and (${query.periodRevision ?? null}::integer is null
+        or i.period_revision = ${query.periodRevision ?? null})
+      and (${query.role ?? null}::text is null or i.prepared_role_key = ${query.role ?? null})
+      and (${query.view} = 'all'
+        or (${query.view} = 'working' and i.status in ('draft', 'in_approval'))
+        or (${query.view} = 'published' and i.status in ('approved', 'complete')))
+    order by i.created_at desc, i.id desc`;
+  const iaps: IapWorkspaceItem[] = rows.map((row) => {
+    const progress = progressFor((row.form_ids as string[] | null) ?? []);
+    const preparedAttribution: IapPreparedAttribution = {
+      organizationId: row.prepared_organization_id as string,
+      organizationName: row.prepared_organization_name as string,
+      roleKey: row.prepared_role_key as string,
+      roleLabel: row.prepared_role_label as string,
+      positionId: (row.prepared_position_id as string | null) ?? null,
+      participationId: (row.prepared_participation_id as string | null) ?? null,
+    };
+    return {
+      id: row.id as string,
+      operationalPeriod: row.operational_period as string,
+      period: row.period_revision === null ? null : {
+        revision: Number(row.period_revision),
+        label: row.period_label as string,
+        startsAt: iso(row.period_starts_at),
+        endsAt: iso(row.period_ends_at),
+      },
+      status: displayStatus(row.status as string, progress.completed),
+      formCount: progress.completed,
+      targetForms: progress.required,
+      progress,
+      preparedBy: (row.prepared_by as string | null) ?? null,
+      preparedAttribution,
+      submittedBy: (row.submitted_by as string | null) ?? null,
+      submittedAt: row.submitted_at ? iso(row.submitted_at) : null,
+      approvedBy: (row.approved_by as string | null) ?? null,
+      approvedAt: row.approved_at ? iso(row.approved_at) : null,
+      createdAt: iso(row.created_at),
+    };
+  });
+  const states: IapDisplayState[] = ["not_started", "in_progress", "in_approval", "approved", "complete"];
+  const byState = Object.fromEntries(states.map((state) => [
+    state, iaps.filter((iap) => iap.status === state).length,
+  ])) as Record<IapDisplayState, number>;
+  return {
+    iaps,
+    query,
+    summary: {
+      total: iaps.length,
+      byState,
+      completedForms: iaps.reduce((sum, iap) => sum + iap.progress.completed, 0),
+      requiredForms: iaps.reduce((sum, iap) => sum + iap.progress.required, 0),
+    },
+    facets: {
+      organizations: facet(iaps.map((iap) => ({
+        key: iap.preparedAttribution.organizationId,
+        label: iap.preparedAttribution.organizationName,
+      }))),
+      roles: facet(iaps.map((iap) => ({
+        key: iap.preparedAttribution.roleKey,
+        label: iap.preparedAttribution.roleLabel,
+      }))),
+    },
+  };
 }
 
 /**
@@ -301,31 +636,18 @@ export async function listIaps(
   actor: Principal,
   incidentId: string,
 ): Promise<IapListItem[]> {
-  const [incident] = await sql`select jurisdiction_id from incidents where id = ${incidentId}`;
-  if (!incident) throw new AuthError(404, "incident not found");
-  requireMember(actor, incident.jurisdiction_id as string);
-  const rows = await sql`
-    select i.id, i.operational_period, i.status, i.form_ids, i.created_at, i.approved_at,
-           prep.display_name as prepared_by, appr.display_name as approved_by
-    from iaps i
-    left join persons prep on prep.id = i.prepared_by
-    left join persons appr on appr.id = i.approved_by
-    where i.incident_id = ${incidentId}
-    order by i.created_at desc`;
-  return rows.map((r) => {
-    const formCount = (r.form_ids as string[] | null)?.length ?? 0;
-    return {
-      id: r.id as string,
-      operationalPeriod: r.operational_period as string,
-      status: displayStatus(r.status as string, formCount),
-      formCount,
-      targetForms: IAP_TARGET_FORMS,
-      preparedBy: (r.prepared_by as string | null) ?? null,
-      approvedBy: (r.approved_by as string | null) ?? null,
-      approvedAt: r.approved_at ? new Date(r.approved_at as string).toISOString() : null,
-      createdAt: new Date(r.created_at as string).toISOString(),
-    };
-  });
+  const workspace = await queryIapWorkspace(sql, actor, incidentId, { view: "all" });
+  return workspace.iaps.map((iap) => ({
+    id: iap.id,
+    operationalPeriod: iap.operationalPeriod,
+    status: iap.status,
+    formCount: iap.formCount,
+    targetForms: iap.targetForms,
+    preparedBy: iap.preparedBy,
+    approvedBy: iap.approvedBy,
+    approvedAt: iap.approvedAt,
+    createdAt: iap.createdAt,
+  }));
 }
 
 export async function exportIapPdf(
@@ -339,20 +661,4 @@ export async function exportIapPdf(
   const bytes = renderPdf(title, iapToTextLines(content));
   const safe = content.incidentName.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase();
   return { filename: `iap-${safe}.pdf`, bytes };
-}
-
-function requireAdmin(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || m.role !== "admin") throw new AuthError(403, "requires jurisdiction admin");
-}
-
-function requireMember(actor: Principal, jurisdictionId: string): void {
-  if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
-    throw new AuthError(403, "no access to this jurisdiction");
-}
-
-function requireWriter(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || (m.role !== "admin" && m.role !== "member"))
-    throw new AuthError(403, "requires write access to this jurisdiction");
 }

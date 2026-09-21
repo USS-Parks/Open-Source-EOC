@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { IapWorkspaceQuerySchema } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import {
@@ -8,8 +9,8 @@ import {
   createIap,
   exportIapPdf,
   getIap,
-  listIaps,
   markIapComplete,
+  queryIapWorkspace,
   submitIapForApproval,
 } from "./service.js";
 
@@ -25,6 +26,7 @@ const IapBody = z.object({
   preparedBy: z.string().min(1).optional(),
   safetyMessage: z.string().min(1).optional(),
   formIds: z.array(z.string().min(1)).optional(),
+  periodRevision: z.number().int().positive().optional(),
 });
 
 export function iapRoutes(
@@ -61,6 +63,7 @@ export function iapRoutes(
           ...(body.preparedBy !== undefined ? { preparedBy: body.preparedBy } : {}),
           ...(body.safetyMessage !== undefined ? { safetyMessage: body.safetyMessage } : {}),
           ...(body.formIds !== undefined ? { formIds: body.formIds } : {}),
+          ...(body.periodRevision !== undefined ? { periodRevision: body.periodRevision } : {}),
         }),
       );
       return reply.status(201).send(result);
@@ -72,10 +75,11 @@ export function iapRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { incidentId } = req.params as { incidentId: string };
-      const iaps = await withPerson(sql, req.principal.person.id, (tx) =>
-        listIaps(tx, req.principal, incidentId),
+      const query = IapWorkspaceQuerySchema.parse(req.query);
+      const workspace = await withPerson(sql, req.principal.person.id, (tx) =>
+        queryIapWorkspace(tx, req.principal, incidentId, query),
       );
-      return reply.send({ iaps });
+      return reply.send(workspace);
     },
   );
 

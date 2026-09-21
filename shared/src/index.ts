@@ -27,6 +27,7 @@ export * from "./ics/forms.js";
 export * from "./ics/pdf.js";
 export * from "./resource/lifecycle.js";
 export * from "./aar/aar.js";
+export * from "./iap/contract.js";
 export * from "./incidents/area.js";
 export * from "./incidents/participation.js";
 export * from "./data-packs/pack.js";
