@@ -2947,6 +2947,29 @@ increment proves it and that coverage follows the incident area.
   No historical receipt, accepted implementation or prompt wording is erased.
 - **Unit commit:** recorded by next receipt; standing commit authority applies.
 
+## W0.4: provision bounded execution lanes
+
+- **Serves:** Master PSPR W0.4. Integrator: main. W0.3 commit: 880f9c9.
+- **Change:** provision lane/a through lane/d under the sibling eoc-lanes
+  directory, each from 880f9c9, with independent Git indices and the shared
+  pnpm store. No extra runtime cluster or dependency downloads.
+- **Gate:** all four frozen offline installs exited 0, reusing 300 packages
+  each with zero downloads. All four recursive TypeScript checks exited 0.
+  Each checkout resolves its own root and retains .githooks, including the
+  merge rejection hook. Root inspected the setup commands and all results.
+- **Ownership:** a: 79G-E1 impact contract; b: VEOC-80 access; c: H11 maps
+  after the first a/b landings; d: D00 design baseline then its foundation chain.
+  Astra alone controls Git writes, shared documents and the existing database
+  cluster. Distinct run tags and artifact directories apply to every lane.
+- **Storage:** before creation C: had approximately 279.6 GB free; canonical
+  node_modules logical size was 2022.5 MiB. Four active lane dependency trees
+  use pnpm's common content store; no copied PostgreSQL cluster or SDK caches.
+- **Retirement:** all four lanes remain active for this approved roster and
+  have no unpublished product commits at setup. Remove them under the standing
+  grant after their work is preserved on main and no assigned unit needs them.
+- **Evidence level:** integrated local setup. No product feature claim.
+- **Unit commit:** this receipt, standing commit authority; no push.
+
 ## W0.3: enforce linear integration history
 
 - **Serves:** Master PSPR W0.3. Lane: main. Prior W0.2 commit: d99ae0a.
