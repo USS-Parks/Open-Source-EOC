@@ -11,6 +11,8 @@ import type {
   IncidentAreaUpdate,
   IncidentParticipantGrant,
   IncidentParticipantGrantInput,
+  DatasetStatus,
+  DataPack,
 } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
 
@@ -473,6 +475,14 @@ export class ApiClient {
   }
   revokeIncidentParticipant(incidentId: string, participantId: string, reason: string): Promise<{ participant: IncidentParticipantGrant }> {
     return this.request("POST", `/api/v1/incidents/${incidentId}/participants/${participantId}/revoke`, { reason });
+  }
+  async listIncidentDatasets(incidentId: string): Promise<DatasetStatus[]> {
+    const result = await this.request<{ datasets: DatasetStatus[] }>(
+      "GET", `/api/v1/incidents/${incidentId}/datasets`);
+    return result.datasets;
+  }
+  registerDataPack(incidentId: string, body: DataPack): Promise<{ pack: { id: string; datasetKeys: string[] } }> {
+    return this.request("POST", `/api/v1/incidents/${incidentId}/data-packs`, body as unknown as Record<string, unknown>);
   }
   getIncidentArea(incidentId: string): Promise<IncidentAreaRevision> {
     return this.request("GET", `/api/v1/incidents/${incidentId}/operational-area`);

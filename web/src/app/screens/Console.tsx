@@ -16,6 +16,7 @@ import { FormsSurface } from "../surfaces/FormsSurface.js";
 import { IapSurface } from "../surfaces/IapSurface.js";
 import { FilesSurface } from "../surfaces/FilesSurface.js";
 import { IncidentsSurface } from "../surfaces/IncidentsSurface.js";
+import { IncidentDatasets } from "../surfaces/IncidentDatasets.js";
 import { ResourcesSurface } from "../surfaces/ResourcesSurface.js";
 import { AarSurface } from "../surfaces/AarSurface.js";
 import { FeedsSurface } from "../surfaces/FeedsSurface.js";
@@ -28,6 +29,7 @@ const NAV: readonly NavItem[] = [
   { key: "map", label: "Map" },
   { key: "dashboard", label: "Dashboard" },
   { key: "incidents", label: "Incidents" },
+  { key: "datasets", label: "Datasets" },
   { key: "boards", label: "Boards" },
   { key: "sitreps", label: "SITREP" },
   { key: "forms", label: "Forms" },
@@ -151,6 +153,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         jurisdictionId={jurisdictionId}
         incidentId={incident.selectedIncidentId}
         incidentName={incident.selectedIncident?.name ?? null}
+        incidentCanManage={incident.selectedIncident?.canEditArea ?? false}
         boards={boardItems}
         collections={collections.data ?? []}
         feeds={feeds.data ?? []}
@@ -180,6 +183,8 @@ function sectionForNav(key: string): Surface {
       return { kind: "files" };
     case "incidents":
       return { kind: "incidents" };
+    case "datasets":
+      return { kind: "datasets" };
     case "resources":
       return { kind: "resources" };
     case "aar":
@@ -206,6 +211,7 @@ function Center(props: {
   jurisdictionId: string;
   incidentId: string | null;
   incidentName: string | null;
+  incidentCanManage: boolean;
   boards: readonly BoardListItem[];
   collections: readonly CollectionRef[];
   feeds: readonly FeedHealth[];
@@ -296,6 +302,14 @@ function Center(props: {
           jurisdictionId={props.jurisdictionId}
           isAdmin={props.isAdmin}
           theme={props.theme}
+        />
+      );
+    case "datasets":
+      return (
+        <IncidentDatasets
+          client={props.client}
+          incidentId={props.incidentId}
+          canManage={props.incidentCanManage}
         />
       );
     case "alerts":

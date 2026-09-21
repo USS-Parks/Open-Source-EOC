@@ -2248,4 +2248,62 @@ previous incident's view down.
   hidden switcher option).
 - **Gate:** pnpm check --maxWorkers=2 exited 0; 456 tests in 79 files passed.
   Log: deploy/test-runtime/out/veoc-79b-check-final.log.
+- **Ending commit:** 8c96103963da6b4a2291d1c76fe4bd56e1ec85c8, pushed
+  (9466ed2..8c96103).
+
+## VEOC-79C: Activation-time data-pack onboarding
+
+Basho chose the full data-pack contract (a dataset registry decoupled from the
+feed framework) over extending the feed seam. A participating organization
+registers a pack at runtime, no code change or redeploy.
+
+- **Baseline:** 8c96103963da6b4a2291d1c76fe4bd56e1ec85c8 on canonical main.
+- **Contract and engine:** shared/src/data-packs/pack.ts defines the pack
+  schema (organization, datasets, per-dataset field mapping, coverage,
+  freshness) and a pure field-mapping engine: a mapped source path that is
+  absent yields null, never a fabricated zero, and datasetAvailability
+  classifies awaiting / available / stale / unavailable. Unit tested.
+- **Store and authority:** migration 0035 adds data_packs and
+  data_pack_datasets with row-level security reusing the 79A functions. Reads
+  follow can_read_incident; a pack is registered by the incident owner's admin
+  or a coordinator of the owning organization (the coordinator bound to its own
+  org); load status is written by an incident contributor. item_count is null
+  until a load succeeds, enforced by a table constraint, so a missing source is
+  never stored as zero.
+- **Service and routes:** registerDataPack (with PostGIS coverage validation),
+  listIncidentDatasets (availability computed, itemCount null unless available
+  or stale, source owner and coverage area returned), and loadDataset (applies
+  the field mapping, records real freshness and count, or records an error).
+  The audit event is attributed to the jurisdiction the actor belongs to so a
+  partner coordinator's registration is not rejected by the audit membership
+  wall.
+- **Operator surface:** a Datasets surface, driven by the selected incident,
+  lists datasets by source organization with availability badges, a dash (not
+  zero) for missing counts, and coverage state; owner admins and coordinators
+  get an onboarding form.
+- **Scope boundary:** loadDataset records freshness and count and applies the
+  mapping; persisting and rendering each mapped item on the COP is 79D
+  (COP/KPI reconciliation), not this contract.
+- **Evidence:** shared pack tests; a real-database server test (onboard,
+  missing-is-not-zero, load applies mapping, failure is unavailable, cross-
+  incident isolation, viewer and outsider and foreign-org denial); a web test
+  asserting the surface shows a real count for available data and a dash for
+  missing.
+- **Gate:** pnpm check --maxWorkers=2 exited 0; 467 tests in 82 files passed.
+  Log: deploy/test-runtime/out/veoc-79c-final.log.
+
+## Direction from Basho, 2026-09-20: no public facet (For Official Use Only)
+
+Basho clarified during VEOC-79C: the platform has no public-facing facet and is
+For Official Use Only. Access is binary. Anyone with authorized access,
+including a mutual-aid guest holding a grant, may view an incident and the
+dashboard without restriction; only someone without access cannot view an
+incident. This supersedes VEOC-80 ("Anonymous public-information map with
+explicitly published records") and the continuation doc's public projection
+boundary: there is no anonymous or public read path to build. VEOC-80 is to be
+reframed as authorized-access viewing (guests included). The incident lockdown
+(migration 0028_lockdown), which suspends guest read during an incident,
+conflicts with "authorized guests unrestricted" and awaits Basho's direction
+before any change. Recorded in session memory.
+
 - **Ending commit:** this receipt commit, recorded by the next receipt.

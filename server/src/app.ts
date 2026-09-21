@@ -34,6 +34,7 @@ import { federationRoutes } from "./federation/routes.js";
 import { collabRoutes } from "./collab/routes.js";
 import { syncPositionIncidents } from "./collab/service.js";
 import { incidentRoutes } from "./incidents/routes.js";
+import { dataPackRoutes } from "./data-packs/routes.js";
 import { iapRoutes } from "./iap/routes.js";
 import { ipawsRoutes } from "./ipaws/routes.js";
 import { jicRoutes } from "./jic/routes.js";
@@ -342,6 +343,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   staffingRoutes(app, sql, authenticate);
   trackingRoutes(app, sql, authenticate);
   incidentRoutes(app, sql, authenticate);
+  dataPackRoutes(app, sql, authenticate);
   notifyRoutes(app, sql, authenticate);
   messagingRoutes(app, sql, authenticate);
   geoRoutes(app, sql, authenticate);

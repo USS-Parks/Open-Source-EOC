@@ -28,6 +28,7 @@ export * from "./resource/lifecycle.js";
 export * from "./aar/aar.js";
 export * from "./incidents/area.js";
 export * from "./incidents/participation.js";
+export * from "./data-packs/pack.js";
 
 export const OPENEOC_VERSION = "0.0.0" as const;
 

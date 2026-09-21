@@ -17,6 +17,7 @@ export type Surface =
   | { readonly kind: "iap" }
   | { readonly kind: "files" }
   | { readonly kind: "incidents" }
+  | { readonly kind: "datasets" }
   | { readonly kind: "resources" }
   | { readonly kind: "aar" }
   | { readonly kind: "feeds" }
@@ -61,6 +62,8 @@ export function parseHash(hash: string): Surface {
       return { kind: "files" };
     case "incidents":
       return { kind: "incidents" };
+    case "datasets":
+      return { kind: "datasets" };
     case "resources":
       return { kind: "resources" };
     case "aar":
@@ -102,6 +105,8 @@ export function surfaceHash(surface: Surface): string {
       return "#/files";
     case "incidents":
       return "#/incidents";
+    case "datasets":
+      return "#/datasets";
     case "resources":
       return "#/resources";
     case "aar":
