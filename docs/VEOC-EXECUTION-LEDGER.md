@@ -2929,3 +2929,20 @@ increment proves it and that coverage follows the incident area.
   dependency, authentication policy or production database was changed.
 - **Unit commit:** recorded by the next receipt; authorized standing commit.
   No push, no lane worktrees created in this unit.
+
+## W0.2: reconcile capability rows with delivered increments
+
+- **Serves:** Master PSPR W0.2. Lane: main. Prior unit W0.1: cbc1ecb.
+- **Change:** reconcile F6, F18, R3, G-INCSCOPE, G-INGEST and G-PARCELS
+  against the 79B1/B2, 79C1/C2 and Handoff 10 receipts. Delivered behavior is
+  retained. Database/DOM evidence is not presented as a browser exercise.
+  The historic 79B closure receipt remains intact; unresolved original
+  browser and URL-state obligations remain visible in the matrix.
+- **Files:** docs/VEOC-PARITY-MATRIX.md and this ledger only.
+- **Gate:** node scripts/check-links.mjs exited 0 (46 files), git diff --check
+  exited 0, and integrator and independent reviews found no matrix issue.
+  The review's sole correction was recording these passed results here. No app tests.
+- **Evidence level:** designed, evidence-register reconciliation only.
+- **Boundary:** all six rows remain partial at their broader capability scope.
+  No historical receipt, accepted implementation or prompt wording is erased.
+- **Unit commit:** recorded by next receipt; standing commit authority applies.
