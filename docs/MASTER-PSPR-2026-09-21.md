@@ -890,7 +890,13 @@ Execution split, 2026-09-21: `80a` is the independently gated client-cache
 correction in data/hooks.ts, DashboardSurface.tsx and its new hook test.
 The remaining `80b` access work is preserved separately while the policy
 decision is pending. Its next clean unit boundary incorporates E2's helper.
-VEOC-80 remains open; the opening ramp still waits for full unit 80 acceptance.
+VEOC-80 remains open. After 80a's clean landing and integration gate, both
+opening lanes have landed a clean unit, satisfying section 7.4. Lane c starts
+H11; the temporary hold for full 80 acceptance was stricter than that rule.
+H11 also owns the existing data-pack items read service/routes and its new
+focused tests for area-filtered pagination, because the current read silently
+caps at 2,000 records. Unit 80b's nine restored files do not touch that seam.
+Existing unpaged callers stay compatible; authority and ingestion are unchanged.
 
 ### 8.6 Migration blocks
 

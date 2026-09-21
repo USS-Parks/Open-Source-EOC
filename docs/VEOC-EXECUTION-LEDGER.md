@@ -3153,3 +3153,17 @@ increment proves it and that coverage follows the incident area.
 - **Integration:** exact fast-forward to 73bcd67227fe71c85cfb6214fb2ed0100d281e57.
   Lane d proceeds to D03 and the G-A package. Lanes a/b remain active;
   c remains reserved. No new worktree, generated dependency tree or push.
+
+## Opening ramp: release the existing hazard lane
+
+- Both opening lanes have landed clean units: a's E1/E2 and b's 80a.
+  The 80a replay passed TypeScript, ESLint and 18 focused integration tests.
+  This satisfies the Master's first-clean-landing rule. The temporary extra
+  hold for full 80 acceptance is lifted; 80b's policy gate is unchanged.
+- Existing lane c starts H11 on current main. No new checkout or install.
+  H11 additionally owns area-filtered, paged data-pack item reads because
+  source inspection found the existing endpoint silently caps at 2,000.
+  The nine restored 80b files do not overlap this read seam. Existing clients
+  remain compatible; no authority, ingestion or external-source grant changes.
+- The live NFHL source remains a named gap. Local rendering, attribution,
+  coverage and retrieval behavior are the authorized H11 deliverable.
