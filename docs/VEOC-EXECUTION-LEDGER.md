@@ -3038,3 +3038,15 @@ increment proves it and that coverage follows the incident area.
 - **Retained lanes:** a continues impact, b access, c awaits the first b
   landing, d workflow baselines. All are active or reserved by the ramp.
   No new worktree, dependency copy or push.
+
+## VEOC-80 execution note: policy approval pending
+
+- Automatic approval review rejected the proposed dashboard SELECT-policy
+  extension, including the narrower incident-context variant, as an unverified
+  expansion of FOUO dashboard read access. No rejected migration was applied.
+- The concrete SQL, exposure boundary and supporting service checks are in
+  docs/VEOC-80-POLICY-APPROVAL.md. Basho was asked for informed approval in
+  this session. That question remains pending until an explicit answer.
+- Unit 80 continues unaffected service, UI and test preparation in lane b.
+  Its full real-database/browser gate and landing remain open. Other approved
+  units continue; no approval is inferred from elapsed time or prior general STS.
