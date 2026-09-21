@@ -3727,3 +3727,25 @@ increment proves it and that coverage follows the incident area.
 - **Boundary:** final operational map composition remains P-COP; this source
   gate is complete. Four existing lanes retained, no new worktree or push.
   Acquisition profiler temporary data remains disclosed cleanup debt.
+
+## D08: recoverable forms and accessible overlays
+
+- **Serves/lane:** D08 in lane d, refreshed to aafc36f. Shared schema-based
+  controls, grouped conditional fields, scoped drafts and truthful submission,
+  plus focus-managed drawers and dialogs. Uses existing validation and storage
+  seams; injected geometry, reference and upload adapters remain explicit.
+- **Gate:** root read the full change and passed workspace TypeScript, tree
+  ESLint and six suites 40/40. Four real-browser wide/narrow light/dark views
+  passed validation, hash-route preservation, draft resume, rejection/success,
+  unsaved guard and containment; zero errors or external requests. Root viewed
+  wide light and narrow dark. After final plain validation wording, web types,
+  affected lint and forms 11/11 passed. Fresh review identified focus stealing
+  during multi-field correction; repaired one-shot submit focus and root forms
+  11/11 passed. Bounded correction review: SHIP. H14 replay 5/5 plus desktop
+  10/10 passed. No unnecessary full or browser rerun after the focus repair.
+- **Evidence:** deploy/test-runtime/out/lanes/d/logs/D08-root-integration.log;
+  out/d08-review/result.json, browser-width-repair.log and shots. Final focused
+  root run passed in session output; owner retained regression in forms.test.
+- **Unit commit:** 03e42ad883152af7d6a98a54057353bc250ae186, exact fast-forward.
+  Gallery is synthetic kit proof, not final screen composition. Four existing
+  lanes retained, no new worktree or push. Lane d next: P-SHELL frame/context.
