@@ -23,14 +23,29 @@ $testRoot = (Resolve-Path deploy/test-runtime/out).Path
 Run the complete verification gate without displaying credentials:
 
 ```powershell
+$testRoot = 'C:/Users/17076/Documents/Open Source EOC/deploy/test-runtime/out'
 $testPassword = [IO.File]::ReadAllText("$testRoot/test-password.txt").Trim()
+$lane = 'gate' # a, b, c, d for lanes; main for the integrator; gate for milestones
+$env:OPENEOC_TEST_DB_TAG = $lane
 $env:OPENEOC_DATABASE_URL = 'postgres://postgres:' + [Uri]::EscapeDataString($testPassword) + '@127.0.0.1:55439/openeoc_test'
 $env:OPENEOC_CHROMIUM = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
-$env:OPENEOC_TEST_BUILD_ROOT = "$testRoot/browser"
-$env:OPENEOC_SHOT_DIR = "$testRoot/browser-shots"
-$env:OPENEOC_DATA_DIR = "$testRoot/blobs"
+$env:OPENEOC_TEST_BUILD_ROOT = "$testRoot/lanes/$lane/browser"
+$env:OPENEOC_SHOT_DIR = "$testRoot/lanes/$lane/browser-shots"
+$env:OPENEOC_DATA_DIR = "$testRoot/lanes/$lane/blobs"
 pnpm check --maxWorkers=2
 ```
+
+Each concurrent run needs a different tag containing 1 to 12 lowercase letters
+or digits. Never run two suites with the same tag at once. An omitted tag keeps
+the legacy untagged namespace; an empty or invalid tag fails before connecting.
+Teardown drops only the current namespace. Only the integrating session controls
+the cluster. Lane commands set the absolute canonical testRoot shown above,
+their own working directory, and all environment variables in each invocation.
+
+If interrupted runs leave databases behind, the integrator may inspect names
+matching `^t_([a-z0-9]{1,12}_)?[0-9a-z]{10}$`. Manual cleanup is allowed only
+after every test run is stopped and ownership is verified. The broader pattern
+is for idle-cluster recovery, never for automatic teardown of a live run.
 
 Stop only this project's cluster after verification work ends:
 

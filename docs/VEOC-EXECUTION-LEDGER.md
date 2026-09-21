@@ -2905,3 +2905,27 @@ increment proves it and that coverage follows the incident area.
   remains preserved in temporary storage.
 - **Unit commit:** approved; SHA recorded by the next receipt. No push
   performed; no branch created. One canonical worktree retained, with no lanes.
+
+## W0.1: isolate concurrent test database cleanup
+
+- **Serves:** Master PSPR Phase 0 W0.1. Lane: main.
+- **Baseline / prior unit:** 0916c21bc56bb1552497bff8f84efd1fece61fcd (W0.0).
+- **Change:** validate optional lowercase alphanumeric run tags, include the
+  tag in database names, pad the random suffix to ten characters, and clean
+  only the run's namespace. Untagged behavior remains supported. Document
+  isolated output directories and idle-only recovery cleanup.
+- **Files:** server/src/__tests__/helpers.ts and globalSetup.ts,
+  deploy/test-runtime/README.md, the Master PSPR recovery note and this receipt.
+- **Gate:** pnpm -r exec tsc --noEmit and pnpm exec eslint . both exited 0.
+  The real-database overlap proof ran the quick test with tag a while tag b
+  held a live database. A exited 0 while B remained alive; B's subsequent
+  database query passed and B exited 0. Each run passed one test. Final count
+  of a/b databases was zero. Independent review returned ship, no findings.
+- **Evidence:** deploy/test-runtime/out/w0-1-proof/run-1790017944234 contains
+  a.log, b.log and result.json. Temporary fixtures are archived as .ts.txt
+  outside test discovery. The cluster was already running and was not restarted.
+- **Evidence level:** integrated, test-harness isolation on real PostgreSQL.
+- **Boundary:** simultaneous runs must use distinct tags. No product behavior,
+  dependency, authentication policy or production database was changed.
+- **Unit commit:** recorded by the next receipt; authorized standing commit.
+  No push, no lane worktrees created in this unit.

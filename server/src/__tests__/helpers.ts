@@ -6,6 +6,11 @@ import { addMembership, createJurisdiction, createPerson } from "../auth/service
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "migrations");
 
+const DB_TAG = process.env.OPENEOC_TEST_DB_TAG;
+if (DB_TAG !== undefined && !/^[a-z0-9]{1,12}$/.test(DB_TAG)) {
+  throw new Error("OPENEOC_TEST_DB_TAG must contain 1 to 12 lowercase letters or digits");
+}
+
 // Test-only credential for the RLS-bound runtime role in the throwaway
 // test cluster; production deployments set their own (see 0002_authz.sql).
 const RUNTIME_TEST_PASSWORD = "app-runtime-test-only";
@@ -19,10 +24,11 @@ export interface TestDb {
 
 /**
  * One throwaway database per test file, so files can run concurrently
- * without racing each other's schemas.
+ * without racing each other's schemas. A run tag isolates concurrent teardown.
  */
 export async function freshDb(): Promise<TestDb> {
-  const dbName = `t_${Math.random().toString(36).slice(2, 12)}`;
+  const suffix = Math.random().toString(36).slice(2, 12).padEnd(10, "0");
+  const dbName = DB_TAG === undefined ? `t_${suffix}` : `t_${DB_TAG}_${suffix}`;
   const bootstrap = connect();
   const url = process.env.OPENEOC_DATABASE_URL;
   let admin: Sql;

@@ -341,7 +341,9 @@ Caveats:
   `server/src/__tests__/globalSetup.ts` or its wiring in `vitest.config.mjs`.
   If the cluster bloats again, drop leaked databases with psql `\gexec` over
   `select 'drop database if exists '||datname||' with (force)' from
-  pg_database where datname ~ '^t_[0-9a-z]{10}$'`.
+  pg_database where datname ~ '^t_([a-z0-9]{1,12}_)?[0-9a-z]{10}$'`.
+  This manual recovery is permitted only after every test run has stopped;
+  automatic teardown remains strictly scoped to the current run tag.
 - **Write protocol (`CLAUDE.md`).** Edit existing files with small atomic
   patches. Never `sed -i`, `perl -i` or shell redirects onto repository files.
   New files over 40 lines go to the scratchpad first, are verified with
