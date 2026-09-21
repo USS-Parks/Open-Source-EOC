@@ -3659,3 +3659,26 @@ increment proves it and that coverage follows the incident area.
   Impact aggregates explicitly report unsupported active nonspatial filters.
 - **Boundary:** no new counting engine or presentation. Four retained lanes,
   no new worktree or push. Lane b next takes D07.
+
+## D05: accessible navigation and lifeline icons
+
+- **Serves/lane:** D05 in lane a, refreshed to e21dcad. Evidence level:
+  integrated icon kit, with isolated browser proof against canonical photos.
+- **Change:** original SVG registry covers current and planned destinations,
+  all eight lifelines, meaningful/decorative accessibility, supported sizes and
+  independent selected/disabled states. Status stays outside icon identity.
+  Provenance is recorded in ASSET-LICENSES; NAPSG map symbols remain distinct.
+- **Gate:** root TypeScript and ESLint passed; icon and D06 tests passed 28/28.
+  Visual review corrected gallery font declaration and hazard geometry; final
+  icon and replayed dashboard engine suites passed 18/18. Four browser views
+  in light/navy-dark at 1440/390 px passed inventory, 16/20 px minimum sizes,
+  focus, accessible names and containment, with no errors or external requests.
+  Root inspected rendered images and confirmed computed system sans typography.
+  Fresh review is SHIP. Evidence: out/lanes/a/logs/D05-integration.log,
+  D05-final-repair-replay.log and D05-browser-result.json, plus
+  out/d05-review/browser-repair.log and out/lanes/a/browser-shots/d05.
+- **Unit commit:** a0d0051958539c7019ceca9ece57ee4312b680a1, exact fast-forward.
+- **Boundary:** galleries do not supersede the three canonical photos or prove
+  final screen composition. Lane a retains 39,062 bytes of construction scratch
+  in work/d05, excluded from the commit and disposable at lane retirement.
+  Four existing lanes retained; no new worktree or push. Next lane a: 82-E.
