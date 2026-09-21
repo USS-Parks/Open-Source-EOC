@@ -1,0 +1,372 @@
+import { createHash, randomUUID } from "node:crypto";
+import type {
+  IncidentTask,
+  TaskCompletionReceipt,
+  TaskListQuery,
+  TaskListResponse,
+  TaskMetadataPatch,
+  TaskStatus,
+} from "@openeoc/shared";
+import type { Sql } from "../db/client.js";
+import { AuthError, type Principal } from "../auth/service.js";
+import { recordAudit } from "../audit/service.js";
+import { resolveWorkflowAssignment } from "../boards/workflow.js";
+import {
+  getIncidentAuthority,
+  lockIncidentMutation,
+  type IncidentAuthority,
+} from "./participation.js";
+
+interface TaskRow extends Record<string, unknown> {
+  id: string;
+  incident_id: string;
+  item: string;
+  category: string;
+  status: TaskStatus;
+  due_at: string | Date | null;
+  revision: number;
+  position_id: string | null;
+  position_title: string | null;
+  position_organization_id: string | null;
+  assigned_participant_id: string | null;
+  participant_person_id: string | null;
+  participant_organization_id: string | null;
+  participant_title: string | null;
+  completed_at: string | Date | null;
+  completed_by: string | null;
+  completed_by_position: string | null;
+  completed_by_organization_id: string | null;
+  completed_by_participation_id: string | null;
+  completed_as_title: string | null;
+}
+
+const taskSelect = `
+  select c.id, c.incident_id, c.item, c.category, c.status, c.due_at, c.revision,
+    c.position_id, pos.title as position_title,
+    pos.jurisdiction_id as position_organization_id,
+    c.assigned_participant_id, ip.person_id as participant_person_id,
+    ip.organization_id as participant_organization_id,
+    ip.incident_position_title as participant_title,
+    c.completed_at, c.completed_by, c.completed_by_position,
+    c.completed_by_organization_id, c.completed_by_participation_id,
+    c.completed_as_title
+  from checklist_items c
+  left join positions pos on pos.id = c.position_id
+  left join incident_participants ip on ip.id = c.assigned_participant_id`;
+
+function iso(value: string | Date | null): string | null {
+  return value === null ? null : new Date(value).toISOString();
+}
+
+function toTask(row: TaskRow): IncidentTask {
+  const assignment = row.position_id
+    ? {
+        kind: "position" as const,
+        id: row.position_id,
+        organizationId: row.position_organization_id!,
+        title: row.position_title!,
+        personId: null,
+      }
+    : row.assigned_participant_id
+      ? {
+          kind: "incident_participant" as const,
+          id: row.assigned_participant_id,
+          organizationId: row.participant_organization_id!,
+          title: row.participant_title!,
+          personId: row.participant_person_id,
+        }
+      : null;
+  const completedBy = row.completed_at
+    ? {
+        personId: row.completed_by!,
+        positionId: row.completed_by_position,
+        organizationId: row.completed_by_organization_id!,
+        participationId: row.completed_by_participation_id,
+        title: row.completed_as_title!,
+      }
+    : null;
+  return {
+    id: row.id,
+    incidentId: row.incident_id,
+    item: row.item,
+    category: row.category,
+    status: row.status,
+    dueAt: iso(row.due_at),
+    revision: Number(row.revision),
+    assignment,
+    completedAt: iso(row.completed_at),
+    completedBy,
+  };
+}
+
+function dueBucket(
+  task: IncidentTask,
+  now: number,
+): "overdue" | "next_24_hours" | "upcoming" | "none" | "completed" {
+  if (task.status === "completed") return "completed";
+  if (!task.dueAt) return "none";
+  const due = new Date(task.dueAt).getTime();
+  if (due < now) return "overdue";
+  if (due < now + 24 * 60 * 60_000) return "next_24_hours";
+  return "upcoming";
+}
+
+function assignedMatch(task: IncidentTask, actor: Principal, value: string): boolean {
+  if (value === "unassigned") return task.assignment === null;
+  if (value === "mine") {
+    return task.assignment?.kind === "position"
+      ? task.assignment.id === actor.position?.id
+      : task.assignment?.personId === actor.person.id;
+  }
+  return task.assignment?.id === value;
+}
+
+/** List and aggregate the same complete filtered task set, without pagination. */
+export async function listIncidentTasks(
+  sql: Sql,
+  actor: Principal,
+  incidentId: string,
+  filters: TaskListQuery,
+): Promise<TaskListResponse> {
+  await getIncidentAuthority(sql, actor, incidentId);
+  const rows = await sql.unsafe(`${taskSelect} where c.incident_id = $1
+    order by c.status, c.due_at nulls last, c.sort_order, c.id`, [incidentId]);
+  const now = Date.now();
+  const tasks = (rows as unknown as TaskRow[]).map(toTask).filter((task) =>
+    (filters.status === undefined || task.status === filters.status) &&
+    (filters.category === undefined || task.category === filters.category) &&
+    (filters.assignment === undefined || assignedMatch(task, actor, filters.assignment)) &&
+    (filters.due === undefined || dueBucket(task, now) === filters.due));
+  const byStatus: Record<TaskStatus, number> = { open: 0, in_progress: 0, completed: 0 };
+  const byCategory: Record<string, number> = {};
+  let overdue = 0;
+  let dueNext24Hours = 0;
+  let upcoming = 0;
+  let withoutDue = 0;
+  for (const task of tasks) {
+    byStatus[task.status] += 1;
+    byCategory[task.category] = (byCategory[task.category] ?? 0) + 1;
+    const bucket = dueBucket(task, now);
+    if (bucket === "overdue") overdue += 1;
+    else if (bucket === "next_24_hours") dueNext24Hours += 1;
+    else if (bucket === "upcoming") upcoming += 1;
+    else if (bucket === "none") withoutDue += 1;
+  }
+  return {
+    tasks,
+    analytics: {
+      total: tasks.length,
+      byStatus,
+      byCategory,
+      overdue,
+      dueNext24Hours,
+      upcoming,
+      withoutDue,
+    },
+    filters,
+  };
+}
+
+type LockedIncidentAuthority = IncidentAuthority & { readonly closedAt: string | null };
+
+async function lockIncident(
+  sql: Sql,
+  actor: Principal,
+  incidentId: string,
+): Promise<LockedIncidentAuthority> {
+  await getIncidentAuthority(sql, actor, incidentId);
+  await lockIncidentMutation(sql, incidentId);
+  const [incident] = await sql`
+    select id, closed_at from incidents where id = ${incidentId}`;
+  if (!incident) throw new AuthError(404, "incident not found");
+  const authority = await getIncidentAuthority(sql, actor, incidentId);
+  return { ...authority, closedAt: (incident.closed_at as string | null) ?? null };
+}
+
+async function loadTaskForUpdate(sql: Sql, incidentId: string, taskId: string): Promise<TaskRow> {
+  const rows = await sql.unsafe(
+    `${taskSelect} where c.incident_id = $1 and c.id = $2 for update of c`,
+    [incidentId, taskId],
+  );
+  const row = rows[0] as TaskRow | undefined;
+  if (!row) throw new AuthError(404, "task not found");
+  return row;
+}
+
+/** Owner-admin metadata or current-assignee status update with revision CAS. */
+export async function updateIncidentTask(
+  sql: Sql,
+  actor: Principal,
+  incidentId: string,
+  taskId: string,
+  input: TaskMetadataPatch,
+): Promise<IncidentTask> {
+  const authority = await lockIncident(sql, actor, incidentId);
+  if (authority.closedAt) throw new AuthError(409, "incident is closed");
+  const current = await loadTaskForUpdate(sql, incidentId, taskId);
+  if (current.status === "completed") throw new AuthError(409, "completed task is immutable");
+  const statusOnly = input.status !== undefined && input.item === undefined &&
+    input.category === undefined && input.dueAt === undefined && input.assignment === undefined;
+  if (!authority.canManageParticipation) {
+    if (!statusOnly) throw new AuthError(403, "task metadata requires incident owner admin");
+    await requireCurrentAssignee(sql, actor, authority, current);
+  }
+
+  let positionId: string | null | undefined;
+  let participantId: string | null | undefined;
+  if (input.assignment !== undefined) {
+    if (input.assignment === null) {
+      positionId = null;
+      participantId = null;
+    } else {
+      if (input.assignment.kind === "incident_participant" && input.assignment.incidentId !== incidentId) {
+        throw new AuthError(400, "assignment belongs to another incident");
+      }
+      const assignment = await resolveWorkflowAssignment(
+        sql,
+        actor,
+        authority.jurisdictionId,
+        input.assignment,
+      );
+      positionId = assignment.kind === "position" ? assignment.positionId : null;
+      participantId = assignment.kind === "incident_participant" ? assignment.participantId : null;
+    }
+  }
+
+  const [updated] = await sql`
+    update checklist_items set
+      item = case when ${input.item !== undefined} then ${input.item ?? current.item} else item end,
+      category = case when ${input.category !== undefined} then ${input.category ?? current.category} else category end,
+      due_at = case when ${input.dueAt !== undefined} then ${input.dueAt ?? null}::timestamptz else due_at end,
+      status = case when ${input.status !== undefined} then ${input.status ?? current.status} else status end,
+      position_id = case when ${positionId !== undefined} then ${positionId ?? null}::uuid else position_id end,
+      assigned_participant_id = case when ${participantId !== undefined}
+        then ${participantId ?? null}::uuid else assigned_participant_id end
+    where id = ${taskId} and incident_id = ${incidentId}
+      and revision = ${input.expectedRevision}
+    returning id`;
+  if (!updated) throw new AuthError(409, "task revision changed");
+  const [row] = await sql.unsafe(`${taskSelect} where c.id = $1`, [taskId]);
+  const task = toTask(row as unknown as TaskRow);
+  await recordAudit(sql, actor, {
+    jurisdictionId: authority.jurisdictionId,
+    incidentId,
+    category: "checklist.task.updated",
+    subjectTable: "checklist_items",
+    subjectId: taskId,
+    payload: {
+      revision: task.revision,
+      changed: Object.keys(input).filter((key) => key !== "expectedRevision"),
+      ...(statusOnly ? { status: task.status } : {}),
+    },
+  });
+  return task;
+}
+
+function completionDigest(incidentId: string, taskId: string): string {
+  return createHash("sha256").update(JSON.stringify({ incidentId, taskId, action: "complete" })).digest("hex");
+}
+
+async function requireCurrentAssignee(
+  sql: Sql,
+  actor: Principal,
+  authority: IncidentAuthority,
+  task: TaskRow,
+): Promise<void> {
+  if (task.position_id) {
+    const [assignment] = await sql`
+      select id from position_assignments
+      where position_id = ${task.position_id} and person_id = ${actor.person.id}
+        and revoked_at is null`;
+    if (!assignment || actor.position?.id !== task.position_id || !authority.canContribute) {
+      throw new AuthError(403, "sign into the assigned position to complete this task");
+    }
+    return;
+  }
+  if (
+    task.assigned_participant_id &&
+    authority.participation?.id === task.assigned_participant_id &&
+    task.participant_person_id === actor.person.id
+  ) return;
+  throw new AuthError(403, "task is not assigned to the current actor");
+}
+
+/** Complete once; exact retries return the first immutable receipt. */
+export async function completeIncidentTask(
+  sql: Sql,
+  actor: Principal,
+  incidentId: string,
+  taskId: string,
+  operationId: string,
+): Promise<TaskCompletionReceipt> {
+  const authority = await lockIncident(sql, actor, incidentId);
+  const digest = completionDigest(incidentId, taskId);
+  const [prior] = await sql`
+    select task_id, incident_id, actor_person_id, request_digest, receipt
+    from checklist_completion_operations where operation_id = ${operationId}`;
+  if (prior) {
+    if (
+      prior.task_id !== taskId || prior.incident_id !== incidentId ||
+      prior.actor_person_id !== actor.person.id || prior.request_digest !== digest
+    ) throw new AuthError(409, "operation id was used for another completion");
+    return prior.receipt as unknown as TaskCompletionReceipt;
+  }
+  if (authority.closedAt) throw new AuthError(409, "incident is closed");
+  const task = await loadTaskForUpdate(sql, incidentId, taskId);
+  await requireCurrentAssignee(sql, actor, authority, task);
+  if (task.status === "completed") throw new AuthError(409, "task is already completed");
+
+  const [completed] = await sql`
+    update checklist_items set status = 'completed'
+    where id = ${taskId} and incident_id = ${incidentId} and revision = ${task.revision}
+    returning revision, completed_at, completed_by, completed_by_position,
+      completed_by_organization_id, completed_by_participation_id, completed_as_title`;
+  if (!completed) throw new AuthError(409, "task revision changed");
+  const receipt: TaskCompletionReceipt = {
+    operationId,
+    taskId,
+    incidentId,
+    status: "completed",
+    revision: Number(completed.revision),
+    completedAt: new Date(completed.completed_at as string).toISOString(),
+    completedBy: {
+      personId: completed.completed_by as string,
+      positionId: (completed.completed_by_position as string | null) ?? null,
+      organizationId: completed.completed_by_organization_id as string,
+      participationId: (completed.completed_by_participation_id as string | null) ?? null,
+      title: completed.completed_as_title as string,
+    },
+  };
+  try {
+    await sql`
+      insert into checklist_completion_operations
+        (operation_id, task_id, incident_id, actor_person_id, request_digest, receipt)
+      values (${operationId}, ${taskId}, ${incidentId}, ${actor.person.id}, ${digest},
+        ${sql.json(receipt as never)})`;
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "23505") {
+      throw new AuthError(409, "operation id was used for another completion");
+    }
+    throw error;
+  }
+  await recordAudit(sql, actor, {
+    jurisdictionId: authority.jurisdictionId,
+    incidentId,
+    category: "checklist.completed",
+    subjectTable: "checklist_items",
+    subjectId: taskId,
+    payload: { operationId, revision: receipt.revision },
+  });
+  return receipt;
+}
+
+/** Backward-compatible entry point; it uses the same completion engine. */
+export async function completeLegacyChecklistItem(
+  sql: Sql,
+  actor: Principal,
+  taskId: string,
+): Promise<TaskCompletionReceipt> {
+  const [task] = await sql`select incident_id from checklist_items where id = ${taskId}`;
+  if (!task) throw new AuthError(404, "task not found");
+  return completeIncidentTask(sql, actor, task.incident_id as string, taskId, randomUUID());
+}

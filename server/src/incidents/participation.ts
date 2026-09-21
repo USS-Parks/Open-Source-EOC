@@ -18,6 +18,11 @@ export interface IncidentAuthority {
   } | null;
 }
 
+/** Serialize incident-scoped mutations that span tables without widening RLS. */
+export async function lockIncidentMutation(sql: Sql, incidentId: string): Promise<void> {
+  await sql`select pg_advisory_xact_lock(hashtextextended(${incidentId}, 82::bigint))`;
+}
+
 /** The database evaluates membership, revocation and expiry on every request. */
 export async function getIncidentAuthority(
   sql: Sql, actor: Principal, incidentId: string,
@@ -101,6 +106,7 @@ export async function grantIncidentParticipant(
 ): Promise<IncidentParticipantGrant> {
   const authority = await getIncidentAuthority(sql, actor, incidentId);
   requireManager(authority);
+  await lockIncidentMutation(sql, incidentId);
   const expiresAt = new Date(input.expiresAt);
   if (expiresAt <= new Date()) throw new AuthError(400, "expiry must be in the future");
   const [incident] = await sql`select closed_at from incidents where id = ${incidentId} for update`;
@@ -149,6 +155,7 @@ export async function revokeIncidentParticipant(
 ): Promise<IncidentParticipantGrant> {
   const authority = await getIncidentAuthority(sql, actor, incidentId);
   requireManager(authority);
+  await lockIncidentMutation(sql, incidentId);
   const [updated] = await sql`
     update incident_participants
     set revoked_at = now(), revoked_by = ${actor.person.id}, revoke_reason = ${reason}

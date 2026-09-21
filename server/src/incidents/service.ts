@@ -1,11 +1,17 @@
 import { z } from "zod";
-import { COMMAND_STAFF, GENERAL_STAFF } from "@openeoc/shared";
+import {
+  COMMAND_STAFF,
+  GENERAL_STAFF,
+  TaskTemplateItemSchema,
+  workflowDueAt,
+} from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 import { STANDARD_TITLES } from "../auth/authz.js";
 import { createBoard } from "../boards/service.js";
-import { getIncidentAuthority } from "./participation.js";
+import { getIncidentAuthority, lockIncidentMutation } from "./participation.js";
+import { completeLegacyChecklistItem } from "./tasks.js";
 
 export const IncidentTemplateSchema = z.object({
   key: z.string().regex(/^[a-z][a-z0-9_]*$/),
@@ -13,8 +19,20 @@ export const IncidentTemplateSchema = z.object({
   positions: z.array(z.string().min(1)).min(1),
   boards: z.array(z.string().min(1)),
   checklists: z.array(
-    z.object({ position: z.string().min(1), items: z.array(z.string().min(1)).min(1) }),
+    z.object({ position: z.string().min(1), items: z.array(TaskTemplateItemSchema).min(1) }),
   ),
+}).superRefine((template, ctx) => {
+  for (const [listIndex, list] of template.checklists.entries()) {
+    for (const [itemIndex, item] of list.items.entries()) {
+      if (typeof item !== "string" && item.due?.kind === "record_field") {
+        ctx.addIssue({
+          code: "custom",
+          path: ["checklists", listIndex, "items", itemIndex, "due"],
+          message: "checklist template due rules cannot reference record fields",
+        });
+      }
+    }
+  }
 });
 
 export type IncidentTemplate = z.infer<typeof IncidentTemplateSchema>;
@@ -137,13 +155,26 @@ export async function activateIncident(
   }
 
   let itemCount = 0;
+  const [clock] = await sql`select now() as activated_at`;
+  const activatedAt = new Date(clock!.activated_at as string).toISOString();
   for (const list of template.checklists) {
     const positionId = positionIds.get(list.position);
     if (!positionId) continue;
-    for (const [i, item] of list.items.entries()) {
+    for (const [i, raw] of list.items.entries()) {
+      const item = typeof raw === "string"
+        ? { item: raw, category: "general", due: undefined }
+        : raw;
+      const dueAt = item.due
+        ? workflowDueAt(item.due, {
+            createdAt: activatedAt,
+            transitionedAt: activatedAt,
+            record: {},
+          })
+        : null;
       await sql`
-        insert into checklist_items (incident_id, position_id, item, sort_order)
-        values (${incidentId}, ${positionId}, ${item}, ${i})`;
+        insert into checklist_items
+          (incident_id, position_id, item, category, due_at, sort_order)
+        values (${incidentId}, ${positionId}, ${item.item}, ${item.category}, ${dueAt}, ${i})`;
       itemCount += 1;
     }
   }
@@ -183,8 +214,13 @@ export interface IncidentDetail {
   readonly boards: ReadonlyArray<{ id: string; title: string }>;
   readonly checklists: ReadonlyArray<{
     id: string;
-    positionKey: string;
+    positionKey: string | null;
     item: string;
+    category: string;
+    status: string;
+    dueAt: string | null;
+    revision: number;
+    assignedParticipantId: string | null;
     completedAt: string | null;
     completedByPosition: string | null;
   }>;
@@ -249,9 +285,11 @@ export async function getIncident(
     join boards b on b.id = ib.board_id
     where ib.incident_id = ${incidentId} order by b.title`;
   const checklists = await sql`
-    select c.id, p.key as position_key, c.item, c.completed_at, cp.title as completed_position
+    select c.id, p.key as position_key, c.item, c.category, c.status, c.due_at,
+      c.revision, c.assigned_participant_id, c.completed_at,
+      cp.title as completed_position
     from checklist_items c
-    join positions p on p.id = c.position_id
+    left join positions p on p.id = c.position_id
     left join positions cp on cp.id = c.completed_by_position
     where c.incident_id = ${incidentId}
     order by p.key, c.sort_order`;
@@ -274,8 +312,13 @@ export async function getIncident(
     boards: boards.map((b) => ({ id: b.id as string, title: b.title as string })),
     checklists: checklists.map((c) => ({
       id: c.id as string,
-      positionKey: c.position_key as string,
+      positionKey: (c.position_key as string | null) ?? null,
       item: c.item as string,
+      category: c.category as string,
+      status: c.status as string,
+      dueAt: c.due_at ? new Date(c.due_at as string).toISOString() : null,
+      revision: Number(c.revision),
+      assignedParticipantId: (c.assigned_participant_id as string | null) ?? null,
       completedAt: (c.completed_at as string | null) ?? null,
       completedByPosition: (c.completed_position as string | null) ?? null,
     })),
@@ -296,27 +339,7 @@ export async function completeChecklistItem(
   actor: Principal,
   itemId: string,
 ): Promise<void> {
-  const [item] = await sql`
-    select c.id, c.position_id, c.completed_at, i.jurisdiction_id, i.id as incident_id
-    from checklist_items c join incidents i on i.id = c.incident_id
-    where c.id = ${itemId}`;
-  if (!item) throw new AuthError(404, "checklist item not found");
-  requireMember(actor, item.jurisdiction_id as string);
-  if (actor.position?.id !== (item.position_id as string))
-    throw new AuthError(403, "sign into the owning position to complete its checklist");
-  if (item.completed_at) throw new AuthError(409, "already completed");
-  await sql`
-    update checklist_items
-    set completed_at = now(), completed_by = ${actor.person.id},
-        completed_by_position = ${actor.position.id}
-    where id = ${itemId}`;
-  await recordAudit(sql, actor, {
-    jurisdictionId: item.jurisdiction_id as string,
-    incidentId: item.incident_id as string,
-    category: "checklist.completed",
-    subjectTable: "checklist_items",
-    subjectId: itemId,
-  });
+  await completeLegacyChecklistItem(sql, actor, itemId);
 }
 
 export async function closeIncident(
@@ -324,6 +347,7 @@ export async function closeIncident(
   actor: Principal,
   incidentId: string,
 ): Promise<void> {
+  await lockIncidentMutation(sql, incidentId);
   const [incident] = await sql`
     select jurisdiction_id, closed_at from incidents where id = ${incidentId}`;
   if (!incident) throw new AuthError(404, "incident not found");

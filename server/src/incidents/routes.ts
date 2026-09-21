@@ -1,6 +1,11 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { IncidentAreaUpdateSchema } from "@openeoc/shared";
+import {
+  IncidentAreaUpdateSchema,
+  TaskCompletionRequestSchema,
+  TaskListQuerySchema,
+  TaskMetadataPatchSchema,
+} from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import { getIncidentArea, listIncidentAreaHistory, reviseIncidentArea } from "./area.js";
@@ -19,6 +24,11 @@ import {
   isBackendEnabled,
   provisionForIncident,
 } from "../collab/service.js";
+import {
+  completeIncidentTask,
+  listIncidentTasks,
+  updateIncidentTask,
+} from "./tasks.js";
 
 const ActivateBody = z.object({
   templateKey: z.string().min(1),
@@ -110,6 +120,41 @@ export function incidentRoutes(
     return withPerson(sql, req.principal.person.id, (tx) =>
       reviseIncidentArea(tx, req.principal, incidentId, input));
   });
+
+  app.get("/api/v1/incidents/:incidentId/tasks", { preHandler: authenticate }, async (req) => {
+    const incidentId = IncidentId.parse((req.params as { incidentId: string }).incidentId);
+    const filters = TaskListQuerySchema.parse(req.query);
+    return withPerson(sql, req.principal.person.id, (tx) =>
+      listIncidentTasks(tx, req.principal, incidentId, filters));
+  });
+
+  app.patch(
+    "/api/v1/incidents/:incidentId/tasks/:taskId",
+    { preHandler: authenticate },
+    async (req) => {
+      const params = z.object({ incidentId: IncidentId, taskId: IncidentId }).parse(req.params);
+      const input = TaskMetadataPatchSchema.parse(req.body);
+      return withPerson(sql, req.principal.person.id, (tx) =>
+        updateIncidentTask(tx, req.principal, params.incidentId, params.taskId, input));
+    },
+  );
+
+  app.post(
+    "/api/v1/incidents/:incidentId/tasks/:taskId/complete",
+    { preHandler: authenticate },
+    async (req) => {
+      const params = z.object({ incidentId: IncidentId, taskId: IncidentId }).parse(req.params);
+      const input = TaskCompletionRequestSchema.parse(req.body);
+      return withPerson(sql, req.principal.person.id, (tx) =>
+        completeIncidentTask(
+          tx,
+          req.principal,
+          params.incidentId,
+          params.taskId,
+          input.operationId,
+        ));
+    },
+  );
 
   app.post(
     "/api/v1/checklist-items/:itemId/complete",

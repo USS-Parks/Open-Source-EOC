@@ -30,6 +30,30 @@ const me = {
 };
 
 describe("ApiClient", () => {
+  it("retains a task operation identity through authenticated session renewal", async () => {
+    const calls: Call[] = [];
+    let completions = 0;
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      calls.push({ url: String(url), init });
+      if (String(url).endsWith("/auth/login")) return res(200, { accessToken: "A1", resumeToken: "R", sessionId: "S" });
+      if (String(url).endsWith("/auth/resume")) return res(200, { accessToken: "A2", resumeToken: "R2", sessionId: "S" });
+      if (String(url).endsWith("/complete")) {
+        completions += 1;
+        return completions === 1 ? res(401, { error: "expired" }) : res(200, { operationId: "operation-one" });
+      }
+      return res(404, { error: "not found" });
+    }) as unknown as typeof fetch;
+    const client = new ApiClient({ fetchImpl });
+    await client.login("e@x.org", "pw");
+    expect((await client.completeIncidentTask("incident", "task", "operation-one")).operationId).toBe("operation-one");
+    const attempts = calls.filter((call) => call.url.endsWith("/complete"));
+    expect(attempts).toHaveLength(2);
+    expect(attempts.map((call) => JSON.parse(String(call.init.body)))).toEqual([
+      { operationId: "operation-one" }, { operationId: "operation-one" },
+    ]);
+    expect((attempts[1]!.init.headers as Record<string, string>)["authorization"]).toBe("Bearer A2");
+  });
+
   it("sends the bearer token on authenticated calls", async () => {
     const calls: Call[] = [];
     const fetchImpl = (async (url: string, init: RequestInit) => {

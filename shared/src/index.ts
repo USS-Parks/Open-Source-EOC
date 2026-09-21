@@ -47,3 +47,4 @@ export interface WorkspaceInfo {
 export function workspaceInfo(name: string): WorkspaceInfo {
   return { name, version: OPENEOC_VERSION };
 }
+export * from "./tasks/contract.js";

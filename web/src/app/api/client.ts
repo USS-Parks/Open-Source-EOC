@@ -17,6 +17,11 @@ import type {
   SavedStateListPage,
   SavedStateRecord,
   SavedStateWrite,
+  IncidentTask,
+  TaskListQuery,
+  TaskListResponse,
+  TaskMetadataPatch,
+  TaskCompletionReceipt,
 } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
 
@@ -604,6 +609,19 @@ export class ApiClient {
   }
   closeIncident(incidentId: string): Promise<{ ok: true }> {
     return this.request<{ ok: true }>("POST", `/api/v1/incidents/${incidentId}/close`);
+  }
+  listIncidentTasks(incidentId: string, filters: TaskListQuery = {}): Promise<TaskListResponse> {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined) query.set(key, value);
+    }
+    return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/tasks?${query}`);
+  }
+  updateIncidentTask(incidentId: string, taskId: string, input: TaskMetadataPatch): Promise<IncidentTask> {
+    return this.request("PATCH", `/api/v1/incidents/${encodeURIComponent(incidentId)}/tasks/${encodeURIComponent(taskId)}`, { ...input });
+  }
+  completeIncidentTask(incidentId: string, taskId: string, operationId: string): Promise<TaskCompletionReceipt> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/tasks/${encodeURIComponent(taskId)}/complete`, { operationId });
   }
   async listResourceRequests(
     jurisdictionId: string,
