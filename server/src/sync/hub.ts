@@ -3,7 +3,12 @@ import { buildRecordSchema } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import type { Principal } from "../auth/service.js";
-import { geomExpr, getEffectiveBoard, type EffectiveBoard } from "../boards/service.js";
+import {
+  geomExpr,
+  getEffectiveBoard,
+  lockBoardMutation,
+  type EffectiveBoard,
+} from "../boards/service.js";
 import { recordAudit } from "../audit/service.js";
 import { notifyBoardEvent, type BoardEvent } from "../notify/engine.js";
 import { publishBoardEvent } from "../events/bus.js";
@@ -103,14 +108,17 @@ export class BoardSyncHub {
     state: Map<string, Record<string, unknown>>,
   ): Promise<{ conflicts: number; committed: Array<{ recordId: string; existing: boolean }> }> {
     const committed: Array<{ recordId: string; existing: boolean }> = [];
-    const schema = buildRecordSchema(entry.board.fields);
-    // A record missing required fields mid-reconciliation is a normal
-    // intermediate (the rest is still in flight on another client): it
-    // stays in the CRDT log and projects once complete. Only VALUE
-    // violations (bad enum, wrong type) are conflicts.
-    const relaxed = buildRecordSchema(entry.board.fields.map((f) => ({ ...f, required: false })));
     let conflicts = 0;
     await withPerson(this.sql, actor.person.id, async (tx) => {
+      await lockBoardMutation(tx, entry.board.id);
+      const board = await getEffectiveBoard(tx, actor, entry.board.id);
+      entry.board = board;
+      const schema = buildRecordSchema(board.fields);
+      // A record missing required fields mid-reconciliation is a normal
+      // intermediate (the rest is still in flight on another client): it
+      // stays in the CRDT log and projects once complete. Only VALUE
+      // violations (bad enum, wrong type) are conflicts.
+      const relaxed = buildRecordSchema(board.fields.map((f) => ({ ...f, required: false })));
       for (const recordId of recordIds) {
         const data = state.get(recordId)!;
         const parsed = schema.safeParse(data);
@@ -119,11 +127,11 @@ export class BoardSyncHub {
           conflicts += 1;
           await tx`
             insert into sync_conflicts (board_id, record_id, reason, rejected_data, origin_person)
-            values (${entry.board.id}, ${recordId},
+            values (${board.id}, ${recordId},
                     ${parsed.error.issues[0]?.message ?? "schema violation"},
                     ${tx.json(data as never)}, ${actor.person.id})`;
           await recordAudit(tx, actor, {
-            jurisdictionId: entry.board.jurisdictionId,
+            jurisdictionId: board.jurisdictionId,
             category: "sync.conflict",
             subjectTable: "board_records",
             subjectId: recordId,
@@ -137,21 +145,21 @@ export class BoardSyncHub {
           await tx`
             update board_records
             set data = ${tx.json(parsed.data as never)}, updated_by = ${actor.person.id},
-                updated_at = now(), geom = ${geomExpr(tx, entry.board.fields, parsed.data)}
+                updated_at = now(), geom = ${geomExpr(tx, board.fields, parsed.data)}
             where id = ${recordId}`;
         } else {
           await tx`
             insert into board_records (id, board_id, data, created_by, created_by_position, geom)
-            values (${recordId}, ${entry.board.id}, ${tx.json(parsed.data as never)},
+            values (${recordId}, ${board.id}, ${tx.json(parsed.data as never)},
                     ${actor.person.id}, ${actor.position?.id ?? null},
-                    ${geomExpr(tx, entry.board.fields, parsed.data)})`;
+                    ${geomExpr(tx, board.fields, parsed.data)})`;
         }
         await recordAudit(tx, actor, {
-          jurisdictionId: entry.board.jurisdictionId,
+          jurisdictionId: board.jurisdictionId,
           category: existing ? "board.record.updated" : "board.record.created",
           subjectTable: "board_records",
           subjectId: recordId,
-          payload: { board: entry.board.template.key, via: "sync" },
+          payload: { board: board.template.key, via: "sync" },
         });
         committed.push({ recordId, existing: Boolean(existing) });
       }

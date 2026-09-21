@@ -274,6 +274,26 @@ describe("signed package import", () => {
     expect(ok.statusCode).toBe(201);
     expect(ok.json().imported).toBe(1);
 
+    const additional = {
+      ...STANDARD_TEMPLATES.find((t) => t.key === "damage_assessment")!,
+      key: "regional_damage_assessment",
+      version: 1,
+    };
+    const mixed = exportPackage(
+      [custom, additional],
+      "Test Region",
+      signer.privateKeyPem,
+      signer.publicKeyPem,
+    );
+    const retried = await app.inject({
+      method: "POST",
+      url: "/api/v1/templates/import",
+      headers: auth(adminToken),
+      payload: mixed,
+    });
+    expect(retried.statusCode).toBe(201);
+    expect(retried.json().imported).toBe(1);
+
     const tampered = structuredClone(pkg) as typeof pkg;
     (tampered.templates[0] as { title: string }).title = "Evil";
     const bad = await app.inject({

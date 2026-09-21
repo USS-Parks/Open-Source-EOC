@@ -2,12 +2,14 @@ import {
   applyView,
   BoardTemplateSchema,
   buildRecordSchema,
+  deriveRecordValues,
   effectiveFields,
   geometryFieldKey,
   LocalFieldSchema,
   STANDARD_TEMPLATES,
   type BoardTemplate,
   type FieldDef,
+  type FormLayout,
 } from "@openeoc/shared";
 import { verifyPackage } from "./package.js";
 import type { Sql } from "../db/client.js";
@@ -43,13 +45,39 @@ export async function registerTemplate(
 ): Promise<{ key: string; version: number }> {
   if (!actor.isInstanceAdmin) throw new AuthError(403, "requires instance admin");
   const template = BoardTemplateSchema.parse(raw);
-  const [existing] = await sql`
-    select 1 from board_templates where key = ${template.key} and version = ${template.version}`;
-  if (existing) throw new AuthError(409, "template version already exists");
+  const [latest] = await sql`
+    select coalesce(max(version), 0)::int as version from board_templates where key = ${template.key}`;
+  const expected = Number(latest!.version) + 1;
+  if (template.version !== expected)
+    throw new AuthError(409, `template version must be ${expected}`);
   await sql`
     insert into board_templates (key, version, title, definition)
     values (${template.key}, ${template.version}, ${template.title}, ${sql.json(template)})`;
   return { key: template.key, version: template.version };
+}
+
+export async function listTemplateVersions(
+  sql: Sql,
+  key: string,
+): Promise<Array<{ key: string; version: number; title: string }>> {
+  const rows = await sql`
+    select key, version, title from board_templates where key = ${key} order by version`;
+  return rows.map((row) => ({
+    key: row.key as string,
+    version: row.version as number,
+    title: row.title as string,
+  }));
+}
+
+export async function getTemplateVersion(
+  sql: Sql,
+  key: string,
+  version: number,
+): Promise<BoardTemplate> {
+  const [row] = await sql`
+    select definition from board_templates where key = ${key} and version = ${version}`;
+  if (!row) throw new AuthError(404, "template version not found");
+  return BoardTemplateSchema.parse(row.definition);
 }
 
 /** Import a signed regional package (instance admin; trusted keys only). */
@@ -169,6 +197,7 @@ export async function addLocalField(
   boardId: string,
   raw: unknown,
 ): Promise<void> {
+  await lockBoardMutation(sql, boardId);
   const board = await getEffectiveBoard(sql, actor, boardId);
   requireRole(actor, board.jurisdictionId, "admin");
   const field = LocalFieldSchema.parse(raw);
@@ -191,8 +220,11 @@ export async function upgradeBoard(
   boardId: string,
   toVersion: number,
 ): Promise<{ dropped: string[] }> {
+  await lockBoardMutation(sql, boardId);
   const board = await getEffectiveBoard(sql, actor, boardId);
   requireRole(actor, board.jurisdictionId, "admin");
+  if (toVersion <= board.template.version)
+    throw new AuthError(409, "target template version must be newer than the board version");
   const [next] = await sql`
     select definition from board_templates
     where key = ${board.template.key} and version = ${toVersion}`;
@@ -202,6 +234,39 @@ export async function upgradeBoard(
   const locals = (current!.local_fields as FieldDef[]) ?? [];
   const { fields, dropped } = effectiveFields(nextTemplate, locals);
   const keptLocals = fields.filter((f) => f.key.startsWith("x_"));
+  const acceptedKeys = new Set(fields.filter((field) => !field.calculation).map((field) => field.key));
+  const records = await sql`
+    select id, data, incident_id from board_records where board_id = ${boardId} order by id`;
+  const incompatible: Array<{ id: string; issues: string[] }> = [];
+  const nextBoard: EffectiveBoard = { ...board, template: nextTemplate, fields };
+  for (const row of records) {
+    const data = row.data as Record<string, unknown>;
+    const retained = Object.fromEntries(Object.entries(data).filter(([key]) => acceptedKeys.has(key)));
+    const checked = buildRecordSchema(fields).safeParse(retained);
+    if (!checked.success) {
+      incompatible.push({
+        id: row.id as string,
+        issues: checked.error.issues.map((issue) => `${issue.path.join(".") || "record"}: ${issue.message}`),
+      });
+      continue;
+    }
+    try {
+      await validateRecordReferences(
+        sql,
+        actor,
+        nextBoard,
+        checked.data,
+        (row.incident_id as string | null) ?? undefined,
+      );
+    } catch (error) {
+      incompatible.push({
+        id: row.id as string,
+        issues: [error instanceof Error ? error.message : "invalid record reference"],
+      });
+    }
+  }
+  if (incompatible.length)
+    throw new AuthError(409, `template upgrade incompatible with records: ${JSON.stringify(incompatible)}`);
   await sql`
     update boards
     set template_version = ${toVersion}, local_fields = ${sql.json(keptLocals)}
@@ -224,6 +289,7 @@ export async function createRecord(
   data: Record<string, unknown>,
   incidentId?: string,
 ): Promise<RecordWriteResult> {
+  await lockBoardMutation(sql, boardId);
   let board: EffectiveBoard;
   let participantOrg: string | undefined;
   if (incidentId) {
@@ -247,6 +313,7 @@ export async function createRecord(
   }
   checkFieldWrites(board, Object.keys(data));
   const parsed = buildRecordSchema(board.fields).parse(data);
+  await validateRecordReferences(sql, actor, board, parsed, incidentId);
   const [row] = await sql`
     insert into board_records
       (board_id, data, created_by, created_by_position, geom, incident_id)
@@ -279,19 +346,27 @@ export async function updateRecord(
   recordId: string,
   patch: Record<string, unknown>,
 ): Promise<RecordWriteResult> {
+  await lockBoardMutation(sql, boardId);
   const board = await getEffectiveBoard(sql, actor, boardId);
   requireWriter(board.role);
   checkFieldWrites(board, Object.keys(patch));
   const [existing] = await sql`
-    select data from board_records where id = ${recordId} and board_id = ${boardId}`;
+    select data, incident_id from board_records where id = ${recordId} and board_id = ${boardId}`;
   if (!existing) throw new AuthError(404, "record not found");
   const previous = existing.data as Record<string, unknown>;
   const merged = { ...previous, ...patch };
-  const parsed = buildRecordSchema(board.fields).parse(merged);
+  const accepted = new Set(board.fields.filter((field) => !field.calculation).map((field) => field.key));
+  const rejectedKey = Object.keys(patch).find((key) => !accepted.has(key));
+  if (rejectedKey) throw new AuthError(400, `unknown or computed field ${rejectedKey}`);
+  const declared = Object.fromEntries(Object.entries(merged).filter(([key]) => accepted.has(key)));
+  const parsed = buildRecordSchema(board.fields).parse(declared);
+  const legacy = Object.fromEntries(Object.entries(previous).filter(([key]) => !accepted.has(key)));
+  const persisted = { ...legacy, ...parsed };
+  await validateRecordReferences(sql, actor, board, parsed, existing.incident_id as string | undefined);
   await sql`
     update board_records
-    set data = ${sql.json(parsed as never)}, updated_by = ${actor.person.id},
-        updated_at = now(), geom = ${geomExpr(sql, board.fields, parsed)}
+    set data = ${sql.json(persisted as never)}, updated_by = ${actor.person.id},
+        updated_at = now(), geom = ${geomExpr(sql, board.fields, persisted)}
     where id = ${recordId}`;
   await recordAudit(sql, actor, {
     jurisdictionId: board.jurisdictionId,
@@ -302,7 +377,7 @@ export async function updateRecord(
   });
   return {
     id: recordId,
-    data: parsed,
+    data: persisted,
     previous,
     boardKey: board.template.key,
     jurisdictionId: board.jurisdictionId,
@@ -348,7 +423,7 @@ export async function listViewRecords(
     board.fields.filter((f) => canRead(board.role, f.read)).map((f) => f.key),
   );
   const masked = rows.map((r) => {
-    const data = r.data as Record<string, unknown>;
+    const data = deriveRecordValues(board.fields, r.data as Record<string, unknown>);
     const out: Record<string, unknown> & { id: string } = { id: r.id as string };
     for (const key of Object.keys(data)) if (readable.has(key)) out[key] = data[key];
     return out;
@@ -434,6 +509,94 @@ export function visibleFields(board: EffectiveBoard): FieldDef[] {
   return board.fields.filter((f) => canRead(board.role, f.read));
 }
 
+/** Remove unreadable field references from authoring layouts returned to a reader. */
+export function visibleLayout(board: EffectiveBoard, layout: FormLayout | undefined): FormLayout | undefined {
+  if (!layout) return undefined;
+  const readable = new Set(visibleFields(board).map((field) => field.key));
+  const sections = layout.sections
+    .map((section) => ({ ...section, fields: section.fields.filter((key) => readable.has(key)) }))
+    .filter((section) => section.fields.length > 0);
+  return sections.length ? { sections } : undefined;
+}
+
+export interface RecordReferenceOption {
+  readonly id: string;
+  readonly label: string;
+  readonly boardId: string;
+}
+
+/** Incident-scoped, stable reference choices for a declared record_ref field. */
+export async function listRecordReferenceOptions(
+  sql: Sql,
+  actor: Principal,
+  incidentId: string,
+  sourceBoardId: string,
+  fieldKey: string,
+  after?: string,
+  limit = 50,
+): Promise<RecordReferenceOption[]> {
+  const source = await getIncidentBoardReadShape(sql, actor, incidentId, sourceBoardId);
+  const field = source.fields.find((candidate) => candidate.key === fieldKey && candidate.type === "record_ref");
+  if (!field || !canRead(source.role, field.read)) throw new AuthError(404, "reference field not found");
+  const boundedLimit = Math.max(1, Math.min(limit, 100));
+  const options: RecordReferenceOption[] = [];
+  let cursor = after;
+  while (options.length < boundedLimit) {
+    const rows = await sql`
+      select r.id, r.board_id, r.data
+      from board_records r
+      join boards b on b.id = r.board_id
+      join incident_boards ib on ib.board_id = b.id and ib.incident_id = ${incidentId}
+      where r.incident_id = ${incidentId}
+        and b.template_key = ${field.targetBoardKey!}
+        and (${cursor ?? null}::uuid is null or r.id > ${cursor ?? null})
+      order by r.id
+      limit 100`;
+    if (!rows.length) break;
+    for (const row of rows) {
+      cursor = row.id as string;
+      const target = await getIncidentBoardReadShape(sql, actor, incidentId, row.board_id as string);
+      const label = target.fields.find((candidate) => candidate.key === field.labelField);
+      if (!label || !canRead(target.role, label.read)) continue;
+      const derived = deriveRecordValues(target.fields, row.data as Record<string, unknown>);
+      const value = derived[label.key];
+      if (typeof value === "string" || typeof value === "number")
+        options.push({ id: row.id as string, label: String(value), boardId: row.board_id as string });
+      if (options.length === boundedLimit) break;
+    }
+    if (rows.length < 100) break;
+  }
+  return options;
+}
+
+async function validateRecordReferences(
+  sql: Sql,
+  actor: Principal,
+  board: EffectiveBoard,
+  data: Readonly<Record<string, unknown>>,
+  incidentId?: string,
+): Promise<void> {
+  const populated = board.fields.filter((field) => field.type === "record_ref" && data[field.key] !== undefined);
+  if (!populated.length) return;
+  if (!incidentId) throw new AuthError(400, "record references require incident scope");
+  await getIncidentAuthority(sql, actor, incidentId);
+  for (const field of populated) {
+    const [row] = await sql`
+      select r.id, r.board_id
+      from board_records r
+      join boards b on b.id = r.board_id
+      join incident_boards ib on ib.board_id = b.id and ib.incident_id = ${incidentId}
+      where r.id = ${data[field.key] as string}
+        and r.incident_id = ${incidentId}
+        and b.template_key = ${field.targetBoardKey!}`;
+    if (!row) throw new AuthError(400, `field ${field.key} references a record outside this incident`);
+    const target = await getIncidentBoardReadShape(sql, actor, incidentId, row.board_id as string);
+    const label = target.fields.find((candidate) => candidate.key === field.labelField);
+    if (!label || !canRead(target.role, label.read))
+      throw new AuthError(403, `field ${field.key} target label is not readable`);
+  }
+}
+
 /** PostGIS expression fragment for a record's geometry field, or null. */
 export function geomExpr(
   sql: Sql,
@@ -453,4 +616,9 @@ function checkFieldWrites(board: EffectiveBoard, keys: readonly string[]): void 
     if (field.write === "admin" && board.role !== "admin")
       throw new AuthError(403, `field ${key} is admin-writable only`);
   }
+}
+
+/** Serialize all mutations whose validation depends on a board's effective shape. */
+export async function lockBoardMutation(sql: Sql, boardId: string): Promise<void> {
+  await sql`select pg_advisory_xact_lock(hashtextextended(${boardId}, 81001::bigint))`;
 }

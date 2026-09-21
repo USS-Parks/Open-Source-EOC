@@ -9,13 +9,17 @@ import {
   createBoard,
   createRecord,
   getEffectiveBoard,
+  getTemplateVersion,
   importTemplatePackage,
   listBoards,
+  listRecordReferenceOptions,
+  listTemplateVersions,
   listViewRecords,
   registerTemplate,
   updateRecord,
   upgradeBoard,
   visibleFields,
+  visibleLayout,
 } from "./service.js";
 
 const CreateBoardBody = z.object({
@@ -48,6 +52,23 @@ export function boardRoutes(
       importTemplatePackage(tx, req.principal, req.body, options.trustedTemplateKeys),
     );
     return reply.status(201).send({ imported });
+  });
+
+  app.get("/api/v1/templates/:key/versions", { preHandler: authenticate }, async (req, reply) => {
+    const { key } = req.params as { key: string };
+    const versions = await withPerson(sql, req.principal.person.id, (tx) =>
+      listTemplateVersions(tx, key),
+    );
+    return reply.send({ versions });
+  });
+
+  app.get("/api/v1/templates/:key/versions/:version", { preHandler: authenticate }, async (req, reply) => {
+    const { key, version: rawVersion } = req.params as { key: string; version: string };
+    const version = z.coerce.number().int().positive().parse(rawVersion);
+    const template = await withPerson(sql, req.principal.person.id, (tx) =>
+      getTemplateVersion(tx, key, version),
+    );
+    return reply.send(template);
   });
 
   app.post(
@@ -88,6 +109,8 @@ export function boardRoutes(
       role: board.role,
       fields: visibleFields(board),
       views: board.template.views,
+      inputLayout: visibleLayout(board, board.template.inputLayout),
+      detailLayout: visibleLayout(board, board.template.detailLayout),
     });
   });
 
@@ -156,6 +179,23 @@ export function boardRoutes(
       await notifyBoardEvent(sql, req.principal, event);
       publishBoardEvent(event);
       return reply.send({ ok: true });
+    },
+  );
+
+  app.get(
+    "/api/v1/boards/:boardId/record-references/:fieldKey",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { boardId, fieldKey } = req.params as { boardId: string; fieldKey: string };
+      const query = z.object({
+        incidentId: z.string().uuid(),
+        after: z.string().uuid().optional(),
+        limit: z.coerce.number().int().min(1).max(100).optional(),
+      }).parse(req.query);
+      const options = await withPerson(sql, req.principal.person.id, (tx) =>
+        listRecordReferenceOptions(tx, req.principal, query.incidentId, boardId, fieldKey, query.after, query.limit),
+      );
+      return reply.send({ options });
     },
   );
 

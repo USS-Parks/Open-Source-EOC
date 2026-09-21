@@ -57,6 +57,8 @@ class TestSyncClient {
   private socket: WebSocket | null = null;
   private acks: Array<(v: { seq: number; conflicts: number }) => void> = [];
 
+  constructor(private readonly targetBoardId = boardId) {}
+
   records(): Y.Map<Y.Map<unknown>> {
     return this.doc.getMap<unknown>("records") as unknown as Y.Map<Y.Map<unknown>>;
   }
@@ -81,7 +83,7 @@ class TestSyncClient {
   }
 
   async connect(token: string): Promise<void> {
-    const socket = new WebSocket(`ws://${baseUrl}/api/v1/sync/boards/${boardId}`);
+    const socket = new WebSocket(`ws://${baseUrl}/api/v1/sync/boards/${this.targetBoardId}`);
     this.socket = socket;
     await new Promise<void>((resolve, reject) => {
       socket.on("open", () => socket.send(JSON.stringify({ type: "auth", token })));
@@ -269,6 +271,53 @@ describe("partition and reconnect (the 24-hour test, scripted)", () => {
     expect(clientB.json()[liveRec]).toMatchObject({ summary: "Live update test" });
     clientA.disconnect();
     clientB.disconnect();
+  });
+});
+
+describe("sync checkpoint follows the locked current board shape", () => {
+  it("keeps an old-session record pending after a required-field upgrade", async () => {
+    const v1 = {
+      key: "sync_upgrade_shape", version: 1, title: "Sync upgrade shape",
+      fields: [{ key: "summary", label: "Summary", type: "text", required: true }],
+      views: [{ key: "all", title: "All", columns: ["summary"] }],
+    };
+    const v2 = {
+      ...v1, version: 2,
+      fields: [
+        ...v1.fields,
+        { key: "new_required", label: "New required", type: "text", required: true },
+      ],
+      views: [{ key: "all", title: "All", columns: ["summary", "new_required"] }],
+    };
+    await admin`insert into board_templates (key, version, title, definition) values
+      (${v1.key}, 1, ${v1.title}, ${admin.json(v1)}),
+      (${v2.key}, 2, ${v2.title}, ${admin.json(v2)})`;
+    const created = await app.inject({ method: "POST",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { templateKey: v1.key, version: 1 } });
+    expect(created.statusCode).toBe(201);
+    const upgradedBoardId = created.json().id as string;
+    const client = new TestSyncClient(upgradedBoardId);
+    await client.connect(adminToken); // caches/open v1 in the hub
+    const upgraded = await app.inject({ method: "POST",
+      url: `/api/v1/boards/${upgradedBoardId}/upgrade`,
+      headers: { authorization: `Bearer ${adminToken}` }, payload: { toVersion: 2 } });
+    expect(upgraded.statusCode).toBe(200);
+
+    const recordId = "55555555-5555-4555-8555-555555555555";
+    client.edit(recordId, { summary: "created against the old client shape" });
+    const pending = await client.push();
+    expect(pending.conflicts).toBe(0);
+    expect(await admin`select id from board_records where id = ${recordId}`).toHaveLength(0);
+    expect(await admin`select seq from sync_updates where board_id = ${upgradedBoardId}`).toHaveLength(1);
+
+    client.edit(recordId, { new_required: "now complete" });
+    const projected = await client.push();
+    expect(projected.conflicts).toBe(0);
+    const [record] = await admin`select data from board_records where id = ${recordId}`;
+    expect(record!.data).toMatchObject({ summary: "created against the old client shape", new_required: "now complete" });
+    client.disconnect();
   });
 });
 
