@@ -3243,3 +3243,22 @@ increment proves it and that coverage follows the incident area.
   F1/AR3 and the complete 81A gate remain partial until P-BOARDS implements
   runtime layouts and the no-code designer. Existing lane a proceeds to
   81B-E1, the shared assignment and workflow contract. No push occurred.
+
+## H12-CB: map viewport callback
+
+- **Files:** CopMap.tsx and one focused bounds test. The optional callback
+  reports a non-wrapping WGS84 box at map readiness and moveend, uses the
+  latest prop, and unregisters before unmount. Wrapped/full-world viewports
+  conservatively report full-world longitude. No KPI query or UI is claimed.
+- **Gate:** TypeScript, ESLint and two focused lifecycle/normalization tests
+  passed. After rebase over board-authoring code, TypeScript and ESLint passed
+  and five affected callback, shared-board, authoring, board and sync suites
+  passed 30/30. Actual exit codes are in
+  deploy/test-runtime/out/lanes/c/logs/h12-cb-integration.log.
+- **Review:** full parent diff inspection and fresh read-only review returned
+  ship. Structural callback tests suffice for this primitive; live counts on
+  pan/zoom remain the H12-E and P-COP integration gate.
+- **Integration:** exact fast-forward to
+  6cb0500c90eb9c44633119a2a5910abe687e3bc3. Evidence level is integrated
+  callback. G-KPIMAP remains partial. Existing lane c next takes H13 from
+  current main; no additional checkout, dependency copy or push.
