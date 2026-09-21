@@ -2619,3 +2619,33 @@ incident's boards.
   already incident-bound. Only then does the 79B gate close.
 - **Gate:** pnpm check --maxWorkers=2 exited 0; 474 tests in 86 files passed.
 - **Ending commit:** this receipt commit, recorded by the next receipt.
+
+## VEOC-79B2 increment: incident-scoped resource-request reads (closes 79B)
+
+Continues 79B2 with the resources side, the last operational surface still
+reading jurisdiction-wide.
+
+- **Baseline:** 473a8e1 on canonical main (after the dashboard-counts increment).
+- **Change:** listRequests takes an optional incidentId and narrows the 213RR
+  list to that incident's requests; unscoped still returns every request in the
+  jurisdiction, so a standing cache with no incident is never hidden. The list
+  route accepts ?incidentId=. On the web, the API client threads the incident
+  through the list and the submit, and the resources surface passes the selected
+  incident, so a request submitted in an incident context lists in that context
+  and switching incident reloads the scoped list. Row-level security stays the
+  access wall; the incident clause only narrows within the jurisdiction's rows.
+- **Evidence:** a new real-database test activates two incidents, submits two
+  requests tagged to A, one to B, and one untagged, and asserts the list scoped
+  to each incident returns only its requests while the unscoped list returns all
+  four including the untagged standing cache. Existing 213RR lifecycle tests are
+  unchanged.
+- **79B status: closed.** Boards (reads, writes, counts), dashboards (counts and
+  the live stream), the COP map, resources, and the already incident-bound tasks
+  (checklist items) and planning (IAP) are all driven by the selected incident,
+  and the cross-incident reconciliation of displayed records and totals is proven
+  by the dashboard-counts real-database scenario plus the DashboardSurface DOM
+  test. Boundary recorded honestly: incident selection is an in-memory workspace
+  selector, not a URL parameter; URL-addressable incident state is left to the
+  adaptable-workspace work (81C/81), not required to close 79B.
+- **Gate:** pnpm check --maxWorkers=2 exited 0; 475 tests in 87 files passed.
+- **Ending commit:** this receipt commit, recorded by the next receipt.

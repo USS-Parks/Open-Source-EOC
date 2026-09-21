@@ -523,16 +523,27 @@ export class ApiClient {
   closeIncident(incidentId: string): Promise<{ ok: true }> {
     return this.request<{ ok: true }>("POST", `/api/v1/incidents/${incidentId}/close`);
   }
-  async listResourceRequests(jurisdictionId: string): Promise<ResourceRequestSummary[]> {
+  async listResourceRequests(
+    jurisdictionId: string,
+    incidentId?: string | null,
+  ): Promise<ResourceRequestSummary[]> {
+    const query = incidentId ? `?incidentId=${encodeURIComponent(incidentId)}` : "";
     const r = await this.request<{ requests: ResourceRequestSummary[] }>(
       "GET",
-      `/api/v1/jurisdictions/${jurisdictionId}/resource-requests`,
+      `/api/v1/jurisdictions/${jurisdictionId}/resource-requests${query}`,
     );
     return r.requests;
   }
   submitResourceRequest(
     jurisdictionId: string,
-    body: { origin: "field" | "eoc"; item: string; quantity?: number; priority?: string; notes?: string },
+    body: {
+      origin: "field" | "eoc";
+      item: string;
+      quantity?: number;
+      priority?: string;
+      notes?: string;
+      incidentId?: string;
+    },
   ): Promise<{ id: string }> {
     return this.request<{ id: string }>(
       "POST",

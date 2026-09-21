@@ -274,7 +274,13 @@ function Center(props: {
     case "files":
       return <FilesSurface client={props.client} jurisdictionId={props.jurisdictionId} />;
     case "resources":
-      return <ResourcesSurface client={props.client} jurisdictionId={props.jurisdictionId} />;
+      return (
+        <ResourcesSurface
+          client={props.client}
+          jurisdictionId={props.jurisdictionId}
+          incidentId={props.incidentId}
+        />
+      );
     case "aar":
       return (
         <AarSurface

@@ -82,11 +82,15 @@ function RequestRow(props: {
  * from the dictionary transition table, so the UI can never offer an illegal
  * move (the server enforces the same table).
  */
-export function ResourcesSurface(props: { client: ApiClient; jurisdictionId: string }) {
+export function ResourcesSurface(props: {
+  client: ApiClient;
+  jurisdictionId: string;
+  incidentId: string | null;
+}) {
   const [reload, setReload] = useState(0);
   const requests = useAsync(
-    () => props.client.listResourceRequests(props.jurisdictionId),
-    [props.jurisdictionId, reload],
+    () => props.client.listResourceRequests(props.jurisdictionId, props.incidentId),
+    [props.jurisdictionId, props.incidentId, reload],
   );
   const [item, setItem] = useState("");
   const [quantity, setQuantity] = useState("1");
@@ -115,6 +119,9 @@ export function ResourcesSurface(props: { client: ApiClient; jurisdictionId: str
         item: item.trim(),
         quantity: Number(quantity) || 1,
         priority,
+        // Tag the request to the working incident so it lists in that context;
+        // with no incident selected it stays a jurisdiction-wide request (79B2).
+        ...(props.incidentId ? { incidentId: props.incidentId } : {}),
       });
       setItem("");
       setQuantity("1");

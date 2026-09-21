@@ -90,8 +90,11 @@ export function resourceRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
+      // Optional incident scope: narrow the 213RR list to the selected
+      // incident's requests so the surface reconciles with its context (79B2).
+      const { incidentId } = z.object({ incidentId: z.string().uuid().optional() }).parse(req.query);
       const requests = await withPerson(sql, req.principal.person.id, (tx) =>
-        listRequests(tx, req.principal, jurisdictionId),
+        listRequests(tx, req.principal, jurisdictionId, incidentId),
       );
       return reply.send({ requests });
     },

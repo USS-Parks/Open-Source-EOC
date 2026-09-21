@@ -290,16 +290,24 @@ export interface RequestSummary {
   readonly state: string;
 }
 
-/** Resource requests visible in a jurisdiction, for the 213RR board. */
+/**
+ * Resource requests visible in a jurisdiction, for the 213RR board. An
+ * optional incident narrows the list to that incident's requests (VEOC-79B2);
+ * unscoped returns every request in the jurisdiction, so a standing cache with
+ * no incident is never silently hidden. Row-level security stays the wall.
+ */
 export async function listRequests(
   sql: Sql,
   actor: Principal,
   jurisdictionId: string,
+  incidentId?: string,
 ): Promise<RequestSummary[]> {
   requireMember(actor, jurisdictionId);
   const rows = await sql`
     select id, item, quantity, priority, state from resource_requests
-    where jurisdiction_id = ${jurisdictionId} order by item`;
+    where jurisdiction_id = ${jurisdictionId}
+      and (${incidentId ?? null}::uuid is null or incident_id = ${incidentId ?? null})
+    order by item`;
   return rows.map((r) => ({
     id: r.id as string,
     item: r.item as string,
