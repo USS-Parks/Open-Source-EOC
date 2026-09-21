@@ -2825,3 +2825,25 @@ and a source onboards through the data-pack path.
 - **Boundary:** the operator catalog UI and the parity-matrix gap record are the
   next increment; outbound polling of these sources stays gated.
 - **Ending commit:** this receipt commit, recorded by the next receipt.
+
+## VEOC-79F: operator catalog UI and matrix record
+
+Closes 79F: an operator browses the California catalog and adds a covering source
+to the incident from the datasets surface.
+
+- **Baseline:** f34cd69 on canonical main.
+- **Change:** IncidentDatasets shows a "California data catalog" panel listing
+  each source with owner, category, coverage label and license, badged for
+  availability (named gap), coverage here (covers area / outside area) and
+  onboarded state. An owner admin adds an available, covering, not-yet-onboarded
+  source with one action; uncovered sources are shown but not addable, and named
+  gaps are shown with their note and not addable. The parity matrix G-CATALOG row
+  moves to partial with the delivered catalog and the named gaps.
+- **Evidence:** pnpm -r exec tsc --noEmit exit 0, eslint exit 0,
+  incident-datasets.test.tsx 3 passed (catalog mock added).
+- **79F status: closed.** Catalog registry, per-incident coverage listing,
+  onboarding through the data-pack path, and the operator UI are in, activatable
+  at different California locations without a code edit. Boundary: live outbound
+  polling of the sources stays gated (no external calls this session); a source's
+  data still arrives via the existing push/poll seam.
+- **Ending commit:** this receipt commit, recorded by the next receipt.

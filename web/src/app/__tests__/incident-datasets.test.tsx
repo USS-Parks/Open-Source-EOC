@@ -23,7 +23,10 @@ const datasets: DatasetStatus[] = [
 ];
 
 const client = (rows: DatasetStatus[]) =>
-  ({ listIncidentDatasets: vi.fn().mockResolvedValue(rows) }) as unknown as ApiClient;
+  ({
+    listIncidentDatasets: vi.fn().mockResolvedValue(rows),
+    incidentCatalog: vi.fn().mockResolvedValue([]),
+  }) as unknown as ApiClient;
 
 it("prompts to pick an incident when none is selected", () => {
   render(<IncidentDatasets client={client([])} incidentId={null} canManage={false} />);

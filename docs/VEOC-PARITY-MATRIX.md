@@ -95,7 +95,7 @@ accordingly, so parity against "WebEOC" is not overstated.
 |---|---|---|---|---|---|
 | G-INCSCOPE | Incident-scoped operational records (boards/feeds/resources/tasks) | WebEOC-inc | Records are jurisdiction-scoped; incident association not yet added | open | VEOC-79B1/B2 |
 | G-INGEST | Durable normalized dataset ingestion to the COP | Esri-EMO | Data-pack registry + mapping + availability shipped (`91f588d`); persistence and COP display open | open | VEOC-79C1/C2 |
-| G-CATALOG | California operational data catalog + refresh controls | Esri-EMO | Feed adapters + data packs exist; statewide catalog not delivered | open | VEOC-79F |
+| G-CATALOG | California operational data catalog + refresh controls | Esri-EMO | Coverage-aware catalog (boundaries/closures/parcels/hazards/facilities/population/shelters) onboards through the data-pack path with owner/license/coverage/mapping/cadence, listed per incident and added from the operator UI (`f34cd69`); named gaps: FEMA NFHL flood (Handoff 11, see G-FLOOD), an open statewide shelter feed, and live outbound polling (gated, no external calls this session) | partial | VEOC-79F |
 | G-IMPACT | Incident-area impact analysis (affected structures/parcels/population) | Esri-EMO | Not implemented | open | VEOC-79G |
 | G-PARCELS | Configurable parcel overlays | Esri-EMO | Reference layers exist; configurable parcel overlay open | open | Handoff 10 |
 | G-FLOOD | Hazard hatching + FEMA flood zone overlays | Esri-EMO | Not implemented | open | Handoff 11 |
