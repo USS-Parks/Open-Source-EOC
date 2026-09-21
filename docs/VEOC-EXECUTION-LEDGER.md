@@ -2332,4 +2332,73 @@ guest keeps unrestricted access while an incident is open.
   (0xC0000409 in auth.test.ts, unrelated to the change) cleared on re-run.
 - **Gate:** pnpm check --maxWorkers=2 exited 0; 465 tests in 82 files passed.
   Log: deploy/test-runtime/out/veoc-lockdown-check2.log.
+- **Ending commit:** 16ce9117ff0c4b866f9d72a15702a38b1776ff63, pushed
+  (91f588d..16ce911).
+
+## VEOC-79D: Integrated cross-boundary incident exercise (partial)
+
+A real-database integration test drives one owner and one partner organization
+through a single incident end to end over everything built in 79-79C, proving
+the pieces compose, a second incident stays isolated, and partner contributions
+keep their attribution.
+
+- **Baseline:** 16ce9117ff0c4b866f9d72a15702a38b1776ff63 on canonical main.
+- **Exercise (server/src/__tests__/cross-boundary.test.ts):** owner activates an
+  incident and sets its operational area; the partner has no access; the owner
+  grants the partner a coordinator seat; the partner reads that incident but
+  never the second; the partner revises the area, attributed to its home
+  organization and incident position; the partner onboards a data pack whose
+  fresh dataset is awaiting, not zero; the owner publishes the operational-
+  period IAP; revoking the partner removes its access at once while the area
+  history keeps the partner's revision; the owner closes the incident and the
+  second incident stays open, free of the partner and of the first incident's
+  datasets.
+- **Not yet covered (79D stays open on these):** cross-organization resource
+  requests tied to the incident and COP/KPI reconciliation of partner dataset
+  items both depend on per-record incident scoping of resources and dataset
+  items, the data-model change deferred in 79B/79C. The offline-reconnect and
+  federation attribution legs, and a full browser walk-through of the
+  cross-organization flow, are also outstanding. This receipt closes the
+  integrated-foundation proof, not the whole exercise.
+- **Gate:** pnpm check --maxWorkers=2 exited 0; 466 tests in 83 files passed.
+  Log: deploy/test-runtime/out/veoc-79d-check2.log.
 - **Ending commit:** this receipt commit, recorded by the next receipt.
+
+## Focused parity roster amendment, 2026-09-20 (planning only)
+
+- **Authority:** Basho requested focused amendments restoring unfinished
+  acceptance criteria and assigning omitted capabilities implementation steps.
+  This is not a new STS authorization or a product implementation receipt.
+- **Recorded:** 2026-09-21 01:01:55 UTC / 2026-09-20 18:01:55 PDT.
+- **Starting and ending HEAD:** 16ce9117ff0c4b866f9d72a15702a38b1776ff63,
+  the preceding authorized-guest correction, on canonical main.
+- **Change:** appended the controlling amendment to the continuation roster;
+  added authority/status pointers in the canonical PSPR, VEOC-77 handoff,
+  ROADMAP and FACET-STATUS. This ledger entry is the sixth changed document.
+  Existing prompts and implementation receipts remain intact.
+- **Roster:** 25 open steps at this baseline, retaining the previous 15 and
+  adding 79E, 79B1/B2, 79C1/C2, 79F, 79G and 81A/B/C. The added steps assign
+  capability accounting, incident data scope, durable ingestion, operational
+  data coverage/refresh, impact analysis, board authoring/routing and workspace
+  usability. 79D moves after its planning/offline implementation dependencies;
+  86 remains the final live readiness and release disposition.
+- **Restored criteria:** 79B selector delivery does not close incident-scoped
+  operational records; 79C registry/mapping delivery does not close durable
+  ingestion-to-COP behavior. FOUO authorized access supersedes public mapping;
+  reuse 16ce911 and any preliminary exercise work rather than rebuilding them.
+- **Disposition:** planning coverage improved for F1/F2/F5/F6/F8/F9/F14/F16/F17/
+  F18/F19, R3/R4 and AR2/AR3/AR4/AR6/AR7. No facet, requirement, invariant or
+  parity claim is newly verified. 79E reconciles all canonical obligations.
+- **Verification:** node scripts/check-links.mjs exited 0 (42 Markdown files);
+  git diff --check exited 0; PowerShell roster assertions exited 0 (25 unique
+  sequential rows, all ten new IDs, exercise/release order, exact expected
+  document line counts). No application tests: no product behavior changed.
+- **Preservation:** no schema, API, dependency or license changes. User-owned
+  .claude/, .vitest/, Reference Screenshots/, PARITY-AUDIT-2026-09-20.md and
+  the concurrent untracked cross-boundary.test.ts remain untouched.
+- **Worktree:** only the canonical main checkout is registered; no temporary
+  checkout or generated dependency tree was created by this amendment.
+- **Remaining:** execute only under applicable user authority. Source access,
+  credentials and live pilot inputs remain explicit gates on affected claims.
+  To revise this plan, add a superseding amendment; do not erase prior receipts.
+- **Publication:** No commit or push performed; no branch created.
