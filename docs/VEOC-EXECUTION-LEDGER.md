@@ -2989,3 +2989,23 @@ increment proves it and that coverage follows the incident area.
   grant after their work is preserved on main and no assigned unit needs them.
 - **Evidence level:** integrated local setup. No product feature claim.
 - **Unit commit:** 63fbad8; standing commit authority; no push.
+
+## D00: design baseline and ownership map
+
+- **Serves:** D00, Master Milestone A. Lane d, baseline 63fbad8.
+- **Change:** inventory all 16 navigation destinations, embedded/detail
+  workflows, shared components and source-observed deficiencies. Map all 36
+  design prompts to their single engine/presentation owners. Keep local
+  reference images and synthetic concepts distinct from delivered behavior.
+- **File:** docs/design/D00-DESIGN-BASELINE-AND-OWNERSHIP.md, 211 lines.
+- **Gate:** writer source reconciliation and path validation passed; staged
+  link check exited 0, 47 files. Diff check passed. Integrator read the whole
+  document. Independent review identified four navigation ownership omissions;
+  those were corrected, and fresh bounded review returned ship.
+- **Evidence level:** designed, source-verified baseline. No new runtime,
+  operator, responsive, accessibility or live-system acceptance is claimed.
+- **Integration:** docs-only rebase over 9203399 required no app gate repeat.
+  Main fast-forwarded to exact commit 3e0b382d50a87eee89045fe3d974532f8048784d.
+- **Retained lanes:** a impact E1, b authorized viewing, c reserved for the
+  opening ramp, d design foundation. All remain needed by approved work;
+  no extra worktrees or dependency copies were created. No push.
