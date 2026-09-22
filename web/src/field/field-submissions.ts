@@ -5,6 +5,7 @@ import {
   type SyncAck,
 } from "../offline/field-client.js";
 import { openOfflineStore, type OfflineStore } from "../offline/store.js";
+import { notifyOfflineQueueChange } from "../offline/queue-events.js";
 
 export type FieldSubmissionPhase =
   | "ready"
@@ -111,7 +112,28 @@ export class FieldSubmissionQueue {
   ): Promise<FieldSubmissionState> {
     await this.fields.open(scope, boardId);
     await this.fields.edit(scope, boardId, recordId, data);
+    notifyOfflineQueueChange(scope);
     return this.state(scope);
+  }
+
+  /**
+   * Flush one board through the same receipt path used by field capture.
+   * Callers that coordinate multiple queues must use this rather than
+   * FieldClient.sync so a conflict keeps its exact board and operation.
+   */
+  async syncOne(scope: ContinuityScope, boardId: string, token: string): Promise<SyncAck | null> {
+    const receipt = await this.fields.sync(scope, boardId, token);
+    if (receipt && receipt.conflicts > 0) {
+      if (!receipt.operationId) throw new Error("conflicting field acknowledgement has no operation id");
+      await this.retainConflict(scope, {
+        boardId,
+        operationId: receipt.operationId,
+        conflicts: receipt.conflicts,
+        receipt,
+      });
+    }
+    notifyOfflineQueueChange(scope);
+    return receipt;
   }
 
   async sync(scope: ContinuityScope, token: string): Promise<FieldSubmissionState> {
@@ -122,13 +144,9 @@ export class FieldSubmissionQueue {
     try {
       for (const boardId of boardIds) {
         while ((await this.fields.pendingOperations(scope)).some((item) => item.boardId === boardId)) {
-          const receipt = await this.fields.sync(scope, boardId, token);
+          const receipt = await this.syncOne(scope, boardId, token);
           if (!receipt) break;
           last = receipt;
-          if (receipt.conflicts > 0) {
-            if (!receipt.operationId) throw new Error("conflicting field acknowledgement has no operation id");
-            await this.retainConflict(scope, { boardId, operationId: receipt.operationId, conflicts: receipt.conflicts, receipt });
-          }
         }
       }
       const pending = (await this.fields.pendingOperations(scope)).length;

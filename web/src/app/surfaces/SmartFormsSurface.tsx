@@ -10,6 +10,7 @@ import { EmptyState, ErrorState, LoadingState } from "../../design/feedback.js";
 import { Icon } from "../../design/icons/Icon.js";
 import type { ApiClient } from "../api/client.js";
 import { useSession } from "../auth/session.js";
+import { subscribeOfflineQueueChange } from "../../offline/queue-events.js";
 import { useAsync } from "../data/hooks.js";
 import { uploadPickedFile } from "../data/files.js";
 import { Scroll, SurfaceHeader } from "../screens/parts.js";
@@ -91,16 +92,24 @@ export function SmartFormsSurface(props: SmartFormsSurfaceProps) {
     const currentScope = { personId, incidentId };
     let current = true;
     let opened: FieldSubmissionQueue | null = null;
+    let unsubscribe = () => {};
     void FieldSubmissionQueue.open().then(async (value) => {
       opened = value;
       if (!current) return value.close();
       setQueue(value);
       setQueueState(await value.state(currentScope));
+      if (!current) return;
+      unsubscribe = subscribeOfflineQueueChange(currentScope, () => {
+        void value.state(currentScope).then((next) => {
+          if (current) setQueueState(next);
+        });
+      });
     }).catch((reason: unknown) => {
       if (current) setError(reason instanceof Error ? reason.message : "Durable field storage is unavailable.");
     });
     return () => {
       current = false;
+      unsubscribe();
       opened?.close();
       setQueue(null);
     };

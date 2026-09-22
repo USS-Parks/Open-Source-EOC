@@ -4576,3 +4576,25 @@ increment proves it and that coverage follows the incident area.
   Evidence level: integrated on publication, not operator-validated. No new
   dependency. Unit commit: this receipt's commit; rollback by revert. Seven
   worktrees remain assigned or retained for final roster closeout.
+## D31: durable work and session recovery in the Console
+
+- Lane E, final baseline 95cb3f1. The Context panel shows scoped local work,
+  receipt conflicts, failures and session recovery using the existing durable
+  board and task queues. Reconciliation retains exact receipts before removing
+  acknowledged work. Same-person/incident queue notifications keep the panel
+  and field form consistent after enqueue or delivery.
+- Credentials remain transient in this integration. Invalid session recovery
+  routes to sign-in while preserving local work. Runtime generations and scoped
+  listener cleanup prevent results from an earlier person or incident appearing
+  in the current panel.
+- Full TypeScript and ESLint passed. The final queue-freshness gate passed
+  23 tests across four suites, including real PostgreSQL/Chrome reload,
+  attribution, exactly-once delivery, expired session recovery and scope
+  isolation. Log: deploy/test-runtime/out/lanes/e/d31-queue-freshness.log.
+  Rebased integration TypeScript and Console lint passed. An initial incorrect
+  root tsc -b invocation had no project file; the repository's recursive
+  tsc --noEmit command passed. No source change was needed for that invocation.
+- Root reviewed source and the final capture. Independent review: SHIP.
+  Evidence level: integrated on publication, not operator-validated. No new
+  dependency or migration. Unit commit: this receipt's commit; rollback by
+  revert. Seven lane worktrees remain retained for roster closeout.

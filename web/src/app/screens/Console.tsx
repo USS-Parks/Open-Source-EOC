@@ -40,6 +40,7 @@ import { AlertsSurface } from "../surfaces/AlertsSurface.js";
 import { NotificationTray } from "../../notifications/NotificationTray.js";
 import { LifelinesSurface } from "../surfaces/LifelinesSurface.js";
 import { EsfSurface } from "../surfaces/EsfSurface.js";
+import { ContinuityPanel } from "../../offline/ContinuityPanel.js";
 
 const NAV: readonly NavGroup[] = [
   { key: "situation", label: "Situation", items: [
@@ -212,6 +213,13 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
           </Button>
         </section>
       ) : null}
+      <ContinuityPanel
+        client={client}
+        personId={session.me?.person.id ?? null}
+        incidentId={incident.selectedIncidentId}
+        onRecoverSession={session.recoverSession}
+        onOpenBoards={() => navigateInContext({ kind: "boards" })}
+      />
       <section aria-label="Boards">
         <h2 style={dockHeading}>Boards</h2>
         {boardItems.length === 0 ? (

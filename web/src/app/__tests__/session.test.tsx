@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiClient } from "../api/client.js";
 import { SessionProvider, useSession } from "../auth/session.js";
 
@@ -19,7 +19,7 @@ afterEach(() => {
   }
 });
 
-function makeClient(): ApiClient {
+function makeClient(onResume?: () => boolean | void): ApiClient {
   const fetchImpl = (async (url: string) => {
     const u = String(url);
     const res = (status: number, body: unknown) => ({
@@ -30,6 +30,10 @@ function makeClient(): ApiClient {
     });
     if (u.endsWith("/auth/login"))
       return res(200, { accessToken: "A", resumeToken: "R", sessionId: "S" });
+    if (u.endsWith("/auth/resume")) {
+      if (onResume?.() === false) return res(401, { error: "expired" });
+      return res(200, { accessToken: "A2", resumeToken: "R2", sessionId: "S" });
+    }
     if (u.endsWith("/api/v1/me"))
       return res(200, {
         person: { id: "p", email: "e@x.org", displayName: "Duty Officer" },
@@ -85,6 +89,7 @@ function Probe() {
       <button type="button" onClick={() => void session.login("e@x.org", "pw")}>
         login
       </button>
+      <button type="button" onClick={() => void session.recoverSession().catch(() => undefined)}>recover session</button>
       <button type="button" onClick={() => session.setJurisdiction("foreign")}>foreign jurisdiction</button>
       <button type="button" onClick={() => void session.switchPosition("position-1")}>sign in position</button>
       <button type="button" onClick={() => void session.switchPosition(null)}>sign out position</button>
@@ -124,6 +129,27 @@ describe("SessionProvider", () => {
     );
     await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("authed"));
     expect(screen.getByTestId("jur").textContent).toBe("j1");
+  });
+
+  it("renews a live session for offline-work recovery without changing its jurisdiction", async () => {
+    const resumed = vi.fn();
+    render(<SessionProvider client={makeClient(resumed)}><Probe /></SessionProvider>);
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("anon"));
+    fireEvent.click(screen.getByText("login"));
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("authed"));
+    fireEvent.click(screen.getByText("recover session"));
+    await waitFor(() => expect(resumed).toHaveBeenCalledOnce());
+    expect(screen.getByTestId("jur").textContent).toBe("j1");
+  });
+
+  it("returns to sign-in when recovery credentials are no longer valid", async () => {
+    render(<SessionProvider client={makeClient(() => false)}><Probe /></SessionProvider>);
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("anon"));
+    fireEvent.click(screen.getByText("login"));
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("authed"));
+    fireEvent.click(screen.getByText("recover session"));
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("anon"));
+    expect(localStorage.getItem("openeoc.tokens")).toBeNull();
   });
 
   it("rejects a jurisdiction outside the refreshed membership and guest list", async () => {

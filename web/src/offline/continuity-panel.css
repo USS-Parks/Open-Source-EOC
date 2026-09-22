@@ -1,0 +1,14 @@
+.eoc-continuity { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--eoc-border); border-top: 3px solid var(--eoc-brand-teal); border-radius: var(--eoc-radius-md); background: var(--eoc-surface); box-shadow: var(--eoc-shadow-sm); }
+.eoc-continuity > header { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
+.eoc-continuity > header > div { min-width: 0; }
+.eoc-continuity > header span:first-child { display: block; color: var(--eoc-brand-teal); font-size: 10px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.eoc-continuity h2 { margin: 2px 0 0; color: var(--eoc-text-strong); font-size: 15px; }
+.eoc-continuity > p { margin: 0; color: var(--eoc-status-critical); line-height: 1.4; }
+.eoc-continuity-state { display: grid; gap: 7px; }
+.eoc-continuity-state p { margin: 0; color: var(--eoc-text-muted); font-size: 12px; line-height: 1.4; }
+.eoc-continuity dl { display: grid; gap: 7px; margin: 0; }
+.eoc-continuity dl > div { display: grid; gap: 2px; padding-top: 7px; border-top: 1px solid var(--eoc-border); }
+.eoc-continuity dt { color: var(--eoc-text-muted); font-size: 11px; }
+.eoc-continuity dd { margin: 0; color: var(--eoc-text); font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+.eoc-continuity-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.eoc-continuity-actions .eoc-btn { min-height: 36px; padding: 5px 10px; font-size: 12px; }

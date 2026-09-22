@@ -1,5 +1,6 @@
 import { TaskCompletionReceiptSchema, type TaskCompletionReceipt } from "@openeoc/shared";
 import type { OfflineStore } from "./store.js";
+import { notifyOfflineQueueChange } from "./queue-events.js";
 
 const TASK_QUEUE_PREFIX = "task-completions";
 
@@ -45,6 +46,7 @@ export class TaskCompletionQueue {
       if (pending.some((item) => item.operationId === operation.operationId)) return pending;
       return [...pending, operation];
     });
+    notifyOfflineQueueChange(input);
     return operation;
   }
 
@@ -73,6 +75,7 @@ export class TaskCompletionQueue {
       }
       await this.change(personId, incidentId, (pending) =>
         pending.filter((item) => item.operationId !== operation.operationId));
+      notifyOfflineQueueChange({ personId, incidentId });
       receipts.push(receipt);
     }
     return receipts;

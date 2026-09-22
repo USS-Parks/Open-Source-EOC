@@ -271,6 +271,8 @@ describe("the field client works offline and survives restart", () => {
     await queue.enqueue(scope, "board-conflict-a", "record-conflict-a", { status: "blocked" });
     await queue.enqueue(scope, "board-conflict-b", "record-conflict-b", { status: "blocked" });
 
+    await expect(queue.syncOne(scope, "board-conflict-a", "transient-token"))
+      .resolves.toMatchObject({ conflicts: 1, operationId: expect.any(String) });
     await expect(queue.sync(scope, "transient-token")).resolves.toMatchObject({
       phase: "conflict", pending: 0, receipt: { conflicts: 1 },
     });

@@ -53,6 +53,7 @@ export interface SessionValue {
   readonly error: string | null;
   readonly setJurisdiction: (id: string) => void;
   readonly refreshMe: () => Promise<Me>;
+  readonly recoverSession: () => Promise<void>;
   readonly switchPosition: (positionId: string | null) => Promise<void>;
   readonly login: (email: string, password: string) => Promise<void>;
   readonly logout: () => Promise<void>;
@@ -138,6 +139,21 @@ export function SessionProvider(props: { client?: ApiClient; children: ReactNode
         else setError("That jurisdiction is not available to this session.");
       },
       refreshMe,
+      recoverSession: async () => {
+        setError(null);
+        try {
+          await client.resume();
+          await refreshMe();
+          setStatus("authed");
+        } catch (cause) {
+          client.clearTokens();
+          setMe(null);
+          setJurisdictionId(null);
+          setStatus("anon");
+          setError(cause instanceof Error ? cause.message : "Session recovery failed.");
+          throw cause;
+        }
+      },
       switchPosition: async (positionId: string | null) => {
         setError(null);
         try {
