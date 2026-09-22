@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 
 import * as maplibregl from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { Protocol } from "pmtiles";
+import { Icon } from "../design/icons/index.js";
+import "./cop-workspace.css";
 import { withJurisdictionOverlays, readOverlayCoverage, type OverlayCoverage, VECTOR_OVERLAYS, ROAD_OVERLAYS, OWNERSHIP_LEVELS, overlayGroupOf, type JurisdictionOverlays } from "./overlays.js";
 import { themes, type ThemeName } from "../design/tokens.js";
 import {
@@ -64,11 +66,18 @@ import {
 import {
   formatArea,
   geometryBounds,
+  labelFor,
   parseCoordinate,
   polygonAreaSqMi,
   searchFeatures,
   totalMiles,
 } from "./tools.js";
+import {
+  CopFeatureInspector,
+  EmptyLayerSearch,
+  WorkspaceSection,
+  type CopInspection,
+} from "./workspace.js";
 
 export interface CopBoard {
   readonly id: string;
@@ -176,6 +185,8 @@ export interface CopMapProps {
   readonly onPickPoint?: ((lngLat: [number, number]) => void) | undefined;
   /** Current non-wrapping WGS84 bounds, reported at ready and after moveend. */
   readonly onBoundsChange?: ((bounds: CopMapBounds) => void) | undefined;
+  /** Final D11 drawer by default; explicit popup preserves the legacy direct-map mode. */
+  readonly inspectionMode?: "popup" | "workspace" | undefined;
   /** Test/instrumentation hook: receives the live map instance. */
   readonly onMap?: ((map: maplibregl.Map) => void) | undefined;
 }
@@ -205,12 +216,23 @@ interface FindResult {
   readonly title: string;
   readonly detail: string;
   readonly bounds: Bounds;
+  readonly sourceId?: string | undefined;
   readonly properties?: Record<string, unknown> | undefined;
 }
 
 /** A rendered operational or jurisdiction feature (inspectable). */
 function isCopLayerId(id: string): boolean {
-  return id === "facility-label" || id.startsWith(sourceId("")) || id.startsWith(feedSourceId("")) || id.startsWith("overlay-");
+  return id === "facility-label" || id === BUILDING_USE_LAYER_ID || id.startsWith(sourceId("")) || id.startsWith(feedSourceId("")) || id.startsWith("overlay-");
+}
+
+function visibleInspectionRows(properties: Record<string, unknown>) {
+  return Object.entries(properties)
+    .filter(([key, value]) => !key.startsWith("_") && value !== null && value !== undefined)
+    .slice(0, 24)
+    .map(([label, value]) => ({
+      label,
+      value: typeof value === "object" ? (JSON.stringify(value) ?? String(value)) : String(value),
+    }));
 }
 
 function esc(value: string): string {
@@ -328,6 +350,22 @@ export function CopMap(props: CopMapProps) {
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(loadBookmarks);
   const [bookmarkName, setBookmarkName] = useState("");
+  const [layerQuery, setLayerQuery] = useState("");
+  const [selection, setSelection] = useState<CopInspection | null>(null);
+  const feedHealthRef = useRef(feedHealth);
+  const coverageRef = useRef(coverage);
+  const boardsRef = useRef(props.boards);
+  const feedsRef = useRef(props.feeds ?? []);
+  feedHealthRef.current = feedHealth;
+  coverageRef.current = coverage;
+  boardsRef.current = props.boards;
+  feedsRef.current = props.feeds ?? [];
+
+  useEffect(() => {
+    if (!props.picking) return;
+    popupRef.current?.remove();
+    setSelection(null);
+  }, [props.picking]);
 
   const home = { center: props.center ?? DEFAULT_CENTER, zoom: props.zoom ?? DEFAULT_ZOOM };
   const assetBase = props.bundledBasemap?.assetBase ?? props.basemap?.assetBase;
@@ -342,6 +380,72 @@ export function CopMap(props: CopMapProps) {
       : assetBase
         ? BUNDLED_FONT_STACK
         : undefined;
+
+  const openInspection = (
+    properties: Record<string, unknown>,
+    sourceKey: string,
+    layerId: string,
+    featureStatus?: unknown,
+  ) => {
+    const board = boardsRef.current.find((candidate) => sourceKey === sourceId(candidate.id));
+    const feed = feedsRef.current.find((candidate) => sourceKey === feedSourceId(candidate.id));
+    const health = feed ? feedHealthRef.current[feed.id] : undefined;
+    const facility = facilitySymbol(facilityTypeFor(properties));
+    const rawStatus = properties._symbolStatus ?? featureStatus;
+    const status = typeof rawStatus === "string" && LEGEND.includes(rawStatus as SymbolStatus)
+      ? rawStatus as SymbolStatus
+      : "unknown";
+    const building = sourceKey === BUILDINGS_SOURCE_ID || layerId === BUILDING_USE_LAYER_ID;
+    const overlay = layerId.startsWith("overlay-") ? layerId.slice("overlay-".length) : undefined;
+    const overlayInfo = overlay ? coverageRef.current[overlay] : undefined;
+    const freshness = health
+      ? health.stale
+        ? `Stale last-good data · ${formatAge(health.ageSeconds)}`
+        : `Current · ${formatAge(health.ageSeconds)}`
+      : undefined;
+    const source = board?.title
+      ?? health?.name
+      ?? feed?.title
+      ?? (building ? "OpenStreetMap building footprints" : undefined)
+      ?? (layerId === "facility-label" ? "Basemap facility reference" : undefined)
+      ?? VECTOR_OVERLAYS.find((candidate) => candidate.id === overlay)?.title
+      ?? "Configured geographic reference";
+    const kind = board
+      ? (facility ? "Operational facility" : "Operational record")
+      : feed?.kind === "fema-flood"
+        ? "Static flood reference"
+        : feed
+          ? "Configured feed"
+          : building
+            ? "Building footprint"
+            : "Geographic reference";
+    const attribution = feed?.attribution
+      ?? health?.attribution
+      ?? (facility ? NAPSG_ATTRIBUTION : undefined)
+      ?? (building
+        ? buildings?.overtureRelease
+          ? `Buildings: © OpenStreetMap contributors (ODbL); enrichment: © Overture Maps Foundation (ODbL, ${buildings.overtureRelease})`
+          : "Buildings: © OpenStreetMap contributors (ODbL)"
+        : overlayInfo?.attribution);
+    const coverageLabel = feed?.coverage ?? health?.coverage ?? overlayInfo?.coverage;
+    setSelection({
+      title: labelFor(properties),
+      kind,
+      source,
+      status,
+      ...(facility ? { facilityType: facility.title } : {}),
+      ...(freshness ? { freshness } : {}),
+      ...(coverageLabel ? { coverage: coverageLabel } : {}),
+      ...(attribution ? { attribution } : {}),
+      rows: visibleInspectionRows(properties),
+    });
+  };
+
+  const closeInspection = () => {
+    popupRef.current?.remove();
+    setSelection(null);
+    requestAnimationFrame(() => mapRef.current?.getCanvas().focus());
+  };
 
   /** Paint the corner readout: cursor position, zoom, and the measurement. */
   const paintReadout = (lng: number, lat: number, zoom: number) => {
@@ -490,8 +594,17 @@ export function CopMap(props: CopMapProps) {
         return;
       }
       const hit = map.queryRenderedFeatures(e.point).find((f) => isCopLayerId(f.layer.id));
-      if (!hit) return;
-      popup.setLngLat(e.lngLat).setHTML(featureHtml(hit.properties ?? {})).addTo(map);
+      if (!hit) {
+        popup.remove();
+        setSelection(null);
+        return;
+      }
+      if (props.inspectionMode !== "popup") {
+        popup.remove();
+        openInspection(hit.properties ?? {}, hit.source, hit.layer.id, hit.state?.status);
+      } else {
+        popup.setLngLat(e.lngLat).setHTML(featureHtml(hit.properties ?? {})).addTo(map);
+      }
     });
     map.on("mousemove", (e) => {
       paintReadout(e.lngLat.lng, e.lngLat.lat, map.getZoom());
@@ -746,6 +859,7 @@ export function CopMap(props: CopMapProps) {
         title: h.title,
         detail: h.detail,
         bounds: h.bounds,
+        sourceId: h.sourceId,
         properties: h.properties,
       });
     }
@@ -780,7 +894,12 @@ export function CopMap(props: CopMapProps) {
       markerRef.current = marker;
     }
     if (r.kind === "feature" && r.properties && popupRef.current) {
-      popupRef.current.setLngLat(center).setHTML(featureHtml(r.properties)).addTo(map);
+      if (props.inspectionMode !== "popup") {
+        popupRef.current.remove();
+        openInspection(r.properties, r.sourceId ?? "", r.sourceId ?? "");
+      } else {
+        popupRef.current.setLngLat(center).setHTML(featureHtml(r.properties)).addTo(map);
+      }
     }
   };
 
@@ -872,18 +991,50 @@ export function CopMap(props: CopMapProps) {
     }
   }, [feedVisible, props.feeds]);
 
+  const layerNeedle = layerQuery.trim().toLowerCase();
+  const layerMatches = (label: string) => !layerNeedle || label.toLowerCase().includes(layerNeedle);
+  const shownBoards = props.boards.filter((board) => layerMatches(board.title));
+  const shownFeeds = (props.feeds ?? []).filter((feed) => layerMatches(feed.title));
+  const shownVectors = VECTOR_OVERLAYS.filter((overlay) => layerMatches(overlay.title));
+  const shownRasters = overlays.filter((overlay) => layerMatches(overlay.title));
+  const shownGroups = groups.filter((group) => layerMatches(group.title));
+  const shownBasemaps = [{ id: "vector", title: "Map" }, ...rasterBases]
+    .filter((basemap) => layerMatches(basemap.title));
+  const noLayerMatches = !!layerNeedle
+    && shownBoards.length + shownFeeds.length + shownVectors.length + shownRasters.length
+      + shownGroups.length + shownBasemaps.length === 0
+    && !(terrain && layerMatches("Hillshade"));
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 8, height: "100%" }}>
-      <nav aria-label="Map layers" className="eoc-map-panel">
-        <form onSubmit={(e) => void find(e)} style={{ marginBottom: 12 }}>
-          <h3 style={headingStyle}>Find</h3>
+    <div className="eoc-cop-container">
+    <div className="eoc-cop-workspace" data-inspecting={selection ? true : undefined} data-testid="cop-workspace">
+      <nav aria-label="Map layers" className="eoc-cop-layers">
+        <header>
+          <Icon name="map" size={20} decorative />
+          <h2>Map layers</h2>
+        </header>
+        <div className="eoc-cop-filter">
+          <label htmlFor="cop-layer-filter">Filter layer groups</label>
+          <Icon name="search" size={16} decorative />
           <input
+            id="cop-layer-filter"
+            type="search"
+            placeholder="Layer name"
+            value={layerQuery}
+            onChange={(event) => setLayerQuery(event.target.value)}
+          />
+        </div>
+        <EmptyLayerSearch visible={noLayerMatches} />
+        <form onSubmit={(e) => void find(e)} className="eoc-cop-find">
+          <label htmlFor="cop-feature-find">Find on map</label>
+          <Icon name="search" size={16} decorative />
+          <input
+            id="cop-feature-find"
             type="search"
             aria-label="Find on map"
             placeholder="Record, county, or lat, lng"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            style={inputStyle}
           />
           {results.length > 0 ? (
             <ul style={{ listStyle: "none", margin: "6px 0 0", padding: 0, display: "grid", gap: 2 }}>
@@ -904,11 +1055,19 @@ export function CopMap(props: CopMapProps) {
             </ul>
           ) : null}
         </form>
-        {rasterBases.length > 0 ? (
+        <WorkspaceSection
+          title="Reference layers"
+          icon="feeds"
+          className="is-reference"
+          defaultOpen
+          forceOpen={!!layerNeedle}
+          testId="reference-layer-group"
+        >
+        {shownBasemaps.length > 0 ? (
           <div style={{ marginBottom: 12 }}>
             <h3 style={headingStyle}>Basemap</h3>
             <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-              {[{ id: "vector", title: "Map" }, ...rasterBases].map((b) => (
+              {shownBasemaps.map((b) => (
                 <button
                   key={b.id}
                   type="button"
@@ -922,11 +1081,11 @@ export function CopMap(props: CopMapProps) {
             </div>
           </div>
         ) : null}
-        {overlays.length > 0 || terrain || vectors ? (
+        {shownRasters.length > 0 || (terrain && layerMatches("Hillshade")) || (vectors && shownVectors.length > 0) ? (
           <div style={{ marginBottom: 12 }}>
             <h3 style={headingStyle}>Overlays</h3>
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
-              {vectors ? VECTOR_OVERLAYS.map((o) => (
+              {vectors ? shownVectors.map((o) => (
                 <li key={o.id}>
                   <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <input type="checkbox" disabled={coverage[o.id]?.available === false} checked={!!vectorOn[o.id]}
@@ -937,7 +1096,7 @@ export function CopMap(props: CopMapProps) {
                   {vectorOn[o.id] && coverage[o.id]?.attribution ? <details style={{ marginLeft: 24, fontSize: "0.8em", color: "var(--eoc-text-muted)" }}><summary>Source</summary>{coverage[o.id]?.attribution}</details> : null}
                 </li>
               )) : null}
-              {terrain ? (
+              {terrain && layerMatches("Hillshade") ? (
                 <li>
                   <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <input
@@ -949,7 +1108,7 @@ export function CopMap(props: CopMapProps) {
                   </label>
                 </li>
               ) : null}
-              {overlays.map((o) => (
+              {shownRasters.map((o) => (
                 <li key={o.id}>
                   <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <input
@@ -1000,11 +1159,11 @@ export function CopMap(props: CopMapProps) {
             </ul>
           </div>
         ) : null}
-        {groups.length > 0 ? (
+        {shownGroups.length > 0 ? (
           <div style={{ marginBottom: 12 }}>
             <h3 style={headingStyle}>Basemap layers</h3>
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
-              {groups.map((g) => (
+              {shownGroups.map((g) => (
                 <li key={g.id}>
                   <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <input
@@ -1019,9 +1178,18 @@ export function CopMap(props: CopMapProps) {
             </ul>
           </div>
         ) : null}
+        </WorkspaceSection>
+        <WorkspaceSection
+          title="Operational layers"
+          icon="boards"
+          className="is-operational"
+          defaultOpen
+          forceOpen={!!layerNeedle}
+          testId="operational-layer-group"
+        >
         <h3 style={headingStyle}>Layers</h3>
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
-          {props.boards.map((b) => (
+          {shownBoards.map((b) => (
             <li key={b.id}>
               <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <input
@@ -1036,11 +1204,16 @@ export function CopMap(props: CopMapProps) {
             </li>
           ))}
         </ul>
-        {(props.feeds ?? []).length > 0 ? (
+        {shownBoards.length ? (
+          <p className="eoc-cop-layer-meta">
+            Source: application boards. If a record has no update time, its freshness remains unknown.
+          </p>
+        ) : null}
+        {shownFeeds.length > 0 ? (
           <div style={{ marginTop: 12 }}>
             <h3 style={headingStyle}>Feeds</h3>
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
-              {(props.feeds ?? []).map((f) => (
+              {shownFeeds.map((f) => (
                 <li key={f.id}>
                   <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <input
@@ -1059,7 +1232,7 @@ export function CopMap(props: CopMapProps) {
                     <small style={{ display: "block", marginLeft: 24, color: "var(--eoc-text-muted)" }}>
                       {feedHealth[f.id]!.stale ? "Stale last-good data" : `Freshness: ${formatAge(feedHealth[f.id]!.ageSeconds)}`}
                     </small>
-                  ) : null}
+                  ) : <small className="eoc-cop-layer-meta">Freshness unknown</small>}
                   {feedHealth[f.id]?.incomplete ? (
                     <small role="status" style={{ display: "block", marginLeft: 24, color: "var(--eoc-status-warning)" }}>
                       Display incomplete: bounded page limit reached.
@@ -1075,6 +1248,8 @@ export function CopMap(props: CopMapProps) {
             </ul>
           </div>
         ) : null}
+        </WorkspaceSection>
+        <WorkspaceSection title="Legends" icon="source" className="is-legends" defaultOpen testId="map-legends">
         {(props.feeds ?? []).some((feed) => feed.kind === "fema-flood") ? (
           <div style={{ marginTop: 12 }}>
             <h3 style={headingStyle}>Flood hazard (static reference)</h3>
@@ -1133,6 +1308,8 @@ export function CopMap(props: CopMapProps) {
             ))}
           </ul>
         </div>
+        </WorkspaceSection>
+        <WorkspaceSection title="Map tools and saved views" icon="settings" className="is-tools" testId="map-tools">
         <div style={{ marginTop: 12 }}>
           <h3 style={headingStyle}>Tools</h3>
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -1204,12 +1381,15 @@ export function CopMap(props: CopMapProps) {
             </ul>
           ) : null}
         </div>
+        </WorkspaceSection>
       </nav>
-      <div style={{ position: "relative", minHeight: 400, height: "100%" }}>
+      <div className="eoc-cop-map-frame">
         <div
           ref={container}
           data-testid="cop-map"
-          style={{ position: "absolute", inset: 0, borderRadius: 6, overflow: "hidden" }}
+          role="region"
+          aria-label="Common operating picture map"
+          style={{ position: "absolute", inset: 0, overflow: "hidden" }}
         />
         <div
           ref={readoutRef}
@@ -1229,6 +1409,8 @@ export function CopMap(props: CopMapProps) {
           }}
         />
       </div>
+      {selection ? <CopFeatureInspector selection={selection} onClose={closeInspection} /> : null}
+    </div>
     </div>
   );
 }

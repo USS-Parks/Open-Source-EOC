@@ -435,14 +435,16 @@ describe("the operations console in a real browser, offline", () => {
     await page.getByRole("button", { name: "Submit for approval" }).first().click();
     await iapList.getByText("In Approval", { exact: true }).first().waitFor({ state: "visible", timeout: 20000 });
 
-    // Field capture: drop a point on the map and save it as a road-closure
-    // record, the Field Maps gesture, entirely in the browser.
+    // Field capture: enter WGS84 coordinates with the keyboard and save them
+    // as a road-closure record through the same point-capture seam.
     await page.getByRole("button", { name: "Map" }).click();
     await page.waitForSelector('[data-testid="cop-map"]', { timeout: 20000 });
+    await page.getByRole("region", { name: "Common operating picture map" }).waitFor();
 
     // Map operator tools: the cursor/zoom readout, zoom-to-extent, home,
     // distance and area measure, find-on-map, and bookmarks.
     await page.waitForSelector('[data-testid="cop-readout"]', { timeout: 20000 });
+    await page.getByText("Map tools and saved views", { exact: true }).click();
     await page.getByRole("button", { name: "Zoom to extent" }).click();
     await page.getByRole("button", { name: "Home", exact: true }).click();
     await page.getByRole("button", { name: "Measure", exact: true }).click();
@@ -469,10 +471,9 @@ describe("the operations console in a real browser, offline", () => {
 
     await page.getByRole("button", { name: "Add point" }).click();
     await page.getByLabel("Map record board").selectOption({ label: "Road Closures" });
-    await page
-      .locator('[data-testid="cop-map"] canvas')
-      .first()
-      .click({ position: { x: 320, y: 300 } });
+    await page.getByLabel("Longitude").fill("-123.53");
+    await page.getByLabel("Latitude").fill("41.31");
+    await page.getByRole("button", { name: "Use coordinates" }).click();
     await page.getByText("New map record").waitFor({ state: "visible", timeout: 20000 });
     const recordPanel = page.getByRole("region", { name: "New map record" });
     await recordPanel.getByLabel("Road").fill("SR-96 at Weitchpec");

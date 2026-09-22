@@ -240,6 +240,7 @@ describe("H13 real-map licensed facility presentation", () => {
     `);
     expect(facilityImageResponses.size).toBe(9);
 
+    await page.getByTestId("map-tools").locator("summary").click();
     await page.getByRole("button", { name: "Zoom to extent" }).click();
     const lightVisible = await stableCanvasShot();
     const toggle = page.getByLabel("Synthetic Facility Symbols");
@@ -269,6 +270,7 @@ describe("H13 real-map licensed facility presentation", () => {
       [...document.querySelectorAll('[data-testid="facility-legend"] img')]
         .every(image => image.complete && image.naturalWidth === 128)
     `);
+    await page.getByTestId("map-tools").locator("summary").click();
     await page.getByRole("button", { name: "Zoom to extent" }).click();
     const darkVisible = await stableCanvasShot();
     const darkToggle = page.getByLabel("Synthetic Facility Symbols");

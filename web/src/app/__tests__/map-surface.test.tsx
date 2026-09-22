@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
 import { useRef } from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MapSurface } from "../surfaces/MapSurface.js";
 import type { ApiClient } from "../api/client.js";
 vi.mock("../../cop/CopMap.js", () => {
@@ -15,6 +15,11 @@ vi.mock("../../cop/CopMap.js", () => {
     },
   };
 });
+vi.mock("../../boards/RecordForm.js", () => ({
+  RecordForm: (props: { initial: Record<string, unknown> }) => (
+    <output data-testid="record-initial">{JSON.stringify(props.initial)}</output>
+  ),
+}));
 afterEach(() => { cleanup(); delete (globalThis as { OPENEOC?: unknown }).OPENEOC; });
 it("keeps a California basemap available for a new jurisdiction with no operational layers", async () => {
   render(<MapSurface client={{} as ApiClient} theme="light" jurisdictionId="new" collections={[]} feeds={[]} />);
@@ -52,4 +57,38 @@ it("remounts the COP when the selected incident changes, and not when it stays",
   view.rerender(<MapSurface {...props} incidentId="b" incidentName="Fire B" />);
   expect(screen.getByTestId("map").getAttribute("data-mount-id")).not.toBe(first); // switch tears down the old map
   expect(screen.getByText("Fire B")).toBeTruthy();
+});
+
+it("places a point from validated WGS84 coordinates with the keyboard", async () => {
+  const client = {
+    getBoard: vi.fn().mockResolvedValue({
+      id: "roads",
+      title: "Road Closures",
+      role: "member",
+      fields: [{ key: "location", label: "Location", type: "geometry", geometryKind: "point" }],
+      views: [],
+    }),
+  } as unknown as ApiClient;
+  render(
+    <MapSurface
+      client={client}
+      theme="light"
+      jurisdictionId="j1"
+      collections={[{ id: "roads", title: "Road Closures" }]}
+      feeds={[]}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Add point" }));
+  fireEvent.change(screen.getByLabelText("Longitude"), { target: { value: "181" } });
+  fireEvent.change(screen.getByLabelText("Latitude"), { target: { value: "41.3" } });
+  fireEvent.click(screen.getByRole("button", { name: "Use coordinates" }));
+  expect(screen.getByRole("alert").textContent).toContain("finite WGS84 coordinates");
+
+  fireEvent.change(screen.getByLabelText("Longitude"), { target: { value: "-123.5" } });
+  fireEvent.click(screen.getByRole("button", { name: "Use coordinates" }));
+  expect(await screen.findByText("New map record")).toBeTruthy();
+  expect(screen.getByTestId("record-initial").textContent).toContain(
+    '"location":{"type":"Point","coordinates":[-123.5,41.3]}',
+  );
 });

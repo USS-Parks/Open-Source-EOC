@@ -4056,3 +4056,26 @@ increment proves it and that coverage follows the incident area.
   refs/heads/main` confirms that exact SHA. Pending lane work was not published.
 - Earlier no-push receipt statements record the action at their time; this
   authorization supersedes the former publication hold prospectively.
+
+## P-COP: operational map workspace
+
+- Serves D12 workspace composition, integrated; KPI and D30 composed export
+  remain separate follow-ups. Lane C, 2026-09-21 PDT. Base 440b59e, replayed
+  through 63b552f without conflicting source changes.
+- MapSurface and CopMap now provide searchable operational/reference layers,
+  legend and tools, a source-aware selected-feature inspector, and explicit
+  unknown coverage/freshness. Wide inspectors preserve map bounds; narrow
+  layouts keep controls reachable. Field capture supports labeled WGS84
+  coordinates and pointer input through the same creation path.
+- Root TypeScript/full ESLint and 16 focused suites passed 108 tests, including
+  real PostgreSQL/Chrome COP, application, hazard, facility and Lifelines paths.
+  One earlier Windows worker termination passed its isolated recovery.
+  The accessibility correction passed web TypeScript, affected lint and 10
+  tests; fresh independent review returned SHIP. Light/dark/narrow evidence
+  inspected under deploy/test-runtime/out/lanes/c/browser-shots/cop-workspace.
+- Logs: P-COP-workspace-replay-gate.log, P-COP-accessible-capture.log and
+  P-COP-current-main-integration.log in deploy/test-runtime/out/lanes/c/logs.
+  Integration of independent AAR and Windows path fixes passed 15 focused tests
+  and all 10 native desktop tests. No dependencies or migrations.
+- Approved commit, exact fast-forward and push to canonical main. Rollback by
+  revert. Four existing active lanes retained; protected user files unchanged.

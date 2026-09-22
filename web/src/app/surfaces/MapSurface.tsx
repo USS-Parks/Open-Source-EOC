@@ -5,6 +5,7 @@ import { FEMA_NFHL_ATTRIBUTION, FEMA_NFHL_DATASET_KEY } from "../../cop/hazards.
 import { geometryBounds } from "../../cop/tools.js";
 import { RecordForm } from "../../boards/RecordForm.js";
 import { Button, Panel } from "../../design/components.js";
+import { Icon } from "../../design/icons/index.js";
 import type { ThemeName } from "../../design/tokens.js";
 import type { ApiClient, CollectionRef, FeedHealth } from "../api/client.js";
 import {
@@ -66,6 +67,9 @@ export function MapSurface(props: {
   const [adding, setAdding] = useState(false);
   const [boardId, setBoardId] = useState("");
   const [point, setPoint] = useState<[number, number] | null>(null);
+  const [longitude, setLongitude] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [coordinateError, setCoordinateError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -115,7 +119,38 @@ export function MapSurface(props: {
   const reset = () => {
     setAdding(false);
     setPoint(null);
+    setLongitude("");
+    setLatitude("");
+    setCoordinateError(null);
     setError(null);
+  };
+
+  const placePoint = (coordinates: [number, number]) => {
+    setPoint(coordinates);
+    setLongitude(String(coordinates[0]));
+    setLatitude(String(coordinates[1]));
+    setCoordinateError(null);
+  };
+
+  const useCoordinates = () => {
+    const longitudeValue = Number(longitude);
+    const latitudeValue = Number(latitude);
+    if (
+      longitude.trim() === ""
+      || latitude.trim() === ""
+      || !Number.isFinite(longitudeValue)
+      || !Number.isFinite(latitudeValue)
+      || longitudeValue < -180
+      || longitudeValue > 180
+      || latitudeValue < -90
+      || latitudeValue > 90
+    ) {
+      setCoordinateError(
+        "Enter finite WGS84 coordinates: longitude from -180 to 180 and latitude from -90 to 90.",
+      );
+      return;
+    }
+    placePoint([longitudeValue, latitudeValue]);
   };
 
   const save = (data: Record<string, unknown>) => {
@@ -170,6 +205,7 @@ export function MapSurface(props: {
             kind={adding ? "primary" : "quiet"}
             onClick={() => (adding ? reset() : setAdding(true))}
           >
+            <Icon name={adding ? "close" : "add"} size={16} decorative />
             {adding ? "Cancel" : "Add point"}
           </Button>
           {adding ? (
@@ -182,6 +218,7 @@ export function MapSurface(props: {
                   onChange={(e) => {
                     setBoardId(e.target.value);
                     setPoint(null);
+                    setCoordinateError(null);
                   }}
                   style={selectStyle}
                 >
@@ -192,9 +229,33 @@ export function MapSurface(props: {
                   ))}
                 </select>
               </label>
+              <label style={{ display: "grid", gap: 3 }}>
+                <span style={{ color: "var(--eoc-text-muted)" }}>Longitude</span>
+                <input
+                  aria-label="Longitude"
+                  inputMode="decimal"
+                  value={longitude}
+                  onChange={(event) => setLongitude(event.target.value)}
+                  style={{ ...selectStyle, width: 116 }}
+                />
+              </label>
+              <label style={{ display: "grid", gap: 3 }}>
+                <span style={{ color: "var(--eoc-text-muted)" }}>Latitude</span>
+                <input
+                  aria-label="Latitude"
+                  inputMode="decimal"
+                  value={latitude}
+                  onChange={(event) => setLatitude(event.target.value)}
+                  style={{ ...selectStyle, width: 116 }}
+                />
+              </label>
+              <Button onClick={useCoordinates}>Use coordinates</Button>
               <span style={{ color: "var(--eoc-text-muted)" }}>
-                {point ? "Point placed. Fill the form, then save." : "Click the map to place the point."}
+                {point ? "Point placed. Fill the form, then save." : "Click the map or enter coordinates to place the point."}
               </span>
+              {coordinateError ? (
+                <span role="alert" style={{ color: "var(--eoc-status-critical)" }}>{coordinateError}</span>
+              ) : null}
             </>
           ) : null}
         </div>
@@ -231,8 +292,9 @@ export function MapSurface(props: {
           buildings={buildingsSource()}
           jurisdictionOverlays={jurisdictionOverlays()}
           initialBounds={jurisdictionMapBounds()}
+          inspectionMode="workspace"
           picking={adding && !point}
-          onPickPoint={(p) => setPoint(p)}
+          onPickPoint={placePoint}
         />
       </div>
 

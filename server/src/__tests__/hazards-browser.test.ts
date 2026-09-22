@@ -259,6 +259,7 @@ describe("H11 real-map hazard and flood presentation", () => {
   it("renders synthetic operational and FEMA polygons with functional toggles in both themes", async () => {
     mkdirSync(SHOTS, { recursive: true });
     await page.getByText("Freshness: live").waitFor({ state: "visible", timeout: 20_000 });
+    await page.getByTestId("map-tools").locator("summary").click();
     await page.getByRole("button", { name: "Zoom to extent" }).click();
     await page.getByText("High risk (A, AE, AO)").waitFor({ state: "visible" });
     await page.getByText("Moderate risk (shaded X)").waitFor({ state: "visible" });
@@ -298,6 +299,7 @@ describe("H11 real-map hazard and flood presentation", () => {
     await page.waitForSelector('[data-testid="cop-map"] canvas', { timeout: 20_000 });
     await page.getByText("Freshness: live").waitFor({ state: "visible", timeout: 20_000 });
     await page.getByText("Flood hazard (static reference)").waitFor({ state: "visible" });
+    await page.getByTestId("map-tools").locator("summary").click();
     const darkFloodToggle = page.getByLabel("FEMA flood zones (synthetic fixture)");
     const darkHazardToggle = page.getByLabel("Synthetic Hazard Areas");
     expect(await darkFloodToggle.isChecked()).toBe(true);
