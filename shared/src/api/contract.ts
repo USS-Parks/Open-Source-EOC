@@ -14,6 +14,7 @@ export interface RestEndpoint {
   readonly tag: string;
   readonly summary: string;
   readonly auth: "bearer" | "peer-token" | "feed-token" | "intake-token" | "none";
+  readonly audience: "operator" | "machine" | "system";
 }
 
 export interface WsChannel {
@@ -33,40 +34,324 @@ export interface ApiContract {
   readonly webhooks: readonly WebhookEvent[];
 }
 
-const rest: RestEndpoint[] = [
-  { method: "POST", path: "/api/v1/auth/login", tag: "auth", summary: "Exchange credentials for tokens", auth: "none" },
-  { method: "POST", path: "/api/v1/auth/resume", tag: "auth", summary: "Renew a session from a resume token", auth: "none" },
-  { method: "GET", path: "/api/v1/me", tag: "auth", summary: "The current principal", auth: "bearer" },
-  { method: "POST", path: "/api/v1/jurisdictions/:jurisdictionId/boards", tag: "boards", summary: "Create a board from a template", auth: "bearer" },
-  { method: "GET", path: "/api/v1/boards/:boardId", tag: "boards", summary: "The effective board", auth: "bearer" },
-  { method: "POST", path: "/api/v1/boards/:boardId/records", tag: "boards", summary: "Create a record", auth: "bearer" },
-  { method: "PATCH", path: "/api/v1/boards/:boardId/records/:recordId", tag: "boards", summary: "Update a record", auth: "bearer" },
-  { method: "GET", path: "/api/v1/boards/:boardId/views/:viewKey", tag: "boards", summary: "Records through a view", auth: "bearer" },
-  { method: "GET", path: "/api/v1/ogc", tag: "geo", summary: "OGC API - Features landing", auth: "bearer" },
-  { method: "GET", path: "/api/v1/ogc/conformance", tag: "geo", summary: "Conformance classes", auth: "bearer" },
-  { method: "GET", path: "/api/v1/ogc/collections", tag: "geo", summary: "Feature collections", auth: "bearer" },
-  { method: "GET", path: "/api/v1/ogc/collections/:boardId/items", tag: "geo", summary: "Features as GeoJSON", auth: "bearer" },
-  { method: "POST", path: "/api/v1/jurisdictions/:jurisdictionId/cap/alerts", tag: "cap", summary: "Author a CAP 1.2 alert", auth: "bearer" },
-  { method: "GET", path: "/api/v1/jurisdictions/:jurisdictionId/cap/alerts", tag: "cap", summary: "List readable CAP alert records and local review state", auth: "bearer" },
-  { method: "GET", path: "/api/v1/cap/alerts/:id", tag: "cap", summary: "Read one CAP alert record", auth: "bearer" },
-  { method: "POST", path: "/api/v1/jurisdictions/:jurisdictionId/cap/drafts", tag: "cap", summary: "Store an unsent local CAP draft or exercise", auth: "bearer" },
-  { method: "POST", path: "/api/v1/cap/alerts/:id/review", tag: "cap", summary: "Append a local CAP review state", auth: "bearer" },
-  { method: "POST", path: "/api/v1/jurisdictions/:jurisdictionId/cap/ingest", tag: "cap", summary: "Ingest external CAP XML", auth: "bearer" },
-  { method: "GET", path: "/api/v1/notifications", tag: "notifications", summary: "List visible notification and delivery records", auth: "bearer" },
-  { method: "POST", path: "/api/v1/notifications/:notificationId/read", tag: "notifications", summary: "Mark an assigned notification read", auth: "bearer" },
-  { method: "POST", path: "/api/v1/notifications/:notificationId/acknowledge", tag: "notifications", summary: "Acknowledge an assigned notification with attribution", auth: "bearer" },
-  { method: "POST", path: "/api/v1/boards/:boardId/records/:recordId/edxl", tag: "interop", summary: "Emit a 213RR as EDXL", auth: "bearer" },
-  { method: "POST", path: "/api/v1/jurisdictions/:jurisdictionId/edxl/import", tag: "interop", summary: "Import an EDXL envelope", auth: "bearer" },
-  { method: "GET", path: "/api/v1/jurisdictions/:jurisdictionId/facilities/have", tag: "interop", summary: "Export facility status as EDXL-HAVE", auth: "bearer" },
-  { method: "POST", path: "/api/v1/federation/receive", tag: "federation", summary: "Receive a peer's forwarded updates", auth: "peer-token" },
-  { method: "POST", path: "/api/v1/feeds/:feedId/ingest", tag: "feeds", summary: "Push into a feed", auth: "feed-token" },
-  { method: "GET", path: "/api/v1/jurisdictions/:jurisdictionId/ipaws", tag: "ipaws", summary: "IPAWS enablement status", auth: "bearer" },
-  { method: "PUT", path: "/api/v1/jurisdictions/:jurisdictionId/ipaws/config", tag: "ipaws", summary: "Configure the IPAWS-OPEN COG", auth: "bearer" },
-  { method: "POST", path: "/api/v1/jurisdictions/:jurisdictionId/ipaws/moa", tag: "ipaws", summary: "Acknowledge the documented MOA", auth: "bearer" },
-  { method: "POST", path: "/api/v1/jurisdictions/:jurisdictionId/ipaws/enable", tag: "ipaws", summary: "Enable or disable IPAWS transmission", auth: "bearer" },
-  { method: "POST", path: "/api/v1/jurisdictions/:jurisdictionId/ipaws/test", tag: "ipaws", summary: "Run an IPAWS test-environment handshake", auth: "bearer" },
-  { method: "POST", path: "/api/v1/jurisdictions/:jurisdictionId/cap/alerts/:alertId/ipaws", tag: "ipaws", summary: "Transmit a CAP alert to IPAWS", auth: "bearer" },
-];
+const routeKeys = `
+DELETE /api/v1/guests/:grantId
+DELETE /api/v1/incidents/:incidentId/dashboard-configs/:key
+DELETE /api/v1/incidents/:incidentId/saved-state/:kind/:key
+GET /api/v1/aar/:aarId/pdf
+GET /api/v1/auth/oidc/callback
+GET /api/v1/auth/oidc/start
+GET /api/v1/boards/:boardId
+GET /api/v1/boards/:boardId/record-references/:fieldKey
+GET /api/v1/boards/:boardId/records/:recordId/detail
+GET /api/v1/boards/:boardId/records/:recordId/workflow
+GET /api/v1/boards/:boardId/views/:viewKey
+GET /api/v1/cap/alerts/:id
+GET /api/v1/corrective-actions/:id
+GET /api/v1/dashboard-templates/:key/:version/export
+GET /api/v1/dashboards/:dashboardId
+GET /api/v1/dashboards/:dashboardId/data
+GET /api/v1/dashboards/:dashboardId/stream
+GET /api/v1/dashboards/:dashboardId/widgets/:widgetKey/records
+GET /api/v1/datasets/:datasetId/items
+GET /api/v1/feeds/:feedId/items
+GET /api/v1/files/:fileId
+GET /api/v1/files/:fileId/content
+GET /api/v1/health
+GET /api/v1/iap/:iapId
+GET /api/v1/iap/:iapId/pdf
+GET /api/v1/iap/:iapId/revisions
+GET /api/v1/iap/:iapId/revisions/:revision/pdf
+GET /api/v1/incident-templates
+GET /api/v1/incidents/:incidentId
+GET /api/v1/incidents/:incidentId/aar/analytics
+GET /api/v1/incidents/:incidentId/aar/observations
+GET /api/v1/incidents/:incidentId/briefings
+GET /api/v1/incidents/:incidentId/catalog
+GET /api/v1/incidents/:incidentId/dashboard-configs
+GET /api/v1/incidents/:incidentId/dashboard-configs/:key
+GET /api/v1/incidents/:incidentId/dashboard-configs/:key/data
+GET /api/v1/incidents/:incidentId/datasets
+GET /api/v1/incidents/:incidentId/esf-assessments
+GET /api/v1/incidents/:incidentId/esf-assessments/:framework/:esf/history
+GET /api/v1/incidents/:incidentId/iaps
+GET /api/v1/incidents/:incidentId/ics-forms/:formId
+GET /api/v1/incidents/:incidentId/impact
+GET /api/v1/incidents/:incidentId/impact/compare
+GET /api/v1/incidents/:incidentId/impact/sources/:datasetId/records
+GET /api/v1/incidents/:incidentId/lifeline-assessments
+GET /api/v1/incidents/:incidentId/lifeline-assessments/:lifeline/history
+GET /api/v1/incidents/:incidentId/meetings
+GET /api/v1/incidents/:incidentId/operational-area
+GET /api/v1/incidents/:incidentId/operational-area/history
+GET /api/v1/incidents/:incidentId/operational-relationships
+GET /api/v1/incidents/:incidentId/participants
+GET /api/v1/incidents/:incidentId/saved-state
+GET /api/v1/incidents/:incidentId/saved-state/:kind/:key
+GET /api/v1/incidents/:incidentId/tasks
+GET /api/v1/jurisdictions/:jurisdictionId/boards
+GET /api/v1/jurisdictions/:jurisdictionId/cap/alerts
+GET /api/v1/jurisdictions/:jurisdictionId/chronology
+GET /api/v1/jurisdictions/:jurisdictionId/collab
+GET /api/v1/jurisdictions/:jurisdictionId/corrective-actions
+GET /api/v1/jurisdictions/:jurisdictionId/damage/assessments
+GET /api/v1/jurisdictions/:jurisdictionId/dashboards
+GET /api/v1/jurisdictions/:jurisdictionId/export
+GET /api/v1/jurisdictions/:jurisdictionId/facilities/board
+GET /api/v1/jurisdictions/:jurisdictionId/facilities/have
+GET /api/v1/jurisdictions/:jurisdictionId/feeds
+GET /api/v1/jurisdictions/:jurisdictionId/files
+GET /api/v1/jurisdictions/:jurisdictionId/forms
+GET /api/v1/jurisdictions/:jurisdictionId/forms/:key
+GET /api/v1/jurisdictions/:jurisdictionId/incidents
+GET /api/v1/jurisdictions/:jurisdictionId/ipaws
+GET /api/v1/jurisdictions/:jurisdictionId/jic/public
+GET /api/v1/jurisdictions/:jurisdictionId/lifelines
+GET /api/v1/jurisdictions/:jurisdictionId/meetings/config
+GET /api/v1/jurisdictions/:jurisdictionId/positions
+GET /api/v1/jurisdictions/:jurisdictionId/resource-requests
+GET /api/v1/jurisdictions/:jurisdictionId/reunification
+GET /api/v1/jurisdictions/:jurisdictionId/search
+GET /api/v1/jurisdictions/:jurisdictionId/sitreps
+GET /api/v1/jurisdictions/:jurisdictionId/staffing
+GET /api/v1/jurisdictions/:jurisdictionId/threads
+GET /api/v1/me
+GET /api/v1/notifications
+GET /api/v1/ogc
+GET /api/v1/ogc/collections
+GET /api/v1/ogc/collections/:boardId/items
+GET /api/v1/ogc/conformance
+GET /api/v1/peers/:peerId/pending
+GET /api/v1/ready
+GET /api/v1/resource-requests/:id
+GET /api/v1/resource-requests/:id/costs/export
+GET /api/v1/sitreps/:sitrepId
+GET /api/v1/status-queries/:id
+GET /api/v1/sync/boards/:boardId
+GET /api/v1/templates/:key/versions
+GET /api/v1/templates/:key/versions/:version
+GET /api/v1/threads/:threadId/export
+GET /api/v1/threads/:threadId/messages
+GET /api/v1/tracked-objects/:id
+PATCH /api/v1/boards/:boardId/records/:recordId
+PATCH /api/v1/corrective-actions/:id
+PATCH /api/v1/incidents/:incidentId/tasks/:taskId
+POST /api/v1/audit/:eventId/corrections
+POST /api/v1/auth/login
+POST /api/v1/auth/logout
+POST /api/v1/auth/resume
+POST /api/v1/boards/:boardId/local-fields
+POST /api/v1/boards/:boardId/records
+POST /api/v1/boards/:boardId/records/:recordId/cot
+POST /api/v1/boards/:boardId/records/:recordId/edxl
+POST /api/v1/boards/:boardId/records/:recordId/workflow/approvals
+POST /api/v1/boards/:boardId/records/:recordId/workflow/escalations
+POST /api/v1/boards/:boardId/records/:recordId/workflow/transitions
+POST /api/v1/boards/:boardId/upgrade
+POST /api/v1/cap/alerts/:id/review
+POST /api/v1/checkins/:id/checkout
+POST /api/v1/checklist-items/:itemId/complete
+POST /api/v1/corrective-actions/:id/status
+POST /api/v1/damage/assessments/:id/moderate
+POST /api/v1/dashboard-templates
+POST /api/v1/data-packs/datasets/:datasetId/load
+POST /api/v1/facilities/:id/status
+POST /api/v1/federation/receive
+POST /api/v1/feeds/:feedId/ingest
+POST /api/v1/feeds/:feedId/poll
+POST /api/v1/forms/:key/submit
+POST /api/v1/iap/:iapId/approve
+POST /api/v1/iap/:iapId/complete
+POST /api/v1/iap/:iapId/revisions
+POST /api/v1/iap/:iapId/submit
+POST /api/v1/incidents/:incidentId/aar
+POST /api/v1/incidents/:incidentId/aar/observations
+POST /api/v1/incidents/:incidentId/briefings
+POST /api/v1/incidents/:incidentId/catalog/:sourceId/onboard
+POST /api/v1/incidents/:incidentId/close
+POST /api/v1/incidents/:incidentId/collab/announce
+POST /api/v1/incidents/:incidentId/collab/archive
+POST /api/v1/incidents/:incidentId/collab/provision
+POST /api/v1/incidents/:incidentId/collab/sync
+POST /api/v1/incidents/:incidentId/data-packs
+POST /api/v1/incidents/:incidentId/esf-assessments
+POST /api/v1/incidents/:incidentId/esf-assessments/:framework/:esf/decisions
+POST /api/v1/incidents/:incidentId/iap
+POST /api/v1/incidents/:incidentId/lifeline-assessments
+POST /api/v1/incidents/:incidentId/lifeline-assessments/:lifeline/decisions
+POST /api/v1/incidents/:incidentId/meetings
+POST /api/v1/incidents/:incidentId/operational-relationships
+POST /api/v1/incidents/:incidentId/participants
+POST /api/v1/incidents/:incidentId/participants/:participantId/revoke
+POST /api/v1/incidents/:incidentId/tasks/:taskId/complete
+POST /api/v1/jic/approvals/receive
+POST /api/v1/jic/inquiries/:inquiryId/answer
+POST /api/v1/jic/inquiries/:inquiryId/assign
+POST /api/v1/jic/releases/:releaseId/decisions
+POST /api/v1/jic/releases/:releaseId/publish
+POST /api/v1/jic/releases/:releaseId/submit
+POST /api/v1/jurisdictions/:jurisdictionId/badges
+POST /api/v1/jurisdictions/:jurisdictionId/boards
+POST /api/v1/jurisdictions/:jurisdictionId/briefings/run-due
+POST /api/v1/jurisdictions/:jurisdictionId/cap/alerts
+POST /api/v1/jurisdictions/:jurisdictionId/cap/alerts/:alertId/ipaws
+POST /api/v1/jurisdictions/:jurisdictionId/cap/drafts
+POST /api/v1/jurisdictions/:jurisdictionId/cap/ingest
+POST /api/v1/jurisdictions/:jurisdictionId/checkins
+POST /api/v1/jurisdictions/:jurisdictionId/checkins/scan
+POST /api/v1/jurisdictions/:jurisdictionId/corrective-actions
+POST /api/v1/jurisdictions/:jurisdictionId/cot/ingest
+POST /api/v1/jurisdictions/:jurisdictionId/damage/assessments
+POST /api/v1/jurisdictions/:jurisdictionId/damage/baseline
+POST /api/v1/jurisdictions/:jurisdictionId/damage/declaration
+POST /api/v1/jurisdictions/:jurisdictionId/damage/intake/enable
+POST /api/v1/jurisdictions/:jurisdictionId/damage/report
+POST /api/v1/jurisdictions/:jurisdictionId/damage/summary
+POST /api/v1/jurisdictions/:jurisdictionId/dashboards
+POST /api/v1/jurisdictions/:jurisdictionId/edxl/import
+POST /api/v1/jurisdictions/:jurisdictionId/facilities
+POST /api/v1/jurisdictions/:jurisdictionId/feeds
+POST /api/v1/jurisdictions/:jurisdictionId/files
+POST /api/v1/jurisdictions/:jurisdictionId/forms
+POST /api/v1/jurisdictions/:jurisdictionId/forms/import
+POST /api/v1/jurisdictions/:jurisdictionId/guests
+POST /api/v1/jurisdictions/:jurisdictionId/incidents
+POST /api/v1/jurisdictions/:jurisdictionId/ipaws/enable
+POST /api/v1/jurisdictions/:jurisdictionId/ipaws/moa
+POST /api/v1/jurisdictions/:jurisdictionId/ipaws/test
+POST /api/v1/jurisdictions/:jurisdictionId/jic/inquiries
+POST /api/v1/jurisdictions/:jurisdictionId/jic/releases
+POST /api/v1/jurisdictions/:jurisdictionId/libraries
+POST /api/v1/jurisdictions/:jurisdictionId/notification-rules
+POST /api/v1/jurisdictions/:jurisdictionId/notifications/run-scheduled
+POST /api/v1/jurisdictions/:jurisdictionId/peers
+POST /api/v1/jurisdictions/:jurisdictionId/positions
+POST /api/v1/jurisdictions/:jurisdictionId/resource-requests
+POST /api/v1/jurisdictions/:jurisdictionId/shifts
+POST /api/v1/jurisdictions/:jurisdictionId/sitreps
+POST /api/v1/jurisdictions/:jurisdictionId/status-queries
+POST /api/v1/jurisdictions/:jurisdictionId/threads
+POST /api/v1/jurisdictions/:jurisdictionId/tracked-objects
+POST /api/v1/jurisdictions/:jurisdictionId/tracked-objects/scan
+POST /api/v1/notifications/:notificationId/acknowledge
+POST /api/v1/notifications/:notificationId/read
+POST /api/v1/peers/:peerId/agreements
+POST /api/v1/peers/:peerId/queue
+POST /api/v1/persons
+POST /api/v1/positions/:positionId/assignments
+POST /api/v1/positions/:positionId/reassignments
+POST /api/v1/positions/:positionId/sign-in
+POST /api/v1/positions/sign-out
+POST /api/v1/provision/jurisdictions
+POST /api/v1/resource-requests/:id/assign
+POST /api/v1/resource-requests/:id/costs
+POST /api/v1/resource-requests/:id/escalate
+POST /api/v1/resource-requests/:id/transition
+POST /api/v1/resource-requests/receive
+POST /api/v1/resource-requests/report
+POST /api/v1/templates
+POST /api/v1/templates/import
+POST /api/v1/threads/:threadId/messages
+PUT /api/v1/iap/:iapId/ics-204
+PUT /api/v1/incidents/:incidentId/dashboard-configs/:key
+PUT /api/v1/incidents/:incidentId/operational-area
+PUT /api/v1/incidents/:incidentId/saved-state/:kind/:key
+PUT /api/v1/jurisdictions/:jurisdictionId/collab/backend
+PUT /api/v1/jurisdictions/:jurisdictionId/ipaws/config
+PUT /api/v1/jurisdictions/:jurisdictionId/lifelines
+PUT /api/v1/jurisdictions/:jurisdictionId/meetings/config
+PUT /api/v1/jurisdictions/:jurisdictionId/messaging-settings
+`
+  .trim()
+  .split("\n");
+
+const methods = new Set<RestEndpoint["method"]>(["GET", "POST", "PUT", "PATCH", "DELETE"]);
+const noAuth = new Set([
+  "GET /api/v1/health",
+  "GET /api/v1/ready",
+  "GET /api/v1/auth/oidc/callback",
+  "GET /api/v1/auth/oidc/start",
+  "POST /api/v1/auth/login",
+  "POST /api/v1/auth/resume",
+]);
+const peerAuth = new Set([
+  "POST /api/v1/federation/receive",
+  "POST /api/v1/jic/approvals/receive",
+  "POST /api/v1/resource-requests/receive",
+  "POST /api/v1/resource-requests/report",
+]);
+const feedAuth = new Set(["POST /api/v1/feeds/:feedId/ingest"]);
+const systemRoutes = new Set(["GET /api/v1/health", "GET /api/v1/ready"]);
+
+const tagAliases: Readonly<Record<string, string>> = {
+  "corrective-actions": "aar",
+  "dashboard-configs": "dashboards",
+  "data-packs": "datasets",
+  "guests": "auth",
+  "incident-templates": "incidents",
+  "me": "auth",
+  "operational-area": "incidents",
+  "operational-relationships": "incidents",
+  "persons": "auth",
+  "positions": "auth",
+  "provision": "auth",
+  "resource-requests": "resources",
+  "saved-state": "workspace",
+  "status-queries": "facilities",
+  "templates": "boards",
+  "tracked-objects": "tracking",
+};
+
+function routeTag(path: string): string {
+  const segments = path.split("/").slice(3);
+  const scoped = segments[0] === "jurisdictions" || segments[0] === "incidents";
+  const resource = scoped ? (segments[2] ?? segments[0] ?? "meta") : (segments[0] ?? "meta");
+  return tagAliases[resource] ?? resource;
+}
+
+function routeSummary(method: RestEndpoint["method"], path: string): string {
+  const verbs: Readonly<Record<RestEndpoint["method"], string>> = {
+    GET: "Read",
+    POST: "Run",
+    PUT: "Set",
+    PATCH: "Update",
+    DELETE: "Delete",
+  };
+  const subject = path
+    .split("/")
+    .slice(3)
+    .filter((segment) => !segment.startsWith(":"))
+    .join(" ")
+    .replaceAll("-", " ");
+  return `${verbs[method]} ${subject}`;
+}
+
+const rest: RestEndpoint[] = routeKeys.map((key) => {
+  const separator = key.indexOf(" ");
+  const method = key.slice(0, separator) as RestEndpoint["method"];
+  const path = key.slice(separator + 1);
+  if (!methods.has(method)) throw new Error(`unsupported API method in contract: ${key}`);
+  const auth = noAuth.has(key)
+    ? "none"
+    : peerAuth.has(key)
+      ? "peer-token"
+      : feedAuth.has(key)
+        ? "feed-token"
+        : "bearer";
+  const audience = systemRoutes.has(key)
+    ? "system"
+    : auth === "peer-token" || auth === "feed-token"
+      ? "machine"
+      : "operator";
+  return {
+    method,
+    path,
+    tag: routeTag(path),
+    summary: routeSummary(method, path),
+    auth,
+    audience,
+  };
+});
 
 const websockets: WsChannel[] = [
   { path: "/api/v1/sync/boards/:boardId", summary: "CRDT board sync" },
@@ -85,8 +370,8 @@ export function generateApiDocs(contract: ApiContract = API_CONTRACT): string {
   const lines: string[] = [
     `# Open Source EOC Public API (${contract.version})`,
     ``,
-    `This document is generated from the frozen API contract. Every REST`,
-    `endpoint below is held to the running server by a contract test.`,
+    `This document is generated from the frozen API contract. Every registered`,
+    `method and path below is held to the Fastify route table by a contract test.`,
     ``,
     `## REST`,
     ``,
@@ -98,8 +383,13 @@ export function generateApiDocs(contract: ApiContract = API_CONTRACT): string {
   }
   for (const tag of [...byTag.keys()].sort()) {
     lines.push(`### ${tag}`, ``);
-    for (const e of byTag.get(tag)!) {
-      lines.push(`- \`${e.method} ${e.path}\`: ${e.summary} (auth: ${e.auth})`);
+    const endpoints = [...byTag.get(tag)!].sort((a, b) =>
+      `${a.path} ${a.method}`.localeCompare(`${b.path} ${b.method}`),
+    );
+    for (const e of endpoints) {
+      lines.push(
+        `- \`${e.method} ${e.path}\`: ${e.summary} (auth: ${e.auth}; audience: ${e.audience})`,
+      );
     }
     lines.push(``);
   }

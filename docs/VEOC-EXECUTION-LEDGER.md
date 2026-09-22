@@ -4901,3 +4901,27 @@ increment proves it and that coverage follows the incident area.
   changed. Repository receipt lands in this commit; rollback the document by
   revert, while GitHub protection requires a separate account-level change.
   Next: W0.5.
+
+## V1 W0.5: complete API route coverage
+
+- **Contract:** `API_CONTRACT.rest` now covers all 226 registered method and
+  path pairs: the 224 routes in the normal application table plus the two
+  routes registered when OIDC is configured. Fastify's automatic `HEAD`
+  aliases are intentionally excluded. Each entry carries an explicit auth
+  mode and an operator, machine or system audience.
+- **Published document:** `docs/API.md` was regenerated from that complete
+  contract. Its generated sections are deterministically tagged and sorted;
+  no hand-maintained route subset remains.
+- **Drift gate:** the API docs test now starts the real Fastify application
+  with OIDC enabled, walks `printRoutes({ commonPrefix: false })`, reconstructs
+  the registered paths and requires exact equality with the contract. It also
+  rejects duplicate contract entries.
+- **Verification:** the focused contract and API documentation suites passed
+  10 of 10 tests across 2 files. Recursive TypeScript and full ESLint passed;
+  the license scan passed all 300 packages; the link checker passed all 65
+  Markdown files. `git diff --check` is clean.
+- **Result:** W0.5 and the W0 milestone gate are complete. M4 is green, the
+  parity, facet and design-capability matrices agree with their receipts, and
+  `README.md` states the true deployability boundary. No runtime route, schema,
+  dependency or operator behavior changed. Next: W1.0, using the standing
+  section 9 default to delete the obsolete field-node surface.

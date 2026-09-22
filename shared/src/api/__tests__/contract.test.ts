@@ -70,7 +70,16 @@ describe("API contract", () => {
   it("accepts an alternate contract argument", () => {
     const tiny: ApiContract = {
       version: "v9",
-      rest: [{ method: "GET", path: "/api/v9/ping", tag: "meta", summary: "Liveness", auth: "none" }],
+      rest: [
+        {
+          method: "GET",
+          path: "/api/v9/ping",
+          tag: "meta",
+          summary: "Liveness",
+          auth: "none",
+          audience: "system",
+        },
+      ],
       websockets: [],
       webhooks: [],
     };
