@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
-  [ValidateSet('Build', 'Setup', 'Start', 'Status', 'Stop')]
-  [string]$Action = 'Start',
+  [ValidateSet('Build', 'Setup', 'Start', 'Status', 'Stop', 'Launch')]
+  [string]$Action = 'Launch',
   [ValidateSet('production', 'demo', 'acceptance')]
   [string]$Profile = 'production',
   [ValidateRange(1024, 65535)]
@@ -19,7 +19,22 @@ $ErrorActionPreference = 'Stop'
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $scriptRoot '../..'))
 $entry = Join-Path $scriptRoot 'desktop.mjs'
-$node = (Get-Command node.exe -ErrorAction Stop).Source
+$installedMarker = Join-Path $repoRoot 'desktop-install.json'
+$profileDataRoot = Join-Path $scriptRoot 'out'
+if (Test-Path -LiteralPath $installedMarker) {
+  $bundledNode = Join-Path $repoRoot 'runtime/node/node.exe'
+  if (-not (Test-Path -LiteralPath $bundledNode)) { throw "Installed Node runtime is missing: $bundledNode" }
+  if (-not $env:LOCALAPPDATA) { throw 'LOCALAPPDATA is required for installed Open Source EOC data.' }
+  $env:OPENEOC_DESKTOP_PREBUILT = '1'
+  $env:OPENEOC_DESKTOP_DATA_ROOT = Join-Path $env:LOCALAPPDATA 'Open Source EOC'
+  $env:OPENEOC_DESKTOP_DIST_ROOT = Join-Path $repoRoot 'web/dist'
+  $env:OPENEOC_DESKTOP_PUBLIC_ROOT = Join-Path $repoRoot 'web/public'
+  $env:OPENEOC_PG_DIST = Join-Path $repoRoot 'runtime/pgsql'
+  $profileDataRoot = $env:OPENEOC_DESKTOP_DATA_ROOT
+  $node = $bundledNode
+} else {
+  $node = (Get-Command node.exe -ErrorAction Stop).Source
+}
 Set-Location -LiteralPath $repoRoot
 
 $arguments = @($entry, $Action.ToLowerInvariant())
@@ -32,15 +47,15 @@ if ($PSBoundParameters.ContainsKey('PgPort')) {
 if ($PSBoundParameters.ContainsKey('HttpPort')) {
   $arguments += "--http-port=$HttpPort"
 }
-if ($Action -eq 'Start' -and $NoBrowser) {
+if (($Action -eq 'Start' -or $Action -eq 'Launch') -and $NoBrowser) {
   $arguments += '--no-browser'
 }
 
 $secretPointer = [IntPtr]::Zero
 $plainPassword = $null
 try {
-  if ($Action -eq 'Setup' -and $Profile -eq 'production') {
-    $profileConfig = Join-Path $scriptRoot 'out/profiles/production/profile.json'
+  if (($Action -eq 'Setup' -or $Action -eq 'Launch') -and $Profile -eq 'production') {
+    $profileConfig = Join-Path $profileDataRoot 'profiles/production/profile.json'
     $profileRoot = Split-Path -Parent $profileConfig
     $emptyProfile = -not (Test-Path -LiteralPath $profileRoot) -or @((Get-ChildItem -LiteralPath $profileRoot -Force -ErrorAction SilentlyContinue)).Count -eq 0
     if (-not (Test-Path -LiteralPath $profileConfig) -and $emptyProfile) {

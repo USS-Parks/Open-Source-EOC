@@ -1,5 +1,5 @@
 import "./ts-loader.mjs";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { execFileSync, spawn } from "node:child_process";
 import {
   closeSync,
@@ -9,12 +9,11 @@ import {
   readFileSync,
   readdirSync,
   renameSync,
-  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { createServer } from "node:net";
-import { dirname, relative, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   PROFILE_DEFAULTS,
@@ -26,27 +25,19 @@ import {
   validateProfilePlans,
 } from "./lib/contracts.mjs";
 import { desktopRuntimeConfig, registerStaticHost } from "./lib/static-host.mjs";
+import { desktopBuildSourceFingerprint } from "./lib/build-fingerprint.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
-const repoRoot = resolve(dirname(scriptPath), "../..");
-const outRoot = resolve(repoRoot, "deploy/windows/out");
+const repoRoot = resolve(process.env.OPENEOC_DESKTOP_APP_ROOT ?? resolve(dirname(scriptPath), "../.."));
+const prebuiltDesktop = process.env.OPENEOC_DESKTOP_PREBUILT === "1";
+const outRoot = resolve(process.env.OPENEOC_DESKTOP_DATA_ROOT ?? resolve(repoRoot, "deploy/windows/out"));
 const buildRoot = resolve(outRoot, "build");
-const distRoot = resolve(buildRoot, "app-dist");
+const distRoot = resolve(process.env.OPENEOC_DESKTOP_DIST_ROOT ?? resolve(buildRoot, "app-dist"));
 const buildStampPath = resolve(buildRoot, "build-stamp.json");
-const publicRoot = resolve(repoRoot, "web/public");
+const publicRoot = resolve(process.env.OPENEOC_DESKTOP_PUBLIC_ROOT ?? resolve(repoRoot, "web/public"));
 const pgDist = resolve(process.env.OPENEOC_PG_DIST ?? resolve(repoRoot, "deploy/test-runtime/out/pgsql"));
 const pgBin = resolve(pgDist, "bin");
 const powershell = "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe";
-const SOURCE_INPUTS = [
-  "pnpm-lock.yaml",
-  "shared/package.json",
-  "shared/src",
-  "tsconfig.base.json",
-  "web/index.html",
-  "web/package.json",
-  "web/src",
-  "web/vite.config.ts",
-];
 
 function parseArgs(values) {
   const result = { action: values[0] ?? "status" };
@@ -93,10 +84,10 @@ function randomPassword() {
 function requiredFiles(kind) {
   const files = [
     resolve(repoRoot, "node_modules/typescript/lib/typescript.js"),
-    resolve(repoRoot, "web/node_modules/vite/dist/node/index.js"),
     resolve(publicRoot, "basemap/basemap.pmtiles"),
     resolve(publicRoot, "manifest.webmanifest"),
   ];
+  if (!prebuiltDesktop) files.push(resolve(repoRoot, "web/node_modules/vite/dist/node/index.js"));
   if (kind === "database") {
     for (const executable of ["createdb.exe", "initdb.exe", "pg_ctl.exe", "pg_isready.exe"])
       files.push(resolve(pgBin, executable));
@@ -107,25 +98,8 @@ function requiredFiles(kind) {
     throw new Error(`Offline prerequisites are missing:\n${missing.map((path) => `- ${path}`).join("\n")}`);
 }
 
-function collectFiles(path) {
-  if (!existsSync(path)) throw new Error(`Build input is missing: ${path}`);
-  const stat = statSync(path);
-  if (stat.isFile()) return [path];
-  return readdirSync(path, { withFileTypes: true })
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .flatMap((entry) => collectFiles(resolve(path, entry.name)));
-}
-
 function sourceFingerprint() {
-  const hash = createHash("sha256");
-  const files = SOURCE_INPUTS.flatMap((item) => collectFiles(resolve(repoRoot, item)));
-  for (const file of files) {
-    hash.update(relative(repoRoot, file).replaceAll("\\", "/"));
-    hash.update("\0");
-    hash.update(readFileSync(file));
-    hash.update("\0");
-  }
-  return { hash: hash.digest("hex"), files: files.length };
+  return desktopBuildSourceFingerprint(repoRoot);
 }
 
 function gitRevision() {
@@ -137,6 +111,7 @@ function gitRevision() {
 }
 
 async function buildWeb() {
+  if (prebuiltDesktop) throw new Error("The installed desktop bundle is prebuilt and cannot be rebuilt in place");
   requiredFiles("build");
   const before = sourceFingerprint();
   const vite = await import(pathToFileURL(resolve(repoRoot, "web/node_modules/vite/dist/node/index.js")).href);
@@ -161,6 +136,11 @@ async function buildWeb() {
 }
 
 function buildFreshness() {
+  if (prebuiltDesktop) {
+    if (!existsSync(resolve(distRoot, "index.html")))
+      return { fresh: false, reason: "installed desktop web bundle is missing" };
+    return { fresh: true, stamp: { schema: 1, revision: "installed", prebuilt: true } };
+  }
   if (!existsSync(resolve(distRoot, "index.html")) || !existsSync(buildStampPath))
     return { fresh: false, reason: "desktop build is missing" };
   const stamp = readJson(buildStampPath);
@@ -554,6 +534,13 @@ async function startProfile(args) {
   }
 }
 
+/** Set up a new profile once, then open its loopback desktop application. */
+async function launchProfile(args) {
+  const profile = validateProfileName(String(args.profile ?? "production"));
+  if (!loadProfile(profile).config) await setupProfile({ ...args, profile });
+  await startProfile({ ...args, profile });
+}
+
 async function serveProfile(args) {
   const profile = validateProfileName(String(args.profile ?? ""));
   const { paths, config } = loadProfile(profile);
@@ -642,7 +629,10 @@ async function stopOwnedApp(paths, config) {
 async function stopProfile(args) {
   const profile = validateProfileName(String(args.profile ?? "production"));
   const { paths, config } = loadProfile(profile);
-  if (!config) throw new Error(`Profile ${profile} is not configured`);
+  if (!config) {
+    console.log(`PROFILE_STOPPED configured=false profile=${profile} app=false postgres=false browser=false`);
+    return;
+  }
   const browserStopped = await stopOwnedBrowser(paths, config);
   const appStopped = await stopOwnedApp(paths, config);
   const postgresStopped = stopPostgres(paths);
@@ -687,6 +677,7 @@ async function main() {
   if (action === "build") return buildWeb();
   if (action === "setup") return setupProfile(args);
   if (action === "start") return startProfile(args);
+  if (action === "launch") return launchProfile(args);
   if (action === "serve") return serveProfile(args);
   if (action === "status") return profileStatus(args);
   if (action === "stop") return stopProfile(args);

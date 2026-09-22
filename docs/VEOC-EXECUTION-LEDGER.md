@@ -4324,6 +4324,34 @@ increment proves it and that coverage follows the incident area.
   publication; user aesthetic acceptance remains separate. Unit commit: this
   receipt's commit; rollback by revert. Seven active worktrees remain assigned.
 
+## VEOC-85-A addendum: installable Windows desktop package
+
+- Lane E, integrated baseline fadaa30. Per-user Inno Setup installation bundles
+  the local Node/PostgreSQL/PostGIS runtime, production dependencies and prebuilt
+  UI. Application files and operational data have separate roots. Launch sets up
+  a new profile once; uninstall stops only owned processes across production,
+  demo and acceptance and preserves operational data. Absent-profile Stop is an
+  idempotent no-op. No Windows service or production credential is packaged.
+- Staging checks the launcher's shared content fingerprint against the build
+  stamp, resolves a portable dependency closure, verifies imports from an isolated
+  temporary root and records SHA-256 hashes. Compilation verifies every staged
+  file's path, size and hash. No download occurs in the staging script.
+- Full TypeScript/ESLint and 17 launcher/installer checks passed, including an
+  actual absent-profile launcher invocation. The fresh 9870-file stage passed
+  its isolated import and Inno Setup compilation. Logs under
+  deploy/test-runtime/out/lanes/e include installer-integrity-gate.log,
+  installer-integrity-stage.log and installer-integrity-build.log.
+- The earlier engineering installer was silently installed into installed-proof,
+  launched its own demo at HTTP 8083/PostgreSQL 55443, passed readiness and an
+  authenticated account request, then uninstalled with data preserved and app
+  removed. The regular user demo on 8081 was unaffected. This proves packaging;
+  the final delivery artifact still must be rebuilt from the completed roster,
+  with the requested local California/Overture/overlay archives included.
+- Root reviewed the complete source; independent final repair review: SHIP.
+  Unit commit: this receipt's commit; rollback by revert. Seven worktrees remain
+  assigned. Generated installer stages/builds are retained for final packaging
+  and must be accounted for at worktree retirement.
+
 ## D22: incident resource coordination
 
 - Lane F, baseline 75464fc. Request intake, named local-position or active

@@ -20,7 +20,9 @@ registerHooks({
     }
   },
   load(url, context, nextLoad) {
-    if (url.startsWith("file:") && url.endsWith(".ts") && !url.includes("/node_modules/")) {
+    const applicationSource = !url.includes("/node_modules/")
+      || url.includes("/node_modules/@openeoc/shared/");
+    if (url.startsWith("file:") && url.endsWith(".ts") && applicationSource) {
       const filename = fileURLToPath(url);
       const source = readFileSync(filename, "utf8");
       const output = ts.transpileModule(source, {

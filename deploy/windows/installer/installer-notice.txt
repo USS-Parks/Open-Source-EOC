@@ -1,0 +1,9 @@
+Open Source EOC installs a loopback-only desktop application for the current Windows user.
+
+Production opens a one-time setup prompt for your administrator account and jurisdiction. The installer does not supply production credentials.
+
+Open Source EOC Demo creates clearly labeled synthetic exercise data. Do not use the demo profile for operational records.
+
+Application data, PostgreSQL data, secrets, logs, attachments, and browser state live in %LOCALAPPDATA%\Open Source EOC. Uninstall removes the application files and leaves that data intact for a later reinstall, backup, or deliberate administrator-managed removal.
+
+The installer includes the portable Node and PostgreSQL/PostGIS runtime and its selected local map assets. It does not install a Windows service or contact external network services while running.
