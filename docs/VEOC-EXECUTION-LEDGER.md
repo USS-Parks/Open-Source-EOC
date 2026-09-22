@@ -4360,3 +4360,23 @@ increment proves it and that coverage follows the incident area.
   SHIP. Evidence level: integrated on publication. No new dependency or migration.
   User aesthetic acceptance remains separate. Unit commit: this receipt's commit;
   rollback by revert. Seven worktrees remain assigned to active roster units.
+
+## P-BOARDS-2 / D19: structured board customization
+
+- Lane D, final baseline a5b96f9. Templates and board customization are mounted
+  in the application. Administrators can edit fields, input/detail layouts,
+  filtered views and workflow states, assignments, approvals, due rules and
+  escalation. Input/list/detail previews use synthetic values visibly labeled.
+- Publication creates an immutable template version. Applying it to a board
+  remains a separate server action; migration failures identify incompatible
+  records, preserve the current board and support retry of the published version.
+  The account endpoint exposes its existing instance-admin flag; server publish
+  and jurisdiction administration gates remain authoritative.
+- Full TypeScript and ESLint passed. Seven focused/integration suites passed
+  46 tests, including real PostgreSQL/Chrome publish, apply, reload, keyboard
+  navigation and actual narrow designer containment. Log:
+  lanes/d/logs/designer-iap-integration.log under deploy/test-runtime/out.
+  Root reviewed the complete diff and light/dark/narrow captures. Independent
+  review: SHIP. No new dependency or migration. Evidence level: integrated on
+  publication; user aesthetic acceptance remains separate. Unit commit: this
+  receipt's commit; rollback by revert. Seven active worktrees remain assigned.

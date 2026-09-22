@@ -209,8 +209,8 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   }
 
   app.get("/api/v1/me", { preHandler: authenticate }, async (req, reply) => {
-    const { person, position, memberships, sessionId } = req.principal;
-    return reply.send({ person, position, memberships, sessionId });
+    const { person, position, memberships, sessionId, isInstanceAdmin } = req.principal;
+    return reply.send({ person, position, memberships, sessionId, isInstanceAdmin });
   });
 
   app.post(

@@ -54,6 +54,7 @@ import type {
   AarActionPriority,
   AarActionStatus,
   WorkflowAssignmentRequest,
+  BoardTemplate,
 } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
 
@@ -75,6 +76,7 @@ export interface GuestGrant {
   readonly expiresAt: string;
 }
 export interface Me {
+  readonly isInstanceAdmin?: boolean;
   readonly person: { readonly id: string; readonly email: string; readonly displayName: string };
   readonly position:
     | { readonly id: string; readonly key: string; readonly title: string; readonly jurisdictionId: string }
@@ -99,6 +101,11 @@ export interface BoardListItem {
   readonly templateKey: string;
   readonly templateVersion: number;
   readonly hasGeometry: boolean;
+}
+export interface TemplateVersionSummary {
+  readonly key: string;
+  readonly version: number;
+  readonly title: string;
 }
 export interface DashboardListItem {
   readonly id: string;
@@ -508,6 +515,33 @@ export class ApiClient {
       `/api/v1/jurisdictions/${jurisdictionId}/boards`,
     );
     return r.boards;
+  }
+  async listTemplateVersions(key: string): Promise<TemplateVersionSummary[]> {
+    const result = await this.request<{ versions: TemplateVersionSummary[] }>(
+      "GET", `/api/v1/templates/${encodeURIComponent(key)}/versions`,
+    );
+    return result.versions;
+  }
+  getTemplateVersion(key: string, version: number): Promise<BoardTemplate> {
+    return this.request(
+      "GET", `/api/v1/templates/${encodeURIComponent(key)}/versions/${version}`,
+    );
+  }
+  publishTemplate(template: BoardTemplate): Promise<{ key: string; version: number }> {
+    return this.request("POST", "/api/v1/templates", template as unknown as Record<string, unknown>);
+  }
+  createBoard(jurisdictionId: string, input: {
+    templateKey: string; version?: number; title?: string;
+  }): Promise<{ id: string }> {
+    return this.request(
+      "POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/boards`,
+      input as unknown as Record<string, unknown>,
+    );
+  }
+  upgradeBoard(boardId: string, toVersion: number): Promise<{ dropped: string[] }> {
+    return this.request(
+      "POST", `/api/v1/boards/${encodeURIComponent(boardId)}/upgrade`, { toVersion },
+    );
   }
   async listDashboards(jurisdictionId: string): Promise<DashboardListItem[]> {
     const r = await this.request<{ dashboards: DashboardListItem[] }>(

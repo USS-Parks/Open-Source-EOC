@@ -19,6 +19,7 @@ import { EmptyState, ErrorNote, Loading, NotFoundState, UnavailableState } from 
 import { MapSurface } from "../surfaces/MapSurface.js";
 import { DashboardSurface, parseDashboardViewState, type DashboardViewState } from "../surfaces/DashboardSurface.js";
 import { BoardSurface, BoardRecordDetailPane, type BoardRecordContext } from "../surfaces/BoardSurface.js";
+import { TemplatesSurface } from "../surfaces/TemplatesSurface.js";
 import { SitrepSurface, SitrepWorkspace } from "../surfaces/SitrepSurface.js";
 import { FormsSurface } from "../surfaces/FormsSurface.js";
 import { IapSurface } from "../surfaces/IapSurface.js";
@@ -283,6 +284,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         collections={collections.data ?? []}
         feeds={feeds.data ?? []}
         isAdmin={viewingMembership?.role === "admin"}
+        isInstanceAdmin={session.me?.isInstanceAdmin === true}
         collectionsError={collections.error}
         firstDashboardId={dashboards.data?.[0]?.id}
         dashboards={dashboards.data ?? []}
@@ -378,6 +380,7 @@ function Center(props: {
   collections: readonly CollectionRef[];
   feeds: readonly FeedHealth[];
   isAdmin: boolean;
+  isInstanceAdmin: boolean;
   collectionsError: string | null;
   firstDashboardId: string | undefined;
   dashboards: readonly DashboardListItem[];
@@ -442,6 +445,7 @@ function Center(props: {
     case "board":
       return <BoardSurface client={props.client} boardId={s.id} incidentId={props.incidentId}
         incidentScoped={props.incidentBoardIds.has(s.id)}
+        {...(props.isAdmin && props.isInstanceAdmin ? { onDesign: () => props.onNavigate({ kind: "board-design", id: s.id }) } : {})}
         {...(props.recordId ? { recordId: props.recordId } : {})} onRecordContext={props.onRecordContext} />;
     case "sitreps":
       return (
@@ -562,11 +566,15 @@ function Center(props: {
         incidentId={props.incidentId} incidentName={props.incidentName}
         period={props.operationalPeriod} onOpen={props.onOpenSitrep} />;
     case "templates":
-      return <UnavailableState title="Templates is unavailable" message="This section is not available in the current application." returnLabel="Return to Boards" onReturn={() => props.onNavigate({ kind: "boards" })} />;
+      return <TemplatesSurface client={props.client} jurisdictionId={props.jurisdictionId} boards={props.boards}
+        isInstanceAdmin={props.isInstanceAdmin} isJurisdictionAdmin={props.isAdmin}
+        onOpenBoard={props.onOpenBoard} onDesignBoard={(id) => props.onNavigate({ kind: "board-design", id })} />;
     case "settings":
       return <UnavailableState title="Settings is unavailable" message="This section is not available in the current application." returnLabel="Open Incident Setup" onReturn={() => props.onNavigate({ kind: "incidents" })} />;
     case "board-design":
-      return <UnavailableState title="Board customization is unavailable" message="This board can be used, but customization is not available in the current application." returnLabel="Return to board" onReturn={() => props.onNavigate({ kind: "board", id: s.id })} />;
+      return <TemplatesSurface client={props.client} jurisdictionId={props.jurisdictionId} boards={props.boards} boardId={s.id}
+        isInstanceAdmin={props.isInstanceAdmin} isJurisdictionAdmin={props.isAdmin}
+        onOpenBoard={props.onOpenBoard} onDesignBoard={(id) => props.onNavigate({ kind: "board-design", id })} />;
     case "not-found":
       return <NotFoundState onMap={() => props.onNavigate({ kind: "map" })} onOverview={() => props.onNavigate({ kind: "dashboard" })} />;
   }

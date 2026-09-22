@@ -55,6 +55,44 @@ describe("ApiClient", () => {
     await client.boardView("board-a", "all", "incident-a");
     expect(fetchImpl.mock.calls[0]?.[0]).toBe("/api/v1/boards/board-a/views/all?incidentId=incident-a");
   });
+
+  it("uses the versioned board authoring routes without a parallel configuration API", async () => {
+    const calls: Call[] = [];
+    const definition: Parameters<ApiClient["publishTemplate"]>[0] = {
+      key: "ops", version: 2, title: "Operations", description: "",
+      fields: [{ key: "summary", label: "Summary", type: "text", required: true, read: "any", write: "member" }],
+      views: [{ key: "all", title: "All", kind: "list", columns: ["summary"], filter: [] }],
+    };
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      calls.push({ url: String(url), init });
+      const path = String(url);
+      if (path.endsWith("/versions")) return res(200, { versions: [{ key: "ops", version: 1, title: "Operations" }] });
+      if (path.endsWith("/versions/1")) return res(200, { ...definition, version: 1 });
+      if (path === "/api/v1/templates") return res(201, { key: "ops", version: 2 });
+      if (path.endsWith("/boards") && init.method === "POST") return res(201, { id: "board-2" });
+      if (path.endsWith("/upgrade")) return res(200, { dropped: [] });
+      return res(404, { error: "nope" });
+    }) as unknown as typeof fetch;
+    const client = new ApiClient({ fetchImpl });
+    client.setTokens({ accessToken: "A", resumeToken: "R" });
+
+    expect(await client.listTemplateVersions("ops")).toHaveLength(1);
+    expect((await client.getTemplateVersion("ops", 1)).version).toBe(1);
+    await client.publishTemplate(definition);
+    await client.createBoard("jurisdiction-a", { templateKey: "ops", version: 2, title: "Operations" });
+    await client.upgradeBoard("board-a", 2);
+
+    expect(calls.map((call) => call.url)).toEqual([
+      "/api/v1/templates/ops/versions",
+      "/api/v1/templates/ops/versions/1",
+      "/api/v1/templates",
+      "/api/v1/jurisdictions/jurisdiction-a/boards",
+      "/api/v1/boards/board-a/upgrade",
+    ]);
+    expect(JSON.parse(String(calls[2]!.init.body))).toMatchObject({ key: "ops", version: 2 });
+    expect(JSON.parse(String(calls[3]!.init.body))).toEqual({ templateKey: "ops", version: 2, title: "Operations" });
+    expect(JSON.parse(String(calls[4]!.init.body))).toEqual({ toVersion: 2 });
+  });
   it("keeps workspace CAS scope through renewal and surfaces position denial", async () => {
     const calls: Call[] = [];
     let saves = 0;

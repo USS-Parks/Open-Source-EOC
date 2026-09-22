@@ -53,6 +53,7 @@ export function BoardSurface(props: {
   incidentId?: string | null;
   incidentScoped?: boolean;
   recordId?: string;
+  onDesign?: () => void;
   onRecordContext?: (state: BoardRecordContext | null) => void;
   draftStore?: ScopedDraftStore;
 }) {
@@ -195,14 +196,19 @@ export function BoardSurface(props: {
       <SurfaceHeader
         title={b.title}
         actions={
-          canWrite ? (
-            <ActionButton kind="primary" onClick={() => {
-              setAddingDirty(false);
-              setAdding(true);
-            }}>
-              <Icon name="add" decorative size={16} /> New record
-            </ActionButton>
-          ) : null
+          <>
+            {props.onDesign ? (
+              <ActionButton kind="secondary" onClick={props.onDesign}>Customize board</ActionButton>
+            ) : null}
+            {canWrite ? (
+              <ActionButton kind="primary" onClick={() => {
+                setAddingDirty(false);
+                setAdding(true);
+              }}>
+                <Icon name="add" decorative size={16} /> New record
+              </ActionButton>
+            ) : null}
+          </>
         }
       />
       {viewKey ? (
