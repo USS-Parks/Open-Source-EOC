@@ -117,9 +117,11 @@ http://127.0.0.1:5175/docs/design/D03-gallery.html
 
 Use the Screen selector, theme control, and `Preview 390 px` control. The narrow All sections button opens the complete D02 navigation sheet. The review page needs no database and makes no external request.
 
-For bounded automated capture, copy `docs/design/D03-gallery.fixture.mjs.txt` unchanged to the ignored runtime as `deploy/test-runtime/out/d03-review/D03-gallery.fixture.mjs`, set `D03_REVIEW_URL`, `D03_SHOT_DIR`, and `OPENEOC_CHROMIUM`, then run it with Node while Vite is already serving the lane.
-
-If a full fixture run has already completed the ten wide captures and compact-rail check before an unrelated narrow-phase stop, set `D03_REVIEW_PHASE=narrow` to resume with only the eight narrow captures. The result records `phase: "narrow"`, eight screenshots, and `compactNavigationChecked: false`; combine it only with the retained wide evidence from that interrupted run.
+The machine-specific browser script was retired during the V1 consolidation.
+Its completed wide and narrow evidence remains in the execution ledger and the
+recorded runtime evidence paths below. Any future visual review should exercise
+the current HTML entry with a new bounded script in the ignored runtime rather
+than restoring the stale tracked harness.
 
 ## 8. G-A review script
 

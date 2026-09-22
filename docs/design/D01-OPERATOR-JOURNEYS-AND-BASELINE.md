@@ -12,7 +12,12 @@ The D01 run is a scripted browser baseline. It records wall-clock time and direc
 
 No licensed Esri, WebEOC/Juvare, COBRA, or Microsoft Teams EOC comparison environment was supplied. Every vendor baseline is therefore **unavailable**. No vendor time, interaction count, error rate, or relative-speed claim is inferred from screenshots or research.
 
-The fixture data is synthetic and local. External network requests are blocked. The fixture is stored as `docs/design/D01-baseline.fixture.ts.txt` so it does not enter default test discovery or become a permanent regression test for the old interface. The compact durable receipt is `docs/design/D01-baseline.metrics.json`; the full raw result and corrected run log remain in the ignored canonical runtime evidence directory.
+The fixture data was synthetic and local, and external network requests were
+blocked. The machine-specific script was retired during the V1 consolidation
+so it cannot become a permanent regression test for the old interface. The
+compact durable receipt is `docs/design/D01-baseline.metrics.json`; the full
+raw result and corrected run log remain in the ignored canonical runtime
+evidence directory.
 
 ## 2. Fixed measurement contract
 
@@ -43,22 +48,16 @@ The fixture data is synthetic and local. External network requests are blocked. 
 
 Login and fixture setup occur before measurement. Direct database/API calls are permitted only to establish controlled initial data. Every measured task action is performed through the browser.
 
-## 3. Reproduction fixture
+## 3. Reproduction boundary
 
-The checked-in artifact is descriptive source with a `.ts.txt` suffix. For a bounded run, copy it unchanged to the ignored runtime location:
-
-`deploy/test-runtime/out/d01-baseline/D01-baseline.test.ts`
-
-Required environment:
-
-- `OPENEOC_TEST_DB_TAG=main` to isolate the throwaway database run.
-- `OPENEOC_D01_OUTPUT=<runtime path>/D01-baseline.metrics.json` for the structured receipt.
-- `OPENEOC_CHROMIUM` when Chromium is not at one of the existing app-e2e candidate paths.
-- `OPENEOC_TEST_BUILD_ROOT` may select an ignored build location.
-
-Run only this fixture with one worker. It reuses `server/src/__tests__/app-e2e.test.ts` patterns for the built SPA, local Fastify server, fresh migrated database, deterministic identity, and blocked external traffic. It writes no screenshots and runs no broad suite.
-
-The JSON receipt records the baseline SHA, environment, operator, task status, exact data, ready/stop conditions, elapsed time, interactions, duplicate entry, assistance, errors, limitations, and vendor unavailability.
+The fixed conditions and task scripts below remain the reproduction contract;
+the durable JSON receipt records the baseline SHA, environment, operator, task
+status, exact data, ready and stop conditions, elapsed time, interactions,
+duplicate entry, assistance, errors, limitations and vendor unavailability.
+A future comparison must implement a new bounded browser script against the
+then-current application in the ignored runtime, using the current shared
+browser harness and a fresh migrated database. It must block external traffic,
+run with one worker and disclose any deviation from the fixed contract.
 
 ## 4. Fixed task scripts
 

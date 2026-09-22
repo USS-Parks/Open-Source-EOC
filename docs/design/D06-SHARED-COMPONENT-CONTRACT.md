@@ -81,7 +81,10 @@ Open [D06-gallery.html](D06-gallery.html) through the existing local Vite review
 http://127.0.0.1:5175/docs/design/D06-gallery.html
 ```
 
-The archived [browser fixture](D06-gallery.fixture.mjs.txt) is outside default test discovery. Root copies it to `deploy/test-runtime/out/d06-review/review.mjs`. It captures wide and narrow light/dark views and checks the four-KPI strip, eight condition cards, selected outline, detail panel, explicit zero/unknown, structural primary action cues, keyboard focus/tabs/menu/tooltip, progress semantics, long content, feedback states, horizontal containment, page errors, and external requests.
+The machine-specific browser script was retired during the V1 consolidation.
+The verification table below and the execution ledger retain its completed
+evidence. A future review should use the current HTML entry and a new bounded
+script in the ignored runtime.
 
 ## 8. Verification evidence
 

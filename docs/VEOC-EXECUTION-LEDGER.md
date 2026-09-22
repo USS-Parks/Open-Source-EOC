@@ -4968,3 +4968,25 @@ increment proves it and that coverage follows the incident area.
   application source or bundle, while its review entries and automated checks
   remain usable. No runtime route, schema, dependency or operator behavior
   changed. Next: W1.2, retire the archived design fixture scripts.
+
+## V1 W1.2: retire machine-specific design harnesses
+
+- **Inventory correction:** the owned `docs/design/*.fixture.*.txt` glob held
+  seven scripts totaling 1,301 lines, not six scripts totaling 1,454 lines.
+  The remaining 153 lines in the roster's figure are
+  `D01-baseline.metrics.json`, the durable evidence receipt; that JSON remains.
+- **Retirement:** removed all seven tracked text-disguised TypeScript and
+  JavaScript browser harnesses. Their machine-specific absolute runtime paths,
+  copied-script instructions and stale review orchestration leave with them.
+- **Evidence boundary:** the design notes now point to their completed
+  verification tables, execution-ledger receipts and durable metrics rather
+  than offering the obsolete scripts as current reproduction paths. A future
+  comparison or visual review must write a bounded script against the current
+  application in the ignored runtime.
+- **Verification:** the owned fixture glob and every direct filename reference
+  are empty. Recursive TypeScript and full ESLint passed; the license scan
+  passed all 300 packages; the link checker passed all 65 Markdown files; and
+  `git diff --check` is clean.
+- **Result:** W1.2 is complete. Evidence remains, harness code does not. No
+  runtime route, schema, dependency or operator behavior changed. Next: W1.3,
+  apply the standing feature-gate default to collaboration and meetings.

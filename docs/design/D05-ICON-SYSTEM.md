@@ -78,10 +78,9 @@ Open `/docs/design/D05-gallery.html` through the existing D03 Vite review server
 all navigation icons, all eight lifelines, light and dark themes, meaningful and decorative
 accessibility modes, and independent selected, disabled, and status examples.
 
-The bounded browser fixture is `docs/design/D05-gallery.fixture.mjs.txt`. It blocks external
-requests, verifies the icon inventory and accessible names, exercises keyboard theme switching,
-checks wide and narrow containment, and captures light and dark screenshots. Root coordinates the
-shared preview server before running it.
+The machine-specific browser script was retired during the V1 consolidation.
+Its completed evidence remains in the execution ledger. Future review should
+use the current HTML entry and a new bounded script in the ignored runtime.
 
 ## Verification
 

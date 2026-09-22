@@ -74,7 +74,10 @@ Open [D08-gallery.html](D08-gallery.html) through the root-controlled preview:
 http://127.0.0.1:5175/docs/design/D08-gallery.html
 ```
 
-The archived [browser fixture](D08-gallery.fixture.mjs.txt) is outside default test discovery. It captures light/dark wide/narrow states and checks validation correction, conditional controls, draft close/reopen without re-entry, rejected-submit preservation, successful-submit truth, focus trap/restoration, Escape unsaved guard, responsive drawer containment, page errors, and external requests.
+The machine-specific browser script was retired during the V1 consolidation.
+The verification table below and the execution ledger retain its completed
+evidence. A future review should use the current HTML entry and a new bounded
+script in the ignored runtime.
 
 ## 8. Verification evidence
 

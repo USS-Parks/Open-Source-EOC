@@ -80,7 +80,10 @@ Open the dedicated [D04 gallery entry](D04-gallery.html) through the already-run
 http://127.0.0.1:5175/docs/design/D04-gallery.html
 ```
 
-The bounded [browser fixture](D04-gallery.fixture.mjs.txt) is intentionally archived as text outside default test discovery. Copy it to `deploy/test-runtime/out/d04-review/review.mjs` and run it from that location. It captures light and dark at 1440 × 900 and 390 × 844, exercises keyboard order and focus, checks the 12 px review-text floor, rejects horizontal overflow, blocks external requests, and records page errors.
+The machine-specific browser script was retired during the V1 consolidation.
+The verification table below and the execution ledger retain its completed
+evidence. A future review should use the current HTML entry and a new bounded
+script in the ignored runtime.
 
 ## 7. Verification evidence
 
