@@ -4138,3 +4138,12 @@ increment proves it and that coverage follows the incident area.
   Further lanes remain preserved pending the next user review.
 - Preserve the demo database and any records entered during user testing.
   Existing passing checks stand unless changed code affects their evidence.
+
+## Full Master PSPR continuation restored, 2026-09-21
+
+- Basho corrected the proposed two-workflow stopping point: "No. Proceed until
+  finished with the master PSPR." Full approved roster execution resumes,
+  including authorized fan-out, prescribed gates, commits and main publication.
+- Intermediate demos remain usable progress artifacts without approval pauses.
+  Final user aesthetic acceptance remains Basho's authority; technical SHIP is
+  not a claim of that acceptance. Canonical screenshots remain binding.
