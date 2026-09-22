@@ -43,6 +43,13 @@ import type {
   WidgetFilter,
   ViewportBbox,
   FormLayout,
+  AarDocument,
+  AarAnalytics,
+  AarObservation as SharedAarObservation,
+  AarCorrectiveAction,
+  AarActionPriority,
+  AarActionStatus,
+  WorkflowAssignmentRequest,
 } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
 
@@ -266,22 +273,15 @@ export interface ResourceRequestSummary {
   readonly priority: string;
   readonly state: string;
 }
-export interface AarObservation {
-  readonly capability: string;
-  readonly capabilityElement: string;
-  readonly kind: "strength" | "improvement";
-  readonly observation: string;
-  readonly recommendation: string | null;
-}
-export interface CorrectiveAction {
-  readonly id: string;
-  readonly capability: string;
-  readonly capabilityElement: string;
-  readonly recommendation: string;
-  readonly owner: string | null;
-  readonly dueDate: string | null;
-  readonly status: string;
+export type AarObservation = SharedAarObservation;
+export interface CorrectiveAction extends AarCorrectiveAction {
   readonly incidentId: string | null;
+  readonly createdAt: string;
+}
+export interface AarAnalyticsResponse {
+  readonly observations: readonly AarObservation[];
+  readonly correctiveActions: readonly CorrectiveAction[];
+  readonly analytics: AarAnalytics;
 }
 export interface ReunificationAnswer {
   readonly tag: string;
@@ -877,12 +877,17 @@ export class ApiClient {
       ...(note ? { note } : {}),
     });
   }
-  async listAarObservations(incidentId: string): Promise<AarObservation[]> {
+  async listAarObservations(incidentId: string, periodRevision?: number): Promise<AarObservation[]> {
+    const query = periodRevision === undefined ? "" : `?periodRevision=${periodRevision}`;
     const r = await this.request<{ observations: AarObservation[] }>(
       "GET",
-      `/api/v1/incidents/${incidentId}/aar/observations`,
+      `/api/v1/incidents/${incidentId}/aar/observations${query}`,
     );
     return r.observations;
+  }
+  getAarAnalytics(incidentId: string, periodRevision?: number): Promise<AarAnalyticsResponse> {
+    const query = periodRevision === undefined ? "" : `?periodRevision=${periodRevision}`;
+    return this.request("GET", `/api/v1/incidents/${incidentId}/aar/analytics${query}`);
   }
   recordAarObservation(
     incidentId: string,
@@ -892,6 +897,7 @@ export class ApiClient {
       kind: "strength" | "improvement";
       observation: string;
       recommendation?: string;
+      periodRevision?: number;
     },
   ): Promise<unknown> {
     return this.request<unknown>(
@@ -902,9 +908,9 @@ export class ApiClient {
   }
   composeAar(
     incidentId: string,
-    body: { overview: string; objectives?: readonly string[]; period?: string },
-  ): Promise<{ id: string }> {
-    return this.request<{ id: string }>(
+    body: { overview: string; objectives?: readonly string[]; period?: string; periodRevision?: number },
+  ): Promise<{ id: string; content: AarDocument }> {
+    return this.request<{ id: string; content: AarDocument }>(
       "POST",
       `/api/v1/incidents/${incidentId}/aar`,
       body as unknown as Record<string, unknown>,
@@ -915,11 +921,25 @@ export class ApiClient {
   }
   async listCorrectiveActions(
     jurisdictionId: string,
-    includeComplete = true,
+    filters: {
+      includeComplete?: boolean;
+      incidentId?: string;
+      periodRevision?: number;
+      priority?: AarActionPriority;
+      status?: AarActionStatus;
+      capability?: string;
+    } = { includeComplete: true },
   ): Promise<CorrectiveAction[]> {
+    const query = new URLSearchParams();
+    query.set("includeComplete", String(filters.includeComplete ?? true));
+    if (filters.incidentId) query.set("incidentId", filters.incidentId);
+    if (filters.periodRevision !== undefined) query.set("periodRevision", String(filters.periodRevision));
+    if (filters.priority) query.set("priority", filters.priority);
+    if (filters.status) query.set("status", filters.status);
+    if (filters.capability) query.set("capability", filters.capability);
     const r = await this.request<{ correctiveActions: CorrectiveAction[] }>(
       "GET",
-      `/api/v1/jurisdictions/${jurisdictionId}/corrective-actions?includeComplete=${includeComplete}`,
+      `/api/v1/jurisdictions/${jurisdictionId}/corrective-actions?${query.toString()}`,
     );
     return r.correctiveActions;
   }
@@ -930,6 +950,9 @@ export class ApiClient {
       capabilityElement?: string;
       recommendation: string;
       incidentId?: string;
+      priority?: AarActionPriority;
+      periodRevision?: number;
+      assignment?: WorkflowAssignmentRequest;
       dueDate?: string;
     },
   ): Promise<{ id: string }> {
@@ -938,6 +961,18 @@ export class ApiClient {
       `/api/v1/jurisdictions/${jurisdictionId}/corrective-actions`,
       body as unknown as Record<string, unknown>,
     );
+  }
+  updateCorrectiveAction(
+    id: string,
+    body: {
+      expectedRevision: number;
+      priority?: AarActionPriority;
+      assignment?: WorkflowAssignmentRequest | null;
+      dueDate?: string | null;
+      status?: AarActionStatus;
+    },
+  ): Promise<CorrectiveAction> {
+    return this.request("PATCH", `/api/v1/corrective-actions/${id}`, body);
   }
   setCorrectiveActionStatus(
     id: string,

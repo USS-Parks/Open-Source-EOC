@@ -1,0 +1,168 @@
+.eoc-aar {
+  container-type: inline-size;
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 16px;
+  color: var(--eoc-text);
+}
+
+.eoc-aar h1,
+.eoc-aar h2,
+.eoc-aar h3,
+.eoc-aar p { margin-block-start: 0; }
+
+.eoc-aar-heading,
+.eoc-aar-analytics > header,
+.eoc-aar-drill > header,
+.eoc-aar-form > header,
+.eoc-aar-pdf > header,
+.eoc-aar-action > header,
+.eoc-aar-observations li > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.eoc-aar-heading h1 { margin: 2px 0 4px; color: var(--eoc-text-strong); font-size: clamp(1.45rem, 2vw, 2rem); }
+.eoc-aar-heading p { margin: 0; color: var(--eoc-text-muted); }
+.eoc-aar-heading label { min-width: 230px; }
+.eoc-aar-eyebrow { color: var(--eoc-brand-teal); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+
+.eoc-aar label { display: grid; gap: 5px; color: var(--eoc-text-muted); font-size: 0.78rem; font-weight: 700; }
+.eoc-aar input,
+.eoc-aar select,
+.eoc-aar textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  color: var(--eoc-text);
+  font: inherit;
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border-strong);
+  border-radius: var(--eoc-radius-sm, 4px);
+}
+.eoc-aar textarea { min-height: 78px; resize: vertical; }
+.eoc-aar input:focus-visible,
+.eoc-aar select:focus-visible,
+.eoc-aar textarea:focus-visible,
+.eoc-aar button:focus-visible { outline: 3px solid var(--eoc-focus); outline-offset: 2px; }
+
+.eoc-aar-analytics,
+.eoc-aar-form,
+.eoc-aar-drill,
+.eoc-aar-pdf {
+  min-width: 0;
+  padding: 14px;
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border);
+  border-radius: var(--eoc-radius-md, 8px);
+  box-shadow: var(--eoc-shadow-sm);
+}
+.eoc-aar-analytics h2,
+.eoc-aar-form h2,
+.eoc-aar-drill h2,
+.eoc-aar-pdf h2 { margin: 2px 0 0; color: var(--eoc-text-strong); font-size: 1rem; }
+.eoc-aar-clear-filter { color: var(--eoc-brand-teal); font: inherit; font-weight: 750; background: transparent; border: 0; cursor: pointer; }
+
+.eoc-aar-totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.eoc-aar-total,
+.eoc-aar-metric {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 2px;
+  min-height: 74px;
+  padding: 10px 12px;
+  color: var(--eoc-text);
+  text-align: left;
+  background: var(--eoc-surface-raised);
+  border: 1px solid var(--eoc-border);
+  border-radius: var(--eoc-radius-sm, 4px);
+}
+.eoc-aar-metric { cursor: pointer; }
+.eoc-aar-metric:hover,
+.eoc-aar-metric[data-selected="true"] { border-color: var(--eoc-brand-teal); box-shadow: inset 3px 0 0 var(--eoc-brand-teal); }
+.eoc-aar-total strong,
+.eoc-aar-metric strong { color: var(--eoc-text-strong); font-size: 1.55rem; font-variant-numeric: tabular-nums; }
+.eoc-aar-total span,
+.eoc-aar-metric span { font-weight: 750; }
+.eoc-aar-metric small { color: var(--eoc-text-muted); }
+.eoc-aar-bucket-groups { display: grid; grid-template-columns: minmax(180px, 0.7fr) minmax(180px, 0.7fr) minmax(280px, 1.6fr); gap: 12px; margin-top: 12px; }
+.eoc-aar-bucket-groups h3 { margin: 0 0 6px; color: var(--eoc-text-muted); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.eoc-aar-bucket-groups section > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 6px; }
+.eoc-aar-bucket-groups .eoc-aar-metric { min-height: 66px; }
+.eoc-aar-bucket-groups .eoc-aar-metric strong { font-size: 1.15rem; }
+
+.eoc-aar-entry-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.eoc-aar-form,
+.eoc-aar-pdf { display: grid; gap: 12px; }
+.eoc-aar-form > header,
+.eoc-aar-pdf > header { justify-content: flex-start; color: var(--eoc-brand-teal); }
+.eoc-aar-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.eoc-aar-source { padding: 10px; background: color-mix(in srgb, var(--eoc-brand-teal) 8%, var(--eoc-surface)); border-left: 3px solid var(--eoc-brand-teal); }
+.eoc-aar-source span { display: block; color: var(--eoc-text-muted); font-size: 0.75rem; }
+.eoc-aar-source p { margin: 6px 0; }
+.eoc-aar-source button { padding: 0; color: var(--eoc-brand-teal); font: inherit; font-weight: 700; background: transparent; border: 0; cursor: pointer; }
+
+.eoc-aar-warning,
+.eoc-aar-error,
+.eoc-aar-message { margin: 0; padding: 9px 12px; border-radius: var(--eoc-radius-sm, 4px); }
+.eoc-aar-warning { color: var(--eoc-text); background: color-mix(in srgb, var(--eoc-status-warning) 13%, var(--eoc-surface)); }
+.eoc-aar-error { color: var(--eoc-status-critical); background: color-mix(in srgb, var(--eoc-status-critical) 8%, var(--eoc-surface)); }
+.eoc-aar-message { color: var(--eoc-status-success); background: color-mix(in srgb, var(--eoc-status-success) 8%, var(--eoc-surface)); }
+
+.eoc-aar-drill > header > strong { color: var(--eoc-brand-teal); font-variant-numeric: tabular-nums; }
+.eoc-aar-record-columns { display: grid; grid-template-columns: minmax(260px, 0.82fr) minmax(380px, 1.18fr); gap: 12px; margin-top: 12px; }
+.eoc-aar-record-columns > section { min-width: 0; }
+.eoc-aar-record-columns > section > h3 { color: var(--eoc-text-muted); font-size: 0.78rem; letter-spacing: 0.04em; text-transform: uppercase; }
+.eoc-aar-observations,
+.eoc-aar-actions { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.eoc-aar-observations li,
+.eoc-aar-action { min-width: 0; padding: 11px; background: var(--eoc-surface-raised); border: 1px solid var(--eoc-border); border-radius: var(--eoc-radius-sm, 4px); }
+.eoc-aar-observations code { max-width: 15ch; overflow: hidden; color: var(--eoc-text-muted); font-size: 0.7rem; text-overflow: ellipsis; white-space: nowrap; }
+.eoc-aar-observations li > strong,
+.eoc-aar-observations li > span,
+.eoc-aar-observations li > small { display: block; }
+.eoc-aar-observations li > span,
+.eoc-aar-observations li > small { margin-top: 3px; color: var(--eoc-text-muted); }
+.eoc-aar-observations p { margin: 8px 0; }
+.eoc-aar-observations blockquote { margin: 8px 0; padding-left: 9px; color: var(--eoc-text-muted); border-left: 2px solid var(--eoc-brand-teal); }
+.eoc-aar-observations .eoc-kit-button { margin-top: 9px; }
+.eoc-aar-empty { padding: 14px; color: var(--eoc-text-muted); background: var(--eoc-surface-sunken); border-radius: var(--eoc-radius-sm, 4px); }
+
+.eoc-aar-action > header > div { display: flex; align-items: center; gap: 8px; }
+.eoc-aar-action > header h3 { margin: 0; color: var(--eoc-text-strong); font-size: 0.95rem; }
+.eoc-aar-action > header > span { color: var(--eoc-text-muted); font-size: 0.72rem; }
+.eoc-aar-action > p { margin: 10px 0; }
+.eoc-aar-action dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 0; }
+.eoc-aar-action dl div { min-width: 0; padding: 6px 8px; background: var(--eoc-surface-sunken); }
+.eoc-aar-action dt { color: var(--eoc-text-muted); font-size: 0.68rem; text-transform: uppercase; }
+.eoc-aar-action dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.eoc-aar-action-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--eoc-border); }
+.eoc-aar-action-controls .eoc-kit-button { align-self: end; }
+.eoc-aar-pdf > p { margin: 0; color: var(--eoc-text-muted); font-size: 0.82rem; }
+
+@container (max-width: 900px) {
+  .eoc-aar-entry-grid,
+  .eoc-aar-record-columns { grid-template-columns: 1fr; }
+  .eoc-aar-bucket-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .eoc-aar-bucket-groups section:last-child { grid-column: 1 / -1; }
+}
+
+@container (max-width: 560px) {
+  .eoc-aar { padding: 10px; }
+  .eoc-aar-heading,
+  .eoc-aar-analytics > header,
+  .eoc-aar-drill > header { align-items: stretch; flex-direction: column; }
+  .eoc-aar-heading label { min-width: 0; }
+  .eoc-aar-totals,
+  .eoc-aar-bucket-groups,
+  .eoc-aar-form-grid,
+  .eoc-aar-action dl,
+  .eoc-aar-action-controls { grid-template-columns: 1fr; }
+  .eoc-aar-bucket-groups section:last-child { grid-column: auto; }
+  .eoc-aar-bucket-groups section > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

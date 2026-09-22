@@ -4323,3 +4323,21 @@ increment proves it and that coverage follows the incident area.
   review: SHIP. No new dependency or migration. Evidence level: integrated on
   publication; user aesthetic acceptance remains separate. Unit commit: this
   receipt's commit; rollback by revert. Seven active worktrees remain assigned.
+
+## P-AAR / D25: incident learning and improvement actions
+
+- Lane A, final baseline 79019cc. Period analytics drill into the exact source
+  records. Structured observations convert into assigned improvement actions
+  with due dates, priorities, revision-protected progress and existing PDF export.
+  The source observation remains intact; conversion prefills its text but does
+  not claim a persisted relational foreign key absent from the existing engine.
+- Full TypeScript and ESLint passed. Database, client and presentation checks
+  passed; final integration passed 27 tests across four suites. The corrected
+  real PostgreSQL/Chrome journey proves saved progress, retained drafts,
+  keyboard operation and light, dark and narrow layouts. Logs include
+  lanes/a/logs/aar-progress-final.log and aar-briefing-integration.log under
+  deploy/test-runtime/out. Root inspected the complete diff and captures.
+- Fresh independent correction review: SHIP. Evidence level: integrated on
+  publication. No new dependency or migration. User aesthetic acceptance remains
+  separate. Unit commit: this receipt's commit; rollback by revert. Seven active
+  worktrees remain assigned; protected local work is preserved.
