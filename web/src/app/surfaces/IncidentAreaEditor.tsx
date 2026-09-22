@@ -27,6 +27,7 @@ export function IncidentAreaEditor(props: {
   const [snapshot, setSnapshot] = useState<IncidentAreaRevision | null>(null);
   const [geometry, setGeometry] = useState<IncidentAreaGeometry | null>(null);
   const [points, setPoints] = useState<Coordinate[]>([]);
+  const [coordinate, setCoordinate] = useState({ longitude: "", latitude: "" });
   const [drawing, setDrawing] = useState(false);
   const [period, setPeriod] = useState({ label: "", start: "", end: "" });
   const [reason, setReason] = useState("");
@@ -72,6 +73,22 @@ export function IncidentAreaEditor(props: {
     const result = IncidentAreaGeometrySchema.safeParse({ type: "Polygon", coordinates: [[...points, points[0]]] });
     if (!result.success) { setError("Draw at least three distinct boundary points."); return; }
     setGeometry(result.data); setPoints([]); setDrawing(false); setError(null);
+  };
+  const addCoordinate = () => {
+    if (!coordinate.longitude.trim() || !coordinate.latitude.trim()) {
+      setError("Enter both longitude and latitude.");
+      return;
+    }
+    const longitude = Number(coordinate.longitude);
+    const latitude = Number(coordinate.latitude);
+    if (!Number.isFinite(longitude) || !Number.isFinite(latitude) || longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) {
+      setError("Enter longitude from -180 to 180 and latitude from -90 to 90.");
+      return;
+    }
+    setDrawing(true);
+    setPoints((existing) => existing.length < 9999 ? [...existing, [longitude, latitude]] : existing);
+    setCoordinate({ longitude: "", latitude: "" });
+    setError(null);
   };
   const importArea = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]; event.target.value = "";
@@ -138,6 +155,12 @@ export function IncidentAreaEditor(props: {
           <Button onClick={() => { setGeometry(null); setPoints([]); setDrawing(false); }} disabled={busy}>Mark area undefined</Button>
         </> : null}
       </div>
+      {props.canEdit && !preview ? <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", alignItems: "end" }}>
+        <TextField label="Longitude" value={coordinate.longitude} onChange={(longitude) => setCoordinate((value) => ({ ...value, longitude }))} />
+        <TextField label="Latitude" value={coordinate.latitude} onChange={(latitude) => setCoordinate((value) => ({ ...value, latitude }))} />
+        <Button onClick={addCoordinate} disabled={busy}>Add coordinate</Button>
+        <p style={{ margin: 0, color: "var(--eoc-text-muted)", gridColumn: "1 / -1" }}>Enter boundary points in order when map input is impractical, then close the boundary. Coordinates use longitude, latitude.</p>
+      </div> : null}
       {importName && !preview ? <p role="status">Imported area: {importName}. Save a revision to record it.</p> : null}
       {drawing ? <p role="status">Click boundary points on the map, then close the boundary. {points.length} points placed. The recorded area stays unchanged until you save.</p> : null}
       {props.canEdit && !preview ? <fieldset disabled={busy || current.loading} style={{ border: 0, padding: 0, display: "grid", gap: 12 }}>

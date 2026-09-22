@@ -234,6 +234,23 @@ export interface IncidentBoardRef {
   readonly id: string;
   readonly title: string;
 }
+export interface IncidentDetail {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: string;
+  readonly closedAt: string | null;
+  readonly canManageParticipation: boolean;
+  readonly canEditArea: boolean;
+  readonly positions: ReadonlyArray<{ id: string; key: string; title: string }>;
+  readonly boards: ReadonlyArray<{ id: string; title: string }>;
+  readonly checklists: ReadonlyArray<{
+    id: string; positionKey: string | null; item: string; category: string;
+    status: string; dueAt: string | null; revision: number;
+    assignedParticipantId: string | null; completedAt: string | null;
+    completedByPosition: string | null;
+  }>;
+  readonly libraries: ReadonlyArray<{ id: string; title: string; kind: string }>;
+}
 export interface IncidentTemplateOption {
   readonly key: string;
   readonly title: string;
@@ -783,6 +800,9 @@ export class ApiClient {
   }
   getIncidentArea(incidentId: string): Promise<IncidentAreaRevision> {
     return this.request("GET", `/api/v1/incidents/${incidentId}/operational-area`);
+  }
+  getIncident(incidentId: string): Promise<IncidentDetail> {
+    return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}`);
   }
   updateIncidentArea(incidentId: string, body: IncidentAreaUpdate): Promise<IncidentAreaRevision> {
     return this.request("PUT", `/api/v1/incidents/${incidentId}/operational-area`, body);

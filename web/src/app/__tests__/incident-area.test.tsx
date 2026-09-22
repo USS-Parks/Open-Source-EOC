@@ -30,6 +30,26 @@ it("draws and saves a boundary with the expected revision and attributed reason"
   await waitFor(() => expect(client.updateIncidentArea).toHaveBeenCalledWith("incident-a", { expectedRevision: 0, geometry, operationalPeriod: null, reason: "Initial area" }));
   expect(await screen.findByText(/Revision 1./)).toBeTruthy();
 });
+it("accepts an ordered coordinate boundary when pointer input is impractical", async () => {
+  const client = setup();
+  for (const [longitude, latitude] of [["-122", "38"], ["-121", "38"], ["-121", "39"]]) {
+    fireEvent.change(await screen.findByLabelText("Longitude"), { target: { value: longitude } });
+    fireEvent.change(screen.getByLabelText("Latitude"), { target: { value: latitude } });
+    fireEvent.click(screen.getByRole("button", { name: "Add coordinate" }));
+  }
+  fireEvent.click(screen.getByRole("button", { name: "Close boundary" }));
+  fireEvent.change(screen.getByLabelText("Reason for revision"), { target: { value: "Coordinate entry" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save area revision" }));
+  await waitFor(() => expect(client.updateIncidentArea).toHaveBeenCalledWith("incident-a", {
+    expectedRevision: 0, geometry, operationalPeriod: null, reason: "Coordinate entry",
+  }));
+});
+it("refuses an incomplete coordinate entry", async () => {
+  setup();
+  fireEvent.click(await screen.findByRole("button", { name: "Add coordinate" }));
+  expect(await screen.findByRole("alert")).toHaveProperty("textContent", expect.stringContaining("Enter both longitude and latitude"));
+  expect(screen.queryByRole("button", { name: "Close boundary" })).toBeNull();
+});
 it("retains the operator draft after a revision conflict", async () => {
   setup({ updateIncidentArea: vi.fn().mockRejectedValue(new ApiError(409, "revision conflict")) });
   fireEvent.change(await screen.findByLabelText("Reason for revision"), { target: { value: "Awaiting aerial report" } });

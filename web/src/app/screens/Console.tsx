@@ -24,6 +24,8 @@ import { FormsSurface } from "../surfaces/FormsSurface.js";
 import { IapSurface } from "../surfaces/IapSurface.js";
 import { FilesSurface } from "../surfaces/FilesSurface.js";
 import { IncidentsSurface } from "../surfaces/IncidentsSurface.js";
+import { IncidentAreaEditor } from "../surfaces/IncidentAreaEditor.js";
+import { IncidentParticipants } from "../surfaces/IncidentParticipants.js";
 import { IncidentDatasets } from "../surfaces/IncidentDatasets.js";
 import { ResourcesSurface } from "../surfaces/ResourcesSurface.js";
 import { AarSurface } from "../surfaces/AarSurface.js";
@@ -264,11 +266,15 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         theme={props.theme}
         client={client}
         jurisdictionId={viewingJurisdictionId ?? jurisdictionId}
+        discoveryJurisdictionId={jurisdictionId}
+        canActivateIncident={session.me?.memberships.some((membership) => membership.jurisdictionId === jurisdictionId && membership.role === "admin") ?? false}
         incidentId={incident.selectedIncidentId}
         incidentName={incident.selectedIncident?.name ?? null}
         incidentJurisdictionId={incident.selectedIncident?.jurisdictionId ?? null}
         operationalPeriod={workspace.selectedPeriodRevision === null ? null : workspace.selectedPeriodLabel}
         incidentCanManage={incident.selectedIncident?.canEditArea ?? false}
+        incidentCanManageParticipation={incident.selectedIncident?.canManageParticipation ?? false}
+        incidentClosed={Boolean(incident.selectedIncident?.closedAt)}
         incidentBoardIds={incident.incidentBoardIds}
         boards={boardItems}
         collections={collections.data ?? []}
@@ -353,11 +359,15 @@ function Center(props: {
   theme: ThemeName;
   client: ApiClient;
   jurisdictionId: string;
+  discoveryJurisdictionId: string;
+  canActivateIncident: boolean;
   incidentId: string | null;
   incidentName: string | null;
   incidentJurisdictionId: string | null;
   operationalPeriod: string | null;
   incidentCanManage: boolean;
+  incidentCanManageParticipation: boolean;
+  incidentClosed: boolean;
   incidentBoardIds: ReadonlySet<string>;
   boards: readonly BoardListItem[];
   collections: readonly CollectionRef[];
@@ -486,8 +496,8 @@ function Center(props: {
       return (
         <IncidentsSurface
           client={props.client}
-          jurisdictionId={props.jurisdictionId}
-          isAdmin={props.isAdmin}
+          jurisdictionId={props.discoveryJurisdictionId}
+          isAdmin={props.canActivateIncident}
           theme={props.theme}
         />
       );
@@ -520,9 +530,15 @@ function Center(props: {
     case "field-reports":
       return <UnavailableState title="Field Reports is unavailable" message="This section is not available in the current application. Existing reports remain available through their board." returnLabel="Return to Boards" onReturn={() => props.onNavigate({ kind: "boards" })} />;
     case "periods":
-      return <UnavailableState title="Operational Periods is unavailable" message="This section is not available in the current application." returnLabel="Open ICS Forms" onReturn={() => props.onNavigate({ kind: "forms" })} />;
+      return props.incidentId ? <IncidentAreaEditor client={props.client} incidentId={props.incidentId}
+        incidentName={props.incidentName ?? "Incident"} theme={props.theme}
+        canEdit={props.incidentCanManage && !props.incidentClosed} />
+        : <EmptyState label="Select an incident to manage operational periods." />;
     case "participants":
-      return <UnavailableState title="Participants is unavailable" message="This section is not available in the current application." returnLabel="Open Incident Setup" onReturn={() => props.onNavigate({ kind: "incidents" })} />;
+      return props.incidentId ? <IncidentParticipants client={props.client} incidentId={props.incidentId}
+        incidentName={props.incidentName ?? "Incident"} canManage={props.incidentCanManageParticipation}
+        closed={props.incidentClosed} />
+        : <EmptyState label="Select an incident to manage participation." />;
     case "jic":
       return <UnavailableState title="JIC is unavailable" message="This section is not available in the current application." returnLabel="Open SITREP" onReturn={() => props.onNavigate({ kind: "sitreps" })} />;
     case "templates":

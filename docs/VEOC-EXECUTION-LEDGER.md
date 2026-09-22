@@ -4257,3 +4257,24 @@ increment proves it and that coverage follows the incident area.
   dependency. Evidence level: integrated on publication. User aesthetic
   acceptance remains separate. Unit commit: this receipt's commit; revert for
   rollback. Seven worktrees remain assigned to active roster units.
+
+## D20: incident activation, participation and closeout
+
+- Lane F, baseline 32249fc. Incident setup now joins scenario activation,
+  template positions, area and period revisions, named participation and an
+  explicit closeout confirmation. Keyboard coordinate entry supplements map
+  drawing. Discovery uses the user's home organization and current grants.
+- Host ownership, administration, participant grants and command assignments
+  remain distinct. Closure prevents new incident writes while authorized
+  history remains readable; revocation ends the named participant's access.
+- Full TypeScript and affected ESLint passed. Client and DOM checks passed
+  29 tests; the final real PostgreSQL and Windows Chrome journey passed one
+  test covering partner discovery, revocation, retained history and rejected
+  post-close writes. Logs: lanes/f/logs/d20-integration-corrected.log and
+  d20-partner-ready.log under deploy/test-runtime/out. Earlier selector and
+  asynchronous fixture failures are superseded by the final passing journey.
+- Root reviewed the complete diff and light/dark/narrow captures. Independent
+  review returned SHIP. Evidence level: integrated on publication; actual
+  representative-operator comprehension remains D34. No new dependency or
+  migration. Unit commit: this receipt's commit; rollback by revert. Seven
+  retained worktrees serve active roster units; protected work is preserved.
