@@ -1,5 +1,6 @@
 import type { CSSProperties, HTMLAttributes, ReactNode } from "react";
 import { operationalStates, type OperationalState } from "./tokens.js";
+import "./kit.css";
 
 const foregroundByState: Readonly<Record<OperationalState, string>> = {
   normal: "var(--eoc-status-success)",

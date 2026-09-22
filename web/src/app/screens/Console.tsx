@@ -32,6 +32,7 @@ import { MessagesSurface } from "../surfaces/MessagesSurface.js";
 import { SmartFormsSurface } from "../surfaces/SmartFormsSurface.js";
 import { TrackingSurface } from "../surfaces/TrackingSurface.js";
 import { AlertsSurface, BoardsIndex, SitrepsIndex } from "../surfaces/lists.js";
+import { LifelinesSurface } from "../surfaces/LifelinesSurface.js";
 
 const NAV: readonly NavGroup[] = [
   { key: "situation", label: "Situation", items: [
@@ -249,7 +250,9 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       sync={sync}
       page={page.page}
       arrangement={page.arrangement}
-      layout={workspace.layout(page.arrangement)}
+      layout={surface.kind === "lifelines" || surface.kind === "lifeline"
+        ? { ...workspace.layout(page.arrangement), drawerOpen: false }
+        : workspace.layout(page.arrangement)}
       onLayoutChange={(next) => workspace.updateLayout(page.arrangement, next)}
       rightDock={dock}
     >
@@ -478,6 +481,10 @@ function Center(props: {
       return <AlertsSurface client={props.client} />;
     case "lifelines":
     case "lifeline":
+      return <LifelinesSurface client={props.client} incidentId={props.incidentId}
+        selectedLifeline={s.kind === "lifeline" ? s.id : null}
+        onOpen={(id) => props.onNavigate({ kind: "lifeline", id })}
+        onClose={() => props.onNavigate({ kind: "lifelines" })} />;
     case "esf":
       return <UnavailableState title="ESFs & Lifelines is unavailable" message="This workspace is not available in the current application." returnLabel="Return to Map" onReturn={() => props.onNavigate({ kind: "map" })} />;
     case "tasks":

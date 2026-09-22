@@ -1,0 +1,237 @@
+import { useEffect, useMemo, useRef, type RefObject } from "react";
+import type { ApiClient } from "../api/client.js";
+import { usePolled } from "../data/hooks.js";
+import { ConditionBadge, EmptyState, ErrorState, LoadingState } from "../../design/feedback.js";
+import { LifelineIcon, type LifelineKey } from "../../design/icons/index.js";
+import {
+  LIFELINE_KEYS,
+  projectLifeline,
+  type LifelineCardView,
+} from "./lifeline-view.js";
+import "./LifelinesSurface.css";
+
+const REFRESH_MS = 30_000;
+
+export interface LifelinesSurfaceProps {
+  readonly client: ApiClient;
+  readonly incidentId: string | null;
+  readonly selectedLifeline: string | null;
+  readonly onOpen: (id: string) => void;
+  readonly onClose: () => void;
+}
+
+function isLifelineKey(value: string | null): value is LifelineKey {
+  return value !== null && (LIFELINE_KEYS as readonly string[]).includes(value);
+}
+
+function conditionLabel(condition: LifelineCardView["condition"]): string {
+  return condition[0]!.toUpperCase() + condition.slice(1);
+}
+
+function freshnessState(freshness: LifelineCardView["freshness"]) {
+  return freshness === "current" ? "normal" : freshness;
+}
+
+function unresolvedLabel(value: number | null): string {
+  if (value === null) return "Not reported";
+  if (value === 0) return "Zero open actions";
+  return `${value} open action${value === 1 ? "" : "s"}`;
+}
+
+function LifelineCard(props: {
+  readonly item: LifelineCardView;
+  readonly selected: boolean;
+  readonly buttonRef: (node: HTMLButtonElement | null) => void;
+  readonly onOpen: () => void;
+}) {
+  const { item } = props;
+  return (
+    <article
+      className="eoc-lifeline-card"
+      data-condition={item.condition}
+      data-freshness={item.freshness}
+      data-lifeline={item.key}
+      data-selected={props.selected || undefined}
+    >
+      <header>
+        <span className="eoc-lifeline-icon" aria-hidden="true">
+          <LifelineIcon decorative lifeline={item.key} size={40} selected={props.selected} />
+        </span>
+        <div>
+          <h3>{item.label}</h3>
+          <div className="eoc-lifeline-badges">
+            <ConditionBadge state={item.conditionState} label={conditionLabel(item.condition)} />
+            <ConditionBadge state={freshnessState(item.freshness)} label={item.freshnessLabel} />
+          </div>
+        </div>
+      </header>
+      <p className="eoc-lifeline-impact">{item.impact}</p>
+      <dl>
+        <div><dt>Components</dt><dd>{item.components}</dd></div>
+        <div><dt>Source</dt><dd>{item.source}</dd></div>
+        <div><dt>Assessed</dt><dd>{item.assessedLabel}</dd></div>
+        <div><dt>Outlook</dt><dd>{item.outlook}</dd></div>
+      </dl>
+      {item.conflict ? (
+        <p className="eoc-lifeline-conflict">
+          {item.conflictResolved ? "Conflicting reports resolved by an attributed decision." : "Conflicting reports remain unresolved."}
+        </p>
+      ) : null}
+      <button
+        ref={props.buttonRef}
+        type="button"
+        className="eoc-lifeline-open"
+        aria-pressed={props.selected}
+        onClick={props.onOpen}
+      >
+        Open {item.label} details
+      </button>
+    </article>
+  );
+}
+
+function LifelineDrawer(props: {
+  readonly item: LifelineCardView;
+  readonly drawerRef: RefObject<HTMLElement | null>;
+  readonly onClose: () => void;
+}) {
+  const { item } = props;
+  return (
+    <aside
+      ref={props.drawerRef}
+      className="eoc-lifeline-drawer"
+      aria-labelledby="eoc-lifeline-detail-title"
+      tabIndex={-1}
+    >
+      <header>
+        <div>
+          <span className="eoc-lifeline-eyebrow">Community Lifeline</span>
+          <h2 id="eoc-lifeline-detail-title">{item.label}</h2>
+        </div>
+        <button type="button" className="eoc-lifeline-close" aria-label={`Close ${item.label} details`} onClick={props.onClose}>×</button>
+      </header>
+      <div className="eoc-lifeline-drawer-condition">
+        <LifelineIcon decorative lifeline={item.key} size={40} />
+        <ConditionBadge state={item.conditionState} label={conditionLabel(item.condition)} />
+        <ConditionBadge state={freshnessState(item.freshness)} label={item.freshnessLabel} />
+      </div>
+      <p className="eoc-lifeline-drawer-impact">{item.impact}</p>
+      <dl>
+        <div><dt>Affected components</dt><dd>{item.components}</dd></div>
+        <div><dt>Affected geography</dt><dd>{item.geography}</dd></div>
+        <div><dt>Reporting organization</dt><dd>{item.source}</dd></div>
+        <div><dt>Assessed</dt><dd>{item.assessedLabel}</dd></div>
+        <div><dt>Confidence and evidence</dt><dd>{item.evidence}</dd></div>
+        <div><dt>Stabilization outlook</dt><dd>{item.outlook}</dd></div>
+        <div><dt>Unresolved actions</dt><dd>{unresolvedLabel(item.unresolvedActions)}</dd></div>
+      </dl>
+      {item.conflict ? (
+        <p className="eoc-lifeline-callout">
+          {item.conflictResolved
+            ? "The displayed condition follows an attributed assessment decision; conflicting reports remain in history."
+            : "No report is presented as authoritative until the conflict is resolved."}
+        </p>
+      ) : null}
+      <p className="eoc-lifeline-callout">
+        Exposure and ESF activation do not determine this assessed condition.
+      </p>
+    </aside>
+  );
+}
+
+export function LifelinesSurface(props: LifelinesSurfaceProps) {
+  const overview = usePolled(
+    () => props.incidentId
+      ? props.client.listIncidentLifelineAssessments(props.incidentId)
+      : Promise.resolve(null),
+    REFRESH_MS,
+    [props.incidentId],
+  );
+  const area = usePolled(
+    () => props.incidentId ? props.client.getIncidentArea(props.incidentId) : Promise.resolve(null),
+    REFRESH_MS,
+    [props.incidentId],
+  );
+  const cardButtons = useRef(new Map<LifelineKey, HTMLButtonElement>());
+  const drawerRef = useRef<HTMLElement>(null);
+  const priorSelection = useRef<LifelineKey | null>(null);
+  const selectedKey = isLifelineKey(props.selectedLifeline) ? props.selectedLifeline : null;
+  const refreshError = overview.error ?? area.error;
+  const cards = useMemo(() => {
+    const states = overview.data?.states ?? [];
+    const period = area.data?.operationalPeriod ?? null;
+    return LIFELINE_KEYS.map((key) => projectLifeline(
+      states.find((state) => state.lifeline === key),
+      key,
+      period,
+      new Date(),
+      Boolean(refreshError && overview.data),
+    ));
+  }, [overview.data, area.data, refreshError]);
+  const selected = selectedKey ? cards.find((item) => item.key === selectedKey) ?? null : null;
+
+  useEffect(() => {
+    const previous = priorSelection.current;
+    priorSelection.current = selectedKey;
+    if (selectedKey) drawerRef.current?.focus();
+    else if (previous) cardButtons.current.get(previous)?.focus();
+  }, [selectedKey]);
+
+  if (!props.incidentId) {
+    return <EmptyState title="Select an incident" description="Community Lifeline conditions are scoped to an incident." />;
+  }
+  if ((overview.loading && !overview.data) || (area.loading && !area.data)) {
+    return <LoadingState label="Loading Community Lifelines" lines={6} />;
+  }
+  if ((!overview.data || !area.data) && refreshError) {
+    return (
+      <ErrorState
+        title="Community Lifelines unavailable"
+        message={refreshError}
+        action={<button type="button" className="eoc-lifeline-retry" onClick={() => { overview.reload(); area.reload(); }}>Try again</button>}
+      />
+    );
+  }
+  if (!overview.data || !area.data) {
+    return <EmptyState title="Community Lifelines unavailable" description="No incident assessment response was returned." />;
+  }
+
+  return (
+    <section className="eoc-lifelines" aria-labelledby="eoc-lifelines-title">
+      <header className="eoc-lifelines-heading">
+        <div>
+          <span className="eoc-lifeline-eyebrow">Situation</span>
+          <h2 id="eoc-lifelines-title">Community Lifelines</h2>
+          <p>Essential service conditions from attributed incident assessments.</p>
+        </div>
+        <span className="eoc-lifelines-definition">FEMA framework · definition v{overview.data.definition.version}</span>
+      </header>
+      {refreshError ? (
+        <div className="eoc-lifeline-refresh-warning" role="status">
+          Update failed. Showing the last received assessments with stale freshness.
+        </div>
+      ) : null}
+      {props.selectedLifeline && !selectedKey ? (
+        <div className="eoc-lifeline-refresh-warning" role="alert">That Lifeline identifier is not recognized.</div>
+      ) : null}
+      <div className={`eoc-lifeline-layout${selected ? " has-drawer" : ""}`}>
+        <div className="eoc-lifeline-grid" aria-label="Community Lifeline conditions">
+          {cards.map((item) => (
+            <LifelineCard
+              key={item.key}
+              item={item}
+              selected={selectedKey === item.key}
+              buttonRef={(node) => {
+                if (node) cardButtons.current.set(item.key, node);
+                else cardButtons.current.delete(item.key);
+              }}
+              onOpen={() => props.onOpen(item.key)}
+            />
+          ))}
+        </div>
+        {selected ? <LifelineDrawer item={selected} drawerRef={drawerRef} onClose={props.onClose} /> : null}
+      </div>
+    </section>
+  );
+}
+

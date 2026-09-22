@@ -22,6 +22,8 @@ import type {
   TaskListResponse,
   TaskMetadataPatch,
   TaskCompletionReceipt,
+  LifelineCurrentState,
+  LIFELINE_DEFINITION,
 } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
 
@@ -111,6 +113,11 @@ export interface LifelineCurrent {
   readonly status: string;
   readonly note: string | null;
   readonly at: string | null;
+}
+export interface LifelineAssessmentOverviewResponse {
+  readonly definition: typeof LIFELINE_DEFINITION;
+  readonly doctrineGaps: readonly string[];
+  readonly states: readonly LifelineCurrentState[];
 }
 export interface FeedHealth {
   readonly id: string;
@@ -458,6 +465,10 @@ export class ApiClient {
   getSitrep(sitrepId: string): Promise<SitrepRow> {
     return this.request<SitrepRow>("GET", `/api/v1/sitreps/${sitrepId}`);
   }
+  listIncidentLifelineAssessments(incidentId: string): Promise<LifelineAssessmentOverviewResponse> {
+    return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/lifeline-assessments`);
+  }
+
   async lifelines(jurisdictionId: string): Promise<LifelineCurrent[]> {
     const r = await this.request<{ lifelines: LifelineCurrent[] }>(
       "GET",

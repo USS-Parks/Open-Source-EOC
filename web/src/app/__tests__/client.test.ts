@@ -406,6 +406,16 @@ describe("ApiClient", () => {
     expect((await client.reunify("j", { label: "Jane" }))[0]!.label).toBe("Jane");
   });
 
+  it("loads operational Lifelines from the selected incident", async () => {
+    const urls: string[] = [];
+    const client = new ApiClient({ fetchImpl: (async (url: string) => {
+      urls.push(String(url));
+      return res(200, { definition: {}, doctrineGaps: [], states: [] });
+    }) as unknown as typeof fetch });
+    expect((await client.listIncidentLifelineAssessments("incident/a")).states).toEqual([]);
+    expect(urls).toEqual(["/api/v1/incidents/incident%2Fa/lifeline-assessments"]);
+  });
+
   it("surfaces the server error envelope as a typed ApiError", async () => {
     const fetchImpl = (async (url: string) => {
       const u = String(url);
