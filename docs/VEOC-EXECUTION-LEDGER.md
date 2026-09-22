@@ -4552,3 +4552,27 @@ increment proves it and that coverage follows the incident area.
   source-scope review: SHIP. Evidence level: integrated on publication, not
   operator-validated. No new dependency. Unit commit: this receipt's commit;
   rollback by revert. Seven worktrees remain assigned to remaining roster work.
+## D28: alerts, acknowledgements and local review
+
+- Lane D, final baseline b253180. The notification center and command tray
+  distinguish unread, read, acknowledged and delivery-log states. Exact current
+  recipients may read or acknowledge; administrative visibility alone grants
+  neither action. Failed read mutations remain visibly unread.
+- Local CAP drafting and append-only review preserve attribution and immutable
+  content. Per-alert advisory serialization precedes a fresh revision read;
+  non-incident concurrent submissions yield one success and one conflict.
+  Incident-linked author/review actions reject closed incidents under the shared
+  incident lock. Actual stored IPAWS attempts show environment, time and outcome;
+  local approval never claims external transmission. No external send was made.
+- Migration 0100 adds acknowledgement fields and append-only review records
+  without broadening cap_alerts update privileges. Full TypeScript and ESLint
+  passed. The initial gate passed 22 checks; its invalid-template fixture was
+  repaired, and the final database/DOM gate passed 15 tests. Real Chrome passed
+  light/dark/narrow composition and saved review. Final coordination integration
+  typecheck/lint passed. Logs under deploy/test-runtime/out/lanes/d/logs:
+  d28-alerts-gate.log, d28-alerts-fixtures.log, d28-shell-integration.log and
+  d28-coordination-integration.log.
+- Root reviewed source and captures. Independent correction review: SHIP.
+  Evidence level: integrated on publication, not operator-validated. No new
+  dependency. Unit commit: this receipt's commit; rollback by revert. Seven
+  worktrees remain assigned or retained for final roster closeout.

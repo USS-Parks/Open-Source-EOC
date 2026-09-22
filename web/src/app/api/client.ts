@@ -60,6 +60,7 @@ import type {
   ResourceRequestAssignment as ResourceRequestAssignmentContract,
   ResourceRequestDetail as ResourceRequestDetailContract,
   ResourceRequestSummary as ResourceRequestSummaryContract,
+  CapAlert,
 } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
 
@@ -178,8 +179,55 @@ export interface RawNotification {
   readonly title: string;
   readonly body: string;
   readonly status: string;
+  readonly detail: Readonly<Record<string, unknown>>;
+  readonly person_id: string | null;
+  readonly position_id: string | null;
+  readonly destination: string;
+  readonly incident_id: string | null;
+  readonly incident_name: string | null;
   readonly created_at: string;
   readonly read_at: string | null;
+  readonly acknowledged_at: string | null;
+  readonly acknowledged_by: string | null;
+  readonly acknowledged_by_name: string | null;
+  readonly assigned_to_current_actor: boolean;
+}
+
+export type AlertReviewState = "draft" | "in_review" | "approved";
+export interface AlertTransmission {
+  readonly state: "not_attempted" | "accepted" | "rejected";
+  readonly environment: string | null;
+  readonly submittedAt: string | null;
+  readonly submittedByName: string | null;
+}
+export type CapDraft = Omit<CapAlert, "identifier" | "sent"> & {
+  readonly identifier?: string;
+  readonly sent?: string;
+};
+export interface CapAlertSummary {
+  readonly id: string;
+  readonly identifier: string;
+  readonly origin: "authored" | "ingested";
+  readonly status: CapAlert["status"];
+  readonly msgType: CapAlert["msgType"];
+  readonly scope: CapAlert["scope"];
+  readonly ipawsEligible: boolean;
+  readonly incidentId: string | null;
+  readonly headline: string | null;
+  readonly event: string | null;
+  readonly createdAt: string;
+  readonly review: { readonly revision: number; readonly state: AlertReviewState; readonly actorName: string; readonly createdAt: string } | null;
+  readonly transmission: AlertTransmission;
+}
+export interface CapAlertDetail {
+  readonly alert: CapAlert;
+  readonly xml: string;
+  readonly ipawsEligible: boolean;
+  readonly origin: "authored" | "ingested";
+  readonly incidentId: string | null;
+  readonly createdAt: string;
+  readonly review: CapAlertSummary["review"];
+  readonly transmission: AlertTransmission;
 }
 export interface EffectiveBoardResponse {
   readonly id: string;
@@ -786,6 +834,63 @@ export class ApiClient {
   }
   markNotificationRead(id: string): Promise<{ ok: true }> {
     return this.request<{ ok: true }>("POST", `/api/v1/notifications/${id}/read`);
+  }
+  acknowledgeNotification(id: string): Promise<{
+    ok: true;
+    acknowledged_at: string;
+    acknowledged_by: string;
+  }> {
+    return this.request("POST", `/api/v1/notifications/${id}/acknowledge`);
+  }
+  async listCapAlerts(jurisdictionId: string): Promise<CapAlertSummary[]> {
+    const response = await this.request<{ alerts: Array<{
+      id: string; identifier: string; origin: "authored" | "ingested";
+      status: CapAlert["status"]; msg_type: CapAlert["msgType"]; scope: CapAlert["scope"];
+      ipaws_eligible: boolean; incident_id: string | null; headline: string | null;
+      event: string | null; created_at: string; review_state: AlertReviewState | null;
+      review_revision: number | null; reviewed_at: string | null; reviewer_name: string | null;
+      transmission: AlertTransmission;
+    }> }>("GET", `/api/v1/jurisdictions/${jurisdictionId}/cap/alerts`);
+    return response.alerts.map((item) => ({
+      id: item.id,
+      identifier: item.identifier,
+      origin: item.origin,
+      status: item.status,
+      msgType: item.msg_type,
+      scope: item.scope,
+      ipawsEligible: item.ipaws_eligible,
+      incidentId: item.incident_id,
+      headline: item.headline,
+      event: item.event,
+      createdAt: item.created_at,
+      transmission: item.transmission,
+      review: item.review_state && item.review_revision !== null && item.reviewed_at && item.reviewer_name
+        ? { revision: item.review_revision, state: item.review_state, actorName: item.reviewer_name, createdAt: item.reviewed_at }
+        : null,
+    }));
+  }
+  getCapAlert(id: string): Promise<CapAlertDetail> {
+    return this.request("GET", `/api/v1/cap/alerts/${id}`);
+  }
+  createCapDraft(jurisdictionId: string, alert: CapDraft, incidentId?: string): Promise<{
+    id: string;
+    identifier: string;
+    ipawsEligible: boolean;
+    xml: string;
+    reviewState: "draft";
+  }> {
+    return this.request("POST", `/api/v1/jurisdictions/${jurisdictionId}/cap/drafts`, {
+      alert,
+      ...(incidentId ? { incidentId } : {}),
+    });
+  }
+  reviewCapAlert(id: string, state: AlertReviewState): Promise<{
+    revision: number;
+    state: AlertReviewState;
+    actorName: string;
+    createdAt: string;
+  }> {
+    return this.request("POST", `/api/v1/cap/alerts/${id}/review`, { state });
   }
   async listFeeds(jurisdictionId: string): Promise<FeedHealth[]> {
     const r = await this.request<{ feeds: FeedHealth[] }>(

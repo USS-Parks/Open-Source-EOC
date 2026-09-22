@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { Button, StatusBadge } from "../../design/components.js";
 import type { ApiClient, BoardListItem } from "../api/client.js";
-import { useAsync, usePolled } from "../data/hooks.js";
+import { useAsync } from "../data/hooks.js";
 import { EmptyState, ErrorNote, Loading, Scroll } from "../screens/parts.js";
 
 /** The list sections: all boards, situation reports, and notifications. */
@@ -84,37 +84,6 @@ export function SitrepsIndex(props: {
   );
 }
 
-export function AlertsSurface(props: { client: ApiClient }) {
-  const { data, error, loading } = usePolled(() => props.client.notifications(), 8000, []);
-  if (loading && !data) return <Loading label="Loading notifications…" />;
-  if (error && !data) return <ErrorNote message={error} />;
-  const items = data ?? [];
-  return (
-    <Scroll>
-      {items.length === 0 ? (
-        <EmptyState label="No notifications." hint="Board events and scheduled rules post here." />
-      ) : (
-        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
-          {items.map((n) => (
-            <li key={n.id} style={card}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                <strong>{n.title}</strong>
-                <StatusBadge status={n.read_at ? "unknown" : "info"}>
-                  {n.read_at ? "read" : "new"}
-                </StatusBadge>
-              </div>
-              <p style={{ margin: "4px 0 0" }}>{n.body}</p>
-              <p style={{ margin: "4px 0 0", color: "var(--eoc-text-muted)", fontSize: "0.85em" }}>
-                {new Date(n.created_at).toLocaleString()}
-              </p>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Scroll>
-  );
-}
-
 const rowButton: CSSProperties = {
   width: "100%",
   textAlign: "left",
@@ -129,11 +98,4 @@ const rowButton: CSSProperties = {
   cursor: "pointer",
   fontFamily: "inherit",
   fontSize: "1em",
-};
-const card: CSSProperties = {
-  padding: "10px 12px",
-  background: "var(--eoc-surface)",
-  border: "1px solid var(--eoc-border)",
-  borderRadius: "var(--eoc-radius-md)",
-  boxShadow: "var(--eoc-shadow-sm)",
 };

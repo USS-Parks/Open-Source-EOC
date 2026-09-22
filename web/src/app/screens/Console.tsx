@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { BoardList, NotificationTray } from "../../design/layout.js";
-import { Button, type Status } from "../../design/components.js";
+import { BoardList } from "../../design/layout.js";
+import { Button } from "../../design/components.js";
 import type { ThemeName } from "../../design/tokens.js";
 import type { ApiClient, BoardListItem, DashboardListItem, CollectionRef, FeedHealth } from "../api/client.js";
 import { useSession } from "../auth/session.js";
@@ -35,7 +35,9 @@ import { FeedsSurface } from "../surfaces/FeedsSurface.js";
 import { MessagesSurface } from "../surfaces/MessagesSurface.js";
 import { SmartFormsSurface } from "../surfaces/SmartFormsSurface.js";
 import { TrackingSurface } from "../surfaces/TrackingSurface.js";
-import { AlertsSurface, BoardsIndex } from "../surfaces/lists.js";
+import { BoardsIndex } from "../surfaces/lists.js";
+import { AlertsSurface } from "../surfaces/AlertsSurface.js";
+import { NotificationTray } from "../../notifications/NotificationTray.js";
 import { LifelinesSurface } from "../surfaces/LifelinesSurface.js";
 import { EsfSurface } from "../surfaces/EsfSurface.js";
 
@@ -221,19 +223,10 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
           />
         )}
       </section>
-      <section aria-label="Recent notifications">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-          <h2 style={{ ...dockHeading, margin: 0 }}>Notifications</h2>
-          <Button kind="quiet" onClick={() => navigateInContext({ kind: "alerts" })}>Open center</Button>
-        </div>
-        <NotificationTray
-          items={(notifications.data ?? []).slice(0, 6).map((n) => ({
-            id: n.id,
-            status: (n.read_at ? "unknown" : "info") as Status,
-            text: n.title,
-          }))}
-        />
-      </section>
+      <NotificationTray
+        items={notifications.data ?? []}
+        onOpenCenter={() => navigateInContext({ kind: "alerts" })}
+      />
     </>
   );
 
@@ -267,7 +260,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       theme={props.theme}
       onToggleTheme={props.onToggleTheme}
       onLogout={() => void session.logout()}
-      notificationCount={(notifications.data ?? []).filter((item) => !item.read_at).length}
+      notificationCount={(notifications.data ?? []).filter((item) => item.assigned_to_current_actor && !item.read_at).length}
       sync={sync}
       page={page.page}
       arrangement={page.arrangement}
@@ -306,6 +299,8 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         collections={collections.data ?? []}
         feeds={feeds.data ?? []}
         isAdmin={viewingMembership?.role === "admin"}
+        canAuthorAlerts={viewingMembership?.role === "admin" || viewingMembership?.role === "member"}
+        actorEmail={session.me?.person.email ?? ""}
         isInstanceAdmin={session.me?.isInstanceAdmin === true}
         canWriteResources={resourceMembership?.role === "admin" || resourceMembership?.role === "member"}
         collectionsError={collections.error}
@@ -416,6 +411,8 @@ function Center(props: {
   collections: readonly CollectionRef[];
   feeds: readonly FeedHealth[];
   isAdmin: boolean;
+  canAuthorAlerts: boolean;
+  actorEmail: string;
   isInstanceAdmin: boolean;
   resourceJurisdictionId: string;
   canWriteResources: boolean;
@@ -601,7 +598,8 @@ function Center(props: {
         />
       );
     case "alerts":
-      return <AlertsSurface client={props.client} />;
+      return <AlertsSurface client={props.client} jurisdictionId={props.jurisdictionId}
+        incidentId={props.incidentId} canAuthor={props.canAuthorAlerts} actorEmail={props.actorEmail} />;
     case "lifelines":
     case "lifeline":
       return <LifelinesSurface client={props.client} incidentId={props.incidentId}

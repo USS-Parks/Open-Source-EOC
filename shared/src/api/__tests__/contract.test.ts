@@ -15,6 +15,15 @@ describe("API contract", () => {
     expect(API_CONTRACT.websockets.length).toBeGreaterThan(0);
   });
 
+  it("keeps local alert review, notification acknowledgement, and external transmission as separate endpoints", () => {
+    const endpoints = new Set(API_CONTRACT.rest.map((entry) => `${entry.method} ${entry.path}`));
+    expect(endpoints.has("POST /api/v1/jurisdictions/:jurisdictionId/cap/drafts")).toBe(true);
+    expect(endpoints.has("POST /api/v1/cap/alerts/:id/review")).toBe(true);
+    expect(endpoints.has("POST /api/v1/notifications/:notificationId/read")).toBe(true);
+    expect(endpoints.has("POST /api/v1/notifications/:notificationId/acknowledge")).toBe(true);
+    expect(endpoints.has("POST /api/v1/jurisdictions/:jurisdictionId/cap/alerts/:alertId/ipaws")).toBe(true);
+  });
+
   it("has no duplicate REST method+path pairs", () => {
     const seen = new Set<string>();
     for (const e of API_CONTRACT.rest) {

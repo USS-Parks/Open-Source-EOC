@@ -2,13 +2,14 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
-import { authorAlert, CapValidationError, getAlert, ingestAlert, listAlerts } from "./service.js";
+import { authorAlert, CapValidationError, createAlertDraft, getAlert, ingestAlert, listAlerts, reviewAlert } from "./service.js";
 
 const AuthorBody = z.object({
   alert: z.record(z.string(), z.unknown()),
   incidentId: z.string().uuid().optional(),
 });
 const IngestBody = z.object({ xml: z.string().min(1) });
+const ReviewBody = z.object({ state: z.enum(["draft", "in_review", "approved"]) });
 
 export function capRoutes(
   app: FastifyInstance,
@@ -31,6 +32,38 @@ export function capRoutes(
           return reply.status(422).send({ error: "CAP validation failed", issues: err.issues });
         throw err;
       }
+    },
+  );
+
+  app.post(
+    "/api/v1/jurisdictions/:jurisdictionId/cap/drafts",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const body = AuthorBody.parse(req.body);
+      try {
+        const result = await withPerson(sql, req.principal.person.id, (tx) =>
+          createAlertDraft(tx, req.principal, jurisdictionId, body.alert, body.incidentId),
+        );
+        return reply.status(201).send(result);
+      } catch (err) {
+        if (err instanceof CapValidationError)
+          return reply.status(422).send({ error: "CAP validation failed", issues: err.issues });
+        throw err;
+      }
+    },
+  );
+
+  app.post(
+    "/api/v1/cap/alerts/:id/review",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const body = ReviewBody.parse(req.body);
+      const result = await withPerson(sql, req.principal.person.id, (tx) =>
+        reviewAlert(tx, req.principal, id, body.state),
+      );
+      return reply.send(result);
     },
   );
 
