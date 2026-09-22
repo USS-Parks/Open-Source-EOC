@@ -22,6 +22,9 @@ import type {
   TaskListResponse,
   TaskMetadataPatch,
   TaskCompletionReceipt,
+  CreateLifelineAssessment,
+  LifelineAssessmentReport,
+  AssessmentDecisionInput,
   LifelineCurrentState,
   LIFELINE_DEFINITION,
   DashboardTemplate,
@@ -551,6 +554,15 @@ export class ApiClient {
   }
   listIncidentLifelineAssessments(incidentId: string): Promise<LifelineAssessmentOverviewResponse> {
     return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/lifeline-assessments`);
+  }
+  createLifelineAssessment(incidentId: string, input: CreateLifelineAssessment): Promise<LifelineAssessmentReport> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/lifeline-assessments`, input);
+  }
+  lifelineAssessmentHistory(incidentId: string, lifeline: string): Promise<{ readonly reports: readonly LifelineAssessmentReport[] }> {
+    return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/lifeline-assessments/${encodeURIComponent(lifeline)}/history`);
+  }
+  decideLifelineAssessment(incidentId: string, lifeline: string, input: AssessmentDecisionInput): Promise<{ readonly id: string }> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/lifeline-assessments/${encodeURIComponent(lifeline)}/decisions`, input);
   }
 
   async lifelines(jurisdictionId: string): Promise<LifelineCurrent[]> {

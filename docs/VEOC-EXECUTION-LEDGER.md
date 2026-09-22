@@ -4147,3 +4147,27 @@ increment proves it and that coverage follows the incident area.
 - Intermediate demos remain usable progress artifacts without approval pauses.
   Final user aesthetic acceptance remains Basho's authority; technical SHIP is
   not a claim of that acceptance. Canonical screenshots remain binding.
+
+## P-LIFE-2: assessment detail, updates and attributed history
+
+- D15 now provides component conditions, affected geography, evidence,
+  stabilization objectives, actions, owners and estimates, plus append-only
+  assessment history and explicit conflict decisions. Failed writes retain
+  the draft; polling does not reset it. Existing evidence and action identifiers
+  survive editing. Empty times stay empty until supplied by the operator.
+- Incident-scoped SITREP composition freezes the current native assessment,
+  attribution, impact, outlook and actions. Unresolved reports remain unknown.
+  Participant action assignment uses the author's home organization; cross-
+  incident and same-organization participant targets remain rejected.
+- Root reviewed the full diff. All-workspace TypeScript and full ESLint passed.
+  The final real-PostgreSQL assignment suite passed 9 tests. Rebase integration
+  passed 40 tests in 7 suites, including Windows Chrome update/history journeys,
+  SITREP isolation and frozen snapshots, DOM workflows and dashboard/client
+  integration. Logs: lanes/b/logs/demo-increment-final-gate.log and
+  demo-increment-integration.log under deploy/test-runtime/out. Light, dark and
+  narrow screenshots are under lanes/b/browser-shots/assessment. Fresh bounded
+  correction review: SHIP. Subsequent rebase changed documentation only.
+- No dependency or schema changes. Publish the accepted commit through an exact
+  fast-forward to main; rollback by revert. Seven worktrees remain for active
+  roster lanes; protected files and demo data are preserved. Final user design
+  acceptance remains separate from this technical completion receipt.

@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { SitrepRow, LifelineCurrent } from "@openeoc/shared";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
+import { ensureStandardIncidentTemplates } from "../incidents/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
@@ -213,5 +214,52 @@ describe("situation report composition and archive", () => {
       headers: { authorization: `Bearer ${outToken}` },
     });
     expect(denied.statusCode).toBe(403);
+  });
+
+  it("freezes attributed incident assessments and keeps another incident unknown", async () => {
+    await ensureStandardIncidentTemplates(admin);
+    const headers = { authorization: `Bearer ${adminToken}` };
+    const activate = async (name: string) => {
+      const response = await app.inject({ method: "POST", headers,
+        url: `/api/v1/jurisdictions/${seed.jurisdictionId}/incidents`,
+        payload: { templateKey: "daily_ops", name } });
+      expect(response.statusCode, response.body).toBe(201);
+      return response.json().incidentId as string;
+    };
+    const incidentId = await activate("Briefing assessment A");
+    const other = await activate("Briefing assessment B");
+    const payload = { lifeline: "energy", condition: "unstable", confidence: "confirmed",
+      assessedAt: "2026-09-21T10:00:00Z", impactStatement: "Substation offline",
+      stabilizationOutlook: "Restore critical facilities first",
+      actions: [{ key: "generator", title: "Stage backup generator", status: "in_progress",
+        dueAt: "2026-09-21T14:00:00Z" }] };
+    const report = await app.inject({ method: "POST", headers,
+      url: `/api/v1/incidents/${incidentId}/lifeline-assessments`, payload });
+    expect(report.statusCode, report.body).toBe(201);
+    const compose = async (scope: string) => {
+      const response = await app.inject({ method: "POST", headers,
+        url: `/api/v1/jurisdictions/${seed.jurisdictionId}/sitreps`,
+        payload: { period: "Assessment period", incidentId: scope } });
+      expect(response.statusCode, response.body).toBe(201);
+      return response.json() as SitrepRow;
+    };
+    const frozen = await compose(incidentId);
+    const energy = frozen.content.lifelines.find((line) => line.lifeline === "energy")!;
+    expect(energy).toMatchObject({ status: "unstable", note: "Substation offline",
+      assessment: { id: report.json().id, person: "Admin", payload: {
+        actions: [{ title: "Stage backup generator" }] } } });
+    expect((await compose(other)).content.lifelines.every((line) => line.status === "unknown")).toBe(true);
+    const revised = await app.inject({ method: "POST", headers,
+      url: `/api/v1/incidents/${incidentId}/lifeline-assessments`, payload: {
+        ...payload, condition: "stable", impactStatement: "Power restored",
+        supersedesAssessmentId: report.json().id } });
+    expect(revised.statusCode, revised.body).toBe(201);
+    const archive = await app.inject({ method: "GET", headers, url: `/api/v1/sitreps/${frozen.id}` });
+    expect(archive.json().content).toEqual(frozen.content);
+    expect((await compose(incidentId)).content.lifelines.find((line) => line.lifeline === "energy")?.status).toBe("stable");
+    const missing = await app.inject({ method: "POST", headers,
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/sitreps`,
+      payload: { period: "Invalid", incidentId: "10000000-0000-4000-8000-000000000099" } });
+    expect(missing.statusCode).toBe(404);
   });
 });

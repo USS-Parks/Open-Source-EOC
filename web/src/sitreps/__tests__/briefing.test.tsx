@@ -32,6 +32,25 @@ const sitrep: SitrepRow = {
 afterEach(cleanup);
 
 describe("the briefing view renders an archived sitrep", () => {
+  it("shows the frozen assessment attribution and linked stabilization action", () => {
+    const assessed: SitrepRow = { ...sitrep, content: { ...sitrep.content,
+      lifelines: sitrep.content.lifelines.map((line) => line.lifeline === "energy" ? {
+        ...line, note: "Substation offline", at: "2026-09-21T10:00:00Z",
+        assessment: { id: "assessment-1", person: "Utility operator", position: "Energy liaison",
+          organization: "County utilities", recordedAt: "2026-09-21T10:01:00Z",
+          payload: { stabilizationOutlook: "Restore critical facilities first",
+            actions: [{ title: "Stage backup generator", status: "in_progress", dueAt: "2026-09-21T14:00:00Z" }] } },
+      } : line),
+    } };
+    render(<Theme name="light"><BriefingView sitrep={assessed} /></Theme>);
+    const energy = screen.getByTestId("lifeline-energy");
+    expect(energy.textContent).toContain("Substation offline");
+    expect(energy.textContent).toContain("Utility operator (Energy liaison)");
+    expect(energy.textContent).toContain("County utilities");
+    expect(energy.textContent).toContain("Stage backup generator");
+    expect(energy.textContent).toContain("estimated");
+  });
+
   it("shows lifeline conditions, board status, and significant events for an executive read", () => {
     render(
       <Theme name="light">

@@ -12,11 +12,13 @@ import { withPerson } from "../db/context.js";
 import { freshDb, type Sql } from "./helpers.js";
 
 let admin: Sql, runtime: Sql, app: FastifyInstance;
-let ownerId: string, partnerId: string, outsiderId: string;
-let adminPersonId: string, memberPersonId: string, partnerPersonId: string, outsiderPersonId: string;
+let ownerId: string, partnerId: string, outsiderId: string, targetId: string;
+let adminPersonId: string, memberPersonId: string, partnerPersonId: string;
+let outsiderPersonId: string, targetPersonId: string;
 let adminToken: string, memberToken: string, partnerToken: string, outsiderToken: string;
 let incidentId: string, otherIncidentId: string, closedIncidentId: string;
-let participantId: string, otherResourceId: string, legacyLifelineId: string, legacyEsfId: string;
+let participantId: string, targetParticipantId: string, otherIncidentParticipantId: string;
+let otherResourceId: string, legacyLifelineId: string, legacyEsfId: string;
 let preexistingEsfIncidentId: string, preexistingEsfRecordId: string;
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "migrations");
@@ -125,6 +127,7 @@ beforeAll(async () => {
   ownerId = await createJurisdiction(admin, "assessment-owner", "Assessment Owner EOC");
   partnerId = await createJurisdiction(admin, "assessment-partner", "Assessment Partner");
   outsiderId = await createJurisdiction(admin, "assessment-outside", "Assessment Outsider");
+  targetId = await createJurisdiction(admin, "assessment-target", "Assessment Target");
   adminPersonId = await createPerson(admin, {
     email: "assessment-admin@example.org", displayName: "Assessment Admin",
     password: "assessment-admin-password",
@@ -141,10 +144,15 @@ beforeAll(async () => {
     email: "assessment-outsider@example.org", displayName: "Assessment Outsider",
     password: "assessment-outsider-password",
   });
+  targetPersonId = await createPerson(admin, {
+    email: "assessment-target@example.org", displayName: "Assessment Target",
+    password: "assessment-target-password",
+  });
   await addMembership(admin, adminPersonId, ownerId, "admin");
   await addMembership(admin, memberPersonId, ownerId, "member");
   await addMembership(admin, partnerPersonId, partnerId, "member");
   await addMembership(admin, outsiderPersonId, outsiderId, "admin");
+  await addMembership(admin, targetPersonId, targetId, "member");
   await ensureStandardTemplates(admin);
   await ensureStandardIncidentTemplates(admin);
   await preparePreexistingEsfBackfill();
@@ -172,6 +180,36 @@ beforeAll(async () => {
   });
   expect(grant.statusCode).toBe(201);
   participantId = grant.json().participant.id as string;
+  const targetGrant = await app.inject({
+    method: "POST",
+    url: `/api/v1/incidents/${incidentId}/participants`,
+    headers: auth(adminToken),
+    payload: {
+      organizationSlug: "assessment-target",
+      personEmail: "assessment-target@example.org",
+      incidentPositionTitle: "Field Infrastructure Lead",
+      role: "contributor",
+      expiresAt: new Date(Date.now() + 600_000).toISOString(),
+      reason: "Cross-organization stabilization assignment",
+    },
+  });
+  expect(targetGrant.statusCode).toBe(201);
+  targetParticipantId = targetGrant.json().participant.id as string;
+  const otherIncidentGrant = await app.inject({
+    method: "POST",
+    url: `/api/v1/incidents/${otherIncidentId}/participants`,
+    headers: auth(adminToken),
+    payload: {
+      organizationSlug: "assessment-target",
+      personEmail: "assessment-target@example.org",
+      incidentPositionTitle: "Other Incident Lead",
+      role: "contributor",
+      expiresAt: new Date(Date.now() + 600_000).toISOString(),
+      reason: "Separate incident assignment boundary",
+    },
+  });
+  expect(otherIncidentGrant.statusCode).toBe(201);
+  otherIncidentParticipantId = otherIncidentGrant.json().participant.id as string;
   await admin`
     insert into incident_area_revisions (incident_id, revision, geometry, reason, created_by)
     values (${incidentId}, 1,
@@ -371,6 +409,82 @@ describe("D13 operational assessments", () => {
       organizationId: partnerId,
       authority: "incident_owner_admin",
     });
+  });
+
+  it("uses an external coordinator's home organization for bounded participant assignment", async () => {
+    const created = await app.inject({
+      method: "POST", url: lifelineUrl(), headers: auth(partnerToken),
+      payload: lifelinePayload("stabilizing", {
+        actions: [{
+          key: "coordinate_field_team",
+          title: "Coordinate outside field team",
+          status: "planned",
+          assignment: {
+            kind: "incident_participant", incidentId, participantId: targetParticipantId,
+          },
+        }],
+      }),
+    });
+    expect(created.statusCode, created.body).toBe(201);
+    expect(created.json()).toMatchObject({
+      attribution: {
+        participationId: participantId,
+        homeOrganizationId: partnerId,
+      },
+      payload: {
+        actions: [{
+          assignment: {
+            kind: "incident_participant",
+            participantId: targetParticipantId,
+            organizationId: targetId,
+            authority: "incident_coordinator",
+            actorParticipationId: participantId,
+          },
+        }],
+      },
+    });
+    const [stored] = await admin`
+      select payload from operational_assessments where id = ${created.json().id as string}`;
+    expect((stored!.payload as { actions: Array<Record<string, unknown>> }).actions[0]).toMatchObject({
+      assignment: {
+        participantId: targetParticipantId,
+        organizationId: targetId,
+        authority: "incident_coordinator",
+        actorParticipationId: participantId,
+      },
+    });
+
+    const outsideIncident = await app.inject({
+      method: "POST", url: lifelineUrl(), headers: auth(partnerToken),
+      payload: lifelinePayload("stabilizing", {
+        actions: [{
+          key: "outside_incident_target",
+          title: "Invalid outside-incident target",
+          status: "planned",
+          assignment: {
+            kind: "incident_participant", incidentId, participantId: otherIncidentParticipantId,
+          },
+        }],
+      }),
+    });
+    expect(outsideIncident.statusCode).toBe(404);
+    expect(outsideIncident.json().error).toContain("active incident participant");
+
+    const sameOrganization = await app.inject({
+      method: "POST", url: lifelineUrl(), headers: auth(partnerToken),
+      payload: lifelinePayload("stabilizing", {
+        actions: [{
+          key: "same_organization_target",
+          title: "Invalid same-organization target",
+          status: "planned",
+          assignment: {
+            kind: "incident_participant", incidentId, participantId,
+          },
+        }],
+      }),
+    });
+    expect(sameOrganization.statusCode).toBe(400);
+    expect(sameOrganization.json().error).toContain("another organization");
   });
 
   it("applies legacy board field-read masks without discarding preserved history", async () => {

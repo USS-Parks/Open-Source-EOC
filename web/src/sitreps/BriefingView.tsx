@@ -51,10 +51,24 @@ export function BriefingView(props: { sitrep: SitrepRow }) {
             <li
               key={l.lifeline}
               data-testid={`lifeline-${l.lifeline}`}
-              style={{ display: "flex", justifyContent: "space-between", gap: 8 }}
+              style={{ display: "grid", gap: 6, padding: "8px 0", borderBottom: "1px solid var(--eoc-border)" }}
             >
               <span>{LIFELINE_LABEL[l.lifeline] ?? l.lifeline}</span>
               <StatusBadge status={lifelineStatus(l.status)}>{l.status}</StatusBadge>
+              {l.conflict ? <p>Conflicting reports remain unresolved.</p> : null}
+              {l.note ? <p style={{ margin: 0 }}>{l.note}</p> : null}
+              {l.at ? <small>Assessed {new Date(l.at).toLocaleString()}</small> : null}
+              {l.assessment ? <div>
+                <small>{l.assessment.person}{l.assessment.position ? ` (${l.assessment.position})` : ""} · {l.assessment.organization}</small>
+                {typeof l.assessment.payload.stabilizationOutlook === "string"
+                  ? <p>{l.assessment.payload.stabilizationOutlook}</p> : null}
+                {Array.isArray(l.assessment.payload.actions) ? <ul>{l.assessment.payload.actions.map((value, index) => {
+                  if (!value || typeof value !== "object" || !("title" in value)) return null;
+                  const action = value as Record<string, unknown>;
+                  return <li key={index}>{String(action.title)} · {String(action.status ?? "Status unknown")}
+                    {typeof action.dueAt === "string" ? ` · estimated ${new Date(action.dueAt).toLocaleString()}` : ""}</li>;
+                })}</ul> : null}
+              </div> : null}
             </li>
           ))}
         </ul>

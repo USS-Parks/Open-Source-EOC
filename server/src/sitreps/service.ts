@@ -11,6 +11,8 @@ import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
 import { createRecord } from "../boards/service.js";
 import { recordAudit } from "../audit/service.js";
+import { listCurrentLifelineAssessments } from "../lifelines/service.js";
+import { getIncidentAuthority } from "../incidents/participation.js";
 
 /**
  * Situation reporting (VEOC-20, F8). Lifelines status entry remembers the
@@ -116,7 +118,29 @@ export async function composeSitrep(
 ): Promise<SitrepRow> {
   requireWriter(actor, jurisdictionId);
   const composedAt = new Date().toISOString();
-  const lifelines = await currentLifelines(sql, actor, jurisdictionId);
+  if (input.incidentId) {
+    const authority = await getIncidentAuthority(sql, actor, input.incidentId);
+    if (authority.jurisdictionId !== jurisdictionId) throw new AuthError(400, "incident belongs to another jurisdiction");
+  }
+  const lifelines = input.incidentId
+    ? (await listCurrentLifelineAssessments(sql, actor, input.incidentId)).map((state): LifelineCurrent => {
+      const report = state.decision
+        ? state.reports.find((candidate) => candidate.id === state.decision!.selectedAssessmentId)
+        : state.condition === null ? undefined : state.reports[0];
+      return {
+        lifeline: state.lifeline,
+        status: state.condition ?? "unknown",
+        note: report && typeof report.payload.impactStatement === "string" ? report.payload.impactStatement : null,
+        at: report?.assessedAt ?? null,
+        conflict: state.conflict && !state.decision,
+        ...(report ? { assessment: {
+          id: report.id, person: report.attribution.personName,
+          position: report.attribution.positionTitle, organization: report.attribution.homeOrganizationName,
+          recordedAt: report.attribution.recordedAt, payload: report.payload,
+        } } : {}),
+      };
+    })
+    : await currentLifelines(sql, actor, jurisdictionId);
   const boards = await summarizeBoards(sql, jurisdictionId);
   const significantEvents = await recentSignificantEvents(sql, jurisdictionId);
   const rumorControl = await recentRumorControl(sql, jurisdictionId);

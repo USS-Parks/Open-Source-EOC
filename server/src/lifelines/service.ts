@@ -154,7 +154,7 @@ export async function createLifelineAssessment(
     ...input.responsibleOrganizationIds, ...evidenceOrganizations,
   ]);
   const actions = await resolveAssessmentActions(
-    sql, actor, incidentId, context.jurisdictionId, input.actions,
+    sql, actor, incidentId, context.homeOrganizationId, input.actions,
   );
   const evidence = await snapshotImpactEvidence(sql, actor, incidentId, input.evidence);
   const payload = {

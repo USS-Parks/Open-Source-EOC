@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import type { LifelineAssessmentReport, LifelineCurrentState, OperationalPeriod } from "@openeoc/shared";
 import type { ApiClient } from "../api/client.js";
 import { usePolled } from "../data/hooks.js";
 import { ConditionBadge, EmptyState, ErrorState, LoadingState } from "../../design/feedback.js";
@@ -8,6 +9,8 @@ import {
   projectLifeline,
   type LifelineCardView,
 } from "./lifeline-view.js";
+import { LifelineAssessmentForm } from "./LifelineAssessmentForm.js";
+import { LifelineAssessmentHistory } from "./LifelineAssessmentHistory.js";
 import "./LifelinesSurface.css";
 
 const REFRESH_MS = 30_000;
@@ -90,9 +93,22 @@ function LifelineCard(props: {
   );
 }
 
+type LifelineDetailMode = "overview" | "update" | "history";
+
 function LifelineDrawer(props: {
+  readonly client: ApiClient;
+  readonly incidentId: string;
   readonly item: LifelineCardView;
+  readonly currentState: LifelineCurrentState | undefined;
+  readonly currentReport: LifelineAssessmentReport | null;
+  readonly period: OperationalPeriod | null;
+  readonly mode: LifelineDetailMode;
+  readonly refreshToken: number;
+  readonly savedNotice: string | null;
   readonly drawerRef: RefObject<HTMLElement | null>;
+  readonly onMode: (mode: LifelineDetailMode) => void;
+  readonly onSaved: (report: LifelineAssessmentReport) => void;
+  readonly onDecision: () => void;
   readonly onClose: () => void;
 }) {
   const { item } = props;
@@ -110,36 +126,69 @@ function LifelineDrawer(props: {
         </div>
         <button type="button" className="eoc-lifeline-close" aria-label={`Close ${item.label} details`} onClick={props.onClose}>×</button>
       </header>
-      <div className="eoc-lifeline-drawer-condition">
-        <LifelineIcon decorative lifeline={item.key} size={40} />
-        <ConditionBadge state={item.conditionState} label={conditionLabel(item.condition)} />
-        <ConditionBadge state={freshnessState(item.freshness)} label={item.freshnessLabel} />
-      </div>
-      <p className="eoc-lifeline-drawer-impact">{item.impact}</p>
-      <dl>
-        <div><dt>Affected components</dt><dd>{item.components}</dd></div>
-        <div><dt>Affected geography</dt><dd>{item.geography}</dd></div>
-        <div><dt>Reporting organization</dt><dd>{item.source}</dd></div>
-        <div><dt>Assessed</dt><dd>{item.assessedLabel}</dd></div>
-        <div><dt>Confidence and evidence</dt><dd>{item.evidence}</dd></div>
-        <div><dt>Stabilization outlook</dt><dd>{item.outlook}</dd></div>
-        <div><dt>Unresolved actions</dt><dd>{unresolvedLabel(item.unresolvedActions)}</dd></div>
-      </dl>
-      {item.conflict ? (
-        <p className="eoc-lifeline-callout">
-          {item.conflictResolved
-            ? "The displayed condition follows an attributed assessment decision; conflicting reports remain in history."
-            : "No report is presented as authoritative until the conflict is resolved."}
-        </p>
-      ) : null}
-      <p className="eoc-lifeline-callout">
-        Exposure and ESF activation do not determine this assessed condition.
-      </p>
+      <nav className="eoc-lifeline-detail-tabs" aria-label={`${item.label} assessment views`}>
+        <button type="button" aria-current={props.mode === "overview" ? "page" : undefined} onClick={() => props.onMode("overview")}>Overview</button>
+        <button type="button" aria-current={props.mode === "update" ? "page" : undefined} onClick={() => props.onMode("update")}>Update assessment</button>
+        <button type="button" aria-current={props.mode === "history" ? "page" : undefined} onClick={() => props.onMode("history")}>History</button>
+      </nav>
+      {props.savedNotice ? <p className="eoc-lifeline-form-success" role="status">{props.savedNotice}</p> : null}
+      {props.mode === "update" ? (
+        <LifelineAssessmentForm
+          client={props.client}
+          incidentId={props.incidentId}
+          lifeline={item.key}
+          period={props.period}
+          currentReport={props.currentReport}
+          onSaved={props.onSaved}
+          onCancel={() => props.onMode("overview")}
+        />
+      ) : props.mode === "history" ? (
+        <LifelineAssessmentHistory
+          client={props.client}
+          incidentId={props.incidentId}
+          lifeline={item.key}
+          currentState={props.currentState}
+          refreshToken={props.refreshToken}
+          onDecision={props.onDecision}
+        />
+      ) : (
+        <div className="eoc-lifeline-overview-detail">
+          <div className="eoc-lifeline-drawer-condition">
+            <LifelineIcon decorative lifeline={item.key} size={40} />
+            <ConditionBadge state={item.conditionState} label={conditionLabel(item.condition)} />
+            <ConditionBadge state={freshnessState(item.freshness)} label={item.freshnessLabel} />
+          </div>
+          <p className="eoc-lifeline-drawer-impact">{item.impact}</p>
+          <dl>
+            <div><dt>Affected components</dt><dd>{item.components}</dd></div>
+            <div><dt>Affected geography</dt><dd>{item.geography}</dd></div>
+            <div><dt>Reporting organization</dt><dd>{item.source}</dd></div>
+            <div><dt>Assessed</dt><dd>{item.assessedLabel}</dd></div>
+            <div><dt>Confidence and evidence</dt><dd>{item.evidence}</dd></div>
+            <div><dt>Stabilization outlook</dt><dd>{item.outlook}</dd></div>
+            <div><dt>Unresolved actions</dt><dd>{unresolvedLabel(item.unresolvedActions)}</dd></div>
+          </dl>
+          {item.conflict ? (
+            <p className="eoc-lifeline-callout">
+              {item.conflictResolved
+                ? "The displayed condition follows an attributed assessment decision; conflicting reports remain in history."
+                : "No report is presented as authoritative until the conflict is resolved."}
+            </p>
+          ) : null}
+          <p className="eoc-lifeline-callout">
+            Exposure and ESF activation do not determine this assessed condition.
+          </p>
+        </div>
+      )}
     </aside>
   );
 }
 
+
 export function LifelinesSurface(props: LifelinesSurfaceProps) {
+  const [detailMode, setDetailMode] = useState<LifelineDetailMode>("overview");
+  const [historyVersion, setHistoryVersion] = useState(0);
+  const [savedNotice, setSavedNotice] = useState<string | null>(null);
   const overview = usePolled(
     () => props.incidentId
       ? props.client.listIncidentLifelineAssessments(props.incidentId)
@@ -169,13 +218,34 @@ export function LifelinesSurface(props: LifelinesSurfaceProps) {
     ));
   }, [overview.data, area.data, refreshError]);
   const selected = selectedKey ? cards.find((item) => item.key === selectedKey) ?? null : null;
+  const selectedState = selectedKey
+    ? overview.data?.states.find((state) => state.lifeline === selectedKey)
+    : undefined;
+  const currentReport = selectedState?.decision
+    ? selectedState.reports.find((report) => report.id === selectedState.decision?.selectedAssessmentId) ?? null
+    : selectedState && !selectedState.conflict ? selectedState.reports[0] ?? null : null;
 
   useEffect(() => {
     const previous = priorSelection.current;
     priorSelection.current = selectedKey;
+    setDetailMode("overview");
+    setSavedNotice(null);
     if (selectedKey) drawerRef.current?.focus();
     else if (previous) cardButtons.current.get(previous)?.focus();
-  }, [selectedKey]);
+  }, [selectedKey, props.incidentId]);
+
+  function assessmentSaved(report: LifelineAssessmentReport) {
+    setHistoryVersion((value) => value + 1);
+    setSavedNotice(`Assessment recorded at ${new Date(report.attribution.recordedAt).toLocaleString()}.`);
+    setDetailMode("overview");
+    overview.reload();
+  }
+
+  function decisionSaved() {
+    setHistoryVersion((value) => value + 1);
+    setSavedNotice("Assessment decision recorded with attribution.");
+    overview.reload();
+  }
 
   if (!props.incidentId) {
     return <EmptyState title="Select an incident" description="Community Lifeline conditions are scoped to an incident." />;
@@ -229,9 +299,25 @@ export function LifelinesSurface(props: LifelinesSurfaceProps) {
             />
           ))}
         </div>
-        {selected ? <LifelineDrawer item={selected} drawerRef={drawerRef} onClose={props.onClose} /> : null}
+        {selected ? (
+          <LifelineDrawer
+            client={props.client}
+            incidentId={props.incidentId}
+            item={selected}
+            currentState={selectedState}
+            currentReport={currentReport}
+            period={area.data.operationalPeriod}
+            mode={detailMode}
+            refreshToken={historyVersion}
+            savedNotice={savedNotice}
+            drawerRef={drawerRef}
+            onMode={(mode) => { setDetailMode(mode); setSavedNotice(null); }}
+            onSaved={assessmentSaved}
+            onDecision={decisionSaved}
+            onClose={props.onClose}
+          />
+        ) : null}
       </div>
     </section>
   );
 }
-

@@ -12,6 +12,15 @@ export const LifelineCurrentSchema = z.object({
   status: z.enum(LIFELINE_STATUS.values as [string, ...string[]]),
   note: z.string().nullable(),
   at: z.string().nullable(),
+  assessment: z.object({
+    id: z.string(),
+    person: z.string(),
+    position: z.string().nullable(),
+    organization: z.string(),
+    recordedAt: z.string(),
+    payload: z.record(z.string(), z.unknown()),
+  }).optional(),
+  conflict: z.boolean().optional(),
 });
 export type LifelineCurrent = z.infer<typeof LifelineCurrentSchema>;
 
