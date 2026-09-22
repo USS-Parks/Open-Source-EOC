@@ -76,6 +76,37 @@ export const CALIFORNIA_ESFS = defineEnum(
   },
 );
 
+/** Current California ESF display titles verified against the Cal OES source. */
+export const CALIFORNIA_ESF_TITLES = {
+  ca_esf_1: "Transportation",
+  ca_esf_2: "Communications",
+  ca_esf_3: "Construction and Engineering",
+  ca_esf_4: "Fire and Rescue",
+  ca_esf_5: "Management",
+  ca_esf_6: "Mass Care and Shelter",
+  ca_esf_7: "Resources",
+  ca_esf_8: "Public Health and Medical",
+  ca_esf_9: "Search and Rescue",
+  ca_esf_10: "Hazardous Materials",
+  ca_esf_11: "Agriculture",
+  ca_esf_12: "Utilities",
+  ca_esf_13: "Law Enforcement",
+  ca_esf_14: "Long Term Recovery",
+  ca_esf_15: "Public Information",
+  ca_esf_16: "Evacuation",
+  ca_esf_17: "Volunteer and Donations Management",
+  ca_esf_18: "Cybersecurity",
+} as const satisfies Readonly<Record<(typeof CALIFORNIA_ESFS.values)[number], string>>;
+
+/** Historical functions remain visible where Cal OES marks a merger. */
+export const CALIFORNIA_ESF_MERGED_INTO = {
+  ca_esf_9: ["ca_esf_4", "ca_esf_13"],
+  ca_esf_16: ["ca_esf_13"],
+} as const satisfies Partial<Readonly<Record<
+  (typeof CALIFORNIA_ESFS.values)[number],
+  readonly (typeof CALIFORNIA_ESFS.values)[number][]
+>>>;
+
 export const ESF_DEFINITIONS = {
   federal: {
     version: 1,
@@ -108,6 +139,5 @@ export const ESF_CROSSWALK_V1 = [
 ] as const;
 
 export const ESF_DOCTRINE_GAPS = [
-  "California ESF titles and effective dates are not retained in an approved local source.",
-  "No approved local source establishes a federal-to-California ESF crosswalk; numeric alignment is not inferred.",
+  "California ESF effective dates are not verified in the retained local source receipt.",
 ] as const;

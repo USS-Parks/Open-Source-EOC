@@ -102,7 +102,7 @@ export async function createEsfAssessment(
   ];
   await validateOrganizations(sql, incidentId, organizationIds);
   const actions = await resolveAssessmentActions(
-    sql, actor, incidentId, context.jurisdictionId, input.actions,
+    sql, actor, incidentId, context.homeOrganizationId, input.actions,
   );
   const payload = {
     confidence: input.confidence,

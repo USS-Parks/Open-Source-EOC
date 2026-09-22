@@ -4188,3 +4188,28 @@ increment proves it and that coverage follows the incident area.
   acceptance remains separate. Seven worktrees remain assigned to active roster
   units, with protected files retained; no extra dependency trees were created.
 - Unit commit: this receipt's commit. Rollback by revert.
+
+## P-LIFE-3: California and federal ESF coordination
+
+- Serves D16; lane A, baseline b4c14bf. All 18 California and 15 federal
+  functions remain separate from Community Lifelines. The Cal OES source
+  receipt records verified titles, historical mergers and unverified effective
+  dates. Every California function has a distinct semantic interface icon.
+- Operators can record activation, capacity, organizations, missions, priorities,
+  evidence and stabilization actions, then inspect attributed history. Drafts
+  retain their original supersession baseline through polling and preserve
+  existing action assignments and resource links. External coordinator action
+  validation uses the writer's home organization.
+- Workspace TypeScript and full ESLint passed after one unused-import repair.
+  Shared contract, route, DOM, real PostgreSQL assignment and Chrome workflow
+  tests passed: 16 tests in 5 suites across the focused and corrected runs.
+  Evidence: lanes/a/logs/completion-focused-gate.log,
+  esf-fixture-correction.log and esf-browser-final.log under test-runtime/out.
+  Light, dark and 390px keyboard captures are in lanes/a/browser-shots/esf.
+  Root inspected the complete implementation and captures; fresh review: SHIP.
+- Rebase retained both KPI and ESF client methods. All TypeScript, affected
+  lint and 27 client/router tests passed after that additive resolution.
+  No new dependency or migration. Evidence level: integrated on publication;
+  final user aesthetic acceptance remains separate. Unit commit: this receipt's
+  commit. Seven retained worktrees continue active roster units; protected
+  files and prior preservation stashes remain accounted for. Rollback by revert.

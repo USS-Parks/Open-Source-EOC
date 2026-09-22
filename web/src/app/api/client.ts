@@ -29,6 +29,11 @@ import type {
   IncidentImpactAnalysis,
   ImpactContributionPage,
   LIFELINE_DEFINITION,
+  ESF_DEFINITIONS,
+  ESF_CROSSWALK_V1,
+  EsfCurrentState,
+  CreateEsfAssessment,
+  EsfAssessmentReport,
   DashboardTemplate,
   DashboardComposition,
   DashboardCompositionSnapshot,
@@ -172,6 +177,12 @@ export interface LifelineAssessmentOverviewResponse {
   readonly definition: typeof LIFELINE_DEFINITION;
   readonly doctrineGaps: readonly string[];
   readonly states: readonly LifelineCurrentState[];
+}
+export interface EsfAssessmentOverviewResponse {
+  readonly definitions: typeof ESF_DEFINITIONS;
+  readonly crosswalk: typeof ESF_CROSSWALK_V1;
+  readonly doctrineGaps: readonly string[];
+  readonly states: readonly EsfCurrentState[];
 }
 export interface FeedHealth {
   readonly id: string;
@@ -584,6 +595,21 @@ export class ApiClient {
     if (options.cursor) params.set("cursor", options.cursor);
     if (options.limit !== undefined) params.set("limit", String(options.limit));
     return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/impact/sources/${encodeURIComponent(datasetId)}/records?${params}`);
+  }
+
+  listIncidentEsfAssessments(incidentId: string): Promise<EsfAssessmentOverviewResponse> {
+    return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/esf-assessments`);
+  }
+  createEsfAssessment(incidentId: string, body: CreateEsfAssessment): Promise<EsfAssessmentReport> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/esf-assessments`, body);
+  }
+  async listEsfAssessmentHistory(incidentId: string, framework: "federal" | "california", esf: string): Promise<readonly EsfAssessmentReport[]> {
+    const result = await this.request<{ reports: EsfAssessmentReport[] }>("GET",
+      `/api/v1/incidents/${encodeURIComponent(incidentId)}/esf-assessments/${framework}/${encodeURIComponent(esf)}/history`);
+    return result.reports;
+  }
+  decideEsfAssessment(incidentId: string, framework: "federal" | "california", esf: string, body: AssessmentDecisionInput): Promise<{ id: string }> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/esf-assessments/${framework}/${encodeURIComponent(esf)}/decisions`, body);
   }
 
   async lifelines(jurisdictionId: string): Promise<LifelineCurrent[]> {

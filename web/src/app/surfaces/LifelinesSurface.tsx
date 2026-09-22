@@ -21,6 +21,7 @@ export interface LifelinesSurfaceProps {
   readonly selectedLifeline: string | null;
   readonly onOpen: (id: string) => void;
   readonly onClose: () => void;
+  readonly onOpenEsfs?: () => void;
 }
 
 function isLifelineKey(value: string | null): value is LifelineKey {
@@ -275,6 +276,7 @@ export function LifelinesSurface(props: LifelinesSurfaceProps) {
           <p>Essential service conditions from attributed incident assessments.</p>
         </div>
         <span className="eoc-lifelines-definition">FEMA framework · definition v{overview.data.definition.version}</span>
+        {props.onOpenEsfs ? <button type="button" className="eoc-lifeline-retry" onClick={props.onOpenEsfs}>ESF coordination</button> : null}
       </header>
       {refreshError ? (
         <div className="eoc-lifeline-refresh-warning" role="status">

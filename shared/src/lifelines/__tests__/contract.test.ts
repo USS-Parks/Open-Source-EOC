@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  CALIFORNIA_ESF_MERGED_INTO,
+  CALIFORNIA_ESF_TITLES,
   CreateEsfAssessmentSchema,
   CreateLifelineAssessmentSchema,
   ESF_CROSSWALK_V1,
@@ -21,13 +23,17 @@ describe("operational assessment contracts", () => {
     expect(input.capacity).toBe("critical");
   });
 
-  it("keeps only locally supported mappings and names unresolved doctrine", () => {
+  it("keeps verified California titles, mergers, and unresolved effective dates explicit", () => {
     expect(ESF_CROSSWALK_V1).toEqual([expect.objectContaining({
       fromKey: "ca_esf_16",
       toKey: "ca_esf_13",
       relationship: "merged_into",
     })]);
-    expect(ESF_DOCTRINE_GAPS.join(" ")).toContain("federal-to-California");
+    expect(CALIFORNIA_ESF_TITLES.ca_esf_18).toBe("Cybersecurity");
+    expect(CALIFORNIA_ESF_MERGED_INTO.ca_esf_9).toEqual(["ca_esf_4", "ca_esf_13"]);
+    expect(CALIFORNIA_ESF_MERGED_INTO.ca_esf_16).toEqual(["ca_esf_13"]);
+    expect(ESF_DOCTRINE_GAPS.join(" ")).toContain("effective dates");
+    expect(ESF_DOCTRINE_GAPS.join(" ")).not.toContain("federal-to-California");
   });
 
   it("validates bounded components, actions, evidence, and references", () => {

@@ -33,6 +33,7 @@ import { SmartFormsSurface } from "../surfaces/SmartFormsSurface.js";
 import { TrackingSurface } from "../surfaces/TrackingSurface.js";
 import { AlertsSurface, BoardsIndex, SitrepsIndex } from "../surfaces/lists.js";
 import { LifelinesSurface } from "../surfaces/LifelinesSurface.js";
+import { EsfSurface } from "../surfaces/EsfSurface.js";
 
 const NAV: readonly NavGroup[] = [
   { key: "situation", label: "Situation", items: [
@@ -250,7 +251,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       sync={sync}
       page={page.page}
       arrangement={page.arrangement}
-      layout={surface.kind === "lifelines" || surface.kind === "lifeline" || surface.kind === "dashboard"
+      layout={surface.kind === "lifelines" || surface.kind === "lifeline" || surface.kind === "esf" || surface.kind === "dashboard"
         ? { ...workspace.layout(page.arrangement), drawerOpen: false }
         : workspace.layout(page.arrangement)}
       onLayoutChange={(next) => workspace.updateLayout(page.arrangement, next)}
@@ -269,6 +270,8 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         jurisdictionId={viewingJurisdictionId ?? jurisdictionId}
         incidentId={incident.selectedIncidentId}
         incidentName={incident.selectedIncident?.name ?? null}
+        incidentJurisdictionId={incident.selectedIncident?.jurisdictionId ?? null}
+        operationalPeriod={workspace.selectedPeriodRevision === null ? null : workspace.selectedPeriodLabel}
         incidentCanManage={incident.selectedIncident?.canEditArea ?? false}
         incidentBoardIds={incident.incidentBoardIds}
         boards={boardItems}
@@ -356,6 +359,8 @@ function Center(props: {
   jurisdictionId: string;
   incidentId: string | null;
   incidentName: string | null;
+  incidentJurisdictionId: string | null;
+  operationalPeriod: string | null;
   incidentCanManage: boolean;
   incidentBoardIds: ReadonlySet<string>;
   boards: readonly BoardListItem[];
@@ -504,9 +509,15 @@ function Center(props: {
       return <LifelinesSurface client={props.client} incidentId={props.incidentId}
         selectedLifeline={s.kind === "lifeline" ? s.id : null}
         onOpen={(id) => props.onNavigate({ kind: "lifeline", id })}
-        onClose={() => props.onNavigate({ kind: "lifelines" })} />;
+        onClose={() => props.onNavigate({ kind: "lifelines" })}
+        onOpenEsfs={() => props.onNavigate({ kind: "esf" })} />;
     case "esf":
-      return <UnavailableState title="ESFs & Lifelines is unavailable" message="This workspace is not available in the current application." returnLabel="Return to Map" onReturn={() => props.onNavigate({ kind: "map" })} />;
+      return <EsfSurface client={props.client} incidentId={props.incidentId}
+        incidentJurisdictionId={props.incidentJurisdictionId} selectedEsf={s.id ?? null}
+        operationalPeriod={props.operationalPeriod}
+        onOpen={(id) => props.onNavigate({ kind: "esf", id })}
+        onClose={() => props.onNavigate({ kind: "esf" })}
+        onOpenLifelines={() => props.onNavigate({ kind: "lifelines" })} />;
     case "tasks":
       return <UnavailableState title="Tasks is unavailable" message="This section is not available in the current application." returnLabel="Return to Boards" onReturn={() => props.onNavigate({ kind: "boards" })} />;
     case "field-reports":
