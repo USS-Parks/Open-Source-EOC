@@ -78,6 +78,12 @@ import {
   WorkspaceSection,
   type CopInspection,
 } from "./workspace.js";
+import {
+  downloadMapExport,
+  renderMapExport,
+  type MapExportContext,
+  type MapExportLayer,
+} from "./map-export.js";
 
 export interface CopBoard {
   readonly id: string;
@@ -199,6 +205,8 @@ export interface CopMapProps {
   readonly onInspectFeature?: ((feature: CopSelectedDatasetFeature | null) => void) | undefined;
   /** Test/instrumentation hook: receives the live map instance. */
   readonly onMap?: ((map: maplibregl.Map) => void) | undefined;
+  /** Stored incident context printed outside the map frame in PNG exports. */
+  readonly exportContext?: MapExportContext | undefined;
 }
 
 let pmtilesRegistered = false;
@@ -859,14 +867,78 @@ export function CopMap(props: CopMapProps) {
     else mapRef.current?.flyTo({ center: home.center, zoom: home.zoom, bearing: 0, pitch: 0 });
   };
 
-  /** Save the current frame as a PNG (the print/export gesture). */
+  /** Compose the current frame with identity, operational context and source receipt. */
   const exportImage = () => {
     const map = mapRef.current;
     if (!map) return;
-    const a = document.createElement("a");
-    a.href = map.getCanvas().toDataURL("image/png");
-    a.download = `cop-${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
-    a.click();
+    const operationalLayers: MapExportLayer[] = [
+      ...props.boards.filter((board) => visible[board.id] ?? true)
+        .map((board) => ({ title: board.title, detail: "Open Source EOC board records" })),
+      ...(props.feeds ?? []).filter((feed) => feedVisible[feed.id] ?? true).map((feed) => {
+        const health = feedHealth[feed.id];
+        const freshness = health
+          ? health.stale ? `stale last-good data, ${formatAge(health.ageSeconds)}` : `current, ${formatAge(health.ageSeconds)}`
+          : "freshness unknown";
+        return { title: feed.title, detail: `${freshness}${health?.incomplete ? ", display incomplete" : ""}` };
+      }),
+    ];
+    const references: string[] = [];
+    if (basemapMode !== "vector") {
+      const raster = rasterBases.find((candidate) => candidate.id === basemapMode);
+      if (raster) references.push(`${raster.title}: ${raster.attribution ?? "configured raster; attribution not supplied"}`);
+    } else if (props.basemapStyleUrl) {
+      const attributions = Object.values(map.getStyle().sources as Record<string, { attribution?: string }>)
+        .flatMap((source) => source.attribution ? [source.attribution] : []);
+      references.push(...(attributions.length > 0
+        ? attributions
+        : ["Deployment-configured basemap style; attribution not supplied to the exporter"]));
+    } else if (props.streetBasemap) references.push(OSM_ATTRIBUTION);
+    else if (props.bundledBasemap) references.push(BUNDLED_BASEMAP_ATTRIBUTION);
+    else if (props.basemap) references.push(NATURAL_EARTH_ATTRIBUTION);
+    else references.push("Plain geographic canvas; no basemap source configured");
+
+    for (const overlay of overlays.filter((candidate) => overlayOn[candidate.id])) {
+      references.push(`${overlay.title}: ${overlay.attribution ?? "configured overlay; attribution not supplied"}`);
+    }
+    for (const overlay of VECTOR_OVERLAYS.filter((candidate) => vectorOn[candidate.id])) {
+      references.push(`${overlay.title}: ${coverage[overlay.id]?.attribution ?? "configured jurisdiction GIS; coverage attribution unavailable"}`);
+    }
+    if (hillshade && terrain) references.push(`Hillshade: ${terrain.attribution ?? "configured elevation source; attribution not supplied"}`);
+    if (buildings) references.push(buildings.overtureRelease
+      ? `Buildings: © OpenStreetMap contributors (ODbL); enrichment: © Overture Maps Foundation (ODbL, ${buildings.overtureRelease})`
+      : "Buildings: © OpenStreetMap contributors (ODbL)");
+
+    for (const board of props.boards.filter((candidate) => visible[candidate.id] ?? true))
+      references.push(`${board.title}: Open Source EOC board records`);
+    for (const feed of (props.feeds ?? []).filter((candidate) => feedVisible[candidate.id] ?? true)) {
+      const health = feedHealth[feed.id];
+      references.push(`${feed.title}: ${feed.attribution ?? health?.attribution ?? "configured feed; attribution not supplied"}`);
+    }
+
+    const activeSourceKeys = [
+      ...props.boards.filter((board) => visible[board.id] ?? true).map((board) => sourceId(board.id)),
+      ...(props.feeds ?? []).filter((feed) => feedVisible[feed.id] ?? true).map((feed) => feedSourceId(feed.id)),
+    ];
+    const hasFacilities = activeSourceKeys.some((key) => dataRef.current[key]?.features.some(
+      (feature) => Boolean(feature.properties._facilityType),
+    ));
+    const legendLines: string[] = [];
+    if ((props.feeds ?? []).some((feed) => feed.kind === "fema-flood" && (feedVisible[feed.id] ?? true)))
+      legendLines.push(`FLOOD REFERENCE LEGEND: ${FLOOD_LEGEND.map((entry) => entry.title).join("; ")}`);
+    if (buildings)
+      legendLines.push(`BUILDING USE LEGEND: ${BUILDING_USE_LEGEND.map((entry) => entry.title).join("; ")}`);
+    if (hasFacilities)
+      legendLines.push(`FACILITY SYMBOLS (NAPSG): ${FACILITY_SYMBOLS.map((entry) => entry.title).join("; ")}`);
+    if (Object.values(vectorOn).some(Boolean))
+      legendLines.push(`REFERENCE LAYERS: ${VECTOR_OVERLAYS.filter((entry) => vectorOn[entry.id]).map((entry) => entry.title).join("; ")}`);
+
+    downloadMapExport(renderMapExport(map.getCanvas(), {
+      ...props.exportContext,
+      operationalLayers,
+      referenceSources: references,
+      legendLines,
+      exportedAt: new Date(),
+    }));
   };
 
   /** County bounds for the find box, read once from the bundled boundaries. */

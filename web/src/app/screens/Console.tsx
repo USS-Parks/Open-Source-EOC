@@ -419,6 +419,8 @@ function Center(props: {
           feeds={props.feeds}
           incidentId={props.incidentId}
           incidentName={props.incidentName}
+          operationalPeriod={props.operationalPeriod}
+          handlingMarking="FOUO"
           incidentBoardIds={props.incidentBoardIds}
           focusDatasetId={s.datasetId}
           focusFeatureId={s.featureId}

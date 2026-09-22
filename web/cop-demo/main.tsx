@@ -54,6 +54,11 @@ createRoot(document.getElementById("app")!).render(
       pollMs={1000}
       center={[-123.61, 41.29]}
       zoom={11}
+      exportContext={{
+        incidentName: params.get("incident"),
+        operationalPeriod: params.get("period"),
+        handling: params.get("handling"),
+      }}
       bundledBasemap={params.get("bundled") === "1" ? { assetBase: assetBase() } : undefined}
       basemapStyleUrl={basemapStyleUrl()}
       streetBasemap={streetBasemap()}

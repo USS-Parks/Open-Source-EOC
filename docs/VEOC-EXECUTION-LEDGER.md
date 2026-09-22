@@ -4495,3 +4495,21 @@ increment proves it and that coverage follows the incident area.
   review: SHIP. Evidence level: integrated on publication, not operator-validated.
   No new migration or dependency. Unit commit: this receipt's commit; rollback
   by revert. Seven active worktrees remain assigned; protected work/d05 remains.
+## D30: branded map image exports
+
+- Lane B, final baseline d1c5d63. PNG export composes the current MapLibre
+  canvas with navy/teal identity, stored incident and period, handling, UTC
+  snapshot time, status legend, visible layers, freshness and source attribution.
+  Missing context remains explicit. Existing IAP/AAR PDF branding is reused.
+- Full TypeScript and ESLint passed. Final map integration passed ten focused
+  tests; the real Chrome download passed PNG signature, dimensions and filename
+  assertions with external network blocked. Logs under deploy/test-runtime/out:
+  lanes/b/logs/d30-relationship-integration.log and d30-export-canvas.log.
+  Earlier fixture failures concerned a collapsed tools section and a non-invoked
+  evaluation expression; both are superseded by the passing download proof.
+- Root reviewed the complete source and downloaded PNG. Independent review:
+  SHIP. The test uses an explicit plain geographic canvas; it proves export
+  composition, not external basemap availability. Evidence level: integrated
+  on publication, not operator-validated. No migration or dependency added.
+  Unit commit: this receipt's commit; rollback by revert. Seven active lane
+  worktrees remain assigned to remaining roster work.

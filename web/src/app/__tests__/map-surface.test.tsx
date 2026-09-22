@@ -13,11 +13,14 @@ vi.mock("../../cop/CopMap.js", () => {
       boards: { id: string }[];
       requestedFeature?: { datasetId: string; featureId: string } | null;
       onInspectFeature?: (feature: { datasetId: string; featureId: string; title: string }) => void;
+      exportContext?: { incidentName?: string | null; operationalPeriod?: string | null; handling?: string | null };
     }) => {
       const mountedTheme = useRef(props.theme);
       const mountedBoards = useRef(props.boards.map((b) => b.id).join(","));
       const mountId = useRef(++mountCount);
       return <div data-testid="map" data-mounted-theme={mountedTheme.current} data-mounted-boards={mountedBoards.current} data-mount-id={mountId.current}
+        data-export-incident={props.exportContext?.incidentName ?? ""} data-export-period={props.exportContext?.operationalPeriod ?? ""}
+        data-export-handling={props.exportContext?.handling ?? ""}
         data-requested-feature={props.requestedFeature ? `${props.requestedFeature.datasetId}/${props.requestedFeature.featureId}` : undefined}>
         {props.initialBounds.join(",")}
         {props.requestedFeature && props.onInspectFeature ? <button type="button" onClick={() => props.onInspectFeature?.({
@@ -59,6 +62,15 @@ it("remounts when operational layers arrive after the empty map", () => {
   const view = render(<MapSurface {...props} collections={[]} />);
   view.rerender(<MapSurface {...props} collections={[{ id: "damage", title: "Damage assessments" }]} />);
   expect(screen.getByTestId("map").getAttribute("data-mounted-boards")).toBe("damage");
+});
+
+it("passes the selected incident and operational period to the PNG export receipt", () => {
+  const client = { listIncidentDatasets: vi.fn().mockResolvedValue([]) } as unknown as ApiClient;
+  render(<MapSurface client={client} theme="light" jurisdictionId="j1" collections={[]} feeds={[]}
+    incidentId="incident-1" incidentName="North Coast Storm" operationalPeriod="OP 3 · 1800-0600" handlingMarking="FOUO" />);
+  expect(screen.getByTestId("map").getAttribute("data-export-incident")).toBe("North Coast Storm");
+  expect(screen.getByTestId("map").getAttribute("data-export-period")).toBe("OP 3 · 1800-0600");
+  expect(screen.getByTestId("map").getAttribute("data-export-handling")).toBe("FOUO");
 });
 
 it("remounts the COP when the selected incident changes, and not when it stays", () => {

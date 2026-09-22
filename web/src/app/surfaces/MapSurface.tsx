@@ -113,6 +113,8 @@ export function MapSurface(props: {
   feeds: readonly FeedHealth[];
   incidentId?: string | null;
   incidentName?: string | null;
+  operationalPeriod?: string | null;
+  handlingMarking?: string | null;
   incidentBoardIds?: ReadonlySet<string>;
   focusDatasetId?: string | undefined;
   focusFeatureId?: string | undefined;
@@ -481,6 +483,11 @@ export function MapSurface(props: {
             setRelationshipNotice(null);
             setRelationshipError(null);
             setSelectedFeature(feature && datasetIds.has(feature.datasetId) ? feature : null);
+          }}
+          exportContext={{
+            incidentName: props.incidentName ?? null,
+            operationalPeriod: props.operationalPeriod ?? null,
+            handling: props.handlingMarking ?? null,
           }}
           onBoundsChange={updateImpactBounds}
           picking={adding && !point}

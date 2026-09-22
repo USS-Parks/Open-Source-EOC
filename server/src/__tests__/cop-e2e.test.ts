@@ -142,7 +142,8 @@ describe("the COP in a real browser, offline", () => {
     });
 
     await page.goto(
-      `${baseUrl}/demo/index.html?token=${encodeURIComponent(memberToken)}&board=${boardId}`,
+      `${baseUrl}/demo/index.html?token=${encodeURIComponent(memberToken)}&board=${boardId}`
+        + "&incident=North%20Coast%20Storm&period=OP%203%20%C2%B7%201800-0600&handling=FOUO",
     );
     await page.waitForFunction(() => Boolean((globalThis as {__map?: unknown}).__map), undefined, { timeout: 30000 });
     await page.waitForFunction(
@@ -200,6 +201,27 @@ describe("the COP in a real browser, offline", () => {
     });
     expect(returnedBounds).toEqual(selectedBounds);
 
+    mkdirSync(SHOTS, { recursive: true });
+    const mapCanvas = await page.evaluate(`(() => {
+      const element = document.querySelector("canvas.maplibregl-canvas");
+      return { width: element.width, height: element.height };
+    })()`) as { width: number; height: number };
+    const mapTools = page.getByTestId("map-tools");
+    await mapTools.locator("summary").click();
+    const exportButton = mapTools.getByRole("button", { name: "Export image" });
+    await exportButton.waitFor({ state: "visible" });
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      exportButton.click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/^cop-north-coast-storm-.*\.png$/);
+    const exportPath = join(SHOTS, "d30-map-export.png");
+    await download.saveAs(exportPath);
+    const png = readFileSync(exportPath);
+    expect(png.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+    expect(png.readUInt32BE(16)).toBeGreaterThanOrEqual(mapCanvas.width);
+    expect(png.readUInt32BE(20)).toBeGreaterThan(mapCanvas.height + 92);
+
     // Field-to-COP latency: a new closure must appear on the map within budget.
     const t0 = Date.now();
     await postClosure("SR-96 at Orleans", [-123.59, 41.3]);
@@ -222,7 +244,6 @@ describe("the COP in a real browser, offline", () => {
     );
     const latency = Date.now() - t0;
     expect(latency).toBeLessThanOrEqual(LATENCY_BUDGET_MS);
-    mkdirSync(SHOTS, { recursive: true });
     await page.screenshot({ path: join(SHOTS, "pcop-workspace-light.png"), fullPage: false });
 
     const darkPage = await browser.newPage({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
