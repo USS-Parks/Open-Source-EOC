@@ -35,6 +35,15 @@ function pdfPhysicalLines(pdf: string): string[] {
   );
 }
 
+function pdfBytesToLatin1(bytes: Uint8Array): string {
+  const chunkSize = 0x8000;
+  let text = "";
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    text += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return text;
+}
+
 describe("composeAar", () => {
   it("splits observations by kind and carries evidence", () => {
     const doc = composeAar(input);
@@ -72,7 +81,7 @@ describe("composeAar", () => {
   });
 
   it("keeps operational period and action follow-through in the PDF", () => {
-    const pdf = Buffer.from(renderAarPdf(composeAar(input))).toString("latin1");
+    const pdf = pdfBytesToLatin1(renderAarPdf(composeAar(input)));
     const text = pdfPhysicalLines(pdf).join(" ");
     expect(text).toContain("Operational Period Revision: 3");
     expect(text).toContain("priority: high; owner: Logistics; due: 2026-12-01");
@@ -98,7 +107,7 @@ describe("composeAar", () => {
       ),
     });
 
-    const pdf = Buffer.from(renderAarPdf(document)).toString("latin1");
+    const pdf = pdfBytesToLatin1(renderAarPdf(document));
     const physicalLines = pdfPhysicalLines(pdf);
     const text = physicalLines.join(" ");
 
