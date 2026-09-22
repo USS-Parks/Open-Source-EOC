@@ -53,7 +53,10 @@ grant still falls under the rule above.
 Standing execution grant, 2026-09-21: in the Master PSPR execution session,
 Basho approved W0.0 and subsequent commits and fast-forward landings that pass
 their prescribed gates. This overrides per-commit asks for this approved
-roster. Push, external-action and G-A design-review gates remain separate.
+roster. Basho explicitly authorized publishing accepted commits to the canonical
+GitHub main during this session on 2026-09-21. Push each accepted landing;
+do not publish unfinished lane work. External-action and G-A design-review
+gates remain separate.
 
 Every commit message and pull request is humanized: plain language stating
 what changed and why, nothing else.

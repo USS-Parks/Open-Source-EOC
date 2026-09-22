@@ -4044,3 +4044,15 @@ increment proves it and that coverage follows the incident area.
 - **Closeout:** approved local commit and exact fast-forward only, no push.
   Four existing lanes retained for active work. Protected root files and
   preservation stashes remain unchanged.
+
+## Publication authorization and accepted main
+
+- Basho explicitly directed publication of all accepted main commits on
+  2026-09-21. Continuing accepted landings are authorized for push.
+- Verified origin matches the canonical project authority:
+  https://github.com/USS-Parks/Open-Source-EOC.git.
+- Published 82 accepted commits from 32acaf1 through
+  440b59e69971d0abf3c9b1fec7a33ec341a8b004. `git ls-remote origin
+  refs/heads/main` confirms that exact SHA. Pending lane work was not published.
+- Earlier no-push receipt statements record the action at their time; this
+  authorization supersedes the former publication hold prospectively.
