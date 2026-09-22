@@ -97,12 +97,12 @@ export interface BuildAppOptions {
   readonly integrations?: readonly OptionalIntegration[];
 }
 
-export type OptionalIntegration = "collab" | "meetings";
+export type OptionalIntegration = "collab" | "facilities" | "meetings" | "tracking";
 
 function integrationsFromEnv(value = process.env.OPENEOC_INTEGRATIONS ?? ""): OptionalIntegration[] {
   const integrations: OptionalIntegration[] = [];
   for (const entry of value.split(",").map((item) => item.trim()).filter(Boolean)) {
-    if (entry !== "collab" && entry !== "meetings") {
+    if (entry !== "collab" && entry !== "facilities" && entry !== "meetings" && entry !== "tracking") {
       throw new Error(`unsupported OPENEOC_INTEGRATIONS entry: ${entry}`);
     }
     if (!integrations.includes(entry)) integrations.push(entry);
@@ -366,12 +366,12 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   dashboardRoutes(app, sql, authenticate);
   damageRoutes(app, sql, authenticate);
   edxlRoutes(app, sql, authenticate);
-  facilityRoutes(app, sql, authenticate);
+  if (integrations.has("facilities")) facilityRoutes(app, sql, authenticate);
   feedRoutes(app, sql, authenticate);
   formRoutes(app, sql, authenticate);
   sitrepRoutes(app, sql, authenticate);
   staffingRoutes(app, sql, authenticate);
-  trackingRoutes(app, sql, authenticate);
+  if (integrations.has("tracking")) trackingRoutes(app, sql, authenticate);
   incidentRoutes(app, sql, authenticate);
   dataPackRoutes(app, sql, authenticate);
   impactRoutes(app, sql, authenticate);

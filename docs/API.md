@@ -176,12 +176,12 @@ present in the comma-separated OPENEOC_INTEGRATIONS setting.
 
 ### facilities
 
-- `POST /api/v1/facilities/:id/status`: Run facilities status (auth: bearer; audience: operator)
-- `POST /api/v1/jurisdictions/:jurisdictionId/facilities`: Run jurisdictions facilities (auth: bearer; audience: operator)
-- `GET /api/v1/jurisdictions/:jurisdictionId/facilities/board`: Read jurisdictions facilities board (auth: bearer; audience: operator)
-- `GET /api/v1/jurisdictions/:jurisdictionId/facilities/have`: Read jurisdictions facilities have (auth: bearer; audience: operator)
-- `POST /api/v1/jurisdictions/:jurisdictionId/status-queries`: Run jurisdictions status queries (auth: bearer; audience: operator)
-- `GET /api/v1/status-queries/:id`: Read status queries (auth: bearer; audience: operator)
+- `POST /api/v1/facilities/:id/status`: Run facilities status (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=facilities)
+- `POST /api/v1/jurisdictions/:jurisdictionId/facilities`: Run jurisdictions facilities (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=facilities)
+- `GET /api/v1/jurisdictions/:jurisdictionId/facilities/board`: Read jurisdictions facilities board (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=facilities)
+- `GET /api/v1/jurisdictions/:jurisdictionId/facilities/have`: Read jurisdictions facilities have (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=facilities)
+- `POST /api/v1/jurisdictions/:jurisdictionId/status-queries`: Run jurisdictions status queries (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=facilities)
+- `GET /api/v1/status-queries/:id`: Read status queries (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=facilities)
 
 ### federation
 
@@ -350,7 +350,7 @@ present in the comma-separated OPENEOC_INTEGRATIONS setting.
 
 ### reunification
 
-- `GET /api/v1/jurisdictions/:jurisdictionId/reunification`: Read jurisdictions reunification (auth: bearer; audience: operator)
+- `GET /api/v1/jurisdictions/:jurisdictionId/reunification`: Read jurisdictions reunification (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=tracking)
 
 ### search
 
@@ -390,9 +390,9 @@ present in the comma-separated OPENEOC_INTEGRATIONS setting.
 
 ### tracking
 
-- `POST /api/v1/jurisdictions/:jurisdictionId/tracked-objects`: Run jurisdictions tracked objects (auth: bearer; audience: operator)
-- `POST /api/v1/jurisdictions/:jurisdictionId/tracked-objects/scan`: Run jurisdictions tracked objects scan (auth: bearer; audience: operator)
-- `GET /api/v1/tracked-objects/:id`: Read tracked objects (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/tracked-objects`: Run jurisdictions tracked objects (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=tracking)
+- `POST /api/v1/jurisdictions/:jurisdictionId/tracked-objects/scan`: Run jurisdictions tracked objects scan (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=tracking)
+- `GET /api/v1/tracked-objects/:id`: Read tracked objects (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=tracking)
 
 ### workspace
 

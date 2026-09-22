@@ -25,7 +25,7 @@ let shelter: string;
 beforeAll(async () => {
   ({ admin, runtime } = await freshDb());
   seed = await seedIdentity(admin);
-  app = buildApp(runtime, { oidc: null });
+  app = buildApp(runtime, { oidc: null, integrations: ["facilities"] });
   await app.listen({ port: 0, host: "127.0.0.1" });
   memberToken = await tokenFor("member@example.org", "another-good-password");
   memberP = await principalForPerson(runtime, seed.memberId);

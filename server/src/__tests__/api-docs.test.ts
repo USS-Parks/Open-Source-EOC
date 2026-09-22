@@ -18,7 +18,9 @@ const sql = (() => {
   throw new Error("route inventory must not query the database");
 }) as unknown as Sql;
 
-function inventoryApp(integrations: readonly ("collab" | "meetings")[]) {
+function inventoryApp(
+  integrations: readonly ("collab" | "facilities" | "meetings" | "tracking")[],
+) {
   return buildApp(sql, {
     integrations,
     oidc: {
@@ -57,7 +59,7 @@ describe("generated API docs", () => {
   });
 
   it("covers every registered Fastify method and path", async () => {
-    const app = inventoryApp(["collab", "meetings"]);
+    const app = inventoryApp(["collab", "facilities", "meetings", "tracking"]);
     try {
       await app.ready();
       const registered = registeredRouteKeys(app.printRoutes({ commonPrefix: false }));

@@ -44,11 +44,13 @@ and total attribution (INV-2) are the standing mitigations everywhere.
 | B11 | Auth/identity (VEOC-07, VEOC-08) | T1, T2, T5 | credential stuffing, session fixation, position self-assignment | OIDC or local with rate-limited login; position assignment is an authorized act; mid-incident re-auth preserves state without widening it |
 | B12 | Audit substrate (VEOC-11) | T5 | history rewrite, deletion, backdating | append-only at API and database (no UPDATE/DELETE grants on audit tables); server-side timestamps; corrections are new entries |
 | B13 | Jitsi meeting bridge (conditional: `OPENEOC_INTEGRATIONS=meetings`) | T2, T6 | meeting-token theft, room guessing, unauthorized moderator access | routes absent by default; room names are random; JWT secrets stay in server-side envelopes; incident membership and role determine join authority |
+| B14 | Object tracking and reunification (conditional: `OPENEOC_INTEGRATIONS=tracking`) | T2, T5 | disclosure of restricted person data, custody-event forgery, cross-jurisdiction search | routes absent by default; jurisdiction scope enforced server-side; restricted attributes require elevated membership; custody changes are attributed and audited |
+| B15 | Facility status and HAVE exchange (conditional: `OPENEOC_INTEGRATIONS=facilities`) | T2, T6 | disclosure of HIPAA-adjacent capacity data, false status reports, stale availability | routes absent by default; jurisdiction scope enforced server-side; reports carry source and time; stale status remains explicit; exports use the authorized read path |
 
 ## Standing adversarial test policy
 
 Each session that opens a surface ships negative tests named for its row
-(B1-B13) and they run in `pnpm check` forever. VEOC-37 re-verifies the whole
+(B1-B15) and they run in `pnpm check` forever. VEOC-37 re-verifies the whole
 table adversarially before release.
 
 ## Out of scope (baseline)

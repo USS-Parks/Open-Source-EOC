@@ -34,7 +34,7 @@ beforeAll(async () => {
     select 'tracking-outsider@example.org', 'Out', password_hash from persons
     where email = 'member@example.org'`;
 
-  app = buildApp(runtime, { oidc: null });
+  app = buildApp(runtime, { oidc: null, integrations: ["tracking"] });
   await app.listen({ port: 0, host: "127.0.0.1" });
   memberToken = await tokenFor("member@example.org", "another-good-password");
   viewerToken = await tokenFor("viewer@example.org", "another-good-password");

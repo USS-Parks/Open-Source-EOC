@@ -15,7 +15,7 @@ export interface RestEndpoint {
   readonly summary: string;
   readonly auth: "bearer" | "peer-token" | "feed-token" | "intake-token" | "none";
   readonly audience: "operator" | "machine" | "system";
-  readonly integration?: "collab" | "meetings";
+  readonly integration?: "collab" | "facilities" | "meetings" | "tracking";
 }
 
 export interface WsChannel {
@@ -329,7 +329,9 @@ function routeSummary(method: RestEndpoint["method"], path: string): string {
 
 function routeIntegration(path: string): RestEndpoint["integration"] {
   if (path.includes("/collab")) return "collab";
+  if (path.includes("/facilities") || path.includes("/status-queries")) return "facilities";
   if (path.includes("/meetings") || path.includes("/briefings")) return "meetings";
+  if (path.includes("/tracked-objects") || path.includes("/reunification")) return "tracking";
   return undefined;
 }
 

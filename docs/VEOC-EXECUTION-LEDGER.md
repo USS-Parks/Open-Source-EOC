@@ -5017,3 +5017,29 @@ increment proves it and that coverage follows the incident area.
   reachable in the default product while remaining available to an explicitly
   configured deployment. No schema or dependency changed. Next: W1.4, retain
   tracking and facilities behind the same default-off integration mechanism.
+
+## V1 W1.4: keep and gate tracking and facilities
+
+- **Standing decision applied:** section 9's default is keep and gate. The
+  object tracking, reunification, facility status, status-query and HAVE
+  implementations remain intact, including their existing tests and schema.
+- **Default-off registration:** four tracking routes require
+  `OPENEOC_INTEGRATIONS=tracking`; six facility routes require
+  `OPENEOC_INTEGRATIONS=facilities`. Both use the same validated comma-separated
+  integration setting introduced in W1.3.
+- **Published contract:** the generated API catalog labels all 10 conditional
+  routes with their enabling setting. The route-table test proves exact
+  equality for the default-off and fully enabled Fastify configurations.
+- **Threat boundary:** B14 and B15 name the restricted-person, custody,
+  HIPAA-adjacent capacity, false-status and staleness risks. Both rows record
+  that their routes are absent by default and retain server-side jurisdiction,
+  attribution and authorized-export controls.
+- **Verification:** API documentation and route registration passed 3 of 3
+  focused tests. Tracking and facilities suites passed 9 of 9 tests on the
+  existing local Postgres cluster. Recursive TypeScript and full ESLint passed;
+  the license scan passed all 300 packages; the link checker passed all 65
+  Markdown files; and `git diff --check` is clean.
+- **Result:** W1.4 is complete. HIPAA and retention policy remain open inputs,
+  so these maintained engines are outside the default V1 critical path. No
+  schema or dependency changed. Next: W1.5, remove the acceptance-only Windows
+  profile from the shipped installer while retaining test-runtime access.
