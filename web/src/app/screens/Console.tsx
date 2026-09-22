@@ -273,6 +273,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         incidentId={incident.selectedIncidentId}
         incidentName={incident.selectedIncident?.name ?? null}
         incidentJurisdictionId={incident.selectedIncident?.jurisdictionId ?? null}
+        periodRevision={workspace.selectedPeriodRevision}
         operationalPeriod={workspace.selectedPeriodRevision === null ? null : workspace.selectedPeriodLabel}
         incidentCanManage={incident.selectedIncident?.canEditArea ?? false}
         incidentCanManageParticipation={incident.selectedIncident?.canManageParticipation ?? false}
@@ -367,6 +368,7 @@ function Center(props: {
   incidentId: string | null;
   incidentName: string | null;
   incidentJurisdictionId: string | null;
+  periodRevision: number | null;
   operationalPeriod: string | null;
   incidentCanManage: boolean;
   incidentCanManageParticipation: boolean;
@@ -459,12 +461,19 @@ function Center(props: {
         <FormsSurface
           client={props.client}
           incidentId={props.incidentId}
+          incidentName={props.incidentName}
+          periodRevision={props.periodRevision}
+          operationalPeriod={props.operationalPeriod}
+          onOpenIap={() => props.onNavigate({ kind: "iap" })}
           isAdmin={props.isAdmin}
         />
       );
     case "iap":
       return (
-        <IapSurface client={props.client} incidentId={props.incidentId} isAdmin={props.isAdmin} />
+        <IapSurface client={props.client} incidentId={props.incidentId} isAdmin={props.isAdmin}
+          jurisdictionId={props.jurisdictionId} incidentName={props.incidentName}
+          periodRevision={props.periodRevision} operationalPeriod={props.operationalPeriod}
+          onOpenForms={() => props.onNavigate({ kind: "forms" })} />
       );
     case "files":
       return <FilesSurface client={props.client} jurisdictionId={props.jurisdictionId} />;

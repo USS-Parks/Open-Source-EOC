@@ -4341,3 +4341,22 @@ increment proves it and that coverage follows the incident area.
   publication. No new dependency or migration. User aesthetic acceptance remains
   separate. Unit commit: this receipt's commit; rollback by revert. Seven active
   worktrees remain assigned; protected local work is preserved.
+
+## P-IAP / D24: operational planning workspace
+
+- Lane C, final baseline 32b2e4e. Plans are organized by period, organization,
+  role and stored progress. ICS-204 editing uses named supervisor authority,
+  structured tactics/resources and a frozen compare-and-swap content revision.
+  Local navigation guards unsaved drafts; rejected saves retain edits. Approved
+  plans remain immutable, with explicit successor revisions and exact-revision
+  PDF export. Prepared, submitted and approved identities/times are visible.
+- Full TypeScript and ESLint passed. The final integration passed 32 client,
+  router, AAR and real PostgreSQL/Chrome checks; the corrected DOM fixture passed
+  four tests. Logs: lanes/c/logs/iap-aar-integration.log and iap-draft-final.log
+  under deploy/test-runtime/out. The duplicate-label fixture failure is
+  superseded by its unique attributed-plan selector. Light/dark and narrow
+  captures include actual editor containment and keyboard operation.
+- Root reviewed the full diff and captures; fresh independent correction review:
+  SHIP. Evidence level: integrated on publication. No new dependency or migration.
+  User aesthetic acceptance remains separate. Unit commit: this receipt's commit;
+  rollback by revert. Seven worktrees remain assigned to active roster units.

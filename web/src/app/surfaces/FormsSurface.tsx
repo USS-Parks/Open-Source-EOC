@@ -1,224 +1,212 @@
-import { useState, type CSSProperties } from "react";
-import { ICS_FORM_IDS, type IcsFormContent } from "@openeoc/shared";
-import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../../design/components.js";
+import { useEffect, useMemo, useState } from "react";
+import { ICS_FORM_IDS, type IcsFormContent, type IncidentAreaRevision } from "@openeoc/shared";
+import { Button, EnumSelect, Panel, StatusBadge } from "../../design/components.js";
 import type { ApiClient, IapResult } from "../api/client.js";
-import { EmptyState, Scroll, SurfaceHeader } from "../screens/parts.js";
+import { useAsync } from "../data/hooks.js";
+import { EmptyState, Loading, Scroll, SurfaceHeader } from "../screens/parts.js";
+import { FORM_TITLES, FormPreview, formLabel } from "../../iap/FormPreview.js";
+import "../../iap/iap-workspace.css";
 
-/**
- * ICS forms and the IAP, for an operator (F5). The forms engine and PDF
- * export already live server-side; this is the screen that reaches them:
- * pick an incident and operational period, preview any of the twelve ICS
- * forms prefilled from live incident data, assemble the operational period's
- * IAP, download it as a PDF, and (as an admin) approve it.
- */
-
-const FORM_TITLES: Record<string, string> = {
-  "ICS-201": "Incident Briefing",
-  "ICS-202": "Incident Objectives",
-  "ICS-203": "Organization Assignment List",
-  "ICS-204": "Assignment List",
-  "ICS-205": "Incident Radio Communications Plan",
-  "ICS-206": "Medical Plan",
-  "ICS-207": "Incident Organization Chart",
-  "ICS-208": "Safety Message/Plan",
-  "ICS-211": "Incident Check-In List",
-  "ICS-213": "General Message",
-  "ICS-214": "Activity Log",
-  "ICS-215": "Operational Planning Worksheet",
-};
-
-const cell: CSSProperties = {
-  border: "1px solid var(--eoc-border)",
-  padding: "4px 8px",
-  textAlign: "left",
-  verticalAlign: "top",
-};
-
-function formLabel(id: string): string {
-  return FORM_TITLES[id] ? `${id} ${FORM_TITLES[id]}` : id;
+interface PeriodChoice {
+  readonly revision: number;
+  readonly label: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
 }
 
-/** One prefilled ICS form rendered as its sections. */
-function FormView(props: { form: IcsFormContent }) {
-  const f = props.form;
-  return (
-    <div style={{ display: "grid", gap: 12 }}>
-      <div>
-        <strong>
-          {f.id} {f.title}
-        </strong>
-        <div style={{ color: "var(--eoc-text-muted)", fontSize: "0.9em" }}>
-          {f.incidentName} · OP {f.operationalPeriod || "(unset)"} · Prepared by {f.preparedBy}
-        </div>
-      </div>
-      {f.sections.map((s, si) => (
-        <div key={si}>
-          <h4 style={{ margin: "0 0 4px" }}>{s.heading}</h4>
-          {s.columns && s.rows ? (
-            <table className="eoc-table" style={{ borderCollapse: "collapse", width: "100%" }}>
-              <thead>
-                <tr>
-                  {s.columns.map((c) => (
-                    <th key={c} style={cell}>
-                      {c}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {s.rows.length === 0 ? (
-                  <tr>
-                    <td style={{ ...cell, color: "var(--eoc-text-muted)" }} colSpan={s.columns.length}>
-                      (none recorded)
-                    </td>
-                  </tr>
-                ) : (
-                  s.rows.map((r, ri) => (
-                    <tr key={ri}>
-                      {r.map((v, ci) => (
-                        <td key={ci} style={cell}>
-                          {v}
-                        </td>
-                      ))}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          ) : null}
-          {s.lines ? (
-            <ul style={{ margin: 0, paddingLeft: 18 }}>
-              {s.lines.length === 0 ? (
-                <li style={{ listStyle: "none", color: "var(--eoc-text-muted)" }}>(none recorded)</li>
-              ) : (
-                s.lines.map((l, li) => <li key={li}>{l}</li>)
-              )}
-            </ul>
-          ) : null}
-        </div>
-      ))}
-    </div>
-  );
+function choicesFor(revisions: readonly IncidentAreaRevision[]): PeriodChoice[] {
+  const seen = new Set<number>();
+  return [...revisions]
+    .sort((a, b) => b.revision - a.revision)
+    .flatMap((revision) => {
+      if (!revision.operationalPeriod || seen.has(revision.revision)) return [];
+      seen.add(revision.revision);
+      return [{ revision: revision.revision, ...revision.operationalPeriod }];
+    });
 }
 
-export function FormsSurface(props: { client: ApiClient; incidentId: string | null; isAdmin: boolean }) {
-  const [period, setPeriod] = useState("");
+function timeRange(period: PeriodChoice): string {
+  return `${new Date(period.startsAt).toLocaleString()} to ${new Date(period.endsAt).toLocaleString()}`;
+}
+
+export interface FormsSurfaceProps {
+  readonly client: ApiClient;
+  readonly incidentId: string | null;
+  readonly incidentName?: string | null;
+  readonly periodRevision?: number | null;
+  readonly operationalPeriod?: string | null;
+  readonly isAdmin: boolean;
+  readonly onOpenIap?: () => void;
+}
+
+export function FormsSurface(props: FormsSurfaceProps) {
+  const [selectedRevision, setSelectedRevision] = useState<number | null>(props.periodRevision ?? null);
   const [formId, setFormId] = useState<string>(ICS_FORM_IDS[0]);
   const [preview, setPreview] = useState<IcsFormContent | null>(null);
   const [iap, setIap] = useState<IapResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const active = props.incidentId;
-  if (!active)
+
+  useEffect(() => {
+    setSelectedRevision(props.periodRevision ?? null);
+    setPreview(null);
+    setIap(null);
+    setError(null);
+  }, [active, props.periodRevision]);
+
+  const periods = useAsync(async () => {
+    if (!active) return [] as PeriodChoice[];
+    const [current, history] = await Promise.all([
+      props.client.getIncidentArea(active),
+      props.client.incidentAreaHistory(active),
+    ]);
+    return choicesFor([current, ...history]);
+  }, [active]);
+  const selectedPeriod = useMemo(
+    () => periods.data?.find((period) => period.revision === selectedRevision) ?? null,
+    [periods.data, selectedRevision],
+  );
+  const contextPeriodLabel = selectedPeriod?.label
+    ?? (selectedRevision === props.periodRevision ? props.operationalPeriod : null)
+    ?? (selectedRevision ? `Operational period revision ${selectedRevision}` : "No operational period selected");
+
+  if (!active) {
     return (
       <EmptyState
         label="No incident selected."
-        hint="Choose an incident in the command bar; its ICS forms and IAP assemble from live data here."
+        hint="Choose an incident and an authoritative operational period before assembling ICS forms."
       />
     );
+  }
 
-  const run = async (fn: () => Promise<void>) => {
+  async function run(action: () => Promise<void>) {
     setBusy(true);
     setError(null);
     try {
-      await fn();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      await action();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
       setBusy(false);
     }
-  };
+  }
 
-  const doPreview = () =>
-    run(async () => {
-      setPreview(await props.client.getIcsForm(active, formId, period));
-    });
-  const doAssemble = () =>
-    run(async () => {
-      const op = period || "OP 1";
-      const r = await props.client.createIap(active, { operationalPeriod: op });
-      setIap({ id: r.id, status: "draft", operationalPeriod: op, content: r.content });
-    });
-  const doApprove = () =>
-    run(async () => {
-      if (!iap) return;
-      await props.client.approveIap(iap.id);
-      setIap({ ...iap, status: "approved" });
-    });
-  const doDownload = () =>
-    run(async () => {
-      if (!iap) return;
-      const blob = await props.client.downloadIapPdf(iap.id);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `iap-${iap.operationalPeriod.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "op"}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    });
+  function selectPeriod(value: string) {
+    setSelectedRevision(value ? Number(value) : null);
+    setPreview(null);
+    setIap(null);
+    setError(null);
+  }
 
   return (
     <Scroll>
-      <SurfaceHeader title="ICS Forms & IAP" />
-      <div style={{ display: "grid", gap: 16, maxWidth: 920 }}>
-        <Panel title="Build">
-          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
-            <TextField label="Operational period" value={period} onChange={setPeriod} />
-            <EnumSelect
-              label="ICS form"
-              values={ICS_FORM_IDS as readonly string[]}
-              value={formId}
-              onChange={setFormId}
-              labels={FORM_TITLES}
-            />
-          </div>
-          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-            <Button onClick={doPreview} disabled={busy}>
-              Preview form
-            </Button>
-            <Button kind="primary" onClick={doAssemble} disabled={busy}>
-              Assemble IAP
-            </Button>
-          </div>
-          {error ? (
-            <p role="alert" style={{ color: "var(--eoc-status-critical)", margin: "8px 0 0" }}>
-              {error}
+      <SurfaceHeader
+        title="ICS Forms and IAP Assembly"
+        actions={props.onOpenIap ? <Button onClick={props.onOpenIap}>Open IAP workspace</Button> : undefined}
+      />
+      <div className="iap-forms-workspace">
+        <div className="iap-context" aria-label="ICS form context">
+          <strong>{props.incidentName ?? "Selected incident"}</strong>
+          <span>Incident {active}</span>
+          <span>{contextPeriodLabel}</span>
+          {selectedRevision ? <span>Area revision {selectedRevision}</span> : null}
+        </div>
+
+        <Panel title="Authoritative planning period">
+          {periods.loading && !periods.data ? <Loading label="Loading operational periods…" /> : null}
+          {periods.error ? <p role="alert" className="iap-error">{periods.error}</p> : null}
+          <label className="iap-field">
+            <span>Operational period revision</span>
+            <select value={selectedRevision ?? ""} onChange={(event) => selectPeriod(event.target.value)}>
+              <option value="">Select an operational period</option>
+              {(periods.data ?? []).map((period) => (
+                <option key={period.revision} value={period.revision}>
+                  {period.label} · area revision {period.revision}
+                </option>
+              ))}
+            </select>
+          </label>
+          {selectedPeriod ? (
+            <p className="iap-muted">
+              <strong>{selectedPeriod.label}</strong> · {timeRange(selectedPeriod)}
             </p>
-          ) : null}
+          ) : (
+            <p className="iap-period-empty">
+              Select a recorded operational period. The workspace does not create an inferred period label.
+            </p>
+          )}
+        </Panel>
+
+        <Panel title="Build from live incident records">
+          <EnumSelect
+            label="ICS form"
+            values={ICS_FORM_IDS as readonly string[]}
+            value={formId}
+            onChange={(value) => {
+              setFormId(value);
+              setPreview(null);
+            }}
+            labels={FORM_TITLES}
+          />
+          <div className="iap-actions">
+            <Button
+              onClick={() => void run(async () => {
+                if (!selectedPeriod) throw new Error("Select an authoritative operational period first.");
+                setPreview(await props.client.getIcsForm(active, formId, selectedPeriod.label));
+              })}
+              disabled={busy || !selectedPeriod}
+            >
+              Preview selected form
+            </Button>
+            <Button
+              kind="primary"
+              onClick={() => void run(async () => {
+                if (!selectedPeriod) throw new Error("Select an authoritative operational period first.");
+                const created = await props.client.createIap(active, {
+                  operationalPeriod: selectedPeriod.label,
+                  periodRevision: selectedPeriod.revision,
+                });
+                setIap({
+                  id: created.id,
+                  status: "draft",
+                  operationalPeriod: selectedPeriod.label,
+                  content: created.content,
+                });
+              })}
+              disabled={busy || !selectedPeriod}
+            >
+              Assemble draft IAP
+            </Button>
+          </div>
+          <p className="iap-muted">
+            Assembly creates a draft snapshot. Submission, approval, revisions, and exact-revision export are handled in the IAP workspace.
+          </p>
+          {error ? <p role="alert" className="iap-error">{error}</p> : null}
         </Panel>
 
         {preview ? (
           <Panel title={`Preview: ${formLabel(preview.id)}`}>
-            <FormView form={preview} />
+            <FormPreview form={preview} />
           </Panel>
         ) : null}
 
         {iap ? (
-          <Panel title="Incident Action Plan">
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
-              <StatusBadge status={iap.status === "approved" ? "success" : "info"}>
-                {iap.status}
-              </StatusBadge>
-              <span style={{ color: "var(--eoc-text-muted)" }}>
-                OP {iap.operationalPeriod} · {iap.content.forms.length} forms
-              </span>
-              <span style={{ flex: 1 }} />
-              <Button onClick={doDownload} disabled={busy}>
-                Download PDF
-              </Button>
-              {props.isAdmin && iap.status !== "approved" ? (
-                <Button kind="primary" onClick={doApprove} disabled={busy}>
-                  Approve
-                </Button>
+          <Panel title="Assembled draft">
+            <div className="iap-detail">
+              <div className="iap-detail-heading">
+                <h2>{iap.operationalPeriod}</h2>
+                <StatusBadge status="info">Draft</StatusBadge>
+              </div>
+              <p className="iap-muted">
+                {iap.content.forms.length} stored forms · Incident {props.incidentName ?? active}
+              </p>
+              {props.onOpenIap ? (
+                <Button kind="primary" onClick={props.onOpenIap}>Review draft in IAP workspace</Button>
               ) : null}
-            </div>
-            <div style={{ display: "grid", gap: 20 }}>
-              {iap.content.forms.map((f) => (
-                <FormView key={f.id} form={f} />
-              ))}
+              <div className="iap-form-tabs" role="list" aria-label="Assembled forms">
+                {iap.content.forms.map((form) => <span key={form.id}>{form.id}</span>)}
+              </div>
             </div>
           </Panel>
         ) : null}

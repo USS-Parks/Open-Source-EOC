@@ -6,6 +6,10 @@ import type {
   SitrepRow,
   IcsFormContent,
   IapDocument,
+  IapWorkspaceQuery,
+  IapWorkspaceResponse,
+  Ics204Assignment,
+  Ics204AssignedResource,
   FormDefinition,
   IncidentAreaRevision,
   IncidentAreaUpdate,
@@ -313,10 +317,29 @@ export interface IapListItem {
 }
 export interface CreateIapBody {
   readonly operationalPeriod: string;
+  readonly periodRevision?: number;
   readonly objectives?: readonly string[];
   readonly preparedBy?: string;
   readonly safetyMessage?: string;
   readonly formIds?: readonly string[];
+}
+export interface Ics204AssignmentInput {
+  readonly id?: string;
+  readonly name: string;
+  readonly supervisor: WorkflowAssignmentRequest;
+  readonly tactics: readonly string[];
+  readonly resources: readonly Ics204AssignedResource[];
+}
+export interface IapRevisionSummary {
+  readonly id: string;
+  readonly revisionNumber: number;
+  readonly contentRevision: number;
+  readonly status: string;
+  readonly supersedesIapId: string | null;
+  readonly createdAt: string;
+  readonly preparedBy: string | null;
+  readonly approvedBy: string | null;
+  readonly approvedAt: string | null;
 }
 export interface SearchHit {
   readonly kind: "record" | "library" | "file" | "chronology";
@@ -1114,6 +1137,26 @@ export class ApiClient {
   }
   getIap(iapId: string): Promise<IapResult> {
     return this.request<IapResult>("GET", `/api/v1/iap/${iapId}`);
+  }
+  queryIapWorkspace(incidentId: string, query: IapWorkspaceQuery): Promise<IapWorkspaceResponse> {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined) params.set(key, String(value));
+    }
+    return this.request<IapWorkspaceResponse>("GET", `/api/v1/incidents/${incidentId}/iaps?${params}`);
+  }
+  replaceIcs204Assignments(iapId: string, body: { expectedContentRevision: number; assignments: readonly Ics204AssignmentInput[] }): Promise<{ contentRevision: number; assignments: readonly Ics204Assignment[] }> {
+    return this.request("PUT", `/api/v1/iap/${iapId}/ics-204`, body);
+  }
+  createIapRevision(iapId: string, body: { assignments: readonly Ics204AssignmentInput[] }): Promise<{ id: string; revisionNumber: number; contentRevision: number }> {
+    return this.request("POST", `/api/v1/iap/${iapId}/revisions`, body);
+  }
+  async listIapRevisions(iapId: string): Promise<IapRevisionSummary[]> {
+    const result = await this.request<{ revisions: IapRevisionSummary[] }>("GET", `/api/v1/iap/${iapId}/revisions`);
+    return result.revisions;
+  }
+  downloadIapRevisionPdf(iapId: string, revisionNumber: number): Promise<Blob> {
+    return this.requestBlob(`/api/v1/iap/${iapId}/revisions/${revisionNumber}/pdf`);
   }
   submitIap(iapId: string): Promise<{ ok: true }> {
     return this.request<{ ok: true }>("POST", `/api/v1/iap/${iapId}/submit`);
