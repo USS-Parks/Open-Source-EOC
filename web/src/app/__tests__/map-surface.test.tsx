@@ -65,6 +65,7 @@ it("places a point from validated WGS84 coordinates with the keyboard", async ()
       id: "roads",
       title: "Road Closures",
       role: "member",
+      canContribute: true,
       fields: [{ key: "location", label: "Location", type: "geometry", geometryKind: "point" }],
       views: [],
     }),

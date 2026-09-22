@@ -4231,3 +4231,29 @@ increment proves it and that coverage follows the incident area.
 - Live NFHL/ACS, statewide damage costs, the full NAPSG catalog and operational
   vector tiles are not claimed. Final application and external readiness gates
   remain in the Master PSPR. Unit commit: this receipt's commit.
+
+## P-BOARDS-1: operational board and record workspaces
+
+- Serves D18 and VEOC-81A runtime presentation; lane D, baseline 48edf63.
+  Board views now use the shared operational table with saved views, filters,
+  selection and detail navigation. Record forms consume configured layouts,
+  conditional fields, calculations, related records and attachment references.
+  Record detail exposes readable values and attributed immutable history.
+- Incident readers receive field-masked metadata and history. Owner admins
+  retain their field authority; external participants remain member-scoped.
+  Closed incidents reject new and changed records. Unchanged saves emit neither
+  audit updates, notifications nor websocket events.
+- Migration 0097 attributes new incident record audit to the board owner and
+  permits only corroborated legacy partner-created receipts to remain readable
+  after actor revocation. It does not rewrite audit or widen unrelated access.
+- Full TypeScript and ESLint passed. Seven focused suites passed 49 tests across
+  bounded runs; the final database/browser correction passed 10 tests in two
+  suites. Logs: lanes/d/logs/completion-focused-gate.log,
+  board-authority-final.log and boards-noop-legacy-gate.log under test-runtime/out.
+  Actual Chrome/PostgreSQL captures cover light/dark, narrow detail and keyboard
+  use. Root inspected the full diff and captures; fresh correction review: SHIP.
+- Rebase onto the published map and ESF work merged additively; all TypeScript,
+  affected lint and 28 client/map/record-context tests passed afterward. No new
+  dependency. Evidence level: integrated on publication. User aesthetic
+  acceptance remains separate. Unit commit: this receipt's commit; revert for
+  rollback. Seven worktrees remain assigned to active roster units.

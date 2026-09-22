@@ -42,6 +42,7 @@ import type {
   DashboardFilterSet,
   WidgetFilter,
   ViewportBbox,
+  FormLayout,
 } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
 
@@ -159,8 +160,27 @@ export interface EffectiveBoardResponse {
   readonly templateKey: string;
   readonly templateVersion: number;
   readonly role: "admin" | "member" | "viewer" | "guest";
+  readonly canContribute: boolean;
   readonly fields: readonly FieldDef[];
   readonly views: readonly ViewDef[];
+  readonly inputLayout?: FormLayout;
+  readonly detailLayout?: FormLayout;
+}
+export interface RecordReferenceOption { readonly id: string; readonly label: string; readonly boardId: string }
+export interface BoardRecordActor {
+  readonly personId: string; readonly displayName: string;
+  readonly positionId: string | null; readonly positionTitle: string | null;
+}
+export interface BoardRecordHistoryEntry {
+  readonly id: string; readonly at: string; readonly category: string;
+  readonly actor: BoardRecordActor; readonly payload: Record<string, unknown>;
+  readonly corrects: string | null;
+}
+export interface BoardRecordDetailResponse {
+  readonly id: string; readonly incidentId: string | null; readonly data: ViewRecord;
+  readonly createdAt: string; readonly createdBy: BoardRecordActor;
+  readonly updatedAt: string; readonly updatedBy: BoardRecordActor | null;
+  readonly canEdit: boolean; readonly history: readonly BoardRecordHistoryEntry[];
 }
 export interface ViewRecordsResponse {
   readonly view: string;
@@ -475,14 +495,27 @@ export class ApiClient {
       `/api/v1/ogc/collections/${boardId}/items`,
     );
   }
-  getBoard(boardId: string): Promise<EffectiveBoardResponse> {
-    return this.request<EffectiveBoardResponse>("GET", `/api/v1/boards/${boardId}`);
+  getBoard(boardId: string, incidentId?: string | null): Promise<EffectiveBoardResponse> {
+    return this.request<EffectiveBoardResponse>("GET", `/api/v1/boards/${boardId}${incidentId ? `?incidentId=${encodeURIComponent(incidentId)}` : ""}`);
   }
   boardView(boardId: string, viewKey: string, incidentId?: string): Promise<ViewRecordsResponse> {
     return this.request<ViewRecordsResponse>(
       "GET",
       `/api/v1/boards/${boardId}/views/${viewKey}${incidentId ? `?incidentId=${encodeURIComponent(incidentId)}` : ""}`,
     );
+  }
+  updateRecord(boardId: string, recordId: string, patch: Record<string, unknown>, incidentId?: string | null): Promise<{ ok: true }> {
+    return this.request("PATCH", `/api/v1/boards/${encodeURIComponent(boardId)}/records/${encodeURIComponent(recordId)}${incidentId ? `?incidentId=${encodeURIComponent(incidentId)}` : ""}`, patch);
+  }
+  async recordReferenceOptions(boardId: string, fieldKey: string, incidentId: string, options: { after?: string; limit?: number } = {}): Promise<readonly RecordReferenceOption[]> {
+    const query = new URLSearchParams({ incidentId });
+    if (options.after) query.set("after", options.after);
+    if (options.limit !== undefined) query.set("limit", String(options.limit));
+    const result = await this.request<{ options: RecordReferenceOption[] }>("GET", `/api/v1/boards/${encodeURIComponent(boardId)}/record-references/${encodeURIComponent(fieldKey)}?${query}`);
+    return result.options;
+  }
+  boardRecordDetail(boardId: string, recordId: string, incidentId?: string | null): Promise<BoardRecordDetailResponse> {
+    return this.request("GET", `/api/v1/boards/${encodeURIComponent(boardId)}/records/${encodeURIComponent(recordId)}/detail${incidentId ? `?incidentId=${encodeURIComponent(incidentId)}` : ""}`);
   }
   createRecord(
     boardId: string,

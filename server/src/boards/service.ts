@@ -10,12 +10,14 @@ import {
   type BoardTemplate,
   type FieldDef,
   type FormLayout,
+  type ViewDef,
 } from "@openeoc/shared";
+import { isDeepStrictEqual } from "node:util";
 import { verifyPackage } from "./package.js";
 import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
-import { getIncidentAuthority } from "../incidents/participation.js";
+import { getIncidentAuthority, lockIncidentMutation } from "../incidents/participation.js";
 
 export type BoardRole = "admin" | "member" | "viewer" | "guest";
 
@@ -182,6 +184,21 @@ export async function getIncidentBoardReadShape(
   return { ...shape, role: membership ? membership.role as BoardRole : "member" };
 }
 
+export async function getBoardReadShape(
+  sql: Sql,
+  actor: Principal,
+  boardId: string,
+  incidentId?: string,
+): Promise<{ board: EffectiveBoard; canContribute: boolean }> {
+  if (!incidentId) {
+    const board = await getEffectiveBoard(sql, actor, boardId);
+    return { board, canContribute: board.role === "admin" || board.role === "member" };
+  }
+  const authority = await getIncidentAuthority(sql, actor, incidentId);
+  const board = await getIncidentBoardReadShape(sql, actor, incidentId, boardId);
+  return { board, canContribute: authority.canContribute };
+}
+
 export async function getEffectiveBoard(
   sql: Sql,
   actor: Principal,
@@ -282,6 +299,7 @@ export interface RecordWriteResult {
   readonly previous?: Record<string, unknown> | undefined;
   readonly boardKey: string;
   readonly jurisdictionId: string;
+  readonly changed: boolean;
 }
 
 export async function createRecord(
@@ -291,9 +309,7 @@ export async function createRecord(
   data: Record<string, unknown>,
   incidentId?: string,
 ): Promise<RecordWriteResult> {
-  await lockBoardMutation(sql, boardId);
   let board: EffectiveBoard;
-  let participantOrg: string | undefined;
   if (incidentId) {
     // Incident contribution (VEOC-79B1): a contributor participant, or an
     // owner writer, adds a record to a board the incident uses. Source
@@ -302,13 +318,16 @@ export async function createRecord(
     // participant acts as a non-admin writer, so admin-only fields stay closed.
     const authority = await getIncidentAuthority(sql, actor, incidentId);
     if (!authority.canContribute) throw new AuthError(403, "requires incident contributor");
+    await lockIncidentMutation(sql, incidentId);
+    await requireOpenIncident(sql, incidentId);
+    await lockBoardMutation(sql, boardId);
     const [attached] = await sql`
       select 1 as ok from incident_boards
       where incident_id = ${incidentId} and board_id = ${boardId}`;
     if (!attached) throw new AuthError(400, "board is not part of this incident");
-    participantOrg = authority.participation?.organizationId;
-    board = { ...(await loadBoardShape(sql, boardId)), role: "member" };
+    board = await getIncidentBoardReadShape(sql, actor, incidentId, boardId);
   } else {
+    await lockBoardMutation(sql, boardId);
     const effective = await getEffectiveBoard(sql, actor, boardId);
     requireWriter(effective.role);
     board = effective;
@@ -324,21 +343,16 @@ export async function createRecord(
             ${incidentId ?? null})
     returning id`;
   const id = row!.id as string;
-  // Attribute the audit to a jurisdiction the actor belongs to: the board's
-  // owner when the actor is a member, otherwise the contributing partner's own
-  // organization, so the audit membership wall never rejects the write.
-  const isOwnerMember = actor.memberships.some((m) => m.jurisdictionId === board.jurisdictionId);
-  const auditJurisdiction =
-    isOwnerMember || !participantOrg ? board.jurisdictionId : participantOrg;
   await recordAudit(sql, actor, {
-    jurisdictionId: auditJurisdiction,
+    jurisdictionId: board.jurisdictionId,
     ...(incidentId ? { incidentId } : {}),
     category: "board.record.created",
     subjectTable: "board_records",
     subjectId: id,
     payload: { board: board.template.key, data: parsed },
   });
-  return { id, data: parsed, boardKey: board.template.key, jurisdictionId: board.jurisdictionId };
+  return { id, data: parsed, boardKey: board.template.key,
+    jurisdictionId: board.jurisdictionId, changed: true };
 }
 
 export async function updateRecord(
@@ -347,13 +361,33 @@ export async function updateRecord(
   boardId: string,
   recordId: string,
   patch: Record<string, unknown>,
+  incidentId?: string,
 ): Promise<RecordWriteResult> {
+  const [scope] = await sql`
+    select incident_id from board_records where id = ${recordId} and board_id = ${boardId}
+      and (${incidentId ?? null}::uuid is null or incident_id = ${incidentId ?? null})`;
+  if (!scope) throw new AuthError(404, "record not found");
+  const recordIncidentId = scope.incident_id as string | null;
+  if (incidentId) {
+    const authority = await getIncidentAuthority(sql, actor, incidentId);
+    if (!authority.canContribute) throw new AuthError(403, "requires incident contributor");
+  }
+  if (recordIncidentId) {
+    await lockIncidentMutation(sql, recordIncidentId);
+    await requireOpenIncident(sql, recordIncidentId);
+  }
   await lockBoardMutation(sql, boardId);
-  const board = await getEffectiveBoard(sql, actor, boardId);
-  requireWriter(board.role);
+  let board: EffectiveBoard;
+  if (incidentId) {
+    board = await getIncidentBoardReadShape(sql, actor, incidentId, boardId);
+  } else {
+    board = await getEffectiveBoard(sql, actor, boardId);
+    requireWriter(board.role);
+  }
   checkFieldWrites(board, Object.keys(patch));
   const [existing] = await sql`
-    select data, incident_id from board_records where id = ${recordId} and board_id = ${boardId}`;
+    select data, incident_id from board_records where id = ${recordId} and board_id = ${boardId}
+      and (${incidentId ?? null}::uuid is null or incident_id = ${incidentId ?? null})`;
   if (!existing) throw new AuthError(404, "record not found");
   const previous = existing.data as Record<string, unknown>;
   const merged = { ...previous, ...patch };
@@ -364,7 +398,16 @@ export async function updateRecord(
   const parsed = buildRecordSchema(board.fields).parse(declared);
   const legacy = Object.fromEntries(Object.entries(previous).filter(([key]) => !accepted.has(key)));
   const persisted = { ...legacy, ...parsed };
-  await validateRecordReferences(sql, actor, board, parsed, existing.incident_id as string | undefined);
+  if ((existing.incident_id as string | null) !== recordIncidentId)
+    throw new AuthError(409, "record incident scope changed during update");
+  await validateRecordReferences(sql, actor, board, parsed, recordIncidentId ?? undefined);
+  const actualPatch = Object.fromEntries(Object.keys(patch)
+    .filter((key) => !isDeepStrictEqual(previous[key], persisted[key]))
+    .map((key) => [key, persisted[key]]));
+  if (Object.keys(actualPatch).length === 0) {
+    return { id: recordId, data: persisted, previous, boardKey: board.template.key,
+      jurisdictionId: board.jurisdictionId, changed: false };
+  }
   await sql`
     update board_records
     set data = ${sql.json(persisted as never)}, updated_by = ${actor.person.id},
@@ -372,10 +415,11 @@ export async function updateRecord(
     where id = ${recordId}`;
   await recordAudit(sql, actor, {
     jurisdictionId: board.jurisdictionId,
+    ...(recordIncidentId ? { incidentId: recordIncidentId } : {}),
     category: "board.record.updated",
     subjectTable: "board_records",
     subjectId: recordId,
-    payload: { board: board.template.key, patch },
+    payload: { board: board.template.key, patch: actualPatch },
   });
   return {
     id: recordId,
@@ -383,6 +427,72 @@ export async function updateRecord(
     previous,
     boardKey: board.template.key,
     jurisdictionId: board.jurisdictionId,
+    changed: true,
+  };
+}
+
+async function requireOpenIncident(sql: Sql, incidentId: string): Promise<void> {
+  const [incident] = await sql`select closed_at from incidents where id = ${incidentId}`;
+  if (!incident) throw new AuthError(404, "incident not found");
+  if (incident.closed_at) throw new AuthError(409, "incident is closed");
+}
+
+/** Read one record and its attributed history through the same field boundary
+ * as its board view. Audit payloads expose changed field names, never raw data. */
+export async function getBoardRecordDetail(
+  sql: Sql, actor: Principal, boardId: string, recordId: string, incidentId?: string,
+) {
+  const shape = await getBoardReadShape(sql, actor, boardId, incidentId);
+  const board = shape.board;
+  const [row] = await sql`
+    select r.*, creator.display_name as creator_name, creator_pos.title as creator_position,
+           updater.display_name as updater_name
+    from board_records r
+    join persons creator on creator.id = r.created_by
+    left join positions creator_pos on creator_pos.id = r.created_by_position
+    left join persons updater on updater.id = r.updated_by
+    where r.id = ${recordId} and r.board_id = ${boardId}
+      and (${incidentId ?? null}::uuid is null or r.incident_id = ${incidentId ?? null})`;
+  if (!row) throw new AuthError(404, "record not found in this view");
+  const readable = new Set(visibleFields(board).map((field) => field.key));
+  const values = deriveRecordValues(board.fields, row.data as Record<string, unknown>);
+  const data = Object.fromEntries(Object.entries(values).filter(([key]) => readable.has(key)));
+  const events = await sql`
+    select e.id, e.created_at, e.category, e.payload, e.corrects, e.person_id,
+           e.position_id, p.display_name, pos.title as position_title
+    from audit_events e
+    join persons p on p.id = e.person_id
+    left join positions pos on pos.id = e.position_id
+    where (e.subject_table = 'board_records' and e.subject_id = ${recordId})
+       or e.corrects in (select original.id from audit_events original
+          where original.subject_table = 'board_records' and original.subject_id = ${recordId})
+    order by e.seq`;
+  const history = events.map((event) => {
+    const payload = event.payload as Record<string, unknown>;
+    const changed = payload.patch ?? payload.data;
+    const fields = changed && typeof changed === "object" && !Array.isArray(changed)
+      ? Object.keys(changed).filter((key) => readable.has(key)) : [];
+    return {
+      id: event.id as string, at: new Date(event.created_at as string).toISOString(),
+      category: event.category as string, corrects: event.corrects as string | null,
+      actor: { personId: event.person_id as string, displayName: event.display_name as string,
+        positionId: event.position_id as string | null, positionTitle: event.position_title as string | null },
+      payload: { fields },
+    };
+  });
+  const latestUpdate = [...history].reverse().find((event) =>
+    event.category === "board.record.updated" && event.actor.personId === row.updated_by);
+  return {
+    id: row.id as string, incidentId: row.incident_id as string | null,
+    data: { ...data, id: row.id as string },
+    createdAt: new Date(row.created_at as string).toISOString(),
+    createdBy: { personId: row.created_by as string, displayName: row.creator_name as string,
+      positionId: row.created_by_position as string | null, positionTitle: row.creator_position as string | null },
+    updatedAt: new Date((row.updated_at ?? row.created_at) as string).toISOString(),
+    updatedBy: row.updated_by ? { personId: row.updated_by as string, displayName: row.updater_name as string,
+      positionId: latestUpdate?.actor.positionId ?? null, positionTitle: latestUpdate?.actor.positionTitle ?? null } : null,
+    canEdit: shape.canContribute,
+    history,
   };
 }
 
@@ -519,6 +629,19 @@ export function visibleLayout(board: EffectiveBoard, layout: FormLayout | undefi
     .map((section) => ({ ...section, fields: section.fields.filter((key) => readable.has(key)) }))
     .filter((section) => section.fields.length > 0);
   return sections.length ? { sections } : undefined;
+}
+
+/** Project view metadata through the same readable-field boundary as rows. */
+export function visibleViews(board: EffectiveBoard): ViewDef[] {
+  const readable = new Set(visibleFields(board).map((field) => field.key));
+  return board.template.views.flatMap((view) => {
+    const columns = view.columns.filter((key) => readable.has(key));
+    if (columns.length === 0) return [];
+    const filter = view.filter.filter((item) => readable.has(item.field));
+    const { sort, ...metadata } = view;
+    const visibleSort = sort && readable.has(sort.field) ? sort : undefined;
+    return [{ ...metadata, columns, filter, ...(visibleSort ? { sort: visibleSort } : {}) }];
+  });
 }
 
 export interface RecordReferenceOption {

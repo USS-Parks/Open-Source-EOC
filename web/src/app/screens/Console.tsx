@@ -18,7 +18,7 @@ import { parseRouteHash, sectionOf, useSurface, type RouteContext, type Surface 
 import { EmptyState, ErrorNote, Loading, NotFoundState, UnavailableState } from "./parts.js";
 import { MapSurface } from "../surfaces/MapSurface.js";
 import { DashboardSurface, parseDashboardViewState, type DashboardViewState } from "../surfaces/DashboardSurface.js";
-import { BoardSurface, type BoardRecordContext } from "../surfaces/BoardSurface.js";
+import { BoardSurface, BoardRecordDetailPane, type BoardRecordContext } from "../surfaces/BoardSurface.js";
 import { SitrepSurface } from "../surfaces/SitrepSurface.js";
 import { FormsSurface } from "../surfaces/FormsSurface.js";
 import { IapSurface } from "../surfaces/IapSurface.js";
@@ -175,11 +175,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
           {recordContext?.status === "loading" || !recordContext ? <p>Loading record context…</p> : null}
           {recordContext?.status === "missing" ? <p role="status">Record unavailable in this view</p> : null}
           {recordContext?.status === "ready" ? (
-            <dl className="eoc-shell-record-context">
-              {Object.entries(recordContext.record).map(([key, value]) => (
-                <div key={key}><dt>{key}</dt><dd>{formatRecordValue(value)}</dd></div>
-              ))}
-            </dl>
+            <BoardRecordDetailPane context={recordContext} />
           ) : null}
         </section>
       ) : null}
@@ -430,6 +426,7 @@ function Center(props: {
       return <BoardsIndex boards={props.boards} onOpen={props.onOpenBoard} />;
     case "board":
       return <BoardSurface client={props.client} boardId={s.id} incidentId={props.incidentId}
+        incidentScoped={props.incidentBoardIds.has(s.id)}
         {...(props.recordId ? { recordId: props.recordId } : {})} onRecordContext={props.onRecordContext} />;
     case "sitreps":
       return (
@@ -577,13 +574,6 @@ function pageFor(surface: Surface, scope: string): { readonly page: ShellPage; r
 
 function formatTime(value: Date) {
   return value.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
-function formatRecordValue(value: unknown): string {
-  if (value === null || value === undefined || value === "") return "Unavailable";
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
 }
 
 const dockHeading = { margin: "0 0 8px", fontSize: "1em" } as const;

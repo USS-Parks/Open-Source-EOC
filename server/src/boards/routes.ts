@@ -9,7 +9,8 @@ import {
   addLocalField,
   createBoard,
   createRecord,
-  getEffectiveBoard,
+  getBoardReadShape,
+  getBoardRecordDetail,
   getTemplateVersion,
   importTemplatePackage,
   listBoards,
@@ -21,6 +22,7 @@ import {
   upgradeBoard,
   visibleFields,
   visibleLayout,
+  visibleViews,
 } from "./service.js";
 import {
   approveWorkflowTransition,
@@ -123,17 +125,20 @@ export function boardRoutes(
 
   app.get("/api/v1/boards/:boardId", { preHandler: authenticate }, async (req, reply) => {
     const { boardId } = req.params as { boardId: string };
-    const board = await withPerson(sql, req.principal.person.id, (tx) =>
-      getEffectiveBoard(tx, req.principal, boardId),
+    const { incidentId } = z.object({ incidentId: z.string().uuid().optional() }).strict().parse(req.query);
+    const shape = await withPerson(sql, req.principal.person.id, (tx) =>
+      getBoardReadShape(tx, req.principal, boardId, incidentId),
     );
+    const { board } = shape;
     return reply.send({
       id: board.id,
       title: board.title,
       templateKey: board.template.key,
       templateVersion: board.template.version,
       role: board.role,
+      canContribute: shape.canContribute,
       fields: visibleFields(board),
-      views: board.template.views,
+      views: visibleViews(board),
       inputLayout: visibleLayout(board, board.template.inputLayout),
       detailLayout: visibleLayout(board, board.template.detailLayout),
     });
@@ -183,26 +188,36 @@ export function boardRoutes(
     return reply.status(201).send({ id: result.id });
   });
 
+  app.get("/api/v1/boards/:boardId/records/:recordId/detail", { preHandler: authenticate }, async (req) => {
+    const { boardId, recordId } = z.object({ boardId: z.string().uuid(), recordId: z.string().uuid() }).parse(req.params);
+    const { incidentId } = z.object({ incidentId: z.string().uuid().optional() }).strict().parse(req.query);
+    return withPerson(sql, req.principal.person.id, (tx) =>
+      getBoardRecordDetail(tx, req.principal, boardId, recordId, incidentId));
+  });
+
   app.patch(
     "/api/v1/boards/:boardId/records/:recordId",
     { preHandler: authenticate },
     async (req, reply) => {
       const { boardId, recordId } = req.params as { boardId: string; recordId: string };
+      const { incidentId } = z.object({ incidentId: z.string().uuid().optional() }).strict().parse(req.query);
       const patch = RecordBody.parse(req.body);
       const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        updateRecord(tx, req.principal, boardId, recordId, patch),
+        updateRecord(tx, req.principal, boardId, recordId, patch, incidentId),
       );
-      const event: BoardEvent = {
-        jurisdictionId: result.jurisdictionId,
-        boardId,
-        boardKey: result.boardKey,
-        recordId,
-        event: "record.updated",
-        record: result.data,
-        previous: result.previous,
-      };
-      await notifyBoardEvent(sql, req.principal, event);
-      publishBoardEvent(event);
+      if (result.changed) {
+        const event: BoardEvent = {
+          jurisdictionId: result.jurisdictionId,
+          boardId,
+          boardKey: result.boardKey,
+          recordId,
+          event: "record.updated",
+          record: result.data,
+          previous: result.previous,
+        };
+        await notifyBoardEvent(sql, req.principal, event);
+        publishBoardEvent(event);
+      }
       return reply.send({ ok: true });
     },
   );

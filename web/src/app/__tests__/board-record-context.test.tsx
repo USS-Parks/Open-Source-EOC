@@ -5,6 +5,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApiClient } from "../api/client.js";
 import { BoardSurface, type BoardRecordContext } from "../surfaces/BoardSurface.js";
 
+vi.mock("../auth/session.js", () => ({
+  useSession: () => ({
+    me: { person: { id: "person-1" } },
+    jurisdictionId: "jurisdiction-1",
+  }),
+}));
+vi.mock("../router.js", () => ({
+  useSurface: () => ({ routeContext: {}, navigate: vi.fn() }),
+}));
+
 const template = STANDARD_TEMPLATES.find((candidate) => candidate.key === "shelters")!;
 const records = [
   { id: "record-1", name: "Hoopa High Gym", status: "normal", capacity: 150, occupancy: 112 },
@@ -19,6 +29,7 @@ function client(): ApiClient {
       templateKey: template.key,
       templateVersion: template.version,
       role: "member",
+      canContribute: true,
       fields: template.fields,
       views: template.views,
     }),
@@ -27,6 +38,21 @@ function client(): ApiClient {
       columns: template.views[0]!.columns,
       records: incidentId ? records.slice(0, 1) : records,
     })),
+    boardRecordDetail: vi.fn((_boardId: string, recordId: string, incidentId?: string | null) => {
+      const record = incidentId ? records.find((candidate) => candidate.id === recordId && recordId === "record-1") : null;
+      if (!record) return Promise.reject(new Error("Record unavailable in this view"));
+      return Promise.resolve({
+        id: recordId,
+        incidentId,
+        data: record,
+        createdAt: "2026-09-21T12:00:00.000Z",
+        createdBy: { personId: "person-1", displayName: "Operator", positionId: null, positionTitle: null },
+        updatedAt: "2026-09-21T12:00:00.000Z",
+        updatedBy: null,
+        canEdit: true,
+        history: [],
+      });
+    }),
   } as unknown as ApiClient;
 }
 
@@ -38,17 +64,17 @@ describe("BoardSurface record context seam", () => {
     const api = client();
     const view = render(
       <BoardSurface client={api} boardId="board-1" incidentId="incident-1"
-        recordId="record-1" onRecordContext={onRecordContext} />,
+        incidentScoped recordId="record-1" onRecordContext={onRecordContext} />,
     );
-    await waitFor(() => expect(onRecordContext).toHaveBeenCalledWith({
+    await waitFor(() => expect(onRecordContext).toHaveBeenCalledWith(expect.objectContaining({
       status: "ready",
       record: expect.objectContaining({ id: "record-1", name: "Hoopa High Gym" }),
-    }));
+    })));
     expect(api.boardView).toHaveBeenCalledWith("board-1", template.views[0]!.key, "incident-1");
 
     view.rerender(
       <BoardSurface client={api} boardId="board-1" incidentId="incident-1"
-        recordId="record-2" onRecordContext={onRecordContext} />,
+        incidentScoped recordId="record-2" onRecordContext={onRecordContext} />,
     );
     await waitFor(() => expect(onRecordContext).toHaveBeenLastCalledWith({ status: "missing" }));
   });

@@ -69,7 +69,7 @@ describe("RecordForm (input view)", () => {
     fireEvent.change(screen.getByLabelText("Category"), { target: { value: "damage" } });
     const file = new File(["x"], "photo.jpg", { type: "image/jpeg" });
     fireEvent.change(screen.getByLabelText("Photo"), { target: { files: [file] } });
-    await screen.findByText("attached ✓", { exact: false });
+    await screen.findByText("Attached", { exact: true });
     fireEvent.click(screen.getByText("Save record"));
     expect(onUpload).toHaveBeenCalled();
     expect(onSubmit).toHaveBeenCalledWith(
