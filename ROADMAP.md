@@ -1,5 +1,20 @@
 # Roadmap
 
+## Geographic reference milestone, 2026-09-21 (H15)
+
+The final COP carries local flood references, loaded-source impact analysis,
+viewport KPIs, the agreed NAPSG subset and exact-lineage Overture enrichment.
+PostgreSQL and MapLibre/Chrome evidence covers both themes, wide and narrow
+layouts, source drilldowns, attribution, unknown coverage and counts beyond
+the client feature cap. H15 closes the geographic milestone for delivered
+local sources. Live NFHL and ACS acquisition, statewide damage replacement-cost
+and parcel-roll baselines, broader NAPSG coverage and operational vector-tile
+rendering remain named gaps in the parity matrix.
+
+The approved Master PSPR remains the execution authority. Presentation,
+continuity, Windows packaging and final acceptance continue in its dependency
+order; this geographic closeout is not a whole-application release claim.
+
 ## Current continuation, 2026-09-20
 
 The [focused roster amendment](./docs/VEOC-PARITY-CONTINUATION-2026-09-20.md#focused-roster-amendment-2026-09-20)

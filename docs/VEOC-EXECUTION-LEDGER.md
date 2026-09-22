@@ -4213,3 +4213,21 @@ increment proves it and that coverage follows the incident area.
   final user aesthetic acceptance remains separate. Unit commit: this receipt's
   commit. Seven retained worktrees continue active roster units; protected
   files and prior preservation stashes remain accounted for. Rollback by revert.
+
+## H15: geographic reference milestone closeout
+
+- Baseline bd55856; canonical checkout, documentation only. Reconciled the
+  matrix and ROADMAP against the delivered P-COP/P-DASH composition and prior
+  H11-H14 receipts. Read-only evidence reconciliation covered G-FLOOD, G-IMPACT,
+  G-KPIMAP, G-BUILDINGS, G-TILES, F8, F9 and F19.
+- G-KPIMAP is verified; impact is verified for loaded sources; buildings for
+  exact-way enrichment; F19 for the agreed NAPSG subset. Flood, F8 and F9 remain
+  partial at their source/depth boundaries; dense operational tiles remain open.
+- Existing evidence: H11 browser repair and both-theme captures; 79G-E1/E2
+  spatial/masking tests; P-DASH light/dark wide/narrow source drilldowns;
+  h12e-integration and kpi-stable-layout-gate logs; H13 sprite/license and
+  browser proofs; H14-root-integration, H14-root-browser and h14-evidence.json.
+  No engine changed and no passing check was repeated for this documentation.
+- Live NFHL/ACS, statewide damage costs, the full NAPSG catalog and operational
+  vector tiles are not claimed. Final application and external readiness gates
+  remain in the Master PSPR. Unit commit: this receipt's commit.
