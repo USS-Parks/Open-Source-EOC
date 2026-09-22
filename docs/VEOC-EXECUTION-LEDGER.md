@@ -4925,3 +4925,22 @@ increment proves it and that coverage follows the incident area.
   `README.md` states the true deployability boundary. No runtime route, schema,
   dependency or operator behavior changed. Next: W1.0, using the standing
   section 9 default to delete the obsolete field-node surface.
+
+## V1 W1.0: remove the placeholder field node
+
+- **Standing decision applied:** section 9's cut-list default is delete. Basho
+  authorized that default under the plan-wide STS grant for this session.
+- **Cut:** removed the three-file `field-node/` placeholder crate, its dedicated
+  Rust check and Clippy CI job, and the README component line. The crate held no
+  gateway implementation and nothing in the product imported or packaged it.
+- **Architecture truth:** ADR-0008 now records the completed cut rather than
+  claiming that the placeholder remains under CI. The TypeScript CoT model and
+  relay endpoints are unchanged. A future native relay remains reversible by
+  implementing the same model and API when a concrete deployment need exists.
+- **Verification:** recursive TypeScript and full ESLint passed; the license
+  scan passed all 300 packages; the link checker passed all 65 Markdown files.
+  Targeted reference inspection found no active field-node reference in the
+  README or CI workflow, and `git diff --check` is clean.
+- **Result:** W1.0 is complete. This removes an empty second toolchain without
+  changing a runtime route, schema, dependency or operator behavior. Next:
+  W1.1, relocate the design-review galleries outside the application tree.

@@ -40,7 +40,6 @@ License: Apache-2.0. See `LICENSE`.
 - `server/` - Node and Fastify backend in TypeScript.
 - `web/` - React operator application in TypeScript.
 - `shared/` - contracts and types shared by server and web.
-- `field-node/` - placeholder Rust field gateway pending V1 disposition.
 - `deploy/` - Docker, Windows desktop and local-data deployment tooling.
 - `docs/` - operator guides, architecture, evidence and governed plans.
 

@@ -70,15 +70,6 @@ jobs:
       - run: pnpm audit:advisories
       - run: pnpm check
 
-  field-node:
-    name: Rust field node
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: rustup update stable && rustup default stable && rustup component add clippy
-      - run: cargo check --manifest-path field-node/Cargo.toml
-      - run: cargo clippy --manifest-path field-node/Cargo.toml -- -D warnings
-
   commit-hygiene:
     name: Commit message hygiene
     runs-on: ubuntu-latest

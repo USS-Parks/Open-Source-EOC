@@ -1,6 +1,6 @@
 # ADR-0008: CoT/TAK gateway, and the field-node language decision
 
-Status: Accepted (provisional — flagged for Basho's confirmation)
+Status: Accepted (confirmed by the V1 W1.0 standing default, 2026-09-22)
 Date: 2026-09-18
 Context: VEOC-29
 
@@ -38,11 +38,11 @@ in `field-node/`, or as part of the existing TypeScript stack.
 
 ## Decision
 
-Implement the CoT/TAK gateway in TypeScript (option B). Keep the
-`field-node/` Rust crate as a documented, still-compiled placeholder
-(CI runs `cargo check`/`clippy` on it) so the single-binary path remains
-open for a future deployment that needs it — a native relay can consume
-the same CoT model and API without changing the gateway's semantics.
+Implement the CoT/TAK gateway in TypeScript (option B). V1 W1.0 removes the
+placeholder `field-node/` crate and its Rust CI job because they contain no
+gateway implementation and impose a second toolchain on every build. The
+single-binary path remains open: a future native relay can consume the same
+CoT model and API without changing the gateway's semantics.
 
 This decision is reversible: adopting the Rust field node later does not
 undo the TypeScript gateway, which stays the reference implementation.
@@ -52,18 +52,18 @@ undo the TypeScript gateway, which stays the reference implementation.
 The gateway is I/O-bound XML translation at modest scale, the CoT model is
 already TypeScript, and a single-language stack is the project's stated
 posture. The performance case for Rust does not yet exist; the complexity
-cost is immediate. Choosing B now, with A documented and the crate kept
-alive, buys interoperability today without foreclosing the native path.
+cost is immediate. Choosing B now, with A documented as a reversal path,
+buys interoperability today without carrying an empty second toolchain.
 
 ## Note
 
-The roster asked that this decision be put to Basho. He was away under the
-standing full-execution authorization, so this ADR records the reversible
-default and its rationale for his review; he can direct the Rust path and
-the gateway semantics carry over unchanged.
+The original roster asked that this decision be put to Basho. The V1 PSPR
+later established deletion as the standing default, and Basho authorized full
+STS for that plan on 2026-09-22. A later native requirement can reverse the
+language choice without changing the gateway semantics.
 
 ## Consequences
 
 - CoT model and mapping: `shared/src/cot/`. Relay endpoints: `server/src/cot/`.
-- `field-node/` remains a placeholder under CI; ADR revisited if a native
-  relay is adopted.
+- The placeholder Rust crate and CI job are absent. Reintroducing a native
+  relay requires a concrete deployment need and a new implementation commit.
