@@ -174,13 +174,19 @@ describe("real-browser incident activation and participation", () => {
     await activate(page.getByRole("button", { name: "Account menu" }));
     await activate(page.getByRole("button", { name: "Use dark theme" }));
     await activate(page.getByRole("button", { name: "Account menu" }));
-    await participants.scrollIntoViewIfNeeded();
-    expect(await participants.getByRole("button", { name: "Add participant" }).isVisible()).toBe(true);
+    await activate(page.getByRole("button", { name: "Incident Setup", exact: true }));
+    await activate(page.locator("li").filter({ hasText: "D20 California Exercise" })
+      .getByRole("button", { name: "Participants" }));
+    const darkParticipants = page.getByRole("region", {
+      name: "D20 California Exercise: participants", exact: true,
+    });
+    await darkParticipants.scrollIntoViewIfNeeded();
+    expect(await darkParticipants.getByRole("button", { name: "Add participant" }).isVisible()).toBe(true);
     await page.screenshot({ path: join(SHOTS, "d20-wide-dark.png"), fullPage: false });
     await page.setViewportSize({ width: 390, height: 844 });
     expect(await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")).toBe(true);
-    await participants.scrollIntoViewIfNeeded();
-    expect(await participants.getByRole("button", { name: "Add participant" }).isVisible()).toBe(true);
+    await darkParticipants.scrollIntoViewIfNeeded();
+    expect(await darkParticipants.getByRole("button", { name: "Add participant" }).isVisible()).toBe(true);
     await page.screenshot({ path: join(SHOTS, "d20-narrow-dark.png"), fullPage: false });
     await activate(page.locator("li").filter({ hasText: "D20 California Exercise" }).getByRole("button", { name: "Close incident" }));
     await page.getByText(/Closeout prevents new incident updates/i).waitFor();

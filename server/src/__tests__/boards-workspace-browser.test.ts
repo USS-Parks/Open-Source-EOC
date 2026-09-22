@@ -257,8 +257,10 @@ describe("P-BOARDS-1 operational board workspace", () => {
     await page.screenshot({ path: join(SHOTS, "boards-workspace-wide-dark.png"), fullPage: false });
 
     await page.setViewportSize({ width: 390, height: 844 });
-    const closeContext = page.getByRole("button", { name: "Close context drawer" });
-    if (await closeContext.isVisible()) await closeContext.click();
+    await page.evaluate(`(() => {
+      const closeContext = document.querySelector('button[aria-label="Close context drawer"]');
+      if (closeContext?.getClientRects().length) closeContext.click();
+    })()`);
     await page.getByRole("main").getByText("Support staging", { exact: true }).waitFor();
     const geometry = await page.evaluate(`({
       documentWidth: document.documentElement.scrollWidth,
