@@ -150,7 +150,7 @@ beforeAll(async () => {
   await createBoard("significant_events");
   await createBoard("resource_request");
   await createBoard("field_reports");
-  await app.inject({
+  const dashboard = await app.inject({
     method: "POST",
     url: `/api/v1/jurisdictions/${seed.jurisdictionId}/dashboards`,
     headers: { authorization: `Bearer ${adminToken}` },
@@ -198,6 +198,31 @@ beforeAll(async () => {
     payload: { templateKey: "wildfire", name: "Bald Hills Fire" },
   });
   if (activation.statusCode !== 201) throw new Error(`activation failed: ${activation.body}`);
+  const activeIncidentId = activation.json().incidentId as string;
+  const period = await app.inject({
+    method: "PUT", url: `/api/v1/incidents/${activeIncidentId}/operational-area`,
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: { expectedRevision: 0, geometry: null, operationalPeriod: {
+      label: "Bald Hills OP 1", startsAt: "2026-09-21T06:00:00.000Z",
+      endsAt: "2026-09-22T06:00:00.000Z",
+    }, reason: "Synthetic browser exercise planning period" },
+  });
+  expect(period.statusCode, period.body).toBe(200);
+  await admin`insert into incident_boards (incident_id, board_id)
+    select ${activeIncidentId}, id from boards where jurisdiction_id = ${seed.jurisdictionId}
+    on conflict do nothing`;
+  await admin`update board_records set incident_id = ${activeIncidentId}
+    where incident_id is null and board_id in
+      (select id from boards where jurisdiction_id = ${seed.jurisdictionId})`;
+  const overview = await app.inject({
+    method: "PUT", url: `/api/v1/incidents/${activeIncidentId}/dashboard-configs/incident-overview`,
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: { expectedRevision: 0, composition: { title: "EOC Status", panels: [
+      { key: "closed", source: "dashboard", dashboardId: dashboard.json().id, widgetKey: "closed_roads", presentation: "tile" },
+      { key: "esf", source: "dashboard", dashboardId: dashboard.json().id, widgetKey: "esfs", presentation: "status" },
+    ] } },
+  });
+  expect(overview.statusCode, overview.body).toBe(201);
 
   // A push feed with one point, so the COP shows a live external feed layer.
   const feed = await app.inject({
@@ -334,8 +359,7 @@ describe("the operations console in a real browser, offline", () => {
         }
       }
       await page.evaluate("window.location.hash = '#/unknown-workspace'");
-      // The Boards arrangement opens its context drawer as a modal on phones.
-      await page.getByRole("button", { name: "Close context drawer" }).click();
+      // Narrow routes keep the context drawer closed until explicitly opened.
       await page.getByRole("heading", { name: "Page not found", level: 2 }).waitFor();
       await page.getByRole("button", { name: "Open Map", exact: true }).click();
       await page.locator('[data-testid="cop-map"]').waitFor();
@@ -409,13 +433,12 @@ describe("the operations console in a real browser, offline", () => {
     // The Forms surface previews an ICS form and assembles an IAP from the
     // live incident, all through the browser.
     await page.getByRole("button", { name: "ICS Forms", exact: true }).click();
-    await page.getByRole("button", { name: "Assemble IAP" }).waitFor({ state: "visible", timeout: 20000 });
-    await page.getByRole("button", { name: "Preview form" }).click();
-    await page.getByText("ICS-201 Incident Briefing").first().waitFor({ state: "visible", timeout: 20000 });
-    await page.getByRole("button", { name: "Assemble IAP" }).click();
-    await page.getByText("Incident Action Plan").first().waitFor({ state: "visible", timeout: 20000 });
-    await page.getByText("ICS-202 Incident Objectives").first().waitFor({ state: "visible", timeout: 20000 });
-    await page.getByRole("button", { name: "Download PDF" }).first().waitFor({ state: "visible", timeout: 20000 });
+    await page.getByRole("heading", { name: "ICS Forms and IAP Assembly" }).waitFor();
+    await page.getByLabel("Operational period revision").selectOption("1");
+    await page.getByRole("button", { name: "Preview selected form" }).click();
+    await page.getByRole("region", { name: "Preview: ICS-201 Incident Briefing" }).waitFor();
+    await page.getByRole("button", { name: "Assemble draft IAP" }).click();
+    await page.getByRole("region", { name: "Assembled draft" }).waitFor();
     await page.waitForTimeout(300);
     await page.screenshot({ path: join(SHOTS, "app-forms-light.png"), fullPage: false });
 
@@ -423,17 +446,19 @@ describe("the operations console in a real browser, offline", () => {
     // progress bar, then advances through submit and command approval. Status
     // assertions are scoped to the working list so they do not match the
     // always-present KPI count chips above it.
-    await page.getByRole("button", { name: "IAP", exact: true }).click();
-    await page.getByText("Incident Action Plans").waitFor({ state: "visible", timeout: 20000 });
-    const iapList = page.getByRole("region", { name: "Working list" });
-    await iapList.getByText("In Progress", { exact: true }).first().waitFor({ state: "visible", timeout: 20000 });
-    await iapList.getByText(/7 \/ 7 forms/).first().waitFor({ state: "visible", timeout: 20000 });
+    await page.getByRole("button", { name: "Review draft in IAP workspace" }).click();
+    await page.getByRole("heading", { name: "Incident Action Plans" }).waitFor();
+    const iapList = page.getByRole("region", { name: "Plans", exact: true });
+    await iapList.getByRole("button", { name: /Bald Hills OP 1.*In progress/i }).click();
+    const iapDetail = page.getByRole("region", { name: "Plan detail", exact: true });
+    await iapDetail.getByText("In progress", { exact: true }).waitFor();
+    await iapDetail.getByRole("button", { name: "Download revision 1 PDF" }).waitFor();
     await page.waitForTimeout(300);
     await page.screenshot({ path: join(SHOTS, "app-iap-light.png"), fullPage: false });
     // The member (a writer, not an admin) can submit the plan for approval;
     // approval and completion are admin-only and covered by the server tests.
-    await page.getByRole("button", { name: "Submit for approval" }).first().click();
-    await iapList.getByText("In Approval", { exact: true }).first().waitFor({ state: "visible", timeout: 20000 });
+    await iapDetail.getByRole("button", { name: "Submit for approval" }).click();
+    await iapDetail.getByText("In approval", { exact: true }).waitFor();
 
     // Field capture: enter WGS84 coordinates with the keyboard and save them
     // as a road-closure record through the same point-capture seam.
@@ -507,15 +532,15 @@ describe("the operations console in a real browser, offline", () => {
 
     // Files: upload a document and find it through platform search.
     await page.getByRole("button", { name: "Files" }).click();
-    await page.getByText("Files & Search").waitFor({ state: "visible", timeout: 20000 });
-    await page.getByLabel("File to upload").setInputFiles({
+    await page.getByRole("heading", { name: "Files", exact: true, level: 2 }).waitFor();
+    await page.getByLabel("File", { exact: true }).setInputFiles({
       name: "sitrep-note.txt",
       mimeType: "text/plain",
       buffer: Buffer.from("Evacuation staging at the rodeo grounds."),
     });
     await page.getByRole("button", { name: "Upload", exact: true }).click();
-    await page.getByText(/Uploaded sitrep-note\.txt/).waitFor({ state: "visible", timeout: 20000 });
-    await page.getByLabel("Query").fill("sitrep");
+    await page.getByText("Stored sitrep-note.txt as version 1.").waitFor();
+    await page.getByLabel("Search records and files").fill("sitrep");
     await page.getByRole("button", { name: "Search" }).click();
     await page.getByText("sitrep-note.txt").first().waitFor({ state: "visible", timeout: 20000 });
     await page.waitForTimeout(200);
@@ -533,22 +558,23 @@ describe("the operations console in a real browser, offline", () => {
 
     // Resource requests (213RR): submit one and advance its lifecycle state.
     await page.getByRole("button", { name: "Resources" }).click();
-    await page.getByText("Resource Requests (213RR)").waitFor({ state: "visible", timeout: 20000 });
+    await page.getByRole("heading", { name: "Resource coordination" }).waitFor();
     await page.getByLabel("Requested item").fill("Sandbags, 500 ct");
     await page.getByRole("button", { name: "Submit request" }).click();
     await page.getByText("Sandbags, 500 ct").first().waitFor({ state: "visible", timeout: 20000 });
+    await page.getByLabel("Next state for Sandbags, 500 ct").selectOption("triaged");
     await page.getByRole("button", { name: "Advance" }).first().click();
     // The row's state badge flips to "triaged" (the first allowed transition).
     await page.getByText("triaged", { exact: true }).first().waitFor({ state: "visible", timeout: 20000 });
 
     // After-action review: record an observation against a Core Capability.
     await page.getByRole("button", { name: "AAR" }).click();
-    await page.getByText("After-Action Review").waitFor({ state: "visible", timeout: 20000 });
-    const obsPanel = page.getByRole("region", { name: "Record an observation" });
-    await obsPanel.getByLabel("Core Capability").selectOption("mass_care_services");
+    await page.getByRole("heading", { name: "After-action review" }).waitFor();
+    const obsPanel = page.getByRole("form", { name: "Record an observation" });
+    await obsPanel.getByLabel("Core capability").selectOption("mass_care_services");
     await obsPanel.getByLabel("Capability element").selectOption("training");
     await page.getByLabel("Observation", { exact: true }).fill("Shelter stood up within two hours.");
-    await page.getByRole("button", { name: "Add observation" }).click();
+    await obsPanel.getByRole("button", { name: "Record observation" }).click();
     await page
       .getByText("Shelter stood up within two hours.")
       .first()
@@ -556,16 +582,16 @@ describe("the operations console in a real browser, offline", () => {
     // The observation renders the capability's proper label (scoped to the
     // Observations list so it does not match the select's hidden <option>).
     await page
-      .getByRole("region", { name: "Observations" })
+      .locator("[data-record-id]").filter({ hasText: "Shelter stood up within two hours." })
       .getByText("Mass Care Services")
       .first()
       .waitFor({ state: "visible", timeout: 20000 });
     // A corrective action in the improvement plan, against a Core Capability.
-    const caPanel = page.getByRole("region", { name: "Corrective actions (improvement plan)" });
-    await caPanel.getByLabel("Core Capability").selectOption("operational_communications");
-    await caPanel.getByLabel("Capability element").selectOption("equipment");
-    await page.getByLabel("Recommended action").fill("Add a backup repeater at the EOC.");
-    await page.getByRole("button", { name: "Add action" }).click();
+    const caPanel = page.getByRole("form", { name: "Create a corrective action" });
+    await caPanel.getByLabel("Action capability").selectOption("operational_communications");
+    await caPanel.getByLabel("Action element").selectOption("equipment");
+    await caPanel.getByLabel("Corrective action", { exact: true }).fill("Add a backup repeater at the EOC.");
+    await caPanel.getByRole("button", { name: "Create corrective action" }).click();
     await page
       .getByText("Add a backup repeater at the EOC.")
       .first()
@@ -573,31 +599,33 @@ describe("the operations console in a real browser, offline", () => {
 
     // Feeds: the seeded push feed is listed on the Feeds admin screen.
     await page.getByRole("button", { name: "Feeds" }).click();
-    await page.getByText("Live Feeds").waitFor({ state: "visible", timeout: 20000 });
+    await page.getByRole("heading", { name: "Feeds", exact: true, level: 2 }).waitFor();
     await page.getByText("NWS Alerts").first().waitFor({ state: "visible", timeout: 20000 });
 
     // Smart Forms: render an imported XLSForm and submit it to a board.
     await page.getByRole("button", { name: "Smart Forms" }).click();
     await page.getByRole("heading", { name: "Rapid Needs Survey" }).waitFor({ state: "visible", timeout: 20000 });
-    await page.getByLabel("Summary", { exact: true }).fill("Two homes flooded on the flat");
-    await page.getByLabel("Category", { exact: true }).selectOption("damage");
-    await page.getByRole("button", { name: "Submit form" }).click();
-    await page.getByText("Form submitted to the board.").waitFor({ state: "visible", timeout: 20000 });
+    const fieldForm = page.getByRole("form", { name: "Field report form" });
+    await fieldForm.getByLabel("Summary *").fill("Two homes flooded on the flat");
+    await fieldForm.getByLabel("Category").selectOption("damage");
+    await fieldForm.getByRole("button", { name: "Queue field report" }).click();
+    await page.getByText("Report synchronized with retained server attribution.").waitFor();
 
     // Tracking & Reunification: register an object and find it by name.
     await page.getByRole("button", { name: "Tracking" }).click();
-    await page.getByText("Tracking & Reunification").waitFor({ state: "visible", timeout: 20000 });
-    await page.getByLabel("Label", { exact: true }).fill("Jane Doe");
-    await page.getByRole("button", { name: "Register" }).click();
-    await page.getByText(/Registered "Jane Doe"/).waitFor({ state: "visible", timeout: 20000 });
-    await page.getByLabel("Name, or #tag").fill("Jane");
+    await page.getByRole("tab", { name: "Register", exact: true }).click();
+    await page.getByLabel("Field-safe label", { exact: true }).fill("Jane Doe");
+    await page.getByRole("button", { name: "Register tracked object" }).click();
+    await page.getByText(/Registered .*Continue with the first custody handoff/).waitFor();
+    await page.getByRole("tab", { name: "Find & reunify" }).click();
+    await page.getByLabel("Name, field-safe label, or #tag").fill("Jane");
     await page.getByRole("button", { name: "Search" }).click();
     await page.getByText("Jane Doe").first().waitFor({ state: "visible", timeout: 20000 });
 
     // Messages: start a position-addressed thread and post to it.
     await page.getByRole("button", { name: "Messages" }).click();
     await page.getByText("New thread").waitFor({ state: "visible", timeout: 20000 });
-    await page.getByLabel("Title", { exact: true }).fill("Ops coordination");
+    await page.getByLabel("Thread title", { exact: true }).fill("Ops coordination");
     await page.getByRole("button", { name: "Start thread" }).click();
     await page.getByText("Ops coordination").first().waitFor({ state: "visible", timeout: 20000 });
     await page.getByLabel("Message", { exact: true }).fill("Staging established at rodeo grounds.");

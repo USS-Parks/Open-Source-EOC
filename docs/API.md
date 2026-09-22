@@ -22,6 +22,10 @@ endpoint below is held to the running server by a contract test.
 ### cap
 
 - `POST /api/v1/jurisdictions/:jurisdictionId/cap/alerts` — Author a CAP 1.2 alert (auth: bearer)
+- `GET /api/v1/jurisdictions/:jurisdictionId/cap/alerts` — List readable CAP alert records and local review state (auth: bearer)
+- `GET /api/v1/cap/alerts/:id` — Read one CAP alert record (auth: bearer)
+- `POST /api/v1/jurisdictions/:jurisdictionId/cap/drafts` — Store an unsent local CAP draft or exercise (auth: bearer)
+- `POST /api/v1/cap/alerts/:id/review` — Append a local CAP review state (auth: bearer)
 - `POST /api/v1/jurisdictions/:jurisdictionId/cap/ingest` — Ingest external CAP XML (auth: bearer)
 
 ### federation
@@ -53,6 +57,12 @@ endpoint below is held to the running server by a contract test.
 - `POST /api/v1/jurisdictions/:jurisdictionId/ipaws/enable` — Enable or disable IPAWS transmission (auth: bearer)
 - `POST /api/v1/jurisdictions/:jurisdictionId/ipaws/test` — Run an IPAWS test-environment handshake (auth: bearer)
 - `POST /api/v1/jurisdictions/:jurisdictionId/cap/alerts/:alertId/ipaws` — Transmit a CAP alert to IPAWS (auth: bearer)
+
+### notifications
+
+- `GET /api/v1/notifications` — List visible notification and delivery records (auth: bearer)
+- `POST /api/v1/notifications/:notificationId/read` — Mark an assigned notification read (auth: bearer)
+- `POST /api/v1/notifications/:notificationId/acknowledge` — Acknowledge an assigned notification with attribution (auth: bearer)
 
 ## WebSocket channels
 

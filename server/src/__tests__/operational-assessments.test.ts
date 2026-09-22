@@ -309,7 +309,8 @@ describe("D13 operational assessments", () => {
     expect(esfLegacy).toMatchObject({
       activation: "unknown", capacity: "unknown", legacyStatus: "normal",
     });
-    expect(esfs.json().doctrineGaps.join(" ")).toContain("federal-to-California");
+    expect(esfs.json().doctrineGaps.join(" ")).toContain("effective dates");
+    expect(esfs.json().doctrineGaps.join(" ")).not.toContain("federal-to-California");
   });
 
   it("keeps conflicting lifeline reports visible and records an attributed decision", async () => {

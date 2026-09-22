@@ -52,6 +52,7 @@ it("assembles from the selected authoritative period revision without inventing 
     getIncidentArea: vi.fn().mockResolvedValue(area),
     incidentAreaHistory: vi.fn().mockResolvedValue([]),
     createIap,
+    getIap: vi.fn().mockResolvedValue({ id: "iap-4", operationalPeriod: "Operational Period 4", content: document }),
   } as unknown as ApiClient;
   render(
     <FormsSurface

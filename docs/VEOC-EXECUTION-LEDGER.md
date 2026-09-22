@@ -4614,3 +4614,33 @@ increment proves it and that coverage follows the incident area.
   Evidence level: integrated on publication, not operator-validated. No new
   dependency or migration. Unit commit: this receipt's commit; rollback by
   revert. Seven lane worktrees remain retained for roster closeout.
+
+## M3: full Phase 2 integration gate and fixture reconciliation
+
+- Full canonical gate at 69dba8b ran once: recursive TypeScript, full ESLint,
+  license scan (300 packages), links (63 documents) and 11 native checks passed.
+  Vitest passed 918 of 923 tests; five assertions failed and a Node-native
+  installer file was incorrectly discovered as an empty Vitest suite.
+- Corrected only the observed integration drift: native installer tests now
+  run explicitly under Node and are excluded from Vitest; generated API docs
+  include the landed CAP/notification routes; the ESF test uses the retained
+  effective-date gap; the IAP mock supplies its exact stored-document fetch.
+  The legacy console journey now uses real incident/period/configuration
+  fixtures and current Forms, IAP, Files, AAR, field and tracking controls.
+- Final evidence is the full run plus focused correction results, not another
+  full reassurance run. Affected database/DOM/docs checks passed 14 tests;
+  three console checks passed with scoped fixtures, and the final remaining
+  console journey passed alone. All 923 discovered application assertions are
+  accounted for as passing after correction; all 17 native checks passed.
+  Intermediate fixture failures exposed missing incident scope, the supported
+  status-widget presentation, creation response status and changed semantic
+  form/heading roles; final results supersede them.
+- Logs: deploy/test-runtime/out/lanes/gate/logs/m3-full.log,
+  m3-corrections.log, m3-console-contract.log and m3-console-final.log.
+  Independent source review: SHIP; final affected TypeScript/ESLint passed.
+  No production behavior, dependency or migration changed in this correction.
+- Storage: clean published lanes B, C, D, E and F were retired under the
+  standing grant after dirty/unpublished checks. A retains protected work/d05
+  (39,062 bytes, about 213.6 MB generated data); G retains active D32 changes.
+  Historical preservation stashes remain untouched. Unit commit: this receipt's
+  commit; rollback by revert. M3 is technically complete, not operator acceptance.
