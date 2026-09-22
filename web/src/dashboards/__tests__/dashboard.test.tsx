@@ -55,6 +55,7 @@ describe("the dashboard renders a computed snapshot and nothing else", () => {
     expect(screen.getByText("+3 last 24h")).toBeTruthy();
     expect(screen.getByLabelText("Shelters by status: 3 total")).toBeTruthy();
     expect(screen.getByText("unstable")).toBeTruthy();
+    expect(document.querySelector('svg[data-icon="energy"]')).toBeTruthy();
     expect(screen.getByText("SR-169")).toBeTruthy();
   });
 

@@ -4059,7 +4059,7 @@ increment proves it and that coverage follows the incident area.
 
 ## P-COP: operational map workspace
 
-- Serves D12 workspace composition, integrated; KPI and D30 composed export
+- Serves D11 workspace composition, integrated; KPI and D30 composed export
   remain separate follow-ups. Lane C, 2026-09-21 PDT. Base 440b59e, replayed
   through 63b552f without conflicting source changes.
 - MapSurface and CopMap now provide searchable operational/reference layers,
@@ -4079,3 +4079,28 @@ increment proves it and that coverage follows the incident area.
   and all 10 native desktop tests. No dependencies or migrations.
 - Approved commit, exact fast-forward and push to canonical main. Rollback by
   revert. Four existing active lanes retained; protected user files unchanged.
+
+## P-DASH: saved incident dashboard workspace
+
+- Serves VEOC-81 presentation, D12 and the 79G impact widget, integrated.
+  Lane A based on e20e772, 2026-09-21 PDT. DashboardSurface, composition and
+  configuration components, client and Console now use saved compositions,
+  inherited/overridden filters, scoped paginated record drilldowns and actual
+  source geometry. Status, activity, map and impact panels reuse their engines.
+- Missing, unknown, stale and zero remain distinct. Root corrected missing
+  dashboard sentinels and unavailable geometry after independent review;
+  unavailable maps never fetch contributions. Human labels replace enum keys;
+  full source limitations remain in a compact disclosure. Overview reserves
+  the main canvas for operational content with the generic context dock closed.
+- Root TypeScript/full ESLint and 8 suites passed 45 tests on current main.
+  Corrections passed web TypeScript, affected ESLint and 5 focused tests,
+  including the real Windows Chrome/PostgreSQL dashboard journey. Light/dark
+  and 1440/900/390 evidence is in lanes/a/browser-shots/dashboard under
+  deploy/test-runtime/out. Logs: P-DASH-map-integration.log and
+  P-DASH-final-correction.log in lanes/a/logs. Fresh correction review: SHIP.
+- No dependencies or migrations. Approved commit, exact fast-forward and push;
+  rollback by revert. Seven lanes now support the explicitly requested fan-out:
+  A dashboard, B assessments, C KPI, D boards, E installer source, F incidents,
+  G tasks. E/F/G share existing dependencies; no duplicated dependency trees.
+  Installer build is deferred behind application completion. Protected work/d05
+  and canonical user files remain untouched.

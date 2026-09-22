@@ -1,0 +1,336 @@
+.p-dash-composition {
+  display: grid;
+  gap: var(--eoc-space-4, 16px);
+  min-width: 0;
+}
+
+.p-dash-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--eoc-space-3, 12px);
+}
+
+.p-dash-stats .eoc-kit-kpi-card {
+  min-height: 112px;
+}
+
+.p-dash-impact-tile {
+  min-width: 0;
+}
+
+.p-dash-impact-tile > details {
+  margin-top: 4px;
+  color: var(--eoc-text-muted);
+  font-size: 0.82rem;
+}
+
+.p-dash-impact-tile > details summary {
+  width: max-content;
+  cursor: pointer;
+  color: var(--eoc-accent);
+  font-weight: 700;
+}
+
+.p-dash-impact-tile > details p {
+  max-width: 62ch;
+  margin: 6px 0 0;
+}
+
+.p-dash-stats .eoc-kit-card-leading {
+  color: var(--eoc-accent);
+}
+
+.p-dash-situation-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 0.82fr);
+  gap: var(--eoc-space-3, 12px);
+  min-height: 410px;
+}
+
+.p-dash-maps,
+.p-dash-lifelines,
+.p-dash-charts,
+.p-dash-activity {
+  display: grid;
+  gap: var(--eoc-space-3, 12px);
+  min-width: 0;
+}
+
+.p-dash-map-panel,
+.p-dash-panel-state,
+.p-dash-standard-panel {
+  min-width: 0;
+  border: 1px solid var(--eoc-border);
+  border-radius: var(--eoc-radius-md);
+  background: var(--eoc-surface);
+  box-shadow: var(--eoc-shadow-sm);
+}
+
+.p-dash-map-panel {
+  display: grid;
+  grid-template-rows: auto minmax(320px, 1fr);
+  overflow: hidden;
+}
+
+.p-dash-map-panel > header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--eoc-border);
+}
+
+.p-dash-map-panel > header > span:first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: auto;
+}
+
+.p-dash-map-panel > header > span:nth-child(2) {
+  color: var(--eoc-text-muted);
+  font-size: 0.82rem;
+}
+
+.p-dash-map-canvas {
+  position: relative;
+  min-height: 320px;
+  overflow: hidden;
+}
+
+.p-dash-map-canvas > * {
+  position: absolute;
+  inset: 0;
+}
+
+.p-dash-lifelines .p-dash-standard-panel > article,
+.p-dash-standard-panel > article {
+  border: 0;
+  box-shadow: none;
+  height: 100%;
+}
+
+.p-dash-panel-state {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 8px;
+  padding: 16px;
+}
+
+.p-dash-panel-state h3,
+.p-dash-panel-state p {
+  margin: 0;
+}
+
+.p-dash-panel-state p {
+  color: var(--eoc-text-muted);
+}
+
+.p-dash-status-panel {
+  padding: 14px;
+}
+
+.p-dash-status-panel h3 {
+  margin: 0 0 10px;
+  color: var(--eoc-text-muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.p-dash-status-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.p-dash-status-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--eoc-border);
+  border-radius: var(--eoc-radius-sm, 4px);
+}
+
+.p-dash-status-item > span:last-child {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.p-dash-status-icon {
+  display: flex;
+  color: var(--eoc-status-unknown);
+}
+
+.p-dash-status-item[data-state="normal"] .p-dash-status-icon { color: var(--eoc-status-success); }
+.p-dash-status-item[data-state="watch"] .p-dash-status-icon { color: var(--eoc-status-warning); }
+.p-dash-status-item[data-state="critical"] .p-dash-status-icon { color: var(--eoc-status-critical); }
+
+.p-dash-charts,
+.p-dash-activity {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.p-dash-activity .eoc-operational-table {
+  border: 0;
+  box-shadow: none;
+}
+
+.p-dash-surface {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 16px;
+}
+
+.p-dash-toolbar {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.p-dash-toolbar label,
+.p-dash-filter-grid label,
+.p-dash-config-editor label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.86rem;
+  color: var(--eoc-text-muted);
+}
+
+.p-dash-toolbar select,
+.p-dash-filter-grid select,
+.p-dash-filter-grid input,
+.p-dash-config-editor input,
+.p-dash-config-editor select {
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--eoc-border);
+  border-radius: var(--eoc-radius-sm, 4px);
+  background: var(--eoc-surface);
+  color: var(--eoc-text);
+  font: inherit;
+}
+
+.p-dash-context-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--eoc-text-muted);
+  font-size: 0.86rem;
+}
+
+.p-dash-filter-panel,
+.p-dash-config-editor,
+.p-dash-drilldown {
+  padding: 16px;
+  border: 1px solid var(--eoc-border);
+  border-radius: var(--eoc-radius-md);
+  background: var(--eoc-surface);
+  box-shadow: var(--eoc-shadow-sm);
+}
+
+.p-dash-filter-panel > header,
+.p-dash-config-editor > header,
+.p-dash-drilldown > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.p-dash-filter-panel h2,
+.p-dash-config-editor h2,
+.p-dash-drilldown h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.p-dash-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.p-dash-config-sources {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.p-dash-config-source {
+  padding: 12px;
+  border: 1px solid var(--eoc-border);
+  border-radius: var(--eoc-radius-sm, 4px);
+}
+
+.p-dash-config-source legend {
+  padding: 0 6px;
+  font-weight: 700;
+}
+
+.p-dash-config-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(108px, auto);
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.p-dash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.p-dash-inline-error {
+  color: var(--eoc-status-critical);
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .p-dash-situation-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .p-dash-map-panel {
+    min-height: 380px;
+  }
+}
+
+@media (max-width: 560px) {
+  .p-dash-surface {
+    padding: 10px;
+  }
+
+  .p-dash-stats,
+  .p-dash-charts,
+  .p-dash-activity {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .p-dash-map-panel > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .p-dash-map-panel > header > span:first-child {
+    margin-right: 0;
+  }
+
+  .p-dash-config-option {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .p-dash-config-option select {
+    grid-column: 2;
+  }
+}

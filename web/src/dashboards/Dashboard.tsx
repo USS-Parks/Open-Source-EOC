@@ -1,5 +1,11 @@
-import type { CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { StatusBadge, type Status } from "../design/components.js";
+import { Icon, LifelineIcon, lifelineIconByKey, type LifelineKey } from "../design/icons/index.js";
+import {
+  OperationalTable,
+  createOperationalTableViewState,
+  type OperationalTableColumn,
+} from "../design/table.js";
 import { LIFELINE_STATUS_COLOR, ESF_STATUS_COLOR } from "@openeoc/shared";
 import type {
   ChartResult,
@@ -30,14 +36,14 @@ export function Dashboard(props: { snapshot: DashboardSnapshot; onDrill?: Drill 
         }}
       >
         {props.snapshot.widgets.map((w) => (
-          <Widget key={w.key} widget={w} onDrill={props.onDrill} />
+          <DashboardWidget key={w.key} widget={w} onDrill={props.onDrill} />
         ))}
       </div>
     </section>
   );
 }
 
-function Widget(props: { widget: WidgetResult; onDrill?: Drill | undefined }) {
+export function DashboardWidget(props: { widget: WidgetResult; onDrill?: Drill | undefined }) {
   const w = props.widget;
   return (
     <article
@@ -296,6 +302,7 @@ function StatusGrid(props: { widget: StatusResult }) {
     >
       {props.widget.groups.map((g) => {
         const color = g.value ? (CONDITION_COLOR[g.value] ?? "gray") : "gray";
+        const lifeline = g.group in lifelineIconByKey ? g.group as LifelineKey : null;
         return (
           <div
             key={g.group}
@@ -308,17 +315,11 @@ function StatusGrid(props: { widget: StatusResult }) {
               gap: 8,
             }}
           >
-            <span
-              aria-hidden="true"
-              style={{
-                flex: "0 0 auto",
-                width: 14,
-                height: 14,
-                borderRadius: 7,
-                background: LIFELINE_DOT[color] ?? LIFELINE_DOT.gray,
-                boxShadow: "0 0 0 3px color-mix(in srgb, currentColor 12%, transparent)",
-              }}
-            />
+            <span style={{ color: LIFELINE_DOT[color] ?? LIFELINE_DOT.gray, display: "flex" }}>
+              {lifeline
+                ? <LifelineIcon lifeline={lifeline} decorative size={24} />
+                : <Icon name="lifelines" decorative size={24} />}
+            </span>
             <span style={{ display: "grid", minWidth: 0 }}>
               <span style={{ fontSize: 13, fontWeight: 600 }}>{g.group}</span>
               <span style={{ fontSize: 12, color: "var(--eoc-text-muted)" }}>
@@ -333,28 +334,61 @@ function StatusGrid(props: { widget: StatusResult }) {
 }
 
 function List(props: { widget: ListResult }) {
+  type Row = ListResult["records"][number];
+  const columns = useMemo<readonly OperationalTableColumn<Row>[]>(
+    () => props.widget.columns.map((key) => ({
+      id: key,
+      header: key.replaceAll("_", " "),
+      value: (row: Row) => {
+        const value = row[key];
+        return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+          ? value
+          : value === null || value === undefined
+            ? null
+            : JSON.stringify(value);
+      },
+      sortable: true,
+      filterable: true,
+      missingLabel: "Not reported",
+      minWidth: 120,
+    })),
+    [props.widget.columns],
+  );
+  const [view, setView] = useState(() => createOperationalTableViewState(columns, { pageSize: 10 }));
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const filtered = useMemo(() => {
+    const rows = props.widget.records.filter((row) => columns.every((column) => {
+      const query = view.filters[column.id]?.trim().toLocaleLowerCase();
+      return !query || String(column.value(row) ?? "").toLocaleLowerCase().includes(query);
+    }));
+    if (!view.sort) return rows;
+    const column = columns.find((candidate) => candidate.id === view.sort?.columnId);
+    if (!column) return rows;
+    const direction = view.sort.direction === "asc" ? 1 : -1;
+    return [...rows].sort((left, right) =>
+      String(column.value(left) ?? "").localeCompare(String(column.value(right) ?? "")) * direction,
+    );
+  }, [columns, props.widget.records, view.filters, view.sort]);
+  const start = view.page * view.pageSize;
+  const page = filtered.slice(start, start + view.pageSize);
   return (
-    <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 13 }}>
-      <thead>
-        <tr>
-          {props.widget.columns.map((c) => (
-            <th key={c} style={{ textAlign: "left", padding: "2px 6px" }}>
-              {c}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {props.widget.records.map((r) => (
-          <tr key={r.id}>
-            {props.widget.columns.map((c) => (
-              <td key={c} style={{ padding: "2px 6px", borderTop: "1px solid var(--eoc-border)" }}>
-                {String(r[c] ?? "")}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <OperationalTable
+      tableId={`dashboard-${props.widget.key}`}
+      caption={props.widget.title}
+      columns={columns}
+      rows={page}
+      rowId={(row) => row.id}
+      datasetKey={props.widget.key}
+      status={filtered.length === 0 ? "empty" : "ready"}
+      viewState={view}
+      onViewStateChange={setView}
+      totalRows={filtered.length}
+      hasPreviousPage={view.page > 0}
+      hasNextPage={start + view.pageSize < filtered.length}
+      selectedIds={selected}
+      onSelectionChange={setSelected}
+      emptyTitle="No matching activity"
+      emptyDescription="No records match the current dashboard filters."
+    />
   );
 }

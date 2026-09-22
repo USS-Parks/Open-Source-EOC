@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import { DashboardSurface } from "../surfaces/DashboardSurface.js";
+import { DashboardSurface, parseDashboardViewState } from "../surfaces/DashboardSurface.js";
 import type { ApiClient } from "../api/client.js";
 import type { DashboardSnapshot } from "@openeoc/shared";
 
@@ -35,13 +35,29 @@ function fakeClient() {
   const dashboardData = vi.fn((_id: string, _filter: unknown, incidentId?: string | null) =>
     Promise.resolve(snapshotFor(incidentId ?? null)),
   );
-  return { client: { dashboardData } as unknown as ApiClient, dashboardData };
+  return {
+    client: {
+      dashboardData,
+      listDashboardConfigs: vi.fn().mockResolvedValue({ configs: [], nextCursor: null }),
+      getIncidentArea: vi.fn().mockResolvedValue({ geometry: null }),
+    } as unknown as ApiClient,
+    dashboardData,
+  };
 }
+
+const surfaceProps = {
+  theme: "light" as const,
+  dashboards: [],
+  configKey: null,
+  onConfigKey: () => undefined,
+  onViewStateChange: () => undefined,
+};
 
 it("scopes the request to the selected incident and displays its total", async () => {
   const { client, dashboardData } = fakeClient();
   render(
-    <DashboardSurface client={client} dashboardId="d1" filter={null} incidentId="incident-a" onFilter={() => {}} />,
+    <DashboardSurface {...surfaceProps} client={client} dashboardId="d1" filter={null}
+      incidentId="incident-a" onFilter={() => undefined} />,
   );
   await waitFor(() => expect(screen.getByTestId("tile-closed_roads-value").textContent).toBe("2"));
   expect(dashboardData).toHaveBeenCalledWith("d1", null, "incident-a");
@@ -50,12 +66,32 @@ it("scopes the request to the selected incident and displays its total", async (
 it("switches the scoped total when the selected incident changes", async () => {
   const { client, dashboardData } = fakeClient();
   const { rerender } = render(
-    <DashboardSurface client={client} dashboardId="d1" filter={null} incidentId="incident-a" onFilter={() => {}} />,
+    <DashboardSurface {...surfaceProps} client={client} dashboardId="d1" filter={null}
+      incidentId="incident-a" onFilter={() => undefined} />,
   );
   await waitFor(() => expect(screen.getByTestId("tile-closed_roads-value").textContent).toBe("2"));
   rerender(
-    <DashboardSurface client={client} dashboardId="d1" filter={null} incidentId="incident-b" onFilter={() => {}} />,
+    <DashboardSurface {...surfaceProps} client={client} dashboardId="d1" filter={null}
+      incidentId="incident-b" onFilter={() => undefined} />,
   );
   await waitFor(() => expect(screen.getByTestId("tile-closed_roads-value").textContent).toBe("0"));
   expect(dashboardData).toHaveBeenLastCalledWith("d1", null, "incident-b");
+});
+
+it("parses only bounded, schema-valid saved dashboard route state", () => {
+  expect(parseDashboardViewState(JSON.stringify({
+    scope: "saved",
+    filterMode: "replace",
+    filters: { category: { field: "status", equals: "closed" } },
+    bbox: [-124, 40, -120, 43],
+  }))).toEqual({
+    scope: "saved",
+    filterMode: "replace",
+    filters: { category: { field: "status", equals: "closed" } },
+    bbox: [-124, 40, -120, 43],
+  });
+  expect(parseDashboardViewState(JSON.stringify({ scope: "incident", bbox: [-124, 40, -120, 43] }))).toBeUndefined();
+  expect(parseDashboardViewState(JSON.stringify({ scope: "saved", filters: { category: { field: "bad field", equals: 1 } } })))
+    .toBeUndefined();
+  expect(parseDashboardViewState(`{"scope":"saved","extra":"${"x".repeat(260)}"}`)).toBeUndefined();
 });

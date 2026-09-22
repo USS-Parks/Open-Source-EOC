@@ -61,7 +61,7 @@ const DashboardBboxSchema = z
     "bbox must be finite ordered WGS84 west,south,east,north",
   );
 
-const DashboardPresentationSchema = z.enum(["tile", "chart", "list", "map"]);
+const DashboardPresentationSchema = z.enum(["tile", "chart", "list", "map", "status"]);
 const DashboardPanelBase = {
   key: z.string().regex(KEY),
   title: z.string().min(1).max(200).optional(),
@@ -247,7 +247,7 @@ export interface DashboardPanelSnapshot {
   readonly key: string;
   readonly title: string;
   readonly source: "dashboard" | "impact";
-  readonly presentation: "tile" | "chart" | "list" | "map";
+  readonly presentation: "tile" | "chart" | "list" | "map" | "status";
   readonly state: DashboardPanelState;
   readonly reason: string | null;
   readonly filterCapabilities: readonly DashboardFilterCapability[];

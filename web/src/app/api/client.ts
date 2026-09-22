@@ -24,6 +24,14 @@ import type {
   TaskCompletionReceipt,
   LifelineCurrentState,
   LIFELINE_DEFINITION,
+  DashboardTemplate,
+  DashboardComposition,
+  DashboardCompositionSnapshot,
+  DashboardContributionPage,
+  DashboardFilterMode,
+  DashboardFilterSet,
+  WidgetFilter,
+  ViewportBbox,
 } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
 
@@ -74,6 +82,47 @@ export interface DashboardListItem {
   readonly id: string;
   readonly title: string;
   readonly templateKey: string;
+}
+export interface DashboardConfigListItem {
+  readonly key: string;
+  readonly revision: number;
+  readonly title: string | null;
+  readonly valid: boolean;
+  readonly reason: string | null;
+  readonly updatedAt: string;
+}
+export interface DashboardDataOptions {
+  readonly scope?: "saved" | "incident";
+  readonly filterMode?: DashboardFilterMode;
+  readonly runtimeFilter?: WidgetFilter;
+  readonly filters?: DashboardFilterSet;
+  readonly bbox?: ViewportBbox;
+}
+export interface DashboardConfigResponse {
+  readonly state: SavedStateRecord;
+  readonly composition: DashboardComposition;
+}
+
+function dashboardQuery(options: DashboardDataOptions): URLSearchParams {
+  const query = new URLSearchParams();
+  if (options.scope) query.set("scope", options.scope);
+  if (options.filterMode) query.set("filterMode", options.filterMode);
+  if (options.runtimeFilter) {
+    query.set("field", options.runtimeFilter.field);
+    query.set("equals", String(options.runtimeFilter.equals));
+  }
+  if (options.filters?.category) {
+    query.set("categoryField", options.filters.category.field);
+    query.set("category", String(options.filters.category.equals));
+  }
+  if (options.filters?.operationalPeriod) {
+    query.set("periodField", options.filters.operationalPeriod.field);
+    query.set("periodRevision", String(options.filters.operationalPeriod.areaRevision));
+  }
+  if (options.filters?.date?.from) query.set("from", options.filters.date.from);
+  if (options.filters?.date?.to) query.set("to", options.filters.date.to);
+  if (options.bbox) query.set("bbox", options.bbox.join(","));
+  return query;
 }
 export interface CollectionRef {
   readonly id: string;
@@ -440,6 +489,41 @@ export class ApiClient {
       `/api/v1/incidents/${incidentId}`,
     );
     return r.boards;
+  }
+  getDashboard(dashboardId: string, incidentId: string): Promise<{
+    id: string; jurisdictionId: string; title: string; template: DashboardTemplate;
+  }> {
+    return this.request("GET", `/api/v1/dashboards/${encodeURIComponent(dashboardId)}?incidentId=${encodeURIComponent(incidentId)}`);
+  }
+  listDashboardConfigs(incidentId: string, options: { cursor?: string; limit?: number } = {}): Promise<{
+    configs: DashboardConfigListItem[]; nextCursor: string | null;
+  }> {
+    const query = new URLSearchParams();
+    if (options.cursor) query.set("cursor", options.cursor);
+    if (options.limit !== undefined) query.set("limit", String(options.limit));
+    return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/dashboard-configs?${query}`);
+  }
+  getDashboardConfig(incidentId: string, key: string): Promise<DashboardConfigResponse> {
+    return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/dashboard-configs/${encodeURIComponent(key)}`);
+  }
+  putDashboardConfig(incidentId: string, key: string, expectedRevision: number, composition: DashboardComposition): Promise<DashboardConfigResponse> {
+    return this.request("PUT", `/api/v1/incidents/${encodeURIComponent(incidentId)}/dashboard-configs/${encodeURIComponent(key)}`, { expectedRevision, composition });
+  }
+  async deleteDashboardConfig(incidentId: string, key: string, expectedRevision: number): Promise<void> {
+    await this.request("DELETE", `/api/v1/incidents/${encodeURIComponent(incidentId)}/dashboard-configs/${encodeURIComponent(key)}?expectedRevision=${expectedRevision}`);
+  }
+  dashboardConfigData(incidentId: string, key: string, options: DashboardDataOptions = {}): Promise<DashboardCompositionSnapshot> {
+    return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/dashboard-configs/${encodeURIComponent(key)}/data?${dashboardQuery(options)}`);
+  }
+  dashboardContributions(dashboardId: string, widgetKey: string, options: Omit<DashboardDataOptions, "scope" | "filterMode"> & {
+    incidentId: string; group?: string; cursor?: string; limit?: number;
+  }): Promise<DashboardContributionPage> {
+    const query = dashboardQuery(options);
+    query.set("incidentId", options.incidentId);
+    if (options.group !== undefined) query.set("group", options.group);
+    if (options.cursor) query.set("cursor", options.cursor);
+    if (options.limit !== undefined) query.set("limit", String(options.limit));
+    return this.request("GET", `/api/v1/dashboards/${encodeURIComponent(dashboardId)}/widgets/${encodeURIComponent(widgetKey)}/records?${query}`);
   }
   dashboardData(
     dashboardId: string,

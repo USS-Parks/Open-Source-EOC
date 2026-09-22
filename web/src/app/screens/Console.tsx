@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { BoardList, NotificationTray } from "../../design/layout.js";
 import { Button, type Status } from "../../design/components.js";
 import type { ThemeName } from "../../design/tokens.js";
-import type { ApiClient, BoardListItem, CollectionRef, FeedHealth } from "../api/client.js";
+import type { ApiClient, BoardListItem, DashboardListItem, CollectionRef, FeedHealth } from "../api/client.js";
 import { useSession } from "../auth/session.js";
 import { IncidentSwitcher, useIncident } from "../incident/context.js";
 import { useAsync, usePolled } from "../data/hooks.js";
@@ -17,7 +17,7 @@ import { OperationalPeriodControl, PositionControl, useWorkspaceContext } from "
 import { parseRouteHash, sectionOf, useSurface, type RouteContext, type Surface } from "../router.js";
 import { EmptyState, ErrorNote, Loading, NotFoundState, UnavailableState } from "./parts.js";
 import { MapSurface } from "../surfaces/MapSurface.js";
-import { DashboardSurface } from "../surfaces/DashboardSurface.js";
+import { DashboardSurface, parseDashboardViewState, type DashboardViewState } from "../surfaces/DashboardSurface.js";
 import { BoardSurface, type BoardRecordContext } from "../surfaces/BoardSurface.js";
 import { SitrepSurface } from "../surfaces/SitrepSurface.js";
 import { FormsSurface } from "../surfaces/FormsSurface.js";
@@ -250,7 +250,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       sync={sync}
       page={page.page}
       arrangement={page.arrangement}
-      layout={surface.kind === "lifelines" || surface.kind === "lifeline"
+      layout={surface.kind === "lifelines" || surface.kind === "lifeline" || surface.kind === "dashboard"
         ? { ...workspace.layout(page.arrangement), drawerOpen: false }
         : workspace.layout(page.arrangement)}
       onLayoutChange={(next) => workspace.updateLayout(page.arrangement, next)}
@@ -277,6 +277,9 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         isAdmin={viewingMembership?.role === "admin"}
         collectionsError={collections.error}
         firstDashboardId={dashboards.data?.[0]?.id}
+        dashboards={dashboards.data ?? []}
+        routeContext={routeContext}
+        onDashboardContext={(change) => navigate(surface, { ...baseContext, ...change })}
         onNavigate={navigateInContext}
         onOpenBoard={(id) => navigateInContext({ kind: "board", id })}
         onOpenSitrep={(id) => navigateInContext({ kind: "sitrep", id })}
@@ -285,7 +288,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
             f
               ? { kind: "dashboard", id, filterField: f.field, filterEquals: f.equals }
               : { kind: "dashboard", id },
-            baseContext,
+            { ...baseContext, ...routeContext },
           )
         }
       />
@@ -361,6 +364,9 @@ function Center(props: {
   isAdmin: boolean;
   collectionsError: string | null;
   firstDashboardId: string | undefined;
+  dashboards: readonly DashboardListItem[];
+  routeContext: RouteContext;
+  onDashboardContext: (context: RouteContext) => void;
   onNavigate: (surface: Surface) => void;
   onOpenBoard: (id: string) => void;
   onOpenSitrep: (id: string) => void;
@@ -385,8 +391,6 @@ function Center(props: {
       );
     case "dashboard": {
       const id = s.id ?? props.firstDashboardId;
-      if (!id)
-        return <EmptyState label="No dashboard configured." hint="An admin creates one from a dashboard template." />;
       const filter =
         s.filterField && s.filterEquals !== undefined
           ? { field: s.filterField, equals: s.filterEquals }
@@ -394,10 +398,26 @@ function Center(props: {
       return (
         <DashboardSurface
           client={props.client}
-          dashboardId={id}
+          {...(id ? { dashboardId: id } : {})}
+          theme={props.theme}
+          dashboards={props.dashboards}
+          configKey={props.routeContext.view ?? null}
+          {...(props.routeContext.filter ? { viewState: parseDashboardViewState(props.routeContext.filter) } : {})}
+          onConfigKey={(key) => {
+            const next = { ...props.routeContext };
+            if (key) next.view = key;
+            else delete next.view;
+            props.onDashboardContext(next);
+          }}
+          onViewStateChange={(state: DashboardViewState) => {
+            const filterState = JSON.stringify(state);
+            if (filterState.length > 256) throw new Error("Dashboard filters exceed the saved link limit.");
+            props.onDashboardContext({ ...props.routeContext, filter: filterState });
+          }}
+          onOpenMap={() => props.onNavigate({ kind: "map" })}
           filter={filter}
           incidentId={props.incidentId}
-          onFilter={(f) => props.onDashboardFilter(id, f)}
+          onFilter={(f) => props.onDashboardFilter(id ?? "", f ? { field: f.field, equals: String(f.equals) } : null)}
         />
       );
     }

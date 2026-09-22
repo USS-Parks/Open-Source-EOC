@@ -30,6 +30,24 @@ const me = {
 };
 
 describe("ApiClient", () => {
+  it("keeps saved dashboard scope, typed filters, paging and revision preconditions in requests", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(res(200, {}));
+    const client = new ApiClient({ fetchImpl });
+    await client.dashboardConfigData("incident/a", "saved view", { scope: "saved", filterMode: "replace",
+      runtimeFilter: { field: "active", equals: false }, filters: { category: { field: "priority", equals: 2 },
+        operationalPeriod: { field: "period", areaRevision: 3 } }, bbox: [-124, 39, -122, 41] });
+    const request = new URL(String(fetchImpl.mock.calls[0]?.[0]), "http://local");
+    expect(request.pathname).toBe("/api/v1/incidents/incident%2Fa/dashboard-configs/saved%20view/data");
+    expect(Object.fromEntries(request.searchParams)).toMatchObject({ scope: "saved", filterMode: "replace",
+      field: "active", equals: "false", categoryField: "priority", category: "2", periodRevision: "3", bbox: "-124,39,-122,41" });
+    await client.dashboardContributions("dashboard", "roads", { incidentId: "incident/a", group: "", cursor: "next", limit: 20 });
+    const records = new URL(String(fetchImpl.mock.calls[1]?.[0]), "http://local");
+    expect(Object.fromEntries(records.searchParams)).toEqual({ incidentId: "incident/a", group: "", cursor: "next", limit: "20" });
+    await client.deleteDashboardConfig("incident/a", "saved view", 4);
+    expect(String(fetchImpl.mock.calls[2]?.[0])).toContain("expectedRevision=4");
+    expect(fetchImpl.mock.calls[2]?.[1]).toMatchObject({ method: "DELETE" });
+  });
+
   it("passes explicit incident scope to the existing board view endpoint", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(res(200, { view: "all", columns: [], records: [] }));
     const client = new ApiClient({ fetchImpl });

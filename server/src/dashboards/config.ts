@@ -55,6 +55,7 @@ function presentationCompatible(
 ): boolean {
   if (presentation === "tile") return widgetKind === "tile";
   if (presentation === "chart") return widgetKind === "chart";
+  if (presentation === "status") return widgetKind === "status";
   if (presentation === "list") return widgetKind !== "status";
   return widgetKind !== "status";
 }

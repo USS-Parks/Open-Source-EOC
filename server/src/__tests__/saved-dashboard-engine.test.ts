@@ -655,6 +655,26 @@ describe("UNIT81-E saved composable dashboard engine", () => {
     }
   });
 
+  it("preserves an explicitly configured status widget without deriving exposure status", async () => {
+    const saved = await saveConfig(adminToken, "reported-status", {
+      title: "Reported conditions",
+      panels: [{ key: "conditions", source: "dashboard", dashboardId,
+        widgetKey: "public_status", presentation: "status" }],
+    });
+    expect(saved.statusCode, saved.body).toBe(201);
+    const data = await app.inject({ method: "GET",
+      url: `/api/v1/incidents/${incidentId}/dashboard-configs/reported-status/data`,
+      headers: auth(adminToken) });
+    expect(data.statusCode, data.body).toBe(200);
+    expect(data.json().panels[0]).toMatchObject({ presentation: "status", data: { kind: "status" } });
+    const mismatch = await saveConfig(adminToken, "invalid-status", {
+      title: "Wrong source",
+      panels: [{ key: "conditions", source: "dashboard", dashboardId,
+        widgetKey: "public_tile", presentation: "status" }],
+    });
+    expect(mismatch.statusCode).toBe(400);
+  });
+
   it("keeps stale and missing impact inputs explicit and revocation fresh", async () => {
     const stale = await saveConfig(adminToken, "stale-impact", {
       title: "Stale impact",
