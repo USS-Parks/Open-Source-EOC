@@ -571,7 +571,7 @@ export async function listRecordReferenceOptions(
   return options;
 }
 
-async function validateRecordReferences(
+export async function validateRecordReferences(
   sql: Sql,
   actor: Principal,
   board: EffectiveBoard,
@@ -611,7 +611,7 @@ export function geomExpr(
   return (g ? sql`ST_SetSRID(ST_GeomFromGeoJSON(${JSON.stringify(g)}), 4326)` : null) as never;
 }
 
-function checkFieldWrites(board: EffectiveBoard, keys: readonly string[]): void {
+export function checkFieldWrites(board: EffectiveBoard, keys: readonly string[]): void {
   for (const key of keys) {
     const field = board.fields.find((f) => f.key === key);
     if (!field) continue; // unknown keys rejected by the record schema

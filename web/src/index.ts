@@ -27,5 +27,15 @@ export {
   type CachedBoard,
   type SyncAck,
   type PushFn,
+  type ContinuityScope,
+  type PendingBoardOperation,
+  type SyncErrorCode,
+  SyncTransportError,
 } from "./offline/field-client.js";
+export {
+  ContinuityCoordinator,
+  type ContinuityPhase,
+  type ContinuitySnapshot,
+  type ContinuityAdapters,
+} from "./offline/continuity.js";
 export { registerFieldWorker } from "./offline/register.js";

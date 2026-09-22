@@ -1,20 +1,10 @@
 import * as Y from "yjs";
 import type { OfflineStore } from "./store.js";
 
-/**
- * Offline-first field client (VEOC-21). Every opened board is a local
- * Yjs document, hydrated from the durable store, so edits made in
- * airplane mode are real immediately and survive an app restart. The
- * queue is the CRDT itself: on reconnect the client exchanges state with
- * the server over the sync channel (VEOC-13), which reconciles and
- * checkpoints. Authentication never strands the user: the resume token
- * is cached, so a disconnected session renews on reconnect without
- * losing a single queued edit.
- */
-
-const DIRTY_KEY = "dirty";
-const SESSION_KEY = "session";
-const BOARDS_KEY = "boards";
+export interface ContinuityScope {
+  readonly personId: string;
+  readonly incidentId: string;
+}
 
 export interface FieldSession {
   readonly accessToken: string;
@@ -28,29 +18,61 @@ export interface CachedBoard {
   readonly templateKey: string;
 }
 
-export interface SyncAck {
-  readonly seq: number;
-  readonly conflicts: number;
+export interface PendingBoardOperation extends ContinuityScope {
+  readonly boardId: string;
+  readonly operationId: string;
+  readonly queuedAt: string;
+  /** Immutable base64 Yjs update used for every retry of this operation. */
+  readonly update: string;
 }
 
-/** A transport that pushes local state and returns the server ack. */
-export type PushFn = (state: Uint8Array) => Promise<SyncAck>;
+export interface SyncAck {
+  readonly operationId: string | null;
+  readonly seq: number;
+  readonly conflicts: number;
+  readonly exact: boolean;
+}
+
+export type SyncErrorCode = "auth_required" | "conflict" | "failed";
+
+export class SyncTransportError extends Error {
+  constructor(readonly code: SyncErrorCode, message: string) {
+    super(message);
+    this.name = "SyncTransportError";
+  }
+}
+
+export type PushFn = (
+  operation: PendingBoardOperation,
+  state: Uint8Array,
+) => Promise<SyncAck>;
+
+const scopeId = (scope: ContinuityScope): string => `${scope.personId}:${scope.incidentId}`;
+const docKey = (scope: ContinuityScope, boardId: string): string =>
+  `board:${scopeId(scope)}:${boardId}`;
+const operationsKey = (scope: ContinuityScope): string => `board-operations:${scopeId(scope)}`;
+const sessionKey = (scope: ContinuityScope): string => `session:${scopeId(scope)}`;
+const boardsKey = (scope: ContinuityScope): string => `boards:${scopeId(scope)}`;
+const resultsKey = (scope: ContinuityScope): string => `board-results:${scopeId(scope)}`;
 
 function toBase64(bytes: Uint8Array): string {
   let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
+  for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary);
 }
 
-function fromBase64(b64: string): Uint8Array {
-  const binary = atob(b64);
+function fromBase64(value: string): Uint8Array {
+  const binary = atob(value);
   const out = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  for (let index = 0; index < binary.length; index += 1) out[index] = binary.charCodeAt(index);
   return out;
 }
 
+/** Scoped IndexedDB Yjs client for durable board operations. */
 export class FieldClient {
   private readonly docs = new Map<string, Y.Doc>();
+  private mutation = Promise.resolve();
+  private delivery = Promise.resolve();
 
   constructor(
     private readonly store: OfflineStore,
@@ -59,58 +81,73 @@ export class FieldClient {
     private readonly fetchImpl: typeof fetch = (...args) => fetch(...args),
   ) {}
 
-  /** Cache the session and assigned boards for offline use. */
-  async cacheSession(session: FieldSession, boards: readonly CachedBoard[]): Promise<void> {
-    await this.store.setMeta(SESSION_KEY, session);
-    await this.store.setMeta(BOARDS_KEY, boards);
+  async cacheSession(
+    scope: ContinuityScope,
+    session: FieldSession,
+    boards: readonly CachedBoard[],
+  ): Promise<void> {
+    if (scope.personId !== session.personId) throw new Error("session belongs to another person");
+    await this.store.setMeta(sessionKey(scope), session);
+    await this.store.setMeta(boardsKey(scope), boards);
   }
 
-  async session(): Promise<FieldSession | null> {
-    return this.store.getMeta<FieldSession>(SESSION_KEY);
+  async session(scope: ContinuityScope): Promise<FieldSession | null> {
+    return this.store.getMeta<FieldSession>(sessionKey(scope));
   }
 
-  async cachedBoards(): Promise<CachedBoard[]> {
-    return (await this.store.getMeta<CachedBoard[]>(BOARDS_KEY)) ?? [];
+  async cachedBoards(scope: ContinuityScope): Promise<CachedBoard[]> {
+    return (await this.store.getMeta<CachedBoard[]>(boardsKey(scope))) ?? [];
   }
 
-  /** Hydrate (or create) the local doc for a board from durable storage. */
-  async open(boardId: string): Promise<void> {
-    if (this.docs.has(boardId)) return;
+  async open(scope: ContinuityScope, boardId: string): Promise<void> {
+    const key = docKey(scope, boardId);
+    if (this.docs.has(key)) return;
     const doc = new Y.Doc();
-    const state = await this.store.loadDoc(boardId);
+    const state = await this.store.loadDoc(key);
     if (state) Y.applyUpdate(doc, state);
-    this.docs.set(boardId, doc);
+    this.docs.set(key, doc);
   }
 
-  private doc(boardId: string): Y.Doc {
-    const doc = this.docs.get(boardId);
-    if (!doc) throw new Error(`board ${boardId} not open`);
+  private doc(scope: ContinuityScope, boardId: string): Y.Doc {
+    const doc = this.docs.get(docKey(scope, boardId));
+    if (!doc) throw new Error(`board ${boardId} is not open for this continuity scope`);
     return doc;
   }
 
-  /**
-   * Edit a record offline. Flat `recordId/field` keys give field-level
-   * merge on reconnect (VEOC-13). The doc is persisted synchronously with
-   * the edit, so nothing is lost if the app dies before reconnect.
-   */
   async edit(
+    scope: ContinuityScope,
     boardId: string,
     recordId: string,
     fields: Record<string, unknown>,
-  ): Promise<void> {
-    const doc = this.doc(boardId);
-    const records = doc.getMap<unknown>("records");
-    doc.transact(() => {
-      for (const [k, v] of Object.entries(fields)) records.set(`${recordId}/${k}`, v);
+  ): Promise<PendingBoardOperation> {
+    return this.change(async () => {
+      const doc = this.doc(scope, boardId);
+      const records = doc.getMap<unknown>("records");
+      doc.transact(() => {
+        for (const [key, value] of Object.entries(fields)) records.set(`${recordId}/${key}`, value);
+      });
+      const state = Y.encodeStateAsUpdate(doc);
+      const operation: PendingBoardOperation = {
+        ...scope,
+        boardId,
+        operationId: crypto.randomUUID(),
+        queuedAt: new Date().toISOString(),
+        update: toBase64(state),
+      };
+      const pending = await this.pendingOperations(scope);
+      await this.store.saveDocAndMeta(
+        docKey(scope, boardId),
+        state,
+        operationsKey(scope),
+        [...pending, operation],
+      );
+      return operation;
     });
-    await this.store.saveDoc(boardId, Y.encodeStateAsUpdate(doc));
-    await this.markDirty(boardId);
   }
 
-  /** Current records as plain objects, for the field UI (works offline). */
-  records(boardId: string): Record<string, Record<string, unknown>> {
+  records(scope: ContinuityScope, boardId: string): Record<string, Record<string, unknown>> {
     const out: Record<string, Record<string, unknown>> = {};
-    for (const [key, value] of this.doc(boardId).getMap<unknown>("records").entries()) {
+    for (const [key, value] of this.doc(scope, boardId).getMap<unknown>("records").entries()) {
       const slash = key.indexOf("/");
       if (slash <= 0) continue;
       (out[key.slice(0, slash)] ??= {})[key.slice(slash + 1)] = value;
@@ -118,54 +155,87 @@ export class FieldClient {
     return out;
   }
 
-  async pendingBoardIds(): Promise<string[]> {
-    return (await this.store.getMeta<string[]>(DIRTY_KEY)) ?? [];
+  async pendingOperations(scope: ContinuityScope): Promise<PendingBoardOperation[]> {
+    return (await this.store.getMeta<PendingBoardOperation[]>(operationsKey(scope))) ?? [];
   }
 
-  private async markDirty(boardId: string): Promise<void> {
-    const dirty = new Set(await this.pendingBoardIds());
-    dirty.add(boardId);
-    await this.store.setMeta(DIRTY_KEY, [...dirty]);
+  async pendingBoardIds(scope: ContinuityScope): Promise<string[]> {
+    return [...new Set((await this.pendingOperations(scope)).map((item) => item.boardId))];
   }
 
-  private async clearDirty(boardId: string): Promise<void> {
-    const dirty = new Set(await this.pendingBoardIds());
-    dirty.delete(boardId);
-    await this.store.setMeta(DIRTY_KEY, [...dirty]);
+  async lastResult(scope: ContinuityScope, boardId: string): Promise<SyncAck | null> {
+    const results = (await this.store.getMeta<Record<string, SyncAck>>(resultsKey(scope))) ?? {};
+    return results[boardId] ?? null;
   }
 
-  /**
-   * Push queued state through a transport and settle the board. Applying
-   * any server state the transport surfaces happens before the push, so
-   * the merged doc is what gets persisted. A clean (non-dirty) board is a
-   * no-op. Used directly by tests; sync() wraps it around a WebSocket.
-   */
-  async flush(boardId: string, push: PushFn): Promise<SyncAck | null> {
-    const doc = this.doc(boardId);
-    if (!(await this.pendingBoardIds()).includes(boardId)) return null;
-    const ack = await push(Y.encodeStateAsUpdate(doc));
-    await this.store.saveDoc(boardId, Y.encodeStateAsUpdate(doc));
-    await this.clearDirty(boardId);
+  private async settle(
+    scope: ContinuityScope,
+    operation: PendingBoardOperation,
+    ack: SyncAck,
+  ): Promise<void> {
+    await this.change(async () => {
+      const pending = await this.pendingOperations(scope);
+      if (!pending.some((item) => item.operationId === operation.operationId)) {
+        throw new Error("pending board operation changed before acknowledgement");
+      }
+      await this.store.setMeta(
+        operationsKey(scope),
+        pending.filter((item) => item.operationId !== operation.operationId),
+      );
+      const results = (await this.store.getMeta<Record<string, SyncAck>>(resultsKey(scope))) ?? {};
+      await this.store.setMeta(resultsKey(scope), { ...results, [operation.boardId]: ack });
+    });
+  }
+
+  async flush(scope: ContinuityScope, boardId: string, push: PushFn): Promise<SyncAck | null> {
+    const run = this.delivery.then(() => this.flushOne(scope, boardId, push));
+    this.delivery = run.then(() => undefined, () => undefined);
+    return run;
+  }
+
+  private async flushOne(
+    scope: ContinuityScope,
+    boardId: string,
+    push: PushFn,
+  ): Promise<SyncAck | null> {
+    const operation = (await this.pendingOperations(scope)).find(
+      (item) => item.boardId === boardId,
+    );
+    if (!operation) return null;
+    const ack = await push(operation, fromBase64(operation.update));
+    if (!ack.exact || ack.operationId !== operation.operationId) {
+      throw new Error("sync acknowledgement does not match the pending operation");
+    }
+    await this.settle(scope, operation, ack);
     return ack;
   }
 
-  /**
-   * Renew a disconnected session on reconnect. The cached resume token
-   * buys a fresh access token without re-login and without touching the
-   * queued edits. Throws while still offline; the caller keeps using the
-   * cached data and retries later.
-   */
-  async renew(): Promise<string> {
-    const session = await this.session();
-    if (!session) throw new Error("no cached session");
-    const res = await this.fetchImpl(`${this.baseUrl}/api/v1/auth/resume`, {
+  private async mergeServerState(
+    scope: ContinuityScope,
+    boardId: string,
+    state: Uint8Array,
+  ): Promise<void> {
+    await this.change(async () => {
+      const doc = this.doc(scope, boardId);
+      Y.applyUpdate(doc, state);
+      await this.store.saveDoc(docKey(scope, boardId), Y.encodeStateAsUpdate(doc));
+    });
+  }
+
+  async renew(scope: ContinuityScope): Promise<string> {
+    const session = await this.session(scope);
+    if (!session) throw new SyncTransportError("auth_required", "no cached session");
+    const response = await this.fetchImpl(`${this.baseUrl}/api/v1/auth/resume`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ resumeToken: session.resumeToken }),
     });
-    if (!res.ok) throw new Error(`resume failed: ${res.status}`);
-    const body = (await res.json()) as { accessToken: string; resumeToken?: string };
-    await this.store.setMeta(SESSION_KEY, {
+    if (!response.ok) {
+      const code = response.status === 401 || response.status === 403 ? "auth_required" : "failed";
+      throw new SyncTransportError(code, `resume failed: ${response.status}`);
+    }
+    const body = (await response.json()) as { accessToken: string; resumeToken?: string };
+    await this.store.setMeta(sessionKey(scope), {
       ...session,
       accessToken: body.accessToken,
       resumeToken: body.resumeToken ?? session.resumeToken,
@@ -173,51 +243,77 @@ export class FieldClient {
     return body.accessToken;
   }
 
-  /**
-   * Full reconnect-and-reconcile over the sync WebSocket: authenticate,
-   * apply the server's state into the local doc, push the merged state,
-   * and settle on the ack. This is the production reconnect path.
-   */
-  async sync(boardId: string, token: string, timeoutMs = 15000): Promise<SyncAck | null> {
-    await this.open(boardId);
+  async sync(
+    scope: ContinuityScope,
+    boardId: string,
+    token: string,
+    timeoutMs = 15000,
+  ): Promise<SyncAck | null> {
+    await this.open(scope, boardId);
     const wsBase = this.baseUrl.replace(/^http/, "ws");
-    const socket = this.wsFactory(`${wsBase}/api/v1/sync/boards/${boardId}`);
-    const doc = this.doc(boardId);
-    const push: PushFn = (state) =>
-      new Promise<SyncAck>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("sync timeout")), timeoutMs);
-        socket.onmessage = (ev: MessageEvent) => {
-          const msg = JSON.parse(String(ev.data)) as {
-            type: string;
-            update?: string;
-            seq?: number;
-            conflicts?: number;
-            error?: string;
-          };
-          if (msg.type === "state") {
-            Y.applyUpdate(doc, fromBase64(msg.update!));
-            socket.send(
-              JSON.stringify({ type: "update", update: toBase64(Y.encodeStateAsUpdate(doc)) }),
-            );
-          } else if (msg.type === "synced") {
-            clearTimeout(timer);
-            resolve({ seq: msg.seq!, conflicts: msg.conflicts! });
-          } else if (msg.type === "error") {
-            clearTimeout(timer);
-            reject(new Error(msg.error));
-          }
+    const socketRef: { current: WebSocket | null } = { current: null };
+    const push: PushFn = (operation, frozenUpdate) => new Promise<SyncAck>((resolve, reject) => {
+      const activeSocket = this.wsFactory(
+        `${wsBase}/api/v1/sync/boards/${boardId}?incidentId=${encodeURIComponent(scope.incidentId)}`,
+      );
+      socketRef.current = activeSocket;
+      const timer = setTimeout(() => reject(new SyncTransportError("failed", "sync timeout")), timeoutMs);
+      activeSocket.onmessage = (event: MessageEvent) => {
+        const handle = async () => {
+        const message = JSON.parse(String(event.data)) as {
+          type: string;
+          update?: string;
+          operationId?: string | null;
+          seq?: number;
+          conflicts?: number;
+          exact?: boolean;
+          code?: SyncErrorCode;
+          error?: string;
         };
-        socket.onerror = () => {
+        if (message.type === "state") {
+          await this.mergeServerState(scope, boardId, fromBase64(message.update!));
+          activeSocket.send(JSON.stringify({
+            type: "update",
+            operationId: operation.operationId,
+            incidentId: scope.incidentId,
+            update: toBase64(frozenUpdate),
+          }));
+        } else if (message.type === "update") {
+          await this.mergeServerState(scope, boardId, fromBase64(message.update!));
+        } else if (message.type === "synced") {
           clearTimeout(timer);
-          reject(new Error("socket error"));
+          resolve({
+            operationId: message.operationId ?? null,
+            seq: message.seq!,
+            conflicts: message.conflicts!,
+            exact: message.exact === true,
+          });
+        } else if (message.type === "error") {
+          clearTimeout(timer);
+          reject(new SyncTransportError(message.code ?? "failed", message.error ?? "sync failed"));
+        }
         };
-        socket.onopen = () => socket.send(JSON.stringify({ type: "auth", token }));
-        void state;
-      });
+        void handle().catch((error: unknown) => {
+          clearTimeout(timer);
+          reject(error);
+        });
+      };
+      activeSocket.onerror = () => {
+        clearTimeout(timer);
+        reject(new SyncTransportError("failed", "socket error"));
+      };
+      activeSocket.onopen = () => activeSocket.send(JSON.stringify({ type: "auth", token }));
+    });
     try {
-      return await this.flush(boardId, push);
+      return await this.flush(scope, boardId, push);
     } finally {
-      socket.close();
+      socketRef.current?.close();
     }
+  }
+
+  private change<T>(update: () => Promise<T>): Promise<T> {
+    const run = this.mutation.then(update);
+    this.mutation = run.then(() => undefined, () => undefined);
+    return run;
   }
 }

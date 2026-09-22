@@ -3941,3 +3941,34 @@ increment proves it and that coverage follows the incident area.
 - **Closeout:** integrated export increment, approved local commit and exact
   fast-forward. Rollback is a revert of this unit. Four registered lanes remain
   needed for authorized work; preservation stashes retained. No push.
+
+## VEOC-85-B: durable incident continuity engine
+
+- **Base and landing:** accepted on 6112189 and replayed without overlap onto
+  0d3bf3bb34ed00daf314bf919e52aacf9796d4c1, 2026-09-21. The latter is the
+  exact accepted D30-PDF commit. This unit remains an engine increment;
+  D31 owns application wiring and 85-PROOF the combined desktop proof.
+- **Behavior:** person/incident/board-scoped durable documents and frozen
+  operation payloads survive reload. An exact matching receipt removes only
+  its operation. Edits made during delivery remain queued. Conflicts and
+  authorization failures remain visible and retained. No pending work opens
+  a socket. Reconciliation processes a bounded initial queue snapshot.
+- **Server:** migration 0095 binds receipts and conflicts to the incident.
+  Socket state, history, subscribers and record projection share that scope.
+  Common field-write and reference validation enforce the existing member-level
+  incident REST contract. REST seed identities travel with the first frozen
+  client payload instead of competing with regenerated server identities.
+  Receipt replay requires current read access and attachment; only new writes
+  require contribution authority and an open incident. Audit rows retain actor
+  and incident attribution. Legacy board-wide sync stays separate.
+- **Gate:** root all-workspace TypeScript, full-tree ESLint and seven affected
+  suites passed, 25 tests. Actual PostgreSQL and Chrome prove scoped state,
+  REST-seeded edits, exact retry, conflicting payload/scope rejection, partner
+  contribution and schema conflict, revocation, demotion/closure replay and
+  durable browser recovery. Evidence:
+  deploy/test-runtime/out/lanes/a/logs/85-B-root-final.log.
+- **Review:** parent inspected the complete initial change and correction
+  deltas. Fresh bounded independent correction review: SHIP, no findings.
+  No dependency changes. Rollback is a revert plus preservation of queued
+  local state; deployed receipt data must not be discarded. Approved local
+  commit and exact fast-forward only. Four active lanes retained, no push.

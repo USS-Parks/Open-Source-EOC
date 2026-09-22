@@ -16,87 +16,246 @@ async function clientOn(idb: IDBFactory, name: string): Promise<FieldClient> {
   return new FieldClient(store);
 }
 
+const scope = {
+  personId: "11111111-1111-4111-8111-111111111111",
+  incidentId: "22222222-2222-4222-8222-222222222222",
+};
+const otherPerson = { ...scope, personId: "33333333-3333-4333-8333-333333333333" };
+const otherIncident = { ...scope, incidentId: "44444444-4444-4444-8444-444444444444" };
+
+class ScriptedSocket {
+  onopen: ((event: Event) => void) | null = null;
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  onerror: ((event: Event) => void) | null = null;
+  readonly sentUpdates: string[];
+
+  constructor(
+    private readonly serverState: Uint8Array,
+    private readonly acknowledge: boolean,
+    sentUpdates: string[],
+  ) {
+    this.sentUpdates = sentUpdates;
+    queueMicrotask(() => this.onopen?.(new Event("open")));
+  }
+
+  send(raw: string): void {
+    const message = JSON.parse(raw) as { type: string; operationId?: string; update?: string };
+    if (message.type === "auth") {
+      queueMicrotask(() => this.onmessage?.({
+        data: JSON.stringify({
+          type: "state",
+          update: btoa(String.fromCharCode(...this.serverState)),
+        }),
+      } as MessageEvent));
+      return;
+    }
+    this.sentUpdates.push(message.update!);
+    queueMicrotask(() => {
+      if (!this.acknowledge) {
+        this.onerror?.(new Event("error"));
+        return;
+      }
+      this.onmessage?.({
+        data: JSON.stringify({
+          type: "synced",
+          operationId: message.operationId,
+          seq: 4,
+          conflicts: 0,
+          exact: true,
+        }),
+      } as MessageEvent);
+    });
+  }
+
+  close(): void {}
+}
+
+function serverState(values: Record<string, unknown>): Uint8Array {
+  const doc = new Y.Doc();
+  const records = doc.getMap<unknown>("records");
+  for (const [key, value] of Object.entries(values)) records.set(key, value);
+  return Y.encodeStateAsUpdate(doc);
+}
+
 describe("the field client works offline and survives restart", () => {
   it("edits with no network, reads them back, and marks the board pending", async () => {
     const idb = new IDBFactory();
     const client = await clientOn(idb, "db1");
-    await client.open("board-1");
-    await client.edit("board-1", "rec-1", { road: "SR-169", status: "closed" });
-    await client.edit("board-1", "rec-2", { road: "SR-96", status: "one_lane" });
+    await client.open(scope, "board-1");
+    await client.edit(scope, "board-1", "rec-1", { road: "SR-169", status: "closed" });
+    await client.edit(scope, "board-1", "rec-2", { road: "SR-96", status: "one_lane" });
 
-    const records = client.records("board-1");
+    const records = client.records(scope, "board-1");
     expect(records["rec-1"]).toEqual({ road: "SR-169", status: "closed" });
     expect(records["rec-2"]!.status).toBe("one_lane");
-    expect(await client.pendingBoardIds()).toEqual(["board-1"]);
+    expect(await client.pendingBoardIds(scope)).toEqual(["board-1"]);
   });
 
   it("recovers queued edits in a brand-new client after an app restart", async () => {
     const idb = new IDBFactory();
     const first = await clientOn(idb, "db2");
-    await first.open("board-1");
-    await first.edit("board-1", "rec-1", { road: "SR-169", status: "closed" });
+    await first.open(scope, "board-1");
+    const operation = await first.edit(
+      scope, "board-1", "rec-1", { road: "SR-169", status: "closed" },
+    );
 
     // Simulate an app restart: a new client, same durable store, no memory.
     const revived = await clientOn(idb, "db2");
-    await revived.open("board-1");
-    expect(revived.records("board-1")["rec-1"]).toEqual({ road: "SR-169", status: "closed" });
-    expect(await revived.pendingBoardIds()).toEqual(["board-1"]);
+    await revived.open(scope, "board-1");
+    expect(revived.records(scope, "board-1")["rec-1"]).toEqual({ road: "SR-169", status: "closed" });
+    expect(await revived.pendingOperations(scope)).toEqual([operation]);
+    expect(await revived.pendingBoardIds(otherPerson)).toEqual([]);
+    expect(await revived.pendingBoardIds(otherIncident)).toEqual([]);
+    await revived.open(otherPerson, "board-1");
+    expect(revived.records(otherPerson, "board-1")).toEqual({});
   });
 
   it("field-level edits from before and after restart merge into one record", async () => {
     const idb = new IDBFactory();
     const first = await clientOn(idb, "db3");
-    await first.open("b");
-    await first.edit("b", "r", { road: "SR-169" });
+    await first.open(scope, "b");
+    await first.edit(scope, "b", "r", { road: "SR-169" });
 
     const revived = await clientOn(idb, "db3");
-    await revived.open("b");
-    await revived.edit("b", "r", { status: "closed" });
-    expect(revived.records("b")["r"]).toEqual({ road: "SR-169", status: "closed" });
+    await revived.open(scope, "b");
+    await revived.edit(scope, "b", "r", { status: "closed" });
+    expect(revived.records(scope, "b")["r"]).toEqual({ road: "SR-169", status: "closed" });
   });
 
   it("flush pushes the queued state, clears pending, and no-ops when clean", async () => {
     const idb = new IDBFactory();
     const client = await clientOn(idb, "db4");
-    await client.open("board-1");
-    await client.edit("board-1", "rec-1", { road: "SR-169", status: "closed" });
+    await client.open(scope, "board-1");
+    const operation = await client.edit(
+      scope, "board-1", "rec-1", { road: "SR-169", status: "closed" },
+    );
 
     let pushed: Uint8Array | null = null;
-    const push = async (state: Uint8Array): Promise<SyncAck> => {
+    const push = async (sent: typeof operation, state: Uint8Array): Promise<SyncAck> => {
+      expect(sent).toEqual(operation);
       pushed = state;
-      return { seq: 1, conflicts: 0 };
+      return { operationId: sent.operationId, seq: 1, conflicts: 0, exact: true };
     };
-    const ack = await client.flush("board-1", push);
-    expect(ack).toEqual({ seq: 1, conflicts: 0 });
+    const ack = await client.flush(scope, "board-1", push);
+    expect(ack).toEqual({ operationId: operation.operationId, seq: 1, conflicts: 0, exact: true });
     expect(pushed).not.toBeNull();
     // The pushed state carries the edit: decode it into a fresh doc.
     const check = new Y.Doc();
     Y.applyUpdate(check, pushed!);
     expect(check.getMap("records").get("rec-1/road")).toBe("SR-169");
-    expect(await client.pendingBoardIds()).toEqual([]);
+    expect(await client.pendingBoardIds(scope)).toEqual([]);
 
     // Nothing queued now: a second flush is a no-op.
     let pushedAgain = false;
-    const ack2 = await client.flush("board-1", async () => {
+    const ack2 = await client.flush(scope, "board-1", async () => {
       pushedAgain = true;
-      return { seq: 2, conflicts: 0 };
+      return { operationId: operation.operationId, seq: 2, conflicts: 0, exact: true };
     });
     expect(ack2).toBeNull();
     expect(pushedAgain).toBe(false);
+  });
+
+  it("retains pending data when an acknowledgement is not exact", async () => {
+    const idb = new IDBFactory();
+    const client = await clientOn(idb, "db-mismatch");
+    await client.open(scope, "board-1");
+    const operation = await client.edit(scope, "board-1", "rec-1", { road: "SR-169" });
+    await expect(client.flush(scope, "board-1", async () => ({
+      operationId: "55555555-5555-4555-8555-555555555555",
+      seq: 9,
+      conflicts: 0,
+      exact: true,
+    }))).rejects.toThrow("does not match");
+    expect(await client.pendingOperations(scope)).toEqual([operation]);
+  });
+
+  it("retries immutable bytes after a lost acknowledgement while merging newer server state", async () => {
+    const idb = new IDBFactory();
+    const sent: string[] = [];
+    const scripts = [
+      { state: serverState({ "remote-1/status": "open" }), acknowledge: false },
+      { state: serverState({ "remote-2/status": "closed" }), acknowledge: true },
+    ];
+    const client = new FieldClient(
+      await openOfflineStore(idb, "db-lost-ack"),
+      "http://localhost",
+      () => {
+        const script = scripts.shift()!;
+        return new ScriptedSocket(script.state, script.acknowledge, sent) as unknown as WebSocket;
+      },
+    );
+    await client.open(scope, "board-1");
+    const operation = await client.edit(scope, "board-1", "local", { status: "assigned" });
+
+    await expect(client.sync(scope, "board-1", "token")).rejects.toThrow("socket error");
+    expect((await client.pendingOperations(scope))[0]?.operationId).toBe(operation.operationId);
+    expect(await client.sync(scope, "board-1", "token")).toMatchObject({
+      operationId: operation.operationId,
+      exact: true,
+    });
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toBe(sent[0]);
+    expect(client.records(scope, "board-1")).toMatchObject({
+      "remote-1": { status: "open" },
+      "remote-2": { status: "closed" },
+      local: { status: "assigned" },
+    });
+  });
+
+  it("keeps an edit made during an in-flight acknowledgement as a separate operation", async () => {
+    const client = await clientOn(new IDBFactory(), "db-in-flight");
+    await client.open(scope, "board-1");
+    const first = await client.edit(scope, "board-1", "record", { status: "open" });
+    let release!: () => void;
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    const ack = new Promise<SyncAck>((resolve) => {
+      release = () => resolve({ operationId: first.operationId, seq: 1, conflicts: 0, exact: true });
+    });
+    const inFlight = client.flush(scope, "board-1", async () => {
+      entered();
+      return ack;
+    });
+    await started;
+    const second = await client.edit(scope, "board-1", "record", { details: "new edit" });
+    release();
+    await inFlight;
+
+    expect((await client.pendingOperations(scope)).map((item) => item.operationId)).toEqual([
+      second.operationId,
+    ]);
+    const frozen = new Y.Doc();
+    const binary = atob(second.update);
+    Y.applyUpdate(frozen, Uint8Array.from(binary, (character) => character.charCodeAt(0)));
+    expect(frozen.getMap("records").get("record/details")).toBe("new edit");
+  });
+
+  it("serializes concurrent edits without losing either board operation", async () => {
+    const client = await clientOn(new IDBFactory(), "db-concurrent-edits");
+    await Promise.all([client.open(scope, "board-a"), client.open(scope, "board-b")]);
+    await Promise.all([
+      client.edit(scope, "board-a", "a", { status: "open" }),
+      client.edit(scope, "board-b", "b", { status: "closed" }),
+    ]);
+    expect((await client.pendingOperations(scope)).map((item) => item.boardId)).toEqual([
+      "board-a",
+      "board-b",
+    ]);
   });
 
   it("caches the session and assigned boards for offline use", async () => {
     const idb = new IDBFactory();
     const client = await clientOn(idb, "db5");
     await client.cacheSession(
-      { accessToken: "a", resumeToken: "r", personId: "p" },
+      scope,
+      { accessToken: "a", resumeToken: "r", personId: scope.personId },
       [{ id: "board-1", title: "Road Closures", templateKey: "road_closures" }],
     );
 
     const revived = await clientOn(idb, "db5");
-    const session = await revived.session();
+    const session = await revived.session(scope);
     expect(session?.resumeToken).toBe("r");
-    const boards = await revived.cachedBoards();
+    const boards = await revived.cachedBoards(scope);
     expect(boards).toEqual([
       { id: "board-1", title: "Road Closures", templateKey: "road_closures" },
     ]);

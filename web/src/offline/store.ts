@@ -14,6 +14,12 @@ const META = "meta";
 
 export interface OfflineStore {
   saveDoc(boardId: string, state: Uint8Array): Promise<void>;
+  saveDocAndMeta(
+    boardId: string,
+    state: Uint8Array,
+    metaKey: string,
+    metaValue: unknown,
+  ): Promise<void>;
   loadDoc(boardId: string): Promise<Uint8Array | null>;
   docBoardIds(): Promise<string[]>;
   setMeta(key: string, value: unknown): Promise<void>;
@@ -57,6 +63,12 @@ export async function openOfflineStore(
       // Copy into a plain ArrayBuffer-backed array so the structured clone
       // is a stable snapshot, not a view that could be detached later.
       tx.objectStore(DOCS).put(Uint8Array.from(state), boardId);
+      await txDone(tx);
+    },
+    async saveDocAndMeta(boardId, state, metaKey, metaValue) {
+      const tx = db.transaction([DOCS, META], "readwrite");
+      tx.objectStore(DOCS).put(Uint8Array.from(state), boardId);
+      tx.objectStore(META).put(metaValue, metaKey);
       await txDone(tx);
     },
     async loadDoc(boardId) {
