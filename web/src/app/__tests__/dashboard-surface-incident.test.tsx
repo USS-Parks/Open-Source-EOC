@@ -78,6 +78,17 @@ it("switches the scoped total when the selected incident changes", async () => {
   expect(dashboardData).toHaveBeenLastCalledWith("d1", null, "incident-b");
 });
 
+it("shows an inaccessible dashboard as not found without retaining dashboard data", async () => {
+  const { client, dashboardData } = fakeClient();
+  dashboardData.mockRejectedValueOnce(new Error("dashboard not found"));
+  render(
+    <DashboardSurface {...surfaceProps} client={client} dashboardId="other-incident-dashboard" filter={null}
+      incidentId="incident-a" onFilter={() => undefined} />,
+  );
+  await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("dashboard not found"));
+  expect(screen.queryByText("EOC Status")).toBeNull();
+});
+
 it("parses only bounded, schema-valid saved dashboard route state", () => {
   expect(parseDashboardViewState(JSON.stringify({
     scope: "saved",

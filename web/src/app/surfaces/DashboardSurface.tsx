@@ -439,6 +439,8 @@ export function DashboardSurface(props: DashboardSurfaceProps) {
 
       {snapshot.loading && !snapshot.data && props.configKey ? <Loading label="Loading saved dashboard…" /> : null}
       {snapshot.error && !snapshot.data ? <ErrorNote message={snapshot.error} /> : null}
+      {legacy.loading && !legacy.data && props.dashboardId ? <Loading label="Loading dashboard…" /> : null}
+      {legacy.error && !legacy.data ? <ErrorNote message={legacy.error} /> : null}
       {snapshot.data && config.data ? (
         <>
           {snapshot.error ? <ErrorNote message={`Dashboard refresh failed: ${snapshot.error}`} /> : null}
@@ -460,7 +462,7 @@ export function DashboardSurface(props: DashboardSurfaceProps) {
         </>
       ) : null}
 
-      {!props.configKey && !configs.loading ? (
+      {!props.configKey && !configs.loading && !legacy.loading && !legacy.error ? (
         <KitEmptyState
           title="No saved incident overview"
           description="Create a saved view to choose real dashboard widgets and impact panels. No values are inferred or filled with demo data."
