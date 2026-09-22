@@ -10,7 +10,7 @@
     <div id="token-review-root"></div>
     <script type="module">
       import "../../web/src/design/base.css";
-      import { mountTokenReview } from "../../web/src/design/gallery.tsx";
+      import { mountTokenReview } from "../../web/design-review/gallery.tsx";
       const root = document.querySelector("#token-review-root");
       if (!root) throw new Error("Token review root is missing");
       mountTokenReview(root);

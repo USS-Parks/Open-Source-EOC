@@ -65,7 +65,7 @@ FOUO or other handling markings remain persistent shell context under P-SHELL an
 
 ## 6. Review surface
 
-The additive [TokenReview](../../web/src/design/gallery.tsx) export leaves the D03 `CompositionReview` and original component gallery intact. It displays:
+The additive [TokenReview](../../web/design-review/gallery.tsx) export leaves the D03 `CompositionReview` and original component gallery intact. It displays:
 
 - product, organization, incident, and operational-period hierarchy;
 - neutral surface and brand swatches;

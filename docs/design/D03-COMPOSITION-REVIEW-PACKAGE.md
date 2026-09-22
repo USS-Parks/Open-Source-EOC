@@ -11,7 +11,7 @@ D03 assembles the reviewable visual direction before product presentation work b
 The package has three parts:
 
 - Supplied Overview and ESF/Lifeline concept images, inventoried below as synthetic design references.
-- Missing compositions implemented in the isolated `CompositionReview` export in `web/src/design/gallery.tsx`.
+- Missing compositions implemented in the isolated `CompositionReview` export in `web/design-review/gallery.tsx`.
 - `docs/design/D03-gallery.html`, a separate Vite entry that mounts the review export without changing `App.tsx`, `main.tsx`, or the operational application.
 
 Every record in the coded gallery is synthetic. Controls are interactive review props only and perform no application or network write. Generic inline map symbols and icons are proposals, not NAPSG symbols.

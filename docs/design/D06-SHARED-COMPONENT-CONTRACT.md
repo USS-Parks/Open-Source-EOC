@@ -18,7 +18,7 @@ D06 keeps `components.tsx`, `layout.tsx`, and every existing export unchanged th
 | `feedback.tsx` | `ConditionBadge`, `CountBadge`, `LoadingState`, `EmptyState`, `ErrorState` | Uses D04 condition meaning and existing live-region conventions |
 | `controls.tsx` | `ActionButton`, `Tabs`, `Menu`, `Tooltip`, `ProgressIndicator` | Native buttons and ARIA patterns; no workflow or navigation state |
 | `kit.css` | Scoped `.eoc-kit-*` styles | Uses D04 tokens and inherits the approved navy correction at integration |
-| `kit-gallery.tsx` | `KitReview`, `mountKitReview` | Synthetic review surface; not an application route |
+| `web/design-review/kit-gallery.tsx` | `KitReview`, `mountKitReview` | Synthetic review surface; not an application route or part of the application TypeScript tree |
 
 All cards accept normal DOM attributes so downstream table, form, shell, and drawer owners can label and compose them without wrapping or forking the component.
 

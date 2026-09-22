@@ -4944,3 +4944,27 @@ increment proves it and that coverage follows the incident area.
 - **Result:** W1.0 is complete. This removes an empty second toolchain without
   changing a runtime route, schema, dependency or operator behavior. Next:
   W1.1, relocate the design-review galleries outside the application tree.
+
+## V1 W1.1: separate design review from the application tree
+
+- **Relocation:** the six HTML review entries for composition, tokens, icons,
+  shared components, operational tables and recoverable forms now load their
+  synthetic modules from `web/design-review/`. The composition and token
+  entries intentionally share one module; icon, kit, table and form reviews
+  each retain their own module and review-only CSS.
+- **Application boundary:** no gallery file remains under `web/src`, the web
+  package TypeScript configuration still includes only `src`, and production
+  components, tokens, icons and styles remain in that tree. The six review
+  HTML files and their design notes point to the new paths.
+- **Accessibility coverage:** the four gallery-owned suites moved beside the
+  reviews and still exercise the moved composition/token, icon, kit and form
+  surfaces. They passed 27 of 27 tests across 4 files.
+- **Verification:** recursive TypeScript and full ESLint passed; the license
+  scan passed all 300 packages; the link checker passed all 65 Markdown files.
+  The production web build transformed 360 modules successfully, and a scan of
+  its output found none of the gallery-only markers. `git diff --check` is
+  clean.
+- **Result:** W1.1 is complete. Synthetic review code is no longer part of the
+  application source or bundle, while its review entries and automated checks
+  remain usable. No runtime route, schema, dependency or operator behavior
+  changed. Next: W1.2, retire the archived design fixture scripts.

@@ -2,15 +2,15 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { LIFELINE_STATUS } from "@openeoc/shared";
-import { Button, EnumSelect, Panel, StatusBadge, TextField, Theme } from "./components.js";
+import { Button, EnumSelect, Panel, StatusBadge, TextField, Theme } from "../src/design/components.js";
 import {
   AppFrame,
   BoardList,
   BoardTable,
   MapPanel,
   NotificationTray,
-} from "./layout.js";
-import type { ThemeName } from "./tokens.js";
+} from "../src/design/layout.js";
+import type { ThemeName } from "../src/design/tokens.js";
 import type { CSSProperties } from "react";
 import {
   chartCategories,
@@ -19,7 +19,7 @@ import {
   operationalStates,
   themes,
   type OperationalState,
-} from "./tokens.js";
+} from "../src/design/tokens.js";
 
 /**
  * Component gallery: every design-system piece rendered together. Serves as

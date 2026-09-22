@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// Review-only accessibility coverage lives with the non-product galleries.
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import axe from "axe-core";
 import { afterEach, describe, expect, it } from "vitest";

@@ -6,8 +6,9 @@ D05 adds one original, local SVG family for application navigation, common actio
 community lifelines. The family follows the approved G-A direction: compact geometry, navy and teal
 presentation, rounded strokes, and silhouettes that remain recognizable at small sizes.
 
-The registry lives under `web/src/design/icons/`. Existing design-kit, layout, and gallery exports are
-unchanged; downstream surfaces can adopt this family deliberately in later units.
+The production registry remains under `web/src/design/icons/`. The synthetic icon review lives in
+`web/design-review/IconGallery.tsx`, outside the application TypeScript tree; downstream surfaces can
+adopt the production family deliberately without shipping the review surface.
 
 ## Public contract
 

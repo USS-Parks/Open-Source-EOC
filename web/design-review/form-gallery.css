@@ -1,3 +1,4 @@
+/* Review-only gallery styles; not shipped by the operator application. */
 .form-review { min-height: 100vh; color: var(--eoc-text); background: var(--eoc-bg); font-family: var(--eoc-font); }
 .form-review-command { min-height: 58px; padding: 8px 18px; display: flex; align-items: center; justify-content: space-between; gap: 16px; color: var(--eoc-brand-navy-text); background: var(--eoc-brand-navy); }
 .form-review-command > div { display: grid; gap: 2px; }.form-review-command span { color: color-mix(in srgb, var(--eoc-brand-navy-text) 72%, transparent); font-size: 12px; }

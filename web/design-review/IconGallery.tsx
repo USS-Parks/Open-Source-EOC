@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Theme } from "../components.js";
-import type { ThemeName } from "../tokens.js";
-import { Icon, LifelineIcon } from "./Icon.js";
+import { Theme } from "../src/design/components.js";
+import type { ThemeName } from "../src/design/tokens.js";
+import { Icon, LifelineIcon } from "../src/design/icons/Icon.js";
 import {
   actionIconNames,
   iconRegistry,
   lifelineIconByKey,
   navigationIconNames,
   type LifelineKey,
-} from "./registry.js";
-import "./styles.css";
+} from "../src/design/icons/registry.js";
+import "./icon-gallery.css";
 
 const lifelineLabels: Readonly<Record<LifelineKey, string>> = {
   safety_security: "Safety and Security",

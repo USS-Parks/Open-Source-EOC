@@ -1,28 +1,28 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Theme } from "./components.js";
+import { Theme } from "../src/design/components.js";
 import {
   ActionCard,
   ConditionCard,
   KpiCard,
   RecordCard,
   SummaryCard,
-} from "./cards.js";
+} from "../src/design/cards.js";
 import {
   ActionButton,
   Menu,
   ProgressIndicator,
   Tabs,
   Tooltip,
-} from "./controls.js";
+} from "../src/design/controls.js";
 import {
   ConditionBadge,
   CountBadge,
   EmptyState,
   ErrorState,
   LoadingState,
-} from "./feedback.js";
-import type { ThemeName, OperationalState } from "./tokens.js";
+} from "../src/design/feedback.js";
+import type { ThemeName, OperationalState } from "../src/design/tokens.js";
 import "./kit-gallery.css";
 
 const lifelines: readonly {

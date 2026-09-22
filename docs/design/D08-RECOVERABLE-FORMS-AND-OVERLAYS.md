@@ -18,7 +18,7 @@ The existing `RecordForm` and its exports remain unchanged. P-BOARDS-1 owns adop
 | `forms.tsx` | `SchemaForm`, grouped sections, shared conditional/calculated values, field controls, linked validation, draft and async submission states |
 | `overlays.tsx` | `Drawer` and `ModalDialog` with shared focus trap, restoration, Escape/backdrop handling, and explicit unsaved confirmation |
 | `forms.css` | Scoped form/overlay presentation driven by D04 tokens |
-| `form-gallery.tsx` | Synthetic review surface; no operational route or API |
+| `web/design-review/form-gallery.tsx` | Synthetic review surface; no operational route, API or application TypeScript ownership |
 
 ## 2. Field contract
 

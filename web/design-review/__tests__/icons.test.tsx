@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import axe from "axe-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { Icon, LifelineIcon } from "../Icon.js";
+import { Icon, LifelineIcon } from "../../src/design/icons/Icon.js";
 import { IconGallery } from "../IconGallery.js";
 import {
   ICON_SIZES,
@@ -12,7 +12,7 @@ import {
   lifelineIconByKey,
   lifelineIconNames,
   navigationIconNames,
-} from "../registry.js";
+} from "../../src/design/icons/registry.js";
 
 afterEach(cleanup);
 

@@ -1,20 +1,20 @@
 import { useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { SavedStateListPage, SavedStateRecord, SavedStateWrite } from "@openeoc/shared";
-import { Theme, StatusBadge } from "./components.js";
-import { ActionButton } from "./controls.js";
+import { Theme, StatusBadge } from "../src/design/components.js";
+import { ActionButton } from "../src/design/controls.js";
 import {
   OperationalTable,
   createOperationalTableViewState,
   type OperationalTableColumn,
   type OperationalTableStatus,
   type OperationalTableViewState,
-} from "./table.js";
+} from "../src/design/table.js";
 import {
   OperationalTableSavedViews,
   useOperationalTableViews,
   type TableViewPersistence,
-} from "./table-saved-views.js";
+} from "../src/design/table-saved-views.js";
 import "./table-gallery.css";
 
 interface WorkRow {

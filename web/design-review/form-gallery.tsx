@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { FieldDef, FormLayout } from "@openeoc/shared";
-import { Theme } from "./components.js";
-import { ActionButton } from "./controls.js";
-import { createMetadataDraftStore, type DraftScope } from "./form-drafts.js";
-import { SchemaForm, type GeometryFieldContext } from "./forms.js";
-import { Drawer, ModalDialog } from "./overlays.js";
-import type { ThemeName } from "./tokens.js";
+import { Theme } from "../src/design/components.js";
+import { ActionButton } from "../src/design/controls.js";
+import { createMetadataDraftStore, type DraftScope } from "../src/design/form-drafts.js";
+import { SchemaForm, type GeometryFieldContext } from "../src/design/forms.js";
+import { Drawer, ModalDialog } from "../src/design/overlays.js";
+import type { ThemeName } from "../src/design/tokens.js";
 import "./form-gallery.css";
 
 const fields: readonly FieldDef[] = [
