@@ -1,42 +1,17 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
-import { chromium, type Browser } from "playwright-core";
+import type { Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { addMembership, createJurisdiction, createPerson } from "../auth/service.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardDashboards } from "../dashboards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import { auth, buildDir, buildWeb, launchBrowser, listen, login, serveStatic, shotDir } from "./browser.js";
 import { freshDb, type Sql } from "./helpers.js";
 
-const DIST = process.env["OPENEOC_TEST_BUILD_ROOT"]
-  ? join(process.env["OPENEOC_TEST_BUILD_ROOT"], "authorized-viewing-dist")
-  : "/tmp/openeoc-authorized-viewing-dist";
-const SHOTS = process.env["OPENEOC_SHOT_DIR"] ?? "/tmp/openeoc-authorized-viewing-shots";
-const TYPES: Record<string, string> = {
-  ".html": "text/html",
-  ".js": "text/javascript",
-  ".css": "text/css",
-  ".json": "application/json",
-  ".geojson": "application/geo+json",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".woff2": "font/woff2",
-  ".wasm": "application/wasm",
-};
-
-function chromiumPath(): string {
-  const candidates = [
-    process.env["OPENEOC_CHROMIUM"],
-    "/opt/pw-browsers/chromium",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium-browser",
-    "/usr/bin/chromium",
-  ];
-  for (const candidate of candidates) if (candidate && existsSync(candidate)) return candidate;
-  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
-}
+const DIST = buildDir("authorized-viewing");
+const SHOTS = shotDir("authorized-viewing");
 
 let admin: Sql;
 let runtime: Sql;
@@ -51,18 +26,6 @@ let incidentA: string;
 let dashboardA: string;
 let dashboardB: string;
 let participantId: string;
-
-const auth = (token: string) => ({ authorization: `Bearer ${token}` });
-
-async function login(email: string, password: string): Promise<string> {
-  const response = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  if (response.statusCode !== 200) throw new Error(`login failed: ${response.body}`);
-  return response.json().accessToken as string;
-}
 
 async function activate(jurisdictionId: string, name: string): Promise<string> {
   const response = await app.inject({
@@ -87,18 +50,7 @@ async function makeDashboard(jurisdictionId: string): Promise<string> {
 }
 
 beforeAll(async () => {
-  const webDir = join(process.cwd(), "web");
-  const publicDir = join(webDir, "public");
-  const { build } = await import("../../../web/node_modules/vite/dist/node/index.js");
-  await build({
-    root: webDir,
-    base: "./",
-    publicDir: false,
-    logLevel: "silent",
-    build: { outDir: DIST, emptyOutDir: true },
-  });
-  expect(existsSync(join(DIST, "index.html"))).toBe(true);
-  mkdirSync(SHOTS, { recursive: true });
+  await buildWeb(DIST);
 
   ({ admin, runtime } = await freshDb());
   hostA = await createJurisdiction(admin, "browser-host-a", "Browser Host A");
@@ -121,31 +73,9 @@ beforeAll(async () => {
   await ensureStandardDashboards(admin);
   await ensureStandardIncidentTemplates(admin);
   app = buildApp(runtime, { oidc: null });
-  app.get("/app/*", (req, reply) => {
-    const rel = (req.params as { "*": string })["*"] || "index.html";
-    const safe = rel.replaceAll("..", "");
-    let path = join(DIST, safe);
-    if (!existsSync(path)) path = join(publicDir, safe);
-    if (!existsSync(path)) return reply.status(404).send("missing");
-    const ext = path.slice(path.lastIndexOf("."));
-    const type = TYPES[ext] ?? "application/octet-stream";
-    const buffer = readFileSync(path);
-    const range = req.headers.range;
-    const match = range ? /^bytes=(\d+)-(\d*)$/.exec(range) : null;
-    if (match) {
-      const start = Number(match[1]);
-      const end = match[2] ? Number(match[2]) : buffer.length - 1;
-      const slice = buffer.subarray(start, Math.min(end, buffer.length - 1) + 1);
-      return reply.status(206).header("content-type", type).header("accept-ranges", "bytes")
-        .header("content-range", `bytes ${start}-${start + slice.length - 1}/${buffer.length}`)
-        .send(slice);
-    }
-    return reply.header("content-type", type).header("accept-ranges", "bytes").send(buffer);
-  });
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const address = app.server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-  ownerToken = await login("browser-owner@example.org", "browser-owner-password");
+  serveStatic(app, "/app", DIST);
+  baseUrl = await listen(app);
+  ownerToken = await login(app, "browser-owner@example.org", "browser-owner-password");
   incidentA = await activate(hostA, "Authorized Host A Fire");
   await activate(hostB, "Unrelated Host B Flood");
   dashboardA = await makeDashboard(hostA);
@@ -196,7 +126,7 @@ beforeAll(async () => {
     }] },
   })).statusCode).toBe(200);
 
-  browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
+  browser = await launchBrowser();
 }, 120000);
 
 afterAll(async () => {
@@ -206,7 +136,7 @@ afterAll(async () => {
   await admin?.end();
 });
 
-describe("VEOC-80 authorized viewing in a real browser", () => {
+describe("authorized viewing in a real browser", () => {
   it("shows only the partner's host incident data and clears it after revocation", async () => {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     const external: string[] = [];

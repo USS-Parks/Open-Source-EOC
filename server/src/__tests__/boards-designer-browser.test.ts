@@ -1,22 +1,14 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { FastifyInstance, FastifyReply } from "fastify";
-import { chromium, type Browser, type Page } from "playwright-core";
+import type { FastifyInstance } from "fastify";
+import type { Browser, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
+import { buildDir, buildWeb, launchBrowser, listen, login, post, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
-const DIST = process.env.OPENEOC_TEST_BUILD_ROOT
-  ? join(process.env.OPENEOC_TEST_BUILD_ROOT, "boards-designer-app-dist")
-  : "/tmp/openeoc-boards-designer-app-dist";
-const SHOTS = process.env.OPENEOC_SHOT_DIR ?? "/tmp/openeoc-boards-designer-shots";
-const TYPES: Record<string, string> = {
-  ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript",
-  ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml",
-  ".png": "image/png", ".woff2": "font/woff2", ".wasm": "application/wasm",
-  ".pmtiles": "application/octet-stream",
-};
+const DIST = buildDir("boards-designer-app");
+const SHOTS = shotDir("boards-designer");
 
 let admin: Sql;
 let runtime: Sql;
@@ -28,64 +20,20 @@ let boardId: string;
 const pageErrors: string[] = [];
 const externalRequests: string[] = [];
 
-function chromiumPath(): string {
-  for (const candidate of [process.env.OPENEOC_CHROMIUM, "/opt/pw-browsers/chromium",
-    "/usr/bin/google-chrome", "/usr/bin/chromium"]) {
-    if (candidate && existsSync(candidate)) return candidate;
-  }
-  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
-}
-
-function sendFile(reply: FastifyReply, path: string, range?: string) {
-  if (!existsSync(path)) return reply.status(404).send("missing");
-  const buffer = readFileSync(path);
-  const extension = path.slice(path.lastIndexOf("."));
-  const match = range ? /^bytes=(\d+)-(\d*)$/.exec(range) : null;
-  if (match) {
-    const start = Number(match[1]);
-    const end = match[2] ? Number(match[2]) : buffer.length - 1;
-    const slice = buffer.subarray(start, Math.min(end, buffer.length - 1) + 1);
-    return reply.status(206).header("content-type", TYPES[extension] ?? "application/octet-stream")
-      .header("accept-ranges", "bytes")
-      .header("content-range", `bytes ${start}-${start + slice.length - 1}/${buffer.length}`).send(slice);
-  }
-  return reply.header("content-type", TYPES[extension] ?? "application/octet-stream")
-    .header("accept-ranges", "bytes").send(buffer);
-}
-
 beforeAll(async () => {
-  const webDir = join(process.cwd(), "web");
-  const publicDir = join(webDir, "public");
-  const { build } = await import("../../../web/node_modules/vite/dist/node/index.js");
-  await build({ root: webDir, base: "./", publicDir: false, logLevel: "silent",
-    build: { outDir: DIST, emptyOutDir: true } });
-  mkdirSync(SHOTS, { recursive: true });
+  await buildWeb(DIST);
 
   ({ admin, runtime } = await freshDb());
   const seed = await seedIdentity(admin);
   await admin`update persons set is_instance_admin = true where id = ${seed.adminId}`;
   await ensureStandardTemplates(admin);
   app = buildApp(runtime, { oidc: null });
-  app.get("/app/*", (incoming, reply) => {
-    const relative = (incoming.params as { "*": string })["*"] || "index.html";
-    const safe = relative.replaceAll("..", "");
-    const built = join(DIST, safe);
-    return sendFile(reply, existsSync(built) ? built : join(publicDir, safe), incoming.headers.range);
-  });
-  const login = await app.inject({ method: "POST", url: "/api/v1/auth/login",
-    payload: { email: "admin@example.org", password: "correct-horse-battery" } });
-  expect(login.statusCode, login.body).toBe(200);
-  const token = login.json().accessToken as string;
-  const created = await app.inject({ method: "POST",
-    url: `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`,
-    headers: { authorization: `Bearer ${token}` }, payload: { templateKey: "shelters" } });
-  expect(created.statusCode, created.body).toBe(201);
-  boardId = created.json().id as string;
+  serveStatic(app, "/app", DIST);
+  const token = await login(app);
+  boardId = (await post(app, token, `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`, { templateKey: "shelters" })).id as string;
 
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const address = app.server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-  browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
+  baseUrl = await listen(app);
+  browser = await launchBrowser();
   page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   await page.emulateMedia({ reducedMotion: "reduce" });
   page.on("pageerror", (error) => pageErrors.push(error.message));
@@ -105,7 +53,7 @@ afterAll(async () => {
   await admin?.end();
 });
 
-describe("P-BOARDS-2 no-code board authoring", () => {
+describe("no-code board authoring", () => {
   it("configures, previews, publishes and reapplies a board version in both themes and widths", async () => {
     await page.goto(`${baseUrl}/app/index.html#/board/${boardId}/design`);
     await page.getByLabel("Email").fill("admin@example.org");

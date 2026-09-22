@@ -1,10 +1,11 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
-import { chromium, type Browser, type Page } from "playwright-core";
+import type { Browser, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
+import { launchBrowser, listen, login, serveStatic } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 const OUT_ROOT = process.env.OPENEOC_TEST_BUILD_ROOT ?? "/tmp/openeoc-test-build";
@@ -14,11 +15,6 @@ const DB_NAME = "continuity-browser-proof";
 const RECORD_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_INCIDENT_RECORD_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const TASK_OPERATION_ID = "22222222-2222-4222-8222-222222222222";
-const TYPES: Record<string, string> = {
-  ".html": "text/html",
-  ".js": "text/javascript",
-  ".css": "text/css",
-};
 
 interface FixtureApi {
   configure(config: Record<string, string>): Promise<void>;
@@ -43,29 +39,6 @@ let taskId: string;
 let memberToken: string;
 let memberId: string;
 let positionId: string;
-
-function chromiumPath(): string {
-  const candidates = [
-    process.env.OPENEOC_CHROMIUM,
-    "C:/Program Files/Google/Chrome/Application/chrome.exe",
-    "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
-    "/opt/pw-browsers/chromium",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium",
-  ];
-  for (const candidate of candidates) if (candidate && existsSync(candidate)) return candidate;
-  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
-}
-
-async function login(email: string, password: string): Promise<string> {
-  const response = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  expect(response.statusCode).toBe(200);
-  return response.json().accessToken as string;
-}
 
 async function post(token: string, url: string, payload: Record<string, unknown>) {
   const response = await app.inject({
@@ -104,20 +77,11 @@ beforeAll(async () => {
   await admin`insert into incident_templates (key, title, definition)
     values ('continuity_fixture', 'Continuity fixture', ${admin.json(definition as never)})`;
   app = buildApp(runtime, { oidc: null });
-  app.get("/continuity/*", (request, reply) => {
-    const relative = (request.params as { "*": string })["*"] || "continuity.html";
-    const safe = relative.replaceAll("..", "");
-    const path = join(DIST, safe);
-    if (!existsSync(path)) return reply.status(404).send("missing");
-    const extension = path.slice(path.lastIndexOf("."));
-    return reply.header("content-type", TYPES[extension] ?? "application/octet-stream")
-      .send(readFileSync(path));
-  });
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const address = app.server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-  const adminToken = await login("admin@example.org", "correct-horse-battery");
-  memberToken = await login("member@example.org", "another-good-password");
+  // The fixture bundle is self-contained; no web/public fallback is wanted.
+  serveStatic(app, "/continuity", DIST, DIST);
+  baseUrl = await listen(app);
+  const adminToken = await login(app);
+  memberToken = await login(app, "member@example.org", "another-good-password");
   incidentId = (await post(
     adminToken,
     `/api/v1/jurisdictions/${seed.jurisdictionId}/incidents`,
@@ -153,7 +117,7 @@ beforeAll(async () => {
     headers: { authorization: `Bearer ${memberToken}` },
   });
   taskId = listed.json().tasks[0].id as string;
-  browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
+  browser = await launchBrowser();
   page = await browser.newPage();
 }, 120000);
 
@@ -165,7 +129,7 @@ afterAll(async () => {
   await admin?.end();
 });
 
-describe("85-B actual browser continuity", () => {
+describe("actual browser continuity", () => {
   it("survives reload offline and reconciles board and task exactly once", async () => {
     const config = {
       personId: memberId,

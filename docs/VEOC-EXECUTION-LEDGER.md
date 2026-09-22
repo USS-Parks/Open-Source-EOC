@@ -4692,3 +4692,45 @@ increment proves it and that coverage follows the incident area.
 - No product contract, migration or dependency changed. G was retired clean
   after remote preservation; A retains protected work/d05. Unit commit is
   this receipt's commit; rollback by revert without deleting profile data.
+
+## Audit cleanup, second pass: remaining harness copies and roster names
+
+- **Session:** repository audit follow-up, executed 2026-09-22 on main at
+  `d2ca863`; commit and push authorized for audit closeout.
+- **Scope:** the part of the 2026-09-21 audit remedy that the first pass
+  (`aa2661e`) left unfinished after its sub-agents were cut off. Basho's
+  direction for the whole cleanup: dedupe drift, never delete working code;
+  the 26 real-browser suites are acceptance proof and stay.
+- **Files changed:** `server/src/__tests__/authorized-viewing-browser.test.ts`,
+  `boards-designer-browser.test.ts`, `boards-workspace-browser.test.ts`,
+  `communications-workspace-browser.test.ts`, `continuity-browser.test.ts`
+  moved onto the shared harness in `server/src/__tests__/browser.ts`
+  (Chromium lookup, bundle build, static route with byte ranges, listen,
+  login, post); local `request`/`post` helpers with 2xx-range semantics and
+  the continuity fixture's own Vite root stay local. Five test files renamed
+  off roster step names: `81c-workspace-browser` to
+  `incident-workspace-browser`, `d07-table-view` to `table-view`,
+  `d20-browser` to `incident-activation-browser`, `d22-resources-browser` to
+  `resources-browser`, `d31-continuity-console-browser` to
+  `continuity-console-browser`. Two remaining step-tagged test titles and two
+  module header comments (`server/src/iap/service.ts`,
+  `server/src/dashboards/service.ts`) reworded.
+- **Style regression repaired:** `aa2661e` committed
+  `server/src/iap/service.ts` and `server/src/dashboards/service.ts` reflowed
+  to single quotes without semicolons. Cause: the global editor autoformat
+  hook resolves `C:/Users/17076/node_modules/.bin/prettier` by walking up
+  from the edited file and only honors this repository's `.prettierignore`
+  when the shell's working directory is the repository root. Both files are
+  restored from `aa2661e^`; a formatted copy of that version is byte-identical
+  to the committed one, so nothing but formatting is reverted.
+- **Verification:** `pnpm check` with the local cluster, tag `audit`,
+  `--maxWorkers=2`: typecheck, lint, license scan, link check and desktop
+  tests green; vitest 173 of 176 files, 913 of 920 tests passed, 5 skipped.
+  The three failures were timeouts (`federation.test.ts` beforeAll at 60s,
+  `ipaws.test.ts` second `freshDb()` at 30s, `incident-activation-browser`
+  scroll at 30s). Re-run in isolation with `--maxWorkers=1`: 3 files, 20 of
+  20 tests passed in 22s. Browser harness preamble total is 3,258 lines
+  across 26 files, down from 4,733 before the audit. Working tree diff:
+  12 files, +700 / -1,080 lines.
+- **Rollback:** revert the commit containing this receipt; no migration or
+  dependency rollback is required.
