@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
-import type { Browser, Page } from "playwright-core";
+import type { Browser, Locator, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { addMembership, createJurisdiction, createPerson } from "../auth/service.js";
@@ -22,6 +22,11 @@ let jurisdictionId: string;
 let token: string;
 const pageErrors: string[] = [];
 const externalRequests: string[] = [];
+
+async function activate(control: Locator): Promise<void> {
+  await control.waitFor({ state: "visible" });
+  await control.evaluate((button) => (button as unknown as { click(): void }).click());
+}
 
 beforeAll(async () => {
   await buildWeb(DIST);
@@ -59,20 +64,20 @@ describe("real-browser incident activation and participation", () => {
     await page.goto(`${baseUrl}/app/index.html`, { waitUntil: "load" });
     await page.getByLabel("Email").fill("admin@example.org");
     await page.getByLabel("Password").fill("correct-horse-battery");
-    await page.getByRole("button", { name: "Sign in" }).click();
-    await page.getByRole("button", { name: "Incident Setup", exact: true }).click();
+    await activate(page.getByRole("button", { name: "Sign in" }));
+    await activate(page.getByRole("button", { name: "Incident Setup", exact: true }));
     await page.getByLabel("Scenario template").selectOption("daily_ops");
     await page.getByLabel("Incident name").fill("D20 California Exercise");
     await page.getByLabel("Incident type").selectOption("planned_event");
     const activated = page.waitForResponse((response) => response.request().method() === "POST"
       && response.url().endsWith(`/jurisdictions/${jurisdictionId}/incidents`));
-    await page.getByRole("button", { name: "Activate", exact: true }).click();
+    await activate(page.getByRole("button", { name: "Activate", exact: true }));
     const response = await activated;
     expect(response.status()).toBe(201);
     const incidentId = (await response.json()).incidentId as string;
     const areaButton = page.locator("li").filter({ hasText: "D20 California Exercise" })
       .getByRole("button", { name: "Operational area" });
-    await areaButton.click();
+    await activate(areaButton);
     const setup = page.getByRole("region", { name: "D20 California Exercise: incident setup", exact: true });
     await setup.getByText("Operations Section Chief", { exact: true }).waitFor();
     expect(await setup.getByText(/they do not by themselves transfer ownership or establish unified command/i).isVisible()).toBe(true);
@@ -81,18 +86,18 @@ describe("real-browser incident activation and participation", () => {
     for (const [longitude, latitude] of areaCoordinates) {
       await area.getByLabel("Longitude").fill(longitude);
       await area.getByLabel("Latitude").fill(latitude);
-      await area.getByRole("button", { name: "Add coordinate" }).click();
+      await activate(area.getByRole("button", { name: "Add coordinate" }));
     }
-    await area.getByRole("button", { name: "Close boundary" }).click();
+    await activate(area.getByRole("button", { name: "Close boundary" }));
     await area.getByLabel("Operational period").fill("OP-D20");
     await area.getByLabel("Period starts").fill("2026-09-21T08:00");
     await area.getByLabel("Period ends").fill("2026-09-21T20:00");
     await area.getByLabel("Reason for revision").fill("Synthetic operational area confirmed");
-    await area.getByRole("button", { name: "Save area revision" }).click();
+    await activate(area.getByRole("button", { name: "Save area revision" }));
     await area.getByText(/^Revision 1\./).waitFor();
-    await area.getByRole("button", { name: "View revision 1" }).click();
+    await activate(area.getByRole("button", { name: "View revision 1" }));
     await area.getByText(/Viewing revision 1/).waitFor();
-    await area.getByRole("button", { name: "Return to current draft" }).click();
+    await activate(area.getByRole("button", { name: "Return to current draft" }));
     await area.scrollIntoViewIfNeeded();
     expect(await area.getByRole("button", { name: "Save area revision" }).isVisible()).toBe(true);
     await page.screenshot({ path: join(SHOTS, "d20-light.png"), fullPage: false });
@@ -121,15 +126,14 @@ describe("real-browser incident activation and participation", () => {
     await participants.getByLabel("Incident role").selectOption("coordinator");
     await participants.getByLabel("Participation expires").fill("2099-09-21T20:00");
     await participants.getByLabel("Participation reason").fill("Selected mutual-aid coordination");
-    await participants.getByRole("button", { name: "Add participant" })
-      .evaluate((button) => (button as unknown as { click(): void }).click());
+    await activate(participants.getByRole("button", { name: "Add participant" }));
     await participants.getByText("D20 Partner", { exact: true }).waitFor();
     const partnerToken = await login(app, "d20-partner@example.org", "d20-partner-password");
     const partnerRead = () => app.inject({ method: "GET", url: `/api/v1/incidents/${incidentId}/operational-area`, headers: { authorization: `Bearer ${partnerToken}` } });
     expect((await partnerRead()).statusCode).toBe(200);
-    await participants.getByRole("button", { name: "End participation for D20 Partner" }).click();
+    await activate(participants.getByRole("button", { name: "End participation for D20 Partner" }));
     await participants.getByLabel("Reason for ending participation").fill("Synthetic demobilization");
-    await participants.getByRole("button", { name: "End participation", exact: true }).click();
+    await activate(participants.getByRole("button", { name: "End participation", exact: true }));
     await participants.getByText(/Incident access has been revoked/i).waitFor();
     expect((await partnerRead()).statusCode).toBe(404);
 
@@ -142,8 +146,7 @@ describe("real-browser incident activation and participation", () => {
     await participants.getByLabel("Incident role").selectOption("coordinator");
     await participants.getByLabel("Participation expires").fill("2099-09-21T20:00");
     await participants.getByLabel("Participation reason").fill("Closeout access proof");
-    await participants.getByRole("button", { name: "Add participant" })
-      .evaluate((button) => (button as unknown as { click(): void }).click());
+    await activate(participants.getByRole("button", { name: "Add participant" }));
     await participants.locator("strong").filter({ hasText: "D20 Close Partner" }).waitFor();
     const closePartnerToken = await login(app, "d20-close-partner@example.org", "d20-close-partner-password");
     const closePartnerRead = () => app.inject({ method: "GET", url: `/api/v1/incidents/${incidentId}/operational-area`, headers: { authorization: `Bearer ${closePartnerToken}` } });
@@ -153,20 +156,20 @@ describe("real-browser incident activation and participation", () => {
     await closePartnerPage.goto(`${baseUrl}/app/index.html`, { waitUntil: "load" });
     await closePartnerPage.getByLabel("Email").fill("d20-close-partner@example.org");
     await closePartnerPage.getByLabel("Password").fill("d20-close-partner-password");
-    await closePartnerPage.getByRole("button", { name: "Sign in" }).click();
-    await closePartnerPage.getByRole("button", { name: "Incident Setup", exact: true }).click();
+    await activate(closePartnerPage.getByRole("button", { name: "Sign in" }));
+    await activate(closePartnerPage.getByRole("button", { name: "Incident Setup", exact: true }));
     const remoteIncident = closePartnerPage.locator("li").filter({ hasText: "D20 California Exercise" });
     await remoteIncident.getByRole("button", { name: "Operational area" }).waitFor();
     expect(await remoteIncident.getByRole("button", { name: "Operational area" }).isVisible()).toBe(true);
-    await remoteIncident.getByRole("button", { name: "Operational area" }).click();
+    await activate(remoteIncident.getByRole("button", { name: "Operational area" }));
     const remoteSetup = closePartnerPage.getByRole("region", { name: "D20 California Exercise: incident setup", exact: true });
     await remoteSetup.getByRole("region", { name: "D20 California Exercise: operational area", exact: true }).waitFor();
     expect(await remoteSetup.getByRole("region", { name: "D20 California Exercise: operational area", exact: true }).isVisible()).toBe(true);
     await closePartnerPage.close();
 
-    await page.getByRole("button", { name: "Account menu" }).click();
-    await page.getByRole("button", { name: "Use dark theme" }).click();
-    await page.getByRole("button", { name: "Account menu" }).click();
+    await activate(page.getByRole("button", { name: "Account menu" }));
+    await activate(page.getByRole("button", { name: "Use dark theme" }));
+    await activate(page.getByRole("button", { name: "Account menu" }));
     await participants.scrollIntoViewIfNeeded();
     expect(await participants.getByRole("button", { name: "Add participant" }).isVisible()).toBe(true);
     await page.screenshot({ path: join(SHOTS, "d20-wide-dark.png"), fullPage: false });
@@ -175,9 +178,9 @@ describe("real-browser incident activation and participation", () => {
     await participants.scrollIntoViewIfNeeded();
     expect(await participants.getByRole("button", { name: "Add participant" }).isVisible()).toBe(true);
     await page.screenshot({ path: join(SHOTS, "d20-narrow-dark.png"), fullPage: false });
-    await page.locator("li").filter({ hasText: "D20 California Exercise" }).getByRole("button", { name: "Close incident" }).click();
+    await activate(page.locator("li").filter({ hasText: "D20 California Exercise" }).getByRole("button", { name: "Close incident" }));
     await page.getByText(/Closeout prevents new incident updates/i).waitFor();
-    await page.getByRole("button", { name: "Confirm closeout" }).click();
+    await activate(page.getByRole("button", { name: "Confirm closeout" }));
     await page.getByText("closed", { exact: true }).waitFor();
     expect((await closePartnerRead()).statusCode).toBe(200);
     const ownerClosedWrite = await app.inject({ method: "POST", url: `/api/v1/boards/${boardId}/records?incidentId=${incidentId}`,
