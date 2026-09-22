@@ -158,7 +158,8 @@ describe("real-browser incident activation and participation", () => {
     await closePartnerPage.getByLabel("Password").fill("d20-close-partner-password");
     await activate(closePartnerPage.getByRole("button", { name: "Sign in" }));
     const remoteIncidentSelector = closePartnerPage.getByLabel("Selected incident");
-    await remoteIncidentSelector.getByRole("option", { name: "D20 California Exercise", exact: true }).waitFor();
+    await remoteIncidentSelector.getByRole("option", { name: "D20 California Exercise", exact: true })
+      .waitFor({ state: "attached" });
     await remoteIncidentSelector.selectOption(incidentId);
     await activate(closePartnerPage.getByRole("button", { name: "Incident Setup", exact: true }));
     const remoteIncident = closePartnerPage.locator("li").filter({ hasText: "D20 California Exercise" });
