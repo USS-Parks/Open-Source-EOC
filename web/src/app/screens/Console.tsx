@@ -19,7 +19,7 @@ import { EmptyState, ErrorNote, Loading, NotFoundState, UnavailableState } from 
 import { MapSurface } from "../surfaces/MapSurface.js";
 import { DashboardSurface, parseDashboardViewState, type DashboardViewState } from "../surfaces/DashboardSurface.js";
 import { BoardSurface, BoardRecordDetailPane, type BoardRecordContext } from "../surfaces/BoardSurface.js";
-import { SitrepSurface } from "../surfaces/SitrepSurface.js";
+import { SitrepSurface, SitrepWorkspace } from "../surfaces/SitrepSurface.js";
 import { FormsSurface } from "../surfaces/FormsSurface.js";
 import { IapSurface } from "../surfaces/IapSurface.js";
 import { FilesSurface } from "../surfaces/FilesSurface.js";
@@ -34,7 +34,7 @@ import { FeedsSurface } from "../surfaces/FeedsSurface.js";
 import { MessagesSurface } from "../surfaces/MessagesSurface.js";
 import { SmartFormsSurface } from "../surfaces/SmartFormsSurface.js";
 import { TrackingSurface } from "../surfaces/TrackingSurface.js";
-import { AlertsSurface, BoardsIndex, SitrepsIndex } from "../surfaces/lists.js";
+import { AlertsSurface, BoardsIndex } from "../surfaces/lists.js";
 import { LifelinesSurface } from "../surfaces/LifelinesSurface.js";
 import { EsfSurface } from "../surfaces/EsfSurface.js";
 
@@ -443,14 +443,17 @@ function Center(props: {
         {...(props.recordId ? { recordId: props.recordId } : {})} onRecordContext={props.onRecordContext} />;
     case "sitreps":
       return (
-        <SitrepsIndex
+        <SitrepWorkspace
           client={props.client}
           jurisdictionId={props.jurisdictionId}
+          incidentId={props.incidentId}
+          incidentName={props.incidentName}
+          period={props.operationalPeriod}
           onOpen={props.onOpenSitrep}
         />
       );
     case "sitrep":
-      return <SitrepSurface client={props.client} sitrepId={s.id} />;
+      return <SitrepSurface client={props.client} sitrepId={s.id} jurisdictionId={props.jurisdictionId} />;
     case "forms":
       return (
         <FormsSurface
@@ -546,7 +549,9 @@ function Center(props: {
         closed={props.incidentClosed} />
         : <EmptyState label="Select an incident to manage participation." />;
     case "jic":
-      return <UnavailableState title="JIC is unavailable" message="This section is not available in the current application." returnLabel="Open SITREP" onReturn={() => props.onNavigate({ kind: "sitreps" })} />;
+      return <SitrepWorkspace mode="jic" client={props.client} jurisdictionId={props.jurisdictionId}
+        incidentId={props.incidentId} incidentName={props.incidentName}
+        period={props.operationalPeriod} onOpen={props.onOpenSitrep} />;
     case "templates":
       return <UnavailableState title="Templates is unavailable" message="This section is not available in the current application." returnLabel="Return to Boards" onReturn={() => props.onNavigate({ kind: "boards" })} />;
     case "settings":

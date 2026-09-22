@@ -214,6 +214,22 @@ describe("situation report composition and archive", () => {
       headers: { authorization: `Bearer ${outToken}` },
     });
     expect(denied.statusCode).toBe(403);
+
+    const legacyContent = {
+      period: "Legacy jurisdiction archive",
+      composedAt: "2026-09-17T08:00:00Z",
+      lifelines: [], boards: [], significantEvents: [], rumorControl: [],
+    };
+    const [legacy] = await admin`
+      insert into sitreps (jurisdiction_id, period, content, composed_by)
+      values (${seed.jurisdictionId}, ${legacyContent.period},
+        ${admin.json(legacyContent as never)}, ${seed.memberId}) returning id`;
+    const legacyRead = await app.inject({
+      method: "GET", url: `/api/v1/sitreps/${legacy!.id as string}`,
+      headers: { authorization: `Bearer ${memberToken}` },
+    });
+    expect(legacyRead.statusCode, legacyRead.body).toBe(200);
+    expect((legacyRead.json() as SitrepRow).period).toBe("Legacy jurisdiction archive");
   });
 
   it("freezes attributed incident assessments and keeps another incident unknown", async () => {
@@ -261,5 +277,132 @@ describe("situation report composition and archive", () => {
       url: `/api/v1/jurisdictions/${seed.jurisdictionId}/sitreps`,
       payload: { period: "Invalid", incidentId: "10000000-0000-4000-8000-000000000099" } });
     expect(missing.statusCode).toBe(404);
+  });
+
+  it("composes an incident-only briefing with ESF, JIC sources, freshness, and revisions", async () => {
+    await ensureStandardIncidentTemplates(admin);
+    const headers = { authorization: `Bearer ${adminToken}` };
+    const activate = async (name: string) => {
+      const response = await app.inject({ method: "POST", headers,
+        url: `/api/v1/jurisdictions/${seed.jurisdictionId}/incidents`,
+        payload: { templateKey: "daily_ops", name } });
+      expect(response.statusCode, response.body).toBe(201);
+      return response.json().incidentId as string;
+    };
+    const incidentA = await activate("D26 briefing incident A");
+    const incidentB = await activate("D26 briefing incident B");
+    const attachedBoard = async (incidentId: string, templateKey: string) => {
+      const created = await app.inject({ method: "POST", headers,
+        url: `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`,
+        payload: { templateKey, title: `${incidentId}:${templateKey}` } });
+      expect(created.statusCode, created.body).toBe(201);
+      const boardId = created.json().id as string;
+      await admin`insert into incident_boards (incident_id, board_id)
+        values (${incidentId}, ${boardId})`;
+      return boardId;
+    };
+    const incidentBoards = async (incidentId: string) => {
+      const rows = await admin`
+        select b.id, b.template_key from incident_boards ib join boards b on b.id = ib.board_id
+        where ib.incident_id = ${incidentId}`;
+      return new Map(rows.map((row) => [row.template_key as string, row.id as string]));
+    };
+    const aBoards = await incidentBoards(incidentA);
+    const bBoards = await incidentBoards(incidentB);
+    const rumorBoard = await attachedBoard(incidentA, "rumor_control");
+    const talkingBoard = await attachedBoard(incidentA, "talking_points");
+    const record = async (boardId: string, incidentId: string, data: Record<string, unknown>) => {
+      const response = await app.inject({ method: "POST", headers,
+        url: `/api/v1/boards/${boardId}/records?incidentId=${incidentId}`, payload: data });
+      expect(response.statusCode, response.body).toBe(201);
+    };
+    await record(aBoards.get("significant_events")!, incidentA, {
+      summary: "A-only verified road closure", occurred_at: "2026-09-21T11:00:00Z",
+      severity: "critical", verified: true,
+    });
+    await record(bBoards.get("significant_events")!, incidentB, {
+      summary: "B-only unrelated evacuation", occurred_at: "2026-09-21T11:30:00Z",
+      severity: "critical", verified: true,
+    });
+    await record(rumorBoard, incidentA, {
+      rumor: "A-only rumor", status: "false", response: "A-only confirmed response",
+    });
+    await record(talkingBoard, incidentA, {
+      topic: "Road access", point: "Use the signed detour.", approved: true,
+    });
+    await admin`
+      update board_templates
+      set definition = jsonb_set(definition, '{fields,1,read}', '"admin"'::jsonb, true)
+      where key = 'talking_points' and version = 1`;
+    const esf = await app.inject({ method: "POST", headers,
+      url: `/api/v1/incidents/${incidentA}/esf-assessments`, payload: {
+        identity: { framework: "federal", esf: "esf_12_energy" },
+        activation: "activated", capacity: "constrained",
+        assessedAt: "2026-09-21T11:15:00Z", confidence: "confirmed",
+        situation: "Fuel delivery is constrained.", relatedLifelines: ["energy"],
+      } });
+    expect(esf.statusCode, esf.body).toBe(201);
+
+    const compose = () => app.inject({ method: "POST", headers,
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/sitreps`,
+      payload: { period: "D26 OP", incidentId: incidentA } });
+    const firstResponse = await compose();
+    expect(firstResponse.statusCode, firstResponse.body).toBe(201);
+    const first = firstResponse.json() as SitrepRow;
+    expect(first).toMatchObject({ incidentId: incidentA, incidentName: "D26 briefing incident A",
+      revision: 1 });
+    expect(first.content.archiveReaderLevel).toBe("admin");
+    expect(first.content.sourceTime).toBeTruthy();
+    expect(first.content.significantEvents.map((line) => line.summary)).toEqual([
+      "A-only verified road closure",
+    ]);
+    expect(JSON.stringify(first.content)).not.toContain("B-only unrelated evacuation");
+    expect(first.content.esfs).toEqual([expect.objectContaining({
+      framework: "federal", esf: "esf_12_energy", activation: "activated",
+      capacity: "constrained", situation: "Fuel delivery is constrained.",
+    })]);
+    expect(first.content.talkingPoints).toEqual([
+      expect.objectContaining({ topic: "Road access", point: "Use the signed detour." }),
+    ]);
+    expect(first.content.rumorControl).toEqual([
+      expect.objectContaining({ rumor: "A-only rumor", response: "A-only confirmed response" }),
+    ]);
+
+    await record(aBoards.get("significant_events")!, incidentA, {
+      summary: "Later A event", occurred_at: "2026-09-21T12:00:00Z",
+      severity: "warning", verified: true,
+    });
+    const secondResponse = await compose();
+    expect(secondResponse.statusCode, secondResponse.body).toBe(201);
+    expect(secondResponse.json()).toMatchObject({ revision: 2 });
+    const archived = await app.inject({ method: "GET", headers,
+      url: `/api/v1/sitreps/${first.id}` });
+    expect(archived.statusCode, archived.body).toBe(200);
+    expect(archived.json().content).toEqual(first.content);
+    const filtered = await app.inject({ method: "GET", headers,
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/sitreps?incidentId=${incidentA}` });
+    expect(filtered.statusCode, filtered.body).toBe(200);
+    expect(filtered.json().sitreps).toHaveLength(2);
+    expect(filtered.json().sitreps[0]).toMatchObject({
+      incidentId: incidentA, incidentName: "D26 briefing incident A", revision: 2,
+    });
+
+    const memberCompose = await app.inject({ method: "POST",
+      headers: { authorization: `Bearer ${memberToken}` },
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/sitreps`,
+      payload: { period: "D26 member mask", incidentId: incidentA } });
+    expect(memberCompose.statusCode, memberCompose.body).toBe(201);
+    expect((memberCompose.json() as SitrepRow).content.archiveReaderLevel).toBe("member");
+    expect((memberCompose.json() as SitrepRow).content.talkingPoints).toEqual([]);
+    expect(JSON.stringify(memberCompose.json())).not.toContain("Use the signed detour.");
+    const deniedAdminArchive = await app.inject({ method: "GET",
+      headers: { authorization: `Bearer ${memberToken}` },
+      url: `/api/v1/sitreps/${first.id}` });
+    expect(deniedAdminArchive.statusCode).toBe(403);
+    const memberArchive = await app.inject({ method: "GET",
+      headers: { authorization: `Bearer ${memberToken}` },
+      url: `/api/v1/sitreps/${(memberCompose.json() as SitrepRow).id}` });
+    expect(memberArchive.statusCode, memberArchive.body).toBe(200);
+    expect(JSON.stringify(memberArchive.json())).not.toContain("Use the signed detour.");
   });
 });

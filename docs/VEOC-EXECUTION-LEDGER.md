@@ -4299,3 +4299,27 @@ increment proves it and that coverage follows the incident area.
 - Evidence level: integrated on publication. No new dependency. Unit commit:
   this receipt's commit; rollback by revert. Seven retained worktrees serve
   active roster units, with protected files and preservation stashes retained.
+
+## D26: frozen briefings and controlled JIC preparation
+
+- Lane B, final baseline d867488. Incident-only composition freezes board
+  sources, Lifeline and ESF summaries, significant events, approved talking
+  points and confirmed rumor responses with source time and revision identity.
+  JIC drafting and submission reuse the existing controlled preparation path.
+  Saving or submitting a draft does not publish an external message.
+- Composition preserves board field masks. Incident archives capture their
+  reader level and recheck current authority on direct retrieval. Members
+  cannot retrieve admin-composed incident snapshots by known ID; member
+  snapshots stay masked. Legacy jurisdiction-wide access remains compatible.
+  Advisory incident locking serializes revisions without requiring admin-only
+  incident update authority from an otherwise authorized member writer.
+- Full TypeScript and ESLint passed. Seven integration suites covered 45 tests;
+  the two final fixture corrections passed all five affected DOM/browser tests.
+  Logs: lanes/b/logs/D26-archive-integration.log and D26-final-presentation.log
+  under deploy/test-runtime/out. Real PostgreSQL/Chrome proves frozen reload,
+  JIC draft submission, no public publication, keyboard composition and actual
+  article containment in light, dark and narrow layouts.
+- Root reviewed the complete diff and corrected captures. Independent final
+  review: SHIP. No new dependency or migration. Evidence level: integrated on
+  publication; user aesthetic acceptance remains separate. Unit commit: this
+  receipt's commit; rollback by revert. Seven active worktrees remain assigned.

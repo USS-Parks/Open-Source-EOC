@@ -10,6 +10,10 @@ const sitrep: SitrepRow = {
   period: "OP-1",
   composedAt: new Date("2026-09-17T12:00:00Z").toISOString(),
   composedBy: "Duty Officer",
+  incidentId: "10000000-0000-4000-8000-000000000001",
+  incidentName: "North Fork Flood",
+  revision: 3,
+  sourceTime: "2026-09-17T11:55:00Z",
   content: {
     period: "OP-1",
     composedAt: new Date("2026-09-17T12:00:00Z").toISOString(),
@@ -17,6 +21,9 @@ const sitrep: SitrepRow = {
       { lifeline: "energy", status: "unstable", note: "substation down", at: null },
       { lifeline: "communications", status: "unknown", note: null, at: null },
     ],
+    esfs: [{ framework: "federal", esf: "esf_5_information_planning",
+      activation: "activated", capacity: "constrained", situation: "Planning cell active",
+      assessedAt: "2026-09-17T11:50:00Z", conflict: false }],
     boards: [
       { key: "shelters", title: "Shelters", records: 2, byStatus: { normal: 1, closed: 1 } },
     ],
@@ -26,6 +33,7 @@ const sitrep: SitrepRow = {
     rumorControl: [
       { rumor: "The dam has failed", status: "false", response: "The dam is intact and monitored." },
     ],
+    talkingPoints: [{ topic: "Dam safety", point: "Monitoring continues around the clock.", recordedAt: "2026-09-17T11:52:00Z" }],
   },
 };
 
@@ -59,11 +67,16 @@ describe("the briefing view renders an archived sitrep", () => {
     );
     expect(screen.getByText("Situation Report")).toBeTruthy();
     expect(screen.getByText(/Operational period OP-1/)).toBeTruthy();
+    const briefing = screen.getByRole("article", { name: "Situation report: OP-1" });
+    expect(briefing.textContent).toContain("North Fork Flood");
+    expect(briefing.textContent).toContain("Revision 3");
     const energy = screen.getByTestId("lifeline-energy");
     expect(energy.textContent).toContain("unstable");
     expect(screen.getByText(/2 records/)).toBeTruthy();
     expect(screen.getByText(/1 normal, 1 closed/)).toBeTruthy();
     expect(screen.getByText(/Levee overtopping/)).toBeTruthy();
+    expect(screen.getByText("Planning cell active")).toBeTruthy();
+    expect(screen.getByText("Monitoring continues around the clock.")).toBeTruthy();
     // JIC rumor-control entries surface on the briefing view (VEOC-33A).
     const rumor = screen.getByTestId("rumor-0");
     expect(rumor.textContent).toContain("The dam has failed");

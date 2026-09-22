@@ -19,6 +19,7 @@ const ComposeBody = z.object({
   period: z.string().min(1),
   incidentId: z.string().uuid().optional(),
 });
+const ListQuery = z.object({ incidentId: z.string().uuid().optional() });
 
 export function sitrepRoutes(
   app: FastifyInstance,
@@ -68,8 +69,9 @@ export function sitrepRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const query = ListQuery.parse(req.query);
       const sitreps = await withPerson(sql, req.principal.person.id, (tx) =>
-        listSitreps(tx, req.principal, jurisdictionId),
+        listSitreps(tx, req.principal, jurisdictionId, query.incidentId),
       );
       return reply.send({ sitreps });
     },

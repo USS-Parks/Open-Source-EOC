@@ -144,6 +144,10 @@ export interface SitrepListItem {
   readonly period: string;
   readonly composedAt: string;
   readonly composedBy: string;
+  readonly incidentId: string | null;
+  readonly incidentName: string | null;
+  readonly revision: number;
+  readonly sourceTime: string;
 }
 export interface RawNotification {
   readonly id: string;
@@ -605,15 +609,24 @@ export class ApiClient {
     const query = params.toString() ? `?${params.toString()}` : "";
     return this.request<DashboardSnapshot>("GET", `/api/v1/dashboards/${dashboardId}/data${query}`);
   }
-  async listSitreps(jurisdictionId: string): Promise<SitrepListItem[]> {
+  async listSitreps(jurisdictionId: string, incidentId?: string): Promise<SitrepListItem[]> {
     const r = await this.request<{ sitreps: SitrepListItem[] }>(
       "GET",
-      `/api/v1/jurisdictions/${jurisdictionId}/sitreps`,
+      `/api/v1/jurisdictions/${jurisdictionId}/sitreps${incidentId ? `?incidentId=${encodeURIComponent(incidentId)}` : ""}`,
     );
     return r.sitreps;
   }
   getSitrep(sitrepId: string): Promise<SitrepRow> {
     return this.request<SitrepRow>("GET", `/api/v1/sitreps/${sitrepId}`);
+  }
+  composeSitrep(jurisdictionId: string, input: { incidentId: string; period: string }): Promise<SitrepRow> {
+    return this.request("POST", `/api/v1/jurisdictions/${jurisdictionId}/sitreps`, input);
+  }
+  draftJicRelease(jurisdictionId: string, input: { title: string; body: string; requiredAgencies: readonly string[]; incidentId?: string }): Promise<{ id: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${jurisdictionId}/jic/releases`, input);
+  }
+  submitJicRelease(releaseId: string): Promise<{ ok: true }> {
+    return this.request("POST", `/api/v1/jic/releases/${releaseId}/submit`);
   }
   listIncidentLifelineAssessments(incidentId: string): Promise<LifelineAssessmentOverviewResponse> {
     return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/lifeline-assessments`);
