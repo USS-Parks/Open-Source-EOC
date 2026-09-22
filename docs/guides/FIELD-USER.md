@@ -1,32 +1,55 @@
 # Field User Guide
 
-For responders working from a phone or a ruggedized tablet, often with gloves
-and a bad connection.
+The field workflow is designed for a phone or ruggedized tablet. It keeps
+supported report fields and assigned task completions durable through a network
+interruption, while distinguishing local queue state from server receipt.
 
-## Work offline
+## Before leaving connectivity
 
-The field client works disconnected. Fill forms, add records, and scan objects
-with no signal; the work queues on the device and syncs when a connection
-returns. Disconnection is the normal case, not an error.
+1. Sign in and select the assigned incident and position.
+2. Open **Smart Forms** and load the assigned form and incident board.
+3. Open **My Tasks** and confirm the work assigned to your current position or
+   incident participation.
+4. Check the command-bar connection state. Cache preparation must finish before
+   you rely on a disconnected path.
 
-## Smart forms
+## Queue a field report
 
-Field forms are XLSForm-compatible: they show the right questions based on
-earlier answers, validate as you go, and submit into the incident once synced.
+1. In **Smart Forms**, choose your organization's form and the attached incident
+   board.
+2. Complete the visible questions. Required and conditional fields are checked
+   before the report can queue.
+3. Select **Queue field report**. The report is stored for the current person,
+   incident, and board before synchronization begins.
+4. Read the status: queued means local only; synchronizing means a transfer is
+   running; synced means the server acknowledged it; failed means acceptance is
+   not verified and conflict needs an explicit review.
 
-## Scanning and tracking
+The form definition must already be loaded. Report fields can queue after that.
+Attachments require a connection, and map record submission uses the connected
+map-capture path. The interface disables those actions while offline rather
+than implying they were stored.
 
-Scan an evacuee, patient, animal, or asset into the tracking board with the
-device camera. Reunification links records so a family is put back together
-without retyping.
+## Complete an assigned task
 
-## Touch and gloves
+Only a completion for a task assigned to your current authority can queue
+offline. Task creation, assignment, prerequisites, due dates, and other metadata
+edits require a server connection. A queued completion remains pending until
+**Reconcile queued work** returns the authoritative receipt.
 
-Controls are sized for a gloved finger. Enumerated inputs mean you tap a choice
-rather than type, which is faster and less error-prone under stress.
+If a prerequisite is incomplete, the task remains blocked. If the server
+rejects the completion or requests authentication, the queue is retained; sign
+in again and reconcile rather than repeating the work under another account.
 
-## Getting a position
+## Handle a conflict
 
-Your admin assigns you to an ICS position. Sign into it to act as that seat;
-messages addressed to the position reach whoever currently holds it, so a shift
-change never drops traffic.
+Do not erase or recreate a conflicted item. The application retains exact
+conflict information for the current person and incident so an authorized
+operator can review it. Record any needed clarification in the authoritative
+workflow after connectivity returns.
+
+## Shift change
+
+Finish synchronization where possible, report every remaining queued or
+conflicted item, then sign out of the position. The incoming responder should
+use their own account and position session so attribution remains accurate.

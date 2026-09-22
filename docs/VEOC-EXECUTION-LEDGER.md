@@ -4644,3 +4644,26 @@ increment proves it and that coverage follows the incident area.
   (39,062 bytes, about 213.6 MB generated data); G retains active D32 changes.
   Historical preservation stashes remain untouched. Unit commit: this receipt's
   commit; rollback by revert. M3 is technically complete, not operator acceptance.
+
+## D32: operational guidance and usable synthetic desktop scenario
+
+- Updated the role guides and scenario to the finished navigation and actual
+  online/offline boundaries. Added operator and guide-index entry points.
+- Cold demo setup now creates an incident area and period, assigned work,
+  a usable field-report form, incident-scoped records, independent California
+  ESF and Lifeline assessments, partial dataset coverage and local Exercise
+  CAP content. Unknown and stale states remain explicit; no warning is sent.
+- Saved Overview configurations are created through real person-scoped
+  services for admin, operator and viewer. Viewer computation proves ready
+  map/list data and an honest missing legacy status source.
+- Gate: recursive TypeScript and affected ESLint passed. Real database demo
+  tests passed 2/2; the added assertion initially used the wrong scope label,
+  corrected to the existing incident-area discriminator. Logs are
+  deploy/test-runtime/out/lanes/g/logs/d32-overview-gate.log and
+  d32-overview-final.log. Independent bounded source review: SHIP.
+- No dependency, migration or API contract changed. New guidance files were
+  scratch-written, counted and copied. The historical integrity script is
+  absent; actual file counts and git diff checks provide write verification.
+- Started at 7a52438 and rebased without conflicts onto M3 5c8d710. This
+  receipt's commit is the unit commit; rollback by revert. No operator timing
+  or live external-source claim is made. Next: canonical cold desktop proof.

@@ -1,37 +1,53 @@
 # Board Designer Guide
 
-Boards are the platform's primitive: a versioned schema with input and display
-views. You design them as data, with no hand-written HTML or JavaScript.
+Boards are versioned operational schemas with structured fields, input layouts,
+and display views. Use the designer for local operational needs without adding
+custom HTML or JavaScript.
 
-## Anatomy of a board
+## Start with the operational purpose
 
-- **Fields** have a key, a label, and a type (text, number, boolean, datetime,
-  enum, person reference, geometry). Enumerated fields are the default: where
-  doctrine defines the values, users pick rather than type.
-- **Views** are named column sets with optional filters and sort. An input view
-  is what an editor fills; a display view is what a reader scans.
-- **Version** is the schema version. Boards are versioned so an instance can
-  upgrade without losing data.
+Write down the decision the board supports, who records it, who reads it, and
+which values are sensitive. Reuse a standard template when it already models
+the work. A new board is appropriate when the record lifecycle or accountable
+owner is meaningfully different.
 
-## Local customization
+## Define fields
 
-A jurisdiction can add local fields to a board it created. Local field keys
-start with `x_`. On a template upgrade, your `x_` fields and all records are
-preserved; local fields the new template now covers re-converge to the
-template. This is why there are no in-place-upgrade dead ends.
+- Give every field a stable key and plain-language label.
+- Prefer enumerations when doctrine defines the allowed values.
+- Mark required data only when the operator can know it at capture time.
+- Use geometry only for real locations or extents.
+- Set read and write levels deliberately. An admin-only field stays masked from
+  members and incident participants even when they may read the record.
+- Prefix local template extensions with `x_` so upgrades can preserve and
+  reconcile them.
 
-## The standard library
+Conditional and calculated fields use the shared form rules. Preview the exact
+conditions and verify that hidden inputs do not silently submit stale values.
 
-The shipped set (activity log, significant events, resource requests,
-shelters, road closures, lifelines, sign-in/out, situation report, press
-releases, checklists, after-action review, rumor control, talking points)
-covers common needs. Start from one and adjust, or design your own.
+## Build input and display views
 
-## Publishing to other instances
+Group input fields in the order operators obtain the information. Keep the
+primary list compact and include the fields needed to distinguish records.
+Filters and sort rules are part of the view; they do not replace record or
+field authorization.
 
-Templates can be packaged and shared. Only signed packages from trusted keys
-import, so a region can distribute a common board set without letting an
-untrusted package redefine schemas.
+Test long names, missing values, narrow screens, and keyboard operation. A
+missing column value should remain visibly missing rather than becoming a
+synthetic default.
 
-See the hands-on walkthrough in
-[../DESIGNER-USABILITY-SCRIPT.md](../DESIGNER-USABILITY-SCRIPT.md).
+## Preview and publish a revision
+
+1. Review the structural diff from the current version.
+2. Preview create, list, detail, filter, and map behavior with synthetic data.
+3. Confirm field permissions with admin, member, and viewer accounts.
+4. Publish a new version. Existing records remain; history is not rewritten.
+5. If another designer published first, reload the current revision and
+   reconcile the changes. Do not overwrite a revision conflict blindly.
+
+Signed template packages can distribute an approved board definition to other
+instances. Trust of the signing key and local import authority are still
+required; package exchange does not share operational records.
+
+For the timed walkthrough, see
+[the designer usability script](../DESIGNER-USABILITY-SCRIPT.md).

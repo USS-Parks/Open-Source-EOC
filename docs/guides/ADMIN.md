@@ -1,45 +1,61 @@
 # Administrator Guide
 
-For the person who runs an OpenEOC instance.
+Administrators configure the local instance and control incident access. The
+application enforces current server authority; hiding a button is not an access
+control.
 
-## Install and first boot
+## Install and protect the instance
 
-Follow [../../deploy/README.md](../../deploy/README.md). After the stack is up,
-set the `app_runtime` password and put its URL in `deploy/.env` so the app runs
-under Row-Level Security, then re-apply. Back up `deploy/.env`: it holds the
-database password and the secret key for credential envelopes.
+Follow [the deployment guide](../../deploy/README.md). Run the application with
+the `app_runtime` database role so Row-Level Security remains active. Protect
+the deployment environment, database password, and credential-envelope secret,
+and schedule tested backups before an activation.
 
-## Bootstrap the first jurisdiction and admin
+Demo accounts and data are for exercises only. Remove or rotate the seeded
+credentials before real operations.
 
-Create the first jurisdiction and its admin once (via `psql` or the
-provisioning endpoint). From then on, admins manage people and positions in
-the app.
+## People, roles, positions, and participants
 
-## People, positions, and roles
+- **Admin** manages the jurisdiction and owner-authorized incident work.
+- **Member** performs routine jurisdiction work.
+- **Viewer** reads only the records and fields the server authorizes.
+- **Positions** are attributable ICS seats. End the outgoing session and assign
+  the incoming person at shift change.
+- **Incident participants** grant bounded, current mutual-aid access. Verify the
+  incident, home organization, position, expiration, and contribution role.
+  Revocation or expiration takes effect on the next authorized read or write.
 
-- **Roles** are `admin`, `member`, and `viewer`. Admins configure; members do
-  the operational work; viewers read. Viewers are free and unlimited, and they
-  cannot write.
-- **Positions** are ICS seats. Assign a person to a position; at shift change,
-  reassign it so the incoming holder takes over and the outgoing one steps
-  down. Position-addressed messages and channel membership follow the seat.
+Do not replace incident participation with a broad board grant. Board and
+position grants keep their exact scope and do not confer incident authority.
 
-## Integrations (all optional, all off by default)
+## Prepare an incident
 
-- **IPAWS**: see [../IPAWS-ENABLEMENT.md](../IPAWS-ENABLEMENT.md). Disabled
-  until a COG is configured and the MOA is acknowledged.
-- **Collaboration** (Mattermost/Matrix) and **meetings** (Jitsi): configure a
-  backend per jurisdiction; with none, the platform still runs and degrades to
-  in-app notifications.
-- **Federation**: see [FEDERATION-SETUP.md](./FEDERATION-SETUP.md).
+1. Activate the appropriate incident template.
+2. Set and verify the incident area and operational period. Revisions are
+   append-only; a correction creates a new revision.
+3. Assign positions and selected partner participants.
+4. Confirm required boards and forms are attached to the incident.
+5. Configure data sources and inspect registry presence, ingestion state,
+   freshness, coverage, rejected rows, and retained last-good data separately.
+6. Confirm task assignments and prerequisites before operators begin work.
 
-## Backups and upgrades
+## Optional integrations
 
-Run `deploy/backup.sh` on a schedule and keep copies off the box. Upgrade by
-pulling new code and re-applying compose; migrations run on boot and preserve
-customization. Always back up first.
+IPAWS, collaboration, meeting, federation, feed, and webhook adapters require
+separate configuration. A local alert, release, message, or request is not proof
+that an external system received it. Use the connector-specific status and
+observed remote evidence before making a delivery claim.
 
-## The audit trail
+- IPAWS setup: [IPAWS enablement](../IPAWS-ENABLEMENT.md)
+- Federation setup: [Federation setup](./FEDERATION-SETUP.md)
 
-Every action is attributed and the audit log is append-only. Corrections are
-new events that point at the original; nothing is ever edited or deleted.
+## During operations
+
+Monitor authorization, source freshness, failed ingestion, offline queues, and
+conflicts. Keep unknown and missing conditions visible. Do not mark an incident
+closed until queued work is reconciled or deliberately accounted for; closeout
+blocks later incident mutations.
+
+The audit trail is append-only. Corrections are new attributed actions rather
+than edits to history. Use domain screens for operational decisions; database
+access is not a routine administrative workflow.

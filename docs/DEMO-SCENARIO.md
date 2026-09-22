@@ -1,97 +1,116 @@
-# Demo Scenario and Scripted Exercise (VEOC-41)
+# Synthetic Incident Demonstration
 
-A functional exercise a stranger can run against the demo dataset
-(`server/src/demo/seed.ts`, loaded on a demo instance) using only the guides
-in `docs/guides/`. It walks the platform end to end, and every facet F1 through
-F20 appears. The facet coverage is checked in CI
-(`server/src/__tests__/demo.test.ts`) so this script cannot silently drop a
-facet.
+This scenario is a guided tour of the current application. Every organization,
+incident, location, assessment, message, and request in the seeded dataset is
+synthetic. Do not treat it as live operational information.
 
-## Setup
+The seed creates **SYNTHETIC Ridge Wildfire Exercise** for **Synthetic Demo
+County OES**. It includes an incident area and operational period, incomplete
+tasks assigned through an operations position, a field form targeting an
+attached Field Reports board, mixed-freshness Lifeline and ESF assessments, a
+partial-coverage exercise dataset, a triaged resource request, a local CAP
+exercise record, a JIC draft, and an AAR observation. Unknown, stale, and
+partial states are intentional.
 
-Deploy per [../deploy/README.md](../deploy/README.md) and load the demo
-dataset. Sign in as `demo-admin@example.org`. The exercise runs about 45
-minutes.
+## Accounts and preparation
 
-## Scripted injects
+Load the demo dataset through the deployment's documented demo-data command,
+then sign in with one of these local exercise accounts:
 
-1. **Activation.** Activate "Demo Wildfire" from the wildfire scenario
-   template. The ICS org chart, the board set, per-position checklists, and the
-   scenario libraries arrive in one action. (F12 incident templates; F13
-   scenario/reference libraries.)
-2. **Provisioning and the viewer path.** Provision an operator and a viewer;
-   time the viewer reaching the common operating picture from a cold start.
-   (F16 one-click role-based provisioning and the ten-minute viewer path.)
-3. **Log the first actions.** On the activity log board, record command
-   establishment and the evacuation decision. (F1 board primitive; F2
-   position login and immutable activity logs.)
-4. **Read the calm screen.** Open the map-first COP and confirm the display
-   stays calm and legible. (F14 calm, map-first SPA discipline; F19 NAPSG/DHS
-   incident symbology.)
-5. **Lifelines and the sitrep.** Set community lifeline conditions and compose
-   a situation report; read it on the briefing view. (F8 FEMA doctrine as
-   schema: lifelines and PDA.)
-6. **Board to map.** Add a road-closure record with a location and watch it
-   appear as a COP layer. (F6 any board as a live geospatial layer.)
-7. **Field forms offline.** On a field device, fill an XLSForm-compatible smart
-   form offline, then sync it. (F7 offline smart forms.)
-8. **Damage assessment.** File a preliminary damage assessment against the
-   pre-disaster baseline. (F9 pre-disaster baseline for damage assessment.)
-9. **Facilities.** Query hospital and shelter status across the always-on
-   facility network. (F10 always-on facility status networks.)
-10. **Tracking and reunification.** Scan an evacuee into the tracking board and
-    reunify a family. (F11 scan-first tracking and reunification.)
-11. **Sensor feed.** Point a sensor/drone feed at the COP and watch tracks land
-    live. (F18 sensor and drone live feeds into the COP.)
-12. **Notifications.** Set a board rule that fans a threshold breach out to the
-    tray and a webhook. (F4 board-triggered notifications and webhooks.)
-13. **Resources, field to state.** Submit a 213RR, triage it, and escalate it
-    to the state tier; watch the state fill it and report back. (F5 ICS forms
-    and the 213RR lifecycle.)
-14. **The IAP.** Assemble the operational-period Incident Action Plan from live
-    data and export the PDF. (F5 IAP builder.)
-15. **Public information.** Draft a press release, route it through multi-agency
-    approval, and publish it to the public feed and CAP; log a media inquiry and
-    answer it with the approved language. (F20 native standards interchange:
-    CAP; JIC.)
-16. **Standards interchange.** Emit a 213RR as EDXL, export facility status as
-    EDXL-HAVE, and bridge a track to CoT/TAK. (F20 native standards
-    interchange: EDXL, HAVE, CoT.)
-17. **Collaboration space.** Confirm the incident's collaboration channels and
-    a one-click meeting bridge for the operations section. (F15 per-incident
-    auto-provisioned collaboration space.)
-18. **Federation.** Share a board with a neighboring instance and watch it
-    converge after a simulated partition. (F3 store-and-forward federation and
-    local replication.)
-19. **Daily ops.** Flip the same machinery into a daily-ops planned event to
-    keep skills fresh between incidents. (F17 daily-ops usability against skill
-    decay.)
-20. **After action.** Capture observations during the incident, then compose
-    the HSEEP AAR from those observations plus the chronology, and track a
-    corrective action that outlives the incident. (F16 usability again for the
-    naive AAR author; and the AAR module.)
+| Role | Account | Use |
+|---|---|---|
+| Administrator | `demo-admin@example.org` | Configuration and owner-authorized actions |
+| Operator | `demo-operator@example.org` | Routine incident work |
+| Viewer | `demo-viewer@example.org` | Read-only briefing path |
 
-## Facet coverage checklist
+The seeded password is `correct-horse-battery`. Change or remove these accounts
+before using an instance for real operations. Select **SYNTHETIC Ridge Wildfire
+Exercise** and **OP SYNTHETIC 1** whenever the shell asks for incident context.
 
-| Facet | Inject |
+## Core walkthrough
+
+1. Open **Situation / Overview** as the viewer. Confirm the incident name,
+   period, and organization remain visible while moving between pages. (F14)
+2. Open **Situation / ESFs & Lifelines**, then the **Lifelines** tab. Energy is
+   a recent unstable assessment, Communications is explicitly unknown and
+   incomplete, Transportation is intentionally stale, and the other Lifelines
+   have no assessment. Do not interpret missing or unknown as stable. (F8)
+3. In **ESFs & Lifelines**, choose the **ESFs** tab. Compare current, stale,
+   and unknown entries. Lifeline condition and ESF activation/capacity are
+   separate facts. (F8)
+4. Open **Situation / Map**. Inspect the selected incident area and available
+   layers, source, freshness, and coverage. The synthetic road source covers
+   only part of the incident area, so the impact panel remains partial and does
+   not present its count as an incident-wide total. (F6, F19)
+5. Open **Operations / Boards**, then the Activity Log. The seeded entries are
+   labeled `SYNTHETIC` and remain attributed to the local exercise actor. (F1,
+   F2)
+6. Sign in as the named operator, select **Operations Section Chief** in the
+   position control, and open **Operations / Tasks**. A task assigned through
+   that position is in progress; other work remains open. Filters and totals
+   describe the selected incident only. (F12)
+7. Open **Operations / Resources**. Inspect the triaged request for synthetic
+   portable generators. Its note explicitly says no resource was ordered or
+   delivered. (F5)
+8. Open **Planning / IAP**. Use the selected incident and operational period to
+   prepare or inspect working content. Approval and completion are explicit
+   transitions; a working plan is not a published plan. (F5)
+9. Open **Situation / SITREP**. Compose only from the selected incident.
+   Unknown, stale, conflict, and missing-source labels must remain visible in
+   the result. (F8)
+10. In the right-dock **Notifications** section, select **Open center** to open
+    Alerts. Inspect the `Exercise` CAP record. It is a locally stored exercise
+    artifact; this walkthrough does not configure or call IPAWS and makes no
+    delivery claim. (F20)
+11. Open **Coordination / JIC**. The seeded release is a draft. Saving,
+    submitting, approving, and publishing are distinct states; this exercise
+    does not publish externally. (F20)
+12. Open **Planning / AAR** and inspect the synthetic observation.
+    Record any exercise finding as attributed follow-up work. (F16)
+
+## Continuity walkthrough
+
+Field and task continuity are intentionally bounded to the implemented paths.
+
+1. As the named operator, open **Operations / Smart Forms** while online. Choose
+   **SYNTHETIC rapid field report** and its attached Field Reports board. Enter
+   a Summary, choose the Hazard category, add a geopoint, and queue it. (F7)
+2. If connectivity drops after the form is loaded, report fields can remain in
+   the durable, person-and-incident-scoped queue. Attachments and map capture
+   require a connection. A queued report is not yet a server receipt.
+3. Reconnect and use **Sync queued**. Confirm the screen distinguishes queued,
+   synchronizing, synced, failed, and conflict states. (F7)
+4. In **My Tasks**, complete an assigned task while disconnected. Only task
+   completion is queued offline; task creation, assignment, metadata edits,
+   and team-task administration require the server. Reconcile and confirm the
+   authoritative receipt before treating the task as complete. (F12)
+
+## Optional integration lab
+
+These facets need separately configured services, credentials, peers, devices,
+or reference data. They are not proven by the local seed and must not be
+presented as completed during the core walkthrough.
+
+| Facet | Separate evidence required |
 |---|---|
-| F1 board primitive | 3 |
-| F2 position login + immutable logs | 3 |
-| F3 store-and-forward federation | 18 |
-| F4 board-triggered notifications | 12 |
-| F5 ICS forms, IAP, 213RR | 13, 14 |
-| F6 any board as a geospatial layer | 6 |
-| F7 offline smart forms | 7 |
-| F8 FEMA doctrine as schema (lifelines/PDA) | 5 |
-| F9 pre-disaster baseline | 8 |
-| F10 always-on facility status | 9 |
-| F11 scan-first tracking + reunification | 10 |
-| F12 incident templates | 1 |
-| F13 scenario/reference libraries | 1 |
-| F14 calm, map-first SPA | 4 |
-| F15 per-incident collaboration space | 17 |
-| F16 one-click provisioning; ten-minute viewer | 2, 20 |
-| F17 daily-ops usability | 19 |
-| F18 sensor and drone feeds | 11 |
-| F19 NAPSG/DHS symbology | 4 |
-| F20 native standards interchange | 15, 16 |
+| F3 federation | A configured trusted peer and partition/reconnect exercise |
+| F4 notifications/webhooks | A configured adapter and observed receiver |
+| F9 damage baseline | An imported exercise baseline and approved assessments |
+| F10 facility network | A configured source with freshness and coverage |
+| F11 tracking/reunification | Exercise tags and authorized restricted-data roles |
+| F13 reference libraries | Locally approved scenario/reference content |
+| F15 collaboration | A configured collaboration or meeting adapter |
+| F17 daily operations | A separately activated planned-event workflow |
+| F18 sensor/drone feeds | A configured exercise feed and observed ingestion |
+
+F20 standards exchange beyond the stored CAP exercise record likewise requires
+the relevant EDXL, HAVE, CoT/TAK, or alert transport to be configured and
+observed. The absence of an adapter is a visible prerequisite, never simulated
+delivery.
+
+## Facet index
+
+The walkthrough directly exercises the current local paths for F1, F2, F5,
+F6, F7, F8, F12, F14, F16, F19, and part of F20. The optional lab records the
+external prerequisites for F3, F4, F9, F10, F11, F13, F15, F17, and F18. No
+facet is treated as successful without the evidence described above.
