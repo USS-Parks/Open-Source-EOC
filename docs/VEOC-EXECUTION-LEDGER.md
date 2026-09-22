@@ -4000,3 +4000,23 @@ increment proves it and that coverage follows the incident area.
   shell, VEOC-81C structure and D09/D10; 81C-PROOF retains whole-workspace proof.
   No dependencies. Approved local commit/fast-forward; rollback by revert.
   M2 is now due. Four existing lanes remain active, no push.
+
+## M2: accepted shell milestone
+
+- **Exact shell commit:** 64e3cf5e7b0a32298ebe21eda941f8688923b91b.
+  Root ran `pnpm check --maxWorkers=2` on this unchanged main. TypeScript,
+  full-tree ESLint, the license scan (300 packages), link check (61 documents)
+  and all 10 native desktop tests passed.
+- **Worker recovery:** the full Vitest run passed 131 suites and 762 tests;
+  federation's worker exited with Windows code 3221226505. Under the Master
+  PSPR's prescribed single recovery, lane checks were held idle and root ran
+  `pnpm exec vitest run --maxWorkers=1`. All 132 suites and 767 tests passed,
+  exit 0. No product failure or waiver remains in this milestone.
+- **Evidence:** deploy/test-runtime/out/lanes/gate/logs/M2-check.log and
+  M2-idle-retry.log, 2026-09-21 PDT / 2026-09-22 UTC. Static/native passes stand;
+  no further confirmation pass. Phase 2 presentation proceeds under the user's
+  explicit continuing STS authorization. The accepted range is 80 local commits
+  after origin/main before this receipt; no push is authorized or performed.
+- **Storage:** four existing lane worktrees retained for their active surface
+  units. No new worktree, dependency copy or source-data acquisition. User-owned
+  untracked root files and preservation stashes remain untouched.
