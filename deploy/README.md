@@ -79,13 +79,16 @@ on a clean machine.
 ## Backup and restore
 
 ```
-./backup.sh              # writes ./backups/openeoc-<timestamp>.sql.gz
+./backup.sh              # writes a database dump and matching blob archive
 ./restore.sh ./backups/openeoc-<timestamp>.sql.gz --yes-drop-and-restore
 ```
 
-The dump is the whole database, which is the whole system of record. Keep
-copies off the box. Restore is destructive and refuses to run without the
-explicit confirmation flag.
+Each backup consists of `openeoc-<timestamp>.sql.gz` and the matching
+`openeoc-<timestamp>.blobs.tar.gz`. Keep both files together and off the box.
+The database holds file metadata; the blob archive holds the uploaded bytes.
+Restore is destructive to the database and refuses to run without the explicit
+confirmation flag. If the matching blob archive is absent, restore warns and
+file downloads remain unavailable until those bytes are recovered.
 
 ## Upgrades
 

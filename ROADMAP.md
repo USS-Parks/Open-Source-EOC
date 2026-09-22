@@ -1,109 +1,79 @@
 # Roadmap
 
-## Geographic reference milestone, 2026-09-21 (H15)
+## Current program
 
-The final COP carries local flood references, loaded-source impact analysis,
-viewport KPIs, the agreed NAPSG subset and exact-lineage Overture enrichment.
-PostgreSQL and MapLibre/Chrome evidence covers both themes, wide and narrow
-layouts, source drilldowns, attribution, unknown coverage and counts beyond
-the client feature cap. H15 closes the geographic milestone for delivered
-local sources. Live NFHL and ACS acquisition, statewide damage replacement-cost
-and parcel-roll baselines, broader NAPSG coverage and operational vector-tile
-rendering remain named gaps in the parity matrix.
+The [V1 PSPR](./docs/V1-PSPR-2026-09-22.md) is the approved execution
+authority. It begins after technical completion of the
+[Master PSPR](./docs/MASTER-PSPR-2026-09-21.md) and turns the current
+evaluation build into a county-deployable release.
 
-The approved Master PSPR remains the execution authority. Presentation,
-continuity, Windows packaging and final acceptance continue in its dependency
-order; this geographic closeout is not a whole-application release claim.
+The Master roster is complete through Phase 3 and M4. That establishes a
+substantial, tested application. It does not establish a live pilot,
+commercial parity, representative-operator acceptance or release readiness.
+Current capability truth is in the
+[parity matrix](./docs/VEOC-PARITY-MATRIX.md), the
+[facet register](./docs/FACET-STATUS.md), and the
+[execution ledger](./docs/VEOC-EXECUTION-LEDGER.md).
 
-## Current continuation, 2026-09-20
+## Current deployment boundary
 
-The [focused roster amendment](./docs/VEOC-PARITY-CONTINUATION-2026-09-20.md#focused-roster-amendment-2026-09-20)
-is the current remaining sequence: 25 open steps at baseline `16ce911`.
-It restores incident-scoped operational data and durable ingestion, then adds
-source-backed capability accounting, statewide data readiness, impact analysis,
-board authoring/routing and an adaptable workspace. The integrated exercise
-follows its implementation dependencies; FOUO authorized viewing replaces the
-old anonymous public-map prompt. Planning approval does not restart execution.
+- A prepared Windows host has completed cold setup, local map use, runtime RLS,
+  offline work reconciliation and persistent restart.
+- Independent media transfer and deployment on a second machine are absent.
+- Docker Compose runs PostGIS and the API, but the documented path does not yet
+  include the web application, TLS or first-administrator bootstrap.
+- The architecture is explicitly single-node until V1 records a different
+  decision. Several runtime limiters, caches and live hubs are process-local.
+- Live IPAWS, live external data acquisition, real-hardware 150-user load and
+  a pilot remain evidence gates.
 
-The [Design PSPR](./docs/VEOC-DESIGN-PSPR-2026-09-20.md) is published as a
-draft for review. Its 36 prompts cover the operator experience, visual identity,
-and dedicated ESF/Lifeline workspace, with ownership shared explicitly with
-the implementation roster. Publication does not authorize execution or append
-36 new backend features to the roadmap.
+The product is therefore installable for evaluation on a prepared host. It is
+not yet the version 1.0 release a county can install and operate unassisted.
 
-The phase table and narrative below are historical implementation summaries.
-Their broad complete/yes labels and code-side release claims do not establish
-current operator parity or readiness. Use the amendment and subsequent ledger
-receipts for current scope and evidence; the identified integration and
-operator-workflow gaps remain open until their explicit acceptance gates pass.
+## V1 sequence
 
-The authoritative sequence is the build roster
-(`docs/VIRTUAL-EOC-PSPR-2026-09-17.md`). Live status per capability is
-`docs/FACET-STATUS.md`, with per-prompt receipts in
-`docs/VEOC-EXECUTION-LEDGER.md`. This file is the readable summary.
+| Wave | Purpose | Current status |
+|---|---|---|
+| W0 | Close the Master roster and reconcile repository truth | In progress; M4 and W0.0-W0.3 complete |
+| W1 | Remove or relocate non-product and obsolete delivery surface | Not started |
+| W2 | Harden one real activation: queues, scheduling, scale, security, observability and retention | Not started |
+| W3 | Put an operator screen in front of delivered engines | Not started |
+| W4 | Add parity depth where engines or data are genuinely missing | Not started |
+| W5 | Reduce initial client weight and consolidate presentation | Not started |
+| W6 | Build the supported install, upgrade, recovery and adoption path | Not started |
+| W7 | Run integrated, accessibility, operator, hardware and release acceptance | Not started |
 
-It tracks three separate bars, because "the code exists" is not "an operator
-can use it," and neither is "it can be released":
+W1 lands before W2 and W3. The engine and presentation waves may fan out only
+as the V1 PSPR permits. W7 does not convert missing external inputs into proof.
 
-- **Backend:** built, tested, CI-green.
-- **Operator UI:** a person can actually do it from the web console.
-- **Release gate:** the Phase G bar (real load, live pilot) is met.
+## What is already delivered
 
-| Phase | Scope | Backend | Operator UI |
-|---|---|---|---|
-| A | Foundation and governance: scaffold, license, data dictionary, architecture decisions, design system, CI gates | complete | n/a |
-| B | Core primitives: identity and positions, boards, immutable audit, incidents, real-time sync, notifications, files, search, native messaging | complete | yes |
-| C | Geospatial COP: geo-enabled boards, the map, dashboards, live feeds, situation reporting | complete | yes |
-| D | Field and offline: offline-first client, smart forms, damage assessment, check-in, tracking and reunification | complete | yes |
-| E | Interop and federation: CAP, EDXL, facility status networks, CoT/TAK, instance federation, public API, IPAWS connector | complete | partial |
-| F | Collaboration and ICS operations: incident spaces, meetings, the JIC, ICS forms and IAP, resource requests, after-action | complete | yes |
-| G | Hardening and release: security, load (150+ concurrent users), accessibility, packaging, docs, pilot exercise, 1.0 disposition | partial | n/a |
+- Incident-scoped boards, audit, files, messaging, tasks, resources, IAP,
+  Lifeline/ESF assessment, briefings, JIC review and after-action workflows.
+- A responsive, persistent operator shell with operational board, map,
+  dashboard, field, dataset, feed, alert and administration-adjacent surfaces.
+- Native CAP, EDXL, CoT, HAVE and GeoJSON contracts; federation and
+  store-and-forward foundations.
+- Local PMTiles basemaps, operational overlays, the agreed NAPSG subset,
+  exact-lineage Overture enrichment and loaded-source impact analysis.
+- A Windows desktop package and continuity proof on one prepared machine.
 
-## Where the bars actually sit
+## What blocks version 1.0
 
-- **B:** boards, the activity log, incidents, file upload, platform search, and
-  native messaging (direct and position-addressed threads) are all reachable in
-  the console.
-- **C:** the map, dashboards, situation reports, and external feed layers are
-  live in the app, with drop-a-point field capture, a switchable
-  satellite/imagery basemap, and the operator tool set the commercial COPs
-  ship: feature labels, find-on-map (records, counties, coordinates),
-  distance and area measurement, bookmarks, home and zoom-to-extent, compass,
-  fullscreen, geolocate, and image export. The basemap side now matches too:
-  a self-hosted OpenStreetMap street map (generated by the repo's pipeline,
-  rendered and proven on real tiles) with landcover, rail, airfields, and
-  critical-facility labels, a gallery of imagery, topo, and hydrography
-  rasters, and hillshade with 3D terrain over a configured DEM.
-- **D:** complete for the operator: drop-a-point map capture with a photo,
-  the field-reports and damage-assessment (PDA) and check-in boards, the XLSForm
-  smart-form runner (renders an imported form and submits to a board), and
-  object tracking with custody scans and reunification search.
-- **E:** the feeds admin screen registers and polls upstreams (CAP, GeoJSON,
-  GeoRSS, CoT) and shows freshness. Instance federation and the EDXL/CoT peer
-  exchanges are machine-to-machine APIs by design, not operator screens. IPAWS
-  live credentialing is gated (external).
-- **F:** ICS forms 201-208/211/213-215 build, preview, and export to PDF from the
-  Forms screen, assembled into an IAP with approval. The 213RR resource lifecycle
-  and after-action (observations, AAR PDF, corrective actions) have their own
-  screens. JIC content (press releases, rumor control, talking points) is
-  reachable through the Boards runtime. The 204 assignment list is still shallow.
-- **G:** security, accessibility, packaging, and docs are substantially done,
-  and the 150-distinct-concurrent-user load test now passes as a CI gate (each
-  user logs in to its own session and fires a request under its own RLS
-  context). The live pilot has not run (gated on Basho). AR7 (disconnected
-  provisioning) is deferred.
+The binding list is V1 PSPR section 8. The largest groups are:
 
-## Honest one-line status
+1. durable outbound delivery, a scheduler and long-activation resource bounds;
+2. structured logs, metrics, retention, recovery and upgrade operations;
+3. secure deployment defaults, MFA, two-person IPAWS authority and webhook
+   controls;
+4. operator reachability for engines that still require curl or have no route;
+5. email/SMS reach, board/reporting depth and operational vector tiles;
+6. one-command HTTPS deployment and independent Windows transfer proof;
+7. real-hardware load, manual accessibility, representative operators, a pilot
+   and the final release disposition.
 
-A tested A-F backend with an operator console covering the map (with photo
-field capture, a switchable imagery basemap, labels, search, measurement, and
-bookmarks), dashboards, boards, incidents,
-situation reports, ICS forms and the IAP, the 213RR resource lifecycle,
-after-action and corrective actions, files and search, feeds administration, and
-native messaging, smart forms, and object tracking/reunification. What remains
-is not operator screens: the EDXL/CoT/federation exchanges are machine APIs;
-IPAWS live credentialing and the live pilot are external and gated on Basho. The
-150-concurrent-user load gate passes in CI.
+## Release rule
 
-Nothing is deployable before the live pilot runs (VEOC-42), which is Basho's
-call; the code-side release gates are met.
+Code, operator workflow and release evidence are separate bars. A technical
+receipt closes only the behavior it tested. Version 1.0 requires every V1 gate
+to pass or an explicit written waiver, followed by Basho's release decision.

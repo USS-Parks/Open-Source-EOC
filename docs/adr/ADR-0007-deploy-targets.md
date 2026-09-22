@@ -1,6 +1,8 @@
 # ADR-0007: Deploy targets are compose-first with a single-node installer
 
-Status: accepted, 2026-09-17 (VEOC-04)
+Status: superseded, 2026-09-22, by
+[ADR-0004](./ADR-0004-plugin-sandbox.md), which records the deployment paths
+that were actually built.
 
 ## Decision
 

@@ -1807,7 +1807,7 @@ unchanged; all work on `main`.
 
 ---
 
-## VEOC-78: prompt 9b, buildings archive browser proof
+## VEOC-78A: prompt 9b, buildings archive browser proof
 
 - **Session:** 2026-09-20, 20:38 UTC / 13:38 PDT. Starting and ending HEAD:
   `0daf86a6283f1e4b5359e4660c7eba929467ba52`; no commit made.
@@ -1901,7 +1901,7 @@ Docker Desktop startup was attempted for local database tests. Following
 Basho's objection, docker desktop stop --timeout 20 returned exit 0 and
 reported Docker Desktop is not running. No test container was created.
 
-## VEOC-78 prompt 8: California geographic reference overlays (2026-09-20)
+## VEOC-78B: prompt 8, California geographic reference overlays (2026-09-20)
 
 - **Authority:** Basho approved the remaining roadmap and explicitly expanded
   scope to all California, plug-and-play for any jurisdiction. The handoff
@@ -2138,6 +2138,18 @@ code was needed.
 - **Scope discipline:** verification ran once; no speculative test expansion.
 - **Ending commit:** ca0d130b842ee2697112ed25d8de5a85d129ebe5, pushed to
   origin/main (a9931f8..ca0d130).
+
+### Ledger correction, 2026-09-22
+
+- The two legacy `VEOC-78` level-two headings represented separate receipts.
+  They are now uniquely labeled `VEOC-78A` for prompt 9b and `VEOC-78B` for
+  prompt 8. Their evidence and chronology are unchanged.
+- The `VEOC-79A` stop-point paragraph is an interim snapshot, not the final
+  disposition. The resumption receipt immediately above supersedes its
+  "interrupted" warning: VEOC-79A passed 450 tests, was committed as
+  `ca0d130b842ee2697112ed25d8de5a85d129ebe5` and was pushed to `origin/main`.
+  The historical stop instruction remains visible because it was true when
+  written; it must not be read as current status.
 
 ## Security hardening pass 1 (parity audit section 3)
 
@@ -4828,3 +4840,36 @@ increment proves it and that coverage follows the incident area.
 - **Result:** W0.2 is complete. The matrices agree without synthesizing live
   or human evidence. Repository files and this receipt land together; rollback
   by revert. Next: W0.3.
+
+## V1 W0.3: documentation truth pass
+
+- **Public status and canon:** `README.md`, `CLAUDE.md` and `ROADMAP.md` now
+  state the prepared-host, single-node, pre-1.0 boundary. They no longer claim
+  an absent workspace, undecided license, unbuilt martin sidecar, completed
+  code-side release gate or completed real-hardware load gate. The V1 PSPR is
+  the current authority and the Master PSPR is recorded as technically complete
+  through M4.
+- **Operations:** the deployment and security-continuity guides now describe
+  the paired database dump and blob archive that `backup.sh` actually writes,
+  including the missing-blob restore warning. README separates the proven
+  prepared Windows path from the incomplete Docker server path.
+- **Architecture record:** ADR-0004 now records the implemented declarative
+  board-extension model and the two deployment paths that exist. It supersedes
+  the unbuilt QuickJS decision and ADR-0007's unbuilt martin, bare-metal Linux
+  and complete air-gap design. ADR-0007 points at the superseding record.
+- **History:** removed the superseded Astra 6 PSPR. The two legacy VEOC-78
+  receipts are uniquely labeled VEOC-78A and VEOC-78B. A dated correction note
+  makes clear that the VEOC-79A stop snapshot was superseded by its passed gate,
+  commit `ca0d130b842ee2697112ed25d8de5a85d129ebe5` and push.
+- **Generated API document:** the generator uses colons rather than em dashes;
+  `docs/API.md` was regenerated and its focused equality test passed 1 of 1.
+  No route or API contract changed. The link checker now skips a tracked path
+  that has been deleted in the working tree, which lets the prescribed link
+  gate validate the remaining documents before their deletion commit.
+- **Verification:** recursive TypeScript, full ESLint and the 300-package
+  license scan passed. The final link check passed all 65 remaining tracked
+  Markdown files; the focused documentation truth checker and `git diff
+  --check` passed. The link-checker repair's focused ESLint passed.
+- **Result:** W0.3 is complete. No schema, dependency or operator behavior
+  changed. Repository files and this receipt land together; rollback by revert.
+  Next: W0.4.

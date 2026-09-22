@@ -10,7 +10,8 @@ import { dirname, join, normalize } from "node:path";
 
 const files = execFileSync("git", ["ls-files", "*.md", "**/*.md"], { encoding: "utf8" })
   .split("\n")
-  .filter(Boolean);
+  .filter(Boolean)
+  .filter((file) => existsSync(file));
 
 const LINK = /\[[^\]]*\]\(([^)\s]+)\)/g;
 const failures = [];

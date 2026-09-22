@@ -99,14 +99,14 @@ export function generateApiDocs(contract: ApiContract = API_CONTRACT): string {
   for (const tag of [...byTag.keys()].sort()) {
     lines.push(`### ${tag}`, ``);
     for (const e of byTag.get(tag)!) {
-      lines.push(`- \`${e.method} ${e.path}\` — ${e.summary} (auth: ${e.auth})`);
+      lines.push(`- \`${e.method} ${e.path}\`: ${e.summary} (auth: ${e.auth})`);
     }
     lines.push(``);
   }
   lines.push(`## WebSocket channels`, ``);
-  for (const w of contract.websockets) lines.push(`- \`${w.path}\` — ${w.summary}`);
+  for (const w of contract.websockets) lines.push(`- \`${w.path}\`: ${w.summary}`);
   lines.push(``, `## Webhook events`, ``);
-  for (const h of contract.webhooks) lines.push(`- \`${h.name}\` — ${h.summary}`);
+  for (const h of contract.webhooks) lines.push(`- \`${h.name}\`: ${h.summary}`);
   lines.push(``);
   return lines.join("\n");
 }
