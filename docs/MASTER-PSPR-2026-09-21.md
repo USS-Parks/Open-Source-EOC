@@ -23,6 +23,14 @@ their prescribed gates. It supersedes per-commit A3 asks and permits A4 lane
 commits for this roster. A5 push, A6 external actions and G-A design review
 remain separate. The register below preserves the original approval model.
 
+**User-directed working-demo gate, 2026-09-21.** Basho subsequently required
+working demos for his own visual and functional verification. Basho alone
+decides aesthetic and functional acceptance. Further advancement requires his
+direction and explicit approval after testing and critique; automated gates and
+agent reviews do not confer that approval. Current lane work is preserved and
+frozen while the latest published build is prepared for review. This instruction
+supersedes earlier automatic STS advancement prospectively.
+
 **Held-request approval receipt, 2026-09-21.** Basho subsequently gave full,
 explicit authorization for all requests held in this working session. This
 clears the three concrete pending requests: G-A's recommended design defaults;

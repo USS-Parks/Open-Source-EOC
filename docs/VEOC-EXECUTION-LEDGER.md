@@ -4104,3 +4104,37 @@ increment proves it and that coverage follows the incident area.
   G tasks. E/F/G share existing dependencies; no duplicated dependency trees.
   Installer build is deferred behind application completion. Protected work/d05
   and canonical user files remain untouched.
+
+## User-owned demo review gate
+
+- Basho explicitly replaced automatic advancement with working demos followed
+  by his own visual and functional verification and explicit approval.
+  Agent SHIP decisions establish technical review only, not user acceptance.
+- Latest published application: 7ce5da695c81ccb1911e2258195670fb4968c353.
+  Built on Windows and started the separate synthetic demo at
+  http://127.0.0.1:8081. Its database uses port 55441. Production data is not
+  involved. The demo has labeled synthetic road/shelter records, eight
+  attributed Lifeline assessments, an operational area and a saved dashboard.
+- All unfinished lanes frozen for preservation. A has no ESF implementation;
+  B has assessment and assignment corrections pending acceptance; C has KPI
+  source with a TypeScript optional-prop error; D has boards source with its
+  last browser history-selector correction unverified; E has installer source
+  without build/install proof; F has incident source with syntax/type gate
+  failures; G has Tasks source before its initial gate. None is newly published.
+- Seven retained lane worktrees serve those named units. A retains protected
+  work/d05. B-G contain unpublished changes; no worktree or preservation stash
+  is removed. E/F/G share canonical dependencies. Existing lane dependency
+  footprints are approximately 195 MB each; current free disk was 234 GiB.
+- Governance updates remain local while this demo awaits user review. Further
+  implementation, acceptance and publication follow Basho's explicit direction.
+
+## Demo acceptance and next increment, 2026-09-21
+
+- Basho tested the running demo and said: "Looks and functions decently so far.
+  Proceed." This accepts the demonstrated version and authorizes continuation.
+- The next reviewable increment completes the pending P-BOARDS-1 record
+  workflows and P-LIFE-2 assessment workflows, with their prescribed technical
+  gates and publication, then updates the existing Windows demo for Basho.
+  Further lanes remain preserved pending the next user review.
+- Preserve the demo database and any records entered during user testing.
+  Existing passing checks stand unless changed code affects their evidence.

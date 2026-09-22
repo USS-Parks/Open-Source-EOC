@@ -99,6 +99,15 @@ writes before. Follow the same discipline as the Mighty-Eel-OS protocol:
 
 ## Session discipline
 
+### User review gate, 2026-09-21
+
+Basho is the sole final approver of visual quality and functional suitability.
+From this point, provide a working demo for Basho to test and critique, then
+advance only on his direction and explicit approval following his own visual
+and functional verification. Automated tests and agent SHIP reviews are
+technical evidence, not user acceptance. This supersedes automatic advancement
+under earlier STS grants. Preserve unfinished lanes while a demo awaits review.
+
 - Execute one numbered prompt at a time, in roster order, unless work is fanned
   out under the standing grant above. Under fan-out, each lane executes one
   unit at a time and work lands on `main` only through the integrating
