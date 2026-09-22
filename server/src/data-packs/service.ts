@@ -303,12 +303,21 @@ export async function loadDataset(
   outcome: { records: readonly unknown[] } | { error: string },
 ): Promise<DatasetLoadResult> {
   const [ds] = await sql`
-    select d.id, d.key, d.field_mapping, d.stale_after_seconds, p.incident_id
+    select d.id, d.key, d.field_mapping, d.stale_after_seconds, p.incident_id, p.organization_id
     from data_pack_datasets d join data_packs p on p.id = d.pack_id
     where d.id = ${datasetId}`;
   if (!ds) throw new AuthError(404, "dataset not found");
   const authority = await getIncidentAuthority(sql, actor, ds.incident_id as string);
-  if (!authority.canContribute) throw new AuthError(403, "requires incident contributor");
+  const orgId = ds.organization_id as string;
+  const ownerAdmin = authority.canManageParticipation;
+  const sameOrgContributor =
+    authority.canContribute &&
+    (authority.participation?.organizationId === orgId ||
+      actor.memberships.some(
+        (m) => m.jurisdictionId === orgId && (m.role === "admin" || m.role === "member"),
+      ));
+  if (!ownerAdmin && !sameOrgContributor)
+    throw new AuthError(403, "requires incident owner admin or a contributor of that organization");
 
   if ("error" in outcome) {
     await sql`update data_pack_datasets set last_error = ${outcome.error} where id = ${datasetId}`;

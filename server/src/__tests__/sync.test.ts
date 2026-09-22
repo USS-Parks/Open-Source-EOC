@@ -322,6 +322,26 @@ describe("sync checkpoint follows the locked current board shape", () => {
 });
 
 describe("sync authorization (INV-7)", () => {
+  it("rejects a malformed incidentId instead of opening the board unscoped", async () => {
+    const socket = new WebSocket(
+      `ws://${baseUrl}/api/v1/sync/boards/${boardId}?incidentId=not-a-uuid`,
+    );
+    const msg = await new Promise<{ type: string; error?: string }>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("no sync error")), 5000);
+      socket.on("error", (err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+      socket.on("message", (raw: Buffer) => {
+        clearTimeout(timer);
+        resolve(JSON.parse(raw.toString()) as { type: string; error?: string });
+      });
+    });
+    expect(msg.type).toBe("error");
+    expect(msg.error).toBe("invalid sync incident context");
+    socket.close();
+  });
+
   it("an outsider cannot read a board after a member has already opened it", async () => {
     const member = new TestSyncClient();
     await member.connect(adminToken);

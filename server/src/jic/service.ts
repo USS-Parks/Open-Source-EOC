@@ -79,6 +79,8 @@ export async function decideLocal(
 ): Promise<{ status: string }> {
   const rel = await loadRelease(sql, releaseId);
   requireWriter(actor, rel.jurisdiction_id);
+  if (!rel.required_agencies.includes(agency))
+    throw new AuthError(403, "agency is not in this release's approval chain");
   const [peerAgency] = await sql`
     select 1 from peers where jurisdiction_id = ${rel.jurisdiction_id} and name = ${agency}`;
   if (peerAgency) throw new AuthError(403, "that agency must approve over its peer token");
@@ -115,10 +117,14 @@ export async function receivePeerDecision(
   if (!peer) throw new AuthError(401, "unknown peer");
   const local = await principalForPerson(sql, peer.created_by as string);
   return withPerson(sql, local.person.id, async (tx) => {
-    const [rel] = await tx`select jurisdiction_id from press_releases where id = ${releaseId}`;
+    const [rel] = await tx`
+      select jurisdiction_id, required_agencies from press_releases where id = ${releaseId}`;
     if (!rel) throw new AuthError(404, "release not found");
     if ((rel.jurisdiction_id as string) !== (peer.jurisdiction_id as string))
       throw new AuthError(403, "release belongs to another jurisdiction");
+    const required = (rel.required_agencies as string[]) ?? [];
+    if (!required.includes(peer.name as string))
+      throw new AuthError(403, "this peer is not in the release approval chain");
     await recordDecision(tx, releaseId, peer.name as string, decision, note, null, peer.name as string);
     const status = await recomputeStatus(tx, releaseId);
     await recordAudit(tx, local, {
@@ -293,11 +299,13 @@ interface ReleaseRow {
   title: string;
   body: string;
   status: string;
+  required_agencies: string[];
 }
 
 async function loadRelease(sql: Sql, releaseId: string): Promise<ReleaseRow> {
   const [row] = (await sql`
-    select jurisdiction_id, incident_id, title, body, status from press_releases
+    select jurisdiction_id, incident_id, title, body, status, required_agencies
+    from press_releases
     where id = ${releaseId}`) as unknown as ReleaseRow[];
   if (!row) throw new AuthError(404, "release not found");
   return row;
@@ -330,7 +338,9 @@ async function recomputeStatus(sql: Sql, releaseId: string): Promise<string> {
     select agency, decision from press_release_approvals where release_id = ${releaseId}`;
   const byAgency = new Map(approvals.map((a) => [a.agency as string, a.decision as string]));
   let status: string;
-  if ([...byAgency.values()].includes("reject")) status = "rejected";
+  // Only required agencies can settle the chain. An invented name, or a
+  // registered peer that is not on this release, must not veto or approve it.
+  if (required.some((a) => byAgency.get(a) === "reject")) status = "rejected";
   else if (required.length > 0 && required.every((a) => byAgency.get(a) === "approve"))
     status = "approved";
   else status = "pending";
