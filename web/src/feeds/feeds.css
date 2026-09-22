@@ -1,0 +1,4 @@
+@import "../datasets/datasets.css";
+
+.d21-feed-form-note { color: var(--eoc-text-muted); font-size: .84rem; line-height: 1.45; margin: 0; }
+.d21-feed-token-heading { color: var(--eoc-status-success); display: block; margin-bottom: 4px; }

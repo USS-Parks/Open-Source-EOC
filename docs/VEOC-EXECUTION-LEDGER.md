@@ -4352,6 +4352,27 @@ increment proves it and that coverage follows the incident area.
   assigned. Generated installer stages/builds are retained for final packaging
   and must be accounted for at worktree retirement.
 
+## D21: dataset and feed administration
+
+- Lane B, final baseline f0590e9. Source catalog, mapping previews, coverage,
+  update controls and readiness distinguish registration from ingestion. Counts
+  identify the last-good accepted/rejected tally; unavailable feed rejection
+  counts remain explicit. Failed pushes preserve stored items and expose actual
+  failures. Disabled or demoted feed creators show authorization required.
+- Polling checks administrator authority before fetching. The internal scheduler
+  resolves each creator's current authority and skips only authorization failures;
+  it does not rely on membership joins hidden by its no-person RLS context.
+  Invalid push tokens cannot mutate health. No privileged write bypass was added.
+- Full TypeScript/ESLint passed. Final integration passed 23 tests in four suites
+  including actual PostgreSQL authorization/revocation and Chrome readiness,
+  recovery, keyboard and light/dark/narrow operation. Earlier dataset-focused
+  checks also passed. Evidence: deploy/test-runtime/out/lanes/b/logs/
+  datasets-feeds-final-integration.log and datasets-feeds-mapping-browser.log.
+  Root reviewed source and actual captures. Independent final review: SHIP.
+- No new dependency or migration. Evidence level: integrated on publication;
+  user aesthetic acceptance remains separate. Unit commit: this receipt's commit;
+  rollback by revert. Seven active worktrees and protected local work retained.
+
 ## D22: incident resource coordination
 
 - Lane F, baseline 75464fc. Request intake, named local-position or active

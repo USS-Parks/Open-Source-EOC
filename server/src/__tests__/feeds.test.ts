@@ -84,6 +84,25 @@ async function newFeed(raw: Record<string, unknown>): Promise<{ id: string; inge
 }
 
 describe("a simulated weather feed (CAP over poll)", () => {
+  it("denies a member before making the outbound poll request", async () => {
+    const { id } = await newFeed({
+      name: "Admin-controlled poll",
+      kind: "cap",
+      url: "https://alerts.example.test/admin-only.xml",
+    });
+    const member = await principalForPerson(runtime, seed.memberId);
+    let fetchCalls = 0;
+    const countedFetch: typeof fetch = (async () => {
+      fetchCalls += 1;
+      return new Response(CAP_ALERT, { status: 200 });
+    }) as never;
+
+    await expect(withPerson(runtime, seed.memberId, (tx) =>
+      pollFeed(tx, member, id, countedFetch),
+    )).rejects.toMatchObject({ status: 403 });
+    expect(fetchCalls).toBe(0);
+  });
+
   it("lands the alert as a layer with provenance, severity, and freshness", async () => {
     const { id } = await newFeed({
       name: "NWS CAP",
@@ -132,6 +151,67 @@ describe("a simulated weather feed (CAP over poll)", () => {
 });
 
 describe("a simulated drone track (CoT over push)", () => {
+  it("blocks a demoted creator before parsing while retaining last-good readiness", async () => {
+    const [creatorRow] = await admin`
+      insert into persons (email, display_name, password_hash)
+      select 'feed-owner@example.org', 'Feed Owner', password_hash
+      from persons where id = ${seed.adminId}
+      returning id`;
+    const creatorId = creatorRow!.id as string;
+    await admin`
+      insert into jurisdiction_memberships (jurisdiction_id, person_id, role)
+      values (${seed.jurisdictionId}, ${creatorId}, 'admin')`;
+    const creator = await principalForPerson(runtime, creatorId);
+    const created = await withPerson(runtime, creatorId, (tx) =>
+      createFeed(tx, creator, seed.jurisdictionId, {
+        name: "Demoted push owner", kind: "geojson", push: true,
+      }),
+    );
+    const good = await app.inject({
+      method: "POST", url: `/api/v1/feeds/${created.id}/ingest`,
+      headers: { "x-feed-token": created.ingestToken! },
+      payload: { type: "FeatureCollection", features: [{
+        type: "Feature", id: "last-good", geometry: null,
+        properties: { name: "Retained item" },
+      }] },
+    });
+    expect(good.statusCode, good.body).toBe(202);
+    const [before] = await admin`
+      select last_success_at, last_error, consecutive_failures,
+        (select count(*)::integer from feed_items where feed_id = ${created.id}) as item_count
+      from feeds where id = ${created.id}`;
+
+    await admin`
+      update jurisdiction_memberships set role = 'member'
+      where jurisdiction_id = ${seed.jurisdictionId} and person_id = ${creatorId}`;
+    const wrongToken = await app.inject({
+      method: "POST", url: `/api/v1/feeds/${created.id}/ingest`,
+      headers: { "x-feed-token": "wrong-token" }, payload: { malformed: true },
+    });
+    expect(wrongToken.statusCode).toBe(401);
+    const denied = await app.inject({
+      method: "POST", url: `/api/v1/feeds/${created.id}/ingest`,
+      headers: { "x-feed-token": created.ingestToken! }, payload: { malformed: true },
+    });
+    expect(denied.statusCode, denied.body).toBe(403);
+
+    const health = (await withPerson(runtime, seed.adminId, (tx) =>
+      listFeeds(tx, adminPrincipal, seed.jurisdictionId),
+    )).find((feed) => feed.id === created.id)!;
+    expect(health).toMatchObject({
+      ingestAuthorized: false,
+      currentItemCount: 1,
+      lastError: null,
+      consecutiveFailures: 0,
+    });
+    expect(health.lastSuccessAt).toBeTruthy();
+    const [after] = await admin`
+      select last_success_at, last_error, consecutive_failures,
+        (select count(*)::integer from feed_items where feed_id = ${created.id}) as item_count
+      from feeds where id = ${created.id}`;
+    expect(after).toEqual(before);
+  });
+
   it("authenticates by feed token, keeps the track, and renders the latest position", async () => {
     const { id, ingestToken } = await newFeed({ name: "UAS EAGLE-1", kind: "cot", push: true });
     expect(ingestToken).toBeTruthy();
@@ -260,6 +340,27 @@ describe("ingestion failures alarm and never silently stop", () => {
 
 describe("the scheduler", () => {
   it("polls due feeds under their creator's authority and respects intervals", async () => {
+    const [revokedCreatorRow] = await admin`
+      insert into persons (email, display_name, password_hash)
+      select 'revoked-poll-owner@example.org', 'Revoked Poll Owner', password_hash
+      from persons where id = ${seed.adminId}
+      returning id`;
+    const revokedCreatorId = revokedCreatorRow!.id as string;
+    await admin`
+      insert into jurisdiction_memberships (jurisdiction_id, person_id, role)
+      values (${seed.jurisdictionId}, ${revokedCreatorId}, 'admin')`;
+    const revokedCreator = await principalForPerson(runtime, revokedCreatorId);
+    await withPerson(runtime, revokedCreatorId, (tx) =>
+      createFeed(tx, revokedCreator, seed.jurisdictionId, {
+        name: "Revoked scheduled source",
+        kind: "georss",
+        url: "https://revoked.example.test/no-fetch",
+        pollIntervalSeconds: 60,
+      }),
+    );
+    await admin`
+      update jurisdiction_memberships set role = 'member'
+      where jurisdiction_id = ${seed.jurisdictionId} and person_id = ${revokedCreatorId}`;
     const { id } = await newFeed({
       name: "Scheduled GeoRSS",
       kind: "georss",
@@ -272,8 +373,15 @@ describe("the scheduler", () => {
         <item><title>M2.1 near Orleans</title><guid>q-1</guid>
           <georss:point>41.30 -123.53</georss:point></item>
       </channel></rss>`;
-    const ran = await runDueFeeds(runtime, fetchOk(rss));
+    const fetchedUrls: string[] = [];
+    const schedulerFetch: typeof fetch = (async (input: Parameters<typeof fetch>[0]) => {
+      fetchedUrls.push(String(input));
+      return new Response(rss, { status: 200, headers: { "content-type": "application/xml" } });
+    }) as never;
+    const ran = await runDueFeeds(runtime, schedulerFetch);
     expect(ran).toBeGreaterThanOrEqual(1);
+    expect(fetchedUrls).toContain("https://rss.example.test/quakes");
+    expect(fetchedUrls).not.toContain("https://revoked.example.test/no-fetch");
     const layer = await withPerson(runtime, seed.adminId, (tx) =>
       feedItems(tx, adminPrincipal, id),
     );
@@ -283,8 +391,9 @@ describe("the scheduler", () => {
     ]);
 
     // Nothing is due immediately after; the interval gates the next round.
-    const again = await runDueFeeds(runtime, fetchOk(rss));
+    const again = await runDueFeeds(runtime, schedulerFetch);
     expect(again).toBe(0);
+    expect(fetchedUrls).not.toContain("https://revoked.example.test/no-fetch");
   });
 });
 

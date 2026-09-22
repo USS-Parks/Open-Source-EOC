@@ -237,6 +237,12 @@ export interface FeedHealth {
   readonly enabled: boolean;
   readonly stale: boolean;
   readonly ageSeconds: number | null;
+  readonly staleAfterSeconds: number;
+  readonly lastSuccessAt: string | null;
+  readonly lastError: string | null;
+  readonly consecutiveFailures: number;
+  readonly ingestAuthorized: boolean;
+  readonly currentItemCount: number | null;
 }
 export type FeedItemsResponse = CopFeatureCollection & { readonly feed: FeedHealth };
 export type DatasetItemsPageResponse = CopFeatureCollection & {

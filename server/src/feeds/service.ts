@@ -38,6 +38,10 @@ export interface FeedHealth {
   readonly consecutiveFailures: number;
   readonly stale: boolean;
   readonly ageSeconds: number | null;
+  /** Whether the configured creator can still run automated or push ingestion. */
+  readonly ingestAuthorized: boolean;
+  /** Current persisted last-good items. Null when the caller did not request a count. */
+  readonly currentItemCount: number | null;
 }
 
 const FETCH_TIMEOUT_MS = 10000;
@@ -80,9 +84,17 @@ export async function listFeeds(
 ): Promise<FeedHealth[]> {
   requireMember(actor, jurisdictionId);
   const rows = await sql`
-    select id, name, kind, url, enabled, stale_after_seconds, last_success_at,
-           last_error, consecutive_failures
-    from feeds where jurisdiction_id = ${jurisdictionId} order by name`;
+    select f.id, f.name, f.kind, f.url, f.enabled, f.stale_after_seconds, f.last_success_at,
+           f.last_error, f.consecutive_failures, count(fi.id)::integer as item_count,
+           exists (
+             select 1 from persons p
+             join jurisdiction_memberships m on m.person_id = p.id
+             where p.id = f.created_by and not p.disabled
+               and m.jurisdiction_id = f.jurisdiction_id and m.role = 'admin'
+           ) as ingest_authorized
+    from feeds f left join feed_items fi on fi.feed_id = f.id
+    where f.jurisdiction_id = ${jurisdictionId}
+    group by f.id order by f.name`;
   return rows.map((r) => healthOf(r, now));
 }
 
@@ -102,6 +114,8 @@ function healthOf(r: Record<string, unknown>, now: Date): FeedHealth {
     consecutiveFailures: r.consecutive_failures as number,
     stale: age === null || age > staleAfter,
     ageSeconds: age,
+    ingestAuthorized: r.ingest_authorized === undefined || Boolean(r.ingest_authorized),
+    currentItemCount: r.item_count === undefined ? null : Number(r.item_count),
   };
 }
 
@@ -121,6 +135,7 @@ export async function pollFeed(
     select id, jurisdiction_id, name, kind, url from feeds
     where id = ${feedId} and url is not null`;
   if (!feed) throw new AuthError(404, "feed not found");
+  requireAdmin(actor, feed.jurisdiction_id as string);
   try {
     const res = await fetchImpl(feed.url as string, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
@@ -157,20 +172,40 @@ export async function ingestPush(
   // Token check runs on the internal lane; the write then runs under the
   // feed creator's authority, same as a scheduled poll.
   const [feed] = await sql`
-    select id, kind, ingest_token_hash, created_by from feeds
+    select id, jurisdiction_id, name, kind, ingest_token_hash, created_by from feeds
     where id = ${feedId} and ingest_token_hash is not null and enabled`;
   if (!feed || feed.ingest_token_hash !== hashToken(token))
     throw new AuthError(401, "invalid feed token");
-  const items = parseFeed(feed.kind as string, body);
   const creator = await principalForPerson(sql, feed.created_by as string);
-  await withPerson(sql, creator.person.id, async (tx) => {
-    await landItems(tx, feedId, items, now);
-    await tx`
-      update feeds set last_success_at = ${now}, last_error = null,
-        consecutive_failures = 0
-      where id = ${feedId}`;
-  });
-  return { items: items.length };
+  requireAdmin(creator, feed.jurisdiction_id as string);
+  try {
+    const items = parseFeed(feed.kind as string, body);
+    await withPerson(sql, creator.person.id, async (tx) => {
+      await landItems(tx, feedId, items, now);
+      await tx`
+        update feeds set last_success_at = ${now}, last_error = null,
+          consecutive_failures = 0
+        where id = ${feedId}`;
+    });
+    return { items: items.length };
+  } catch (reason) {
+    const message = reason instanceof Error ? reason.message : String(reason);
+    await withPerson(sql, creator.person.id, async (tx) => {
+      await tx`
+        update feeds set last_error = ${message},
+          consecutive_failures = consecutive_failures + 1
+        where id = ${feedId}`;
+      await alarm(
+        tx,
+        creator,
+        feed.jurisdiction_id as string,
+        feedId,
+        feed.name as string,
+        message,
+      );
+    });
+    throw new AuthError(400, message);
+  }
 }
 
 /** Run every due poll feed, each under its creator's authority. */
@@ -181,18 +216,27 @@ export async function runDueFeeds(
 ): Promise<number> {
   // Internal scheduler lane: no person context, sees feeds only.
   const due = await sql`
-    select id, created_by from feeds
+    select id, jurisdiction_id, created_by from feeds
     where enabled and url is not null
       and (last_polled_at is null
            or last_polled_at <= ${now}::timestamptz
                - make_interval(secs => poll_interval_seconds))`;
+  let ran = 0;
   for (const feed of due) {
-    const creator = await principalForPerson(sql, feed.created_by as string);
+    let creator: Principal;
+    try {
+      creator = await principalForPerson(sql, feed.created_by as string);
+      requireAdmin(creator, feed.jurisdiction_id as string);
+    } catch (reason) {
+      if (reason instanceof AuthError && (reason.status === 401 || reason.status === 403)) continue;
+      throw reason;
+    }
     await withPerson(sql, creator.person.id, (tx) =>
       pollFeed(tx, creator, feed.id as string, fetchImpl, now),
     );
+    ran += 1;
   }
-  return due.length;
+  return ran;
 }
 
 async function landItems(
@@ -267,7 +311,14 @@ export async function feedItems(
   feedId: string,
   now = new Date(),
 ): Promise<FeedItemsResult> {
-  const [feed] = await sql`select * from feeds where id = ${feedId}`;
+  const [feed] = await sql`
+    select f.*, exists (
+      select 1 from persons p
+      join jurisdiction_memberships m on m.person_id = p.id
+      where p.id = f.created_by and not p.disabled
+        and m.jurisdiction_id = f.jurisdiction_id and m.role = 'admin'
+    ) as ingest_authorized
+    from feeds f where f.id = ${feedId}`;
   if (!feed) throw new AuthError(404, "feed not found");
   requireMember(actor, feed.jurisdiction_id as string);
   const health = healthOf(feed, now);
