@@ -3872,3 +3872,26 @@ increment proves it and that coverage follows the incident area.
 - **Unit commit:** ef13b0c108f025cd7a2830b570ba4c9bb073927d, exact fast-forward.
   Next: P-SHELL-CONTEXT before the M2 gate and presentation fan-out. Four
   existing lanes retained; no new worktree or push. Replay stashes preserved.
+
+## 84A-E: editable ICS-204 and immutable IAP revisions
+
+- **Serves/lane:** VEOC-84A engine, lane b based on 558eb74. Typed assignment
+  resources, supervisor identity and tactics use the existing workflow authority
+  resolver. Draft content uses revision CAS; unchanged saves retain their version.
+  Approved rows stay immutable. A serialized clone creates one successor draft,
+  and selected-revision PDF reads preserve the original snapshot and period.
+- **Gate:** parent full read, workspace TypeScript/tree ESLint and seven suites
+  passed 45/45. Actual server PDF rendered to four pages; parent viewed first
+  and last pages with long tactics/resources intact. Review found host edits of
+  partner drafts incorrectly resolving against the preparer's organization.
+  Acting-owner resolution repaired it without changing stored preparation
+  attribution; affected types/lint and actual database tests passed 5/5.
+  Fresh bounded correction review: SHIP.
+- **Evidence:** deploy/test-runtime/out/lanes/b/logs/84A-root-integration.log,
+  84A-root-authority-repair.log and artifacts/84a-revision1.pdf with rendered PNGs.
+  The preexisting ASCII-only PDF renderer remains a known D30 export limitation;
+  this receipt does not claim arbitrary Unicode fidelity or final branding.
+- **Unit commit:** 3922491d2ebe47de9ab2872367556feb620afe55, exact fast-forward.
+  Evidence level: integrated engine; P-IAP owns presentation. Phase 1 engines
+  are now landed and M1 is due. Four existing lanes retained; no push. Replay
+  stashes remain preserved until retirement inspection.
