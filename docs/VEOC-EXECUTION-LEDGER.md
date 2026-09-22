@@ -3972,3 +3972,31 @@ increment proves it and that coverage follows the incident area.
   No dependency changes. Rollback is a revert plus preservation of queued
   local state; deployed receipt data must not be discarded. Approved local
   commit and exact fast-forward only. Four active lanes retained, no push.
+
+## P-SHELL-CONTEXT: persistent incident workspace
+
+- **Base and landing:** 6112189, replayed over accepted PDF and continuity
+  increments onto 47389a6e51dd280b40d95024aee7a0f90cd7c9e3 without overlapping
+  changes. The latter is the exact VEOC-85-B engine commit. Date: 2026-09-21.
+- **Behavior:** authenticated person/incident preferences and Map, Boards and
+  Planning arrangements persist through reload. Period choices come from the
+  incident's stored operational areas; explicit Not set and Browser Back are
+  preserved. Assigned-position switching refreshes authoritative session state.
+  Bounded deep links retain context and resolve selected records through the
+  authorized incident view, with a same-incident return route. Incident changes
+  invalidate incompatible selections and stale asynchronous responses.
+- **Persistence:** serialized revision-checked writes, visible CAS conflicts
+  and explicit keep-session/reload recovery. URL and saved presentation values
+  never grant authority. The existing responsive frame and modal focus rules
+  remain in force. The incident board list itself remains P-BOARDS ownership.
+- **Gate:** root workspace TypeScript and full-tree ESLint passed. The initial
+  15-suite run passed 87 of 90 tests; three browser fixtures were repaired for
+  period-bearing links and explicit restoration/modal interactions. The final
+  affected browser/context run passed 10/10, including four live PostgreSQL and
+  Chrome journeys. All unaffected passing suites stand. Both theme screenshots
+  were inspected. Evidence: lanes/d/logs/P-SHELL-CONTEXT-root-integration.log and
+  P-SHELL-CONTEXT-browser-repair3.log under deploy/test-runtime/out.
+- **Review:** fresh independent SHIP, no findings. Evidence level: integrated
+  shell, VEOC-81C structure and D09/D10; 81C-PROOF retains whole-workspace proof.
+  No dependencies. Approved local commit/fast-forward; rollback by revert.
+  M2 is now due. Four existing lanes remain active, no push.

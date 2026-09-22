@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -51,6 +52,8 @@ export interface SessionValue {
   readonly role: string | null;
   readonly error: string | null;
   readonly setJurisdiction: (id: string) => void;
+  readonly refreshMe: () => Promise<Me>;
+  readonly switchPosition: (positionId: string | null) => Promise<void>;
   readonly login: (email: string, password: string) => Promise<void>;
   readonly logout: () => Promise<void>;
 }
@@ -73,6 +76,25 @@ export function SessionProvider(props: { client?: ApiClient; children: ReactNode
   const [jurisdictionId, setJurisdictionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const adoptMe = useCallback((next: Me) => {
+    const available = new Set([
+      ...next.memberships.map((membership) => membership.jurisdictionId),
+      ...next.guests
+        .filter((grant) => Date.parse(grant.expiresAt) > Date.now())
+        .map((grant) => grant.jurisdictionId),
+    ]);
+    setMe(next);
+    setJurisdictionId((current) => current && available.has(current)
+      ? current
+      : next.memberships[0]?.jurisdictionId ?? next.guests.find((grant) => available.has(grant.jurisdictionId))?.jurisdictionId ?? null);
+  }, []);
+
+  const refreshMe = useCallback(async () => {
+    const next = await client.me();
+    adoptMe(next);
+    return next;
+  }, [adoptMe, client]);
+
   useEffect(() => {
     let cancelled = false;
     const saved = loadTokens();
@@ -85,8 +107,7 @@ export function SessionProvider(props: { client?: ApiClient; children: ReactNode
       .me()
       .then((m) => {
         if (cancelled) return;
-        setMe(m);
-        setJurisdictionId((cur) => cur ?? m.memberships[0]?.jurisdictionId ?? null);
+        adoptMe(m);
         setStatus("authed");
       })
       .catch(() => {
@@ -97,7 +118,7 @@ export function SessionProvider(props: { client?: ApiClient; children: ReactNode
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [adoptMe, client]);
 
   const value = useMemo<SessionValue>(
     () => ({
@@ -110,14 +131,30 @@ export function SessionProvider(props: { client?: ApiClient; children: ReactNode
           ? (me.memberships.find((x) => x.jurisdictionId === jurisdictionId)?.role ?? null)
           : null,
       error,
-      setJurisdiction: (id: string) => setJurisdictionId(id),
+      setJurisdiction: (id: string) => {
+        const allowed = me?.memberships.some((membership) => membership.jurisdictionId === id)
+          || me?.guests.some((grant) => grant.jurisdictionId === id && Date.parse(grant.expiresAt) > Date.now());
+        if (allowed) setJurisdictionId(id);
+        else setError("That jurisdiction is not available to this session.");
+      },
+      refreshMe,
+      switchPosition: async (positionId: string | null) => {
+        setError(null);
+        try {
+          if (positionId) await client.signInPosition(positionId);
+          else await client.signOutPosition();
+          await refreshMe();
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "The acting position could not be changed.");
+          throw cause;
+        }
+      },
       login: async (email: string, password: string) => {
         setError(null);
         try {
           await client.login(email, password);
           const m = await client.me();
-          setMe(m);
-          setJurisdictionId((cur) => cur ?? m.memberships[0]?.jurisdictionId ?? null);
+          adoptMe(m);
           setStatus("authed");
         } catch (e) {
           client.clearTokens();
@@ -136,7 +173,7 @@ export function SessionProvider(props: { client?: ApiClient; children: ReactNode
         }
       },
     }),
-    [status, me, jurisdictionId, error, client],
+    [status, me, jurisdictionId, error, client, adoptMe, refreshMe],
   );
 
   return <SessionContext.Provider value={value}>{props.children}</SessionContext.Provider>;

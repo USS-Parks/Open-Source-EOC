@@ -1,5 +1,5 @@
-import { useState } from "react";
-import type { BoardTemplate } from "@openeoc/shared";
+import { useEffect, useState } from "react";
+import type { BoardTemplate, ViewRecord } from "@openeoc/shared";
 import { BoardView } from "../../boards/BoardView.js";
 import { RecordForm } from "../../boards/RecordForm.js";
 import { Button, Panel } from "../../design/components.js";
@@ -13,14 +13,45 @@ import { EmptyState, ErrorNote, Loading, Scroll, SurfaceHeader } from "../screen
  * enforces, so the form can never submit what the server would refuse; a
  * viewer sees the data with no write affordance.
  */
-export function BoardSurface(props: { client: ApiClient; boardId: string }) {
+export type BoardRecordContext =
+  | { readonly status: "loading" }
+  | { readonly status: "ready"; readonly record: ViewRecord }
+  | { readonly status: "missing" };
+
+export function BoardSurface(props: {
+  client: ApiClient;
+  boardId: string;
+  incidentId?: string | null;
+  recordId?: string;
+  onRecordContext?: (state: BoardRecordContext | null) => void;
+}) {
   const board = useAsync(() => props.client.getBoard(props.boardId), [props.boardId]);
   const viewKey = board.data?.views[0]?.key ?? null;
   const view = useAsync(
     () => (viewKey ? props.client.boardView(props.boardId, viewKey) : Promise.resolve(null)),
     [props.boardId, viewKey],
   );
+  const recordView = useAsync(
+    () => (props.recordId && props.incidentId && viewKey
+      ? props.client.boardView(props.boardId, viewKey, props.incidentId)
+      : Promise.resolve(null)),
+    [props.boardId, props.incidentId, props.recordId, viewKey],
+  );
   const [adding, setAdding] = useState(false);
+
+  useEffect(() => {
+    if (!props.recordId) {
+      props.onRecordContext?.(null);
+      return;
+    }
+    if (recordView.loading && !recordView.data) {
+      props.onRecordContext?.({ status: "loading" });
+      return;
+    }
+    const record = recordView.data?.records.find((candidate) => candidate.id === props.recordId);
+    props.onRecordContext?.(record ? { status: "ready", record } : { status: "missing" });
+    return () => props.onRecordContext?.(null);
+  }, [props.boardId, props.onRecordContext, props.recordId, recordView.data, recordView.error, recordView.loading, viewKey]);
 
   if (board.loading && !board.data) return <Loading label="Loading board…" />;
   if (board.error && !board.data) return <ErrorNote message={board.error} />;

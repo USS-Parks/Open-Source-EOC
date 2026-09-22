@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BoardList, NotificationTray } from "../../design/layout.js";
 import { Button, type Status } from "../../design/components.js";
 import type { ThemeName } from "../../design/tokens.js";
@@ -13,11 +13,12 @@ import {
   type ShellSyncState,
   type WorkspaceArrangement,
 } from "../layout/AppShell.js";
-import { sectionOf, useSurface, type Surface } from "../router.js";
-import { EmptyState, ErrorNote, NotFoundState, UnavailableState } from "./parts.js";
+import { OperationalPeriodControl, PositionControl, useWorkspaceContext } from "../layout/context.js";
+import { parseRouteHash, sectionOf, useSurface, type RouteContext, type Surface } from "../router.js";
+import { EmptyState, ErrorNote, Loading, NotFoundState, UnavailableState } from "./parts.js";
 import { MapSurface } from "../surfaces/MapSurface.js";
 import { DashboardSurface } from "../surfaces/DashboardSurface.js";
-import { BoardSurface } from "../surfaces/BoardSurface.js";
+import { BoardSurface, type BoardRecordContext } from "../surfaces/BoardSurface.js";
 import { SitrepSurface } from "../surfaces/SitrepSurface.js";
 import { FormsSurface } from "../surfaces/FormsSurface.js";
 import { IapSurface } from "../surfaces/IapSurface.js";
@@ -78,7 +79,10 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
   const { client } = session;
   const jurisdictionId = session.jurisdictionId;
   const incident = useIncident();
-  const { surface, navigate } = useSurface();
+  const workspace = useWorkspaceContext();
+  const { surface, routeContext, navigate } = useSurface();
+  const [recordContext, setRecordContext] = useState<BoardRecordContext | null>(null);
+  const receiveRecordContext = useCallback((next: BoardRecordContext | null) => setRecordContext(next), []);
   const viewingJurisdictionId = incident.selectedIncident?.jurisdictionId ?? jurisdictionId;
   const viewingMembership = session.me?.memberships.find(
     (membership) => membership.jurisdictionId === viewingJurisdictionId,
@@ -121,6 +125,10 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
     if (!notifications.loading && !notifications.error && notifications.data) setLastNotificationCheck(new Date());
   }, [notifications.data, notifications.error, notifications.loading]);
 
+  useEffect(() => {
+    if (surface.kind !== "board" || !routeContext.recordId) setRecordContext(null);
+  }, [routeContext.recordId, surface.kind]);
+
   if (!jurisdictionId) {
     return (
       <EmptyState
@@ -130,9 +138,56 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
     );
   }
 
+  const expectedWorkspaceScope = session.me && incident.selectedIncidentId
+    ? `${session.me.person.id}:${incident.selectedIncidentId}`
+    : null;
+  if (expectedWorkspaceScope && workspace.loadedScope !== expectedWorkspaceScope && workspace.phase === "loading") {
+    return <Loading label="Restoring workspace…" />;
+  }
+
+  const baseContext: RouteContext = {
+    ...(incident.selectedIncidentId ? { incidentId: incident.selectedIncidentId } : {}),
+    periodRevision: workspace.selectedPeriodRevision,
+  };
+  const navigateInContext = (next: Surface) => navigate(next, baseContext);
+  const returnRoute = routeContext.returnTo ? parseRouteHash(routeContext.returnTo) : null;
+  const canReturn = Boolean(returnRoute && returnRoute.context.incidentId === incident.selectedIncidentId
+    && returnRoute.surface.kind !== "not-found");
+
   const boardItems = boards.data ?? [];
   const dock = (
     <>
+      {workspace.message && (workspace.phase === "conflict" || workspace.phase === "error") ? (
+        <section className="eoc-shell-context-state" aria-label="Workspace settings status">
+          <h2 style={dockHeading}>Workspace settings</h2>
+          <p role="alert">{workspace.message}</p>
+          <div>
+            <Button kind="quiet" onClick={workspace.reloadSaved}>Reload saved settings</Button>
+            {workspace.conflict ? <Button kind="primary" onClick={() => void workspace.keepSession()}>Keep this session</Button> : null}
+          </div>
+        </section>
+      ) : null}
+      {surface.kind === "board" && routeContext.recordId ? (
+        <section aria-label="Selected record">
+          <h2 style={dockHeading}>Selected record</h2>
+          {recordContext?.status === "loading" || !recordContext ? <p>Loading record context…</p> : null}
+          {recordContext?.status === "missing" ? <p role="status">Record unavailable in this view</p> : null}
+          {recordContext?.status === "ready" ? (
+            <dl className="eoc-shell-record-context">
+              {Object.entries(recordContext.record).map(([key, value]) => (
+                <div key={key}><dt>{key}</dt><dd>{formatRecordValue(value)}</dd></div>
+              ))}
+            </dl>
+          ) : null}
+        </section>
+      ) : null}
+      {canReturn && returnRoute ? (
+        <section aria-label="Return path">
+          <Button kind="quiet" onClick={() => navigate(returnRoute.surface, returnRoute.context)}>
+            {returnRoute.context.recordId ? "Return to record" : "Return to previous workspace"}
+          </Button>
+        </section>
+      ) : null}
       <section aria-label="Boards">
         <h2 style={dockHeading}>Boards</h2>
         {boardItems.length === 0 ? (
@@ -140,14 +195,14 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         ) : (
           <BoardList
             boards={boardItems.map((b) => ({ id: b.id, name: b.title }))}
-            onOpen={(id) => navigate({ kind: "board", id })}
+            onOpen={(id) => navigateInContext({ kind: "board", id })}
           />
         )}
       </section>
       <section aria-label="Recent notifications">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
           <h2 style={{ ...dockHeading, margin: 0 }}>Notifications</h2>
-          <Button kind="quiet" onClick={() => navigate({ kind: "alerts" })}>Open center</Button>
+          <Button kind="quiet" onClick={() => navigateInContext({ kind: "alerts" })}>Open center</Button>
         </div>
         <NotificationTray
           items={(notifications.data ?? []).slice(0, 6).map((n) => ({
@@ -160,23 +215,31 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
     </>
   );
 
-  const sync: ShellSyncState = notifications.error
+  const notificationSync: ShellSyncState = notifications.error
     ? { state: "error", label: lastNotificationCheck ? `Update failed · checked ${formatTime(lastNotificationCheck)}` : "Updates unavailable" }
     : notifications.loading && !notifications.data
       ? { state: "checking", label: "Checking updates" }
       : { state: "current", label: lastNotificationCheck ? `Checked ${formatTime(lastNotificationCheck)}` : "Update received" };
-  const page = pageFor(surface, incident.selectedIncident?.name ?? "No incident selected");
+  const sync: ShellSyncState = workspace.phase === "loading" || workspace.phase === "saving"
+    ? { state: "checking", label: workspace.message ?? "Restoring workspace" }
+    : workspace.phase === "conflict" || workspace.phase === "error"
+      ? { state: "error", label: workspace.message ?? "Workspace settings unavailable" }
+      : notificationSync;
+  const scope = `${incident.selectedIncident?.name ?? "No incident selected"} · ${workspace.selectedPeriodLabel}`;
+  const page = pageFor(surface, scope);
 
   return (
     <AppShell
       product="Open Source EOC"
       organization="Emergency coordination"
       context={<IncidentSwitcher />}
-      periodLabel="Not set"
+      periodLabel={workspace.selectedPeriodLabel}
       positionLabel={session.me?.position?.title ?? "No acting position"}
+      periodControl={<OperationalPeriodControl />}
+      positionControl={<PositionControl />}
       nav={NAV}
       activeNav={sectionOf(surface)}
-      onNavigate={(key) => navigate(sectionForNav(key))}
+      onNavigate={(key) => navigateInContext(sectionForNav(key))}
       userName={session.me?.person.displayName ?? ""}
       roleLabel={viewingMembership?.role ?? "guest"}
       theme={props.theme}
@@ -186,6 +249,8 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       sync={sync}
       page={page.page}
       arrangement={page.arrangement}
+      layout={workspace.layout(page.arrangement)}
+      onLayoutChange={(next) => workspace.updateLayout(page.arrangement, next)}
       rightDock={dock}
     >
       <Center
@@ -194,6 +259,8 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         // survive the switch (VEOC-79B teardown).
         key={incident.selectedIncidentId ?? "no-incident"}
         surface={surface}
+        recordId={routeContext.recordId}
+        onRecordContext={receiveRecordContext}
         theme={props.theme}
         client={client}
         jurisdictionId={viewingJurisdictionId ?? jurisdictionId}
@@ -207,14 +274,15 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         isAdmin={viewingMembership?.role === "admin"}
         collectionsError={collections.error}
         firstDashboardId={dashboards.data?.[0]?.id}
-        onNavigate={navigate}
-        onOpenBoard={(id) => navigate({ kind: "board", id })}
-        onOpenSitrep={(id) => navigate({ kind: "sitrep", id })}
+        onNavigate={navigateInContext}
+        onOpenBoard={(id) => navigateInContext({ kind: "board", id })}
+        onOpenSitrep={(id) => navigateInContext({ kind: "sitrep", id })}
         onDashboardFilter={(id, f) =>
           navigate(
             f
               ? { kind: "dashboard", id, filterField: f.field, filterEquals: f.equals }
               : { kind: "dashboard", id },
+            baseContext,
           )
         }
       />
@@ -275,6 +343,8 @@ function sectionForNav(key: string): Surface {
 
 function Center(props: {
   surface: Surface;
+  recordId: string | undefined;
+  onRecordContext: (state: BoardRecordContext | null) => void;
   theme: ThemeName;
   client: ApiClient;
   jurisdictionId: string;
@@ -331,7 +401,8 @@ function Center(props: {
     case "boards":
       return <BoardsIndex boards={props.boards} onOpen={props.onOpenBoard} />;
     case "board":
-      return <BoardSurface client={props.client} boardId={s.id} />;
+      return <BoardSurface client={props.client} boardId={s.id} incidentId={props.incidentId}
+        {...(props.recordId ? { recordId: props.recordId } : {})} onRecordContext={props.onRecordContext} />;
     case "sitreps":
       return (
         <SitrepsIndex
@@ -468,6 +539,13 @@ function pageFor(surface: Surface, scope: string): { readonly page: ShellPage; r
 
 function formatTime(value: Date) {
   return value.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatRecordValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "Unavailable";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
 }
 
 const dockHeading = { margin: "0 0 8px", fontSize: "1em" } as const;

@@ -85,6 +85,31 @@ describe("provisioning (F16, one action)", () => {
 });
 
 describe("cross-jurisdiction default deny (INV-7)", () => {
+  it("lists only the caller's current assignments when requested", async () => {
+    const [position] = await admin`insert into positions (jurisdiction_id, key, title)
+      values (${seed.jurisdictionId}, 'context_duty', 'Context Duty') returning id`;
+    const positionId = position!.id as string;
+    await admin`insert into position_assignments (position_id, person_id, assigned_by)
+      values (${positionId}, ${seed.memberId}, ${seed.adminId})`;
+    const memberToken = await tokenFor("member@example.org", "another-good-password");
+    const adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
+    const read = (token: string, filter = true) => app.inject({
+      method: "GET",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/positions${filter ? "?assignedToMe=true" : ""}`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect((await read(memberToken)).json().positions).toEqual([
+      { id: positionId, key: "context_duty", title: "Context Duty" },
+    ]);
+    expect((await read(adminToken)).json().positions).toEqual([]);
+    expect((await read(adminToken, false)).json().positions).toContainEqual(
+      { id: positionId, key: "context_duty", title: "Context Duty" },
+    );
+    await admin`update position_assignments set revoked_at = now()
+      where position_id = ${positionId} and person_id = ${seed.memberId}`;
+    expect((await read(memberToken)).json().positions).toEqual([]);
+  });
+
   it("a member of one jurisdiction cannot read another's positions", async () => {
     const [hoopa] = await admin`select id from jurisdictions where slug = 'hoopa'`;
     const token = await tokenFor("member@example.org", "another-good-password");

@@ -334,6 +334,8 @@ describe("the operations console in a real browser, offline", () => {
         }
       }
       await page.evaluate("window.location.hash = '#/unknown-workspace'");
+      // The Boards arrangement opens its context drawer as a modal on phones.
+      await page.getByRole("button", { name: "Close context drawer" }).click();
       await page.getByRole("heading", { name: "Page not found", level: 2 }).waitFor();
       await page.getByRole("button", { name: "Open Map", exact: true }).click();
       await page.locator('[data-testid="cop-map"]').waitFor();
@@ -364,6 +366,17 @@ describe("the operations console in a real browser, offline", () => {
 
     // Console-only markers: the live COP, its controls and legend, the dock.
     await page.waitForSelector('[data-testid="cop-map"]', { timeout: 20000 });
+    await page.waitForFunction("location.hash.includes('period=')");
+    // The preceding frame journey intentionally persists a closed drawer and
+    // dark theme. Set this journey's presentation through the actual controls.
+    if (await page.getByRole("button", { name: "Open context", exact: true }).count()) {
+      await page.getByRole("button", { name: "Open context", exact: true }).click();
+    }
+    await page.getByRole("button", { name: "Account menu" }).click();
+    if (await page.getByRole("button", { name: "Use light theme" }).count()) {
+      await page.getByRole("button", { name: "Use light theme" }).click();
+    }
+    await page.getByRole("button", { name: "Account menu" }).click();
     await page.waitForSelector(".maplibregl-ctrl-zoom-in", { timeout: 20000 });
     await page.getByText("Status", { exact: true }).first().waitFor({ state: "visible", timeout: 20000 });
     await page
@@ -724,6 +737,111 @@ describe("the operations console in a real browser, offline", () => {
       expect((await read(first)).geometry).toEqual(multi);
       expect((await read(first)).operationalPeriod.label).toBe("OP 1");
       expect((await read(second)).geometry).toBeNull();
+      expect(errors).toEqual([]); expect(external).toEqual([]);
+    } finally { await page.close(); }
+  }, 90000);
+
+  it("restores scoped workspace context, periods and positions through reload and Back", async () => {
+    const call = (token: string, method: "GET" | "POST" | "PUT", url: string, payload?: Record<string, unknown>) =>
+      app.inject({ method, url, headers: { authorization: `Bearer ${token}` }, ...(payload ? { payload } : {}) });
+    const activate = async (name: string) => {
+      const response = await call(adminToken, "POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/incidents`, { templateKey: "wildfire", name });
+      expect(response.statusCode, response.body).toBe(201);
+      return response.json().incidentId as string;
+    };
+    const first = await activate("Context Alpha"), second = await activate("Context Bravo");
+    for (const [incidentId, labels] of [[first, ["Alpha day", "Alpha night"]], [second, ["Bravo day"]]] as const) {
+      for (const [index, label] of labels.entries()) {
+        const response = await call(adminToken, "PUT", `/api/v1/incidents/${incidentId}/operational-area`, {
+          expectedRevision: index, geometry: null, reason: "Synthetic context proof",
+          operationalPeriod: { label, startsAt: `2026-09-${21 + index}T08:00:00-07:00`, endsAt: `2026-09-${21 + index}T20:00:00-07:00` },
+        });
+        expect(response.statusCode, response.body).toBe(200);
+      }
+    }
+    const detail = (await call(adminToken, "GET", `/api/v1/incidents/${first}`)).json();
+    const positionId = detail.positions[0].id as string;
+    const unassignedId = detail.positions[1].id as string;
+    expect((await call(adminToken, "POST", `/api/v1/positions/${positionId}/assignments`, { personId: seed.memberId })).statusCode).toBe(201);
+    const boardId = await createBoard("road_closures");
+    await admin`insert into incident_boards (incident_id, board_id) values (${first}, ${boardId}), (${second}, ${boardId})`;
+    const record = async (incidentId: string, road: string) => {
+      const response = await call(memberToken, "POST", `/api/v1/boards/${boardId}/records?incidentId=${incidentId}`, { road, status: "closed", reason: "Context proof" });
+      expect(response.statusCode, response.body).toBe(201);
+      return response.json().id as string;
+    };
+    const firstRecord = await record(first, "Context Alpha road"), secondRecord = await record(second, "Context Bravo road");
+    const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
+    const errors: string[] = [], external: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.route("**/*", (route) => {
+      const url = route.request().url();
+      if (url.startsWith(baseUrl) || url.startsWith("data:") || url.startsWith("blob:")) return route.continue();
+      external.push(url); return route.abort();
+    });
+    const saved = (kind: string, key: string, incidentId = first, token = memberToken) =>
+      call(token, "GET", `/api/v1/incidents/${incidentId}/saved-state/${kind}/${key}`);
+    const afterSave = () => page.waitForResponse((response) => response.request().method() === "PUT"
+      && response.url().includes("/saved-state/") && response.status() === 200);
+    try {
+      await page.goto(`${baseUrl}/app/index.html#/?incident=${first}&period=1`);
+      await page.getByLabel("Email").fill("member@example.org");
+      await page.getByLabel("Password").fill("another-good-password");
+      await page.getByRole("button", { name: "Sign in" }).click();
+      await page.getByRole("option", { name: "Alpha night", exact: true }).waitFor({ state: "attached" });
+      expect(await page.getByLabel("Operational period", { exact: true }).inputValue()).toBe("1");
+      let save = afterSave();
+      await page.getByLabel("Operational period", { exact: true }).selectOption("2"); await save;
+      await page.goBack();
+      await page.waitForFunction("document.querySelector('select[aria-label=\"Operational period\"]')?.value === '1'");
+      save = afterSave();
+      await page.getByLabel("Operational period", { exact: true }).selectOption("2"); await save;
+      save = afterSave();
+      await page.getByRole("button", { name: "Compact navigation", exact: true }).click(); await save;
+      const resize = page.getByRole("separator", { name: "Resize context drawer" });
+      save = afterSave(); await resize.focus(); await page.keyboard.press("End"); await save;
+      expect((await saved("workspace_layout", "map")).json().state.payload).toMatchObject({ drawerWidth: 520, compactNavigation: true });
+      expect((await saved("workspace_layout", "map", second)).statusCode).toBe(404);
+      expect((await saved("workspace_layout", "map", first, adminToken)).statusCode).toBe(404);
+      await page.screenshot({ path: join(SHOTS, "shell-context-light.png") });
+      await page.getByRole("button", { name: "Account menu" }).click(); save = afterSave();
+      await page.getByRole("button", { name: "Use dark theme" }).click(); await save;
+      await page.getByRole("button", { name: "Account menu" }).click();
+      const positionRefresh = page.waitForResponse((response) => response.url().endsWith("/api/v1/me") && response.status() === 200);
+      await page.getByLabel("Acting position", { exact: true }).selectOption(positionId);
+      await positionRefresh;
+      expect((await call(memberToken, "POST", `/api/v1/positions/${unassignedId}/sign-in`, {})).statusCode).toBe(403);
+      await page.reload();
+      await page.getByRole("button", { name: "Expand navigation", exact: true }).waitFor();
+      expect(await page.getByLabel("Operational period", { exact: true }).inputValue()).toBe("2");
+      expect(await page.getByLabel("Acting position", { exact: true }).inputValue()).toBe(positionId);
+      expect(await page.locator("[data-theme]").getAttribute("data-theme")).toBe("dark");
+      expect(await resize.getAttribute("aria-valuenow")).toBe("520");
+      const oldState = (await saved("workspace_layout", "map")).json().state;
+      expect((await call(memberToken, "PUT", `/api/v1/incidents/${first}/saved-state/workspace_layout/map`, {
+        schemaVersion: 1, expectedRevision: oldState.revision, payload: { ...oldState.payload, drawerWidth: 300 },
+      })).statusCode).toBe(200);
+      await resize.focus(); await page.keyboard.press("Home");
+      await page.getByRole("button", { name: "Keep this session", exact: true }).waitFor();
+      save = afterSave(); await page.getByRole("button", { name: "Keep this session", exact: true }).click(); await save;
+      expect((await saved("workspace_layout", "map")).json().state.payload.drawerWidth).toBe(280);
+      await page.screenshot({ path: join(SHOTS, "shell-context-dark.png") });
+      await page.evaluate((hash) => { (globalThis as unknown as { location: { hash: string } }).location.hash = hash; }, `#/board/${boardId}?incident=${first}&period=2&record=${firstRecord}&return=${encodeURIComponent(`#/?incident=${first}&period=2`)}`);
+      const selected = page.getByRole("region", { name: "Selected record", exact: true });
+      await selected.getByText("Context Alpha road", { exact: true }).waitFor();
+      await page.getByRole("button", { name: "Return to previous workspace" }).click();
+      await page.locator('[data-testid="cop-map"]').waitFor();
+      await page.evaluate((hash) => { (globalThis as unknown as { location: { hash: string } }).location.hash = hash; }, `#/board/${boardId}?incident=${first}&period=2&record=${secondRecord}`);
+      await selected.getByText("Record unavailable in this view", { exact: true }).waitFor();
+      expect(await selected.getByText("Context Bravo road").count()).toBe(0);
+      await page.getByLabel("Selected incident").selectOption(second);
+      await page.getByRole("option", { name: "Bravo day", exact: true }).waitFor({ state: "attached" });
+      expect(new URL(page.url()).hash).not.toContain("record=");
+      expect(await page.getByLabel("Operational period", { exact: true }).inputValue()).toBe("");
+      expect(await selected.count()).toBe(0);
+      await page.getByLabel("Selected incident").selectOption(first);
+      await page.getByRole("option", { name: "Alpha night", exact: true }).waitFor({ state: "attached" });
+      expect(await page.getByLabel("Operational period", { exact: true }).inputValue()).toBe("2");
       expect(errors).toEqual([]); expect(external).toEqual([]);
     } finally { await page.close(); }
   }, 90000);

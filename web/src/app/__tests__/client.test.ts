@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ApiClient, SessionExpiredError } from "../api/client.js";
 
 /**
@@ -30,6 +30,37 @@ const me = {
 };
 
 describe("ApiClient", () => {
+  it("passes explicit incident scope to the existing board view endpoint", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(res(200, { view: "all", columns: [], records: [] }));
+    const client = new ApiClient({ fetchImpl });
+    client.setTokens({ accessToken: "A", resumeToken: "R" });
+    await client.boardView("board-a", "all", "incident-a");
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe("/api/v1/boards/board-a/views/all?incidentId=incident-a");
+  });
+  it("keeps workspace CAS scope through renewal and surfaces position denial", async () => {
+    const calls: Call[] = [];
+    let saves = 0;
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      calls.push({ url: String(url), init });
+      if (String(url).endsWith("/auth/resume")) return res(200, { accessToken: "A2", resumeToken: "R2", sessionId: "S" });
+      if (String(url).endsWith("/sign-in")) return res(403, { error: "not assigned to this position" });
+      if (init.method === "PUT") {
+        saves += 1;
+        return saves === 1 ? res(401, { error: "expired" }) : res(409, { error: "state revision changed" });
+      }
+      return res(200, { states: [], nextCursor: null });
+    }) as unknown as typeof fetch;
+    const client = new ApiClient({ fetchImpl });
+    client.setTokens({ accessToken: "A", resumeToken: "R" });
+    await expect(client.saveWorkspaceState("incident-a", "workspace_layout", "map", {
+      expectedRevision: 4, schemaVersion: 1, payload: { drawerWidth: 340 },
+    })).rejects.toMatchObject({ status: 409 });
+    const puts = calls.filter((call) => call.init.method === "PUT");
+    expect(puts).toHaveLength(2);
+    expect(puts[0]!.url).toBe("/api/v1/incidents/incident-a/saved-state/workspace_layout/map");
+    expect(puts[1]!.init.body).toBe(puts[0]!.init.body);
+    await expect(client.signInPosition("unassigned")).rejects.toMatchObject({ status: 403 });
+  });
   it("retains a task operation identity through authenticated session renewal", async () => {
     const calls: Call[] = [];
     let completions = 0;

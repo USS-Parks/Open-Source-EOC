@@ -43,6 +43,37 @@ export type Surface =
   | { readonly kind: "board-design"; readonly id: string }
   | { readonly kind: "not-found"; readonly path: string };
 
+export interface RouteContext {
+  readonly incidentId?: string;
+  /** null is an explicit "Not set" choice; undefined means the link did not
+   * carry period context and may hydrate from saved preferences. */
+  readonly periodRevision?: number | null;
+  readonly view?: string;
+  readonly filter?: string;
+  readonly recordId?: string;
+  readonly returnTo?: string;
+}
+
+export interface AppRoute {
+  readonly surface: Surface;
+  readonly context: RouteContext;
+}
+
+const MAX_HASH_LENGTH = 2048;
+const MAX_CONTEXT_VALUE = 256;
+
+function bounded(value: string | null, max = MAX_CONTEXT_VALUE): string | undefined {
+  return value && value.length <= max ? value : undefined;
+}
+
+function safeDecode(value: string): string | null {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+}
+
 /** The rail section a surface belongs to (board detail lives under boards). */
 export function sectionOf(surface: Surface): string {
   switch (surface.kind) {
@@ -72,8 +103,7 @@ export function sectionOf(surface: Surface): string {
   }
 }
 
-export function parseHash(hash: string): Surface {
-  const clean = hash.replace(/^#\/?/, "");
+function parseSurfacePath(clean: string): Surface {
   const slash = clean.indexOf("/");
   const head = slash === -1 ? clean : clean.slice(0, slash);
   const id = slash === -1 ? "" : clean.slice(slash + 1);
@@ -83,8 +113,11 @@ export function parseHash(hash: string): Surface {
       const parts = id.split("/");
       const dashId = parts[0]!;
       const [, field, value] = parts;
-      return field && value !== undefined
-        ? { kind: "dashboard", id: dashId, filterField: field, filterEquals: decodeURIComponent(value) }
+      const decoded = value === undefined ? null : safeDecode(value);
+      return field && value !== undefined && decoded !== null
+        ? { kind: "dashboard", id: dashId, filterField: field, filterEquals: decoded }
+        : value !== undefined && decoded === null
+          ? { kind: "not-found", path: "invalid-link" }
         : { kind: "dashboard", id: dashId };
     }
     case "boards":
@@ -147,7 +180,53 @@ export function parseHash(hash: string): Surface {
   }
 }
 
-export function surfaceHash(surface: Surface): string {
+export function parseRouteHash(hash: string): AppRoute {
+  if (hash.length > MAX_HASH_LENGTH) return { surface: { kind: "not-found", path: "invalid-link" }, context: {} };
+  const clean = hash.replace(/^#\/?/, "");
+  const question = clean.indexOf("?");
+  const path = question === -1 ? clean : clean.slice(0, question);
+  const rawQuery = question === -1 ? "" : clean.slice(question + 1);
+  if (safeDecode(rawQuery) === null) return { surface: { kind: "not-found", path: "invalid-link" }, context: {} };
+  const query = new URLSearchParams(rawQuery);
+  const known = ["incident", "period", "view", "filter", "record", "return"] as const;
+  if (known.some((key) => query.getAll(key).length > 1)) {
+    return { surface: { kind: "not-found", path: "invalid-link" }, context: {} };
+  }
+  const incidentId = bounded(query.get("incident"), 128);
+  const view = bounded(query.get("view"));
+  const filter = bounded(query.get("filter"));
+  const recordId = bounded(query.get("record"), 128);
+  const periodValue = query.get("period");
+  const periodRevision = periodValue === "unset"
+    ? null
+    : periodValue && /^\d{1,10}$/.test(periodValue) && Number(periodValue) > 0
+      ? Number(periodValue)
+      : undefined;
+  const returnValue = bounded(query.get("return"), 512);
+  const returnTo = returnValue?.startsWith("#/") && !returnValue.includes("return=") ? returnValue : undefined;
+  if ((query.has("incident") && !incidentId) || (query.has("period") && periodRevision === undefined)
+    || (query.has("view") && !view) || (query.has("filter") && !filter)
+    || (query.has("record") && !recordId) || (query.has("return") && !returnTo)) {
+    return { surface: { kind: "not-found", path: "invalid-link" }, context: {} };
+  }
+  return {
+    surface: parseSurfacePath(path),
+    context: {
+      ...(incidentId ? { incidentId } : {}),
+      ...(periodRevision !== undefined ? { periodRevision } : {}),
+      ...(view ? { view } : {}),
+      ...(filter ? { filter } : {}),
+      ...(recordId ? { recordId } : {}),
+      ...(returnTo ? { returnTo } : {}),
+    },
+  };
+}
+
+export function parseHash(hash: string): Surface {
+  return parseRouteHash(hash).surface;
+}
+
+function surfacePath(surface: Surface): string {
   switch (surface.kind) {
     case "map":
       return "#/";
@@ -215,17 +294,41 @@ export function surfaceHash(surface: Surface): string {
   }
 }
 
-export function useSurface(): { surface: Surface; navigate: (surface: Surface) => void } {
-  const [surface, setSurface] = useState<Surface>(() => parseHash(location.hash));
+export function surfaceHash(surface: Surface, context: RouteContext = {}): string {
+  const path = surfacePath(surface);
+  const query = new URLSearchParams();
+  if (context.incidentId) query.set("incident", context.incidentId);
+  if (context.periodRevision === null) query.set("period", "unset");
+  else if (context.periodRevision) query.set("period", String(context.periodRevision));
+  if (context.view) query.set("view", context.view);
+  if (context.filter) query.set("filter", context.filter);
+  if (context.recordId) query.set("record", context.recordId);
+  if (context.returnTo) query.set("return", context.returnTo);
+  const encoded = query.toString();
+  return encoded ? `${path}?${encoded}` : path;
+}
+
+export function replaceRouteContext(context: RouteContext): void {
+  const route = parseRouteHash(location.hash);
+  history.replaceState(history.state, "", surfaceHash(route.surface, context));
+  window.dispatchEvent(new HashChangeEvent("hashchange"));
+}
+
+export function useSurface(): {
+  surface: Surface;
+  routeContext: RouteContext;
+  navigate: (surface: Surface, context?: RouteContext) => void;
+} {
+  const [route, setRoute] = useState<AppRoute>(() => parseRouteHash(location.hash));
   useEffect(() => {
-    const onHash = () => setSurface(parseHash(location.hash));
+    const onHash = () => setRoute(parseRouteHash(location.hash));
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
-  const navigate = useCallback((next: Surface) => {
-    const hash = surfaceHash(next);
-    if (location.hash === hash) setSurface(next);
+  const navigate = useCallback((next: Surface, context: RouteContext = {}) => {
+    const hash = surfaceHash(next, context);
+    if (location.hash === hash) setRoute({ surface: next, context });
     else location.hash = hash; // the hashchange listener updates state
   }, []);
-  return { surface, navigate };
+  return { surface: route.surface, routeContext: route.context, navigate };
 }

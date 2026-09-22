@@ -406,10 +406,10 @@ export class ApiClient {
   getBoard(boardId: string): Promise<EffectiveBoardResponse> {
     return this.request<EffectiveBoardResponse>("GET", `/api/v1/boards/${boardId}`);
   }
-  boardView(boardId: string, viewKey: string): Promise<ViewRecordsResponse> {
+  boardView(boardId: string, viewKey: string, incidentId?: string): Promise<ViewRecordsResponse> {
     return this.request<ViewRecordsResponse>(
       "GET",
-      `/api/v1/boards/${boardId}/views/${viewKey}`,
+      `/api/v1/boards/${boardId}/views/${viewKey}${incidentId ? `?incidentId=${encodeURIComponent(incidentId)}` : ""}`,
     );
   }
   createRecord(
@@ -732,6 +732,12 @@ export class ApiClient {
     );
     return r.positions;
   }
+  async listAssignedPositions(jurisdictionId: string): Promise<PositionRef[]> {
+    const result = await this.request<{ positions: PositionRef[] }>(
+      "GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/positions?assignedToMe=true`,
+    );
+    return result.positions;
+  }
   async listThreads(jurisdictionId: string): Promise<Thread[]> {
     const r = await this.request<{ threads: Thread[] }>(
       "GET",
@@ -891,6 +897,50 @@ export class ApiClient {
   }
   fileMeta(fileId: string): Promise<FileMetaRef> {
     return this.request<FileMetaRef>("GET", `/api/v1/files/${fileId}`);
+  }
+  listWorkspaceStates(
+    incidentId: string,
+    kind: "workspace_preferences" | "workspace_layout",
+    options: { cursor?: string; limit?: number } = {},
+  ): Promise<SavedStateListPage> {
+    const query = new URLSearchParams({ kind });
+    if (options.cursor !== undefined) query.set("cursor", options.cursor);
+    if (options.limit !== undefined) query.set("limit", String(options.limit));
+    return this.request<SavedStateListPage>(
+      "GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/saved-state?${query}`,
+    );
+  }
+  async getWorkspaceState(
+    incidentId: string, kind: "workspace_preferences" | "workspace_layout", key: string,
+  ): Promise<SavedStateRecord> {
+    const result = await this.request<{ state: SavedStateRecord }>(
+      "GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/saved-state/${kind}/${encodeURIComponent(key)}`,
+    );
+    return result.state;
+  }
+  async saveWorkspaceState(
+    incidentId: string, kind: "workspace_preferences" | "workspace_layout", key: string,
+    input: SavedStateWrite,
+  ): Promise<SavedStateRecord> {
+    const result = await this.request<{ state: SavedStateRecord }>(
+      "PUT", `/api/v1/incidents/${encodeURIComponent(incidentId)}/saved-state/${kind}/${encodeURIComponent(key)}`,
+      { ...input },
+    );
+    return result.state;
+  }
+  async deleteWorkspaceState(
+    incidentId: string, kind: "workspace_preferences" | "workspace_layout", key: string,
+    expectedRevision: number,
+  ): Promise<void> {
+    await this.request<{ ok: true }>(
+      "DELETE", `/api/v1/incidents/${encodeURIComponent(incidentId)}/saved-state/${kind}/${encodeURIComponent(key)}?expectedRevision=${encodeURIComponent(String(expectedRevision))}`,
+    );
+  }
+  async signInPosition(positionId: string): Promise<void> {
+    await this.request<{ ok: true }>("POST", `/api/v1/positions/${encodeURIComponent(positionId)}/sign-in`, {});
+  }
+  async signOutPosition(): Promise<void> {
+    await this.request<{ ok: true }>("POST", "/api/v1/positions/sign-out", {});
   }
   listTableViewStates(
     incidentId: string,

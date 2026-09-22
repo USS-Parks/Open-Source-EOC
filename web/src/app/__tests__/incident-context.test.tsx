@@ -17,6 +17,7 @@ afterEach(() => {
   } catch {
     // ignore
   }
+  history.replaceState(null, "", "#/");
 });
 
 const INCIDENTS = [
@@ -42,6 +43,7 @@ function makeClient(): ApiClient {
         person: { id: "p", email: "e@x.org", displayName: "Duty Officer" },
         position: null,
         memberships: [{ jurisdictionId: "j1", role: "admin" }],
+        guests: [],
         sessionId: "S",
       });
     return res(404, { error: "nope" });
@@ -92,5 +94,25 @@ describe("IncidentProvider", () => {
   it("exposes the selected incident's board ids for incident-scoped contribution", async () => {
     mount();
     await waitFor(() => expect(screen.getByTestId("boards").textContent).toBe("board-1,board-2"));
+  });
+
+  it("restores a valid deep-linked incident and clears incompatible record context on a switch", async () => {
+    history.replaceState(null, "", "#/board/board-9?incident=open-2&record=record-4");
+    mount();
+    await waitFor(() => expect(screen.getByTestId("selected").textContent).toBe("open-2"));
+    fireEvent.change(screen.getByLabelText("Selected incident"), { target: { value: "open-1" } });
+    await waitFor(() => expect(location.hash).toBe("#/boards?incident=open-1"));
+    expect(screen.getByTestId("selected").textContent).toBe("open-1");
+    location.hash = "#/board/board-9?incident=open-2&record=record-4";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await waitFor(() => expect(screen.getByTestId("selected").textContent).toBe("open-2"));
+  });
+
+  it("replaces a foreign linked incident with an available incident and explains the limit", async () => {
+    history.replaceState(null, "", "#/boards?incident=foreign");
+    mount();
+    await waitFor(() => expect(screen.getByTestId("selected").textContent).toBe("open-1"));
+    expect(location.hash).toBe("#/boards?incident=open-1");
+    expect(screen.getByRole("alert").textContent).toMatch(/linked incident is not available/i);
   });
 });

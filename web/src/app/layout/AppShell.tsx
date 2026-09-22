@@ -27,6 +27,12 @@ export interface NavGroup {
 export type WorkspaceArrangement = "map" | "boards" | "planning";
 type ShellViewport = "narrow" | "overlay" | "dock";
 
+export interface ShellLayoutState {
+  readonly compactNavigation: boolean;
+  readonly drawerOpen: boolean;
+  readonly drawerWidth: number;
+}
+
 export interface ShellSyncState {
   readonly state: "checking" | "current" | "error";
   readonly label: string;
@@ -44,6 +50,8 @@ export interface AppShellProps {
   readonly context: ReactNode;
   readonly periodLabel: string;
   readonly positionLabel: string;
+  readonly periodControl?: ReactNode;
+  readonly positionControl?: ReactNode;
   readonly nav: readonly NavGroup[];
   readonly activeNav: string;
   readonly onNavigate: (key: string) => void;
@@ -56,6 +64,8 @@ export interface AppShellProps {
   readonly sync: ShellSyncState;
   readonly page: ShellPage;
   readonly arrangement: WorkspaceArrangement;
+  readonly layout?: ShellLayoutState;
+  readonly onLayoutChange?: (layout: ShellLayoutState) => void;
   readonly rightDock: ReactNode;
   readonly children: ReactNode;
 }
@@ -113,10 +123,10 @@ function trapTab(event: KeyboardEvent<HTMLElement>, container: HTMLElement) {
 }
 
 export function AppShell(props: AppShellProps) {
-  const [compactNav, setCompactNav] = useState(false);
+  const [compactNav, setCompactNav] = useState(props.layout?.compactNavigation ?? false);
   const [navOpen, setNavOpen] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(startsWithWideDrawer);
-  const [drawerWidth, setDrawerWidth] = useState(340);
+  const [drawerOpen, setDrawerOpen] = useState(props.layout?.drawerOpen ?? startsWithWideDrawer);
+  const [drawerWidth, setDrawerWidth] = useState(props.layout?.drawerWidth ?? 340);
   const [viewport, setViewport] = useState<ShellViewport>(currentViewport);
   const mainRef = useRef<HTMLElement>(null);
   const navRef = useRef<HTMLElement>(null);
@@ -130,9 +140,18 @@ export function AppShell(props: AppShellProps) {
   const focusDrawer = useRef(false);
   const restoreDrawerFocus = useRef(false);
   const pointerCleanup = useRef<(() => void) | null>(null);
+  const drawerWidthRef = useRef(drawerWidth);
 
   const navModal = viewport === "narrow" && navOpen;
   const drawerModal = viewport !== "dock" && drawerOpen;
+
+  useEffect(() => {
+    if (!props.layout) return;
+    setCompactNav(props.layout.compactNavigation);
+    setDrawerOpen(props.layout.drawerOpen);
+    setDrawerWidth(props.layout.drawerWidth);
+    drawerWidthRef.current = props.layout.drawerWidth;
+  }, [props.layout?.compactNavigation, props.layout?.drawerOpen, props.layout?.drawerWidth]);
 
   useEffect(() => {
     if (typeof window.matchMedia !== "function") return;
@@ -189,11 +208,13 @@ export function AppShell(props: AppShellProps) {
     drawerInvoker.current = invoker;
     focusDrawer.current = true;
     setDrawerOpen(true);
+    publishLayout({ drawerOpen: true });
   }
 
   function closeDrawer() {
     restoreDrawerFocus.current = true;
     setDrawerOpen(false);
+    publishLayout({ drawerOpen: false });
   }
 
   function closeNavigation(target: "opener" | "workspace" | null) {
@@ -208,18 +229,26 @@ export function AppShell(props: AppShellProps) {
     const target = event.currentTarget;
     const pointerId = event.pointerId;
     target.setPointerCapture(pointerId);
-    const move = (next: PointerEvent) => setDrawerWidth(clampDrawer(startWidth + startX - next.clientX));
-    const stop = () => {
+    const move = (next: PointerEvent) => {
+      const width = clampDrawer(startWidth + startX - next.clientX);
+      drawerWidthRef.current = width;
+      setDrawerWidth(width);
+    };
+    const cleanup = () => {
       window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", stop);
-      window.removeEventListener("pointercancel", stop);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
       if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
       pointerCleanup.current = null;
     };
-    pointerCleanup.current = stop;
+    const finish = () => {
+      cleanup();
+      publishLayout({ drawerWidth: drawerWidthRef.current });
+    };
+    pointerCleanup.current = cleanup;
     window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", stop);
-    window.addEventListener("pointercancel", stop);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
   }
 
   function onNavigationKeyDown(event: KeyboardEvent<HTMLElement>) {
@@ -244,9 +273,20 @@ export function AppShell(props: AppShellProps) {
   function resizeFromKeyboard(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
     event.preventDefault();
-    if (event.key === "Home") setDrawerWidth(MIN_DRAWER);
-    else if (event.key === "End") setDrawerWidth(MAX_DRAWER);
-    else setDrawerWidth((current) => clampDrawer(current + (event.key === "ArrowLeft" ? 16 : -16)));
+    const next = event.key === "Home" ? MIN_DRAWER
+      : event.key === "End" ? MAX_DRAWER
+        : clampDrawer(drawerWidth + (event.key === "ArrowLeft" ? 16 : -16));
+    drawerWidthRef.current = next;
+    setDrawerWidth(next);
+    publishLayout({ drawerWidth: next });
+  }
+
+  function publishLayout(change: Partial<ShellLayoutState>) {
+    props.onLayoutChange?.({
+      compactNavigation: change.compactNavigation ?? compactNav,
+      drawerOpen: change.drawerOpen ?? drawerOpen,
+      drawerWidth: change.drawerWidth ?? drawerWidthRef.current,
+    });
   }
 
   return (
@@ -264,8 +304,8 @@ export function AppShell(props: AppShellProps) {
           <span><strong>{props.product}</strong><small>{props.organization}</small></span>
         </div>
         <div className="eoc-shell-context">{props.context}</div>
-        <div className="eoc-shell-command-fact"><span>Operational period</span><strong>{props.periodLabel}</strong></div>
-        <div className="eoc-shell-command-fact"><span>Acting position</span><strong>{props.positionLabel}</strong></div>
+        {viewport === "dock" ? <div className="eoc-shell-command-fact">{props.periodControl ?? <><span>Operational period</span><strong>{props.periodLabel}</strong></>}</div> : null}
+        {viewport === "dock" ? <div className="eoc-shell-command-fact">{props.positionControl ?? <><span>Acting position</span><strong>{props.positionLabel}</strong></>}</div> : null}
         <div className="eoc-shell-sync" data-state={props.sync.state}><span aria-hidden="true" />{props.sync.label}</div>
         <span className="eoc-shell-handling" aria-label="Handling marking: FOUO">FOUO</span>
         <button className="eoc-shell-notifications" type="button" aria-label={`Notifications, ${props.notificationCount} unread`} aria-expanded={drawerOpen} onClick={(event) => openDrawer(event.currentTarget)}>
@@ -287,7 +327,7 @@ export function AppShell(props: AppShellProps) {
         <nav ref={navRef} id="eoc-shell-navigation" className="eoc-shell-rail" data-open={navOpen || undefined} aria-label="Sections" aria-hidden={viewport === "narrow" && !navOpen ? true : undefined} inert={(drawerModal || (viewport === "narrow" && !navOpen)) || undefined} onKeyDown={onNavigationKeyDown}>
           <div className="eoc-shell-rail-top">
             <button ref={navClose} type="button" className="eoc-shell-nav-close" onClick={() => closeNavigation("opener")}>Close sections</button>
-            <button type="button" className="eoc-shell-compact-toggle" aria-pressed={compactNav} onClick={() => setCompactNav((current) => !current)}>
+            <button type="button" className="eoc-shell-compact-toggle" aria-pressed={compactNav} onClick={() => { const next = !compactNav; setCompactNav(next); publishLayout({ compactNavigation: next }); }}>
               <span>{compactNav ? "Expand navigation" : "Compact navigation"}</span>
             </button>
           </div>
@@ -321,7 +361,10 @@ export function AppShell(props: AppShellProps) {
         <aside ref={drawerRef} className="eoc-shell-drawer" data-open={drawerOpen || undefined} role={drawerModal ? "dialog" : "complementary"} aria-modal={drawerModal || undefined} aria-labelledby="eoc-shell-context-title" onKeyDown={onDrawerKeyDown}>
           <div className="eoc-shell-resizer" role="separator" aria-label="Resize context drawer" aria-orientation="vertical" aria-valuemin={MIN_DRAWER} aria-valuemax={MAX_DRAWER} aria-valuenow={drawerWidth} aria-hidden={viewport === "narrow" || undefined} tabIndex={viewport === "narrow" ? -1 : 0} onPointerDown={resizeFromPointer} onKeyDown={resizeFromKeyboard} />
           <header><h2 ref={drawerHeading} id="eoc-shell-context-title" tabIndex={-1}>Context</h2><button type="button" aria-label="Close context drawer" onClick={closeDrawer}>×</button></header>
-          <div className="eoc-shell-drawer-content">{props.rightDock}</div>
+          <div className="eoc-shell-drawer-content">
+            {viewport !== "dock" ? <section className="eoc-shell-drawer-context-controls" aria-label="Operational context">{props.periodControl}{props.positionControl}</section> : null}
+            {props.rightDock}
+          </div>
         </aside>
       </div>
     </div>

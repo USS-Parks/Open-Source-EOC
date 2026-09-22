@@ -3,6 +3,7 @@ import { Theme } from "../design/components.js";
 import type { ThemeName } from "../design/tokens.js";
 import { SessionProvider, useSession } from "./auth/session.js";
 import { IncidentProvider } from "./incident/context.js";
+import { WorkspaceContextProvider, useWorkspaceContext } from "./layout/context.js";
 import { Console } from "./screens/Console.js";
 import { Login } from "./screens/Login.js";
 import { Loading } from "./screens/parts.js";
@@ -33,13 +34,20 @@ function saveTheme(theme: ThemeName): void {
   }
 }
 
-function Gate(props: { theme: ThemeName; onToggleTheme: () => void }) {
+function WorkspaceConsole() {
+  const workspace = useWorkspaceContext();
+  return <Console theme={workspace.theme} onToggleTheme={workspace.toggleTheme} />;
+}
+
+function Gate(props: { theme: ThemeName; onThemeChange: (theme: ThemeName) => void }) {
   const { status } = useSession();
   if (status === "loading") return <Loading label="Starting…" />;
   if (status === "anon") return <Login />;
   return (
     <IncidentProvider>
-      <Console theme={props.theme} onToggleTheme={props.onToggleTheme} />
+      <WorkspaceContextProvider theme={props.theme} onThemeChange={props.onThemeChange}>
+        <WorkspaceConsole />
+      </WorkspaceContextProvider>
     </IncidentProvider>
   );
 }
@@ -52,7 +60,7 @@ export function App() {
   return (
     <Theme name={theme}>
       <SessionProvider>
-        <Gate theme={theme} onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))} />
+        <Gate theme={theme} onThemeChange={setTheme} />
       </SessionProvider>
     </Theme>
   );

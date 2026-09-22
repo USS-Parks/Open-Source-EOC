@@ -232,7 +232,9 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
       const rows = await withPerson(sql, req.principal.person.id, (tx) =>
-        listPositions(tx, req.principal, jurisdictionId),
+        listPositions(tx, req.principal, jurisdictionId,
+          z.object({ assignedToMe: z.enum(["true", "false"]).optional() })
+            .parse(req.query).assignedToMe === "true"),
       );
       return reply.send({ positions: rows });
     },

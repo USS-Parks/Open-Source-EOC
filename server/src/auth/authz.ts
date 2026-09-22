@@ -80,6 +80,7 @@ export async function listPositions(
   sql: Sql,
   actor: Principal,
   jurisdictionId: string,
+  assignedToMe = false,
 ): Promise<ReadonlyArray<{ id: string; key: string; title: string }>> {
   const member = actor.memberships.some((m) => m.jurisdictionId === jurisdictionId);
   const guest = actor.guests.some(
@@ -90,7 +91,12 @@ export async function listPositions(
   );
   if (!member && !guest) throw new AuthError(403, "no access to this jurisdiction");
   const rows = await sql`
-    select id, key, title from positions where jurisdiction_id = ${jurisdictionId}
+    select id, key, title from positions p where jurisdiction_id = ${jurisdictionId}
+      and (${!assignedToMe} or exists (
+        select 1 from position_assignments pa
+        where pa.position_id = p.id and pa.person_id = ${actor.person.id}
+          and pa.revoked_at is null
+      ))
     order by key`;
   return rows.map((r) => ({ id: r.id as string, key: r.key as string, title: r.title as string }));
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseHash, sectionOf, surfaceHash, type Surface } from "../router.js";
+import { parseHash, parseRouteHash, sectionOf, surfaceHash, type Surface } from "../router.js";
 
 /** The hash router: every surface round-trips, and detail views map to
  *  their list section for rail highlighting. */
@@ -54,5 +54,43 @@ describe("surface hash routing", () => {
     expect(sectionOf({ kind: "board-design", id: "b1" })).toBe("boards");
     expect(sectionOf({ kind: "field-reports" })).toBe("fieldReports");
     expect(sectionOf({ kind: "map" })).toBe("map");
+  });
+
+  it("round-trips bounded incident, period, view, filter, record, and return context", () => {
+    const hash = surfaceHash(
+      { kind: "board", id: "board-1" },
+      {
+        incidentId: "incident-1",
+        periodRevision: 12,
+        view: "priority",
+        filter: "status:open",
+        recordId: "record-9",
+        returnTo: "#/dashboard?incident=incident-1",
+      },
+    );
+    expect(parseRouteHash(hash)).toEqual({
+      surface: { kind: "board", id: "board-1" },
+      context: {
+        incidentId: "incident-1",
+        periodRevision: 12,
+        view: "priority",
+        filter: "status:open",
+        recordId: "record-9",
+        returnTo: "#/dashboard?incident=incident-1",
+      },
+    });
+  });
+
+  it("round-trips an explicit operational-period not-set choice", () => {
+    const hash = surfaceHash({ kind: "map" }, { incidentId: "incident-1", periodRevision: null });
+    expect(hash).toBe("#/?incident=incident-1&period=unset");
+    expect(parseRouteHash(hash).context.periodRevision).toBeNull();
+  });
+
+  it("rejects malformed, duplicate, oversized, and nested-return deep links without throwing", () => {
+    expect(parseHash("#/dashboard/d1/severity/%E0%A4%A")).toEqual({ kind: "not-found", path: "invalid-link" });
+    expect(parseHash("#/boards?incident=one&incident=two")).toEqual({ kind: "not-found", path: "invalid-link" });
+    expect(parseHash(`#/boards?filter=${"a".repeat(257)}`)).toEqual({ kind: "not-found", path: "invalid-link" });
+    expect(parseHash("#/boards?return=%23%2Fmap%3Freturn%3Dloop")).toEqual({ kind: "not-found", path: "invalid-link" });
   });
 });

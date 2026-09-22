@@ -196,6 +196,24 @@ describe("responsive shell frame", () => {
     expect(separator.getAttribute("aria-valuenow")).toBe("360");
   });
 
+  it("hydrates and reports controlled arrangement layout changes", () => {
+    const onLayoutChange = vi.fn();
+    const view = frame({
+      layout: { compactNavigation: true, drawerOpen: false, drawerWidth: 404 },
+      onLayoutChange,
+      periodControl: <select aria-label="Operational period"><option>Day 2</option></select>,
+      positionControl: <select aria-label="Acting position"><option>Planning Section</option></select>,
+    });
+    expect(view.getByRole("button", { name: "Expand navigation" })).not.toBeNull();
+    expect(view.getByRole("button", { name: "Open context" })).not.toBeNull();
+    expect(view.getByLabelText("Operational period")).not.toBeNull();
+    expect(view.getByLabelText("Acting position")).not.toBeNull();
+    fireEvent.click(view.getByRole("button", { name: "Expand navigation" }));
+    expect(onLayoutChange).toHaveBeenCalledWith({ compactNavigation: false, drawerOpen: false, drawerWidth: 404 });
+    fireEvent.click(view.getByRole("button", { name: "Open context" }));
+    expect(onLayoutChange).toHaveBeenCalledWith({ compactNavigation: false, drawerOpen: true, drawerWidth: 404 });
+  });
+
   it("labels notification count and honest poll state", () => {
     const view = frame({ sync: { state: "error", label: "Updates unavailable" }, notificationCount: 0 });
     expect(view.getByRole("button", { name: "Notifications, 0 unread" })).not.toBeNull();

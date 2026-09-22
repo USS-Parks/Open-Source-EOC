@@ -91,6 +91,10 @@
 
 .eoc-shell-command-fact span { color: #b8cddd; font-size: 10px; }
 .eoc-shell-command-fact strong { overflow: hidden; color: #fff; font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.eoc-shell-inline-control { min-width: 0; display: grid; gap: 2px; }
+.eoc-shell-inline-control > span { color: #b8cddd; font-size: 10px; }
+.eoc-shell-inline-control select { min-width: 0; max-width: 190px; min-height: 32px; padding: 3px 24px 3px 6px; color: #fff; background: #173e5e; border: 1px solid #4d708b; border-radius: var(--eoc-radius-sm); font: inherit; font-size: 11px; }
+.eoc-shell-inline-control small { color: #fecaca; font-size: 10px; }
 
 .eoc-shell-sync {
   margin-left: auto;
@@ -217,6 +221,16 @@
 .eoc-shell-drawer h2 { margin: 0; color: var(--eoc-text-strong); font-size: 16px; }
 .eoc-shell-drawer > header button { width: 40px; padding: 0; font-size: 22px; }
 .eoc-shell-drawer-content { min-width: 0; min-height: 0; overflow: auto; padding: 12px; display: grid; align-content: start; gap: 16px; }
+.eoc-shell-drawer-context-controls { display: grid; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--eoc-border); }
+.eoc-shell-drawer-context-controls .eoc-shell-inline-control > span { color: var(--eoc-text-muted); }
+.eoc-shell-drawer-context-controls .eoc-shell-inline-control select { width: 100%; max-width: none; color: var(--eoc-text); background: var(--eoc-surface); border-color: var(--eoc-border-strong); }
+.eoc-shell-context-state { padding: 10px; border: 1px solid var(--eoc-status-warning); border-radius: var(--eoc-radius-sm); background: var(--eoc-surface-raised); }
+.eoc-shell-context-state p { margin: 6px 0 10px; color: var(--eoc-text); }
+.eoc-shell-context-state > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.eoc-shell-record-context { margin: 0; display: grid; gap: 6px; }
+.eoc-shell-record-context > div { display: grid; grid-template-columns: minmax(90px, 0.45fr) minmax(0, 1fr); gap: 8px; padding-bottom: 5px; border-bottom: 1px solid var(--eoc-border); }
+.eoc-shell-record-context dt { color: var(--eoc-text-muted); font-size: 11px; overflow-wrap: anywhere; }
+.eoc-shell-record-context dd { margin: 0; color: var(--eoc-text); overflow-wrap: anywhere; }
 .eoc-shell-resizer { position: absolute; z-index: 2; top: 0; bottom: 0; left: -5px; width: 10px; cursor: ew-resize; touch-action: none; }
 .eoc-shell-resizer::after { content: ""; position: absolute; top: 0; bottom: 0; left: 4px; width: 2px; background: transparent; }
 .eoc-shell-resizer:hover::after,
