@@ -185,6 +185,7 @@ describe("operational board workspace", () => {
     await filter.fill("Support");
     await page.getByRole("main").getByText("Support staging", { exact: true }).waitFor({ state: "visible" });
     expect(await page.getByRole("main").getByText("Bridge inspection complete", { exact: true }).count()).toBe(0);
+    await page.waitForFunction("location.hash.includes('filter=')");
     expect(page.url()).toContain("filter=");
     await page.reload();
     await page.getByRole("main").getByText("Support staging", { exact: true }).waitFor();

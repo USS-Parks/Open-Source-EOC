@@ -777,7 +777,7 @@ describe("the operations console in a real browser, offline", () => {
       await selected.getByText("Context Alpha road", { exact: true }).waitFor();
       await page.getByRole("button", { name: "Return to previous workspace" }).click();
       await page.locator('[data-testid="cop-map"]').waitFor();
-      await page.evaluate((hash) => { (globalThis as unknown as { location: { hash: string } }).location.hash = hash; }, `#/board/${boardId}?incident=${first}&period=2&record=${secondRecord}`);
+      await page.goto(`${baseUrl}/app/index.html#/board/${boardId}?incident=${first}&period=2&record=${secondRecord}`);
       await selected.getByText("Record unavailable in this view", { exact: true }).waitFor();
       expect(await selected.getByText("Context Bravo road").count()).toBe(0);
       await page.getByLabel("Selected incident").selectOption(second);

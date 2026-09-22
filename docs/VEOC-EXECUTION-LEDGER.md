@@ -4734,3 +4734,15 @@ increment proves it and that coverage follows the incident area.
   12 files, +700 / -1,080 lines.
 - **Rollback:** revert the commit containing this receipt; no migration or
   dependency rollback is required.
+
+### Hosted CI follow-up
+
+- CI run `35733383551` passed commit hygiene, merge-free history, Rust check
+  and Clippy, TypeScript, ESLint, the 300-package license scan, the 65-file
+  link scan and 918 of 920 tests. Two browser assertions were timing-sensitive:
+  board filtering inspected the hash before its route write, and the
+  cross-incident record proof changed the hash after a long stateful sequence.
+- The board proof now waits for the filter route state. The cross-incident
+  access proof uses a fresh direct deep link before requiring the unavailable
+  record state. Product contracts and authorization behavior are unchanged.
+  The hosted CI run for the commit containing this receipt is the gate.
