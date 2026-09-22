@@ -52,6 +52,10 @@ export interface IapPreparedAttribution {
 }
 
 export interface IapWorkspaceItem {
+  readonly revisionRootId: string;
+  readonly revisionNumber: number;
+  readonly contentRevision: number;
+  readonly supersedesIapId: string | null;
   readonly id: string;
   readonly operationalPeriod: string;
   readonly period: IapPeriodReference | null;

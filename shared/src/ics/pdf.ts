@@ -93,7 +93,7 @@ export function renderPdf(title: string, lines: readonly string[]): Uint8Array {
 
 const AAR_PHYSICAL_LINE_LIMIT = 50;
 
-function wrapAarLine(line: string): string[] {
+function wrapExportLine(line: string): string[] {
   const wrapped: string[] = [];
   let remaining = line;
 
@@ -111,8 +111,18 @@ function wrapAarLine(line: string): string[] {
 
 /** Render an immutable composed AAR snapshot with all operational fields. */
 export function renderAarPdf(document: AarDocument): Uint8Array {
-  const titleLines = wrapAarLine(`AAR: ${document.incidentName}`);
-  const bodyLines = aarToTextLines(document).flatMap(wrapAarLine);
+  const titleLines = wrapExportLine(`AAR: ${document.incidentName}`);
+  const bodyLines = aarToTextLines(document).flatMap(wrapExportLine);
+  return renderPhysicalLines([...titleLines, "", ...bodyLines]);
+}
+
+/** Render the exact stored IAP revision with bounded, multipage physical lines. */
+export function renderIapPdf(document: IapDocument): Uint8Array {
+  const titleLines = wrapExportLine(
+    `IAP: ${document.incidentName} - ${document.operationalPeriod}`,
+  );
+  const bodyLines = iapToTextLines(document).flatMap(wrapExportLine);
   return renderPhysicalLines([...titleLines, "", ...bodyLines]);
 }
 import { aarToTextLines, type AarDocument } from "../aar/aar.js";
+import { iapToTextLines, type IapDocument } from "./forms.js";

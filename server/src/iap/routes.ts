@@ -1,16 +1,20 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { IapWorkspaceQuerySchema } from "@openeoc/shared";
+import { IapWorkspaceQuerySchema, WorkflowAssignmentRequestSchema } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import {
   approveIap,
   buildForm,
   createIap,
+  createIapRevision,
   exportIapPdf,
+  exportIapRevisionPdf,
   getIap,
   markIapComplete,
+  listIapRevisions,
   queryIapWorkspace,
+  replaceIcs204Assignments,
   submitIapForApproval,
 } from "./service.js";
 
@@ -28,6 +32,31 @@ const IapBody = z.object({
   formIds: z.array(z.string().min(1)).optional(),
   periodRevision: z.number().int().positive().optional(),
 });
+
+const Ics204ResourceBody = z.object({
+  name: z.string().trim().min(1).max(240),
+  identifier: z.string().trim().max(160).default(""),
+  leader: z.string().trim().max(160).default(""),
+  quantity: z.string().trim().min(1).max(80),
+  notes: z.string().trim().max(2000).default(""),
+}).strict();
+
+const Ics204AssignmentBody = z.object({
+  id: z.uuid().optional(),
+  name: z.string().trim().min(1).max(240),
+  supervisor: WorkflowAssignmentRequestSchema,
+  tactics: z.array(z.string().trim().min(1).max(2000)).min(1).max(100),
+  resources: z.array(Ics204ResourceBody).max(200),
+}).strict();
+
+const ReplaceIcs204Body = z.object({
+  expectedContentRevision: z.number().int().positive(),
+  assignments: z.array(Ics204AssignmentBody).min(1).max(100),
+}).strict();
+
+const CreateRevisionBody = z.object({
+  assignments: z.array(Ics204AssignmentBody).min(1).max(100),
+}).strict();
 
 export function iapRoutes(
   app: FastifyInstance,
@@ -87,6 +116,46 @@ export function iapRoutes(
     const { iapId } = req.params as { iapId: string };
     const iap = await withPerson(sql, req.principal.person.id, (tx) => getIap(tx, req.principal, iapId));
     return reply.send(iap);
+  });
+
+  app.put("/api/v1/iap/:iapId/ics-204", { preHandler: authenticate }, async (req, reply) => {
+    const { iapId } = req.params as { iapId: string };
+    const body = ReplaceIcs204Body.parse(req.body);
+    const result = await withPerson(sql, req.principal.person.id, (tx) =>
+      replaceIcs204Assignments(tx, req.principal, iapId, body),
+    );
+    return reply.send(result);
+  });
+
+  app.post("/api/v1/iap/:iapId/revisions", { preHandler: authenticate }, async (req, reply) => {
+    const { iapId } = req.params as { iapId: string };
+    const body = CreateRevisionBody.parse(req.body);
+    const result = await withPerson(sql, req.principal.person.id, (tx) =>
+      createIapRevision(tx, req.principal, iapId, body.assignments),
+    );
+    return reply.status(201).send(result);
+  });
+
+  app.get("/api/v1/iap/:iapId/revisions", { preHandler: authenticate }, async (req, reply) => {
+    const { iapId } = req.params as { iapId: string };
+    const revisions = await withPerson(sql, req.principal.person.id, (tx) =>
+      listIapRevisions(tx, req.principal, iapId),
+    );
+    return reply.send({ revisions });
+  });
+
+  app.get("/api/v1/iap/:iapId/revisions/:revision/pdf", {
+    preHandler: authenticate,
+  }, async (req, reply) => {
+    const { iapId, revision: rawRevision } = req.params as { iapId: string; revision: string };
+    const revision = z.coerce.number().int().positive().parse(rawRevision);
+    const { filename, bytes } = await withPerson(sql, req.principal.person.id, (tx) =>
+      exportIapRevisionPdf(tx, req.principal, iapId, revision),
+    );
+    return reply
+      .header("content-type", "application/pdf")
+      .header("content-disposition", `attachment; filename="${filename}"`)
+      .send(Buffer.from(bytes));
   });
 
   app.post("/api/v1/iap/:iapId/submit", { preHandler: authenticate }, async (req, reply) => {

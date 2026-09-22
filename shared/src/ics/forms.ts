@@ -34,6 +34,47 @@ export interface ResourceLine {
   readonly state: string;
 }
 
+export type Ics204SupervisorAuthority =
+  | {
+      readonly kind: "position";
+      readonly organizationId: string;
+      readonly organizationName: string;
+      readonly positionId: string;
+      readonly positionKey: string;
+      readonly positionTitle: string;
+      readonly personId: string;
+      readonly personName: string;
+      readonly authority: "local_writer";
+    }
+  | {
+      readonly kind: "incident_participant";
+      readonly organizationId: string;
+      readonly organizationName: string;
+      readonly participantId: string;
+      readonly personId: string;
+      readonly personName: string;
+      readonly incidentPositionTitle: string;
+      readonly participantRole: "contributor" | "coordinator";
+      readonly authority: "incident_owner_admin" | "incident_coordinator";
+      readonly actorParticipationId: string | null;
+    };
+
+export interface Ics204AssignedResource {
+  readonly name: string;
+  readonly identifier: string;
+  readonly leader: string;
+  readonly quantity: string;
+  readonly notes: string;
+}
+
+export interface Ics204Assignment {
+  readonly id: string;
+  readonly name: string;
+  readonly supervisor: Ics204SupervisorAuthority;
+  readonly tactics: readonly string[];
+  readonly resources: readonly Ics204AssignedResource[];
+}
+
 export interface IncidentContext {
   readonly incidentName: string;
   readonly operationalPeriod: string;
@@ -212,6 +253,7 @@ export interface IapDocument {
   readonly operationalPeriod: string;
   readonly preparedBy: string;
   readonly forms: readonly IcsFormContent[];
+  readonly ics204Assignments?: readonly Ics204Assignment[];
 }
 
 /** Assemble the operational period's forms into one IAP document. */
@@ -225,6 +267,61 @@ export function assembleIap(
     preparedBy: ctx.preparedBy,
     forms: formIds.map((id) => buildIcsForm(id, ctx)),
   };
+}
+
+function supervisorLines(supervisor: Ics204SupervisorAuthority): string[] {
+  const title = supervisor.kind === "position"
+    ? supervisor.positionTitle
+    : supervisor.incidentPositionTitle;
+  const grant = supervisor.kind === "incident_participant"
+    ? `Named incident authority: ${supervisor.participantRole} (${supervisor.participantId})`
+    : `Position authority: ${supervisor.positionKey} (${supervisor.positionId})`;
+  return [
+    `Supervisor: ${supervisor.personName} - ${title}`,
+    `Organization: ${supervisor.organizationName} (${supervisor.organizationId})`,
+    grant,
+    `Assignment authority: ${supervisor.authority}`,
+  ];
+}
+
+/** Replace the ICS-204 form in a stored IAP snapshot without changing other forms. */
+export function withIcs204Assignments(
+  iap: IapDocument,
+  assignments: readonly Ics204Assignment[],
+): IapDocument {
+  const form: IcsFormContent = {
+    id: "ICS-204",
+    title: TITLES["ICS-204"],
+    incidentName: iap.incidentName,
+    operationalPeriod: iap.operationalPeriod,
+    preparedBy: iap.preparedBy,
+    sections: assignments.flatMap((assignment) => [
+      {
+        heading: `Assignment: ${assignment.name}`,
+        lines: supervisorLines(assignment.supervisor),
+      },
+      {
+        heading: `Tactics - ${assignment.name}`,
+        lines: [...assignment.tactics],
+      },
+      {
+        heading: `Resources - ${assignment.name}`,
+        columns: ["Resource", "Identifier", "Leader", "Quantity", "Notes"],
+        rows: assignment.resources.map((resource) => [
+          resource.name,
+          resource.identifier,
+          resource.leader,
+          resource.quantity,
+          resource.notes,
+        ]),
+      },
+    ]),
+  };
+  const current = iap.forms.findIndex((candidate) => candidate.id === "ICS-204");
+  const forms = [...iap.forms];
+  if (current >= 0) forms[current] = form;
+  else forms.push(form);
+  return { ...iap, forms, ics204Assignments: [...assignments] };
 }
 
 /** Ensure position keys route to a known ICS section (re-exported helper). */

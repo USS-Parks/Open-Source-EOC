@@ -1,8 +1,8 @@
+import { randomUUID } from "node:crypto";
 import {
   assembleIap,
   buildIcsForm,
-  iapToTextLines,
-  renderPdf,
+  renderIapPdf,
   sectionForPosition,
   DEFAULT_IAP_FORMS,
   ICS_FORM_IDS,
@@ -21,12 +21,18 @@ import {
   type IapWorkspaceItem,
   type IapWorkspaceQuery,
   type IapWorkspaceResponse,
+  type Ics204AssignedResource,
+  type Ics204Assignment,
+  type Ics204SupervisorAuthority,
+  type WorkflowAssignmentRequest,
+  withIcs204Assignments,
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 import { getIncidentBoardReadShape, visibleFields } from "../boards/service.js";
 import { getIncidentAuthority, type IncidentAuthority } from "../incidents/participation.js";
+import { resolveWorkflowAssignment } from "../boards/workflow.js";
 
 /**
  * ICS forms and the IAP builder, server side (VEOC-34, F5). The live
@@ -294,7 +300,11 @@ async function recordIapAudit(
   authority: IncidentAuthority,
   input: {
     incidentId: string;
-    category: "iap.assembled" | "iap.submitted";
+    category:
+      | "iap.assembled"
+      | "iap.submitted"
+      | "iap.ics204.revised"
+      | "iap.revision.created";
     subjectId: string;
     payload?: Record<string, unknown>;
   },
@@ -326,29 +336,239 @@ export async function createIap(
   const period = await resolvePeriod(sql, incidentId, input.operationalPeriod, input.periodRevision);
   const formIds = input.formIds?.filter(isFormId);
   const iap = formIds === undefined ? assembleIap(ctx) : assembleIap(ctx, formIds);
+  const id = randomUUID();
   const [row] = await sql`
     insert into iaps
-      (incident_id, operational_period, period_revision, form_ids, content, prepared_by,
+      (id, incident_id, operational_period, period_revision, form_ids, content, prepared_by,
        prepared_organization_id, prepared_position_id, prepared_participation_id,
-       prepared_role_key, prepared_role_label)
-    values (${incidentId}, ${input.operationalPeriod},
+       prepared_role_key, prepared_role_label, revision_root_id, revision_number,
+       supersedes_iap_id, content_revision)
+    values (${id}, ${incidentId}, ${input.operationalPeriod},
             ${period?.revision ?? null}, ${iap.forms.map((f) => f.id)},
             ${sql.json(iap as never)}, ${actor.person.id}, ${attribution.organizationId},
             ${attribution.positionId}, ${attribution.participationId},
-            ${attribution.roleKey}, ${attribution.roleLabel})
+            ${attribution.roleKey}, ${attribution.roleLabel}, ${id}, 1, null, 1)
     returning id`;
-  const id = row!.id as string;
+  const createdId = row!.id as string;
   await recordIapAudit(sql, actor, authority, {
     incidentId,
     category: "iap.assembled",
-    subjectId: id,
+    subjectId: createdId,
     payload: {
       operationalPeriod: input.operationalPeriod, periodRevision: period?.revision ?? null,
       forms: iap.forms.length, organizationId: attribution.organizationId,
       role: attribution.roleKey,
     },
   });
-  return { id, content: iap, periodRevision: period?.revision ?? null };
+  return { id: createdId, content: iap, periodRevision: period?.revision ?? null };
+}
+
+export interface Ics204AssignmentInput {
+  readonly id?: string | undefined;
+  readonly name: string;
+  readonly supervisor: WorkflowAssignmentRequest;
+  readonly tactics: readonly string[];
+  readonly resources: readonly Ics204AssignedResource[];
+}
+
+export interface ReplaceIcs204Input {
+  readonly expectedContentRevision: number;
+  readonly assignments: readonly Ics204AssignmentInput[];
+}
+
+async function resolveIcs204Assignment(
+  sql: Sql,
+  actor: Principal,
+  incidentId: string,
+  sourceOrganizationId: string,
+  input: Ics204AssignmentInput,
+): Promise<Ics204Assignment> {
+  if (input.supervisor.kind === "incident_participant"
+    && input.supervisor.incidentId !== incidentId)
+    throw new AuthError(400, "ICS-204 supervisor belongs to another incident");
+  const resolved = await resolveWorkflowAssignment(sql, actor, sourceOrganizationId, input.supervisor);
+  let supervisor: Ics204SupervisorAuthority;
+  if (resolved.kind === "position") {
+    const holders = await sql`
+      select per.id, per.display_name, j.name as organization_name
+      from position_assignments pa
+      join persons per on per.id = pa.person_id
+      join jurisdictions j on j.id = ${resolved.organizationId}
+      where pa.position_id = ${resolved.positionId} and pa.revoked_at is null
+      order by pa.assigned_at desc limit 2`;
+    if (holders.length !== 1)
+      throw new AuthError(409, "ICS-204 supervisor position must have exactly one current holder");
+    supervisor = {
+      kind: "position",
+      organizationId: resolved.organizationId,
+      organizationName: holders[0]!.organization_name as string,
+      positionId: resolved.positionId,
+      positionKey: resolved.positionKey,
+      positionTitle: resolved.positionTitle,
+      personId: holders[0]!.id as string,
+      personName: holders[0]!.display_name as string,
+      authority: resolved.authority,
+    };
+  } else {
+    const [identity] = await sql`
+      select j.name as organization_name, p.display_name as person_name
+      from jurisdictions j join persons p on p.id = ${resolved.personId}
+      where j.id = ${resolved.organizationId}`;
+    if (!identity) throw new AuthError(404, "ICS-204 supervisor identity not found");
+    supervisor = {
+      kind: "incident_participant",
+      organizationId: resolved.organizationId,
+      organizationName: identity.organization_name as string,
+      participantId: resolved.participantId,
+      personId: resolved.personId,
+      personName: identity.person_name as string,
+      incidentPositionTitle: resolved.incidentPositionTitle,
+      participantRole: resolved.participantRole,
+      authority: resolved.authority,
+      actorParticipationId: resolved.actorParticipationId,
+    };
+  }
+  return {
+    id: input.id ?? randomUUID(),
+    name: input.name,
+    supervisor,
+    tactics: [...input.tactics],
+    resources: input.resources.map((resource) => ({ ...resource })),
+  };
+}
+
+async function resolveIcs204Assignments(
+  sql: Sql,
+  actor: Principal,
+  incidentId: string,
+  sourceOrganizationId: string,
+  inputs: readonly Ics204AssignmentInput[],
+): Promise<Ics204Assignment[]> {
+  const resolved: Ics204Assignment[] = [];
+  const ids = new Set<string>();
+  for (const input of inputs) {
+    const assignment = await resolveIcs204Assignment(
+      sql, actor, incidentId, sourceOrganizationId, input,
+    );
+    if (ids.has(assignment.id)) throw new AuthError(400, "duplicate ICS-204 assignment id");
+    ids.add(assignment.id);
+    resolved.push(assignment);
+  }
+  return resolved;
+}
+
+function hasOwnerWriteAuthority(actor: Principal, authority: IncidentAuthority): boolean {
+  return authority.canContribute && actor.memberships.some((membership) =>
+    membership.jurisdictionId === authority.jurisdictionId
+      && (membership.role === "admin" || membership.role === "member"));
+}
+
+function requireIapEditAuthority(
+  actor: Principal,
+  authority: IncidentAuthority,
+  row: { preparedBy: string; preparedParticipationId: string | null },
+): void {
+  const participantOwn = authority.canContribute && authority.participation !== null
+    && row.preparedBy === actor.person.id
+    && row.preparedParticipationId === authority.participation.id;
+  if (!hasOwnerWriteAuthority(actor, authority) && !participantOwn)
+    throw new AuthError(403, "requires owner write authority or the current preparer's incident grant");
+}
+
+/** Replace authored ICS-204 assignments in one draft using an exact content CAS. */
+export async function replaceIcs204Assignments(
+  sql: Sql,
+  actor: Principal,
+  iapId: string,
+  input: ReplaceIcs204Input,
+): Promise<{ contentRevision: number; assignments: readonly Ics204Assignment[] }> {
+  const row = await iapWorkflowRow(sql, iapId);
+  const authority = await getIncidentAuthority(sql, actor, row.incidentId);
+  await requireCurrentClaimedPosition(sql, actor, row.jurisdictionId);
+  requireIapEditAuthority(actor, authority, row);
+  if (row.status !== "draft") throw new AuthError(409, "only a draft IAP can be edited");
+  if (row.contentRevision !== input.expectedContentRevision)
+    throw new AuthError(409, "IAP content revision conflict");
+  const assignments = await resolveIcs204Assignments(
+    sql, actor, row.incidentId,
+    hasOwnerWriteAuthority(actor, authority) ? authority.jurisdictionId : row.preparedOrganizationId,
+    input.assignments,
+  );
+  const content = withIcs204Assignments(row.content, assignments);
+  const formIds = row.formIds.includes("ICS-204") ? row.formIds : [...row.formIds, "ICS-204"];
+  const [comparison] = await sql`
+    select content = ${sql.json(content as never)} and form_ids = ${formIds} as unchanged
+    from iaps where id = ${iapId}`;
+  if (comparison?.unchanged) return { contentRevision: row.contentRevision, assignments };
+  const nextRevision = row.contentRevision + 1;
+  const [updated] = await sql`
+    update iaps set content = ${sql.json(content as never)}, form_ids = ${formIds},
+      content_revision = ${nextRevision}
+    where id = ${iapId} and status = 'draft' and content_revision = ${input.expectedContentRevision}
+    returning id`;
+  if (!updated) throw new AuthError(409, "IAP content revision conflict");
+  await recordIapAudit(sql, actor, authority, {
+    incidentId: row.incidentId,
+    category: "iap.ics204.revised",
+    subjectId: iapId,
+    payload: { contentRevision: nextRevision, assignments: assignments.length },
+  });
+  return { contentRevision: nextRevision, assignments };
+}
+
+/** Clone one approved row into the next draft revision and replace its ICS-204. */
+export async function createIapRevision(
+  sql: Sql,
+  actor: Principal,
+  sourceIapId: string,
+  assignmentsInput: readonly Ics204AssignmentInput[],
+): Promise<{ id: string; revisionNumber: number; contentRevision: number }> {
+  const source = await iapWorkflowRow(sql, sourceIapId);
+  const authority = await getIncidentAuthority(sql, actor, source.incidentId);
+  await requireCurrentClaimedPosition(sql, actor, source.jurisdictionId);
+  requireIapEditAuthority(actor, authority, source);
+  if (source.status !== "approved")
+    throw new AuthError(409, "only an approved IAP can start a revision");
+  const [successor] = await sql`select id from iaps where supersedes_iap_id = ${sourceIapId}`;
+  if (successor) throw new AuthError(409, "this IAP revision already has a successor");
+  const attribution = await resolvePreparedAttribution(sql, actor, authority);
+  const assignments = await resolveIcs204Assignments(
+    sql, actor, source.incidentId, attribution.organizationId, assignmentsInput,
+  );
+  const preparedContent: IapDocument = {
+    ...source.content,
+    preparedBy: actor.person.displayName,
+    forms: source.content.forms.map((form) => ({ ...form, preparedBy: actor.person.displayName })),
+  };
+  const content = withIcs204Assignments(preparedContent, assignments);
+  const formIds = source.formIds.includes("ICS-204")
+    ? source.formIds : [...source.formIds, "ICS-204"];
+  const id = randomUUID();
+  const revisionNumber = source.revisionNumber + 1;
+  try {
+    await sql`
+      insert into iaps
+        (id, incident_id, operational_period, period_revision, status, form_ids, content,
+         prepared_by, prepared_organization_id, prepared_position_id,
+         prepared_participation_id, prepared_role_key, prepared_role_label,
+         revision_root_id, revision_number, supersedes_iap_id, content_revision)
+      values (${id}, ${source.incidentId}, ${source.operationalPeriod}, ${source.periodRevision},
+        'draft', ${formIds}, ${sql.json(content as never)}, ${actor.person.id},
+        ${attribution.organizationId}, ${attribution.positionId}, ${attribution.participationId},
+        ${attribution.roleKey}, ${attribution.roleLabel}, ${source.revisionRootId},
+        ${revisionNumber}, ${sourceIapId}, 1)`;
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "23505")
+      throw new AuthError(409, "this IAP revision already has a successor");
+    throw error;
+  }
+  await recordIapAudit(sql, actor, authority, {
+    incidentId: source.incidentId,
+    category: "iap.revision.created",
+    subjectId: id,
+    payload: { revisionNumber, supersedesIapId: sourceIapId, assignments: assignments.length },
+  });
+  return { id, revisionNumber, contentRevision: 1 };
 }
 
 export async function getIap(
@@ -374,7 +594,7 @@ export async function submitIapForApproval(sql: Sql, actor: Principal, iapId: st
   const row = await iapWorkflowRow(sql, iapId);
   const authority = await getIncidentAuthority(sql, actor, row.incidentId);
   await requireCurrentClaimedPosition(sql, actor, row.jurisdictionId);
-  const ownerWriter = authority.canContribute && authority.participation === null;
+  const ownerWriter = hasOwnerWriteAuthority(actor, authority);
   const participantOwnDraft = authority.canContribute && authority.participation !== null
     && row.preparedBy === actor.person.id
     && row.preparedParticipationId === authority.participation.id;
@@ -439,11 +659,21 @@ async function iapWorkflowRow(
   jurisdictionId: string;
   incidentId: string;
   preparedBy: string;
+  preparedOrganizationId: string;
   preparedParticipationId: string | null;
+  operationalPeriod: string;
+  periodRevision: number | null;
+  formIds: IcsFormId[];
+  content: IapDocument;
+  revisionRootId: string;
+  revisionNumber: number;
+  contentRevision: number;
 }> {
   const [row] = await sql`
     select i.status, inc.jurisdiction_id, i.incident_id, i.prepared_by,
-      i.prepared_participation_id
+      i.prepared_organization_id, i.prepared_participation_id,
+      i.operational_period, i.period_revision, i.form_ids, i.content,
+      i.revision_root_id, i.revision_number, i.content_revision
     from iaps i join incidents inc on inc.id = i.incident_id
     where i.id = ${iapId} for update of i`;
   if (!row) throw new AuthError(404, "IAP not found");
@@ -452,7 +682,15 @@ async function iapWorkflowRow(
     jurisdictionId: row.jurisdiction_id as string,
     incidentId: row.incident_id as string,
     preparedBy: row.prepared_by as string,
+    preparedOrganizationId: row.prepared_organization_id as string,
     preparedParticipationId: (row.prepared_participation_id as string | null) ?? null,
+    operationalPeriod: row.operational_period as string,
+    periodRevision: row.period_revision === null ? null : Number(row.period_revision),
+    formIds: (row.form_ids as IcsFormId[]) ?? [],
+    content: row.content as IapDocument,
+    revisionRootId: row.revision_root_id as string,
+    revisionNumber: Number(row.revision_number),
+    contentRevision: Number(row.content_revision),
   };
 }
 
@@ -550,6 +788,7 @@ export async function queryIapWorkspace(
       i.prepared_organization_id, organization.name as prepared_organization_name,
       i.prepared_position_id, i.prepared_participation_id,
       i.prepared_role_key, i.prepared_role_label,
+      i.revision_root_id, i.revision_number, i.supersedes_iap_id, i.content_revision,
       period.period_label, period.period_starts_at, period.period_ends_at
     from iaps i
     join jurisdictions organization on organization.id = i.prepared_organization_id
@@ -598,6 +837,10 @@ export async function queryIapWorkspace(
       approvedBy: (row.approved_by as string | null) ?? null,
       approvedAt: row.approved_at ? iso(row.approved_at) : null,
       createdAt: iso(row.created_at),
+      revisionRootId: row.revision_root_id as string,
+      revisionNumber: Number(row.revision_number),
+      contentRevision: Number(row.content_revision),
+      supersedesIapId: (row.supersedes_iap_id as string | null) ?? null,
     };
   });
   const states: IapDisplayState[] = ["not_started", "in_progress", "in_approval", "approved", "complete"];
@@ -650,6 +893,67 @@ export async function listIaps(
   }));
 }
 
+export interface IapRevisionSummary {
+  readonly id: string;
+  readonly revisionNumber: number;
+  readonly contentRevision: number;
+  readonly status: string;
+  readonly supersedesIapId: string | null;
+  readonly createdAt: string;
+  readonly preparedBy: string | null;
+  readonly approvedBy: string | null;
+  readonly approvedAt: string | null;
+}
+
+/** List the accessible immutable lineage for the selected IAP row. */
+export async function listIapRevisions(
+  sql: Sql,
+  actor: Principal,
+  iapId: string,
+): Promise<IapRevisionSummary[]> {
+  const [selected] = await sql`
+    select incident_id, revision_root_id from iaps where id = ${iapId}`;
+  if (!selected) throw new AuthError(404, "IAP not found");
+  await getIncidentAuthority(sql, actor, selected.incident_id as string);
+  const rows = await sql`
+    select i.id, i.revision_number, i.content_revision, i.status, i.supersedes_iap_id,
+      i.created_at, i.approved_at, prep.display_name as prepared_by,
+      approver.display_name as approved_by
+    from iaps i
+    left join persons prep on prep.id = i.prepared_by
+    left join persons approver on approver.id = i.approved_by
+    where i.revision_root_id = ${selected.revision_root_id as string}
+    order by i.revision_number`;
+  return rows.map((row) => ({
+    id: row.id as string,
+    revisionNumber: Number(row.revision_number),
+    contentRevision: Number(row.content_revision),
+    status: row.status as string,
+    supersedesIapId: (row.supersedes_iap_id as string | null) ?? null,
+    createdAt: iso(row.created_at),
+    preparedBy: (row.prepared_by as string | null) ?? null,
+    approvedBy: (row.approved_by as string | null) ?? null,
+    approvedAt: row.approved_at ? iso(row.approved_at) : null,
+  }));
+}
+
+/** Resolve one exact accessible lineage revision and render its stored snapshot. */
+export async function exportIapRevisionPdf(
+  sql: Sql,
+  actor: Principal,
+  iapId: string,
+  revisionNumber: number,
+): Promise<{ filename: string; bytes: Uint8Array }> {
+  const [selected] = await sql`select revision_root_id from iaps where id = ${iapId}`;
+  if (!selected) throw new AuthError(404, "IAP not found");
+  const [revision] = await sql`
+    select id from iaps
+    where revision_root_id = ${selected.revision_root_id as string}
+      and revision_number = ${revisionNumber}`;
+  if (!revision) throw new AuthError(404, "IAP revision not found");
+  return exportIapPdf(sql, actor, revision.id as string);
+}
+
 export async function exportIapPdf(
   sql: Sql,
   actor: Principal,
@@ -657,8 +961,7 @@ export async function exportIapPdf(
 ): Promise<{ filename: string; bytes: Uint8Array }> {
   const iap = await getIap(sql, actor, iapId);
   const content = iap.content;
-  const title = `IAP - ${content.incidentName} - ${content.operationalPeriod}`;
-  const bytes = renderPdf(title, iapToTextLines(content));
+  const bytes = renderIapPdf(content);
   const safe = content.incidentName.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase();
   return { filename: `iap-${safe}.pdf`, bytes };
 }
