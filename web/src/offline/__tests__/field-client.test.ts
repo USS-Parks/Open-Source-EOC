@@ -3,6 +3,7 @@ import * as Y from "yjs";
 import { describe, expect, it } from "vitest";
 import { openOfflineStore } from "../store.js";
 import { FieldClient, type SyncAck } from "../field-client.js";
+import { FieldSubmissionQueue } from "../../field/field-submissions.js";
 
 /**
  * Offline durability (VEOC-21): edits made in airplane mode persist, and
@@ -33,6 +34,7 @@ class ScriptedSocket {
     private readonly serverState: Uint8Array,
     private readonly acknowledge: boolean,
     sentUpdates: string[],
+    private readonly conflicts = 0,
   ) {
     this.sentUpdates = sentUpdates;
     queueMicrotask(() => this.onopen?.(new Event("open")));
@@ -60,7 +62,7 @@ class ScriptedSocket {
           type: "synced",
           operationId: message.operationId,
           seq: 4,
-          conflicts: 0,
+          conflicts: this.conflicts,
           exact: true,
         }),
       } as MessageEvent);
@@ -259,5 +261,50 @@ describe("the field client works offline and survives restart", () => {
     expect(boards).toEqual([
       { id: "board-1", title: "Road Closures", templateKey: "road_closures" },
     ]);
+  });
+  it("retains exact conflict receipts by board and operation in the same person and incident scope after restart", async () => {
+    const idb = new IDBFactory();
+    const store = await openOfflineStore(idb, "d29-retained-conflict");
+    const fields = new FieldClient(store, "", () =>
+      new ScriptedSocket(serverState({}), true, [], 1) as unknown as WebSocket);
+    const queue = FieldSubmissionQueue.from(store, fields);
+    await queue.enqueue(scope, "board-conflict-a", "record-conflict-a", { status: "blocked" });
+    await queue.enqueue(scope, "board-conflict-b", "record-conflict-b", { status: "blocked" });
+
+    await expect(queue.sync(scope, "transient-token")).resolves.toMatchObject({
+      phase: "conflict", pending: 0, receipt: { conflicts: 1 },
+    });
+    const retained = await queue.state(scope);
+    expect(retained.entries).toHaveLength(2);
+    expect(retained.entries?.map((entry) => entry.boardId).sort()).toEqual(["board-conflict-a", "board-conflict-b"]);
+    expect(retained.entries?.every((entry) => entry.operationId === entry.receipt.operationId)).toBe(true);
+    queue.close();
+
+    const revivedStore = await openOfflineStore(idb, "d29-retained-conflict");
+    const revived = FieldSubmissionQueue.from(revivedStore, new FieldClient(revivedStore));
+    await expect(revived.state(scope)).resolves.toMatchObject({
+      phase: "conflict", pending: 0, receipt: { conflicts: 1 },
+    });
+    expect((await revived.state(scope)).entries).toHaveLength(2);
+    await expect(revived.state(otherPerson)).resolves.toMatchObject({ phase: "ready", pending: 0 });
+    revived.close();
+  });
+
+  it("keeps legacy aggregate conflict metadata when writing a new receipt entry", async () => {
+    const idb = new IDBFactory();
+    const store = await openOfflineStore(idb, "d29-legacy-conflict");
+    await store.setMeta(`field-submission-conflict:${scope.personId}:${scope.incidentId}`, {
+      conflicts: 2,
+      receipt: { operationId: "legacy-operation", seq: 3, conflicts: 2, exact: true },
+    });
+    const fields = new FieldClient(store, "", () =>
+      new ScriptedSocket(serverState({}), true, [], 1) as unknown as WebSocket);
+    const queue = FieldSubmissionQueue.from(store, fields);
+    await queue.enqueue(scope, "board-new", "record-new", { status: "blocked" });
+    const state = await queue.sync(scope, "transient-token");
+    expect(state).toMatchObject({ phase: "conflict", pending: 0, receipt: { conflicts: 1 } });
+    expect(state.message).toContain("3 field submission conflicts");
+    expect(state.entries).toMatchObject([{ boardId: "board-new", receipt: { conflicts: 1 } }]);
+    queue.close();
   });
 });

@@ -4471,3 +4471,27 @@ increment proves it and that coverage follows the incident area.
   SHIP. Evidence level: integrated on publication, not operator-validated.
   No dependency added. Unit commit: this receipt's commit; rollback by revert.
   Seven worktrees remain assigned to active roster units.
+
+## D29: field capture and tracking workspaces
+
+- Lane A, final baseline edc7b32. Smart Forms reuse the operator's organization
+  form library and selected incident's attached boards. Field reports queue
+  durable attributed operations, synchronize with exact acknowledgements, and
+  project the first valid geopoint. Photos require connectivity; offline capture
+  remains explicit. Tracking supports registration, custody scans and public-safe
+  reunification, with keyboard tabs and recoverable barcode failures.
+- Conflict receipts retain board and operation identity across restart and
+  preserve earlier aggregate metadata. The production adapter passes the bearer
+  only to the live handshake; it never persists credentials in IndexedDB.
+- Full TypeScript and ESLint passed. The real PostgreSQL/Chrome journey and
+  forms/tracking/offline checks passed 23 tests. Final receipt regressions passed
+  11 tests and corrected form/ARIA checks passed eight. Integration TypeScript
+  and affected lint passed after the relationship rebase. Logs under
+  deploy/test-runtime/out/lanes/a/logs: field-workspaces-scope-gate.log,
+  field-receipt-final.log, field-dom-settled.log and
+  field-relationship-integration.log. Initial fixture failures are superseded
+  by the targeted passing results, not counted as successful proof.
+- Root reviewed source and light/dark/narrow captures. Independent final receipt
+  review: SHIP. Evidence level: integrated on publication, not operator-validated.
+  No new migration or dependency. Unit commit: this receipt's commit; rollback
+  by revert. Seven active worktrees remain assigned; protected work/d05 remains.

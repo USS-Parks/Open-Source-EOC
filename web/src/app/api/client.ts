@@ -308,7 +308,7 @@ export interface ReunificationAnswer {
     readonly station: string | null;
     readonly location: string | null;
     readonly occurredAt: string;
-  };
+  } | null;
 }
 export interface IapResult {
   readonly id: string;
@@ -442,6 +442,11 @@ export class ApiClient {
   }
   hasSession(): boolean {
     return this.resumeToken !== null;
+  }
+  /** Current bearer for the transient WebSocket sync handshake. Never persist this value. */
+  fieldSyncToken(): string {
+    if (!this.accessToken) throw new SessionExpiredError();
+    return this.accessToken;
   }
 
   async login(email: string, password: string): Promise<LoginResult> {
@@ -1142,7 +1147,7 @@ export class ApiClient {
   }
   scanTrackedObject(
     jurisdictionId: string,
-    body: { tag: string; custodyState: string; station?: string; location?: string; note?: string },
+    body: { tag: string; custodyState: string; station?: string; agency?: string; location?: string; note?: string },
   ): Promise<{ eventId: string }> {
     return this.request<{ eventId: string }>(
       "POST",

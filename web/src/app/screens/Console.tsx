@@ -532,7 +532,8 @@ function Center(props: {
     case "messages":
       return <MessagesSurface client={props.client} jurisdictionId={props.jurisdictionId} />;
     case "smartforms":
-      return <SmartFormsSurface client={props.client} jurisdictionId={props.jurisdictionId} />;
+      return <SmartFormsSurface client={props.client} jurisdictionId={props.discoveryJurisdictionId}
+        incidentId={props.incidentId} onOpenMap={() => props.onNavigate({ kind: "map" })} />;
     case "tracking":
       return <TrackingSurface client={props.client} jurisdictionId={props.jurisdictionId} />;
     case "incidents":

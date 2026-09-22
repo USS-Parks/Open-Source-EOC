@@ -1,172 +1,227 @@
-import { useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { dictionaryValues } from "@openeoc/shared";
-import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../../design/components.js";
+import { ActionButton, Tabs } from "../../design/controls.js";
+import { ConditionBadge, EmptyState, ErrorState, LoadingState } from "../../design/feedback.js";
+import { Icon } from "../../design/icons/Icon.js";
 import type { ApiClient, ReunificationAnswer } from "../api/client.js";
+import { useAsync } from "../data/hooks.js";
 import { Scroll, SurfaceHeader } from "../screens/parts.js";
+import "../../field/field-workspace.css";
 
 const KINDS = dictionaryValues("tracking.kinds") ?? ["patient"];
 const CUSTODY = dictionaryValues("tracking.custody_states") ?? ["registered"];
+type TrackingTab = "scan" | "register" | "find";
 
-/**
- * Object tracking and reunification (F, VEOC-25). Register a patient, evacuee,
- * animal, or asset with a tag; record custody scans as it moves through
- * stations; and search the custody chain to reunify. The restricted PII stays
- * server-side; this screen works the public-safe fields.
- */
+function useOnline(): boolean {
+  const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
+  useEffect(() => {
+    const refresh = () => setOnline(navigator.onLine);
+    window.addEventListener("online", refresh);
+    window.addEventListener("offline", refresh);
+    return () => {
+      window.removeEventListener("online", refresh);
+      window.removeEventListener("offline", refresh);
+    };
+  }, []);
+  return online;
+}
+
+async function detectBarcode(file: File): Promise<string | null> {
+  const api = globalThis as typeof globalThis & {
+    BarcodeDetector?: new (options?: { formats?: string[] }) => {
+      detect(source: ImageBitmap): Promise<Array<{ rawValue?: string }>>;
+    };
+  };
+  if (!api.BarcodeDetector) return null;
+  const bitmap = await createImageBitmap(file);
+  try {
+    const [result] = await new api.BarcodeDetector({ formats: ["qr_code", "code_128", "code_39"] }).detect(bitmap);
+    return result?.rawValue?.trim() || null;
+  } finally {
+    bitmap.close();
+  }
+}
+
+function human(value: string): string {
+  return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+/** Scan-first custody workflow over the existing attributed tracking service. */
 export function TrackingSurface(props: { client: ApiClient; jurisdictionId: string }) {
+  const online = useOnline();
+  const [tab, setTab] = useState<TrackingTab>("scan");
   const [kind, setKind] = useState<string>(KINDS[0] ?? "patient");
   const [label, setLabel] = useState("");
   const [tag, setTag] = useState("");
   const [scanTag, setScanTag] = useState("");
   const [custodyState, setCustodyState] = useState<string>(CUSTODY[0] ?? "registered");
   const [station, setStation] = useState("");
+  const [agency, setAgency] = useState("");
+  const [location, setLocation] = useState("");
+  const [note, setNote] = useState("");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ReunificationAnswer[] | null>(null);
+  const [searchState, setSearchState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const recent = useAsync(
+    () => props.client.reunify(props.jurisdictionId, { label: "" }),
+    [props.client, props.jurisdictionId],
+  );
 
-  const run = async (fn: () => Promise<void>) => {
-    setBusy(true);
-    setError(null);
+  const run = async (work: () => Promise<void>) => {
+    if (!online) {
+      setError("Tracking registration and custody scans require a connection. Nothing was queued.");
+      return;
+    }
+    setBusy(true); setError(null); setMessage(null);
     try {
-      await fn();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      await work();
+      recent.reload();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Tracking action failed.");
     } finally {
       setBusy(false);
     }
   };
 
-  const register = () =>
-    run(async () => {
-      if (!label.trim()) throw new Error("Enter a label.");
-      const r = await props.client.registerTrackedObject(props.jurisdictionId, {
+  const register = (event: FormEvent) => {
+    event.preventDefault();
+    void run(async () => {
+      if (!label.trim()) throw new Error("Enter a field-safe label.");
+      const result = await props.client.registerTrackedObject(props.jurisdictionId, {
         kind,
         label: label.trim(),
         ...(tag.trim() ? { tag: tag.trim() } : {}),
-      });
-      setMsg(`Registered "${label.trim()}" as tag ${r.tag}.`);
-      setScanTag(r.tag);
-      setLabel("");
-      setTag("");
-    });
-
-  const scan = () =>
-    run(async () => {
-      if (!scanTag.trim()) throw new Error("Enter the tag to scan.");
-      await props.client.scanTrackedObject(props.jurisdictionId, {
-        tag: scanTag.trim(),
-        custodyState,
         ...(station.trim() ? { station: station.trim() } : {}),
+        ...(agency.trim() ? { agency: agency.trim() } : {}),
+        ...(location.trim() ? { location: location.trim() } : {}),
       });
-      setMsg(`Scan recorded for ${scanTag.trim()}: ${custodyState}.`);
+      setScanTag(result.tag); setLabel(""); setTag("");
+      setMessage(`Registered ${result.tag}. Continue with the first custody handoff.`);
+      setTab("scan");
     });
+  };
 
-  const search = () =>
-    run(async () => {
-      const q = query.trim();
-      setResults(await props.client.reunify(props.jurisdictionId, q.startsWith("#") ? { tag: q.slice(1) } : { label: q }));
+  const scan = (event: FormEvent) => {
+    event.preventDefault();
+    void run(async () => {
+      if (!scanTag.trim()) throw new Error("Scan or enter a tracking tag.");
+      await props.client.scanTrackedObject(props.jurisdictionId, {
+        tag: scanTag.trim(), custodyState,
+        ...(station.trim() ? { station: station.trim() } : {}),
+        ...(agency.trim() ? { agency: agency.trim() } : {}),
+        ...(location.trim() ? { location: location.trim() } : {}),
+        ...(note.trim() ? { note: note.trim() } : {}),
+      });
+      setMessage(`Custody receipt recorded for ${scanTag.trim()}: ${human(custodyState)}.`);
+      setNote("");
     });
+  };
 
-  return (
-    <Scroll>
-      <SurfaceHeader title="Tracking & Reunification" />
-      <div style={{ display: "grid", gap: 16, maxWidth: 820 }}>
-        <Panel title="Register a tracked object">
-          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 2fr 1fr" }}>
-            <EnumSelect
-              label="Kind"
-              values={KINDS as string[]}
-              value={kind}
-              onChange={setKind}
-            />
-            <TextField label="Label" value={label} onChange={setLabel} />
-            <TextField label="Tag (blank to auto-issue)" value={tag} onChange={setTag} />
-          </div>
-          <div style={{ marginTop: 12 }}>
-            <Button kind="primary" onClick={register} disabled={busy}>
-              Register
-            </Button>
-          </div>
-        </Panel>
+  const search = (event: FormEvent) => {
+    event.preventDefault();
+    if (!online) {
+      setSearchState("error");
+      setError("Tracking registration and custody scans require a connection. Nothing was queued.");
+      return;
+    }
+    setBusy(true); setError(null); setMessage(null); setSearchState("loading");
+    void (async () => {
+      try {
+      const value = query.trim();
+      setResults(await props.client.reunify(props.jurisdictionId,
+        value.startsWith("#") ? { tag: value.slice(1) } : { label: value }));
+        setSearchState("ready");
+      } catch (reason) {
+        setSearchState("error");
+        setError(reason instanceof Error ? reason.message : "Tracking search failed.");
+      } finally {
+        setBusy(false);
+      }
+    })();
+  };
 
-        <Panel title="Record a custody scan">
-          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr 1fr" }}>
-            <TextField label="Tag" value={scanTag} onChange={setScanTag} />
-            <EnumSelect
-              label="Custody state"
-              values={CUSTODY as string[]}
-              value={custodyState}
-              onChange={setCustodyState}
-            />
-            <TextField label="Station" value={station} onChange={setStation} />
-          </div>
-          <div style={{ marginTop: 12 }}>
-            <Button onClick={scan} disabled={busy}>
-              Record scan
-            </Button>
-          </div>
-        </Panel>
+  const showingSearch = searchState !== "idle";
+  const list = showingSearch ? results ?? [] : recent.data ?? [];
+  return <Scroll>
+    <SurfaceHeader title="Tracking & Reunification" />
+    <section className="eoc-field-workspace" aria-label="Tracking and reunification">
+      <section className="eoc-field-hero">
+        <div><span className="eoc-field-eyebrow">Scan-first custody</span><h1>Keep each handoff attached to one tag</h1>
+          <p>Registration and every custody change retain the signed-in operator and server time. Restricted details are not shown here.</p></div>
+        <div className={`eoc-field-sync ${online ? "eoc-field-sync--synced" : "eoc-field-sync--offline"}`} role="status">
+          <Icon name="tracking" decorative size={20} /><div><strong>{online ? "Online" : "Offline"}</strong>
+            <span>{online ? "Custody actions write directly to the authoritative chain." : "Tracking has no offline receipt path. Reconnect before acting."}</span></div>
+        </div>
+      </section>
 
-        <Panel title="Reunification search">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              search();
-            }}
-            style={{ display: "flex", gap: 8, alignItems: "flex-end" }}
-          >
-            <div style={{ flex: 1 }}>
-              <TextField label="Name, or #tag" value={query} onChange={setQuery} />
-            </div>
-            <Button type="submit" disabled={busy}>
-              Search
-            </Button>
-          </form>
-          {results ? (
-            results.length === 0 ? (
-              <p style={{ color: "var(--eoc-text-muted)", margin: "12px 0 0" }}>No matches.</p>
-            ) : (
-              <ul style={{ listStyle: "none", margin: "12px 0 0", padding: 0, display: "grid", gap: 6 }}>
-                {results.map((r) => (
-                  <li
-                    key={r.tag}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      padding: "8px 10px",
-                      border: "1px solid var(--eoc-border)",
-                      borderRadius: 4,
-                    }}
-                  >
-                    <StatusBadge status={r.latest.custodyState === "reunified" ? "success" : "info"}>
-                      {r.latest.custodyState}
-                    </StatusBadge>
-                    <span style={{ flex: 1 }}>
-                      <strong>{r.label}</strong>{" "}
-                      <span style={{ color: "var(--eoc-text-muted)" }}>
-                        {r.kind} · #{r.tag}
-                      </span>
-                    </span>
-                    <span style={{ color: "var(--eoc-text-muted)", fontSize: "0.85em" }}>
-                      {r.latest.station ?? r.latest.location ?? "—"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )
-          ) : null}
-        </Panel>
+      <Tabs id="tracking-workflow" label="Tracking workflow" value={tab} onChange={(value) => setTab(value as TrackingTab)} tabs={[
+        { id: "scan", label: "Scan handoff" }, { id: "register", label: "Register" }, { id: "find", label: "Find & reunify" },
+      ]} />
 
-        {msg ? <p style={{ color: "var(--eoc-status-success)", margin: 0 }}>{msg}</p> : null}
-        {error ? (
-          <p role="alert" style={{ color: "var(--eoc-status-critical)", margin: 0 }}>
-            {error}
-          </p>
-        ) : null}
-      </div>
-    </Scroll>
-  );
+      <section className="eoc-field-form" role="tabpanel" id="tracking-workflow-scan-panel" aria-labelledby="tracking-workflow-scan-tab" hidden={tab !== "scan"}>{tab === "scan" ? <>
+        <header><div><span className="eoc-field-eyebrow">Custody receipt</span><h2 id="tracking-scan-title">Record a handoff</h2></div></header>
+        <form onSubmit={scan}>
+          <div className="eoc-field-scan-row"><label>Tracking tag<input required autoFocus inputMode="text" value={scanTag}
+            onChange={(event) => setScanTag(event.target.value)} placeholder="TRK-1234ABCD" /></label>
+            <label className="eoc-field-camera">Scan barcode or QR<input type="file" accept="image/*" capture="environment" disabled={!online || busy}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+                setError(null);
+                void detectBarcode(file)
+                  .then((value) => value ? setScanTag(value) : setError("This browser could not read the code. Enter the tag manually."))
+                  .catch(() => setError("This image could not be read. Enter the tag manually."));
+              }} /></label></div>
+          <div className="eoc-field-selector-grid">
+            <label>Custody state<select value={custodyState} onChange={(event) => setCustodyState(event.target.value)}>
+              {CUSTODY.map((value) => <option key={value} value={value}>{human(value)}</option>)}</select></label>
+            <label>Station<input value={station} onChange={(event) => setStation(event.target.value)} /></label>
+            <label>Agency<input value={agency} onChange={(event) => setAgency(event.target.value)} /></label>
+            <label>Location<input value={location} onChange={(event) => setLocation(event.target.value)} /></label>
+          </div>
+          <label>Handoff note<textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} /></label>
+          <ActionButton kind="primary" type="submit" loading={busy} loadingLabel="Recording custody…" disabled={!online}>Record custody handoff</ActionButton>
+        </form>
+      </> : null}</section>
+
+      <section className="eoc-field-form" role="tabpanel" id="tracking-workflow-register-panel" aria-labelledby="tracking-workflow-register-tab" hidden={tab !== "register"}>{tab === "register" ? <>
+        <header><div><span className="eoc-field-eyebrow">Minimal registration</span><h2 id="tracking-register-title">Issue or attach a tag</h2></div></header>
+        <form onSubmit={register}>
+          <div className="eoc-field-selector-grid">
+            <label>Tracked kind<select value={kind} onChange={(event) => setKind(event.target.value)}>
+              {KINDS.map((value) => <option key={value} value={value}>{human(value)}</option>)}</select></label>
+            <label>Field-safe label<input required value={label} onChange={(event) => setLabel(event.target.value)} /></label>
+            <label>Existing tag, optional<input value={tag} onChange={(event) => setTag(event.target.value)} /></label>
+            <label>Initial station<input value={station} onChange={(event) => setStation(event.target.value)} /></label>
+            <label>Agency<input value={agency} onChange={(event) => setAgency(event.target.value)} /></label>
+            <label>Location<input value={location} onChange={(event) => setLocation(event.target.value)} /></label>
+          </div>
+          <p className="eoc-field-note">Use a field-safe label. Health and full identity details belong in restricted workflows and are not collected on this screen.</p>
+          <ActionButton kind="primary" type="submit" loading={busy} loadingLabel="Registering…" disabled={!online}>Register tracked object</ActionButton>
+        </form>
+      </> : null}</section>
+
+      <section className="eoc-field-form" role="tabpanel" id="tracking-workflow-find-panel" aria-labelledby="tracking-workflow-find-tab" hidden={tab !== "find"}>{tab === "find" ? <>
+        <header><div><span className="eoc-field-eyebrow">Public-safe whereabouts</span><h2 id="tracking-find-title">Find and continue custody</h2></div></header>
+        <form className="eoc-field-search" onSubmit={search}><label>Name, field-safe label, or #tag<input value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+          <ActionButton kind="secondary" type="submit" loading={busy} disabled={!online}>Search</ActionButton></form>
+        {showingSearch && searchState === "loading" ? <LoadingState label="Searching tracked objects…" />
+          : showingSearch && searchState === "error" ? <ErrorState title="Tracking search unavailable" message={error ?? "Tracking search failed."} />
+            : !showingSearch && recent.loading && !recent.data ? <LoadingState label="Loading tracked objects…" />
+              : !showingSearch && recent.error ? <ErrorState title="Tracking inventory unavailable" message={recent.error} />
+                : list.length === 0 ? <EmptyState title="No tracked objects found" description="Register an object or broaden the field-safe search." />
+                  : <ul className="eoc-field-inventory" aria-label={results ? "Tracking search results" : "Recent tracked objects"}>{list.map((item) => <li key={item.tag}>
+            <ConditionBadge state={item.latest?.custodyState === "reunified" ? "normal" : "watch"} label={item.latest ? human(item.latest.custodyState) : "Unknown"} />
+            <div><strong>{item.label}</strong><span>{human(item.kind)} · #{item.tag}</span><small>{item.latest?.station ?? item.latest?.location ?? "Location not reported"}</small></div>
+            <ActionButton kind="quiet" onClick={() => { setScanTag(item.tag); setTab("scan"); }}>Continue custody</ActionButton>
+          </li>)}</ul>}
+      </> : null}</section>
+
+      {message ? <p className="eoc-field-success" role="status">{message}</p> : null}
+      {error ? <p className="eoc-field-error" role="alert">{error}</p> : null}
+    </section>
+  </Scroll>;
 }
