@@ -257,7 +257,9 @@ describe("H13 real-map licensed facility presentation", () => {
     const oldCanvas = await page.locator('[data-testid="cop-map"] canvas').elementHandle();
     const darkItems = page.waitForResponse((response) =>
       response.url().includes(`/api/v1/ogc/collections/${boardId}/items`) && response.status() === 200);
-    await page.getByRole("button", { name: "Dark", exact: true }).click();
+    await page.getByRole("button", { name: "Account menu", exact: true }).click();
+    await page.getByRole("button", { name: "Use dark theme", exact: true }).click();
+    await page.getByRole("button", { name: "Account menu", exact: true }).click();
     await page.waitForFunction("old => !old.isConnected", oldCanvas);
     await darkItems;
     await page.waitForSelector('[data-testid="cop-map"] canvas', { timeout: 20_000 });

@@ -3895,3 +3895,27 @@ increment proves it and that coverage follows the incident area.
   Evidence level: integrated engine; P-IAP owns presentation. Phase 1 engines
   are now landed and M1 is due. Four existing lanes retained; no push. Replay
   stashes remain preserved until retirement inspection.
+
+## M1: Phase 1 milestone gate and runner correction
+
+- **Base:** c9e8c30, all Phase 1 engines accepted. The prescribed `pnpm check
+  --maxWorkers=2` passed TypeScript, then exposed lint discovery of an ignored
+  H14 scratch copy. Generated basemap output now joins the existing lint
+  exclusions; no source file was excluded to hide a product failure.
+- **Full suite:** remaining ESLint, license scan (300 packages), link check
+  (60 documents) and Vitest ran. 124 real suites passed 733 tests. Three browser
+  checks still used the pre-shell Dashboard/Dark controls. Their selectors now
+  use Overview and the actual account-menu theme control; map rendering,
+  attribution, external-network and revocation assertions are unchanged.
+- **Discovery correction:** Vitest also collected 15 generated scratch test
+  copies and the native Node desktop test. Generated output is excluded from
+  discovery; `pnpm check` explicitly runs the desktop file with `node --test`
+  before Vitest. This preserves its coverage in future milestone gates.
+- **Affected replay:** lint passed, all three failed browser paths passed 3/3,
+  and native desktop tests passed 10/10. Combined with the standing full-run
+  results, the milestone is green: 127 Vitest suites, 736 tests, plus 10 native
+  desktop tests. No unchanged passing suite was rerun for reassurance.
+- **Evidence:** deploy/test-runtime/out/lanes/gate/logs/M1-check.log,
+  M1-tests.log, M1-browser-repair.log and M1-desktop-tests.log. This is integrated
+  engine/frame evidence, not completion of presentation or desktop acceptance.
+  Commits remain local; no push. Authorized STS continues to the next units.

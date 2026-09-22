@@ -226,7 +226,7 @@ describe("VEOC-80 authorized viewing in a real browser", () => {
     await page.getByText("· common operating picture").waitFor({ timeout: 5000 });
     expect(await page.getByRole("option", { name: "Unrelated Host B Flood" }).count()).toBe(0);
     await page.getByText("Authorized Geometry").waitFor({ timeout: 5000 });
-    await page.getByRole("button", { name: "Dashboard" }).click();
+    await page.getByRole("button", { name: "Overview", exact: true }).click();
     await page.getByText("EOC Status").first().waitFor({ timeout: 5000 });
     await page.getByText("Closed roads").waitFor({ timeout: 5000 });
 

@@ -290,7 +290,9 @@ describe("H11 real-map hazard and flood presentation", () => {
       response.url().includes(`/api/v1/ogc/collections/${boardId}/items`) && response.status() === 200);
     const darkDatasetItems = page.waitForResponse((response) =>
       response.url().includes(`/api/v1/datasets/${datasetId}/items`) && response.status() === 200);
-    await page.getByRole("button", { name: "Dark", exact: true }).click();
+    await page.getByRole("button", { name: "Account menu", exact: true }).click();
+    await page.getByRole("button", { name: "Use dark theme", exact: true }).click();
+    await page.getByRole("button", { name: "Account menu", exact: true }).click();
     await page.waitForFunction("old => !old.isConnected", oldCanvas);
     await Promise.all([darkBoardItems, darkDatasetItems]);
     await page.waitForSelector('[data-testid="cop-map"] canvas', { timeout: 20_000 });
