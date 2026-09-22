@@ -146,8 +146,12 @@ describe("operational board workspace", () => {
     await create.waitFor({ state: "hidden" });
     await page.getByRole("main").getByText("Bridge inspection", { exact: true }).waitFor();
     const createdSelection = page.getByLabel(`Select record ${createdId}`);
-    if (!await createdSelection.isChecked()) await createdSelection.check();
+    // The checkbox is controlled by route state: the click navigates the hash
+    // and the checked state follows on the next render, so click and wait for
+    // the URL instead of check(), which asserts the flip synchronously.
+    if (!await createdSelection.isChecked()) await createdSelection.click();
     await page.waitForURL((url) => url.hash.includes(`record=${createdId}`));
+    await expect.poll(() => createdSelection.isChecked()).toBe(true);
     expect((await detailResponse).status()).toBe(200);
     const openContext = page.getByRole("button", { name: "Open context" });
     if (await openContext.isVisible()) await openContext.click();
