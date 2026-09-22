@@ -4513,3 +4513,21 @@ increment proves it and that coverage follows the incident area.
   on publication, not operator-validated. No migration or dependency added.
   Unit commit: this receipt's commit; rollback by revert. Seven active lane
   worktrees remain assigned to remaining roster work.
+## VEOC-81C proof and responsive context correction
+
+- Lane F, final baseline 2b40aee. The real Console proof exercises COP at
+  1440px, boards at 1280px, dashboard touch controls at 900px and all three
+  workspaces at 390px, including keyboard controls and actual inner bounds.
+- The proof exposed a product defect: a saved desktop drawer could reopen as
+  a modal when a narrow workspace hydrated. Saved open state now restores only
+  at dock width, transitions to overlay layouts close it, and explicit operator
+  opening still works. A focused shell regression covers hydration behavior.
+- Full TypeScript and affected ESLint passed. Final real PostgreSQL/Chrome and
+  shell checks passed 13 tests across two suites. Evidence:
+  deploy/test-runtime/out/lanes/f/logs/81c-overlay-close.log; earlier fixture and
+  modal failures are superseded by this passing result. No external requests
+  or page errors occurred in the successful journey.
+- Root reviewed source and generated captures. Independent review: SHIP.
+  Evidence level: integrated on publication, not operator-validated. No new
+  dependency or migration. Unit commit: this receipt's commit; rollback by
+  revert. Seven worktrees remain assigned to active roster units.

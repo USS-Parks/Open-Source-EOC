@@ -125,7 +125,11 @@ function trapTab(event: KeyboardEvent<HTMLElement>, container: HTMLElement) {
 export function AppShell(props: AppShellProps) {
   const [compactNav, setCompactNav] = useState(props.layout?.compactNavigation ?? false);
   const [navOpen, setNavOpen] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(props.layout?.drawerOpen ?? startsWithWideDrawer);
+  // A saved open drawer is a desktop dock preference.  It must not turn into
+  // an unexpected modal when a narrow or overlay workspace hydrates.
+  const [drawerOpen, setDrawerOpen] = useState(() =>
+    startsWithWideDrawer() && (props.layout?.drawerOpen ?? true),
+  );
   const [drawerWidth, setDrawerWidth] = useState(props.layout?.drawerWidth ?? 340);
   const [viewport, setViewport] = useState<ShellViewport>(currentViewport);
   const mainRef = useRef<HTMLElement>(null);
@@ -146,12 +150,13 @@ export function AppShell(props: AppShellProps) {
   const drawerModal = viewport !== "dock" && drawerOpen;
 
   useEffect(() => {
-    if (!props.layout) return;
-    setCompactNav(props.layout.compactNavigation);
-    setDrawerOpen(props.layout.drawerOpen);
-    setDrawerWidth(props.layout.drawerWidth);
-    drawerWidthRef.current = props.layout.drawerWidth;
-  }, [props.layout?.compactNavigation, props.layout?.drawerOpen, props.layout?.drawerWidth]);
+    const layout = props.layout;
+    if (!layout) return;
+    setCompactNav(layout.compactNavigation);
+    setDrawerOpen((current) => viewport === "dock" ? layout.drawerOpen : current && layout.drawerOpen);
+    setDrawerWidth(layout.drawerWidth);
+    drawerWidthRef.current = layout.drawerWidth;
+  }, [props.layout?.compactNavigation, props.layout?.drawerOpen, props.layout?.drawerWidth, viewport]);
 
   useEffect(() => {
     if (typeof window.matchMedia !== "function") return;
@@ -161,7 +166,7 @@ export function AppShell(props: AppShellProps) {
       const next = narrow.matches ? "narrow" : dock.matches ? "dock" : "overlay";
       setViewport(next);
       setNavOpen(false);
-      if (next === "narrow") setDrawerOpen(false);
+      if (next !== "dock") setDrawerOpen(false);
     };
     narrow.addEventListener("change", onChange);
     dock.addEventListener("change", onChange);

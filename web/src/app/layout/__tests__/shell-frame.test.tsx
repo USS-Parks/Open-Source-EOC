@@ -181,6 +181,25 @@ describe("responsive shell frame", () => {
     expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "Close context drawer" }));
   });
 
+  it("keeps a narrow drawer closed through layout hydration while preserving an explicit open", async () => {
+    atWidth(390);
+    const initialLayout = { compactNavigation: false, drawerOpen: true, drawerWidth: 340 };
+    const view = frame({ layout: initialLayout });
+    expect(view.queryByRole("dialog", { name: "Context" })).toBeNull();
+
+    view.rerender(<Theme name="light"><AppShell {...props({
+      layout: { ...initialLayout, drawerWidth: 404 },
+    })} /></Theme>);
+    expect(view.queryByRole("dialog", { name: "Context" })).toBeNull();
+
+    fireEvent.click(view.getByRole("button", { name: "Open context" }));
+    await view.findByRole("dialog", { name: "Context" });
+    view.rerender(<Theme name="light"><AppShell {...props({
+      layout: { ...initialLayout, drawerWidth: 420 },
+    })} /></Theme>);
+    expect(view.getByRole("dialog", { name: "Context" })).not.toBeNull();
+  });
+
   it("removes pointer resize listeners when touch resize is cancelled", () => {
     const view = frame();
     const separator = view.getByRole("separator", { name: "Resize context drawer" });
