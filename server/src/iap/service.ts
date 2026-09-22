@@ -959,9 +959,17 @@ export async function exportIapPdf(
   actor: Principal,
   iapId: string,
 ): Promise<{ filename: string; bytes: Uint8Array }> {
-  const iap = await getIap(sql, actor, iapId);
-  const content = iap.content;
-  const bytes = renderIapPdf(content);
+  await getIap(sql, actor, iapId);
+  const [snapshot] = await sql`
+    select content, created_at, approved_at, revision_number, content_revision, status
+    from iaps where id = ${iapId}`;
+  if (!snapshot) throw new AuthError(404, "IAP not found");
+  const content = snapshot.content as IapDocument;
+  const bytes = renderIapPdf(content, {
+    source: "Stored IAP snapshot",
+    sourceTime: iso(snapshot.approved_at ?? snapshot.created_at),
+    revision: `IAP revision ${snapshot.revision_number}; content revision ${snapshot.content_revision}; status ${snapshot.status}`,
+  });
   const safe = content.incidentName.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase();
   return { filename: `iap-${safe}.pdf`, bytes };
 }

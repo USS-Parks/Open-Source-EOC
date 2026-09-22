@@ -481,12 +481,15 @@ export async function exportAarPdf(
   aarId: string,
 ): Promise<{ filename: string; bytes: Uint8Array }> {
   const [row] = await sql`
-    select a.content, a.title, inc.jurisdiction_id
+    select a.content, a.title, a.created_at, inc.jurisdiction_id
     from aars a join incidents inc on inc.id = a.incident_id where a.id = ${aarId}`;
   if (!row) throw new AuthError(404, "AAR not found");
   requireMember(actor, row.jurisdiction_id as string);
   const content = row.content as AarDocument;
-  const bytes = renderAarPdf(content);
+  const bytes = renderAarPdf(content, {
+    source: "Stored AAR snapshot",
+    sourceTime: new Date(row.created_at as string | Date).toISOString(),
+  });
   const safe = content.incidentName.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase();
   return { filename: `aar-${safe}.pdf`, bytes };
 }

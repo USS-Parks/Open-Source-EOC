@@ -1,4 +1,6 @@
 import type { FastifyInstance } from "fastify";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
@@ -126,7 +128,24 @@ describe("IAP assembly, approval, and PDF export", () => {
     expect(pdf.statusCode).toBe(200);
     expect(pdf.headers["content-type"]).toContain("application/pdf");
     expect(pdf.rawPayload.subarray(0, 8).toString("latin1")).toBe("%PDF-1.4");
-    expect(pdf.rawPayload.toString("latin1")).toContain("Bald Hills Fire");
+    const rawPdfText = pdf.rawPayload.toString("latin1");
+    const pdfText = [...rawPdfText.matchAll(/\((.*?)\) Tj/g)]
+      .map((match) => match[1]!.replace(/\\([\\()])/g, "$1"))
+      .join(" ");
+    expect(pdfText).toContain("Open Source EOC");
+    expect(pdfText).toContain("Incident: Bald Hills Fire");
+    expect(pdfText).toContain("Operational period: OP 1 (0600-1800)");
+    expect(pdfText).toContain("Source: Stored IAP snapshot");
+    expect(pdfText).toMatch(/Source time: \d{4}-\d{2}-\d{2}T/);
+    expect(pdfText).toContain("Revision: IAP revision 1; content revision 1; status approved");
+    expect(pdfText).toContain("Page 1 of ");
+    expect(pdfText).not.toContain("Handling:");
+
+    const proofDir = process.env.OPENEOC_IAP_PROOF_DIR;
+    if (proofDir) {
+      await mkdir(proofDir, { recursive: true });
+      await writeFile(join(proofDir, "iap-approved.pdf"), pdf.rawPayload);
+    }
   });
 });
 

@@ -3919,3 +3919,25 @@ increment proves it and that coverage follows the incident area.
   M1-tests.log, M1-browser-repair.log and M1-desktop-tests.log. This is integrated
   engine/frame evidence, not completion of presentation or desktop acceptance.
   Commits remain local; no push. Authorized STS continues to the next units.
+
+## D30-PDF: branded exports with stored provenance
+
+- **Base:** 6112189, 2026-09-21. This accepted increment adds the original
+  compass wordmark, page counts, grayscale-safe typography and bounded wrapping
+  to every PDF page. IAP and accountability exports include their stored source
+  identity and time; IAP revision, content revision and status come from the
+  same stored row as the rendered content. Handling labels remain opt-in.
+- **Changed:** shared ICS renderer and its tests, IAP and AAR export seams and
+  their actual database tests. No new dependency or license. Parent inspected
+  the complete six-file change and rendered actual IAP and accountability pages.
+- **Gate:** all-workspace TypeScript and full-tree ESLint passed; root ran
+  shared ICS forms plus server AAR, IAP, ICS-204 and IAP workspace tests:
+  five suites, 34 tests passed. Evidence:
+  deploy/test-runtime/out/lanes/c/logs/D30-root-gate.log and lanes/c/d30 PDFs
+  and rendered page images. Fresh independent review: SHIP, no findings.
+- **Limits:** non-WinAnsi glyphs retain an explicit question-mark fallback.
+  Map PNG branding and provenance remain the D30 follow-up after P-COP;
+  this receipt does not mark the entire D30 prompt complete.
+- **Closeout:** integrated export increment, approved local commit and exact
+  fast-forward. Rollback is a revert of this unit. Four registered lanes remain
+  needed for authorized work; preservation stashes retained. No push.

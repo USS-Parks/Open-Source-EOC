@@ -137,6 +137,16 @@ describe("AAR composition", () => {
     const pdf = await api("GET", `/api/v1/aar/${res.json().id}/pdf`);
     expect(pdf.statusCode).toBe(200);
     expect(pdf.rawPayload.subarray(0, 8).toString("latin1")).toBe("%PDF-1.4");
+    const rawPdfText = pdf.rawPayload.toString("latin1");
+    const pdfText = [...rawPdfText.matchAll(/\((.*?)\) Tj/g)]
+      .map((match) => match[1]!.replace(/\\([\\()])/g, "$1"))
+      .join(" ");
+    expect(pdfText).toContain("Open Source EOC");
+    expect(pdfText).toContain("Incident: Bald Hills Fire");
+    expect(pdfText).toContain("Source: Stored AAR snapshot");
+    expect(pdfText).toMatch(/Source time: \d{4}-\d{2}-\d{2}T/);
+    expect(pdfText).toContain("Page 1 of ");
+    expect(pdfText).not.toContain("Handling:");
   });
 });
 

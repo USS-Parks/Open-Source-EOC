@@ -7,7 +7,7 @@ import {
   iapToTextLines,
   type IncidentContext,
 } from "../forms.js";
-import { renderPdf } from "../pdf.js";
+import { renderIapPdf, renderPdf } from "../pdf.js";
 
 /**
  * ICS form prefill, IAP assembly, and PDF export (VEOC-34, F5). The forms
@@ -112,11 +112,52 @@ describe("PDF export", () => {
     expect(bytesEqual(pdf, again)).toBe(true);
   });
 
+  it("applies grayscale-safe identity, metadata, page counts, and opt-in handling", () => {
+    const iap = assembleIap({
+      ...ctx,
+      incidentName: "Incendio José Muñoz",
+      preparedBy: "Renée O’Connor",
+    });
+    const pdf = renderIapPdf(iap, {
+      source: "Stored IAP snapshot",
+      sourceTime: "2026-09-21T12:30:00.000Z",
+      revision: "IAP revision 2; content revision 4; status approved",
+    });
+    const text = decode(pdf);
+
+    expect(text).toContain("Open Source EOC");
+    expect(text).toContain("Incident: Incendio José Muñoz");
+    expect(text).toContain("Operational period: OP 1 \\(0600-1800\\)");
+    expect(text).toContain("Source: Stored IAP snapshot");
+    expect(text).toContain("Source time: 2026-09-21T12:30:00.000Z");
+    expect(text).toContain("Revision: IAP revision 2; content revision 4;");
+    expect(text).toContain("status approved");
+    expect(text).toContain("Page 1 of 2");
+    expect(text).toContain("/Encoding /WinAnsiEncoding");
+    expect(text).toContain(String.fromCharCode(0x92));
+    expect(text).not.toContain("Handling:");
+    expect(text).not.toMatch(/\b(?:rg|RG)\b/);
+
+    const marked = decode(renderIapPdf(iap, { handling: "FOUO" }));
+    expect(marked).toContain("Handling: FOUO");
+  });
+
+  it("states the bounded WinAnsi fallback through deterministic output", () => {
+    const pdf = decode(renderPdf("Encoding limit", ["Western: José – O’Connor", "Unsupported: 漢字"]));
+    expect(pdf).toContain("Western: José ");
+    expect(pdf).toContain(String.fromCharCode(0x96));
+    expect(pdf).toContain(String.fromCharCode(0x92));
+    expect(pdf).toContain("(Unsupported: ??) Tj");
+  });
+
   it("paginates long documents into multiple pages", () => {
     const many = Array.from({ length: 200 }, (_, i) => `Log line ${i}`);
     const pdf = renderPdf("Big", many);
     const text = decode(pdf);
     const pageCount = (text.match(/\/Type \/Page[^s]/g) ?? []).length;
     expect(pageCount).toBeGreaterThan(1);
+    expect((text.match(/\(Open Source EOC\) Tj/g) ?? [])).toHaveLength(pageCount * 2);
+    expect(text).toContain(`Page 1 of ${pageCount}`);
+    expect(text).toContain(`Page ${pageCount} of ${pageCount}`);
   });
 });
