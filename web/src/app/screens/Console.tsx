@@ -26,6 +26,7 @@ import { FilesSurface } from "../surfaces/FilesSurface.js";
 import { IncidentsSurface } from "../surfaces/IncidentsSurface.js";
 import { IncidentAreaEditor } from "../surfaces/IncidentAreaEditor.js";
 import { IncidentParticipants } from "../surfaces/IncidentParticipants.js";
+import { TasksSurface } from "../surfaces/TasksSurface.js";
 import { IncidentDatasets } from "../surfaces/IncidentDatasets.js";
 import { ResourcesSurface } from "../surfaces/ResourcesSurface.js";
 import { AarSurface } from "../surfaces/AarSurface.js";
@@ -265,6 +266,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         onRecordContext={receiveRecordContext}
         theme={props.theme}
         client={client}
+        personId={session.me?.person.id ?? null}
         jurisdictionId={viewingJurisdictionId ?? jurisdictionId}
         discoveryJurisdictionId={jurisdictionId}
         canActivateIncident={session.me?.memberships.some((membership) => membership.jurisdictionId === jurisdictionId && membership.role === "admin") ?? false}
@@ -358,6 +360,7 @@ function Center(props: {
   onRecordContext: (state: BoardRecordContext | null) => void;
   theme: ThemeName;
   client: ApiClient;
+  personId: string | null;
   jurisdictionId: string;
   discoveryJurisdictionId: string;
   canActivateIncident: boolean;
@@ -526,7 +529,10 @@ function Center(props: {
         onClose={() => props.onNavigate({ kind: "esf" })}
         onOpenLifelines={() => props.onNavigate({ kind: "lifelines" })} />;
     case "tasks":
-      return <UnavailableState title="Tasks is unavailable" message="This section is not available in the current application." returnLabel="Return to Boards" onReturn={() => props.onNavigate({ kind: "boards" })} />;
+      return <TasksSurface client={props.client} incidentId={props.incidentId}
+        personId={props.personId} jurisdictionId={props.jurisdictionId}
+        canManage={props.isAdmin} closed={props.incidentClosed}
+        onOpenTemplates={() => props.onNavigate({ kind: "incidents" })} />;
     case "field-reports":
       return <UnavailableState title="Field Reports is unavailable" message="This section is not available in the current application. Existing reports remain available through their board." returnLabel="Return to Boards" onReturn={() => props.onNavigate({ kind: "boards" })} />;
     case "periods":

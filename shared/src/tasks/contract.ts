@@ -7,6 +7,14 @@ import {
 const KeySchema = z.string().trim().regex(/^[a-z][a-z0-9_]*$/).max(80);
 const TitleSchema = z.string().trim().min(1).max(500);
 const TimestampSchema = z.string().datetime({ offset: true });
+const TaskDependencyKeysSchema = z.array(KeySchema).max(100).refine(
+  (keys) => new Set(keys).size === keys.length,
+  "task dependency keys must be unique",
+);
+const TaskDependencyIdsSchema = z.array(z.string().uuid()).max(100).refine(
+  (ids) => new Set(ids).size === ids.length,
+  "task dependencies must be unique",
+);
 
 export const TaskStatusSchema = z.enum(["open", "in_progress", "completed"]);
 export const TaskDueFilterSchema = z.enum(["overdue", "next_24_hours", "upcoming", "none"]);
@@ -18,9 +26,11 @@ export const TaskAssignmentFilterSchema = z.union([
 export const TaskTemplateItemSchema = z.union([
   TitleSchema,
   z.object({
+    key: KeySchema.optional(),
     item: TitleSchema,
     category: KeySchema.default("general"),
     due: WorkflowDueRuleSchema.optional(),
+    dependsOn: TaskDependencyKeysSchema.optional(),
   }).strict(),
 ]);
 
@@ -38,13 +48,15 @@ export const TaskMetadataPatchSchema = z.object({
   dueAt: TimestampSchema.nullable().optional(),
   status: z.enum(["open", "in_progress"]).optional(),
   assignment: WorkflowAssignmentRequestSchema.nullable().optional(),
+  dependencyIds: TaskDependencyIdsSchema.optional(),
 }).strict().superRefine((value, ctx) => {
   if (
     value.item === undefined &&
     value.category === undefined &&
     value.dueAt === undefined &&
     value.status === undefined &&
-    value.assignment === undefined
+    value.assignment === undefined &&
+    value.dependencyIds === undefined
   ) {
     ctx.addIssue({ code: "custom", message: "task patch has no changes" });
   }
@@ -89,6 +101,12 @@ export interface TaskAssignmentView {
   readonly personId: string | null;
 }
 
+export interface TaskDependencyView {
+  readonly id: string;
+  readonly item: string;
+  readonly status: TaskStatus;
+}
+
 export interface IncidentTask {
   readonly id: string;
   readonly incidentId: string;
@@ -98,6 +116,8 @@ export interface IncidentTask {
   readonly dueAt: string | null;
   readonly revision: number;
   readonly assignment: TaskAssignmentView | null;
+  /** Tasks that must be completed before this task can be completed. */
+  readonly dependencies: readonly TaskDependencyView[];
   readonly completedAt: string | null;
   readonly completedBy: z.infer<typeof TaskAttributionSchema> | null;
 }

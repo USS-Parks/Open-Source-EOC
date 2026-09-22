@@ -78,11 +78,12 @@ beforeAll(async () => {
       position: "incident_commander",
       items: [
         {
+          key: "establish_command",
           item: "Establish command",
           category: "command",
           due: { kind: "relative", anchor: "created", minutes: 30 },
         },
-        "Coordinate partner support",
+        { key: "coordinate_partner", item: "Coordinate partner support", dependsOn: ["establish_command"] },
         "Confirm demobilization plan",
       ],
     }],
@@ -210,6 +211,37 @@ describe("incident checklist task engine", () => {
       byStatus: { open: 0, in_progress: 0, completed: 1 },
       byCategory: { priority: 1 },
     });
+  });
+
+  it("resolves template prerequisites and blocks cross-incident, cyclic, and premature completion", async () => {
+    const dependentIncidentId = await activate("Dependent Task Incident");
+    const listed = await app.inject({ method: "GET", url: `/api/v1/incidents/${dependentIncidentId}/tasks`, headers: auth(adminToken) });
+    expect(listed.statusCode).toBe(200);
+    const prerequisite = listed.json().tasks.find((task: { item: string }) => task.item === "Establish command");
+    const dependent = listed.json().tasks.find((task: { item: string }) => task.item === "Coordinate partner support");
+    expect(dependent.dependencies).toMatchObject([{ id: prerequisite.id, item: "Establish command", status: "open" }]);
+
+    const [position] = await admin`
+      select p.id from incident_positions ip join positions p on p.id = ip.position_id
+      where ip.incident_id = ${dependentIncidentId} and p.key = 'incident_commander'`;
+    const signedIn = await app.inject({ method: "POST", url: `/api/v1/positions/${position!.id}/sign-in`, headers: auth(adminToken) });
+    expect(signedIn.statusCode).toBe(200);
+    const tooEarly = await app.inject({ method: "POST", url: `/api/v1/incidents/${dependentIncidentId}/tasks/${dependent.id}/complete`, headers: auth(adminToken), payload: { operationId: "10111111-1111-4111-8111-111111111111" } });
+    expect(tooEarly.statusCode).toBe(409);
+    expect(tooEarly.body).toContain("prerequisite is incomplete");
+
+    const crossIncident = await app.inject({ method: "GET", url: `/api/v1/incidents/${otherIncidentId}/tasks`, headers: auth(adminToken) });
+    const otherTaskId = crossIncident.json().tasks[0].id as string;
+    const crossScope = await app.inject({ method: "PATCH", url: `/api/v1/incidents/${dependentIncidentId}/tasks/${dependent.id}`, headers: auth(adminToken), payload: { expectedRevision: dependent.revision, dependencyIds: [otherTaskId] } });
+    expect(crossScope.statusCode).toBe(400);
+    const cycle = await app.inject({ method: "PATCH", url: `/api/v1/incidents/${dependentIncidentId}/tasks/${prerequisite.id}`, headers: auth(adminToken), payload: { expectedRevision: prerequisite.revision, dependencyIds: [dependent.id] } });
+    expect(cycle.statusCode).toBe(400);
+    expect(cycle.body).toContain("cycle");
+
+    const first = await app.inject({ method: "POST", url: `/api/v1/incidents/${dependentIncidentId}/tasks/${prerequisite.id}/complete`, headers: auth(adminToken), payload: { operationId: "20222222-2222-4222-8222-222222222222" } });
+    expect(first.statusCode).toBe(200);
+    const completed = await app.inject({ method: "POST", url: `/api/v1/incidents/${dependentIncidentId}/tasks/${dependent.id}/complete`, headers: auth(adminToken), payload: { operationId: "30333333-3333-4333-8333-333333333333" } });
+    expect(completed.statusCode).toBe(200);
   });
 
   it("allows assignee status CAS, rejects metadata, and preserves retry after position revocation", async () => {

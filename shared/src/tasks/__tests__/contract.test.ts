@@ -7,15 +7,17 @@ import {
 } from "../contract.js";
 
 describe("task contracts", () => {
-  it("preserves legacy template strings and accepts declarative due objects", () => {
+  it("preserves legacy template strings and accepts keyed declarative prerequisites", () => {
     expect(TaskTemplateItemSchema.parse("Open the incident board")).toBe(
       "Open the incident board",
     );
     expect(TaskTemplateItemSchema.parse({
       item: "Confirm overnight staffing",
+      key: "confirm_staffing",
       category: "staffing",
       due: { kind: "relative", anchor: "created", minutes: 30 },
-    })).toMatchObject({ category: "staffing" });
+      dependsOn: ["open_command"],
+    })).toMatchObject({ category: "staffing", key: "confirm_staffing", dependsOn: ["open_command"] });
   });
 
   it("requires revision CAS and at least one metadata change", () => {
@@ -27,6 +29,14 @@ describe("task contracts", () => {
     expect(TaskMetadataPatchSchema.safeParse({
       expectedRevision: 2,
       status: "completed",
+    }).success).toBe(false);
+    expect(TaskMetadataPatchSchema.parse({
+      expectedRevision: 2,
+      dependencyIds: ["11111111-1111-4111-8111-111111111111"],
+    }).dependencyIds).toHaveLength(1);
+    expect(TaskMetadataPatchSchema.safeParse({
+      expectedRevision: 2,
+      dependencyIds: ["11111111-1111-4111-8111-111111111111", "11111111-1111-4111-8111-111111111111"],
     }).success).toBe(false);
   });
 

@@ -4278,3 +4278,24 @@ increment proves it and that coverage follows the incident area.
   representative-operator comprehension remains D34. No new dependency or
   migration. Unit commit: this receipt's commit; rollback by revert. Seven
   retained worktrees serve active roster units; protected work is preserved.
+
+## P-TASKS: assigned work and offline completion
+
+- Serves D23; lane G, final baseline de67c3d. My Tasks and Team Tasks expose
+  status, due dates, categories, assignments, prerequisites and completion
+  evidence. Owner administrators can revise task metadata with compare-and-swap
+  protection. Migration 0096 records template and incident task dependencies.
+- Completion commands persist locally by incident and person, then reconcile
+  to server receipts after reconnect. Mutation controls are limited to open
+  incidents and actionable personal tasks; team history cannot enqueue another
+  assignee's completion. Closed incidents remain readable.
+- Full TypeScript and ESLint passed. Shared, database, DOM, browser and client
+  integration passed 43 tests in six suites. The final authority correction and
+  integration passed 31 tests in four suites, including real PostgreSQL/Chrome
+  offline completion, reconciliation, keyboard use and narrow containment.
+  Logs: lanes/g/logs/tasks-integration-gate.log and tasks-authority-gate.log
+  under deploy/test-runtime/out. Root inspected the complete diff and corrected
+  light/dark captures. Independent correction review returned SHIP.
+- Evidence level: integrated on publication. No new dependency. Unit commit:
+  this receipt's commit; rollback by revert. Seven retained worktrees serve
+  active roster units, with protected files and preservation stashes retained.

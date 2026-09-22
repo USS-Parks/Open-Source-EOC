@@ -22,6 +22,7 @@ export const IncidentTemplateSchema = z.object({
     z.object({ position: z.string().min(1), items: z.array(TaskTemplateItemSchema).min(1) }),
   ),
 }).superRefine((template, ctx) => {
+  const keyed = new Map<string, [number, number]>();
   for (const [listIndex, list] of template.checklists.entries()) {
     for (const [itemIndex, item] of list.items.entries()) {
       if (typeof item !== "string" && item.due?.kind === "record_field") {
@@ -31,7 +32,35 @@ export const IncidentTemplateSchema = z.object({
           message: "checklist template due rules cannot reference record fields",
         });
       }
+      if (typeof item !== "string" && item.key) {
+        if (keyed.has(item.key)) {
+          ctx.addIssue({ code: "custom", path: ["checklists", listIndex, "items", itemIndex, "key"], message: "checklist task keys must be unique" });
+        } else keyed.set(item.key, [listIndex, itemIndex]);
+      }
     }
+  }
+  for (const [listIndex, list] of template.checklists.entries()) for (const [itemIndex, item] of list.items.entries()) {
+    if (typeof item === "string") continue;
+    for (const dependency of item.dependsOn ?? []) {
+      if (!keyed.has(dependency)) ctx.addIssue({ code: "custom", path: ["checklists", listIndex, "items", itemIndex, "dependsOn"], message: `checklist dependency ${dependency} has no keyed task` });
+      if (dependency === item.key) ctx.addIssue({ code: "custom", path: ["checklists", listIndex, "items", itemIndex, "dependsOn"], message: "checklist task cannot depend on itself" });
+    }
+  }
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const dependencyKeys = new Map<string, readonly string[]>();
+  for (const list of template.checklists) for (const item of list.items) if (typeof item !== "string" && item.key) dependencyKeys.set(item.key, item.dependsOn ?? []);
+  const visit = (key: string): boolean => {
+    if (visiting.has(key)) return true;
+    if (visited.has(key)) return false;
+    visiting.add(key);
+    const cyclic = (dependencyKeys.get(key) ?? []).some(visit);
+    visiting.delete(key); visited.add(key);
+    return cyclic;
+  };
+  for (const key of dependencyKeys.keys()) if (visit(key)) {
+    ctx.addIssue({ code: "custom", path: ["checklists"], message: "checklist task dependencies must not contain a cycle" });
+    break;
   }
 });
 
@@ -155,6 +184,8 @@ export async function activateIncident(
   }
 
   let itemCount = 0;
+  const taskIds = new Map<string, string>();
+  const templateDependencies: Array<{ readonly taskId: string; readonly dependsOn: readonly string[] }> = [];
   const [clock] = await sql`select now() as activated_at`;
   const activatedAt = new Date(clock!.activated_at as string).toISOString();
   for (const list of template.checklists) {
@@ -171,12 +202,23 @@ export async function activateIncident(
             record: {},
           })
         : null;
-      await sql`
+      const [created] = await sql`
         insert into checklist_items
           (incident_id, position_id, item, category, due_at, sort_order)
-        values (${incidentId}, ${positionId}, ${item.item}, ${item.category}, ${dueAt}, ${i})`;
+        values (${incidentId}, ${positionId}, ${item.item}, ${item.category}, ${dueAt}, ${i})
+        returning id`;
+      if (typeof raw !== "string" && raw.key) taskIds.set(raw.key, created!.id as string);
+      if (typeof raw !== "string" && raw.dependsOn?.length) {
+        templateDependencies.push({ taskId: created!.id as string, dependsOn: raw.dependsOn });
+      }
       itemCount += 1;
     }
+  }
+  for (const dependency of templateDependencies) for (const key of dependency.dependsOn) {
+    const prerequisiteTaskId = taskIds.get(key);
+    if (!prerequisiteTaskId) throw new Error(`validated task dependency ${key} did not resolve`);
+    await sql`insert into checklist_task_dependencies (task_id, prerequisite_task_id)
+      values (${dependency.taskId}, ${prerequisiteTaskId})`;
   }
 
   const attached = await sql`

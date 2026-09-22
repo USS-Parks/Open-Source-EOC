@@ -1,0 +1,161 @@
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import type { FastifyInstance } from "fastify";
+import { chromium, type Browser } from "playwright-core";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { buildApp } from "../app.js";
+import { ensureStandardTemplates } from "../boards/service.js";
+import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+
+const DIST = process.env["OPENEOC_TEST_BUILD_ROOT"]
+  ? join(process.env["OPENEOC_TEST_BUILD_ROOT"], "tasks-browser-dist")
+  : "/tmp/openeoc-tasks-browser-dist";
+const SHOTS = process.env["OPENEOC_SHOT_DIR"] ?? "/tmp/openeoc-tasks-browser-shots";
+const TYPES: Record<string, string> = {
+  ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json",
+  ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2", ".wasm": "application/wasm",
+};
+
+function chromiumPath(): string {
+  const candidates = [process.env["OPENEOC_CHROMIUM"], "/opt/pw-browsers/chromium", "/usr/bin/google-chrome", "/usr/bin/chromium-browser", "/usr/bin/chromium"];
+  for (const candidate of candidates) if (candidate && existsSync(candidate)) return candidate;
+  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
+}
+
+let admin: Sql;
+let runtime: Sql;
+let app: FastifyInstance;
+let browser: Browser;
+let baseUrl: string;
+let token: string;
+let incidentId: string;
+let adminId: string;
+let incidentCommanderPositionId: string;
+
+const auth = (value: string) => ({ authorization: `Bearer ${value}` });
+
+async function login(): Promise<string> {
+  const response = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email: "admin@example.org", password: "correct-horse-battery" } });
+  expect(response.statusCode, response.body).toBe(200);
+  return response.json().accessToken as string;
+}
+
+beforeAll(async () => {
+  const webDir = join(process.cwd(), "web");
+  const publicDir = join(webDir, "public");
+  const { build } = await import("../../../web/node_modules/vite/dist/node/index.js");
+  await build({ root: webDir, base: "./", publicDir: false, logLevel: "silent", build: { outDir: DIST, emptyOutDir: true } });
+  expect(existsSync(join(DIST, "index.html"))).toBe(true);
+  mkdirSync(SHOTS, { recursive: true });
+
+  ({ admin, runtime } = await freshDb());
+  const identity = await seedIdentity(admin);
+  adminId = identity.adminId;
+  await ensureStandardTemplates(admin);
+  await ensureStandardIncidentTemplates(admin);
+  await admin`
+    insert into incident_templates (key, title, definition)
+    values ('tasks_browser', 'Tasks browser', ${admin.json({
+      key: "tasks_browser", title: "Tasks browser", positions: ["incident_commander"], boards: [],
+      checklists: [{ position: "incident_commander", items: [{ item: "Confirm evacuation routes", category: "operations", due: { kind: "relative", anchor: "created", minutes: 30 } }] }],
+    } as never)})`;
+  app = buildApp(runtime, { oidc: null });
+  app.get("/app/*", (request, reply) => {
+    const relative = (request.params as { "*": string })["*"] || "index.html";
+    const safe = relative.replaceAll("..", "");
+    let path = join(DIST, safe);
+    if (!existsSync(path)) path = join(publicDir, safe);
+    if (!existsSync(path)) return reply.status(404).send("missing");
+    const buffer = readFileSync(path);
+    return reply.header("content-type", TYPES[path.slice(path.lastIndexOf("."))] ?? "application/octet-stream").send(buffer);
+  });
+  await app.listen({ port: 0, host: "127.0.0.1" });
+  const address = app.server.address();
+  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+  token = await login();
+  const activated = await app.inject({ method: "POST", url: `/api/v1/jurisdictions/${identity.jurisdictionId}/incidents`, headers: auth(token), payload: { templateKey: "tasks_browser", name: "Tasks browser incident" } });
+  expect(activated.statusCode, activated.body).toBe(201);
+  incidentId = activated.json().incidentId as string;
+  const [position] = await admin`
+    select p.id from incident_positions ip join positions p on p.id = ip.position_id
+    where ip.incident_id = ${incidentId} and p.key = 'incident_commander'`;
+  incidentCommanderPositionId = position!.id as string;
+  const assigned = await app.inject({ method: "POST", url: `/api/v1/positions/${position!.id}/assignments`, headers: auth(token), payload: { personId: adminId } });
+  expect(assigned.statusCode, assigned.body).toBe(201);
+  const signedIn = await app.inject({ method: "POST", url: `/api/v1/positions/${position!.id}/sign-in`, headers: auth(token) });
+  expect(signedIn.statusCode, signedIn.body).toBe(200);
+  browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
+}, 120000);
+
+afterAll(async () => {
+  await browser?.close();
+  await app?.close();
+  await runtime?.end();
+  await admin?.end();
+});
+
+describe("P-TASKS in a real browser", () => {
+  it("queues an offline completion, reconciles its receipt, and keeps the task workspace usable across themes", async () => {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" });
+    const external: string[] = [];
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.route("**/*", (route) => {
+      const url = route.request().url();
+      if (url.startsWith(baseUrl) || url.startsWith("data:") || url.startsWith("blob:")) return route.continue();
+      external.push(url); return route.abort();
+    });
+    await page.goto(`${baseUrl}/app/index.html`, { waitUntil: "load" });
+    await page.getByLabel("Email").fill("admin@example.org");
+    await page.getByLabel("Password").fill("correct-horse-battery");
+    await page.getByRole("button", { name: "Sign in" }).click();
+    const selectedIncident = page.getByLabel("Selected incident", { exact: true });
+    await selectedIncident.locator(`option[value="${incidentId}"]`).waitFor({ state: "attached" });
+    await selectedIncident.selectOption(incidentId);
+    const actingPosition = page.getByLabel("Acting position", { exact: true });
+    await actingPosition.locator(`option[value="${incidentCommanderPositionId}"]`).waitFor({ state: "attached" });
+    const positionRefresh = page.waitForResponse((response) => response.url().endsWith("/api/v1/me") && response.status() === 200);
+    await actingPosition.selectOption(incidentCommanderPositionId);
+    await positionRefresh;
+    await page.getByRole("button", { name: "Tasks", exact: true }).click();
+    await page.locator(".eoc-tasks-surface").getByRole("heading", { name: "Tasks" }).waitFor({ timeout: 10000 });
+    await page.getByText("Confirm evacuation routes").waitFor({ timeout: 10000 });
+    await page.getByRole("tab", { name: "Team Tasks" }).click();
+    await page.getByLabel("Due").selectOption("next_24_hours");
+    await page.getByText("Confirm evacuation routes").waitFor({ timeout: 10000 });
+    await page.getByRole("tab", { name: "My Tasks" }).click();
+    await page.getByText("My incident tasks", { exact: true }).waitFor({ timeout: 10000 });
+    await page.locator("[data-table-id='incident-tasks'] table").waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Complete" }).waitFor({ state: "visible" });
+    await page.waitForFunction("() => { const complete = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Complete'); return complete instanceof HTMLButtonElement && !complete.disabled; }");
+    expect(await page.getByRole("button", { name: "Complete" }).isEnabled()).toBe(true);
+    await page.screenshot({ path: join(SHOTS, "tasks-browser-light.png"), fullPage: true });
+    await page.getByRole("button", { name: "Account menu", exact: true }).click();
+    await page.getByRole("button", { name: "Use dark theme", exact: true }).click();
+    await page.getByRole("button", { name: "Account menu", exact: true }).click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole("tab", { name: "My Tasks" }).focus();
+    await page.keyboard.press("ArrowRight");
+    expect(await page.evaluate("document.activeElement?.textContent")).toBe("Team Tasks");
+    await page.getByText("Incident team tasks", { exact: true }).waitFor({ timeout: 10000 });
+    await page.locator("[data-table-id='incident-tasks'] table").waitFor({ state: "visible" });
+    await page.screenshot({ path: join(SHOTS, "tasks-browser-dark-390.png"), fullPage: true });
+    expect(await page.evaluate("document.querySelector('.eoc-tasks-surface').scrollWidth <= document.querySelector('.eoc-tasks-surface').clientWidth")).toBe(true);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.getByRole("tab", { name: "My Tasks" }).click();
+    await page.getByText("My incident tasks", { exact: true }).waitFor({ timeout: 10000 });
+    await page.locator("[data-table-id='incident-tasks'] table").waitFor({ state: "visible" });
+    await page.context().setOffline(true);
+    await page.getByRole("button", { name: "Complete" }).click();
+    await page.getByText("Completion queued locally; server confirmation is still pending.").waitFor({ timeout: 10000 });
+    await page.context().setOffline(false);
+    await page.evaluate("window.dispatchEvent(new Event('online'))");
+    await page.getByText(/queued completion.*reconciled/).waitFor({ timeout: 10000 });
+    await page.getByRole("button", { name: "Open incident templates" }).click();
+    await page.getByRole("heading", { name: "Activate an incident" }).waitFor({ timeout: 10000 });
+    expect(errors).toEqual([]);
+    expect(external).toEqual([]);
+    await page.close();
+  }, 60000);
+});

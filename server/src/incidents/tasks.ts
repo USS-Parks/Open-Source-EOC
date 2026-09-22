@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type {
   IncidentTask,
   TaskCompletionReceipt,
+  TaskDependencyView,
   TaskListQuery,
   TaskListResponse,
   TaskMetadataPatch,
@@ -58,7 +59,7 @@ function iso(value: string | Date | null): string | null {
   return value === null ? null : new Date(value).toISOString();
 }
 
-function toTask(row: TaskRow): IncidentTask {
+function toTask(row: TaskRow, dependencies: readonly TaskDependencyView[] = []): IncidentTask {
   const assignment = row.position_id
     ? {
         kind: "position" as const,
@@ -94,9 +95,30 @@ function toTask(row: TaskRow): IncidentTask {
     dueAt: iso(row.due_at),
     revision: Number(row.revision),
     assignment,
+    dependencies,
     completedAt: iso(row.completed_at),
     completedBy,
   };
+}
+
+async function taskDependencies(
+  sql: Sql,
+  taskIds: readonly string[],
+): Promise<Map<string, TaskDependencyView[]>> {
+  const result = new Map<string, TaskDependencyView[]>();
+  if (taskIds.length === 0) return result;
+  const rows = await sql.unsafe(`select d.task_id, prerequisite.id, prerequisite.item, prerequisite.status
+    from checklist_task_dependencies d
+    join checklist_items prerequisite on prerequisite.id = d.prerequisite_task_id
+    where d.task_id = any($1::uuid[])
+    order by prerequisite.sort_order, prerequisite.id`, [taskIds]);
+  for (const row of rows as Array<Record<string, unknown>>) {
+    const taskId = row.task_id as string;
+    const dependencies = result.get(taskId) ?? [];
+    dependencies.push({ id: row.id as string, item: row.item as string, status: row.status as TaskStatus });
+    result.set(taskId, dependencies);
+  }
+  return result;
 }
 
 function dueBucket(
@@ -132,7 +154,9 @@ export async function listIncidentTasks(
   const rows = await sql.unsafe(`${taskSelect} where c.incident_id = $1
     order by c.status, c.due_at nulls last, c.sort_order, c.id`, [incidentId]);
   const now = Date.now();
-  const tasks = (rows as unknown as TaskRow[]).map(toTask).filter((task) =>
+  const taskRows = rows as unknown as TaskRow[];
+  const dependencies = await taskDependencies(sql, taskRows.map((task) => task.id));
+  const tasks = taskRows.map((task) => toTask(task, dependencies.get(task.id))).filter((task) =>
     (filters.status === undefined || task.status === filters.status) &&
     (filters.category === undefined || task.category === filters.category) &&
     (filters.assignment === undefined || assignedMatch(task, actor, filters.assignment)) &&
@@ -205,8 +229,10 @@ export async function updateIncidentTask(
   if (authority.closedAt) throw new AuthError(409, "incident is closed");
   const current = await loadTaskForUpdate(sql, incidentId, taskId);
   if (current.status === "completed") throw new AuthError(409, "completed task is immutable");
+  if (Number(current.revision) !== input.expectedRevision) throw new AuthError(409, "task revision changed");
   const statusOnly = input.status !== undefined && input.item === undefined &&
-    input.category === undefined && input.dueAt === undefined && input.assignment === undefined;
+    input.category === undefined && input.dueAt === undefined && input.assignment === undefined &&
+    input.dependencyIds === undefined;
   if (!authority.canManageParticipation) {
     if (!statusOnly) throw new AuthError(403, "task metadata requires incident owner admin");
     await requireCurrentAssignee(sql, actor, authority, current);
@@ -232,6 +258,26 @@ export async function updateIncidentTask(
       participantId = assignment.kind === "incident_participant" ? assignment.participantId : null;
     }
   }
+  if (input.dependencyIds !== undefined) {
+    if (input.dependencyIds.includes(taskId)) throw new AuthError(400, "task cannot depend on itself");
+    const dependencyRows = await sql.unsafe(`select id, incident_id from checklist_items
+      where id = any($1::uuid[])`, [input.dependencyIds]);
+    if (dependencyRows.length !== input.dependencyIds.length) throw new AuthError(400, "task dependency was not found");
+    if ((dependencyRows as Array<Record<string, unknown>>).some((row) => row.incident_id !== incidentId)) {
+      throw new AuthError(400, "task dependency belongs to another incident");
+    }
+    const cycle = await sql.unsafe(`with recursive prerequisites(id) as (
+        select prerequisite_task_id from checklist_task_dependencies where task_id = any($1::uuid[])
+        union
+        select d.prerequisite_task_id from checklist_task_dependencies d
+          join prerequisites p on p.id = d.task_id
+      ) select 1 from prerequisites where id = $2::uuid limit 1`, [input.dependencyIds, taskId]);
+    if (cycle.length) throw new AuthError(400, "task dependency would create a cycle");
+    await sql`delete from checklist_task_dependencies where task_id = ${taskId}`;
+    for (const dependencyId of input.dependencyIds) await sql`
+      insert into checklist_task_dependencies (task_id, prerequisite_task_id)
+      values (${taskId}, ${dependencyId})`;
+  }
 
   const [updated] = await sql`
     update checklist_items set
@@ -247,7 +293,7 @@ export async function updateIncidentTask(
     returning id`;
   if (!updated) throw new AuthError(409, "task revision changed");
   const [row] = await sql.unsafe(`${taskSelect} where c.id = $1`, [taskId]);
-  const task = toTask(row as unknown as TaskRow);
+  const task = toTask(row as unknown as TaskRow, (await taskDependencies(sql, [taskId])).get(taskId));
   await recordAudit(sql, actor, {
     jurisdictionId: authority.jurisdictionId,
     incidentId,
@@ -315,6 +361,12 @@ export async function completeIncidentTask(
   const task = await loadTaskForUpdate(sql, incidentId, taskId);
   await requireCurrentAssignee(sql, actor, authority, task);
   if (task.status === "completed") throw new AuthError(409, "task is already completed");
+  const blocked = await sql`
+    select prerequisite.item from checklist_task_dependencies d
+    join checklist_items prerequisite on prerequisite.id = d.prerequisite_task_id
+    where d.task_id = ${taskId} and prerequisite.status <> 'completed'
+    order by prerequisite.sort_order, prerequisite.id limit 1`;
+  if (blocked.length) throw new AuthError(409, `task prerequisite is incomplete: ${blocked[0]!.item as string}`);
 
   const [completed] = await sql`
     update checklist_items set status = 'completed'
