@@ -12,10 +12,10 @@ import { configDefaults, defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     exclude: [...configDefaults.exclude, "deploy/**/out/**", "deploy/windows/desktop.test.mjs", "deploy/windows/installer/installer.test.mjs"],
-    // Hosted runners have limited CPU. Capping file workers prevents several
-    // Chromium suites from rebuilding and driving the UI at once; the load
+    // Hosted runners have limited CPU. Serialize files so multiple Chromium
+    // suites never rebuild Vite and drive the UI at the same time; the load
     // benchmark is run separately by `pnpm check` so its latency stays useful.
-    maxWorkers: process.env.CI ? 2 : undefined,
+    maxWorkers: process.env.CI ? 1 : undefined,
     testTimeout: 30_000,
     hookTimeout: 60_000,
     // The global teardown below may drop one database per test file; give it
