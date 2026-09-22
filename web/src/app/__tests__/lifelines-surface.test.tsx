@@ -117,7 +117,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("P-LIFE-1 Community Lifelines overview", () => {
+describe("Community Lifelines overview", () => {
   it("renders eight distinct cards and keeps stale Stable separate from current green", async () => {
     const onOpen = vi.fn();
     const { container, rerender } = render(

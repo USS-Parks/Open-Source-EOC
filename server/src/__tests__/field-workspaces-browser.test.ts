@@ -1,22 +1,15 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
-import { chromium, type Browser, type Page } from "playwright-core";
+import type { Browser, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import { buildDir, buildWeb, launchBrowser, listen, login, post, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
-const DIST = process.env["OPENEOC_TEST_BUILD_ROOT"]
-  ? join(process.env["OPENEOC_TEST_BUILD_ROOT"], "d29-field-app-dist")
-  : "/tmp/openeoc-d29-field-app-dist";
-const SHOTS = process.env["OPENEOC_SHOT_DIR"] ?? "/tmp/openeoc-d29-field-shots";
-const PUBLIC = join(process.cwd(), "web", "public");
-const TYPES: Readonly<Record<string, string>> = {
-  ".css": "text/css", ".html": "text/html", ".js": "text/javascript", ".json": "application/json",
-  ".mjs": "text/javascript", ".png": "image/png", ".svg": "image/svg+xml", ".woff2": "font/woff2",
-};
+const DIST = buildDir("d29-field-app");
+const SHOTS = shotDir("d29-field");
 
 let admin: Sql;
 let runtime: Sql;
@@ -31,51 +24,6 @@ let actorId: string;
 const pageErrors: string[] = [];
 const externalRequests: string[] = [];
 
-function chromiumPath(): string {
-  const candidates = [
-    process.env["OPENEOC_CHROMIUM"],
-    "C:/Program Files/Google/Chrome/Application/chrome.exe",
-    "/opt/pw-browsers/chromium", "/usr/bin/google-chrome", "/usr/bin/chromium-browser", "/usr/bin/chromium",
-  ];
-  for (const candidate of candidates) if (candidate && existsSync(candidate)) return candidate;
-  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
-}
-
-const auth = (token: string) => ({ authorization: `Bearer ${token}` });
-
-async function login(email: string, password: string): Promise<string> {
-  const response = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email, password } });
-  expect(response.statusCode, response.body).toBe(200);
-  return response.json().accessToken as string;
-}
-
-async function post(token: string, url: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const response = await app.inject({ method: "POST", url, headers: auth(token), payload });
-  expect(response.statusCode, response.body).toBe(201);
-  return response.json() as Record<string, unknown>;
-}
-
-function serveApp(): void {
-  app.get("/d29-app/*", (request, reply) => {
-    const relative = (request.params as { "*": string })["*"] || "index.html";
-    const safe = relative.replaceAll("..", "");
-    let path = join(DIST, safe);
-    if (!existsSync(path)) path = join(PUBLIC, safe);
-    if (!existsSync(path)) return reply.status(404).send("missing");
-    const body = readFileSync(path);
-    const type = TYPES[path.slice(path.lastIndexOf("."))] ?? "application/octet-stream";
-    const match = request.headers.range ? /^bytes=(\d+)-(\d*)$/.exec(request.headers.range) : null;
-    if (match) {
-      const start = Number(match[1]);
-      const end = match[2] ? Number(match[2]) : body.length - 1;
-      const slice = body.subarray(start, Math.min(end, body.length - 1) + 1);
-      return reply.status(206).header("content-type", type).header("accept-ranges", "bytes")
-        .header("content-range", `bytes ${start}-${start + slice.length - 1}/${body.length}`).send(slice);
-    }
-    return reply.header("content-type", type).header("accept-ranges", "bytes").send(body);
-  });
-}
-
 async function useDarkTheme(): Promise<void> {
   await page.getByRole("button", { name: "Account menu" }).click();
   await page.getByRole("button", { name: "Use dark theme" }).click();
@@ -84,12 +32,7 @@ async function useDarkTheme(): Promise<void> {
 }
 
 beforeAll(async () => {
-  const webDir = join(process.cwd(), "web");
-  const { build } = await import("../../../web/node_modules/vite/dist/node/index.js");
-  await build({ root: webDir, base: "./", publicDir: false, logLevel: "silent",
-    build: { outDir: DIST, emptyOutDir: true } });
-  expect(existsSync(join(DIST, "index.html"))).toBe(true);
-  mkdirSync(SHOTS, { recursive: true });
+  await buildWeb(DIST);
 
   ({ admin, runtime } = await freshDb());
   const seed = await seedIdentity(admin);
@@ -98,18 +41,18 @@ beforeAll(async () => {
   await ensureStandardTemplates(admin);
   await ensureStandardIncidentTemplates(admin);
   app = buildApp(runtime, { oidc: null });
-  serveApp();
-  const token = await login("admin@example.org", "correct-horse-battery");
-  const incident = await post(token, `/api/v1/jurisdictions/${jurisdictionId}/incidents`, {
+  serveStatic(app, "/d29-app", DIST);
+  const token = await login(app);
+  const incident = await post(app, token, `/api/v1/jurisdictions/${jurisdictionId}/incidents`, {
     templateKey: "wildfire", name: "D29 Field Operations Exercise",
   });
   incidentId = incident.incidentId as string;
-  const board = await post(token, `/api/v1/jurisdictions/${jurisdictionId}/boards`, {
+  const board = await post(app, token, `/api/v1/jurisdictions/${jurisdictionId}/boards`, {
     templateKey: "field_reports", title: "Field Reports",
   });
   boardId = board.id as string;
   await admin`insert into incident_boards (incident_id, board_id) values (${incidentId}, ${boardId})`;
-  await post(token, `/api/v1/jurisdictions/${jurisdictionId}/forms`, {
+  await post(app, token, `/api/v1/jurisdictions/${jurisdictionId}/forms`, {
     key: "rapid_field_report", version: 1, title: "Rapid field report", boardTemplate: "field_reports",
     nodes: [
       { kind: "field", name: "summary", type: "text", label: "Summary", required: true },
@@ -121,10 +64,8 @@ beforeAll(async () => {
     ],
   });
 
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const address = app.server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-  browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
+  baseUrl = await listen(app);
+  browser = await launchBrowser();
   page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   await page.emulateMedia({ reducedMotion: "reduce" });
   page.on("pageerror", (error) => pageErrors.push(error.message));
@@ -150,7 +91,7 @@ afterAll(async () => {
   await admin?.end();
 });
 
-describe("D29 field reporting and tracking workspace", () => {
+describe("field reporting and tracking workspace", () => {
   it("captures attachments, survives an offline queue, reuses map placement, and retains custody attribution", async () => {
     const workspace = page.getByRole("region", { name: "Field report capture" });
     const form = workspace.getByRole("form", { name: "Field report form" });

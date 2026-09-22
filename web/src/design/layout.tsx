@@ -109,7 +109,7 @@ export function BoardTable(props: {
   );
 }
 
-/** Placeholder frame for the COP map (real map lands at VEOC-17). */
+/** Labeled stand-in frame used where a composition shows the map region without mounting it. */
 export function MapPanel(props: { label: string }) {
   return (
     <div

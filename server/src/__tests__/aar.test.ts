@@ -10,7 +10,7 @@ import { ensureStandardIncidentTemplates } from "../incidents/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * After-action and improvement planning (VEOC-36). An AAR composes from
+ * After-action and improvement planning. An AAR composes from
  * observations captured during the incident plus the chronology as evidence;
  * corrective actions survive incident closure and keep reporting status.
  */

@@ -23,7 +23,7 @@ async function violations(container: Element) {
   return result.violations;
 }
 
-describe("D05 icon registry", () => {
+describe("icon registry", () => {
   it("contains the complete project-owned lifeline family", () => {
     expect(Object.keys(lifelineIconByKey)).toEqual([
       "safety_security",
@@ -57,7 +57,7 @@ describe("D05 icon registry", () => {
     }
   });
 
-  it("maps every D02 current and planned destination to a stable icon", () => {
+  it("maps every current and planned destination to a stable icon", () => {
     expect(Object.keys(destinationIconByKey)).toHaveLength(25);
     for (const name of Object.values(destinationIconByKey)) {
       expect(iconRegistry[name]).toBeDefined();
@@ -79,7 +79,7 @@ describe("D05 icon registry", () => {
   });
 });
 
-describe("D05 icon accessibility and state", () => {
+describe("icon accessibility and state", () => {
   it("gives meaningful standalone icons an accessible name", () => {
     const { container } = render(<Icon label="Open incident map" name="map" size={24} />);
     const image = screen.getByRole("img", { name: "Open incident map" });
@@ -142,7 +142,7 @@ describe("D05 icon accessibility and state", () => {
   });
 });
 
-describe("D05 gallery", () => {
+describe("icon gallery", () => {
   for (const theme of ["light", "dark"] as const) {
     it(`${theme} theme has no automated accessibility violations`, async () => {
       const { container } = render(<IconGallery />);

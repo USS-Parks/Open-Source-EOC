@@ -9,7 +9,7 @@ import {
   type SitrepRow,
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
-import { AuthError, type Principal } from "../auth/service.js";
+import { AuthError, requireMember, requireWriter, type Principal } from "../auth/service.js";
 import {
   createRecord,
   getIncidentBoardReadShape,
@@ -21,7 +21,7 @@ import { getIncidentAuthority, lockIncidentMutation } from "../incidents/partici
 import { listCurrentEsfAssessments } from "../esf/service.js";
 
 /**
- * Situation reporting (VEOC-20, F8). Lifelines status entry remembers the
+ * Situation reporting (F8). Lifelines status entry remembers the
  * prior submission per lifeline (the Esri behavior worth keeping), so an
  * update edits one lifeline without retyping the rest. A sitrep composes
  * from current board state in one action and archives immutably; the
@@ -487,16 +487,4 @@ export async function getSitrep(sql: Sql, actor: Principal, sitrepId: string): P
     revision: content.revision ?? 1,
     sourceTime: content.sourceTime ?? composedAt,
   };
-}
-
-function requireMember(actor: Principal, jurisdictionId: string): void {
-  if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
-    throw new AuthError(403, "no access to this jurisdiction");
-}
-
-function requireWriter(actor: Principal, jurisdictionId: string): "admin" | "member" {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || (m.role !== "admin" && m.role !== "member"))
-    throw new AuthError(403, "requires write access to this jurisdiction");
-  return m.role;
 }

@@ -6,7 +6,7 @@ import { ensureStandardTemplates } from "../boards/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * Portable jurisdiction export (M4, INV-9/INV-10, continuity): an admin can
+ * Portable jurisdiction export (INV-9/INV-10, continuity): an admin can
  * pull the operational record as JSON; a member cannot. Proves boards,
  * records with geometry, sitreps, and lifelines all round-trip out.
  */

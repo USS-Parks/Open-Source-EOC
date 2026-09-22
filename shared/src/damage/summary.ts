@@ -2,7 +2,7 @@ import { DAMAGE_DEGREES } from "../dictionary/pda.js";
 
 /**
  * Damage assessment aggregation and FEMA declaration-support output
- * (VEOC-23, F8/F9). The Crisis Track lesson: the output is the paperwork.
+ * (F8/F9). The Crisis Track lesson: the output is the paperwork.
  * These are pure functions over approved assessment rows, so the numbers
  * that go on a federal declaration request are golden-tested, and the
  * rendered document is derived from exactly those numbers.

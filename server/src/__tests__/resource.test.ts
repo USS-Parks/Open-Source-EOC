@@ -7,7 +7,7 @@ import { escalate, type EscalationPayload } from "../resource/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * The 213RR resource lifecycle (VEOC-35, F5). A request moves through the
+ * The 213RR resource lifecycle (F5). A request moves through the
  * guarded NIMS states with a full chronology and per-change notifications; a
  * request escalates field-to-state over a peer token and the upper tier
  * reports fulfillment back; and costs export for reimbursement.
@@ -130,7 +130,7 @@ describe("single-instance lifecycle", () => {
   });
 });
 
-describe("D22 assignment and organization projection", () => {
+describe("assignment and organization projection", () => {
   it("persists a named incident participant supplier and exposes both organizations", async () => {
     const partnerId = await createJurisdiction(county.admin, "resource-partner", "Resource Partner");
     const partnerPersonId = await createPerson(county.admin, {
@@ -168,7 +168,7 @@ describe("D22 assignment and organization projection", () => {
   });
 });
 
-describe("D22 partner-owned incident requests", () => {
+describe("partner-owned incident requests", () => {
   it("allows an active partner contributor to create, progress and assign its own incident-linked request", async () => {
     const partnerId = await createJurisdiction(county.admin, "d22-owning-partner", "D22 Owning Partner");
     const partnerPersonId = await createPerson(county.admin, {
@@ -219,7 +219,7 @@ describe("D22 partner-owned incident requests", () => {
   });
 });
 
-describe("D22 closed incident resource mutations", () => {
+describe("closed incident resource mutations", () => {
   it("rejects incident-scoped creation, transition and assignment after closeout", async () => {
     const [incident] = await county.admin`
       insert into incidents (jurisdiction_id, name, kind, activated_by)

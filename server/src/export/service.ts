@@ -1,6 +1,6 @@
 import type { SitrepRow } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
-import { AuthError, type Principal } from "../auth/service.js";
+import { AuthError, requireAdmin, type Principal } from "../auth/service.js";
 import { currentLifelines, getSitrep, listSitreps } from "../sitreps/service.js";
 
 /**
@@ -33,11 +33,6 @@ export interface JurisdictionExport {
   readonly boards: readonly ExportedBoard[];
   readonly sitreps: readonly SitrepRow[];
   readonly lifelines: readonly unknown[];
-}
-
-function requireAdmin(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || m.role !== "admin") throw new AuthError(403, "requires jurisdiction admin");
 }
 
 export async function exportJurisdiction(

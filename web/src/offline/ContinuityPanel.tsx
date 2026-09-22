@@ -22,10 +22,10 @@ interface SyncConflictAck {
 }
 
 export interface ConflictReceipt {
-  /** Legacy aggregate receipt retained by pre-D29 queues. */
+  /** Legacy aggregate receipt retained by older queues. */
   readonly conflicts?: number;
   readonly receipt?: SyncConflictAck;
-  /** D29 receipts retain the exact board and operation that require review. */
+  /** Current receipts retain the exact board and operation that require review. */
   readonly entries?: readonly {
     readonly boardId: string;
     readonly operationId: string;

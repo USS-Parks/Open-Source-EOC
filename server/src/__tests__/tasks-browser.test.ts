@@ -1,27 +1,15 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
-import { chromium, type Browser } from "playwright-core";
+import type { Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import { auth, buildDir, buildWeb, launchBrowser, listen, login, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
-const DIST = process.env["OPENEOC_TEST_BUILD_ROOT"]
-  ? join(process.env["OPENEOC_TEST_BUILD_ROOT"], "tasks-browser-dist")
-  : "/tmp/openeoc-tasks-browser-dist";
-const SHOTS = process.env["OPENEOC_SHOT_DIR"] ?? "/tmp/openeoc-tasks-browser-shots";
-const TYPES: Record<string, string> = {
-  ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json",
-  ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2", ".wasm": "application/wasm",
-};
-
-function chromiumPath(): string {
-  const candidates = [process.env["OPENEOC_CHROMIUM"], "/opt/pw-browsers/chromium", "/usr/bin/google-chrome", "/usr/bin/chromium-browser", "/usr/bin/chromium"];
-  for (const candidate of candidates) if (candidate && existsSync(candidate)) return candidate;
-  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
-}
+const DIST = buildDir("tasks-browser");
+const SHOTS = shotDir("tasks-browser");
 
 let admin: Sql;
 let runtime: Sql;
@@ -33,21 +21,8 @@ let incidentId: string;
 let adminId: string;
 let incidentCommanderPositionId: string;
 
-const auth = (value: string) => ({ authorization: `Bearer ${value}` });
-
-async function login(): Promise<string> {
-  const response = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email: "admin@example.org", password: "correct-horse-battery" } });
-  expect(response.statusCode, response.body).toBe(200);
-  return response.json().accessToken as string;
-}
-
 beforeAll(async () => {
-  const webDir = join(process.cwd(), "web");
-  const publicDir = join(webDir, "public");
-  const { build } = await import("../../../web/node_modules/vite/dist/node/index.js");
-  await build({ root: webDir, base: "./", publicDir: false, logLevel: "silent", build: { outDir: DIST, emptyOutDir: true } });
-  expect(existsSync(join(DIST, "index.html"))).toBe(true);
-  mkdirSync(SHOTS, { recursive: true });
+  await buildWeb(DIST);
 
   ({ admin, runtime } = await freshDb());
   const identity = await seedIdentity(admin);
@@ -61,19 +36,9 @@ beforeAll(async () => {
       checklists: [{ position: "incident_commander", items: [{ item: "Confirm evacuation routes", category: "operations", due: { kind: "relative", anchor: "created", minutes: 30 } }] }],
     } as never)})`;
   app = buildApp(runtime, { oidc: null });
-  app.get("/app/*", (request, reply) => {
-    const relative = (request.params as { "*": string })["*"] || "index.html";
-    const safe = relative.replaceAll("..", "");
-    let path = join(DIST, safe);
-    if (!existsSync(path)) path = join(publicDir, safe);
-    if (!existsSync(path)) return reply.status(404).send("missing");
-    const buffer = readFileSync(path);
-    return reply.header("content-type", TYPES[path.slice(path.lastIndexOf("."))] ?? "application/octet-stream").send(buffer);
-  });
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const address = app.server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-  token = await login();
+  serveStatic(app, "/app", DIST);
+  baseUrl = await listen(app);
+  token = await login(app);
   const activated = await app.inject({ method: "POST", url: `/api/v1/jurisdictions/${identity.jurisdictionId}/incidents`, headers: auth(token), payload: { templateKey: "tasks_browser", name: "Tasks browser incident" } });
   expect(activated.statusCode, activated.body).toBe(201);
   incidentId = activated.json().incidentId as string;
@@ -85,7 +50,7 @@ beforeAll(async () => {
   expect(assigned.statusCode, assigned.body).toBe(201);
   const signedIn = await app.inject({ method: "POST", url: `/api/v1/positions/${position!.id}/sign-in`, headers: auth(token) });
   expect(signedIn.statusCode, signedIn.body).toBe(200);
-  browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
+  browser = await launchBrowser();
 }, 120000);
 
 afterAll(async () => {
@@ -95,7 +60,7 @@ afterAll(async () => {
   await admin?.end();
 });
 
-describe("P-TASKS in a real browser", () => {
+describe("task workspace in a real browser", () => {
   it("queues an offline completion, reconciles its receipt, and keeps the task workspace usable across themes", async () => {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" });
     const external: string[] = [];

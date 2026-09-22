@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * XLSForm model and import (VEOC-22, F7). An imported form is data: a
+ * XLSForm model and import (F7). An imported form is data: a
  * nested tree of fields, groups, and repeats with the XLSForm logic
  * columns (relevant, constraint, calculation) preserved verbatim for the
  * expression engine. Import takes the three XLSForm sheets in normalized

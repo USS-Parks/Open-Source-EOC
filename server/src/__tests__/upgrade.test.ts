@@ -8,7 +8,7 @@ import { migrate } from "../db/migrate.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * Deployment upgrade preserves customization (VEOC-40, INV-5). A customized
+ * Deployment upgrade preserves customization (INV-5). A customized
  * instance (a board with a local x_ field and records) survives re-running
  * the migration runner (idempotent) and a board template version upgrade:
  * the local field and the records are kept, and the new template's fields

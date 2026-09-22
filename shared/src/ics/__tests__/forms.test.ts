@@ -10,7 +10,7 @@ import {
 import { renderIapPdf, renderPdf } from "../pdf.js";
 
 /**
- * ICS form prefill, IAP assembly, and PDF export (VEOC-34, F5). The forms
+ * ICS form prefill, IAP assembly, and PDF export (F5). The forms
  * derive purely from a normalized incident context; the golden expectations
  * below are the prefill contract, and the PDF is deterministic.
  */

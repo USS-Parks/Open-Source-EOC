@@ -11,7 +11,7 @@ import {
 } from "./model.js";
 
 /**
- * CAP validation (VEOC-26). Two layers: the base CAP 1.2 schema, and the
+ * CAP validation. Two layers: the base CAP 1.2 schema, and the
  * FEMA IPAWS Profile v1.0 on top of it. Authoring runs both, because an
  * alert bound for IPAWS must satisfy the profile, while an internal or
  * partner alert need only be valid CAP.

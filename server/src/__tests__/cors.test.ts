@@ -5,7 +5,7 @@ import { buildApp } from "../app.js";
 import { freshDb, type Sql } from "./helpers.js";
 
 /**
- * Allowlisted CORS (M4). The allowlist logic is exercised directly with an
+ * Allowlisted CORS. The allowlist logic is exercised directly with an
  * explicit list; the app wiring is checked by a preflight going through the
  * hook. CORS is off by default, so a configured integration case is covered
  * by the unit tests rather than by mutating process state.

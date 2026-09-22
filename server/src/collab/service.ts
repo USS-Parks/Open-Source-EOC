@@ -1,6 +1,12 @@
 import { planIncidentSpace, type PositionHolder, type SpacePlan } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
-import { AuthError, type Principal } from "../auth/service.js";
+import {
+  AuthError,
+  requireAdmin,
+  requireMember,
+  requireWriter,
+  type Principal,
+} from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 import { decryptSecret, encryptSecret, hasSecretKey } from "../secrets/envelope.js";
 import {
@@ -11,7 +17,7 @@ import {
 } from "./adapters.js";
 
 /**
- * Incident collaboration spaces (VEOC-32, F15/R6). Activation provisions a
+ * Incident collaboration spaces (F15/R6). Activation provisions a
  * space with a channel per ICS section; membership follows position
  * assignment and is reconciled as a diff; announcements post from the
  * platform; deactivation archives the space. The backend is optional: with
@@ -396,20 +402,4 @@ async function degrade(
     subjectId: ctx.incidentId,
     payload: { notified: ctx.holderPersonIds.length, message },
   });
-}
-
-function requireAdmin(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || m.role !== "admin") throw new AuthError(403, "requires jurisdiction admin");
-}
-
-function requireMember(actor: Principal, jurisdictionId: string): void {
-  if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
-    throw new AuthError(403, "no access to this jurisdiction");
-}
-
-function requireWriter(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || (m.role !== "admin" && m.role !== "member"))
-    throw new AuthError(403, "requires write access to this jurisdiction");
 }

@@ -1,6 +1,7 @@
 import type { DatasetStatus } from "@openeoc/shared";
 import { Button, StatusBadge, type Status } from "../design/components.js";
 import { Icon } from "../design/icons/index.js";
+import { formatDuration, formatTime } from "./format.js";
 
 const TONE: Record<DatasetStatus["availability"], Status> = {
   available: "success",
@@ -62,15 +63,4 @@ export function DatasetReadiness(props: {
       <div className="d21-toolbar"><Button onClick={props.onRefresh} disabled={props.loading}>{props.loading ? "Checking…" : "Refresh readiness"}</Button></div>
     </>
   );
-}
-
-function formatTime(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
-}
-
-function formatDuration(seconds: number): string {
-  if (seconds % 86400 === 0) return `${seconds / 86400}d`;
-  if (seconds % 3600 === 0) return `${seconds / 3600}h`;
-  return `${Math.round(seconds / 60)}m`;
 }

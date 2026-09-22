@@ -1,24 +1,16 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
-import { chromium, type Browser, type Page } from "playwright-core";
+import type { Browser, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { IapDocument } from "@openeoc/shared";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import { buildDir, buildWeb, launchBrowser, listen, login, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
-const DIST = process.env.OPENEOC_TEST_BUILD_ROOT
-  ? join(process.env.OPENEOC_TEST_BUILD_ROOT, "operational-relationships-browser-dist")
-  : "/tmp/openeoc-operational-relationships-browser-dist";
-const SHOTS = process.env.OPENEOC_SHOT_DIR ?? "/tmp/openeoc-operational-relationships-shots";
-const TYPES: Record<string, string> = {
-  ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript",
-  ".css": "text/css", ".json": "application/json", ".geojson": "application/geo+json",
-  ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2",
-  ".wasm": "application/wasm", ".pmtiles": "application/octet-stream",
-};
+const DIST = buildDir("operational-relationships-browser");
+const SHOTS = shotDir("operational-relationships");
 
 let admin: Sql;
 let runtime: Sql;
@@ -38,28 +30,6 @@ const featureId = "route/7";
 const pageErrors: string[] = [];
 const externalRequests: string[] = [];
 
-function chromiumPath(): string {
-  for (const candidate of [
-    process.env.OPENEOC_CHROMIUM,
-    "/opt/pw-browsers/chromium",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium",
-  ]) {
-    if (candidate && existsSync(candidate)) return candidate;
-  }
-  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
-}
-
-async function login(email: string, password: string): Promise<string> {
-  const response = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  expect(response.statusCode).toBe(200);
-  return response.json().accessToken as string;
-}
-
 async function post(token: string, url: string, payload: Record<string, unknown>) {
   const response = await app.inject({
     method: "POST",
@@ -78,17 +48,7 @@ const polygon = (west: number, south: number, east: number, north: number) => ({
 });
 
 beforeAll(async () => {
-  const webDir = join(process.cwd(), "web");
-  const publicDir = join(webDir, "public");
-  const { build } = await import("../../../web/node_modules/vite/dist/node/index.js");
-  await build({
-    root: webDir,
-    base: "./",
-    publicDir: false,
-    logLevel: "silent",
-    build: { outDir: DIST, emptyOutDir: true },
-  });
-  expect(existsSync(join(DIST, "index.html"))).toBe(true);
+  await buildWeb(DIST);
 
   ({ admin, runtime } = await freshDb());
   const seed = await seedIdentity(admin);
@@ -96,31 +56,9 @@ beforeAll(async () => {
   await ensureStandardTemplates(admin);
   await ensureStandardIncidentTemplates(admin);
   app = buildApp(runtime, { oidc: null });
-  app.get("/app/*", (request, reply) => {
-    const relative = (request.params as { "*": string })["*"] || "index.html";
-    const safe = relative.replaceAll("..", "");
-    let path = join(DIST, safe);
-    if (!existsSync(path)) path = join(publicDir, safe);
-    if (!existsSync(path)) return reply.status(404).send("missing");
-    const extension = path.slice(path.lastIndexOf("."));
-    const buffer = readFileSync(path);
-    const range = request.headers.range;
-    const match = range ? /^bytes=(\d+)-(\d*)$/.exec(range) : null;
-    if (match) {
-      const start = Number(match[1]);
-      const end = match[2] ? Number(match[2]) : buffer.length - 1;
-      const slice = buffer.subarray(start, Math.min(end, buffer.length - 1) + 1);
-      return reply.status(206)
-        .header("content-type", TYPES[extension] ?? "application/octet-stream")
-        .header("accept-ranges", "bytes")
-        .header("content-range", `bytes ${start}-${start + slice.length - 1}/${buffer.length}`)
-        .send(slice);
-    }
-    return reply.header("content-type", TYPES[extension] ?? "application/octet-stream")
-      .header("accept-ranges", "bytes").send(buffer);
-  });
+  serveStatic(app, "/app", DIST);
 
-  const token = await login("admin@example.org", "correct-horse-battery");
+  const token = await login(app);
   const incident = await post(token, `/api/v1/jurisdictions/${seed.jurisdictionId}/incidents`, {
     templateKey: "wildfire",
     name: "Operational relationship route exercise",
@@ -204,10 +142,8 @@ beforeAll(async () => {
     }],
   });
 
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const address = app.server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-  browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
+  baseUrl = await listen(app);
+  browser = await launchBrowser();
   page = await browser.newPage({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" });
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.route("**/*", (route) => {
@@ -234,9 +170,8 @@ afterAll(async () => {
   await admin?.end();
 });
 
-describe("D17 map relationship browser journey", () => {
+describe("map relationship browser journey", () => {
   it("links an authoritative map feature to a recorded assessment and returns to it", async () => {
-    mkdirSync(SHOTS, { recursive: true });
     const encodedRoute = `#/map/${encodeURIComponent(datasetId)}/${encodeURIComponent(featureId)}?incident=${encodeURIComponent(incidentId)}`;
     const focusedItems = page.waitForResponse((response) =>
       response.url().includes(`/api/v1/datasets/${datasetId}/items`) && response.status() === 200);

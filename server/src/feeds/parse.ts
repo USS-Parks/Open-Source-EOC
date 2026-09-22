@@ -1,7 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
 
 /**
- * Feed parsers (VEOC-19). Each format normalizes to the same item shape;
+ * Feed parsers. Each format normalizes to the same item shape;
  * everything unparseable throws with a reason, because a feed that stops
  * making sense must alarm, not quietly produce nothing.
  */

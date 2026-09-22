@@ -6,7 +6,7 @@ import { ensureStandardTemplates } from "../boards/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * Seeded adversarial suite (VEOC-37, INV-7). It holds the platform to its
+ * Seeded adversarial suite (INV-7). It holds the platform to its
  * authorization contract: no unauthenticated path reaches authority, no
  * jurisdiction reaches another's data, viewers are read-only, peer lanes
  * reject unknown tokens, the audit log is append-only, secrets are never

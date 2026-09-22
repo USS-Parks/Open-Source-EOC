@@ -1,4 +1,4 @@
-/** Project-owned compass mark settled in the D03 compositions. */
+/** Project-owned compass mark settled in the design compositions. */
 export function BrandMark() {
   const line = {
     fill: "none",

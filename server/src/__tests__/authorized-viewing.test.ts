@@ -251,7 +251,7 @@ afterAll(async () => {
   await admin?.end();
 });
 
-describe("VEOC-80 FOUO authorized viewing", () => {
+describe("FOUO authorized viewing", () => {
   it("keeps incident, dashboard, and dataset reads exact, fresh, and read-only", async () => {
     const granted = await grant(
       "viewer@example.org",

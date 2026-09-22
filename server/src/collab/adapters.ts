@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 /**
- * Collaboration backend adapters (VEOC-32, F15, contract item 11). Each
+ * Collaboration backend adapters (F15, contract item 11). Each
  * adapter talks to its backend across a process boundary over the backend's
  * own HTTP API; no backend code is vendored, which keeps AGPL systems
  * (Mattermost) at arm's length. The transport is injected, so the same code

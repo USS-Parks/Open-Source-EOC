@@ -258,6 +258,12 @@ external requests and browser/map errors fail the run. Four PNGs and
 This verifies archive rendering, not the live record-to-building status join.
 That integration still requires board records from a running backend.
 
+To check a candidate Overture archive before it replaces the shipped one, run
+`node deploy/basemap/prove-overture-buildings.mjs` with `OPENEOC_H14_ARCHIVE`
+naming the candidate PMTiles, `OPENEOC_CHROMIUM` and `OPENEOC_SHOT_DIR` set;
+it serves the candidate through its own Vite testbed and writes its evidence
+under the shot directory.
+
 ## 9. California road jurisdiction and public land overlays
 
 Run `node deploy/basemap/build-overlays.mjs` (or `overlays.sh`) on the build

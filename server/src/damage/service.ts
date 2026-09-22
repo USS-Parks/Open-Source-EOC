@@ -8,14 +8,24 @@ import {
   DAMAGE_DEGREES,
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
-import { AuthError, principalForPerson, type Principal } from "../auth/service.js";
+import {
+  AuthError,
+  principalForPerson,
+  requireAdmin,
+  requireMember,
+  requireWriter,
+  type Principal,
+} from "../auth/service.js";
 import { hashToken, newToken } from "../auth/tokens.js";
 import { withPerson } from "../db/context.js";
 import { recordAudit } from "../audit/service.js";
-import { intakeAllowed } from "./intake-limit.js";
+import { rateLimit } from "../security/rate-limit.js";
+
+/** Public self-reports accepted per jurisdiction per minute; a flood cannot bury moderators or the store. */
+const INTAKE_PER_MINUTE = 30;
 
 /**
- * Damage assessment module (VEOC-23, F8/F9). Pre-loaded baselines,
+ * Damage assessment module (F8/F9). Pre-loaded baselines,
  * offline-capable field assessment against them, moderated public
  * self-report intake, and aggregation into FEMA declaration paperwork.
  * The invariant the acceptance turns on: only APPROVED assessments count
@@ -160,7 +170,7 @@ export async function submitPublicReport(
     where jurisdiction_id = ${jurisdictionId} and enabled`;
   if (!intake || (intake.token_hash as string) !== hashToken(token))
     throw new AuthError(401, "invalid intake token");
-  if (!intakeAllowed(jurisdictionId))
+  if (!rateLimit(`intake:${jurisdictionId}`, INTAKE_PER_MINUTE, 60_000).allowed)
     throw new AuthError(429, "too many reports right now, please retry shortly");
   if (!DEGREES.has(input.degree)) throw new AuthError(400, "unknown damage degree");
 
@@ -260,20 +270,4 @@ export async function exportDeclaration(
     preparedAt: new Date().toISOString(),
   });
   return { summary, document };
-}
-
-function requireAdmin(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || m.role !== "admin") throw new AuthError(403, "requires jurisdiction admin");
-}
-
-function requireWriter(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || (m.role !== "admin" && m.role !== "member"))
-    throw new AuthError(403, "requires write access to this jurisdiction");
-}
-
-function requireMember(actor: Principal, jurisdictionId: string): void {
-  if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
-    throw new AuthError(403, "no access to this jurisdiction");
 }

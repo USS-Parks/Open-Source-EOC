@@ -120,7 +120,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("P-LIFE-3 ESF workspace", () => {
+describe("ESF workspace", () => {
   it("keeps all California and federal functions visible, distinct, and separate from Lifelines", async () => {
     const api = client();
     const open = vi.fn();

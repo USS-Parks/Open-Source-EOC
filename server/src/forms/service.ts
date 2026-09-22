@@ -8,12 +8,12 @@ import {
   type AnswerRecord,
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
-import { AuthError, type Principal } from "../auth/service.js";
+import { AuthError, requireAdmin, requireMember, type Principal } from "../auth/service.js";
 import { createRecord, getEffectiveBoard } from "../boards/service.js";
 import { recordAudit } from "../audit/service.js";
 
 /**
- * Smart form service (VEOC-22, F7). Imported XLSForm definitions are
+ * Smart form service (F7). Imported XLSForm definitions are
  * stored as versioned per-jurisdiction data. A submission runs through
  * the pure runner (relevance, calculations, constraints) and its result
  * is written to a board through the same schema engine every other write
@@ -149,14 +149,4 @@ export async function submitForm(
     payload: { form: def.key, board: board.template.key },
   });
   return { recordId: result.id };
-}
-
-function requireAdmin(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || m.role !== "admin") throw new AuthError(403, "requires jurisdiction admin");
-}
-
-function requireMember(actor: Principal, jurisdictionId: string): void {
-  if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
-    throw new AuthError(403, "no access to this jurisdiction");
 }

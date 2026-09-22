@@ -6,7 +6,7 @@ import { withPerson } from "../db/context.js";
 import { getEffectiveBoard, visibleFields } from "../boards/service.js";
 
 /**
- * OGC API - Features read surface (VEOC-16, INV-4). Conformance classes
+ * OGC API - Features read surface (INV-4). Conformance classes
  * implemented: Core and GeoJSON. Every board with a geometry field is a
  * collection; authorization is the same wall as everywhere else, so the
  * standards surface can never show more than the REST surface does.

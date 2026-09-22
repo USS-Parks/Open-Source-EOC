@@ -5,9 +5,9 @@ import { composeAndStoreAar, exportAarPdf, recordObservation } from "../aar/serv
 import { freshDb, type Sql } from "./helpers.js";
 
 /**
- * The exercise dry-run (VEOC-42). The functional exercise runs on the demo
+ * The exercise dry-run. The functional exercise runs on the demo
  * activation, and the platform produces its own after-action report from the
- * exercise's observations and chronology (VEOC-36 eating its own cooking).
+ * exercise's observations and chronology (the AAR module eating its own cooking).
  * The real-user pilot on a selected jurisdiction is gated on Basho's
  * external-engagement authorization (contract item 12); this proves the
  * mechanism the pilot will use.

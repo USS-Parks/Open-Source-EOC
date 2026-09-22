@@ -8,7 +8,7 @@ import { ensureStandardIncidentTemplates } from "../incidents/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * ICS forms and the IAP builder (VEOC-34, F5). An IAP for the demo incident
+ * ICS forms and the IAP builder (F5). An IAP for the demo incident
  * assembles from the current org chart and assignments with only objectives
  * and the operational period supplied by hand; the 214 derives from the
  * activity log automatically; command approves; and it exports to PDF.

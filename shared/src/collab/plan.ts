@@ -1,7 +1,7 @@
 import { COMMAND_STAFF, ICS_SECTIONS } from "../dictionary/ics.js";
 
 /**
- * Incident collaboration-space planning (VEOC-32, F15). Pure, isomorphic
+ * Incident collaboration-space planning (F15). Pure, isomorphic
  * derivation of the channel structure and its membership from the incident's
  * ICS positions and their current holders. The server drives whichever
  * adapter (Mattermost, Matrix) is configured from this plan, and the same

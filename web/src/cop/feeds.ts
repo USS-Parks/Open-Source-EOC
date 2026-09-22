@@ -6,7 +6,7 @@ import { floodLayerIds, floodLayerSpecs } from "./hazards.js";
 import { facilityTypeFor } from "./facilities.js";
 
 /**
- * Feed layers on the COP (VEOC-19, F18). Feed features are read-only:
+ * Feed layers on the COP (F18). Feed features are read-only:
  * they carry provenance (_source), age, and a staleness flag from the
  * server. A stale feed's features drop to the unknown frame, whatever
  * their severity claimed, because old data must not present as current.

@@ -2,7 +2,7 @@ import { XMLBuilder, XMLParser } from "fast-xml-parser";
 import { CAP_NS, CapAlertSchema, type CapAlert, type CapArea, type CapInfo } from "./model.js";
 
 /**
- * CAP 1.2 XML serialization and parsing (VEOC-26). Full fidelity: an
+ * CAP 1.2 XML serialization and parsing. Full fidelity: an
  * alert authored in the model round-trips to CAP XML and back with every
  * element preserved, so an ingested external alert renders exactly and an
  * authored alert is byte-faithful to the standard's structure.

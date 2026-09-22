@@ -5,7 +5,7 @@ import { buildApp } from "../app.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * CAP authoring and ingest (VEOC-26): author from incident context with
+ * CAP authoring and ingest: author from incident context with
  * CAP 1.2 + IPAWS validation, and ingest external CAP XML with fidelity.
  */
 

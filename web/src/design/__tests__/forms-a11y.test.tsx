@@ -11,7 +11,7 @@ async function violations(container: Element) {
   return result.violations;
 }
 
-describe("D08 form and drawer accessibility", () => {
+describe("form and drawer accessibility", () => {
   for (const theme of ["light", "dark"] as const) {
     it(`${theme} open form drawer has no axe violations`, async () => {
       const view = render(<FormReview initialTheme={theme} />);

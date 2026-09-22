@@ -1,21 +1,16 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { extname, join } from "node:path";
+import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
-import { chromium, type Browser, type Page } from "playwright-core";
+import type { Browser, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { addMembership, createJurisdiction, createPerson } from "../auth/service.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import { buildDir, buildWeb, launchBrowser, listen, login, post, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
-const DIST = process.env.OPENEOC_TEST_BUILD_ROOT
-  ? join(process.env.OPENEOC_TEST_BUILD_ROOT, "d22-app-dist") : "/tmp/openeoc-d22-app-dist";
-const SHOTS = process.env.OPENEOC_SHOT_DIR ?? "/tmp/openeoc-d22-shots";
-const TYPES: Readonly<Record<string, string>> = {
-  ".css": "text/css", ".html": "text/html", ".js": "text/javascript", ".json": "application/json",
-  ".mjs": "text/javascript", ".png": "image/png", ".svg": "image/svg+xml", ".woff2": "font/woff2",
-};
+const DIST = buildDir("d22-app");
+const SHOTS = shotDir("d22");
 
 let admin: Sql;
 let runtime: Sql;
@@ -29,69 +24,36 @@ let participantId: string;
 const pageErrors: string[] = [];
 const externalRequests: string[] = [];
 
-function chromiumPath(): string {
-  const candidates = [process.env.OPENEOC_CHROMIUM, "C:/Program Files/Google/Chrome/Application/chrome.exe", "/opt/pw-browsers/chromium", "/usr/bin/google-chrome", "/usr/bin/chromium"];
-  for (const candidate of candidates) if (candidate && existsSync(candidate)) return candidate;
-  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
-}
-
-async function login(email: string, password: string): Promise<string> {
-  const response = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email, password } });
-  expect(response.statusCode, response.body).toBe(200);
-  return response.json().accessToken as string;
-}
-
 beforeAll(async () => {
-  const webDir = join(process.cwd(), "web");
-  const publicDir = join(webDir, "public");
-  const { build } = await import("../../../web/node_modules/vite/dist/node/index.js");
-  await build({ root: webDir, base: "./", publicDir: false, logLevel: "silent", build: { outDir: DIST, emptyOutDir: true } });
+  await buildWeb(DIST);
   ({ admin, runtime } = await freshDb());
   const seed = await seedIdentity(admin);
   jurisdictionId = seed.jurisdictionId;
   await ensureStandardTemplates(admin);
   await ensureStandardIncidentTemplates(admin);
   app = buildApp(runtime, { oidc: null });
-  app.get("/app/*", (request, reply) => {
-    const relative = (request.params as { "*": string })["*"] || "index.html";
-    const safe = relative.replaceAll("..", "");
-    const file = existsSync(join(DIST, safe)) ? join(DIST, safe) : join(publicDir, safe);
-    if (!existsSync(file)) return reply.status(404).send("missing");
-    return reply.header("content-type", TYPES[extname(file)] ?? "application/octet-stream")
-      .send(readFileSync(file));
+  serveStatic(app, "/app", DIST);
+  const token = await login(app);
+  const incident = await post(app, token, `/api/v1/jurisdictions/${jurisdictionId}/incidents`, {
+    templateKey: "daily_ops", name: "D22 Resource Exercise", kind: "incident",
   });
-  const token = await login("admin@example.org", "correct-horse-battery");
-  const incident = await app.inject({
-    method: "POST", url: `/api/v1/jurisdictions/${jurisdictionId}/incidents`,
-    headers: { authorization: `Bearer ${token}` },
-    payload: { templateKey: "daily_ops", name: "D22 Resource Exercise", kind: "incident" },
-  });
-  expect(incident.statusCode, incident.body).toBe(201);
-  incidentId = incident.json().incidentId as string;
+  incidentId = incident.incidentId as string;
   const partnerOrganization = await createJurisdiction(admin, "d22-resource-partner", "D22 Mutual Aid");
   const partner = await createPerson(admin, {
     email: "d22-resource-partner@example.org", displayName: "D22 Resource Partner", password: "d22-resource-password",
   });
   await addMembership(admin, partner, partnerOrganization, "member");
-  const grant = await app.inject({
-    method: "POST", url: `/api/v1/incidents/${incidentId}/participants`, headers: { authorization: `Bearer ${token}` },
-    payload: {
-      organizationSlug: "d22-resource-partner", personEmail: "d22-resource-partner@example.org",
-      incidentPositionTitle: "Resource Support", role: "contributor", expiresAt: "2099-09-21T20:00:00.000Z",
-      reason: "D22 supplier coordination proof",
-    },
+  const grant = await post(app, token, `/api/v1/incidents/${incidentId}/participants`, {
+    organizationSlug: "d22-resource-partner", personEmail: "d22-resource-partner@example.org",
+    incidentPositionTitle: "Resource Support", role: "contributor", expiresAt: "2099-09-21T20:00:00.000Z",
+    reason: "D22 supplier coordination proof",
   });
-  expect(grant.statusCode, grant.body).toBe(201);
-  participantId = grant.json().participant.id as string;
-  const position = await app.inject({
-    method: "POST", url: `/api/v1/jurisdictions/${jurisdictionId}/positions`, headers: { authorization: `Bearer ${token}` },
-    payload: { key: "d22_logistics", title: "D22 Logistics" },
+  participantId = (grant.participant as { id: string }).id;
+  await post(app, token, `/api/v1/jurisdictions/${jurisdictionId}/positions`, {
+    key: "d22_logistics", title: "D22 Logistics",
   });
-  expect(position.statusCode, position.body).toBe(201);
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const address = app.server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-  browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
+  baseUrl = await listen(app);
+  browser = await launchBrowser();
   page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   await page.emulateMedia({ reducedMotion: "reduce" });
   page.on("pageerror", (error) => pageErrors.push(error.message));
@@ -111,9 +73,8 @@ afterAll(async () => {
   await admin?.end();
 });
 
-describe("D22 real-browser resource coordination", () => {
+describe("real-browser resource coordination", () => {
   it("takes an incident-scoped request through named supplier assignment with retained history", async () => {
-    mkdirSync(SHOTS, { recursive: true });
     await page.goto(`${baseUrl}/app/index.html`, { waitUntil: "load" });
     await page.getByLabel("Email").fill("admin@example.org");
     await page.getByLabel("Password").fill("correct-horse-battery");

@@ -32,7 +32,7 @@ function renderCard(overrides: Partial<ComponentProps<typeof ContinuityStateCard
   return render(<Theme name="light"><ContinuityStateCard {...defaults} {...overrides} /></Theme>);
 }
 
-describe("D31 continuity presentation", () => {
+describe("continuity presentation", () => {
   it("distinguishes locally queued board and task work from a server receipt", () => {
     const reconnect = vi.fn();
     renderCard({ onReconnect: reconnect });
@@ -56,7 +56,7 @@ describe("D31 continuity presentation", () => {
     expect(screen.queryByRole("button", { name: "Reconnect and reconcile" })).toBeNull();
   });
 
-  it("keeps D29's exact retained conflict receipts visible after reload", () => {
+  it("keeps exact retained conflict receipts visible after reload", () => {
     renderCard({ snapshot: { ...queued, phase: "synced", pendingBoardIds: [], pendingTaskOperationIds: [] }, conflict: {
       entries: [{
         boardId: "board-a", operationId: "operation-a", conflicts: 2,

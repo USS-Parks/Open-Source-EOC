@@ -5,7 +5,7 @@ import { ApiError, SessionExpiredError } from "../api/client.js";
  * Small data-fetching helpers. `useAsync` runs a promise when its deps
  * change and exposes {data, error, loading, reload}. `usePolled` adds a
  * fixed-interval refresh for the surfaces that should feel live until the
- * WebSocket streams are wired (M2/M4). Both cancel cleanly on unmount so a
+ * WebSocket streams are wired. Both cancel cleanly on unmount so a
  * late response never writes into a gone component.
  */
 

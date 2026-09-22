@@ -6,7 +6,7 @@ import {
   workflowDueAt,
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
-import { AuthError, type Principal } from "../auth/service.js";
+import { AuthError, requireAdmin, requireMember, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 import { STANDARD_TITLES } from "../auth/authz.js";
 import { createBoard } from "../boards/service.js";
@@ -426,14 +426,4 @@ export async function createLibrary(
             ${input.forTemplate ?? null}, ${actor.person.id})
     returning id`;
   return row!.id as string;
-}
-
-function requireAdmin(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || m.role !== "admin") throw new AuthError(403, "requires jurisdiction admin");
-}
-
-function requireMember(actor: Principal, jurisdictionId: string): void {
-  if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
-    throw new AuthError(403, "no access to this jurisdiction");
 }

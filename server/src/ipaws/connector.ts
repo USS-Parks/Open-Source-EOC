@@ -1,7 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
 
 /**
- * IPAWS-OPEN connector (VEOC-31, R2). Builds the SOAP request that carries
+ * IPAWS-OPEN connector (R2). Builds the SOAP request that carries
  * a CAP 1.2 alert into IPAWS-OPEN's postCAP operation and interprets the
  * service's response. Transport is injected, so the same code runs against
  * the live IPAWS-OPEN test and production endpoints and against recorded

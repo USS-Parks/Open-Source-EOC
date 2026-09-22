@@ -2,11 +2,11 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { DamageSummary } from "@openeoc/shared";
 import { buildApp } from "../app.js";
-import { resetIntakeLimits, intakeAllowed } from "../damage/intake-limit.js";
+import { rateLimit, resetRateLimit } from "../security/rate-limit.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * Damage assessment (VEOC-23, F8/F9): official assessments aggregate to
+ * Damage assessment (F8/F9): official assessments aggregate to
  * declaration-threshold summaries and export FEMA-shaped documents, and
  * public self-reports cannot move those numbers until a moderator
  * approves them.
@@ -23,7 +23,7 @@ let outsiderToken: string;
 const THRESHOLDS = { population: 5000, paPerCapitaIndicator: 4.6, iaResidenceThreshold: 3 };
 
 beforeAll(async () => {
-  resetIntakeLimits();
+  resetRateLimit();
   ({ admin, runtime } = await freshDb());
   seed = await seedIdentity(admin);
   app = buildApp(runtime, { oidc: null });
@@ -228,12 +228,12 @@ describe("moderated public self-report intake", () => {
   });
 
   it("throttles a flood of public reports", () => {
-    resetIntakeLimits();
-    const key = "flood-jurisdiction";
+    resetRateLimit();
+    const key = "intake:flood-jurisdiction";
     let accepted = 0;
-    for (let i = 0; i < 40; i++) if (intakeAllowed(key)) accepted += 1;
-    expect(accepted).toBe(30); // MAX_PER_WINDOW
-    expect(intakeAllowed(key)).toBe(false);
+    for (let i = 0; i < 40; i++) if (rateLimit(key, 30, 60_000).allowed) accepted += 1;
+    expect(accepted).toBe(30); // the public-intake ceiling per jurisdiction per minute
+    expect(rateLimit(key, 30, 60_000).allowed).toBe(false);
   });
 });
 

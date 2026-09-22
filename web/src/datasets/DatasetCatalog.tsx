@@ -2,6 +2,7 @@ import type { CatalogEntryStatus } from "@openeoc/shared";
 import { Button, StatusBadge } from "../design/components.js";
 import { Icon } from "../design/icons/index.js";
 import { MappingPreview } from "./MappingPreview.js";
+import { formatDuration } from "./format.js";
 
 export function DatasetCatalog(props: {
   readonly sources: readonly CatalogEntryStatus[];
@@ -51,10 +52,4 @@ export function DatasetCatalog(props: {
       })}
     </ul>
   );
-}
-
-function formatDuration(seconds: number): string {
-  if (seconds % 86400 === 0) return `${seconds / 86400}d`;
-  if (seconds % 3600 === 0) return `${seconds / 3600}h`;
-  return `${Math.round(seconds / 60)}m`;
 }

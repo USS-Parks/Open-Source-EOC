@@ -23,7 +23,7 @@ import { TemplatesSurface } from "../surfaces/TemplatesSurface.js";
 import { SitrepSurface, SitrepWorkspace } from "../surfaces/SitrepSurface.js";
 import { FormsSurface } from "../surfaces/FormsSurface.js";
 import { IapSurface } from "../surfaces/IapSurface.js";
-import { FilesSurface } from "../surfaces/FilesSurface.js";
+import { FilesWorkspace } from "../../coordination/FilesWorkspace.js";
 import { IncidentsSurface } from "../surfaces/IncidentsSurface.js";
 import { IncidentAreaEditor } from "../surfaces/IncidentAreaEditor.js";
 import { IncidentParticipants } from "../surfaces/IncidentParticipants.js";
@@ -32,7 +32,7 @@ import { IncidentDatasets } from "../surfaces/IncidentDatasets.js";
 import { ResourcesSurface } from "../surfaces/ResourcesSurface.js";
 import { AarSurface } from "../surfaces/AarSurface.js";
 import { FeedsSurface } from "../surfaces/FeedsSurface.js";
-import { MessagesSurface } from "../surfaces/MessagesSurface.js";
+import { MessagesWorkspace } from "../../coordination/MessagesWorkspace.js";
 import { SmartFormsSurface } from "../surfaces/SmartFormsSurface.js";
 import { TrackingSurface } from "../surfaces/TrackingSurface.js";
 import { BoardsIndex } from "../surfaces/lists.js";
@@ -537,7 +537,7 @@ function Center(props: {
       );
     case "files":
       return (
-        <FilesSurface
+        <FilesWorkspace
           client={props.client}
           jurisdictionId={props.jurisdictionId}
           incidentId={props.incidentId}
@@ -581,7 +581,7 @@ function Center(props: {
         />
       );
     case "messages":
-      return <MessagesSurface client={props.client} jurisdictionId={props.jurisdictionId}
+      return <MessagesWorkspace client={props.client} jurisdictionId={props.jurisdictionId}
         incidentId={props.incidentId} incidentName={props.incidentName} />;
     case "smartforms":
       return <SmartFormsSurface client={props.client} jurisdictionId={props.discoveryJurisdictionId}

@@ -12,7 +12,7 @@ import {
 } from "./service.js";
 
 /**
- * Collaboration adapter and incident-space routes (VEOC-32, F15). Reading
+ * Collaboration adapter and incident-space routes (F15). Reading
  * backend status is open to members; configuring is an admin act. Provision,
  * sync, announce, and archive run under the caller's person context so RLS
  * and the audit trail apply. The default transport is a real HTTP call; the

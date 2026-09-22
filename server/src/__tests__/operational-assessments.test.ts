@@ -234,7 +234,7 @@ afterAll(async () => {
   await admin.end();
 });
 
-describe("D13 operational assessments", () => {
+describe("operational assessments", () => {
   it("backfills a preexisting restricted ESF without leaking its note", async () => {
     const url = `/api/v1/incidents/${preexistingEsfIncidentId}/esf-assessments`;
     const adminView = await app.inject({ method: "GET", url, headers: auth(adminToken) });

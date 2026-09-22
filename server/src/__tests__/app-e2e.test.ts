@@ -1,54 +1,26 @@
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { dictionaryValues } from "@openeoc/shared";
-import { chromium, type Browser } from "playwright-core";
+import type { Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { addMembership, createJurisdiction, createPerson } from "../auth/service.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardDashboards } from "../dashboards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import { buildDir, buildWeb, launchBrowser, listen, login, post, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * Real-browser proof of the M1 app shell: the built SPA is served next to
+ * Real-browser proof of the app shell: the built SPA is served next to
  * the live API, a member signs in, the map-first console renders with the
  * COP and the boards dock, and the dashboard surface renders its widgets.
  * All non-local network is blocked, so this also proves the app runs with
  * no external dependency. Screenshots are written for manual review.
  */
 
-const DIST = process.env["OPENEOC_TEST_BUILD_ROOT"]
-  ? join(process.env["OPENEOC_TEST_BUILD_ROOT"], "app-dist")
-  : "/tmp/openeoc-app-dist";
-const SHOTS = process.env["OPENEOC_SHOT_DIR"] ?? "/tmp/openeoc-app-shots";
-
-function chromiumPath(): string {
-  const candidates = [
-    process.env["OPENEOC_CHROMIUM"],
-    "/opt/pw-browsers/chromium",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium-browser",
-    "/usr/bin/chromium",
-  ];
-  for (const c of candidates) if (c && existsSync(c)) return c;
-  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
-}
-
-const TYPES: Record<string, string> = {
-  ".html": "text/html",
-  ".js": "text/javascript",
-  ".mjs": "text/javascript",
-  ".css": "text/css",
-  ".json": "application/json",
-  ".geojson": "application/geo+json",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".woff2": "font/woff2",
-  ".wasm": "application/wasm",
-};
+const DIST = buildDir("app");
+const SHOTS = shotDir("app");
 
 let admin: Sql;
 let runtime: Sql;
@@ -64,47 +36,17 @@ const isFocused = (node: unknown) => {
   return element.ownerDocument.activeElement === element;
 };
 
-async function login(email: string, password: string): Promise<string> {
-  const res = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  if (res.statusCode !== 200) throw new Error(`login failed: ${res.body}`);
-  return res.json().accessToken as string;
-}
-
 async function createBoard(templateKey: string): Promise<string> {
-  const res = await app.inject({
-    method: "POST",
-    url: `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`,
-    headers: { authorization: `Bearer ${adminToken}` },
-    payload: { templateKey },
-  });
-  if (res.statusCode !== 201) throw new Error(`board create failed: ${res.body}`);
-  return res.json().id as string;
+  const created = await post(app, adminToken, `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`, { templateKey });
+  return created.id as string;
 }
 
 async function addRecord(boardId: string, data: Record<string, unknown>): Promise<void> {
-  const res = await app.inject({
-    method: "POST",
-    url: `/api/v1/boards/${boardId}/records`,
-    headers: { authorization: `Bearer ${memberToken}` },
-    payload: data,
-  });
-  if (res.statusCode !== 201) throw new Error(`record create failed: ${res.body}`);
+  await post(app, memberToken, `/api/v1/boards/${boardId}/records`, data);
 }
 
 beforeAll(async () => {
-  const webDir = join(process.cwd(), "web");
-  const vite = join(webDir, "node_modules", "vite", "bin", "vite.js");
-  execFileSync(
-    process.execPath,
-    [vite, "build", "--outDir", DIST, "--emptyOutDir", "--base", "./"],
-    { cwd: webDir, stdio: "ignore" },
-  );
-  expect(existsSync(join(DIST, "index.html"))).toBe(true);
-  mkdirSync(SHOTS, { recursive: true });
+  await buildWeb(DIST);
 
   ({ admin, runtime } = await freshDb());
   seed = await seedIdentity(admin);
@@ -113,36 +55,11 @@ beforeAll(async () => {
   await ensureStandardIncidentTemplates(admin);
   app = buildApp(runtime, { oidc: null });
 
-  app.get("/app/*", (req, reply) => {
-    const rel = (req.params as { "*": string })["*"] || "index.html";
-    const path = join(DIST, rel.replaceAll("..", ""));
-    if (!existsSync(path)) return reply.status(404).send("missing");
-    const ext = path.slice(path.lastIndexOf("."));
-    const type = TYPES[ext] ?? "application/octet-stream";
-    const buf = readFileSync(path);
-    // Honor HTTP Range so the PMTiles basemap (which reads byte ranges) loads,
-    // as any real static host must (see deploy/basemap/README.md).
-    const range = req.headers.range;
-    const m = range ? /^bytes=(\d+)-(\d*)$/.exec(range) : null;
-    if (m) {
-      const start = Number(m[1]);
-      const end = m[2] ? Number(m[2]) : buf.length - 1;
-      const slice = buf.subarray(start, Math.min(end, buf.length - 1) + 1);
-      return reply
-        .status(206)
-        .header("content-type", type)
-        .header("accept-ranges", "bytes")
-        .header("content-range", `bytes ${start}-${start + slice.length - 1}/${buf.length}`)
-        .send(slice);
-    }
-    return reply.header("content-type", type).header("accept-ranges", "bytes").send(buf);
-  });
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const addr = app.server.address();
-  baseUrl = `http://127.0.0.1:${typeof addr === "object" && addr ? addr.port : 0}`;
+  serveStatic(app, "/app", DIST);
+  baseUrl = await listen(app);
 
-  adminToken = await login("admin@example.org", "correct-horse-battery");
-  memberToken = await login("member@example.org", "another-good-password");
+  adminToken = await login(app);
+  memberToken = await login(app, "member@example.org", "another-good-password");
 
   const roads = await createBoard("road_closures");
   const shelters = await createBoard("shelters");
@@ -279,7 +196,7 @@ beforeAll(async () => {
     },
   });
 
-  browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
+  browser = await launchBrowser();
 }, 120000);
 
 afterAll(async () => {
@@ -748,7 +665,7 @@ describe("the operations console in a real browser, offline", () => {
       await participants.getByRole("button", { name: "Add participant", exact: true }).click();
       await participants.getByText("Participant added to this incident.", { exact: true }).waitFor();
       await participants.getByText("Partner Operator", { exact: true }).waitFor();
-      const partnerToken = await login("area-partner@example.org", "partner-proof-password");
+      const partnerToken = await login(app, "area-partner@example.org", "partner-proof-password");
       const partnerRead = (id: string) => app.inject({ method: "GET", url: "/api/v1/incidents/" + id + "/operational-area", headers: { authorization: "Bearer " + partnerToken } });
       expect((await partnerRead(first)).statusCode).toBe(200);
       expect((await partnerRead(second)).statusCode).toBe(404);

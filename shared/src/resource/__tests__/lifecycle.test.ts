@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { canTransition, formatCostExport, nextStates, type CostRow } from "../lifecycle.js";
 
 /**
- * The 213RR lifecycle (VEOC-35, F5). The transition guard and the
+ * The 213RR lifecycle (F5). The transition guard and the
  * reimbursement cost export are pure and golden-tested here.
  */
 

@@ -1,5 +1,11 @@
 import type { Sql } from "../db/client.js";
-import { AuthError, principalForPerson, type Principal } from "../auth/service.js";
+import {
+  AuthError,
+  principalForPerson,
+  requireMember,
+  requireWriter,
+  type Principal,
+} from "../auth/service.js";
 import { hashToken } from "../auth/tokens.js";
 import { withPerson } from "../db/context.js";
 import { recordAudit } from "../audit/service.js";
@@ -7,7 +13,7 @@ import { authorAlert } from "../cap/service.js";
 import { postAnnouncement } from "../collab/service.js";
 
 /**
- * Joint Information Center (VEOC-33A, R4). Press releases route through a
+ * Joint Information Center (R4). Press releases route through a
  * configurable multi-agency approval chain before they can publish; the
  * chain is appended, never edited. Approvals come from local agencies and
  * from federation peers over a peer token. Publication fans out to the
@@ -344,15 +350,4 @@ async function recordPublication(
   await sql`
     insert into press_release_publications (release_id, channel, ref)
     values (${releaseId}, ${channel}, ${ref})`;
-}
-
-function requireMember(actor: Principal, jurisdictionId: string): void {
-  if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
-    throw new AuthError(403, "no access to this jurisdiction");
-}
-
-function requireWriter(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || (m.role !== "admin" && m.role !== "member"))
-    throw new AuthError(403, "requires write access to this jurisdiction");
 }

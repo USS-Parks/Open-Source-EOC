@@ -1,35 +1,18 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { dictionaryValues } from "@openeoc/shared";
-import { chromium, type Browser, type Page } from "playwright-core";
+import type { Browser, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardDashboards } from "../dashboards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import { auth, buildDir, buildWeb, launchBrowser, listen, login, post, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
-/** Real-browser proof for the saved P-DASH incident overview composition. */
-const DIST = process.env["OPENEOC_TEST_BUILD_ROOT"]
-  ? join(process.env["OPENEOC_TEST_BUILD_ROOT"], "dashboard-dist")
-  : "/tmp/openeoc-dashboard-dist";
-const SHOTS = process.env["OPENEOC_SHOT_DIR"] ?? "/tmp/openeoc-dashboard-shots";
-const PUBLIC = join(process.cwd(), "web", "public");
-const TYPES: Record<string, string> = {
-  ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript",
-  ".css": "text/css", ".json": "application/json", ".geojson": "application/geo+json",
-  ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2", ".wasm": "application/wasm",
-};
-
-function chromiumPath(): string {
-  const candidates = [
-    process.env["OPENEOC_CHROMIUM"], "/opt/pw-browsers/chromium", "/usr/bin/google-chrome",
-    "/usr/bin/chromium-browser", "/usr/bin/chromium",
-  ];
-  for (const candidate of candidates) if (candidate && existsSync(candidate)) return candidate;
-  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
-}
+/** Real-browser proof for the saved incident overview dashboard composition. */
+const DIST = buildDir("dashboard");
+const SHOTS = shotDir("dashboard");
 
 let admin: Sql;
 let runtime: Sql;
@@ -43,23 +26,9 @@ let memberToken: string;
 let jurisdictionId: string;
 let lifelineCondition: string;
 
-const auth = (token: string) => ({ authorization: `Bearer ${token}` });
-
-async function login(email: string, password: string): Promise<string> {
-  const response = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email, password } });
-  expect(response.statusCode, response.body).toBe(200);
-  return response.json().accessToken as string;
-}
-
 async function createBoard(templateKey: string): Promise<string> {
-  const response = await app.inject({
-    method: "POST",
-    url: `/api/v1/jurisdictions/${jurisdictionId}/boards`,
-    headers: auth(adminToken),
-    payload: { templateKey },
-  });
-  expect(response.statusCode, response.body).toBe(201);
-  const boardId = response.json().id as string;
+  const board = await post(app, adminToken, `/api/v1/jurisdictions/${jurisdictionId}/boards`, { templateKey });
+  const boardId = board.id as string;
   await admin`insert into incident_boards (incident_id, board_id) values (${incidentId}, ${boardId})`;
   return boardId;
 }
@@ -74,32 +43,7 @@ async function attachedBoard(templateKey: string): Promise<string> {
 }
 
 async function addRecord(boardId: string, data: Record<string, unknown>): Promise<void> {
-  const response = await app.inject({
-    method: "POST", url: `/api/v1/boards/${boardId}/records?incidentId=${incidentId}`, headers: auth(memberToken), payload: data,
-  });
-  expect(response.statusCode, response.body).toBe(201);
-}
-
-function serveApp(): void {
-  app.get("/dashboard-app/*", (req, reply) => {
-    const relative = (req.params as { "*": string })["*"] || "index.html";
-    const safe = relative.replaceAll("..", "");
-    let path = join(DIST, safe);
-    if (!existsSync(path)) path = join(PUBLIC, safe);
-    if (!existsSync(path)) return reply.status(404).send("missing");
-    const body = readFileSync(path);
-    const type = TYPES[path.slice(path.lastIndexOf("."))] ?? "application/octet-stream";
-    const range = req.headers.range;
-    const match = range ? /^bytes=(\d+)-(\d*)$/.exec(range) : null;
-    if (match) {
-      const start = Number(match[1]);
-      const end = match[2] ? Number(match[2]) : body.length - 1;
-      const slice = body.subarray(start, Math.min(end, body.length - 1) + 1);
-      return reply.status(206).header("content-type", type).header("accept-ranges", "bytes")
-        .header("content-range", `bytes ${start}-${start + slice.length - 1}/${body.length}`).send(slice);
-    }
-    return reply.header("content-type", type).header("accept-ranges", "bytes").send(body);
-  });
+  await post(app, memberToken, `/api/v1/boards/${boardId}/records?incidentId=${incidentId}`, data);
 }
 
 async function setTheme(page: Page, theme: "light" | "dark"): Promise<void> {
@@ -110,17 +54,7 @@ async function setTheme(page: Page, theme: "light" | "dark"): Promise<void> {
 }
 
 beforeAll(async () => {
-  const webDir = join(process.cwd(), "web");
-  const { build } = await import("../../../web/node_modules/vite/dist/node/index.js");
-  await build({
-    root: webDir,
-    base: "./",
-    publicDir: false,
-    logLevel: "silent",
-    build: { outDir: DIST, emptyOutDir: true },
-  });
-  expect(existsSync(join(DIST, "index.html"))).toBe(true);
-  mkdirSync(SHOTS, { recursive: true });
+  await buildWeb(DIST);
 
   ({ admin, runtime } = await freshDb());
   const seed = await seedIdentity(admin);
@@ -129,28 +63,22 @@ beforeAll(async () => {
   await ensureStandardDashboards(admin);
   await ensureStandardIncidentTemplates(admin);
   app = buildApp(runtime, { oidc: null });
-  serveApp();
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const address = app.server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+  serveStatic(app, "/dashboard-app", DIST);
+  baseUrl = await listen(app);
 
-  adminToken = await login("admin@example.org", "correct-horse-battery");
-  memberToken = await login("member@example.org", "another-good-password");
-  const activation = await app.inject({
-    method: "POST", url: `/api/v1/jurisdictions/${jurisdictionId}/incidents`, headers: auth(adminToken),
-    payload: { templateKey: "wildfire", name: "P-DASH Fire" },
+  adminToken = await login(app);
+  memberToken = await login(app, "member@example.org", "another-good-password");
+  const activation = await post(app, adminToken, `/api/v1/jurisdictions/${jurisdictionId}/incidents`, {
+    templateKey: "wildfire", name: "P-DASH Fire",
   });
-  expect(activation.statusCode, activation.body).toBe(201);
-  incidentId = activation.json().incidentId as string;
+  incidentId = activation.incidentId as string;
 
   const roads = await attachedBoard("road_closures");
   const lifelines = await createBoard("lifelines");
-  const dashboard = await app.inject({
-    method: "POST", url: `/api/v1/jurisdictions/${jurisdictionId}/dashboards`, headers: auth(adminToken),
-    payload: { templateKey: "eoc_status", title: "Incident overview sources" },
+  const dashboard = await post(app, adminToken, `/api/v1/jurisdictions/${jurisdictionId}/dashboards`, {
+    templateKey: "eoc_status", title: "Incident overview sources",
   });
-  expect(dashboard.statusCode, dashboard.body).toBe(201);
-  dashboardId = dashboard.json().id as string;
+  dashboardId = dashboard.id as string;
 
   await addRecord(roads, {
     road: "SR-96 at Weitchpec", reason: "Debris flow", status: "closed",
@@ -184,7 +112,7 @@ beforeAll(async () => {
     headers: auth(memberToken), payload: { expectedRevision: 0, composition },
   });
   expect(saved.statusCode, saved.body).toBe(201);
-  browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
+  browser = await launchBrowser();
 }, 120000);
 
 afterAll(async () => {
@@ -194,7 +122,7 @@ afterAll(async () => {
   await admin?.end();
 });
 
-describe("P-DASH incident overview in a real browser", () => {
+describe("incident overview dashboard in a real browser", () => {
   it("composes server totals, COP records, lifelines, priority activity and restored filters offline", async () => {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
     const errors: string[] = [];

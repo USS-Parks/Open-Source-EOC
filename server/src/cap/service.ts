@@ -8,16 +8,16 @@ import {
   type CapAlert,
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
-import { AuthError, type Principal } from "../auth/service.js";
+import { AuthError, requireMember, requireWriter, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 import { lockIncidentMutation } from "../incidents/participation.js";
 
 /**
- * CAP authoring, publishing, and ingest (VEOC-26, F20). Authoring
+ * CAP authoring, publishing, and ingest (F20). Authoring
  * validates against CAP 1.2 and computes IPAWS eligibility; publishing
  * stores the alert with its XML and raises a notification. Ingest parses
  * external CAP XML with full fidelity and stores it. Actual IPAWS
- * transmission is enable-at-will (VEOC-31); this is the standards core.
+ * transmission is enable-at-will through the IPAWS module; this is the standards core.
  */
 
 export class CapValidationError extends Error {
@@ -347,15 +347,4 @@ async function notify(
       (${jurisdictionId}, ${actor.person.id}, 'cap', ${`CAP ${origin}: ${headline}`},
        ${alert.info[0]?.description ?? ""}, 'delivered',
        ${sql.json({ identifier: alert.identifier, origin, incidentId: incidentId ?? null, urgency: alert.info[0]?.urgency ?? null, severity: alert.info[0]?.severity ?? null } as never)})`;
-}
-
-function requireWriter(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || (m.role !== "admin" && m.role !== "member"))
-    throw new AuthError(403, "requires write access to this jurisdiction");
-}
-
-function requireMember(actor: Principal, jurisdictionId: string): void {
-  if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
-    throw new AuthError(403, "no access to this jurisdiction");
 }

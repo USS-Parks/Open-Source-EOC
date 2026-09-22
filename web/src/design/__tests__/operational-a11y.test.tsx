@@ -7,7 +7,7 @@ import { Theme, Button, TextField, EnumSelect } from "../components.js";
 import { BriefingView } from "../../sitreps/BriefingView.js";
 
 /**
- * Operational-surface accessibility and stress-UX (VEOC-39). Axe covers a
+ * Operational-surface accessibility and stress-UX. Axe covers a
  * real operational screen (the briefing view a PIO reads), not only the
  * component gallery; and interactive controls meet a glove/touchscreen
  * target so field users in PPE can operate them. Contrast for both themes

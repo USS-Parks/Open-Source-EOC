@@ -1,5 +1,5 @@
 import type { Sql } from "../db/client.js";
-import { AuthError, type Principal } from "../auth/service.js";
+import { AuthError, requireAdmin, requireMember, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 
 /**
@@ -251,20 +251,10 @@ async function assertMembersInJurisdiction(
   }
 }
 
-function requireMember(actor: Principal, jurisdictionId: string): void {
-  if (!actor.memberships.some((m) => m.jurisdictionId === jurisdictionId))
-    throw new AuthError(403, "no access to this jurisdiction");
-}
-
 function requireMemberOrGuest(actor: Principal, jurisdictionId: string): void {
   const member = actor.memberships.some((m) => m.jurisdictionId === jurisdictionId);
   const guest = actor.guests.some(
     (g) => g.jurisdictionId === jurisdictionId && g.expiresAt.getTime() > Date.now(),
   );
   if (!member && !guest) throw new AuthError(403, "no access to this jurisdiction");
-}
-
-function requireAdmin(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || m.role !== "admin") throw new AuthError(403, "requires jurisdiction admin");
 }

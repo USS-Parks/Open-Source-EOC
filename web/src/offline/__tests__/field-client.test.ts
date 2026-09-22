@@ -6,7 +6,7 @@ import { FieldClient, type SyncAck } from "../field-client.js";
 import { FieldSubmissionQueue } from "../../field/field-submissions.js";
 
 /**
- * Offline durability (VEOC-21): edits made in airplane mode persist, and
+ * Offline durability: edits made in airplane mode persist, and
  * a fresh client built from the same durable store after a "restart"
  * recovers every queued edit. The reconnect-and-reconcile loop against a
  * real server is proven in the server package.

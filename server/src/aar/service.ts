@@ -13,14 +13,14 @@ import {
   type WorkflowAssignmentRequest,
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
-import { AuthError, type Principal } from "../auth/service.js";
+import { AuthError, requireMember, requireWriter, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 import { exportChronology } from "../audit/service.js";
 import { resolveWorkflowAssignment, type ResolvedWorkflowAssignment } from "../boards/workflow.js";
 import { getIncidentAuthority } from "../incidents/participation.js";
 
 /**
- * After-action review, server side (VEOC-36). Observations are captured while
+ * After-action review, server side. Observations are captured while
  * the incident runs; the AAR composes from them plus the exported chronology
  * as evidence; and corrective actions are jurisdiction-scoped so they persist
  * past incident closure and keep reporting status.
@@ -492,15 +492,4 @@ export async function exportAarPdf(
   });
   const safe = content.incidentName.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase();
   return { filename: `aar-${safe}.pdf`, bytes };
-}
-
-function requireMember(actor: Principal, jurisdictionId: string): void {
-  if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
-    throw new AuthError(403, "no access to this jurisdiction");
-}
-
-function requireWriter(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || (m.role !== "admin" && m.role !== "member"))
-    throw new AuthError(403, "requires write access to this jurisdiction");
 }

@@ -1,7 +1,7 @@
 import { CAPABILITY_ELEMENT_LABELS, CORE_CAPABILITY_LABELS } from "../dictionary/core-capabilities.js";
 
 /**
- * After-action review composition (VEOC-36, F16-adjacent, HSEEP-shaped). An
+ * After-action review composition (F16-adjacent, HSEEP-shaped). An
  * AAR is composed purely from observations captured during the incident, the
  * corrective actions, and the exported chronology used as evidence. Keeping
  * composition pure makes it golden-testable and lets the PDF writer render it.
@@ -171,7 +171,7 @@ export function summarizeAar(
 /** A deterministic HSEEP-ordered text projection for rendering and snapshots. */
 export function aarToTextLines(doc: AarDocument): string[] {
   const lines: string[] = [];
-  // Reports composed before VEOC-83 remain exportable; missing accountability
+  // Reports composed before accountability fields existed remain exportable; missing accountability
   // fields receive explicit neutral values rather than inferred classifications.
   const legacyObservations = [...doc.strengths, ...doc.improvements].map((item, index) => ({
     ...item,

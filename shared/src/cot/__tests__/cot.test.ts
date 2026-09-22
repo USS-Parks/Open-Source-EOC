@@ -8,7 +8,7 @@ import {
 } from "../cot.js";
 
 /**
- * CoT round-trip and mapping (VEOC-29): a CoT event serializes and parses
+ * CoT round-trip and mapping: a CoT event serializes and parses
  * both ways, an inbound event becomes a COP feature, and a VEOC geo record
  * emits as a CoT event.
  */

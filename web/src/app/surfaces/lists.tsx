@@ -1,10 +1,8 @@
-import type { CSSProperties } from "react";
 import { Button, StatusBadge } from "../../design/components.js";
-import type { ApiClient, BoardListItem } from "../api/client.js";
-import { useAsync } from "../data/hooks.js";
-import { EmptyState, ErrorNote, Loading, Scroll } from "../screens/parts.js";
+import type { BoardListItem } from "../api/client.js";
+import { EmptyState, Scroll } from "../screens/parts.js";
 
-/** The list sections: all boards, situation reports, and notifications. */
+/** The boards list section. */
 
 export function BoardsIndex(props: {
   boards: readonly BoardListItem[];
@@ -49,53 +47,3 @@ export function BoardsIndex(props: {
     </Scroll>
   );
 }
-
-export function SitrepsIndex(props: {
-  client: ApiClient;
-  jurisdictionId: string;
-  onOpen: (id: string) => void;
-}) {
-  const { data, error, loading } = useAsync(
-    () => props.client.listSitreps(props.jurisdictionId),
-    [props.jurisdictionId],
-  );
-  if (loading && !data) return <Loading label="Loading situation reports…" />;
-  if (error && !data) return <ErrorNote message={error} />;
-  const items = data ?? [];
-  return (
-    <Scroll>
-      {items.length === 0 ? (
-        <EmptyState label="No situation reports yet." hint="A duty officer composes these from live board state." />
-      ) : (
-        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
-          {items.map((s) => (
-            <li key={s.id}>
-              <button type="button" className="eoc-row" onClick={() => props.onOpen(s.id)} style={rowButton}>
-                <span style={{ fontWeight: 600 }}>Operational period {s.period}</span>
-                <span style={{ color: "var(--eoc-text-muted)" }}>
-                  {new Date(s.composedAt).toLocaleString()} · {s.composedBy}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Scroll>
-  );
-}
-
-const rowButton: CSSProperties = {
-  width: "100%",
-  textAlign: "left",
-  display: "grid",
-  gap: 2,
-  padding: "10px 12px",
-  minHeight: 44,
-  background: "var(--eoc-surface)",
-  color: "var(--eoc-text)",
-  border: "1px solid var(--eoc-border)",
-  borderRadius: 4,
-  cursor: "pointer",
-  fontFamily: "inherit",
-  fontSize: "1em",
-};

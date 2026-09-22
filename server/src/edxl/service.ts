@@ -9,12 +9,12 @@ import {
   type ResourceRequest,
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
-import { AuthError, type Principal } from "../auth/service.js";
+import { AuthError, requireWriter, type Principal } from "../auth/service.js";
 import { createRecord, getEffectiveBoard } from "../boards/service.js";
 import { recordAudit } from "../audit/service.js";
 
 /**
- * EDXL bridge (VEOC-27). Emit a 213RR board record as an EDXL-DE envelope
+ * EDXL bridge. Emit a 213RR board record as an EDXL-DE envelope
  * carrying an EDXL-RM message, and import such an envelope onto another
  * instance's resource-request board, honoring the envelope's explicit
  * addressing. A request can thus leave and re-enter the platform as a
@@ -126,10 +126,4 @@ function cleanRecord(rr: ResourceRequest): Record<string, unknown> {
   if (rr.needed_by !== undefined) out.needed_by = rr.needed_by;
   if (rr.notes !== undefined) out.notes = rr.notes;
   return out;
-}
-
-function requireWriter(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || (m.role !== "admin" && m.role !== "member"))
-    throw new AuthError(403, "requires write access to this jurisdiction");
 }

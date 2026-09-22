@@ -3,7 +3,7 @@ import { mkdirSync, existsSync } from "node:fs";
 import { readFile, writeFile, rename } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { Sql } from "../db/client.js";
-import { AuthError, type Principal } from "../auth/service.js";
+import { AuthError, requireWriter, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 
 /**
@@ -346,10 +346,4 @@ async function assertAttachmentTarget(
 function requireReader(actor: Principal, jurisdictionId: string): void {
   if (!actor.memberships.some((membership) => membership.jurisdictionId === jurisdictionId))
     throw new AuthError(403, "no access to this jurisdiction");
-}
-
-function requireWriter(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || (m.role !== "admin" && m.role !== "member"))
-    throw new AuthError(403, "requires write access");
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { API_CONTRACT, API_VERSION, generateApiDocs, type ApiContract } from "../contract.js";
 
 /**
- * The frozen contract (VEOC-31, INV-4/INV-9). These tests guard the shape
+ * The frozen contract (INV-4/INV-9). These tests guard the shape
  * of the published surface and the docs generated from it. A server-side
  * contract test separately holds the running app to the same list, so the
  * documented API and the deployed API cannot drift apart.

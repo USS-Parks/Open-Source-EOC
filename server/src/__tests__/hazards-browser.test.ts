@@ -1,30 +1,15 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
-import { chromium, type Browser, type Page } from "playwright-core";
+import type { Browser, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import { buildDir, buildWeb, launchBrowser, listen, login, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
-const DIST = process.env.OPENEOC_TEST_BUILD_ROOT
-  ? join(process.env.OPENEOC_TEST_BUILD_ROOT, "h11-app-dist")
-  : "/tmp/openeoc-h11-app-dist";
-const SHOTS = process.env.OPENEOC_SHOT_DIR ?? "/tmp/openeoc-h11-shots";
-const TYPES: Record<string, string> = {
-  ".html": "text/html",
-  ".js": "text/javascript",
-  ".mjs": "text/javascript",
-  ".css": "text/css",
-  ".json": "application/json",
-  ".geojson": "application/geo+json",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".woff2": "font/woff2",
-  ".wasm": "application/wasm",
-  ".pmtiles": "application/octet-stream",
-};
+const DIST = buildDir("h11-app");
+const SHOTS = shotDir("h11");
 
 let admin: Sql;
 let runtime: Sql;
@@ -36,23 +21,6 @@ let boardId: string;
 let datasetId: string;
 const pageErrors: string[] = [];
 const externalRequests: string[] = [];
-
-function chromiumPath(): string {
-  const candidates = [
-    process.env.OPENEOC_CHROMIUM,
-    "/opt/pw-browsers/chromium",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium",
-  ];
-  for (const candidate of candidates) if (candidate && existsSync(candidate)) return candidate;
-  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
-}
-
-async function login(email: string, password: string): Promise<string> {
-  const response = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email, password } });
-  expect(response.statusCode).toBe(200);
-  return response.json().accessToken as string;
-}
 
 async function post(token: string, url: string, payload: Record<string, unknown>) {
   const response = await app.inject({
@@ -79,17 +47,7 @@ async function stableCanvasShot(): Promise<Buffer> {
 }
 
 beforeAll(async () => {
-  const webDir = join(process.cwd(), "web");
-  const publicDir = join(webDir, "public");
-  const { build } = await import("../../../web/node_modules/vite/dist/node/index.js");
-  await build({
-    root: webDir,
-    base: "./",
-    publicDir: false,
-    logLevel: "silent",
-    build: { outDir: DIST, emptyOutDir: true },
-  });
-  expect(existsSync(join(DIST, "index.html"))).toBe(true);
+  await buildWeb(DIST);
 
   ({ admin, runtime } = await freshDb());
   const seed = await seedIdentity(admin);
@@ -112,30 +70,8 @@ beforeAll(async () => {
     values ('synthetic_hazard_areas', 1, 'Synthetic Hazard Areas', ${admin.json(hazardTemplate)})`;
 
   app = buildApp(runtime, { oidc: null });
-  app.get("/app/*", (request, reply) => {
-    const relative = (request.params as { "*": string })["*"] || "index.html";
-    const safe = relative.replaceAll("..", "");
-    let path = join(DIST, safe);
-    if (!existsSync(path)) path = join(publicDir, safe);
-    if (!existsSync(path)) return reply.status(404).send("missing");
-    const extension = path.slice(path.lastIndexOf("."));
-    const buffer = readFileSync(path);
-    const range = request.headers.range;
-    const match = range ? /^bytes=(\d+)-(\d*)$/.exec(range) : null;
-    if (match) {
-      const start = Number(match[1]);
-      const end = match[2] ? Number(match[2]) : buffer.length - 1;
-      const slice = buffer.subarray(start, Math.min(end, buffer.length - 1) + 1);
-      return reply.status(206)
-        .header("content-type", TYPES[extension] ?? "application/octet-stream")
-        .header("accept-ranges", "bytes")
-        .header("content-range", `bytes ${start}-${start + slice.length - 1}/${buffer.length}`)
-        .send(slice);
-    }
-    return reply.header("content-type", TYPES[extension] ?? "application/octet-stream")
-      .header("accept-ranges", "bytes").send(buffer);
-  });
-  const token = await login("admin@example.org", "correct-horse-battery");
+  serveStatic(app, "/app", DIST);
+  const token = await login(app);
   const board = await post(token, `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`, {
     templateKey: "synthetic_hazard_areas",
   });
@@ -220,11 +156,9 @@ beforeAll(async () => {
     ],
   });
 
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const address = app.server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+  baseUrl = await listen(app);
 
-  browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
+  browser = await launchBrowser();
   page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   await page.emulateMedia({ reducedMotion: "reduce" });
   page.on("pageerror", (error) => pageErrors.push(error.message));
@@ -255,9 +189,8 @@ afterAll(async () => {
   await admin?.end();
 });
 
-describe("H11 real-map hazard and flood presentation", () => {
+describe("real-map hazard and flood presentation", () => {
   it("renders synthetic operational and FEMA polygons with functional toggles in both themes", async () => {
-    mkdirSync(SHOTS, { recursive: true });
     await page.getByText("Freshness: live").waitFor({ state: "visible", timeout: 20_000 });
     await page.getByTestId("map-tools").locator("summary").click();
     await page.getByRole("button", { name: "Zoom to extent" }).click();

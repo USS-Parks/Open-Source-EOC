@@ -1,23 +1,15 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
-import { chromium, type Browser, type Page } from "playwright-core";
+import type { Browser, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import { auth, buildDir, buildWeb, launchBrowser, listen, login, post, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
-const DIST = process.env.OPENEOC_TEST_BUILD_ROOT
-  ? join(process.env.OPENEOC_TEST_BUILD_ROOT, "pcop-kpi-app-dist")
-  : "/tmp/openeoc-pcop-kpi-app-dist";
-const SHOTS = process.env.OPENEOC_SHOT_DIR ?? "/tmp/openeoc-pcop-kpi-shots";
-const TYPES: Record<string, string> = {
-  ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript",
-  ".css": "text/css", ".json": "application/json", ".geojson": "application/geo+json",
-  ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2",
-  ".wasm": "application/wasm", ".pmtiles": "application/octet-stream",
-};
+const DIST = buildDir("pcop-kpi-app");
+const SHOTS = shotDir("pcop-kpi");
 
 let admin: Sql;
 let runtime: Sql;
@@ -30,89 +22,30 @@ let datasetId: string;
 const pageErrors: string[] = [];
 const externalRequests: string[] = [];
 
-function chromiumPath(): string {
-  for (const candidate of [
-    process.env.OPENEOC_CHROMIUM,
-    "/opt/pw-browsers/chromium",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium",
-  ]) {
-    if (candidate && existsSync(candidate)) return candidate;
-  }
-  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
-}
-
-async function login(email: string, password: string): Promise<string> {
-  const response = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email, password } });
-  expect(response.statusCode).toBe(200);
-  return response.json().accessToken as string;
-}
-
-async function post(token: string, url: string, payload: Record<string, unknown>) {
-  const response = await app.inject({
-    method: "POST", url, headers: { authorization: `Bearer ${token}` }, payload,
-  });
-  expect(response.statusCode, response.body).toBeGreaterThanOrEqual(200);
-  expect(response.statusCode, response.body).toBeLessThan(300);
-  return response.json() as Record<string, unknown>;
-}
-
 const polygon = (west: number, south: number, east: number, north: number) => ({
   type: "Polygon",
   coordinates: [[[west, south], [east, south], [east, north], [west, north], [west, south]]],
 });
 
 beforeAll(async () => {
-  const webDir = join(process.cwd(), "web");
-  const publicDir = join(webDir, "public");
-  const { build } = await import("../../../web/node_modules/vite/dist/node/index.js");
-  await build({
-    root: webDir,
-    base: "./",
-    publicDir: false,
-    logLevel: "silent",
-    build: { outDir: DIST, emptyOutDir: true },
-  });
-  expect(existsSync(join(DIST, "index.html"))).toBe(true);
+  await buildWeb(DIST);
 
   ({ admin, runtime } = await freshDb());
   const seed = await seedIdentity(admin);
   await ensureStandardTemplates(admin);
   await ensureStandardIncidentTemplates(admin);
   app = buildApp(runtime, { oidc: null });
-  app.get("/app/*", (request, reply) => {
-    const relative = (request.params as { "*": string })["*"] || "index.html";
-    const safe = relative.replaceAll("..", "");
-    let path = join(DIST, safe);
-    if (!existsSync(path)) path = join(publicDir, safe);
-    if (!existsSync(path)) return reply.status(404).send("missing");
-    const extension = path.slice(path.lastIndexOf("."));
-    const buffer = readFileSync(path);
-    const range = request.headers.range;
-    const match = range ? /^bytes=(\d+)-(\d*)$/.exec(range) : null;
-    if (match) {
-      const start = Number(match[1]);
-      const end = match[2] ? Number(match[2]) : buffer.length - 1;
-      const slice = buffer.subarray(start, Math.min(end, buffer.length - 1) + 1);
-      return reply.status(206)
-        .header("content-type", TYPES[extension] ?? "application/octet-stream")
-        .header("accept-ranges", "bytes")
-        .header("content-range", `bytes ${start}-${start + slice.length - 1}/${buffer.length}`)
-        .send(slice);
-    }
-    return reply.header("content-type", TYPES[extension] ?? "application/octet-stream")
-      .header("accept-ranges", "bytes").send(buffer);
-  });
+  serveStatic(app, "/app", DIST);
 
-  const token = await login("admin@example.org", "correct-horse-battery");
-  const incident = await post(token, `/api/v1/jurisdictions/${seed.jurisdictionId}/incidents`, {
+  const token = await login(app);
+  const incident = await post(app, token, `/api/v1/jurisdictions/${seed.jurisdictionId}/incidents`, {
     templateKey: "daily_ops", name: "Synthetic viewport impact exercise",
   });
   incidentId = incident.incidentId as string;
   const area = await app.inject({
     method: "PUT",
     url: `/api/v1/incidents/${incidentId}/operational-area`,
-    headers: { authorization: `Bearer ${token}` },
+    headers: auth(token),
     payload: {
       expectedRevision: 0,
       geometry: polygon(-124.44, 40, -123.41, 41.47),
@@ -122,7 +55,7 @@ beforeAll(async () => {
   });
   expect(area.statusCode).toBe(200);
 
-  const pack = await post(token, `/api/v1/incidents/${incidentId}/data-packs`, {
+  const pack = await post(app, token, `/api/v1/incidents/${incidentId}/data-packs`, {
     name: "Synthetic Humboldt parcel KPI fixture",
     organizationSlug: "yurok",
     description: "Synthetic fixture for viewport KPI reconciliation.",
@@ -136,17 +69,15 @@ beforeAll(async () => {
   });
   const packId = (pack.pack as { id: string }).id;
   datasetId = (await admin`select id from data_pack_datasets where pack_id = ${packId}`)[0]!.id as string;
-  await post(token, `/api/v1/data-packs/datasets/${datasetId}/load`, {
+  await post(app, token, `/api/v1/data-packs/datasets/${datasetId}/load`, {
     records: [
       { id: "parcel-a", APN: "A-100", geometry: { type: "Point", coordinates: [-124.0, 40.8] } },
       { id: "parcel-b", APN: "B-200", geometry: { type: "Point", coordinates: [-123.8, 41.0] } },
     ],
-  });
+  }, 200);
 
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const address = app.server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-  browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
+  baseUrl = await listen(app);
+  browser = await launchBrowser();
   page = await browser.newPage({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" });
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.route("**/*", (route) => {
@@ -174,9 +105,8 @@ afterAll(async () => {
   await admin?.end();
 });
 
-describe("P-COP viewport KPI presentation", () => {
+describe("COP viewport KPI presentation", () => {
   it("updates with map extent and drills the same revision and bbox to source records", async () => {
-    mkdirSync(SHOTS, { recursive: true });
     const impactRegion = page.getByRole("region", { name: "Map impact indicators" });
     const structures = page.getByTestId("impact-kpi-structures_parcels");
     await structures.waitFor({ timeout: 30_000 });

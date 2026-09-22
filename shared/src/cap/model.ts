@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * CAP v1.2 alert model (VEOC-26, F20/INV-4). OASIS Common Alerting
+ * CAP v1.2 alert model (F20/INV-4). OASIS Common Alerting
  * Protocol 1.2 (urn:oasis:names:tc:emergency:cap:1.2). The shape mirrors
  * the standard so an authored alert round-trips to XML with full fidelity
  * and validates against both the base schema and the IPAWS profile.

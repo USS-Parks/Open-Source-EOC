@@ -1,7 +1,7 @@
 /**
- * Frozen public API contract (VEOC-31, INV-4/INV-9). The versioned surface
+ * Frozen public API contract (INV-4/INV-9). The versioned surface
  * third parties build against: REST endpoints, the sync WebSocket, webhook
- * event types, and the OGC/GeoJSON Features surfaces from VEOC-16. The docs
+ * event types, and the OGC/GeoJSON Features surfaces. The docs
  * generate from this contract, and a contract test holds the running app to
  * it, so the published surface and the code cannot drift apart.
  */

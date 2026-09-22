@@ -1,15 +1,21 @@
 import { randomBytes } from "node:crypto";
 import type { Sql } from "../db/client.js";
-import { AuthError, type Principal } from "../auth/service.js";
+import {
+  AuthError,
+  requireAdmin,
+  requireMember,
+  requireWriter,
+  type Principal,
+} from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 import { decryptSecret, encryptSecret, hasSecretKey } from "../secrets/envelope.js";
 import { buildMeetingUrl, mintJitsiJwt } from "./jitsi.js";
 
 /**
- * Meeting bridges and briefings (VEOC-33, F15/R4). A one-click Jitsi bridge
+ * Meeting bridges and briefings (F15/R4). A one-click Jitsi bridge
  * per incident or ICS section, its link stable and surfaced for the incident
  * dashboard; and scheduled briefings that, when due, notify the incident's
- * holders through the VEOC-14 notifications substrate.
+ * holders through the notifications substrate.
  */
 
 export interface MeetingConfigStatus {
@@ -249,7 +255,7 @@ export async function listBriefings(
 
 /**
  * Fire every due briefing across the jurisdiction's active incidents,
- * notifying each incident's current position holders through the VEOC-14
+ * notifying each incident's current position holders through the
  * notifications substrate, then stamp the briefing so it fires once.
  */
 export async function runDueBriefings(
@@ -291,20 +297,4 @@ export async function runDueBriefings(
     });
   }
   return { fired: due.length, notified };
-}
-
-function requireAdmin(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || m.role !== "admin") throw new AuthError(403, "requires jurisdiction admin");
-}
-
-function requireMember(actor: Principal, jurisdictionId: string): void {
-  if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
-    throw new AuthError(403, "no access to this jurisdiction");
-}
-
-function requireWriter(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || (m.role !== "admin" && m.role !== "member"))
-    throw new AuthError(403, "requires write access to this jurisdiction");
 }

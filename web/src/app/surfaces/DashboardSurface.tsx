@@ -36,7 +36,7 @@ function validBbox(value: unknown): value is ViewportBbox {
     value[0] < value[2] && value[1] < value[3];
 }
 
-/** Parse the bounded P-SHELL route payload. Invalid or incompatible state is ignored. */
+/** Parse the bounded shell route payload. Invalid or incompatible state is ignored. */
 export function parseDashboardViewState(text: string | undefined): DashboardViewState | undefined {
   if (!text || text.length > ROUTE_STATE_LIMIT) return undefined;
   try {

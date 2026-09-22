@@ -38,7 +38,7 @@ function ControlledBoard(props: { onSelect: (id: string | null) => void }) {
   );
 }
 
-describe("P-BOARDS-1 board workspace", () => {
+describe("board workspace", () => {
   it("filters the operational table, keeps zero distinct, and selects a record", () => {
     const onSelect = vi.fn();
     render(<ControlledBoard onSelect={onSelect} />);

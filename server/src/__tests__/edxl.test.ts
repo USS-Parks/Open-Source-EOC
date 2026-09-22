@@ -6,7 +6,7 @@ import { ensureStandardTemplates } from "../boards/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * EDXL resource messaging (VEOC-27): a 213RR emitted from one instance as
+ * EDXL resource messaging: a 213RR emitted from one instance as
  * EDXL-RM inside an EDXL-DE envelope re-imports on a second instance
  * without loss, and the envelope's explicit addressing gates who may
  * consume it. The two "instances" are two jurisdictions in one database.

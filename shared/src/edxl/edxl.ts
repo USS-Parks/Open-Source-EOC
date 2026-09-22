@@ -3,7 +3,7 @@ import { z } from "zod";
 
 /**
  * EDXL-DE 1.0 distribution envelope and EDXL-RM 1.0 resource messaging
- * (VEOC-27, F20/INV-4), bound to the ICS-213RR lifecycle. A resource
+ * (F20/INV-4), bound to the ICS-213RR lifecycle. A resource
  * request leaves the platform as an EDXL-RM message wrapped in an EDXL-DE
  * envelope and re-enters another instance without loss; the DE routing
  * metadata (explicit addresses) governs who may consume it.

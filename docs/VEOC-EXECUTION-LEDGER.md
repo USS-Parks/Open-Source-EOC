@@ -4667,3 +4667,28 @@ increment proves it and that coverage follows the incident area.
 - Started at 7a52438 and rebased without conflicts onto M3 5c8d710. This
   receipt's commit is the unit commit; rollback by revert. No operator timing
   or live external-source claim is made. Next: canonical cold desktop proof.
+
+## 85-PROOF: cold Windows setup and finished-interface continuity
+
+- At source 7eba769, built the desktop and provisioned a previously absent
+  acceptance profile from the local Node/PostgreSQL/PostGIS runtime and local
+  assets. Setup created a real synthetic activation, area, period and work.
+  Existing demo data was retained and its desktop build updated.
+- Ran deploy/windows/prove-continuity.mjs against the canonical desktop:
+  browser-offline field submission, reconnect exactly once, malformed queued
+  data retained as an attributed conflict, and assigned operator task
+  completion offline with person and position attribution on reconnect.
+  Light/wide and dark/narrow captures used the finished Console.
+- Full application and PostgreSQL stop/start preserved the exact record,
+  conflict and attributed completed task. Zero external browser requests and
+  zero page errors. Result and build/setup/start/continuity logs reside in
+  deploy/test-runtime/out/85-proof. Proof timestamp: 2026-09-22 05:59 UTC
+  (2026-09-21 22:59 PDT). The reproducible proof source is retained in deploy.
+- Honest AR7 boundary: local cold provisioning is proven on this prepared
+  Windows host. Browser disconnection is controlled; the host network adapter
+  was not disabled. Independent media transfer and deployment on a second
+  machine remain absent. Photos, map capture and administrative task edits
+  retain their documented online requirements; no broader offline claim.
+- No product contract, migration or dependency changed. G was retired clean
+  after remote preservation; A retains protected work/d05. Unit commit is
+  this receipt's commit; rollback by revert without deleting profile data.

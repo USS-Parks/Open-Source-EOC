@@ -21,7 +21,7 @@ async function violations(container: Element) {
   return (await axe.run(container, { rules: { "color-contrast": { enabled: false } } })).violations;
 }
 
-describe("D07 operational table accessibility", () => {
+describe("operational table accessibility", () => {
   for (const theme of ["light", "dark"] as const) {
     it(`${theme} table has no axe violations`, async () => {
       const { container } = render(

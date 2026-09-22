@@ -44,7 +44,7 @@ export const PA_CATEGORIES = defineEnum(
 
 /**
  * Core Individual Assistance assessment record, mirroring the fields FEMA
- * gathers in a joint PDA. The damage-assessment module (VEOC-23) extends
+ * gathers in a joint PDA. The damage-assessment module extends
  * this; it must never narrow it.
  */
 export const IaAssessmentSchema = z.object({

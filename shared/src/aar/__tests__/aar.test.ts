@@ -3,7 +3,7 @@ import { aarToTextLines, composeAar, type AarComposeInput } from "../aar.js";
 import { renderAarPdf } from "../../ics/pdf.js";
 
 /**
- * AAR composition (VEOC-36). Observations split into strengths and areas for
+ * AAR composition. Observations split into strengths and areas for
  * improvement; corrective actions and the chronology evidence carry through;
  * the text projection is HSEEP-ordered.
  */

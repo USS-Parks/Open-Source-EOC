@@ -1,24 +1,16 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { FastifyInstance, FastifyReply } from "fastify";
-import { chromium, type Browser, type Page } from "playwright-core";
+import type { FastifyInstance } from "fastify";
+import type { Browser, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardDashboards } from "../dashboards/service.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import { buildDir, buildWeb, launchBrowser, listen, login, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
-const DIST = process.env.OPENEOC_TEST_BUILD_ROOT
-  ? join(process.env.OPENEOC_TEST_BUILD_ROOT, "81c-workspace-app-dist")
-  : "/tmp/openeoc-81c-workspace-app-dist";
-const SHOTS = process.env.OPENEOC_SHOT_DIR ?? "/tmp/openeoc-81c-workspace-shots";
-const TYPES: Record<string, string> = {
-  ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript",
-  ".css": "text/css", ".json": "application/json", ".geojson": "application/geo+json",
-  ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2",
-  ".wasm": "application/wasm", ".pmtiles": "application/octet-stream",
-};
+const DIST = buildDir("81c-workspace-app");
+const SHOTS = shotDir("81c-workspace");
 
 let admin: Sql;
 let runtime: Sql;
@@ -34,34 +26,6 @@ let token: string;
 let jurisdictionId: string;
 const pageErrors: string[] = [];
 const externalRequests: string[] = [];
-
-function chromiumPath(): string {
-  for (const candidate of [
-    process.env.OPENEOC_CHROMIUM,
-    "/opt/pw-browsers/chromium",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium-browser",
-    "/usr/bin/chromium",
-  ]) if (candidate && existsSync(candidate)) return candidate;
-  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
-}
-
-function serveFile(reply: FastifyReply, path: string, range?: string) {
-  if (!existsSync(path)) return reply.status(404).send("missing");
-  const body = readFileSync(path);
-  const extension = path.slice(path.lastIndexOf("."));
-  const match = range ? /^bytes=(\d+)-(\d*)$/.exec(range) : null;
-  if (match) {
-    const start = Number(match[1]);
-    const end = match[2] ? Number(match[2]) : body.length - 1;
-    const slice = body.subarray(start, Math.min(end, body.length - 1) + 1);
-    return reply.status(206).header("content-type", TYPES[extension] ?? "application/octet-stream")
-      .header("accept-ranges", "bytes")
-      .header("content-range", `bytes ${start}-${start + slice.length - 1}/${body.length}`).send(slice);
-  }
-  return reply.header("content-type", TYPES[extension] ?? "application/octet-stream")
-    .header("accept-ranges", "bytes").send(body);
-}
 
 async function request(method: "POST" | "PUT", url: string, payload: Record<string, unknown>) {
   const response = await app.inject({ method, url, headers: { authorization: `Bearer ${token}` }, payload });
@@ -102,12 +66,7 @@ async function openRoute(path: string): Promise<void> {
 }
 
 beforeAll(async () => {
-  const webDir = join(process.cwd(), "web");
-  const publicDir = join(webDir, "public");
-  const { build } = await import("../../../web/node_modules/vite/dist/node/index.js");
-  await build({ root: webDir, base: "./", publicDir: false, logLevel: "silent", build: { outDir: DIST, emptyOutDir: true } });
-  expect(existsSync(join(DIST, "index.html"))).toBe(true);
-  mkdirSync(SHOTS, { recursive: true });
+  await buildWeb(DIST);
 
   ({ admin, runtime } = await freshDb());
   const seed = await seedIdentity(admin);
@@ -116,18 +75,9 @@ beforeAll(async () => {
   await ensureStandardDashboards(admin);
   await ensureStandardIncidentTemplates(admin);
   app = buildApp(runtime, { oidc: null });
-  app.get("/81c-app/*", (incoming, reply) => {
-    const relative = (incoming.params as { "*": string })["*"] || "index.html";
-    const safe = relative.replaceAll("..", "");
-    const built = join(DIST, safe);
-    return serveFile(reply, existsSync(built) ? built : join(publicDir, safe), incoming.headers.range);
-  });
+  serveStatic(app, "/81c-app", DIST);
 
-  const login = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: {
-    email: "admin@example.org", password: "correct-horse-battery",
-  } });
-  expect(login.statusCode, login.body).toBe(200);
-  token = login.json().accessToken as string;
+  token = await login(app);
   const incident = await request("POST", `/api/v1/jurisdictions/${jurisdictionId}/incidents`, {
     templateKey: "wildfire", name: "81C responsive workspace exercise",
   });
@@ -157,10 +107,8 @@ beforeAll(async () => {
     },
   });
 
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const address = app.server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-  browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
+  baseUrl = await listen(app);
+  browser = await launchBrowser();
   page = await browser.newPage({ viewport: { width: 1440, height: 900 }, hasTouch: true, reducedMotion: "reduce" });
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.route("**/*", (route) => {
@@ -179,7 +127,7 @@ afterAll(async () => {
   await admin?.end();
 });
 
-describe("VEOC-81C responsive workspace proof", () => {
+describe("responsive workspace proof", () => {
   it("keeps the real COP, board, and dashboard usable across prescribed widths with keyboard and touch control", async () => {
     await page.goto(`${baseUrl}/81c-app/index.html`, { waitUntil: "load" });
     await page.getByLabel("Email").fill("admin@example.org");

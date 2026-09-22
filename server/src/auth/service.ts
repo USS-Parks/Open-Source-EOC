@@ -238,7 +238,7 @@ export async function assignPosition(
  * Reassign a position at shift change: revoke whoever holds it now and
  * assign the incoming person. Distinct from {@link assignPosition}, which is
  * additive; this makes the current holder unambiguous so downstream
- * membership (VEOC-32 collaboration channels) tracks the handover.
+ * membership (collaboration channels) tracks the handover.
  */
 export async function reassignPosition(
   sql: Sql,
@@ -286,7 +286,20 @@ export async function signOutPosition(sql: Sql, actor: Principal): Promise<void>
     where session_id = ${actor.sessionId} and signed_out_at is null`;
 }
 
-function requireAdmin(actor: Principal, jurisdictionId: string): void {
+/** Jurisdiction guards shared by every service: admin, writer (admin or member), member. */
+export function requireAdmin(actor: Principal, jurisdictionId: string): void {
   const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
   if (!m || m.role !== "admin") throw new AuthError(403, "requires jurisdiction admin");
+}
+
+export function requireWriter(actor: Principal, jurisdictionId: string): "admin" | "member" {
+  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
+  if (!m || (m.role !== "admin" && m.role !== "member"))
+    throw new AuthError(403, "requires write access to this jurisdiction");
+  return m.role;
+}
+
+export function requireMember(actor: Principal, jurisdictionId: string): void {
+  if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
+    throw new AuthError(403, "no access to this jurisdiction");
 }

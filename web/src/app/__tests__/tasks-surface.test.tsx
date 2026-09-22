@@ -22,7 +22,7 @@ function renderSurface(props: { closed?: boolean } = {}) {
   render(<Theme name="light"><TasksSurface client={client as never} incidentId={incidentId} personId="66666666-6666-4666-8666-666666666666" jurisdictionId="44444444-4444-4444-8444-444444444444" canManage closed={props.closed ?? false} onOpenTemplates={() => undefined} /></Theme>);
   return { client, listIncidentTasks, operationIds, updateInputs };
 }
-describe("P-TASKS surface", () => {
+describe("tasks surface", () => {
   it("renders My Tasks and Team Tasks with authoritative category, due, and completion fields", async () => {
     const { listIncidentTasks } = renderSurface();
     expect(await screen.findByText("Establish command")).toBeTruthy();

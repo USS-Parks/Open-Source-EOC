@@ -1,5 +1,5 @@
 /**
- * Durable offline store (VEOC-21). IndexedDB-backed, so a field user's
+ * Durable offline store. IndexedDB-backed, so a field user's
  * queued work survives an app restart while disconnected. Two object
  * stores: `docs` holds one Yjs state blob per board (the offline edit
  * queue lives inside the CRDT), `meta` holds the cached session and the

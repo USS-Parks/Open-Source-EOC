@@ -11,7 +11,7 @@ import {
 /**
  * Display view: a board's records through one of its declared views.
  * Rendering is a pure function of records, so when the sync layer
- * (VEOC-13) streams updates into state, every open view follows.
+ * streams updates into state, every open view follows.
  */
 export function BoardView(props: {
   template: BoardTemplate;

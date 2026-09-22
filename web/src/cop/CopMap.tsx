@@ -197,7 +197,7 @@ export interface CopMapProps {
   readonly onPickPoint?: ((lngLat: [number, number]) => void) | undefined;
   /** Current non-wrapping WGS84 bounds, reported at ready and after moveend. */
   readonly onBoundsChange?: ((bounds: CopMapBounds) => void) | undefined;
-  /** Final D11 drawer by default; explicit popup preserves the legacy direct-map mode. */
+  /** Drawer by default; explicit popup preserves the legacy direct-map mode. */
   readonly inspectionMode?: "popup" | "workspace" | undefined;
   /** Exact persisted dataset feature requested by an operational relationship. */
   readonly requestedFeature?: { readonly datasetId: string; readonly featureId: string } | null | undefined;

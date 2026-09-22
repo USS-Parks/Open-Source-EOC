@@ -1,13 +1,19 @@
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
-import { AuthError, principalForPerson, type Principal } from "../auth/service.js";
+import {
+  AuthError,
+  principalForPerson,
+  requireAdmin,
+  requireMember,
+  type Principal,
+} from "../auth/service.js";
 import { hashToken, newToken } from "../auth/tokens.js";
 import { recordAudit } from "../audit/service.js";
 import { parseFeed, type NormalizedItem } from "./parse.js";
 
 /**
- * Feed framework (VEOC-19, F18). Poll feeds fetch external hazard sources
+ * Feed framework (F18). Poll feeds fetch external hazard sources
  * on an interval; push feeds accept authenticated position streams (CoT,
  * GeoJSON). Items are read-only COP layers with provenance and staleness.
  * A failing feed stays enabled and keeps alarming: the failure is a
@@ -347,14 +353,4 @@ export async function feedItems(
       },
     })),
   };
-}
-
-function requireAdmin(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || m.role !== "admin") throw new AuthError(403, "requires jurisdiction admin");
-}
-
-function requireMember(actor: Principal, jurisdictionId: string): void {
-  if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
-    throw new AuthError(403, "no access to this jurisdiction");
 }

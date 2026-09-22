@@ -14,7 +14,7 @@ const fc: CopFeatureCollection = {
   ],
 };
 
-describe("feed layers carry provenance and staleness (VEOC-19)", () => {
+describe("feed layers carry provenance and staleness", () => {
   it("keeps severity symbology while the feed is fresh, with source and age visible", () => {
     const tagged = tagFeedFeatures(fc, { name: "NWS Alerts", stale: false, ageSeconds: 42 });
     const p = tagged.features[0]!.properties;

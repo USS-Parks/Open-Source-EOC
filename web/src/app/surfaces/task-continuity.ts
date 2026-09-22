@@ -14,7 +14,7 @@ export interface TaskContinuity {
 }
 
 /**
- * P-TASKS uses the VEOC-82 durable receipt queue directly: task completions
+ * The tasks surface uses the durable receipt queue directly: task completions
  * do not need the board-specific FieldClient used by ContinuityCoordinator.
  */
 export function useTaskContinuity(

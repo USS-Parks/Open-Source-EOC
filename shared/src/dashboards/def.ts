@@ -2,7 +2,7 @@ import { z } from "zod";
 import { IMPACT_CATEGORIES, type ImpactCategoryAggregate, type SpatialQueryScope } from "../impact/contract.js";
 
 /**
- * Dashboard definitions (VEOC-18). A dashboard is data, versioned and
+ * Dashboard definitions. A dashboard is data, versioned and
  * shareable exactly like a board template. Widgets bind to board TEMPLATE
  * keys, not board ids, so one definition instantiates in any jurisdiction
  * against that jurisdiction's boards. All aggregation is server-side (the

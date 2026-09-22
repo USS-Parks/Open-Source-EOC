@@ -1,10 +1,16 @@
 import type { Sql } from "../db/client.js";
-import { AuthError, type Principal } from "../auth/service.js";
+import {
+  AuthError,
+  requireAdmin,
+  requireMember,
+  requireWriter,
+  type Principal,
+} from "../auth/service.js";
 import { hashToken, newToken } from "../auth/tokens.js";
 import { recordAudit } from "../audit/service.js";
 
 /**
- * Staffing (VEOC-24). Check-in/out is bound to a position and lands in the
+ * Staffing. Check-in/out is bound to a position and lands in the
  * activity log; badge scans drive fast check-in and carry a client id so a
  * replayed offline scan reconciles to one row; shifts schedule coverage
  * with overlap conflict detection; the staffing summary shows who is on
@@ -234,20 +240,4 @@ export async function staffingSummary(
       endsAt: new Date(s.ends_at as string).toISOString(),
     })),
   };
-}
-
-function requireAdmin(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || m.role !== "admin") throw new AuthError(403, "requires jurisdiction admin");
-}
-
-function requireWriter(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || (m.role !== "admin" && m.role !== "member"))
-    throw new AuthError(403, "requires write access to this jurisdiction");
-}
-
-function requireMember(actor: Principal, jurisdictionId: string): void {
-  if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
-    throw new AuthError(403, "no access to this jurisdiction");
 }

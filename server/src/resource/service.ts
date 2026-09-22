@@ -8,7 +8,13 @@ import {
   type ResourceRequestSummary,
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
-import { AuthError, principalForPerson, type Principal } from "../auth/service.js";
+import {
+  AuthError,
+  principalForPerson,
+  requireMember,
+  requireWriter,
+  type Principal,
+} from "../auth/service.js";
 import { hashToken } from "../auth/tokens.js";
 import { withPerson } from "../db/context.js";
 import { recordAudit } from "../audit/service.js";
@@ -16,7 +22,7 @@ import { resolveWorkflowAssignment } from "../boards/workflow.js";
 import { getIncidentAuthority, lockIncidentMutation } from "../incidents/participation.js";
 
 /**
- * The 213RR resource lifecycle, server side (VEOC-35, F5). A request moves
+ * The 213RR resource lifecycle, server side (F5). A request moves
  * through the NIMS ordering states guarded by the dictionary transition
  * table; every move appends to an immutable chronology and notifies the
  * requester. A request can escalate to a higher tier over a federation peer
@@ -384,7 +390,7 @@ function requestSummary(row: Record<string, unknown>): ResourceRequestSummary {
 
 /**
  * Resource requests visible in a jurisdiction, for the 213RR board. An
- * optional incident narrows the list to that incident's requests (VEOC-79B2);
+ * optional incident narrows the list to that incident's requests;
  * unscoped returns every request in the jurisdiction, so a standing cache with
  * no incident is never silently hidden. Row-level security stays the wall.
  */
@@ -451,11 +457,6 @@ async function notify(
     values (${jurisdictionId}, ${personId}, 'resource', ${"Resource request"}, ${message}, 'delivered')`;
 }
 
-function requireMember(actor: Principal, jurisdictionId: string): void {
-  if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
-    throw new AuthError(403, "no access to this jurisdiction");
-}
-
 /**
  * Resource writes use the same incident lock as closeout and participation.
  * The resource remains owned by its receiving jurisdiction; an active
@@ -477,10 +478,4 @@ async function requireOpenIncidentScope(
   const [incident] = await sql`select closed_at from incidents where id = ${incidentId}`;
   if (!incident) throw new AuthError(404, "incident not found");
   if (incident.closed_at) throw new AuthError(409, "incident is closed");
-}
-
-function requireWriter(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || (m.role !== "admin" && m.role !== "member"))
-    throw new AuthError(403, "requires write access to this jurisdiction");
 }

@@ -29,7 +29,7 @@ const dashboards = [{
 
 afterEach(cleanup);
 
-describe("P-DASH saved view configuration", () => {
+describe("dashboard saved view configuration", () => {
   it("saves selected real widgets and an explicit map presentation", () => {
     const onSave = vi.fn();
     render(

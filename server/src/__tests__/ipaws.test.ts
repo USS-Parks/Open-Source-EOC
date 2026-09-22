@@ -18,7 +18,7 @@ import {
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * IPAWS-OPEN enable-at-will (VEOC-31, R2). The connector interprets
+ * IPAWS-OPEN enable-at-will (R2). The connector interprets
  * recorded IPAWS-OPEN responses; the frozen contract matches the running
  * app; and enablement is gated on explicit configuration plus a documented
  * MOA, disabled by default, with a single toggle taking it live.

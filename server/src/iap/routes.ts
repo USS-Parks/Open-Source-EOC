@@ -19,7 +19,7 @@ import {
 } from "./service.js";
 
 /**
- * ICS form and IAP routes (VEOC-34, F5). Forms prefill from live incident
+ * ICS form and IAP routes (F5). Forms prefill from live incident
  * data; the IAP assembles the operational period's forms with a small amount
  * of human input, carries an approval step, and exports to PDF.
  */

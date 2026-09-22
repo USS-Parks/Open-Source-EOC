@@ -1,29 +1,16 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { FastifyInstance, FastifyReply } from "fastify";
-import { chromium, type Browser, type Page } from "playwright-core";
+import type { FastifyInstance } from "fastify";
+import type { Browser, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import { PUBLIC_DIR, buildDir, buildWeb, launchBrowser, listen, login, post, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
-const DIST = process.env.OPENEOC_TEST_BUILD_ROOT
-  ? join(process.env.OPENEOC_TEST_BUILD_ROOT, "h13-app-dist")
-  : "/tmp/openeoc-h13-app-dist";
-const SHOTS = process.env.OPENEOC_SHOT_DIR ?? "/tmp/openeoc-h13-shots";
-const TYPES: Record<string, string> = {
-  ".html": "text/html",
-  ".js": "text/javascript",
-  ".mjs": "text/javascript",
-  ".css": "text/css",
-  ".json": "application/json",
-  ".geojson": "application/geo+json",
-  ".png": "image/png",
-  ".woff2": "font/woff2",
-  ".wasm": "application/wasm",
-  ".pmtiles": "application/octet-stream",
-};
+const DIST = buildDir("h13-app");
+const SHOTS = shotDir("h13");
+const NAPSG = join(PUBLIC_DIR, "napsg");
 
 let admin: Sql;
 let runtime: Sql;
@@ -35,35 +22,6 @@ let boardId: string;
 const pageErrors: string[] = [];
 const externalRequests: string[] = [];
 const facilityImageResponses = new Set<string>();
-
-function chromiumPath(): string {
-  const candidates = [
-    process.env.OPENEOC_CHROMIUM,
-    "/opt/pw-browsers/chromium",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium",
-  ];
-  for (const candidate of candidates) if (candidate && existsSync(candidate)) return candidate;
-  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
-}
-
-async function login(email: string, password: string): Promise<string> {
-  const response = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email, password } });
-  expect(response.statusCode).toBe(200);
-  return response.json().accessToken as string;
-}
-
-async function post(token: string, url: string, payload: Record<string, unknown>) {
-  const response = await app.inject({
-    method: "POST",
-    url,
-    headers: { authorization: `Bearer ${token}` },
-    payload,
-  });
-  expect(response.statusCode, response.body).toBeGreaterThanOrEqual(200);
-  expect(response.statusCode, response.body).toBeLessThan(300);
-  return response.json() as Record<string, unknown>;
-}
 
 async function stableCanvasShot(): Promise<Buffer> {
   const canvas = page.locator('[data-testid="cop-map"] canvas');
@@ -92,17 +50,7 @@ async function inspectRecord(name: string, expectedType: string, expectedStatus:
 }
 
 beforeAll(async () => {
-  const webDir = join(process.cwd(), "web");
-  const publicDir = join(webDir, "public");
-  const { build } = await import("../../../web/node_modules/vite/dist/node/index.js");
-  await build({
-    root: webDir,
-    base: "./",
-    publicDir: false,
-    logLevel: "silent",
-    build: { outDir: DIST, emptyOutDir: true },
-  });
-  expect(existsSync(join(DIST, "index.html"))).toBe(true);
+  await buildWeb(DIST);
 
   ({ admin, runtime } = await freshDb());
   const seed = await seedIdentity(admin);
@@ -126,42 +74,15 @@ beforeAll(async () => {
     values ('synthetic_facilities', 1, 'Synthetic Facility Symbols', ${admin.json(facilityTemplate)})`;
 
   app = buildApp(runtime, { oidc: null });
-  const sendFile = (reply: FastifyReply, path: string, range?: string) => {
-    if (!existsSync(path)) return reply.status(404).send("missing");
-    const extension = path.slice(path.lastIndexOf("."));
-    const buffer = readFileSync(path);
-    const match = range ? /^bytes=(\d+)-(\d*)$/.exec(range) : null;
-    if (match) {
-      const start = Number(match[1]);
-      const end = match[2] ? Number(match[2]) : buffer.length - 1;
-      const slice = buffer.subarray(start, Math.min(end, buffer.length - 1) + 1);
-      return reply.status(206)
-        .header("content-type", TYPES[extension] ?? "application/octet-stream")
-        .header("accept-ranges", "bytes")
-        .header("content-range", `bytes ${start}-${start + slice.length - 1}/${buffer.length}`)
-        .send(slice);
-    }
-    return reply.header("content-type", TYPES[extension] ?? "application/octet-stream")
-      .header("accept-ranges", "bytes")
-      .send(buffer);
-  };
-  app.get("/app/*", (request, reply) => {
-    const relative = (request.params as { "*": string })["*"] || "index.html";
-    const safe = relative.replaceAll("..", "");
-    const built = join(DIST, safe);
-    return sendFile(reply, existsSync(built) ? built : join(publicDir, safe), request.headers.range);
-  });
-  app.get("/napsg/*", (request, reply) => {
-    const relative = (request.params as { "*": string })["*"].replaceAll("..", "");
-    return sendFile(reply, join(publicDir, "napsg", relative), request.headers.range);
-  });
+  serveStatic(app, "/app", DIST);
+  serveStatic(app, "/napsg", NAPSG, NAPSG);
 
-  const token = await login("admin@example.org", "correct-horse-battery");
-  const board = await post(token, `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`, {
+  const token = await login(app);
+  const board = await post(app, token, `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`, {
     templateKey: "synthetic_facilities",
   });
   boardId = board.id as string;
-  const incident = await post(token, `/api/v1/jurisdictions/${seed.jurisdictionId}/incidents`, {
+  const incident = await post(app, token, `/api/v1/jurisdictions/${seed.jurisdictionId}/incidents`, {
     templateKey: "daily_ops",
     name: "Synthetic H13 Facility Exercise",
   });
@@ -180,7 +101,7 @@ beforeAll(async () => {
     ["Synthetic Heliport", "heliport", "unknown", -123.90, 41.00],
   ] as const;
   for (const [name, facilityType, status, lng, lat] of records) {
-    await post(token, `/api/v1/boards/${boardId}/records?incidentId=${incidentId}`, {
+    await post(app, token, `/api/v1/boards/${boardId}/records?incidentId=${incidentId}`, {
       name,
       facility_type: facilityType,
       ...(status ? { status } : {}),
@@ -188,11 +109,9 @@ beforeAll(async () => {
     });
   }
 
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const address = app.server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+  baseUrl = await listen(app);
 
-  browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
+  browser = await launchBrowser();
   page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   await page.emulateMedia({ reducedMotion: "reduce" });
   page.on("pageerror", (error) => pageErrors.push(error.message));
@@ -226,9 +145,8 @@ afterAll(async () => {
   await admin?.end();
 });
 
-describe("H13 real-map licensed facility presentation", () => {
+describe("real-map licensed facility presentation", () => {
   it("renders type icons and independent status with matching legend and inspection in both themes", async () => {
-    mkdirSync(SHOTS, { recursive: true });
     const legend = page.getByTestId("facility-legend");
     await legend.locator("summary").click();
     for (const title of ["Hospital", "Urgent-care facility", "Fire station", "Law enforcement", "School", "Shelter", "Local EOC", "Commercial airport", "Heliport"]) {

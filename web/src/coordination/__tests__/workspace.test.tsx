@@ -47,7 +47,7 @@ const recordFile: FileMetaRef = {
   },
 };
 
-describe("D27 messages workspace", () => {
+describe("messages workspace", () => {
   it("exposes selected recipient context and reports persistence without invented receipts", async () => {
     const postMessage = vi.fn(async () => ({ id: "message-2", deduplicated: false }));
     const createThread = vi.fn(async () => ({ id: "thread-2" }));
@@ -117,7 +117,7 @@ describe("D27 messages workspace", () => {
   });
 });
 
-describe("D27 files workspace", () => {
+describe("files workspace", () => {
   it("previews contextual files, links to their record, searches, and uploads to the exact record", async () => {
     const onOpenRecord = vi.fn();
     const uploadFile = vi.fn(async () => ({ id: "file-1", sha256: "abc", version: 1 }));

@@ -7,7 +7,7 @@ import { addMembership, createPerson } from "../auth/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * Load and scale benchmarks (VEOC-38, R1). These are the committed floor as a
+ * Load and scale benchmarks (R1). These are the committed floor as a
  * regression guard: a board holding the SharePoint-lesson volume of 5,000
  * records still serves a view quickly, and a 150-operation concurrent burst
  * (mixed reads and writes, the shape of a 150-user activation) completes

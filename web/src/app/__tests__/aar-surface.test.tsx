@@ -117,7 +117,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("P-AAR after-action workspace", () => {
+describe("after-action workspace", () => {
   it("uses server totals and drills each aggregate to its exact records", async () => {
     const api = client();
     const { container } = render(<AarSurface client={api} jurisdictionId={JURISDICTION_ID} incidentId={INCIDENT_ID} />);

@@ -6,7 +6,7 @@ import { ensureStandardTemplates } from "../boards/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * Smart forms (VEOC-22, F7): a real XLSForm .xlsx imports, and a capture
+ * Smart forms (F7): a real XLSForm .xlsx imports, and a capture
  * runs through the form logic and lands on a board with geometry. The
  * offline runner semantics (relevance, calculations, constraints) are
  * proven exhaustively in the shared package; here we prove the binary

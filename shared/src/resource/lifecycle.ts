@@ -1,7 +1,7 @@
 import { RESOURCE_REQUEST_TRANSITIONS } from "../dictionary/resource-request.js";
 
 /**
- * The 213RR resource-request lifecycle (VEOC-35, F5). The state machine is
+ * The 213RR resource-request lifecycle (F5). The state machine is
  * the dictionary's transition table; these helpers make it enforceable, and
  * the cost export formats a request's incurred costs for reimbursement. All
  * pure, so both are golden-testable with no database.

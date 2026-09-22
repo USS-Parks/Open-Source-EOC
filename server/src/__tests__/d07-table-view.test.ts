@@ -86,7 +86,7 @@ afterAll(async () => {
   await admin.end();
 });
 
-describe("D07 table views through ApiClient and the real SEAM", () => {
+describe("table views through ApiClient and the real SEAM", () => {
   it("round-trips scoped table state, isolates people and incidents, and enforces CAS", async () => {
     const payload = {
       tableId: "priority-work",

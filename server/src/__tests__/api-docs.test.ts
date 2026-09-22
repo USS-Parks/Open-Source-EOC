@@ -6,7 +6,7 @@ import { generateApiDocs } from "@openeoc/shared";
 
 /**
  * The published API docs are generated from the frozen contract, never
- * hand-edited (VEOC-31, INV-4/INV-9). This test regenerates them and holds
+ * hand-edited (INV-4/INV-9). This test regenerates them and holds
  * the committed docs/API.md to the output, so the two cannot drift. To
  * refresh the file after a contract change, run vitest with UPDATE_DOCS=1.
  */

@@ -1,7 +1,7 @@
 /**
  * In-memory login backoff (threat row B11): five consecutive failures for
- * one email lock further attempts for thirty seconds. Per-process by design
- * for now; a shared store arrives with horizontal scaling work (VEOC-38).
+ * one email lock further attempts for thirty seconds. Per-process by design;
+ * a shared store is future horizontal-scaling work.
  */
 const WINDOW_MS = 30_000;
 const MAX_FAILURES = 5;

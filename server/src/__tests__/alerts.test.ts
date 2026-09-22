@@ -36,7 +36,7 @@ async function tokenFor(email: string, password: string): Promise<string> {
 
 const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 
-describe("D28 notification read and acknowledgement", () => {
+describe("notification read and acknowledgement", () => {
   it("keeps opening, reading, and acknowledgement as separately attributed state", async () => {
     const [inserted] = await admin`
       insert into notifications (jurisdiction_id, person_id, channel, title, body, status, detail)
@@ -82,7 +82,7 @@ describe("D28 notification read and acknowledgement", () => {
   });
 });
 
-describe("D28 local CAP draft review", () => {
+describe("local CAP draft review", () => {
   it("stores an unsent local draft and appends attributed review transitions", async () => {
     const created = await app.inject({
       method: "POST",

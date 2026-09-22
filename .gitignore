@@ -21,3 +21,6 @@ web/public/basemap/buildings.pmtiles
 web/public/basemap/overlays.pmtiles
 web/public/basemap/overlays-manifest.json
 .DS_Store
+# Local agent and test-runner state.
+.claude/
+.vitest/

@@ -24,7 +24,7 @@ import { draftRelease } from "../jic/service.js";
 import { recordObservation } from "../aar/service.js";
 
 /**
- * The demo dataset (VEOC-41). It stands up a believable activation a stranger
+ * The demo dataset. It stands up a believable activation a stranger
  * can explore and run the scripted exercise (docs/DEMO-SCENARIO.md) against:
  * a jurisdiction with an admin, an operator, and a viewer; an activated
  * synthetic wildfire exercise with its ICS org, boards, operational period,

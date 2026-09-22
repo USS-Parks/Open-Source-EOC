@@ -1,7 +1,7 @@
 import type { FastifyReply } from "fastify";
 
 /**
- * Security response headers (VEOC-37 hardening). The API serves data, never
+ * Security response headers. The API serves data, never
  * a document, so its Content-Security-Policy is the strictest possible
  * (`default-src 'none'`); the browser client is served by its own static
  * host with a document CSP (see deploy/README.md). The non-CSP headers are

@@ -7,7 +7,7 @@ import { ensureStandardTemplates } from "./boards/service.js";
 import { ensureStandardIncidentTemplates } from "./incidents/service.js";
 
 /**
- * Production entrypoint (VEOC-40). Two database identities, matching the
+ * Production entrypoint. Two database identities, matching the
  * deployment doctrine and the test harness: the owner connection runs
  * migrations and seeds the standard templates (it may bypass RLS), and the
  * app runs on the app_runtime connection so Row-Level Security is always in

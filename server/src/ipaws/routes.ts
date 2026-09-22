@@ -5,7 +5,7 @@ import { withPerson } from "../db/context.js";
 import { acknowledgeMoa, configure, getStatus, postAlert, setEnabled } from "./service.js";
 
 /**
- * IPAWS-OPEN administration and transmission routes (VEOC-31, R2). Reading
+ * IPAWS-OPEN administration and transmission routes (R2). Reading
  * status is open to members; configuring, acknowledging the MOA, toggling
  * enablement, and transmitting are admin acts, each run under the caller's
  * person context so RLS and the audit trail apply.

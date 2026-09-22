@@ -1,40 +1,26 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync, existsSync, mkdirSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
-import { chromium, type Browser } from "playwright-core";
+import type { Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
+import { WEB_DIR, buildDir, launchBrowser, listen, login, post, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * Real-browser COP test (VEOC-17 acceptance): MapLibre renders the board
- * layer in headless Chromium with all non-local network blocked, and a
- * field edit reaches the rendered map inside the latency budget. This is
- * also the regression guard for the bundled-worker defect: MapLibre v6
- * resolves its worker from a sibling URL of the bundle, so a broken worker
- * setup shows up here as a map that never loads a tile.
+ * Real-browser COP test: MapLibre renders the board layer in headless
+ * Chromium with all non-local network blocked, and a field edit reaches the
+ * rendered map inside the latency budget. This is also the regression guard
+ * for the bundled-worker defect: MapLibre v6 resolves its worker from a
+ * sibling URL of the bundle, so a broken worker setup shows up here as a map
+ * that never loads a tile.
  */
 
-const DIST = process.env["OPENEOC_TEST_BUILD_ROOT"]
-  ? join(process.env["OPENEOC_TEST_BUILD_ROOT"], "cop-demo-dist")
-  : "/tmp/cop-demo-dist";
+const DIST = buildDir("cop-demo");
 const LATENCY_BUDGET_MS = 5000;
-const SHOTS = process.env["OPENEOC_SHOT_DIR"] ?? "/tmp/openeoc-cop-shots";
-
-/** The sandbox pre-installs Chromium; CI runners ship Chrome. */
-function chromiumPath(): string {
-  const candidates = [
-    process.env["OPENEOC_CHROMIUM"],
-    "/opt/pw-browsers/chromium",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium-browser",
-    "/usr/bin/chromium",
-  ];
-  for (const c of candidates) if (c && existsSync(c)) return c;
-  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
-}
+const SHOTS = shotDir("cop");
 
 let admin: Sql;
 let runtime: Sql;
@@ -45,19 +31,12 @@ let seed: Awaited<ReturnType<typeof seedIdentity>>;
 let boardId: string;
 let memberToken: string;
 
-const TYPES: Record<string, string> = {
-  ".html": "text/html",
-  ".js": "text/javascript",
-  ".mjs": "text/javascript",
-  ".css": "text/css",
-};
-
 beforeAll(async () => {
-  const webDir = join(process.cwd(), "web");
-  const vite = join(webDir, "node_modules", "vite", "bin", "vite.js");
+  // The demo has its own Vite root, so it is built through the CLI rather than buildWeb.
+  const vite = join(WEB_DIR, "node_modules", "vite", "bin", "vite.js");
   execFileSync(process.execPath, [vite, "build", "cop-demo", "--outDir", DIST,
     "--emptyOutDir", "--base", "./"], {
-    cwd: webDir,
+    cwd: WEB_DIR,
     stdio: "ignore",
   });
   expect(existsSync(join(DIST, "index.html"))).toBe(true);
@@ -66,39 +45,18 @@ beforeAll(async () => {
   seed = await seedIdentity(admin);
   await ensureStandardTemplates(admin);
   app = buildApp(runtime, { oidc: null });
-  app.get("/demo/*", (req, reply) => {
-    const rel = (req.params as { "*": string })["*"] || "index.html";
-    const path = join(DIST, rel.replaceAll("..", ""));
-    if (!existsSync(path)) return reply.status(404).send("missing");
-    const ext = path.slice(path.lastIndexOf("."));
-    return reply.header("content-type", TYPES[ext] ?? "application/octet-stream")
-      .send(readFileSync(path));
-  });
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const addr = app.server.address();
-  baseUrl = `http://127.0.0.1:${typeof addr === "object" && addr ? addr.port : 0}`;
+  serveStatic(app, "/demo", DIST);
+  baseUrl = await listen(app);
 
-  const login = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email: "member@example.org", password: "another-good-password" },
+  memberToken = await login(app, "member@example.org", "another-good-password");
+  const adminToken = await login(app);
+  const board = await post(app, adminToken, `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`, {
+    templateKey: "road_closures",
   });
-  memberToken = login.json().accessToken as string;
-  const adminLogin = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email: "admin@example.org", password: "correct-horse-battery" },
-  });
-  const board = await app.inject({
-    method: "POST",
-    url: `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`,
-    headers: { authorization: `Bearer ${adminLogin.json().accessToken as string}` },
-    payload: { templateKey: "road_closures" },
-  });
-  boardId = board.json().id as string;
+  boardId = board.id as string;
   await postClosure("SR-169 at Pecwan", [-123.61, 41.29]);
 
-  browser = await chromium.launch({ executablePath: chromiumPath() });
+  browser = await launchBrowser();
 }, 120000);
 
 afterAll(async () => {
@@ -201,7 +159,6 @@ describe("the COP in a real browser, offline", () => {
     });
     expect(returnedBounds).toEqual(selectedBounds);
 
-    mkdirSync(SHOTS, { recursive: true });
     const mapCanvas = await page.evaluate(`(() => {
       const element = document.querySelector("canvas.maplibregl-canvas");
       return { width: element.width, height: element.height };

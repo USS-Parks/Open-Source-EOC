@@ -8,7 +8,7 @@ import { createFeed, feedItems, listFeeds, pollFeed, runDueFeeds } from "../feed
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * Feed framework (VEOC-19): a simulated weather feed and a simulated
+ * Feed framework: a simulated weather feed and a simulated
  * drone track land as read-only layers with provenance and staleness;
  * a failing feed alarms and keeps trying, never a silent stop.
  */

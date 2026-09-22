@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 /**
- * Jitsi bridge helpers (VEOC-33). A meeting is a room on a configured Jitsi
+ * Jitsi bridge helpers. A meeting is a room on a configured Jitsi
  * deployment; the platform mints the join URL and, when a JWT secret is
  * configured, a signed token that scopes the room to the incident audience
  * and marks moderators. The JWT is a standard HS256 token built here with

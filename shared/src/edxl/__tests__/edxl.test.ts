@@ -10,7 +10,7 @@ import {
 } from "../edxl.js";
 
 /**
- * EDXL round-trip (VEOC-27): a 213RR maps to EDXL-RM and back without
+ * EDXL round-trip: a 213RR maps to EDXL-RM and back without
  * loss, the DE envelope serializes and parses with full fidelity, and
  * explicit addresses gate consumption.
  */

@@ -8,7 +8,7 @@ import { ensureStandardTemplates } from "../boards/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * Offline field loop (VEOC-21 acceptance): a field user edits in airplane
+ * Offline field loop: a field user edits in airplane
  * mode, the app restarts while still offline, then reconnects and the
  * queued work reconciles into the server of record with an audit trail.
  * The client here speaks the same durable-doc + sync protocol as the

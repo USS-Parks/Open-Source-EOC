@@ -17,9 +17,9 @@ import { verifyJitsiJwt } from "../meetings/jitsi.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * Meeting bridges and briefings (VEOC-33, F15/R4). One action yields a
+ * Meeting bridges and briefings (F15/R4). One action yields a
  * joinable Jitsi bridge scoped to the incident audience; scheduled briefings
- * notify the holders through the VEOC-14 substrate; and neither depends on
+ * notify the holders through the notifications substrate; and neither depends on
  * any Jitsi code being vendored.
  */
 
@@ -176,7 +176,7 @@ describe("meeting bridge", () => {
 });
 
 describe("briefings", () => {
-  it("fires due briefings once, notifying the incident holders via VEOC-14", async () => {
+  it("fires due briefings once, notifying the incident holders via the notifications substrate", async () => {
     await withPerson(runtime, adminId, (tx) =>
       scheduleBriefing(tx, adminPrincipal, incidentId, {
         title: "Operational period 1 briefing",

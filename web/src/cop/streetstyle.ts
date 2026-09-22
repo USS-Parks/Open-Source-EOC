@@ -13,7 +13,7 @@ import {
 
 /**
  * A themed MapLibre street style over a self-hosted OpenMapTiles-schema PMTiles
- * source (VEOC-74). This is what turns the COP into a real street map: roads by
+ * source. This is what turns the COP into a real street map: roads by
  * class, water, boundaries, buildings, and place and road labels, all served
  * from a deployment's own `california.pmtiles` with a self-hosted glyph stack,
  * so the map stays offline-capable and license-clean (OpenStreetMap, ODbL). The

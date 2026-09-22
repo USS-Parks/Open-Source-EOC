@@ -44,9 +44,6 @@ importers:
       postgres:
         specifier: ^3.4.9
         version: 3.4.9
-      ws:
-        specifier: ^8.21.3
-        version: 8.21.3
       xlsx:
         specifier: 0.18.5
         version: 0.18.5
@@ -69,6 +66,9 @@ importers:
       playwright-core:
         specifier: ^1.63.0
         version: 1.63.0
+      ws:
+        specifier: ^8.21.3
+        version: 8.21.3
 
   shared:
     dependencies:

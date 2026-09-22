@@ -1,5 +1,5 @@
 /**
- * Service worker registration (VEOC-21). Safe to call unconditionally:
+ * Service worker registration. Safe to call unconditionally:
  * it no-ops where service workers are unavailable (older browsers, or a
  * non-secure origin), so the client still runs, just without the
  * installable-shell affordance.

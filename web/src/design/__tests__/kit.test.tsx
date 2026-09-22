@@ -9,7 +9,7 @@ import { CountBadge, EmptyState, ErrorState, LoadingState } from "../feedback.js
 
 afterEach(cleanup);
 
-describe("D06 state precision", () => {
+describe("state precision", () => {
   it("renders reported zero and unknown as distinct non-success states", () => {
     const { container, getByLabelText } = render(
       <Theme name="light">
@@ -43,7 +43,7 @@ describe("D06 state precision", () => {
   });
 });
 
-describe("D06 actions", () => {
+describe("actions", () => {
   it("marks primary action with structure and disables a busy action", () => {
     const onClick = vi.fn();
     const { getByRole } = render(
@@ -72,7 +72,7 @@ describe("D06 actions", () => {
   });
 });
 
-describe("D06 keyboard controls", () => {
+describe("keyboard controls", () => {
   function TabsHarness() {
     const [value, setValue] = useState("one");
     return (
@@ -162,7 +162,7 @@ describe("D06 keyboard controls", () => {
   });
 });
 
-describe("D06 progress and feedback", () => {
+describe("progress and feedback", () => {
   it("represents determinate, complete, and indeterminate progress without false completion", () => {
     const { getByRole, rerender } = render(<Theme name="light"><ProgressIndicator label="Upload" value={30} /></Theme>);
     expect(getByRole("progressbar").getAttribute("aria-valuenow")).toBe("30");

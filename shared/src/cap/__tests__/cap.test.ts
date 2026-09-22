@@ -4,7 +4,7 @@ import { validateCap12, validateIpawsProfile, isIpawsEligible } from "../validat
 import { capToXml, capFromXml } from "../xml.js";
 
 /**
- * CAP 1.2 conformance and IPAWS profile (VEOC-26): a golden alert
+ * CAP 1.2 conformance and IPAWS profile: a golden alert
  * round-trips XML with full fidelity and validates against both the base
  * schema and the IPAWS profile; profile violations are caught.
  */

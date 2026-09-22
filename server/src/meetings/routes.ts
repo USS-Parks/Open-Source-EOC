@@ -13,7 +13,7 @@ import {
 } from "./service.js";
 
 /**
- * Meeting-bridge and briefing routes (VEOC-33). Reading config is open to
+ * Meeting-bridge and briefing routes. Reading config is open to
  * members; configuring is admin. Opening a bridge is a member action (one
  * click). Briefings are scheduled by members and fired by an admin runner.
  */

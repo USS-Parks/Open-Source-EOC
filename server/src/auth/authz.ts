@@ -1,6 +1,12 @@
 import { COMMAND_STAFF, GENERAL_STAFF } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
-import { addMembership, AuthError, createJurisdiction, type Principal } from "./service.js";
+import {
+  addMembership,
+  AuthError,
+  createJurisdiction,
+  requireAdmin,
+  type Principal,
+} from "./service.js";
 
 /** Human titles for the standard ICS position set (keys from the dictionary). */
 export const STANDARD_TITLES: Readonly<Record<string, string>> = {
@@ -99,9 +105,4 @@ export async function listPositions(
       ))
     order by key`;
   return rows.map((r) => ({ id: r.id as string, key: r.key as string, title: r.title as string }));
-}
-
-function requireAdmin(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || m.role !== "admin") throw new AuthError(403, "requires jurisdiction admin");
 }

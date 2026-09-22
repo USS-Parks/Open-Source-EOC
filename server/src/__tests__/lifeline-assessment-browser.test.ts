@@ -1,28 +1,16 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { extname, join } from "node:path";
-import type { FastifyInstance, FastifyReply } from "fastify";
-import { chromium, type Browser, type Page } from "playwright-core";
+import { join } from "node:path";
+import type { FastifyInstance } from "fastify";
+import type { Browser, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { addMembership, createJurisdiction, createPerson } from "../auth/service.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import { auth, buildDir, buildWeb, launchBrowser, listen, login, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
-const DIST = process.env.OPENEOC_TEST_BUILD_ROOT
-  ? join(process.env.OPENEOC_TEST_BUILD_ROOT, "lifeline-assessment-app-dist")
-  : "/tmp/openeoc-lifeline-assessment-app-dist";
-const SHOTS = process.env.OPENEOC_SHOT_DIR ?? "/tmp/openeoc-lifeline-assessment-shots";
-const TYPES: Readonly<Record<string, string>> = {
-  ".css": "text/css",
-  ".html": "text/html",
-  ".js": "text/javascript",
-  ".json": "application/json",
-  ".mjs": "text/javascript",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-  ".woff2": "font/woff2",
-};
+const DIST = buildDir("lifeline-assessment-app");
+const SHOTS = shotDir("lifeline-assessment");
 
 let admin: Sql;
 let runtime: Sql;
@@ -36,32 +24,6 @@ let incidentId: string;
 let jurisdictionId: string;
 const pageErrors: string[] = [];
 const externalRequests: string[] = [];
-
-function chromiumPath(): string {
-  const candidates = [
-    process.env.OPENEOC_CHROMIUM,
-    "C:/Program Files/Google/Chrome/Application/chrome.exe",
-    "/opt/pw-browsers/chromium",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium",
-  ];
-  for (const candidate of candidates) if (candidate && existsSync(candidate)) return candidate;
-  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
-}
-
-function auth(token: string) {
-  return { authorization: `Bearer ${token}` };
-}
-
-async function login(email: string, password: string): Promise<string> {
-  const response = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  expect(response.statusCode, response.body).toBe(200);
-  return response.json().accessToken as string;
-}
 
 async function request(
   token: string,
@@ -83,17 +45,7 @@ async function signIn(target: Page, email: string, password: string): Promise<vo
 }
 
 beforeAll(async () => {
-  const webDir = join(process.cwd(), "web");
-  const publicDir = join(webDir, "public");
-  const { build } = await import("../../../web/node_modules/vite/dist/node/index.js");
-  await build({
-    root: webDir,
-    base: "./",
-    publicDir: false,
-    logLevel: "silent",
-    build: { outDir: DIST, emptyOutDir: true },
-  });
-  expect(existsSync(join(DIST, "index.html"))).toBe(true);
+  await buildWeb(DIST);
 
   ({ admin, runtime } = await freshDb());
   const seed = await seedIdentity(admin);
@@ -115,20 +67,10 @@ beforeAll(async () => {
   await ensureStandardIncidentTemplates(admin);
 
   app = buildApp(runtime, { oidc: null });
-  const sendFile = (reply: FastifyReply, path: string) => {
-    if (!existsSync(path)) return reply.status(404).send("missing");
-    return reply.header("content-type", TYPES[extname(path)] ?? "application/octet-stream")
-      .send(readFileSync(path));
-  };
-  app.get("/app/*", (httpRequest, reply) => {
-    const relative = (httpRequest.params as { "*": string })["*"] || "index.html";
-    const safe = relative.replaceAll("..", "");
-    const built = join(DIST, safe);
-    return sendFile(reply, existsSync(built) ? built : join(publicDir, safe));
-  });
+  serveStatic(app, "/app", DIST);
 
-  adminToken = await login("admin@example.org", "correct-horse-battery");
-  outsiderToken = await login("outside@example.org", "outside-only-password");
+  adminToken = await login(app);
+  outsiderToken = await login(app, "outside@example.org", "outside-only-password");
   const incident = await request(
     adminToken,
     "POST",
@@ -172,10 +114,8 @@ beforeAll(async () => {
     actions: [],
   });
 
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const address = app.server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-  browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
+  baseUrl = await listen(app);
+  browser = await launchBrowser();
   page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   await page.emulateMedia({ reducedMotion: "reduce" });
   page.on("pageerror", (error) => pageErrors.push(error.message));
@@ -202,7 +142,6 @@ afterAll(async () => {
 
 describe("real incident Community Lifeline assessment workflow", () => {
   it("authors an attributed Energy assessment and presents the frozen result in a briefing", async () => {
-    mkdirSync(SHOTS, { recursive: true });
     const energy = page.locator('[data-lifeline="energy"]');
     await energy.getByRole("button", { name: "Open Energy details" }).focus();
     await page.keyboard.press("Enter");

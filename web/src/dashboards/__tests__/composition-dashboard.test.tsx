@@ -68,7 +68,7 @@ const snapshot: DashboardCompositionSnapshot = {
 
 afterEach(cleanup);
 
-describe("P-DASH incident overview composition", () => {
+describe("incident overview composition", () => {
   it("composes server panels into statistics, COP, lifelines, and priority activity", async () => {
     const openMap = vi.fn();
     const loadMapRecords = vi.fn().mockResolvedValue({

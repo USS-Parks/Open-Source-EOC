@@ -248,7 +248,7 @@ describe("P-BOARDS-1 operational board workspace", () => {
     await page.reload();
     await page.getByRole("main").getByText("Support staging", { exact: true }).waitFor();
     expect(await filter.inputValue()).toBe("Support");
-    await page.getByLabel(`Select record ${referenceId}`).check();
+    await page.getByLabel(`Select record ${referenceId}`).click();
     await selected.getByText("Support staging", { exact: true }).waitFor();
 
     await page.getByRole("button", { name: "Account menu" }).click();

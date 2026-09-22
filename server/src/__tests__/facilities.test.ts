@@ -7,7 +7,7 @@ import { withPerson } from "../db/context.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * Facility status networks (VEOC-28, F10): an always-on board with
+ * Facility status networks (F10): an always-on board with
  * staleness, a "report now" query that fans out and tracks response
  * completeness, and EDXL-HAVE export.
  */

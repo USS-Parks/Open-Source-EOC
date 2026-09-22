@@ -5,7 +5,7 @@ import { buildApp } from "../app.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * Staffing (VEOC-24): check-in bound to positions feeds the activity log,
+ * Staffing: check-in bound to positions feeds the activity log,
  * scan check-in reconciles when replayed offline, shift scheduling
  * refuses overlaps, and the staffing summary shows on-duty, vacancies,
  * and upcoming coverage live.

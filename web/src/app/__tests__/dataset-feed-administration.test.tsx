@@ -65,7 +65,7 @@ function feedClient(): ApiClient {
   } as unknown as ApiClient;
 }
 
-describe("D21 source readiness", () => {
+describe("source readiness", () => {
   it("separates registration from usable ingestion and explains last-good data", async () => {
     const client = datasetClient();
     const { container } = render(<IncidentDatasets client={client} incidentId="incident-1" canManage />);

@@ -34,7 +34,7 @@ const statusSchema = z.enum(AAR_ACTION_STATUSES);
 const periodRevisionSchema = z.coerce.number().int().positive();
 
 /**
- * After-action and improvement-planning routes (VEOC-36). Observations are
+ * After-action and improvement-planning routes. Observations are
  * captured during the incident; the AAR composes from them plus the
  * chronology; corrective actions are jurisdiction-scoped and outlive the
  * incident.

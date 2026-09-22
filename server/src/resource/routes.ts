@@ -19,7 +19,7 @@ import {
 } from "./service.js";
 
 /**
- * 213RR resource-request routes (VEOC-35, F5). Submission, the guarded
+ * 213RR resource-request routes (F5). Submission, the guarded
  * lifecycle transitions, assignment, cost capture, and export run under the
  * caller's person context. Escalation delivers to a peer tier over that
  * peer's token; the receive and report lanes are peer-token authenticated.

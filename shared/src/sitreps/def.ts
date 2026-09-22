@@ -2,7 +2,7 @@ import { z } from "zod";
 import { COMMUNITY_LIFELINES, LIFELINE_STATUS } from "../dictionary/lifelines.js";
 
 /**
- * Situation reports (VEOC-20, F8). A sitrep is a frozen composition of
+ * Situation reports (F8). A sitrep is a frozen composition of
  * live board state at a moment: once archived it never changes, and the
  * briefing view renders the archive, not the live boards.
  */

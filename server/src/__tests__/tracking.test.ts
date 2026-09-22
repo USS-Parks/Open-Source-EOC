@@ -4,7 +4,7 @@ import { buildApp } from "../app.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * Tracking and reunification (VEOC-25, F11): a scan tag carries one
+ * Tracking and reunification (F11): a scan tag carries one
  * custody chain across agency handoffs; restricted health/identity is
  * masked to anyone below operational staff; and a reunification query
  * answers whereabouts without exposing restricted fields.

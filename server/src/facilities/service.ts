@@ -1,10 +1,10 @@
 import { haveToXml, type FacilitySnapshot } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
-import { AuthError, type Principal } from "../auth/service.js";
+import { AuthError, requireMember, requireWriter, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 
 /**
- * Facility status networks (VEOC-28, F10) — the EMResource pattern. A
+ * Facility status networks (F10) — the EMResource pattern. A
  * standing registry, an always-on status board, event-driven "report now"
  * queries with response tracking, and EDXL-HAVE export. Staleness is
  * computed against each facility's freshness window.
@@ -216,15 +216,4 @@ export async function queryStatus(
       .filter((t) => t.responded_at === null)
       .map((t) => ({ facilityId: t.facility_id as string, name: t.name as string })),
   };
-}
-
-function requireWriter(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || (m.role !== "admin" && m.role !== "member"))
-    throw new AuthError(403, "requires write access to this jurisdiction");
-}
-
-function requireMember(actor: Principal, jurisdictionId: string): void {
-  if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
-    throw new AuthError(403, "no access to this jurisdiction");
 }

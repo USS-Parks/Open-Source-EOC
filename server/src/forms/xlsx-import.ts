@@ -2,7 +2,7 @@ import * as XLSX from "xlsx";
 import { importXlsForm, type FormDefinition, type SheetRow, type XlsFormSheets } from "@openeoc/shared";
 
 /**
- * Real .xlsx import (VEOC-22). Reads an XLSForm workbook's survey,
+ * Real .xlsx import. Reads an XLSForm workbook's survey,
  * choices, and settings sheets into normalized rows, then hands them to
  * the pure isomorphic importer. Keeping the binary reader here leaves the
  * shared package free of Node/file dependencies. SheetJS is Apache-2.0

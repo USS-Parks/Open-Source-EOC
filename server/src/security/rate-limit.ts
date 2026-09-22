@@ -1,11 +1,11 @@
 /**
- * A shared request flood limiter (VEOC-37 security audit, RA-1). A fixed
+ * A shared request flood limiter (security audit, RA-1). A fixed
  * window per client key (source IP) that trips only on a flood, so it never
  * touches the latency of normal operation: one Map lookup per request, no
  * allocation on the hot path. The default ceiling is set high on purpose,
  * so heavy but legitimate operation (live polling, a 150-user activation)
  * never trips it; only abuse does. Per-process, like the login backoff; a
- * shared store lands with horizontal scaling (VEOC-38). Set the max to 0 to
+ * shared store lands with horizontal scaling. Set the max to 0 to
  * disable it.
  */
 

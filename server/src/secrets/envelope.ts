@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
 /**
- * Envelope encryption for credentials at rest (VEOC-31, INV-7). A single
+ * Envelope encryption for credentials at rest (INV-7). A single
  * server key, OPENEOC_SECRET_KEY, wraps per-secret AES-256-GCM ciphertexts.
  * The key stays in deployment config; adding a new secret (e.g. an IPAWS
  * COG credential) is a runtime write, so a jurisdiction can be provisioned

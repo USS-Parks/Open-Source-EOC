@@ -7,7 +7,7 @@ import {
 } from "../plan.js";
 
 /**
- * Collaboration-space planning (VEOC-32, F15). The channel structure and
+ * Collaboration-space planning (F15). The channel structure and
  * membership derive purely from the ICS positions and their holders, so the
  * plan is testable with no backend and the adapters simply enact it.
  */

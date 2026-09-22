@@ -9,7 +9,7 @@ import { addMembership, createJurisdiction, createPerson } from "../auth/service
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * Dashboards (VEOC-18): server-side aggregation over several boards with
+ * Dashboards: server-side aggregation over several boards with
  * no client-side joins, live refresh pushed over the stream, and
  * definitions that round-trip between jurisdictions.
  */
@@ -314,7 +314,7 @@ describe("definitions travel between jurisdictions", () => {
   });
 });
 
-describe("runtime dashboard filter (VEOC-81)", () => {
+describe("runtime dashboard filter", () => {
   it("scopes the counting widgets, reconciles the totals, and echoes the filter", async () => {
     // Shelters: two normal, one closed. Unfiltered, all three are counted.
     const all = await snapshot(memberToken);

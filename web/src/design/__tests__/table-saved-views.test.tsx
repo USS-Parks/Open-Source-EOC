@@ -74,7 +74,7 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-describe("D07 table saved views", () => {
+describe("table saved views", () => {
   it("continues paged SEAM results until it finds the exact table and schema", async () => {
     const list = vi.fn(async (_incidentId: string, options?: { cursor?: string }) => options?.cursor
       ? { states: [record({ key: "priority:mine", tableId: "priority", label: "Mine" })], nextCursor: null }

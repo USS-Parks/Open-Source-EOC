@@ -7,7 +7,7 @@ import { ensureStandardIncidentTemplates } from "../incidents/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * Situation reporting and briefing (VEOC-20, F8): lifelines entry edits
+ * Situation reporting and briefing (F8): lifelines entry edits
  * one lifeline without retyping the rest; a sitrep composes from current
  * board state in one action and archives immutably.
  */

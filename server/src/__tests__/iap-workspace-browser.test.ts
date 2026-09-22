@@ -1,27 +1,15 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { extname, join } from "node:path";
-import type { FastifyInstance, FastifyReply } from "fastify";
-import { chromium, type Browser, type Page } from "playwright-core";
+import { join } from "node:path";
+import type { FastifyInstance } from "fastify";
+import type { Browser, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import { auth, buildDir, buildWeb, launchBrowser, listen, login, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
-const DIST = process.env.OPENEOC_TEST_BUILD_ROOT
-  ? join(process.env.OPENEOC_TEST_BUILD_ROOT, "p-iap-app-dist")
-  : "/tmp/openeoc-p-iap-app-dist";
-const SHOTS = process.env.OPENEOC_SHOT_DIR ?? "/tmp/openeoc-p-iap-shots";
-const TYPES: Readonly<Record<string, string>> = {
-  ".css": "text/css",
-  ".html": "text/html",
-  ".js": "text/javascript",
-  ".json": "application/json",
-  ".mjs": "text/javascript",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-  ".woff2": "font/woff2",
-};
+const DIST = buildDir("p-iap-app");
+const SHOTS = shotDir("p-iap");
 
 let admin: Sql;
 let runtime: Sql;
@@ -32,33 +20,6 @@ let baseUrl: string;
 let incidentId: string;
 const pageErrors: string[] = [];
 const externalRequests: string[] = [];
-
-function chromiumPath(): string {
-  for (const candidate of [
-    process.env.OPENEOC_CHROMIUM,
-    "C:/Program Files/Google/Chrome/Application/chrome.exe",
-    "/opt/pw-browsers/chromium",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium",
-  ]) {
-    if (candidate && existsSync(candidate)) return candidate;
-  }
-  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
-}
-
-function auth(token: string) {
-  return { authorization: `Bearer ${token}` };
-}
-
-async function login(email: string, password: string): Promise<string> {
-  const response = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  expect(response.statusCode, response.body).toBe(200);
-  return response.json().accessToken as string;
-}
 
 async function request(
   token: string,
@@ -97,36 +58,16 @@ async function iapSurfaceBounds(target: Page): Promise<{
 }
 
 beforeAll(async () => {
-  const webDir = join(process.cwd(), "web");
-  const publicDir = join(webDir, "public");
-  const { build } = await import("../../../web/node_modules/vite/dist/node/index.js");
-  await build({
-    root: webDir,
-    base: "./",
-    publicDir: false,
-    logLevel: "silent",
-    build: { outDir: DIST, emptyOutDir: true },
-  });
-  expect(existsSync(join(DIST, "index.html"))).toBe(true);
+  await buildWeb(DIST);
 
   ({ admin, runtime } = await freshDb());
   const seed = await seedIdentity(admin);
   await ensureStandardTemplates(admin);
   await ensureStandardIncidentTemplates(admin);
   app = buildApp(runtime, { oidc: null });
-  const sendFile = (reply: FastifyReply, path: string) => {
-    if (!existsSync(path)) return reply.status(404).send("missing");
-    return reply.header("content-type", TYPES[extname(path)] ?? "application/octet-stream")
-      .send(readFileSync(path));
-  };
-  app.get("/app/*", (httpRequest, reply) => {
-    const relative = (httpRequest.params as { "*": string })["*"] || "index.html";
-    const safe = relative.replaceAll("..", "");
-    const built = join(DIST, safe);
-    return sendFile(reply, existsSync(built) ? built : join(publicDir, safe));
-  });
+  serveStatic(app, "/app", DIST);
 
-  const token = await login("admin@example.org", "correct-horse-battery");
+  const token = await login(app);
   const incident = await request(
     token,
     "POST",
@@ -153,10 +94,8 @@ beforeAll(async () => {
     personId: seed.memberId,
   });
 
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const address = app.server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-  browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
+  baseUrl = await listen(app);
+  browser = await launchBrowser();
   page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce" });
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.route("**/*", (route) => {
@@ -182,9 +121,8 @@ afterAll(async () => {
   await admin?.end();
 });
 
-describe("P-IAP operational planning workspace presentation", () => {
+describe("operational planning workspace presentation", () => {
   it("authors, approves, revises, and exports an exact IAP revision in responsive light and dark views", async () => {
-    mkdirSync(SHOTS, { recursive: true });
     const periodPanel = page.getByRole("region", { name: "Authoritative planning period" });
     await periodPanel.waitFor({ state: "visible" });
     await periodPanel.getByText("Operational Period Browser", { exact: true }).waitFor({ state: "visible" });

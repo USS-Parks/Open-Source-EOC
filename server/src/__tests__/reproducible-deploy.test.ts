@@ -6,7 +6,7 @@ import { ensureStandardIncidentTemplates } from "../incidents/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * INV-10 second independent deploy proof (VEOC-43): the codebase outlives any
+ * INV-10 second independent deploy proof: the codebase outlives any
  * one maintainer. Two independent instances built from the source alone
  * (migrations from scratch, then the standard templates) produce byte-identical
  * board and incident template libraries and both serve a working API. Nothing

@@ -25,7 +25,7 @@ const selection: CopInspection = {
   ],
 };
 
-describe("P-COP workspace presentation", () => {
+describe("COP workspace presentation", () => {
   it("keeps grouped layer controls searchable without hiding an empty result", () => {
     render(
       <>

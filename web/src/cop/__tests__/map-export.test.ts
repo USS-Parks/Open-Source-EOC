@@ -35,7 +35,7 @@ function exportHarness(sourceWidth = 600, sourceHeight = 400) {
   return { source, output, text };
 }
 
-describe("D30 map PNG export", () => {
+describe("map PNG export", () => {
   it("keeps the map unobscured and adds identity, period, legend and provenance", () => {
     const harness = exportHarness();
     const exportedAt = new Date("2026-09-21T19:23:45.000Z");

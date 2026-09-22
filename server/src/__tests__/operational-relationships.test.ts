@@ -89,7 +89,7 @@ beforeAll(async () => {
 
 afterAll(async () => { await app?.close(); await runtime?.end(); await admin?.end(); });
 
-describe("D17 operational relationships", () => {
+describe("operational relationships", () => {
   it("records attributed same-incident task and resource links while rejecting a foreign target", async () => {
     const task = await api("POST", `/api/v1/incidents/${incidentId}/operational-relationships`, { source, target: { kind: "task", taskId } });
     expect(task.statusCode, task.body).toBe(201);

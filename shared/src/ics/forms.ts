@@ -1,7 +1,7 @@
 import { sectionForPosition } from "../collab/plan.js";
 
 /**
- * Electronic ICS forms and IAP assembly (VEOC-34, F5). The forms are built
+ * Electronic ICS forms and IAP assembly (F5). The forms are built
  * purely from a normalized incident context, so prefill is deterministic and
  * golden-testable with no database. The server gathers the live context
  * (org chart, assignments, activity log, comms) and calls these; the IAP

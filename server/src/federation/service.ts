@@ -1,16 +1,22 @@
 import type { Sql } from "../db/client.js";
-import { AuthError, principalForPerson, type Principal } from "../auth/service.js";
+import {
+  AuthError,
+  principalForPerson,
+  requireAdmin,
+  requireMember,
+  type Principal,
+} from "../auth/service.js";
 import { hashToken, newToken } from "../auth/tokens.js";
 import { withPerson } from "../db/context.js";
 import { recordAudit } from "../audit/service.js";
 import type { BoardSyncHub } from "../sync/hub.js";
 
 /**
- * Instance federation, store-and-forward (VEOC-30, F3). Peers are mutually
+ * Instance federation, store-and-forward (F3). Peers are mutually
  * authenticated; sharing agreements scope which boards a peer may read or
  * write. Local edits are queued in an outbox that survives a partition;
  * when a link returns, the batch is delivered and the peer applies it
- * through the VEOC-13 reconciliation, so both sides converge with no
+ * through the offline reconciliation path, so both sides converge with no
  * synchronous dual-commit and every jurisdiction keeps its own data.
  */
 
@@ -150,14 +156,4 @@ export async function receiveUpdates(
     }),
   );
   return { applied: updatesBase64.length, conflicts };
-}
-
-function requireAdmin(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || m.role !== "admin") throw new AuthError(403, "requires jurisdiction admin");
-}
-
-function requireMember(actor: Principal, jurisdictionId: string): void {
-  if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
-    throw new AuthError(403, "no access to this jurisdiction");
 }

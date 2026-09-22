@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { CUSTODY_STATES, TRACKING_KINDS } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
-import { AuthError, type Principal } from "../auth/service.js";
+import { AuthError, requireMember, requireWriter, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 
 /**
- * Scan-first tracking and reunification (VEOC-25, F11). Every object is a
+ * Scan-first tracking and reunification (F11). Every object is a
  * scan tag with one custody chain that any agency appends to. Restricted
  * details (health, full identity) are masked to anyone below operational
  * staff — the need-to-know wall — while whereabouts stays answerable for
@@ -221,15 +221,4 @@ export async function reunify(
     });
   }
   return answers;
-}
-
-function requireWriter(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || (m.role !== "admin" && m.role !== "member"))
-    throw new AuthError(403, "requires write access to this jurisdiction");
-}
-
-function requireMember(actor: Principal, jurisdictionId: string): void {
-  if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
-    throw new AuthError(403, "no access to this jurisdiction");
 }

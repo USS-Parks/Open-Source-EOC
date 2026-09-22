@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
 /**
- * Allowlisted CORS (VEOC-37). Off by default: with no configured origins the
+ * Allowlisted CORS. Off by default: with no configured origins the
  * API answers same-origin only, which is the tested reverse-proxy topology.
  * When OPENEOC_CORS_ORIGINS is set (comma-separated), only those exact
  * origins are echoed back, never a wildcard, so a browser client hosted on a

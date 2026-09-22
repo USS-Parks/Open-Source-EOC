@@ -87,7 +87,7 @@ afterEach(() => {
   Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
 });
 
-describe("D29 field reporting", () => {
+describe("field reporting", () => {
   it("maps the first valid geopoint like the authoritative form service", () => {
     const multiplePoints: FormDefinition = { ...definition, nodes: [
       ...definition.nodes,
@@ -165,7 +165,7 @@ describe("D29 field reporting", () => {
   });
 });
 
-describe("D29 tracking handoff", () => {
+describe("tracking handoff", () => {
   it("registers a field-safe object and records a structured custody receipt", async () => {
     const client = trackingClient();
     const { container } = render(<TrackingSurface client={client} jurisdictionId={JURISDICTION} />);

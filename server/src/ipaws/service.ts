@@ -1,11 +1,11 @@
 import type { Sql } from "../db/client.js";
-import { AuthError, type Principal } from "../auth/service.js";
+import { AuthError, requireAdmin, requireMember, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 import { decryptSecret, encryptSecret, fingerprint, hasSecretKey } from "../secrets/envelope.js";
 import { httpTransport, postCap, type IpawsResult, type IpawsTransport } from "./connector.js";
 
 /**
- * IPAWS-OPEN enablement and transmission (VEOC-31, R2). The connector is
+ * IPAWS-OPEN enablement and transmission (R2). The connector is
  * disabled by default. Going live is gated on two explicit acts by a
  * jurisdiction admin: configuring a COG's credentials and acknowledging
  * the documented MOA. Once both exist, enabling is a single toggle with no
@@ -242,14 +242,4 @@ export async function postAlert(
     },
   });
   return { ...result, submissionId: sub!.id as string };
-}
-
-function requireAdmin(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || m.role !== "admin") throw new AuthError(403, "requires jurisdiction admin");
-}
-
-function requireMember(actor: Principal, jurisdictionId: string): void {
-  if (!actor.memberships.some((x) => x.jurisdictionId === jurisdictionId))
-    throw new AuthError(403, "no access to this jurisdiction");
 }

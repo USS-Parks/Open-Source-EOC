@@ -1,23 +1,15 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { FastifyInstance, FastifyReply } from "fastify";
-import { chromium, type Browser, type Page } from "playwright-core";
+import type { FastifyInstance } from "fastify";
+import type { Browser, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
 import { ensureStandardTemplates } from "../boards/service.js";
+import { buildDir, buildWeb, launchBrowser, listen, login, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
-const DIST = process.env.OPENEOC_TEST_BUILD_ROOT
-  ? join(process.env.OPENEOC_TEST_BUILD_ROOT, "alerts-workspace-app-dist")
-  : "/tmp/openeoc-alerts-workspace-app-dist";
-const SHOTS = process.env.OPENEOC_SHOT_DIR ?? "/tmp/openeoc-alerts-workspace-shots";
-const TYPES: Record<string, string> = {
-  ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript",
-  ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml",
-  ".png": "image/png", ".woff2": "font/woff2", ".wasm": "application/wasm",
-  ".pmtiles": "application/octet-stream",
-};
+const DIST = buildDir("alerts-workspace-app");
+const SHOTS = shotDir("alerts-workspace");
 
 let admin: Sql;
 let runtime: Sql;
@@ -29,32 +21,6 @@ let adminToken: string;
 let incidentId: string;
 const pageErrors: string[] = [];
 const externalRequests: string[] = [];
-
-function chromiumPath(): string {
-  for (const candidate of [process.env.OPENEOC_CHROMIUM, "/opt/pw-browsers/chromium", "/usr/bin/google-chrome", "/usr/bin/chromium"]) {
-    if (candidate && existsSync(candidate)) return candidate;
-  }
-  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
-}
-
-function sendFile(reply: FastifyReply, path: string, range?: string) {
-  if (!existsSync(path)) return reply.status(404).send("missing");
-  const buffer = readFileSync(path);
-  const extension = path.slice(path.lastIndexOf("."));
-  const match = range ? /^bytes=(\d+)-(\d*)$/.exec(range) : null;
-  if (match) {
-    const start = Number(match[1]);
-    const end = match[2] ? Number(match[2]) : buffer.length - 1;
-    const slice = buffer.subarray(start, Math.min(end, buffer.length - 1) + 1);
-    return reply.status(206)
-      .header("content-type", TYPES[extension] ?? "application/octet-stream")
-      .header("accept-ranges", "bytes")
-      .header("content-range", `bytes ${start}-${start + slice.length - 1}/${buffer.length}`)
-      .send(slice);
-  }
-  return reply.header("content-type", TYPES[extension] ?? "application/octet-stream")
-    .header("accept-ranges", "bytes").send(buffer);
-}
 
 async function request(method: "GET" | "POST", url: string, payload?: Record<string, unknown>) {
   const response = await app.inject({
@@ -69,12 +35,7 @@ async function request(method: "GET" | "POST", url: string, payload?: Record<str
 }
 
 beforeAll(async () => {
-  const webDir = join(process.cwd(), "web");
-  const publicDir = join(webDir, "public");
-  const { build } = await import("../../../web/node_modules/vite/dist/node/index.js");
-  await build({ root: webDir, base: "./", publicDir: false, logLevel: "silent", build: { outDir: DIST, emptyOutDir: true } });
-  expect(existsSync(join(DIST, "index.html"))).toBe(true);
-  mkdirSync(SHOTS, { recursive: true });
+  await buildWeb(DIST);
 
   ({ admin, runtime } = await freshDb());
   const seed = await seedIdentity(admin);
@@ -82,19 +43,10 @@ beforeAll(async () => {
   await ensureStandardTemplates(admin);
   await ensureStandardIncidentTemplates(admin);
   app = buildApp(runtime, { oidc: null });
-  app.get("/app/*", (incoming, reply) => {
-    const relative = (incoming.params as { "*": string })["*"] || "index.html";
-    const safe = relative.replaceAll("..", "");
-    const built = join(DIST, safe);
-    if (existsSync(built)) return sendFile(reply, built, incoming.headers.range);
-    return sendFile(reply, join(publicDir, safe), incoming.headers.range);
-  });
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const address = app.server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+  serveStatic(app, "/app", DIST);
+  baseUrl = await listen(app);
 
-  const login = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email: "admin@example.org", password: "correct-horse-battery" } });
-  adminToken = login.json().accessToken as string;
+  adminToken = await login(app);
   const incident = await request("POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/incidents`, { templateKey: "daily_ops", name: "Synthetic D28 Alert Exercise" });
   incidentId = incident.incidentId as string;
   await request("POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/cap/drafts`, {
@@ -110,7 +62,7 @@ beforeAll(async () => {
       'Review the synthetic shelter request before the next operational briefing.', 'delivered',
       ${admin.json({ incidentId, urgency: "Expected" } as never)})`;
 
-  browser = await chromium.launch({ executablePath: chromiumPath(), headless: true, args: ["--no-sandbox"] });
+  browser = await launchBrowser({ headless: true });
   page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.route("**/*", (route) => {
@@ -143,7 +95,7 @@ async function openCenter() {
   await page.getByRole("heading", { name: "Alerts and notifications" }).waitFor({ state: "visible", timeout: 20000 });
 }
 
-describe("D28 real alert workspace", () => {
+describe("real alert workspace", () => {
   it("keeps read, acknowledgement, local review, and external delivery visibly separate", async () => {
     await signIn();
     await openCenter();

@@ -74,7 +74,7 @@ function Harness(props: {
 
 afterEach(cleanup);
 
-describe("D07 operational table", () => {
+describe("operational table", () => {
   it("sorts and filters through controlled state and distinguishes missing values", () => {
     const { getByRole, getByText, queryByText } = render(<Harness />);
     expect(getByText("Not provided").closest("td")?.getAttribute("data-missing")).toBe("true");

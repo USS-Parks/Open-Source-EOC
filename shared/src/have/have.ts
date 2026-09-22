@@ -1,7 +1,7 @@
 import { XMLBuilder } from "fast-xml-parser";
 
 /**
- * EDXL-HAVE 2.0 export (VEOC-28, F10/F20). Hospital AVailability Exchange:
+ * EDXL-HAVE 2.0 export (F10/F20). Hospital AVailability Exchange:
  * the standing facility-status picture serialized to the OASIS HAVE shape
  * so a jurisdiction's status board leaves the platform as a standard
  * others can consume. Export only; the always-on board is the source.

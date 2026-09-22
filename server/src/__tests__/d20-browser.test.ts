@@ -1,21 +1,16 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { extname, join } from "node:path";
+import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
-import { chromium, type Browser, type Page } from "playwright-core";
+import type { Browser, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { addMembership, createJurisdiction, createPerson } from "../auth/service.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import { buildDir, buildWeb, launchBrowser, listen, login, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
-const DIST = process.env.OPENEOC_TEST_BUILD_ROOT
-  ? join(process.env.OPENEOC_TEST_BUILD_ROOT, "d20-app-dist") : "/tmp/openeoc-d20-app-dist";
-const SHOTS = process.env.OPENEOC_SHOT_DIR ?? "/tmp/openeoc-d20-shots";
-const TYPES: Readonly<Record<string, string>> = {
-  ".css": "text/css", ".html": "text/html", ".js": "text/javascript", ".json": "application/json",
-  ".mjs": "text/javascript", ".png": "image/png", ".svg": "image/svg+xml", ".woff2": "font/woff2",
-};
+const DIST = buildDir("d20-app");
+const SHOTS = shotDir("d20");
 
 let admin: Sql;
 let runtime: Sql;
@@ -28,53 +23,18 @@ let token: string;
 const pageErrors: string[] = [];
 const externalRequests: string[] = [];
 
-function chromiumPath(): string {
-  const candidates = [process.env.OPENEOC_CHROMIUM, "C:/Program Files/Google/Chrome/Application/chrome.exe", "/opt/pw-browsers/chromium", "/usr/bin/google-chrome", "/usr/bin/chromium"];
-  for (const candidate of candidates) if (candidate && existsSync(candidate)) return candidate;
-  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
-}
-
-async function login(email: string, password: string): Promise<string> {
-  const response = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email, password } });
-  expect(response.statusCode, response.body).toBe(200);
-  return response.json().accessToken as string;
-}
-
 beforeAll(async () => {
-  const webDir = join(process.cwd(), "web");
-  const publicDir = join(webDir, "public");
-  const { build } = await import("../../../web/node_modules/vite/dist/node/index.js");
-  await build({ root: webDir, base: "./", publicDir: false, logLevel: "silent", build: { outDir: DIST, emptyOutDir: true } });
-  expect(existsSync(join(DIST, "index.html"))).toBe(true);
+  await buildWeb(DIST);
   ({ admin, runtime } = await freshDb());
   const seed = await seedIdentity(admin);
   jurisdictionId = seed.jurisdictionId;
   await ensureStandardTemplates(admin);
   await ensureStandardIncidentTemplates(admin);
   app = buildApp(runtime, { oidc: null });
-  app.get("/app/*", (request, reply) => {
-    const relative = (request.params as { "*": string })["*"] || "index.html";
-    const path = join(DIST, relative.replaceAll("..", ""));
-    const fallback = join(publicDir, relative.replaceAll("..", ""));
-    const file = existsSync(path) ? path : fallback;
-    if (!existsSync(file)) return reply.status(404).send("missing");
-    const data = readFileSync(file);
-    const range = request.headers.range;
-    const match = range ? /^bytes=(\d+)-(\d*)$/.exec(range) : null;
-    if (match) {
-      const start = Number(match[1]);
-      const end = match[2] ? Number(match[2]) : data.length - 1;
-      const slice = data.subarray(start, Math.min(end, data.length - 1) + 1);
-      return reply.status(206).header("content-type", TYPES[extname(file)] ?? "application/octet-stream")
-        .header("accept-ranges", "bytes").header("content-range", `bytes ${start}-${start + slice.length - 1}/${data.length}`).send(slice);
-    }
-    return reply.header("content-type", TYPES[extname(file)] ?? "application/octet-stream").header("accept-ranges", "bytes").send(data);
-  });
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const address = app.server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-  token = await login("admin@example.org", "correct-horse-battery");
-  browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
+  serveStatic(app, "/app", DIST);
+  baseUrl = await listen(app);
+  token = await login(app);
+  browser = await launchBrowser();
   page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   await page.emulateMedia({ reducedMotion: "reduce" });
   page.on("pageerror", (error) => pageErrors.push(error.message));
@@ -94,9 +54,8 @@ afterAll(async () => {
   await admin?.end();
 });
 
-describe("D20 real-browser incident activation and participation", () => {
+describe("real-browser incident activation and participation", () => {
   it("activates, scopes area and records, proves partner discovery and access, then closes the incident", async () => {
-    mkdirSync(SHOTS, { recursive: true });
     await page.goto(`${baseUrl}/app/index.html`, { waitUntil: "load" });
     await page.getByLabel("Email").fill("admin@example.org");
     await page.getByLabel("Password").fill("correct-horse-battery");
@@ -162,9 +121,10 @@ describe("D20 real-browser incident activation and participation", () => {
     await participants.getByLabel("Incident role").selectOption("coordinator");
     await participants.getByLabel("Participation expires").fill("2099-09-21T20:00");
     await participants.getByLabel("Participation reason").fill("Selected mutual-aid coordination");
-    await participants.getByRole("button", { name: "Add participant" }).click();
+    await participants.getByRole("button", { name: "Add participant" })
+      .evaluate((button) => (button as unknown as { click(): void }).click());
     await participants.getByText("D20 Partner", { exact: true }).waitFor();
-    const partnerToken = await login("d20-partner@example.org", "d20-partner-password");
+    const partnerToken = await login(app, "d20-partner@example.org", "d20-partner-password");
     const partnerRead = () => app.inject({ method: "GET", url: `/api/v1/incidents/${incidentId}/operational-area`, headers: { authorization: `Bearer ${partnerToken}` } });
     expect((await partnerRead()).statusCode).toBe(200);
     await participants.getByRole("button", { name: "End participation for D20 Partner" }).click();
@@ -182,9 +142,10 @@ describe("D20 real-browser incident activation and participation", () => {
     await participants.getByLabel("Incident role").selectOption("coordinator");
     await participants.getByLabel("Participation expires").fill("2099-09-21T20:00");
     await participants.getByLabel("Participation reason").fill("Closeout access proof");
-    await participants.getByRole("button", { name: "Add participant" }).click();
+    await participants.getByRole("button", { name: "Add participant" })
+      .evaluate((button) => (button as unknown as { click(): void }).click());
     await participants.locator("strong").filter({ hasText: "D20 Close Partner" }).waitFor();
-    const closePartnerToken = await login("d20-close-partner@example.org", "d20-close-partner-password");
+    const closePartnerToken = await login(app, "d20-close-partner@example.org", "d20-close-partner-password");
     const closePartnerRead = () => app.inject({ method: "GET", url: `/api/v1/incidents/${incidentId}/operational-area`, headers: { authorization: `Bearer ${closePartnerToken}` } });
     expect((await closePartnerRead()).statusCode).toBe(200);
 

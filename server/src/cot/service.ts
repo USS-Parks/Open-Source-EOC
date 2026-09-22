@@ -7,13 +7,13 @@ import {
   type GeoFeature,
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
-import { AuthError, type Principal } from "../auth/service.js";
+import { AuthError, requireAdmin, type Principal } from "../auth/service.js";
 import { getEffectiveBoard } from "../boards/service.js";
 import { newToken } from "../auth/tokens.js";
 import { recordAudit } from "../audit/service.js";
 
 /**
- * CoT/TAK gateway (VEOC-29, F20; ADR-0008, TypeScript path). Inbound CoT
+ * CoT/TAK gateway (F20; ADR-0008, TypeScript path). Inbound CoT
  * tracks land as a COP feed layer; a VEOC geo record emits as a CoT event
  * a TAK server can consume. The translation lives in `shared`; this wires
  * it to the feed layers and board records.
@@ -46,7 +46,7 @@ export async function ingestCot(
   now = new Date(),
 ): Promise<{ feedId: string; feature: GeoFeature }> {
   // The gateway lands tracks on a feed layer, which is admin-gated (the
-  // feeds posture from VEOC-19); CoT ingest is a service/admin action.
+  // feed framework's posture); CoT ingest is a service/admin action.
   requireAdmin(actor, jurisdictionId);
   const event = cotFromXml(xml);
   const feature = cotToGeoFeature(event);
@@ -114,9 +114,4 @@ export async function emitCot(
     payload: { uid: event.uid, type: event.type },
   });
   return { xml: cotToXml(event), uid: event.uid };
-}
-
-function requireAdmin(actor: Principal, jurisdictionId: string): void {
-  const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
-  if (!m || m.role !== "admin") throw new AuthError(403, "requires jurisdiction admin");
 }

@@ -1,6 +1,7 @@
 import { Button, StatusBadge } from "../design/components.js";
 import { Icon } from "../design/icons/index.js";
 import type { FeedHealth } from "../app/api/client.js";
+import { formatTime } from "../datasets/format.js";
 
 export function FeedReadiness(props: {
   readonly feeds: readonly FeedHealth[];
@@ -49,9 +50,4 @@ function formatDuration(seconds: number): string {
   if (seconds % 86400 === 0) return `${seconds / 86400} day${seconds === 86400 ? "" : "s"}`;
   if (seconds % 3600 === 0) return `${seconds / 3600} hour${seconds === 3600 ? "" : "s"}`;
   return `${Math.round(seconds / 60)} minutes`;
-}
-
-function formatTime(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
 }

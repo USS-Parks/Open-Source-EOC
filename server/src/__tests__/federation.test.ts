@@ -9,7 +9,7 @@ import { ensureStandardTemplates } from "../boards/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * Instance federation (VEOC-30, F3). Two genuinely separate instances —
+ * Instance federation (F3). Two genuinely separate instances —
  * separate databases and app processes — share a board through an
  * agreement. A scripted partition strands edits in each instance's
  * outbox; on reconnect the batches deliver over HTTP and both boards

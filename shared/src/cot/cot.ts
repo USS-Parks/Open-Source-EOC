@@ -1,7 +1,7 @@
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
 
 /**
- * Cursor-on-Target (CoT) event model and gateway mapping (VEOC-29, F20).
+ * Cursor-on-Target (CoT) event model and gateway mapping (F20).
  * CoT is the TAK ecosystem's wire format. This bridges it both ways: an
  * ATAK track parses to a COP feature, and a VEOC geo record emits as a
  * CoT event a TAK server can consume. Pure and isomorphic, so the gateway

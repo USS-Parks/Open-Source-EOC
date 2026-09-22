@@ -58,7 +58,7 @@ export interface IcsFormEntry {
 
 /**
  * Standard ICS form registry. Full per-form field sets are implemented with
- * the forms engine in roster session VEOC-34; the registry is the canonical
+ * the forms engine; the registry is the canonical
  * list they must cover.
  */
 export const ICS_FORMS: readonly IcsFormEntry[] = [

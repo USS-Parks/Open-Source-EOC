@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * PWA packaging (VEOC-21): the app is installable and its shell caches
+ * PWA packaging: the app is installable and its shell caches
  * for offline boot. The install-prompt and airplane-mode boot are
  * validated in a real browser at pilot; here we hold the static contract.
  */

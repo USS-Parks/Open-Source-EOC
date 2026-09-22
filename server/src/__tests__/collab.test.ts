@@ -16,7 +16,7 @@ import type { HttpRequest, HttpResponse, HttpTransport } from "../collab/adapter
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * Collaboration adapters and incident spaces (VEOC-32, F15/R6). Activation
+ * Collaboration adapters and incident spaces (F15/R6). Activation
  * against a fake Mattermost and a fake Matrix backend yields the channel
  * structure with membership drawn from position holders; reassignment moves
  * membership; announcements post; deactivation archives; and with no backend

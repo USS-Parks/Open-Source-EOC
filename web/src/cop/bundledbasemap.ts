@@ -10,7 +10,7 @@ import {
 } from "./layers.js";
 
 /**
- * The bundled offline vector basemap (VEOC-75). Natural Earth 10m and US Census
+ * The bundled offline vector basemap. Natural Earth 10m and US Census
  * county data, clipped to California and tiled to PMTiles with tippecanoe (see
  * deploy/basemap), rendered as real vector tiles with labeled towns, highways,
  * urban footprints, water, and county lines. This ships with the app, needs no

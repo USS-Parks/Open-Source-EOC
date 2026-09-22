@@ -62,7 +62,7 @@ const conflictKey = (scope: ContinuityScope): string =>
   `field-submission-conflict:${scope.personId}:${scope.incidentId}`;
 
 /**
- * Production adapter over the VEOC-85 incident-scoped Yjs queue. The bearer
+ * Production adapter over the incident-scoped Yjs queue. The bearer
  * token enters only the live sync call; IndexedDB stores the immutable update,
  * person, incident, board and operation UUID, never the credential.
  */

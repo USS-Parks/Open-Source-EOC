@@ -6,7 +6,7 @@ import { ensureStandardTemplates } from "../boards/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
- * CoT/TAK gateway (VEOC-29, ADR-0008): a simulated ATAK track renders on
+ * CoT/TAK gateway (ADR-0008): a simulated ATAK track renders on
  * the COP (inbound CoT → feed feature), and a VEOC geo record appears in a
  * TAK fixture server (outbound CoT XML a TAK consumer parses back).
  */

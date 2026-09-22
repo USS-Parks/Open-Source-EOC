@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { WebSocket } from "ws";
 import { z } from "zod";
@@ -32,7 +33,7 @@ export function registerSyncRoutes(app: FastifyInstance, sql: Sql, hub: BoardSyn
     const { boardId } = req.params as { boardId: string };
     const query = SyncQuery.safeParse(req.query);
     const incidentId = query.success ? query.data.incidentId ?? null : null;
-    const sessionId = Math.random().toString(36).slice(2);
+    const sessionId = randomUUID();
     let principal: Principal | null = null;
     let unsubscribe: (() => void) | null = null;
 

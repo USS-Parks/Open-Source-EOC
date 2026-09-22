@@ -1,5 +1,5 @@
 /**
- * XLSForm / ODK-XForms expression engine (VEOC-22, F7). A focused,
+ * XLSForm / ODK-XForms expression engine (F7). A focused,
  * conformant subset of the XPath-flavored expression language used in
  * `relevant`, `constraint`, and `calculation` columns: variable
  * references `${name}`, the XForms operators (`=` `!=` `<` `<=` `>` `>=`

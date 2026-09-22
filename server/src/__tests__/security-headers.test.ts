@@ -5,7 +5,7 @@ import { rateLimit, resetRateLimit } from "../security/rate-limit.js";
 import { freshDb, type Sql } from "./helpers.js";
 
 /**
- * VEOC-37 hardening (M4): security response headers, health and readiness
+ * Hardening: security response headers, health and readiness
  * probes, and the shared flood limiter. The limiter's ceiling is exercised
  * directly so the test is fast and deterministic; the middleware path is
  * covered by the header and probe checks going through the same hook.

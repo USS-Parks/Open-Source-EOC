@@ -1,22 +1,15 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { extname, join } from "node:path";
-import type { FastifyInstance, FastifyReply } from "fastify";
-import { chromium, type Browser, type Page } from "playwright-core";
+import { join } from "node:path";
+import type { FastifyInstance } from "fastify";
+import type { Browser, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import { auth, buildDir, buildWeb, launchBrowser, listen, login, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
-const DIST = process.env.OPENEOC_TEST_BUILD_ROOT
-  ? join(process.env.OPENEOC_TEST_BUILD_ROOT, "d21-data-admin-app-dist")
-  : "/tmp/openeoc-d21-data-admin-app-dist";
-const SHOTS = process.env.OPENEOC_SHOT_DIR ?? "/tmp/openeoc-d21-data-admin-shots";
-const TYPES: Readonly<Record<string, string>> = {
-  ".css": "text/css", ".html": "text/html", ".js": "text/javascript",
-  ".json": "application/json", ".mjs": "text/javascript", ".png": "image/png",
-  ".svg": "image/svg+xml", ".woff2": "font/woff2",
-};
+const DIST = buildDir("d21-data-admin-app");
+const SHOTS = shotDir("d21-data-admin");
 
 let admin: Sql;
 let runtime: Sql;
@@ -29,21 +22,6 @@ let jurisdictionId: string;
 let incidentId: string;
 const pageErrors: string[] = [];
 const externalRequests: string[] = [];
-
-function chromiumPath(): string {
-  for (const candidate of [process.env.OPENEOC_CHROMIUM, "C:/Program Files/Google/Chrome/Application/chrome.exe", "/opt/pw-browsers/chromium", "/usr/bin/google-chrome", "/usr/bin/chromium"]) {
-    if (candidate && existsSync(candidate)) return candidate;
-  }
-  throw new Error("no Chromium found; set OPENEOC_CHROMIUM");
-}
-
-function auth(value: string) { return { authorization: `Bearer ${value}` }; }
-
-async function login(email: string, password: string): Promise<string> {
-  const response = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email, password } });
-  expect(response.statusCode, response.body).toBe(200);
-  return response.json().accessToken as string;
-}
 
 async function request(method: "POST" | "PUT", url: string, payload: Record<string, unknown>) {
   const response = await app.inject({ method, url, headers: auth(token), payload });
@@ -60,11 +38,7 @@ async function signIn(target: Page): Promise<void> {
 }
 
 beforeAll(async () => {
-  const webDir = join(process.cwd(), "web");
-  const publicDir = join(webDir, "public");
-  const { build } = await import("../../../web/node_modules/vite/dist/node/index.js");
-  await build({ root: webDir, base: "./", publicDir: false, logLevel: "silent", build: { outDir: DIST, emptyOutDir: true } });
-  expect(existsSync(join(DIST, "index.html"))).toBe(true);
+  await buildWeb(DIST);
 
   ({ admin, runtime } = await freshDb());
   const seed = await seedIdentity(admin);
@@ -72,18 +46,9 @@ beforeAll(async () => {
   await ensureStandardTemplates(admin);
   await ensureStandardIncidentTemplates(admin);
   app = buildApp(runtime, { oidc: null });
-  const sendFile = (reply: FastifyReply, path: string) => {
-    if (!existsSync(path)) return reply.status(404).send("missing");
-    return reply.header("content-type", TYPES[extname(path)] ?? "application/octet-stream").send(readFileSync(path));
-  };
-  app.get("/app/*", (httpRequest, reply) => {
-    const relative = (httpRequest.params as { "*": string })["*"] || "index.html";
-    const safe = relative.replaceAll("..", "");
-    const built = join(DIST, safe);
-    return sendFile(reply, existsSync(built) ? built : join(publicDir, safe));
-  });
+  serveStatic(app, "/app", DIST);
 
-  token = await login("admin@example.org", "correct-horse-battery");
+  token = await login(app);
   const incident = await request("POST", `/api/v1/jurisdictions/${jurisdictionId}/incidents`, { templateKey: "daily_ops", name: "North Coast Storm" });
   incidentId = incident.incidentId as string;
   const now = Date.now();
@@ -134,10 +99,8 @@ beforeAll(async () => {
   });
   expect(failedFeed!.last_success_at).toBeTruthy();
 
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const address = app.server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-  browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"] });
+  baseUrl = await listen(app);
+  browser = await launchBrowser();
   page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   await page.emulateMedia({ reducedMotion: "reduce" });
   page.on("pageerror", (error) => pageErrors.push(error.message));
@@ -153,9 +116,8 @@ afterAll(async () => {
   await page?.close(); await browser?.close(); await app?.close(); await runtime?.end(); await admin?.end();
 }, 30_000);
 
-describe("D21 datasets and feed administration", () => {
+describe("datasets and feed administration", () => {
   it("shows truthful readiness, mapping and recovery at wide and narrow widths", async () => {
-    mkdirSync(SHOTS, { recursive: true });
     await page.goto(`${baseUrl}/app/index.html#/datasets?incident=${incidentId}`, { waitUntil: "networkidle" });
     await page.getByRole("heading", { name: "Datasets", level: 2, exact: true }).waitFor({ state: "visible" });
     await page.getByText("Registered · awaiting ingestion").waitFor({ state: "visible" });

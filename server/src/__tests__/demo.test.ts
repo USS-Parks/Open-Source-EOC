@@ -10,7 +10,7 @@ import { computeSpatialImpact } from "../impact/spatial.js";
 import { freshDb, type Sql } from "./helpers.js";
 
 /**
- * The demo dataset and the facet coverage gate (VEOC-41/D32). The dataset
+ * The demo dataset and the facet coverage gate. The dataset
  * loads through the real services, remains visibly synthetic, includes honest
  * unknown/stale/partial states, and performs no outbound alert delivery.
  */

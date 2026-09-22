@@ -102,7 +102,7 @@ function renderSurface(client = makeClient()) {
   return { client, ...view };
 }
 
-describe("D28 notification tray", () => {
+describe("notification tray", () => {
   it("summarizes state without marking items read", () => {
     const onOpen = vi.fn();
     const { getByText, getByRole } = render(
@@ -116,7 +116,7 @@ describe("D28 notification tray", () => {
   });
 });
 
-describe("D28 notification states", () => {
+describe("notification states", () => {
   it("marks an explicitly opened notification read without acknowledging it", async () => {
     const { client, findByRole, getByRole, getByText } = renderSurface();
     const item = await findByRole("button", { name: /Approval requested/ });
@@ -161,7 +161,7 @@ describe("D28 notification states", () => {
   });
 });
 
-describe("D28 local CAP drafting and review", () => {
+describe("local CAP drafting and review", () => {
   it("reviews then stores a local draft without exposing an enabled external action", async () => {
     const { client, findByRole, getByLabelText, getByRole, getByText } = renderSurface();
     await findByRole("button", { name: "Compose local alert" });

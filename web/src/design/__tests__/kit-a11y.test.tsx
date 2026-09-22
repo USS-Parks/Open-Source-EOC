@@ -13,7 +13,7 @@ async function violations(container: Element) {
   return results.violations;
 }
 
-describe("D06 component gallery accessibility", () => {
+describe("component gallery accessibility", () => {
   for (const theme of ["light", "dark"] as const) {
     it(`${theme} review has no axe violations`, async () => {
       const { container } = render(<KitReview initialTheme={theme} />);

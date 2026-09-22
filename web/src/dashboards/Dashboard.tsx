@@ -17,7 +17,7 @@ import type {
 } from "@openeoc/shared";
 
 /**
- * Dashboard renderer (VEOC-18). Everything on screen is a server-computed
+ * Dashboard renderer. Everything on screen is a server-computed
  * snapshot; this component never fetches raw records and never joins.
  * Live updates arrive as replacement snapshots over the dashboard stream.
  */

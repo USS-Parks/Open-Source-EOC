@@ -2,7 +2,7 @@ import { evaluate, evaluateBool, type Bindings, type Scalar } from "./expr.js";
 import type { FormDefinition, FormField, FormNode } from "./xlsform.js";
 
 /**
- * Pure form runner (VEOC-22, F7). Given a form and a set of answers it
+ * Pure form runner (F7). Given a form and a set of answers it
  * resolves relevance, runs calculations to a fixed point, checks
  * constraints and required fields, and produces the submission. No I/O,
  * so the whole thing runs offline in the field client and is exhaustively
