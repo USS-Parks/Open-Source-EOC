@@ -31,6 +31,12 @@ agent reviews do not confer that approval. Current lane work is preserved and
 frozen while the latest published build is prepared for review. This instruction
 supersedes earlier automatic STS advancement prospectively.
 
+**Full continuation restored, 2026-09-21.** After testing the demo, Basho
+directed: "No. Proceed until finished with the master PSPR." This supersedes
+the intermediate demo approval pauses above and resumes the full approved
+roster with its prescribed technical gates, authorized commits and publication.
+Keep working demos updated; final aesthetic acceptance remains Basho's alone.
+
 **Held-request approval receipt, 2026-09-21.** Basho subsequently gave full,
 explicit authorization for all requests held in this working session. This
 clears the three concrete pending requests: G-A's recommended design defaults;
