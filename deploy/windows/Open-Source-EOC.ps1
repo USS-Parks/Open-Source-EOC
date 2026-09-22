@@ -2,7 +2,6 @@
 param(
   [ValidateSet('Build', 'Setup', 'Start', 'Status', 'Stop', 'Launch')]
   [string]$Action = 'Launch',
-  [ValidateSet('production', 'demo', 'acceptance')]
   [string]$Profile = 'production',
   [ValidateRange(1024, 65535)]
   [int]$PgPort,
@@ -21,7 +20,15 @@ $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $scriptRoot '../..'))
 $entry = Join-Path $scriptRoot 'desktop.mjs'
 $installedMarker = Join-Path $repoRoot 'desktop-install.json'
 $profileDataRoot = Join-Path $scriptRoot 'out'
-if (Test-Path -LiteralPath $installedMarker) {
+$installed = Test-Path -LiteralPath $installedMarker
+$allowedProfiles = @('production', 'demo')
+if (-not $installed -and $env:OPENEOC_ENABLE_ACCEPTANCE_PROFILE -eq '1') {
+  $allowedProfiles += 'acceptance'
+}
+if ($Action -ne 'Build' -and $Profile -notin $allowedProfiles) {
+  throw "Profile must be one of: $($allowedProfiles -join ', ')"
+}
+if ($installed) {
   $bundledNode = Join-Path $repoRoot 'runtime/node/node.exe'
   if (-not (Test-Path -LiteralPath $bundledNode)) { throw "Installed Node runtime is missing: $bundledNode" }
   if (-not $env:LOCALAPPDATA) { throw 'LOCALAPPDATA is required for installed Open Source EOC data.' }

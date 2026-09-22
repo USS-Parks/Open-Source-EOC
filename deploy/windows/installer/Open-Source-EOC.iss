@@ -39,7 +39,6 @@ Name: "{autodesktop}\Open Source EOC"; Filename: "{app}\app\deploy\windows\Open 
 [UninstallRun]
 Filename: "{app}\app\deploy\windows\Open Source EOC.cmd"; Parameters: "-Action Stop -Profile production"; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "OpenSourceEOCStopProduction"
 Filename: "{app}\app\deploy\windows\Open Source EOC.cmd"; Parameters: "-Action Stop -Profile demo"; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "OpenSourceEOCStopDemo"
-Filename: "{app}\app\deploy\windows\Open Source EOC.cmd"; Parameters: "-Action Stop -Profile acceptance"; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "OpenSourceEOCStopAcceptance"
 
 [Code]
 function InitializeSetup(): Boolean;

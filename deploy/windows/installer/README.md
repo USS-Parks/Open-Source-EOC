@@ -13,6 +13,11 @@ administrator and jurisdiction. The demo shortcut creates the existing,
 clearly labeled synthetic fixture. No production credentials are placed in the
 installer.
 
+The acceptance profile is test harness infrastructure, not an installed
+operator profile. From a source checkout only, test owners may enable it for a
+single command by setting `OPENEOC_ENABLE_ACCEPTANCE_PROFILE=1`. The installed
+launcher ignores that switch and accepts only `production` and `demo`.
+
 ## Data and uninstall behavior
 
 Application files install below `%LOCALAPPDATA%\Programs\Open Source EOC`.
@@ -22,7 +27,7 @@ Operational data is deliberately separate at `%LOCALAPPDATA%\Open Source EOC`:
 - uploads and blobs
 - logs, process ownership records, and per-profile browser state
 
-The uninstaller stops owned production, demo and acceptance processes, removes application
+The uninstaller stops owned production and demo processes, removes application
 files, and preserves that data directory. This allows recovery after reinstall
 and prevents an uninstall from destroying operational records. Removing the
 data directory is an explicit administrator action outside this installer.
@@ -112,5 +117,5 @@ Test-Path "$env:LOCALAPPDATA/Open Source EOC/profiles/demo/profile.json"
 Use the Start Menu **Open Source EOC** shortcut for production. Its first
 launch collects the production bootstrap details in PowerShell. Use **Open
 Source EOC Demo** only for synthetic exercise data. Uninstall invokes the
-bounded owned-process stop action for production, demo, and acceptance profiles
+bounded owned-process stop action for production and demo profiles
 once each; it still preserves their operational data directories.

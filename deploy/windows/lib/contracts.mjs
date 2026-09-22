@@ -1,9 +1,11 @@
 import { isAbsolute, resolve, win32 } from "node:path";
 
+const acceptanceProfile = Object.freeze({ pgPort: 55442, httpPort: 8082, database: "openeoc_acceptance", synthetic: true });
+
 export const PROFILE_DEFAULTS = Object.freeze({
   production: Object.freeze({ pgPort: 55440, httpPort: 8080, database: "openeoc", synthetic: false }),
   demo: Object.freeze({ pgPort: 55441, httpPort: 8081, database: "openeoc_demo", synthetic: true }),
-  acceptance: Object.freeze({ pgPort: 55442, httpPort: 8082, database: "openeoc_acceptance", synthetic: true }),
+  ...(process.env.OPENEOC_ENABLE_ACCEPTANCE_PROFILE === "1" ? { acceptance: acceptanceProfile } : {}),
 });
 
 export function validateProfileName(profile) {

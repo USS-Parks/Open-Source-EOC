@@ -134,7 +134,7 @@ test("document CSP permits local MapLibre workers and fonts without external ori
   assert.doesNotMatch(DOCUMENT_CSP, /unsafe-eval/);
 });
 
-test("desktop profiles have separate default ports, databases, and storage", () => {
+test("shipped desktop profiles have separate default ports, databases, and storage", () => {
   const root = resolve("C:/desktop/out");
   const plans = Object.entries(PROFILE_DEFAULTS).map(([profile, defaults]) => ({
     profile,
@@ -143,10 +143,31 @@ test("desktop profiles have separate default ports, databases, and storage", () 
     root: profilePaths(root, profile).root,
   }));
   assert.equal(validateProfilePlans(plans), true);
-  assert.equal(new Set(plans.flatMap((plan) => [plan.pgPort, plan.httpPort])).size, 6);
-  assert.equal(new Set(Object.values(PROFILE_DEFAULTS).map((item) => item.database)).size, 3);
+  assert.deepEqual(Object.keys(PROFILE_DEFAULTS), ["production", "demo"]);
+  assert.equal(new Set(plans.flatMap((plan) => [plan.pgPort, plan.httpPort])).size, 4);
+  assert.equal(new Set(Object.values(PROFILE_DEFAULTS).map((item) => item.database)).size, 2);
   assert.notEqual(profilePaths(root, "demo").pgData, profilePaths(root, "production").pgData);
-  assert.notEqual(profilePaths(root, "acceptance").browser, profilePaths(root, "demo").browser);
+  assert.throws(() => profilePaths(root, "acceptance"), /Profile must be one of/);
+});
+
+test("acceptance profile requires the explicit test-runtime switch", () => {
+  const contractsUrl = new URL("./lib/contracts.mjs", import.meta.url).href;
+  const result = spawnSync(process.execPath, [
+    "--input-type=module",
+    "--eval",
+    `import { PROFILE_DEFAULTS, validateProfileName } from ${JSON.stringify(contractsUrl)}; validateProfileName("acceptance"); console.log(JSON.stringify(PROFILE_DEFAULTS.acceptance));`,
+  ], {
+    encoding: "utf8",
+    env: { ...process.env, OPENEOC_ENABLE_ACCEPTANCE_PROFILE: "1" },
+  });
+  assert.equal(result.error, undefined);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), {
+    pgPort: 55442,
+    httpPort: 8082,
+    database: "openeoc_acceptance",
+    synthetic: true,
+  });
 });
 
 test("invalid profile and conflicting port plans fail closed", () => {
@@ -184,7 +205,7 @@ test("stopping an unconfigured profile is an idempotent launcher operation", { s
   try {
     const result = spawnSync(process.execPath, [fileURLToPath(new URL("./desktop.mjs", import.meta.url)), "stop", "--profile=acceptance"], {
       encoding: "utf8",
-      env: { ...process.env, OPENEOC_DESKTOP_DATA_ROOT: dataRoot },
+      env: { ...process.env, OPENEOC_DESKTOP_DATA_ROOT: dataRoot, OPENEOC_ENABLE_ACCEPTANCE_PROFILE: "1" },
     });
     assert.equal(result.error, undefined);
     assert.equal(result.status, 0, result.stderr);

@@ -5043,3 +5043,26 @@ increment proves it and that coverage follows the incident area.
   so these maintained engines are outside the default V1 critical path. No
   schema or dependency changed. Next: W1.5, remove the acceptance-only Windows
   profile from the shipped installer while retaining test-runtime access.
+
+## V1 W1.5: remove the acceptance profile from the shipped installer
+
+- **Delivery boundary:** the installer and installed PowerShell launcher now
+  expose only the operator-facing `production` and synthetic `demo` profiles.
+  Uninstall stops those two profiles and no longer carries an acceptance-only
+  stop entry.
+- **Test seam retained:** a source checkout can expose the isolated
+  `acceptance` profile only with
+  `OPENEOC_ENABLE_ACCEPTANCE_PROFILE=1`. The installed marker takes precedence,
+  so an installed launcher refuses that profile even when the caller supplies
+  the environment variable.
+- **Documentation:** the Windows source-checkout guide and installer README
+  distinguish the harness profile from the shipped product and show the
+  explicit test switch.
+- **Verification:** the focused desktop and installer suites passed 18 of 18
+  tests, including default refusal, explicit test enablement, idempotent stop
+  and installer exclusion. Recursive TypeScript and full ESLint passed; the
+  license scan passed all 300 packages; the link checker passed all 65
+  Markdown files; and `git diff --check` is clean.
+- **Result:** W1.5 is complete. No schema, dependency, operator data or runtime
+  port changed. Next: W1.6, move the basemap generation and proof toolchain out
+  of the deploy tree while leaving IT-run deployment assets in place.

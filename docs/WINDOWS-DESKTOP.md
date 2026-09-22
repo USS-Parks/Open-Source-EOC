@@ -16,13 +16,17 @@ The PostgreSQL binaries, package store, browser, and ignored large map assets ar
 
 ## Profiles
 
-The launcher accepts three fixed profiles. Their data never shares a database cluster, blob directory, browser profile, secret file, log, or PID file.
+The source launcher accepts two operator profiles. Their data never shares a database cluster, blob directory, browser profile, secret file, log, or PID file.
 
 | Profile | Purpose | PostgreSQL | HTTP | Database |
 |---|---|---:|---:|---|
 | `production` | Persistent operator data | 55440 | 8080 | `openeoc` |
 | `demo` | Clearly labeled synthetic demonstration | 55441 | 8081 | `openeoc_demo` |
-| `acceptance` | Isolated synthetic acceptance proof | 55442 | 8082 | `openeoc_acceptance` |
+
+The project test harness can additionally expose an isolated synthetic
+`acceptance` profile on PostgreSQL 55442, HTTP 8082 and database
+`openeoc_acceptance` by setting `OPENEOC_ENABLE_ACCEPTANCE_PROFILE=1` in a
+source checkout. The shipped installer does not expose or accept that profile.
 
 Ports can be changed during first setup with `-PgPort` and `-HttpPort`. The launcher rejects privileged, duplicate, or occupied ports. A configured profile keeps its original ports.
 
@@ -62,6 +66,7 @@ For a synthetic demo:
 For the isolated acceptance profile:
 
 ```powershell
+$env:OPENEOC_ENABLE_ACCEPTANCE_PROFILE = '1'
 .\deploy\windows\Open-Source-EOC.ps1 -Action Setup -Profile acceptance
 ```
 
@@ -90,6 +95,7 @@ The plain launcher `deploy/windows/Open Source EOC.cmd` runs that command when d
 For automation or headless acceptance, keep the foreground browser closed:
 
 ```powershell
+$env:OPENEOC_ENABLE_ACCEPTANCE_PROFILE = '1'
 .\deploy\windows\Open-Source-EOC.ps1 -Action Start -Profile acceptance -NoBrowser
 ```
 

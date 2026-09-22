@@ -26,6 +26,9 @@ test("installed launcher uses bundled runtime and an external per-user data root
   assert.match(launcher, /OPENEOC_DESKTOP_DATA_ROOT/);
   assert.match(launcher, /\$profileDataRoot = \$env:OPENEOC_DESKTOP_DATA_ROOT/);
   assert.match(launcher, /Join-Path \$env:LOCALAPPDATA 'Open Source EOC'/);
+  assert.match(launcher, /\$allowedProfiles = @\('production', 'demo'\)/);
+  assert.match(launcher, /-not \$installed -and \$env:OPENEOC_ENABLE_ACCEPTANCE_PROFILE -eq '1'/);
+  assert.match(launcher, /\$Profile -notin \$allowedProfiles/);
   assert.match(desktop, /OPENEOC_DESKTOP_PREBUILT/);
   assert.match(desktop, /desktopBuildSourceFingerprint/);
   assert.match(desktop, /if \(!prebuiltDesktop\) files\.push\(resolve\(repoRoot, "web\/node_modules\/vite/);
@@ -80,11 +83,12 @@ test("compiler binds its explicit stage and refuses a mislabeled release", () =>
   assert.match(source, /"\/DStagedAppRoot=\$app"/);
 });
 
-test("uninstall stops every owned launcher profile exactly once", () => {
+test("installer ships only operator-facing production and demo profiles", () => {
   const source = read("Open-Source-EOC.iss");
-  for (const profile of ["production", "demo", "acceptance"])
+  for (const profile of ["production", "demo"])
     assert.match(source, new RegExp(`-Action Stop -Profile ${profile}`));
   assert.match(source, /RunOnceId: "OpenSourceEOCStopProduction"/);
   assert.match(source, /RunOnceId: "OpenSourceEOCStopDemo"/);
-  assert.match(source, /RunOnceId: "OpenSourceEOCStopAcceptance"/);
+  assert.doesNotMatch(source, /acceptance/i);
+  assert.doesNotMatch(source, /RunOnceId: "OpenSourceEOCStopAcceptance"/);
 });
