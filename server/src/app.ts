@@ -61,6 +61,7 @@ import { impactRoutes } from "./impact/routes.js";
 import { savedStateRoutes } from "./saved-state/routes.js";
 import { lifelineRoutes } from "./lifelines/routes.js";
 import { esfRoutes } from "./esf/routes.js";
+import { operationalRelationshipRoutes } from "./relationships/routes.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -361,6 +362,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   savedStateRoutes(app, sql, authenticate);
   lifelineRoutes(app, sql, authenticate);
   esfRoutes(app, sql, authenticate);
+  operationalRelationshipRoutes(app, sql, authenticate);
   notifyRoutes(app, sql, authenticate);
   messagingRoutes(app, sql, authenticate);
   geoRoutes(app, sql, authenticate);

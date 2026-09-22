@@ -7,6 +7,7 @@ import { parseHash, parseRouteHash, sectionOf, surfaceHash, type Surface } from 
 describe("surface hash routing", () => {
   const cases: readonly Surface[] = [
     { kind: "map" },
+    { kind: "map", datasetId: "11111111-1111-4111-8111-111111111111", featureId: "road/closure 7" },
     { kind: "dashboard" },
     { kind: "dashboard", id: "d1" },
     { kind: "dashboard", id: "d1", filterField: "severity", filterEquals: "critical" },
@@ -91,6 +92,7 @@ describe("surface hash routing", () => {
 
   it("rejects malformed, duplicate, oversized, and nested-return deep links without throwing", () => {
     expect(parseHash("#/dashboard/d1/severity/%E0%A4%A")).toEqual({ kind: "not-found", path: "invalid-link" });
+    expect(parseHash("#/map/only-a-dataset")).toEqual({ kind: "not-found", path: "invalid-link" });
     expect(parseHash("#/boards?incident=one&incident=two")).toEqual({ kind: "not-found", path: "invalid-link" });
     expect(parseHash(`#/boards?filter=${"a".repeat(257)}`)).toEqual({ kind: "not-found", path: "invalid-link" });
     expect(parseHash("#/boards?return=%23%2Fmap%3Freturn%3Dloop")).toEqual({ kind: "not-found", path: "invalid-link" });

@@ -1,0 +1,13 @@
+.eoc-assessment-relationships { display: grid; gap: 8px; margin-top: 12px; padding: 11px; border: 1px solid var(--eoc-border); border-radius: var(--eoc-radius-sm); background: var(--eoc-surface-raised); }
+.eoc-assessment-relationships h3, .eoc-assessment-relationships p { margin: 0; }
+.eoc-assessment-relationships h3 { color: var(--eoc-text-strong); font-size: 13px; }
+.eoc-assessment-relationships p, .eoc-assessment-relationships small { color: var(--eoc-text-muted); font-size: 12px; line-height: 1.4; }
+.eoc-assessment-relationships ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.eoc-assessment-relationships li { display: grid; gap: 3px; padding: 8px; border-left: 3px solid var(--eoc-brand-teal); background: var(--eoc-surface); color: var(--eoc-text); font-size: 12px; overflow-wrap: anywhere; }
+.eoc-assessment-relationships li[data-target-state="stale"] { border-left-color: var(--eoc-status-warning); }
+.eoc-assessment-relationships li strong { color: var(--eoc-status-warning); }
+.eoc-assessment-relationship-add { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.eoc-assessment-relationship-add label { display: grid; gap: 4px; min-width: 0; color: var(--eoc-text); font-size: 12px; font-weight: 650; }
+.eoc-assessment-relationship-add select { width: 100%; min-width: 0; min-height: 40px; padding: 7px; border: 1px solid var(--eoc-border-strong); border-radius: var(--eoc-radius-sm); background: var(--eoc-surface); color: var(--eoc-text); font: inherit; }
+.eoc-assessment-relationship-add button { grid-column: 1 / -1; justify-self: start; }
+@media (max-width: 720px) { .eoc-assessment-relationship-add { grid-template-columns: minmax(0, 1fr); } }

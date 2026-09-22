@@ -10,6 +10,8 @@ import type {
   IapWorkspaceResponse,
   Ics204Assignment,
   Ics204AssignedResource,
+  OperationalRelationship,
+  OperationalRelationshipCreate,
   FormDefinition,
   IncidentAreaRevision,
   IncidentAreaUpdate,
@@ -312,6 +314,7 @@ export interface IapResult {
   readonly id: string;
   readonly status: string;
   readonly operationalPeriod: string;
+  readonly contentRevision: number;
   readonly content: IapDocument;
 }
 export interface IapListItem {
@@ -902,6 +905,15 @@ export class ApiClient {
   }
   completeIncidentTask(incidentId: string, taskId: string, operationId: string): Promise<TaskCompletionReceipt> {
     return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/tasks/${encodeURIComponent(taskId)}/complete`, { operationId });
+  }
+  async listOperationalRelationships(incidentId: string): Promise<readonly OperationalRelationship[]> {
+    const result = await this.request<{ relationships: readonly OperationalRelationship[] }>(
+      "GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/operational-relationships`,
+    );
+    return result.relationships;
+  }
+  createOperationalRelationship(incidentId: string, input: OperationalRelationshipCreate): Promise<OperationalRelationship> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/operational-relationships`, input);
   }
   async listResourceRequests(
     jurisdictionId: string,

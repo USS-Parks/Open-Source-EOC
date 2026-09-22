@@ -1,17 +1,31 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
 import { useRef } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MapSurface } from "../surfaces/MapSurface.js";
 import type { ApiClient } from "../api/client.js";
 vi.mock("../../cop/CopMap.js", () => {
   let mountCount = 0;
   return {
-    CopMap: (props: { initialBounds: number[]; theme: string; boards: { id: string }[] }) => {
+    CopMap: (props: {
+      initialBounds: number[];
+      theme: string;
+      boards: { id: string }[];
+      requestedFeature?: { datasetId: string; featureId: string } | null;
+      onInspectFeature?: (feature: { datasetId: string; featureId: string; title: string }) => void;
+    }) => {
       const mountedTheme = useRef(props.theme);
       const mountedBoards = useRef(props.boards.map((b) => b.id).join(","));
       const mountId = useRef(++mountCount);
-      return <div data-testid="map" data-mounted-theme={mountedTheme.current} data-mounted-boards={mountedBoards.current} data-mount-id={mountId.current}>{props.initialBounds.join(",")}</div>;
+      return <div data-testid="map" data-mounted-theme={mountedTheme.current} data-mounted-boards={mountedBoards.current} data-mount-id={mountId.current}
+        data-requested-feature={props.requestedFeature ? `${props.requestedFeature.datasetId}/${props.requestedFeature.featureId}` : undefined}>
+        {props.initialBounds.join(",")}
+        {props.requestedFeature && props.onInspectFeature ? <button type="button" onClick={() => props.onInspectFeature?.({
+          datasetId: props.requestedFeature!.datasetId,
+          featureId: props.requestedFeature!.featureId,
+          title: "County Route 7 closure",
+        })}>Inspect routed feature</button> : null}
+      </div>;
     },
   };
 });
@@ -92,4 +106,41 @@ it("places a point from validated WGS84 coordinates with the keyboard", async ()
   expect(screen.getByTestId("record-initial").textContent).toContain(
     '"location":{"type":"Point","coordinates":[-123.5,41.3]}',
   );
+});
+
+it("links an exact routed dataset feature to a recorded assessment", async () => {
+  const datasetId = "11111111-1111-4111-8111-111111111111";
+  const createOperationalRelationship = vi.fn().mockResolvedValue({ id: "relationship-1" });
+  const client = {
+    listIncidentDatasets: vi.fn().mockResolvedValue([{
+      id: datasetId,
+      key: "roads",
+      name: "Road closures",
+      availability: "available",
+      coverageArea: null,
+      lastSuccessAt: "2026-09-21T12:00:00.000Z",
+    }]),
+    listIncidentLifelineAssessments: vi.fn().mockResolvedValue({
+      states: [{ lifeline: "energy", reports: [{ id: "assessment-1" }] }],
+    }),
+    listIncidentEsfAssessments: vi.fn().mockResolvedValue({ states: [] }),
+    createOperationalRelationship,
+  } as unknown as ApiClient;
+  render(<MapSurface client={client} theme="light" jurisdictionId="j1" collections={[]} feeds={[]}
+    incidentId="22222222-2222-4222-8222-222222222222" focusDatasetId={datasetId} focusFeatureId="route/7" />);
+
+  const map = await screen.findByTestId("map");
+  expect(map.getAttribute("data-requested-feature")).toBe(`${datasetId}/route/7`);
+  fireEvent.click(screen.getByRole("button", { name: "Inspect routed feature" }));
+  fireEvent.change(await screen.findByLabelText("Recorded assessment"), {
+    target: { value: "lifeline|fema_community_lifelines|energy" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Link selected feature" }));
+  await waitFor(() => expect(createOperationalRelationship).toHaveBeenCalledWith(
+    "22222222-2222-4222-8222-222222222222",
+    {
+      source: { domain: "lifeline", framework: "fema_community_lifelines", definitionKey: "energy" },
+      target: { kind: "map_feature", datasetId, featureId: "route/7" },
+    },
+  ));
 });

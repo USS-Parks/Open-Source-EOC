@@ -145,12 +145,14 @@ export interface IapSurfaceProps {
   readonly periodRevision?: number | null;
   readonly operationalPeriod?: string | null;
   readonly isAdmin: boolean;
+  readonly initialIapId?: string | null;
+  readonly onSelectIap?: (id: string | null) => void;
   readonly onOpenForms?: () => void;
 }
 
 export function IapSurface(props: IapSurfaceProps) {
   const [query, setQuery] = useState<IapWorkspaceQuery>({ view: "all" });
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(props.initialIapId ?? null);
   const [selectedForm, setSelectedForm] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -158,24 +160,27 @@ export function IapSurface(props: IapSurfaceProps) {
   const [assignmentsDirty, setAssignmentsDirty] = useState(false);
   const [pendingChange, setPendingChange] = useState<
     | { readonly kind: "query"; readonly query: IapWorkspaceQuery }
-    | { readonly kind: "select"; readonly id: string }
+    | { readonly kind: "select"; readonly id: string | null }
     | { readonly kind: "forms" }
     | null
   >(null);
   const active = props.incidentId;
   const scopeRef = useRef(active);
   const dirtyRef = useRef(assignmentsDirty);
+  const selectedIdRef = useRef(selectedId);
+  const initialIapIdRef = useRef(props.initialIapId);
   dirtyRef.current = assignmentsDirty;
+  selectedIdRef.current = selectedId;
+  initialIapIdRef.current = props.initialIapId;
 
   useEffect(() => {
-    const nextQuery: IapWorkspaceQuery = {
-      view: "all",
-      ...(props.periodRevision ? { periodRevision: props.periodRevision } : {}),
-    };
+    const nextQuery: IapWorkspaceQuery = initialIapIdRef.current
+      ? { view: "all" }
+      : { view: "all", ...(props.periodRevision ? { periodRevision: props.periodRevision } : {}) };
     if (scopeRef.current !== active) {
       scopeRef.current = active;
       setQuery(nextQuery);
-      setSelectedId(null);
+      setSelectedId(initialIapIdRef.current ?? null);
       setSelectedForm(null);
       setAssignmentsDirty(false);
       setPendingChange(null);
@@ -184,11 +189,20 @@ export function IapSurface(props: IapSurfaceProps) {
     if (dirtyRef.current) setPendingChange({ kind: "query", query: nextQuery });
     else {
       setQuery(nextQuery);
-      setSelectedId(null);
+      setSelectedId(initialIapIdRef.current ?? null);
       setSelectedForm(null);
       setAssignmentsDirty(false);
     }
   }, [active, props.periodRevision]);
+
+  useEffect(() => {
+    if (props.initialIapId === undefined || props.initialIapId === selectedIdRef.current) return;
+    if (dirtyRef.current) setPendingChange({ kind: "select", id: props.initialIapId });
+    else {
+      setSelectedId(props.initialIapId);
+      setSelectedForm(null);
+    }
+  }, [props.initialIapId]);
 
   useEffect(() => {
     if (!assignmentsDirty) setPendingChange(null);
@@ -263,6 +277,7 @@ export function IapSurface(props: IapSurfaceProps) {
   function applyQuery(next: IapWorkspaceQuery) {
     setQuery(next);
     setSelectedId(null);
+    props.onSelectIap?.(null);
     setSelectedForm(null);
     setAssignmentsDirty(false);
   }
@@ -272,13 +287,16 @@ export function IapSurface(props: IapSurfaceProps) {
     else applyQuery(next);
   }
 
+  function applySelection(id: string | null) {
+    setSelectedId(id);
+    setSelectedForm(null);
+    props.onSelectIap?.(id);
+  }
+
   function requestSelection(id: string) {
     if (id === selectedId) return;
     if (assignmentsDirty) setPendingChange({ kind: "select", id });
-    else {
-      setSelectedId(id);
-      setSelectedForm(null);
-    }
+    else applySelection(id);
   }
 
   function requestForms() {
@@ -287,16 +305,19 @@ export function IapSurface(props: IapSurfaceProps) {
     else props.onOpenForms();
   }
 
+  function keepEditing() {
+    setPendingChange(null);
+    props.onSelectIap?.(selectedId);
+  }
+
   function discardAndContinue() {
     const pending = pendingChange;
     setPendingChange(null);
     setAssignmentsDirty(false);
     if (!pending) return;
     if (pending.kind === "query") applyQuery(pending.query);
-    else if (pending.kind === "select") {
-      setSelectedId(pending.id);
-      setSelectedForm(null);
-    } else props.onOpenForms?.();
+    else if (pending.kind === "select") applySelection(pending.id);
+    else props.onOpenForms?.();
   }
 
   async function exactPdf(iapId: string, revision: number, period: string) {
@@ -343,7 +364,7 @@ export function IapSurface(props: IapSurfaceProps) {
             <strong>Unsaved ICS-204 changes</strong>
             <p>Keep editing, or discard this draft before changing plans, filters, or planning surfaces.</p>
             <div className="iap-actions">
-              <Button onClick={() => setPendingChange(null)}>Keep editing</Button>
+              <Button onClick={keepEditing}>Keep editing</Button>
               <Button kind="danger" onClick={discardAndContinue}>Discard changes and continue</Button>
             </div>
           </section>

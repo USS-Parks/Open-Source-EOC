@@ -167,12 +167,7 @@ export function FormsSurface(props: FormsSurfaceProps) {
                   operationalPeriod: selectedPeriod.label,
                   periodRevision: selectedPeriod.revision,
                 });
-                setIap({
-                  id: created.id,
-                  status: "draft",
-                  operationalPeriod: selectedPeriod.label,
-                  content: created.content,
-                });
+                setIap(await props.client.getIap(created.id));
               })}
               disabled={busy || !selectedPeriod}
             >

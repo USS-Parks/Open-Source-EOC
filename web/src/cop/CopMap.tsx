@@ -89,6 +89,12 @@ export interface CopBoard {
 
 export type FeedItemsData = CopFeatureCollection & { readonly feed: FeedLayerHealth };
 
+export interface CopSelectedDatasetFeature {
+  readonly datasetId: string;
+  readonly featureId: string;
+  readonly title: string;
+}
+
 /** A non-wrapping WGS84 bounding box: west, south, east, north. */
 export type CopMapBounds = readonly [number, number, number, number];
 
@@ -187,6 +193,10 @@ export interface CopMapProps {
   readonly onBoundsChange?: ((bounds: CopMapBounds) => void) | undefined;
   /** Final D11 drawer by default; explicit popup preserves the legacy direct-map mode. */
   readonly inspectionMode?: "popup" | "workspace" | undefined;
+  /** Exact persisted dataset feature requested by an operational relationship. */
+  readonly requestedFeature?: { readonly datasetId: string; readonly featureId: string } | null | undefined;
+  /** Reports only persisted feed/dataset feature identity, never a rendered synthetic id. */
+  readonly onInspectFeature?: ((feature: CopSelectedDatasetFeature | null) => void) | undefined;
   /** Test/instrumentation hook: receives the live map instance. */
   readonly onMap?: ((map: maplibregl.Map) => void) | undefined;
 }
@@ -217,6 +227,7 @@ interface FindResult {
   readonly detail: string;
   readonly bounds: Bounds;
   readonly sourceId?: string | undefined;
+  readonly featureId?: string | undefined;
   readonly properties?: Record<string, unknown> | undefined;
 }
 
@@ -348,6 +359,9 @@ export function CopMap(props: CopMapProps) {
   const countiesRef = useRef<Record<string, Bounds> | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
+  const requestedFeatureRef = useRef(props.requestedFeature);
+  const onInspectFeatureRef = useRef(props.onInspectFeature);
+  const openedRequestedFeatureRef = useRef("");
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(loadBookmarks);
   const [bookmarkName, setBookmarkName] = useState("");
   const [layerQuery, setLayerQuery] = useState("");
@@ -360,6 +374,8 @@ export function CopMap(props: CopMapProps) {
   coverageRef.current = coverage;
   boardsRef.current = props.boards;
   feedsRef.current = props.feeds ?? [];
+  requestedFeatureRef.current = props.requestedFeature;
+  onInspectFeatureRef.current = props.onInspectFeature;
 
   useEffect(() => {
     if (!props.picking) return;
@@ -386,6 +402,7 @@ export function CopMap(props: CopMapProps) {
     sourceKey: string,
     layerId: string,
     featureStatus?: unknown,
+    featureId?: string | number,
   ) => {
     const board = boardsRef.current.find((candidate) => sourceKey === sourceId(candidate.id));
     const feed = feedsRef.current.find((candidate) => sourceKey === feedSourceId(candidate.id));
@@ -428,8 +445,9 @@ export function CopMap(props: CopMapProps) {
           : "Buildings: © OpenStreetMap contributors (ODbL)"
         : overlayInfo?.attribution);
     const coverageLabel = feed?.coverage ?? health?.coverage ?? overlayInfo?.coverage;
+    const title = labelFor(properties);
     setSelection({
-      title: labelFor(properties),
+      title,
       kind,
       source,
       status,
@@ -439,11 +457,40 @@ export function CopMap(props: CopMapProps) {
       ...(attribution ? { attribution } : {}),
       rows: visibleInspectionRows(properties),
     });
+    onInspectFeatureRef.current?.(feed && featureId !== undefined
+      ? { datasetId: feed.id, featureId: String(featureId), title }
+      : null);
+  };
+
+  const inspectRequestedFeature = (
+    datasetId: string,
+    feature: CopFeatureCollection["features"][number],
+  ) => {
+    const map = mapRef.current;
+    const bounds = geometryBounds(feature.geometry);
+    if (!map || !bounds) return;
+    const center: [number, number] = [
+      (bounds[0] + bounds[2]) / 2,
+      (bounds[1] + bounds[3]) / 2,
+    ];
+    const isPoint = bounds[0] === bounds[2] && bounds[1] === bounds[3];
+    setFeedVisible((current) => ({ ...current, [datasetId]: true }));
+    if (isPoint) map.flyTo({ center, zoom: Math.max(map.getZoom(), 13), duration: 600 });
+    else map.fitBounds(bounds, { padding: 64, maxZoom: 14, duration: 600 });
+    popupRef.current?.remove();
+    openInspection(
+      feature.properties,
+      feedSourceId(datasetId),
+      feedSourceId(datasetId),
+      feature.properties._symbolStatus,
+      feature.id,
+    );
   };
 
   const closeInspection = () => {
     popupRef.current?.remove();
     setSelection(null);
+    onInspectFeatureRef.current?.(null);
     requestAnimationFrame(() => mapRef.current?.getCanvas().focus());
   };
 
@@ -597,11 +644,12 @@ export function CopMap(props: CopMapProps) {
       if (!hit) {
         popup.remove();
         setSelection(null);
+        onInspectFeatureRef.current?.(null);
         return;
       }
       if (props.inspectionMode !== "popup") {
         popup.remove();
-        openInspection(hit.properties ?? {}, hit.source, hit.layer.id, hit.state?.status);
+        openInspection(hit.properties ?? {}, hit.source, hit.layer.id, hit.state?.status, hit.id);
       } else {
         popup.setLngLat(e.lngLat).setHTML(featureHtml(hit.properties ?? {})).addTo(map);
       }
@@ -672,6 +720,15 @@ export function CopMap(props: CopMapProps) {
               }
             }
             setFeedHealth((current) => ({ ...current, [feed.id]: res.feed }));
+            const requested = requestedFeatureRef.current;
+            const requestKey = requested ? `${requested.datasetId}/${requested.featureId}` : "";
+            if (requested?.datasetId === feed.id && openedRequestedFeatureRef.current !== requestKey) {
+              const feature = fc.features.find((candidate) => candidate.id === requested.featureId);
+              if (feature) {
+                openedRequestedFeatureRef.current = requestKey;
+                inspectRequestedFeature(feed.id, feature);
+              }
+            }
           } catch {
             // A stale or failed feed keeps its last features; never blank the COP.
           }
@@ -860,6 +917,7 @@ export function CopMap(props: CopMapProps) {
         detail: h.detail,
         bounds: h.bounds,
         sourceId: h.sourceId,
+        featureId: h.featureId,
         properties: h.properties,
       });
     }
@@ -896,7 +954,7 @@ export function CopMap(props: CopMapProps) {
     if (r.kind === "feature" && r.properties && popupRef.current) {
       if (props.inspectionMode !== "popup") {
         popupRef.current.remove();
-        openInspection(r.properties, r.sourceId ?? "", r.sourceId ?? "");
+        openInspection(r.properties, r.sourceId ?? "", r.sourceId ?? "", undefined, r.featureId);
       } else {
         popupRef.current.setLngLat(center).setHTML(featureHtml(r.properties)).addTo(map);
       }

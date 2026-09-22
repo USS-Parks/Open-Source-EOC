@@ -38,6 +38,7 @@ export * from "./impact/service.js";
 export * from "./saved-state/index.js";
 export * from "./lifelines/contract.js";
 export * from "./esf/contract.js";
+export * from "./relationships/contract.js";
 
 export const OPENEOC_VERSION = "0.0.0" as const;
 

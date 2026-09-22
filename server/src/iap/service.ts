@@ -575,9 +575,9 @@ export async function getIap(
   sql: Sql,
   actor: Principal,
   iapId: string,
-): Promise<{ id: string; status: string; operationalPeriod: string; content: IapDocument }> {
+): Promise<{ id: string; status: string; operationalPeriod: string; contentRevision: number; content: IapDocument }> {
   const [row] = await sql`
-    select i.id, i.status, i.operational_period, i.content, i.incident_id
+    select i.id, i.status, i.operational_period, i.content_revision, i.content, i.incident_id
     from iaps i join incidents inc on inc.id = i.incident_id where i.id = ${iapId}`;
   if (!row) throw new AuthError(404, "IAP not found");
   await getIncidentAuthority(sql, actor, row.incident_id as string);
@@ -585,6 +585,7 @@ export async function getIap(
     id: row.id as string,
     status: row.status as string,
     operationalPeriod: row.operational_period as string,
+    contentRevision: Number(row.content_revision),
     content: row.content as IapDocument,
   };
 }

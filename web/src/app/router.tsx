@@ -7,7 +7,11 @@ import { useCallback, useEffect, useState } from "react";
  * (boards, sitreps, alerts) and their detail views share the same hash.
  */
 export type Surface =
-  | { readonly kind: "map" }
+  | {
+      readonly kind: "map";
+      readonly datasetId?: string;
+      readonly featureId?: string;
+    }
   | {
       readonly kind: "dashboard";
       readonly id?: string;
@@ -19,7 +23,7 @@ export type Surface =
   | { readonly kind: "sitreps" }
   | { readonly kind: "sitrep"; readonly id: string }
   | { readonly kind: "forms" }
-  | { readonly kind: "iap" }
+  | { readonly kind: "iap"; readonly id?: string }
   | { readonly kind: "files" }
   | { readonly kind: "incidents" }
   | { readonly kind: "datasets" }
@@ -108,6 +112,15 @@ function parseSurfacePath(clean: string): Surface {
   const head = slash === -1 ? clean : clean.slice(0, slash);
   const id = slash === -1 ? "" : clean.slice(slash + 1);
   switch (head) {
+    case "map": {
+      if (!id) return { kind: "map" };
+      const [rawDatasetId, rawFeatureId, extra] = id.split("/");
+      const datasetId = rawDatasetId ? safeDecode(rawDatasetId) : null;
+      const featureId = rawFeatureId ? safeDecode(rawFeatureId) : null;
+      return datasetId && featureId && !extra && datasetId.length <= 128 && featureId.length <= 500
+        ? { kind: "map", datasetId, featureId }
+        : { kind: "not-found", path: "invalid-link" };
+    }
     case "dashboard": {
       if (!id) return { kind: "dashboard" };
       const parts = id.split("/");
@@ -134,7 +147,7 @@ function parseSurfacePath(clean: string): Surface {
     case "forms":
       return { kind: "forms" };
     case "iap":
-      return { kind: "iap" };
+      return id ? { kind: "iap", id } : { kind: "iap" };
     case "files":
       return { kind: "files" };
     case "incidents":
@@ -229,7 +242,9 @@ export function parseHash(hash: string): Surface {
 function surfacePath(surface: Surface): string {
   switch (surface.kind) {
     case "map":
-      return "#/";
+      return surface.datasetId && surface.featureId
+        ? `#/map/${encodeURIComponent(surface.datasetId)}/${encodeURIComponent(surface.featureId)}`
+        : "#/";
     case "dashboard":
       if (!surface.id) return "#/dashboard";
       return surface.filterField && surface.filterEquals !== undefined
@@ -246,7 +261,7 @@ function surfacePath(surface: Surface): string {
     case "forms":
       return "#/forms";
     case "iap":
-      return "#/iap";
+      return surface.id ? `#/iap/${surface.id}` : "#/iap";
     case "files":
       return "#/files";
     case "incidents":

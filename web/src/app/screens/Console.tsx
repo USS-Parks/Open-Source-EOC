@@ -299,6 +299,10 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         onNavigate={navigateInContext}
         onOpenBoard={(id) => navigateInContext({ kind: "board", id })}
         onOpenSitrep={(id) => navigateInContext({ kind: "sitrep", id })}
+        onOpenBoardRecord={(boardId, recordId) => navigate(
+          { kind: "board", id: boardId },
+          { ...baseContext, recordId },
+        )}
         onDashboardFilter={(id, f) =>
           navigate(
             f
@@ -397,9 +401,11 @@ function Center(props: {
   onNavigate: (surface: Surface) => void;
   onOpenBoard: (id: string) => void;
   onOpenSitrep: (id: string) => void;
+  onOpenBoardRecord: (boardId: string, recordId: string) => void;
   onDashboardFilter: (id: string, filter: { field: string; equals: string } | null) => void;
 }) {
   const s = props.surface;
+  const relationshipBoards = props.boards.filter((board) => props.incidentBoardIds.has(board.id));
   switch (s.kind) {
     case "map":
       return props.collectionsError ? (
@@ -414,6 +420,10 @@ function Center(props: {
           incidentId={props.incidentId}
           incidentName={props.incidentName}
           incidentBoardIds={props.incidentBoardIds}
+          focusDatasetId={s.datasetId}
+          focusFeatureId={s.featureId}
+          onOpenLifeline={(id) => props.onNavigate({ kind: "lifeline", id })}
+          onOpenEsf={(id) => props.onNavigate({ kind: "esf", id })}
         />
       );
     case "dashboard": {
@@ -485,6 +495,8 @@ function Center(props: {
         <IapSurface client={props.client} incidentId={props.incidentId} isAdmin={props.isAdmin}
           jurisdictionId={props.jurisdictionId} incidentName={props.incidentName}
           periodRevision={props.periodRevision} operationalPeriod={props.operationalPeriod}
+          initialIapId={s.id ?? null}
+          onSelectIap={(id) => props.onNavigate(id ? { kind: "iap", id } : { kind: "iap" })}
           onOpenForms={() => props.onNavigate({ kind: "forms" })} />
       );
     case "files":
@@ -545,17 +557,32 @@ function Center(props: {
     case "lifelines":
     case "lifeline":
       return <LifelinesSurface client={props.client} incidentId={props.incidentId}
+        incidentJurisdictionId={props.incidentJurisdictionId}
+        relationshipBoards={relationshipBoards}
         selectedLifeline={s.kind === "lifeline" ? s.id : null}
         onOpen={(id) => props.onNavigate({ kind: "lifeline", id })}
         onClose={() => props.onNavigate({ kind: "lifelines" })}
-        onOpenEsfs={() => props.onNavigate({ kind: "esf" })} />;
+        onOpenEsfs={() => props.onNavigate({ kind: "esf" })}
+        onOpenEsf={(id) => props.onNavigate({ kind: "esf", id })}
+        onOpenTask={() => props.onNavigate({ kind: "tasks" })}
+        onOpenResourceRequest={(id) => props.onNavigate({ kind: "resources", id })}
+        onOpenIap={(id) => props.onNavigate({ kind: "iap", id })}
+        onOpenBoardRecord={props.onOpenBoardRecord}
+        onOpenMapFeature={(datasetId, featureId) => props.onNavigate({ kind: "map", datasetId, featureId })} />;
     case "esf":
       return <EsfSurface client={props.client} incidentId={props.incidentId}
         incidentJurisdictionId={props.incidentJurisdictionId} selectedEsf={s.id ?? null}
+        relationshipBoards={relationshipBoards}
         operationalPeriod={props.operationalPeriod}
         onOpen={(id) => props.onNavigate({ kind: "esf", id })}
         onClose={() => props.onNavigate({ kind: "esf" })}
-        onOpenLifelines={() => props.onNavigate({ kind: "lifelines" })} />;
+        onOpenLifelines={() => props.onNavigate({ kind: "lifelines" })}
+        onOpenLifeline={(id) => props.onNavigate({ kind: "lifeline", id })}
+        onOpenTask={() => props.onNavigate({ kind: "tasks" })}
+        onOpenResourceRequest={(id) => props.onNavigate({ kind: "resources", id })}
+        onOpenIap={(id) => props.onNavigate({ kind: "iap", id })}
+        onOpenBoardRecord={props.onOpenBoardRecord}
+        onOpenMapFeature={(datasetId, featureId) => props.onNavigate({ kind: "map", datasetId, featureId })} />;
     case "tasks":
       return <TasksSurface client={props.client} incidentId={props.incidentId}
         personId={props.personId} jurisdictionId={props.jurisdictionId}

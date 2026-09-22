@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { LifelineAssessmentReport, LifelineCurrentState, OperationalPeriod } from "@openeoc/shared";
-import type { ApiClient } from "../api/client.js";
+import type { ApiClient, BoardListItem } from "../api/client.js";
 import { usePolled } from "../data/hooks.js";
 import { ConditionBadge, EmptyState, ErrorState, LoadingState } from "../../design/feedback.js";
 import { LifelineIcon, type LifelineKey } from "../../design/icons/index.js";
@@ -11,6 +11,7 @@ import {
 } from "./lifeline-view.js";
 import { LifelineAssessmentForm } from "./LifelineAssessmentForm.js";
 import { LifelineAssessmentHistory } from "./LifelineAssessmentHistory.js";
+import { AssessmentRelationships } from "./AssessmentRelationships.js";
 import "./LifelinesSurface.css";
 
 const REFRESH_MS = 30_000;
@@ -19,9 +20,17 @@ export interface LifelinesSurfaceProps {
   readonly client: ApiClient;
   readonly incidentId: string | null;
   readonly selectedLifeline: string | null;
+  readonly incidentJurisdictionId?: string | null;
+  readonly relationshipBoards?: readonly Pick<BoardListItem, "id" | "title">[];
   readonly onOpen: (id: string) => void;
   readonly onClose: () => void;
   readonly onOpenEsfs?: () => void;
+  readonly onOpenEsf?: (id: string) => void;
+  readonly onOpenTask?: (id: string) => void;
+  readonly onOpenResourceRequest?: (id: string) => void;
+  readonly onOpenIap?: (id: string) => void;
+  readonly onOpenBoardRecord?: (boardId: string, recordId: string) => void;
+  readonly onOpenMapFeature?: (datasetId: string, featureId: string) => void;
 }
 
 function isLifelineKey(value: string | null): value is LifelineKey {
@@ -111,6 +120,14 @@ function LifelineDrawer(props: {
   readonly onSaved: (report: LifelineAssessmentReport) => void;
   readonly onDecision: () => void;
   readonly onClose: () => void;
+  readonly incidentJurisdictionId?: string | null;
+  readonly relationshipBoards?: readonly Pick<BoardListItem, "id" | "title">[];
+  readonly onOpenTask?: (id: string) => void;
+  readonly onOpenResourceRequest?: (id: string) => void;
+  readonly onOpenIap?: (id: string) => void;
+  readonly onOpenBoardRecord?: (boardId: string, recordId: string) => void;
+  readonly onOpenMapFeature?: (datasetId: string, featureId: string) => void;
+  readonly onOpenEsf?: (id: string) => void;
 }) {
   const { item } = props;
   return (
@@ -179,6 +196,16 @@ function LifelineDrawer(props: {
           <p className="eoc-lifeline-callout">
             Exposure and ESF activation do not determine this assessed condition.
           </p>
+          <AssessmentRelationships client={props.client} incidentId={props.incidentId}
+            {...(props.incidentJurisdictionId !== undefined ? { jurisdictionId: props.incidentJurisdictionId } : {})}
+            {...(props.relationshipBoards ? { boards: props.relationshipBoards } : {})}
+            source={{ domain: "lifeline", framework: "fema_community_lifelines", definitionKey: item.key }}
+            {...(props.onOpenTask ? { onOpenTask: props.onOpenTask } : {})}
+            {...(props.onOpenResourceRequest ? { onOpenResourceRequest: props.onOpenResourceRequest } : {})}
+            {...(props.onOpenIap ? { onOpenIap: props.onOpenIap } : {})}
+            {...(props.onOpenBoardRecord ? { onOpenBoardRecord: props.onOpenBoardRecord } : {})}
+            {...(props.onOpenMapFeature ? { onOpenMapFeature: props.onOpenMapFeature } : {})}
+            {...(props.onOpenEsf ? { onOpenEsf: props.onOpenEsf } : {})} />
         </div>
       )}
     </aside>
@@ -317,6 +344,14 @@ export function LifelinesSurface(props: LifelinesSurfaceProps) {
             onSaved={assessmentSaved}
             onDecision={decisionSaved}
             onClose={props.onClose}
+            {...(props.incidentJurisdictionId !== undefined ? { incidentJurisdictionId: props.incidentJurisdictionId } : {})}
+            {...(props.relationshipBoards ? { relationshipBoards: props.relationshipBoards } : {})}
+            {...(props.onOpenTask ? { onOpenTask: props.onOpenTask } : {})}
+            {...(props.onOpenResourceRequest ? { onOpenResourceRequest: props.onOpenResourceRequest } : {})}
+            {...(props.onOpenIap ? { onOpenIap: props.onOpenIap } : {})}
+            {...(props.onOpenBoardRecord ? { onOpenBoardRecord: props.onOpenBoardRecord } : {})}
+            {...(props.onOpenMapFeature ? { onOpenMapFeature: props.onOpenMapFeature } : {})}
+            {...(props.onOpenEsf ? { onOpenEsf: props.onOpenEsf } : {})}
           />
         ) : null}
       </div>

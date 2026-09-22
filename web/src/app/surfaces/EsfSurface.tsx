@@ -9,13 +9,14 @@ import {
   type EsfAssessmentReport,
   type EsfCurrentState,
 } from "@openeoc/shared";
-import type { ApiClient, EsfAssessmentOverviewResponse } from "../api/client.js";
+import type { ApiClient, BoardListItem, EsfAssessmentOverviewResponse } from "../api/client.js";
 import { useAsync, usePolled } from "../data/hooks.js";
 import { ActionButton } from "../../design/controls.js";
 import { ConditionBadge, EmptyState, ErrorState, LoadingState } from "../../design/feedback.js";
 import { Icon, type IconName } from "../../design/icons/index.js";
 import type { OperationalState } from "../../design/tokens.js";
 import { EsfAssessmentForm, type EsfOrganizationOption } from "./EsfAssessmentForm.js";
+import { AssessmentRelationships } from "./AssessmentRelationships.js";
 import "./EsfSurface.css";
 
 const REFRESH_MS = 30_000;
@@ -33,10 +34,17 @@ export interface EsfSurfaceProps {
   readonly client: ApiClient;
   readonly incidentId: string | null;
   readonly incidentJurisdictionId: string | null;
+  readonly relationshipBoards?: readonly Pick<BoardListItem, "id" | "title">[];
   readonly selectedEsf: string | null;
   readonly operationalPeriod: string | null;
   readonly onOpen: (id: string) => void;
   readonly onOpenLifelines: () => void;
+  readonly onOpenLifeline?: (id: string) => void;
+  readonly onOpenTask?: (id: string) => void;
+  readonly onOpenResourceRequest?: (id: string) => void;
+  readonly onOpenIap?: (id: string) => void;
+  readonly onOpenBoardRecord?: (boardId: string, recordId: string) => void;
+  readonly onOpenMapFeature?: (datasetId: string, featureId: string) => void;
   readonly onClose: () => void;
 }
 
@@ -151,6 +159,7 @@ function ReportHistory(props: { readonly reports: readonly EsfAssessmentReport[]
 function CurrentWork(props: {
   readonly report: EsfAssessmentReport | null;
   readonly organizationLabel: (id: string | null) => string;
+  readonly onOpenLifeline?: (id: string) => void;
 }) {
   const missions = payloadList(props.report, "missions");
   const priorities = payloadList(props.report, "priorities");
@@ -163,7 +172,7 @@ function CurrentWork(props: {
         <div><dt>Operational period</dt><dd>{payloadText(props.report, "operationalPeriod") ?? "Not reported"}</dd></div>
         <div><dt>Coordinator</dt><dd>{props.organizationLabel(payloadText(props.report, "coordinatorOrganizationId"))}</dd></div>
         <div><dt>Supporting organizations</dt><dd>{supporting.length ? supporting.map(props.organizationLabel).join(", ") : "None reported"}</dd></div>
-        <div><dt>Related Lifelines</dt><dd>{related.length ? related.map((item) => item.replaceAll("_", " ")).join(", ") : "None reported"}</dd></div>
+        <div><dt>Related Lifelines</dt><dd>{related.length ? related.map((item) => props.onOpenLifeline ? <button type="button" key={item} onClick={() => props.onOpenLifeline!(item)}>{item.replaceAll("_", " ")}</button> : item.replaceAll("_", " ")) : "None reported"}</dd></div>
       </dl></section>
       <section><h3>Missions</h3>{missions.length ? <ul>{missions.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No missions reported.</p>}</section>
       <section><h3>Priorities and decisions</h3>{priorities.length ? <ul>{priorities.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No priorities reported.</p>}</section>
@@ -283,7 +292,15 @@ export function EsfSurface(props: EsfSurfaceProps) {
             {decisionError ? <p role="alert">{decisionError}</p> : null}<ActionButton kind="primary" disabled={!decisionReport || !decisionRationale.trim()} onClick={decide}>Record attributed decision</ActionButton>
           </section> : null}
           {current ? <><p className="eoc-esf-situation">{payloadText(current, "situation") ?? "No readable situation narrative"}</p>
-            <CurrentWork report={current} organizationLabel={organizationLabel} /></> : <EmptyState title={selectedState?.conflict ? "Conflicting assessments" : "No current assessment"}
+            <CurrentWork report={current} organizationLabel={organizationLabel}
+              {...(props.onOpenLifeline ? { onOpenLifeline: props.onOpenLifeline } : {})} /><AssessmentRelationships client={props.client} incidentId={props.incidentId}
+              jurisdictionId={props.incidentJurisdictionId} source={{ domain: "esf", framework: selectedFramework, definitionKey: props.selectedEsf }}
+              {...(props.relationshipBoards ? { boards: props.relationshipBoards } : {})}
+              {...(props.onOpenTask ? { onOpenTask: props.onOpenTask } : {})}
+              {...(props.onOpenResourceRequest ? { onOpenResourceRequest: props.onOpenResourceRequest } : {})}
+              {...(props.onOpenIap ? { onOpenIap: props.onOpenIap } : {})}
+              {...(props.onOpenBoardRecord ? { onOpenBoardRecord: props.onOpenBoardRecord } : {})}
+              {...(props.onOpenMapFeature ? { onOpenMapFeature: props.onOpenMapFeature } : {})} /></> : <EmptyState title={selectedState?.conflict ? "Conflicting assessments" : "No current assessment"}
               description={selectedState?.conflict ? "Choose an attributed report before presenting a current workload." : "Record activation, capacity, coordinator, and workload for this incident."} />}
           {!editing ? <ActionButton kind="primary" onClick={() => setEditing(true)}>{current ? "Revise assessment" : "Add assessment"}</ActionButton> : null}
           {editing ? <EsfAssessmentForm framework={selectedFramework} esf={props.selectedEsf} baseline={current}

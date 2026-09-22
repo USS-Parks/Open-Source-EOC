@@ -4450,3 +4450,24 @@ increment proves it and that coverage follows the incident area.
   review: SHIP. No new dependency or migration. Evidence level: integrated on
   publication; user aesthetic acceptance remains separate. Unit commit: this
   receipt's commit; rollback by revert. Seven active worktrees remain assigned.
+## P-LIFE-4 / D17: operational assessment relationships
+
+- Lane G, final baseline 77817f8. Recorded lifeline and ESF assessments link to
+  tasks, resource requests, incident-attached board records, dataset features
+  and immutable IAP objective snapshots. Exact map, board, resource and IAP
+  navigation preserves source context; updated IAP content is visibly stale.
+- Server projections preserve board field visibility and current incident
+  authority. Migration 0099 adds typed relationships and narrowly scoped audit
+  append/read policies bound to the persisted relationship and its actor.
+  Active contributors succeed; expired, revoked, unrelated and closed scopes
+  are denied by real PostgreSQL checks.
+- Full TypeScript and ESLint passed. The projection gate passed 26 tests; the
+  final affected PostgreSQL gate passed five tests and the final Chrome journey
+  passed once. Logs: lanes/g/logs/relationships-projection-gate.log,
+  relationships-participant-gate.log and relationships-browser-final.log under
+  deploy/test-runtime/out. Earlier fixture failures are superseded by the final
+  exact route assertion retaining the operational-period context.
+- Root reviewed source and generated captures; independent correction review:
+  SHIP. Evidence level: integrated on publication, not operator-validated.
+  No dependency added. Unit commit: this receipt's commit; rollback by revert.
+  Seven worktrees remain assigned to active roster units.
