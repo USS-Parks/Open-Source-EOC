@@ -222,8 +222,9 @@ describe("P-LIFE-1 real incident Lifelines presentation", () => {
     await page.keyboard.press("Enter");
     await page.waitForFunction(`location.hash.startsWith("#/lifeline/energy?") && location.hash.includes("incident=")`);
     expect(await page.evaluate(`location.hash.startsWith("#/lifeline/energy?")`)).toBe(true);
-    expect(await page.getByRole("complementary", { name: "Energy" }).isVisible()).toBe(true);
-    expect(await page.getByText("North district", { exact: true }).isVisible()).toBe(true);
+    const energyDetails = page.getByRole("complementary", { name: "Energy" });
+    await energyDetails.waitFor({ state: "visible" });
+    await energyDetails.getByText("North district", { exact: true }).waitFor({ state: "visible" });
     await page.screenshot({ path: join(SHOTS, "p-life-1-light.png"), fullPage: false });
 
     await page.getByRole("button", { name: "Account menu" }).click();
