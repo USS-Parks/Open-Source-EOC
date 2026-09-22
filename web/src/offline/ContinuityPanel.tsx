@@ -251,9 +251,12 @@ export function ContinuityPanel(props: ContinuityPanelProps) {
     setBusy("reconnecting");
     setSnapshot((current) => current ? { ...current, phase: "reconnecting", lastError: null } : current);
     try {
-      const token = props.client.fieldSyncToken();
       await candidate.coordinator.reconnect(scope, {
-        syncBoard: (boardId) => candidate.submissions.syncOne(scope, boardId, token),
+        // Resolve the transient bearer inside the coordinator-controlled
+        // adapter. If background traffic already cleared an expired session,
+        // the coordinator must still persist `auth_required` for recovery.
+        syncBoard: (boardId) => candidate.submissions.syncOne(
+          scope, boardId, props.client.fieldSyncToken()),
         completeTask: (operation) => props.client.completeIncidentTask(
           operation.incidentId, operation.taskId, operation.operationId),
       });
