@@ -58,6 +58,11 @@ authority. Push each accepted landing while that grant applies; do not publish
 unfinished lane work. External actions and user-owned release decisions remain
 separately gated.
 
+Basho's standing instruction, 2026-09-22: under an active plan-wide grant, do
+not ask before a commit, a landing or a push, and do not ask per unit about
+decisions the plan already answers with a default. Use the default, record it
+in the receipt, keep going. Ask only for external actions and release tagging.
+
 Every commit message and pull request is humanized: plain language stating
 what changed and why, nothing else.
 

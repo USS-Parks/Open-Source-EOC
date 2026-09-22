@@ -4873,3 +4873,31 @@ increment proves it and that coverage follows the incident area.
 - **Result:** W0.3 is complete. No schema, dependency or operator behavior
   changed. Repository files and this receipt land together; rollback by revert.
   Next: W0.4.
+
+## V1 W0.4: zipper and linear-history closeout
+
+- **Live inventory:** `git worktree list --porcelain` reports only the
+  canonical checkout on `main`; `git branch -vv` reports only `main` tracking
+  `origin/main`. The planned lane A worktree and all seven `lane/*` branches
+  had already been retired before this unit's action, so no branch or worktree
+  deletion was performed here.
+- **Protected scratch:** neither `C:/Users/17076/Documents/eoc-lanes/a` nor
+  canonical `work/d05` exists at this inventory. The previously reported
+  untracked `work/d05` scratch therefore could not be preserved, deleted or
+  otherwise dispositioned by this unit. No claim is made about who removed it
+  or when.
+- **Residual directories:** `C:/Users/17076/Documents/eoc-lanes/b` through
+  `g` are not registered worktrees and contain only dependency-link scaffolds,
+  about 20 to 512 KiB each when links are not followed. They are disclosed as
+  retained cleanup residue; no source, git metadata or unpublished commit was
+  found there, and this unit did not remove them.
+- **GitHub:** the branch-protection API reported `main` unprotected before the
+  change. W0.4 enabled required linear history and disabled force pushes and
+  branch deletion. The returned protection object has
+  `required_linear_history.enabled=true`.
+- **Result:** the zipper's git state and branch-protection requirement are
+  closed. The missing scratch is recorded honestly rather than reconstructed
+  or silently treated as preserved. No product source, schema or dependency
+  changed. Repository receipt lands in this commit; rollback the document by
+  revert, while GitHub protection requires a separate account-level change.
+  Next: W0.5.

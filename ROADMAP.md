@@ -34,7 +34,7 @@ not yet the version 1.0 release a county can install and operate unassisted.
 
 | Wave | Purpose | Current status |
 |---|---|---|
-| W0 | Close the Master roster and reconcile repository truth | In progress; M4 and W0.0-W0.3 complete |
+| W0 | Close the Master roster and reconcile repository truth | In progress; M4 and W0.0-W0.4 complete |
 | W1 | Remove or relocate non-product and obsolete delivery surface | Not started |
 | W2 | Harden one real activation: queues, scheduling, scale, security, observability and retention | Not started |
 | W3 | Put an operator screen in front of delivered engines | Not started |
