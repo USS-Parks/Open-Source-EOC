@@ -124,7 +124,7 @@ Existing strengths to preserve include semantic shell landmarks, `aria-current` 
 
 ## 6. Initial design-to-capability ownership matrix
 
-This is the D00 starting matrix. Engine units own data, authority, persistence, and operational contracts. Design/presentation units own the operator-facing implementation. A row with a concept or a partial current screen remains open until its prescribed unit and evidence gate pass.
+This is the D00 starting matrix. Engine units own data, authority, persistence, and operational contracts. Design/presentation units own the operator-facing implementation. A row with a concept or a partial current screen remains open until its prescribed unit and evidence gate pass. The current receipt reconciliation is in section 10.
 
 | Prompt | Requested capability | Baseline disposition | Engine owner or reused seam | Exact Master implementation unit |
 |---|---|---|---|---|
@@ -209,3 +209,66 @@ Future practitioner feedback must be recorded with date, participant role or dec
 - Existing components are assigned to extension, reuse, or later contraction. No replacement application, map, board, dashboard, form, incident, resource, messaging, file, notification, or export engine is proposed.
 - Synthetic concepts and vendor/reference screenshots are kept separate from delivered UI and operator evidence.
 - Missing runtime, accessibility, responsive, live-system, and practitioner proof remains explicit for its later gate.
+
+## 10. Current design-to-capability reconciliation, 2026-09-22
+
+Current through `56d2558`. The original ownership baseline above remains
+historical evidence; this table records what later receipts actually delivered
+and preserves the boundary each receipt stated.
+
+Status meanings:
+
+- `verified`: the prompt's prescribed technical gate passed.
+- `partial`: a usable increment passed, but the row's named proof remains.
+- `open`: the prompt has not run.
+
+Technical verification is not Basho's aesthetic acceptance, representative
+operator validation, live external-system evidence, or release disposition.
+
+| Prompt | Requested capability | Current evidence | Status | Remaining receipt boundary / V1 owner |
+|---|---|---|---|---|
+| D00 | Baseline, inventory, references and ownership | D00 inventory and accepted ownership map | verified | Current truth is maintained in this section |
+| D01 | Six repeatable workflow baselines and measures | Scripted baselines and measures recorded | verified | No representative operator timing; D34 |
+| D02 | Navigation hierarchy, role defaults and arrangements | Navigation contract `73bcd67` | verified | - |
+| D03 | Light/dark and wide/narrow representative compositions | Reviewed composition package `e834975` | verified | Composition evidence, not product acceptance |
+| D04 | Semantic tokens and identity placement | Token system `38d20f2`; browser acceptance receipt | verified | - |
+| D05 | Local accessible SVG icon family and registry | Icon registry `a0d0051`; distinct-symbol correction `bb329d3` | verified | NAPSG breadth is separately bounded at F19 |
+| D06 | Shared operational cards, controls and states | Shared kit `474296c` | verified | - |
+| D07 | Operational tables, filters, views, density and selection | Scoped tables and saved views `263c30a` | verified | - |
+| D08 | Forms, drawers, dialogs, validation and recoverable drafts | Recoverable forms and overlays `03e42ad` | verified | - |
+| D09 | Responsive shell, context drawer, headers and notification access | P-SHELL-FRAME `ef13b0c` | verified | Operator comparison remains D34 |
+| D10 | Incident, period and position context, deep links and saved layouts | P-SHELL-CONTEXT `64e3cf5` | verified | - |
+| D11 | Coherent COP layers, provenance, inspection, tools and field entry | P-COP `e20e772`; KPI integration `b4c14bf`; D29 `d1c5d63` | verified | Operational vector-tile scale remains W4.5 |
+| D12 | Linked dashboards, filters, drilldowns, map linkage and saved views | Dashboard engine `6aa5c09`; P-DASH `7ce5da6` | verified | - |
+| D13 | Versioned ESF/Lifeline assessment and activation contract | Attributed assessment engine `8f0a565` | verified | - |
+| D14 | Eight-card Lifelines overview | P-LIFE-1 `440b59e` | verified | - |
+| D15 | Lifeline detail, assessment updates and history | P-LIFE-2 `ade3448` | verified | - |
+| D16 | Incident-specific ESF coordination workspace | California/federal ESF workspaces `bd55856` | verified | - |
+| D17 | Bidirectional operational assessment relationships | P-LIFE-4 `edc7b32` | verified | - |
+| D18 | Board discovery, views, detail, attachments and history | P-BOARDS-1 `48edf63` | verified | - |
+| D19 | Board authoring, preview, versioning, routing and migration feedback | P-BOARDS-2 `75464fc` | verified | User aesthetic acceptance remains separate |
+| D20 | Incident activation, area, periods, organizations, grants and closeout | Integrated incident workspace `32249fc` | verified | - |
+| D21 | Dataset/feed readiness, mapping, coverage, freshness and recovery | Dataset/feed administration `77817f8` | verified | Live scheduled sources remain W2.2 |
+| D22 | Resource request-to-disposition coordination | Resource workspace `fadaa30` | verified | - |
+| D23 | Tasks, templates, due work and offline reconciliation | Task engine `ecd5249`; P-TASKS `d867488` | verified | - |
+| D24 | Operational-period ICS Forms and IAP planning/revisions | P-IAP `a5b96f9` | verified | - |
+| D25 | AAR analytics and accountable improvement actions | P-AAR `32b2e4e` | verified | - |
+| D26 | SITREP, briefing and controlled JIC preparation | Frozen briefings/JIC `79019cc` | verified | External publication remains separately authorized |
+| D27 | Messages and files attached to operational context | Context workspace `b253180` | verified | - |
+| D28 | Notification inbox, acknowledgement, review and destinations | Alerts/review workspace `95cb3f1` | verified | External channel reach remains W4.0 |
+| D29 | Touch field capture, tracking, queued submission and sync | Field/tracking workspaces `d1c5d63` | verified | Remaining form types remain W4.7 |
+| D30 | Branded, legible, provenance-rich exports | PDF provenance `0d3bf3b`; branded map export `2b40aee` | verified | - |
+| D31 | Offline, stale, queued, failed, conflict, reconnect and session recovery | Durable Console recovery `7a52438` | verified | Independent transfer remains W6.4 |
+| D32 | Guidance and realistic synthetic demonstration scenario | Usable exercise and guides `7eba769` | verified | Synthetic scenario is not operator testimony |
+| D33 | Integrated visual and accessibility review | Not run | open | 79D+D33, then A11Y-T1 |
+| D34 | Equivalent operator workflow comparison | No representative operators or result | open | Basho input and D34 |
+| D35 | Final design/evidence reconciliation and release disposition | Not run | open | 86+D35 after all prior gates |
+
+### 10.1 Agreement with the capability registers
+
+- Delivered P-SHELL, P-DASH, P-BOARDS-1/2, P-TASKS and P-COP receipts are no
+  longer shown as future work.
+- The technical design chain is complete through D32. D33, D34 and D35 remain
+  open exactly where the Master PSPR and V1 PSPR place them.
+- Live data, real-hardware load, independent transfer, operator comparison,
+  manual screen-reader evidence and user acceptance remain separate gates.

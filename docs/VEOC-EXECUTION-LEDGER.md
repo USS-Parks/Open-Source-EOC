@@ -4800,3 +4800,31 @@ increment proves it and that coverage follows the incident area.
   are unchanged. Repository files and this receipt land together; the
   user-level hook is an external configuration change and is not part of the
   commit. Roll back the repository unit by revert. Next: W0.2.
+
+## V1 W0.2: matrix truth reconciliation
+
+- **Method and baseline:** re-ran the VEOC-79E stable-ID, reference, operator
+  behavior, local evidence, status and owner method from the plan's `d2ca863`
+  baseline, then included the W0.0 fail-closed receipts through `56d2558`.
+- **Parity matrix:** delivered P-SHELL, P-DASH, P-BOARDS-1/2, P-TASKS, P-COP
+  and incident-context receipts now close the stale F1, F6, F13, F14, AR3,
+  G-INCSCOPE, G-BOARDROUTE, G-SHELL and G-DASH technical gaps. Rows whose
+  receipts stop at durable delivery, source data, representative operators,
+  live integrations, real hardware, scale or independent transfer remain
+  `partial` or `open` and point at their V1 owners.
+- **Facet register:** all 33 F1-F20, R1-R6 and AR1-AR7 statuses now match the
+  parity matrix. The invariant table no longer overstates disconnection, calm
+  under stress or maintainer continuity: INV-3 and INV-8 are partial; INV-10
+  is open pending W6.3 and Basho's second-maintainer input or waiver.
+- **Design matrix:** updated D00's located design-to-capability matrix with a
+  current row for each D00-D35 capability. D00-D32 retain their passed
+  technical receipts and exact limitations. D33, D34 and D35 remain open for
+  integrated visual/accessibility review, representative-operator comparison
+  and final release reconciliation.
+- **Verification:** the matrix consistency check passed all 33 capability
+  rows and all 36 design rows; the link check and 300-package license scan
+  passed; `git diff --check` passed. Documentation only: no code, schema, API,
+  dependency or product behavior changed.
+- **Result:** W0.2 is complete. The matrices agree without synthesizing live
+  or human evidence. Repository files and this receipt land together; rollback
+  by revert. Next: W0.3.
