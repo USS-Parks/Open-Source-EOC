@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "advisories": [
+    {
+      "id": "GHSA-4r6h-8v6p-xvw6",
+      "package": "xlsx",
+      "expires": "2026-10-31",
+      "reason": "Temporary acceptance while V1 unit W1.10 replaces the unmaintained XLSForm reader."
+    },
+    {
+      "id": "GHSA-5pgg-2g8v-p4x9",
+      "package": "xlsx",
+      "expires": "2026-10-31",
+      "reason": "Temporary acceptance while V1 unit W1.10 replaces the unmaintained XLSForm reader."
+    }
+  ]
+}

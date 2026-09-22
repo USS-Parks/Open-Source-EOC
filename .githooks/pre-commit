@@ -1,0 +1,16 @@
+#!/bin/sh
+# Repository-owned staged-content gate. Activate once per clone with:
+#   git config core.hooksPath .githooks
+
+set -eu
+
+ROOT=$(git rev-parse --show-toplevel)
+node "$ROOT/scripts/precommit-check.mjs"
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+    echo "pre-commit: gitleaks is required for the staged secret scan." >&2
+    exit 1
+fi
+
+cd "$ROOT"
+gitleaks git --staged --redact --no-banner .

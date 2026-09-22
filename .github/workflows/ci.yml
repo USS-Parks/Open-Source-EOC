@@ -6,6 +6,17 @@ on:
   pull_request:
 
 jobs:
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   linear-history:
     name: Main history contains no merge commits
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -56,6 +67,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm audit:advisories
       - run: pnpm check
 
   field-node:

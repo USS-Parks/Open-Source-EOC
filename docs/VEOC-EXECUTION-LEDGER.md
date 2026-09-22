@@ -4775,3 +4775,28 @@ increment proves it and that coverage follows the incident area.
   closeout source change is the test's outer time budget; product behavior,
   dependencies and migrations are unchanged. Unit correction is this receipt's
   commit; rollback by revert. Next: W0.1.
+
+## V1 W0.1: repository-owned safety gates
+
+- **Scope:** added `.githooks/pre-commit` with a staged no-slop scan, a
+  whole-file quote-style-flip check and `gitleaks git --staged`; added a
+  separate hosted CI secret-scan job; and added the high/critical dependency
+  advisory gate to CI.
+- **Bounded advisory exceptions:** the only high/critical findings are
+  `GHSA-4r6h-8v6p-xvw6` and `GHSA-5pgg-2g8v-p4x9` in `xlsx@0.18.5`. Both are
+  recorded in `security/advisory-allowlist.json`, expire 2026-10-31 and are
+  owned by `W1.10`, which replaces the unmaintained XLSForm reader.
+- **Formatting owner:** `C:/Users/17076/.claude/hooks/autoformat.sh` now
+  resolves the touched file's git root and supplies its `.prettierignore` to
+  the project-local Prettier. Both shell hooks pass `bash -n`.
+- **Milestone command:** `pnpm check:gate` now names the static gate, the
+  advisory gate, desktop tests and both Vitest legs at one worker. Existing
+  `pnpm check` behavior remains the normal parallel CI path.
+- **Verification:** recursive TypeScript, ESLint, the 300-package license
+  scan and links across 66 Markdown files passed. The advisory gate accepted
+  exactly the two dated `xlsx` exceptions. The staged-content scan passed,
+  and gitleaks scanned 273 commits (about 9.08 MB) with no leak.
+- **Result:** W0.1 is complete. Product behavior, dependencies and migrations
+  are unchanged. Repository files and this receipt land together; the
+  user-level hook is an external configuration change and is not part of the
+  commit. Roll back the repository unit by revert. Next: W0.2.

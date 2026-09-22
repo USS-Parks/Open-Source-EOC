@@ -5,12 +5,17 @@
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "check": "pnpm -r exec tsc --noEmit && eslint . && node scripts/license-scan.mjs && node scripts/check-links.mjs && node --test deploy/windows/desktop.test.mjs deploy/windows/installer/installer.test.mjs && pnpm test:ci",
+    "check": "pnpm check:static && pnpm test:desktop && pnpm test:ci",
+    "check:static": "pnpm -r exec tsc --noEmit && eslint . && node scripts/license-scan.mjs && node scripts/check-links.mjs",
+    "check:gate": "pnpm check:static && pnpm audit:advisories && pnpm test:desktop && pnpm test:ci:serial",
     "lint": "eslint .",
     "license-scan": "node scripts/license-scan.mjs",
     "check-links": "node scripts/check-links.mjs",
+    "audit:advisories": "node scripts/advisory-gate.mjs",
+    "test:desktop": "node --test deploy/windows/desktop.test.mjs deploy/windows/installer/installer.test.mjs",
     "test": "vitest run",
-    "test:ci": "vitest run --exclude server/src/__tests__/load.test.ts && vitest run server/src/__tests__/load.test.ts --maxWorkers=1"
+    "test:ci": "vitest run --exclude server/src/__tests__/load.test.ts && vitest run server/src/__tests__/load.test.ts --maxWorkers=1",
+    "test:ci:serial": "vitest run --exclude server/src/__tests__/load.test.ts --maxWorkers=1 && vitest run server/src/__tests__/load.test.ts --maxWorkers=1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
