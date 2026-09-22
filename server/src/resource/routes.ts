@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { ResourceRequestAssignmentSchema } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { AuthError } from "../auth/service.js";
 import { withPerson } from "../db/context.js";
@@ -34,7 +35,10 @@ const SubmitBody = z.object({
   incidentId: z.string().uuid().optional(),
 });
 const TransitionBody = z.object({ toState: z.string().min(1), note: z.string().optional() });
-const AssignBody = z.object({ positionId: z.string().uuid() });
+const AssignBody = z.union([
+  ResourceRequestAssignmentSchema,
+  z.object({ positionId: z.uuid() }).strict(),
+]).transform((body) => "kind" in body ? body : { kind: "position" as const, positionId: body.positionId });
 const EscalateBody = z.object({
   peerName: z.string().min(1),
   peerBaseUrl: z.string().url(),
@@ -113,7 +117,7 @@ export function resourceRoutes(
     const { id } = req.params as { id: string };
     const body = AssignBody.parse(req.body);
     const result = await withPerson(sql, req.principal.person.id, (tx) =>
-      assign(tx, req.principal, id, body.positionId),
+      assign(tx, req.principal, id, body),
     );
     return reply.send(result);
   });

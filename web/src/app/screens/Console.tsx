@@ -93,6 +93,10 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
   const viewingMembership = session.me?.memberships.find(
     (membership) => membership.jurisdictionId === viewingJurisdictionId,
   );
+  const resourceJurisdictionId = viewingMembership ? viewingJurisdictionId : jurisdictionId;
+  const resourceMembership = session.me?.memberships.find(
+    (membership) => membership.jurisdictionId === resourceJurisdictionId,
+  );
 
   const boards = useAsync(
     () =>
@@ -269,6 +273,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         client={client}
         personId={session.me?.person.id ?? null}
         jurisdictionId={viewingJurisdictionId ?? jurisdictionId}
+        resourceJurisdictionId={resourceJurisdictionId ?? jurisdictionId}
         discoveryJurisdictionId={jurisdictionId}
         canActivateIncident={session.me?.memberships.some((membership) => membership.jurisdictionId === jurisdictionId && membership.role === "admin") ?? false}
         incidentId={incident.selectedIncidentId}
@@ -285,6 +290,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         feeds={feeds.data ?? []}
         isAdmin={viewingMembership?.role === "admin"}
         isInstanceAdmin={session.me?.isInstanceAdmin === true}
+        canWriteResources={resourceMembership?.role === "admin" || resourceMembership?.role === "member"}
         collectionsError={collections.error}
         firstDashboardId={dashboards.data?.[0]?.id}
         dashboards={dashboards.data ?? []}
@@ -381,6 +387,8 @@ function Center(props: {
   feeds: readonly FeedHealth[];
   isAdmin: boolean;
   isInstanceAdmin: boolean;
+  resourceJurisdictionId: string;
+  canWriteResources: boolean;
   collectionsError: string | null;
   firstDashboardId: string | undefined;
   dashboards: readonly DashboardListItem[];
@@ -485,8 +493,12 @@ function Center(props: {
       return (
         <ResourcesSurface
           client={props.client}
-          jurisdictionId={props.jurisdictionId}
+          jurisdictionId={props.resourceJurisdictionId}
           incidentId={props.incidentId}
+          selectedRequestId={s.id ?? null}
+          onSelectRequest={(id) => props.onNavigate(id ? { kind: "resources", id } : { kind: "resources" })}
+          canMutate={props.canWriteResources}
+          closed={props.incidentClosed}
         />
       );
     case "aar":

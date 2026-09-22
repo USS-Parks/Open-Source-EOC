@@ -23,7 +23,7 @@ export type Surface =
   | { readonly kind: "files" }
   | { readonly kind: "incidents" }
   | { readonly kind: "datasets" }
-  | { readonly kind: "resources" }
+  | { readonly kind: "resources"; readonly id?: string }
   | { readonly kind: "aar" }
   | { readonly kind: "feeds" }
   | { readonly kind: "messages" }
@@ -142,7 +142,7 @@ function parseSurfacePath(clean: string): Surface {
     case "datasets":
       return { kind: "datasets" };
     case "resources":
-      return { kind: "resources" };
+      return id ? { kind: "resources", id } : { kind: "resources" };
     case "aar":
       return { kind: "aar" };
     case "feeds":
@@ -254,7 +254,7 @@ function surfacePath(surface: Surface): string {
     case "datasets":
       return "#/datasets";
     case "resources":
-      return "#/resources";
+      return surface.id ? `#/resources/${surface.id}` : "#/resources";
     case "aar":
       return "#/aar";
     case "feeds":

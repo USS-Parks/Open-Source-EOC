@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
-import { principalForPerson, type Principal } from "../auth/service.js";
+import { addMembership, createJurisdiction, createPerson, principalForPerson, type Principal } from "../auth/service.js";
 import { withPerson } from "../db/context.js";
 import { escalate, type EscalationPayload } from "../resource/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
@@ -130,6 +130,128 @@ describe("single-instance lifecycle", () => {
   });
 });
 
+describe("D22 assignment and organization projection", () => {
+  it("persists a named incident participant supplier and exposes both organizations", async () => {
+    const partnerId = await createJurisdiction(county.admin, "resource-partner", "Resource Partner");
+    const partnerPersonId = await createPerson(county.admin, {
+      email: "resource-partner@example.org", displayName: "Resource Partner", password: "resource-partner-password",
+    });
+    await addMembership(county.admin, partnerPersonId, partnerId, "member");
+    const [incident] = await county.admin`
+      insert into incidents (jurisdiction_id, name, kind, activated_by)
+      values (${county.jurisdictionId}, 'D22 Resource Incident', 'incident', ${county.adminId}) returning id`;
+    const [participant] = await county.admin`
+      insert into incident_participants
+        (incident_id, organization_id, person_id, incident_position_title, role, expires_at, reason, created_by)
+      values (${incident!.id as string}, ${partnerId}, ${partnerPersonId}, 'Mutual Aid Logistics',
+        'contributor', now() + interval '1 day', 'D22 assigned supplier', ${county.adminId}) returning id`;
+    const submitted = await post(county, `/api/v1/jurisdictions/${county.jurisdictionId}/resource-requests`, {
+      origin: "eoc", item: "Portable water tender", quantity: 2, priority: "immediate", incidentId: incident!.id as string,
+    });
+    expect(submitted.statusCode).toBe(201);
+    const id = submitted.json().id as string;
+    await post(county, `/api/v1/resource-requests/${id}/transition`, { toState: "triaged" });
+    await post(county, `/api/v1/resource-requests/${id}/transition`, { toState: "sourcing" });
+    const assigned = await post(county, `/api/v1/resource-requests/${id}/assign`, {
+      kind: "incident_participant", incidentId: incident!.id as string, participantId: participant!.id as string,
+    });
+    expect(assigned.statusCode).toBe(200);
+    const detail = (await get(county, `/api/v1/resource-requests/${id}`)).json();
+    expect(detail).toMatchObject({
+      state: "assigned",
+      receivingOrganization: { id: county.jurisdictionId },
+      supplyingOrganization: { id: partnerId, name: "Resource Partner" },
+      assignment: { kind: "incident_participant", participantId: participant!.id as string,
+        personName: "Resource Partner", incidentPositionTitle: "Mutual Aid Logistics" },
+    });
+    expect(detail.chronology.at(-1)).toMatchObject({ toState: "assigned", note: "assigned to Mutual Aid Logistics" });
+  });
+});
+
+describe("D22 partner-owned incident requests", () => {
+  it("allows an active partner contributor to create, progress and assign its own incident-linked request", async () => {
+    const partnerId = await createJurisdiction(county.admin, "d22-owning-partner", "D22 Owning Partner");
+    const partnerPersonId = await createPerson(county.admin, {
+      email: "d22-owning-partner@example.org", displayName: "D22 Owning Partner", password: "d22-owning-password",
+    });
+    await addMembership(county.admin, partnerPersonId, partnerId, "member");
+    const unrelatedJurisdictionId = await createJurisdiction(county.admin, "d22-unrelated-writer", "D22 Unrelated Writer");
+    await addMembership(county.admin, partnerPersonId, unrelatedJurisdictionId, "member");
+    const [incident] = await county.admin`
+      insert into incidents (jurisdiction_id, name, kind, activated_by)
+      values (${county.jurisdictionId}, 'D22 Partner Resource Incident', 'incident', ${county.adminId}) returning id`;
+    const incidentId = incident!.id as string;
+    await county.admin`
+      insert into incident_participants
+        (incident_id, organization_id, person_id, incident_position_title, role, expires_at, reason, created_by)
+      values (${incidentId}, ${partnerId}, ${partnerPersonId}, 'Partner Logistics',
+        'contributor', now() + interval '1 day', 'D22 partner-owned request', ${county.adminId})`;
+    const [position] = await county.admin`
+      insert into positions (jurisdiction_id, key, title)
+      values (${partnerId}, 'd22_partner_logistics', 'D22 Partner Logistics') returning id`;
+    const partnerLogin = await county.app.inject({
+      method: "POST", url: "/api/v1/auth/login",
+      payload: { email: "d22-owning-partner@example.org", password: "d22-owning-password" },
+    });
+    expect(partnerLogin.statusCode, partnerLogin.body).toBe(200);
+    const partnerHeaders = { authorization: `Bearer ${partnerLogin.json().accessToken as string}` };
+    const partnerPost = (url: string, payload: Record<string, unknown>) => county.app.inject({
+      method: "POST", url, headers: partnerHeaders, payload,
+    });
+    const unrelated = await partnerPost(`/api/v1/jurisdictions/${unrelatedJurisdictionId}/resource-requests`, {
+      origin: "eoc", item: "Unrelated-jurisdiction request", incidentId,
+    });
+    expect(unrelated.statusCode, unrelated.body).toBe(403);
+    expect(unrelated.json().error).toBe("incident authority does not cover this receiving organization");
+    const submitted = await partnerPost(`/api/v1/jurisdictions/${partnerId}/resource-requests`, {
+      origin: "eoc", item: "Partner-owned water tender", incidentId,
+    });
+    expect(submitted.statusCode, submitted.body).toBe(201);
+    const requestId = submitted.json().id as string;
+    expect((await partnerPost(`/api/v1/resource-requests/${requestId}/transition`, { toState: "triaged" })).statusCode).toBe(200);
+    expect((await partnerPost(`/api/v1/resource-requests/${requestId}/transition`, { toState: "sourcing" })).statusCode).toBe(200);
+    const assigned = await partnerPost(`/api/v1/resource-requests/${requestId}/assign`, { positionId: position!.id as string });
+    expect(assigned.statusCode, assigned.body).toBe(200);
+    await county.admin`update incidents set closed_at = now(), closed_by = ${county.adminId} where id = ${incidentId}`;
+    const closed = await partnerPost(`/api/v1/resource-requests/${requestId}/transition`, { toState: "deployed" });
+    expect(closed.statusCode, closed.body).toBe(409);
+    expect(closed.json().error).toBe("incident is closed");
+  });
+});
+
+describe("D22 closed incident resource mutations", () => {
+  it("rejects incident-scoped creation, transition and assignment after closeout", async () => {
+    const [incident] = await county.admin`
+      insert into incidents (jurisdiction_id, name, kind, activated_by)
+      values (${county.jurisdictionId}, 'D22 Closed Resource Incident', 'incident', ${county.adminId}) returning id`;
+    const incidentId = incident!.id as string;
+    const submitted = await post(county, `/api/v1/jurisdictions/${county.jurisdictionId}/resource-requests`, {
+      origin: "eoc", item: "Closed incident generator", incidentId,
+    });
+    expect(submitted.statusCode, submitted.body).toBe(201);
+    const requestId = submitted.json().id as string;
+    const position = await post(county, `/api/v1/jurisdictions/${county.jurisdictionId}/positions`, {
+      key: "d22_closed_logistics", title: "D22 Closed Logistics",
+    });
+    expect(position.statusCode, position.body).toBe(201);
+    await county.admin`update incidents set closed_at = now(), closed_by = ${county.adminId} where id = ${incidentId}`;
+
+    const rejectedCreate = await post(county, `/api/v1/jurisdictions/${county.jurisdictionId}/resource-requests`, {
+      origin: "eoc", item: "Rejected after close", incidentId,
+    });
+    const rejectedTransition = await post(county, `/api/v1/resource-requests/${requestId}/transition`, { toState: "triaged" });
+    const rejectedAssignment = await post(county, `/api/v1/resource-requests/${requestId}/assign`, {
+      positionId: position.json().id as string,
+    });
+    for (const response of [rejectedCreate, rejectedTransition, rejectedAssignment]) {
+      expect(response.statusCode, response.body).toBe(409);
+      expect(response.json().error).toBe("incident is closed");
+    }
+    const [stored] = await county.admin`select state, assigned_position from resource_requests where id = ${requestId}`;
+    expect(stored).toMatchObject({ state: "submitted", assigned_position: null });
+  });
+});
+
 describe("cross-tier escalation, field to state and back", () => {
   it("escalates over a peer token and the upper tier reports fulfillment back", async () => {
     // state registers county so county can push up; county registers state so
@@ -175,7 +297,7 @@ describe("cross-tier escalation, field to state and back", () => {
         title: "Operations Section Chief",
       })
     ).json().id as string;
-    await post(state, `/api/v1/resource-requests/${stateReqId}/assign`, { positionId: statePosition });
+    await post(state, `/api/v1/resource-requests/${stateReqId}/assign`, { kind: "position", positionId: statePosition });
     await post(state, `/api/v1/resource-requests/${stateReqId}/transition`, { toState: "deployed" });
 
     // State reports fulfillment back down to the county's originating request.

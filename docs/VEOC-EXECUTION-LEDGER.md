@@ -4324,6 +4324,27 @@ increment proves it and that coverage follows the incident area.
   publication; user aesthetic acceptance remains separate. Unit commit: this
   receipt's commit; rollback by revert. Seven active worktrees remain assigned.
 
+## D22: incident resource coordination
+
+- Lane F, baseline 75464fc. Request intake, named local-position or active
+  partner assignment, receiving/supplying organizations, lifecycle and attributed
+  history now share the resource workspace and reloadable detail routes.
+  Migration 0098 adds assignment provenance; existing position inputs remain
+  compatible. Incident mutation locking preserves closeout and current contributor
+  authority. Receiving organizations must be the incident owner or the actor's
+  active participant organization; unrelated second memberships cannot cross it.
+- Full TypeScript and ESLint passed. Final presentation integration passed 18
+  checks including real PostgreSQL and Chrome; the final organization correction
+  passed all six affected database checks. Earlier assignment/client checks passed
+  in resources-closure-integration.log. Evidence logs are under
+  deploy/test-runtime/out/lanes/f/logs: resources-partner-integration.log and
+  resources-organization-gate.log. Root reviewed the complete diff and actual
+  light, dark and narrow captures. Independent correction review: SHIP.
+- Evidence level: integrated on publication. User aesthetic acceptance remains
+  separate. No new dependency. Unit commit: this receipt's commit; rollback by
+  revert. Seven worktrees remain assigned to active roster units; protected local
+  files and preservation stashes remain intact.
+
 ## P-AAR / D25: incident learning and improvement actions
 
 - Lane A, final baseline 79019cc. Period analytics drill into the exact source

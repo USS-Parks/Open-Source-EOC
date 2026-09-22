@@ -55,6 +55,9 @@ import type {
   AarActionStatus,
   WorkflowAssignmentRequest,
   BoardTemplate,
+  ResourceRequestAssignment as ResourceRequestAssignmentContract,
+  ResourceRequestDetail as ResourceRequestDetailContract,
+  ResourceRequestSummary as ResourceRequestSummaryContract,
 } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
 
@@ -277,13 +280,7 @@ export interface IncidentTemplateOption {
   readonly key: string;
   readonly title: string;
 }
-export interface ResourceRequestSummary {
-  readonly id: string;
-  readonly item: string;
-  readonly quantity: number;
-  readonly priority: string;
-  readonly state: string;
-}
+export type { ResourceRequestAssignment, ResourceRequestDetail, ResourceRequestSummary } from "@openeoc/shared";
 export type AarObservation = SharedAarObservation;
 export interface CorrectiveAction extends AarCorrectiveAction {
   readonly incidentId: string | null;
@@ -903,9 +900,9 @@ export class ApiClient {
   async listResourceRequests(
     jurisdictionId: string,
     incidentId?: string | null,
-  ): Promise<ResourceRequestSummary[]> {
+  ): Promise<ResourceRequestSummaryContract[]> {
     const query = incidentId ? `?incidentId=${encodeURIComponent(incidentId)}` : "";
-    const r = await this.request<{ requests: ResourceRequestSummary[] }>(
+    const r = await this.request<{ requests: ResourceRequestSummaryContract[] }>(
       "GET",
       `/api/v1/jurisdictions/${jurisdictionId}/resource-requests${query}`,
     );
@@ -933,6 +930,12 @@ export class ApiClient {
       toState,
       ...(note ? { note } : {}),
     });
+  }
+  getResourceRequest(id: string): Promise<ResourceRequestDetailContract> {
+    return this.request("GET", `/api/v1/resource-requests/${encodeURIComponent(id)}`);
+  }
+  assignResourceRequest(id: string, assignment: ResourceRequestAssignmentContract): Promise<{ state: string }> {
+    return this.request("POST", `/api/v1/resource-requests/${encodeURIComponent(id)}/assign`, assignment);
   }
   async listAarObservations(incidentId: string, periodRevision?: number): Promise<AarObservation[]> {
     const query = periodRevision === undefined ? "" : `?periodRevision=${periodRevision}`;
