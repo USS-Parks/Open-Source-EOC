@@ -8,7 +8,7 @@ export type IconPrimitive =
   | { readonly element: "polyline"; readonly points: string }
   | { readonly element: "rect"; readonly x: number; readonly y: number; readonly width: number; readonly height: number; readonly rx?: number };
 
-export interface IconDefinition {
+interface IconDefinition {
   readonly label: string;
   readonly category: "navigation" | "action" | "lifeline";
   readonly description: string;
@@ -265,7 +265,7 @@ export const iconRegistry = {
 } as const satisfies Readonly<Record<string, IconDefinition>>;
 
 export type IconName = keyof typeof iconRegistry;
-export type LifelineIconName = {
+type LifelineIconName = {
   [Name in IconName]: (typeof iconRegistry)[Name]["category"] extends "lifeline" ? Name : never;
 }[IconName];
 

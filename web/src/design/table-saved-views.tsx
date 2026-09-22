@@ -26,7 +26,7 @@ export interface TableViewPersistence {
   ): Promise<void>;
 }
 
-export interface OperationalTableSavedView {
+interface OperationalTableSavedView {
   readonly id: string;
   readonly key: string;
   readonly label: string;
@@ -34,7 +34,7 @@ export interface OperationalTableSavedView {
   readonly view: OperationalTableViewState;
 }
 
-export type TableViewControllerStatus =
+type TableViewControllerStatus =
   | "idle"
   | "loading"
   | "saving"
@@ -42,19 +42,19 @@ export type TableViewControllerStatus =
   | "error"
   | "conflict";
 
-export interface TableViewScope {
+interface TableViewScope {
   readonly personId: string;
   readonly incidentId: string;
   readonly tableId: string;
   readonly tableSchema: string;
 }
 
-export interface UseTableViewsOptions extends TableViewScope {
+interface UseTableViewsOptions extends TableViewScope {
   readonly persistence: TableViewPersistence;
   readonly onApply: (view: OperationalTableViewState, viewId: string) => void;
 }
 
-export interface TableViewController {
+interface TableViewController {
   readonly views: readonly OperationalTableSavedView[];
   readonly status: TableViewControllerStatus;
   readonly error: string | null;
@@ -87,7 +87,7 @@ export function tableViewStateKey(tableId: string, viewId: string): string {
   return key;
 }
 
-export function tableViewIdFromLabel(label: string): string {
+function tableViewIdFromLabel(label: string): string {
   const id = label
     .trim()
     .toLowerCase()
@@ -131,7 +131,7 @@ function parsePinRecord(value: unknown): Record<string, OperationalTablePin> | n
   return Object.fromEntries(entries) as Record<string, OperationalTablePin>;
 }
 
-export function parseOperationalTableViewState(value: unknown): OperationalTableViewState | null {
+function parseOperationalTableViewState(value: unknown): OperationalTableViewState | null {
   if (!isRecord(value)) return null;
   const order = value.columnOrder;
   const sort = value.sort;

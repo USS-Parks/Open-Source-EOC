@@ -44,7 +44,7 @@ const lifelines: readonly {
   { title: "Water Systems", state: "watch", stateLabel: "Stabilizing", mark: "WS", summary: "Treatment on backup power", source: "State Water Resources Control Board", assessed: "09:22 PDT" },
 ];
 
-export interface KitReviewProps {
+interface KitReviewProps {
   readonly initialTheme?: ThemeName;
 }
 

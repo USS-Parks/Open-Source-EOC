@@ -10,7 +10,7 @@ import {
 import { ActionButton } from "./controls.js";
 import "./forms.css";
 
-export interface OverlayProps {
+interface OverlayProps {
   readonly open: boolean;
   readonly title: string;
   readonly children: ReactNode;

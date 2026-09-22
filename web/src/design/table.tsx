@@ -11,12 +11,12 @@ import { ActionButton, Menu } from "./controls.js";
 import { EmptyState, ErrorState, LoadingState } from "./feedback.js";
 import "./table.css";
 
-export type OperationalTableDensity = "compact" | "comfortable";
+type OperationalTableDensity = "compact" | "comfortable";
 export type OperationalTablePin = "start" | "end" | null;
 export type OperationalTableStatus = "ready" | "loading" | "empty" | "error";
-export type OperationalTableSortDirection = "asc" | "desc";
+type OperationalTableSortDirection = "asc" | "desc";
 
-export interface OperationalTableSort {
+interface OperationalTableSort {
   readonly columnId: string;
   readonly direction: OperationalTableSortDirection;
 }
@@ -47,20 +47,20 @@ export interface OperationalTableColumn<Row> {
   readonly align?: "start" | "center" | "end";
 }
 
-export interface OperationalTableBulkAction {
+interface OperationalTableBulkAction {
   readonly id: string;
   readonly label: string;
   readonly disabled?: boolean;
   readonly onInvoke: (recordIds: readonly string[]) => void;
 }
 
-export type OperationalTableSelectionReason =
+type OperationalTableSelectionReason =
   | "row"
   | "page"
   | "rows-reconciled"
   | "dataset-changed";
 
-export interface OperationalTableProps<Row> {
+interface OperationalTableProps<Row> {
   readonly tableId: string;
   readonly caption: string;
   readonly columns: readonly OperationalTableColumn<Row>[];

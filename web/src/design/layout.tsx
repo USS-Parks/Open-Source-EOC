@@ -29,7 +29,7 @@ export function AppFrame(props: { title: string; children: ReactNode }) {
   );
 }
 
-export interface BoardListItem {
+interface BoardListItem {
   readonly id: string;
   readonly name: string;
   readonly status?: Status;
@@ -130,7 +130,7 @@ export function MapPanel(props: { label: string }) {
   );
 }
 
-export interface TrayNotification {
+interface TrayNotification {
   readonly id: string;
   readonly status: Status;
   readonly text: string;

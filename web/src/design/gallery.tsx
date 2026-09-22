@@ -102,7 +102,7 @@ const REVIEW_SCREENS: readonly { id: ReviewScreen; label: string }[] = [
  * Composition review-only compositions. These use synthetic records and local inline
  * artwork. They do not call the application API or claim implemented behavior.
  */
-export function CompositionReview() {
+function CompositionReview() {
   const [theme, setTheme] = useState<ThemeName>("light");
   const [screen, setScreen] = useState<ReviewScreen>("map");
   const [narrow, setNarrow] = useState(false);

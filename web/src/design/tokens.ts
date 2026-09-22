@@ -6,7 +6,7 @@
 
 export type ThemeName = "light" | "dark";
 
-export interface ThemeTokens {
+interface ThemeTokens {
   readonly bg: string;
   readonly surface: string;
   readonly surfaceRaised: string;
@@ -85,22 +85,11 @@ export const themes: Readonly<Record<ThemeName, ThemeTokens>> = {
   },
 };
 
-export const spacing = [0, 4, 8, 12, 16, 24, 32, 48] as const;
-
 export const fontStack =
   'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif';
 
 /** Corner radii. A single scale keeps the surface visually consistent. */
-export const radii = { sm: 4, md: 6, lg: 10, pill: 999 } as const;
-
-/** Type scale in px: one ramp for every size on the surface. */
-export const typeScale = { xs: 12, sm: 13, md: 14, lg: 16, xl: 20, xxl: 28 } as const;
-
-export const fontWeights = { regular: 400, medium: 550, semibold: 650, bold: 750 } as const;
-
-export const lineHeights = { tight: 1.2, body: 1.45, relaxed: 1.6 } as const;
-
-export const borderWidths = { hairline: 1, emphasis: 2, selected: 3 } as const;
+const radii = { sm: 4, md: 6, pill: 999 } as const;
 
 /** Compact is for dense workspaces; touch preserves the field minimum. */
 export const density = {
@@ -124,7 +113,7 @@ export type OperationalState =
   | "notApplicable"
   | "zero";
 
-export interface OperationalStateToken {
+interface OperationalStateToken {
   readonly label: string;
   readonly foreground: string;
   readonly background: string;
@@ -169,7 +158,7 @@ export const identityPlacement = {
  * Elevation. Shadows complement semantic surfaces and are tuned per theme so dark mode lifts without
  * glowing.
  */
-export const shadows: Record<ThemeName, { sm: string; md: string; lg: string }> = {
+const shadows: Record<ThemeName, { sm: string; md: string; lg: string }> = {
   light: {
     sm: "0 1px 2px rgba(16,24,32,0.06)",
     md: "0 2px 6px rgba(16,24,32,0.08), 0 1px 2px rgba(16,24,32,0.06)",
@@ -211,12 +200,7 @@ export function toCssVariables(theme: ThemeName): Record<string, string> {
     "--eoc-status-unknown": t.statusUnknown,
     "--eoc-radius-sm": `${radii.sm}px`,
     "--eoc-radius-md": `${radii.md}px`,
-    "--eoc-radius-lg": `${radii.lg}px`,
     "--eoc-radius-pill": `${radii.pill}px`,
-    "--eoc-border-hairline": `${borderWidths.hairline}px`,
-    "--eoc-border-emphasis": `${borderWidths.emphasis}px`,
-    "--eoc-density-compact-control": `${density.compact.controlHeight}px`,
-    "--eoc-density-compact-row": `${density.compact.rowHeight}px`,
     "--eoc-shadow-sm": shadows[theme].sm,
     "--eoc-shadow-md": shadows[theme].md,
     "--eoc-shadow-lg": shadows[theme].lg,
@@ -225,7 +209,7 @@ export function toCssVariables(theme: ThemeName): Record<string, string> {
 }
 
 /** WCAG relative luminance. */
-export function relativeLuminance(hex: string): number {
+function relativeLuminance(hex: string): number {
   const m = /^#([0-9a-f]{6})$/i.exec(hex);
   if (!m) throw new Error(`not a 6-digit hex color: ${hex}`);
   const [r, g, b] = [0, 2, 4].map((i) => {

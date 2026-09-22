@@ -24,7 +24,7 @@ const markerText: Readonly<Record<OperationalState, string>> = {
   zero: "0",
 };
 
-export interface ConditionBadgeProps extends Omit<HTMLAttributes<HTMLSpanElement>, "children"> {
+interface ConditionBadgeProps extends Omit<HTMLAttributes<HTMLSpanElement>, "children"> {
   readonly state: OperationalState;
   readonly label?: string;
 }
@@ -52,7 +52,7 @@ export function ConditionBadge({ state, label, className, style, ...domProps }: 
   );
 }
 
-export interface CountBadgeProps extends Omit<HTMLAttributes<HTMLSpanElement>, "children"> {
+interface CountBadgeProps extends Omit<HTMLAttributes<HTMLSpanElement>, "children"> {
   readonly value: number | null;
   readonly label: string;
 }
@@ -75,7 +75,7 @@ export function CountBadge({ value, label, className, ...domProps }: CountBadgeP
   );
 }
 
-export interface LoadingStateProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"> {
+interface LoadingStateProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"> {
   readonly label?: string;
   readonly lines?: number;
 }
@@ -98,7 +98,7 @@ export function LoadingState({ label = "Loading", lines = 3, className, ...domPr
   );
 }
 
-export interface EmptyStateProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
+interface EmptyStateProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   readonly title: string;
   readonly description: string;
   readonly action?: ReactNode;
@@ -115,7 +115,7 @@ export function EmptyState({ title, description, action, className, ...domProps 
   );
 }
 
-export interface ErrorStateProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
+interface ErrorStateProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   readonly title: string;
   readonly message: string;
   readonly action?: ReactNode;

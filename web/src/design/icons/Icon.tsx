@@ -10,9 +10,9 @@ import {
 
 type AccessibleIcon = { readonly decorative?: false; readonly label: string };
 type DecorativeIcon = { readonly decorative: true; readonly label?: never };
-export type IconAccessibility = AccessibleIcon | DecorativeIcon;
+type IconAccessibility = AccessibleIcon | DecorativeIcon;
 
-export type IconProps = IconAccessibility & {
+type IconProps = IconAccessibility & {
   readonly name: IconName;
   readonly size?: IconSize;
   readonly selected?: boolean;
@@ -98,7 +98,7 @@ export function Icon(props: IconProps) {
   );
 }
 
-export type LifelineIconProps = IconAccessibility & {
+type LifelineIconProps = IconAccessibility & {
   readonly lifeline: LifelineKey;
   readonly size?: IconSize;
   readonly selected?: boolean;

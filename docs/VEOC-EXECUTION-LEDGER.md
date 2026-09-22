@@ -4576,6 +4576,22 @@ increment proves it and that coverage follows the incident area.
   Evidence level: integrated on publication, not operator-validated. No new
   dependency. Unit commit: this receipt's commit; rollback by revert. Seven
   worktrees remain assigned or retained for final roster closeout.
+
+## KIT-CONTRACT: close the design kit's unused public surface
+
+- Solo unit on main, baseline 7a52438. Removed five unused token declarations,
+  five unused emitted CSS variables, unused icon barrel aliases and export
+  keywords on internal-only declarations. Preserved production consumers,
+  gallery entry points, test contracts and all current theme values.
+- Full recursive TypeScript and design ESLint passed. The design gate passed
+  142 of 143 checks initially; the sole failure was a legacy assertion expecting
+  the earlier briefing heading structure. It now checks the current single
+  page heading and correctly named second-level sections. The affected suite
+  passed all four checks after correction, and its ESLint passed.
+- Root reviewed the complete diff. No dependency, migration, theme or runtime
+  behavior change. Evidence level: integrated, not operator-validated.
+  Unit commit: this receipt's commit; rollback by revert. Seven lane worktrees
+  remain retained for roster closeout. M3 follows this landing.
 ## D31: durable work and session recovery in the Console
 
 - Lane E, final baseline 95cb3f1. The Context panel shows scoped local work,

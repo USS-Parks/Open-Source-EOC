@@ -34,7 +34,7 @@ export interface GeometryFieldContext {
   readonly onChange: (value: unknown) => void;
 }
 
-export interface SchemaFormProps {
+interface SchemaFormProps {
   readonly fields: readonly FieldDef[];
   readonly layout?: FormLayout;
   readonly initialValues?: Readonly<Record<string, unknown>>;

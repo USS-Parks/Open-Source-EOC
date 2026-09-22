@@ -39,7 +39,7 @@ const draftScope: DraftScope = {
   schema: "resource-request-v3",
 };
 
-export interface FormReviewProps { readonly initialTheme?: ThemeName }
+interface FormReviewProps { readonly initialTheme?: ThemeName }
 
 export function FormReview({ initialTheme = "light" }: FormReviewProps) {
   const [theme, setTheme] = useState<ThemeName>(initialTheme);

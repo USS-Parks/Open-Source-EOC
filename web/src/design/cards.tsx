@@ -13,7 +13,7 @@ export type KpiValue =
   | { readonly kind: "zero"; readonly unit?: string }
   | { readonly kind: "unknown" | "stale" | "unavailable" | "notApplicable" };
 
-export interface KpiCardProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
+interface KpiCardProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   readonly label: string;
   readonly value: KpiValue;
   readonly detail?: string;
@@ -42,7 +42,7 @@ export function KpiCard({ label, value, detail, leading, action, className, ...d
   );
 }
 
-export interface ConditionCardProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
+interface ConditionCardProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   readonly title: string;
   readonly state: OperationalState;
   readonly stateLabel?: string;
@@ -76,12 +76,12 @@ export function ConditionCard({ title, state, stateLabel, leading, summary, meta
   );
 }
 
-export interface RecordField {
+interface RecordField {
   readonly label: string;
   readonly value: ReactNode;
 }
 
-export interface RecordCardProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
+interface RecordCardProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   readonly eyebrow?: string;
   readonly title: string;
   readonly fields: readonly RecordField[];
@@ -105,11 +105,11 @@ export function RecordCard({ eyebrow, title, fields, selected = false, actionLab
   );
 }
 
-export interface CardAction extends Omit<ActionButtonProps, "children"> {
+interface CardAction extends Omit<ActionButtonProps, "children"> {
   readonly label: string;
 }
 
-export interface ActionCardProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
+interface ActionCardProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   readonly title: string;
   readonly summary: string;
   readonly primaryAction: CardAction;
@@ -134,13 +134,13 @@ export function ActionCard({ title, summary, primaryAction, secondaryAction, cla
   );
 }
 
-export interface SummaryItem {
+interface SummaryItem {
   readonly label: string;
   readonly value: ReactNode;
   readonly detail?: string;
 }
 
-export interface SummaryCardProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
+interface SummaryCardProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   readonly title: string;
   readonly items: readonly SummaryItem[];
   readonly footer?: ReactNode;

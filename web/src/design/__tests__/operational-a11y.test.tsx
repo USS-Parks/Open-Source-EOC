@@ -49,14 +49,21 @@ describe("operational surface accessibility", () => {
     }, 30000);
   }
 
-  it("the briefing view uses one h2 and section headings for screen-reader structure", () => {
+  it("the briefing view uses one page heading and named sections for screen readers", () => {
     const { container } = render(
       <Theme name="light">
         <BriefingView sitrep={sitrep} />
       </Theme>,
     );
-    expect(container.querySelectorAll("h2")).toHaveLength(1);
-    expect(container.querySelectorAll("h3").length).toBeGreaterThanOrEqual(3);
+    expect(container.querySelectorAll("h1")).toHaveLength(1);
+    expect(container.querySelector("h1")?.textContent).toBe("Situation Report");
+    const sections = container.querySelectorAll("section[aria-labelledby]");
+    expect(sections.length).toBeGreaterThanOrEqual(3);
+    for (const section of sections) {
+      const heading = document.getElementById(section.getAttribute("aria-labelledby")!);
+      expect(heading?.tagName).toBe("H2");
+      expect(section.contains(heading)).toBe(true);
+    }
   });
 });
 

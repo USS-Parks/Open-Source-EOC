@@ -6,7 +6,7 @@ export interface DraftScope {
   readonly schema: string;
 }
 
-export interface DraftRecord {
+interface DraftRecord {
   readonly values: Readonly<Record<string, unknown>>;
   readonly savedAt: string;
 }

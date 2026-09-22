@@ -11,7 +11,7 @@ import {
 } from "react";
 import "./kit.css";
 
-export type ActionButtonKind = "primary" | "secondary" | "quiet" | "danger";
+type ActionButtonKind = "primary" | "secondary" | "quiet" | "danger";
 
 export interface ActionButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   readonly kind?: ActionButtonKind;
@@ -43,13 +43,13 @@ export function ActionButton({
   );
 }
 
-export interface TabOption {
+interface TabOption {
   readonly id: string;
   readonly label: string;
   readonly disabled?: boolean;
 }
 
-export interface TabsProps {
+interface TabsProps {
   readonly id: string;
   readonly label: string;
   readonly tabs: readonly TabOption[];
@@ -122,14 +122,14 @@ export function Tabs({ id, label, tabs, value, onChange, className }: TabsProps)
   );
 }
 
-export interface MenuItem {
+interface MenuItem {
   readonly id: string;
   readonly label: string;
   readonly disabled?: boolean;
   readonly onSelect: () => void;
 }
 
-export interface MenuProps {
+interface MenuProps {
   readonly label: string;
   readonly items: readonly MenuItem[];
   readonly className?: string;
@@ -258,7 +258,7 @@ export function Menu({ label, items, className }: MenuProps) {
   );
 }
 
-export interface TooltipProps {
+interface TooltipProps {
   readonly text: string;
   readonly children: ReactElement<{ "aria-describedby"?: string }>;
 }
@@ -291,7 +291,7 @@ export function Tooltip({ text, children }: TooltipProps) {
   );
 }
 
-export interface ProgressIndicatorProps {
+interface ProgressIndicatorProps {
   readonly label: string;
   readonly value?: number;
   readonly max?: number;
