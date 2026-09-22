@@ -94,6 +94,20 @@ const GuestGrantBody = z.object({
 export interface BuildAppOptions {
   readonly oidc?: OidcSettings | null;
   readonly trustedTemplateKeys?: readonly string[];
+  readonly integrations?: readonly OptionalIntegration[];
+}
+
+export type OptionalIntegration = "collab" | "meetings";
+
+function integrationsFromEnv(value = process.env.OPENEOC_INTEGRATIONS ?? ""): OptionalIntegration[] {
+  const integrations: OptionalIntegration[] = [];
+  for (const entry of value.split(",").map((item) => item.trim()).filter(Boolean)) {
+    if (entry !== "collab" && entry !== "meetings") {
+      throw new Error(`unsupported OPENEOC_INTEGRATIONS entry: ${entry}`);
+    }
+    if (!integrations.includes(entry)) integrations.push(entry);
+  }
+  return integrations;
 }
 
 export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstance {
@@ -104,6 +118,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   void app.register(websocket);
   const oidcSettings = options.oidc === undefined ? oidcSettingsFromEnv() : options.oidc;
   const oidc = oidcSettings ? new OidcClient(oidcSettings) : null;
+  const integrations = new Set(options.integrations ?? integrationsFromEnv());
 
   /**
    * Security headers on every response, and a shared flood limiter in front
@@ -162,6 +177,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
    * assignment, and no-ops when no collaboration backend is configured.
    */
   async function syncCollabForPosition(principal: Principal, positionId: string): Promise<void> {
+    if (!integrations.has("collab")) return;
     try {
       await withPerson(sql, principal.person.id, (tx) =>
         syncPositionIncidents(tx, principal, positionId),
@@ -341,8 +357,8 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   capRoutes(app, sql, authenticate);
   cotRoutes(app, sql, authenticate);
   ipawsRoutes(app, sql, authenticate);
-  collabRoutes(app, sql, authenticate);
-  meetingRoutes(app, sql, authenticate);
+  if (integrations.has("collab")) collabRoutes(app, sql, authenticate);
+  if (integrations.has("meetings")) meetingRoutes(app, sql, authenticate);
   jicRoutes(app, sql, authenticate);
   iapRoutes(app, sql, authenticate);
   resourceRoutes(app, sql, authenticate);

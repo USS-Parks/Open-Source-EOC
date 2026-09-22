@@ -14,6 +14,21 @@ import type { Sql } from "../db/client.js";
  */
 
 const DOCS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "docs", "API.md");
+const sql = (() => {
+  throw new Error("route inventory must not query the database");
+}) as unknown as Sql;
+
+function inventoryApp(integrations: readonly ("collab" | "meetings")[]) {
+  return buildApp(sql, {
+    integrations,
+    oidc: {
+      issuer: "https://identity.invalid",
+      clientId: "route-inventory",
+      clientSecret: "not-used",
+      redirectUri: "https://eoc.invalid/api/v1/auth/oidc/callback",
+    },
+  });
+}
 
 function registeredRouteKeys(routeTable: string): string[] {
   const paths: string[] = [];
@@ -42,17 +57,7 @@ describe("generated API docs", () => {
   });
 
   it("covers every registered Fastify method and path", async () => {
-    const sql = (() => {
-      throw new Error("route inventory must not query the database");
-    }) as unknown as Sql;
-    const app = buildApp(sql, {
-      oidc: {
-        issuer: "https://identity.invalid",
-        clientId: "route-inventory",
-        clientSecret: "not-used",
-        redirectUri: "https://eoc.invalid/api/v1/auth/oidc/callback",
-      },
-    });
+    const app = inventoryApp(["collab", "meetings"]);
     try {
       await app.ready();
       const registered = registeredRouteKeys(app.printRoutes({ commonPrefix: false }));
@@ -61,6 +66,21 @@ describe("generated API docs", () => {
         .sort();
       expect(new Set(documented).size).toBe(documented.length);
       expect(documented).toEqual(registered);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("keeps optional integration routes unregistered by default", async () => {
+    const app = inventoryApp([]);
+    try {
+      await app.ready();
+      const registered = registeredRouteKeys(app.printRoutes({ commonPrefix: false }));
+      const defaultContract = API_CONTRACT.rest
+        .filter((endpoint) => endpoint.integration === undefined)
+        .map((endpoint) => `${endpoint.method} ${endpoint.path}`)
+        .sort();
+      expect(registered).toEqual(defaultContract);
     } finally {
       await app.close();
     }

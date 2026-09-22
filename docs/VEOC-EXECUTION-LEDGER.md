@@ -4990,3 +4990,30 @@ increment proves it and that coverage follows the incident area.
 - **Result:** W1.2 is complete. Evidence remains, harness code does not. No
   runtime route, schema, dependency or operator behavior changed. Next: W1.3,
   apply the standing feature-gate default to collaboration and meetings.
+
+## V1 W1.3: feature-gate collaboration and meetings
+
+- **Standing decision applied:** section 9's default is retain and gate. The
+  Matrix/Mattermost collaboration modules and Jitsi meeting modules remain;
+  no integration implementation or persisted data was deleted.
+- **Default-off registration:** `buildApp` registers six collaboration routes
+  only for `OPENEOC_INTEGRATIONS=collab` and seven meeting/briefing routes only
+  for `OPENEOC_INTEGRATIONS=meetings`. Collaboration membership sync follows
+  the same flag. Unknown names are rejected instead of silently enabling a
+  surface.
+- **Published contract:** the generated API catalog retains the complete
+  optional surface but labels all 13 conditional routes with the exact setting
+  that enables them. Its route-table test proves both the default-off catalog
+  and the fully enabled catalog against real Fastify registration.
+- **Threat boundary:** B4 and new B13 identify the two conditional trust
+  surfaces, their default-off posture, server-side secret handling and
+  authorization requirements.
+- **Verification:** API documentation and route registration passed 3 of 3
+  focused tests. Collaboration, meeting and security suites passed 18 of 18
+  tests on the existing local Postgres cluster. Recursive TypeScript and full
+  ESLint passed; the license scan passed all 300 packages; the link checker
+  passed all 65 Markdown files; and `git diff --check` is clean.
+- **Result:** W1.3 is complete. The two external integration surfaces are not
+  reachable in the default product while remaining available to an explicitly
+  configured deployment. No schema or dependency changed. Next: W1.4, retain
+  tracking and facilities behind the same default-off integration mechanism.

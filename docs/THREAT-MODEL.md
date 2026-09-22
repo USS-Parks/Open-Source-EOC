@@ -34,7 +34,7 @@ and total attribution (INV-2) are the standing mitigations everywhere.
 | B1 | REST `/api/v1` + WebSocket (VEOC-07..) | T1, T2 | authn bypass, tenant confusion, enumeration | server-derived principal; RLS second wall (ADR-0005); rate limits; deny-by-default routes |
 | B2 | Public damage-report intake (VEOC-23) | T1 | spam, poisoning of assessed data, PII phishing | isolated intake store; moderation gate before it touches A1; rate limits; no account creation path |
 | B3 | Federation ingest/egress (VEOC-27, VEOC-30) | T3 | forged payloads, scope creep, replay, poisoned records | signature verification before parse (ADR-0006); per-record agreement scope check; monotonic sequence per peer; peer data always attributed, never merged anonymously |
-| B4 | Collaboration adapters (VEOC-32, VEOC-33) | T2, T6 | token theft, membership drift, injection via chat content | adapter tokens scoped and stored server-side; membership reconciled from position assignments, one direction; chat content treated as untrusted text everywhere |
+| B4 | Collaboration adapters (conditional: `OPENEOC_INTEGRATIONS=collab`) | T2, T6 | token theft, membership drift, injection via chat content | routes and membership sync absent by default; adapter tokens scoped and stored server-side; membership reconciled from position assignments, one direction; chat content treated as untrusted text everywhere |
 | B5 | Plugin sandbox (VEOC-10, ADR-0004) | T4 | sandbox escape, capability abuse, resource exhaustion | capability-only API; CPU/memory quotas; no network from sandbox; template packages signed (VEOC-09) |
 | B6 | Feed and sensor ingestion (VEOC-19, VEOC-26) | T1, T6 | spoofed feeds, malformed CAP/CoT parser attacks, staleness masking | feeds are read-only layers with provenance; schema-validated parse with fuzz tests; staleness always displayed |
 | B7 | Outbound webhooks + notification channels (VEOC-14) | T2 | SSRF via webhook URLs, notification bombing | webhook URL allowlist per jurisdiction; HMAC signing; per-rule rate caps |
@@ -43,11 +43,12 @@ and total attribution (INV-2) are the standing mitigations everywhere.
 | B10 | File library (VEOC-15) | T1, T2 | malware distribution, content-type confusion, storage exhaustion | content-addressed immutable storage; type allowlist; size quotas; no server-side rendering of uploads |
 | B11 | Auth/identity (VEOC-07, VEOC-08) | T1, T2, T5 | credential stuffing, session fixation, position self-assignment | OIDC or local with rate-limited login; position assignment is an authorized act; mid-incident re-auth preserves state without widening it |
 | B12 | Audit substrate (VEOC-11) | T5 | history rewrite, deletion, backdating | append-only at API and database (no UPDATE/DELETE grants on audit tables); server-side timestamps; corrections are new entries |
+| B13 | Jitsi meeting bridge (conditional: `OPENEOC_INTEGRATIONS=meetings`) | T2, T6 | meeting-token theft, room guessing, unauthorized moderator access | routes absent by default; room names are random; JWT secrets stay in server-side envelopes; incident membership and role determine join authority |
 
 ## Standing adversarial test policy
 
 Each session that opens a surface ships negative tests named for its row
-(B1-B12) and they run in `pnpm check` forever. VEOC-37 re-verifies the whole
+(B1-B13) and they run in `pnpm check` forever. VEOC-37 re-verifies the whole
 table adversarially before release.
 
 ## Out of scope (baseline)

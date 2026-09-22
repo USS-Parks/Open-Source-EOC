@@ -2,6 +2,8 @@
 
 This document is generated from the frozen API contract. Every registered
 method and path below is held to the Fastify route table by a contract test.
+Routes marked with an integration are unregistered unless that name is
+present in the comma-separated OPENEOC_INTEGRATIONS setting.
 
 ## REST
 
@@ -70,9 +72,9 @@ method and path below is held to the Fastify route table by a contract test.
 
 ### briefings
 
-- `GET /api/v1/incidents/:incidentId/briefings`: Read incidents briefings (auth: bearer; audience: operator)
-- `POST /api/v1/incidents/:incidentId/briefings`: Run incidents briefings (auth: bearer; audience: operator)
-- `POST /api/v1/jurisdictions/:jurisdictionId/briefings/run-due`: Run jurisdictions briefings run due (auth: bearer; audience: operator)
+- `GET /api/v1/incidents/:incidentId/briefings`: Read incidents briefings (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=meetings)
+- `POST /api/v1/incidents/:incidentId/briefings`: Run incidents briefings (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=meetings)
+- `POST /api/v1/jurisdictions/:jurisdictionId/briefings/run-due`: Run jurisdictions briefings run due (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=meetings)
 
 ### cap
 
@@ -109,12 +111,12 @@ method and path below is held to the Fastify route table by a contract test.
 
 ### collab
 
-- `POST /api/v1/incidents/:incidentId/collab/announce`: Run incidents collab announce (auth: bearer; audience: operator)
-- `POST /api/v1/incidents/:incidentId/collab/archive`: Run incidents collab archive (auth: bearer; audience: operator)
-- `POST /api/v1/incidents/:incidentId/collab/provision`: Run incidents collab provision (auth: bearer; audience: operator)
-- `POST /api/v1/incidents/:incidentId/collab/sync`: Run incidents collab sync (auth: bearer; audience: operator)
-- `GET /api/v1/jurisdictions/:jurisdictionId/collab`: Read jurisdictions collab (auth: bearer; audience: operator)
-- `PUT /api/v1/jurisdictions/:jurisdictionId/collab/backend`: Set jurisdictions collab backend (auth: bearer; audience: operator)
+- `POST /api/v1/incidents/:incidentId/collab/announce`: Run incidents collab announce (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=collab)
+- `POST /api/v1/incidents/:incidentId/collab/archive`: Run incidents collab archive (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=collab)
+- `POST /api/v1/incidents/:incidentId/collab/provision`: Run incidents collab provision (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=collab)
+- `POST /api/v1/incidents/:incidentId/collab/sync`: Run incidents collab sync (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=collab)
+- `GET /api/v1/jurisdictions/:jurisdictionId/collab`: Read jurisdictions collab (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=collab)
+- `PUT /api/v1/jurisdictions/:jurisdictionId/collab/backend`: Set jurisdictions collab backend (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=collab)
 
 ### cot
 
@@ -289,10 +291,10 @@ method and path below is held to the Fastify route table by a contract test.
 
 ### meetings
 
-- `GET /api/v1/incidents/:incidentId/meetings`: Read incidents meetings (auth: bearer; audience: operator)
-- `POST /api/v1/incidents/:incidentId/meetings`: Run incidents meetings (auth: bearer; audience: operator)
-- `GET /api/v1/jurisdictions/:jurisdictionId/meetings/config`: Read jurisdictions meetings config (auth: bearer; audience: operator)
-- `PUT /api/v1/jurisdictions/:jurisdictionId/meetings/config`: Set jurisdictions meetings config (auth: bearer; audience: operator)
+- `GET /api/v1/incidents/:incidentId/meetings`: Read incidents meetings (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=meetings)
+- `POST /api/v1/incidents/:incidentId/meetings`: Run incidents meetings (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=meetings)
+- `GET /api/v1/jurisdictions/:jurisdictionId/meetings/config`: Read jurisdictions meetings config (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=meetings)
+- `PUT /api/v1/jurisdictions/:jurisdictionId/meetings/config`: Set jurisdictions meetings config (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=meetings)
 
 ### messaging-settings
 

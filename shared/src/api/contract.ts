@@ -15,6 +15,7 @@ export interface RestEndpoint {
   readonly summary: string;
   readonly auth: "bearer" | "peer-token" | "feed-token" | "intake-token" | "none";
   readonly audience: "operator" | "machine" | "system";
+  readonly integration?: "collab" | "meetings";
 }
 
 export interface WsChannel {
@@ -326,6 +327,12 @@ function routeSummary(method: RestEndpoint["method"], path: string): string {
   return `${verbs[method]} ${subject}`;
 }
 
+function routeIntegration(path: string): RestEndpoint["integration"] {
+  if (path.includes("/collab")) return "collab";
+  if (path.includes("/meetings") || path.includes("/briefings")) return "meetings";
+  return undefined;
+}
+
 const rest: RestEndpoint[] = routeKeys.map((key) => {
   const separator = key.indexOf(" ");
   const method = key.slice(0, separator) as RestEndpoint["method"];
@@ -343,6 +350,7 @@ const rest: RestEndpoint[] = routeKeys.map((key) => {
     : auth === "peer-token" || auth === "feed-token"
       ? "machine"
       : "operator";
+  const integration = routeIntegration(path);
   return {
     method,
     path,
@@ -350,6 +358,7 @@ const rest: RestEndpoint[] = routeKeys.map((key) => {
     summary: routeSummary(method, path),
     auth,
     audience,
+    ...(integration ? { integration } : {}),
   };
 });
 
@@ -372,6 +381,8 @@ export function generateApiDocs(contract: ApiContract = API_CONTRACT): string {
     ``,
     `This document is generated from the frozen API contract. Every registered`,
     `method and path below is held to the Fastify route table by a contract test.`,
+    `Routes marked with an integration are unregistered unless that name is`,
+    `present in the comma-separated OPENEOC_INTEGRATIONS setting.`,
     ``,
     `## REST`,
     ``,
@@ -387,8 +398,9 @@ export function generateApiDocs(contract: ApiContract = API_CONTRACT): string {
       `${a.path} ${a.method}`.localeCompare(`${b.path} ${b.method}`),
     );
     for (const e of endpoints) {
+      const integration = e.integration ? `; integration: OPENEOC_INTEGRATIONS=${e.integration}` : "";
       lines.push(
-        `- \`${e.method} ${e.path}\`: ${e.summary} (auth: ${e.auth}; audience: ${e.audience})`,
+        `- \`${e.method} ${e.path}\`: ${e.summary} (auth: ${e.auth}; audience: ${e.audience}${integration})`,
       );
     }
     lines.push(``);

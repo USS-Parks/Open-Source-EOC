@@ -49,7 +49,7 @@ beforeAll(async () => {
   memberId = seed.memberId;
   await ensureStandardTemplates(admin);
   await ensureStandardIncidentTemplates(admin);
-  app = buildApp(runtime, { oidc: null });
+  app = buildApp(runtime, { oidc: null, integrations: ["meetings"] });
   await app.ready();
   adminToken = (
     await app.inject({

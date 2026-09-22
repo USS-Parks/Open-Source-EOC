@@ -60,7 +60,7 @@ beforeAll(async () => {
   });
   await addMembership(admin, adminBId, jurB, "admin");
 
-  app = buildApp(runtime, { oidc: null });
+  app = buildApp(runtime, { oidc: null, integrations: ["collab"] });
   await app.ready();
   adminAToken = await login("admin@example.org", "correct-horse-battery");
   viewerAToken = await login("viewer@example.org", "correct-horse-battery");
