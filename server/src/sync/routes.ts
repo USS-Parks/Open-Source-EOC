@@ -32,7 +32,14 @@ export function registerSyncRoutes(app: FastifyInstance, sql: Sql, hub: BoardSyn
     scoped.get("/api/v1/sync/boards/:boardId", { websocket: true }, (socket: WebSocket, req) => {
     const { boardId } = req.params as { boardId: string };
     const query = SyncQuery.safeParse(req.query);
-    const incidentId = query.success ? query.data.incidentId ?? null : null;
+    if (!query.success) {
+      socket.send(JSON.stringify({
+        type: "error", error: "invalid sync incident context", code: "failed",
+      }));
+      socket.close();
+      return;
+    }
+    const incidentId = query.data.incidentId ?? null;
     const sessionId = randomUUID();
     let principal: Principal | null = null;
     let unsubscribe: (() => void) | null = null;
@@ -54,7 +61,6 @@ export function registerSyncRoutes(app: FastifyInstance, sql: Sql, hub: BoardSyn
           if (!principal) {
             const auth = AuthMessage.safeParse(message);
             if (!auth.success) return fail("authenticate first");
-            if (!query.success) return fail("invalid sync incident context");
             principal = await principalFromToken(sql, auth.data.token);
             const { state } = await hub.open(principal, boardId, incidentId);
             unsubscribe = hub.subscribe(boardId, incidentId, (update, origin) => {
