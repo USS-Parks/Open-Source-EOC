@@ -198,6 +198,26 @@ describe("server-side aggregation (AR6: no join trap)", () => {
 });
 
 describe("live refresh over the stream", () => {
+  it("rejects a malformed incidentId instead of leaving the stream unscoped", async () => {
+    const socket = new WebSocket(
+      `ws://${baseUrl}/api/v1/dashboards/${dashboardId}/stream?incidentId=not-a-uuid`,
+    );
+    const msg = await new Promise<{ type: string; error?: string }>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("no stream error")), 5000);
+      socket.on("error", (err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+      socket.on("message", (raw: Buffer) => {
+        clearTimeout(timer);
+        resolve(JSON.parse(raw.toString()) as { type: string; error?: string });
+      });
+    });
+    expect(msg.type).toBe("error");
+    expect(msg.error).toBe("invalid incident scope");
+    socket.close();
+  });
+
   it("pushes a recomputed snapshot after a field edit, inside the budget", async () => {
     const socket = new WebSocket(`ws://${baseUrl}/api/v1/dashboards/${dashboardId}/stream`);
     const snapshots: DashboardSnapshot[] = [];
