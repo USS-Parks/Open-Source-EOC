@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { isAbsolute, resolve, win32 } from "node:path";
 
 export const PROFILE_DEFAULTS = Object.freeze({
   production: Object.freeze({ pgPort: 55440, httpPort: 8080, database: "openeoc", synthetic: false }),
@@ -62,6 +62,11 @@ function normalizeCommand(value) {
   return String(value ?? "").replaceAll("\\", "/").toLowerCase();
 }
 
+function normalizeCommandPath(value) {
+  const path = String(value ?? "");
+  return normalizeCommand(isAbsolute(path) || win32.isAbsolute(path) ? path : resolve(path));
+}
+
 export function parseWindowsCommandLine(commandLine) {
   const args = [];
   let current = "";
@@ -82,12 +87,12 @@ export function parseWindowsCommandLine(commandLine) {
 
 export function matchesOwnedAppCommand(commandLine, { scriptPath, profile }) {
   const args = parseWindowsCommandLine(commandLine).map(normalizeCommand);
-  const script = normalizeCommand(resolve(scriptPath));
+  const script = normalizeCommandPath(scriptPath);
   return args.includes(script) && args.includes("serve") && args.includes(`--profile=${profile.toLowerCase()}`);
 }
 
 export function matchesOwnedBrowserCommand(commandLine, { userDataDir, url }) {
   const args = parseWindowsCommandLine(commandLine).map(normalizeCommand);
-  const expectedDirectory = normalizeCommand(resolve(userDataDir));
+  const expectedDirectory = normalizeCommandPath(userDataDir);
   return args.includes(`--app=${normalizeCommand(url)}`) && args.includes(`--user-data-dir=${expectedDirectory}`);
 }
