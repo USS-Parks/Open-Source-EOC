@@ -4171,3 +4171,20 @@ increment proves it and that coverage follows the incident area.
   fast-forward to main; rollback by revert. Seven worktrees remain for active
   roster lanes; protected files and demo data are preserved. Final user design
   acceptance remains separate from this technical completion receipt.
+
+## P-COP-KPI: map exposure counts and source drilldowns
+
+- Serves P-COP and H12 presentation. Baseline ade3448; lane C. Map extent
+  counts now distinguish unknown, stale, unavailable and measured zero. Each
+  drilldown retains the server-returned extent and area revision across pages.
+  Fixed-height loading states prevent repeated map resizing and reloads.
+- Full workspace TypeScript and ESLint passed before the bounded correction.
+  Final affected TypeScript, ESLint, DOM and real Chrome/PostgreSQL checks passed:
+  2 suites, 3 tests. Evidence: deploy/test-runtime/out/lanes/c/logs/
+  kpi-stable-layout-gate.log. Light, dark and narrow screenshots are in
+  lanes/c/browser-shots/cop-kpi. Root inspected the complete diff and captures;
+  independent bounded review returned SHIP. No new dependencies or migrations.
+- Evidence level: integrated after exact fast-forward publication. User design
+  acceptance remains separate. Seven worktrees remain assigned to active roster
+  units, with protected files retained; no extra dependency trees were created.
+- Unit commit: this receipt's commit. Rollback by revert.

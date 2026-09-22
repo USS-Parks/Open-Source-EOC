@@ -1,6 +1,7 @@
-import { useState, type CSSProperties } from "react";
+import { useCallback, useState, type CSSProperties } from "react";
 import { geometryFieldKey } from "@openeoc/shared";
-import { CopMap } from "../../cop/CopMap.js";
+import { CopMap, type CopMapBounds } from "../../cop/CopMap.js";
+import { ImpactKpiPanel } from "../../cop/ImpactKpiPanel.js";
 import { FEMA_NFHL_ATTRIBUTION, FEMA_NFHL_DATASET_KEY } from "../../cop/hazards.js";
 import { geometryBounds } from "../../cop/tools.js";
 import { RecordForm } from "../../boards/RecordForm.js";
@@ -48,6 +49,19 @@ function ageSeconds(lastSuccessAt: string | null): number | null {
   return lastSuccessAt ? Math.floor((Date.now() - Date.parse(lastSuccessAt)) / 1000) : null;
 }
 
+function stableBounds(bounds: CopMapBounds): CopMapBounds {
+  return [
+    Number(bounds[0].toFixed(6)),
+    Number(bounds[1].toFixed(6)),
+    Number(bounds[2].toFixed(6)),
+    Number(bounds[3].toFixed(6)),
+  ];
+}
+
+function boundsKey(bounds: CopMapBounds | null): string {
+  return bounds?.join(",") ?? "";
+}
+
 /**
  * The COP surface, plus field capture: an operator can drop a point on the
  * map (the Field Maps gesture), which opens the board's record form with the
@@ -70,6 +84,7 @@ export function MapSurface(props: {
   const [longitude, setLongitude] = useState("");
   const [latitude, setLatitude] = useState("");
   const [coordinateError, setCoordinateError] = useState<string | null>(null);
+  const [impactBounds, setImpactBounds] = useState<CopMapBounds | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -152,6 +167,11 @@ export function MapSurface(props: {
     }
     placePoint([longitudeValue, latitudeValue]);
   };
+
+  const updateImpactBounds = useCallback((bounds: CopMapBounds) => {
+    const next = stableBounds(bounds);
+    setImpactBounds((current) => boundsKey(current) === boundsKey(next) ? current : next);
+  }, []);
 
   const save = (data: Record<string, unknown>) => {
     setBusy(true);
@@ -261,6 +281,10 @@ export function MapSurface(props: {
         </div>
       ) : null}
 
+      {props.incidentId ? (
+        <ImpactKpiPanel client={props.client} incidentId={props.incidentId} bbox={impactBounds} />
+      ) : null}
+
       <div style={{ flex: 1, minHeight: 0 }}>
         <CopMap
           key={JSON.stringify([props.jurisdictionId, props.incidentId ?? null, props.theme, areaBbox, geoBoards.map((b) => b.id), feedAndDatasetLayers.map((f) => f.id)])}
@@ -293,6 +317,7 @@ export function MapSurface(props: {
           jurisdictionOverlays={jurisdictionOverlays()}
           initialBounds={jurisdictionMapBounds()}
           inspectionMode="workspace"
+          onBoundsChange={updateImpactBounds}
           picking={adding && !point}
           onPickPoint={placePoint}
         />

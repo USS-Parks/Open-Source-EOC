@@ -26,6 +26,8 @@ import type {
   LifelineAssessmentReport,
   AssessmentDecisionInput,
   LifelineCurrentState,
+  IncidentImpactAnalysis,
+  ImpactContributionPage,
   LIFELINE_DEFINITION,
   DashboardTemplate,
   DashboardComposition,
@@ -563,6 +565,25 @@ export class ApiClient {
   }
   decideLifelineAssessment(incidentId: string, lifeline: string, input: AssessmentDecisionInput): Promise<{ readonly id: string }> {
     return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/lifeline-assessments/${encodeURIComponent(lifeline)}/decisions`, input);
+  }
+
+  getIncidentImpact(incidentId: string, bbox?: readonly [number, number, number, number]): Promise<IncidentImpactAnalysis> {
+    const params = new URLSearchParams();
+    if (bbox) params.set("bbox", bbox.join(","));
+    return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/impact${params.size ? `?${params}` : ""}`);
+  }
+
+  getImpactContributions(incidentId: string, datasetId: string, options: {
+    readonly revision: number;
+    readonly bbox?: readonly [number, number, number, number];
+    readonly cursor?: string;
+    readonly limit?: number;
+  }): Promise<ImpactContributionPage> {
+    const params = new URLSearchParams({ revision: String(options.revision) });
+    if (options.bbox) params.set("bbox", options.bbox.join(","));
+    if (options.cursor) params.set("cursor", options.cursor);
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/impact/sources/${encodeURIComponent(datasetId)}/records?${params}`);
   }
 
   async lifelines(jurisdictionId: string): Promise<LifelineCurrent[]> {

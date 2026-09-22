@@ -1,0 +1,204 @@
+.eoc-impact-kpis {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  padding: 8px 10px;
+  color: var(--eoc-text);
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border);
+  border-radius: 6px;
+  box-shadow: var(--eoc-shadow-sm);
+}
+
+.eoc-impact-header,
+.eoc-impact-drill > header,
+.eoc-impact-source > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.eoc-impact-header h2,
+.eoc-impact-drill h3,
+.eoc-impact-source h4,
+.eoc-impact-records h4 {
+  margin: 0;
+}
+
+.eoc-impact-header h2 {
+  font-size: 0.95rem;
+}
+
+.eoc-impact-header p,
+.eoc-impact-drill header p,
+.eoc-impact-source header p,
+.eoc-impact-interpretation {
+  margin: 2px 0 0;
+  color: var(--eoc-text-muted);
+  font-size: 0.73rem;
+}
+
+.eoc-impact-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  gap: 7px;
+  overflow-x: auto;
+}
+
+.eoc-impact-strip .eoc-kit-kpi-card {
+  box-sizing: border-box;
+  height: 112px;
+  min-width: 0;
+  padding: 9px;
+  align-items: flex-start;
+}
+
+.eoc-impact-message {
+  height: 18px;
+  min-height: 18px;
+  overflow: hidden;
+  color: var(--eoc-text-muted);
+  font-size: 0.73rem;
+  line-height: 18px;
+}
+
+.eoc-impact-message .eoc-impact-error {
+  display: block;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eoc-impact-strip .eoc-kit-kpi-value strong {
+  font-size: 1.35rem;
+}
+
+.eoc-impact-strip .eoc-kit-card-eyebrow {
+  font-size: 0.66rem;
+}
+
+.eoc-impact-strip .eoc-kit-kpi-content > p {
+  max-height: 2.8em;
+  margin: 1px 0 0;
+  overflow: hidden;
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.eoc-impact-strip .eoc-kit-button {
+  min-height: 32px;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+}
+
+.eoc-impact-drill {
+  position: absolute;
+  z-index: 9;
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(620px, calc(100vw - 48px));
+  max-height: min(62vh, 620px);
+  padding: 12px;
+  overflow: auto;
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border);
+  border-radius: 6px;
+  box-shadow: var(--eoc-shadow-lg);
+}
+
+.eoc-impact-drill button,
+.eoc-impact-source button,
+.eoc-impact-records button {
+  min-height: 36px;
+  padding: 5px 9px;
+  color: var(--eoc-text);
+  background: var(--eoc-surface-raised);
+  border: 1px solid var(--eoc-border);
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.eoc-impact-source-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.eoc-impact-source {
+  padding: 10px;
+  background: var(--eoc-surface-raised);
+  border: 1px solid var(--eoc-border);
+  border-radius: 5px;
+}
+
+.eoc-impact-source dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+  margin: 9px 0 0;
+}
+
+.eoc-impact-source dl > div {
+  min-width: 0;
+}
+
+.eoc-impact-source dt {
+  color: var(--eoc-text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.eoc-impact-source dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 0.78rem;
+}
+
+.eoc-impact-reason,
+.eoc-impact-error {
+  margin: 7px 0 0;
+  font-size: 0.78rem;
+}
+
+.eoc-impact-error {
+  color: var(--eoc-status-critical);
+}
+
+.eoc-impact-records {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--eoc-border);
+}
+
+.eoc-impact-records ol {
+  display: grid;
+  gap: 5px;
+  margin: 8px 0;
+  padding-left: 22px;
+}
+
+.eoc-impact-records li span,
+.eoc-impact-records li small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.eoc-impact-records li small {
+  color: var(--eoc-text-muted);
+}
+
+@media (max-width: 760px) {
+  .eoc-impact-strip {
+    grid-template-columns: repeat(5, minmax(170px, 1fr));
+  }
+
+  .eoc-impact-drill {
+    position: fixed;
+    inset: auto 12px 12px;
+    width: auto;
+    max-height: 70vh;
+  }
+}
