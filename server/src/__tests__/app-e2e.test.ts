@@ -790,5 +790,5 @@ describe("the operations console in a real browser, offline", () => {
       expect(await page.getByLabel("Operational period", { exact: true }).inputValue()).toBe("2");
       expect(errors).toEqual([]); expect(external).toEqual([]);
     } finally { await page.close(); }
-  }, 90000);
+  }, 150000);
 });

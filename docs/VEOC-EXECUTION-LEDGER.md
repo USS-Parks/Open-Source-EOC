@@ -4753,20 +4753,25 @@ increment proves it and that coverage follows the incident area.
   roster and every in-scope commit and push to `main` for this session.
 - **Tree:** execution opened at `68bbab6`. The audit cleanup was already
   published in `57250bc`, with hosted-browser route stabilization in
-  `bb25cce`. During M4, two independently completed fail-closed commits landed
-  linearly and were published; the final gate tree is `513db28`.
+  `bb25cce`. During M4, two independently completed fail-closed commits and two
+  browser-harness stabilizations landed linearly and were published. The final
+  source base is `b5435c6`; the governance receipt landed in `551a1a5`.
 - **M4:** recursive TypeScript and ESLint passed; the license scan passed all
   300 packages; links passed across 66 Markdown files; all 17 Windows desktop
   and installer checks passed. The serial application run passed 925 of 926
-  assertions across 175 of 176 files. Its only failure was the final 30-second
-  wait in the long Back/reload browser scenario; that exact file then passed
-  4 of 4 in isolation. The separate one-worker load suite passed 3 of 3. All
-  926 application assertions and all three load assertions are accounted for.
+  assertions across 175 of 176 files. Its only failure was the long Back/reload
+  browser scenario reaching its explicit 90-second outer budget while the same
+  file passed in 62 seconds alone. The outer budget is now 150 seconds without
+  changing an assertion or adding a retry; the corrected file passed 4 of 4 in
+  60.74 seconds. The separate one-worker load suite passed 3 of 3. All 926
+  application assertions and all three load assertions are accounted for.
 - **Gate command qualification:** the root script forwards a supplied
   `--maxWorkers=1` only to its second Vitest command, where that command already
   pins the same flag and rejects the duplicate. M4 therefore ran the root
   checks and both Vitest legs explicitly under the same `gate` environment.
   W0.1 owns making that serial invocation a first-class repository command.
 - **Result:** W0.0 and M4 are complete. Evidence is local on the approved test
-  cluster; no new operator or live external-system claim is made. No product
-  source, dependency or migration changed in this unit. Next: W0.1.
+  cluster; no new operator or live external-system claim is made. The only
+  closeout source change is the test's outer time budget; product behavior,
+  dependencies and migrations are unchanged. Unit correction is this receipt's
+  commit; rollback by revert. Next: W0.1.
