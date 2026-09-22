@@ -1,5 +1,7 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { setTimeout as sleep } from "node:timers/promises";
+import { join, relative, resolve } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { chromium, type Browser, type LaunchOptions } from "playwright-core";
 import { expect } from "vitest";
@@ -55,10 +57,70 @@ export function shotDir(name: string): string {
   return dir;
 }
 
-/** Build the web bundle into `dist` the way `vite build` does. */
+/** Everything the web bundle is built from; a change to any of these forces a rebuild. */
+const BUNDLE_INPUTS = ["pnpm-lock.yaml", "shared/package.json", "shared/src", "web/index.html", "web/package.json", "web/src", "web/vite.config.ts"];
+
+function collectFiles(path: string): string[] {
+  if (!existsSync(path)) throw new Error(`Build input is missing: ${path}`);
+  if (statSync(path).isFile()) return [path];
+  return readdirSync(path, { withFileTypes: true })
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .flatMap((entry) => collectFiles(resolve(path, entry.name)));
+}
+
+/** Content hash of the bundle inputs, the same recipe the desktop installer uses. */
+function bundleFingerprint(): string {
+  const root = process.cwd();
+  const hash = createHash("sha256");
+  for (const file of BUNDLE_INPUTS.flatMap((item) => collectFiles(resolve(root, item)))) {
+    hash.update(relative(root, file).replaceAll("\\", "/"));
+    hash.update("\0");
+    hash.update(readFileSync(file));
+    hash.update("\0");
+  }
+  return hash.digest("hex").slice(0, 16);
+}
+
+/**
+ * Build the web bundle once per source state and share it across suites. The
+ * first suite to arrive builds under a lock directory and writes a marker;
+ * later suites, in this run or a later one on the same sources, reuse it.
+ * Concurrent workers wait on the marker instead of building twice.
+ */
+async function ensureSharedBuild(): Promise<string> {
+  const shared = buildDir(`shared-${bundleFingerprint()}`);
+  const marker = join(shared, ".complete");
+  if (existsSync(marker)) return shared;
+  const lock = `${shared}.lock`;
+  mkdirSync(join(shared, ".."), { recursive: true });
+  try {
+    mkdirSync(lock);
+  } catch {
+    // Another worker is building. Wait for its marker; a lock older than the
+    // wait budget is treated as abandoned and the build proceeds here.
+    for (let waited = 0; waited < 300_000; waited += 500) {
+      if (existsSync(marker)) return shared;
+      await sleep(500);
+    }
+    rmSync(lock, { recursive: true, force: true });
+    mkdirSync(lock);
+  }
+  try {
+    const { build } = await import("../../../web/node_modules/vite/dist/node/index.js");
+    await build({ root: WEB_DIR, base: "./", publicDir: false, logLevel: "silent", build: { outDir: shared, emptyOutDir: true } });
+    expect(existsSync(join(shared, "index.html"))).toBe(true);
+    writeFileSync(marker, new Date().toISOString());
+  } finally {
+    rmSync(lock, { recursive: true, force: true });
+  }
+  return shared;
+}
+
+/** Give a suite its own copy of the current web bundle at `dist`. */
 export async function buildWeb(dist: string): Promise<void> {
-  const { build } = await import("../../../web/node_modules/vite/dist/node/index.js");
-  await build({ root: WEB_DIR, base: "./", publicDir: false, logLevel: "silent", build: { outDir: dist, emptyOutDir: true } });
+  const shared = await ensureSharedBuild();
+  rmSync(dist, { recursive: true, force: true });
+  cpSync(shared, dist, { recursive: true });
   expect(existsSync(join(dist, "index.html"))).toBe(true);
 }
 
@@ -96,8 +158,23 @@ export async function listen(app: FastifyInstance): Promise<string> {
   return `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
 }
 
-export function launchBrowser(options: LaunchOptions = {}): Promise<Browser> {
-  return chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"], ...options });
+/**
+ * Playwright's default wait is 30 seconds, tuned for a desktop. A hosted CI
+ * runner renders the same transitions several times slower, so pages opened
+ * through this harness wait longer there and unchanged elsewhere.
+ */
+const PAGE_TIMEOUT_MS = process.env["CI"] ? 90_000 : 30_000;
+
+export async function launchBrowser(options: LaunchOptions = {}): Promise<Browser> {
+  const browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"], ...options });
+  const newPage = browser.newPage.bind(browser);
+  browser.newPage = async (pageOptions) => {
+    const page = await newPage(pageOptions);
+    page.setDefaultTimeout(PAGE_TIMEOUT_MS);
+    page.setDefaultNavigationTimeout(PAGE_TIMEOUT_MS);
+    return page;
+  };
+  return browser;
 }
 
 export const auth = (token: string) => ({ authorization: `Bearer ${token}` });
