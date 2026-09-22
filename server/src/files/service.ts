@@ -58,7 +58,7 @@ export interface UploadInput {
   readonly name: string;
   readonly contentType: string;
   readonly content: Buffer;
-  readonly attachedKind?: "none" | "board" | "incident" | "library" | undefined;
+  readonly attachedKind?: "none" | "board" | "record" | "incident" | "library" | undefined;
   readonly attachedId?: string | undefined;
   readonly supersedes?: string | undefined;
 }
@@ -76,6 +76,7 @@ export async function uploadFile(
   if (input.content.length === 0) throw new AuthError(400, "empty file");
   if (input.content.length > maxBytes)
     throw new AuthError(400, `file exceeds the ${maxBytes} byte limit`);
+  await assertAttachmentTarget(sql, input.jurisdictionId, input.attachedKind ?? "none", input.attachedId);
 
   let version = 1;
   if (input.supersedes) {
@@ -108,6 +109,8 @@ export async function uploadFile(
   return { id, sha256, version };
 }
 
+export type FileAttachmentKind = "none" | "board" | "record" | "incident" | "library";
+
 export interface FileMeta {
   readonly id: string;
   readonly name: string;
@@ -116,6 +119,12 @@ export interface FileMeta {
   readonly sha256: string;
   readonly version: number;
   readonly supersedes: string | null;
+  readonly attachedKind: FileAttachmentKind;
+  readonly attachedId: string | null;
+  readonly attachedBoardId: string | null;
+  readonly attachedIncidentId: string | null;
+  readonly createdAt: string;
+  readonly uploadedBy: { readonly personId: string; readonly displayName: string; readonly positionTitle: string | null };
 }
 
 export async function getFileMeta(sql: Sql, fileId: string): Promise<FileMeta> {
@@ -124,8 +133,18 @@ export async function getFileMeta(sql: Sql, fileId: string): Promise<FileMeta> {
   // connection (first boot, main.ts) where RLS does not apply. This mirrors
   // the files_read policy exactly: membership of the file's jurisdiction.
   const [row] = await sql`
-    select id, name, content_type, size, sha256, version, supersedes
-    from files where id = ${fileId} and is_member_of(jurisdiction_id)`;
+    select f.id, f.name, f.content_type, f.size, f.sha256, f.version, f.supersedes,
+           f.attached_kind, f.attached_id, f.created_at, f.uploaded_by,
+           p.display_name as uploaded_by_name, pos.title as uploaded_by_position,
+           case when f.attached_kind = 'record' then br.board_id
+                when f.attached_kind = 'board' then f.attached_id else null end as attached_board_id,
+           case when f.attached_kind = 'record' then br.incident_id
+                else null end as attached_incident_id
+    from files f
+    join persons p on p.id = f.uploaded_by
+    left join positions pos on pos.id = f.uploaded_by_position
+    left join board_records br on f.attached_kind = 'record' and br.id = f.attached_id
+    where f.id = ${fileId} and is_member_of(f.jurisdiction_id)`;
   if (!row) throw new AuthError(404, "file not found");
   return {
     id: row.id as string,
@@ -135,6 +154,64 @@ export async function getFileMeta(sql: Sql, fileId: string): Promise<FileMeta> {
     sha256: row.sha256 as string,
     version: row.version as number,
     supersedes: (row.supersedes as string | null) ?? null,
+    attachedKind: row.attached_kind as FileAttachmentKind,
+    attachedId: (row.attached_id as string | null) ?? null,
+    attachedBoardId: (row.attached_board_id as string | null) ?? null,
+    attachedIncidentId: (row.attached_incident_id as string | null) ?? null,
+    createdAt: new Date(row.created_at as Date | string).toISOString(),
+    uploadedBy: {
+      personId: row.uploaded_by as string,
+      displayName: row.uploaded_by_name as string,
+      positionTitle: (row.uploaded_by_position as string | null) ?? null,
+    },
+  };
+}
+
+export interface FilePage {
+  readonly files: readonly FileMeta[];
+  readonly nextCursor: string | null;
+}
+
+export async function listFiles(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+  options: { readonly attachedKind?: FileAttachmentKind | undefined; readonly attachedId?: string | undefined; readonly cursor?: string | undefined; readonly limit: number },
+): Promise<FilePage> {
+  requireReader(actor, jurisdictionId);
+  const cursor = decodeFileCursor(options.cursor);
+  const limit = Math.max(1, Math.min(options.limit, 100));
+  if (options.attachedId !== undefined && options.attachedKind === undefined)
+    throw new AuthError(400, "attachment kind is required with an attachment id");
+  if (options.attachedKind !== undefined && options.attachedKind !== "none" && options.attachedId === undefined)
+    throw new AuthError(400, "attachment id is required for the selected kind");
+  if (options.attachedKind === "none" && options.attachedId !== undefined)
+    throw new AuthError(400, "unattached files cannot name an attachment target");
+  const rows = await sql`
+    select f.id, f.name, f.content_type, f.size, f.sha256, f.version, f.supersedes,
+           f.attached_kind, f.attached_id, f.created_at, f.uploaded_by,
+           p.display_name as uploaded_by_name, pos.title as uploaded_by_position,
+           case when f.attached_kind = 'record' then br.board_id
+                when f.attached_kind = 'board' then f.attached_id else null end as attached_board_id,
+           case when f.attached_kind = 'record' then br.incident_id
+                else null end as attached_incident_id
+    from files f
+    join persons p on p.id = f.uploaded_by
+    left join positions pos on pos.id = f.uploaded_by_position
+    left join board_records br on f.attached_kind = 'record' and br.id = f.attached_id
+    where f.jurisdiction_id = ${jurisdictionId}
+      and (${options.attachedKind ?? null}::text is null or f.attached_kind = ${options.attachedKind ?? null})
+      and (${options.attachedId ?? null}::uuid is null or f.attached_id = ${options.attachedId ?? null})
+      and (${cursor?.at ?? null}::timestamptz is null
+        or (f.created_at, f.id) < (${cursor?.at ?? null}::timestamptz, ${cursor?.id ?? null}::uuid))
+    order by f.created_at desc, f.id desc
+    limit ${limit + 1}`;
+  const page = rows.slice(0, limit);
+  return {
+    files: page.map(fileMetaFromRow),
+    nextCursor: rows.length > limit
+      ? encodeFileCursor(page.at(-1)!.created_at as Date | string, page.at(-1)!.id as string)
+      : null,
   };
 }
 
@@ -142,6 +219,8 @@ export interface SearchHit {
   readonly kind: "record" | "library" | "file" | "chronology";
   readonly id: string;
   readonly title: string;
+  readonly boardId?: string;
+  readonly incidentId?: string | null;
 }
 
 /**
@@ -162,7 +241,7 @@ export async function search(
   if (!isMember && !isGuest) throw new AuthError(403, "no access to this jurisdiction");
   const hits: SearchHit[] = [];
   const records = await sql`
-    select r.id, r.data from board_records r
+    select r.id, r.data, r.board_id, r.incident_id from board_records r
     join boards b on b.id = r.board_id
     where b.jurisdiction_id = ${jurisdictionId}
       and to_tsvector('english', r.data::text) @@ plainto_tsquery('english', ${query})
@@ -173,6 +252,8 @@ export async function search(
       kind: "record",
       id: r.id as string,
       title: String(data.summary ?? data.item ?? data.name ?? "record"),
+      boardId: r.board_id as string,
+      incidentId: (r.incident_id as string | null) ?? null,
     });
   }
   const libraries = await sql`
@@ -198,6 +279,73 @@ export async function search(
   for (const e of events)
     hits.push({ kind: "chronology", id: e.id as string, title: e.category as string });
   return hits;
+}
+
+function fileMetaFromRow(row: Record<string, unknown>): FileMeta {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    contentType: row.content_type as string,
+    size: Number(row.size),
+    sha256: row.sha256 as string,
+    version: Number(row.version),
+    supersedes: (row.supersedes as string | null) ?? null,
+    attachedKind: row.attached_kind as FileAttachmentKind,
+    attachedId: (row.attached_id as string | null) ?? null,
+    attachedBoardId: (row.attached_board_id as string | null) ?? null,
+    attachedIncidentId: (row.attached_incident_id as string | null) ?? null,
+    createdAt: new Date(row.created_at as Date | string).toISOString(),
+    uploadedBy: {
+      personId: row.uploaded_by as string,
+      displayName: row.uploaded_by_name as string,
+      positionTitle: (row.uploaded_by_position as string | null) ?? null,
+    },
+  };
+}
+
+function encodeFileCursor(at: Date | string, id: string): string {
+  return Buffer.from(JSON.stringify([new Date(at).toISOString(), id]), "utf8").toString("base64url");
+}
+
+function decodeFileCursor(cursor: string | undefined): { readonly at: string; readonly id: string } | null {
+  if (!cursor) return null;
+  try {
+    const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as unknown;
+    if (!Array.isArray(value) || value.length !== 2 || typeof value[0] !== "string" ||
+        !Number.isFinite(Date.parse(value[0])) || typeof value[1] !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value[1]))
+      throw new Error("bad cursor");
+    return { at: value[0], id: value[1] };
+  } catch {
+    throw new AuthError(400, "invalid file cursor");
+  }
+}
+
+async function assertAttachmentTarget(
+  sql: Sql,
+  jurisdictionId: string,
+  kind: FileAttachmentKind,
+  id: string | undefined,
+): Promise<void> {
+  if (kind === "none") {
+    if (id !== undefined) throw new AuthError(400, "unattached files cannot name an attachment target");
+    return;
+  }
+  if (!id) throw new AuthError(400, "attachment target is required");
+  const rows = kind === "board"
+    ? await sql`select id from boards where id = ${id} and jurisdiction_id = ${jurisdictionId}`
+    : kind === "record"
+      ? await sql`select r.id from board_records r join boards b on b.id = r.board_id
+          where r.id = ${id} and b.jurisdiction_id = ${jurisdictionId}`
+      : kind === "incident"
+        ? await sql`select id from incidents where id = ${id} and jurisdiction_id = ${jurisdictionId}`
+        : await sql`select id from libraries where id = ${id} and jurisdiction_id = ${jurisdictionId}`;
+  if (!rows[0]) throw new AuthError(400, "attachment target not found in this jurisdiction");
+}
+
+function requireReader(actor: Principal, jurisdictionId: string): void {
+  if (!actor.memberships.some((membership) => membership.jurisdictionId === jurisdictionId))
+    throw new AuthError(403, "no access to this jurisdiction");
 }
 
 function requireWriter(actor: Principal, jurisdictionId: string): void {

@@ -2,18 +2,24 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
-import { BlobStore, getFileMeta, search, uploadFile } from "./service.js";
+import { BlobStore, getFileMeta, listFiles, search, uploadFile } from "./service.js";
 
 const UploadBody = z.object({
   name: z.string().min(1).max(255),
   contentType: z.string().min(1),
   dataBase64: z.string().min(1),
-  attachedKind: z.enum(["none", "board", "incident", "library"]).optional(),
+  attachedKind: z.enum(["none", "board", "record", "incident", "library"]).optional(),
   attachedId: z.string().uuid().optional(),
   supersedes: z.string().uuid().optional(),
 });
 
 const SearchQuery = z.object({ q: z.string().min(2).max(200) });
+const FileListQuery = z.object({
+  attachedKind: z.enum(["none", "board", "record", "incident", "library"]).optional(),
+  attachedId: z.string().uuid().optional(),
+  cursor: z.string().max(512).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
 
 /**
  * Build a Content-Disposition value a stored filename can never break out of.
@@ -55,6 +61,19 @@ export function fileRoutes(
         }),
       );
       return reply.status(201).send(result);
+    },
+  );
+
+  app.get(
+    "/api/v1/jurisdictions/:jurisdictionId/files",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const query = FileListQuery.parse(req.query);
+      const page = await withPerson(sql, req.principal.person.id, (tx) =>
+        listFiles(tx, req.principal, jurisdictionId, query),
+      );
+      return reply.send(page);
     },
   );
 

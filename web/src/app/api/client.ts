@@ -358,13 +358,32 @@ export interface SearchHit {
   readonly kind: "record" | "library" | "file" | "chronology";
   readonly id: string;
   readonly title: string;
+  readonly boardId?: string;
+  readonly incidentId?: string | null;
 }
+export type FileAttachmentKind = "none" | "board" | "record" | "incident" | "library";
 export interface FileMetaRef {
   readonly id: string;
   readonly name: string;
   readonly contentType: string;
   readonly size: number;
+  readonly sha256?: string;
   readonly version: number;
+  readonly supersedes?: string | null;
+  readonly attachedKind?: FileAttachmentKind;
+  readonly attachedId?: string | null;
+  readonly attachedBoardId?: string | null;
+  readonly attachedIncidentId?: string | null;
+  readonly createdAt?: string;
+  readonly uploadedBy?: {
+    readonly personId: string;
+    readonly displayName: string;
+    readonly positionTitle: string | null;
+  };
+}
+export interface FilePage {
+  readonly files: readonly FileMetaRef[];
+  readonly nextCursor: string | null;
 }
 export interface UploadResult {
   readonly id: string;
@@ -377,16 +396,24 @@ export interface PositionRef {
   readonly key: string;
   readonly title: string;
 }
+export interface ThreadRecipient {
+  readonly kind: "person" | "position";
+  readonly id: string;
+  readonly label: string;
+  readonly currentHolders: readonly string[];
+}
 export interface Thread {
   readonly id: string;
   readonly kind: string;
   readonly title: string;
   readonly incidentId: string | null;
+  readonly recipients: readonly ThreadRecipient[];
 }
 export interface Message {
   readonly id: string;
   readonly seq: number;
   readonly sender: string | null;
+  readonly senderPosition: string | null;
   readonly body: string;
   readonly at: string;
 }
@@ -1243,7 +1270,7 @@ export class ApiClient {
       name: string;
       contentType: string;
       dataBase64: string;
-      attachedKind?: "none" | "board" | "incident" | "library";
+      attachedKind?: FileAttachmentKind;
       attachedId?: string;
     },
   ): Promise<UploadResult> {
@@ -1255,6 +1282,21 @@ export class ApiClient {
   }
   fileMeta(fileId: string): Promise<FileMetaRef> {
     return this.request<FileMetaRef>("GET", `/api/v1/files/${fileId}`);
+  }
+  listFiles(
+    jurisdictionId: string,
+    options: { attachedKind?: FileAttachmentKind; attachedId?: string; cursor?: string; limit?: number } = {},
+  ): Promise<FilePage> {
+    const query = new URLSearchParams();
+    if (options.attachedKind !== undefined) query.set("attachedKind", options.attachedKind);
+    if (options.attachedId !== undefined) query.set("attachedId", options.attachedId);
+    if (options.cursor !== undefined) query.set("cursor", options.cursor);
+    if (options.limit !== undefined) query.set("limit", String(options.limit));
+    const suffix = query.size > 0 ? `?${query.toString()}` : "";
+    return this.request<FilePage>(
+      "GET",
+      `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/files${suffix}`,
+    );
   }
   listWorkspaceStates(
     incidentId: string,

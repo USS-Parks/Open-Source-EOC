@@ -4531,3 +4531,24 @@ increment proves it and that coverage follows the incident area.
   Evidence level: integrated on publication, not operator-validated. No new
   dependency or migration. Unit commit: this receipt's commit; rollback by
   revert. Seven worktrees remain assigned to active roster units.
+## D27: messages, files and exact source context
+
+- Lane C, final baseline b64b951. Messages show named position recipients and
+  current holders with truthful stored-message state. Files support bounded
+  pagination, search, preview, download, version metadata and exact board-record
+  attachments. Migration 0101 adds record attachment kind; upload validates
+  target jurisdiction before blob persistence.
+- File metadata and record search carry the source record's nullable incident.
+  Opening a source replaces or clears route context instead of retaining an
+  unrelated incident; real cross-incident browser navigation proves both paths.
+- Full TypeScript and ESLint passed. Earlier database/router checks passed
+  27 tests; the final source-scope database and DOM checks passed 12 tests.
+  Final responsive Chrome/router integration passed eight tests after the
+  separately landed 81C shell correction. Logs under deploy/test-runtime/out:
+  lanes/c/logs/communications-context-gate.log, communications-source-scope.log
+  and d27-responsive-final.log. The final result supersedes the documented
+  intermediate fixture and narrow modal failures.
+- Root reviewed source and light/dark/narrow captures. Independent final
+  source-scope review: SHIP. Evidence level: integrated on publication, not
+  operator-validated. No new dependency. Unit commit: this receipt's commit;
+  rollback by revert. Seven worktrees remain assigned to remaining roster work.

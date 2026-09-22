@@ -14,7 +14,7 @@ import {
   type WorkspaceArrangement,
 } from "../layout/AppShell.js";
 import { OperationalPeriodControl, PositionControl, useWorkspaceContext } from "../layout/context.js";
-import { parseRouteHash, sectionOf, useSurface, type RouteContext, type Surface } from "../router.js";
+import { parseRouteHash, sectionOf, surfaceHash, useSurface, type RouteContext, type Surface } from "../router.js";
 import { EmptyState, ErrorNote, Loading, NotFoundState, UnavailableState } from "./parts.js";
 import { MapSurface } from "../surfaces/MapSurface.js";
 import { DashboardSurface, parseDashboardViewState, type DashboardViewState } from "../surfaces/DashboardSurface.js";
@@ -183,7 +183,23 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
           {recordContext?.status === "loading" || !recordContext ? <p>Loading record context…</p> : null}
           {recordContext?.status === "missing" ? <p role="status">Record unavailable in this view</p> : null}
           {recordContext?.status === "ready" ? (
-            <BoardRecordDetailPane context={recordContext} />
+            <>
+              <BoardRecordDetailPane context={recordContext} />
+              <Button
+                kind="quiet"
+                onClick={() => navigate(
+                  { kind: "files" },
+                  {
+                    ...baseContext,
+                    boardId: surface.id,
+                    recordId: recordContext.detail.id,
+                    returnTo: surfaceHash(surface, routeContext),
+                  },
+                )}
+              >
+                Files for this record
+              </Button>
+            </>
           ) : null}
         </section>
       ) : null}
@@ -268,6 +284,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         key={incident.selectedIncidentId ?? "no-incident"}
         surface={surface}
         recordId={routeContext.recordId}
+        recordBoardId={routeContext.boardId}
         onRecordContext={receiveRecordContext}
         theme={props.theme}
         client={client}
@@ -298,6 +315,14 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         onDashboardContext={(change) => navigate(surface, { ...baseContext, ...change })}
         onNavigate={navigateInContext}
         onOpenBoard={(id) => navigateInContext({ kind: "board", id })}
+        onOpenRecord={(boardId, recordId, sourceIncidentId) => navigate(
+          { kind: "board", id: boardId },
+          { ...(sourceIncidentId ? { incidentId: sourceIncidentId } : {}), recordId },
+        )}
+        onOpenIncident={(incidentId) => navigate({ kind: "incidents" }, { incidentId })}
+        {...(canReturn && returnRoute ? {
+          onReturn: () => navigate(returnRoute.surface, returnRoute.context),
+        } : {})}
         onOpenSitrep={(id) => navigateInContext({ kind: "sitrep", id })}
         onOpenBoardRecord={(boardId, recordId) => navigate(
           { kind: "board", id: boardId },
@@ -370,6 +395,7 @@ function sectionForNav(key: string): Surface {
 function Center(props: {
   surface: Surface;
   recordId: string | undefined;
+  recordBoardId: string | undefined;
   onRecordContext: (state: BoardRecordContext | null) => void;
   theme: ThemeName;
   client: ApiClient;
@@ -400,6 +426,9 @@ function Center(props: {
   onDashboardContext: (context: RouteContext) => void;
   onNavigate: (surface: Surface) => void;
   onOpenBoard: (id: string) => void;
+  onOpenRecord: (boardId: string, recordId: string, incidentId: string | null) => void;
+  onOpenIncident: (incidentId: string) => void;
+  onReturn?: () => void;
   onOpenSitrep: (id: string) => void;
   onOpenBoardRecord: (boardId: string, recordId: string) => void;
   onDashboardFilter: (id: string, filter: { field: string; equals: string } | null) => void;
@@ -463,8 +492,8 @@ function Center(props: {
     case "boards":
       return <BoardsIndex boards={props.boards} onOpen={props.onOpenBoard} />;
     case "board":
-      return <BoardSurface client={props.client} boardId={s.id} incidentId={props.incidentId}
-        incidentScoped={props.incidentBoardIds.has(s.id)}
+      return <BoardSurface client={props.client} boardId={s.id} incidentId={props.routeContext.incidentId ?? null}
+        incidentScoped={Boolean(props.routeContext.incidentId) && props.incidentBoardIds.has(s.id)}
         {...(props.isAdmin && props.isInstanceAdmin ? { onDesign: () => props.onNavigate({ kind: "board-design", id: s.id }) } : {})}
         {...(props.recordId ? { recordId: props.recordId } : {})} onRecordContext={props.onRecordContext} />;
     case "sitreps":
@@ -502,7 +531,22 @@ function Center(props: {
           onOpenForms={() => props.onNavigate({ kind: "forms" })} />
       );
     case "files":
-      return <FilesSurface client={props.client} jurisdictionId={props.jurisdictionId} />;
+      return (
+        <FilesSurface
+          client={props.client}
+          jurisdictionId={props.jurisdictionId}
+          incidentId={props.incidentId}
+          incidentName={props.incidentName}
+          recordContext={props.recordBoardId && props.recordId ? {
+            boardId: props.recordBoardId,
+            recordId: props.recordId,
+            label: "Selected record",
+          } : null}
+          onOpenRecord={props.onOpenRecord}
+          onOpenIncident={props.onOpenIncident}
+          {...(props.onReturn ? { onReturn: props.onReturn } : {})}
+        />
+      );
     case "resources":
       return (
         <ResourcesSurface
@@ -532,7 +576,8 @@ function Center(props: {
         />
       );
     case "messages":
-      return <MessagesSurface client={props.client} jurisdictionId={props.jurisdictionId} />;
+      return <MessagesSurface client={props.client} jurisdictionId={props.jurisdictionId}
+        incidentId={props.incidentId} incidentName={props.incidentName} />;
     case "smartforms":
       return <SmartFormsSurface client={props.client} jurisdictionId={props.discoveryJurisdictionId}
         incidentId={props.incidentId} onOpenMap={() => props.onNavigate({ kind: "map" })} />;

@@ -138,21 +138,60 @@ export async function listMessages(
   }));
 }
 
+export interface ThreadRecipient {
+  readonly kind: "person" | "position";
+  readonly id: string;
+  readonly label: string;
+  readonly currentHolders: readonly string[];
+}
+
+export interface ThreadSummary {
+  readonly id: string;
+  readonly kind: string;
+  readonly title: string;
+  readonly incidentId: string | null;
+  readonly recipients: readonly ThreadRecipient[];
+}
+
 export async function listThreads(
   sql: Sql,
   actor: Principal,
   jurisdictionId: string,
-): Promise<Array<{ id: string; kind: string; title: string; incidentId: string | null }>> {
+): Promise<ThreadSummary[]> {
   requireMemberOrGuest(actor, jurisdictionId);
   const rows = await sql`
     select id, kind, title, incident_id from threads
     where jurisdiction_id = ${jurisdictionId} and is_thread_participant(id)
     order by created_at desc`;
-  return rows.map((r) => ({
-    id: r.id as string,
-    kind: r.kind as string,
-    title: r.title as string,
-    incidentId: (r.incident_id as string | null) ?? null,
+  if (rows.length === 0) return [];
+  const threadIds = rows.map((row) => row.id as string);
+  const members = await sql`
+    select m.thread_id, m.member_kind,
+           coalesce(m.person_id, m.position_id) as recipient_id,
+           coalesce(person.display_name, position.title) as recipient_label,
+           coalesce(holder.names, array[]::text[]) as current_holders
+    from thread_members m
+    left join persons person on m.member_kind = 'person' and person.id = m.person_id
+    left join positions position on m.member_kind = 'position' and position.id = m.position_id
+    left join lateral (
+      select array_agg(p.display_name order by p.display_name) as names
+      from position_assignments assignment
+      join persons p on p.id = assignment.person_id
+      where assignment.position_id = m.position_id and assignment.revoked_at is null
+    ) holder on true
+    where m.thread_id in ${sql(threadIds)} and m.removed_at is null
+    order by m.added_at, m.id`;
+  return rows.map((row) => ({
+    id: row.id as string,
+    kind: row.kind as string,
+    title: row.title as string,
+    incidentId: (row.incident_id as string | null) ?? null,
+    recipients: members.filter((member) => member.thread_id === row.id).map((member) => ({
+      kind: member.member_kind as "person" | "position",
+      id: member.recipient_id as string,
+      label: member.recipient_label as string,
+      currentHolders: member.current_holders as string[],
+    })),
   }));
 }
 

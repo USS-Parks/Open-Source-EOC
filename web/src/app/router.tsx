@@ -54,6 +54,7 @@ export interface RouteContext {
   readonly periodRevision?: number | null;
   readonly view?: string;
   readonly filter?: string;
+  readonly boardId?: string;
   readonly recordId?: string;
   readonly returnTo?: string;
 }
@@ -201,13 +202,14 @@ export function parseRouteHash(hash: string): AppRoute {
   const rawQuery = question === -1 ? "" : clean.slice(question + 1);
   if (safeDecode(rawQuery) === null) return { surface: { kind: "not-found", path: "invalid-link" }, context: {} };
   const query = new URLSearchParams(rawQuery);
-  const known = ["incident", "period", "view", "filter", "record", "return"] as const;
+  const known = ["incident", "period", "view", "filter", "board", "record", "return"] as const;
   if (known.some((key) => query.getAll(key).length > 1)) {
     return { surface: { kind: "not-found", path: "invalid-link" }, context: {} };
   }
   const incidentId = bounded(query.get("incident"), 128);
   const view = bounded(query.get("view"));
   const filter = bounded(query.get("filter"));
+  const boardId = bounded(query.get("board"), 128);
   const recordId = bounded(query.get("record"), 128);
   const periodValue = query.get("period");
   const periodRevision = periodValue === "unset"
@@ -219,7 +221,8 @@ export function parseRouteHash(hash: string): AppRoute {
   const returnTo = returnValue?.startsWith("#/") && !returnValue.includes("return=") ? returnValue : undefined;
   if ((query.has("incident") && !incidentId) || (query.has("period") && periodRevision === undefined)
     || (query.has("view") && !view) || (query.has("filter") && !filter)
-    || (query.has("record") && !recordId) || (query.has("return") && !returnTo)) {
+    || (query.has("board") && !boardId) || (query.has("record") && !recordId)
+    || (query.has("return") && !returnTo)) {
     return { surface: { kind: "not-found", path: "invalid-link" }, context: {} };
   }
   return {
@@ -229,6 +232,7 @@ export function parseRouteHash(hash: string): AppRoute {
       ...(periodRevision !== undefined ? { periodRevision } : {}),
       ...(view ? { view } : {}),
       ...(filter ? { filter } : {}),
+      ...(boardId ? { boardId } : {}),
       ...(recordId ? { recordId } : {}),
       ...(returnTo ? { returnTo } : {}),
     },
@@ -317,6 +321,7 @@ export function surfaceHash(surface: Surface, context: RouteContext = {}): strin
   else if (context.periodRevision) query.set("period", String(context.periodRevision));
   if (context.view) query.set("view", context.view);
   if (context.filter) query.set("filter", context.filter);
+  if (context.boardId) query.set("board", context.boardId);
   if (context.recordId) query.set("record", context.recordId);
   if (context.returnTo) query.set("return", context.returnTo);
   const encoded = query.toString();

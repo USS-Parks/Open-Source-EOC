@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
+import { createJurisdiction } from "../auth/service.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
@@ -14,6 +15,8 @@ let seed: Awaited<ReturnType<typeof seedIdentity>>;
 let adminToken: string;
 let memberToken: string;
 let boardId: string;
+let recordId: string;
+let sourceIncidentId: string;
 let fileV1: string;
 
 beforeAll(async () => {
@@ -31,6 +34,17 @@ beforeAll(async () => {
     payload: { templateKey: "significant_events" },
   });
   boardId = board.json().id as string;
+  const [sourceIncident] = await admin`
+    insert into incidents (jurisdiction_id, name, kind, activated_by)
+    values (${seed.jurisdictionId}, 'D27 attachment source incident', 'incident', ${seed.adminId})
+    returning id`;
+  sourceIncidentId = sourceIncident!.id as string;
+  await admin`insert into incident_boards (incident_id, board_id) values (${sourceIncidentId}, ${boardId})`;
+  const [record] = await admin`
+    insert into board_records (board_id, data, created_by, incident_id)
+    values (${boardId}, ${admin.json({ summary: "D27 attachment source" } as never)}, ${seed.memberId}, ${sourceIncidentId})
+    returning id`;
+  recordId = record!.id as string;
 });
 
 afterAll(async () => {
@@ -122,6 +136,65 @@ describe("content-addressed, immutable file storage", () => {
     expect(oldContent.body).toBe("Operational period 1 objectives");
   });
 
+  it("validates exact record attachments and lists them with deterministic pagination", async () => {
+    const first = await upload("record-photo-a.txt", "one", {
+      attachedKind: "record",
+      attachedId: recordId,
+    });
+    const second = await upload("record-photo-b.txt", "two", {
+      attachedKind: "record",
+      attachedId: recordId,
+    });
+    const third = await upload("record-photo-c.txt", "three", {
+      attachedKind: "record",
+      attachedId: recordId,
+    });
+    expect([first.statusCode, second.statusCode, third.statusCode]).toEqual([201, 201, 201]);
+
+    const firstPage = await app.inject({
+      method: "GET",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/files?attachedKind=record&attachedId=${recordId}&limit=2`,
+      headers: auth(memberToken),
+    });
+    expect(firstPage.statusCode, firstPage.body).toBe(200);
+    expect(firstPage.json().files).toHaveLength(2);
+    expect(firstPage.json().nextCursor).toEqual(expect.any(String));
+    expect(firstPage.json().files[0]).toMatchObject({
+      attachedKind: "record",
+      attachedId: recordId,
+      attachedBoardId: boardId,
+      attachedIncidentId: sourceIncidentId,
+      uploadedBy: { personId: seed.memberId, displayName: "Member" },
+    });
+
+    const secondPage = await app.inject({
+      method: "GET",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/files?attachedKind=record&attachedId=${recordId}&limit=2&cursor=${encodeURIComponent(firstPage.json().nextCursor as string)}`,
+      headers: auth(memberToken),
+    });
+    expect(secondPage.statusCode, secondPage.body).toBe(200);
+    expect(secondPage.json().files).toHaveLength(1);
+    expect(secondPage.json().nextCursor).toBeNull();
+    const ids = [...firstPage.json().files, ...secondPage.json().files].map((item: { id: string }) => item.id);
+    expect(new Set(ids).size).toBe(3);
+
+    const otherJurisdiction = await createJurisdiction(admin, "d27-other", "D27 Other");
+    const [otherRecord] = await admin`
+      insert into boards (jurisdiction_id, template_key, template_version, title)
+      select ${otherJurisdiction}, key, version, 'Other board' from board_templates
+      where key = 'significant_events' order by version desc limit 1
+      returning id`;
+    const [foreign] = await admin`
+      insert into board_records (board_id, data, created_by)
+      values (${otherRecord!.id as string}, '{}'::jsonb, ${seed.adminId}) returning id`;
+    const rejected = await upload("wrong-context.txt", "blocked", {
+      attachedKind: "record",
+      attachedId: foreign!.id as string,
+    });
+    expect(rejected.statusCode).toBe(400);
+    expect(rejected.json().error).toBe("attachment target not found in this jurisdiction");
+  });
+
   it("file rows cannot be rewritten or deleted at any layer", async () => {
     await expect(admin`update files set name = 'forged' where id = ${fileV1}`).rejects.toThrow(
       /append-only/,
@@ -170,13 +243,26 @@ describe("permission-aware search", () => {
       headers: auth(memberToken),
     });
     expect(res.statusCode).toBe(200);
-    const kinds = new Set(
-      (res.json().hits as Array<{ kind: string }>).map((h) => h.kind),
-    );
+    const searchHits = res.json().hits as Array<{ kind: string; boardId?: string; incidentId?: string | null }>;
+    const kinds = new Set(searchHits.map((hit) => hit.kind));
+    expect(searchHits.find((hit) => hit.kind === "record")?.boardId).toBe(boardId);
     expect(kinds.has("record")).toBe(true);
     expect(kinds.has("library")).toBe(true);
     expect(kinds.has("file")).toBe(true);
     expect(kinds.has("chronology")).toBe(true);
+
+    const scoped = await app.inject({
+      method: "GET",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/search?q=attachment`,
+      headers: auth(memberToken),
+    });
+    expect(scoped.statusCode, scoped.body).toBe(200);
+    expect(scoped.json().hits).toContainEqual(expect.objectContaining({
+      kind: "record",
+      id: recordId,
+      boardId,
+      incidentId: sourceIncidentId,
+    }));
   });
 
   it("never returns rows the caller cannot read", async () => {

@@ -224,6 +224,19 @@ describe("position-addressed messaging (the seat, not the person)", () => {
     });
     expect(holderRead.statusCode).toBe(200);
     expect(holderRead.json().messages).toHaveLength(1);
+    const listed = await app.inject({
+      method: "GET",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/threads`,
+      headers: auth(memberToken),
+    });
+    const summary = listed.json().threads.find((thread: { id: string }) => thread.id === seatThreadId);
+    expect(summary.recipients).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "position",
+        label: "Operations Section Chief",
+        currentHolders: ["Member"],
+      }),
+    ]));
   });
 
   it("the seat's history survives a shift change and access follows the assignment", async () => {
@@ -244,6 +257,15 @@ describe("position-addressed messaging (the seat, not the person)", () => {
     });
     expect(newHolder.statusCode).toBe(200);
     expect(newHolder.json().messages[0].body).toBe("Report resource status by 1400");
+    const listed = await app.inject({
+      method: "GET",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/threads`,
+      headers: auth(secondToken),
+    });
+    const summary = listed.json().threads.find((thread: { id: string }) => thread.id === seatThreadId);
+    expect(summary.recipients).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "position", currentHolders: ["Second Member"] }),
+    ]));
 
     const oldHolder = await app.inject({
       method: "GET",
