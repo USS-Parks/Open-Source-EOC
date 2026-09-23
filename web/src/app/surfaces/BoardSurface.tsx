@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { BoardTemplate, FieldDef, FormLayout, ViewRecord } from "@openeoc/shared";
 import { BoardView } from "../../boards/BoardView.js";
 import { RecordForm } from "../../boards/RecordForm.js";
+import { RecordWorkflowPanel, type RecordWorkflowSource } from "../../boards/RecordWorkflow.js";
 import { ActionButton, Tabs } from "../../design/controls.js";
 import { createMetadataDraftStore, type ScopedDraftStore } from "../../design/form-drafts.js";
 import { Drawer } from "../../design/overlays.js";
@@ -45,6 +46,7 @@ export type BoardRecordContext =
       readonly canEdit: boolean;
       readonly onEdit: () => void;
       readonly onDownloadAttachment: (fieldKey: string) => Promise<void>;
+      readonly workflow?: RecordWorkflowSource;
     }
   | { readonly status: "missing" };
 
@@ -146,9 +148,20 @@ export function BoardSurface(props: {
       canEdit: detail.data.canEdit && board.data.canContribute,
       onEdit: editRecord,
       onDownloadAttachment: downloadAttachment,
+      workflow: {
+        client: props.client,
+        boardId: props.boardId,
+        recordId: detail.data.id,
+        templateKey: board.data.templateKey,
+        templateVersion: board.data.templateVersion,
+        jurisdictionId: session.jurisdictionId,
+        incidentId: detail.data.incidentId,
+        canAct: board.data.canContribute,
+        people: knownPeople(detail.data, session.me?.person ?? null),
+      },
     });
     return () => props.onRecordContext?.(null);
-  }, [board.data, detail.data, detail.loading, downloadAttachment, editRecord, props.onRecordContext, props.recordId, resources.data, resources.loading]);
+  }, [board.data, detail.data, detail.loading, downloadAttachment, editRecord, props.boardId, props.client, props.onRecordContext, props.recordId, resources.data, resources.loading, session.jurisdictionId, session.me]);
 
   if (board.loading && !board.data) return <Loading label="Loading board…" />;
   if (board.error && !board.data) return <ErrorNote message={board.error} />;
@@ -531,6 +544,7 @@ export function BoardRecordDetailPane(props: {
         </section>
       ))}
       {downloadError ? <p role="alert">{downloadError}</p> : null}
+      {context.workflow ? <RecordWorkflowPanel key={context.workflow.recordId} source={context.workflow} /> : null}
       <section aria-labelledby="record-attribution-title">
         <h3 id="record-attribution-title" style={{ fontSize: "0.9rem", margin: "0 0 6px" }}>Attribution</h3>
         <p>Created {formatDate(context.detail.createdAt)} by {actorLabel(context.detail.createdBy)}.</p>
@@ -556,6 +570,18 @@ function formatDetailValue(value: unknown, type: FieldDef["type"]): string {
   if (type === "record_ref") return `Related record ${String(value)}`;
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
+}
+
+function knownPeople(
+  detail: BoardRecordDetailResponse,
+  me: { readonly id: string; readonly displayName: string } | null,
+): Record<string, string> {
+  const people: Record<string, string> = {};
+  for (const actor of [detail.createdBy, detail.updatedBy, ...detail.history.map((entry) => entry.actor)]) {
+    if (actor) people[actor.personId] = actor.displayName;
+  }
+  if (me) people[me.id] = me.displayName;
+  return people;
 }
 
 function actorLabel(actor: BoardRecordDetailResponse["createdBy"]): string {

@@ -1033,3 +1033,50 @@ tagging remain separately gated as section 1 of the roster states.
 - **Guide:** `docs/guides/OPERATOR-QUICKSTART.md` describes the screen,
   significant events, corrections and export.
 - **Rollback:** revert the commit.
+
+## V1 W3.7: workflow runtime in the record detail
+
+- **What changed.** The four workflow routes had no web client. They now have
+  `recordWorkflow`, `requestWorkflowTransition`, `approveWorkflowTransition`
+  and `escalateWorkflow`, and the board record detail in `BoardSurface.tsx`
+  gains a Workflow section, new `web/src/boards/workflow.ts` and
+  `RecordWorkflow.tsx`: the current state with "final" for a terminal state;
+  the assignee; the due time with Overdue, On time or Due time missing; buttons
+  for the transitions leaving the current state, with an assignee picker when
+  a transition assigns work; pending approvals with counts, approvers and an
+  Approve button per rule; the escalation schedule with Escalate once an
+  occurrence is due; and the append-only history with no edit controls.
+  Command buttons appear only for board writers; the server decides every
+  command and its refusal message is shown.
+- **Defaults applied.** The definition is read from the template version the
+  record's workflow is pinned to; a board with no workflow shows no section
+  and makes no request. The server does not say which transitions an actor may
+  take, so every transition leaving the current state is shown and the server
+  refuses what the actor may not do. Escalation timing uses the shared
+  `workflowEscalationAt`. Each click sends a fresh idempotency key.
+- **Deviations from the roster wording.** No reject action and no free-text
+  history note: the engine has neither, and the unit allows no engine code.
+  History "who" falls back to `Person` and a short id for anyone the shell
+  does not already know, because the history route returns ids only. Labels
+  come from the template's workflow definition; the dictionary has none.
+- **Schema, contract, dependencies:** none.
+- **Browser walk.** A member requests "Release to operations"; the member's
+  self-approval is refused with the server's message; the admin approves and
+  the record moves to "Released to operations"; a seeded past-due record shows
+  Overdue; the due escalation is processed; the history lists 4 entries with
+  no controls and the database holds 4 history rows. Three screenshots, wide
+  light, wide dark and narrow dark, with no horizontal overflow narrow.
+- **Verification.** In the lane, 13 files passed 115 of 115. After rebasing
+  onto W3.0, W3.1 and W3.5, resolving additive conflicts in the client imports
+  and the operator guide: the workflow and boards workspace browser walks,
+  board-workflow, boards, list-pagination and every web test passed 460 with
+  0 failed; `workflow-runtime.test.ts` reported its six tests pending in that
+  combined run, the file not completing under load, and passed 6 of 6 alone
+  per HZ-C. TypeScript and ESLint clean. Link checker 69 files.
+- **Evidence level:** unit, component, real-database integration, browser and
+  document.
+- **Deferred, needing engine work:** a reject or cancel command, and actor
+  display names on the history route.
+- **Guide:** `docs/guides/OPERATOR-QUICKSTART.md` explains transitions,
+  approvals, due times, escalations and history.
+- **Rollback:** revert the commit.

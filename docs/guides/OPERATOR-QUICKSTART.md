@@ -70,6 +70,35 @@ come first; **Load more records** reads the next page.
   signed file is a JSON array of signed pages in order; verify each page as
   described in [Export the audit trail](ADMIN.md#export-the-audit-trail).
 
+### Move a board record through its workflow
+
+A board designer can give a board a workflow: named states, the transitions
+between them, approval rules, due rules and escalations. Select a record and
+read the **Workflow** section of the record context.
+
+- **State** is the record's current workflow state. A final state has no
+  further transitions.
+- The transition buttons are the transitions that leave the current state.
+  When a transition assigns work, choose the position or incident participant
+  first. The server decides whether you may run it and shows its reason when
+  it refuses.
+- A transition with approval rules does not move the record at once. The
+  section shows it as awaiting approval, with each rule, its approver and the
+  approvals counted so far. An approver selects **Approve** for the rule. The
+  person who requested a transition cannot approve it unless the rule allows
+  it. The record moves when every rule has its count.
+- **Due** shows the time set by the transition's due rule. **Overdue** means
+  that time has passed. **Due time missing** means the rule reads a record
+  field that is empty.
+- **Escalations** lists each escalation of the transition that produced the
+  current state, with its schedule. An organization administrator or incident
+  coordinator selects **Escalate** once an occurrence is due. Each occurrence
+  is recorded once.
+- **Workflow history** lists every request, approval, completed transition and
+  escalation with the time, the person, their position, the states and the
+  recorded assignment, due time or schedule. History is append-only and has no
+  edit controls.
+
 ## 4. Plan and brief
 
 - Prepare IAP content against the selected incident and a real incident-area

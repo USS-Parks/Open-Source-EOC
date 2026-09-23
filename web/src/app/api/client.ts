@@ -72,6 +72,13 @@ import type {
   IpawsTrailEntry,
 } from "../../ipaws/model.js";
 import type { ChronologyFilters, ChronologyPage } from "../../audit/chronology.js";
+import type {
+  RecordWorkflow,
+  WorkflowApprovalCommand,
+  WorkflowCommandResult,
+  WorkflowEscalationCommand,
+  WorkflowTransitionCommand,
+} from "../../boards/workflow.js";
 
 /**
  * The app shell's one door to the server. It carries the bearer access
@@ -1557,6 +1564,19 @@ export class ApiClient {
       "GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/chronology?${query}`,
     );
     return page.entries.filter((entry) => entry.category.startsWith("ipaws."));
+  }
+  // ---- Board record workflow runtime ----
+  recordWorkflow(boardId: string, recordId: string): Promise<RecordWorkflow> {
+    return this.request("GET", `/api/v1/boards/${encodeURIComponent(boardId)}/records/${encodeURIComponent(recordId)}/workflow`);
+  }
+  requestWorkflowTransition(boardId: string, recordId: string, command: WorkflowTransitionCommand): Promise<WorkflowCommandResult> {
+    return this.request("POST", `/api/v1/boards/${encodeURIComponent(boardId)}/records/${encodeURIComponent(recordId)}/workflow/transitions`, { ...command });
+  }
+  approveWorkflowTransition(boardId: string, recordId: string, command: WorkflowApprovalCommand): Promise<WorkflowCommandResult> {
+    return this.request("POST", `/api/v1/boards/${encodeURIComponent(boardId)}/records/${encodeURIComponent(recordId)}/workflow/approvals`, { ...command });
+  }
+  escalateWorkflow(boardId: string, recordId: string, command: WorkflowEscalationCommand): Promise<WorkflowCommandResult> {
+    return this.request("POST", `/api/v1/boards/${encodeURIComponent(boardId)}/records/${encodeURIComponent(recordId)}/workflow/escalations`, { ...command });
   }
   downloadFile(fileId: string): Promise<Blob> {
     return this.requestBlob(`/api/v1/files/${fileId}/content`);
