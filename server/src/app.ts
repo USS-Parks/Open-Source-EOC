@@ -390,6 +390,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
     authenticate,
   );
   const hub = new BoardSyncHub(sql);
+  app.addHook("onClose", () => { hub.close(); });
   registerSyncRoutes(app, sql, hub);
   federationRoutes(app, sql, hub, authenticate);
 

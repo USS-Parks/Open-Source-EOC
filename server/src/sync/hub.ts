@@ -16,7 +16,7 @@ import {
 } from "../boards/service.js";
 import { recordAudit } from "../audit/service.js";
 import { notifyBoardEvent, type BoardEvent } from "../notify/engine.js";
-import { publishBoardEvent } from "../events/bus.js";
+import { onBoardEvent, publishBoardEvent } from "../events/bus.js";
 import { getIncidentAuthority } from "../incidents/participation.js";
 
 /**
@@ -32,7 +32,40 @@ interface HubEntry {
   doc: Y.Doc;
   board: EffectiveBoard;
   subscribers: Set<(update: Uint8Array, originSession: string) => void>;
+  /** Encoded state of `doc`, rebuilt lazily so repeat opens stop re-encoding. */
+  encoded: Uint8Array | null;
+  /**
+   * Board rows keyed by the reader's visible-field signature. Two actors with
+   * the same readable fields share one projection; a reader with narrower
+   * fields gets its own. Cleared whenever a record changes by any path.
+   */
+  rows: Map<string, Map<string, Record<string, unknown>>>;
+  /** Template version the doc was hydrated against, to catch an upgrade. */
+  templateVersion: number;
+  /** Highest sync_updates.seq folded into `doc`. */
+  throughSeq: number;
+  /** Updates replayed past the snapshot, the trigger for writing a new one. */
+  sinceSnapshot: number;
+  /** Open apply calls; eviction waits for these. */
+  active: number;
+  idle: NodeJS.Timeout | null;
 }
+
+/**
+ * How long an entry with no subscribers is kept before its Y.Doc is dropped.
+ * Long enough that a reconnecting client re-attaches to a warm doc, short
+ * enough that a long activation does not accumulate every board it touched.
+ */
+const IDLE_EVICT_MS = 60_000;
+
+/**
+ * Updates replayed past a snapshot before a new one is written. A snapshot is
+ * one encoded state, so this bounds hydration work rather than log size; the
+ * log itself is append-only and is trimmed, if ever, by retention policy.
+ */
+const SNAPSHOT_THRESHOLD = 200;
+
+const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
 export interface ApplyResult {
   readonly operationId: string | null;
@@ -46,10 +79,64 @@ export interface ExactSyncContext {
   readonly incidentId: string;
 }
 
+export interface HubOptions {
+  /** Grace period before an entry with no subscribers is dropped. */
+  readonly idleEvictMs?: number;
+  /** Updates past a snapshot before a new one is written. */
+  readonly snapshotThreshold?: number;
+}
+
+/** Counters for the lifecycle, for tests and for the metrics endpoint. */
+export interface HubStats {
+  /** Y.Docs currently held. */
+  readonly entries: number;
+  /** Times a scope's doc was rebuilt from the log. */
+  readonly hydrations: number;
+  /** Times board rows were read from the database for a projection. */
+  readonly rowLoads: number;
+  /** Snapshots written. */
+  readonly snapshots: number;
+}
+
 export class BoardSyncHub {
   private entries = new Map<string, HubEntry>();
+  private readonly unlisten: () => void;
+  private readonly idleEvictMs: number;
+  private readonly snapshotThreshold: number;
+  private hydrations = 0;
+  private rowLoads = 0;
+  private snapshots = 0;
 
-  constructor(private readonly sql: Sql) {}
+  constructor(private readonly sql: Sql, options: HubOptions = {}) {
+    this.idleEvictMs = options.idleEvictMs ?? IDLE_EVICT_MS;
+    this.snapshotThreshold = options.snapshotThreshold ?? SNAPSHOT_THRESHOLD;
+    // A record written over REST never passes through apply(), so the row
+    // projections have to be invalidated from the event bus or a reader would
+    // keep being served the rows as they stood when the doc was first opened.
+    this.unlisten = onBoardEvent((event) => {
+      for (const [key, entry] of this.entries) {
+        if (key.startsWith(`${event.boardId}:`)) entry.rows.clear();
+      }
+    });
+  }
+
+  stats(): HubStats {
+    return {
+      entries: this.entries.size,
+      hydrations: this.hydrations,
+      rowLoads: this.rowLoads,
+      snapshots: this.snapshots,
+    };
+  }
+
+  /** Release timers and listeners. Safe to call twice. */
+  close(): void {
+    this.unlisten();
+    for (const entry of this.entries.values()) {
+      if (entry.idle) clearTimeout(entry.idle);
+    }
+    this.entries.clear();
+  }
 
   /** Hydrate the legacy board-wide doc or one validated incident-scoped doc. */
   async open(
@@ -58,14 +145,29 @@ export class BoardSyncHub {
     incidentId: string | null = null,
   ): Promise<{ state: Uint8Array }> {
     const entry = await this.entry(actor, boardId, incidentId);
-    if (!incidentId) return { state: Y.encodeStateAsUpdate(entry.doc) };
-    const projected = await withPerson(this.sql, actor.person.id, async (tx) => {
-      const doc = new Y.Doc();
-      Y.applyUpdate(doc, Y.encodeStateAsUpdate(entry.doc));
-      await seedBoardRows(tx, doc, boardId, incidentId, entry.board);
-      return doc;
-    });
-    return { state: Y.encodeStateAsUpdate(projected) };
+    // entry() cancels a pending eviction so the doc survives the call. A read
+    // that never subscribes, such as a federation pull, must not leave the doc
+    // pinned, so the grace period restarts here instead.
+    const key = entryKey(boardId, incidentId);
+    try {
+      if (!incidentId) return { state: encodedState(entry) };
+      // The projection is per reader: visibleFields() narrows by role, so the
+      // cache is keyed by the fields this actor may see.
+      const signature = visibleFields(entry.board).map((field) => field.key).sort().join(",");
+      let rows = entry.rows.get(signature);
+      if (!rows) {
+        this.rowLoads += 1;
+        rows = await withPerson(this.sql, actor.person.id, (tx) =>
+          loadBoardRows(tx, boardId, incidentId, entry.board));
+        entry.rows.set(signature, rows);
+      }
+      const projected = new Y.Doc();
+      Y.applyUpdate(projected, encodedState(entry));
+      applyBoardRows(projected, rows);
+      return { state: Y.encodeStateAsUpdate(projected) };
+    } finally {
+      this.scheduleEvict(key, entry);
+    }
   }
 
   subscribe(
@@ -73,10 +175,40 @@ export class BoardSyncHub {
     incidentId: string | null,
     fn: (update: Uint8Array, originSession: string) => void,
   ): () => void {
-    const entry = this.entries.get(entryKey(boardId, incidentId));
+    const key = entryKey(boardId, incidentId);
+    const entry = this.entries.get(key);
     if (!entry) throw new Error("board not open");
     entry.subscribers.add(fn);
-    return () => entry.subscribers.delete(fn);
+    if (entry.idle) {
+      clearTimeout(entry.idle);
+      entry.idle = null;
+    }
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      entry.subscribers.delete(fn);
+      this.scheduleEvict(key, entry);
+    };
+  }
+
+  /**
+   * Drop an idle entry after a grace period. Re-subscribing cancels it, and an
+   * apply in flight defers it, so a doc is never pulled out from under work.
+   */
+  private scheduleEvict(key: string, entry: HubEntry): void {
+    if (entry.subscribers.size > 0 || entry.active > 0) return;
+    if (entry.idle) clearTimeout(entry.idle);
+    entry.idle = setTimeout(() => {
+      entry.idle = null;
+      if (entry.subscribers.size > 0 || entry.active > 0) return;
+      if (this.entries.get(key) !== entry) return;
+      entry.doc.destroy();
+      entry.rows.clear();
+      entry.encoded = null;
+      this.entries.delete(key);
+    }, this.idleEvictMs);
+    entry.idle.unref?.();
   }
 
   /**
@@ -92,10 +224,30 @@ export class BoardSyncHub {
   ): Promise<ApplyResult> {
     const incidentId = context?.incidentId ?? null;
     const entry = await this.entry(actor, boardId, incidentId);
+    const key = entryKey(boardId, incidentId);
+    entry.active += 1;
+    try {
+      return await this.applyLocked(actor, boardId, incidentId, entry, update, originSession, context);
+    } finally {
+      entry.active -= 1;
+      this.scheduleEvict(key, entry);
+    }
+  }
+
+  private async applyLocked(
+    actor: Principal,
+    boardId: string,
+    incidentId: string | null,
+    entry: HubEntry,
+    update: Uint8Array,
+    originSession: string,
+    context: ExactSyncContext | null,
+  ): Promise<ApplyResult> {
     const digest = context ? syncDigest(actor.person.id, boardId, context, update) : null;
     let outcome: {
       board: EffectiveBoard;
       doc: Y.Doc | null;
+      hydrated: HydratedDoc | null;
       before: Map<string, Record<string, unknown>>;
       after: Map<string, Record<string, unknown>>;
       committed: Array<{ recordId: string; existing: boolean }>;
@@ -127,6 +279,7 @@ export class BoardSyncHub {
             return {
               board,
               doc: null,
+              hydrated: null,
               before: new Map(),
               after: new Map(),
               committed: [],
@@ -143,7 +296,8 @@ export class BoardSyncHub {
           if (attached.closed_at) throw new AuthError(409, "incident is closed");
         }
 
-        const doc = await hydrateBoardDoc(tx, boardId, incidentId, board);
+        const hydrated = await hydrateBoardDoc(tx, boardId, incidentId, board);
+        const doc = hydrated.doc;
         const before = snapshotRecords(doc);
         if (incidentId) {
           for (const [recordId, data] of await loadBoardRows(tx, boardId, incidentId, board)) {
@@ -168,6 +322,11 @@ export class BoardSyncHub {
         return {
           board,
           doc,
+          hydrated: {
+            doc,
+            throughSeq: Number(row!.seq),
+            sinceSnapshot: hydrated.sinceSnapshot + 1,
+          },
           before,
           after,
           committed: checkpoint.committed,
@@ -187,8 +346,19 @@ export class BoardSyncHub {
       throw error;
     }
     if (outcome.replay) return outcome.result;
+    const previous = entry.doc;
     entry.board = outcome.board;
     entry.doc = outcome.doc!;
+    entry.templateVersion = outcome.board.template.version;
+    entry.throughSeq = outcome.hydrated!.throughSeq;
+    entry.sinceSnapshot = outcome.hydrated!.sinceSnapshot;
+    // The doc and every projection taken from it are now stale.
+    entry.encoded = null;
+    entry.rows.clear();
+    if (previous !== entry.doc) previous.destroy();
+    if (entry.sinceSnapshot >= this.snapshotThreshold) {
+      await this.writeSnapshot(actor, boardId, incidentId, entry);
+    }
     for (const fn of entry.subscribers) fn(update, originSession);
     // Post-commit notification fan-out for sync-originated changes.
     for (const c of outcome.committed) {
@@ -287,6 +457,36 @@ export class BoardSyncHub {
     return { conflicts, committed };
   }
 
+  /**
+   * Replace this scope's snapshot with the current merged state. The log is
+   * untouched; only the starting point for the next hydration moves.
+   */
+  private async writeSnapshot(
+    actor: Principal,
+    boardId: string,
+    incidentId: string | null,
+    entry: HubEntry,
+  ): Promise<void> {
+    const state = Buffer.from(Y.encodeStateAsUpdate(entry.doc));
+    const throughSeq = entry.throughSeq;
+    try {
+      await withPerson(this.sql, actor.person.id, async (tx) => {
+        await tx`
+          insert into sync_snapshots (board_id, incident_id, through_seq, state)
+          values (${boardId}, ${incidentId}, ${throughSeq}, ${state})
+          on conflict (board_id, coalesce(incident_id, ${NIL_UUID}::uuid))
+          do update set through_seq = excluded.through_seq, state = excluded.state,
+                        updated_at = now()
+          where sync_snapshots.through_seq < excluded.through_seq`;
+      });
+      entry.sinceSnapshot = 0;
+      this.snapshots += 1;
+    } catch {
+      // A snapshot is a cache. Failing to write one must never fail the update
+      // that triggered it; the next apply simply tries again.
+    }
+  }
+
   private async entry(
     actor: Principal,
     boardId: string,
@@ -298,48 +498,97 @@ export class BoardSyncHub {
         ? { ...(await getIncidentBoardReadShape(tx, actor, incidentId, boardId)), role: "member" as const }
         : await getEffectiveBoard(tx, actor, boardId);
       const cached = this.entries.get(key);
-      if (cached) return { board, doc: null as Y.Doc | null, cached };
-      const doc = await hydrateBoardDoc(tx, boardId, incidentId, board);
-      return { board, doc, cached: null };
+      // A template upgrade changes the fields the doc was built from, so the
+      // cached doc and every projection taken from it are rebuilt, not reused.
+      if (cached && cached.templateVersion === board.template.version) {
+        return { board, hydrated: null as HydratedDoc | null, cached };
+      }
+      this.hydrations += 1;
+      const hydrated = await hydrateBoardDoc(tx, boardId, incidentId, board);
+      return { board, hydrated, cached: cached ?? null };
     });
-    if (loaded.cached) {
-      loaded.cached.board = loaded.board;
-      return loaded.cached;
+    if (loaded.hydrated === null) {
+      const cached = loaded.cached!;
+      cached.board = loaded.board;
+      if (cached.idle) {
+        clearTimeout(cached.idle);
+        cached.idle = null;
+      }
+      return cached;
     }
-    const entry: HubEntry = { doc: loaded.doc!, board: loaded.board, subscribers: new Set() };
+    if (loaded.cached) {
+      loaded.cached.doc.destroy();
+      if (loaded.cached.idle) clearTimeout(loaded.cached.idle);
+    }
+    const entry: HubEntry = {
+      doc: loaded.hydrated.doc,
+      board: loaded.board,
+      subscribers: loaded.cached?.subscribers ?? new Set(),
+      encoded: null,
+      rows: new Map(),
+      templateVersion: loaded.board.template.version,
+      throughSeq: loaded.hydrated.throughSeq,
+      sinceSnapshot: loaded.hydrated.sinceSnapshot,
+      active: loaded.cached?.active ?? 0,
+      idle: null,
+    };
     this.entries.set(key, entry);
     return entry;
   }
 }
 
+interface HydratedDoc {
+  readonly doc: Y.Doc;
+  readonly throughSeq: number;
+  readonly sinceSnapshot: number;
+}
+
+/** Encoded state of an entry's doc, computed once per change. */
+function encodedState(entry: HubEntry): Uint8Array {
+  entry.encoded ??= Y.encodeStateAsUpdate(entry.doc);
+  return entry.encoded;
+}
+
+/**
+ * Rebuild a scope's doc: start from its snapshot if one exists, then replay
+ * only the log rows after it. Without a snapshot this is the original full
+ * replay, so a board that has never been compacted behaves exactly as before.
+ */
 async function hydrateBoardDoc(
   sql: Sql,
   boardId: string,
   incidentId: string | null,
   board: EffectiveBoard,
-): Promise<Y.Doc> {
+): Promise<HydratedDoc> {
   const doc = new Y.Doc();
+  const [snapshot] = await sql`
+    select through_seq, state from sync_snapshots
+    where board_id = ${boardId}
+      and coalesce(incident_id, ${NIL_UUID}::uuid) = coalesce(${incidentId}::uuid, ${NIL_UUID}::uuid)`;
+  let throughSeq = 0;
+  if (snapshot) {
+    Y.applyUpdate(doc, new Uint8Array(snapshot.state as Buffer));
+    throughSeq = Number(snapshot.through_seq);
+  }
   const updates = await sql`
-    select update_data from sync_updates
+    select seq, update_data from sync_updates
     where board_id = ${boardId}
       and (${incidentId}::uuid is null or incident_id = ${incidentId})
+      and seq > ${throughSeq}
     order by seq`;
   for (const update of updates) {
     Y.applyUpdate(doc, new Uint8Array(update.update_data as Buffer));
+    throughSeq = Number(update.seq);
   }
-  if (!incidentId) await seedBoardRows(sql, doc, boardId, null, board);
-  return doc;
+  if (!incidentId) {
+    applyBoardRows(doc, await loadBoardRows(sql, boardId, null, board));
+  }
+  return { doc, throughSeq, sinceSnapshot: updates.length };
 }
 
-async function seedBoardRows(
-  sql: Sql,
-  doc: Y.Doc,
-  boardId: string,
-  incidentId: string | null,
-  board: EffectiveBoard,
-): Promise<void> {
+/** Seed rows the sync log has not seen, without disturbing ones it has. */
+function applyBoardRows(doc: Y.Doc, rows: Map<string, Record<string, unknown>>): void {
   const records = doc.getMap<unknown>("records");
-  const rows = await loadBoardRows(sql, boardId, incidentId, board);
   doc.transact(() => {
     const seen = new Set<string>();
     for (const key of records.keys()) seen.add(key.split("/")[0]!);

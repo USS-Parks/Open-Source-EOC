@@ -38,7 +38,7 @@ not yet the version 1.0 release a county can install and operate unassisted.
 |---|---|---|
 | W0 | Close the Master roster and reconcile repository truth | Complete; gate passed 2026-09-22 |
 | W1 | Remove or relocate non-product and obsolete delivery surface | Complete; gate passed 2026-09-23 |
-| W2 | Harden one real activation: queues, scheduling, scale, security, observability and retention | Not started |
+| W2 | Harden one real activation: queues, scheduling, scale, security, observability and retention | In progress; W2.0 complete, W2.1 next |
 | W3 | Put an operator screen in front of delivered engines | Not started |
 | W4 | Add parity depth where engines or data are genuinely missing | Not started |
 | W5 | Reduce initial client weight and consolidate presentation | Not started |

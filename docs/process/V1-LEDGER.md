@@ -145,3 +145,68 @@ Every unit records, in this order:
 - **Result:** wave W1 is complete. Nine commits sit on `main` ahead of
   `origin/main`, linear, no merges, nothing pushed. Next: Basho's word on
   pushing, then wave W2.
+
+## Grant: full STS for the Finish PSPR
+
+Basho, 2026-09-23: STS execution of all phases and prompts of the current
+roster is authorized, together with committing and pushing to `origin main`,
+for this session. Wave W1 was pushed on that instruction: `7b69b67..ba7d960`,
+fast-forward, verified against a fresh fetch. External actions and release
+tagging remain separately gated as section 1 of the roster states.
+
+## V1 W2.0: sync hub lifecycle
+
+- **What was wrong.** One `Y.Doc` per board scope was created on first access
+  and held for the life of the process: nothing ever removed an entry from the
+  hub's map. Every hydration replayed the entire append-only `sync_updates` log
+  from the beginning. Every `open()` of an incident scope cloned the doc and
+  re-read every board row for that scope from the database. A board template
+  upgrade left the cached doc built from the previous field set.
+- **Eviction.** Entries carry a subscriber set, an in-flight apply count and an
+  idle timer. When the last subscriber leaves, or an `open()` that never
+  subscribes returns, the doc is dropped after a grace period, default 60
+  seconds. Re-subscribing or re-opening inside the grace period cancels it, and
+  an apply in flight defers it. The timer is unref'd so it never holds the
+  process open.
+- **Defect found while testing the above.** `entry()` cancels a pending
+  eviction so the doc survives the call, but `open()` did not restart it. A
+  read that never subscribes, such as a federation pull, pinned the doc
+  forever. `open()` now reschedules in a `finally`. The bounded-cycle test
+  fails without this.
+- **Compaction, within the append-only rule.** `sync_updates` carries a
+  `BEFORE DELETE OR UPDATE` trigger and is an audit surface: it is not
+  rewritten, trimmed or nulled. Migration `0102_sync_snapshots.sql` adds a
+  derived cache holding one merged state per scope. Hydration starts from the
+  snapshot and replays only rows after it; a scope with no snapshot behaves
+  exactly as before. A snapshot is written after 200 updates past the previous
+  one, and a failure to write one never fails the update that triggered it.
+  The table is the one sync table that may be updated in place, because every
+  row in it can be discarded and rebuilt from the log alone.
+- **Row projections.** `open()` no longer re-reads board rows per connection.
+  Rows are cached per scope, keyed by the reader's visible-field signature, so
+  two actors with the same readable fields share one projection and a narrower
+  reader still gets its own. The cache is dropped on every apply and, through
+  the board event bus, on every record written over REST, which is the path
+  that would otherwise serve stale rows.
+- **Template upgrades.** The entry records the template version it was
+  hydrated against. `entry()` rebuilds the doc and clears the projections when
+  that version moves, rather than serving a doc built from the old field set.
+- **Instrumentation.** `stats()` reports retained entries, hydrations, row
+  loads and snapshots written. The tests assert on those counters rather than
+  on wall-clock timings, so the acceptance is deterministic rather than
+  load-dependent. The counters are also what `W2.8` will expose as metrics.
+- **Acceptance, and how it was read.** The roster asks for heap within 10
+  percent of baseline after 200 open-close cycles across 50 boards, and for
+  open latency flat in record count. Both are asserted structurally, which is
+  stronger than a timing assertion on this host: after 200 open-close cycles
+  across 50 boards the hub retains zero documents, where before it retained
+  all 50 for the life of the process; and opening a 41-record scope 26 times
+  costs exactly one row read, the same one read a 1-record scope costs.
+- **Tests:** new `sync-hub-lifecycle.test.ts`, 7 tests against a real
+  database, each failing against the previous behavior.
+- **Verification:** recursive TypeScript clean; full ESLint clean; the sync,
+  continuity-sync, federation, boards, upgrade, reproducible-deploy and new
+  lifecycle suites passed 33 of 33.
+- **Evidence level:** unit and real-database. No benchmark on real hardware;
+  that belongs to the wave gate.
+- **Result:** W2.0 is complete. Next: W2.1, the outbound delivery queue.
