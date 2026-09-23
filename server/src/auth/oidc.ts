@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import * as client from "openid-client";
 import type { Sql } from "../db/client.js";
+import { prune } from "../security/rate-limit.js";
 import { AuthError, createSession, type LoginResult } from "./service.js";
 
 export interface OidcSettings {
@@ -32,6 +33,7 @@ interface PendingLogin {
 }
 
 const PENDING_TTL_MS = 10 * 60 * 1000;
+const MAX_PENDING = 10_000;
 
 export class OidcClient {
   private config: client.Configuration | null = null;
@@ -112,8 +114,9 @@ export class OidcClient {
     return createSession(sql, personId);
   }
 
+  /** Drop expired attempts, then the oldest past the cap, so a flood of starts cannot grow memory. */
   private prune(): void {
     const cutoff = Date.now() - PENDING_TTL_MS;
-    for (const [k, v] of this.pending) if (v.createdAt < cutoff) this.pending.delete(k);
+    prune(this.pending, (v) => v.createdAt < cutoff, MAX_PENDING);
   }
 }

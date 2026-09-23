@@ -15,6 +15,43 @@ cd deploy
 builds and starts [docker-compose.yml](./docker-compose.yml), and waits for the
 database and API to answer. The API comes up on `http://localhost:8080`.
 
+## One application node
+
+Version 1 runs as exactly one API process against one PostgreSQL database. Do
+not put two API containers behind a load balancer. Several safeguards keep
+their state in that process's memory:
+
+- the login and second-factor backoff (`server/src/auth/rate-limit.ts`);
+- the per-client flood limiter (`server/src/security/rate-limit.ts`);
+- the principal cache (`server/src/auth/principal-cache.ts`), which keeps the
+  identity, roles and position behind an access token for up to
+  `OPENEOC_PRINCIPAL_CACHE_MS` (default 5000 ms, `0` turns it off);
+- the live board sync hub, which relays an edit only to WebSocket clients
+  connected to the same process.
+
+With a second node, login guesses could be split across nodes, each node would
+grant its own flood ceiling, a sign-out or role change made on one node would
+reach the other only when its cached principal expired, and people connected
+to different nodes would not see each other's live edits. On the single node,
+a sign-out, position change, membership grant or guest grant made through the
+API takes effect on the next request. A change made directly in the database,
+such as a role edited or a person disabled in `psql`, takes effect within
+`OPENEOC_PRINCIPAL_CACHE_MS`. The scheduler elects its leader through a
+PostgreSQL advisory lock and the delivery worker claims its work with leases,
+so neither is what holds v1 to one node. A shared store for the limiters and
+the principal cache is a 1.x item.
+
+## Behind a reverse proxy
+
+The limiters key on the client address. Behind a reverse proxy every request
+arrives from the proxy, so all clients would share one flood allowance. Set
+`OPENEOC_TRUST_PROXY` to the proxy's address, or a comma-separated list of
+addresses and CIDR ranges, and the API takes the client address from
+`X-Forwarded-For` on requests from those peers only. `true` trusts the header
+from any peer; use it only when nothing but the proxy can reach the API. Leave
+the variable unset when clients connect directly, or any client could name its
+own address and step around the limiters.
+
 ## The two database identities
 
 Migrations and the running app use different roles on purpose, so Row-Level
@@ -197,3 +234,5 @@ upgrade path begins with a database whose first receipt is
 | `OPENEOC_SLOW_REQUEST_MS` | Slow request threshold in milliseconds (default 1000) |
 | `OPENEOC_METRICS_TOKEN` | Scrape token for `GET /api/v1/metrics`; unset serves 404 |
 | `OPENEOC_SCHEDULER_*_MS` | Scheduler intervals; see [Scheduler](#scheduler) |
+| `OPENEOC_TRUST_PROXY` | Reverse proxy addresses or CIDRs whose `X-Forwarded-For` is trusted, or `true`; unset trusts none |
+| `OPENEOC_PRINCIPAL_CACHE_MS` | How long a request principal is cached, in milliseconds (default 5000; `0` turns it off) |

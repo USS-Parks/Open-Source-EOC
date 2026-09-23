@@ -37,17 +37,41 @@ style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src
 - Roles are per-jurisdiction (`admin`, `member`, `viewer`); viewers are
   structurally read-only and never metered (INV-1). Time-boxed, scope-limited
   guest grants allow narrow cross-jurisdiction reads.
+- The principal derived from a token is cached in process for up to
+  `OPENEOC_PRINCIPAL_CACHE_MS`, keyed by the token's hash, and never past the
+  access token's expiry or a guest grant's (`server/src/auth/principal-cache.ts`).
+  Sign-out, resume, position sign-in and sign-out, provisioning and guest grant
+  changes made through the API drop the affected entries at once. A change made
+  directly in the database takes effect within the TTL. RLS reads the database
+  on every query, so it never sees a cached role.
 
 ## Rate limiting and timeouts
 
-- Per-email login backoff: five consecutive failures lock an email for thirty
-  seconds (`server/src/auth/rate-limit.ts`).
+- Per-email login backoff: five failures lock an email for thirty seconds
+  (`server/src/auth/rate-limit.ts`). Failures are forgotten fifteen minutes
+  after the last one, and the table holds at most 10,000 keys, shedding
+  forgotten and then the stalest keys, so a spray of invented addresses cannot
+  exhaust memory. Second-factor codes share the same backoff, keyed by person.
 - A shared per-client flood limiter fronts the API
   (`server/src/security/rate-limit.ts`), with a high default ceiling so heavy
   legitimate operation is never throttled and only abuse is. Health probes and
-  live WebSocket sessions are exempt.
+  live WebSocket sessions are exempt. Its table holds at most 20,000 clients.
+- Both limiters key on the client address. `X-Forwarded-For` is ignored unless
+  the request comes from a peer named in `OPENEOC_TRUST_PROXY`, so a client
+  cannot pick its own address.
 - A 30-second request timeout caps unfinished requests (slowloris defense)
   without affecting established WebSocket sessions.
+
+## One application node
+
+Version 1 is declared single node: one API process against one PostgreSQL
+database. The login backoff, the flood limiter, the principal cache and the
+live sync hub all hold their state in that process, so a second node would
+split the limits, serve a revoked session or role until its cache entry
+expired, and miss live edits made on the other node. On one node, identity
+changes made through the API apply on the next request. A shared store is a
+1.x item. Details: [../deploy/README.md](../deploy/README.md), "One
+application node".
 
 ## Audit and integrity
 
@@ -80,12 +104,15 @@ grant, proven in the security suite. Attribution is total (INV-2).
 | `OPENEOC_DATA_DIR` | Blob storage directory. | `./data/blobs` |
 | `OPENEOC_RATELIMIT_MAX` | Flood-limiter ceiling per client per window; `0` disables. | `1200` |
 | `OPENEOC_RATELIMIT_WINDOW_MS` | Flood-limiter window. | `10000` |
+| `OPENEOC_TRUST_PROXY` | Reverse proxy addresses or CIDRs (comma-separated) whose `X-Forwarded-For` is trusted; `true` trusts every peer. | off |
+| `OPENEOC_PRINCIPAL_CACHE_MS` | How long a request principal is cached; `0` disables. | `5000` |
 | `OPENEOC_CORS_ORIGINS` | Comma-separated exact origins allowed cross-origin. | off |
 | `OPENEOC_BASEMAP_STYLE_URL` | A deployment's own MapLibre style, replacing the bundled basemap. | bundled |
 | `OPENEOC_OIDC_ISSUER` (+ client id/secret/redirect) | Enables OIDC sign-in. | off |
 
 ## What is deferred
 
-Mutual-TLS peer hardening for federation and a shared rate-limit store for
-horizontal scaling are infrastructure steps recorded in the audit and capacity
-documents; they are out of band for a single instance.
+Mutual-TLS peer hardening for federation is an infrastructure step recorded in
+the audit and capacity documents. A shared store for the limiters and the
+principal cache, which horizontal scaling needs, is a 1.x item; v1 runs one
+application node.

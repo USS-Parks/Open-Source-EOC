@@ -64,17 +64,19 @@ export async function createGuestGrant(
   return row!.id as string;
 }
 
+/** Revoke a guest grant; returns the grantee, whose cached principals are now stale. */
 export async function revokeGuestGrant(
   sql: Sql,
   actor: Principal,
   grantId: string,
-): Promise<void> {
-  const [grant] = await sql`select jurisdiction_id from guest_grants where id = ${grantId}`;
+): Promise<string> {
+  const [grant] = await sql`select jurisdiction_id, person_id from guest_grants where id = ${grantId}`;
   if (!grant) throw new AuthError(404, "grant not found");
   requireAdmin(actor, grant.jurisdiction_id as string);
   await sql`
     update guest_grants set revoked_at = now(), revoked_by = ${actor.person.id}
     where id = ${grantId} and revoked_at is null`;
+  return grant.person_id as string;
 }
 
 /**

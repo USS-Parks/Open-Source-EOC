@@ -1,5 +1,6 @@
 import type { Sql } from "../db/client.js";
 import { hashPassword, verifyPassword } from "./passwords.js";
+import { forgetPerson } from "./principal-cache.js";
 import { hashToken, newToken } from "./tokens.js";
 
 const ACCESS_TTL_MS = 15 * 60 * 1000;
@@ -58,6 +59,9 @@ export async function addMembership(
   await sql`
     insert into jurisdiction_memberships (person_id, jurisdiction_id, role)
     values (${personId}, ${jurisdictionId}, ${role})`;
+  // Callers outside a route (provisioning scripts, seeds) get a fresh
+  // principal at once; routes forget again after their transaction commits.
+  forgetPerson(personId);
 }
 
 /**
@@ -122,18 +126,29 @@ export async function logout(sql: Sql, sessionId: string): Promise<void> {
 
 /** Derive the principal from a bearer token. Server-side only (INV-7). */
 export async function principalFromToken(sql: Sql, token: string): Promise<Principal> {
+  return (await sessionPrincipal(sql, hashToken(token))).principal;
+}
+
+/**
+ * The principal behind an access-token hash, with the instant that access
+ * token lapses; the principal cache never keeps an entry past it.
+ */
+export async function sessionPrincipal(
+  sql: Sql,
+  accessHash: string,
+): Promise<{ principal: Principal; accessExpiresAt: Date }> {
   // Token resolution precedes the person context, so the session/person join
   // runs through the definer helper (0034); RLS then applies to every read
   // below, once the context is set.
-  const [row] = await sql`select * from resolve_auth_session(${hashToken(token)})`;
+  const [row] = await sql`select * from resolve_auth_session(${accessHash})`;
   if (!row || row.disabled) throw new AuthError(401, "not authenticated");
-  if (new Date(row.access_expires_at as string) < new Date())
-    throw new AuthError(401, "session expired");
+  const accessExpiresAt = new Date(row.access_expires_at as string);
+  if (accessExpiresAt < new Date()) throw new AuthError(401, "session expired");
   const personId = row.person_id as string;
   // Membership, guest, and position reads run under the person's own RLS
   // context: the principal is derived through the same wall it will act
   // behind, never around it.
-  return sql.begin(async (tx) => {
+  const principal = await sql.begin(async (tx) => {
     await tx`select set_config('app.person_id', ${personId}, true)`;
     const memberships = await tx`
       select jurisdiction_id, role from jurisdiction_memberships
@@ -174,7 +189,8 @@ export async function principalFromToken(sql: Sql, token: string): Promise<Princ
         expiresAt: new Date(g.expires_at as string),
       })),
     } satisfies Principal;
-  }) as Promise<Principal>;
+  }) as Principal;
+  return { principal, accessExpiresAt };
 }
 
 /**

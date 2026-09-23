@@ -56,6 +56,8 @@ services:
       OPENEOC_SLOW_REQUEST_MS: ${OPENEOC_SLOW_REQUEST_MS:-1000}
       # Unset leaves GET /api/v1/metrics answering 404.
       OPENEOC_METRICS_TOKEN: ${OPENEOC_METRICS_TOKEN:-}
+      # Set to the reverse proxy address when one fronts the API; unset trusts none.
+      OPENEOC_TRUST_PROXY: ${OPENEOC_TRUST_PROXY:-}
     ports:
       - "8080:8080"
     volumes:

@@ -516,3 +516,64 @@ tagging remain separately gated as section 1 of the roster states.
   separate steps, so a leader handover overlapping a run could notify a
   briefing twice. Rare; not addressed here.
 - **Rollback:** revert the commit; migration 0107 adds one function only.
+
+## V1 W2.5: rate limiting and identity caching
+
+- **What changed.**
+  - Login backoff in `server/src/auth/rate-limit.ts`: failures for a key are
+    forgotten fifteen minutes after the last one, and the table is capped at
+    10,000 keys, dropping forgotten keys first and then the stalest. The lock
+    rule is unchanged, five failures lock for thirty seconds. MFA still uses it
+    keyed by person.
+  - The flood limiter in `server/src/security/rate-limit.ts` only swept expired
+    windows and could grow without bound; it is capped at 20,000 client keys,
+    oldest first. One shared `prune` helper serves both limiters and the cache.
+  - `trustProxy` comes from `OPENEOC_TRUST_PROXY` or a build option: unset or
+    `false` trusts no proxy, `true` trusts every peer, otherwise a comma list
+    of addresses or CIDRs. Off by default.
+  - New `server/src/auth/principal-cache.ts`: a per-process cache keyed by the
+    access-token hash, never the raw token, TTL `OPENEOC_PRINCIPAL_CACHE_MS`
+    (default 5000, `0` disables), at most 10,000 entries, never past the
+    session's access expiry or the earliest guest grant it carries, with a
+    generation counter so a load that overlapped an invalidation is not stored.
+    Logout, resume and position sign-in and sign-out drop the session's entry;
+    provisioning, guest grant create and revoke, and `addMembership` drop the
+    person's entries. WebSocket paths keep the uncached lookup.
+- **Decision default applied:** section 7 item 4, single node declared and the
+  shared store a 1.x item. The Postgres-backed limiter was not built. The
+  declaration is in `deploy/README.md` ("One application node", "Behind a
+  reverse proxy") and in `docs/SECURITY-CONTINUITY.md`.
+- **Deviations, recorded.** No hop-count trust setting: Fastify 5 treats a
+  number as trusting nothing. No v1 route demotes a role or disables a person;
+  those are SQL operations and take effect within the cache TTL, which is what
+  the test shows. Row-level security still reads the database on every query,
+  so database-side checks are never stale. Position assign and reassign do not
+  invalidate, because the cached principal holds no assignments.
+  `revokeGuestGrant` now returns the grantee id for invalidation.
+- **Defect fixed on the way.** A refused `/api/v1/me` request crashed the `/me`
+  response hook on an undefined principal, so the 401 body carried a
+  TypeError message instead of the real error.
+- **Integration fixes.** The declaration's text predated the scheduler and
+  said no leader election existed; it now names the advisory-lock election.
+  `deploy/docker-compose.yml` passes `OPENEOC_TRUST_PROXY` through. The OIDC
+  pending-login map in `server/src/auth/oidc.ts` was pruned by age but had no
+  size cap, the same unbounded-growth defect this unit closes, and is now
+  capped at 10,000 through the shared helper.
+- **Schema, contract, dependencies:** none.
+- **Verification:** new `identity-cache.test.ts`, 11 tests: backoff
+  forgetting, both limiter caps, cache hit, TTL expiry, session-expiry cap,
+  sign-out, position sign-in and sign-out, role granted immediately, demotion
+  after the TTL, guest grant and revoke, trusted and untrusted proxy, and the
+  invalidation race guard. In the lane, 15 suites passed 106 of 106. After
+  rebasing onto W2.2, W2.3 and W2.10 and the integration fixes:
+  identity-cache, auth, authz, security, oidc, mfa, observability, scheduler,
+  api-docs, ipaws, federation, boards, list-pagination and
+  incident-participation passed 100 of 100. TypeScript and ESLint clean. Link
+  checker 69 files. The full milestone suite runs at the wave gate.
+- **Evidence level:** unit, real-database integration and document.
+- **Carried forward:** an admin route added later that changes roles, the
+  disabled flag or grants must call `forgetPerson` or `forgetSession` after
+  its transaction commits; the module comment says so. W3.0 is the unit that
+  adds those routes.
+- **Rollback:** revert the commit; `OPENEOC_PRINCIPAL_CACHE_MS=0` turns the
+  cache off at runtime.

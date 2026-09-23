@@ -11,13 +11,15 @@ import {
   createPosition,
   logout,
   type Principal,
-  principalFromToken,
   reassignPosition,
   resume,
+  sessionPrincipal,
   signInPosition,
   signOutPosition,
 } from "./auth/service.js";
+import { cachedPrincipal, forgetPerson, forgetSession } from "./auth/principal-cache.js";
 import { checkAllowed, recordFailure, recordSuccess } from "./auth/rate-limit.js";
+import { hashToken } from "./auth/tokens.js";
 import { activateEnrollment, beginEnrollment, passwordLogin, verifyMfa } from "./auth/mfa.js";
 import { createGuestGrant, listPositions, provisionJurisdiction, revokeGuestGrant } from "./auth/authz.js";
 import { OidcClient, oidcSettingsFromEnv, type OidcSettings } from "./auth/oidc.js";
@@ -118,6 +120,8 @@ export interface BuildAppOptions {
   readonly metricsToken?: string | null;
   /** Admins must enroll in MFA to sign in with a password. Default: on unless OPENEOC_REQUIRE_ADMIN_MFA=0. */
   readonly requireAdminMfa?: boolean;
+  /** Which peers may set X-Forwarded-For; defaults to OPENEOC_TRUST_PROXY (see trustProxyFromEnv). */
+  readonly trustProxy?: boolean | string;
 }
 
 export type OptionalIntegration = "collab" | "facilities" | "meetings" | "tracking";
@@ -133,12 +137,26 @@ function integrationsFromEnv(value = process.env.OPENEOC_INTEGRATIONS ?? ""): Op
   return integrations;
 }
 
+/**
+ * OPENEOC_TRUST_PROXY: unset or "false" trusts no proxy, so request.ip is the
+ * socket peer; "true" trusts any sender; anything else is a comma-separated
+ * list of proxy addresses or CIDRs whose X-Forwarded-For is believed. The
+ * limiters key on request.ip, so behind a reverse proxy name the proxy, and
+ * never trust the header where clients connect directly.
+ */
+export function trustProxyFromEnv(value = process.env.OPENEOC_TRUST_PROXY ?? ""): boolean | string {
+  const v = value.trim();
+  if (v === "" || v === "false") return false;
+  return v === "true" ? true : v;
+}
+
 export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstance {
   // requestTimeout caps how long an unfinished request may occupy a
   // connection (slowloris defense and continuity under load); it applies to
   // request receipt, not to established WebSocket sessions.
   const app = Fastify({
     requestTimeout: 30_000,
+    trustProxy: options.trustProxy ?? trustProxyFromEnv(),
     ...loggingOptions(options.logLevel ?? logLevelFromEnv(), options.logStream),
   });
   void app.register(websocket);
@@ -191,13 +209,15 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   /**
    * Server-side principal derivation (INV-7): the bearer token is the only
    * caller input consulted. Position, roles, and identity come from the
-   * database; any caller-supplied identity headers are ignored.
+   * database; any caller-supplied identity headers are ignored. A short-lived
+   * cache (auth/principal-cache.ts) spares repeat requests the derivation.
    */
   async function authenticate(req: FastifyRequest): Promise<void> {
     const header = req.headers.authorization ?? "";
     const token = header.startsWith("Bearer ") ? header.slice(7) : "";
     if (!token) throw new AuthError(401, "not authenticated");
-    req.principal = await principalFromToken(sql, token);
+    const accessHash = hashToken(token);
+    req.principal = await cachedPrincipal(accessHash, () => sessionPrincipal(sql, accessHash));
   }
 
   /**
@@ -247,18 +267,25 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
 
   app.post("/api/v1/auth/resume", async (req, reply) => {
     const body = ResumeBody.parse(req.body);
-    return reply.send(await resume(sql, body.resumeToken));
+    const result = await resume(sql, body.resumeToken);
+    forgetSession(result.sessionId); // the previous access token no longer resolves
+    return reply.send(result);
   });
 
+  // Identity changes below forget the affected cached principals only after
+  // withPerson has committed, so a concurrent request cannot re-cache the
+  // state from before the change.
   app.post("/api/v1/auth/logout", { preHandler: authenticate }, async (req, reply) => {
     await withPerson(sql, req.principal.person.id, (tx) => logout(tx, req.principal.sessionId));
+    forgetSession(req.principal.sessionId);
     return reply.send({ ok: true });
   });
 
   // Keep the session contract truthful for scope-limited raw guest grants.
   // Incident participation remains a separate, incident-specific authority.
+  // A refused request has no principal; its error body passes through as is.
   app.addHook("preSerialization", async (req, _reply, payload) => {
-    if (req.routeOptions.url !== "/api/v1/me") return payload;
+    if (req.routeOptions.url !== "/api/v1/me" || !req.principal) return payload;
     return { ...(payload as object), guests: req.principal.guests };
   });
 
@@ -307,6 +334,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
     const result = await withPerson(sql, req.principal.person.id, (tx) =>
       provisionJurisdiction(tx, req.principal, body),
     );
+    forgetPerson(body.adminPersonId);
     return reply.status(201).send(result);
   });
 
@@ -319,6 +347,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
       const id = await withPerson(sql, req.principal.person.id, (tx) =>
         createGuestGrant(tx, req.principal, { jurisdictionId, ...body }),
       );
+      forgetPerson(body.personId);
       return reply.status(201).send({ id });
     },
   );
@@ -328,9 +357,10 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
     { preHandler: authenticate },
     async (req, reply) => {
       const { grantId } = req.params as { grantId: string };
-      await withPerson(sql, req.principal.person.id, (tx) =>
+      const guestId = await withPerson(sql, req.principal.person.id, (tx) =>
         revokeGuestGrant(tx, req.principal, grantId),
       );
+      forgetPerson(guestId);
       return reply.send({ ok: true });
     },
   );
@@ -373,12 +403,14 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
       await withPerson(sql, req.principal.person.id, (tx) =>
         signInPosition(tx, req.principal, positionId),
       );
+      forgetSession(req.principal.sessionId);
       return reply.send({ ok: true });
     },
   );
 
   app.post("/api/v1/positions/sign-out", { preHandler: authenticate }, async (req, reply) => {
     await withPerson(sql, req.principal.person.id, (tx) => signOutPosition(tx, req.principal));
+    forgetSession(req.principal.sessionId);
     return reply.send({ ok: true });
   });
 
