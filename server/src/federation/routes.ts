@@ -5,6 +5,7 @@ import { withPerson } from "../db/context.js";
 import type { BoardSyncHub } from "../sync/hub.js";
 import {
   createAgreement,
+  federationStatus,
   pending,
   queueOutbound,
   receiveUpdates,
@@ -42,6 +43,18 @@ export function federationRoutes(
         registerPeer(tx, req.principal, jurisdictionId, body.name),
       );
       return reply.status(201).send(result);
+    },
+  );
+
+  app.get(
+    "/api/v1/jurisdictions/:jurisdictionId/federation",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const status = await withPerson(sql, req.principal.person.id, (tx) =>
+        federationStatus(tx, req.principal, jurisdictionId),
+      );
+      return reply.send(status);
     },
   );
 

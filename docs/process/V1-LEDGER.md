@@ -1234,3 +1234,44 @@ tagging remain separately gated as section 1 of the roster states.
 - **Guide:** `docs/guides/OPERATOR-QUICKSTART.md`, "Staffing: check in, badges
   and shifts".
 - **Rollback:** revert the commit.
+
+## V1 W3.6: federation and peers
+
+- **What changed.** A Federation screen under Data and administration, new
+  `web/src/federation/**`, for jurisdiction administrators. Registering a
+  partner shows the issued token once with a copy button and a warning, then
+  clears it. The push link takes the partner address and a masked token; the
+  stored token is never displayed. Sharing a board takes a board picker, read
+  or read-and-write, and the receiving board id on the partner. Outbox status
+  per partner and board shows updates waiting, oldest waiting age, next
+  attempt, last error and last delivery, and says why an update is held: no
+  link or no receiving board. "Received from partners" lists the ten latest
+  `federation.received` events. Resource escalation keeps no stored targets,
+  because each escalation supplies the peer, and the screen says so.
+- **Deviation: one read route.** No route listed peers, agreements or outbox
+  status, so `GET /api/v1/jurisdictions/:jurisdictionId/federation` was
+  added, admin only, under row-level security, returning peers without their
+  token hash or outbound token and the newest received batches first. Contract
+  and `docs/API.md` updated. The Console wiring also touches the member-nav
+  filter, the nav switch, the center switch and the page title.
+- **Defaults.** Members cannot view status; the entry is hidden from them and
+  a direct URL shows the refusal. The board picker offers only boards not yet
+  shared with that partner.
+- **Engine gaps found, carried to W3.11.** Nothing in the sync write path
+  queues a shared board's edits for its peers; only the manual queue route
+  writes the outbox, which contradicts the federation guide. A second
+  agreement for the same peer and board answers 500 from the unique
+  constraint instead of 409.
+- **Schema:** none. **Dependencies:** none.
+- **Verification.** In the lane: `federation-browser.test.ts` 2 of 2, twice,
+  walking two real instances: register (token shown once), link, share with a
+  receiving board, queue, "1 waiting", drain into the second instance, "Up to
+  date", then the reverse direction received; and a member refused. Federation,
+  delivery-outbox, resource, api-docs and ipaws 42 of 42; shared 115 of 115.
+  After rebasing onto W3.2 and W3.3, resolving additive conflicts in the
+  client, its test and the console: the federation and staffing browser walks,
+  federation, delivery-outbox, api-docs, ipaws, every web test and the shared
+  suite passed 606 of 606. TypeScript and ESLint clean. Link checker 70 files.
+- **Evidence level:** unit, integration, real-database, browser and document.
+- **Guide:** `docs/guides/FEDERATION-SETUP.md`, "The Federation screen".
+- **Rollback:** revert the commit.

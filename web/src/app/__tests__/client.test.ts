@@ -624,3 +624,22 @@ describe("staffing client", () => {
     ]);
   });
 });
+
+describe("federation client", () => {
+  it("reads status, registers a peer, sets its push link and shares a board", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(res(200, { peers: [], received: [] }));
+    const client = new ApiClient({ fetchImpl });
+    expect(await client.federationStatus("j/1")).toEqual({ peers: [], received: [] });
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe("/api/v1/jurisdictions/j%2F1/federation");
+    fetchImpl.mockResolvedValueOnce(res(201, { id: "p1", token: "once" }));
+    expect(await client.registerPeer("j", "State OES")).toEqual({ id: "p1", token: "once" });
+    expect(fetchImpl.mock.calls[1]).toEqual(["/api/v1/jurisdictions/j/peers",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ name: "State OES" }) })]);
+    await client.setPeerLink("p1", "https://state.example", "issued");
+    expect(fetchImpl.mock.calls[2]).toEqual(["/api/v1/peers/p1/link",
+      expect.objectContaining({ method: "PUT", body: JSON.stringify({ endpointUrl: "https://state.example", token: "issued" }) })]);
+    await client.createSharingAgreement("p1", { boardId: "b1", canRead: true, canWrite: false, remoteBoardId: "r1" });
+    expect(fetchImpl.mock.calls[3]).toEqual(["/api/v1/peers/p1/agreements",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ boardId: "b1", canRead: true, canWrite: false, remoteBoardId: "r1" }) })]);
+  });
+});

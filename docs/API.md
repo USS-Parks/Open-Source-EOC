@@ -202,6 +202,7 @@ set, and then require that value as a bearer token.
 ### federation
 
 - `POST /api/v1/federation/receive`: Run federation receive (auth: peer-token; audience: machine)
+- `GET /api/v1/jurisdictions/:jurisdictionId/federation`: Read jurisdictions federation (auth: bearer; audience: operator)
 
 ### feeds
 

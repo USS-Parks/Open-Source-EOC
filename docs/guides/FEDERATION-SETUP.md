@@ -28,6 +28,42 @@ stored encrypted and is never shown again, so the server needs
 `OPENEOC_SECRET_KEY` set. Without a link, entries stay in the outbox and can be
 read with the pending route.
 
+## The Federation screen
+
+Jurisdiction administrators set all of this up from **Federation** under Data
+and administration in the console. The entry is hidden from everyone else, and
+the server refuses the status read to anyone who is not an administrator of
+the jurisdiction.
+
+1. **Register a partner.** Enter the partner's name and select **Register
+   partner**. The partner's token appears once, with a **Copy token** button.
+   Copy it and give it to the partner's administrator, who enters it as the
+   push link token on their instance. Select **I have saved the token** to
+   clear it; it cannot be shown again.
+2. **Set push link.** Open **Set push link** on the partner's card and enter
+   the partner's address and the token the partner issued to this instance.
+   The token field is masked, the stored token is never displayed, and saving
+   again replaces both the address and the token. The card then reads
+   "Pushing to" the address.
+3. **Share a board.** Open **Share a board**, pick one of this jurisdiction's
+   boards not yet shared with the partner, choose whether the partner reads it
+   or reads and writes it, and enter the receiving board ID: the id of the
+   board on the partner that should receive the updates.
+4. **Watch the outbox.** Each shared board shows how many updates are waiting,
+   how long the oldest has waited, the next attempt, the last error and the
+   last delivery. An update is held, and the card says why, until the partner
+   is linked and the board has a receiving board. The badge on the partner
+   reads "Up to date" when it is linked and nothing is waiting. Select **Refresh status** to
+   read the outbox again.
+5. **Received from partners.** The ten latest batches partners pushed to this
+   instance, read from the audit trail: the board, the partner, the time, the
+   number of updates and any conflicts reconciled.
+
+The screen also states how resource escalation chooses its target: it keeps
+no stored targets. Whoever escalates a request supplies the higher tier's
+name, address and peer token with that escalation, so the partner links on
+this screen are not used for it.
+
 ## How updates flow
 
 - Local edits to a shared board queue in an outbox, one entry per peer allowed

@@ -45,6 +45,7 @@ import { EsfSurface } from "../surfaces/EsfSurface.js";
 import { ContinuityPanel } from "../../offline/ContinuityPanel.js";
 import { ChronologySurface } from "../../audit/ChronologySurface.js";
 import { StaffingSurface } from "../../staffing/StaffingSurface.js";
+import { FederationSurface } from "../../federation/FederationSurface.js";
 
 const NAV: readonly NavGroup[] = [
   { key: "situation", label: "Situation", items: [
@@ -81,10 +82,11 @@ const NAV: readonly NavGroup[] = [
     { key: "feeds", label: "Feeds", icon: "feeds" },
     { key: "templates", label: "Templates", icon: "templates" },
     { key: "admin", label: "Administration", icon: "settings" },
+    { key: "federation", label: "Federation", icon: "participants" },
   ] },
 ];
-/** The rail without Administration, for accounts that administer nothing. */
-const MEMBER_NAV: readonly NavGroup[] = NAV.map((group) => ({ ...group, items: group.items.filter((item) => item.key !== "admin") }));
+/** The rail without the administrator-only entries, for accounts that administer nothing. */
+const MEMBER_NAV: readonly NavGroup[] = NAV.map((group) => ({ ...group, items: group.items.filter((item) => item.key !== "admin" && item.key !== "federation") }));
 
 /**
  * The operations console: the map-first hybrid. The rail switches the
@@ -400,6 +402,8 @@ function sectionForNav(key: string): Surface {
       return { kind: "templates" };
     case "admin":
       return { kind: "admin" };
+    case "federation":
+      return { kind: "federation" };
     case "chronology":
       return { kind: "chronology" };
     default:
@@ -687,6 +691,9 @@ function Center(props: {
     case "admin":
       return <AdminSurface client={props.client} jurisdictionId={props.jurisdictionId} personId={props.personId}
         isAdmin={props.isAdmin} isInstanceAdmin={props.isInstanceAdmin} boards={props.boards} />;
+    case "federation":
+      return <FederationSurface client={props.client} jurisdictionId={props.jurisdictionId}
+        isAdmin={props.isAdmin} boards={props.boards} />;
     case "chronology":
       return <ChronologySurface client={props.client} jurisdictionId={props.jurisdictionId}
         incidentId={props.incidentId} incidentName={props.incidentName} isAdmin={props.isAdmin} />;
@@ -728,6 +735,7 @@ function pageFor(surface: Surface, scope: string): { readonly page: ShellPage; r
     case "feeds": return result("Data and administration", "Feeds", "map");
     case "templates": return result("Data and administration", "Templates", "boards");
     case "admin": return result("Data and administration", "Administration", "boards");
+    case "federation": return result("Data and administration", "Federation", "boards");
     case "alerts": return result("Notifications", "Notification center", "boards");
     case "not-found": return result("Navigation", "Page not found", "boards");
   }

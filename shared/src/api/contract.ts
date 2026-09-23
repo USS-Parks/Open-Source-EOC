@@ -104,6 +104,7 @@ GET /api/v1/jurisdictions/:jurisdictionId/dashboards
 GET /api/v1/jurisdictions/:jurisdictionId/export
 GET /api/v1/jurisdictions/:jurisdictionId/facilities/board
 GET /api/v1/jurisdictions/:jurisdictionId/facilities/have
+GET /api/v1/jurisdictions/:jurisdictionId/federation
 GET /api/v1/jurisdictions/:jurisdictionId/feeds
 GET /api/v1/jurisdictions/:jurisdictionId/files
 GET /api/v1/jurisdictions/:jurisdictionId/forms

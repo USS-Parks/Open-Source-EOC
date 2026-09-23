@@ -72,6 +72,7 @@ import type {
   IpawsTrailEntry,
 } from "../../ipaws/model.js";
 import type { ChronologyFilters, ChronologyPage } from "../../audit/chronology.js";
+import type { FederationStatus } from "../../federation/model.js";
 import type {
   RecordWorkflow,
   WorkflowApprovalCommand,
@@ -1801,6 +1802,23 @@ export class ApiClient {
   }
   createShift(jurisdictionId: string, input: { positionId: string; personId?: string; startsAt: string; endsAt: string; note?: string; incidentId?: string }): Promise<{ id: string }> {
     return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/shifts`, input);
+  }
+
+  // ---- Federation ----
+
+  /** Peers with their link state and shared boards, and the latest received batches. Administrators only. */
+  federationStatus(jurisdictionId: string): Promise<FederationStatus> {
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/federation`);
+  }
+  /** Register a peer; the returned token is the only time it is ever shown. */
+  registerPeer(jurisdictionId: string, name: string): Promise<{ id: string; token: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/peers`, { name });
+  }
+  async setPeerLink(peerId: string, endpointUrl: string, token: string): Promise<void> {
+    await this.request("PUT", `/api/v1/peers/${encodeURIComponent(peerId)}/link`, { endpointUrl, token });
+  }
+  createSharingAgreement(peerId: string, input: { boardId: string; canRead: boolean; canWrite: boolean; remoteBoardId?: string }): Promise<{ id: string }> {
+    return this.request("POST", `/api/v1/peers/${encodeURIComponent(peerId)}/agreements`, input);
   }
 }
 

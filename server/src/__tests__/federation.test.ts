@@ -290,3 +290,57 @@ describe("agreement scope", () => {
     expect(res.json().error).toBe("board is not in this jurisdiction");
   });
 });
+
+describe("federation status for administrators", () => {
+  it("lists peers, shared boards with their outbox standing, and received batches, never a token", async () => {
+    const prior = process.env.OPENEOC_SECRET_KEY;
+    process.env.OPENEOC_SECRET_KEY = "test-only-federation-status-key";
+    try {
+      const link = await county.app.inject({
+        method: "PUT",
+        url: `/api/v1/peers/${peerCountySide}/link`,
+        headers: { authorization: `Bearer ${county.adminToken}` },
+        payload: { endpointUrl: "http://127.0.0.1:9", token: "push-token-never-shown" },
+      });
+      expect(link.statusCode).toBe(200);
+    } finally {
+      if (prior === undefined) delete process.env.OPENEOC_SECRET_KEY;
+      else process.env.OPENEOC_SECRET_KEY = prior;
+    }
+
+    const res = await county.app.inject({
+      method: "GET",
+      url: `/api/v1/jurisdictions/${county.jurisdictionId}/federation`,
+      headers: { authorization: `Bearer ${county.adminToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const [stored] = await county.admin`select token_hash, outbound_token from peers where id = ${peerCountySide}`;
+    for (const secret of ["push-token-never-shown", tokenIntoCounty, stored!.token_hash, stored!.outbound_token]) {
+      expect(res.body).not.toContain(secret as string);
+    }
+    const [board] = await county.admin`select title from boards where id = ${county.boardId}`;
+    const body = res.json();
+    const peer = body.peers.find((p: { name: string }) => p.name === "state");
+    expect(peer).toMatchObject({ id: peerCountySide, endpointUrl: "http://127.0.0.1:9", tokenStored: true });
+    expect(peer.boards).toEqual([
+      expect.objectContaining({
+        boardId: county.boardId, boardTitle: board!.title, canRead: true, canWrite: true, remoteBoardId: null,
+        pending: 1, lastError: null, lastDeliveredAt: null,
+      }),
+    ]);
+    expect(Date.parse(peer.boards[0].oldestPendingAt)).not.toBeNaN();
+    expect(Date.parse(peer.boards[0].nextAttemptAt)).not.toBeNaN();
+    expect(body.received).toEqual([
+      expect.objectContaining({ peer: "state", boardId: county.boardId, boardTitle: board!.title, updates: 1, conflicts: 0 }),
+    ]);
+  });
+
+  it("refuses a member", async () => {
+    const res = await county.app.inject({
+      method: "GET",
+      url: `/api/v1/jurisdictions/${county.jurisdictionId}/federation`,
+      headers: { authorization: `Bearer ${county.memberToken}` },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+});

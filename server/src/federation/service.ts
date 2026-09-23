@@ -105,6 +105,114 @@ export async function pending(sql: Sql, actor: Principal, peerId: string): Promi
   }));
 }
 
+export interface SharedBoardStatus {
+  readonly id: string;
+  readonly boardId: string;
+  readonly boardTitle: string;
+  readonly canRead: boolean;
+  readonly canWrite: boolean;
+  readonly remoteBoardId: string | null;
+  readonly pending: number;
+  readonly oldestPendingAt: string | null;
+  readonly nextAttemptAt: string | null;
+  readonly lastError: string | null;
+  readonly lastDeliveredAt: string | null;
+}
+
+export interface PeerStatus {
+  readonly id: string;
+  readonly name: string;
+  readonly createdAt: string;
+  readonly endpointUrl: string | null;
+  /** Whether a push token is stored; the token itself is never returned. */
+  readonly tokenStored: boolean;
+  readonly boards: SharedBoardStatus[];
+}
+
+export interface ReceivedBatch {
+  readonly at: string;
+  readonly peer: string;
+  readonly boardId: string;
+  readonly boardTitle: string | null;
+  readonly updates: number;
+  readonly conflicts: number;
+}
+
+const iso = (value: unknown): string | null => (value ? new Date(value as string).toISOString() : null);
+
+/**
+ * The administrator's view of federation: every peer with its link state,
+ * the boards it shares with the outbox standing per board, and the latest
+ * batches received from peers.
+ */
+export async function federationStatus(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+): Promise<{ peers: PeerStatus[]; received: ReceivedBatch[] }> {
+  requireAdmin(actor, jurisdictionId);
+  const peers = await sql`
+    select id, name, created_at, endpoint_url, outbound_token is not null as token_stored
+    from peers where jurisdiction_id = ${jurisdictionId} order by name, created_at`;
+  const boards = await sql`
+    select a.id, a.peer_id, a.board_id, b.title, a.can_read, a.can_write, a.remote_board_id,
+           count(o.id) filter (where o.delivered_at is null)::integer as pending,
+           min(o.created_at) filter (where o.delivered_at is null) as oldest,
+           min(o.next_attempt_at) filter (where o.delivered_at is null) as next_attempt,
+           (array_agg(o.last_error order by o.next_attempt_at desc)
+              filter (where o.delivered_at is null and o.last_error is not null))[1] as last_error,
+           max(o.delivered_at) as last_delivered
+    from sharing_agreements a
+    join peers p on p.id = a.peer_id
+    join boards b on b.id = a.board_id
+    left join federation_outbox o on o.peer_id = a.peer_id and o.board_id = a.board_id
+    where p.jurisdiction_id = ${jurisdictionId}
+    group by a.id, b.id
+    order by b.title, a.created_at`;
+  // ponytail: walks the jurisdiction's audit index backwards to the newest ten;
+  // add a partial index on this category if audit trails grow into the millions.
+  const received = await sql`
+    select e.created_at, e.subject_id, e.payload, b.title
+    from audit_events e left join boards b on b.id = e.subject_id
+    where e.jurisdiction_id = ${jurisdictionId} and e.category = 'federation.received'
+    order by e.seq desc limit 10`;
+  return {
+    peers: peers.map((p) => ({
+      id: p.id as string,
+      name: p.name as string,
+      createdAt: iso(p.created_at)!,
+      endpointUrl: (p.endpoint_url as string | null) ?? null,
+      tokenStored: p.token_stored as boolean,
+      boards: boards
+        .filter((b) => b.peer_id === p.id)
+        .map((b) => ({
+          id: b.id as string,
+          boardId: b.board_id as string,
+          boardTitle: b.title as string,
+          canRead: b.can_read as boolean,
+          canWrite: b.can_write as boolean,
+          remoteBoardId: (b.remote_board_id as string | null) ?? null,
+          pending: b.pending as number,
+          oldestPendingAt: iso(b.oldest),
+          nextAttemptAt: iso(b.next_attempt),
+          lastError: (b.last_error as string | null) ?? null,
+          lastDeliveredAt: iso(b.last_delivered),
+        })),
+    })),
+    received: received.map((r) => {
+      const payload = r.payload as { peer?: string; updates?: number; conflicts?: number };
+      return {
+        at: iso(r.created_at)!,
+        peer: payload.peer ?? "",
+        boardId: r.subject_id as string,
+        boardTitle: (r.title as string | null) ?? null,
+        updates: Number(payload.updates ?? 0),
+        conflicts: Number(payload.conflicts ?? 0),
+      };
+    }),
+  };
+}
+
 /** Mark outbox entries delivered. Called by the delivery worker after a peer accepts a batch. */
 export async function markDelivered(sql: Sql, ids: readonly string[]): Promise<void> {
   if (ids.length === 0) return;
