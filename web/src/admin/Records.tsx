@@ -6,9 +6,9 @@ import { ErrorNote, Loading } from "../app/screens/parts.js";
 import { DATA_CLASS_LABELS, saveFile } from "./labels.js";
 
 /**
- * Records retention per data class and the audit trail export. Nothing is
- * purged until a period is set; the audit trail itself is never purged and
- * leaves only by export.
+ * Records retention per data class, the audit trail export and the
+ * jurisdiction export. Nothing is purged until a period is set; the audit
+ * trail itself is never purged and leaves only by export.
  */
 export function Records(props: { client: ApiClient; jurisdictionId: string }) {
   const policies = useAsync(() => props.client.getRetention(props.jurisdictionId), [props.jurisdictionId]);
@@ -65,6 +65,10 @@ export function Records(props: { client: ApiClient; jurisdictionId: string }) {
     saveFile(new Blob([JSON.stringify(pages, null, 2)], { type: "application/json" }), "audit-export.json");
     return `Audit trail downloaded as signed JSON (${pages.length} ${pages.length === 1 ? "page" : "pages"}).`;
   });
+  const exportJurisdiction = () => run(async () => {
+    saveFile(await props.client.exportJurisdiction(props.jurisdictionId), "jurisdiction-export.tar.gz");
+    return "Jurisdiction export downloaded.";
+  });
 
   return (
     <div style={{ display: "grid", gap: 14, minWidth: 0 }}>
@@ -102,6 +106,13 @@ export function Records(props: { client: ApiClient; jurisdictionId: string }) {
             <Button disabled={busy} onClick={() => void exportCsv()}>Download audit CSV</Button>
             <Button disabled={busy} onClick={() => void exportSigned()}>Download signed JSON</Button>
           </span>
+        </div>
+      </Panel>
+      <Panel title="Jurisdiction export">
+        <p className="d21-muted">One .tar.gz archive. Its export.json holds boards and records, sitreps, lifelines, incidents, IAPs, AARs, resource requests, tasks, assessments and file details; its files folder holds each stored file, named by its SHA-256.</p>
+        <div className="d21-toolbar">
+          <span className="d21-muted">It holds only what your account can read in this jurisdiction.</span>
+          <Button disabled={busy} onClick={() => void exportJurisdiction()}>Export jurisdiction</Button>
         </div>
       </Panel>
     </div>

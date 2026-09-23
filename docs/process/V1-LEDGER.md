@@ -1473,3 +1473,57 @@ tagging remain separately gated as section 1 of the roster states.
   path's peer and queues for every reader of the board; the guide describes
   that behaviour. The incident exclusion has no dedicated test.
 - **Rollback:** revert the commit; 0115 adds a function and an index.
+
+## V1 W3.9: export and import
+
+- **Jurisdiction export.** `GET /api/v1/jurisdictions/:jurisdictionId/export`
+  returns a gzip-compressed tar archive. `export.json` keeps the four schema 1
+  keys in the same shape and adds, at `schemaVersion` 2: incidents with areas
+  as GeoJSON, participants and attached boards; every IAP revision with its
+  ICS-204 assignments; AARs, observations and corrective actions; resource
+  requests with costs and state history; tasks with prerequisites; lifeline and
+  ESF assessments with decisions; and file metadata with each file's archive
+  path. `files/<sha256>` holds each distinct file once. The export runs as the
+  requesting admin through `withPerson`, so it holds only what that admin can
+  read; `export.json` is written to a temporary file 500 rows per page inside
+  one transaction, then the archive streams it and each blob, so memory holds
+  one page or one blob and no connection waits on the download. The admin
+  Records tab gains "Export jurisdiction".
+- **Designer import.** An Import tab sends a board template JSON or signed
+  package, an XLSForm workbook or form JSON, and a dashboard template JSON to
+  the existing routes, checking JSON against the shared schema first and
+  showing server refusals in the server's words.
+- **Defaults and deviations.** tar.gz was chosen over ZIP, which needs a
+  dependency or ZIP64 past 4 GiB under a 10 GiB default quota, and over JSON
+  with base64, which grows by a third and cannot be parsed at size. The route
+  now answers `application/gzip` rather than bare JSON; compatibility is the
+  version field and the unchanged v1 keys, and no jurisdiction import exists.
+  "Assessments" means lifeline and ESF assessments; damage assessments are not
+  included. A workbook the reader cannot open now answers 400 with the reason
+  instead of 500. Ownership deviations: one shared `BlobStore` in `app.ts`,
+  `server/src/forms/routes.ts`, one line in `TemplatesSurface.tsx`, and the
+  export line in `docs/SECURITY-CONTINUITY.md`. No dashboard-template import
+  route was needed.
+- **Integration fix: signed packages on a deployed server.** `main.ts` built
+  the app without trusted publisher keys and no setting supplied them, so a
+  deployed server refused every signed template package. `buildApp` now reads
+  `OPENEOC_TRUSTED_TEMPLATE_KEYS`, a path to a PEM bundle of publisher public
+  keys; unset trusts none, and a set path holding no key stops startup rather
+  than silently trusting none. The board suite now supplies its signer key
+  through that file, so its signed-import tests run the deployed path.
+  `deploy/README.md` and `docs/guides/DESIGNER.md` document it.
+- **Schema, contract, dependencies:** none.
+- **Verification.** In the lane: 11 server files 82 of 82; designer,
+  templates-surface and client 46 of 46; admin, designer and the new
+  export-import browser walks 4 of 4. The export tests prove every section
+  present, file bytes matching their hash, a second jurisdiction absent both
+  ways with 403 across jurisdictions, and the archive unpacking with the
+  system `tar`. After rebasing onto W3.4, W3.10 and W3.11, with the key
+  setting: boards, export, forms, board-authoring, dashboards, files, admin,
+  api-docs, ipaws, the three browser walks, every web test and the shared
+  suite passed 666 of 666. TypeScript and ESLint clean. Link checker 71 files.
+- **Evidence level:** unit, real-database integration, browser and document.
+- **Deferred:** the admin screen holds the archive in browser memory before
+  saving, and the guide sends very large jurisdictions to `curl -o`. The export
+  is one READ COMMITTED transaction, not one snapshot, which the guide states.
+- **Rollback:** revert the commit.

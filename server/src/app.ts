@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import websocket from "@fastify/websocket";
 import { z } from "zod";
@@ -154,6 +155,19 @@ export function trustProxyFromEnv(value = process.env.OPENEOC_TRUST_PROXY ?? "")
   const v = value.trim();
   if (v === "" || v === "false") return false;
   return v === "true" ? true : v;
+}
+
+/**
+ * Public keys of the template publishers this instance trusts, read from the
+ * PEM bundle file OPENEOC_TRUSTED_TEMPLATE_KEYS names. Unset trusts none, so a
+ * signed package is refused; a set path with no key in it is a mistake and
+ * stops startup rather than silently trusting none.
+ */
+export function trustedTemplateKeysFromEnv(path = process.env.OPENEOC_TRUSTED_TEMPLATE_KEYS): string[] {
+  if (!path) return [];
+  const keys = readFileSync(path, "utf8").match(/-----BEGIN PUBLIC KEY-----[\s\S]+?-----END PUBLIC KEY-----/g);
+  if (!keys) throw new Error(`OPENEOC_TRUSTED_TEMPLATE_KEYS names ${path}, which holds no PEM public key`);
+  return keys;
 }
 
 export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstance {
@@ -455,7 +469,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   adminRoutes(app, sql, authenticate);
 
   boardRoutes(app, sql, authenticate, {
-    trustedTemplateKeys: options.trustedTemplateKeys ?? [],
+    trustedTemplateKeys: options.trustedTemplateKeys ?? trustedTemplateKeysFromEnv(),
   });
   auditRoutes(app, sql, authenticate);
   capRoutes(app, sql, authenticate);
@@ -486,13 +500,9 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   notifyRoutes(app, sql, authenticate);
   messagingRoutes(app, sql, authenticate);
   geoRoutes(app, sql, authenticate);
-  exportRoutes(app, sql, authenticate);
-  fileRoutes(
-    app,
-    sql,
-    new BlobStore(process.env.OPENEOC_DATA_DIR ?? "./data/blobs"),
-    authenticate,
-  );
+  const blobs = new BlobStore(process.env.OPENEOC_DATA_DIR ?? "./data/blobs");
+  exportRoutes(app, sql, blobs, authenticate);
+  fileRoutes(app, sql, blobs, authenticate);
   const hub = new BoardSyncHub(sql);
   app.addHook("onClose", () => { hub.close(); });
   registerSyncRoutes(app, sql, hub);

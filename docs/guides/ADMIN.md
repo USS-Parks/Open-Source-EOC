@@ -35,7 +35,7 @@ screen shows. The screen acts on the jurisdiction selected in the console.
 | People | Create accounts, add existing accounts, change roles, disable sign-in, reset two-step sign-in, remove people from the jurisdiction |
 | Positions | Add positions; assign, reassign and revoke their holders |
 | Guest access | Grant and revoke time-boxed read access for mutual-aid accounts |
-| Records | Set retention periods; download the audit trail |
+| Records | Set retention periods; download the audit trail; export the jurisdiction |
 | Deployment | Show which optional integrations are enabled; provision a jurisdiction (instance administrators) |
 
 A change to a role, a membership, the disabled flag or a guest grant applies to
@@ -296,3 +296,46 @@ Forwarding starts with events written after the sink first runs; use the export
 for earlier history. A failed send is retried on the next run, so after a
 failure an event can arrive twice but is not lost. A long-running database
 transaction holds forwarding back until it finishes.
+
+### Export the jurisdiction
+
+On the **Records** tab, **Export jurisdiction** saves
+`jurisdiction-export.tar.gz`: the jurisdiction's operational record and the
+bytes of its stored files in one gzip-compressed tar archive that any tar tool
+opens. The export runs as the administrator who asks for it, under the same
+row-level security as every other request, so it holds only what that account
+can read in the jurisdiction. Automation reads the same archive from
+`GET /api/v1/jurisdictions/:jurisdictionId/export` with an administrator's
+bearer token. The server streams the archive, but the screen holds all of it in
+the browser before saving, so fetch a jurisdiction with gigabytes of files with
+`curl -o` instead.
+
+The archive holds `export.json` and a `files` folder. `export.json` carries
+`schemaVersion` 2, `exportedAt`, `jurisdiction` and these sections:
+
+| Key | Contents |
+|---|---|
+| `boards` | Every board with its `records`; geometry as GeoJSON |
+| `sitreps` | The situation report archive |
+| `lifelines` | Current lifeline status |
+| `incidents` | Every incident with its operational area revisions (`areas`, geometry as GeoJSON), `participants` and attached `board_ids` |
+| `iaps` | Every IAP revision; the ICS-204 assignments are inside `content` |
+| `aars`, `aarObservations`, `correctiveActions` | After-action reports, their observations and corrective actions |
+| `resourceRequests` | Every request with its `costs` and state `history` |
+| `tasks` | Incident tasks with their `prerequisite_task_ids` |
+| `assessments`, `assessmentDecisions` | Lifeline and ESF assessments and the decisions that select among them |
+| `files` | Metadata of every stored file version, with the `archive_path` of its bytes |
+
+Rows in the sections from `incidents` on keep their database column names.
+Schema 1 exports were plain JSON with only `jurisdiction`, `boards`, `sitreps`
+and `lifelines`; those four keep the same shape in schema 2. Each section is
+read in one transaction but not as one snapshot, so a change committed during
+the export can appear in a later section and not an earlier one.
+
+`files/<sha256>` holds each distinct file content once, named by its SHA-256
+hash, however many versions or names share it. To unpack and check every file:
+
+```sh
+tar -xzf jurisdiction-export.tar.gz
+cd files && for f in *; do echo "$f  $f"; done | sha256sum -c
+```

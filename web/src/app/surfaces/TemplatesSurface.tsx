@@ -166,6 +166,7 @@ export function TemplatesSurface(props: TemplatesSurfaceProps) {
     </div> : null}
     {positions.error ? <ErrorNote message={`Position choices unavailable: ${positions.error}`} /> : null}
     <Designer key={identity} {...(base ? { base } : {})} positions={positions.data ?? []}
+      client={props.client} jurisdictionId={props.jurisdictionId}
       onSave={publish} saveLabel={base ? `Publish and apply version ${base.version + 1}` : "Publish and create board"} />
     {base ? <section className="board-template-versions" aria-label="Version history">
       <h2>Version history</h2>

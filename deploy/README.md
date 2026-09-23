@@ -311,6 +311,7 @@ upgrade path begins with a database whose first receipt is
 | `OPENEOC_LOG_LEVEL` | Log level (default `info`) |
 | `OPENEOC_SLOW_REQUEST_MS` | Slow request threshold in milliseconds (default 1000) |
 | `OPENEOC_METRICS_TOKEN` | Scrape token for `GET /api/v1/metrics`; unset serves 404 |
+| `OPENEOC_TRUSTED_TEMPLATE_KEYS` | Path to a PEM file of template publisher public keys; signed template packages from other publishers are refused, and unset refuses all |
 | `OPENEOC_SCHEDULER_*_MS` | Scheduler intervals; see [Scheduler](#scheduler) |
 | `OPENEOC_TRUST_PROXY` | Reverse proxy addresses or CIDRs whose `X-Forwarded-For` is trusted, or `true`; unset trusts none |
 | `OPENEOC_PRINCIPAL_CACHE_MS` | How long a request principal is cached, in milliseconds (default 5000; `0` turns it off) |

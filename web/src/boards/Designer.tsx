@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import {
   allEnums,
   BoardTemplateSchema,
+  DashboardTemplateSchema,
   FIELD_TYPES,
+  FormDefinitionSchema,
   READ_LEVELS,
   templateDiff,
   WRITE_LEVELS,
@@ -13,6 +15,7 @@ import {
   type FormLayout,
   type ViewDef,
 } from "@openeoc/shared";
+import type { ApiClient } from "../app/api/client.js";
 import { ActionButton, Tabs } from "../design/controls.js";
 import { Button, EnumSelect, Panel, TextField } from "../design/components.js";
 import { BoardView } from "./BoardView.js";
@@ -29,13 +32,19 @@ export interface DesignerPositionOption {
  * here is a structured control over the template model; there is no markup
  * input, no script input, and no escape hatch by construction. Saving
  * produces the next template version; the diff is shown before save.
+ * Given a client and jurisdiction, an Import tab also takes board templates,
+ * forms and dashboard templates from files.
  */
 export function Designer(props: {
   base?: BoardTemplate;
   positions?: readonly DesignerPositionOption[];
   onSave: (template: BoardTemplate) => void | Promise<void>;
   saveLabel?: string;
+  client?: ApiClient;
+  jurisdictionId?: string;
 }) {
+  const importer = props.client && props.jurisdictionId
+    ? { client: props.client, jurisdictionId: props.jurisdictionId } : null;
   const [key, setKey] = useState(props.base?.key ?? "");
   const [title, setTitle] = useState(props.base?.title ?? "");
   const [description, setDescription] = useState(props.base?.description ?? "");
@@ -63,7 +72,7 @@ export function Designer(props: {
   async function save() {
     const parsed = BoardTemplateSchema.safeParse(draft());
     if (!parsed.success) {
-      setError(parsed.error.issues.map((issue) => `${issue.path.join(".") || "board"}: ${issue.message}`).join("; "));
+      setError(describeIssues(parsed.error.issues, "board"));
       setTab("preview");
       return;
     }
@@ -97,7 +106,8 @@ export function Designer(props: {
       <Tabs id="board-designer" label="Board configuration" value={tab} onChange={setTab}
         tabs={[{ id: "fields", label: "Fields" }, { id: "layouts", label: "Layouts" },
           { id: "views", label: "Views" }, { id: "routing", label: "Routing" },
-          { id: "preview", label: "Review & preview" }]} />
+          { id: "preview", label: "Review & preview" },
+          ...(importer ? [{ id: "import", label: "Import" }] : [])]} />
 
       {tab === "fields" ? <Panel title="Fields">
         <ul className="board-designer__field-list">
@@ -134,8 +144,9 @@ export function Designer(props: {
         positions={props.positions ?? []} onChange={setWorkflow} /> : null}
 
       {tab === "preview" ? <DesignerPreview template={parsedDraft.success ? parsedDraft.data : null}
-        error={parsedDraft.success ? null : parsedDraft.error.issues.map((issue) =>
-          `${issue.path.join(".") || "board"}: ${issue.message}`).join("; ")} diff={diff} /> : null}
+        error={parsedDraft.success ? null : describeIssues(parsedDraft.error.issues, "board")} diff={diff} /> : null}
+
+      {tab === "import" && importer ? <DefinitionImport {...importer} /> : null}
 
       {error ? (
         <p role="alert" style={{ color: "var(--eoc-status-critical)" }}>
@@ -682,6 +693,108 @@ function DetailPreview(props: { template: BoardTemplate; record: Record<string, 
     <dl className="board-designer__detail">{section.fields.map((key) => <div key={key}>
       <dt>{fieldMap.get(key)?.label ?? key}</dt><dd>{formatValue(props.record[key])}</dd>
     </div>)}</dl></section>)}</div>;
+}
+
+type ImportKind = "template" | "form" | "dashboard";
+
+/**
+ * Imports from files through the existing routes. JSON is checked against the
+ * shared schema first so a malformed file names its fields; the server's own
+ * refusal (an existing version, missing authority, an unreadable workbook) is
+ * shown as it answers.
+ */
+function DefinitionImport(props: { client: ApiClient; jurisdictionId: string }) {
+  const [imported, setImported] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function pick(kind: ImportKind, input: HTMLInputElement) {
+    const file = input.files?.[0];
+    // Cleared so the same file can be chosen again after it is corrected.
+    input.value = "";
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const line = await importDefinition(props.client, props.jurisdictionId, kind, file);
+      setImported((list) => [...list, line]);
+    } catch (reason) {
+      setError(`${file.name}: ${reason instanceof Error ? reason.message : "the import failed."}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const picker = (kind: ImportKind, label: string, accept: string) =>
+    <label className="board-designer__control"><span>{label}</span>
+      {/* A file input's own minimum width would otherwise overflow its column. */}
+      <input type="file" accept={accept} disabled={busy} style={{ minWidth: 0, width: "100%" }}
+        onChange={(event) => void pick(kind, event.currentTarget)} /></label>;
+  return <Panel title="Import definitions">
+    <div className="board-designer__stack">
+      <p>A board template is its JSON definition or a signed template package. A form is an XLSForm workbook,
+        whose file name becomes the form key, or form definition JSON. A dashboard template is its JSON
+        definition, as its export gives it. Each import adds a version and changes no existing board.</p>
+      <div className="board-designer__grid board-designer__grid--3">
+        {picker("template", "Board template file", ".json,application/json")}
+        {picker("form", "Form file", ".xlsx,.json,application/json")}
+        {picker("dashboard", "Dashboard template file", ".json,application/json")}
+      </div>
+      {busy ? <p role="status">Importing…</p> : null}
+      {error ? <p role="alert" style={{ color: "var(--eoc-status-critical)" }}>{error}</p> : null}
+      {imported.length ? <section>
+        <h4>Imported</h4>
+        <ul aria-label="Imported definitions">
+          {imported.map((line, index) => <li key={index}>{line}</li>)}
+        </ul>
+      </section> : null}
+    </div>
+  </Panel>;
+}
+
+async function importDefinition(client: ApiClient, jurisdictionId: string, kind: ImportKind, file: File): Promise<string> {
+  if (kind === "form" && /\.xlsx$/i.test(file.name)) {
+    const key = file.name.replace(/\.xlsx$/i, "").toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^[^a-z]+/, "");
+    const result = await client.importXlsForm(jurisdictionId, { key, xlsxBase64: await toBase64(file) });
+    return `Form ${result.key}, version ${result.version}`;
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(await file.text());
+  } catch {
+    throw new Error("the file is not valid JSON.");
+  }
+  if (kind === "template" && (raw as { format?: unknown } | null)?.format === "openeoc-templates-v1") {
+    const count = await client.importTemplatePackage(raw as Record<string, unknown>);
+    return `Template package ${file.name}, ${count} new ${count === 1 ? "version" : "versions"}`;
+  }
+  if (kind === "template") {
+    const template = BoardTemplateSchema.safeParse(raw);
+    if (!template.success) throw new Error(describeIssues(template.error.issues, "template"));
+    const result = await client.publishTemplate(template.data);
+    return `Board template ${template.data.title} (${result.key}), version ${result.version}`;
+  }
+  if (kind === "form") {
+    const form = FormDefinitionSchema.safeParse(raw);
+    if (!form.success) throw new Error(describeIssues(form.error.issues, "form"));
+    const result = await client.importForm(jurisdictionId, form.data);
+    return `Form ${form.data.title} (${result.key}), version ${result.version}`;
+  }
+  const dashboard = DashboardTemplateSchema.safeParse(raw);
+  if (!dashboard.success) throw new Error(describeIssues(dashboard.error.issues, "dashboard template"));
+  const result = await client.importDashboardTemplate(dashboard.data);
+  return `Dashboard template ${dashboard.data.title} (${result.key}), version ${result.version}`;
+}
+
+async function toBase64(file: Blob): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+
+function describeIssues(issues: readonly { path: readonly PropertyKey[]; message: string }[], subject: string): string {
+  return issues.map((issue) => `${issue.path.map(String).join(".") || subject}: ${issue.message}`).join("; ");
 }
 
 function Input(props: { label: string; value: string; onChange: (value: string) => void }) {

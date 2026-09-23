@@ -1890,6 +1890,27 @@ export class ApiClient {
   listJicInquiries(jurisdictionId: string, filter: JicListFilter = {}, page: PageOptions = {}): Promise<{ inquiries: JicInquiryListItem[]; nextCursor: string | null }> {
     return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/jic/inquiries${jicListQuery(filter, page)}`);
   }
+
+  // ---- Jurisdiction export and definition import ----
+
+  /** The jurisdiction's operational record and file bytes as one `.tar.gz` archive. */
+  exportJurisdiction(jurisdictionId: string): Promise<Blob> {
+    return this.requestBlob(`/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/export`);
+  }
+  /** A signed board template package; resolves with how many template versions were new. */
+  async importTemplatePackage(pkg: Record<string, unknown>): Promise<number> {
+    return (await this.request<{ imported: number }>("POST", "/api/v1/templates/import", pkg)).imported;
+  }
+  importForm(jurisdictionId: string, form: FormDefinition): Promise<{ key: string; version: number }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/forms`,
+      form as unknown as Record<string, unknown>);
+  }
+  importXlsForm(jurisdictionId: string, input: { key: string; xlsxBase64: string }): Promise<{ key: string; version: number }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/forms/import`, input);
+  }
+  importDashboardTemplate(template: DashboardTemplate): Promise<{ key: string; version: number }> {
+    return this.request("POST", "/api/v1/dashboard-templates", template as unknown as Record<string, unknown>);
+  }
 }
 
 // ---- JIC list types ----

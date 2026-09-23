@@ -49,5 +49,32 @@ Signed template packages can distribute an approved board definition to other
 instances. Trust of the signing key and local import authority are still
 required; package exchange does not share operational records.
 
+## Import definitions
+
+The designer's **Import** tab takes definitions from files. Open it from
+**Templates**, through **Create template** or **Customize**; it needs an
+instance administrator who also administers the selected jurisdiction.
+
+- **Board template file**: a template's JSON definition, published under its
+  key when its `version` is the next one for that key, or a signed template
+  package (`"format": "openeoc-templates-v1"`). A package is accepted only
+  when the server trusts its publisher key, and versions the instance already
+  holds are skipped. The server trusts the public keys in the PEM file that
+  `OPENEOC_TRUSTED_TEMPLATE_KEYS` names; with it unset, every signed package
+  is refused.
+- **Form file**: an XLSForm workbook (`.xlsx`) or form definition JSON. A
+  workbook is stored under a key made from its file name, in lower case with
+  every other character turned into an underscore, as version 1:
+  `Road Closure.xlsx` becomes `road_closure`. JSON carries its own key and
+  version. Forms belong to the selected jurisdiction.
+- **Dashboard template file**: the JSON definition that
+  `GET /api/v1/dashboard-templates/:key/:version/export` returns.
+
+JSON is checked before it is sent, and a malformed file is reported with the
+fields at fault. A refusal from the server, such as a version that already
+exists or an unreadable workbook, is shown in the server's words. Each import
+is listed under **Imported**. An import adds a version and changes no existing
+board.
+
 For the timed walkthrough, see
 [the designer usability script](../process/DESIGNER-USABILITY-SCRIPT.md).

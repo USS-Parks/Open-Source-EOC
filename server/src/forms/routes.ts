@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { FormDefinitionSchema, type AnswerRecord } from "@openeoc/shared";
+import { FormDefinitionSchema, type AnswerRecord, type FormDefinition } from "@openeoc/shared";
+import { AuthError } from "../auth/service.js";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import { importXlsFormWorkbook } from "./xlsx-import.js";
@@ -33,12 +34,18 @@ export function formRoutes(
       const { jurisdictionId } = req.params as { jurisdictionId: string };
       const body = ImportBody.parse(req.body);
       const buffer = Buffer.from(body.xlsxBase64, "base64");
-      const def = await importXlsFormWorkbook(buffer, {
-        key: body.key,
-        ...(body.version !== undefined ? { version: body.version } : {}),
-        ...(body.title !== undefined ? { title: body.title } : {}),
-        ...(body.boardTemplate !== undefined ? { boardTemplate: body.boardTemplate } : {}),
-      });
+      let def: FormDefinition;
+      try {
+        def = importXlsFormWorkbook(buffer, {
+          key: body.key,
+          ...(body.version !== undefined ? { version: body.version } : {}),
+          ...(body.title !== undefined ? { title: body.title } : {}),
+          ...(body.boardTemplate !== undefined ? { boardTemplate: body.boardTemplate } : {}),
+        });
+      } catch (err) {
+        // A workbook the reader or the XLSForm rules refuse is the caller's to fix.
+        throw new AuthError(400, err instanceof Error ? err.message : "unreadable XLSForm workbook");
+      }
       const result = await withPerson(sql, req.principal.person.id, (tx) =>
         storeForm(tx, req.principal, jurisdictionId, def),
       );

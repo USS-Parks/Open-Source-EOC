@@ -98,8 +98,10 @@ grant, proven in the security suite. Attribution is total (INV-2).
   timestamp and must be retained together. A database-only restore leaves file
   metadata pointing at missing bytes.
 - Portability: `GET /api/v1/jurisdictions/:jurisdictionId/export` (admin) pulls
-  the jurisdiction's operational record as plain JSON, a no-lock-in guarantee
-  and a migration building block (`server/src/export/service.ts`).
+  the jurisdiction's operational record as JSON and its stored file bytes in
+  one `.tar.gz`, a no-lock-in guarantee and a migration building block
+  (`server/src/export/service.ts`; format in the
+  [administrator guide](guides/ADMIN.md#export-the-jurisdiction)).
 
 ## Configuration knobs
 

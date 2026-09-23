@@ -93,6 +93,17 @@ describe("importing a real XLSForm workbook", () => {
     });
     expect(denied.statusCode).toBe(403);
   });
+
+  it("refuses an unreadable workbook with the reason, not a server error", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/forms/import`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { key: "broken", xlsxBase64: Buffer.from("not a workbook").toString("base64") },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/^not a readable \.xlsx workbook/);
+  });
 });
 
 describe("submitting a capture", () => {

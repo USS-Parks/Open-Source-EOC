@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { STANDARD_TEMPLATES } from "@openeoc/shared";
@@ -20,6 +23,8 @@ let viewerId: string;
 let guestId: string;
 let outsiderId: string;
 let boardId: string;
+let keyDir: string;
+let priorKeys: string | undefined;
 
 beforeAll(async () => {
   ({ admin, runtime } = await freshDb());
@@ -43,10 +48,20 @@ beforeAll(async () => {
   });
   await admin`update persons set is_instance_admin = true
     where id = ${seed.adminId}`;
-  app = buildApp(runtime, { oidc: null, trustedTemplateKeys: [signer.publicKeyPem] });
+  // The publisher key reaches the app the way a deployment supplies it: a
+  // PEM bundle file named by OPENEOC_TRUSTED_TEMPLATE_KEYS.
+  keyDir = mkdtempSync(join(tmpdir(), "openeoc-keys-"));
+  writeFileSync(join(keyDir, "publishers.pem"), `${signer.publicKeyPem}
+`);
+  priorKeys = process.env.OPENEOC_TRUSTED_TEMPLATE_KEYS;
+  process.env.OPENEOC_TRUSTED_TEMPLATE_KEYS = join(keyDir, "publishers.pem");
+  app = buildApp(runtime, { oidc: null });
 });
 
 afterAll(async () => {
+  if (priorKeys === undefined) delete process.env.OPENEOC_TRUSTED_TEMPLATE_KEYS;
+  else process.env.OPENEOC_TRUSTED_TEMPLATE_KEYS = priorKeys;
+  rmSync(keyDir, { recursive: true, force: true });
   await app.close();
   await runtime.end();
   await admin.end();

@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { allEnums, BoardTemplateSchema, STANDARD_TEMPLATES, type BoardTemplate } from "@openeoc/shared";
+import {
+  allEnums,
+  BoardTemplateSchema,
+  STANDARD_DASHBOARDS,
+  STANDARD_TEMPLATES,
+  type BoardTemplate,
+} from "@openeoc/shared";
+import { ApiError, type ApiClient } from "../../app/api/client.js";
 import { Designer } from "../Designer.js";
 
 afterEach(cleanup);
@@ -203,5 +210,72 @@ describe("no-code designer (INV-6)", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Review & preview" }));
     fireEvent.click(screen.getByRole("button", { name: `Publish version ${base.version + 1}` }));
     expect((await screen.findByRole("alert")).textContent).toContain("Publication denied");
+  });
+});
+
+describe("definition import from the designer", () => {
+  function importClient(overrides: Partial<Record<keyof ApiClient, unknown>> = {}) {
+    return {
+      publishTemplate: vi.fn().mockResolvedValue({ key: "generator_log", version: 1 }),
+      importTemplatePackage: vi.fn().mockResolvedValue(2),
+      importForm: vi.fn().mockResolvedValue({ key: "damage_intake", version: 1 }),
+      importXlsForm: vi.fn().mockResolvedValue({ key: "road_closure_2", version: 1 }),
+      importDashboardTemplate: vi.fn().mockResolvedValue({ key: "ops_overview", version: 1 }),
+      ...overrides,
+    } as unknown as ApiClient;
+  }
+  function choose(label: string, file: File) {
+    fireEvent.change(screen.getByLabelText(label), { target: { files: [file] } });
+  }
+  const json = (name: string, value: unknown) => new File([JSON.stringify(value)], name, { type: "application/json" });
+  const openImport = (client: ApiClient) => {
+    render(<Designer onSave={() => undefined} client={client} jurisdictionId="j-1" />);
+    fireEvent.click(screen.getByRole("tab", { name: "Import" }));
+  };
+
+  it("imports a board template, a signed package, a form and a dashboard template and lists them", async () => {
+    const client = importClient();
+    openImport(client);
+    const template = { ...STANDARD_TEMPLATES.find((item) => item.key === "shelters")!, key: "generator_log", version: 1 };
+    choose("Board template file", json("generator-log.json", template));
+    await screen.findByText("Board template Shelters (generator_log), version 1");
+    expect(client.publishTemplate).toHaveBeenCalledWith(BoardTemplateSchema.parse(template));
+
+    const pkg = { format: "openeoc-templates-v1", publisher: "Region", templates: [template] };
+    choose("Board template file", json("region.json", pkg));
+    await screen.findByText("Template package region.json, 2 new versions");
+    expect(client.importTemplatePackage).toHaveBeenCalledWith(pkg);
+
+    const workbook = new File([new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0xff])], "Road Closure 2.xlsx");
+    choose("Form file", workbook);
+    await screen.findByText("Form road_closure_2, version 1");
+    expect(client.importXlsForm).toHaveBeenCalledWith("j-1", { key: "road_closure_2", xlsxBase64: "UEsDBP8=" });
+
+    const form = { key: "damage_intake", version: 1, title: "Damage intake",
+      nodes: [{ kind: "field", name: "summary", type: "text", label: "Summary" }] };
+    choose("Form file", json("damage.json", form));
+    await screen.findByText("Form Damage intake (damage_intake), version 1");
+
+    const dashboard = { ...STANDARD_DASHBOARDS[0]!, key: "ops_overview", version: 1 };
+    choose("Dashboard template file", json("ops.json", dashboard));
+    await screen.findByText(`Dashboard template ${dashboard.title} (ops_overview), version 1`);
+    expect(screen.getByRole("list", { name: "Imported definitions" }).children).toHaveLength(5);
+  });
+
+  it("names the fields of a malformed file and shows the server's refusal plainly", async () => {
+    const client = importClient({
+      importDashboardTemplate: vi.fn().mockRejectedValue(new ApiError(409, "dashboard template version already exists")),
+    });
+    openImport(client);
+    choose("Board template file", json("broken.json", { key: "Bad Key", version: 1 }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/^broken\.json: .*title/);
+    expect(client.publishTemplate).not.toHaveBeenCalled();
+
+    choose("Form file", new File(["{ not json"], "form.json"));
+    expect((await screen.findByRole("alert")).textContent).toBe("form.json: the file is not valid JSON.");
+
+    choose("Dashboard template file", json("ops.json", STANDARD_DASHBOARDS[0]));
+    expect((await screen.findByText(/already exists/)).textContent)
+      .toBe("ops.json: dashboard template version already exists");
   });
 });
