@@ -405,6 +405,7 @@ export interface AarAnalyticsResponse {
   readonly analytics: AarAnalytics;
 }
 export interface ReunificationAnswer {
+  readonly id: string;
   readonly tag: string;
   readonly kind: string;
   readonly label: string;
@@ -1970,6 +1971,63 @@ export class ApiClient {
   deleteRecord(boardId: string, recordId: string): Promise<{ ok: true }> {
     return this.request("DELETE", `/api/v1/boards/${encodeURIComponent(boardId)}/records/${encodeURIComponent(recordId)}`);
   }
+
+  // ---- Collaboration channels (optional integration) ----
+  collabStatus(jurisdictionId: string): Promise<CollabStatus> {
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/collab`);
+  }
+  /** The token is stored encrypted on the server and never returned; omit it to keep the stored one. */
+  configureCollab(jurisdictionId: string, input: CollabBackendInput): Promise<CollabStatus> {
+    return this.request("PUT", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/collab/backend`, { ...input });
+  }
+  provisionCollab(incidentId: string): Promise<{ degraded: boolean; backend: string | null; channels: number }> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/collab/provision`);
+  }
+  syncCollab(incidentId: string): Promise<{ degraded: boolean; added: number; removed: number }> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/collab/sync`);
+  }
+  announceCollab(incidentId: string, input: { section?: string; text: string }): Promise<{ degraded: boolean }> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/collab/announce`, { ...input });
+  }
+  archiveCollab(incidentId: string): Promise<{ archived: boolean }> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/collab/archive`);
+  }
+
+  // ---- Meetings and briefings (optional integration) ----
+  meetingConfig(jurisdictionId: string): Promise<MeetingConfig> {
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/meetings/config`);
+  }
+  /** The secret is stored encrypted on the server and never returned; omit it to keep the stored one. */
+  configureMeetings(jurisdictionId: string, input: MeetingConfigInput): Promise<MeetingConfig> {
+    return this.request("PUT", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/meetings/config`, { ...input });
+  }
+  async listMeetingBridges(incidentId: string): Promise<MeetingBridge[]> {
+    return (await this.request<{ meetings: MeetingBridge[] }>("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/meetings`)).meetings;
+  }
+  /** Opens the incident's bridge, or a section's; later calls answer with the same room. */
+  openMeetingBridge(incidentId: string, section?: string): Promise<MeetingBridge> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/meetings`, section ? { section } : {});
+  }
+  async listBriefings(incidentId: string): Promise<Briefing[]> {
+    return (await this.request<{ briefings: Briefing[] }>("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/briefings`)).briefings;
+  }
+  scheduleBriefing(incidentId: string, input: { title: string; scheduledAt: string; section?: string }): Promise<{ id: string }> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/briefings`, { ...input });
+  }
+
+  // ---- Facility status requests and tracked object detail (optional integrations) ----
+  /** Asks every facility, or every facility of one kind, to report now; its next status report answers. */
+  launchStatusQuery(jurisdictionId: string, input: { prompt: string; kind?: string; dueInSeconds?: number }): Promise<{ id: string; targets: number }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/status-queries`, { ...input });
+  }
+  statusQuery(id: string): Promise<StatusQuery> {
+    return this.request("GET", `/api/v1/status-queries/${encodeURIComponent(id)}`);
+  }
+  /** The object with one page of its custody chain, oldest first. */
+  trackedObject(id: string, page: PageOptions = {}): Promise<TrackedObject> {
+    const params = pageParams(page);
+    return this.request("GET", `/api/v1/tracked-objects/${encodeURIComponent(id)}${params.size ? `?${params}` : ""}`);
+  }
 }
 
 // ---- Notification channel types ----
@@ -2117,4 +2175,71 @@ export interface RetentionPolicy {
 export interface SignedAuditPage {
   readonly page: { readonly nextCursor: string | null } & Readonly<Record<string, unknown>>;
   readonly signature: Readonly<Record<string, unknown>>;
+}
+
+// ---- Optional integration types ----
+
+export interface CollabStatus {
+  /** A token is stored; the token itself is never returned. */
+  readonly configured: boolean;
+  readonly enabled: boolean;
+  readonly kind: string | null;
+  readonly baseUrl: string | null;
+}
+export interface CollabBackendInput {
+  readonly kind: "mattermost" | "matrix";
+  readonly baseUrl: string;
+  readonly token?: string;
+  readonly homeserver?: string;
+  readonly enabled: boolean;
+}
+export interface MeetingConfig {
+  readonly configured: boolean;
+  readonly enabled: boolean;
+  readonly baseUrl: string | null;
+  readonly appId: string | null;
+  /** A token secret is stored; the secret itself is never returned. */
+  readonly authenticated: boolean;
+}
+export interface MeetingConfigInput {
+  readonly baseUrl: string;
+  readonly appId?: string;
+  readonly secret?: string;
+  readonly enabled: boolean;
+}
+export interface MeetingBridge {
+  readonly room: string;
+  readonly section: string;
+  readonly url: string;
+}
+export interface Briefing {
+  readonly id: string;
+  readonly title: string;
+  readonly section: string | null;
+  readonly scheduledAt: string;
+  readonly notifiedAt: string | null;
+}
+export interface StatusQuery {
+  readonly id: string;
+  readonly prompt: string;
+  readonly total: number;
+  readonly responded: number;
+  readonly complete: boolean;
+  readonly outstanding: ReadonlyArray<{ readonly facilityId: string; readonly name: string }>;
+}
+export interface TrackedObject {
+  readonly id: string;
+  readonly tag: string;
+  readonly kind: string;
+  readonly label: string;
+  readonly restrictedRedacted: boolean;
+  readonly chain: ReadonlyArray<{
+    readonly custodyState: string;
+    readonly station: string | null;
+    readonly agency: string | null;
+    readonly location: string | null;
+    readonly note: string | null;
+    readonly occurredAt: string;
+  }>;
+  readonly nextCursor: string | null;
 }

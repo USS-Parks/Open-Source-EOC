@@ -141,6 +141,8 @@ describe("a continuous custody chain across agency handoffs", () => {
       latest: { custodyState: string; location: string | null } | null;
     }>;
     expect(answers).toHaveLength(1);
+    // The id opens the custody chain from the reunification list.
+    expect((answers[0] as { id?: string }).id).toBe(objectId);
     expect(answers[0]!.latest?.custodyState).toBe("discharged");
     expect(answers[0]!.latest?.location).toBe("released to family");
     // No restricted data anywhere in the reunification payload.

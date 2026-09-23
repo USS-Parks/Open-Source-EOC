@@ -31,21 +31,6 @@ const AWAITING_SCREEN: Readonly<Record<string, string>> = {
   "PUT /api/v1/jurisdictions/:jurisdictionId/messaging-settings": "no screen yet for an engine that exists",
   "PUT /api/v1/jurisdictions/:jurisdictionId/notification-allowlist": "no screen yet for an engine that exists",
   "POST /api/v1/boards/:boardId/local-fields": "local board fields have no designer control yet",
-  "GET /api/v1/incidents/:incidentId/briefings": "optional integration with no screen yet",
-  "GET /api/v1/incidents/:incidentId/meetings": "optional integration with no screen yet",
-  "GET /api/v1/jurisdictions/:jurisdictionId/collab": "optional integration with no screen yet",
-  "GET /api/v1/jurisdictions/:jurisdictionId/meetings/config": "optional integration with no screen yet",
-  "GET /api/v1/status-queries/:id": "optional integration with no screen yet",
-  "GET /api/v1/tracked-objects/:id": "optional integration with no screen yet",
-  "POST /api/v1/incidents/:incidentId/briefings": "optional integration with no screen yet",
-  "POST /api/v1/incidents/:incidentId/collab/announce": "optional integration with no screen yet",
-  "POST /api/v1/incidents/:incidentId/collab/archive": "optional integration with no screen yet",
-  "POST /api/v1/incidents/:incidentId/collab/provision": "optional integration with no screen yet",
-  "POST /api/v1/incidents/:incidentId/collab/sync": "optional integration with no screen yet",
-  "POST /api/v1/incidents/:incidentId/meetings": "optional integration with no screen yet",
-  "POST /api/v1/jurisdictions/:jurisdictionId/status-queries": "optional integration with no screen yet",
-  "PUT /api/v1/jurisdictions/:jurisdictionId/collab/backend": "optional integration with no screen yet",
-  "PUT /api/v1/jurisdictions/:jurisdictionId/meetings/config": "optional integration with no screen yet",
 };
 
 interface CallSite {

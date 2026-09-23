@@ -167,6 +167,10 @@
 .eoc-field-inventory li > div { display: grid; gap: 2px; }
 .eoc-field-inventory li span,
 .eoc-field-inventory li small { color: var(--eoc-text-muted); }
+.eoc-field-item-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+.eoc-field-chain { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--eoc-border); border-radius: 4px; }
+.eoc-field-chain > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.eoc-field-chain h3 { margin: 4px 0 0; font-size: 16px; overflow-wrap: anywhere; }
 
 @media (max-width: 680px) {
   .eoc-field-workspace { padding: 10px 10px 24px; }

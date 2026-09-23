@@ -68,6 +68,16 @@ Under **Report status**, choose the facility and set:
 A report becomes the facility's current status and answers any open status
 request for that facility.
 
+## Ask facilities to report
+
+Under **Status requests**, write the request and choose whom to ask: every
+facility, or every facility of one type. **Send status request** tells you how
+many facilities were asked. Each request sent from the screen then shows how
+many have reported, or **All reported**, and names the facilities still
+outstanding. A facility answers with its next status report, from the screen
+or the API. **Refresh**, or any report, reads the answers again. Members and
+administrators send requests.
+
 ## Hospital bed availability (HAVE)
 
 Each hospital shows its operating status, freshness, EMS traffic, the time of
@@ -98,7 +108,7 @@ map.
 ## Limits
 
 - Registry entries cannot be edited or removed from the screen or the API.
-- "Report now" status requests and their response tracking are available
-  through the API only.
+- The server keeps no list of status requests, so the screen follows only the
+  requests sent from it until the page is left.
 - The screen shows the latest report for each facility; the server keeps the
   earlier reports.

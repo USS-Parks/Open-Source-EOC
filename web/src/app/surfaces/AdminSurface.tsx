@@ -57,7 +57,8 @@ export function AdminSurface(props: {
           {tab === "guests" ? <Guests client={props.client} jurisdictionId={props.jurisdictionId} boards={props.boards} /> : null}
           {tab === "records" ? <Records client={props.client} jurisdictionId={props.jurisdictionId} /> : null}
           {tab === "channels" ? <Channels client={props.client} jurisdictionId={props.jurisdictionId} /> : null}
-          {tab === "deployment" ? <Deployment client={props.client} isInstanceAdmin={props.isInstanceAdmin} /> : null}
+          {tab === "deployment" ? <Deployment client={props.client} isInstanceAdmin={props.isInstanceAdmin}
+            {...(props.isAdmin ? { jurisdictionId: props.jurisdictionId } : {})} /> : null}
         </div>
       </div>
     </Scroll>

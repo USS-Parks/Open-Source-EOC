@@ -3,7 +3,7 @@ import { dictionaryValues } from "@openeoc/shared";
 import { ActionButton, Tabs } from "../../design/controls.js";
 import { ConditionBadge, EmptyState, ErrorState, LoadingState } from "../../design/feedback.js";
 import { Icon } from "../../design/icons/Icon.js";
-import type { ApiClient, ReunificationAnswer } from "../api/client.js";
+import type { ApiClient, ReunificationAnswer, TrackedObject } from "../api/client.js";
 import { useAsync } from "../data/hooks.js";
 import { Scroll, SurfaceHeader } from "../screens/parts.js";
 import "../../field/field-workspace.css";
@@ -63,6 +63,7 @@ export function TrackingSurface(props: { client: ApiClient; jurisdictionId: stri
   const [results, setResults] = useState<ReunificationAnswer[] | null>(null);
   const [searchState, setSearchState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [busy, setBusy] = useState(false);
+  const [chainId, setChainId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const recent = useAsync(
@@ -208,6 +209,7 @@ export function TrackingSurface(props: { client: ApiClient; jurisdictionId: stri
         <header><div><span className="eoc-field-eyebrow">Public-safe whereabouts</span><h2 id="tracking-find-title">Find and continue custody</h2></div></header>
         <form className="eoc-field-search" onSubmit={search}><label>Name, field-safe label, or #tag<input value={query} onChange={(event) => setQuery(event.target.value)} /></label>
           <ActionButton kind="secondary" type="submit" loading={busy} disabled={!online}>Search</ActionButton></form>
+        {chainId ? <CustodyChain key={chainId} client={props.client} objectId={chainId} onClose={() => setChainId(null)} /> : null}
         {showingSearch && searchState === "loading" ? <LoadingState label="Searching tracked objects…" />
           : showingSearch && searchState === "error" ? <ErrorState title="Tracking search unavailable" message={error ?? "Tracking search failed."} />
             : !showingSearch && recent.loading && !recent.data ? <LoadingState label="Loading tracked objects…" />
@@ -216,7 +218,9 @@ export function TrackingSurface(props: { client: ApiClient; jurisdictionId: stri
                   : <ul className="eoc-field-inventory" aria-label={results ? "Tracking search results" : "Recent tracked objects"}>{list.map((item) => <li key={item.tag}>
             <ConditionBadge state={item.latest?.custodyState === "reunified" ? "normal" : "watch"} label={item.latest ? human(item.latest.custodyState) : "Unknown"} />
             <div><strong>{item.label}</strong><span>{human(item.kind)} · #{item.tag}</span><small>{item.latest?.station ?? item.latest?.location ?? "Location not reported"}</small></div>
-            <ActionButton kind="quiet" onClick={() => { setScanTag(item.tag); setTab("scan"); }}>Continue custody</ActionButton>
+            <p className="eoc-field-item-actions">
+              <ActionButton kind="quiet" onClick={() => setChainId(item.id)}>Custody chain</ActionButton>
+              <ActionButton kind="quiet" onClick={() => { setScanTag(item.tag); setTab("scan"); }}>Continue custody</ActionButton></p>
           </li>)}</ul>}
       </> : null}</section>
 
@@ -224,4 +228,42 @@ export function TrackingSurface(props: { client: ApiClient; jurisdictionId: stri
       {error ? <p className="eoc-field-error" role="alert">{error}</p> : null}
     </section>
   </Scroll>;
+}
+
+/** One object's custody chain, oldest first, a page at a time. Restricted details stay off this screen. */
+function CustodyChain(props: { client: ApiClient; objectId: string; onClose: () => void }) {
+  const first = useAsync(() => props.client.trackedObject(props.objectId), [props.client, props.objectId]);
+  const [more, setMore] = useState<{ chain: TrackedObject["chain"]; next: string | null } | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<string | null>(null);
+  const object = first.data;
+  const chain = [...(object?.chain ?? []), ...(more?.chain ?? [])];
+  const next = more ? more.next : object?.nextCursor ?? null;
+  const loadMore = async () => {
+    if (!next) return;
+    setLoadingMore(true); setMoreError(null);
+    try {
+      const page = await props.client.trackedObject(props.objectId, { cursor: next });
+      setMore({ chain: [...(more?.chain ?? []), ...page.chain], next: page.nextCursor });
+    } catch (reason) {
+      setMoreError(reason instanceof Error ? reason.message : "The next page could not be read.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+  return <section className="eoc-field-chain" aria-label={object ? `Custody chain for ${object.label}` : "Custody chain"}>
+    <header><div><span className="eoc-field-eyebrow">Custody chain</span>
+      <h3>{object ? `${object.label} · #${object.tag}` : "Loading…"}</h3></div>
+      <ActionButton kind="quiet" onClick={props.onClose}>Close chain</ActionButton></header>
+    {first.error ? <ErrorState title="Custody chain unavailable" message={first.error} />
+      : !object ? <LoadingState label="Loading the custody chain…" />
+        : <ol className="eoc-field-inventory" aria-label="Custody events, oldest first">{chain.map((event, index) => <li key={index}>
+          <ConditionBadge state={event.custodyState === "reunified" ? "normal" : "watch"} label={human(event.custodyState)} />
+          <div><strong>{new Date(event.occurredAt).toLocaleString()}</strong>
+            <span>{[event.station, event.agency, event.location].filter(Boolean).join(" · ") || "No station, agency or location recorded"}</span>
+            {event.note ? <small>{event.note}</small> : null}</div>
+        </li>)}</ol>}
+    {next ? <ActionButton kind="secondary" loading={loadingMore} loadingLabel="Loading…" onClick={() => void loadMore()}>Show later events</ActionButton> : null}
+    {moreError ? <p className="eoc-field-error" role="alert">{moreError}</p> : null}
+  </section>;
 }

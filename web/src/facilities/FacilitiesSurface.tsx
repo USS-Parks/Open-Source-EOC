@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { EMS_TRAFFIC_STATUS, FACILITY_KINDS, FACILITY_OPERATING_STATUS } from "@openeoc/shared";
 import { CopMap } from "../cop/CopMap.js";
 import { EnumSelect, Panel, StatusBadge, TextField } from "../design/components.js";
@@ -81,6 +81,7 @@ export function FacilitiesSurface(props: {
         {/* The panels wait for the first answer so an empty list never stands in for one not yet read. */}
         {current ? <>
           {props.canWrite && rows.length ? <ReportPanel {...common} /> : null}
+          {props.canWrite && rows.length ? <StatusRequestPanel {...common} revision={revision} /> : null}
           <HavePanel {...common} />
           <ShelterPanel rows={rows} />
         </> : null}
@@ -197,6 +198,61 @@ function ReportPanel(props: PanelProps) {
         </fieldset>
       </form>
       {feedback}
+    </Panel>
+  );
+}
+
+/**
+ * Ask facilities to report now and follow who has answered. The server keeps
+ * no list of requests, so the panel follows the ones sent from this screen;
+ * a status report from a facility answers every open request for it.
+ */
+function StatusRequestPanel(props: PanelProps & { revision: number }) {
+  const [prompt, setPrompt] = useState("Report your current status");
+  const [kind, setKind] = useState("");
+  const [sent, setSent] = useState<readonly string[]>([]);
+  const { busy, run, feedback } = useRun();
+  const results = useAsync(() => Promise.all(sent.map((id) => props.client.statusQuery(id))), [props.client, sent]);
+  const { reload } = results;
+  // A report or a Refresh bumps the revision; the answers read again with the board.
+  useEffect(() => reload(), [props.revision, reload]);
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    void run(async () => {
+      if (!prompt.trim()) throw new Error("Enter what the facilities should report.");
+      const query = await props.client.launchStatusQuery(props.jurisdictionId, { prompt: prompt.trim(), ...(kind ? { kind } : {}) });
+      setSent((current) => [query.id, ...current]);
+      return `Request sent to ${query.targets} ${query.targets === 1 ? "facility" : "facilities"}.`;
+    });
+  };
+  return (
+    <Panel title="Status requests">
+      <p className="d21-muted" style={{ marginBottom: 12 }}>Ask every facility, or every facility of one type, to report now. Each facility's next status report answers the request.</p>
+      <form onSubmit={submit}>
+        <fieldset disabled={busy} className="d21-form-grid facilities-fieldset">
+          <TextField label="Request" value={prompt} onChange={setPrompt} required />
+          <EnumSelect label="Ask" values={["", ...FACILITY_KINDS.values]} value={kind} onChange={setKind}
+            labels={{ "": "Every facility", ...Object.fromEntries(FACILITY_KINDS.values.map((k) => [k, `Every ${kindLabel(k).toLowerCase()}`])) }} />
+          <div className="d21-form-grid-wide facilities-actions">
+            <ActionButton kind="primary" type="submit" loading={busy} loadingLabel="Sending…">Send status request</ActionButton>
+          </div>
+        </fieldset>
+      </form>
+      {feedback}
+      {results.error ? <p className="d21-error" role="alert">{results.error}</p> : null}
+      {results.data?.length ? (
+        <ul className="facilities-requests" aria-label="Requests sent from this screen">
+          {results.data.map((query) => (
+            <li key={query.id} aria-label={query.prompt}>
+              <strong>{query.prompt}</strong>{" "}
+              <StatusBadge status={query.complete ? "success" : "warning"}>
+                {query.complete ? "All reported" : `${query.responded} of ${query.total} reported`}
+              </StatusBadge>
+              {query.outstanding.length ? <span className="d21-muted"> Waiting for {query.outstanding.map((f) => f.name).join(", ")}.</span> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </Panel>
   );
 }

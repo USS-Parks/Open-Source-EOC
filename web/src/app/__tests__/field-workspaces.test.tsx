@@ -214,6 +214,33 @@ describe("tracking handoff", () => {
     }
   });
 
+  it("opens an object's custody chain from the inventory and reads later events a page at a time", async () => {
+    const event = (custodyState: string, station: string) =>
+      ({ custodyState, station, agency: "EMS", location: null, note: null, occurredAt: "2026-09-23T15:00:00.000Z" });
+    const client = { ...trackingClient(),
+      reunify: vi.fn().mockResolvedValue([{ id: "obj-1", tag: "TRK-1", kind: "patient", label: "Adult male, blue jacket",
+        latest: { custodyState: "in_transit", station: "Medic 4", location: null, occurredAt: "2026-09-23T15:00:00.000Z" } }]),
+      trackedObject: vi.fn()
+        .mockResolvedValueOnce({ id: "obj-1", tag: "TRK-1", kind: "patient", label: "Adult male, blue jacket", restrictedRedacted: false,
+          chain: [event("registered", "Triage A")], nextCursor: "c2" })
+        .mockResolvedValueOnce({ id: "obj-1", tag: "TRK-1", kind: "patient", label: "Adult male, blue jacket", restrictedRedacted: false,
+          chain: [event("in_transit", "Medic 4")], nextCursor: null }),
+    } as unknown as ApiClient;
+    render(<TrackingSurface client={client} jurisdictionId={JURISDICTION} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Find & reunify" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Custody chain" }));
+    const chain = await screen.findByRole("region", { name: "Custody chain for Adult male, blue jacket" });
+    await within(chain).findByText("Triage A · EMS");
+    fireEvent.click(within(chain).getByRole("button", { name: "Show later events" }));
+    await within(chain).findByText("Medic 4 · EMS");
+    expect(within(chain).queryByRole("button", { name: "Show later events" })).toBeNull();
+    expect(client.trackedObject).toHaveBeenNthCalledWith(1, "obj-1");
+    expect(client.trackedObject).toHaveBeenNthCalledWith(2, "obj-1", { cursor: "c2" });
+    expect(within(chain).getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+      expect.stringContaining("Registered"), expect.stringContaining("In Transit"),
+    ]);
+  });
+
   it("does not present a failed tracking search as an empty inventory", async () => {
     const client = { ...trackingClient(), reunify: vi.fn().mockRejectedValue(new Error("Tracking lookup unavailable")) } as unknown as ApiClient;
     render(<TrackingSurface client={client} jurisdictionId={JURISDICTION} />);

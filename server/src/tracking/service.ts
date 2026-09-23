@@ -177,6 +177,8 @@ export async function getObject(
 }
 
 export interface ReunificationAnswer {
+  /** Opens the object's custody chain; the restricted column stays behind that route's role check. */
+  readonly id: string;
   readonly tag: string;
   readonly kind: string;
   readonly label: string;
@@ -216,6 +218,7 @@ export async function reunify(
       select custody_state, station, location, occurred_at from tracking_events
       where object_id = ${obj.id as string} order by occurred_at desc, created_at desc limit 1`;
     answers.push({
+      id: obj.id as string,
       tag: obj.tag as string,
       kind: obj.kind as string,
       label: obj.label as string,

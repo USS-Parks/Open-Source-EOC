@@ -19,4 +19,5 @@
 .facilities-map-canvas { height: 460px; overflow: hidden; position: relative; }
 .facilities-map-canvas > * { inset: 0; position: absolute; }
 .facilities-notice { margin: 8px 0 0; }
+.facilities-requests { display: grid; gap: 8px; list-style: none; margin: 12px 0 0; padding: 0; }
 @container (max-width: 760px) { .facilities-hospitals { grid-template-columns: 1fr; } .facilities-map-canvas { height: 520px; } }

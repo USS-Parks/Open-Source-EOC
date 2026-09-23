@@ -37,7 +37,7 @@ screen shows. The screen acts on the jurisdiction selected in the console.
 | Guest access | Grant and revoke time-boxed read access for mutual-aid accounts |
 | Records | Set retention periods; download the audit trail; export the jurisdiction |
 | Channels | Configure the email relay and SMS provider notification rules send through; send a test message |
-| Deployment | Show which optional integrations are enabled; provision a jurisdiction (instance administrators) |
+| Deployment | Show which optional integrations are enabled; configure collaboration channels and the meeting bridge where they are enabled; provision a jurisdiction (instance administrators) |
 
 A change to a role, a membership, the disabled flag or a guest grant applies to
 the person's next request, including a request from a session they already
@@ -154,6 +154,55 @@ patient, evacuee and asset tracking register their routes only when their names
 `OPENEOC_INTEGRATIONS` in the server environment. The **Deployment** tab shows
 which are enabled. It cannot change them: edit the variable and restart the
 server.
+
+### Collaboration channels
+
+With `collab` enabled, the **Deployment** tab shows **Collaboration channels**
+to a jurisdiction administrator. Choose Mattermost or Matrix, enter the chat
+server address and the access token the chat server issued for this platform
+(a Mattermost bot token or a Matrix access token), and for Matrix the
+homeserver domain used in user ids if it differs from the server address.
+Select **Use this backend for incident channels** and **Save collaboration
+settings**. The server stores the token encrypted under `OPENEOC_SECRET_KEY`
+and never returns it; the screen shows only whether a token is stored. Leave
+the field blank to keep the stored token. A server without
+`OPENEOC_SECRET_KEY` refuses to store one.
+
+For an incident, open **Incident Setup**, choose **Operational area** on the
+incident, and use its **collaboration channels** section:
+
+- **Set up channels** (administrators) creates one channel for the whole
+  incident and one per ICS section the incident carries, with the position
+  holders as members, matched by email address.
+- **Update membership** (administrators) matches the channels to the current
+  position holders after a reassignment.
+- **Post announcement** (administrators and members) posts into the chosen
+  channel.
+- **Archive channels** (administrators) archives the incident's channels.
+
+With no backend in use, these actions notify the incident's position holders
+in the app instead, and the screen says so. The screen cannot show whether an
+incident's channels already exist, because the server reports only the
+backend's settings.
+
+### Meetings and briefings
+
+With `meetings` enabled, the **Deployment** tab shows **Meeting bridge**.
+Enter the Jitsi server address and select **Offer meeting bridges for
+incidents**. For a Jitsi deployment that requires signed tokens, also enter
+its app id and token secret: each join link then carries a token signed for
+the person who opened it, valid for four hours, and administrators join as
+moderators. The secret is stored encrypted and never shown. Without a secret,
+join links are plain room links.
+
+In the incident's **meetings and briefings** section, members and
+administrators open a bridge for the whole incident or for one ICS section.
+The room is created once; a later **Open bridge** for the same section
+returns the same room. Join links open in a new tab. Members and
+administrators also schedule a briefing with a title, a start time and the
+section it is for. When a briefing falls due, the scheduler notifies the
+incident's position holders in the app, and the briefing table shows when
+they were notified. Viewers see the bridges and briefings with no controls.
 
 IPAWS, collaboration, meeting, federation, feed, and webhook adapters require
 separate configuration. A local alert, release, message, or request is not proof

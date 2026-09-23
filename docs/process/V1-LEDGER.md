@@ -1791,3 +1791,59 @@ tagging remain separately gated as section 1 of the roster states.
   evidence is added at the W4 gate.
 - **Rollback:** revert the commit and drop the migration's policies, functions
   and columns.
+
+## V1 W3.13: screens for the optional integrations
+
+- **What changed.** All fifteen integration routes the coverage test listed
+  now have screens, each shown only where its integration runs, read from
+  `GET /api/v1/integrations`, and only to roles the server accepts.
+  - Collaboration settings under Administration > Deployment: Mattermost or
+    Matrix, the server address, the access token and a Matrix homeserver; the
+    token clears after saving and the screen says only whether one is stored.
+  - Meeting settings under Deployment: the Jitsi address, app id and token
+    secret, handled the same way.
+  - Incident collaboration in the incident setup panel: admins set up channels,
+    update membership and archive; admins and members announce. With no
+    backend, the screen says holders were notified in the app instead.
+  - Incident meetings: members open a bridge for the incident or a section,
+    get a join link, and schedule briefings; viewers read only.
+  - Facilities gains a Status requests panel: "n of m reported" then "All
+    reported", naming facilities still outstanding.
+  - Tracking gains "Custody chain": an object's handoffs oldest first, paged.
+  New `web/src/integrations/collab.tsx` and `meetings.tsx`.
+- **Deviations.** No credential fingerprint, because the status routes return
+  only whether a secret is stored. Channel existence is not shown, because no
+  route reports it; each action reports its own result. The status request
+  panel follows requests sent from the current view, because the server keeps
+  no list. Restricted tracking details stay off the screen for every role.
+  The collab browser walk runs a loopback receiver implementing the Mattermost
+  v4 subset the collab suite's fake uses; Matrix is covered by component tests.
+- **Ownership deviation, accepted.** The custody chain needs an object's id,
+  and the only screen path to one was right after registration, because the
+  reunification answer omitted it. `server/src/tracking/service.ts` now returns
+  `id` in each reunification answer, asserted in `tracking.test.ts`; the route
+  already requires membership and still never reads the restricted column.
+  Other deviations: additive props in `Console.tsx` and `AdminSurface.tsx`,
+  four lines of CSS, and a new tracking section in `docs/guides/FIELD-USER.md`,
+  since tracking was documented nowhere.
+- **Schema, contract, dependencies:** none.
+- **Browser walk.** An admin saves the collab backend against the loopback
+  receiver, with the token absent from the stored envelope's plaintext and the
+  page; saves the meeting bridge; sets up the incident's team and six
+  channels with the bearer on every call; announces; opens a signed bridge
+  link; schedules a briefing; sends a hospital status request from "0 of 1
+  reported" to "All reported"; and reads a custody chain of two handoffs. At
+  390 nothing overflows and no request leaves the app. With the integrations
+  off: no Facilities or Tracking entry, no collaboration or meeting panel, no
+  incident controls.
+- **Verification.** In the lane: collab, meetings, facilities, tracking,
+  api-docs, ipaws and every web test including route coverage, 82 files 566 of
+  566; four browser walks 7 of 7; app-e2e 4 of 4. After rebasing onto W4.0
+  part one and W4.1 part one, resolving the admin tab, guide and client
+  conflicts: the same suites with the shared suite 659 of 659; the
+  integrations, facilities, admin, channels, field workspaces and app-e2e
+  browser walks serial 12 of 12. TypeScript and ESLint clean. Link checker 71.
+- **Evidence level:** unit, real-database, browser and document.
+- **Deferred:** an incident's channel state, a list of status requests,
+  restricted tracking details for cleared roles, a browser walk against Matrix.
+- **Rollback:** revert the commit.

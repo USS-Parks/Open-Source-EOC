@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { BoardList } from "../../design/layout.js";
 import { Button } from "../../design/components.js";
 import type { ThemeName } from "../../design/tokens.js";
-import type { ApiClient, BoardListItem, DashboardListItem, CollectionRef, FeedHealth } from "../api/client.js";
+import type { ApiClient, BoardListItem, DashboardListItem, CollectionRef, FeedHealth, Membership } from "../api/client.js";
 import { useSession } from "../auth/session.js";
 import { IncidentSwitcher, useIncident } from "../incident/context.js";
 import { useAsync, useNotifications } from "../data/hooks.js";
@@ -346,6 +346,8 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         feeds={feeds.data ?? []}
         isAdmin={viewingMembership?.role === "admin"}
         facilitiesEnabled={facilitiesEnabled}
+        integrations={enabledIntegrations}
+        memberships={session.me?.memberships ?? []}
         canAuthorAlerts={viewingMembership?.role === "admin" || viewingMembership?.role === "member"}
         actorEmail={session.me?.person.email ?? ""}
         isInstanceAdmin={session.me?.isInstanceAdmin === true}
@@ -470,6 +472,8 @@ function Center(props: {
   feeds: readonly FeedHealth[];
   isAdmin: boolean;
   facilitiesEnabled: boolean | null;
+  integrations: ReadonlySet<string>;
+  memberships: readonly Membership[];
   canAuthorAlerts: boolean;
   actorEmail: string;
   isInstanceAdmin: boolean;
@@ -661,6 +665,8 @@ function Center(props: {
           jurisdictionId={props.discoveryJurisdictionId}
           isAdmin={props.canActivateIncident}
           theme={props.theme}
+          integrations={props.integrations}
+          memberships={props.memberships}
         />
       );
     case "datasets":

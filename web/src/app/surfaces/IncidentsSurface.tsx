@@ -3,7 +3,9 @@ import type { ThemeName } from "../../design/tokens.js";
 import { IncidentAreaEditor } from "./IncidentAreaEditor.js";
 import { IncidentParticipants } from "./IncidentParticipants.js";
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../../design/components.js";
-import type { ApiClient } from "../api/client.js";
+import type { ApiClient, Membership } from "../api/client.js";
+import { IncidentCollaboration } from "../../integrations/collab.js";
+import { IncidentMeetings } from "../../integrations/meetings.js";
 import { useAsync } from "../data/hooks.js";
 import { ErrorNote, Loading, Scroll, SurfaceHeader } from "../screens/parts.js";
 
@@ -18,6 +20,9 @@ export function IncidentsSurface(props: {
   jurisdictionId: string;
   isAdmin: boolean;
   theme: ThemeName;
+  /** Optional integrations the server runs; their incident actions show only when on. */
+  integrations?: ReadonlySet<string>;
+  memberships?: readonly Membership[];
 }) {
   const [reload, setReload] = useState(0);
   const [selectedIncident, setSelectedIncident] = useState<string | null>(null);
@@ -157,6 +162,7 @@ export function IncidentsSurface(props: {
               theme={props.theme} canEdit={incident.canEditArea && !incident.closedAt} />
             <IncidentParticipants client={props.client} incidentId={incident.id} incidentName={incident.name}
               canManage={incident.canManageParticipation} closed={Boolean(incident.closedAt)} />
+            <IntegrationActions client={props.client} integrations={props.integrations} memberships={props.memberships} incident={incident} />
           </div>
         </Panel>)}
 
@@ -178,4 +184,28 @@ export function IncidentsSurface(props: {
       </div>
     </Scroll>
   );
+}
+
+/**
+ * Collaboration channels and meetings for one incident, where their
+ * integration runs. Both engines answer members of the incident's own
+ * jurisdiction only, so a participant from elsewhere sees neither.
+ */
+function IntegrationActions(props: {
+  client: ApiClient;
+  integrations: ReadonlySet<string> | undefined;
+  memberships: readonly Membership[] | undefined;
+  incident: { id: string; jurisdictionId: string; name: string; closedAt: string | null };
+}) {
+  const { incident } = props;
+  const role = props.memberships?.find((m) => m.jurisdictionId === incident.jurisdictionId)?.role;
+  if (!role) return null;
+  const canWrite = role === "admin" || role === "member";
+  const closed = Boolean(incident.closedAt);
+  return <>
+    {props.integrations?.has("collab") ? <IncidentCollaboration client={props.client} jurisdictionId={incident.jurisdictionId}
+      incidentId={incident.id} incidentName={incident.name} canAdmin={role === "admin"} canWrite={canWrite} closed={closed} /> : null}
+    {props.integrations?.has("meetings") ? <IncidentMeetings client={props.client} incidentId={incident.id}
+      incidentName={incident.name} canWrite={canWrite} closed={closed} /> : null}
+  </>;
 }

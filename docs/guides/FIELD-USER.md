@@ -41,6 +41,21 @@ If a prerequisite is incomplete, the task remains blocked. If the server
 rejects the completion or requests authentication, the queue is retained; sign
 in again and reconcile rather than repeating the work under another account.
 
+## Track a patient, evacuee or asset
+
+**Tracking** appears when the server runs the `tracking` integration. It needs
+a connection; nothing is queued offline.
+
+- **Register** issues a tag, or attaches an existing one, to a patient,
+  evacuee, companion animal or asset under a field-safe label.
+- **Scan handoff** records each custody change against the tag: the custody
+  state, the station, agency and location, and a note.
+- **Find & reunify** lists recent objects and searches by label, or by tag
+  with a leading `#`. **Custody chain** opens the object's handoffs, oldest
+  first, with the time, station, agency, location and note of each; **Show
+  later events** reads the next page. Health and identity details are never
+  shown on this screen.
+
 ## Handle a conflict
 
 Do not erase or recreate a conflicted item. The application retains exact

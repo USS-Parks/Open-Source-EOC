@@ -4,14 +4,20 @@ import type { ApiClient } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import { ErrorNote, Loading } from "../app/screens/parts.js";
 import { INTEGRATION_LABELS } from "./labels.js";
+import { CollabSettings } from "../integrations/collab.js";
+import { MeetingSettings } from "../integrations/meetings.js";
 
 /**
  * Deployment-wide settings: which optional integrations the server registers,
  * which only the deployment environment can change, and provisioning of a new
- * jurisdiction by an instance administrator.
+ * jurisdiction by an instance administrator. A jurisdiction administrator,
+ * named by `jurisdictionId`, also configures the collaboration and meeting
+ * integrations the deployment runs.
  */
-export function Deployment(props: { client: ApiClient; isInstanceAdmin: boolean }) {
+export function Deployment(props: { client: ApiClient; isInstanceAdmin: boolean; jurisdictionId?: string }) {
   const state = useAsync(() => props.client.listIntegrations(), []);
+  const { jurisdictionId } = props;
+  const on = (key: string) => state.data?.integrations.some((i) => i.key === key && i.enabled) ?? false;
   return (
     <div style={{ display: "grid", gap: 14, minWidth: 0 }}>
       <Panel title="Optional integrations">
@@ -36,6 +42,8 @@ export function Deployment(props: { client: ApiClient; isInstanceAdmin: boolean 
           <p className="d21-muted" style={{ marginTop: 12 }}>This screen shows the deployment's setting and cannot change it. To enable an integration, add its name to {state.data.variable} in the server environment, for example {state.data.variable}=meetings,tracking, and restart the server.</p>
         </> : null}
       </Panel>
+      {jurisdictionId && on("collab") ? <CollabSettings client={props.client} jurisdictionId={jurisdictionId} /> : null}
+      {jurisdictionId && on("meetings") ? <MeetingSettings client={props.client} jurisdictionId={jurisdictionId} /> : null}
       {props.isInstanceAdmin ? <Provision client={props.client} /> : null}
     </div>
   );

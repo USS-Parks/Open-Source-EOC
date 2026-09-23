@@ -58,3 +58,39 @@ it("requires an explicit closeout confirmation", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Confirm closeout" }));
   await waitFor(() => expect(client.closeIncident).toHaveBeenCalledWith("incident-a"));
 });
+
+it("offers collaboration and meeting actions only where each integration runs, to members of the incident's jurisdiction", async () => {
+  const client = {
+    listIncidents: vi.fn().mockResolvedValue([incident]),
+    listIncidentTemplates: vi.fn().mockResolvedValue([]),
+    getIncident: vi.fn().mockResolvedValue(detail),
+    getIncidentArea: vi.fn().mockResolvedValue({ incidentId: "incident-a", revision: 0, geometry: null, operationalPeriod: null, reason: "", createdAt: null, createdBy: null, positionId: null, createdByName: null, positionTitle: null }),
+    incidentAreaHistory: vi.fn().mockResolvedValue([]),
+    listIncidentParticipants: vi.fn().mockResolvedValue([]),
+    collabStatus: vi.fn().mockResolvedValue({ configured: false, enabled: false, kind: null, baseUrl: null }),
+    listMeetingBridges: vi.fn().mockResolvedValue([]),
+    listBriefings: vi.fn().mockResolvedValue([]),
+  };
+  const open = async (integrations: readonly string[], role?: "admin" | "member" | "viewer") => {
+    cleanup();
+    render(<IncidentsSurface client={client as unknown as ApiClient} jurisdictionId="j1" isAdmin={false} theme="light"
+      integrations={new Set(integrations)} memberships={role ? [{ jurisdictionId: "j1", role }] : []} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Operational area" }));
+    await screen.findByText("Incident Commander");
+  };
+
+  await open([], "admin");
+  expect(screen.queryByRole("region", { name: "River Fire: collaboration channels" })).toBeNull();
+  expect(screen.queryByRole("region", { name: "River Fire: meetings and briefings" })).toBeNull();
+
+  await open(["collab", "meetings"], "member");
+  await screen.findByRole("region", { name: "River Fire: collaboration channels" });
+  await screen.findByRole("region", { name: "River Fire: meetings and briefings" });
+  expect(screen.queryByRole("button", { name: "Set up channels" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Post announcement" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Open bridge" })).toBeTruthy();
+
+  await open(["collab", "meetings"]);
+  expect(screen.queryByRole("region", { name: "River Fire: collaboration channels" })).toBeNull();
+  expect(screen.queryByRole("region", { name: "River Fire: meetings and briefings" })).toBeNull();
+});
