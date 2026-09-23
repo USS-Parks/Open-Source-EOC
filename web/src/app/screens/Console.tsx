@@ -36,6 +36,7 @@ import { FeedsSurface } from "../surfaces/FeedsSurface.js";
 import { MessagesWorkspace } from "../../coordination/MessagesWorkspace.js";
 import { SmartFormsSurface } from "../surfaces/SmartFormsSurface.js";
 import { TrackingSurface } from "../surfaces/TrackingSurface.js";
+import { DamageSurface } from "../../damage/DamageSurface.js";
 import { BoardsIndex } from "../surfaces/lists.js";
 import { AlertsSurface } from "../surfaces/AlertsSurface.js";
 import { NotificationTray } from "../../notifications/NotificationTray.js";
@@ -58,6 +59,7 @@ const NAV: readonly NavGroup[] = [
     { key: "tasks", label: "Tasks", icon: "tasks" },
     { key: "smartForms", label: "Smart Forms", icon: "smartForms" },
     { key: "tracking", label: "Tracking", icon: "tracking" },
+    { key: "damage", label: "Damage Assessment", icon: "fieldReports" },
   ] },
   { key: "planning", label: "Planning", items: [
     { key: "operationalPeriods", label: "Operational Periods", icon: "operationalPeriods" },
@@ -378,6 +380,8 @@ function sectionForNav(key: string): Surface {
       return { kind: "smartforms" };
     case "tracking":
       return { kind: "tracking" };
+    case "damage":
+      return { kind: "damage" };
     case "lifelines":
       return { kind: "lifelines" };
     case "tasks":
@@ -592,6 +596,9 @@ function Center(props: {
         incidentId={props.incidentId} onOpenMap={() => props.onNavigate({ kind: "map" })} />;
     case "tracking":
       return <TrackingSurface client={props.client} jurisdictionId={props.jurisdictionId} />;
+    case "damage":
+      return <DamageSurface client={props.client} jurisdictionId={props.jurisdictionId} theme={props.theme}
+        canWrite={props.canAuthorAlerts} isAdmin={props.isAdmin} incidentName={props.incidentName} />;
     case "incidents":
       return (
         <IncidentsSurface
@@ -698,6 +705,7 @@ function pageFor(surface: Surface, scope: string): { readonly page: ShellPage; r
     case "tasks": return result("Operations", "Tasks", "boards");
     case "smartforms": return result("Operations", "Smart Forms", "boards");
     case "tracking": return result("Operations", "Tracking", "boards");
+    case "damage": return result("Operations", "Damage Assessment", "boards");
     case "periods": return result("Planning", "Operational Periods", "planning");
     case "forms": return result("Planning", "ICS Forms", "planning");
     case "iap": return result("Planning", "IAP", "planning");

@@ -1,0 +1,23 @@
+.damage-thresholds { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 12px; }
+.damage-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.damage-field input { background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: 4px; color: var(--eoc-text); font: inherit; min-height: 44px; padding: 6px; }
+.damage-subhead { font-size: .92rem; margin: 14px 0 8px; }
+.damage-kpis { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.damage-kpis .eoc-kit-kpi-value strong { font-size: 24px; }
+.damage-indicators { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); list-style: none; margin: 0 0 12px; padding: 0; }
+.damage-indicators > li { background: var(--eoc-surface-raised); border: 1px solid var(--eoc-border); border-radius: var(--eoc-radius-sm); display: grid; gap: 8px; min-width: 0; padding: 12px; }
+.damage-indicator-head { align-items: flex-start; display: flex; gap: 8px; justify-content: space-between; }
+.damage-export, .damage-actions { align-items: flex-end; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.damage-export > :first-child { flex: 1 1 240px; }
+.damage-map-status { margin: 0 0 8px; }
+.damage-legend { display: flex; flex-wrap: wrap; font-size: .84rem; gap: 6px 14px; list-style: none; margin: 0 0 10px; padding: 0; }
+.damage-legend li { align-items: center; display: inline-flex; gap: 6px; }
+.damage-legend span { border: 2px solid var(--eoc-surface); border-radius: 50%; box-shadow: 0 0 0 1px var(--eoc-border); display: inline-block; height: 12px; width: 12px; }
+.damage-map-canvas { height: 460px; overflow: hidden; position: relative; }
+.damage-map-canvas > * { inset: 0; position: absolute; }
+.damage-tabpanel { margin-top: 10px; min-width: 0; }
+.damage-table { display: grid; gap: 10px; min-width: 0; }
+.damage-decision { display: inline-flex; gap: 6px; }
+.damage-fieldset { border: 0; margin: 0; padding: 0; }
+.damage-notice { margin: 8px 0 0; }
+@container (max-width: 760px) { .damage-thresholds, .damage-indicators { grid-template-columns: 1fr; } .damage-map-canvas { height: 520px; } }

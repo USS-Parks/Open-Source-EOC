@@ -79,6 +79,8 @@ import type {
   WorkflowEscalationCommand,
   WorkflowTransitionCommand,
 } from "../../boards/workflow.js";
+import type { DamageSummary, DeclarationThresholds } from "@openeoc/shared";
+import type { DamageReportPage, DamageReportStatus, FieldAssessmentInput } from "../../damage/model.js";
 
 /**
  * The app shell's one door to the server. It carries the bearer access
@@ -1749,6 +1751,31 @@ export class ApiClient {
     }
     if (!res.ok) throw new ApiError(res.status, res.statusText || `HTTP ${res.status}`);
     return { csv: await res.text(), nextCursor: res.headers.get("x-next-cursor") };
+  }
+
+  // ---- Damage assessment ----
+  listDamageReports(jurisdictionId: string, options: PageOptions & { status?: DamageReportStatus } = {}): Promise<DamageReportPage> {
+    const query = pageParams(options);
+    if (options.status) query.set("status", options.status);
+    const text = query.toString();
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/damage/assessments${text ? `?${text}` : ""}`);
+  }
+  async moderateDamageReport(assessmentId: string, decision: "approved" | "rejected"): Promise<void> {
+    await this.request("POST", `/api/v1/damage/assessments/${encodeURIComponent(assessmentId)}/moderate`, { decision });
+  }
+  recordDamageAssessment(jurisdictionId: string, input: FieldAssessmentInput): Promise<{ id: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/damage/assessments`, { ...input });
+  }
+  damageSummary(jurisdictionId: string, thresholds: DeclarationThresholds): Promise<DamageSummary> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/damage/summary`, { ...thresholds });
+  }
+  /** The declaration support document, rendered by the server from the counted assessments. */
+  damageDeclaration(jurisdictionId: string, input: DeclarationThresholds & { incident: string }): Promise<{ summary: DamageSummary; document: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/damage/declaration`, { ...input });
+  }
+  /** Issue the public intake token; a new token replaces the previous one. */
+  enableDamageIntake(jurisdictionId: string): Promise<{ token: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/damage/intake/enable`);
   }
 }
 

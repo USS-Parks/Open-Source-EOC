@@ -227,7 +227,8 @@ export async function listAssessments(
   const after = decodeCursor(page.cursor, ["at", "id"]);
   const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
   const rows = await sql`
-    select id, address, degree, source, status, estimated_loss, reporter_contact, created_at,
+    select id, address, structure_type, degree, source, status, estimated_loss, insured, notes,
+      reporter_contact, created_at, ST_X(geom) as lon, ST_Y(geom) as lat,
       to_char(created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
     from damage_assessments
     where jurisdiction_id = ${jurisdictionId}

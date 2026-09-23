@@ -28,6 +28,7 @@ describe("surface hash routing", () => {
     { kind: "jic" },
     { kind: "templates" },
     { kind: "board-design", id: "b1" },
+    { kind: "damage" },
     { kind: "admin" },
     { kind: "not-found", path: "not-a-workspace" },
   ];

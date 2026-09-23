@@ -1148,3 +1148,48 @@ tagging remain separately gated as section 1 of the roster states.
   refused, rotate prints counts.
 - **Evidence level:** unit, real-database integration, browser and document.
 - **Rollback:** revert the commit and drop the dependency; no schema change.
+
+## V1 W3.2: damage assessment
+
+- **What changed.** Operations > Damage Assessment, new `web/src/damage/**`:
+  the public intake queue where members and admins accept or reject reports,
+  paged with Load more; Accepted and Rejected tabs; a form to record an
+  official field assessment with degree, structure and occupancy from the PDA
+  dictionary with human labels; a loss summary by degree with total and
+  uninsured loss; the PA per-capita and IA residences indicators each shown
+  against its threshold with the basis of the number; the declaration summary
+  download; accepted reports on the map, colored by degree through the
+  existing map component; and, for admins behind a confirm step, issuing a
+  public intake token.
+- **Deviations from the roster wording.** Moderation is accept or reject; the
+  engine has no "needs info" state. The degree is set by recording an official
+  field assessment, because the engine cannot change a submitted report's
+  degree. The export is the engine's Markdown declaration summary, not CSV or
+  JSON. The map is the existing map component embedded in the screen, not a
+  layer on the main Map screen, and shows the newest 500 accepted reports. The
+  engine needs a county population it has no source for, so the operator
+  enters it; the three threshold inputs are remembered per jurisdiction in
+  that browser, with the server's 4.6 and 25 defaults prefilled. Destroyed and
+  major share the critical color; a legend and the guide say so.
+- **Ownership deviation.** `server/src/damage/service.ts`: the existing report
+  list now also returns structure type, insured, notes, longitude and
+  latitude, which the map needs; smaller than a new route, with a failing-first
+  test in `damage.test.ts`.
+- **F8 and F9 are not closed, stated plainly.** F8 stays partial: there is no
+  engine for Public Assistance categories A to G or shelter census, and the
+  screen says the per-capita figure is structure loss, not PA cost. F9 stays
+  partial: parcel-roll ingestion and statewide replacement-cost coverage need
+  data acquisition, an external action; baseline import exists through the
+  API only and baselines do not feed the summary. The W4 gate expects F8
+  verified, so the PA category engine is carried into W4 as a unit of its own.
+- **Schema, contract, dependencies:** none.
+- **Verification.** In the lane: `damage-browser.test.ts` 2 of 2, a Chrome
+  walk at 1440 and 390 in light and dark with database checks, and 6 files 83
+  of 83. After rebasing onto W2.6, W3.1, W3.7 and the gate commits: the damage
+  and chronology browser walks, damage, list-pagination-operational,
+  api-docs, every web test and the shared suite passed 610 of 610. TypeScript
+  and ESLint clean. Link checker 70 files.
+- **Evidence level:** unit, real-database, browser and document.
+- **Guide:** new `docs/guides/DAMAGE-ASSESSMENT.md`, linked from the guides
+  index.
+- **Rollback:** revert the commit.

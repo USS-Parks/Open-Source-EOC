@@ -23,6 +23,7 @@ substitute. Re-select context before acting.
 | Coordinate incident work | [Operator quickstart](./OPERATOR-QUICKSTART.md) |
 | Configure people, incidents, and integrations | [Administrator guide](./ADMIN.md) |
 | Capture field reports and assigned completions | [Field user guide](./FIELD-USER.md) |
+| Moderate damage reports and prepare declaration support | [Damage assessment](./DAMAGE-ASSESSMENT.md) |
 | Create or revise board schemas | [Board designer guide](./DESIGNER.md) |
 | Configure federation | [Federation setup](./FEDERATION-SETUP.md) |
 

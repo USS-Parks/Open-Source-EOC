@@ -123,6 +123,17 @@ describe("baseline and official assessment", () => {
     expect(s.totalEstimatedLoss).toBe(350000);
     expect(s.uninsuredLoss).toBe(260000);
     expect(s.declaration.iaThresholdMet).toBe(true);
+
+    // The list carries what the queue and the map show: structure, insurance and position.
+    const listed = await app.inject({
+      method: "GET",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/damage/assessments?status=approved`,
+      headers: { authorization: `Bearer ${memberToken}` },
+    });
+    const rows = listed.json().assessments as Array<Record<string, unknown>>;
+    expect(rows.find((r) => r.address === "1 River Rd"))
+      .toMatchObject({ structure_type: "single_family", insured: false, lon: -123.61, lat: 41.29 });
+    expect(rows.find((r) => r.address === "2 River Rd")).toMatchObject({ insured: true, lon: null, lat: null });
   });
 
   it("rejects an unknown degree and a non-admin baseline import", async () => {
