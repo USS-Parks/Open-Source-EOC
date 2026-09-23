@@ -447,6 +447,10 @@ export function MapSurface(props: {
           theme={props.theme}
           boards={geoBoards.map((c) => ({ id: c.id, title: c.title }))}
           fetchItems={(id) => props.client.collectionItems(id)}
+          tileUrl={(kind, id) => kind === "board"
+            ? `/api/v1/tiles/boards/${id}/{z}/{x}/{y}.mvt`
+            : datasetIds.has(id) ? `/api/v1/tiles/datasets/${id}/{z}/{x}/{y}.mvt` : undefined}
+          tileHeaders={() => ({ authorization: `Bearer ${props.client.fieldSyncToken()}` })}
           feeds={feedAndDatasetLayers}
           fetchFeedItems={(id) =>
             datasetIds.has(id)

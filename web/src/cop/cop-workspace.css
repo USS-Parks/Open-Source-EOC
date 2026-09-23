@@ -365,3 +365,17 @@
     max-height: none;
   }
 }
+
+.eoc-cop-opacity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 24px;
+  color: var(--eoc-text-muted);
+  font-size: 0.75rem;
+}
+
+.eoc-cop-opacity input {
+  flex: 1;
+  min-width: 0;
+}

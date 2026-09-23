@@ -149,6 +149,8 @@ GET /api/v1/templates/:key/versions
 GET /api/v1/templates/:key/versions/:version
 GET /api/v1/threads/:threadId/export
 GET /api/v1/threads/:threadId/messages
+GET /api/v1/tiles/boards/:boardId/:z/:x/:y.mvt
+GET /api/v1/tiles/datasets/:datasetId/:z/:x/:y.mvt
 GET /api/v1/tracked-objects/:id
 PATCH /api/v1/boards/:boardId/records/:recordId
 PATCH /api/v1/corrective-actions/:id

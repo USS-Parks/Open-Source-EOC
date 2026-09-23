@@ -1,9 +1,9 @@
 import { themes, type ThemeName } from "../design/tokens.js";
-import { statusColorExpression, symbolStatusFor } from "./symbology.js";
+import { statusColorExpression, symbolStatusExpression, symbolStatusFor } from "./symbology.js";
 import { basemapBackground, naturalEarthLayers, naturalEarthSources } from "./basemap.js";
-import { labelFor } from "./tools.js";
+import { labelExpression, labelFor } from "./tools.js";
 import { statusPatternExpression } from "./hazards.js";
-import { facilityIconExpression, facilityTypeFor } from "./facilities.js";
+import { facilityIconExpression, facilityTypeExpression, facilityTypeFor } from "./facilities.js";
 
 /**
  * COP layer construction: pure functions from board data to MapLibre
@@ -22,6 +22,8 @@ export interface CopFeature {
 export interface CopFeatureCollection {
   readonly type: "FeatureCollection";
   readonly features: readonly CopFeature[];
+  /** OGC API paging links; a `next` link means the layer is past one page. */
+  readonly links?: readonly { readonly rel: string }[] | undefined;
 }
 
 /**
@@ -141,6 +143,92 @@ export function boardLayerSpecs(boardId: string, theme: ThemeName, labelFont?: s
     },
     ...label,
   ];
+}
+
+/** Source layers in an operational vector tile (server/src/geo/tiles.ts). */
+export const TILE_FEATURES_LAYER = "features";
+export const TILE_CLUSTERS_LAYER = "clusters";
+
+/**
+ * The vector-tile form of a layer's GeoJSON specs. Tiles carry raw record
+ * fields, so the tags tagFeatures precomputes become expressions over those
+ * fields, and server-side clusters get a neutral count marker that never
+ * reads as a status (INV-8). A stale feed keeps every feature in the unknown
+ * frame, as tagFeedFeatures does.
+ */
+export function tileLayerSpecs(
+  specs: readonly unknown[],
+  src: string,
+  theme: ThemeName,
+  labelFont?: string,
+  stale = false,
+): unknown[] {
+  const tags = new Map<string, unknown>([
+    ["_symbolStatus", stale ? "unknown" : symbolStatusExpression()],
+    ["_facilityType", facilityTypeExpression()],
+    ["_label", labelExpression()],
+  ]);
+  const rewrite = (value: unknown): unknown => {
+    if (Array.isArray(value)) {
+      const [op, key] = value as unknown[];
+      if (value.length === 2 && typeof key === "string" && tags.has(key)) {
+        if (op === "get") return tags.get(key);
+        if (op === "has") return ["!=", tags.get(key), ""];
+      }
+      return value.map(rewrite);
+    }
+    return value && typeof value === "object"
+      ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, rewrite(v)]))
+      : value;
+  };
+  const t = themes[theme];
+  const count = labelFont
+    ? [{
+        id: `${src}-cluster-count`,
+        type: "symbol",
+        source: src,
+        "source-layer": TILE_CLUSTERS_LAYER,
+        layout: {
+          "text-field": ["to-string", ["get", "point_count"]],
+          "text-font": [labelFont],
+          "text-size": 11,
+          "text-allow-overlap": true,
+        },
+        paint: { "text-color": t.text },
+      }]
+    : [];
+  return [
+    ...specs.map((spec) => ({ ...(rewrite(spec) as object), "source-layer": TILE_FEATURES_LAYER })),
+    {
+      id: `${src}-cluster`,
+      type: "circle",
+      source: src,
+      "source-layer": TILE_CLUSTERS_LAYER,
+      paint: {
+        "circle-color": t.surface,
+        "circle-radius": ["interpolate", ["linear"], ["get", "point_count"], 2, 10, 100, 16, 1000, 24],
+        "circle-stroke-width": 2,
+        "circle-stroke-color": t.text,
+      },
+    },
+    ...count,
+  ];
+}
+
+const OPACITY_PAINT: Readonly<Record<string, readonly string[]>> = {
+  fill: ["fill-opacity"],
+  line: ["line-opacity"],
+  circle: ["circle-opacity", "circle-stroke-opacity"],
+  symbol: ["icon-opacity", "text-opacity"],
+};
+
+/** A layer's opacity paint scaled by the operator's layer opacity (0 to 1). */
+export function opacityPaint(spec: unknown, factor: number): Record<string, number> {
+  const s = spec as { type: string; paint?: Record<string, unknown> };
+  return Object.fromEntries((OPACITY_PAINT[s.type] ?? []).map((prop) => {
+    const base = s.paint?.[prop];
+    return [prop, (typeof base === "number" ? base : 1) * factor];
+  }));
 }
 
 /** The COP base map: bundled Natural Earth, or a plain canvas as a floor. */

@@ -7,7 +7,6 @@ import "./cop-workspace.css";
 import { withJurisdictionOverlays, readOverlayCoverage, type OverlayCoverage, VECTOR_OVERLAYS, ROAD_OVERLAYS, OWNERSHIP_LEVELS, overlayGroupOf, type JurisdictionOverlays } from "./overlays.js";
 import { themes, type ThemeName } from "../design/tokens.js";
 import {
-  boardLayerIds,
   boardLayerSpecs,
   BASEMAP_GROUPS,
   basemapGroupOf,
@@ -18,9 +17,12 @@ import {
   BUILDINGS_SOURCE_ID,
   DEM_SOURCE_ID,
   HILLSHADE_LAYER_ID,
+  opacityPaint,
   rasterLayerId,
   sourceId,
   tagFeatures,
+  TILE_CLUSTERS_LAYER,
+  tileLayerSpecs,
   type BasemapConfig,
   type BuildingsConfig,
   type CopFeatureCollection,
@@ -40,9 +42,9 @@ import {
   streetFontStack,
   type StreetBasemapConfig,
 } from "./streetstyle.js";
-import { statusColor, type SymbolStatus } from "./symbology.js";
+import { statusColor, symbolStatusFor, type SymbolStatus } from "./symbology.js";
+import { toMgrs, toUsng } from "./mgrs.js";
 import {
-  feedLayerIds,
   feedLayerSpecs,
   feedSourceId,
   formatAge,
@@ -203,6 +205,12 @@ export interface CopMapProps {
   readonly requestedFeature?: { readonly datasetId: string; readonly featureId: string } | null | undefined;
   /** Reports only persisted feed/dataset feature identity, never a rendered synthetic id. */
   readonly onInspectFeature?: ((feature: CopSelectedDatasetFeature | null) => void) | undefined;
+  /** Vector tiles for a layer too large for one GeoJSON page (board items
+   * with a `next` link, or a standard feed marked incomplete): its
+   * {z}/{x}/{y} URL template, or undefined where no tiles are served. */
+  readonly tileUrl?: ((kind: "board" | "feed", id: string) => string | undefined) | undefined;
+  /** Headers (the bearer) for tile requests from tileUrl, read per request. */
+  readonly tileHeaders?: (() => Record<string, string>) | undefined;
   /** Test/instrumentation hook: receives the live map instance. */
   readonly onMap?: ((map: maplibregl.Map) => void) | undefined;
   /** Stored incident context printed outside the map frame in PNG exports. */
@@ -374,6 +382,19 @@ export function CopMap(props: CopMapProps) {
   const [bookmarkName, setBookmarkName] = useState("");
   const [layerQuery, setLayerQuery] = useState("");
   const [selection, setSelection] = useState<CopInspection | null>(null);
+  // Operator opacity per operational source key, 0 to 1 (default 1).
+  const [opacity, setOpacity] = useState<Record<string, number>>({});
+  // The operational layers actually mounted per source key (GeoJSON or tile
+  // mode), so visibility and opacity reach whichever form is live.
+  const mountedRef = useRef<Record<string, { mode: string; specs: unknown[] }>>({});
+  const visibleRef = useRef(visible);
+  const feedVisibleRef = useRef(feedVisible);
+  const opacityRef = useRef(opacity);
+  const tileHeadersRef = useRef(props.tileHeaders);
+  visibleRef.current = visible;
+  feedVisibleRef.current = feedVisible;
+  opacityRef.current = opacity;
+  tileHeadersRef.current = props.tileHeaders;
   const feedHealthRef = useRef(feedHealth);
   const coverageRef = useRef(coverage);
   const boardsRef = useRef(props.boards);
@@ -416,7 +437,9 @@ export function CopMap(props: CopMapProps) {
     const feed = feedsRef.current.find((candidate) => sourceKey === feedSourceId(candidate.id));
     const health = feed ? feedHealthRef.current[feed.id] : undefined;
     const facility = facilitySymbol(facilityTypeFor(properties));
-    const rawStatus = properties._symbolStatus ?? featureStatus;
+    // Tile features arrive untagged; derive the frame as tagging would.
+    const rawStatus = properties._symbolStatus ?? featureStatus
+      ?? (board || feed ? (health?.stale ? "unknown" : symbolStatusFor(properties)) : undefined);
     const status = typeof rawStatus === "string" && LEGEND.includes(rawStatus as SymbolStatus)
       ? rawStatus as SymbolStatus
       : "unknown";
@@ -517,7 +540,9 @@ export function CopMap(props: CopMapProps) {
           ? ` · ${formatArea(polygonAreaSqMi(coords))}`
           : " · click three or more points";
     }
-    el.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)} · z${zoom.toFixed(1)}${tail}`;
+    const usng = toUsng(lng, lat);
+    const grid = usng ? `\nUSNG ${usng} · MGRS ${toMgrs(lng, lat)}` : "\nUSNG/MGRS: outside UTM coverage";
+    el.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)} · z${zoom.toFixed(1)}${tail}${grid}`;
   };
 
   useEffect(() => {
@@ -530,6 +555,17 @@ export function CopMap(props: CopMapProps) {
       maplibregl.addProtocol("pmtiles", new Protocol().tile);
       pmtilesRegistered = true;
     }
+    // Tile URL prefixes this map created; only those requests carry the
+    // bearer, never a basemap or raster server.
+    const tilePrefixes = new Set<string>();
+    const tileTemplate = (kind: "board" | "feed", id: string): string | undefined => {
+      const template = props.tileUrl?.(kind, id);
+      if (!template) return undefined;
+      // MapLibre fetches tiles in a worker, so the template must be absolute.
+      const absolute = template.startsWith("/") ? `${globalThis.location.origin}${template}` : template;
+      tilePrefixes.add(absolute.slice(0, absolute.indexOf("{z}")));
+      return absolute;
+    };
     const map = new maplibregl.Map({
       container: container.current,
       style: (props.basemapStyleUrl ??
@@ -544,6 +580,12 @@ export function CopMap(props: CopMapProps) {
       attributionControl: false,
       // Keeps the drawn frame readable for the image export.
       canvasContextAttributes: { preserveDrawingBuffer: true },
+      transformRequest: (url) => {
+        const headers = tileHeadersRef.current;
+        return headers && [...tilePrefixes].some((prefix) => url.startsWith(prefix))
+          ? { url, headers: headers() }
+          : undefined;
+      },
     });
     mapRef.current = map;
     let styleReady = false;
@@ -655,6 +697,11 @@ export function CopMap(props: CopMapProps) {
         onInspectFeatureRef.current?.(null);
         return;
       }
+      // A server-side cluster opens by zooming in toward its records.
+      if (hit.sourceLayer === TILE_CLUSTERS_LAYER) {
+        map.easeTo({ center: e.lngLat, zoom: map.getZoom() + 2 });
+        return;
+      }
       if (props.inspectionMode !== "popup") {
         popup.remove();
         openInspection(hit.properties ?? {}, hit.source, hit.layer.id, hit.state?.status, hit.id);
@@ -693,20 +740,59 @@ export function CopMap(props: CopMapProps) {
       }
     };
 
+    // One source per operational layer: GeoJSON while it fits one page,
+    // vector tiles past that. A change of form (or of feed staleness on
+    // tiles) remounts the source and its layers with the operator's current
+    // visibility and opacity.
+    // ponytail: tile sources reload on every poll to match the GeoJSON
+    // freshness; the tiles' short private max-age absorbs most of the cost.
+    const mount = (
+      key: string,
+      fc: CopFeatureCollection,
+      specs: unknown[],
+      tiles: string | undefined,
+      stale: boolean,
+      shown: boolean,
+    ) => {
+      const mode = tiles ? `tiles:${stale}` : "geojson";
+      const current = mountedRef.current[key];
+      if (current?.mode === mode) {
+        if (tiles) map.refreshTiles(key);
+        else (map.getSource(key) as maplibregl.GeoJSONSource).setData(fc as never);
+        return;
+      }
+      if (current) {
+        for (const spec of current.specs) {
+          const id = (spec as { id: string }).id;
+          if (map.getLayer(id)) map.removeLayer(id);
+        }
+        map.removeSource(key);
+      }
+      map.addSource(key, tiles
+        ? { type: "vector", tiles: [tiles], maxzoom: 14, promoteId: "_id" }
+        : { type: "geojson", data: fc as never });
+      const layers = tiles ? tileLayerSpecs(specs, key, props.theme, labelFont, stale) : specs;
+      mountedRef.current[key] = { mode, specs: layers };
+      for (const spec of layers) {
+        const s = spec as { paint?: Record<string, unknown>; layout?: Record<string, unknown> };
+        map.addLayer({
+          ...s,
+          paint: { ...s.paint, ...opacityPaint(spec, opacityRef.current[key] ?? 1) },
+          layout: { ...s.layout, visibility: shown ? "visible" : "none" },
+        } as never);
+      }
+    };
+
     const refresh = async () => {
       if (!styleReady) return;
       for (const board of props.boards) {
         try {
-          const fc = tagFeatures(await props.fetchItems(board.id));
+          const raw = await props.fetchItems(board.id);
+          const fc = tagFeatures(raw);
           dataRef.current[sourceId(board.id)] = fc;
-          const source = map.getSource(sourceId(board.id)) as maplibregl.GeoJSONSource | undefined;
-          if (source) source.setData(fc as never);
-          else {
-            map.addSource(sourceId(board.id), { type: "geojson", data: fc as never });
-            for (const spec of boardLayerSpecs(board.id, props.theme, labelFont)) {
-              map.addLayer(spec as never);
-            }
-          }
+          const pastPage = raw.links?.some((link) => link.rel === "next") ?? false;
+          mount(sourceId(board.id), fc, boardLayerSpecs(board.id, props.theme, labelFont),
+            pastPage ? tileTemplate("board", board.id) : undefined, false, visibleRef.current[board.id] ?? true);
         } catch {
           // A failed refresh keeps the last good picture; never blank the COP.
         }
@@ -719,14 +805,11 @@ export function CopMap(props: CopMapProps) {
               ? tagFloodFeatures(res, res.feed)
               : tagFeedFeatures(res, res.feed);
             dataRef.current[feedSourceId(feed.id)] = fc;
-            const source = map.getSource(feedSourceId(feed.id)) as maplibregl.GeoJSONSource | undefined;
-            if (source) source.setData(fc as never);
-            else {
-              map.addSource(feedSourceId(feed.id), { type: "geojson", data: fc as never });
-              for (const spec of feedLayerSpecs(feed.id, props.theme, labelFont, feed.kind)) {
-                map.addLayer(spec as never);
-              }
-            }
+            // Flood styling classifies by pattern matching, which tile
+            // expressions cannot do, so flood references stay GeoJSON.
+            const tiles = feed.kind !== "fema-flood" && res.feed.incomplete ? tileTemplate("feed", feed.id) : undefined;
+            mount(feedSourceId(feed.id), fc, feedLayerSpecs(feed.id, props.theme, labelFont, feed.kind),
+              tiles, res.feed.stale, feedVisibleRef.current[feed.id] ?? true);
             setFeedHealth((current) => ({ ...current, [feed.id]: res.feed }));
             const requested = requestedFeatureRef.current;
             const requestKey = requested ? `${requested.datasetId}/${requested.featureId}` : "";
@@ -806,11 +889,15 @@ export function CopMap(props: CopMapProps) {
     // Board list and theme are stable for the life of a COP screen.
   }, []);
 
+  /** The ids of the layers mounted for one operational source. */
+  const mountedLayerIds = (key: string): string[] =>
+    (mountedRef.current[key]?.specs ?? []).map((spec) => (spec as { id: string }).id);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     for (const board of props.boards) {
-      for (const layerId of boardLayerIds(board.id)) {
+      for (const layerId of mountedLayerIds(sourceId(board.id))) {
         if (map.getLayer(layerId)) {
           map.setLayoutProperty(
             layerId,
@@ -821,6 +908,20 @@ export function CopMap(props: CopMapProps) {
       }
     }
   }, [visible, props.boards]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    for (const [key, mounted] of Object.entries(mountedRef.current)) {
+      for (const spec of mounted.specs) {
+        const id = (spec as { id: string }).id;
+        if (!map.getLayer(id)) continue;
+        for (const [prop, value] of Object.entries(opacityPaint(spec, opacity[key] ?? 1))) {
+          map.setPaintProperty(id, prop as "fill-opacity", value);
+        }
+      }
+    }
+  }, [opacity]);
 
   useEffect(() => {
     pickingRef.current = !!props.picking;
@@ -1109,7 +1210,7 @@ export function CopMap(props: CopMapProps) {
     const map = mapRef.current;
     if (!map) return;
     for (const feed of props.feeds ?? []) {
-      for (const layerId of feedLayerIds(feed.id, feed.kind)) {
+      for (const layerId of mountedLayerIds(feedSourceId(feed.id))) {
         if (map.getLayer(layerId)) {
           map.setLayoutProperty(
             layerId,
@@ -1331,6 +1432,8 @@ export function CopMap(props: CopMapProps) {
                 />
                 {b.title}
               </label>
+              <LayerOpacity value={opacity[sourceId(b.id)] ?? 1}
+                onChange={(value) => setOpacity((o) => ({ ...o, [sourceId(b.id)]: value }))} />
             </li>
           ))}
         </ul>
@@ -1355,6 +1458,8 @@ export function CopMap(props: CopMapProps) {
                     />
                     {f.title}
                   </label>
+                  <LayerOpacity value={opacity[feedSourceId(f.id)] ?? 1}
+                    onChange={(value) => setOpacity((o) => ({ ...o, [feedSourceId(f.id)]: value }))} />
                   <small style={{ display: "block", marginLeft: 24, color: "var(--eoc-text-muted)" }}>
                     {f.coverage ?? feedHealth[f.id]?.coverage ?? "Coverage unknown"}
                   </small>
@@ -1536,12 +1641,35 @@ export function CopMap(props: CopMapProps) {
             border: "1px solid var(--eoc-border)",
             borderRadius: 4,
             pointerEvents: "none",
+            whiteSpace: "pre-line",
           }}
         />
       </div>
       {selection ? <CopFeatureInspector selection={selection} onClose={closeInspection} /> : null}
     </div>
     </div>
+  );
+}
+
+/**
+ * A layer's opacity slider, named "Opacity" alone; the layer's checkbox
+ * directly above it carries the layer title.
+ */
+function LayerOpacity(props: { value: number; onChange: (value: number) => void }) {
+  const percent = Math.round(props.value * 100);
+  return (
+    <label className="eoc-cop-opacity">
+      Opacity
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={5}
+        value={percent}
+        aria-valuetext={`${percent}%`}
+        onChange={(event) => props.onChange(Number(event.target.value) / 100)}
+      />
+    </label>
   );
 }
 

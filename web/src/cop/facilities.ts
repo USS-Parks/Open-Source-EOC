@@ -93,6 +93,28 @@ export function facilitySymbol(type: FacilityType | undefined): FacilitySymbol |
   return type ? SYMBOL_BY_TYPE.get(type) : undefined;
 }
 
+/**
+ * facilityTypeFor as a MapLibre expression over raw record fields, for vector
+ * tiles; "" when unclassified.
+ * ponytail: expressions have no trim, so a padded value stays unclassified on
+ * the tile path; trim server-side if padded source values turn up.
+ */
+export function facilityTypeExpression(): unknown {
+  const canonical = Object.fromEntries(FACILITY_TYPE.values.map((type) => [type, type]));
+  const lookups: [string, Readonly<Record<string, FacilityType>>][] = [
+    ["_facilityType", canonical],
+    ["facility_type", canonical],
+    ["facilityType", canonical],
+    ["NAICS_DESC", EXACT_SOURCE_LABELS],
+    ["category", EXACT_SOURCE_LABELS],
+    ["subclass", STREET_FACILITY_TYPES],
+  ];
+  return lookups.reduceRight<unknown>(
+    (next, [key, table]) => ["match", ["downcase", ["to-string", ["get", key]]], ...Object.entries(table).flat(), next],
+    "",
+  );
+}
+
 /** MapLibre icon expression for tagged operational records. */
 export function facilityIconExpression(): unknown[] {
   return [

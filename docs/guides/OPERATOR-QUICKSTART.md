@@ -36,6 +36,25 @@ Check:
 Lifeline condition is an attributed assessment. It does not derive from an
 impact count or from ESF activation. Unknown or missing never means stable.
 
+### Read the map
+
+- **Map layers** lists each board and feed under **Operational layers** with
+  a checkbox and an **Opacity** slider. The slider fades every part of that one
+  layer (areas, lines, points, symbols and labels) so the basemap or another
+  layer shows through. It changes only your map view, not the data, and resets
+  when the map reloads.
+- A layer with more records than one page is drawn from map tiles cut by the
+  server. Below street zoom, nearby points are grouped into white circles; the
+  number in a circle is its record count. Select a circle to zoom toward it.
+  Status colors, facility symbols and record selection work as on a smaller
+  layer. **Find on map** and **Zoom to extent** cover only the first page of
+  such a layer; search the board itself for the rest.
+- The readout in the top-left corner of the map shows the latitude, longitude
+  and zoom of the pointer, or of the map center after a move. Its second line
+  gives the same position as a USNG and an MGRS grid reference to 1 m, for
+  example `USNG 10T DL 48923 71130 · MGRS 10TDL4892371130`. North of 84°N and
+  south of 80°S it reads "outside UTM coverage".
+
 ## 3. Work the incident
 
 - Use **Boards** for structured incident records and the Activity Log for

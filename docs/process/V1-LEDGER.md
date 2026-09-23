@@ -1559,3 +1559,57 @@ tagging remain separately gated as section 1 of the roster states.
   api-docs, ipaws (the route-table contract), the shared suite, the IPAWS web
   tests and the client test passed 183 of 183. TypeScript and ESLint clean.
 - **Evidence level:** unit and document.
+
+## V1 W4.5: operational vector tiles
+
+- **What changed.** Closes G-TILES without a martin sidecar. New
+  `GET /api/v1/tiles/boards/:boardId/:z/:x/:y.mvt` and
+  `.../tiles/datasets/:datasetId/:z/:x/:y.mvt`, new `server/src/geo/tiles.ts`,
+  build each tile with `ST_AsMVT`, `ST_AsMVTGeom` and `ST_TileEnvelope`,
+  bearer-authenticated through `withPerson` with row-level security on. Board
+  tiles carry only the fields the caller's role may read, the OGC items
+  route's authorization; dataset tiles use the dataset items route's incident
+  authority check. Below zoom 12 points group per 16 by 16 cell into a
+  `clusters` layer with `point_count`; a single point stays a feature.
+  `Cache-Control: private, max-age=5`.
+- **Client.** The map switches a board to tiles once its items page has a
+  `next` link, and a standard dataset once its load is incomplete. Status,
+  NAPSG facility icons and labels are rebuilt as MapLibre expressions over the
+  same lookup tables; the inspector works on tile features and a cluster click
+  zooms in. The bearer is attached through `transformRequest` only to tile URLs
+  this map created, never to basemap or raster servers. Each board and feed has
+  an opacity slider. The readout adds USNG and MGRS, new `web/src/cop/mgrs.ts`,
+  converted in-house from the NGA and Snyder UTM formulas with the Norway and
+  Svalbard exceptions.
+- **Defaults and deviations.** Boards switch at 101 records, one client page,
+  not at the 1,000 cap. Datasets keep their GeoJSON paging and switch past
+  50,000 features. Flood datasets stay on GeoJSON, because their zone
+  classification uses a regex MapLibre expressions cannot express. Tile layers
+  reload on each poll. The parity matrix is left to the final reconciliation;
+  the evidence is here. Ownership deviations: four lines in `MapSurface.tsx`
+  and two in `web/cop-demo/main.tsx` passing the tile URL and headers.
+- **Schema:** none; the spatial indexes already existed. Contract: two routes;
+  `docs/API.md` regenerated after rebasing onto the route-coverage change. No
+  dependency; the tests decode tiles with a reader in the test file.
+- **Evidence.** Real database: a 5,000-point board and dataset, low-zoom
+  `point_count` summing to exactly 5,000, an admin-only field absent from every
+  byte of a member's tile and present in an admin's, 404 and no features
+  without access, 401 unauthenticated, 400 out of zoom. Unit: USNG and MGRS
+  against the USNG standard's Washington Monument example, the NGA example
+  `4QFJ1234567890` and PostGIS-projected points; the expressions agree with the
+  existing tagging functions. Browser: all 5,000 records reach the map through
+  tiles, every tile request carries the bearer and returns 200, a tile feature
+  opens the inspector showing "Critical", the slider sets opacity 0.4, the
+  readout shows `MGRS 10TDL4892371130`.
+- **Verification.** In the lane: 35 files 237 of 237; the cop, KPI, hazards,
+  facility symbols and vector tile browser walks 5 of 5 serial; map surface 8
+  of 8. After rebasing: geo, vector-tiles, ipaws, the vector tile, cop,
+  facilities and damage browser walks, every web test including route
+  coverage, and the shared suite passed 637 of 637. TypeScript and ESLint
+  clean.
+- **Evidence level:** unit, real-database, browser and document.
+- **Deferred:** flood and parcel datasets on GeoJSON; Find on map, Zoom to
+  extent and building status coloring see only a tile layer's first page;
+  tiles drop nested JSON values, so the inspector shows scalars.
+- **Guide:** `docs/guides/OPERATOR-QUICKSTART.md`, "Read the map".
+- **Rollback:** revert the commit.

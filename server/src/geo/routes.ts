@@ -5,6 +5,7 @@ import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import { CURSOR_AT_FORMAT, cutPage, decodeCursor, pageQuery } from "../db/cursor.js";
 import { getEffectiveBoard, visibleFields } from "../boards/service.js";
+import { tileRoutes } from "./tiles.js";
 
 /**
  * OGC API - Features read surface (INV-4). Conformance classes
@@ -131,4 +132,5 @@ export function geoRoutes(
       });
     },
   );
+  tileRoutes(app, sql, authenticate);
 }

@@ -51,6 +51,8 @@ createRoot(document.getElementById("app")!).render(
       theme={theme}
       boards={boardId ? [{ id: boardId, title }] : []}
       fetchItems={fetchItems}
+      tileUrl={(kind, id) => (kind === "board" ? `/api/v1/tiles/boards/${id}/{z}/{x}/{y}.mvt` : undefined)}
+      tileHeaders={() => ({ authorization: `Bearer ${token}` })}
       pollMs={1000}
       center={[-123.61, 41.29]}
       zoom={11}

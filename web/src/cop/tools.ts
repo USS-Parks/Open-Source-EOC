@@ -80,6 +80,19 @@ export function labelFor(properties: Record<string, unknown>): string {
   return "";
 }
 
+/** labelFor as a MapLibre expression over raw record fields, for vector tiles. */
+export function labelExpression(): unknown {
+  return LABEL_KEYS.reduceRight<unknown>(
+    (next, key) => [
+      "case",
+      ["all", ["==", ["typeof", ["get", key]], "string"], ["!=", ["get", key], ""]],
+      ["to-string", ["get", key]],
+      next,
+    ],
+    "",
+  );
+}
+
 /** [minLng, minLat, maxLng, maxLat] of any GeoJSON geometry, or null if empty. */
 export function geometryBounds(geometry: unknown): [number, number, number, number] | null {
   let box: [number, number, number, number] | null = null;

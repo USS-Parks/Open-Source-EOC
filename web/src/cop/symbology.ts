@@ -43,6 +43,21 @@ export function symbolStatusFor(data: Record<string, unknown>): SymbolStatus {
   return "unknown";
 }
 
+/**
+ * symbolStatusFor as a MapLibre expression over raw record fields, for vector
+ * tiles, where features cannot be tagged before rendering.
+ */
+export function symbolStatusExpression(): unknown {
+  const branches = SYMBOL_STATUS.values.flatMap((status) => [
+    Object.keys(VALUE_STATUS).filter((value) => VALUE_STATUS[value] === status),
+    status,
+  ]);
+  return ["severity", "status", "priority"].reduceRight<unknown>(
+    (next, key) => ["match", ["get", key], ...branches, next],
+    "unknown",
+  );
+}
+
 /** Status frame → color, from the same tokens the boards use. */
 export function statusColor(status: SymbolStatus, theme: ThemeName): string {
   const t = themes[theme];

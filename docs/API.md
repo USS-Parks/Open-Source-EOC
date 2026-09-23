@@ -426,6 +426,11 @@ set, and then require that value as a bearer token.
 - `GET /api/v1/threads/:threadId/messages`: Read threads messages (auth: bearer; audience: operator)
 - `POST /api/v1/threads/:threadId/messages`: Run threads messages (auth: bearer; audience: operator)
 
+### tiles
+
+- `GET /api/v1/tiles/boards/:boardId/:z/:x/:y.mvt`: Read tiles boards (auth: bearer; audience: operator)
+- `GET /api/v1/tiles/datasets/:datasetId/:z/:x/:y.mvt`: Read tiles datasets (auth: bearer; audience: operator)
+
 ### tracking
 
 - `POST /api/v1/jurisdictions/:jurisdictionId/tracked-objects`: Run jurisdictions tracked objects (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=tracking)
