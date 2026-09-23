@@ -38,12 +38,10 @@ export type Surface =
   | { readonly kind: "lifeline"; readonly id: string }
   | { readonly kind: "esf"; readonly id?: string }
   | { readonly kind: "tasks" }
-  | { readonly kind: "field-reports" }
   | { readonly kind: "periods" }
   | { readonly kind: "participants" }
   | { readonly kind: "jic" }
   | { readonly kind: "templates" }
-  | { readonly kind: "settings" }
   | { readonly kind: "board-design"; readonly id: string }
   | { readonly kind: "not-found"; readonly path: string };
 
@@ -92,8 +90,6 @@ export function sectionOf(surface: Surface): string {
       return "incidentSetup";
     case "smartforms":
       return "smartForms";
-    case "field-reports":
-      return "fieldReports";
     case "periods":
       return "operationalPeriods";
     case "lifeline":
@@ -177,8 +173,6 @@ function parseSurfacePath(clean: string): Surface {
       return id ? { kind: "esf", id } : { kind: "esf" };
     case "tasks":
       return { kind: "tasks" };
-    case "field-reports":
-      return { kind: "field-reports" };
     case "periods":
       return { kind: "periods" };
     case "participants":
@@ -187,8 +181,6 @@ function parseSurfacePath(clean: string): Surface {
       return { kind: "jic" };
     case "templates":
       return { kind: "templates" };
-    case "settings":
-      return { kind: "settings" };
     default:
       return head ? { kind: "not-found", path: clean } : { kind: "map" };
   }
@@ -294,8 +286,6 @@ function surfacePath(surface: Surface): string {
       return surface.id ? `#/esf/${surface.id}` : "#/esf";
     case "tasks":
       return "#/tasks";
-    case "field-reports":
-      return "#/field-reports";
     case "periods":
       return "#/periods";
     case "participants":
@@ -304,8 +294,6 @@ function surfacePath(surface: Surface): string {
       return "#/jic";
     case "templates":
       return "#/templates";
-    case "settings":
-      return "#/settings";
     case "board-design":
       return `#/board/${surface.id}/design`;
     case "not-found":

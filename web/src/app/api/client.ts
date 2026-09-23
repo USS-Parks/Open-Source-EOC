@@ -515,9 +515,6 @@ export class ApiClient {
     this.resumeToken = null;
     this.onTokens?.(null);
   }
-  hasSession(): boolean {
-    return this.resumeToken !== null;
-  }
   /** Current bearer for the transient WebSocket sync handshake. Never persist this value. */
   fieldSyncToken(): string {
     if (!this.accessToken) throw new SessionExpiredError();
@@ -689,13 +686,6 @@ export class ApiClient {
     const query = incidentId ? `?incidentId=${encodeURIComponent(incidentId)}` : "";
     return this.request<{ id: string }>("POST", `/api/v1/boards/${boardId}/records${query}`, data);
   }
-  async incidentBoardIds(incidentId: string): Promise<string[]> {
-    const r = await this.request<{ boards: { id: string }[] }>(
-      "GET",
-      `/api/v1/incidents/${incidentId}`,
-    );
-    return r.boards.map((b) => b.id);
-  }
   async incidentBoards(incidentId: string): Promise<IncidentBoardRef[]> {
     const r = await this.request<{ boards: IncidentBoardRef[] }>(
       "GET",
@@ -818,13 +808,6 @@ export class ApiClient {
     return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/esf-assessments/${framework}/${encodeURIComponent(esf)}/decisions`, body);
   }
 
-  async lifelines(jurisdictionId: string): Promise<LifelineCurrent[]> {
-    const r = await this.request<{ lifelines: LifelineCurrent[] }>(
-      "GET",
-      `/api/v1/jurisdictions/${jurisdictionId}/lifelines`,
-    );
-    return r.lifelines;
-  }
   async notifications(): Promise<RawNotification[]> {
     const r = await this.request<{ notifications: RawNotification[] }>(
       "GET",
@@ -965,10 +948,7 @@ export class ApiClient {
       "GET", `/api/v1/incidents/${incidentId}/datasets`);
     return result.datasets;
   }
-  datasetItems(datasetId: string): Promise<CopFeatureCollection> {
-    return this.request<CopFeatureCollection>("GET", `/api/v1/datasets/${datasetId}/items`);
-  }
-  datasetItemsPage(
+  private datasetItemsPage(
     datasetId: string,
     options: { bbox?: readonly [number, number, number, number]; limit?: number; offset?: number } = {},
   ): Promise<DatasetItemsPageResponse> {
@@ -1403,18 +1383,6 @@ export class ApiClient {
       `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/files${suffix}`,
     );
   }
-  listWorkspaceStates(
-    incidentId: string,
-    kind: "workspace_preferences" | "workspace_layout",
-    options: { cursor?: string; limit?: number } = {},
-  ): Promise<SavedStateListPage> {
-    const query = new URLSearchParams({ kind });
-    if (options.cursor !== undefined) query.set("cursor", options.cursor);
-    if (options.limit !== undefined) query.set("limit", String(options.limit));
-    return this.request<SavedStateListPage>(
-      "GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/saved-state?${query}`,
-    );
-  }
   async getWorkspaceState(
     incidentId: string, kind: "workspace_preferences" | "workspace_layout", key: string,
   ): Promise<SavedStateRecord> {
@@ -1432,14 +1400,6 @@ export class ApiClient {
       { ...input },
     );
     return result.state;
-  }
-  async deleteWorkspaceState(
-    incidentId: string, kind: "workspace_preferences" | "workspace_layout", key: string,
-    expectedRevision: number,
-  ): Promise<void> {
-    await this.request<{ ok: true }>(
-      "DELETE", `/api/v1/incidents/${encodeURIComponent(incidentId)}/saved-state/${kind}/${encodeURIComponent(key)}?expectedRevision=${encodeURIComponent(String(expectedRevision))}`,
-    );
   }
   async signInPosition(positionId: string): Promise<void> {
     await this.request<{ ok: true }>("POST", `/api/v1/positions/${encodeURIComponent(positionId)}/sign-in`, {});

@@ -5176,3 +5176,37 @@ increment proves it and that coverage follows the incident area.
 - **Result:** committed as `00deba5`. No tracked change remains, the unpushed
   range is one commit with no merge, and `main` fast-forwards from `7b69b67`.
   W1.11 is complete. Next: W1.9, the client and console leftovers.
+
+## V1 W1.9: remove the dead console destinations and client methods
+
+- **Navigation:** the `field-reports` and `settings` surfaces rendered an
+  "unavailable" panel and nothing else. Both are removed from the `Surface`
+  union, the rail, the hash parser, the href builder, the section map and the
+  page-title map. The `UnavailableState` component had no other caller and is
+  removed with them. No navigation destination now renders an unavailable
+  panel, which is gate 10 and CANON section 11.
+- **Decision recorded:** the standing default in the roster is removal, not
+  build. `W3.10` revisits whether Settings returns as the entry point to the
+  administration surface that `W3.0` builds. Nothing else referenced either
+  route, and the `fieldReports` icon stays because the smart-forms surface and
+  the composition dashboard still use it.
+- **Client methods:** seven had no caller and are removed: `datasetItems`,
+  `deleteWorkspaceState`, `hasSession`, `incidentBoardIds`, `lifelines`,
+  `listWorkspaceStates` and the public `datasetItemsPage`, the last of which is
+  retained as a private helper because `datasetItemsInArea` pages through it.
+  `getTableViewState` was a candidate but is kept: `TableViewPersistence` in
+  `web/src/design/table-saved-views.tsx` requires it structurally. Their routes
+  remain in the contract and in `docs/API.md`.
+- **Regression found and closed:** `server/src/__tests__/app-e2e.test.ts` has
+  been failing on `main` since `51475d2`. That commit gated tracking and
+  facilities behind `OPENEOC_INTEGRATIONS` and updated `tracking.test.ts` and
+  `facilities.test.ts`, but not the console walk, which registers a tracked
+  object. The harness now enables both integrations; a default deployment still
+  registers neither. This was a live red on `main`, not a break introduced by
+  this unit.
+- **Verification:** recursive TypeScript clean; full ESLint clean; the web
+  suite passed 406 of 406 tests across 58 files; `app-e2e` passed 4 of 4 after
+  the harness fix, having failed 1 of 4 before it. The focus-wrap assertion in
+  the mobile section drawer now names Templates, the last rail item.
+- **Result:** W1.9 is complete. Next: W1.10, replace the abandoned workbook
+  parser on the XLSForm import path.

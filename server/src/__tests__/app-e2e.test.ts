@@ -53,7 +53,9 @@ beforeAll(async () => {
   await ensureStandardTemplates(admin);
   await ensureStandardDashboards(admin);
   await ensureStandardIncidentTemplates(admin);
-  app = buildApp(runtime, { oidc: null });
+  // The console walk covers the tracking surface, so this harness enables the
+  // optional integrations explicitly. A default deployment registers neither.
+  app = buildApp(runtime, { oidc: null, integrations: ["tracking", "facilities"] });
 
   serveStatic(app, "/app", DIST);
   baseUrl = await listen(app);
@@ -247,7 +249,7 @@ describe("the operations console in a real browser, offline", () => {
             await page.getByRole("button", { name: "All sections" }).click();
             expect(await page.getByRole("button", { name: "Close sections" }).evaluate(isFocused)).toBe(true);
             await page.keyboard.press("Shift+Tab");
-            expect(await page.getByRole("button", { name: "Settings", exact: true }).evaluate(isFocused)).toBe(true);
+            expect(await page.getByRole("button", { name: "Templates", exact: true }).evaluate(isFocused)).toBe(true);
             await page.keyboard.press("Escape");
             expect(await page.getByRole("button", { name: "All sections" }).evaluate(isFocused)).toBe(true);
           }

@@ -15,7 +15,7 @@ import {
 } from "../layout/AppShell.js";
 import { OperationalPeriodControl, PositionControl, useWorkspaceContext } from "../layout/context.js";
 import { parseRouteHash, sectionOf, surfaceHash, useSurface, type RouteContext, type Surface } from "../router.js";
-import { EmptyState, ErrorNote, Loading, NotFoundState, UnavailableState } from "./parts.js";
+import { EmptyState, ErrorNote, Loading, NotFoundState } from "./parts.js";
 import { MapSurface } from "../surfaces/MapSurface.js";
 import { DashboardSurface, parseDashboardViewState, type DashboardViewState } from "../surfaces/DashboardSurface.js";
 import { BoardSurface, BoardRecordDetailPane, type BoardRecordContext } from "../surfaces/BoardSurface.js";
@@ -53,7 +53,6 @@ const NAV: readonly NavGroup[] = [
     { key: "boards", label: "Boards", icon: "boards" },
     { key: "resources", label: "Resources", icon: "resources" },
     { key: "tasks", label: "Tasks", icon: "tasks" },
-    { key: "fieldReports", label: "Field Reports", icon: "fieldReports" },
     { key: "smartForms", label: "Smart Forms", icon: "smartForms" },
     { key: "tracking", label: "Tracking", icon: "tracking" },
   ] },
@@ -74,7 +73,6 @@ const NAV: readonly NavGroup[] = [
     { key: "datasets", label: "Datasets", icon: "datasets" },
     { key: "feeds", label: "Feeds", icon: "feeds" },
     { key: "templates", label: "Templates", icon: "templates" },
-    { key: "settings", label: "Settings", icon: "settings" },
   ] },
 ];
 
@@ -378,8 +376,6 @@ function sectionForNav(key: string): Surface {
       return { kind: "lifelines" };
     case "tasks":
       return { kind: "tasks" };
-    case "fieldReports":
-      return { kind: "field-reports" };
     case "operationalPeriods":
       return { kind: "periods" };
     case "participants":
@@ -388,8 +384,6 @@ function sectionForNav(key: string): Surface {
       return { kind: "jic" };
     case "templates":
       return { kind: "templates" };
-    case "settings":
-      return { kind: "settings" };
     default:
       return { kind: "map" };
   }
@@ -642,8 +636,6 @@ function Center(props: {
         personId={props.personId} jurisdictionId={props.jurisdictionId}
         canManage={props.isAdmin} closed={props.incidentClosed}
         onOpenTemplates={() => props.onNavigate({ kind: "incidents" })} />;
-    case "field-reports":
-      return <UnavailableState title="Field Reports is unavailable" message="This section is not available in the current application. Existing reports remain available through their board." returnLabel="Return to Boards" onReturn={() => props.onNavigate({ kind: "boards" })} />;
     case "periods":
       return props.incidentId ? <IncidentAreaEditor client={props.client} incidentId={props.incidentId}
         incidentName={props.incidentName ?? "Incident"} theme={props.theme}
@@ -662,8 +654,6 @@ function Center(props: {
       return <TemplatesSurface client={props.client} jurisdictionId={props.jurisdictionId} boards={props.boards}
         isInstanceAdmin={props.isInstanceAdmin} isJurisdictionAdmin={props.isAdmin}
         onOpenBoard={props.onOpenBoard} onDesignBoard={(id) => props.onNavigate({ kind: "board-design", id })} />;
-    case "settings":
-      return <UnavailableState title="Settings is unavailable" message="This section is not available in the current application." returnLabel="Open Incident Setup" onReturn={() => props.onNavigate({ kind: "incidents" })} />;
     case "board-design":
       return <TemplatesSurface client={props.client} jurisdictionId={props.jurisdictionId} boards={props.boards} boardId={s.id}
         isInstanceAdmin={props.isInstanceAdmin} isJurisdictionAdmin={props.isAdmin}
@@ -688,7 +678,6 @@ function pageFor(surface: Surface, scope: string): { readonly page: ShellPage; r
     case "board-design": return result("Operations", "Board customization", "boards");
     case "resources": return result("Operations", "Resources", "boards");
     case "tasks": return result("Operations", "Tasks", "boards");
-    case "field-reports": return result("Operations", "Field Reports", "boards");
     case "smartforms": return result("Operations", "Smart Forms", "boards");
     case "tracking": return result("Operations", "Tracking", "boards");
     case "periods": return result("Planning", "Operational Periods", "planning");
@@ -703,7 +692,6 @@ function pageFor(surface: Surface, scope: string): { readonly page: ShellPage; r
     case "datasets": return result("Data and administration", "Datasets", "map");
     case "feeds": return result("Data and administration", "Feeds", "map");
     case "templates": return result("Data and administration", "Templates", "boards");
-    case "settings": return result("Data and administration", "Settings", "boards");
     case "alerts": return result("Notifications", "Notification center", "boards");
     case "not-found": return result("Navigation", "Page not found", "boards");
   }

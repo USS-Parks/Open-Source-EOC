@@ -23,12 +23,10 @@ describe("surface hash routing", () => {
     { kind: "lifeline", id: "energy" },
     { kind: "esf", id: "utilities" },
     { kind: "tasks" },
-    { kind: "field-reports" },
     { kind: "periods" },
     { kind: "participants" },
     { kind: "jic" },
     { kind: "templates" },
-    { kind: "settings" },
     { kind: "board-design", id: "b1" },
     { kind: "not-found", path: "not-a-workspace" },
   ];
@@ -55,7 +53,7 @@ describe("surface hash routing", () => {
     expect(sectionOf({ kind: "sitrep", id: "s1" })).toBe("sitreps");
     expect(sectionOf({ kind: "dashboard" })).toBe("overview");
     expect(sectionOf({ kind: "board-design", id: "b1" })).toBe("boards");
-    expect(sectionOf({ kind: "field-reports" })).toBe("fieldReports");
+    expect(sectionOf({ kind: "periods" })).toBe("operationalPeriods");
     expect(sectionOf({ kind: "map" })).toBe("map");
   });
 
