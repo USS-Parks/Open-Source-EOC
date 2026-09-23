@@ -44,6 +44,7 @@ DELETE /api/v1/incidents/:incidentId/dashboard-configs/:key
 DELETE /api/v1/incidents/:incidentId/saved-state/:kind/:key
 DELETE /api/v1/jurisdictions/:jurisdictionId/members/:personId
 DELETE /api/v1/positions/:positionId/assignments/:personId
+DELETE /api/v1/reports/:reportId
 GET /api/v1/aar/:aarId/pdf
 GET /api/v1/ack/:token
 GET /api/v1/auth/oidc/callback
@@ -133,6 +134,7 @@ GET /api/v1/jurisdictions/:jurisdictionId/notification-allowlist
 GET /api/v1/jurisdictions/:jurisdictionId/notification-channels/:kind
 GET /api/v1/jurisdictions/:jurisdictionId/position-assignments
 GET /api/v1/jurisdictions/:jurisdictionId/positions
+GET /api/v1/jurisdictions/:jurisdictionId/reports
 GET /api/v1/jurisdictions/:jurisdictionId/resource-requests
 GET /api/v1/jurisdictions/:jurisdictionId/retention
 GET /api/v1/jurisdictions/:jurisdictionId/reunification
@@ -152,6 +154,8 @@ GET /api/v1/ogc/conformance
 GET /api/v1/peers/:peerId/pending
 GET /api/v1/persons
 GET /api/v1/ready
+GET /api/v1/reports/:reportId
+GET /api/v1/reports/:reportId/output
 GET /api/v1/resource-requests/:id
 GET /api/v1/resource-requests/:id/costs/export
 GET /api/v1/sitreps/:sitrepId
@@ -273,6 +277,8 @@ POST /api/v1/jurisdictions/:jurisdictionId/notification-rules
 POST /api/v1/jurisdictions/:jurisdictionId/notifications/run-scheduled
 POST /api/v1/jurisdictions/:jurisdictionId/peers
 POST /api/v1/jurisdictions/:jurisdictionId/positions
+POST /api/v1/jurisdictions/:jurisdictionId/reports
+POST /api/v1/jurisdictions/:jurisdictionId/reports/preview
 POST /api/v1/jurisdictions/:jurisdictionId/resource-requests
 POST /api/v1/jurisdictions/:jurisdictionId/shifts
 POST /api/v1/jurisdictions/:jurisdictionId/sitreps
@@ -317,6 +323,7 @@ PUT /api/v1/jurisdictions/:jurisdictionId/notification-allowlist
 PUT /api/v1/jurisdictions/:jurisdictionId/notification-channels/:kind
 PUT /api/v1/jurisdictions/:jurisdictionId/retention
 PUT /api/v1/peers/:peerId/link
+PUT /api/v1/reports/:reportId
 `
   .trim()
   .split("\n");

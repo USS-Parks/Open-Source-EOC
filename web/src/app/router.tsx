@@ -52,6 +52,7 @@ export type Surface =
   | { readonly kind: "field-reports" }
   | { readonly kind: "contacts" }
   | { readonly kind: "mass-notification" }
+  | { readonly kind: "reports" }
   | { readonly kind: "not-found"; readonly path: string };
 
 export interface RouteContext {
@@ -212,6 +213,8 @@ function parseSurfacePath(clean: string): Surface {
       return { kind: "contacts" };
     case "mass-notification":
       return { kind: "mass-notification" };
+    case "reports":
+      return { kind: "reports" };
     default:
       return head ? { kind: "not-found", path: clean } : { kind: "map" };
   }
@@ -345,6 +348,8 @@ function surfacePath(surface: Surface): string {
       return "#/contacts";
     case "mass-notification":
       return "#/mass-notification";
+    case "reports":
+      return "#/reports";
     case "not-found":
       return `#/${surface.path}`;
   }

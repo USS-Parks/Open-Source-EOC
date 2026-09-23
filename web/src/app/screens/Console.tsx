@@ -50,6 +50,7 @@ import { StaffingSurface } from "../../staffing/StaffingSurface.js";
 import { FederationSurface } from "../../federation/FederationSurface.js";
 import { ContactsSurface } from "../../contacts/ContactsSurface.js";
 import { MassNotificationSurface } from "../../contacts/MassNotificationSurface.js";
+import { ReportsSurface } from "../../reports/ReportsSurface.js";
 
 const NAV: readonly NavGroup[] = [
   { key: "situation", label: "Situation", items: [
@@ -75,6 +76,7 @@ const NAV: readonly NavGroup[] = [
     { key: "forms", label: "ICS Forms", icon: "forms" },
     { key: "iap", label: "IAP", icon: "iap" },
     { key: "aar", label: "AAR", icon: "aar" },
+    { key: "reports", label: "Reports", icon: "sitrep" },
   ] },
   { key: "coordination", label: "Coordination", items: [
     { key: "participants", label: "Participants", icon: "participants" },
@@ -97,8 +99,8 @@ const NAV: readonly NavGroup[] = [
 function railFor(administers: boolean, designsBoards: boolean, integrations: ReadonlySet<string>, member: boolean): readonly NavGroup[] {
   const hidden = new Set([
     ...(administers ? [] : ["admin", "federation"]),
-    // The directory and mass notification belong to members of the jurisdiction in view.
-    ...(member ? [] : ["contacts", "massNotification"]),
+    // The directory, mass notification and reports belong to members of the jurisdiction in view.
+    ...(member ? [] : ["contacts", "massNotification", "reports"]),
     ...(designsBoards ? [] : ["templates"]),
     // Optional integrations register no routes when off, so their entries go too.
     ...["facilities", "tracking"].filter((key) => !integrations.has(key)),
@@ -454,6 +456,8 @@ function sectionForNav(key: string): Surface {
       return { kind: "contacts" };
     case "massNotification":
       return { kind: "mass-notification" };
+    case "reports":
+      return { kind: "reports" };
     default:
       return { kind: "map" };
   }
@@ -774,6 +778,11 @@ function Center(props: {
     case "mass-notification":
       // Sending needs the admin-or-member role that alert authoring checks; viewers follow the sends.
       return <MassNotificationSurface client={props.client} jurisdictionId={props.jurisdictionId} canSend={props.canAuthorAlerts} />;
+    case "reports":
+      // Viewers read and run reports; writers build them.
+      return <ReportsSurface client={props.client} jurisdictionId={props.jurisdictionId} boards={props.boards}
+        incidentId={props.incidentId} incidentName={props.incidentName} incidentBoardIds={props.incidentBoardIds}
+        canBuild={props.canAuthorAlerts} />;
     case "not-found":
       return <NotFoundState onMap={() => props.onNavigate({ kind: "map" })} onOverview={() => props.onNavigate({ kind: "dashboard" })} />;
   }
@@ -805,6 +814,7 @@ function pageFor(surface: Surface, scope: string): { readonly page: ShellPage; r
     case "forms": return result("Planning", "ICS Forms", "planning");
     case "iap": return result("Planning", "IAP", "planning");
     case "aar": return result("Planning", "AAR", "planning");
+    case "reports": return result("Planning", "Reports", "planning");
     case "participants": return result("Coordination", "Participants", "boards");
     case "messages": return result("Coordination", "Messages", "boards");
     case "jic": return result("Coordination", "JIC", "planning");

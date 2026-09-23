@@ -2170,6 +2170,37 @@ export class ApiClient {
   async updatePaItem(itemId: string, input: PaItemInput): Promise<void> {
     await this.request("PUT", `/api/v1/damage/pa-items/${encodeURIComponent(itemId)}`, { ...input });
   }
+
+  // ---- Reports ----
+  listReports(jurisdictionId: string, page: PageOptions = {}): Promise<ReportsPage> {
+    const params = pageParams(page);
+    const query = params.size ? `?${params}` : "";
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/reports${query}`);
+  }
+  createReport(jurisdictionId: string, input: ReportInput): Promise<SavedReport> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/reports`,
+      input as unknown as Record<string, unknown>);
+  }
+  /** Run an unsaved definition: its first rows, with groups and totals over every record. */
+  previewReport(jurisdictionId: string, input: Pick<ReportInput, "boardId" | "incidentId" | "definition">): Promise<ReportResult> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/reports/preview`,
+      input as unknown as Record<string, unknown>);
+  }
+  getReport(reportId: string): Promise<SavedReportDetail> {
+    return this.request("GET", `/api/v1/reports/${encodeURIComponent(reportId)}`);
+  }
+  updateReport(reportId: string, input: ReportInput): Promise<SavedReport> {
+    return this.request("PUT", `/api/v1/reports/${encodeURIComponent(reportId)}`, input as unknown as Record<string, unknown>);
+  }
+  async deleteReport(reportId: string): Promise<void> {
+    await this.request("DELETE", `/api/v1/reports/${encodeURIComponent(reportId)}`);
+  }
+  runReport(reportId: string): Promise<ReportResult & { readonly name: string }> {
+    return this.request("GET", `/api/v1/reports/${encodeURIComponent(reportId)}/output?format=json`);
+  }
+  downloadReport(reportId: string, format: ReportFormat): Promise<Blob> {
+    return this.requestBlob(`/api/v1/reports/${encodeURIComponent(reportId)}/output?format=${format}`);
+  }
 }
 
 // ---- Notification channel types ----
@@ -2412,4 +2443,81 @@ export interface TrackedObject {
     readonly occurredAt: string;
   }>;
   readonly nextCursor: string | null;
+}
+
+// ---- Report types ----
+
+export type ReportFormat = "pdf" | "xlsx" | "csv";
+export type ReportTotalFunction = "sum" | "avg" | "min" | "max";
+export interface ReportDefinition {
+  readonly columns: readonly string[];
+  readonly where: readonly ViewCondition[];
+  /** Up to two fields, outermost first. */
+  readonly groupBy: readonly string[];
+  readonly totals: ReadonlyArray<{ readonly field: string; readonly fn: ReportTotalFunction }>;
+  readonly sorts: ReadonlyArray<{ readonly field: string; readonly dir: "asc" | "desc" }>;
+  readonly archived: "exclude" | "include" | "only";
+}
+export type ReportCadence =
+  | { readonly kind: "interval"; readonly minutes: number }
+  | { readonly kind: "daily"; readonly time: string; readonly timeZone: string };
+export interface ReportSchedule {
+  readonly cadence: ReportCadence;
+  readonly format: ReportFormat;
+  readonly emails: readonly string[];
+  readonly contactIds: readonly string[];
+  readonly storeFile: boolean;
+}
+export interface ReportInput {
+  readonly name: string;
+  readonly boardId: string;
+  readonly incidentId: string | null;
+  readonly definition: ReportDefinition;
+  readonly schedule: ReportSchedule | null;
+}
+export interface SavedReport extends ReportInput {
+  readonly id: string;
+  readonly jurisdictionId: string;
+  readonly boardTitle: string | null;
+  readonly nextRunAt: string | null;
+  readonly owner: { readonly personId: string; readonly displayName: string };
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  /** The owner while a writer, or an administrator. */
+  readonly canEdit: boolean;
+}
+export interface ReportRun {
+  readonly id: string;
+  readonly ranAt: string;
+  readonly ranAs: string;
+  readonly rows: number | null;
+  readonly outcome: "delivered" | "partial" | "failed";
+  readonly detail: Readonly<Record<string, unknown>>;
+}
+export interface SavedReportDetail extends SavedReport {
+  readonly runs: readonly ReportRun[];
+}
+export interface ReportsPage {
+  readonly reports: readonly SavedReport[];
+  readonly nextCursor: string | null;
+}
+export interface ReportResult {
+  readonly board: { readonly id: string; readonly title: string };
+  readonly incidentId: string | null;
+  readonly generatedAt: string;
+  readonly columns: ReadonlyArray<{ readonly key: string; readonly label: string; readonly type: string }>;
+  readonly groupBy: ReadonlyArray<{ readonly key: string; readonly label: string; readonly type: string }>;
+  readonly totals: ReadonlyArray<{ readonly key: string; readonly field: string; readonly fn: ReportTotalFunction; readonly label: string }>;
+  /** Fields the definition names that the person running it cannot read. */
+  readonly omitted: readonly string[];
+  readonly rows: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  /** Each group before its subgroups; its rows are `count` rows from `first`. */
+  readonly groups: ReadonlyArray<{
+    readonly level: number;
+    readonly values: readonly unknown[];
+    readonly first: number;
+    readonly count: number;
+    readonly totals: Readonly<Record<string, number | null>>;
+  }>;
+  readonly total: { readonly count: number; readonly totals: Readonly<Record<string, number | null>> };
 }

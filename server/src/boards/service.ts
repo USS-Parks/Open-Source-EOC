@@ -923,7 +923,7 @@ function sortKeySql(sql: Sql, field: FieldDef): { expr: never; numeric: boolean 
  * short. ponytail: `in` compares the stored value's text form, which differs
  * from applyView's String() only for objects and exotic numbers such as 1e21.
  */
-function conditionSql(
+export function conditionSql(
   sql: Sql,
   condition: ViewCondition,
   fields: ReadonlyMap<string, FieldDef>,

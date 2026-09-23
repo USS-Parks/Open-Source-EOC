@@ -8,7 +8,8 @@ import { connect as tlsConnect, type ConnectionOptions } from "node:tls";
  * A minimal SMTP submission client: one message to one recipient per
  * connection. Implicit TLS or STARTTLS (never downgraded to plain text when
  * STARTTLS was asked for), AUTH PLAIN or LOGIN, multi-line replies, and a
- * base64 text body so no line needs dot-stuffing or exceeds the line limit.
+ * base64 text body and attachments so no line needs dot-stuffing or exceeds
+ * the line limit.
  * Every connection carries an idle timeout.
  */
 
@@ -35,10 +36,24 @@ export interface SmtpReceipt {
  */
 export class SmtpRefused extends Error {}
 
+/** A file sent with a message, as a base64 MIME part. */
+export interface MailAttachment {
+  readonly filename: string;
+  readonly contentType: string;
+  readonly content: Uint8Array;
+}
+
+export interface MailMessage {
+  readonly to: string;
+  readonly subject: string;
+  readonly body: string;
+  readonly attachments?: readonly MailAttachment[] | undefined;
+}
+
 export async function sendMail(
   relay: SmtpRelay,
   password: string | null,
-  message: { readonly to: string; readonly subject: string; readonly body: string },
+  message: MailMessage,
   options: { readonly timeoutMs: number; readonly tls?: ConnectionOptions | undefined },
 ): Promise<SmtpReceipt> {
   // SNI takes a host name, never an address.
@@ -111,12 +126,36 @@ export async function sendMail(
   }
 }
 
-/** The message as sent after DATA, dot-stuffed, without the terminating line. */
-export function render(
-  from: string,
-  message: { readonly to: string; readonly subject: string; readonly body: string },
-  messageId: string,
-): string {
+/**
+ * The message as sent after DATA, dot-stuffed, without the terminating line.
+ * With attachments it is multipart/mixed: the text part, then one base64 part
+ * per file. Every part is base64, so no line starts with a dot or runs long.
+ */
+export function render(from: string, message: MailMessage, messageId: string): string {
+  const base64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64").match(/.{1,76}/g) ?? [];
+  const text = ["Content-Type: text/plain; charset=utf-8", "Content-Transfer-Encoding: base64", "",
+    ...base64(Buffer.from(message.body, "utf8"))];
+  const files = message.attachments ?? [];
+  const boundary = `=_openeoc_${randomUUID()}`;
+  const body = files.length === 0 ? text : [
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    "",
+    `--${boundary}`,
+    ...text,
+    ...files.flatMap((file) => {
+      // A name the relay and the reader cannot mistake for header syntax.
+      const name = file.filename.replace(/[^\w. -]/g, "_").slice(0, 120) || "attachment";
+      return [
+        `--${boundary}`,
+        `Content-Type: ${file.contentType.replace(/[^\w.+/-]/g, "")}; name="${name}"`,
+        `Content-Disposition: attachment; filename="${name}"`,
+        "Content-Transfer-Encoding: base64",
+        "",
+        ...base64(file.content),
+      ];
+    }),
+    `--${boundary}--`,
+  ];
   const lines = [
     `From: ${from}`,
     `To: ${message.to}`,
@@ -124,10 +163,7 @@ export function render(
     `Date: ${new Date().toUTCString()}`,
     `Message-ID: <${messageId}>`,
     "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=utf-8",
-    "Content-Transfer-Encoding: base64",
-    "",
-    ...(Buffer.from(message.body, "utf8").toString("base64").match(/.{1,76}/g) ?? []),
+    ...body,
   ];
   return lines.join("\r\n").replace(/^\./gm, "..");
 }

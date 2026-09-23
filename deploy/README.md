@@ -214,6 +214,7 @@ its database session. No cron job or manual call is needed.
 | Feed polls (each feed keeps its own poll interval) | `OPENEOC_SCHEDULER_FEEDS_MS` | 60000 |
 | Outbound webhook, push and federation deliveries | `OPENEOC_SCHEDULER_OUTBOX_MS` | 2000 |
 | Mass notification call-downs | `OPENEOC_SCHEDULER_CALLDOWNS_MS` | 30000 |
+| Scheduled reports, run as each report's owner | `OPENEOC_SCHEDULER_REPORTS_MS` | 60000 |
 | Retention purge (only classes a jurisdiction admin has given a period) | `OPENEOC_SCHEDULER_RETENTION_MS` | 3600000 |
 | Audit forwarding to syslog (only with `OPENEOC_SYSLOG_URL`) | `OPENEOC_SCHEDULER_SYSLOG_MS` | 10000 |
 

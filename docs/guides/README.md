@@ -25,6 +25,7 @@ substitute. Re-select context before acting.
 | Capture field reports and assigned completions | [Field user guide](./FIELD-USER.md) |
 | Moderate damage reports and prepare declaration support | [Damage assessment](./DAMAGE-ASSESSMENT.md) |
 | Track facility and shelter status, hospital beds and shelter capacity | [Facilities and shelters](./FACILITIES.md) |
+| Build, run, download and schedule reports over boards | [Reports](./REPORTS.md) |
 | Create or revise board schemas | [Board designer guide](./DESIGNER.md) |
 | Configure federation | [Federation setup](./FEDERATION-SETUP.md) |
 

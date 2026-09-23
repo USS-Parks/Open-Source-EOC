@@ -30,6 +30,7 @@ describe("surface hash routing", () => {
     { kind: "board-design", id: "b1" },
     { kind: "contacts" },
     { kind: "mass-notification" },
+    { kind: "reports" },
     { kind: "damage" },
     { kind: "facilities" },
     { kind: "admin" },

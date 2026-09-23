@@ -403,6 +403,16 @@ set, and then require that value as a bearer token.
 
 - `GET /api/v1/ready`: Read ready (auth: none; audience: system)
 
+### reports
+
+- `GET /api/v1/jurisdictions/:jurisdictionId/reports`: Read jurisdictions reports (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/reports`: Run jurisdictions reports (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/reports/preview`: Run jurisdictions reports preview (auth: bearer; audience: operator)
+- `DELETE /api/v1/reports/:reportId`: Delete reports (auth: bearer; audience: operator)
+- `GET /api/v1/reports/:reportId`: Read reports (auth: bearer; audience: operator)
+- `PUT /api/v1/reports/:reportId`: Set reports (auth: bearer; audience: operator)
+- `GET /api/v1/reports/:reportId/output`: Read reports output (auth: bearer; audience: operator)
+
 ### resources
 
 - `GET /api/v1/jurisdictions/:jurisdictionId/resource-requests`: Read jurisdictions resource requests (auth: bearer; audience: operator)

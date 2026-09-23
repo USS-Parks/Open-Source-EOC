@@ -1,0 +1,15 @@
+.reports-check { align-items: center; display: flex; gap: 8px; min-height: 44px; }
+.reports-check input { height: 20px; width: 20px; }
+.reports-checks, .reports-totals { border: 0; margin: 0; min-width: 0; padding: 0; }
+.reports-checks { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.reports-checks legend, .reports-totals legend { font-weight: 600; margin-bottom: 4px; padding: 0; }
+.reports-total-row { align-items: end; display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin-bottom: 8px; }
+.reports-field { display: flex; flex-direction: column; gap: 4px; }
+.reports-field input { background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: 4px; color: var(--eoc-text); font: inherit; min-height: 44px; padding: 6px; }
+.reports-heading { font-size: 1em; margin: 16px 0 8px; }
+.reports-result { display: grid; gap: 8px; margin-top: 12px; min-width: 0; }
+.reports-scroll { max-width: 100%; overflow-x: auto; }
+.reports-group td { font-weight: 600; }
+.reports-schedule { display: grid; gap: 10px; }
+.reports-runs { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.reports-runs li { align-items: baseline; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: .9rem; overflow-wrap: anywhere; }

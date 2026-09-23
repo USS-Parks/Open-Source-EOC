@@ -33,7 +33,8 @@ const WIN_ANSI_SPECIAL = new Map<number, number>([
   [0x0153, 0x9c], [0x017e, 0x9e], [0x0178, 0x9f],
 ]);
 
-function escapeText(s: string): string {
+/** Text as a PDF string body in WinAnsi, for the standard Helvetica fonts. */
+export function escapeText(s: string): string {
   // Standard Helvetica with WinAnsi faithfully covers Western accented names
   // and common punctuation. Characters outside WinAnsi become "?" rather than
   // claiming arbitrary Unicode support without an embedded licensed font.
