@@ -32,6 +32,7 @@ export function profilePaths(outRoot, profile) {
     secrets: resolve(root, "secrets"),
     ownerPassword: resolve(root, "secrets", "postgres.password"),
     runtimePassword: resolve(root, "secrets", "app_runtime.password"),
+    secretKey: resolve(root, "secrets", "envelope.key"),
     browser: resolve(root, "browser"),
     logs: resolve(root, "logs"),
     run: resolve(root, "run"),

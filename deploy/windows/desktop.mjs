@@ -377,6 +377,7 @@ async function setupProfile(args) {
   secureDirectory(paths.run);
   writeFileSync(paths.ownerPassword, `${randomPassword()}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
   writeFileSync(paths.runtimePassword, `${randomPassword()}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+  ensureSecretKey(paths);
   writeJsonAtomic(paths.config, config);
 
   try {
@@ -539,6 +540,11 @@ async function startProfile(args) {
   }
 }
 
+function ensureSecretKey(paths) {
+  if (existsSync(paths.secretKey)) return;
+  writeFileSync(paths.secretKey, `${randomPassword()}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+}
+
 /** Set up a new profile once, then open its loopback desktop application. */
 async function launchProfile(args) {
   const profile = validateProfileName(String(args.profile ?? "production"));
@@ -555,6 +561,11 @@ async function serveProfile(args) {
   delete process.env.OPENEOC_DESKTOP_TOKEN;
   if (!token) throw new Error("Desktop ownership token is missing");
   process.env.OPENEOC_DATA_DIR = paths.blobs;
+  // Credentials at rest (MFA secrets, connector credentials) are encrypted
+  // with this profile's own key. Profiles created before the key existed get
+  // one here.
+  ensureSecretKey(paths);
+  process.env.OPENEOC_SECRET_KEY ??= readFileSync(paths.secretKey, "utf8").trim();
   const runtimePassword = readFileSync(paths.runtimePassword, "utf8").trim();
   const [{ connect }, { buildApp }] = await Promise.all([
     importServer("server/src/db/client.ts"),

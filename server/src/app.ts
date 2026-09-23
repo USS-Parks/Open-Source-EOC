@@ -9,7 +9,6 @@ import {
   createJurisdiction,
   createPerson,
   createPosition,
-  login,
   logout,
   type Principal,
   principalFromToken,
@@ -19,6 +18,7 @@ import {
   signOutPosition,
 } from "./auth/service.js";
 import { checkAllowed, recordFailure, recordSuccess } from "./auth/rate-limit.js";
+import { activateEnrollment, beginEnrollment, passwordLogin, verifyMfa } from "./auth/mfa.js";
 import { createGuestGrant, listPositions, provisionJurisdiction, revokeGuestGrant } from "./auth/authz.js";
 import { OidcClient, oidcSettingsFromEnv, type OidcSettings } from "./auth/oidc.js";
 import { aarRoutes } from "./aar/routes.js";
@@ -82,6 +82,8 @@ declare module "fastify" {
 
 const LoginBody = z.object({ email: z.string().email(), password: z.string().min(1) });
 const ResumeBody = z.object({ resumeToken: z.string().min(1) });
+const MfaTokenBody = z.object({ mfaToken: z.string().min(1) });
+const MfaCodeBody = z.object({ mfaToken: z.string().min(1), code: z.string().min(1).max(64) });
 const CreatePositionBody = z.object({ key: z.string().min(1), title: z.string().min(1) });
 const AssignBody = z.object({ personId: z.string().uuid() });
 const CreatePersonBody = z.object({
@@ -114,6 +116,8 @@ export interface BuildAppOptions {
   readonly slowRequestMs?: number;
   /** Bearer token for GET /api/v1/metrics; defaults to OPENEOC_METRICS_TOKEN. Unset serves 404. */
   readonly metricsToken?: string | null;
+  /** Admins must enroll in MFA to sign in with a password. Default: on unless OPENEOC_REQUIRE_ADMIN_MFA=0. */
+  readonly requireAdminMfa?: boolean;
 }
 
 export type OptionalIntegration = "collab" | "facilities" | "meetings" | "tracking";
@@ -212,17 +216,33 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
     }
   }
 
+  const requireAdminMfa = options.requireAdminMfa ?? process.env.OPENEOC_REQUIRE_ADMIN_MFA !== "0";
   app.post("/api/v1/auth/login", async (req, reply) => {
     const body = LoginBody.parse(req.body);
     if (!checkAllowed(body.email)) throw new AuthError(429, "too many attempts, retry later");
     try {
-      const result = await login(sql, body.email, body.password);
+      const result = await passwordLogin(sql, body.email, body.password, requireAdminMfa);
       recordSuccess(body.email);
       return reply.send(result);
     } catch (err) {
       if (err instanceof AuthError && err.status === 401) recordFailure(body.email);
       throw err;
     }
+  });
+
+  // Second factor. The mfaToken from a password login is the only credential
+  // these accept; each completes sign-in with the usual session payload.
+  app.post("/api/v1/auth/mfa/verify", async (req, reply) => {
+    const body = MfaCodeBody.parse(req.body);
+    return reply.send(await verifyMfa(sql, body.mfaToken, body.code));
+  });
+  app.post("/api/v1/auth/mfa/enroll", async (req, reply) => {
+    const body = MfaTokenBody.parse(req.body);
+    return reply.send(await beginEnrollment(sql, body.mfaToken));
+  });
+  app.post("/api/v1/auth/mfa/activate", async (req, reply) => {
+    const body = MfaCodeBody.parse(req.body);
+    return reply.send(await activateEnrollment(sql, body.mfaToken, body.code));
   });
 
   app.post("/api/v1/auth/resume", async (req, reply) => {

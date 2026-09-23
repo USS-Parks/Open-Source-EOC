@@ -28,6 +28,40 @@ credentials before real operations.
 Do not replace incident participation with a broad board grant. Board and
 position grants keep their exact scope and do not confer incident authority.
 
+## Two-step sign-in (MFA)
+
+Local password accounts support a second factor: a time-based one-time code
+(TOTP, six digits, 30-second step) from any standard authenticator app.
+
+- **Who must enroll.** Jurisdiction admins and instance admins must enroll
+  before a password sign-in issues a session. Enabling IPAWS is an admin act,
+  so this covers every account that can enable it. Members and viewers are
+  not asked to enroll.
+- **Enrollment.** After the password, an admin who has not enrolled sees a
+  setup key and a setup link. Add the account to an authenticator app with
+  either one and enter the code it shows. The screen then shows ten recovery
+  codes once. Store them offline; the server keeps only their hashes.
+- **Signing in.** An enrolled person is always asked for a code after the
+  password. A recovery code works in place of a code, once. A code that has
+  already been accepted cannot be used again. Five wrong codes pause attempts
+  for thirty seconds. The step between password and code expires after five
+  minutes.
+- **Audit.** Enrollment, recovery code use and wrong codes are recorded in
+  the audit trail of each jurisdiction the person belongs to.
+- **Secret key.** Authenticator secrets are stored under the
+  credential-envelope key, `OPENEOC_SECRET_KEY`. Without it enrollment is
+  refused, so admins cannot complete a password sign-in. Set the key before
+  admins first sign in.
+- **Switch.** `OPENEOC_REQUIRE_ADMIN_MFA=0` removes the admin requirement, for
+  example on an isolated training laptop. It is on by default. A person who
+  has enrolled is still asked for a code.
+- **Single sign-on.** OIDC sign-in does not pass through this step. Require a
+  second factor in the identity provider for accounts that sign in that way.
+- **Lost authenticator and recovery codes.** There is no self-service reset.
+  An operator with database owner access deletes the person's rows from
+  `mfa_recovery_codes` and `person_mfa`; the person enrolls again at the next
+  sign-in. Treat this as an identity-verification event and record why.
+
 ## Prepare an incident
 
 1. Activate the appropriate incident template.

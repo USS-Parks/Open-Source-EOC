@@ -10,6 +10,7 @@
 //     --email admin@example.org --password '...' [--board BOARD_ID] \
 //     [--users 150] [--duration 20] [--http-p95-ms 1500]
 //
+// Administrators must pass a second factor, so sign in as a member account.
 // It logs in, runs an HTTP phase (each user fires a burst of reads) and, when
 // --board is given, a WebSocket phase (each user opens, authenticates, and
 // holds a board sync socket for the duration). It prints latency percentiles

@@ -141,6 +141,9 @@ PATCH /api/v1/incidents/:incidentId/tasks/:taskId
 POST /api/v1/audit/:eventId/corrections
 POST /api/v1/auth/login
 POST /api/v1/auth/logout
+POST /api/v1/auth/mfa/activate
+POST /api/v1/auth/mfa/enroll
+POST /api/v1/auth/mfa/verify
 POST /api/v1/auth/resume
 POST /api/v1/boards/:boardId/local-fields
 POST /api/v1/boards/:boardId/records
@@ -275,6 +278,9 @@ const noAuth = new Set([
   "GET /api/v1/auth/oidc/callback",
   "GET /api/v1/auth/oidc/start",
   "POST /api/v1/auth/login",
+  "POST /api/v1/auth/mfa/activate",
+  "POST /api/v1/auth/mfa/enroll",
+  "POST /api/v1/auth/mfa/verify",
   "POST /api/v1/auth/resume",
 ]);
 const peerAuth = new Set([

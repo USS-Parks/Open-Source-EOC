@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { ApiClient, type Me, type Tokens } from "../api/client.js";
+import { ApiClient, type Me, type MfaChallenge, type Tokens } from "../api/client.js";
 
 /**
  * Session state for the shell. The token pair is persisted per-viewer in
@@ -55,7 +55,10 @@ export interface SessionValue {
   readonly refreshMe: () => Promise<Me>;
   readonly recoverSession: () => Promise<void>;
   readonly switchPosition: (positionId: string | null) => Promise<void>;
-  readonly login: (email: string, password: string) => Promise<void>;
+  /** Resolves with a challenge when a second factor is due, else signs in. */
+  readonly login: (email: string, password: string) => Promise<MfaChallenge | null>;
+  /** Enter the console once the client holds a session from a second-factor step. */
+  readonly completeSignIn: () => Promise<void>;
   readonly logout: () => Promise<void>;
 }
 
@@ -165,13 +168,19 @@ export function SessionProvider(props: { client?: ApiClient; children: ReactNode
           throw cause;
         }
       },
+      completeSignIn: async () => {
+        adoptMe(await client.me());
+        setStatus("authed");
+      },
       login: async (email: string, password: string) => {
         setError(null);
         try {
-          await client.login(email, password);
+          const result = await client.login(email, password);
+          if (!("accessToken" in result)) return result;
           const m = await client.me();
           adoptMe(m);
           setStatus("authed");
+          return null;
         } catch (e) {
           client.clearTokens();
           setStatus("anon");

@@ -320,3 +320,68 @@ tagging remain separately gated as section 1 of the roster states.
   configuration rows.
 - **Evidence level:** unit, integration and real-database.
 - **Rollback:** revert the commit; migration 0106 adds only one function.
+
+## V1 W2.10: MFA
+
+- **What changed.** Local accounts gain TOTP sign-in with single-use recovery
+  codes, required for jurisdiction admins and instance admins. Enabling IPAWS
+  is admin-only, so every account that can enable it is covered.
+  - New `server/src/auth/totp.ts`: RFC 6238, HMAC-SHA-1, six digits, thirty
+    second step, one step of drift either way, standard library only.
+  - New `server/src/auth/mfa.ts`. A password login for an enrolled person
+    returns only `{ mfaRequired, mfaToken }`; an admin who has not enrolled
+    gets `{ mfaEnrollmentRequired, mfaToken }` and must enroll before any
+    session is issued. The challenge token lasts five minutes, works once, and
+    only its hash is stored. The TOTP secret is envelope-encrypted; without
+    `OPENEOC_SECRET_KEY` enrollment answers 409. Ten recovery codes are shown
+    once and stored hashed. A TOTP step at or below the last accepted one is
+    refused. Five wrong codes pause the person for thirty seconds through the
+    existing login backoff. Enrollment, recovery-code use and wrong codes are
+    audited to each jurisdiction the person belongs to.
+  - `login` in `server/src/auth/service.ts` became `checkPassword`, so no path
+    mints a session from a password alone.
+  - Web: the sign-in screen handles both challenges in new
+    `web/src/app/auth/MfaStep.tsx`, shows the setup key and the `otpauth`
+    link for manual entry, and shows recovery codes once. There is no QR code
+    because `web/` carries no QR library.
+- **Decision default applied:** section 7 item 3, TOTP for local accounts and
+  no SAML. OIDC sign-in leaves the second factor to the identity provider.
+  Enforcement is on by default, switched by `BuildAppOptions.requireAdminMfa`
+  or `OPENEOC_REQUIRE_ADMIN_MFA=0`; an enrolled person is always asked for a
+  code. Instance admins are included, a slight widening of the roster's
+  "jurisdiction admins".
+- **Ownership deviations:** the MFA routes, login response and option in
+  `server/src/app.ts`; three client methods in `web/src/app/api/client.ts`;
+  `web/src/app/screens/Login.tsx`; `vitest.config.mjs` sets
+  `OPENEOC_REQUIRE_ADMIN_MFA=0` for the suite, whose seeded admins sign in by
+  password; `deploy/README.md`.
+- **Integration fix: the Windows desktop path.** The desktop profile set no
+  secret key, so with enforcement on its admins would be sent to an enrollment
+  that answers 409 and could never sign in. Each profile now carries a
+  generated `secrets/envelope.key`, created at setup and, for profiles created
+  earlier, on first serve, and the serve path exports it as
+  `OPENEOC_SECRET_KEY`. MFA stays on for desktop admins. `DEMO-SCENARIO.md`
+  and `WINDOWS-DESKTOP.md` state the first-sign-in enrollment, and the load
+  harness notes that it must sign in as a member.
+- **Schema:** migration `0105_mfa.sql`: `person_mfa`, `mfa_recovery_codes` and
+  `mfa_challenges` with row-level security to the owning person, and one
+  SECURITY DEFINER function resolving a challenge hash to its person.
+- **Contract:** `POST /api/v1/auth/mfa/verify`, `/enroll` and `/activate`,
+  unauthenticated by bearer and authenticated by the challenge token;
+  `docs/API.md` regenerated. No dependency change.
+- **Verification:** new `mfa.test.ts`, 13 tests: RFC 6238 vectors, drift,
+  enrollment, verification, wrong code, replay, single-use challenge,
+  recovery-code single use, expiry, backoff, admin versus member versus
+  instance admin, the switch off, and the 409 without a key. New
+  `mfa-browser.test.ts` walks an admin through enrollment and recovery codes,
+  refuses a replayed code, and signs in with the next one. After rebasing onto
+  the observability change: mfa, auth, authz, oidc, security, ipaws, api-docs,
+  observability and mfa-browser passed 65 of 65. `pnpm test:desktop` 19
+  passed. TypeScript and ESLint clean. Link checker 69 files.
+- **Evidence level:** unit, real-database and browser.
+- **Deferred:** voluntary enrollment for members, recovery-code
+  regeneration, and an admin screen to reset another person's factor (the
+  admin guide documents the database-owner reset). None is in the roster row.
+- **Rollback:** revert the commit; migration 0105 adds tables and one function
+  only. `OPENEOC_REQUIRE_ADMIN_MFA=0` disables admin enforcement without a
+  code change.

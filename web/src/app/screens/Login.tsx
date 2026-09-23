@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Button, Panel, TextField } from "../../design/components.js";
+import type { MfaChallenge } from "../api/client.js";
+import { MfaStep } from "../auth/MfaStep.js";
 import { useSession } from "../auth/session.js";
 
 /** The sign-in surface shown while the session is anonymous. */
@@ -8,11 +10,12 @@ export function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [challenge, setChallenge] = useState<MfaChallenge | null>(null);
 
   async function submit() {
     setBusy(true);
     try {
-      await login(email, password);
+      setChallenge(await login(email, password));
     } catch {
       // The failure message is surfaced from session state below.
     } finally {
@@ -20,8 +23,17 @@ export function Login() {
     }
   }
 
+  const frame = { minHeight: "100vh", display: "grid", placeItems: "center", padding: 16 } as const;
+  if (challenge) {
+    return (
+      <div style={frame}>
+        <MfaStep challenge={challenge} onCancel={() => { setChallenge(null); setPassword(""); }} />
+      </div>
+    );
+  }
+
   return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 16 }}>
+    <div style={frame}>
       <form
         onSubmit={(e) => {
           e.preventDefault();

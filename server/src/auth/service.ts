@@ -60,7 +60,12 @@ export async function addMembership(
     values (${personId}, ${jurisdictionId}, ${role})`;
 }
 
-export async function login(sql: Sql, email: string, password: string): Promise<LoginResult> {
+/**
+ * Verify a local password and return the person it belongs to. This is only
+ * the first factor; sign-in goes through passwordLogin (mfa.ts), which
+ * decides whether a second factor is due before any session is minted.
+ */
+export async function checkPassword(sql: Sql, email: string, password: string): Promise<string> {
   // Pre-authentication read: no person context exists yet, so this goes
   // through the SECURITY DEFINER helper (0034) rather than a direct select,
   // which row-level security would now deny.
@@ -73,7 +78,7 @@ export async function login(sql: Sql, email: string, password: string): Promise<
     "scrypt:32768:8:1:00000000000000000000000000000000:00";
   const ok = verifyPassword(password, stored);
   if (!person || person.disabled || !ok) throw new AuthError(401, "invalid credentials");
-  return createSession(sql, person.id as string);
+  return person.id as string;
 }
 
 /** Mint a fresh session for an already-authenticated person. */

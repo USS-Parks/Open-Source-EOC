@@ -30,6 +30,9 @@ set, and then require that value as a bearer token.
 
 - `POST /api/v1/auth/login`: Run auth login (auth: none; audience: operator)
 - `POST /api/v1/auth/logout`: Run auth logout (auth: bearer; audience: operator)
+- `POST /api/v1/auth/mfa/activate`: Run auth mfa activate (auth: none; audience: operator)
+- `POST /api/v1/auth/mfa/enroll`: Run auth mfa enroll (auth: none; audience: operator)
+- `POST /api/v1/auth/mfa/verify`: Run auth mfa verify (auth: none; audience: operator)
 - `GET /api/v1/auth/oidc/callback`: Read auth oidc callback (auth: none; audience: operator)
 - `GET /api/v1/auth/oidc/start`: Read auth oidc start (auth: none; audience: operator)
 - `POST /api/v1/auth/resume`: Run auth resume (auth: none; audience: operator)

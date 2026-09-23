@@ -21,6 +21,9 @@ export default defineConfig({
     // The global teardown below may drop one database per test file; give it
     // room beyond the 10s default so a full run's cleanup never times out.
     teardownTimeout: 120_000,
+    // Suites sign in as a seeded admin with a password alone. Admin MFA is
+    // on by default in a deployment; the MFA suites turn it on explicitly.
+    env: { OPENEOC_REQUIRE_ADMIN_MFA: "0" },
     // After the whole run, drop the throwaway t_<random> databases freshDb()
     // creates per file (it never drops them), so the local cluster does not
     // accumulate dead databases and slow Postgres startup and recovery fsync.

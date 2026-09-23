@@ -23,8 +23,10 @@ then sign in with one of these local exercise accounts:
 | Operator | `demo-operator@example.org` | Routine incident work |
 | Viewer | `demo-viewer@example.org` | Read-only briefing path |
 
-The seeded password is `correct-horse-battery`. Change or remove these accounts
-before using an instance for real operations. Select **SYNTHETIC Ridge Wildfire
+The seeded password is `correct-horse-battery`. Administrators must use a
+second factor: the first time `demo-admin` signs in, the sign-in screen asks
+them to add the account to an authenticator app and shows recovery codes once.
+Change or remove these accounts before using an instance for real operations. Select **SYNTHETIC Ridge Wildfire
 Exercise** and **OP SYNTHETIC 1** whenever the shell asks for incident context.
 
 ## Core walkthrough

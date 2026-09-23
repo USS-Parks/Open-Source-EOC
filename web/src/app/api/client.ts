@@ -96,6 +96,12 @@ export interface LoginResult {
   readonly resumeToken: string;
   readonly sessionId: string;
 }
+/** A password login that must finish with a second factor; no session exists yet. */
+export interface MfaChallenge {
+  readonly mfaToken: string;
+  readonly mfaRequired?: true;
+  readonly mfaEnrollmentRequired?: true;
+}
 export interface Tokens {
   readonly accessToken: string;
   readonly resumeToken: string;
@@ -521,10 +527,28 @@ export class ApiClient {
     return this.accessToken;
   }
 
-  async login(email: string, password: string): Promise<LoginResult> {
-    const result = await this.raw<LoginResult>("POST", "/api/v1/auth/login", { email, password }, false);
-    this.setTokens({ accessToken: result.accessToken, resumeToken: result.resumeToken });
+  async login(email: string, password: string): Promise<LoginResult | MfaChallenge> {
+    const result = await this.raw<LoginResult | MfaChallenge>("POST", "/api/v1/auth/login", { email, password }, false);
+    if ("accessToken" in result) this.setTokens({ accessToken: result.accessToken, resumeToken: result.resumeToken });
     return result;
+  }
+
+  /** Finish an MFA sign-in with a TOTP or recovery code. */
+  async mfaVerify(mfaToken: string, code: string): Promise<void> {
+    const result = await this.raw<LoginResult>("POST", "/api/v1/auth/mfa/verify", { mfaToken, code }, false);
+    this.setTokens({ accessToken: result.accessToken, resumeToken: result.resumeToken });
+  }
+
+  mfaEnroll(mfaToken: string): Promise<{ secret: string; otpauthUri: string }> {
+    return this.raw("POST", "/api/v1/auth/mfa/enroll", { mfaToken }, false);
+  }
+
+  /** Activate enrollment with a first code; returns the one-time recovery codes. */
+  async mfaActivate(mfaToken: string, code: string): Promise<string[]> {
+    const result = await this.raw<LoginResult & { recoveryCodes: string[] }>(
+      "POST", "/api/v1/auth/mfa/activate", { mfaToken, code }, false);
+    this.setTokens({ accessToken: result.accessToken, resumeToken: result.resumeToken });
+    return result.recoveryCodes;
   }
 
   async resume(): Promise<void> {

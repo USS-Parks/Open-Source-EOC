@@ -166,7 +166,8 @@ upgrade path begins with a database whose first receipt is
 |---|---|
 | `OPENEOC_DATABASE_URL` | Owner connection: migrations and seeding |
 | `OPENEOC_RUNTIME_URL` | `app_runtime` connection: the app under RLS |
-| `OPENEOC_SECRET_KEY` | Server key for credential envelopes (IPAWS, collab, Jitsi) |
+| `OPENEOC_SECRET_KEY` | Server key for credential envelopes (IPAWS, collab, Jitsi, MFA secrets) |
+| `OPENEOC_REQUIRE_ADMIN_MFA` | Admins must enroll in two-step sign-in (default on; `0` turns it off) |
 | `HOST` / `PORT` | API bind address (default `0.0.0.0:8080`) |
 | `OPENEOC_LOG_LEVEL` | Log level (default `info`) |
 | `OPENEOC_SLOW_REQUEST_MS` | Slow request threshold in milliseconds (default 1000) |

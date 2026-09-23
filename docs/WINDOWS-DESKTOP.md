@@ -34,7 +34,7 @@ Each profile is stored below `deploy/windows/out/profiles/<profile>/`:
 
 - `pgdata` contains that profile's PostgreSQL cluster;
 - `blobs` contains file attachments;
-- `secrets` contains generated owner and `app_runtime` passwords with inheritance removed and access limited to the current Windows identity;
+- `secrets` contains generated owner and `app_runtime` passwords and the profile's envelope key for credentials at rest, with inheritance removed and access limited to the current Windows identity;
 - `browser` is the Chrome or Edge user data directory;
 - `logs` contains PostgreSQL and application logs;
 - `run` contains private PID ownership records.
@@ -70,7 +70,7 @@ $env:OPENEOC_ENABLE_ACCEPTANCE_PROFILE = '1'
 .\deploy\windows\Open-Source-EOC.ps1 -Action Setup -Profile acceptance
 ```
 
-Both synthetic profiles use `ensureDemoData`. Their demonstration administrator is `demo-admin@example.org` with password `correct-horse-battery`. Never use either profile for real incident information.
+Both synthetic profiles use `ensureDemoData`. Their demonstration administrator is `demo-admin@example.org` with password `correct-horse-battery`; on first sign-in it must enroll an authenticator app, as every administrator must. Never use either profile for real incident information.
 
 For production:
 
