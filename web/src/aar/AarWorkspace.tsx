@@ -211,6 +211,7 @@ function ActionRow(props: {
     dueDate?: string | null;
     status?: AarActionStatus;
   }) => Promise<void>;
+  readonly onRefresh: (id: string) => void;
 }) {
   const [status, setStatus] = useState<AarActionStatus>(props.action.status);
   const [priority, setPriority] = useState<AarActionPriority>(props.action.priority);
@@ -222,6 +223,9 @@ function ActionRow(props: {
   actionAtRevision.current = props.action;
   useEffect(() => {
     const action = actionAtRevision.current;
+    // State already starts from this revision; resetting it again on mount
+    // would race a change made before the effect runs.
+    if (action.revision === baselineRevision.current) return;
     const nextOwner = assignmentValue(action.assignment);
     baselineRevision.current = action.revision;
     baselineOwner.current = nextOwner;
@@ -261,6 +265,7 @@ function ActionRow(props: {
           {props.owners.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
         <label>Due date<input disabled={props.busy} type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label>
         <ActionButton kind="secondary" loading={props.busy} loadingLabel="Saving…" onClick={save}>Save progress</ActionButton>
+        <ActionButton kind="quiet" disabled={props.busy} onClick={() => props.onRefresh(props.action.id)}>Load latest revision</ActionButton>
       </div>
     </article>
   );
@@ -295,6 +300,8 @@ export function AarWorkspace(props: AarWorkspaceProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // Single actions read fresh from the server, newer than the analytics response.
+  const [latest, setLatest] = useState<Readonly<Record<string, CorrectiveAction>>>({});
   const periodRevision = period ? Number(period) : undefined;
   const analytics = useAsync(
     () => props.client.getAarAnalytics(props.incidentId, periodRevision),
@@ -336,6 +343,14 @@ export function AarWorkspace(props: AarWorkspaceProps) {
     await props.client.updateCorrectiveAction(id, body);
     setMessage("Corrective action progress saved.");
   });
+  const refreshAction = (id: string) => {
+    setBusy(`action:${id}`); setError(null); setMessage(null);
+    props.client.getCorrectiveAction(id).then((action) => {
+      setLatest((current) => ({ ...current, [id]: action }));
+      setMessage(`Corrective action revision ${action.revision} loaded.`);
+    }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)))
+      .finally(() => setBusy(null));
+  };
   const compose = (overview: string, objectives: readonly string[]) => execute("pdf", async () => {
     const result = await props.client.composeAar(props.incidentId, {
       overview,
@@ -356,7 +371,8 @@ export function AarWorkspace(props: AarWorkspaceProps) {
   if (!analytics.data) return <EmptyState title="After-action workspace unavailable" description="No analytics response was returned." />;
   const ids = recordIds(analytics.data, filter);
   const observations = analytics.data.observations.filter((item) => ids.observationIds.has(item.id));
-  const actions = analytics.data.correctiveActions.filter((item) => ids.actionIds.has(item.id));
+  const actions = analytics.data.correctiveActions.filter((item) => ids.actionIds.has(item.id))
+    .map((item) => (latest[item.id]?.revision ?? 0) > item.revision ? latest[item.id]! : item);
   const revisions = (periods.data ?? []).filter((item) => item.operationalPeriod !== null)
     .sort((left, right) => right.revision - left.revision);
 
@@ -392,7 +408,8 @@ export function AarWorkspace(props: AarWorkspaceProps) {
           </section>
           <section aria-labelledby="eoc-aar-actions-title"><h3 id="eoc-aar-actions-title">Corrective actions and progress</h3>
             {actions.length ? <div className="eoc-aar-actions">{actions.map((action) => <ActionRow key={action.id} action={action}
-              owners={owners} busy={busy === `action:${action.id}`} onSave={async (id, body) => { await updateAction(id, body); }} />)}</div>
+              owners={owners} busy={busy === `action:${action.id}`} onSave={async (id, body) => { await updateAction(id, body); }}
+              onRefresh={refreshAction} />)}</div>
               : <p className="eoc-aar-empty">No corrective actions belong to this aggregate.</p>}
           </section>
         </div>

@@ -50,6 +50,8 @@ export function IncidentDatasets(props: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
+  const [loadTarget, setLoadTarget] = useState("");
+  const [loadFile, setLoadFile] = useState<File | null>(null);
 
   if (!active)
     return (
@@ -98,6 +100,22 @@ export function IncidentDatasets(props: {
         setNotice("Source registered. It remains awaiting ingestion until a successful update is accepted.");
         datasets.reload();
       })
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setBusy(false));
+  };
+
+  const loadable = datasets.data ?? [];
+  const target = loadable.some((d) => d.id === loadTarget) ? loadTarget : loadable[0]?.id ?? "";
+  const loadRecords = () => {
+    setBusy(true);
+    setError(null);
+    setNotice("");
+    (async () => {
+      if (!target || !loadFile) throw new Error("Choose a dataset and a records file.");
+      const result = await props.client.loadDataset(target, recordsFromJson(await loadFile.text()));
+      setNotice(`${result.accepted} of ${result.received} records accepted, ${result.rejected} rejected.`);
+      datasets.reload();
+    })()
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setBusy(false));
   };
@@ -169,6 +187,23 @@ export function IncidentDatasets(props: {
           <DatasetCatalog sources={catalog.data ?? []} canManage={props.canManage} onboarding={onboarding} onOnboard={onboardSource} />
         </Panel>
 
+        {props.canManage && loadable.length > 0 ? (
+          <Panel title="Load records">
+            <div className="d21-form-grid">
+              <EnumSelect label="Dataset to load" values={loadable.map((d) => d.id)} value={target} onChange={setLoadTarget}
+                labels={Object.fromEntries(loadable.map((d) => [d.id, `${d.name} (${d.organizationName})`]))} />
+              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>Records file
+                <input type="file" accept=".json,.geojson,application/json,application/geo+json"
+                  onChange={(event) => setLoadFile(event.target.files?.[0] ?? null)} />
+              </label>
+            </div>
+            <div className="d21-toolbar">
+              <span className="d21-muted">A GeoJSON FeatureCollection or a list of source records. A load replaces the dataset's items with the file's records, mapped by its field mapping; at most 10,000 records per load.</span>
+              <Button kind="primary" onClick={loadRecords} disabled={busy}>Load records</Button>
+            </div>
+          </Panel>
+        ) : null}
+
         <Panel title="Ingestion readiness">
           {datasets.loading && !datasets.data ? <Loading label="Loading dataset readiness…" /> : null}
           {datasets.error && datasets.data ? <ErrorNote message={datasets.error} /> : null}
@@ -177,6 +212,21 @@ export function IncidentDatasets(props: {
       </div>
     </Scroll>
   );
+}
+
+/** Records from a JSON file: an array, a GeoJSON FeatureCollection's features, or a `records` array. */
+export function recordsFromJson(text: string): unknown[] {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    throw new Error("The records file is not valid JSON.");
+  }
+  if (Array.isArray(value)) return value;
+  const holder = value && typeof value === "object" ? value as { features?: unknown; records?: unknown } : {};
+  if (Array.isArray(holder.features)) return holder.features;
+  if (Array.isArray(holder.records)) return holder.records;
+  throw new Error("The records file must hold an array of records, a GeoJSON FeatureCollection or a records array.");
 }
 
 function mappingValue(draft: MappingDraft): FieldMapping {

@@ -35,6 +35,10 @@ Check:
 
 Lifeline condition is an attributed assessment. It does not derive from an
 impact count or from ESF activation. Unknown or missing never means stable.
+The **Standing lifeline status** panel at the foot of **ESFs & Lifelines** is
+the jurisdiction's status outside any incident; members and administrators
+record it there with **Record status**, and a SITREP composed without an
+incident uses it.
 
 ### Read the map
 
@@ -54,6 +58,10 @@ impact count or from ESF activation. Unknown or missing never means stable.
   gives the same position as a USNG and an MGRS grid reference to 1 m, for
   example `USNG 10T DL 48923 71130 · MGRS 10TDL4892371130`. North of 84°N and
   south of 80°S it reads "outside UTM coverage".
+- Under **Impact in view**, once the incident area has more than one
+  revision, **Compare with area revision** shows each count at an earlier
+  revision against the current one, in the same view. Both revisions use the
+  datasets loaded now; it is not a snapshot of what was loaded then.
 
 ## 3. Work the incident
 
@@ -80,6 +88,12 @@ impact count or from ESF activation. Unknown or missing never means stable.
   attributable assessments, evidence, actions, organizations, and history.
   Resolve conflicting current reports only through the attributed decision
   workflow.
+- In **Incident Setup**, **Operational area** on an incident opens its setup,
+  which lists its checklists and libraries. **Mark complete** appears on the
+  checklist items of the position you are signed into; the server refuses
+  anyone else.
+- In **Messages**, **Export thread** downloads the selected thread as text,
+  one line per message with its time and sender.
 
 ### Read and correct the chronology
 
@@ -204,6 +218,8 @@ through the board routes listed in the [API reference](../API.md).
 - A local CAP exercise record or alert draft is not evidence of IPAWS delivery.
   Check the dedicated submission status and external acknowledgement only when
   that integration is configured.
+- In **AAR**, **Load latest revision** on a corrective action reads that one
+  action again from the server, so a save does not overwrite a newer change.
 
 ### Review, publish and answer from the JIC panel
 

@@ -115,6 +115,39 @@ describe("messages workspace", () => {
       expect.objectContaining({ incidentId, members: [{ kind: "position", id: "position-1" }] }),
     ));
   });
+
+  it("exports the selected thread, and lets only an administrator save message settings", async () => {
+    const exportThread = vi.fn(async () => ["2026-09-21T18:05:00.000Z Alex Operator: Confirm the route."]);
+    const setMessagingSettings = vi.fn(async () => ({ ok: true as const }));
+    const client = {
+      listThreads: vi.fn(async () => [thread]),
+      listPositions: vi.fn(async () => []),
+      listMessages: vi.fn(async () => []),
+      exportThread,
+      setMessagingSettings,
+    } as unknown as ApiClient;
+    const saved: string[] = [];
+    Object.assign(URL, { createObjectURL: vi.fn(() => "blob:thread"), revokeObjectURL: vi.fn() });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { saved.push(this.download); });
+
+    const view = render(<MessagesWorkspace client={client} jurisdictionId={jurisdictionId} incidentId={incidentId} isAdmin />);
+    fireEvent.click(await screen.findByRole("button", { name: "Export thread" }));
+    expect((await screen.findByText("Thread exported with 1 message.")).getAttribute("role")).toBe("status");
+    expect(exportThread).toHaveBeenCalledWith("thread-1");
+    expect(saved).toEqual(["evacuation-coordination.txt"]);
+
+    fireEvent.change(screen.getByLabelText("Message retention in days (empty keeps all)"), { target: { value: "30" } });
+    fireEvent.click(screen.getByLabelText("Record incident thread messages in the incident audit trail"));
+    fireEvent.click(screen.getByRole("button", { name: "Save message settings" }));
+    await screen.findByText("Message settings saved.");
+    expect(setMessagingSettings).toHaveBeenCalledWith(jurisdictionId, { retentionDays: 30, inIncidentRecord: false });
+
+    view.unmount();
+    render(<MessagesWorkspace client={client} jurisdictionId={jurisdictionId} incidentId={incidentId} />);
+    await screen.findByRole("button", { name: "Export thread" });
+    expect(screen.queryByRole("button", { name: "Save message settings" })).toBeNull();
+    vi.restoreAllMocks();
+  });
 });
 
 describe("files workspace", () => {

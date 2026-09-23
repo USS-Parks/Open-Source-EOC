@@ -1847,3 +1847,58 @@ tagging remain separately gated as section 1 of the roster states.
 - **Deferred:** an incident's channel state, a list of status requests,
   restricted tracking details for cleared roles, a browser walk against Matrix.
 - **Rollback:** revert the commit.
+
+## V1 W3.12: screens for the remaining operator routes
+
+- **What changed.** The fifteen core-engine routes the coverage test listed
+  each have a caller and have left the awaiting list.
+  - Administration gains a Notifications tab, new `web/src/admin/
+    Notifications.tsx`, admin only: an allowlist editor showing destinations
+    as the server normalized them, and a rule form over board, event,
+    condition, schedule interval, channels and rate cap; a webhook rule's
+    signing secret is shown once with Copy secret. Each channel kind is one
+    table entry, so in-app, webhook, push, email and SMS are offered.
+  - ESFs and Lifelines gains a standing lifeline status panel, new
+    `JurisdictionLifelines.tsx`.
+  - Messages gains Export thread and, for admins, a Message settings panel.
+  - Incident Setup gains Add a library for admins, the incident's checklists
+    and libraries, and Mark complete on the signed-in position's items.
+  - Datasets gains Load records from a JSON or GeoJSON file.
+  - Overview gains a jurisdiction dashboards panel with admin creation and a
+    per-dashboard Export template, new `DashboardDefinitions.tsx`.
+  - AAR gains Load latest revision on each corrective action; the map gains
+    Compare with area revision under Impact in view; Damage Assessment gains a
+    parcel baseline import from CSV or JSON, admin only.
+- **Deviations, recorded.** The lifeline routes set the jurisdiction's standing
+  lifeline status, not which lifelines are tracked, and admins and members may
+  both write; the screen does what the routes do. Messaging settings have no
+  read route, so the screen cannot show the values in effect and saves both;
+  it says so. No route lists notification rules or dashboard templates, so the
+  rule screen has no list of existing rules and a dashboard is created from a
+  typed template key, with keys in use shown; the admin guide states both.
+  Checklist completion shows only on items of the signed-in position.
+  Template export appears with an incident selected, which is when the
+  dashboard's definition, and so its version, is loaded.
+- **Defect fixed on the way.** `ActionRow` in the AAR workspace re-applied its
+  saved values when it first mounted, racing an edit made before it ran, which
+  made the existing "updates action progress" test flake under load.
+- **Ownership deviation:** ten lines of prop threading in `Console.tsx`.
+- **Schema, contract, dependencies:** none.
+- **Verification.** In the lane: twelve server suites and every web test 623
+  of 624 on the first run, the red being the AAR race above; after the fix, web
+  530 of 530; the two new browser walks and eleven neighbouring browser walks
+  passed, incident activation after a text collision was fixed. The
+  notification walk sets the allowlist, is refused an unlisted URL with no
+  rule row written, creates a rule, reads the secret from the clipboard,
+  drains a delivery after a board write and checks the delivered HMAC against
+  the secret shown. After rebasing onto W4.0 part one, W4.1 part one and W3.13,
+  resolving the client, incident surface and console conflicts: ten server
+  suites, every web test and the shared suite 719 of 719; the notification,
+  operator screens, admin, channels, integrations, incident activation and AAR
+  browser walks serial, all passed. TypeScript and ESLint clean. Link checker
+  71 files. The awaiting list now holds only local board fields, owed by W4.1
+  part two.
+- **Evidence level:** unit, real-database integration, browser and document.
+- **Deferred, needing engine routes:** a list of notification rules and a
+  messaging settings read.
+- **Rollback:** revert the commit.

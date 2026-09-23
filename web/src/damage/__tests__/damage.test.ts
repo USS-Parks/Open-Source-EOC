@@ -4,6 +4,7 @@ import { ApiClient } from "../../app/api/client.js";
 import {
   declarationFileName,
   declarationIndicators,
+  parseBaseline,
   parseThresholds,
   reportBounds,
   reportFeatures,
@@ -123,5 +124,27 @@ describe("damage client methods", () => {
       { ...thresholds, incident: "Winter storms" },
       undefined,
     ]);
+  });
+});
+
+describe("parcel baseline files", () => {
+  it("reads a CSV with quoted cells, loose headers and optional coordinates", () => {
+    const csv = 'Parcel ID,Address,structure_type,Replacement Value,lon,lat\r\n'
+      + 'P-1,"12 Main St, Unit 2",single_family,"$250,000",-123.9,41.5\r\n'
+      + 'P-2,"The ""Old"" Mill",business,90000,,\n\n';
+    expect(parseBaseline(csv, "parcels.csv")).toEqual([
+      { parcelId: "P-1", address: "12 Main St, Unit 2", structureType: "single_family", replacementValue: 250000, location: { lon: -123.9, lat: 41.5 } },
+      { parcelId: "P-2", address: 'The "Old" Mill', structureType: "business", replacementValue: 90000 },
+    ]);
+  });
+
+  it("passes JSON parcels through and names what a file lacks", () => {
+    const rows = [{ parcelId: "P-3", address: "3 Oak", structureType: "mobile_home", replacementValue: 1 }];
+    expect(parseBaseline(JSON.stringify(rows), "parcels.json")).toEqual(rows);
+    expect(parseBaseline(JSON.stringify({ rows }), "upload")).toEqual(rows);
+    expect(() => parseBaseline("parcelId,address\nP,1 Main", "p.csv")).toThrow("needs parcelId, address, structureType and replacementValue");
+    expect(() => parseBaseline("parcelId,address,structureType,replacementValue\nP,1 Main,business,lots", "p.csv"))
+      .toThrow("Row 2: the replacement value is not a number.");
+    expect(() => parseBaseline("{", "p.json")).toThrow("not valid JSON");
   });
 });

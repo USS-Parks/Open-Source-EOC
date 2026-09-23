@@ -6,6 +6,7 @@ import type {
   ImpactContributionPage,
   ImpactSourceAggregate,
   IncidentImpactAnalysis,
+  IncidentImpactComparison,
   ViewportBbox,
 } from "@openeoc/shared";
 import { KpiCard, type KpiValue } from "../design/cards.js";
@@ -23,6 +24,13 @@ export interface ImpactKpiClient {
       limit?: number;
     },
   ): Promise<ImpactContributionPage>;
+  /** Category totals at two area revisions; without it the panel offers no comparison. */
+  compareIncidentImpact?(
+    incidentId: string,
+    fromRevision: number,
+    toRevision: number,
+    bbox?: ViewportBbox,
+  ): Promise<IncidentImpactComparison>;
 }
 
 const CATEGORIES: readonly ImpactCategory[] = [
@@ -74,6 +82,60 @@ function categoryDetail(category: ImpactCategoryAggregate, analysis: IncidentImp
   ];
   if (category.reason) detail.push(category.reason);
   return detail.join(" · ");
+}
+
+function signed(value: number | null): string {
+  if (value === null) return "unknown";
+  const text = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value);
+  return value > 0 ? `+${text}` : text;
+}
+
+/** Totals at an earlier area revision against the one in view, in the same scope. */
+function ImpactComparison(props: {
+  client: ImpactKpiClient;
+  incidentId: string;
+  analysis: IncidentImpactAnalysis;
+}) {
+  const current = props.analysis.impact.areaRevision;
+  const [from, setFrom] = useState(current && current > 1 ? String(current - 1) : "");
+  const [result, setResult] = useState<IncidentImpactComparison | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const compare = props.client.compareIncidentImpact?.bind(props.client);
+  if (!compare || !current || current < 2) return null;
+  const scope = props.analysis.impact.scope;
+  const run = () => {
+    const revision = Number(from);
+    if (!Number.isInteger(revision) || revision < 1 || revision >= current) {
+      setError(`Enter an earlier area revision, from 1 to ${current - 1}.`);
+      return;
+    }
+    setError(null);
+    compare(props.incidentId, revision, current, scope?.kind === "viewport" ? scope.bbox : undefined)
+      .then(setResult)
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)));
+  };
+  return (
+    <section className="eoc-impact-records" aria-label="Impact comparison">
+      <label>Compare with area revision{" "}
+        <input inputMode="numeric" size={4} value={from} onChange={(event) => setFrom(event.target.value)} />
+      </label>{" "}
+      <button type="button" onClick={run}>Compare</button>
+      {error ? <p role="alert" className="eoc-impact-error">{error}</p> : null}
+      {result ? <>
+        <h4>Revision {result.fromRevision} to {result.toRevision}</h4>
+        <ol>
+          {CATEGORIES.map((key) => {
+            const delta = result.categories[key];
+            return <li key={key}>
+              <span>{LABELS[key]}: {signed(delta.delta)}</span>
+              <small>{delta.fromValue ?? "unknown"} then {delta.toValue ?? "unknown"} · {delta.explanation}</small>
+            </li>;
+          })}
+        </ol>
+        <p className="eoc-impact-interpretation">Both revisions use the datasets loaded now; this is not a historical snapshot.</p>
+      </> : null}
+    </section>
+  );
 }
 
 function recordLabel(record: ImpactContribution): string {
@@ -249,6 +311,8 @@ export function ImpactKpiPanel(props: {
       <p className="eoc-impact-interpretation">
         Geographic exposure does not set lifeline condition. Lifeline status remains based on reported incident records.
       </p>
+      {analysis ? <ImpactComparison key={`${analysis.impact.areaRevision}:${resolvedBbox}`} client={props.client}
+        incidentId={props.incidentId} analysis={analysis} /> : null}
       {selected && analysis ? (
         <aside className="eoc-impact-drill" aria-label={`${LABELS[selected.category]} sources`}>
           <header>

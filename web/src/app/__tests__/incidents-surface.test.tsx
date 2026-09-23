@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { IncidentsSurface } from "../surfaces/IncidentsSurface.js";
 import type { ApiClient } from "../api/client.js";
@@ -18,20 +18,61 @@ const detail = {
   boards: [], checklists: [], libraries: [],
 };
 
-function setup() {
+function setup(options: { isAdmin?: boolean; positionKey?: string | null; detail?: object } = {}) {
   const client = {
     listIncidents: vi.fn().mockResolvedValue([incident]),
     listIncidentTemplates: vi.fn().mockResolvedValue([{ key: "wildfire", title: "Wildfire" }]),
     activateIncident: vi.fn().mockResolvedValue({ incidentId: "incident-new" }),
-    getIncident: vi.fn().mockResolvedValue(detail),
+    getIncident: vi.fn().mockResolvedValue(options.detail ?? detail),
     closeIncident: vi.fn().mockResolvedValue({ ok: true }),
     getIncidentArea: vi.fn().mockResolvedValue({ incidentId: "incident-a", revision: 0, geometry: null, operationalPeriod: null, reason: "", createdAt: null, createdBy: null, positionId: null, createdByName: null, positionTitle: null }),
     incidentAreaHistory: vi.fn().mockResolvedValue([]),
     listIncidentParticipants: vi.fn().mockResolvedValue([]),
+    createLibrary: vi.fn().mockResolvedValue({ id: "lib-1" }),
+    completeChecklistItem: vi.fn().mockResolvedValue({ ok: true }),
   };
-  render(<IncidentsSurface client={client as unknown as ApiClient} jurisdictionId="j1" isAdmin theme="light" />);
+  render(<IncidentsSurface client={client as unknown as ApiClient} jurisdictionId="j1" isAdmin={options.isAdmin ?? true}
+    theme="light" positionKey={options.positionKey ?? null} />);
   return client;
 }
+
+const checklistItem = (id: string, positionKey: string, status: string) => ({
+  id, positionKey, item: `Item ${id}`, category: "general", status, dueAt: null, revision: 1,
+  assignedParticipantId: null, completedAt: null, completedByPosition: null,
+});
+
+it("adds a library for a scenario template, admin only", async () => {
+  const client = setup();
+  fireEvent.change(await screen.findByLabelText("Library title"), { target: { value: "Evacuation plan" } });
+  fireEvent.change(screen.getByLabelText("Library kind"), { target: { value: "plan" } });
+  fireEvent.change(screen.getByLabelText("Attach to incidents from"), { target: { value: "wildfire" } });
+  fireEvent.change(screen.getByLabelText("Library content"), { target: { value: "Zones A to C" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add library" }));
+  await screen.findByText("Library added. It attaches to each incident activated from Wildfire.");
+  expect(client.createLibrary).toHaveBeenCalledWith("j1", { title: "Evacuation plan", kind: "plan", body: "Zones A to C", forTemplate: "wildfire" });
+  cleanup();
+  setup({ isAdmin: false });
+  await screen.findByText("River Fire");
+  expect(screen.queryByRole("button", { name: "Add library" })).toBeNull();
+});
+
+it("offers checklist completion only on items of the signed-in position", async () => {
+  const withChecklists = {
+    ...detail,
+    checklists: [checklistItem("c1", "incident_commander", "open"), checklistItem("c2", "safety_officer", "open"),
+      { ...checklistItem("c3", "incident_commander", "completed"), completedByPosition: "Incident Commander" }],
+    libraries: [{ id: "lib-1", title: "Evacuation plan", kind: "plan" }],
+  };
+  const client = setup({ positionKey: "incident_commander", detail: withChecklists });
+  fireEvent.click(await screen.findByRole("button", { name: "Operational area" }));
+  const mine = await screen.findByRole("listitem", { name: "Item c1" });
+  expect(within(screen.getByRole("listitem", { name: "Item c2" })).queryByRole("button")).toBeNull();
+  expect(within(screen.getByRole("listitem", { name: "Item c3" })).getByText("Completed by Incident Commander")).toBeTruthy();
+  expect(screen.getByText("Evacuation plan · plan")).toBeTruthy();
+  fireEvent.click(within(mine).getByRole("button", { name: "Mark complete" }));
+  await screen.findByText("Item c1 completed.");
+  expect(client.completeChecklistItem).toHaveBeenCalledWith("c1");
+});
 
 it("activates the selected incident type and presents explicit relationship context", async () => {
   const client = setup();

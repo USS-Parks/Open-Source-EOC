@@ -33,6 +33,7 @@ import {
   degreeLabel,
   dollars,
   insuredLabel,
+  parseBaseline,
   parseThresholds,
   reportBounds,
   reportFeatures,
@@ -83,8 +84,38 @@ export function DamageSurface(props: {
         </Panel>
         {props.canWrite ? <FieldAssessmentPanel client={props.client} jurisdictionId={props.jurisdictionId} onChanged={changed} /> : null}
         {props.isAdmin ? <IntakePanel client={props.client} jurisdictionId={props.jurisdictionId} /> : null}
+        {props.isAdmin ? <BaselinePanel client={props.client} jurisdictionId={props.jurisdictionId} onChanged={changed} /> : null}
       </div>
     </Scroll>
+  );
+}
+
+function BaselinePanel(props: { client: ApiClient; jurisdictionId: string; onChanged: () => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const { busy, run, feedback } = useRun();
+  const upload = () => run(async () => {
+    if (!file) throw new Error("Choose a CSV or JSON baseline file.");
+    const rows = parseBaseline(await file.text(), file.name);
+    if (rows.length === 0) throw new Error("The baseline file holds no parcels.");
+    const result = await props.client.importDamageBaseline(props.jurisdictionId, rows);
+    props.onChanged();
+    return `${result.imported} ${result.imported === 1 ? "parcel" : "parcels"} imported into the baseline.`;
+  });
+  return (
+    <Panel title="Parcel baseline">
+      <p className="d21-muted">
+        The parcels field assessments are matched against. A CSV file needs a header row with parcelId, address, structureType
+        and replacementValue, and may add lon and lat. A JSON file is an array of objects with those fields and an optional
+        location of lon and lat. A parcel ID already in the baseline is replaced.
+      </p>
+      <label className="damage-field">Baseline file (CSV or JSON)
+        <input type="file" accept=".csv,.json,text/csv,application/json" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+      </label>
+      <div className="damage-actions">
+        <ActionButton kind="primary" loading={busy} loadingLabel="Importing…" onClick={() => void upload()}>Import baseline</ActionButton>
+      </div>
+      {feedback}
+    </Panel>
   );
 }
 

@@ -142,3 +142,40 @@ it("drills source provenance with the same area revision and viewport across pag
   expect(await screen.findByText("Parcel B")).toBeTruthy();
   expect(screen.getByText("All contributing records loaded.")).toBeTruthy();
 });
+
+it("compares an earlier area revision with the one in view, in the same viewport", async () => {
+  const delta = (category: string, fromValue: number | null, toValue: number | null) => ({
+    category, unit: "records", fromValue, toValue, delta: fromValue === null || toValue === null ? null : toValue - fromValue,
+    explanation: "counted in both revisions", sources: [],
+  });
+  const compareIncidentImpact = vi.fn().mockResolvedValue({
+    incidentId: "incident-1", fromRevision: 5, toRevision: 7,
+    baselineStatement: "both revisions use the current selected dataset registrations and loaded records; this is not a historical baseline snapshot",
+    categories: {
+      structures_parcels: delta("structures_parcels", 1, 3),
+      infrastructure_facilities: delta("infrastructure_facilities", null, null),
+      shelters: delta("shelters", 4, 4),
+      closures: delta("closures", 2, 0),
+      population: { ...delta("population", 10, 12.5), unit: "people" },
+    },
+  });
+  const client = {
+    getIncidentImpact: vi.fn().mockResolvedValue(analysis([0, 0, 5, 5], 3)),
+    getImpactContributions: vi.fn(),
+    compareIncidentImpact,
+  } as unknown as ImpactKpiClient;
+  render(<ImpactKpiPanel client={client} incidentId="incident-1" bbox={[0, 0, 5, 5]} />);
+  const input = await screen.findByLabelText("Compare with area revision");
+  expect((input as HTMLInputElement).value).toBe("6");
+  fireEvent.change(input, { target: { value: "7" } });
+  fireEvent.click(screen.getByRole("button", { name: "Compare" }));
+  expect((await screen.findByRole("alert")).textContent).toBe("Enter an earlier area revision, from 1 to 6.");
+  fireEvent.change(input, { target: { value: "5" } });
+  fireEvent.click(screen.getByRole("button", { name: "Compare" }));
+  const comparison = screen.getByRole("region", { name: "Impact comparison" });
+  expect(await within(comparison).findByText("Revision 5 to 7")).toBeTruthy();
+  expect(compareIncidentImpact).toHaveBeenCalledWith("incident-1", 5, 7, [0, 0, 5, 5]);
+  expect(within(comparison).getByText("Affected structures / parcels: +2")).toBeTruthy();
+  expect(within(comparison).getByText("Closures in scope: -2")).toBeTruthy();
+  expect(within(comparison).getByText("Affected facilities: unknown")).toBeTruthy();
+});

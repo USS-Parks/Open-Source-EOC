@@ -199,3 +199,74 @@ export function declarationFileName(now: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `declaration-support-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.md`;
 }
+
+/** One parcel of the baseline field assessments are matched against. */
+export interface DamageBaselineRow {
+  readonly parcelId: string;
+  readonly address: string;
+  readonly structureType: string;
+  readonly replacementValue: number;
+  readonly location?: { readonly lon: number; readonly lat: number };
+}
+
+/** CSV text as rows of cells; quoted cells may hold commas, quotes and line breaks. */
+function csvRows(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text[i]!;
+    if (quoted) {
+      if (c !== '"') cell += c;
+      else if (text[i + 1] === '"') { cell += '"'; i += 1; }
+      else quoted = false;
+    } else if (c === '"') quoted = true;
+    else if (c === ",") { row.push(cell); cell = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i += 1;
+      row.push(cell); rows.push(row); row = []; cell = "";
+    } else cell += c;
+  }
+  row.push(cell);
+  rows.push(row);
+  return rows.filter((r) => r.some((value) => value.trim() !== ""));
+}
+
+/**
+ * Baseline parcels from an uploaded file. JSON is an array of parcels or an
+ * object with a `rows` array, passed as written. CSV needs a header naming
+ * parcelId, address, structureType and replacementValue, with optional lon
+ * and lat; header case, spaces and underscores do not matter.
+ */
+export function parseBaseline(text: string, fileName: string): DamageBaselineRow[] {
+  const start = text.trimStart()[0];
+  if (/\.json$/i.test(fileName) || start === "[" || start === "{") {
+    let value: unknown;
+    try { value = JSON.parse(text); } catch { throw new Error("The baseline file is not valid JSON."); }
+    const rows = Array.isArray(value) ? value : (value as { rows?: unknown } | null)?.rows;
+    if (!Array.isArray(rows)) throw new Error("A JSON baseline is an array of parcels or an object with a rows array.");
+    return rows as DamageBaselineRow[];
+  }
+  const [header, ...body] = csvRows(text);
+  const names = (header ?? []).map((name) => name.trim().toLowerCase().replace(/[^a-z]/g, ""));
+  if (!["parcelid", "address", "structuretype", "replacementvalue"].every((name) => names.includes(name)))
+    throw new Error("The CSV header needs parcelId, address, structureType and replacementValue columns.");
+  const cell = (row: readonly string[], ...keys: string[]) => {
+    const index = names.findIndex((name) => keys.includes(name));
+    return index < 0 ? "" : (row[index] ?? "").trim();
+  };
+  return body.map((row, index) => {
+    const value = Number(cell(row, "replacementvalue").replace(/[$,]/g, ""));
+    if (!Number.isFinite(value)) throw new Error(`Row ${index + 2}: the replacement value is not a number.`);
+    const lon = cell(row, "lon", "longitude");
+    const lat = cell(row, "lat", "latitude");
+    return {
+      parcelId: cell(row, "parcelid"),
+      address: cell(row, "address"),
+      structureType: cell(row, "structuretype"),
+      replacementValue: value,
+      ...(lon && lat ? { location: { lon: Number(lon), lat: Number(lat) } } : {}),
+    };
+  });
+}

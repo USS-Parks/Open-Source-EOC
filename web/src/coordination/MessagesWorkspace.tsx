@@ -3,6 +3,7 @@ import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../design/com
 import type { ApiClient, Thread, ThreadRecipient } from "../app/api/client.js";
 import { useAsync, usePolled } from "../app/data/hooks.js";
 import { EmptyState, Loading, SurfaceHeader } from "../app/screens/parts.js";
+import { saveFile } from "../admin/labels.js";
 import "./workspace.css";
 
 export interface MessagesWorkspaceProps {
@@ -10,6 +11,8 @@ export interface MessagesWorkspaceProps {
   readonly jurisdictionId: string;
   readonly incidentId?: string | null;
   readonly incidentName?: string | null;
+  /** Jurisdiction administrators also set message retention and incident-record inclusion. */
+  readonly isAdmin?: boolean;
 }
 
 function recipientDescription(recipient: ThreadRecipient): string {
@@ -35,6 +38,9 @@ export function MessagesWorkspace(props: MessagesWorkspaceProps) {
   const [reloadMessages, setReloadMessages] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [stored, setStored] = useState<string | null>(null);
+  const [retentionDays, setRetentionDays] = useState("");
+  const [inIncidentRecord, setInIncidentRecord] = useState(true);
+  const [settingsSaved, setSettingsSaved] = useState<string | null>(null);
 
   const threads = useAsync(
     () => props.client.listThreads(props.jurisdictionId),
@@ -92,6 +98,22 @@ export function MessagesWorkspace(props: MessagesWorkspaceProps) {
     setText("");
     setStored("Message stored in the thread.");
     setReloadMessages((value) => value + 1);
+  });
+
+  const exportThread = () => void run(async () => {
+    if (!activeSummary) return;
+    const lines = await props.client.exportThread(activeSummary.id);
+    const name = (activeSummary.title || "thread").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "thread";
+    saveFile(new Blob([lines.map((line) => `${line}\n`).join("")], { type: "text/plain" }), `${name}.txt`);
+    setStored(`Thread exported with ${lines.length} ${lines.length === 1 ? "message" : "messages"}.`);
+  });
+
+  const saveSettings = () => void run(async () => {
+    setSettingsSaved(null);
+    const days = retentionDays.trim() === "" ? null : Number(retentionDays.trim());
+    if (days !== null && !(Number.isInteger(days) && days >= 1)) throw new Error("Enter retention as whole days, or leave it empty to keep messages.");
+    await props.client.setMessagingSettings(props.jurisdictionId, { retentionDays: days, inIncidentRecord });
+    setSettingsSaved("Message settings saved.");
   });
 
   const positionOptions = positions.data ?? [];
@@ -169,6 +191,20 @@ export function MessagesWorkspace(props: MessagesWorkspaceProps) {
               </ul>
             )}
           </Panel>
+          {props.isAdmin ? (
+            <Panel title="Message settings">
+              <div className="d27-form-stack">
+                <p className="d27-muted">Saving sets both values for the jurisdiction; the values in effect are not shown here. Messages older than the retention period are no longer shown or exported.</p>
+                <TextField label="Message retention in days (empty keeps all)" value={retentionDays} onChange={setRetentionDays} />
+                <label style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 32 }}>
+                  <input type="checkbox" checked={inIncidentRecord} onChange={(event) => setInIncidentRecord(event.target.checked)} />
+                  Record incident thread messages in the incident audit trail
+                </label>
+                <Button onClick={saveSettings} disabled={busy}>Save message settings</Button>
+                {settingsSaved ? <p role="status" className="d27-success">{settingsSaved}</p> : null}
+              </div>
+            </Panel>
+          ) : null}
         </div>
         <Panel title="Conversation">
           {!activeSummary ? (
@@ -181,6 +217,7 @@ export function MessagesWorkspace(props: MessagesWorkspaceProps) {
                 <StatusBadge status={activeSummary.incidentId ? "info" : "unknown"}>
                   {activeSummary.incidentId ? "Incident context" : "Jurisdiction context"}
                 </StatusBadge>
+                <Button onClick={exportThread} disabled={busy}>Export thread</Button>
               </div>
               {messages.loading && !messages.data ? <Loading label="Loading messages..." /> : null}
               {messages.error ? <p role="alert" className="d27-error">{messages.error}</p> : null}

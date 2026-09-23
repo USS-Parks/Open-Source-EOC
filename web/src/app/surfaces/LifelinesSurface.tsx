@@ -12,6 +12,7 @@ import {
 import { LifelineAssessmentForm } from "./LifelineAssessmentForm.js";
 import { LifelineAssessmentHistory } from "./LifelineAssessmentHistory.js";
 import { AssessmentRelationships } from "./AssessmentRelationships.js";
+import { JurisdictionLifelines } from "./JurisdictionLifelines.js";
 import "./LifelinesSurface.css";
 
 const REFRESH_MS = 30_000;
@@ -21,6 +22,10 @@ export interface LifelinesSurfaceProps {
   readonly incidentId: string | null;
   readonly selectedLifeline: string | null;
   readonly incidentJurisdictionId?: string | null;
+  /** The console's jurisdiction, for its standing lifeline status outside any incident. */
+  readonly jurisdictionId?: string;
+  /** Whether the signed-in person may record standing status (admin or member). */
+  readonly canWrite?: boolean;
   readonly relationshipBoards?: readonly Pick<BoardListItem, "id" | "title">[];
   readonly onOpen: (id: string) => void;
   readonly onClose: () => void;
@@ -275,8 +280,14 @@ export function LifelinesSurface(props: LifelinesSurfaceProps) {
     overview.reload();
   }
 
+  const standing = props.jurisdictionId
+    ? <JurisdictionLifelines client={props.client} jurisdictionId={props.jurisdictionId} canWrite={props.canWrite ?? false} />
+    : null;
   if (!props.incidentId) {
-    return <EmptyState title="Select an incident" description="Community Lifeline conditions are scoped to an incident." />;
+    return <>
+      <EmptyState title="Select an incident" description="Community Lifeline conditions are scoped to an incident." />
+      {standing}
+    </>;
   }
   if ((overview.loading && !overview.data) || (area.loading && !area.data)) {
     return <LoadingState label="Loading Community Lifelines" lines={6} />;
@@ -355,6 +366,7 @@ export function LifelinesSurface(props: LifelinesSurfaceProps) {
           />
         ) : null}
       </div>
+      {standing}
     </section>
   );
 }

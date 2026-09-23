@@ -14,6 +14,7 @@ import { geometryBounds } from "../../cop/tools.js";
 import { Dashboard, DashboardWidget } from "../../dashboards/Dashboard.js";
 import { CompositionDashboard, type DashboardMapRecords } from "../../dashboards/CompositionDashboard.js";
 import { DashboardConfigurator, type DashboardDefinitionOption } from "../../dashboards/DashboardConfigurator.js";
+import { DashboardDefinitions } from "../../dashboards/DashboardDefinitions.js";
 import { ActionButton } from "../../design/controls.js";
 import { ConditionBadge, EmptyState as KitEmptyState, ErrorState } from "../../design/feedback.js";
 import type { ThemeName } from "../../design/tokens.js";
@@ -75,6 +76,10 @@ export interface DashboardSurfaceProps {
   readonly onFilter: (filter: WidgetFilter | null) => void;
   readonly onViewStateChange: (state: DashboardViewState) => void;
   readonly onOpenMap?: (() => void) | undefined;
+  /** With a jurisdiction, the surface also lists its dashboards; administrators create them. */
+  readonly jurisdictionId?: string | undefined;
+  readonly isAdmin?: boolean | undefined;
+  readonly onDashboardsChanged?: (() => void) | undefined;
 }
 
 async function allDashboardConfigs(client: ApiClient, incidentId: string) {
@@ -385,11 +390,17 @@ export function DashboardSurface(props: DashboardSurfaceProps) {
     [config.data],
   );
 
+  const jurisdictionDashboards = props.jurisdictionId ? (
+    <DashboardDefinitions client={props.client} jurisdictionId={props.jurisdictionId} isAdmin={props.isAdmin ?? false}
+      dashboards={props.dashboards} definitions={definitions.data ?? []} onCreated={props.onDashboardsChanged} />
+  ) : null;
+
   if (!props.incidentId) {
     return (
       <Scroll><div className="p-dash-surface">
         <KitEmptyState title="Select an incident" description="Saved dashboards, impact totals and map records are incident scoped." />
         {legacy.data ? <Dashboard snapshot={legacy.data} onDrill={(field, value) => props.onFilter({ field, equals: value })} /> : null}
+        {jurisdictionDashboards}
       </div></Scroll>
     );
   }
@@ -479,6 +490,7 @@ export function DashboardSurface(props: DashboardSurfaceProps) {
         <SupportingRecords title={drill.title} records={drillResult} loading={drillLoading} error={drillError}
           onClose={() => { setDrill(null); props.onFilter(null); }} />
       ) : null}
+      {jurisdictionDashboards}
     </div></Scroll>
   );
 }

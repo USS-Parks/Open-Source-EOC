@@ -15,21 +15,6 @@ const WEB_SRC = fileURLToPath(new URL("../../", import.meta.url));
 
 /** Operator routes with no screen yet, each with the reason. Remove an entry when it gains a caller. */
 const AWAITING_SCREEN: Readonly<Record<string, string>> = {
-  "GET /api/v1/corrective-actions/:id": "no screen yet for an engine that exists",
-  "GET /api/v1/dashboard-templates/:key/:version/export": "no screen yet for an engine that exists",
-  "GET /api/v1/incidents/:incidentId/impact/compare": "no screen yet for an engine that exists",
-  "GET /api/v1/jurisdictions/:jurisdictionId/lifelines": "no screen yet for an engine that exists",
-  "GET /api/v1/jurisdictions/:jurisdictionId/notification-allowlist": "no screen yet for an engine that exists",
-  "GET /api/v1/threads/:threadId/export": "no screen yet for an engine that exists",
-  "POST /api/v1/checklist-items/:itemId/complete": "no screen yet for an engine that exists",
-  "POST /api/v1/data-packs/datasets/:datasetId/load": "no screen yet for an engine that exists",
-  "POST /api/v1/jurisdictions/:jurisdictionId/damage/baseline": "no screen yet for an engine that exists",
-  "POST /api/v1/jurisdictions/:jurisdictionId/dashboards": "no screen yet for an engine that exists",
-  "POST /api/v1/jurisdictions/:jurisdictionId/libraries": "no screen yet for an engine that exists",
-  "POST /api/v1/jurisdictions/:jurisdictionId/notification-rules": "no screen yet for an engine that exists",
-  "PUT /api/v1/jurisdictions/:jurisdictionId/lifelines": "no screen yet for an engine that exists",
-  "PUT /api/v1/jurisdictions/:jurisdictionId/messaging-settings": "no screen yet for an engine that exists",
-  "PUT /api/v1/jurisdictions/:jurisdictionId/notification-allowlist": "no screen yet for an engine that exists",
   "POST /api/v1/boards/:boardId/local-fields": "local board fields have no designer control yet",
 };
 

@@ -201,6 +201,25 @@ describe("after-action workspace", () => {
     expect(within(completed).getByText(/First completed .* by Jordan Diaz/)).toBeTruthy();
   });
 
+  it("loads one action's latest revision from its detail route before saving over it", async () => {
+    const api = client();
+    const newer = { ...actions[0]!, revision: 5, status: "in_progress" as const, owner: "Operations Section Chief" };
+    Object.assign(api, { getCorrectiveAction: vi.fn().mockResolvedValue(newer) });
+    const { container } = render(<AarSurface client={api} jurisdictionId={JURISDICTION_ID} incidentId={INCIDENT_ID} />);
+    await screen.findByRole("heading", { name: "After-action review" });
+    const action = container.querySelector<HTMLElement>(`[data-record-id="${ACTION_PLANNING}"]`)!;
+    fireEvent.click(within(action).getByRole("button", { name: "Load latest revision" }));
+    await screen.findByText("Corrective action revision 5 loaded.");
+    expect(api.getCorrectiveAction).toHaveBeenCalledWith(ACTION_PLANNING);
+    const refreshed = container.querySelector<HTMLElement>(`[data-record-id="${ACTION_PLANNING}"]`)!;
+    expect(within(refreshed).getByText("Revision 5")).toBeTruthy();
+    expect(within(refreshed).getByText("Operations Section Chief")).toBeTruthy();
+    await waitFor(() => expect((within(refreshed).getByLabelText("Status") as HTMLSelectElement).value).toBe("in_progress"));
+    fireEvent.click(within(refreshed).getByRole("button", { name: "Save progress" }));
+    await waitFor(() => expect(api.updateCorrectiveAction).toHaveBeenCalledWith(ACTION_PLANNING,
+      expect.objectContaining({ expectedRevision: 5, status: "in_progress" })));
+  });
+
   it("renders an explicit loading state instead of a false zero", () => {
     const api = client();
     vi.mocked(api.getAarAnalytics).mockReturnValue(new Promise(() => undefined));

@@ -35,6 +35,7 @@ screen shows. The screen acts on the jurisdiction selected in the console.
 | People | Create accounts, add existing accounts, change roles, disable sign-in, reset two-step sign-in, remove people from the jurisdiction |
 | Positions | Add positions; assign, reassign and revoke their holders |
 | Guest access | Grant and revoke time-boxed read access for mutual-aid accounts |
+| Notifications | Set the webhook and push allowlist; add notification rules and copy a webhook rule's signing secret, shown once |
 | Records | Set retention periods; download the audit trail; export the jurisdiction |
 | Channels | Configure the email relay and SMS provider notification rules send through; send a test message |
 | Deployment | Show which optional integrations are enabled; configure collaboration channels and the meeting bridge where they are enabled; provision a jurisdiction (instance administrators) |
@@ -146,6 +147,37 @@ Local password accounts support a second factor: a time-based one-time code
    freshness, coverage, rejected rows, and retained last-good data separately.
 6. Confirm task assignments and prerequisites before operators begin work.
 
+Other preparation happens on the screens that use it:
+
+- **Libraries.** On **Incident Setup**, **Add a library** (administrators)
+  stores a scenario, plan or reference text. A library attached to a template
+  is linked to each incident activated from that template afterwards; the
+  incident's setup panel lists its libraries.
+- **Dashboards.** Under **Jurisdiction dashboards** at the foot of
+  **Overview**, an administrator creates a dashboard from a published
+  dashboard template key, optionally pinning a version and a title. With an
+  incident selected, anyone who can see a dashboard downloads its template as
+  JSON with **Export template**.
+- **Standing lifeline status.** At the foot of **ESFs & Lifelines**,
+  administrators and members record the jurisdiction's lifeline status outside
+  any incident. A situation report composed without an incident uses it. It
+  needs a board made from the Community Lifelines template; without one the
+  server refuses the entry and the screen shows why.
+- **Parcel baseline.** On **Damage Assessment**, **Parcel baseline**
+  (administrators) imports the parcels field assessments are matched against,
+  from CSV with a header of `parcelId`, `address`, `structureType`,
+  `replacementValue` and optional `lon` and `lat`, or from a JSON array of
+  those objects. A parcel ID already present is replaced.
+- **Dataset records.** On **Datasets**, **Load records** sends a GeoJSON
+  FeatureCollection or a JSON list of source records to a registered dataset.
+  The load replaces the dataset's items, mapped by its field mapping, and
+  reports how many records were accepted and rejected.
+- **Message settings.** On **Messages**, **Message settings**
+  (administrators) sets the message retention in days, after which messages
+  are no longer shown or exported, and whether incident thread messages are
+  written to the incident's audit trail. Saving sets both values; the values
+  in effect are not shown.
+
 ## Optional integrations
 
 Collaboration channels, facilities and shelters, meetings and briefings, and
@@ -217,7 +249,8 @@ the notification is marked `failed` with the last error. A target that keeps
 failing is paused for a minute at a time without using up attempts.
 
 Webhook and push rules reach only destinations on the jurisdiction's
-notification allowlist, which an admin sets with
+notification allowlist, which an admin sets on the **Notifications** tab of
+the Administration screen, one destination per line, or with
 `PUT /api/v1/jurisdictions/:jurisdictionId/notification-allowlist`. The list
 starts empty, so no external destination is reachable until an admin adds
 one. An entry is an exact origin such as `https://hooks.example.org` or
@@ -235,6 +268,17 @@ it was created with a different `rateLimit` (`max` up to 600, `windowMinutes`
 up to 1440). Deliveries beyond the cap are not sent; they are counted on one
 `suppressed` notification per rule and window, which admins see with the
 other notifications.
+
+An admin adds a rule under **Add a notification rule** on the same tab: the
+board (or any board), when it fires (a record is created, a record is
+updated, or on a schedule every so many minutes), an optional condition (a
+field equals a value, or changes to a value), one or more channels, and the
+rate cap. A rule with a webhook channel gets a signing secret, shown once
+under **Signing secret for the new rule** with **Copy secret**; it cannot be
+read again. The receiver checks the `x-openeoc-signature` header, `sha256=`
+followed by the HMAC-SHA256 of the request body with that secret. A
+destination off the allowlist is refused with the server's reason, and the
+draft is kept. The screen has no list of existing rules yet.
 
 Scheduled notification rules, due briefings and feed polls run on their own
 through the server's scheduler; no one has to trigger them. A scheduled rule

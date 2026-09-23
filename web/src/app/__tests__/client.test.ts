@@ -690,3 +690,46 @@ describe("federation client", () => {
       expect.objectContaining({ method: "POST", body: JSON.stringify({ boardId: "b1", canRead: true, canWrite: false, remoteBoardId: "r1" }) })]);
   });
 });
+
+describe("ApiClient screens for existing engines", () => {
+  it("sends rules, settings, loads, exports and single-record reads to their routes", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(res(200, { lines: ["a"], lifelines: [], result: { accepted: 1 } }));
+    const client = new ApiClient({ fetchImpl });
+    const sent = (n: number) => [fetchImpl.mock.calls[n]?.[0], (fetchImpl.mock.calls[n]?.[1] as RequestInit).method,
+      (fetchImpl.mock.calls[n]?.[1] as RequestInit).body];
+    await client.createNotificationRule("j/1", { boardId: null, event: "record.created", condition: { op: "any" },
+      channels: [{ kind: "webhook", url: "https://hooks.example.org/x" }], rateLimit: { max: 5, windowMinutes: 10 } });
+    expect(sent(0)).toEqual(["/api/v1/jurisdictions/j%2F1/notification-rules", "POST", JSON.stringify({ boardId: null,
+      event: "record.created", condition: { op: "any" }, channels: [{ kind: "webhook", url: "https://hooks.example.org/x" }],
+      rateLimit: { max: 5, windowMinutes: 10 } })]);
+    await client.getNotificationAllowlist("j");
+    expect(sent(1)).toEqual(["/api/v1/jurisdictions/j/notification-allowlist", "GET", undefined]);
+    await client.setNotificationAllowlist("j", ["https://hooks.example.org"]);
+    expect(sent(2)).toEqual(["/api/v1/jurisdictions/j/notification-allowlist", "PUT", JSON.stringify({ entries: ["https://hooks.example.org"] })]);
+    expect(await client.jurisdictionLifelines("j")).toEqual([]);
+    expect(sent(3)).toEqual(["/api/v1/jurisdictions/j/lifelines", "GET", undefined]);
+    await client.setJurisdictionLifeline("j", { lifeline: "energy", status: "unstable" });
+    expect(sent(4)).toEqual(["/api/v1/jurisdictions/j/lifelines", "PUT", JSON.stringify({ lifeline: "energy", status: "unstable" })]);
+    await client.setMessagingSettings("j", { retentionDays: null, inIncidentRecord: false });
+    expect(sent(5)).toEqual(["/api/v1/jurisdictions/j/messaging-settings", "PUT", JSON.stringify({ retentionDays: null, inIncidentRecord: false })]);
+    expect(await client.exportThread("t/1")).toEqual(["a"]);
+    expect(sent(6)).toEqual(["/api/v1/threads/t%2F1/export", "GET", undefined]);
+    await client.createLibrary("j", { title: "Flood plan", kind: "plan", body: "", forTemplate: "flood" });
+    expect(sent(7)).toEqual(["/api/v1/jurisdictions/j/libraries", "POST", JSON.stringify({ title: "Flood plan", kind: "plan", body: "", forTemplate: "flood" })]);
+    await client.completeChecklistItem("c1");
+    expect(sent(8)).toEqual(["/api/v1/checklist-items/c1/complete", "POST", undefined]);
+    expect(await client.loadDataset("d1", [{ id: 1 }])).toEqual({ accepted: 1 });
+    expect(sent(9)).toEqual(["/api/v1/data-packs/datasets/d1/load", "POST", JSON.stringify({ records: [{ id: 1 }] })]);
+    await client.createDashboard("j", { templateKey: "ops", version: 2 });
+    expect(sent(10)).toEqual(["/api/v1/jurisdictions/j/dashboards", "POST", JSON.stringify({ templateKey: "ops", version: 2 })]);
+    await client.exportDashboardTemplate("ops", 2);
+    expect(sent(11)).toEqual(["/api/v1/dashboard-templates/ops/2/export", "GET", undefined]);
+    await client.getCorrectiveAction("a1");
+    expect(sent(12)).toEqual(["/api/v1/corrective-actions/a1", "GET", undefined]);
+    await client.compareIncidentImpact("i1", 1, 3, [-124, 39, -122, 41]);
+    expect(sent(13)).toEqual(["/api/v1/incidents/i1/impact/compare?fromRevision=1&toRevision=3&bbox=-124%2C39%2C-122%2C41", "GET", undefined]);
+    await client.importDamageBaseline("j", [{ parcelId: "P1", address: "1 Main", structureType: "single_family", replacementValue: 100 }]);
+    expect(sent(14)).toEqual(["/api/v1/jurisdictions/j/damage/baseline", "POST",
+      JSON.stringify({ rows: [{ parcelId: "P1", address: "1 Main", structureType: "single_family", replacementValue: 100 }] })]);
+  });
+});

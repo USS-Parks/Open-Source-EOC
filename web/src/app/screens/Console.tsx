@@ -327,6 +327,8 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         theme={props.theme}
         client={client}
         personId={session.me?.person.id ?? null}
+        positionKey={session.me?.position?.key ?? null}
+        onDashboardsChanged={dashboards.reload}
         jurisdictionId={viewingJurisdictionId ?? jurisdictionId}
         resourceJurisdictionId={resourceJurisdictionId ?? jurisdictionId}
         discoveryJurisdictionId={jurisdictionId}
@@ -454,6 +456,8 @@ function Center(props: {
   theme: ThemeName;
   client: ApiClient;
   personId: string | null;
+  positionKey: string | null;
+  onDashboardsChanged: () => void;
   jurisdictionId: string;
   discoveryJurisdictionId: string;
   canActivateIncident: boolean;
@@ -543,6 +547,9 @@ function Center(props: {
             props.onDashboardContext({ ...props.routeContext, filter: filterState });
           }}
           onOpenMap={() => props.onNavigate({ kind: "map" })}
+          jurisdictionId={props.jurisdictionId}
+          isAdmin={props.isAdmin}
+          onDashboardsChanged={props.onDashboardsChanged}
           filter={filter}
           incidentId={props.incidentId}
           onFilter={(f) => props.onDashboardFilter(id ?? "", f ? { field: f.field, equals: String(f.equals) } : null)}
@@ -637,7 +644,7 @@ function Center(props: {
       );
     case "messages":
       return <MessagesWorkspace client={props.client} jurisdictionId={props.jurisdictionId}
-        incidentId={props.incidentId} incidentName={props.incidentName} />;
+        incidentId={props.incidentId} incidentName={props.incidentName} isAdmin={props.isAdmin} />;
     case "smartforms":
       return <SmartFormsSurface client={props.client} jurisdictionId={props.discoveryJurisdictionId}
         incidentId={props.incidentId} onOpenMap={() => props.onNavigate({ kind: "map" })} />;
@@ -667,6 +674,7 @@ function Center(props: {
           theme={props.theme}
           integrations={props.integrations}
           memberships={props.memberships}
+          positionKey={props.positionKey}
         />
       );
     case "datasets":
@@ -685,6 +693,7 @@ function Center(props: {
     case "lifeline":
       return <LifelinesSurface client={props.client} incidentId={props.incidentId}
         incidentJurisdictionId={props.incidentJurisdictionId}
+        jurisdictionId={props.jurisdictionId} canWrite={props.canAuthorAlerts}
         relationshipBoards={relationshipBoards}
         selectedLifeline={s.kind === "lifeline" ? s.id : null}
         onOpen={(id) => props.onNavigate({ kind: "lifeline", id })}

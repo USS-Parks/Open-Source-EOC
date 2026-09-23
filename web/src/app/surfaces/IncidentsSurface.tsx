@@ -3,7 +3,7 @@ import type { ThemeName } from "../../design/tokens.js";
 import { IncidentAreaEditor } from "./IncidentAreaEditor.js";
 import { IncidentParticipants } from "./IncidentParticipants.js";
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../../design/components.js";
-import type { ApiClient, Membership } from "../api/client.js";
+import type { ApiClient, LibraryKind, Membership } from "../api/client.js";
 import { IncidentCollaboration } from "../../integrations/collab.js";
 import { IncidentMeetings } from "../../integrations/meetings.js";
 import { useAsync } from "../data/hooks.js";
@@ -12,8 +12,9 @@ import { ErrorNote, Loading, Scroll, SurfaceHeader } from "../screens/parts.js";
 /**
  * Incident lifecycle for the operator (F12): activate an incident from a
  * scenario template in one action (org chart, boards, checklists, and
- * libraries follow), see what is running, and close it. Activation and
- * closure are admin-gated; everyone sees the list.
+ * libraries follow), see what is running, and close it. Activation,
+ * closure and new libraries are admin-gated; everyone sees the list. The
+ * holder of a checklist item's position completes it here.
  */
 export function IncidentsSurface(props: {
   client: ApiClient;
@@ -23,6 +24,8 @@ export function IncidentsSurface(props: {
   /** Optional integrations the server runs; their incident actions show only when on. */
   integrations?: ReadonlySet<string>;
   memberships?: readonly Membership[];
+  /** The signed-in person's current position key, which may complete that position's checklist items. */
+  positionKey?: string | null;
 }) {
   const [reload, setReload] = useState(0);
   const [selectedIncident, setSelectedIncident] = useState<string | null>(null);
@@ -44,12 +47,19 @@ export function IncidentsSurface(props: {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
+  const [libraryTitle, setLibraryTitle] = useState("");
+  const [libraryKind, setLibraryKind] = useState<LibraryKind>("scenario");
+  const [libraryTemplate, setLibraryTemplate] = useState("");
+  const [libraryBody, setLibraryBody] = useState("");
 
-  const run = async (fn: () => Promise<unknown>) => {
+  const run = async (fn: () => Promise<unknown>, done = "") => {
     setBusy(true);
     setError(null);
+    setNotice("");
     try {
       await fn();
+      setNotice(done);
       setReload((n) => n + 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -72,6 +82,21 @@ export function IncidentsSurface(props: {
       setName("");
       setSelectedIncident(activated.incidentId);
     });
+
+  const addLibrary = () =>
+    run(async () => {
+      if (!libraryTitle.trim()) throw new Error("Enter a library title.");
+      await props.client.createLibrary(props.jurisdictionId, {
+        title: libraryTitle.trim(),
+        kind: libraryKind,
+        body: libraryBody,
+        ...(libraryTemplate ? { forTemplate: libraryTemplate } : {}),
+      });
+      setLibraryTitle("");
+      setLibraryBody("");
+    }, libraryTemplate
+      ? `Library added. It attaches to each incident activated from ${tpls.find((t) => t.key === libraryTemplate)?.title ?? "that template"}.`
+      : "Library added to the jurisdiction.");
 
   const list = incidents.data ?? [];
 
@@ -98,6 +123,28 @@ export function IncidentsSurface(props: {
               <Button kind="primary" onClick={activate} disabled={busy}>
                 Activate
               </Button>
+            </div>
+          </Panel>
+        ) : null}
+
+        {props.isAdmin ? (
+          <Panel title="Add a library">
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+              <TextField label="Library title" value={libraryTitle} onChange={setLibraryTitle} />
+              <EnumSelect label="Library kind" values={["scenario", "plan", "reference"]} value={libraryKind}
+                onChange={(value) => setLibraryKind(value as LibraryKind)}
+                labels={{ scenario: "Scenario", plan: "Plan", reference: "Reference" }} />
+              <EnumSelect label="Attach to incidents from" values={["", ...tpls.map((t) => t.key)]} value={libraryTemplate}
+                onChange={setLibraryTemplate}
+                labels={{ "": "No template", ...Object.fromEntries(tpls.map((t) => [t.key, t.title])) }} />
+            </div>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 12 }}>Library content
+              <textarea rows={3} value={libraryBody} onChange={(event) => setLibraryBody(event.target.value)}
+                style={{ font: "inherit", padding: 6, borderRadius: 4, border: "1px solid var(--eoc-border)",
+                  background: "var(--eoc-surface)", color: "var(--eoc-text)" }} />
+            </label>
+            <div style={{ marginTop: 12 }}>
+              <Button onClick={addLibrary} disabled={busy}>Add library</Button>
             </div>
           </Panel>
         ) : null}
@@ -158,6 +205,33 @@ export function IncidentsSurface(props: {
                 {detail.data.positions.map((position) => <li key={position.id}>{position.title}</li>)}
               </ul> : <p>No template positions are attached.</p>}
             </section> : null}
+            {detail.data ? <section aria-label="Incident checklists">
+              <h3 style={{ marginTop: 0 }}>Checklists</h3>
+              {detail.data.checklists.length ? <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
+                {detail.data.checklists.map((item) => {
+                  const title = detail.data!.positions.find((p) => p.key === item.positionKey)?.title;
+                  const done = item.status === "completed";
+                  return <li key={item.id} aria-label={item.item} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8,
+                    padding: "6px 10px", border: "1px solid var(--eoc-border)", borderRadius: 4 }}>
+                    <StatusBadge status={done ? "success" : "info"}>{done ? "completed" : item.status.replaceAll("_", " ")}</StatusBadge>
+                    <strong style={{ flex: "1 1 240px" }}>{item.item}</strong>
+                    <span style={{ color: "var(--eoc-text-muted)", fontSize: "0.9em" }}>
+                      {done && item.completedByPosition ? `Completed by ${item.completedByPosition}` : title ? `Assigned to ${title}` : "Assigned to a participant"}
+                    </span>
+                    {!done && !incident.closedAt && item.positionKey && item.positionKey === props.positionKey
+                      ? <Button onClick={() => run(() => props.client.completeChecklistItem(item.id), `${item.item} completed.`)} disabled={busy}>
+                        Mark complete
+                      </Button> : null}
+                  </li>;
+                })}
+              </ul> : <p>No checklist items came with the template.</p>}
+            </section> : null}
+            {detail.data ? <section aria-label="Incident libraries">
+              <h3 style={{ marginTop: 0 }}>Libraries</h3>
+              {detail.data.libraries.length ? <ul style={{ margin: 0, paddingLeft: 20 }}>
+                {detail.data.libraries.map((library) => <li key={library.id}>{library.title} · {library.kind}</li>)}
+              </ul> : <p>No libraries are attached. A library attaches when an incident is activated from its template.</p>}
+            </section> : null}
             <IncidentAreaEditor client={props.client} incidentId={incident.id} incidentName={incident.name}
               theme={props.theme} canEdit={incident.canEditArea && !incident.closedAt} />
             <IncidentParticipants client={props.client} incidentId={incident.id} incidentName={incident.name}
@@ -181,6 +255,7 @@ export function IncidentsSurface(props: {
             {error}
           </p>
         ) : null}
+        {notice ? <p role="status">{notice}</p> : null}
       </div>
     </Scroll>
   );

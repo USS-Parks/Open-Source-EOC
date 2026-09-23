@@ -62,6 +62,7 @@ import type {
   ResourceRequestDetail as ResourceRequestDetailContract,
   ResourceRequestSummary as ResourceRequestSummaryContract,
   CapAlert,
+  IncidentImpactComparison,
 } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
 import type {
@@ -82,7 +83,7 @@ import type {
   WorkflowTransitionCommand,
 } from "../../boards/workflow.js";
 import type { DamageSummary, DeclarationThresholds } from "@openeoc/shared";
-import type { DamageReportPage, DamageReportStatus, FieldAssessmentInput } from "../../damage/model.js";
+import type { DamageBaselineRow, DamageReportPage, DamageReportStatus, FieldAssessmentInput } from "../../damage/model.js";
 import type { FacilityBoardRow, FacilityInput, FacilityStatusInput } from "../../facilities/model.js";
 
 /**
@@ -2028,6 +2029,66 @@ export class ApiClient {
     const params = pageParams(page);
     return this.request("GET", `/api/v1/tracked-objects/${encodeURIComponent(id)}${params.size ? `?${params}` : ""}`);
   }
+
+  // ---- Notification rules, settings and single-record screens ----
+
+  /** A new rule; a rule with a webhook channel carries its signing secret, returned only here. */
+  createNotificationRule(jurisdictionId: string, rule: NotificationRuleInput): Promise<{ id: string; webhookSecret: string | null }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/notification-rules`,
+      rule as unknown as Record<string, unknown>);
+  }
+  getNotificationAllowlist(jurisdictionId: string): Promise<{ entries: string[]; updatedAt: string | null }> {
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/notification-allowlist`);
+  }
+  /** Replace the allowlist; resolves with the entries as the server normalized them. */
+  setNotificationAllowlist(jurisdictionId: string, entries: readonly string[]): Promise<{ entries: string[] }> {
+    return this.request("PUT", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/notification-allowlist`, { entries });
+  }
+  /** Standing lifeline status for the jurisdiction, outside any incident. */
+  async jurisdictionLifelines(jurisdictionId: string): Promise<LifelineCurrent[]> {
+    return (await this.request<{ lifelines: LifelineCurrent[] }>("GET",
+      `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/lifelines`)).lifelines;
+  }
+  async setJurisdictionLifeline(jurisdictionId: string, input: { lifeline: string; status: string; note?: string }): Promise<LifelineCurrent[]> {
+    return (await this.request<{ lifelines: LifelineCurrent[] }>("PUT",
+      `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/lifelines`, input)).lifelines;
+  }
+  /** Both settings are written together; a null retention keeps messages. */
+  setMessagingSettings(jurisdictionId: string, input: { retentionDays: number | null; inIncidentRecord: boolean }): Promise<{ ok: true }> {
+    return this.request("PUT", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/messaging-settings`, input);
+  }
+  /** Every message in a thread as one line each: time, sender and text. */
+  async exportThread(threadId: string): Promise<string[]> {
+    return (await this.request<{ lines: string[] }>("GET", `/api/v1/threads/${encodeURIComponent(threadId)}/export`)).lines;
+  }
+  createLibrary(jurisdictionId: string, input: { title: string; kind: LibraryKind; body: string; forTemplate?: string }): Promise<{ id: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/libraries`, input);
+  }
+  completeChecklistItem(itemId: string): Promise<{ ok: true }> {
+    return this.request("POST", `/api/v1/checklist-items/${encodeURIComponent(itemId)}/complete`);
+  }
+  /** Replace a dataset's items with these raw source records, mapped by the dataset's field mapping. */
+  async loadDataset(datasetId: string, records: readonly unknown[]): Promise<DatasetLoadResult> {
+    return (await this.request<{ result: DatasetLoadResult }>("POST",
+      `/api/v1/data-packs/datasets/${encodeURIComponent(datasetId)}/load`, { records })).result;
+  }
+  createDashboard(jurisdictionId: string, input: { templateKey: string; version?: number; title?: string }): Promise<{ id: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/dashboards`, input);
+  }
+  exportDashboardTemplate(key: string, version: number): Promise<DashboardTemplate> {
+    return this.request("GET", `/api/v1/dashboard-templates/${encodeURIComponent(key)}/${version}/export`);
+  }
+  getCorrectiveAction(id: string): Promise<CorrectiveAction> {
+    return this.request("GET", `/api/v1/corrective-actions/${encodeURIComponent(id)}`);
+  }
+  compareIncidentImpact(incidentId: string, fromRevision: number, toRevision: number, bbox?: ViewportBbox): Promise<IncidentImpactComparison> {
+    const params = new URLSearchParams({ fromRevision: String(fromRevision), toRevision: String(toRevision) });
+    if (bbox) params.set("bbox", bbox.join(","));
+    return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/impact/compare?${params}`);
+  }
+  importDamageBaseline(jurisdictionId: string, rows: readonly DamageBaselineRow[]): Promise<{ imported: number }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/damage/baseline`, { rows });
+  }
 }
 
 // ---- Notification channel types ----
@@ -2076,6 +2137,34 @@ export interface BoardImportResult {
   readonly ignored: readonly string[];
   readonly errorCount: number;
   readonly errors: ReadonlyArray<{ readonly row: number; readonly field?: string; readonly message: string }>;
+}
+
+
+// ---- Notification rule, library and load types ----
+
+/** A rule channel, shaped as the server's channel schema accepts it. */
+export type NotificationChannel =
+  | { readonly kind: "inapp"; readonly target: "requesting_position" }
+  | { readonly kind: "webhook"; readonly url: string }
+  | { readonly kind: "ntfy"; readonly url: string; readonly topic: string }
+  | { readonly kind: "email"; readonly to: readonly string[] }
+  | { readonly kind: "sms"; readonly to: readonly string[] };
+export interface NotificationRuleInput {
+  readonly boardId: string | null;
+  readonly event: "record.created" | "record.updated" | "scheduled";
+  readonly condition: { readonly op: "any" | "eq" | "changed_to"; readonly field?: string; readonly value?: string };
+  readonly channels: readonly NotificationChannel[];
+  readonly scheduleIntervalMinutes?: number;
+  readonly rateLimit: { readonly max: number; readonly windowMinutes: number };
+}
+export type LibraryKind = "scenario" | "plan" | "reference";
+export interface DatasetLoadResult {
+  readonly key: string;
+  readonly availability: DatasetStatus["availability"];
+  readonly itemCount: number | null;
+  readonly received: number;
+  readonly accepted: number;
+  readonly rejected: number;
 }
 
 // ---- JIC list types ----

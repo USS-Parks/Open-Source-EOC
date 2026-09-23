@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
-import { IncidentDatasets } from "../surfaces/IncidentDatasets.js";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { IncidentDatasets, recordsFromJson } from "../surfaces/IncidentDatasets.js";
 import type { ApiClient } from "../api/client.js";
 import type { DatasetStatus } from "@openeoc/shared";
 
@@ -50,4 +50,27 @@ it("hides the onboarding form for a viewer who cannot manage", async () => {
   render(<IncidentDatasets client={client(datasets)} incidentId="i1" canManage={false} />);
   await waitFor(() => expect(screen.getByText("Road closures")).toBeTruthy());
   expect(screen.queryByText("Register a source")).toBeNull();
+  expect(screen.queryByText("Load records")).toBeNull();
+});
+
+it("loads a GeoJSON file's features into the chosen dataset and reports the server's tally", async () => {
+  const api = client(datasets);
+  const loadDataset = vi.fn().mockResolvedValue({ key: "sensors", availability: "available", itemCount: 2, received: 3, accepted: 2, rejected: 1 });
+  Object.assign(api, { loadDataset });
+  render(<IncidentDatasets client={api} incidentId="i1" canManage />);
+  fireEvent.change(await screen.findByLabelText("Dataset to load"), { target: { value: "ds-sensors" } });
+  const features = [{ type: "Feature", properties: { id: "s1" }, geometry: null }];
+  const file = new File([JSON.stringify({ type: "FeatureCollection", features })], "sensors.geojson");
+  fireEvent.change(screen.getByLabelText("Records file"), { target: { files: [file] } });
+  fireEvent.click(screen.getByRole("button", { name: "Load records" }));
+  await screen.findByText("2 of 3 records accepted, 1 rejected.");
+  expect(loadDataset).toHaveBeenCalledWith("ds-sensors", features);
+});
+
+it("reads records from an array, a FeatureCollection or a records object, and refuses anything else", () => {
+  expect(recordsFromJson("[1,2]")).toEqual([1, 2]);
+  expect(recordsFromJson('{"type":"FeatureCollection","features":[{"a":1}]}')).toEqual([{ a: 1 }]);
+  expect(recordsFromJson('{"records":[{"b":2}]}')).toEqual([{ b: 2 }]);
+  expect(() => recordsFromJson("{")).toThrow("not valid JSON");
+  expect(() => recordsFromJson('{"rows":[]}')).toThrow("must hold an array of records");
 });
