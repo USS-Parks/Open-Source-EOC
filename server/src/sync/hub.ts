@@ -319,6 +319,10 @@ export class BoardSyncHub {
                   ${context?.operationId ?? null}, ${digest},
                   ${context ? checkpoint.conflicts : null})
           returning seq`;
+        // Notifications queue in this transaction; the outbox worker sends them.
+        for (const c of checkpoint.committed) {
+          await notifyBoardEvent(tx, actor, boardEventFor(board, c, before, after));
+        }
         return {
           board,
           doc,
@@ -360,19 +364,8 @@ export class BoardSyncHub {
       await this.writeSnapshot(actor, boardId, incidentId, entry);
     }
     for (const fn of entry.subscribers) fn(update, originSession);
-    // Post-commit notification fan-out for sync-originated changes.
     for (const c of outcome.committed) {
-      const event: BoardEvent = {
-        jurisdictionId: outcome.board.jurisdictionId,
-        boardId: outcome.board.id,
-        boardKey: outcome.board.template.key,
-        recordId: c.recordId,
-        event: c.existing ? "record.updated" : "record.created",
-        record: outcome.after.get(c.recordId)!,
-        previous: outcome.before.get(c.recordId),
-      };
-      await notifyBoardEvent(this.sql, actor, event);
-      publishBoardEvent(event);
+      publishBoardEvent(boardEventFor(outcome.board, c, outcome.before, outcome.after));
     }
     return outcome.result;
   }
@@ -674,4 +667,21 @@ function changedFieldKeys(
 ): string[] {
   return Object.keys(after).filter((key) =>
     JSON.stringify(before[key]) !== JSON.stringify(after[key]));
+}
+
+function boardEventFor(
+  board: EffectiveBoard,
+  c: { recordId: string; existing: boolean },
+  before: Map<string, Record<string, unknown>>,
+  after: Map<string, Record<string, unknown>>,
+): BoardEvent {
+  return {
+    jurisdictionId: board.jurisdictionId,
+    boardId: board.id,
+    boardKey: board.template.key,
+    recordId: c.recordId,
+    event: c.existing ? "record.updated" : "record.created",
+    record: after.get(c.recordId)!,
+    previous: before.get(c.recordId),
+  };
 }

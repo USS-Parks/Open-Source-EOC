@@ -46,6 +46,13 @@ separate configuration. A local alert, release, message, or request is not proof
 that an external system received it. Use the connector-specific status and
 observed remote evidence before making a delivery claim.
 
+Webhook and push notifications are queued with the board change that caused
+them and sent by a background worker, so a slow or unreachable target never
+delays an operator's write. A notification reads `pending` until the target
+accepts it. Failed attempts retry with increasing delay; after eight failures
+the notification is marked `failed` with the last error. A target that keeps
+failing is paused for a minute at a time without using up attempts.
+
 - IPAWS setup: [IPAWS enablement](../IPAWS-ENABLEMENT.md)
 - Federation setup: [Federation setup](./FEDERATION-SETUP.md)
 

@@ -262,6 +262,7 @@ PUT /api/v1/jurisdictions/:jurisdictionId/ipaws/config
 PUT /api/v1/jurisdictions/:jurisdictionId/lifelines
 PUT /api/v1/jurisdictions/:jurisdictionId/meetings/config
 PUT /api/v1/jurisdictions/:jurisdictionId/messaging-settings
+PUT /api/v1/peers/:peerId/link
 `
   .trim()
   .split("\n");

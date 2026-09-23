@@ -171,19 +171,21 @@ export function boardRoutes(
     // the incident uses (VEOC-79B1). Absent, the record is jurisdiction-local.
     const { incidentId } = z.object({ incidentId: z.string().uuid().optional() }).parse(req.query);
     const data = RecordBody.parse(req.body);
-    const result = await withPerson(sql, req.principal.person.id, (tx) =>
-      createRecord(tx, req.principal, boardId, data, incidentId),
-    );
-    // Post-commit fan-out: delivery never runs inside the mutating tx.
-    const event: BoardEvent = {
-      jurisdictionId: result.jurisdictionId,
-      boardId,
-      boardKey: result.boardKey,
-      recordId: result.id,
-      event: "record.created",
-      record: result.data,
-    };
-    await notifyBoardEvent(sql, req.principal, event);
+    // Notifications queue inside the write transaction; the outbox worker
+    // delivers them, so no network call is awaited here.
+    const { result, event } = await withPerson(sql, req.principal.person.id, async (tx) => {
+      const result = await createRecord(tx, req.principal, boardId, data, incidentId);
+      const event: BoardEvent = {
+        jurisdictionId: result.jurisdictionId,
+        boardId,
+        boardKey: result.boardKey,
+        recordId: result.id,
+        event: "record.created",
+        record: result.data,
+      };
+      await notifyBoardEvent(tx, req.principal, event);
+      return { result, event };
+    });
     publishBoardEvent(event);
     return reply.status(201).send({ id: result.id });
   });
@@ -202,10 +204,9 @@ export function boardRoutes(
       const { boardId, recordId } = req.params as { boardId: string; recordId: string };
       const { incidentId } = z.object({ incidentId: z.string().uuid().optional() }).strict().parse(req.query);
       const patch = RecordBody.parse(req.body);
-      const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        updateRecord(tx, req.principal, boardId, recordId, patch, incidentId),
-      );
-      if (result.changed) {
+      const event = await withPerson(sql, req.principal.person.id, async (tx) => {
+        const result = await updateRecord(tx, req.principal, boardId, recordId, patch, incidentId);
+        if (!result.changed) return null;
         const event: BoardEvent = {
           jurisdictionId: result.jurisdictionId,
           boardId,
@@ -215,9 +216,10 @@ export function boardRoutes(
           record: result.data,
           previous: result.previous,
         };
-        await notifyBoardEvent(sql, req.principal, event);
-        publishBoardEvent(event);
-      }
+        await notifyBoardEvent(tx, req.principal, event);
+        return event;
+      });
+      if (event) publishBoardEvent(event);
       return reply.send({ ok: true });
     },
   );

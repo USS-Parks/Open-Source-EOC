@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
@@ -8,8 +8,8 @@ import type { Principal } from "../auth/service.js";
  * Notification engine (F4). Rules are data: an event, an optional
  * condition over the record, and a channel list. Delivery is post-commit
  * (never inside the mutating transaction) and every attempt lands as a
- * logged notification row, delivered or failed; a dead channel is a
- * visible record, not a silent drop.
+ * logged notification row, pending until the outbox worker settles it as
+ * delivered or failed; a dead channel is a visible record, not a silent drop.
  */
 
 export const ConditionSchema = z.object({
@@ -49,116 +49,103 @@ export function signWebhookBody(secret: string, body: string): string {
   return createHmac("sha256", secret).update(body).digest("hex");
 }
 
+/**
+ * Evaluate the rules for a board event and record what they ask for. Runs
+ * inside the caller's write transaction and never touches the network: an
+ * in-app notice is written as delivered, and a webhook or push is written as a
+ * pending notification plus a delivery row that the outbox worker sends.
+ */
 export async function notifyBoardEvent(
-  sql: Sql,
+  tx: Sql,
   actor: Principal,
   event: BoardEvent,
 ): Promise<void> {
-  const rules = await withPerson(sql, actor.person.id, (tx) => {
-    return tx`
-      select id, board_id, event, condition, channels, webhook_secret
-      from notification_rules
-      where jurisdiction_id = ${event.jurisdictionId} and enabled
-        and event = ${event.event}
-        and (board_id is null or board_id = ${event.boardId})`;
-  });
+  const rules = await tx`
+    select id, board_id, event, condition, channels, webhook_secret
+    from notification_rules
+    where jurisdiction_id = ${event.jurisdictionId} and enabled
+      and event = ${event.event}
+      and (board_id is null or board_id = ${event.boardId})`;
   for (const rule of rules) {
     const condition = ConditionSchema.parse(rule.condition ?? {});
     if (!matches(condition, event)) continue;
     const channels = z.array(ChannelSchema).parse(rule.channels);
     for (const channel of channels) {
-      await deliver(sql, actor, rule.id as string, rule.webhook_secret as string | null, channel, event);
+      await enqueue(tx, actor, rule.id as string, rule.webhook_secret as string | null, channel, event);
     }
   }
 }
 
-const DELIVERY_TIMEOUT_MS = 5000;
-
-async function deliver(
-  sql: Sql,
+async function enqueue(
+  tx: Sql,
   actor: Principal,
   ruleId: string,
   webhookSecret: string | null,
   channel: Channel,
   event: BoardEvent,
 ): Promise<void> {
+  void actor;
   const title = `${event.boardKey}: ${event.event}`;
-  const bodyText = summarize(event);
-  try {
-    if (channel.kind === "inapp") {
-      const positionId = await requestingPosition(sql, actor, event.recordId);
-      await log(sql, actor, event, ruleId, "inapp", "delivered", { title, positionId });
-      return;
-    }
-    if (channel.kind === "webhook") {
-      const payload = JSON.stringify({
-        event: event.event,
-        board: event.boardKey,
-        recordId: event.recordId,
-        record: event.record,
-        at: new Date().toISOString(),
-      });
-      const signature = signWebhookBody(webhookSecret ?? "", payload);
-      const res = await fetch(channel.url, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-openeoc-signature": `sha256=${signature}`,
-        },
-        body: payload,
-        signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),
-      });
-      if (!res.ok) throw new Error(`webhook responded ${res.status}`);
-      await log(sql, actor, event, ruleId, "webhook", "delivered", { url: channel.url, title });
-      return;
-    }
-    // ntfy-pattern self-hosted push: plain POST to the topic URL.
-    const res = await fetch(`${channel.url.replace(/\/$/, "")}/${channel.topic}`, {
-      method: "POST",
-      headers: { title },
-      body: bodyText,
-      signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),
-    });
-    if (!res.ok) throw new Error(`ntfy responded ${res.status}`);
-    await log(sql, actor, event, ruleId, "ntfy", "delivered", { topic: channel.topic, title });
-  } catch (err) {
-    await log(sql, actor, event, ruleId, channel.kind, "failed", {
-      title,
-      error: err instanceof Error ? err.message : String(err),
-    });
+  if (channel.kind === "inapp") {
+    const [row] = event.boardKey === "scheduled"
+      ? [undefined]
+      : await tx`select created_by_position from board_records where id = ${event.recordId}`;
+    const positionId = (row?.created_by_position as string | null | undefined) ?? null;
+    await log(tx, event, ruleId, "inapp", "delivered", { title, positionId });
+    return;
   }
-}
-
-async function requestingPosition(
-  sql: Sql,
-  actor: Principal,
-  recordId: string,
-): Promise<string | null> {
-  const [row] = await withPerson(sql, actor.person.id, (tx) => {
-    return tx`select created_by_position from board_records where id = ${recordId}`;
-  });
-  return (row?.created_by_position as string | null) ?? null;
+  let target: string;
+  let headers: Record<string, string>;
+  let body: string;
+  let detail: Record<string, unknown>;
+  if (channel.kind === "webhook") {
+    body = JSON.stringify({
+      event: event.event,
+      board: event.boardKey,
+      recordId: event.recordId,
+      record: event.record,
+      at: new Date().toISOString(),
+    });
+    target = channel.url;
+    headers = {
+      "content-type": "application/json",
+      "x-openeoc-signature": `sha256=${signWebhookBody(webhookSecret ?? "", body)}`,
+    };
+    detail = { url: channel.url, title };
+  } else {
+    // ntfy-pattern self-hosted push: plain POST to the topic URL.
+    target = `${channel.url.replace(/\/$/, "")}/${channel.topic}`;
+    headers = { title };
+    body = summarize(event);
+    detail = { topic: channel.topic, title };
+  }
+  const notificationId = await log(tx, event, ruleId, channel.kind, "pending", detail);
+  await tx`
+    insert into delivery_outbox (jurisdiction_id, notification_id, kind, target, headers, body)
+    values (${event.jurisdictionId}, ${notificationId}, ${channel.kind}, ${target},
+            ${tx.json(headers as never)}, ${body})`;
 }
 
 async function log(
-  sql: Sql,
-  actor: Principal,
+  tx: Sql,
   event: BoardEvent,
   ruleId: string,
   channel: string,
-  status: "delivered" | "failed",
+  status: "pending" | "delivered",
   detail: Record<string, unknown>,
-): Promise<void> {
+): Promise<string> {
   const positionId = detail.positionId as string | null | undefined;
-  await withPerson(sql, actor.person.id, (tx) => {
-    return tx`
-      insert into notifications
-        (jurisdiction_id, rule_id, position_id, channel, title, body, status, detail)
-      values
-        (${event.jurisdictionId}, ${ruleId}, ${positionId ?? null}, ${channel},
-         ${(detail.title as string) ?? event.event}, ${summarize(event)}, ${status},
-         ${tx.json(detail as never)})`;
-  });
+  // The id is chosen here, not returned: the acting member may write a
+  // notification that row-level security does not let them read back.
+  const id = randomUUID();
+  await tx`
+    insert into notifications
+      (id, jurisdiction_id, rule_id, position_id, channel, title, body, status, detail)
+    values
+      (${id}, ${event.jurisdictionId}, ${ruleId}, ${positionId ?? null}, ${channel},
+       ${(detail.title as string) ?? event.event}, ${summarize(event)}, ${status},
+       ${tx.json(detail as never)})`;
+  return id;
 }
 
 function summarize(event: BoardEvent): string {
@@ -177,8 +164,10 @@ export async function runScheduledRules(
   jurisdictionId: string,
   now = new Date(),
 ): Promise<number> {
-  const due = await withPerson(sql, actor.person.id, (tx) => {
-    return tx`
+  // Claiming the interval and queuing its deliveries commit together, so a
+  // crash between them can neither skip an interval nor send it twice.
+  return withPerson(sql, actor.person.id, async (tx) => {
+    const due = await tx`
       update notification_rules
       set last_fired_at = ${now}
       where jurisdiction_id = ${jurisdictionId} and enabled and event = 'scheduled'
@@ -186,26 +175,20 @@ export async function runScheduledRules(
         and (last_fired_at is null
              or last_fired_at <= ${now}::timestamptz - make_interval(mins => schedule_interval_minutes))
       returning id, channels, webhook_secret`;
-  });
-  for (const rule of due) {
-    const channels = z.array(ChannelSchema).parse(rule.channels);
-    const event: BoardEvent = {
-      jurisdictionId,
-      boardId: rule.id as string,
-      boardKey: "scheduled",
-      recordId: rule.id as string,
-      event: "record.created",
-      record: { summary: "scheduled notification" },
-    };
-    for (const channel of channels) {
-      if (channel.kind === "inapp") {
-        await log(sql, actor, event, rule.id as string, "inapp", "delivered", {
-          title: "scheduled",
-        });
-      } else {
-        await deliver(sql, actor, rule.id as string, rule.webhook_secret as string | null, channel, event);
+    for (const rule of due) {
+      const channels = z.array(ChannelSchema).parse(rule.channels);
+      const event: BoardEvent = {
+        jurisdictionId,
+        boardId: rule.id as string,
+        boardKey: "scheduled",
+        recordId: rule.id as string,
+        event: "record.created",
+        record: { summary: "scheduled notification" },
+      };
+      for (const channel of channels) {
+        await enqueue(tx, actor, rule.id as string, rule.webhook_secret as string | null, channel, event);
       }
     }
-  }
-  return due.length;
+    return due.length;
+  });
 }

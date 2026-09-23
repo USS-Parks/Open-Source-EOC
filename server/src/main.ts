@@ -5,6 +5,7 @@ import { connect } from "./db/client.js";
 import { migrate } from "./db/migrate.js";
 import { ensureStandardTemplates } from "./boards/service.js";
 import { ensureStandardIncidentTemplates } from "./incidents/service.js";
+import { DeliveryWorker } from "./notify/outbox.js";
 
 /**
  * Production entrypoint. Two database identities, matching the
@@ -46,12 +47,15 @@ export async function start(): Promise<StartResult> {
   const port = Number(process.env.PORT ?? 8080);
   const host = process.env.HOST ?? "0.0.0.0";
   await app.listen({ port, host });
+  const delivery = new DeliveryWorker(sql);
+  delivery.start();
   const url = `http://${host}:${port}`;
   // eslint-disable-next-line no-console
   console.log(`[openeoc] listening on ${url}`);
   return {
     url,
     close: async () => {
+      await delivery.stop();
       await app.close();
       await sql.end();
     },

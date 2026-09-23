@@ -16,15 +16,27 @@ Create a sharing agreement scoping which board a peer may read or write. An
 agreement is per board, so you share exactly what you intend and nothing more.
 Write access is opt-in: omit `canWrite` (or set it false) and the peer can
 receive the board but cannot push updates. The board must belong to the same
-jurisdiction as the peer record.
+jurisdiction as the peer record. Set `remoteBoardId` to the id of the board on
+the peer that should receive this board's updates.
+
+## Link a peer for push delivery
+
+To have this instance push its outbox, an admin links the peer with
+`PUT /api/v1/peers/:peerId/link`, giving the peer's base URL and the peer token
+that the other instance issued when it registered this one. The token is
+stored encrypted and is never shown again, so the server needs
+`OPENEOC_SECRET_KEY` set. Without a link, entries stay in the outbox and can be
+read with the pending route.
 
 ## How updates flow
 
 - Local edits to a shared board queue in an outbox, one entry per peer allowed
   to read it.
-- When the link is up, the batch delivers to the peer's receive lane over the
-  peer token. The peer applies it through the same reconciliation the live sync
-  uses, so there is no synchronous dual-commit and no lost data.
+- The server's delivery worker pushes each linked peer's batch to its receive
+  lane over the peer token. While the peer is unreachable the entries stay
+  queued and are retried with backoff; they never expire. The peer applies a
+  batch through the same reconciliation the live sync uses, so there is no
+  synchronous dual-commit and no lost data.
 - The convergence is attributed to the sending peer in the audit trail.
 
 ## Resource escalation across tiers

@@ -9,13 +9,15 @@ import {
 import { hashToken, newToken } from "../auth/tokens.js";
 import { withPerson } from "../db/context.js";
 import { recordAudit } from "../audit/service.js";
+import { encryptSecret, hasSecretKey } from "../secrets/envelope.js";
 import type { BoardSyncHub } from "../sync/hub.js";
 
 /**
  * Instance federation, store-and-forward (F3). Peers are mutually
  * authenticated; sharing agreements scope which boards a peer may read or
  * write. Local edits are queued in an outbox that survives a partition;
- * when a link returns, the batch is delivered and the peer applies it
+ * the delivery worker pushes it to every linked peer, and when a link
+ * returns after a partition the stranded batch goes then. The peer applies it
  * through the offline reconciliation path, so both sides converge with no
  * synchronous dual-commit and every jurisdiction keeps its own data.
  */
@@ -40,7 +42,7 @@ export async function createAgreement(
   actor: Principal,
   peerId: string,
   boardId: string,
-  perms: { canRead?: boolean; canWrite?: boolean } = {},
+  perms: { canRead?: boolean; canWrite?: boolean; remoteBoardId?: string } = {},
 ): Promise<{ id: string }> {
   const [peer] = await sql`select jurisdiction_id from peers where id = ${peerId}`;
   if (!peer) throw new AuthError(404, "peer not found");
@@ -50,9 +52,10 @@ export async function createAgreement(
   if ((board.jurisdiction_id as string) !== (peer.jurisdiction_id as string))
     throw new AuthError(403, "board is not in this jurisdiction");
   const [row] = await sql`
-    insert into sharing_agreements (peer_id, board_id, can_read, can_write, created_by)
+    insert into sharing_agreements
+      (peer_id, board_id, can_read, can_write, remote_board_id, created_by)
     values (${peerId}, ${boardId}, ${perms.canRead ?? true}, ${perms.canWrite ?? false},
-            ${actor.person.id})
+            ${perms.remoteBoardId ?? null}, ${actor.person.id})
     returning id`;
   return { id: row!.id as string };
 }
@@ -102,12 +105,40 @@ export async function pending(sql: Sql, actor: Principal, peerId: string): Promi
   }));
 }
 
-export async function markDelivered(sql: Sql, actor: Principal, ids: readonly string[]): Promise<void> {
+/** Mark outbox entries delivered. Called by the delivery worker after a peer accepts a batch. */
+export async function markDelivered(sql: Sql, ids: readonly string[]): Promise<void> {
   if (ids.length === 0) return;
+  await sql`select mark_federation_delivered(${ids as string[]}::uuid[])`;
+}
+
+/**
+ * Link a peer for push delivery: the base URL of the remote instance and the
+ * token that instance issued when it registered this one. The token is stored
+ * envelope-encrypted and never returned.
+ */
+export async function setPeerLink(
+  sql: Sql,
+  actor: Principal,
+  peerId: string,
+  endpointUrl: string,
+  token: string,
+): Promise<void> {
+  const [peer] = await sql`select jurisdiction_id from peers where id = ${peerId}`;
+  if (!peer) throw new AuthError(404, "peer not found");
+  requireAdmin(actor, peer.jurisdiction_id as string);
+  if (!hasSecretKey()) {
+    throw new AuthError(409, "server not provisioned for secret storage (OPENEOC_SECRET_KEY unset)");
+  }
   await sql`
-    update federation_outbox set delivered_at = now()
-    where id in ${sql(ids as string[])} and delivered_at is null`;
-  void actor;
+    update peers set endpoint_url = ${endpointUrl}, outbound_token = ${encryptSecret(token)}
+    where id = ${peerId}`;
+  await recordAudit(sql, actor, {
+    jurisdictionId: peer.jurisdiction_id as string,
+    category: "federation.peer_linked",
+    subjectTable: "peers",
+    subjectId: peerId,
+    payload: { endpointUrl },
+  });
 }
 
 /**

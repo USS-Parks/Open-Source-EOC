@@ -210,3 +210,60 @@ tagging remain separately gated as section 1 of the roster states.
 - **Evidence level:** unit and real-database. No benchmark on real hardware;
   that belongs to the wave gate.
 - **Result:** W2.0 is complete. Next: W2.1, the outbound delivery queue.
+
+## V1 W2.1: outbound delivery queue
+
+- **What was wrong.** Webhook and push notifications were sent with `fetch`
+  after the board write committed but before the HTTP response returned, with a
+  five second timeout per channel, so a slow target held the operator's write
+  open for up to five seconds per channel. Scheduled rules did the same. The
+  federation outbox was only ever read by a person through the pending route;
+  nothing delivered it and nothing called `markDelivered`.
+- **Queue.** Migration `0103_delivery_outbox.sql` adds `delivery_outbox`.
+  `notifyBoardEvent` now takes the write transaction and runs inside it on
+  both write paths, REST and sync: an in-app notice is written as delivered,
+  and a webhook or push is written as a `pending` notification plus a delivery
+  row carrying the signed body. No network call is awaited in any write path.
+  Scheduled rules claim their interval and queue their deliveries in one
+  transaction, so a crash between the two can neither skip nor double-send.
+- **Worker.** New `server/src/notify/outbox.ts`. Each pass claims due rows
+  under a lease with `FOR UPDATE SKIP LOCKED`, sends them concurrently with a
+  ten second timeout, and settles each one: delivered; retried with
+  exponential backoff and jitter capped at fifteen minutes; or dead-lettered
+  after eight attempts, which marks the notification `failed` with the error.
+  A target origin with five consecutive failures opens a circuit for a minute;
+  its deliveries are deferred without spending attempts.
+- **Federation.** Peers gain a push link, `PUT /api/v1/peers/:peerId/link`,
+  holding the peer's base URL and the token the peer issued, stored
+  envelope-encrypted. Agreements gain an optional `remoteBoardId`. The same
+  worker pass pushes each linked peer's stranded entries to its receive lane
+  and calls `markDelivered` on success. Federation entries never dead-letter;
+  they back off and wait through a partition of any length.
+- **Row-level security kept on.** The worker acts for no person, so it
+  reaches the queue only through five narrow SECURITY DEFINER functions
+  granted to `app_runtime`. The new table is insert-only to members and
+  readable by jurisdiction admins.
+- **Defect found and fixed while testing.** Writing the notification with
+  `RETURNING id` failed under RLS when a member's write triggered a rule,
+  because members may insert notifications they may not read. The id is now
+  generated in the application.
+- **Placement.** The worker starts from `main.ts`, which `W2.2` owns. It is a
+  plain interval loop here; `W2.2` moves it under the scheduler with leader
+  election. Recorded as a deviation in file ownership, not in behavior.
+- **Contract:** one route added, `PUT /api/v1/peers/:peerId/link`, with
+  `docs/API.md` regenerated. No dependency change.
+- **Tests:** new `delivery-outbox.test.ts`, 5 tests against real databases: a
+  target that sleeps for 30 seconds leaves write latency unchanged and the
+  worker times it out into a retry; retry then dead letter; circuit open and
+  deferral without spent attempts; federation entries held through a
+  partition and delivered to a second instance when the link returns; a
+  non-admin link refused. `notify.test.ts` now drains the worker explicitly
+  and asserts nothing is sent inline.
+- **Verification:** recursive TypeScript clean; full ESLint clean; link
+  checker 69 files; delivery-outbox, notify, federation, sync-hub-lifecycle,
+  boards, continuity-sync, api-docs, ipaws and migrate-baseline suites passed
+  52 of 52 after the API document was regenerated.
+- **Guides:** `docs/guides/ADMIN.md` states the pending, retry and failed
+  behavior; `docs/guides/FEDERATION-SETUP.md` covers the push link.
+- **Evidence level:** unit, integration and real-database.
+- **Result:** W2.1 is complete. Next: W2.3, pagination and push-down.

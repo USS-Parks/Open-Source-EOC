@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { matches, signWebhookBody, type BoardEvent } from "../notify/engine.js";
+import { DeliveryWorker } from "../notify/outbox.js";
 import { auth, freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
 let admin: Sql;
@@ -22,12 +23,14 @@ let adminToken: string;
 let memberToken: string;
 let webhookSecret: string;
 let recordId: string;
+let worker: DeliveryWorker;
 
 beforeAll(async () => {
   ({ admin, runtime } = await freshDb());
   seed = await seedIdentity(admin);
   await ensureStandardTemplates(admin);
   app = buildApp(runtime, { oidc: null });
+  worker = new DeliveryWorker(runtime, { timeoutMs: 2000, maxAttempts: 1 });
 
   receiver = Fastify({ logger: false });
   // Keep raw bytes: signature verification must see exactly what was sent.
@@ -156,6 +159,8 @@ describe("the 213RR notification lane (F4 acceptance)", () => {
       headers: auth(memberToken),
       payload: { state: "assigned" },
     });
+    expect(received).toHaveLength(0); // queued, not sent inline
+    await worker.drain();
     expect(received).toHaveLength(2); // webhook + ntfy
 
     const hook = received.find((r) => r.path === "/hook")!;
@@ -208,6 +213,7 @@ describe("the 213RR notification lane (F4 acceptance)", () => {
       payload: { state: "deployed" },
     });
     expect(upd.statusCode).toBe(200); // the API call itself is unaffected
+    await worker.drain();
     expect(received).toHaveLength(1); // ntfy delivered despite webhook death
 
     const failed = await admin`
@@ -235,6 +241,7 @@ describe("the 213RR notification lane (F4 acceptance)", () => {
       headers: auth(adminToken),
     });
     expect(first.json().fired).toBe(1);
+    await worker.drain();
     expect(received).toHaveLength(1);
     const second = await app.inject({
       method: "POST",
@@ -242,6 +249,7 @@ describe("the 213RR notification lane (F4 acceptance)", () => {
       headers: auth(adminToken),
     });
     expect(second.json().fired).toBe(0); // interval guard holds
+    await worker.drain();
     expect(received).toHaveLength(1);
   });
 });

@@ -328,6 +328,7 @@ present in the comma-separated OPENEOC_INTEGRATIONS setting.
 
 - `POST /api/v1/jurisdictions/:jurisdictionId/peers`: Run jurisdictions peers (auth: bearer; audience: operator)
 - `POST /api/v1/peers/:peerId/agreements`: Run peers agreements (auth: bearer; audience: operator)
+- `PUT /api/v1/peers/:peerId/link`: Set peers link (auth: bearer; audience: operator)
 - `GET /api/v1/peers/:peerId/pending`: Read peers pending (auth: bearer; audience: operator)
 - `POST /api/v1/peers/:peerId/queue`: Run peers queue (auth: bearer; audience: operator)
 
