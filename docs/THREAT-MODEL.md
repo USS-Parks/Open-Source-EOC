@@ -10,6 +10,9 @@ and total attribution (INV-2) are the standing mitigations everywhere.
 - **A1 Incident operational data:** boards, logs, sitreps, resource requests.
 - **A2 Personal data:** tracking objects (patients, evacuees) carry
   HIPAA-adjacent details; damage assessments carry household details.
+  Tracking and facilities are optional integrations, off by default, and are
+  not reviewed for patient-level data in v1
+  ([ADR-0009](./adr/ADR-0009-optional-integrations.md)).
 - **A3 Audit integrity:** the append-only chronology is the legal record;
   its falsification is worse than its disclosure.
 - **A4 Alerting authority:** the CAP/IPAWS path can page the public;

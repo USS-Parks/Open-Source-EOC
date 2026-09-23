@@ -2282,3 +2282,23 @@ tagging remain separately gated as section 1 of the roster states.
 - **Evidence level:** unit, integration, real-database, browser and document.
 - **Deferred:** chart output in a report; retry of a failed scheduled send.
 - **Rollback:** revert both commits; migration `0124` adds only new objects.
+
+## V1 W6.6: gated-module disposition
+
+- **What changed.** `collab`, `meetings`, `tracking` and `facilities` ship
+  gated, as optional integrations, recorded in the new
+  `docs/adr/ADR-0009-optional-integrations.md`. `README.md` gains an
+  "Optional integrations" section naming each with its `OPENEOC_INTEGRATIONS`
+  value, which meets gate line 21. `docs/THREAT-MODEL.md` asset A2 notes that
+  tracking and facilities are off by default and not reviewed for patient-level
+  data in v1; rows B4, B13, B14 and B15 were already conditional on the setting.
+- **Defaults and deviations.** The roster's default, ship gated, applied. The
+  HIPAA scope follows the default the W2.9 receipt set: tracking and facilities
+  do not hold patient-level data in v1. No module code changed, so the unit
+  took none of its owned module directories.
+- **Schema, contract, dependencies:** none.
+- **Verification.** `node scripts/check-links.mjs`: ok, 72 files.
+- **Evidence level:** document.
+- **Deferred:** a HIPAA review before any deployment puts patient-level data in
+  tracking or facilities.
+- **Rollback:** revert the commit.

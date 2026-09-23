@@ -38,6 +38,22 @@ commercial-parity certification.
 
 License: Apache-2.0. See `LICENSE`.
 
+## Optional integrations
+
+Four modules register no routes and show no screens unless the server's
+`OPENEOC_INTEGRATIONS` setting names them, comma-separated, for example
+`OPENEOC_INTEGRATIONS=facilities,tracking`. The setting is read at start.
+
+| Value | What it turns on |
+|---|---|
+| `collab` | Incident channels in an external collaboration backend, with membership kept in step with position assignments |
+| `meetings` | Incident meetings through a Jitsi bridge, and scheduled briefings |
+| `tracking` | Scan-first tracked objects, custody events and reunification |
+| `facilities` | Facility status networks, status queries, HAVE exchange and the shelter census in damage assessment |
+
+`tracking` and `facilities` are not reviewed for patient-level data in this
+release. See [ADR-0009](./docs/adr/ADR-0009-optional-integrations.md).
+
 ## Workspace layout
 
 - `server/` - Node and Fastify backend in TypeScript.
