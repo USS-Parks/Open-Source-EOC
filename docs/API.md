@@ -34,8 +34,8 @@ set, and then require that value as a bearer token.
 - `POST /api/v1/auth/mfa/activate`: Run auth mfa activate (auth: none; audience: operator)
 - `POST /api/v1/auth/mfa/enroll`: Run auth mfa enroll (auth: none; audience: operator)
 - `POST /api/v1/auth/mfa/verify`: Run auth mfa verify (auth: none; audience: operator)
-- `GET /api/v1/auth/oidc/callback`: Read auth oidc callback (auth: none; audience: operator)
-- `GET /api/v1/auth/oidc/start`: Read auth oidc start (auth: none; audience: operator)
+- `GET /api/v1/auth/oidc/callback`: Read auth oidc callback (auth: none; audience: machine)
+- `GET /api/v1/auth/oidc/start`: Read auth oidc start (auth: none; audience: machine)
 - `POST /api/v1/auth/resume`: Run auth resume (auth: none; audience: operator)
 - `DELETE /api/v1/guests/:grantId`: Delete guests (auth: bearer; audience: operator)
 - `GET /api/v1/integrations`: Read integrations (auth: bearer; audience: operator)
@@ -70,9 +70,9 @@ set, and then require that value as a bearer token.
 - `GET /api/v1/boards/:boardId/record-references/:fieldKey`: Read boards record references (auth: bearer; audience: operator)
 - `POST /api/v1/boards/:boardId/records`: Run boards records (auth: bearer; audience: operator)
 - `PATCH /api/v1/boards/:boardId/records/:recordId`: Update boards records (auth: bearer; audience: operator)
-- `POST /api/v1/boards/:boardId/records/:recordId/cot`: Run boards records cot (auth: bearer; audience: operator)
+- `POST /api/v1/boards/:boardId/records/:recordId/cot`: Run boards records cot (auth: bearer; audience: machine)
 - `GET /api/v1/boards/:boardId/records/:recordId/detail`: Read boards records detail (auth: bearer; audience: operator)
-- `POST /api/v1/boards/:boardId/records/:recordId/edxl`: Run boards records edxl (auth: bearer; audience: operator)
+- `POST /api/v1/boards/:boardId/records/:recordId/edxl`: Run boards records edxl (auth: bearer; audience: machine)
 - `GET /api/v1/boards/:boardId/records/:recordId/workflow`: Read boards records workflow (auth: bearer; audience: operator)
 - `POST /api/v1/boards/:boardId/records/:recordId/workflow/approvals`: Run boards records workflow approvals (auth: bearer; audience: operator)
 - `POST /api/v1/boards/:boardId/records/:recordId/workflow/escalations`: Run boards records workflow escalations (auth: bearer; audience: operator)
@@ -90,17 +90,17 @@ set, and then require that value as a bearer token.
 
 - `GET /api/v1/incidents/:incidentId/briefings`: Read incidents briefings (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=meetings)
 - `POST /api/v1/incidents/:incidentId/briefings`: Run incidents briefings (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=meetings)
-- `POST /api/v1/jurisdictions/:jurisdictionId/briefings/run-due`: Run jurisdictions briefings run due (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=meetings)
+- `POST /api/v1/jurisdictions/:jurisdictionId/briefings/run-due`: Run jurisdictions briefings run due (auth: bearer; audience: machine; integration: OPENEOC_INTEGRATIONS=meetings)
 
 ### cap
 
 - `GET /api/v1/cap/alerts/:id`: Read cap alerts (auth: bearer; audience: operator)
 - `POST /api/v1/cap/alerts/:id/review`: Run cap alerts review (auth: bearer; audience: operator)
 - `GET /api/v1/jurisdictions/:jurisdictionId/cap/alerts`: Read jurisdictions cap alerts (auth: bearer; audience: operator)
-- `POST /api/v1/jurisdictions/:jurisdictionId/cap/alerts`: Run jurisdictions cap alerts (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/cap/alerts`: Run jurisdictions cap alerts (auth: bearer; audience: machine)
 - `POST /api/v1/jurisdictions/:jurisdictionId/cap/alerts/:alertId/ipaws`: Run jurisdictions cap alerts ipaws (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/cap/drafts`: Run jurisdictions cap drafts (auth: bearer; audience: operator)
-- `POST /api/v1/jurisdictions/:jurisdictionId/cap/ingest`: Run jurisdictions cap ingest (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/cap/ingest`: Run jurisdictions cap ingest (auth: bearer; audience: machine)
 
 ### catalog
 
@@ -136,7 +136,7 @@ set, and then require that value as a bearer token.
 
 ### cot
 
-- `POST /api/v1/jurisdictions/:jurisdictionId/cot/ingest`: Run jurisdictions cot ingest (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/cot/ingest`: Run jurisdictions cot ingest (auth: bearer; audience: machine)
 
 ### damage
 
@@ -146,7 +146,7 @@ set, and then require that value as a bearer token.
 - `POST /api/v1/jurisdictions/:jurisdictionId/damage/baseline`: Run jurisdictions damage baseline (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/damage/declaration`: Run jurisdictions damage declaration (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/damage/intake/enable`: Run jurisdictions damage intake enable (auth: bearer; audience: operator)
-- `POST /api/v1/jurisdictions/:jurisdictionId/damage/report`: Run jurisdictions damage report (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/damage/report`: Run jurisdictions damage report (auth: intake-token; audience: machine)
 - `POST /api/v1/jurisdictions/:jurisdictionId/damage/summary`: Run jurisdictions damage summary (auth: bearer; audience: operator)
 
 ### dashboard-templates
@@ -158,7 +158,7 @@ set, and then require that value as a bearer token.
 
 - `GET /api/v1/dashboards/:dashboardId`: Read dashboards (auth: bearer; audience: operator)
 - `GET /api/v1/dashboards/:dashboardId/data`: Read dashboards data (auth: bearer; audience: operator)
-- `GET /api/v1/dashboards/:dashboardId/stream`: Read dashboards stream (auth: bearer; audience: operator)
+- `GET /api/v1/dashboards/:dashboardId/stream`: Read dashboards stream (auth: bearer; audience: machine)
 - `GET /api/v1/dashboards/:dashboardId/widgets/:widgetKey/records`: Read dashboards widgets records (auth: bearer; audience: operator)
 - `GET /api/v1/incidents/:incidentId/dashboard-configs`: Read incidents dashboard configs (auth: bearer; audience: operator)
 - `DELETE /api/v1/incidents/:incidentId/dashboard-configs/:key`: Delete incidents dashboard configs (auth: bearer; audience: operator)
@@ -177,7 +177,7 @@ set, and then require that value as a bearer token.
 
 ### edxl
 
-- `POST /api/v1/jurisdictions/:jurisdictionId/edxl/import`: Run jurisdictions edxl import (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/edxl/import`: Run jurisdictions edxl import (auth: bearer; audience: machine)
 
 ### esf-assessments
 
@@ -337,7 +337,7 @@ set, and then require that value as a bearer token.
 
 ### notifications
 
-- `POST /api/v1/jurisdictions/:jurisdictionId/notifications/run-scheduled`: Run jurisdictions notifications run scheduled (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/notifications/run-scheduled`: Run jurisdictions notifications run scheduled (auth: bearer; audience: machine)
 - `GET /api/v1/notifications`: Read notifications (auth: bearer; audience: operator)
 - `POST /api/v1/notifications/:notificationId/acknowledge`: Run notifications acknowledge (auth: bearer; audience: operator)
 - `POST /api/v1/notifications/:notificationId/read`: Run notifications read (auth: bearer; audience: operator)
@@ -345,10 +345,10 @@ set, and then require that value as a bearer token.
 
 ### ogc
 
-- `GET /api/v1/ogc`: Read ogc (auth: bearer; audience: operator)
+- `GET /api/v1/ogc`: Read ogc (auth: bearer; audience: machine)
 - `GET /api/v1/ogc/collections`: Read ogc collections (auth: bearer; audience: operator)
 - `GET /api/v1/ogc/collections/:boardId/items`: Read ogc collections items (auth: bearer; audience: operator)
-- `GET /api/v1/ogc/conformance`: Read ogc conformance (auth: bearer; audience: operator)
+- `GET /api/v1/ogc/conformance`: Read ogc conformance (auth: bearer; audience: machine)
 
 ### participants
 
@@ -361,8 +361,8 @@ set, and then require that value as a bearer token.
 - `POST /api/v1/jurisdictions/:jurisdictionId/peers`: Run jurisdictions peers (auth: bearer; audience: operator)
 - `POST /api/v1/peers/:peerId/agreements`: Run peers agreements (auth: bearer; audience: operator)
 - `PUT /api/v1/peers/:peerId/link`: Set peers link (auth: bearer; audience: operator)
-- `GET /api/v1/peers/:peerId/pending`: Read peers pending (auth: bearer; audience: operator)
-- `POST /api/v1/peers/:peerId/queue`: Run peers queue (auth: bearer; audience: operator)
+- `GET /api/v1/peers/:peerId/pending`: Read peers pending (auth: bearer; audience: machine)
+- `POST /api/v1/peers/:peerId/queue`: Run peers queue (auth: bearer; audience: machine)
 
 ### ready
 

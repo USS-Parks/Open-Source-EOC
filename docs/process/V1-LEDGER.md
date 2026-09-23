@@ -1527,3 +1527,35 @@ tagging remain separately gated as section 1 of the roster states.
   saving, and the guide sends very large jurisdictions to `curl -o`. The export
   is one READ COMMITTED transaction, not one snapshot, which the guide states.
 - **Rollback:** revert the commit.
+
+## V1 W3 route coverage: every operator route owes a screen
+
+- **What changed.** The W3 gate requires every contract route to be reachable
+  from a screen or marked machine-only in the contract, with no route unwired
+  without a recorded reason. New `web/src/app/__tests__/route-coverage.test.ts`
+  holds that permanently: it extracts every `/api/v1/` call site from the web
+  sources, with the HTTP verb, and requires each operator-audience route to
+  have one, or to be named in an explicit awaiting list with its reason; a
+  second assertion fails when a listed route gains a caller, so the list cannot
+  go stale.
+- **Machine audience in the contract.** `shared/src/api/contract.ts` gains a
+  `machineRoutes` set, with reasons in comments and a load-time check that
+  each entry exists: CAP, CoT and EDXL interchange in and out; direct CAP
+  authoring for API clients, since the screen authors through reviewed drafts;
+  the OGC landing and conformance pages; the live dashboard stream for wall
+  displays; the OIDC redirect pair; the scheduler's manual triggers; and the
+  manual federation queue and its read. The damage self-report route
+  authenticates with an intake token but the contract called it bearer; it now
+  reads `intake-token`, machine audience. `docs/API.md` regenerated.
+- **A scanner miss fixed at the source.** `requestIpawsSend` built its paths
+  from a `${base}` variable; the paths are now written in full so the call
+  sites are visible.
+- **What the test found.** 32 operator routes had no caller. They are carried
+  as roster units added in this commit: `W3.12`, fifteen routes of core
+  engines with no screen, including notification rule authoring and the
+  webhook allowlist; `W3.13`, fifteen routes of the optional integrations; and
+  local board fields, owed by the board presentation half of `W4.1`.
+- **Verification:** route coverage 3 of 3 with the awaiting list in place;
+  api-docs, ipaws (the route-table contract), the shared suite, the IPAWS web
+  tests and the client test passed 183 of 183. TypeScript and ESLint clean.
+- **Evidence level:** unit and document.

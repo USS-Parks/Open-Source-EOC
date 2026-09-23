@@ -1548,10 +1548,10 @@ export class ApiClient {
   }
   /** Ask for a send; the server answers with a pending request a different admin must confirm. */
   requestIpawsSend(jurisdictionId: string, alertId: string, kind: IpawsSendKind): Promise<IpawsSendRequest> {
-    const base = `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}`;
+    const jurisdiction = encodeURIComponent(jurisdictionId);
     return kind === "handshake"
-      ? this.request("POST", `${base}/ipaws/test`, { alertId })
-      : this.request("POST", `${base}/cap/alerts/${encodeURIComponent(alertId)}/ipaws`, {});
+      ? this.request("POST", `/api/v1/jurisdictions/${jurisdiction}/ipaws/test`, { alertId })
+      : this.request("POST", `/api/v1/jurisdictions/${jurisdiction}/cap/alerts/${encodeURIComponent(alertId)}/ipaws`, {});
   }
   async listIpawsSends(jurisdictionId: string): Promise<IpawsSendRequest[]> {
     const result = await this.request<{ sends: IpawsSendRequest[] }>(

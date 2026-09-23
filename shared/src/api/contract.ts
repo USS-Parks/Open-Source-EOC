@@ -312,9 +312,42 @@ const peerAuth = new Set([
   "POST /api/v1/resource-requests/report",
 ]);
 const feedAuth = new Set(["POST /api/v1/feeds/:feedId/ingest"]);
+// Damage self-reports from external intake tools carry the jurisdiction's intake token.
+const intakeAuth = new Set(["POST /api/v1/jurisdictions/:jurisdictionId/damage/report"]);
 // The scrape token is OPENEOC_METRICS_TOKEN; the route answers 404 while it is unset.
 const metricsAuth = new Set(["GET /api/v1/metrics"]);
 const systemRoutes = new Set(["GET /api/v1/health", "GET /api/v1/ready", "GET /api/v1/metrics"]);
+/**
+ * Routes no screen calls, by design. Every other operator route is reachable
+ * from a screen, which a web test holds to.
+ */
+const machineRoutes = new Set([
+  // Interchange with other systems: CAP, CoT and EDXL in and out.
+  "POST /api/v1/jurisdictions/:jurisdictionId/cap/ingest",
+  "POST /api/v1/jurisdictions/:jurisdictionId/cot/ingest",
+  "POST /api/v1/jurisdictions/:jurisdictionId/edxl/import",
+  "POST /api/v1/boards/:boardId/records/:recordId/cot",
+  "POST /api/v1/boards/:boardId/records/:recordId/edxl",
+  // Direct CAP authoring for API clients; the screen authors through reviewed drafts.
+  "POST /api/v1/jurisdictions/:jurisdictionId/cap/alerts",
+  // OGC API Features landing and conformance pages, read by GIS clients.
+  "GET /api/v1/ogc",
+  "GET /api/v1/ogc/conformance",
+  // Live dashboard snapshots for wall displays and other external clients.
+  "GET /api/v1/dashboards/:dashboardId/stream",
+  // The identity-provider redirect pair: the browser is sent here, not called.
+  "GET /api/v1/auth/oidc/start",
+  "GET /api/v1/auth/oidc/callback",
+  // Manual triggers for jobs the scheduler runs on its own.
+  "POST /api/v1/jurisdictions/:jurisdictionId/briefings/run-due",
+  "POST /api/v1/jurisdictions/:jurisdictionId/notifications/run-scheduled",
+  // The manual federation queue and its read; the sync hub queues shared-board edits itself.
+  "POST /api/v1/peers/:peerId/queue",
+  "GET /api/v1/peers/:peerId/pending",
+]);
+for (const key of machineRoutes) {
+  if (!routeKeys.includes(key)) throw new Error(`machine route is not in the contract: ${key}`);
+}
 
 const tagAliases: Readonly<Record<string, string>> = {
   "corrective-actions": "aar",
@@ -383,10 +416,12 @@ const rest: RestEndpoint[] = routeKeys.map((key) => {
         ? "feed-token"
         : metricsAuth.has(key)
           ? "metrics-token"
-          : "bearer";
+          : intakeAuth.has(key)
+            ? "intake-token"
+            : "bearer";
   const audience = systemRoutes.has(key)
     ? "system"
-    : auth === "peer-token" || auth === "feed-token"
+    : auth === "peer-token" || auth === "feed-token" || auth === "intake-token" || machineRoutes.has(key)
       ? "machine"
       : "operator";
   const integration = routeIntegration(path);
