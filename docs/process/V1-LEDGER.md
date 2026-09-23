@@ -98,3 +98,50 @@ Every unit records, in this order:
   milestone gate is recorded in the next receipt.
 - **Result:** W1.14 is complete. No push performed. Next: the W1 milestone
   gate.
+
+## V1 W1 milestone gate
+
+- **Command:** `pnpm check:gate` at the repository root with
+  `OPENEOC_TEST_DB_TAG=gate`: recursive TypeScript, full ESLint, the license
+  scan, the link checker, the advisory gate, the desktop and installer tests,
+  then the serial Vitest path at `--maxWorkers=1`.
+- **Static gates, all green.** TypeScript clean. ESLint clean. License scan
+  300 packages. Link checker 69 files. Advisory gate 0 high or critical with
+  an empty allowlist. Desktop and installer tests 18 passed, 0 failed.
+- **Serial suite:** 177 of 178 files and 933 of 935 tests passed on the final
+  run. The one file that did not pass is recorded below under HZ-C.
+- **HZ-C applied, and stated plainly.** The gate has not passed clean in a
+  single run on this host. Across three runs a different single file failed
+  each time and passed on an isolated retry:
+  - run 2, `app-e2e.test.ts`, one locator timeout at 30 seconds; isolated
+    retry passed 4 of 4, twice;
+  - run 3, `incident-dashboard-scope.test.ts`, a Windows worker fast-fail
+    (`0xC0000409`) at worker startup, not a test failure; isolated retry
+    passed 2 of 2. `app-e2e.test.ts` passed in that same run.
+  HZ-C permits calling such a file green after one isolated retry, and that is
+  what is claimed here. It is not a claim that the suite passed end to end in
+  one process.
+- **Risk carried into W2, not closed here.** A 178-file serial suite with
+  browser walks is at the edge of what this host sustains, so the gate costs
+  about ten minutes and flakes one file per run. That is a real obstacle to
+  the milestone gates W2 through W4 each require. It is not in any unit's
+  scope today and no unit has been invented for it; it is recorded so the
+  decision is Basho's.
+- **Four suites were red on `main` before this wave and are now green**, none
+  of them broken by this wave's units:
+  - `app-e2e.test.ts` and `field-workspaces-browser.test.ts` walk the tracking
+    surface against an app built with no optional integrations, broken when
+    tracking and facilities became opt-in;
+  - `ipaws.test.ts` checked the frozen contract against that same
+    integration-free app, while the contract publishes every route the product
+    can serve;
+  - `operational-assessments.test.ts` read migration `0085` off disk to build
+    its legacy fixture, broken by the pre-release migration squash.
+- **Honesty note on the earlier receipts.** The `W1.0` through `W1.8` receipts
+  each recorded a passing gate. At least the last of them cannot have run the
+  full serial path: once `0085` is deleted, `operational-assessments.test.ts`
+  fails at import. Receipts from here on record the exact command and the file
+  and test counts it returned.
+- **Result:** wave W1 is complete. Nine commits sit on `main` ahead of
+  `origin/main`, linear, no merges, nothing pushed. Next: Basho's word on
+  pushing, then wave W2.
