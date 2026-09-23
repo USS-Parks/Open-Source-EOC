@@ -2335,3 +2335,67 @@ tagging remain separately gated as section 1 of the roster states.
   the bundle instead of a runtime fetch of the county GeoJSON, which waits for
   the geocoding unit to land because both touch the map's search.
 - **Rollback:** revert the commit.
+
+## V1 W4.7: field depth
+
+- **What changed.** Smart forms gain line (`geotrace`), polygon (`geoshape`),
+  barcode, photo and audio questions, cascading selects through
+  `choice_filter`, and repeats, in the runner, the XLSForm importer and the
+  field screen.
+  - The shared runner validates each: a line needs two points, a polygon three
+    distinct points and a closed ring, a select accepts only choices its
+    filter allows, and each repeat entry gets its own required and constraint
+    checks, reported per entry. One shared mapping, `formBoardData`, turns a
+    capture into board data for both the server submit path and the offline
+    queue.
+  - The importer reads the new types and `choice_filter` from a real `.xlsx`
+    workbook, skips metadata rows, and refuses by survey row any construct the
+    runner cannot run (unknown types, `or_other`, `repeat_count`, expressions
+    it cannot evaluate). `storeForm` applies the same expression check.
+  - The field screen, new `web/src/field/GeometryCapture.tsx`, draws a line or
+    polygon by tapping the COP map or typing points, takes a typed barcode or
+    reads one from a photo where the browser has `BarcodeDetector`, and uses
+    the device capture inputs for photo and audio. Cascading selects filter
+    live; repeat entries are added and removed.
+  - Photo and audio answers queue on the device with the report and upload
+    after the record synchronizes, through the new
+    `POST /api/v1/forms/records/:recordId/attachments`, which stores the file
+    with the files service in the record's jurisdiction and sets the board's
+    attachment field of the same name. A refused upload stays queued with the
+    server's reason. `docs/guides/FIELD-USER.md` gains "Question types".
+- **Defaults and deviations.** A repeat lands as a JSON array in a board text
+  field named like the repeat, not as child records. A line or polygon goes to
+  the geometry field of its name, or the first unfilled geometry field whose
+  kind accepts it. Behavior changes, stated as deviations: a photo no longer
+  needs a connection when picked; the importer now refuses constructs it used
+  to skip silently. Limits: one queued file at most 10 MB, 50 MB per person per
+  incident on the device. Eight audio types join the file store's allowlist.
+  Ownership deviation: one line of `field-workspaces-browser.test.ts`, whose
+  expected message changed with the queued photo. The unit was started by an
+  earlier session's lane and finished in this one; the finishing implementer
+  moved the attachment route to its own registration so `server/src/app.ts`
+  took only additive lines.
+- **Schema, contract, dependencies.** No migration; block `0125` unused. One
+  route added to the contract and `docs/API.md`, called by the offline queue.
+  No dependency.
+- **Verification.** In the lane, before the rebase: `pnpm -r exec tsc
+  --noEmit` exit 0, `pnpm exec eslint .` exit 0, 16 files and 88 tests passed.
+  The integrating session re-ran after rebasing onto `1bfbac2`, tag `c`: tsc
+  and eslint exit 0; `pnpm exec vitest run` over the shared forms tests,
+  form-field-depth, forms, xlsform-reader, files, field-offline, api-docs, the
+  field-depth, field-workspaces, field-reports and continuity-console browser
+  walks, the web field tests, field-workspaces, field-client, route-coverage
+  and reports, 17 files and 96 tests passed, 0 failed; link checker 73 files.
+  The browser walk imports a workbook, fills a cascading select, draws a line
+  and a closed polygon, types a barcode, attaches a photo and a voice note,
+  adds two repeat entries, submits, reads both attachments back from the
+  board, then queues a report with a photo offline and syncs it on reconnect,
+  with light and dark screenshots at 1440 and 390.
+- **Evidence level:** unit, integration, real-database, browser and document.
+- **Deferred:** live-video barcode scanning (Windows Chrome has no
+  `BarcodeDetector`, so only the jsdom test drives the photo read); in-page
+  audio recording; a continuous GPS trace for lines; repeats as child records;
+  `or_other`, `repeat_count`, `range` and other refused constructs. The
+  embedded capture map shows the map panel's search icons out of place in a
+  narrow container, a style defect in the map's inline styles carried to W5.1.
+- **Rollback:** revert the commit; no schema to unwind.
