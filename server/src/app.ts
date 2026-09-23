@@ -62,10 +62,21 @@ import { savedStateRoutes } from "./saved-state/routes.js";
 import { lifelineRoutes } from "./lifelines/routes.js";
 import { esfRoutes } from "./esf/routes.js";
 import { operationalRelationshipRoutes } from "./relationships/routes.js";
+import {
+  logLevelFromEnv,
+  loggingOptions,
+  slowRequestMsFromEnv,
+  type LogLevel,
+  type LogStream,
+} from "./telemetry/logging.js";
+import { Metrics, metricsRoutes, observeRequests } from "./telemetry/metrics.js";
 
 declare module "fastify" {
   interface FastifyRequest {
     principal: Principal;
+  }
+  interface FastifyInstance {
+    metrics: Metrics;
   }
 }
 
@@ -95,6 +106,14 @@ export interface BuildAppOptions {
   readonly oidc?: OidcSettings | null;
   readonly trustedTemplateKeys?: readonly string[];
   readonly integrations?: readonly OptionalIntegration[];
+  /** Defaults to OPENEOC_LOG_LEVEL (see telemetry/logging.ts). */
+  readonly logLevel?: LogLevel;
+  /** Log destination; stdout when absent. */
+  readonly logStream?: LogStream;
+  /** Defaults to OPENEOC_SLOW_REQUEST_MS, else 1000. */
+  readonly slowRequestMs?: number;
+  /** Bearer token for GET /api/v1/metrics; defaults to OPENEOC_METRICS_TOKEN. Unset serves 404. */
+  readonly metricsToken?: string | null;
 }
 
 export type OptionalIntegration = "collab" | "facilities" | "meetings" | "tracking";
@@ -114,8 +133,14 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   // requestTimeout caps how long an unfinished request may occupy a
   // connection (slowloris defense and continuity under load); it applies to
   // request receipt, not to established WebSocket sessions.
-  const app = Fastify({ logger: false, requestTimeout: 30_000 });
+  const app = Fastify({
+    requestTimeout: 30_000,
+    ...loggingOptions(options.logLevel ?? logLevelFromEnv(), options.logStream),
+  });
   void app.register(websocket);
+  const metrics = new Metrics();
+  app.decorate("metrics", metrics);
+  observeRequests(app, metrics, options.slowRequestMs ?? slowRequestMsFromEnv());
   const oidcSettings = options.oidc === undefined ? oidcSettingsFromEnv() : options.oidc;
   const oidc = oidcSettings ? new OidcClient(oidcSettings) : null;
   const integrations = new Set(options.integrations ?? integrationsFromEnv());
@@ -152,10 +177,10 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
     }
   });
 
-  app.setErrorHandler((err, _req, reply) => {
+  app.setErrorHandler((err, req, reply) => {
     if (err instanceof AuthError) return reply.status(err.status).send({ error: err.message });
     if (err instanceof z.ZodError) return reply.status(400).send({ error: "invalid request" });
-    app.log.error?.(err);
+    req.log.error({ err }, "request failed");
     return reply.status(500).send({ error: "internal error" });
   });
 
@@ -393,6 +418,13 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   app.addHook("onClose", () => { hub.close(); });
   registerSyncRoutes(app, sql, hub);
   federationRoutes(app, sql, hub, authenticate);
+  metricsRoutes(
+    app,
+    sql,
+    hub,
+    metrics,
+    options.metricsToken === undefined ? process.env.OPENEOC_METRICS_TOKEN || null : options.metricsToken,
+  );
 
   return app;
 }

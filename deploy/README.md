@@ -90,6 +90,56 @@ Restore is destructive to the database and refuses to run without the explicit
 confirmation flag. If the matching blob archive is absent, restore warns and
 file downloads remain unavailable until those bytes are recovered.
 
+## Logs and metrics
+
+The API writes one JSON line per event through Fastify's pino logger.
+Authorization headers, cookies, peer tokens, passwords, tokens and secrets are
+redacted before a line is written.
+
+- **Level.** `OPENEOC_LOG_LEVEL` is one of `fatal`, `error`, `warn`, `info`,
+  `debug`, `trace` or `silent`. The default is `info`, and `silent` under the
+  test runner.
+- **Request ids.** Every response carries an `x-request-id` header, and every
+  line logged for that request carries the same value as `reqId`. An incoming
+  `x-request-id` from a proxy is kept when it is 1 to 64 letters, digits,
+  `.`, `_`, `:` or `-`; anything else is replaced with a new id.
+- **Slow requests.** Each request logs one `request completed` line with its
+  route, path, status and `durationMs`. A request slower than
+  `OPENEOC_SLOW_REQUEST_MS` (default 1000) logs `slow request` at `warn`
+  instead.
+- **Failed deliveries.** The delivery worker logs `delivery retry scheduled`
+  at `warn` and `delivery dead-lettered` at `error`, with the delivery id, the
+  target origin (never the full URL), the attempt count and the error. A
+  federation push that fails logs `federation push deferred`.
+
+`GET /api/v1/metrics` serves Prometheus text format when
+`OPENEOC_METRICS_TOKEN` is set, to a scraper that sends
+`Authorization: Bearer <token>`. While the token is unset the route answers
+404. It reports request counts by method, route pattern and status class, a
+duration histogram, slow request counts by route, open WebSocket connections,
+sync hub counters, delivery queue depth (pending and dead), undelivered
+federation entries, delivery worker outcomes, the database client's configured
+maximum connections and the runtime role's open connections by state.
+
+To find a slow request, look for `openeoc_http_slow_requests_total` rising on a
+route, then search the log for `"msg":"slow request"` on that route; its
+`reqId` identifies the request. To find a failed delivery, look for
+`openeoc_delivery_queue{status="dead"}` above zero, then search the log for
+`"msg":"delivery dead-lettered"`; its `deliveryId` is the `delivery_outbox`
+row.
+
+Rotation:
+
+- **Docker.** Both services use the `json-file` driver with `max-size: 10m`
+  and `max-file: 5`. Read the API log with `docker compose logs api`.
+- **Windows desktop.** The server writes `server.log` in the profile's `logs`
+  directory and rotates it at 10 MB, keeping `server.log.1` through
+  `server.log.5`. `app.log`, `app-error.log` and `postgres.log` hold console
+  output, crash traces and PostgreSQL messages; each is rotated the same way
+  when the launcher starts the process that writes it. The desktop app listens
+  on loopback only; set `OPENEOC_METRICS_TOKEN` in the environment of the
+  launcher to scrape it.
+
 ## Upgrades
 
 Upgrades preserve customization (INV-5), proven by
@@ -118,3 +168,6 @@ upgrade path begins with a database whose first receipt is
 | `OPENEOC_RUNTIME_URL` | `app_runtime` connection: the app under RLS |
 | `OPENEOC_SECRET_KEY` | Server key for credential envelopes (IPAWS, collab, Jitsi) |
 | `HOST` / `PORT` | API bind address (default `0.0.0.0:8080`) |
+| `OPENEOC_LOG_LEVEL` | Log level (default `info`) |
+| `OPENEOC_SLOW_REQUEST_MS` | Slow request threshold in milliseconds (default 1000) |
+| `OPENEOC_METRICS_TOKEN` | Scrape token for `GET /api/v1/metrics`; unset serves 404 |

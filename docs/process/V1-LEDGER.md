@@ -267,3 +267,56 @@ tagging remain separately gated as section 1 of the roster states.
   behavior; `docs/guides/FEDERATION-SETUP.md` covers the push link.
 - **Evidence level:** unit, integration and real-database.
 - **Result:** W2.1 is complete. Next: W2.3, pagination and push-down.
+
+## V1 W2.8: observability
+
+- **What changed.** Fastify's pino logger is on, one structured line per
+  request with method, route pattern, path without query string, status and
+  duration, at warn above `OPENEOC_SLOW_REQUEST_MS` (default 1000). Level comes
+  from `OPENEOC_LOG_LEVEL`, default `silent` under test and `info` otherwise.
+  Authorization and cookie headers, peer and desktop tokens, passwords,
+  tokens, secrets and query parameters are redacted. Every response carries
+  an `x-request-id`; an incoming one is kept only if it matches a safe pattern.
+  New `server/src/telemetry/logging.ts` and `server/src/telemetry/metrics.ts`.
+- **Metrics.** `GET /api/v1/metrics` serves Prometheus text format, written by
+  hand, only when `OPENEOC_METRICS_TOKEN` is set and only to that bearer token,
+  compared in constant time; unset it answers 404. It reports requests by
+  method, route and status class, a duration histogram, slow requests, open
+  WebSocket connections, the sync hub counters, delivery queue depth (pending
+  and dead), undelivered federation entries, delivery worker outcomes, the
+  configured database pool size, the runtime role's connections by state, and
+  `openeoc_db_up`.
+- **Delivery worker.** Takes an optional logger. Retries and dead letters are
+  logged with the delivery id and the target origin only, never the full URL,
+  because a webhook URL can carry a secret in its path. Running totals feed the
+  metrics. Ownership deviation: `server/src/notify/outbox.ts`.
+- **Deviations, recorded.** Request ids are not metric labels, because a label
+  per request grows without bound; a slow request is counted by route in the
+  metrics and found by id in the log. postgres.js exposes no live pool counts,
+  so the pool gauges are the configured maximum and `pg_stat_activity` for the
+  runtime role, which includes the scrape itself.
+- **Log rotation.** Docker services use the `json-file` driver at 10 MB by 5
+  files. On Windows the server's structured log is `server.log`, rotated while
+  running at 10 MB by 5; `app.log`, `app-error.log` and `postgres.log` rotate
+  at launch. New `deploy/windows/lib/rotating-log.mjs`. Byte-range static
+  serving untouched.
+- **Schema:** migration `0106_outbox_counts.sql`, one SECURITY DEFINER function
+  returning three counts and no row data, granted to `app_runtime`.
+- **Contract:** `GET /api/v1/metrics` with a new `metrics-token` auth kind and
+  `system` audience; `docs/API.md` regenerated. No dependency change; pino
+  ships with Fastify under MIT.
+- **Verification:** new `observability.test.ts` finds a slow request by id in
+  the captured log and by route in the metrics, and finds a dead-lettered
+  delivery to a closed port in both; it also covers redaction, unsafe request
+  ids, the gauges, and metrics auth (404 unset, 401 missing, wrong or operator
+  token). observability, security, cors, security-headers, api-docs, ipaws,
+  delivery-outbox, notify, sync-hub-lifecycle, federation and upgrade passed
+  67 of 67. `pnpm test:desktop` 19 passed. TypeScript and ESLint clean. Link
+  checker 69 files.
+- **Carried to W2.2.** The Windows desktop `serve` path runs no delivery
+  worker, which predates this unit. Gate line 4 needs the worker and scheduler
+  in both deploy paths; W2.2 owns that.
+- **Guides:** `deploy/README.md` gains "Logs and metrics" and three
+  configuration rows.
+- **Evidence level:** unit, integration and real-database.
+- **Rollback:** revert the commit; migration 0106 adds only one function.

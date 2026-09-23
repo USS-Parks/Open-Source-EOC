@@ -13,7 +13,7 @@ export interface RestEndpoint {
   readonly path: string;
   readonly tag: string;
   readonly summary: string;
-  readonly auth: "bearer" | "peer-token" | "feed-token" | "intake-token" | "none";
+  readonly auth: "bearer" | "peer-token" | "feed-token" | "intake-token" | "metrics-token" | "none";
   readonly audience: "operator" | "machine" | "system";
   readonly integration?: "collab" | "facilities" | "meetings" | "tracking";
 }
@@ -117,6 +117,7 @@ GET /api/v1/jurisdictions/:jurisdictionId/sitreps
 GET /api/v1/jurisdictions/:jurisdictionId/staffing
 GET /api/v1/jurisdictions/:jurisdictionId/threads
 GET /api/v1/me
+GET /api/v1/metrics
 GET /api/v1/notifications
 GET /api/v1/ogc
 GET /api/v1/ogc/collections
@@ -283,7 +284,9 @@ const peerAuth = new Set([
   "POST /api/v1/resource-requests/report",
 ]);
 const feedAuth = new Set(["POST /api/v1/feeds/:feedId/ingest"]);
-const systemRoutes = new Set(["GET /api/v1/health", "GET /api/v1/ready"]);
+// The scrape token is OPENEOC_METRICS_TOKEN; the route answers 404 while it is unset.
+const metricsAuth = new Set(["GET /api/v1/metrics"]);
+const systemRoutes = new Set(["GET /api/v1/health", "GET /api/v1/ready", "GET /api/v1/metrics"]);
 
 const tagAliases: Readonly<Record<string, string>> = {
   "corrective-actions": "aar",
@@ -347,7 +350,9 @@ const rest: RestEndpoint[] = routeKeys.map((key) => {
       ? "peer-token"
       : feedAuth.has(key)
         ? "feed-token"
-        : "bearer";
+        : metricsAuth.has(key)
+          ? "metrics-token"
+          : "bearer";
   const audience = systemRoutes.has(key)
     ? "system"
     : auth === "peer-token" || auth === "feed-token"
@@ -386,6 +391,8 @@ export function generateApiDocs(contract: ApiContract = API_CONTRACT): string {
     `method and path below is held to the Fastify route table by a contract test.`,
     `Routes marked with an integration are unregistered unless that name is`,
     `present in the comma-separated OPENEOC_INTEGRATIONS setting.`,
+    `Routes with auth metrics-token answer 404 unless OPENEOC_METRICS_TOKEN is`,
+    `set, and then require that value as a bearer token.`,
     ``,
     `## REST`,
     ``,

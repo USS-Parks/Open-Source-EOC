@@ -26,6 +26,7 @@ import {
 } from "./lib/contracts.mjs";
 import { desktopRuntimeConfig, registerStaticHost } from "./lib/static-host.mjs";
 import { desktopBuildSourceFingerprint } from "./lib/build-fingerprint.mjs";
+import { rotateIfLarger, rotatingLog } from "./lib/rotating-log.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = resolve(process.env.OPENEOC_DESKTOP_APP_ROOT ?? resolve(dirname(scriptPath), "../.."));
@@ -227,6 +228,7 @@ async function startPostgres(paths, config, ownerPassword) {
   if (pgIsRunning(paths)) return false;
   await assertPortFree(config.pgPort, `${config.profile} PostgreSQL`);
   const logPath = resolve(paths.logs, "postgres.log");
+  rotateIfLarger(logPath);
   let started = false;
   try {
     pgControl(paths, ["-l", logPath, "-o", `-p ${config.pgPort} -h 127.0.0.1`, "-w", "start"], {
@@ -507,6 +509,9 @@ async function startProfile(args) {
     await prepareDatabase(paths, config);
     await assertPortFree(config.httpPort, `${profile} HTTP`);
     const token = randomUUID();
+    // Console output and crash traces; the server's own log is server.log.
+    rotateIfLarger(resolve(paths.logs, "app.log"));
+    rotateIfLarger(resolve(paths.logs, "app-error.log"));
     const stdout = openSync(resolve(paths.logs, "app.log"), "a");
     const stderr = openSync(resolve(paths.logs, "app-error.log"), "a");
     const child = spawn(process.execPath, [scriptPath, "serve", `--profile=${profile}`], {
@@ -556,7 +561,7 @@ async function serveProfile(args) {
     importServer("server/src/app.ts"),
   ]);
   const runtime = connect({ url: databaseUrl("app_runtime", runtimePassword, config) });
-  const app = buildApp(runtime, { oidc: null });
+  const app = buildApp(runtime, { oidc: null, logStream: rotatingLog(resolve(paths.logs, "server.log")) });
   let closing = false;
   const close = async () => {
     if (closing) return;

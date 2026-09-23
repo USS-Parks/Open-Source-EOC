@@ -3,6 +3,14 @@
 # pre-loaded with `docker load`; nothing here calls out at runtime. The web
 # bundle is built with `pnpm --filter @openeoc/web build` and served by any
 # static host (an nginx service is shown commented below).
+
+# Container logs rotate by size: five files of 10 MB per service.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   db:
     image: postgis/postgis:16-3.4
@@ -18,6 +26,7 @@ services:
       timeout: 5s
       retries: 20
     restart: unless-stopped
+    logging: *logging
 
   api:
     build:
@@ -42,11 +51,17 @@ services:
       OPENEOC_DATA_DIR: /data/blobs
       HOST: 0.0.0.0
       PORT: 8080
+      # Logs are JSON lines on stdout (see deploy/README.md, "Logs and metrics").
+      OPENEOC_LOG_LEVEL: ${OPENEOC_LOG_LEVEL:-info}
+      OPENEOC_SLOW_REQUEST_MS: ${OPENEOC_SLOW_REQUEST_MS:-1000}
+      # Unset leaves GET /api/v1/metrics answering 404.
+      OPENEOC_METRICS_TOKEN: ${OPENEOC_METRICS_TOKEN:-}
     ports:
       - "8080:8080"
     volumes:
       - openeoc-blobs:/data/blobs
     restart: unless-stopped
+    logging: *logging
 
   # web:
   #   image: nginx:1.27-alpine

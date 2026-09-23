@@ -1,3 +1,4 @@
+import type { FastifyBaseLogger } from "fastify";
 import type { Sql } from "../db/client.js";
 import { decryptSecret } from "../secrets/envelope.js";
 import { markDelivered } from "../federation/service.js";
@@ -27,6 +28,8 @@ export interface DeliveryWorkerOptions {
   readonly breakerThreshold?: number;
   readonly breakerCooldownMs?: number;
   readonly now?: () => number;
+  /** Retries, dead letters and deferred federation pushes are logged here. */
+  readonly logger?: Pick<FastifyBaseLogger, "warn" | "error">;
 }
 
 export interface DrainResult {
@@ -51,6 +54,8 @@ export class DeliveryWorker {
   private readonly breakerThreshold: number;
   private readonly breakerCooldownMs: number;
   private readonly now: () => number;
+  private readonly log: Pick<FastifyBaseLogger, "warn" | "error"> | null;
+  private readonly totals = { delivered: 0, retried: 0, dead: 0, deferred: 0, federated: 0 };
   // ponytail: per-process breaker state; a second node keeps its own, which
   // only means each node probes a dead target on its own schedule.
   private readonly circuits = new Map<string, Circuit>();
@@ -70,6 +75,12 @@ export class DeliveryWorker {
     this.breakerThreshold = options.breakerThreshold ?? 5;
     this.breakerCooldownMs = options.breakerCooldownMs ?? 60_000;
     this.now = options.now ?? Date.now;
+    this.log = options.logger ?? null;
+  }
+
+  /** Outcomes since this worker was created, for the metrics endpoint. */
+  stats(): DrainResult {
+    return { ...this.totals };
   }
 
   /** Poll every `intervalMs` until {@link stop}. */
@@ -79,7 +90,8 @@ export class DeliveryWorker {
       if (this.stopped) return;
       this.running = this.drain()
         .catch((err: unknown) => {
-          console.error("[openeoc] delivery worker pass failed", err);
+          if (this.log) this.log.error({ err }, "delivery worker pass failed");
+          else console.error("[openeoc] delivery worker pass failed", err);
         })
         .finally(() => {
           this.running = null;
@@ -117,6 +129,9 @@ export class DeliveryWorker {
       }),
     );
     counts.federated = await this.drainFederation();
+    for (const outcome of Object.keys(counts) as (keyof DrainResult)[]) {
+      this.totals[outcome] += counts[outcome];
+    }
     return counts;
   }
 
@@ -147,10 +162,20 @@ export class DeliveryWorker {
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       this.recordFailure(key);
+      // The origin only: a webhook URL can carry its secret in the path.
+      const fields = {
+        deliveryId: id,
+        target: key,
+        attempts,
+        error,
+        cause: err instanceof Error && err.cause instanceof Error ? err.cause.message : undefined,
+      };
       if (attempts >= this.maxAttempts) {
+        this.log?.error(fields, "delivery dead-lettered");
         await this.settle(id, "dead", error, null);
         return "dead";
       }
+      this.log?.warn(fields, "delivery retry scheduled");
       await this.settle(id, "retry", error, new Date(this.now() + this.backoff(attempts)));
       return "retried";
     }
@@ -186,6 +211,10 @@ export class DeliveryWorker {
         this.recordFailure(key);
         const error = err instanceof Error ? err.message : String(err);
         const retryAt = new Date(this.now() + this.backoff(this.circuits.get(key)?.failures ?? 1));
+        this.log?.warn(
+          { peerId: b.peer_id as string, entries: ids.length, error },
+          "federation push deferred",
+        );
         await this.sql`select defer_federation(${ids}::uuid[], ${retryAt}, ${error})`;
       }
     }

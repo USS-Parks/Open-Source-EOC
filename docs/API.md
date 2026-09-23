@@ -4,6 +4,8 @@ This document is generated from the frozen API contract. Every registered
 method and path below is held to the Fastify route table by a contract test.
 Routes marked with an integration are unregistered unless that name is
 present in the comma-separated OPENEOC_INTEGRATIONS setting.
+Routes with auth metrics-token answer 404 unless OPENEOC_METRICS_TOKEN is
+set, and then require that value as a bearer token.
 
 ## REST
 
@@ -299,6 +301,10 @@ present in the comma-separated OPENEOC_INTEGRATIONS setting.
 ### messaging-settings
 
 - `PUT /api/v1/jurisdictions/:jurisdictionId/messaging-settings`: Set jurisdictions messaging settings (auth: bearer; audience: operator)
+
+### metrics
+
+- `GET /api/v1/metrics`: Read metrics (auth: metrics-token; audience: system)
 
 ### notification-rules
 

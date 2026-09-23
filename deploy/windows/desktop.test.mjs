@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import test from "node:test";
@@ -24,6 +24,7 @@ import {
   safeRelativePath,
   selectStaticFile,
 } from "./lib/static-host.mjs";
+import { rotateIfLarger, rotatingLog } from "./lib/rotating-log.mjs";
 
 function fixture() {
   const root = mkdtempSync(resolve(tmpdir(), "openeoc-windows-"));
@@ -212,5 +213,30 @@ test("stopping an unconfigured profile is an idempotent launcher operation", { s
     assert.match(result.stdout, /PROFILE_STOPPED configured=false profile=acceptance app=false postgres=false browser=false/);
   } finally {
     rmSync(dataRoot, { recursive: true, force: true });
+  }
+});
+
+test("server and launcher logs rotate by size and keep a bounded history", () => {
+  const root = mkdtempSync(resolve(tmpdir(), "openeoc-logs-"));
+  try {
+    const path = resolve(root, "server.log");
+    const log = rotatingLog(path, 20, 2);
+    const [a, b, c, d, e, f] = ["a", "b", "c", "d", "e", "f"].map((ch) => `${ch.repeat(9)}\n`);
+    for (const line of [a, b, c, d, e, f]) log.write(line);
+    assert.equal(readFileSync(path, "utf8"), e + f);
+    assert.equal(readFileSync(`${path}.1`, "utf8"), c + d);
+    assert.equal(readFileSync(`${path}.2`, "utf8"), a + b);
+    assert.equal(existsSync(`${path}.3`), false);
+
+    const launcher = resolve(root, "app.log");
+    writeFileSync(launcher, "small");
+    rotateIfLarger(launcher, 10, 2);
+    assert.equal(existsSync(`${launcher}.1`), false);
+    writeFileSync(launcher, "larger than ten bytes");
+    rotateIfLarger(launcher, 10, 2);
+    assert.equal(existsSync(launcher), false);
+    assert.equal(readFileSync(`${launcher}.1`, "utf8"), "larger than ten bytes");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

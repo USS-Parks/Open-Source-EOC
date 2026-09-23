@@ -33,25 +33,24 @@ export async function start(): Promise<StartResult> {
   await ensureStandardIncidentTemplates(owner);
   await owner.end();
 
+  const sql = connect({ url: runtimeUrl });
+  const app = buildApp(sql);
   if (runtimeUrl === ownerUrl) {
     // Dev/single-user convenience only; production sets a distinct
     // app_runtime URL so RLS is the second wall it is meant to be.
-    console.warn(
-      "[openeoc] OPENEOC_RUNTIME_URL is unset; running the app on the owner connection. " +
+    app.log.warn(
+      "OPENEOC_RUNTIME_URL is unset; running the app on the owner connection. " +
         "Set a distinct app_runtime URL in production so Row-Level Security applies.",
     );
   }
-
-  const sql = connect({ url: runtimeUrl });
-  const app = buildApp(sql);
   const port = Number(process.env.PORT ?? 8080);
   const host = process.env.HOST ?? "0.0.0.0";
+  // Fastify logs the listening address.
   await app.listen({ port, host });
-  const delivery = new DeliveryWorker(sql);
+  const delivery = new DeliveryWorker(sql, { logger: app.log });
+  app.metrics.delivery = delivery;
   delivery.start();
   const url = `http://${host}:${port}`;
-  // eslint-disable-next-line no-console
-  console.log(`[openeoc] listening on ${url}`);
   return {
     url,
     close: async () => {
