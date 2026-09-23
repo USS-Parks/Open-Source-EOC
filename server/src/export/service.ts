@@ -25,6 +25,9 @@ import { currentLifelines, getSitrep, listSitreps } from "../sitreps/service.js"
  * and corrective actions; resource requests with their costs and state
  * history; tasks; lifeline and ESF assessments with their decisions; and file
  * metadata. Rows in the added sections carry their database column names.
+ * `publicAssistanceItems` (the PA damage inventory, geometry as GeoJSON) was
+ * added later as a new key; schema 2 readers that ignore unknown keys are
+ * unaffected, so the version stays 2.
  *
  * Admin-only, and every read runs as that admin under RLS, so the archive
  * holds only what the admin can read. The document is written to a temporary
@@ -166,6 +169,12 @@ async function writeDocument(
   await writeRows(write, sql`
     select to_jsonb(d) as row from operational_assessment_decisions d where d.jurisdiction_id = ${jurisdictionId}
     order by d.created_at, d.id`.cursor(PAGE_ROWS));
+
+  await section("publicAssistanceItems");
+  await writeRows(write, sql`
+    select (to_jsonb(p) - 'geom') || jsonb_build_object('geometry', ST_AsGeoJSON(p.geom)::jsonb) as row
+    from damage_pa_items p where p.jurisdiction_id = ${jurisdictionId}
+    order by p.created_at, p.id`.cursor(PAGE_ROWS));
 
   const blobs = new Set<string>();
   await section("files");

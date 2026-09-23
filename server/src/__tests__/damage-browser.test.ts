@@ -4,14 +4,16 @@ import type { FastifyInstance } from "fastify";
 import type { Browser, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
-import { buildDir, buildWeb, launchBrowser, listen, login, serveStatic, shotDir } from "./browser.js";
+import { buildDir, buildWeb, launchBrowser, listen, login, post, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
  * The damage assessment surface in a real browser: public reports arrive in
  * the intake queue, a member moderates them and records a field assessment,
  * and the loss summary, declaration indicators, download and map follow the
- * counted reports only.
+ * counted reports only. Public Assistance line items move the per-capita
+ * indicators onto PA cost, and the download carries the PA categories and the
+ * shelter census from the facilities integration.
  */
 const DIST = buildDir("damage-app");
 const SHOTS = shotDir("damage");
@@ -41,10 +43,14 @@ beforeAll(async () => {
   const seed = await seedIdentity(admin);
   jurisdictionId = seed.jurisdictionId;
   memberId = seed.memberId;
-  app = buildApp(runtime, { oidc: null });
+  // The facilities integration runs so the declaration summary carries a shelter census.
+  app = buildApp(runtime, { oidc: null, integrations: ["facilities"] });
   serveStatic(app, "/app", DIST);
   baseUrl = await listen(app);
   const adminToken = await login(app);
+  const shelter = await post(app, adminToken, `/api/v1/jurisdictions/${jurisdictionId}/facilities`, { name: "Klamath Gym", kind: "shelter" });
+  await post(app, adminToken, `/api/v1/facilities/${shelter.id as string}/status`,
+    { operatingStatus: "normal", beds: [{ bedType: "other", available: 40, baseline: 120 }] });
   const enabled = await app.inject({
     method: "POST",
     url: `/api/v1/jurisdictions/${jurisdictionId}/damage/intake/enable`,
@@ -145,10 +151,12 @@ describe("damage assessment surface", () => {
     expect(await kpi("Major damage").textContent()).toBe("1");
     expect(await kpi("Minor damage").textContent()).toBe("0");
     expect(await kpi("Uninsured loss").textContent()).toBe("$60,000.00");
-    const pa = indicator("Public Assistance per-capita indicator");
+    const pa = indicator("Public Assistance county per-capita indicator");
     await pa.getByText("Threshold met", { exact: true }).waitFor();
     expect(await pa.textContent()).toContain("$48.00 per resident");
-    expect(await pa.textContent()).toContain("Basis: $240,000.00 counted loss divided by a population of 5,000.");
+    // With no Public Assistance line item the basis says so: structure loss, not PA cost.
+    expect(await pa.textContent()).toContain(
+      "Basis: Structure loss, not Public Assistance cost: $240,000.00 estimated loss of counted structures, divided by an operator-entered county population of 5,000.");
     const ia = indicator("Individual Assistance residences");
     await ia.getByText("Threshold met", { exact: true }).waitFor();
     expect(await ia.textContent()).toContain("Basis: 1 destroyed plus 1 with major damage.");
@@ -164,10 +172,12 @@ describe("damage assessment surface", () => {
     for (const line of [
       "# Disaster Declaration Support Summary", "Jurisdiction: Yurok Tribe OES", "Incident: Winter Storms 2026",
       "- Destroyed: 1", "- Major: 1", "- Minor: 0", "- Destroyed or major (IA basis): 2",
-      "- Total estimated loss: $240,000.00", "- Uninsured loss: $60,000.00", "- County population: 5,000",
-      "- PA threshold met: YES", "- IA residence threshold (2) met: YES",
+      "- Total estimated loss: $240,000.00", "- Uninsured loss: $60,000.00", "- County population (operator-entered): 5,000",
+      "- Basis: structure loss of counted structures; no Public Assistance cost is counted",
+      "- County threshold met: YES", "- IA residence threshold (2, operator-entered) met: YES",
     ]) expect(document.split("\n")).toContain(line);
-    await page.getByText(/Declaration summary downloaded as declaration-support-.*, built from 2 counted structures\./).waitFor();
+    await page.getByText(
+      /Declaration summary downloaded as declaration-support-.*, built from 2 counted structures and 0 counted Public Assistance line items\./).waitFor();
 
     // The map carries the accepted report and the field assessment, never the rejected one.
     await page.getByText("2 accepted reports are on the map.").waitFor();
@@ -208,7 +218,7 @@ describe("damage assessment surface", () => {
     await setTheme(page, "dark");
     await show("Loss summary and declaration indicators");
     await page.screenshot({ path: join(SHOTS, "damage-summary-dark-1440.png") });
-    await show("Reports");
+    await show("Reports and Public Assistance");
     await page.screenshot({ path: join(SHOTS, "damage-reports-dark-1440.png") });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole("heading", { name: "Damage assessment", level: 2, exact: true }).waitFor();
@@ -241,4 +251,116 @@ describe("damage assessment surface", () => {
     expect(external).toEqual([]);
     await page.close();
   }, 90_000);
+
+  it("records Public Assistance line items that move the indicators onto PA cost and into the download", async () => {
+    const { page, errors, external } = await openDamage("member@example.org", "another-good-password");
+    await page.getByLabel("County population").fill("5000");
+    await page.getByRole("tab", { name: "Public Assistance" }).click();
+    const tab = page.locator("#damage-pa-panel");
+    const county = tab.getByRole("listitem", { name: "Public Assistance county per-capita indicator" });
+    await county.getByText("Basis: Structure loss, not Public Assistance cost: $240,000.00", { exact: false }).waitFor();
+    await tab.getByText("No Public Assistance line items").waitFor();
+
+    const form = () => tab.locator("section.damage-pa-form");
+    const record = async (fields: { applicant: string; category: string; cost: string; status?: string; site?: string; lon?: string; lat?: string }) => {
+      await form().getByLabel("Applicant").fill(fields.applicant);
+      await form().getByLabel("Work category").selectOption(fields.category);
+      await form().getByLabel("Estimated cost (USD)").fill(fields.cost);
+      if (fields.site) await form().getByLabel("Site").fill(fields.site);
+      if (fields.lon && fields.lat) {
+        await form().getByLabel("Longitude").fill(fields.lon);
+        await form().getByLabel("Latitude").fill(fields.lat);
+      }
+      await form().getByLabel("Status").selectOption(fields.status ?? "submitted");
+      await form().getByRole("button", { name: "Record line item" }).click();
+    };
+    await record({ applicant: "Yurok Tribe Public Works", category: "a_debris_removal", cost: "1250000", site: "Klamath River Road", lon: "-123.9", lat: "41.5" });
+    await tab.getByText("Recorded the Category A: Debris removal line item for Yurok Tribe Public Works.").waitFor();
+    await record({ applicant: "Del Norte County Roads", category: "c_roads_and_bridges", cost: "30000.05", status: "reviewed" });
+    await tab.getByText("Recorded the Category C: Roads and bridges line item for Del Norte County Roads.").waitFor();
+    await record({ applicant: "Klamath Community Services District", category: "f_utilities", cost: "20000", status: "draft" });
+    await tab.getByText("It is a draft and does not count yet.", { exact: false }).waitFor();
+
+    // Totals by category count the submitted and reviewed items; the draft waits.
+    const total = (label: string) => tab.getByLabel("Public Assistance totals").locator("article", { hasText: label }).locator(".eoc-kit-kpi-value strong");
+    await total("Total, categories A to G").filter({ hasText: "$1,280,000.05" }).waitFor();
+    expect(await total("Category A: Debris removal").textContent()).toBe("$1,250,000.00");
+    expect(await total("Category C: Roads and bridges").textContent()).toBe("$30,000.05");
+    expect(await total("Category F: Utilities").textContent()).toBe("$0.00");
+
+    // Editing the draft to submitted counts it.
+    await tab.getByRole("button", { name: "Edit Category F: Utilities line item for Klamath Community Services District" }).click();
+    await tab.getByRole("region", { name: "Edit a Public Assistance line item" }).waitFor();
+    expect(await form().getByLabel("Estimated cost (USD)").inputValue()).toBe("20000.00");
+    await form().getByLabel("Status").selectOption("submitted");
+    await form().getByRole("button", { name: "Save changes" }).click();
+    await tab.getByText("Saved the Category F: Utilities line item for Klamath Community Services District.").waitFor();
+    await total("Total, categories A to G").filter({ hasText: "$1,300,000.05" }).waitFor();
+    expect(await total("Category F: Utilities").textContent()).toBe("$20,000.00");
+    const rows = await admin`
+      select applicant, category, estimated_cost_cents::int as cents, status, ST_X(geom) as lon from damage_pa_items order by category`;
+    expect(rows).toEqual([
+      { applicant: "Yurok Tribe Public Works", category: "a_debris_removal", cents: 125000000, status: "submitted", lon: -123.9 },
+      { applicant: "Del Norte County Roads", category: "c_roads_and_bridges", cents: 3000005, status: "reviewed", lon: null },
+      { applicant: "Klamath Community Services District", category: "f_utilities", cents: 2000000, status: "submitted", lon: null },
+    ]);
+
+    // The indicator now divides PA cost and says so; the statewide pair adds its own indicator.
+    await county.getByText(
+      "Basis: Public Assistance cost: $1,300,000.05 in 3 counted line items, categories A to G, divided by an operator-entered county population of 5,000.").waitFor();
+    expect(await county.textContent()).toContain("$260.00 per resident");
+    await page.getByLabel("State population").fill("1000000");
+    await page.getByLabel("Statewide PA per-capita indicator (USD)").fill("1.5");
+    const statewide = tab.getByRole("listitem", { name: "Public Assistance statewide per-capita indicator" });
+    await statewide.getByText("Threshold not met", { exact: true }).waitFor();
+    expect(await statewide.textContent()).toContain("$1.30 per resident");
+
+    // The download carries the PA categories, the basis and the shelter census.
+    await page.getByLabel("Incident name for the download").fill("Winter Storms 2026");
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("button", { name: "Download declaration summary" }).click(),
+    ]);
+    const document = readFileSync((await download.path())!, "utf8").split("\n");
+    for (const line of [
+      "## Public Assistance: estimated cost by work category",
+      "- Category A: Debris removal: $1,250,000.00",
+      "- Category C: Roads and bridges: $30,000.05",
+      "- Category F: Utilities: $20,000.00",
+      "- Total, categories A to G: $1,300,000.05",
+      "- Basis: Public Assistance cost, categories A to G",
+      "- County per-capita impact: $260.00",
+      "- Statewide per-capita indicator (operator-entered): $1.50",
+      "## Shelter census",
+      "- Shelters: 1, 1 reporting",
+      "- Capacity: 120",
+      "- Occupied: 80",
+      "- Open spaces: 40",
+    ]) expect(document).toContain(line);
+    await page.getByText(/built from 2 counted structures and 3 counted Public Assistance line items\./).waitFor();
+
+    const show = async (locator: ReturnType<Page["locator"]>) => {
+      await locator.evaluate((element) => (element as unknown as { scrollIntoView(): void }).scrollIntoView());
+      await page.waitForTimeout(800);
+    };
+    await show(tab);
+    await page.screenshot({ path: join(SHOTS, "damage-pa-light-1440.png") });
+    await show(form());
+    await page.screenshot({ path: join(SHOTS, "damage-pa-form-light-1440.png") });
+    await setTheme(page, "dark");
+    await show(tab);
+    await page.screenshot({ path: join(SHOTS, "damage-pa-dark-1440.png") });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole("heading", { name: "Damage assessment", level: 2, exact: true }).waitFor();
+    expect(await page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")).toBe(true);
+    await show(tab);
+    await page.screenshot({ path: join(SHOTS, "damage-pa-dark-390.png") });
+    await setTheme(page, "light");
+    await show(form());
+    await page.screenshot({ path: join(SHOTS, "damage-pa-form-light-390.png") });
+
+    expect(errors).toEqual([]);
+    expect(external).toEqual([]);
+    await page.close();
+  }, 180_000);
 });

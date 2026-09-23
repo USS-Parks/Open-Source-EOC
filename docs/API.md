@@ -159,11 +159,14 @@ set, and then require that value as a bearer token.
 ### damage
 
 - `POST /api/v1/damage/assessments/:id/moderate`: Run damage assessments moderate (auth: bearer; audience: operator)
+- `PUT /api/v1/damage/pa-items/:id`: Set damage pa items (auth: bearer; audience: operator)
 - `GET /api/v1/jurisdictions/:jurisdictionId/damage/assessments`: Read jurisdictions damage assessments (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/damage/assessments`: Run jurisdictions damage assessments (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/damage/baseline`: Run jurisdictions damage baseline (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/damage/declaration`: Run jurisdictions damage declaration (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/damage/intake/enable`: Run jurisdictions damage intake enable (auth: bearer; audience: operator)
+- `GET /api/v1/jurisdictions/:jurisdictionId/damage/pa-items`: Read jurisdictions damage pa items (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/damage/pa-items`: Run jurisdictions damage pa items (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/damage/report`: Run jurisdictions damage report (auth: intake-token; audience: machine)
 - `POST /api/v1/jurisdictions/:jurisdictionId/damage/summary`: Run jurisdictions damage summary (auth: bearer; audience: operator)
 

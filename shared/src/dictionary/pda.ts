@@ -27,6 +27,12 @@ export const IA_OWNERSHIP = defineEnum(
   CITATION,
 );
 
+const PAPPG: Citation = {
+  authority: "FEMA",
+  document: "Public Assistance Program and Policy Guide (PAPPG), FP 104-009-2",
+  section: "Categories of work: emergency work (A and B) and permanent work (C to G)",
+};
+
 /** Public Assistance work categories A through G. */
 export const PA_CATEGORIES = defineEnum(
   "pda.pa_categories",
@@ -39,8 +45,19 @@ export const PA_CATEGORIES = defineEnum(
     "f_utilities",
     "g_parks_recreational_other",
   ],
-  CITATION,
+  PAPPG,
 );
+
+/** Display label for each Public Assistance work category, as the PAPPG names it. */
+export const PA_CATEGORY_LABELS: Readonly<Record<string, string>> = {
+  a_debris_removal: "Category A: Debris removal",
+  b_emergency_protective_measures: "Category B: Emergency protective measures",
+  c_roads_and_bridges: "Category C: Roads and bridges",
+  d_water_control_facilities: "Category D: Water control facilities",
+  e_buildings_and_equipment: "Category E: Buildings and equipment",
+  f_utilities: "Category F: Utilities",
+  g_parks_recreational_other: "Category G: Parks, recreational and other facilities",
+};
 
 /**
  * Core Individual Assistance assessment record, mirroring the fields FEMA

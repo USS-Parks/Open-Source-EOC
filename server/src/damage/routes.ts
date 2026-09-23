@@ -3,16 +3,20 @@ import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import { pageQuery } from "../db/cursor.js";
+import { PA_CATEGORIES, PA_ITEM_STATUSES } from "@openeoc/shared";
 import { AuthError } from "../auth/service.js";
 import {
   aggregate,
   createAssessment,
+  createPaItem,
   enablePublicIntake,
   exportDeclaration,
   importBaseline,
   listAssessments,
+  listPaItems,
   moderate,
   submitPublicReport,
+  updatePaItem,
 } from "./service.js";
 
 const Location = z.object({ lon: z.number(), lat: z.number() });
@@ -50,17 +54,34 @@ const ReportBody = z.object({
   location: Location.optional(),
 });
 const ModerateBody = z.object({ decision: z.enum(["approved", "rejected"]) });
+// Every figure is operator-entered; the statewide pair has no default, so the
+// statewide indicator is computed only when the operator supplies both.
 const Thresholds = z.object({
   population: z.number().int().positive(),
   paPerCapitaIndicator: z.number().min(0).default(4.6),
   iaResidenceThreshold: z.number().int().min(0).default(25),
+  statePopulation: z.number().int().positive().optional(),
+  statewidePerCapitaIndicator: z.number().min(0).optional(),
 });
 const DeclarationBody = Thresholds.extend({ incident: z.string().min(1) });
+const PaItemBody = z.object({
+  incidentId: z.string().uuid().nullable().optional(),
+  applicant: z.string().trim().min(1).max(300),
+  category: PA_CATEGORIES.schema,
+  site: z.string().max(500).nullable().optional(),
+  description: z.string().max(4000).default(""),
+  estimatedCostCents: z.number().int().min(0),
+  insured: z.boolean().nullable().optional(),
+  percentComplete: z.number().int().min(0).max(100).default(0),
+  status: z.enum(PA_ITEM_STATUSES).default("submitted"),
+  location: Location.nullable().optional(),
+});
 
 export function damageRoutes(
   app: FastifyInstance,
   sql: Sql,
   authenticate: (req: FastifyRequest) => Promise<void>,
+  options: { shelterCensus: boolean },
 ): void {
   app.post(
     "/api/v1/jurisdictions/:jurisdictionId/damage/baseline",
@@ -150,7 +171,7 @@ export function damageRoutes(
       const { jurisdictionId } = req.params as { jurisdictionId: string };
       const t = Thresholds.parse(req.body ?? {});
       const summary = await withPerson(sql, req.principal.person.id, (tx) =>
-        aggregate(tx, req.principal, jurisdictionId, t),
+        aggregate(tx, req.principal, jurisdictionId, t, options.shelterCensus),
       );
       return reply.send(summary);
     },
@@ -161,7 +182,7 @@ export function damageRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
-      const body = DeclarationBody.parse(req.body);
+      const { incident, ...thresholds } = DeclarationBody.parse(req.body);
       const result = await withPerson(sql, req.principal.person.id, async (tx) => {
         // Read the name inside the actor's context so jurisdictions RLS admits
         // it; a bare read on the base connection now returns nothing.
@@ -170,15 +191,45 @@ export function damageRoutes(
           tx,
           req.principal,
           jurisdictionId,
-          {
-            population: body.population,
-            paPerCapitaIndicator: body.paPerCapitaIndicator,
-            iaResidenceThreshold: body.iaResidenceThreshold,
-          },
-          { jurisdiction: (jur?.name as string) ?? "Jurisdiction", incident: body.incident },
+          thresholds,
+          { jurisdiction: (jur?.name as string) ?? "Jurisdiction", incident },
+          options.shelterCensus,
         );
       });
       return reply.send(result);
     },
   );
+
+  app.get(
+    "/api/v1/jurisdictions/:jurisdictionId/damage/pa-items",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const page = z.object(pageQuery).parse(req.query);
+      const result = await withPerson(sql, req.principal.person.id, (tx) =>
+        listPaItems(tx, req.principal, jurisdictionId, page),
+      );
+      return reply.send(result);
+    },
+  );
+
+  app.post(
+    "/api/v1/jurisdictions/:jurisdictionId/damage/pa-items",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const body = PaItemBody.parse(req.body);
+      const result = await withPerson(sql, req.principal.person.id, (tx) =>
+        createPaItem(tx, req.principal, jurisdictionId, body),
+      );
+      return reply.status(201).send(result);
+    },
+  );
+
+  app.put("/api/v1/damage/pa-items/:id", { preHandler: authenticate }, async (req, reply) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = PaItemBody.parse(req.body);
+    await withPerson(sql, req.principal.person.id, (tx) => updatePaItem(tx, req.principal, id, body));
+    return reply.send({ ok: true });
+  });
 }

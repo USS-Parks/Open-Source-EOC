@@ -21,3 +21,4 @@
 .damage-fieldset { border: 0; margin: 0; padding: 0; }
 .damage-notice { margin: 8px 0 0; }
 @container (max-width: 760px) { .damage-thresholds, .damage-indicators { grid-template-columns: 1fr; } .damage-map-canvas { height: 520px; } }
+.damage-pa-form { margin-top: 12px; min-width: 0; }

@@ -515,6 +515,7 @@ The archive holds `export.json` and a `files` folder. `export.json` carries
 | `resourceRequests` | Every request with its `costs` and state `history` |
 | `tasks` | Incident tasks with their `prerequisite_task_ids` |
 | `assessments`, `assessmentDecisions` | Lifeline and ESF assessments and the decisions that select among them |
+| `publicAssistanceItems` | Public Assistance line items from the damage assessment, every status; geometry as GeoJSON |
 | `files` | Metadata of every stored file version, with the `archive_path` of its bytes |
 
 Rows in the sections from `incidents` on keep their database column names.

@@ -18,6 +18,10 @@ The loss summary, the declaration indicators, the download and the map read
 only accepted reports and field assessments. A report in the queue or a
 rejected report never moves those numbers.
 
+Public Assistance line items are a third kind of record, kept on the
+**Public Assistance** tab. Submitted and reviewed items count toward the PA
+totals, the per-capita indicators and the download; drafts do not.
+
 ## Moderate the intake queue
 
 Each queued report shows the address, the degree the reporter chose, the
@@ -32,8 +36,8 @@ A decision is final; a moderated report cannot be reopened. The screen has no
 contact to follow up before deciding. When a report names the wrong degree,
 reject it and record a field assessment with the verified degree.
 
-The **Accepted** and **Rejected** tabs list moderated reports and field
-assessments. Each list shows the newest records first; **Load more records**
+The **Accepted** and **Rejected** tabs, beside the queue under **Reports and
+Public Assistance**, list moderated reports and field assessments. Each list shows the newest records first; **Load more records**
 reads the next page from the server. **Refresh** reads the queue again when new
 public reports may have arrived.
 
@@ -53,31 +57,83 @@ the map. The degrees follow the FEMA Preliminary Damage Assessment Guide:
 
 ## Loss summary and declaration indicators
 
-Enter the county population. The PA per-capita indicator starts at $4.60 and
-the IA residence threshold at 25; replace them with the figures that apply to
-the declaration request. FEMA publishes the per-capita indicator each fiscal
-year. The screen remembers these three inputs on this browser only.
+Every figure here is entered by the operator; the screen holds no population
+data and no published indicator values. Enter the county population. The
+county PA per-capita indicator starts at $4.60 and the IA residence threshold
+at 25; replace them with the figures that apply to the declaration request.
+The state population and the statewide PA per-capita indicator are optional
+and have no default; enter both to add the statewide indicator, or leave both
+empty. FEMA publishes the per-capita indicators each fiscal year. The screen
+remembers these inputs on this browser only.
 
 The summary shows counted structures by degree, the total estimated loss and
 the loss on structures recorded as uninsured. Each indicator states the
 measured value, the threshold, whether the threshold is met, and the basis of
 the number:
 
-- **Public Assistance per-capita indicator**: the estimated loss of counted
-  structures divided by the population.
+- **Public Assistance county per-capita indicator**: the per-capita amount
+  divided by the county population.
+- **Public Assistance statewide per-capita indicator**, when the statewide
+  figures are entered: the same amount divided by the state population.
 - **Individual Assistance residences**: destroyed plus major damage.
 
-The per-capita figure is an early signal. Public Assistance cost estimates by
-work category (A to G) are not recorded on this screen, so the figure is not
-the Public Assistance cost that FEMA validates. FEMA makes the determination.
+The per-capita amount is the counted Public Assistance cost, categories A to
+G, once any submitted or reviewed line item exists. Until then it is the
+estimated loss of counted structures, and the basis says "Structure loss, not
+Public Assistance cost". Either way the figure is an early signal; FEMA
+validates the figures and makes the determination.
+
+## Public Assistance
+
+The **Public Assistance** tab under **Reports and Public Assistance** holds the
+PA damage inventory. Each line item names the applicant (a public entity or an
+eligible private nonprofit), the FEMA work category, the site, the work, the
+estimated cost, insurance, percent complete and a status. The categories
+follow the FEMA Public Assistance Program and Policy Guide:
+
+| Category | Work |
+|---|---|
+| A | Debris removal |
+| B | Emergency protective measures |
+| C | Roads and bridges |
+| D | Water control facilities |
+| E | Buildings and equipment |
+| F | Utilities |
+| G | Parks, recreational and other facilities |
+
+The status is **Draft**, **Submitted** or **Reviewed**. A new item starts as
+Submitted. Drafts are listed but do not count; set a draft to Submitted when
+its estimate is ready.
+
+The tab shows the counted cost in each category and the total, the per-capita
+indicators with their basis, and the line items newest first with **Load more
+records** for the next page. Members and administrators record an item with
+**Record line item** and change one with **Edit** on its row, then **Save
+changes**; an edit replaces every field of the item. Longitude and latitude are
+optional. Viewers read the tab without the form. A line item can be linked to
+an incident of the jurisdiction through the API (`incidentId`); the screen does
+not show or change that link, and an edit keeps it. Line items are records:
+there is no delete and the retention purge does not remove them.
+
+## Shelter census
+
+When the server runs the facilities integration, the declaration summary
+carries a shelter census read from **Operations > Facilities**: the latest
+report from each registered shelter, with capacity, occupied and open spaces
+per shelter and in total, and the time of each report. A shelter that has not
+reported is listed as having no report yet. When the integration is off the
+summary says that the shelter census is not available; it never shows numbers
+in its place.
 
 ## Download the declaration summary
 
 Enter the incident name and select **Download declaration summary**. The
 server builds a Markdown document from the counted records: residences by
 degree of damage, the destroyed or major count that is the IA basis, total and
-uninsured loss, the population, the per-capita impact against the indicator,
-and whether each threshold is met. The file is named
+uninsured loss, the counted Public Assistance cost by category with the total,
+the basis of the per-capita figures, the operator-entered populations and
+indicators with the per-capita impact against each, the shelter census, and
+whether each threshold is met. The file is named
 `declaration-support-YYYY-MM-DD.md`.
 
 ## The map
@@ -112,4 +168,7 @@ accepts at most 30 public reports per jurisdiction per minute.
 - Pre-disaster baseline import (assessor parcel rolls) is available through the
   API to administrators, not on this screen, and baselines do not yet feed the
   loss summary.
-- Public Assistance categories A to G and shelter census are not recorded here.
+- Public Assistance line items cannot be deleted, and the screen does not link
+  them to an incident.
+- The shelter census reads the latest report of each shelter as it stands; it
+  does not mark a stale report. Check freshness on the Facilities screen.

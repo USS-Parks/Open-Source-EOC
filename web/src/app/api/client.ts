@@ -83,7 +83,9 @@ import type {
   WorkflowTransitionCommand,
 } from "../../boards/workflow.js";
 import type { DamageSummary, DeclarationThresholds } from "@openeoc/shared";
-import type { DamageBaselineRow, DamageReportPage, DamageReportStatus, FieldAssessmentInput } from "../../damage/model.js";
+import type {
+  DamageBaselineRow, DamageReportPage, DamageReportStatus, FieldAssessmentInput, PaItemInput, PaItemPage,
+} from "../../damage/model.js";
 import type { FacilityBoardRow, FacilityInput, FacilityStatusInput } from "../../facilities/model.js";
 import type {
   Contact,
@@ -2155,6 +2157,18 @@ export class ApiClient {
   /** Adds an `x_` field to one board at once, outside any template version; jurisdiction admins only. */
   addLocalField(boardId: string, field: FieldDef): Promise<{ ok: true }> {
     return this.request("POST", `/api/v1/boards/${encodeURIComponent(boardId)}/local-fields`, field as unknown as Record<string, unknown>);
+  }
+
+  /** Public Assistance line items, newest first, with the counted totals by category. */
+  listPaItems(jurisdictionId: string, options: PageOptions = {}): Promise<PaItemPage> {
+    const text = pageParams(options).toString();
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/damage/pa-items${text ? `?${text}` : ""}`);
+  }
+  createPaItem(jurisdictionId: string, input: PaItemInput): Promise<{ id: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/damage/pa-items`, { ...input });
+  }
+  async updatePaItem(itemId: string, input: PaItemInput): Promise<void> {
+    await this.request("PUT", `/api/v1/damage/pa-items/${encodeURIComponent(itemId)}`, { ...input });
   }
 }
 

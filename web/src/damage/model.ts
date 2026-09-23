@@ -1,4 +1,4 @@
-import type { DamageSummary, DeclarationThresholds } from "@openeoc/shared";
+import type { DamageSummary, DeclarationThresholds, PaItemStatus, PublicAssistanceTotals } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../cop/layers.js";
 import type { SymbolStatus } from "../cop/symbology.js";
 
@@ -137,21 +137,29 @@ export function reportBounds(reports: readonly DamageReport[]): [number, number,
   return [Math.min(...lons) - pad, Math.min(...lats) - pad, Math.max(...lons) + pad, Math.max(...lats) + pad];
 }
 
-/** The threshold inputs as typed, before they are valid numbers. */
+/** The threshold inputs as typed, before they are valid numbers. The statewide pair is optional. */
 export interface ThresholdDraft {
   readonly population: string;
   readonly paPerCapitaIndicator: string;
   readonly iaResidenceThreshold: string;
+  readonly statePopulation?: string;
+  readonly statewidePerCapitaIndicator?: string;
 }
 
-/** The server's defaults for the two indicators; population has none. */
-export const DEFAULT_DRAFT: ThresholdDraft = { population: "", paPerCapitaIndicator: "4.6", iaResidenceThreshold: "25" };
+/** The server's defaults for the county and IA indicators; populations and the statewide indicator have none. */
+export const DEFAULT_DRAFT: ThresholdDraft = {
+  population: "", paPerCapitaIndicator: "4.6", iaResidenceThreshold: "25", statePopulation: "", statewidePerCapitaIndicator: "",
+};
 
 function numberOf(text: string): number {
   return text.trim() === "" ? Number.NaN : Number(text);
 }
 
-/** Valid thresholds, or null while any input is missing or out of range. */
+/**
+ * Valid thresholds, or null while any input is missing or out of range. The
+ * state population and statewide indicator go together: both empty leaves the
+ * statewide indicator out, one without the other is incomplete.
+ */
 export function parseThresholds(draft: ThresholdDraft): DeclarationThresholds | null {
   const population = numberOf(draft.population);
   const paPerCapitaIndicator = numberOf(draft.paPerCapitaIndicator);
@@ -159,11 +167,19 @@ export function parseThresholds(draft: ThresholdDraft): DeclarationThresholds | 
   if (!Number.isInteger(population) || population <= 0) return null;
   if (!Number.isFinite(paPerCapitaIndicator) || paPerCapitaIndicator < 0) return null;
   if (!Number.isInteger(iaResidenceThreshold) || iaResidenceThreshold < 0) return null;
-  return { population, paPerCapitaIndicator, iaResidenceThreshold };
+  const county = { population, paPerCapitaIndicator, iaResidenceThreshold };
+  const stateText = draft.statePopulation ?? "";
+  const statewideText = draft.statewidePerCapitaIndicator ?? "";
+  if (stateText.trim() === "" && statewideText.trim() === "") return county;
+  const statePopulation = numberOf(stateText);
+  const statewidePerCapitaIndicator = numberOf(statewideText);
+  if (!Number.isInteger(statePopulation) || statePopulation <= 0) return null;
+  if (!Number.isFinite(statewidePerCapitaIndicator) || statewidePerCapitaIndicator < 0) return null;
+  return { ...county, statePopulation, statewidePerCapitaIndicator };
 }
 
 export interface Indicator {
-  readonly key: "pa" | "ia";
+  readonly key: "pa" | "pa_state" | "ia";
   readonly title: string;
   readonly met: boolean;
   readonly measured: string;
@@ -171,27 +187,150 @@ export interface Indicator {
   readonly basis: string;
 }
 
-/** The two declaration indicators in words, each with the basis of its number. */
+/** What the per-capita figures divide, named so structure loss is never read as PA cost. */
+export function perCapitaBasis(summary: DamageSummary): string {
+  const d = summary.declaration;
+  const items = summary.publicAssistance.items;
+  return d.perCapitaBasis === "pa_cost"
+    ? `Public Assistance cost: ${dollars(d.perCapitaAmount)} in ${items} counted ${items === 1 ? "line item" : "line items"}, categories A to G`
+    : `Structure loss, not Public Assistance cost: ${dollars(d.perCapitaAmount)} estimated loss of counted structures`;
+}
+
+/** The declaration indicators in words, each with the basis of its number. */
 export function declarationIndicators(summary: DamageSummary): readonly Indicator[] {
   const d = summary.declaration;
-  return [
-    {
-      key: "pa",
-      title: "Public Assistance per-capita indicator",
-      met: d.paThresholdMet,
-      measured: `${dollars(d.perCapitaImpact)} per resident`,
-      threshold: `${dollars(d.paPerCapitaIndicator)} per resident`,
-      basis: `${dollars(summary.totalEstimatedLoss)} counted loss divided by a population of ${d.population.toLocaleString("en-US")}.`,
-    },
-    {
-      key: "ia",
-      title: "Individual Assistance residences",
-      met: d.iaThresholdMet,
-      measured: `${summary.majorOrWorse} destroyed or major`,
-      threshold: `${d.iaResidenceThreshold} residences`,
-      basis: `${summary.byDegree.destroyed ?? 0} destroyed plus ${summary.byDegree.major ?? 0} with major damage.`,
-    },
-  ];
+  const basis = perCapitaBasis(summary);
+  const indicators: Indicator[] = [{
+    key: "pa",
+    title: "Public Assistance county per-capita indicator",
+    met: d.paThresholdMet,
+    measured: `${dollars(d.perCapitaImpact)} per resident`,
+    threshold: `${dollars(d.paPerCapitaIndicator)} per resident, operator-entered`,
+    basis: `${basis}, divided by an operator-entered county population of ${d.population.toLocaleString("en-US")}.`,
+  }];
+  if (d.statewide) indicators.push({
+    key: "pa_state",
+    title: "Public Assistance statewide per-capita indicator",
+    met: d.statewide.met,
+    measured: `${dollars(d.statewide.perCapitaImpact)} per resident`,
+    threshold: `${dollars(d.statewide.indicator)} per resident, operator-entered`,
+    basis: `${basis}, divided by an operator-entered state population of ${d.statewide.population.toLocaleString("en-US")}.`,
+  });
+  indicators.push({
+    key: "ia",
+    title: "Individual Assistance residences",
+    met: d.iaThresholdMet,
+    measured: `${summary.majorOrWorse} destroyed or major`,
+    threshold: `${d.iaResidenceThreshold} residences, operator-entered`,
+    basis: `${summary.byDegree.destroyed ?? 0} destroyed plus ${summary.byDegree.major ?? 0} with major damage.`,
+  });
+  return indicators;
+}
+
+/** One Public Assistance line item as the server lists it, in its field names. */
+export interface PaItem {
+  readonly id: string;
+  readonly incident_id: string | null;
+  readonly applicant: string;
+  readonly category: string;
+  readonly site: string | null;
+  readonly description: string;
+  readonly estimated_cost_cents: number;
+  readonly insured: boolean | null;
+  readonly percent_complete: number;
+  readonly status: PaItemStatus;
+  readonly lon: number | null;
+  readonly lat: number | null;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+export interface PaItemPage {
+  readonly items: readonly PaItem[];
+  readonly nextCursor: string | null;
+  /** Counted totals across the jurisdiction, not only this page. */
+  readonly totals: PublicAssistanceTotals;
+}
+
+/** A line item as it is written; an edit replaces every field. */
+export interface PaItemInput {
+  readonly incidentId?: string | null;
+  readonly applicant: string;
+  readonly category: string;
+  readonly site: string | null;
+  readonly description: string;
+  readonly estimatedCostCents: number;
+  readonly insured: boolean | null;
+  readonly percentComplete: number;
+  readonly status: PaItemStatus;
+  readonly location: { readonly lon: number; readonly lat: number } | null;
+}
+
+export const PA_STATUS_LABELS: Readonly<Record<PaItemStatus, string>> = {
+  draft: "Draft, not counted",
+  submitted: "Submitted",
+  reviewed: "Reviewed",
+};
+
+/** The line item form as typed. */
+export interface PaDraft {
+  readonly applicant: string;
+  readonly category: string;
+  readonly site: string;
+  readonly description: string;
+  readonly cost: string;
+  readonly insured: "unknown" | "insured" | "uninsured";
+  readonly percent: string;
+  readonly status: PaItemStatus;
+  readonly lon: string;
+  readonly lat: string;
+}
+
+export const EMPTY_PA_DRAFT: PaDraft = {
+  applicant: "", category: "a_debris_removal", site: "", description: "", cost: "", insured: "unknown",
+  percent: "0", status: "submitted", lon: "", lat: "",
+};
+
+/** A listed line item back in the form, for editing. */
+export function paDraftOf(item: PaItem): PaDraft {
+  return {
+    applicant: item.applicant,
+    category: item.category,
+    site: item.site ?? "",
+    description: item.description,
+    cost: (item.estimated_cost_cents / 100).toFixed(2),
+    insured: item.insured === null ? "unknown" : item.insured ? "insured" : "uninsured",
+    percent: String(item.percent_complete),
+    status: item.status,
+    lon: item.lon === null ? "" : String(item.lon),
+    lat: item.lat === null ? "" : String(item.lat),
+  };
+}
+
+/** The form as a line item, or an error naming the first field to fix. */
+export function parsePaDraft(draft: PaDraft): PaItemInput {
+  const applicant = draft.applicant.trim();
+  if (!applicant) throw new Error("Enter the applicant: the public entity or eligible private nonprofit.");
+  const cost = numberOf(draft.cost);
+  if (!Number.isFinite(cost) || cost < 0) throw new Error("Enter the estimated cost in dollars, zero or more.");
+  const percent = numberOf(draft.percent);
+  if (!Number.isInteger(percent) || percent < 0 || percent > 100) throw new Error("Enter the percent complete as a whole number from 0 to 100.");
+  const placed = draft.lon.trim() !== "" || draft.lat.trim() !== "";
+  const lon = numberOf(draft.lon);
+  const lat = numberOf(draft.lat);
+  if (placed && !(Math.abs(lon) <= 180 && Math.abs(lat) <= 90))
+    throw new Error("Enter both longitude and latitude in decimal degrees, or leave both empty.");
+  return {
+    applicant,
+    category: draft.category,
+    site: draft.site.trim() || null,
+    description: draft.description.trim(),
+    estimatedCostCents: Math.round(cost * 100),
+    insured: draft.insured === "unknown" ? null : draft.insured === "insured",
+    percentComplete: percent,
+    status: draft.status,
+    location: placed ? { lon, lat } : null,
+  };
 }
 
 /** File name for the declaration support download, dated by the local day. */

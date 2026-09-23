@@ -108,6 +108,7 @@ GET /api/v1/jurisdictions/:jurisdictionId/contact-groups
 GET /api/v1/jurisdictions/:jurisdictionId/contacts
 GET /api/v1/jurisdictions/:jurisdictionId/corrective-actions
 GET /api/v1/jurisdictions/:jurisdictionId/damage/assessments
+GET /api/v1/jurisdictions/:jurisdictionId/damage/pa-items
 GET /api/v1/jurisdictions/:jurisdictionId/dashboards
 GET /api/v1/jurisdictions/:jurisdictionId/export
 GET /api/v1/jurisdictions/:jurisdictionId/facilities/board
@@ -245,6 +246,7 @@ POST /api/v1/jurisdictions/:jurisdictionId/damage/assessments
 POST /api/v1/jurisdictions/:jurisdictionId/damage/baseline
 POST /api/v1/jurisdictions/:jurisdictionId/damage/declaration
 POST /api/v1/jurisdictions/:jurisdictionId/damage/intake/enable
+POST /api/v1/jurisdictions/:jurisdictionId/damage/pa-items
 POST /api/v1/jurisdictions/:jurisdictionId/damage/report
 POST /api/v1/jurisdictions/:jurisdictionId/damage/summary
 POST /api/v1/jurisdictions/:jurisdictionId/dashboards
@@ -299,6 +301,7 @@ POST /api/v1/templates/import
 POST /api/v1/threads/:threadId/messages
 PUT /api/v1/contact-groups/:groupId
 PUT /api/v1/contacts/:contactId
+PUT /api/v1/damage/pa-items/:id
 PUT /api/v1/iap/:iapId/ics-204
 PUT /api/v1/incidents/:incidentId/dashboard-configs/:key
 PUT /api/v1/incidents/:incidentId/operational-area

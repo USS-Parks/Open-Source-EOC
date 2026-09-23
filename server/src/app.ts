@@ -484,7 +484,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   resourceRoutes(app, sql, authenticate);
   aarRoutes(app, sql, authenticate);
   dashboardRoutes(app, sql, authenticate);
-  damageRoutes(app, sql, authenticate);
+  damageRoutes(app, sql, authenticate, { shelterCensus: integrations.has("facilities") });
   edxlRoutes(app, sql, authenticate);
   if (integrations.has("facilities")) facilityRoutes(app, sql, authenticate);
   feedRoutes(app, sql, authenticate);

@@ -2058,3 +2058,57 @@ tagging remain separately gated as section 1 of the roster states.
   has a screen. TypeScript and ESLint clean. Link checker 71 files.
 - **Evidence level:** unit, integration, real-database, browser and document.
 - **Rollback:** revert the commit.
+
+## V1 W4.11: Public Assistance and shelter census
+
+- **Why this unit exists.** W3.2 left F8 partial: no engine for Public
+  Assistance categories A to G or a shelter census, and the per-capita figure
+  was structure loss rather than PA cost. The W4 gate expects F8 verified. The
+  unit and W4.12 are added to the roster's W4 table in this commit.
+- **What changed.** New `damage_pa_items`: applicant, FEMA category A to G from
+  the dictionary, site, description, estimated cost in cents, insured, percent
+  complete, status draft, submitted or reviewed, an optional point and an
+  optional incident in the same jurisdiction. Routes list and create per
+  jurisdiction and replace per item; members and admins write, members read,
+  creates and edits are audited. `PA_CATEGORIES` now cites the FEMA Public
+  Assistance Program and Policy Guide, FP 104-009-2, categories of work; the
+  edition was not pinned and is for Basho to confirm. The damage summary adds
+  PA totals by category; the per-capita figure divides PA cost once any
+  submitted or reviewed item exists and structure loss until then, with the
+  basis stated on screen and in the document; an optional statewide indicator
+  is computed only when the operator enters both its figures, so no threshold
+  is invented. The shelter census reads each shelter's latest facilities report
+  where that integration runs, and the document says "Shelter census not
+  available" where it does not. The declaration document gains the PA section,
+  the basis line, operator-entered labels on every threshold and population
+  figure, and the census. A Public Assistance tab in the Damage Assessment
+  surface lists, records and edits items with totals and both indicators.
+- **Defaults and deviations.** Drafts are listed but not counted; a new item
+  defaults to submitted. Insurance is yes, no or not known, not an amount. An
+  edit replaces every field; there is no delete route. The incident link works
+  through the API only. The export keeps schema version 2 and adds a
+  `publicAssistanceItems` section. The census does not mark stale reports. PA
+  items are records and are not in the retention purge. Ownership deviations:
+  `server/src/app.ts` passes the facilities flag to the damage routes; one row
+  in `docs/guides/ADMIN.md`.
+- **F8 evidence.** Real-database tests: create, edit and list; viewer 403 on
+  writes, outsider 403 on reads and row-level security refusing an outsider's
+  select, insert and update; totals by category with drafts excluded; the basis
+  switching from structure loss to PA cost; the statewide indicator; the census
+  with the integration on and "not available" off; the document sections; the
+  export section, absent from another jurisdiction's export. Browser: items in
+  categories A, C and F, F as a draft then submitted, totals and the PA-basis
+  indicators updating, the downloaded summary carrying the PA and census
+  sections, no overflow at 390.
+- **Schema:** migration `0122_public_assistance.sql`, one table with row-level
+  security. Contract: three routes; `docs/API.md` regenerated. No dependency.
+- **Verification.** In the lane: `public-assistance.test.ts` 8 of 8; seven
+  server suites 84 of 84; `damage-browser` 3 of 3; shared and web 669 of 669.
+  After rebasing onto W4.0 part two and W4.1 part two: public-assistance,
+  damage, facilities, export, api-docs, ipaws, list-pagination-operational,
+  every web test and the shared suite 742 of 742; the damage and operator
+  screens browser walks passed. TypeScript and ESLint clean. Link checker 71.
+- **Evidence level:** unit, real-database, browser and document.
+- **Deferred:** an incident picker on the screen, deleting PA items, stale
+  marking in the census, insurance amounts.
+- **Rollback:** revert the commit and drop `damage_pa_items`.

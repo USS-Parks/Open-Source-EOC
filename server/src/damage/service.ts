@@ -1,10 +1,14 @@
 import {
+  publicAssistanceTotals,
   summarizeAssessments,
   renderDeclarationSupport,
   type AssessmentRow,
   type DamageDegree,
   type DamageSummary,
   type DeclarationThresholds,
+  type PaItemStatus,
+  type PublicAssistanceTotals,
+  type ShelterReport,
   DAMAGE_DEGREES,
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
@@ -259,13 +263,64 @@ async function approvedRows(
   }));
 }
 
+/** Counted Public Assistance cost by work category: submitted and reviewed items, never drafts. */
+async function paTotals(sql: Sql, jurisdictionId: string): Promise<PublicAssistanceTotals> {
+  const groups = await sql`
+    select category, sum(estimated_cost_cents)::text as cents, count(*)::int as items
+    from damage_pa_items
+    where jurisdiction_id = ${jurisdictionId} and status <> 'draft'
+    group by category`;
+  return publicAssistanceTotals(groups.map((g) => ({
+    category: g.category as string,
+    costCents: Number(g.cents),
+    items: g.items as number,
+  })));
+}
+
+/**
+ * The latest report of each registered shelter, read from the facilities
+ * integration. A shelter reports its capacity and open spaces as beds, so
+ * the counts sum over every bed row, as the facilities screen does.
+ */
+async function shelterReports(sql: Sql, jurisdictionId: string): Promise<ShelterReport[]> {
+  const rows = await sql`
+    select f.name, r.beds, r.reported_at
+    from facilities f
+    left join lateral (
+      select beds, reported_at from facility_status_reports
+      where facility_id = f.id order by reported_at desc limit 1) r on true
+    where f.jurisdiction_id = ${jurisdictionId} and f.kind = 'shelter'
+    order by f.name, f.id`;
+  return rows.map((r) => {
+    const beds = (r.beds as Array<{ available: number; baseline: number }> | null) ?? [];
+    return {
+      name: r.name as string,
+      capacity: beds.reduce((sum, bed) => sum + bed.baseline, 0),
+      open: beds.reduce((sum, bed) => sum + bed.available, 0),
+      reportedAt: r.reported_at ? new Date(r.reported_at as string).toISOString() : null,
+    };
+  });
+}
+
+/**
+ * The loss summary and declaration indicators. `shelterCensus` is whether
+ * the facilities integration runs; when it is off the summary carries no
+ * census rather than numbers from tables nobody reports into.
+ */
 export async function aggregate(
   sql: Sql,
   actor: Principal,
   jurisdictionId: string,
   thresholds: DeclarationThresholds,
+  shelterCensus: boolean,
 ): Promise<DamageSummary> {
-  return summarizeAssessments(await approvedRows(sql, actor, jurisdictionId), thresholds);
+  const rows = await approvedRows(sql, actor, jurisdictionId);
+  return summarizeAssessments(
+    rows,
+    thresholds,
+    await paTotals(sql, jurisdictionId),
+    shelterCensus ? await shelterReports(sql, jurisdictionId) : null,
+  );
 }
 
 export async function exportDeclaration(
@@ -274,11 +329,126 @@ export async function exportDeclaration(
   jurisdictionId: string,
   thresholds: DeclarationThresholds,
   meta: { jurisdiction: string; incident: string },
+  shelterCensus: boolean,
 ): Promise<{ summary: DamageSummary; document: string }> {
-  const summary = summarizeAssessments(await approvedRows(sql, actor, jurisdictionId), thresholds);
+  const summary = await aggregate(sql, actor, jurisdictionId, thresholds, shelterCensus);
   const document = renderDeclarationSupport(summary, {
     ...meta,
     preparedAt: new Date().toISOString(),
   });
   return { summary, document };
+}
+
+export interface PaItemInput {
+  readonly incidentId?: string | null | undefined;
+  readonly applicant: string;
+  readonly category: string;
+  readonly site?: string | null | undefined;
+  readonly description: string;
+  readonly estimatedCostCents: number;
+  readonly insured?: boolean | null | undefined;
+  readonly percentComplete: number;
+  readonly status: PaItemStatus;
+  readonly location?: { lon: number; lat: number } | null | undefined;
+}
+
+async function requireOwnIncident(sql: Sql, jurisdictionId: string, incidentId: string | null | undefined): Promise<void> {
+  if (!incidentId) return;
+  const [row] = await sql`select 1 from incidents where id = ${incidentId} and jurisdiction_id = ${jurisdictionId}`;
+  if (!row) throw new AuthError(400, "incident is not in this jurisdiction");
+}
+
+/**
+ * A Public Assistance line item: one applicant's work in one category at one
+ * site. The route checks the category against the PA dictionary.
+ */
+export async function createPaItem(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+  input: PaItemInput,
+): Promise<{ id: string }> {
+  requireWriter(actor, jurisdictionId);
+  await requireOwnIncident(sql, jurisdictionId, input.incidentId);
+  const geom = input.location
+    ? sql`ST_SetSRID(ST_MakePoint(${input.location.lon}, ${input.location.lat}), 4326)`
+    : null;
+  const [row] = await sql`
+    insert into damage_pa_items
+      (jurisdiction_id, incident_id, applicant, category, site, description, estimated_cost_cents,
+       insured, percent_complete, status, geom, created_by, updated_by)
+    values
+      (${jurisdictionId}, ${input.incidentId ?? null}, ${input.applicant}, ${input.category},
+       ${input.site ?? null}, ${input.description}, ${input.estimatedCostCents}, ${input.insured ?? null},
+       ${input.percentComplete}, ${input.status}, ${geom}, ${actor.person.id}, ${actor.person.id})
+    returning id`;
+  const id = row!.id as string;
+  await recordAudit(sql, actor, {
+    jurisdictionId,
+    ...(input.incidentId ? { incidentId: input.incidentId } : {}),
+    category: "damage.pa_item.created",
+    subjectTable: "damage_pa_items",
+    subjectId: id,
+    payload: { category: input.category, estimatedCostCents: input.estimatedCostCents, status: input.status },
+  });
+  return { id };
+}
+
+/** Replace a line item's editable fields. */
+export async function updatePaItem(
+  sql: Sql,
+  actor: Principal,
+  itemId: string,
+  input: PaItemInput,
+): Promise<void> {
+  const [item] = await sql`select jurisdiction_id from damage_pa_items where id = ${itemId}`;
+  if (!item) throw new AuthError(404, "Public Assistance line item not found");
+  const jurisdictionId = item.jurisdiction_id as string;
+  requireWriter(actor, jurisdictionId);
+  await requireOwnIncident(sql, jurisdictionId, input.incidentId);
+  const geom = input.location
+    ? sql`ST_SetSRID(ST_MakePoint(${input.location.lon}, ${input.location.lat}), 4326)`
+    : null;
+  await sql`
+    update damage_pa_items set
+      incident_id = ${input.incidentId ?? null}, applicant = ${input.applicant}, category = ${input.category},
+      site = ${input.site ?? null}, description = ${input.description},
+      estimated_cost_cents = ${input.estimatedCostCents}, insured = ${input.insured ?? null},
+      percent_complete = ${input.percentComplete}, status = ${input.status}, geom = ${geom},
+      updated_by = ${actor.person.id}, updated_at = now()
+    where id = ${itemId}`;
+  await recordAudit(sql, actor, {
+    jurisdictionId,
+    ...(input.incidentId ? { incidentId: input.incidentId } : {}),
+    category: "damage.pa_item.updated",
+    subjectTable: "damage_pa_items",
+    subjectId: itemId,
+    payload: { category: input.category, estimatedCostCents: input.estimatedCostCents, status: input.status },
+  });
+}
+
+/** Line items newest first, with the counted totals by category across the jurisdiction. */
+export async function listPaItems(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+  page: PageRequest,
+): Promise<Page<Record<string, unknown>> & { totals: PublicAssistanceTotals }> {
+  requireMember(actor, jurisdictionId);
+  const after = decodeCursor(page.cursor, ["at", "id"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
+  const rows = await sql`
+    select id, incident_id, applicant, category, site, description, estimated_cost_cents, insured,
+      percent_complete, status, ST_X(geom) as lon, ST_Y(geom) as lat, created_at, updated_at,
+      to_char(created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
+    from damage_pa_items
+    where jurisdiction_id = ${jurisdictionId}
+      ${after ? sql`and (created_at, id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : sql``}
+    order by created_at desc, id desc limit ${limit + 1}`;
+  const { items, nextCursor } = cutPage(rows, limit, (r) => [r.page_at as string, r.id as string]);
+  return {
+    items: items.map(({ page_at: _pageAt, ...r }) => ({ ...r, estimated_cost_cents: Number(r.estimated_cost_cents) })),
+    nextCursor,
+    totals: await paTotals(sql, jurisdictionId),
+  };
 }

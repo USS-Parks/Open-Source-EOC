@@ -101,6 +101,11 @@ beforeAll(async () => {
   const lifeline = (dictionaryValues("lifelines.lifelines") ?? [])[0];
   const status = (dictionaryValues("lifelines.status") ?? [])[0];
   await request(adminToken, "PUT", `/api/v1/jurisdictions/${seed.jurisdictionId}/lifelines`, { lifeline, status });
+  const paItem = await request(memberToken, "POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/damage/pa-items`, {
+    applicant: "Yurok Tribe Public Works", category: "c_roads_and_bridges", estimatedCostCents: 4_500_000,
+    location: { lon: -123.61, lat: 41.29 },
+  });
+  expect(paItem.statusCode, paItem.body).toBe(201);
   yurokFileSha = await upload(memberToken, seed.jurisdictionId, "yurok-only.txt",
     Buffer.from("Yurok evacuation roster, not for other jurisdictions"), "text/plain");
 
@@ -175,6 +180,13 @@ describe("jurisdiction export", () => {
     expect(roads!.records[0]!.geometry?.type).toBe("Point");
     expect(body.sitreps.length).toBeGreaterThanOrEqual(1);
     expect(body.lifelines.length).toBeGreaterThanOrEqual(1);
+    // The Public Assistance inventory rides along as its own section, geometry as GeoJSON.
+    const pa = doc.publicAssistanceItems as Row[];
+    expect(pa).toMatchObject([{
+      applicant: "Yurok Tribe Public Works", category: "c_roads_and_bridges", estimated_cost_cents: 4500000,
+      status: "submitted", geometry: { type: "Point", coordinates: [-123.61, 41.29] },
+    }]);
+    expect(pa[0]).not.toHaveProperty("geom");
   });
 
   it("carries incidents, IAPs, AARs, resources, tasks, assessments and file bytes", async () => {
@@ -207,6 +219,7 @@ describe("jurisdiction export", () => {
       .toBe(true);
     expect(new Set(rows("assessments").map((a) => a.domain))).toEqual(new Set(["lifeline", "esf"]));
     expect(rows("assessmentDecisions")).toEqual([]);
+    expect(rows("publicAssistanceItems")).toEqual([]);
 
     expect(rows("files")).toMatchObject([
       { name: "ridge-map.pdf", sha256: demoFile.sha256, archive_path: `files/${demoFile.sha256}` },
@@ -221,7 +234,7 @@ describe("jurisdiction export", () => {
     expect(demoExport.doc.jurisdiction.id).toBe(demo.jurisdictionId);
     // The demo incident's liaison comes from the first jurisdiction, so its id
     // may appear as that participant's organization; its records may not.
-    for (const foreign of [yurokBoardId, yurokFileSha, "SR-169 at Pecwan", "yurok-only.txt"])
+    for (const foreign of [yurokBoardId, yurokFileSha, "SR-169 at Pecwan", "yurok-only.txt", "Yurok Tribe Public Works"])
       expect(demoExport.text).not.toContain(foreign);
     expect([...demoExport.files.keys()]).toEqual([demoFile.sha256]);
 
