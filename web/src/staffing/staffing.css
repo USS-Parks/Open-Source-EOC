@@ -1,0 +1,50 @@
+.eoc-staffing { display: grid; gap: 16px; min-width: 0; padding: 16px; color: var(--eoc-text); }
+.eoc-staffing-header { padding: 4px 2px; border-bottom: 2px solid var(--eoc-brand-teal, var(--eoc-status-info)); }
+.eoc-staffing-eyebrow { margin: 0 0 4px; color: var(--eoc-text-muted); font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.eoc-staffing-header h1 { margin: 0; color: var(--eoc-text-strong, var(--eoc-text)); font-size: clamp(1.45rem, 2vw, 2rem); }
+.eoc-staffing-header p:not(.eoc-staffing-eyebrow) { margin: 6px 0 0; color: var(--eoc-text-muted); }
+.eoc-staffing-panel { display: grid; gap: 16px; min-width: 0; }
+.eoc-staffing-panel[hidden] { display: none; }
+.eoc-staffing-form, .eoc-staffing-block, .eoc-ics211 { display: grid; gap: 12px; min-width: 0; padding: 14px; border: 1px solid var(--eoc-border); border-radius: var(--eoc-radius-md); background: var(--eoc-surface); }
+.eoc-staffing-form { border-top: 3px solid var(--eoc-brand-teal, var(--eoc-status-info)); }
+.eoc-staffing-panel h2 { margin: 0; font-size: 1.05rem; }
+.eoc-staffing-form > .eoc-kit-button { justify-self: start; }
+.eoc-staffing-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; align-items: end; }
+.eoc-staffing-fields > label { display: grid; gap: 4px; }
+.eoc-staffing-fields input { min-height: 44px; padding: 6px; color: var(--eoc-text); background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: 4px; font: inherit; min-width: 0; }
+.eoc-staffing-hint { margin: 0; color: var(--eoc-text-muted); font-size: .9rem; }
+.eoc-staffing-notice { margin: 0; padding: 10px 12px; border: 1px solid var(--eoc-status-success); border-radius: 4px; color: var(--eoc-status-success); background: var(--eoc-surface); }
+.eoc-staffing-notice.is-error { border-color: var(--eoc-status-critical); color: var(--eoc-status-critical); }
+.eoc-staffing-scroll { min-width: 0; overflow-x: auto; }
+.eoc-staffing-scroll .eoc-kit-button { min-height: 36px; padding: 4px 10px; }
+.eoc-staffing-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.eoc-staffing-vacancies { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.eoc-staffing-vacancies li { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.eoc-ics211 header { display: grid; gap: 8px; }
+.eoc-ics211 dl { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 0; }
+.eoc-ics211 dt { color: var(--eoc-text-muted); font-size: .78rem; font-weight: 700; text-transform: uppercase; }
+.eoc-ics211 dd { margin: 0; }
+.eoc-ics211 .eoc-table { display: block; overflow-x: auto; }
+.eoc-ics211-partial { margin: 0; color: var(--eoc-status-warning); font-weight: 700; }
+.eoc-staffing-badge { display: grid; gap: 4px; width: min(100%, 340px); padding: 18px; border: 2px solid var(--eoc-text); border-radius: 10px; background: var(--eoc-surface); }
+.eoc-staffing-badge h2 { font-size: 1.5rem; }
+.eoc-staffing-badge-position { margin: 0 0 10px; font-size: 1.1rem; font-weight: 700; }
+.eoc-staffing-badge-code { margin: 0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 1rem; line-height: 1.6; overflow-wrap: anywhere; }
+.eoc-staffing-print-sheet { display: none; }
+@media (max-width: 720px) {
+  .eoc-staffing { padding: 10px; }
+}
+@media print {
+  html, body { height: auto !important; background: #fff !important; }
+  body:has(> .eoc-staffing-print-sheet) > :not(.eoc-staffing-print-sheet) { display: none !important; }
+  .eoc-staffing-print-sheet { display: block; color: #000; font: 10pt/1.35 system-ui, sans-serif; }
+  .eoc-staffing-print-sheet .eoc-ics211, .eoc-staffing-print-sheet .eoc-staffing-badge { padding: 0; border: 0; background: none; color: #000; }
+  .eoc-staffing-print-sheet .eoc-staffing-badge { width: 3.4in; padding: .2in; border: 1pt solid #000; break-inside: avoid; }
+  .eoc-staffing-print-sheet h2 { margin: 0 0 6pt; font-size: 14pt; }
+  .eoc-staffing-print-sheet dt { color: #000; }
+  .eoc-staffing-print-sheet .eoc-table { display: table; width: 100%; font-size: 9pt; }
+  .eoc-staffing-print-sheet .eoc-table thead { display: table-header-group; }
+  .eoc-staffing-print-sheet .eoc-table th, .eoc-staffing-print-sheet .eoc-table td { padding: 3pt 5pt; border: .75pt solid #000; color: #000; }
+  .eoc-staffing-print-sheet .eoc-table tbody tr { background: none !important; break-inside: avoid; }
+  .eoc-staffing-print-sheet .eoc-ics211-partial { color: #000; }
+}

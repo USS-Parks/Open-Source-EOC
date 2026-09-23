@@ -97,7 +97,7 @@ export async function scanCheckIn(
     select person_id from badges
     where jurisdiction_id = ${jurisdictionId} and token_hash = ${hashToken(input.badgeToken)}
       and revoked_at is null`;
-  if (!badge) throw new AuthError(401, "unknown or revoked badge");
+  if (!badge) throw new AuthError(404, "unknown or revoked badge");
   const personId = badge.person_id as string;
   const result = await checkIn(sql, actor, jurisdictionId, {
     personId,

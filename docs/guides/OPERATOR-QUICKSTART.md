@@ -136,5 +136,33 @@ reconcile before reporting the work as received or complete.
 4. End your position session. The incoming operator signs in under their own
    identity and position.
 
+### Staffing: check in, badges and shifts
+
+**Operations / Staffing** shows who is checked in to which position across the
+organization. Times are local, 24-hour.
+
+- **Check-in and on duty.** Choose the **Position** and choose **Check in**.
+  Without a badge code you check yourself in; a jurisdiction admin can choose
+  another **Person**. To check in a badge holder, type the code printed on the
+  badge into **Badge code, optional**; spaces are ignored. On a browser that
+  can read QR codes, **Scan badge QR code** takes a photo and fills the code in.
+  **On duty** lists open check-ins, earliest first, with **Check out** on each
+  and **Load more check-ins** when there are more. **Vacant positions** lists
+  every position with no one checked in.
+- **ICS-211 check-in list.** The open check-ins as the ICS-211 form: name,
+  incident assignment, check-in date and time, and how the person checked in.
+  **Print ICS-211** prints only the form. If the form says it is a partial
+  list, load the remaining check-ins first. People who have checked out are not
+  listed.
+- **Badges.** A jurisdiction admin chooses a person and the position printed on
+  the badge, then **Issue badge**. The badge code appears once: print it with
+  **Print badge** before leaving the page. The code is printed as text, not as
+  a QR image. Issuing a new badge does not cancel an earlier one, and this
+  screen has no way to revoke a badge, so report a lost badge to an admin.
+- **Shifts.** **Upcoming shifts** lists scheduled coverage until each shift
+  ends. To schedule one, choose the position, optionally who is assigned, and
+  the start and end, then **Schedule shift**. The server refuses a shift that
+  overlaps another for the same position or person.
+
 For a safe practice run, use the
 [synthetic incident demonstration](../DEMO-SCENARIO.md).

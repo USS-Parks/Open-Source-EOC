@@ -142,7 +142,9 @@ describe("badge scan check-in reconciles offline", () => {
       headers: { authorization: `Bearer ${memberToken}` },
       payload: { badgeToken: "not-a-badge", positionId: planPositionId },
     });
-    expect(bad.statusCode).toBe(401);
+    // Not 401: the caller's session is fine, and a client would otherwise
+    // renew its token for a mistyped badge code.
+    expect(bad.statusCode).toBe(404);
   });
 });
 

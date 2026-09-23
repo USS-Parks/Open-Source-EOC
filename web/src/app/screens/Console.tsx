@@ -44,6 +44,7 @@ import { LifelinesSurface } from "../surfaces/LifelinesSurface.js";
 import { EsfSurface } from "../surfaces/EsfSurface.js";
 import { ContinuityPanel } from "../../offline/ContinuityPanel.js";
 import { ChronologySurface } from "../../audit/ChronologySurface.js";
+import { StaffingSurface } from "../../staffing/StaffingSurface.js";
 
 const NAV: readonly NavGroup[] = [
   { key: "situation", label: "Situation", items: [
@@ -60,6 +61,7 @@ const NAV: readonly NavGroup[] = [
     { key: "smartForms", label: "Smart Forms", icon: "smartForms" },
     { key: "tracking", label: "Tracking", icon: "tracking" },
     { key: "damage", label: "Damage Assessment", icon: "fieldReports" },
+    { key: "staffing", label: "Staffing", icon: "participants" },
   ] },
   { key: "planning", label: "Planning", items: [
     { key: "operationalPeriods", label: "Operational Periods", icon: "operationalPeriods" },
@@ -382,6 +384,8 @@ function sectionForNav(key: string): Surface {
       return { kind: "tracking" };
     case "damage":
       return { kind: "damage" };
+    case "staffing":
+      return { kind: "staffing" };
     case "lifelines":
       return { kind: "lifelines" };
     case "tasks":
@@ -599,6 +603,10 @@ function Center(props: {
     case "damage":
       return <DamageSurface client={props.client} jurisdictionId={props.jurisdictionId} theme={props.theme}
         canWrite={props.canAuthorAlerts} isAdmin={props.isAdmin} incidentName={props.incidentName} />;
+    case "staffing":
+      // Staffing writes need the admin-or-member role that alert authoring checks.
+      return <StaffingSurface client={props.client} jurisdictionId={props.jurisdictionId} personId={props.personId}
+        incidentId={props.incidentId} incidentName={props.incidentName} isAdmin={props.isAdmin} canWrite={props.canAuthorAlerts} />;
     case "incidents":
       return (
         <IncidentsSurface
@@ -706,6 +714,7 @@ function pageFor(surface: Surface, scope: string): { readonly page: ShellPage; r
     case "smartforms": return result("Operations", "Smart Forms", "boards");
     case "tracking": return result("Operations", "Tracking", "boards");
     case "damage": return result("Operations", "Damage Assessment", "boards");
+    case "staffing": return result("Operations", "Staffing", "boards");
     case "periods": return result("Planning", "Operational Periods", "planning");
     case "forms": return result("Planning", "ICS Forms", "planning");
     case "iap": return result("Planning", "IAP", "planning");

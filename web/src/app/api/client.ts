@@ -1777,6 +1777,31 @@ export class ApiClient {
   enableDamageIntake(jurisdictionId: string): Promise<{ token: string }> {
     return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/damage/intake/enable`);
   }
+
+  // ---- Staffing ----
+
+  /** Who is on duty (one page), vacant positions and upcoming shifts. */
+  staffingSummary(jurisdictionId: string, page: PageOptions = {}): Promise<import("../../staffing/model.js").StaffingSummary> {
+    const query = pageParams(page).toString();
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/staffing${query ? `?${query}` : ""}`);
+  }
+  checkIn(jurisdictionId: string, input: { personId: string; positionId: string; incidentId?: string }): Promise<{ id: string; deduplicated: boolean }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/checkins`, input);
+  }
+  /** Check in the holder of a badge code. */
+  scanCheckIn(jurisdictionId: string, input: { badgeToken: string; positionId: string; incidentId?: string }): Promise<{ id: string; deduplicated: boolean; personId: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/checkins/scan`, input);
+  }
+  async checkOut(checkinId: string): Promise<void> {
+    await this.request("POST", `/api/v1/checkins/${encodeURIComponent(checkinId)}/checkout`);
+  }
+  /** Issue a badge; the returned code is shown only this once. */
+  issueBadge(jurisdictionId: string, input: { personId: string; label?: string }): Promise<{ token: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/badges`, input);
+  }
+  createShift(jurisdictionId: string, input: { positionId: string; personId?: string; startsAt: string; endsAt: string; note?: string; incidentId?: string }): Promise<{ id: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/shifts`, input);
+  }
 }
 
 // ---- Administration types ----

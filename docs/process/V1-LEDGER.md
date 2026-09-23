@@ -1193,3 +1193,44 @@ tagging remain separately gated as section 1 of the roster states.
 - **Guide:** new `docs/guides/DAMAGE-ASSESSMENT.md`, linked from the guides
   index.
 - **Rollback:** revert the commit.
+
+## V1 W3.3: staffing
+
+- **What changed.** Operations > Staffing, new `web/src/staffing/**`, with four
+  tabs. Check-in and on duty: check in by position yourself or, for admins, any
+  member, or type or scan a badge code to check in its holder; the on-duty
+  table has Check out per row and loads more by cursor; vacant positions are
+  listed. ICS-211: a printable check-in list of number, name, incident
+  assignment, date, 24-hour time and method, warning "Partial list" while more
+  pages remain. Badges, admin only: issue a badge showing name, position and
+  the code in groups of four. Shifts: the upcoming list and a schedule form.
+  Printing uses a page-level sheet with a print stylesheet that hides the shell.
+- **Deviations and defaults.** No QR image: `web/` carries no QR generator and
+  none was added; the code prints as text and typed entry ignores spaces. The
+  scan control reads a camera photo through `BarcodeDetector` where the
+  browser has it, as Tracking does, with no live video. The ICS-211 lists open
+  check-ins only, with no agency or check-out time, because the engine stores
+  neither, and covers the jurisdiction rather than the selected incident. Only
+  admins check in someone else, because only admins can list members. The
+  engine has no badge revocation, which the screen and guide state. Upcoming
+  shifts stay capped at 50 by the engine.
+- **Integration fix.** An unknown badge answered 401, which the web client
+  reads as an expired session, so a mistyped badge code renewed the
+  operator's token before failing. It now answers 404; the staffing test
+  asserts it. Ownership deviation: `server/src/staffing/service.ts`.
+- **Schema, contract, dependencies:** none.
+- **Verification.** In the lane, 28 files passed 175 of 175, including
+  `staffing-browser.test.ts`: issue a badge, check its holder in by code, see
+  the row on duty and on the ICS-211, vacancies, print emulation showing only
+  the ICS-211, check out, the seeded shift, scheduling a shift, and dark at 390
+  with no horizontal overflow. After rebasing onto W3.2 and the badge fix: the
+  staffing and damage browser walks, staffing, list-pagination-operational,
+  api-docs, every web test and the shared suite passed 611 of 611. TypeScript
+  and ESLint clean. Link checker 70 files.
+- **Evidence level:** unit, real-database integration and browser.
+- **Deferred, needing engine work:** a QR generator, badge revocation,
+  ICS-211 history with check-outs and agency, incident filtering, a cursor on
+  shifts.
+- **Guide:** `docs/guides/OPERATOR-QUICKSTART.md`, "Staffing: check in, badges
+  and shifts".
+- **Rollback:** revert the commit.

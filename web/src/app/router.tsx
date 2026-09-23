@@ -44,6 +44,7 @@ export type Surface =
   | { readonly kind: "jic" }
   | { readonly kind: "templates" }
   | { readonly kind: "chronology" }
+  | { readonly kind: "staffing" }
   | { readonly kind: "board-design"; readonly id: string }
   | { readonly kind: "admin" }
   | { readonly kind: "not-found"; readonly path: string };
@@ -190,6 +191,8 @@ function parseSurfacePath(clean: string): Surface {
       return { kind: "admin" };
     case "chronology":
       return { kind: "chronology" };
+    case "staffing":
+      return { kind: "staffing" };
     default:
       return head ? { kind: "not-found", path: clean } : { kind: "map" };
   }
@@ -307,6 +310,8 @@ function surfacePath(surface: Surface): string {
       return "#/templates";
     case "chronology":
       return "#/chronology";
+    case "staffing":
+      return "#/staffing";
     case "board-design":
       return `#/board/${surface.id}/design`;
     case "admin":

@@ -599,3 +599,28 @@ describe("audit chronology client", () => {
     expect(String(fetchImpl.mock.calls[1]?.[0])).toContain("format=json&limit=500&cursor=c2");
   });
 });
+
+describe("staffing client", () => {
+  it("reads a staffing page by cursor and posts check-in, badge scan, check-out, badge and shift writes", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(res(200, { onDuty: [], nextCursor: null, vacantPositions: [], upcomingShifts: [] }));
+    const client = new ApiClient({ fetchImpl });
+    await client.staffingSummary("j/1", { cursor: "next" });
+    await client.staffingSummary("j");
+    await client.checkIn("j", { personId: "p", positionId: "pos", incidentId: "i" });
+    await client.scanCheckIn("j", { badgeToken: "abc", positionId: "pos" });
+    await client.checkOut("c/1");
+    await client.issueBadge("j", { personId: "p", label: "Planning Section Chief" });
+    await client.createShift("j", { positionId: "pos", startsAt: "2026-09-23T08:00:00.000Z", endsAt: "2026-09-23T20:00:00.000Z" });
+    const calls = fetchImpl.mock.calls.map(([url, init]) => [url, (init as RequestInit).method, (init as RequestInit).body]);
+    expect(calls).toEqual([
+      ["/api/v1/jurisdictions/j%2F1/staffing?cursor=next", "GET", undefined],
+      ["/api/v1/jurisdictions/j/staffing", "GET", undefined],
+      ["/api/v1/jurisdictions/j/checkins", "POST", JSON.stringify({ personId: "p", positionId: "pos", incidentId: "i" })],
+      ["/api/v1/jurisdictions/j/checkins/scan", "POST", JSON.stringify({ badgeToken: "abc", positionId: "pos" })],
+      ["/api/v1/checkins/c%2F1/checkout", "POST", undefined],
+      ["/api/v1/jurisdictions/j/badges", "POST", JSON.stringify({ personId: "p", label: "Planning Section Chief" })],
+      ["/api/v1/jurisdictions/j/shifts", "POST",
+        JSON.stringify({ positionId: "pos", startsAt: "2026-09-23T08:00:00.000Z", endsAt: "2026-09-23T20:00:00.000Z" })],
+    ]);
+  });
+});
