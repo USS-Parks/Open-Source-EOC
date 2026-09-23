@@ -343,6 +343,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         incidentId={incident.selectedIncidentId}
         incidentName={incident.selectedIncident?.name ?? null}
         incidentJurisdictionId={incident.selectedIncident?.jurisdictionId ?? null}
+        incidentBoardsLoading={incident.incidentBoardsLoading}
         periodRevision={workspace.selectedPeriodRevision}
         operationalPeriod={workspace.selectedPeriodRevision === null ? null : workspace.selectedPeriodLabel}
         incidentCanManage={incident.selectedIncident?.canEditArea ?? false}
@@ -459,6 +460,14 @@ function sectionForNav(key: string): Surface {
   }
 }
 
+export function incidentBoardScopePending(
+  routeIncidentId: string | undefined,
+  selectedIncidentId: string | null,
+  incidentBoardsLoading: boolean,
+): boolean {
+  return Boolean(routeIncidentId) && (selectedIncidentId !== routeIncidentId || incidentBoardsLoading);
+}
+
 function Center(props: {
   surface: Surface;
   recordId: string | undefined;
@@ -475,6 +484,7 @@ function Center(props: {
   incidentId: string | null;
   incidentName: string | null;
   incidentJurisdictionId: string | null;
+  incidentBoardsLoading: boolean;
   periodRevision: number | null;
   operationalPeriod: string | null;
   incidentCanManage: boolean;
@@ -573,6 +583,8 @@ function Center(props: {
     case "boards":
       return <BoardsIndex boards={props.boards} onOpen={props.onOpenBoard} />;
     case "board":
+      if (incidentBoardScopePending(props.routeContext.incidentId, props.incidentId, props.incidentBoardsLoading))
+        return <Loading label="Loading board…" />;
       return <BoardSurface client={props.client} boardId={s.id} incidentId={props.routeContext.incidentId ?? null}
         incidentScoped={Boolean(props.routeContext.incidentId) && props.incidentBoardIds.has(s.id)}
         {...(props.isAdmin && props.isInstanceAdmin ? { onDesign: () => props.onNavigate({ kind: "board-design", id: s.id }) } : {})}

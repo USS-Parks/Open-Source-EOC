@@ -33,6 +33,7 @@ export interface IncidentValue {
   readonly error: string | null;
   readonly selectedIncidentId: string | null;
   readonly selectedIncident: IncidentSummary | null;
+  readonly incidentBoardsLoading: boolean;
   /** Board ids the selected incident uses, so a surface can tag a contributed
    *  record with the incident only when its board belongs to it (VEOC-79B2). */
   readonly incidentBoardIds: ReadonlySet<string>;
@@ -154,13 +155,14 @@ export function IncidentProvider(props: { children: ReactNode }) {
       error: incidents.error,
       selectedIncidentId: selected?.id ?? null,
       selectedIncident: selected,
+      incidentBoardsLoading: boards.loading,
       incidentBoardIds,
       incidentBoards,
       selectionNotice,
       selectIncident,
       reload: incidents.reload,
     };
-  }, [list, selectedId, incidentBoardIds, incidentBoards, selectionNotice, selectIncident, incidents.loading, incidents.error, incidents.reload]);
+  }, [list, selectedId, boards.loading, incidentBoardIds, incidentBoards, selectionNotice, selectIncident, incidents.loading, incidents.error, incidents.reload]);
 
   return <IncidentContext.Provider value={value}>{props.children}</IncidentContext.Provider>;
 }
