@@ -15,7 +15,6 @@ const WEB_SRC = fileURLToPath(new URL("../../", import.meta.url));
 
 /** Operator routes with no screen yet, each with the reason. Remove an entry when it gains a caller. */
 const AWAITING_SCREEN: Readonly<Record<string, string>> = {
-  "POST /api/v1/boards/:boardId/local-fields": "local board fields have no designer control yet",
 };
 
 interface CallSite {

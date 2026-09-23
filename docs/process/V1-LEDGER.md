@@ -2004,3 +2004,57 @@ tagging remain separately gated as section 1 of the roster states.
   duplicate detection and a group column in CSV import.
 - **Rollback:** revert the code; 0120 only adds, and its `scheduler_due`
   behaves as before for rules and briefings.
+
+## V1 W4.1 part two: board screen controls
+
+- **What changed.** The board engine's controls, in `web/src/boards/**` and
+  `BoardSurface.tsx`:
+  - The designer takes up to four label fields on a reference field, gains a
+    Record access tab setting read and edit grants with a plain explanation of
+    each, and a Local fields tab that lists a board's `x_` fields and adds new
+    ones, which removed the last entry from the route-coverage awaiting list.
+  - "Filter, sort and group" on the board view builds conditions over every
+    view operator, up to four sort keys, one group field with counts, and the
+    archived option, all applied by the server and carried by "Load more
+    records"; the table's order matches the server's.
+  - Record detail offers archive and restore to writers the edit rule admits,
+    delete to jurisdiction admins behind a confirmation that says it is
+    recorded and cannot be undone from the screen, and a "Change history" tab
+    of who, position, when and each field before and after, a page at a time.
+  - Export downloads the current view as CSV or Excel; import maps a file's
+    headings to fields, checks the file without writing and lists every row
+    error, and enables Import only after a clean check of the current file and
+    mapping. New `ViewRefine.tsx`, `RecordHistory.tsx`, `BoardImport.tsx`,
+    `record-access.tsx`.
+  - Restricted boards: the board screen says offline sync is unavailable;
+    Smart Forms marks such boards and does not queue for them; the sync client
+    recognizes the refusal and keeps that work on the device without asking for
+    a new session, so the continuity panel and field queue still deliver other
+    boards' work. This replaces a loop of "Restore session" and the same
+    refusal.
+- **Deviations.** The designer cannot yet author `where`, sorts or groups into
+  a template's own views; operators apply them per read, as the guide says.
+  Filter settings live on the screen, not in the URL. Label fields are typed as
+  keys. Import headings are read by the server's first check, because the web
+  app has no spreadsheet reader. Ownership deviations: one prop in
+  `TemplatesSurface.tsx`, the restricted check in `SmartFormsSurface.tsx`, the
+  offline and field files, one exact tab name in `boards-designer-browser`, and
+  the record context test's mock.
+- **Carried forward.** The client recognizes the restricted-sync refusal by
+  its message text, because the sync route answers it with the generic
+  `auth_required` code and `server/src/sync/hub.ts` was owned by W4.12 during
+  this unit. A distinct server code follows once W4.12 lands.
+- **Schema, contract, dependencies:** none.
+- **Verification.** In the lane: `board-records-browser` 3 of 3, board-engine
+  18, boards 9, board-authoring 4, api-docs 3; the workspace, field, continuity,
+  field reports and workflow browser walks passed; `boards-designer-browser`
+  red on its first run because the new "Local fields" tab matched its search
+  for "Fields", then passed with an exact match; every web test and the shared
+  suite 657 of 657. After rebasing onto W4.0 part two and the W3 gate fix:
+  board-engine, boards, board-authoring, api-docs, every web test and the
+  shared suite 683 of 683; the board records, workspace, designer, field
+  workspaces, continuity, workflow and field reports browser walks serial all
+  passed. The route-coverage awaiting list is now empty: every operator route
+  has a screen. TypeScript and ESLint clean. Link checker 71 files.
+- **Evidence level:** unit, integration, real-database, browser and document.
+- **Rollback:** revert the commit.

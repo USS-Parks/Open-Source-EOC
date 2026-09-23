@@ -66,7 +66,7 @@ describe("no-code board authoring", () => {
     await nameField.getByLabel("name label").fill("Shelter site");
     await page.screenshot({ path: join(SHOTS, "boards-designer-wide-light.png"), fullPage: false });
 
-    await page.getByRole("tab", { name: "Fields" }).focus();
+    await page.getByRole("tab", { name: "Fields", exact: true }).focus();
     await page.keyboard.press("ArrowRight");
     expect(await page.getByRole("tab", { name: "Layouts" }).getAttribute("aria-selected")).toBe("true");
     await page.getByRole("button", { name: "Add section" }).first().click();

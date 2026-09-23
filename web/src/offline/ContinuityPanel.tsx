@@ -95,6 +95,10 @@ const copy: Record<ContinuityPhase, { label: string; tone: Status; condition: "n
     label: "Session recovery required", tone: "critical", condition: "critical",
     description: "Saved work remains on this device. Restore your session before reconnecting.",
   },
+  restricted: {
+    label: "Offline sync unavailable", tone: "warning", condition: "watch",
+    description: "A board with restricted records is never synchronized offline. Its saved work remains on this device; enter it on the board screen while connected. Other queued work was delivered.",
+  },
 };
 
 function conflictKey(scope: ContinuityScope): string {

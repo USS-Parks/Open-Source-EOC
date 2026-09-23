@@ -152,7 +152,7 @@ describe("no-code designer (INV-6)", () => {
     setByLabel("Field label", "Source record");
     setByLabel("Field type", "record_ref");
     setByLabel("Target template key", "shelters");
-    setByLabel("Target label field", "name");
+    setByLabel("Target label fields", "name");
     fireEvent.click(screen.getByLabelText("Show only when a condition matches"));
     setByLabel("Condition field", "status");
     setByLabel("Condition value", "normal");
@@ -202,6 +202,84 @@ describe("no-code designer (INV-6)", () => {
     stateKey.focus();
     fireEvent.change(stateKey, { target: { value: "opened" } });
     expect(document.activeElement).toBe(stateKey);
+  });
+
+  it("composes reference labels from several target fields, new and existing", () => {
+    const base = STANDARD_TEMPLATES.find((template) => template.key === "shelters")!;
+    const onSave = vi.fn();
+    render(<Designer base={base} onSave={onSave} />);
+    setByLabel("Field key", "host_site");
+    setByLabel("Field label", "Host site");
+    setByLabel("Field type", "record_ref");
+    setByLabel("Target template key", "shelters");
+    setByLabel("Target label fields", "name, status,");
+    fireEvent.click(screen.getByRole("button", { name: "Add field" }));
+    expect((screen.getByLabelText("Target label fields") as HTMLInputElement).value).toBe("");
+
+    fireEvent.click(screen.getByText("Host site"));
+    setByLabel("host_site label fields", "name, status, capacity, occupancy");
+    fireEvent.click(screen.getByText(`Publish version ${base.version + 1}`));
+    const saved = onSave.mock.calls[0]![0] as BoardTemplate;
+    const field = saved.fields.find((item) => item.key === "host_site")!;
+    expect(field.labelFields).toEqual(["name", "status", "capacity", "occupancy"]);
+    expect(field.labelField).toBeUndefined();
+  });
+
+  it("grants record access with plain labels and refuses an empty read list", () => {
+    const base = STANDARD_TEMPLATES.find((template) => template.key === "shelters")!;
+    const onSave = vi.fn();
+    render(<Designer base={base} onSave={onSave} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Record access" }));
+    fireEvent.click(screen.getByRole("button", { name: "Restrict individual records" }));
+    expect(screen.getAllByText(/Anyone assigned to the position the record was created under/)).toHaveLength(2);
+    expect((screen.getByLabelText("Read: The assigned position") as HTMLInputElement).disabled).toBe(true);
+    expect(screen.queryByLabelText("Edit: Board viewers")).toBeNull();
+
+    fireEvent.click(screen.getByLabelText("Read: The record's creator"));
+    fireEvent.click(screen.getByLabelText("Read: The creator's position"));
+    expect(screen.getByRole("note").textContent).toMatch(/Writers lose sight/);
+    fireEvent.click(screen.getByText(`Publish version ${base.version + 1}`));
+    expect(onSave).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Record access" }));
+    fireEvent.click(screen.getByLabelText("Read: The record's creator"));
+    fireEvent.click(screen.getByLabelText("Read: Board viewers"));
+    fireEvent.click(screen.getByLabelText("Edit: Board members"));
+    fireEvent.click(screen.getByText(`Publish version ${base.version + 1}`));
+    const saved = onSave.mock.calls[0]![0] as BoardTemplate;
+    expect(saved.recordAccess).toEqual({
+      read: [{ kind: "role", roles: ["viewer"] }, { kind: "creator" }],
+      edit: [{ kind: "role", roles: ["member"] }, { kind: "creator" }, { kind: "creator_position" }],
+    });
+  });
+
+  it("adds a local field to the board being customized", async () => {
+    const shelters = STANDARD_TEMPLATES.find((template) => template.key === "shelters")!;
+    const getBoard = vi.fn()
+      .mockResolvedValueOnce({ fields: shelters.fields })
+      .mockResolvedValue({ fields: [...shelters.fields, { key: "x_generator", label: "Generator", type: "boolean" }] });
+    const client = {
+      getBoard,
+      addLocalField: vi.fn()
+        .mockRejectedValueOnce(new ApiError(409, "field key already exists on this board"))
+        .mockResolvedValue({ ok: true }),
+    } as unknown as ApiClient;
+    render(<Designer base={shelters} onSave={() => undefined} client={client} jurisdictionId="j-1" boardId="board-1" />);
+    fireEvent.click(screen.getByRole("tab", { name: "Local fields" }));
+    await screen.findByText("This board has no local fields.");
+    setByLabel("Local field key", "generator");
+    setByLabel("Local field label", "Generator");
+    setByLabel("Local field type", "boolean");
+    expect(screen.getByText("x_generator")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add local field" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("field key already exists on this board");
+    fireEvent.click(screen.getByRole("button", { name: "Add local field" }));
+    await screen.findByText("Added x_generator to this board.");
+    expect(client.addLocalField).toHaveBeenLastCalledWith("board-1", {
+      key: "x_generator", label: "Generator", type: "boolean", required: false, read: "any", write: "member",
+    });
+    expect(await screen.findByRole("list", { name: "Local fields on this board" })).toBeTruthy();
+    expect(getBoard).toHaveBeenCalledWith("board-1");
   });
 
   it("shows a publication failure while the review tab is selected", async () => {

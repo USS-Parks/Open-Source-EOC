@@ -2,7 +2,7 @@ import { IDBFactory } from "fake-indexeddb";
 import * as Y from "yjs";
 import { describe, expect, it } from "vitest";
 import { openOfflineStore } from "../store.js";
-import { FieldClient, type SyncAck } from "../field-client.js";
+import { FieldClient, RESTRICTED_SYNC_MESSAGE, type SyncAck } from "../field-client.js";
 import { FieldSubmissionQueue } from "../../field/field-submissions.js";
 
 /**
@@ -309,4 +309,43 @@ describe("the field client works offline and survives restart", () => {
     expect(state.entries).toMatchObject([{ boardId: "board-new", receipt: { conflicts: 1 } }]);
     queue.close();
   });
+
+  it("tells a restricted board's refusal from an expired session and still delivers other boards", async () => {
+    const idb = new IDBFactory();
+    const store = await openOfflineStore(idb, "restricted-board");
+    const sent: string[] = [];
+    const fields = new FieldClient(store, "", (url) => url.includes("/boards/board-restricted?")
+      ? new RefusingSocket("records on this board are restricted; use its views") as unknown as WebSocket
+      : new ScriptedSocket(serverState({}), true, sent) as unknown as WebSocket);
+    const queue = FieldSubmissionQueue.from(store, fields);
+    await queue.enqueue(scope, "board-restricted", "record-1", { status: "closed" });
+    await queue.enqueue(scope, "board-open", "record-2", { status: "closed" });
+    await expect(fields.sync(scope, "board-restricted", "token"))
+      .rejects.toMatchObject({ code: "restricted", message: RESTRICTED_SYNC_MESSAGE });
+
+    const state = await queue.sync(scope, "token");
+    expect(state).toMatchObject({ phase: "restricted", pending: 1, message: RESTRICTED_SYNC_MESSAGE });
+    expect(sent).toHaveLength(1);
+    expect(await fields.pendingBoardIds(scope)).toEqual(["board-restricted"]);
+    queue.close();
+  });
 });
+
+/** A server that refuses the sync right after authentication. */
+class RefusingSocket {
+  onopen: ((event: Event) => void) | null = null;
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  onerror: ((event: Event) => void) | null = null;
+
+  constructor(private readonly error: string) {
+    queueMicrotask(() => this.onopen?.(new Event("open")));
+  }
+
+  send(): void {
+    queueMicrotask(() => this.onmessage?.({
+      data: JSON.stringify({ type: "error", error: this.error, code: "auth_required" }),
+    } as MessageEvent));
+  }
+
+  close(): void {}
+}

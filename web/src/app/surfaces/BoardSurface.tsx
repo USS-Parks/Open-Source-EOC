@@ -1,11 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { BoardTemplate, FieldDef, FormLayout, ViewRecord } from "@openeoc/shared";
+import { BoardImport, type ImportRun } from "../../boards/BoardImport.js";
 import { BoardView } from "../../boards/BoardView.js";
 import { RecordForm } from "../../boards/RecordForm.js";
+import { RecordHistory, type HistoryPageLoader } from "../../boards/RecordHistory.js";
 import { RecordWorkflowPanel, type RecordWorkflowSource } from "../../boards/RecordWorkflow.js";
+import { OFFLINE_SYNC_UNAVAILABLE, offlineSyncAvailable } from "../../boards/record-access.js";
+import {
+  GroupCounts,
+  NO_REFINEMENT,
+  refinedView,
+  refinementQuery,
+  ViewRefineControls,
+  type ViewRefinement,
+} from "../../boards/ViewRefine.js";
 import { ActionButton, Tabs } from "../../design/controls.js";
 import { createMetadataDraftStore, type ScopedDraftStore } from "../../design/form-drafts.js";
-import { Drawer } from "../../design/overlays.js";
+import { Drawer, ModalDialog } from "../../design/overlays.js";
 import { Icon } from "../../design/icons/Icon.js";
 import {
   createOperationalTableViewState,
@@ -31,7 +42,9 @@ import { EmptyState, ErrorNote, Loading, Scroll, SurfaceHeader } from "../screen
  * A single board: its first display view rendered as a table, with a record
  * form for writers. Validation uses the same shared schema the server
  * enforces, so the form can never submit what the server would refuse; a
- * viewer sees the data with no write affordance.
+ * viewer sees the data with no write affordance. Conditions, sort keys,
+ * grouping and archived records refine the view on the server; writers can
+ * import, and anyone who reads the view can export it.
  */
 export type BoardRecordContext =
   | { readonly status: "loading" }
@@ -47,6 +60,14 @@ export type BoardRecordContext =
       readonly onEdit: () => void;
       readonly onDownloadAttachment: (fieldKey: string) => Promise<void>;
       readonly workflow?: RecordWorkflowSource;
+      /** Archive and restore for writers the record's edit rule admits; delete for jurisdiction admins. */
+      readonly lifecycle?: {
+        readonly canArchive: boolean;
+        readonly canDelete: boolean;
+        readonly onArchive: (archived: boolean) => Promise<void>;
+        readonly onDelete: () => Promise<void>;
+      };
+      readonly history?: HistoryPageLoader;
     }
   | { readonly status: "missing" };
 
@@ -70,20 +91,30 @@ export function BoardSurface(props: {
   const viewKey = board.data?.views.some((view) => view.key === route.routeContext.view)
     ? route.routeContext.view!
     : (board.data?.views[0]?.key ?? null);
+  const [refinement, setRefinement] = useState<ViewRefinement>(NO_REFINEMENT);
+  useEffect(() => setRefinement(NO_REFINEMENT), [props.boardId]);
+  const query = useMemo(() => ({
+    ...(incidentViewId ? { incidentId: incidentViewId } : {}),
+    ...refinementQuery(refinement),
+  }), [incidentViewId, refinement]);
   const view = useAsync(
-    () => (viewKey ? props.client.boardView(props.boardId, viewKey, incidentViewId ?? undefined) : Promise.resolve(null)),
-    [incidentViewId, props.boardId, viewKey],
+    () => (viewKey ? props.client.boardViewPage(props.boardId, viewKey, query) : Promise.resolve(null)),
+    [props.boardId, query, viewKey],
   );
   // Pages added with "Load more" extend the first page they were read after,
-  // so a reload or a view change starts again from the newest records.
+  // under the same refinement, so a reload, a view change or a new refinement
+  // starts again from the first page.
   const [more, setMore] = useState<{ base: ViewRecordsResponse; records: readonly ViewRecord[]; nextCursor: string | null } | null>(null);
   const loaded = view.data && more?.base === view.data ? more
     : view.data ? { base: view.data, records: view.data.records, nextCursor: view.data.nextCursor ?? null } : null;
   const nextCursor = loaded?.nextCursor ?? null;
   const loadMore = loaded && nextCursor && viewKey ? async () => {
-    const next = await props.client.boardView(props.boardId, viewKey, incidentViewId ?? undefined, { cursor: nextCursor });
+    const next = await props.client.boardViewPage(props.boardId, viewKey, query, { cursor: nextCursor });
     setMore({ base: loaded.base, records: [...loaded.records, ...next.records], nextCursor: next.nextCursor });
   } : undefined;
+  // A caller whom a record rule restricts is never served the board for offline sync.
+  const offline = useAsync(async () => (board.data ? offlineSyncAvailable(props.client, board.data) : true),
+    [board.data, props.client]);
   const detail = useAsync(
     () => (props.recordId
       ? props.client.boardRecordDetail(props.boardId, props.recordId, incidentViewId)
@@ -99,6 +130,8 @@ export function BoardSurface(props: {
   const [editing, setEditing] = useState(false);
   const [addingDirty, setAddingDirty] = useState(false);
   const [editingDirty, setEditingDirty] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     setAdding(false);
@@ -106,6 +139,10 @@ export function BoardSurface(props: {
     setAddingDirty(false);
     setEditingDirty(false);
   }, [props.boardId, props.incidentId, props.recordId]);
+  useEffect(() => {
+    setImporting(false);
+    setNotice(null);
+  }, [props.boardId, props.incidentId]);
 
   const editRecord = useCallback(() => {
     setEditingDirty(false);
@@ -115,14 +152,33 @@ export function BoardSurface(props: {
     const value = detail.data?.data[fieldKey];
     if (typeof value !== "string") return;
     const file = await props.client.downloadFile(value);
-    const name = resources.data?.attachments[fieldKey]?.name ?? "attachment";
-    const url = URL.createObjectURL(file);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = name;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    saveBlob(file, resources.data?.attachments[fieldKey]?.name ?? "attachment");
   }, [detail.data, props.client, resources.data?.attachments]);
+  const { reload: reloadView } = view;
+  const { reload: reloadDetail } = detail;
+  // The route object changes on every render; the record callbacks read it
+  // through a ref so the record context is not republished each time.
+  const routeRef = useRef(route);
+  routeRef.current = route;
+  const archiveRecord = useCallback(async (archived: boolean) => {
+    if (!props.recordId) return;
+    if (archived) await props.client.archiveRecord(props.boardId, props.recordId);
+    else await props.client.restoreRecord(props.boardId, props.recordId);
+    reloadDetail();
+    reloadView();
+  }, [props.boardId, props.client, props.recordId, reloadDetail, reloadView]);
+  const deleteRecord = useCallback(async () => {
+    if (!props.recordId) return;
+    await props.client.deleteRecord(props.boardId, props.recordId);
+    reloadView();
+    const context = { ...routeRef.current.routeContext };
+    delete context.recordId;
+    routeRef.current.navigate({ kind: "board", id: props.boardId }, context);
+  }, [props.boardId, props.client, props.recordId, reloadView]);
+  const loadHistory = useCallback<HistoryPageLoader>((page) => props.recordId
+    ? props.client.boardRecordHistory(props.boardId, props.recordId, incidentViewId, page)
+    : Promise.resolve({ entries: [], nextCursor: null }),
+  [incidentViewId, props.boardId, props.client, props.recordId]);
 
   useEffect(() => {
     if (!props.recordId) {
@@ -159,9 +215,16 @@ export function BoardSurface(props: {
         canAct: board.data.canContribute,
         people: knownPeople(detail.data, session.me?.person ?? null),
       },
+      lifecycle: {
+        canArchive: detail.data.canEdit && board.data.canContribute,
+        canDelete: board.data.role === "admin",
+        onArchive: archiveRecord,
+        onDelete: deleteRecord,
+      },
+      history: loadHistory,
     });
     return () => props.onRecordContext?.(null);
-  }, [board.data, detail.data, detail.loading, downloadAttachment, editRecord, props.boardId, props.client, props.onRecordContext, props.recordId, resources.data, resources.loading, session.jurisdictionId, session.me]);
+  }, [archiveRecord, board.data, deleteRecord, detail.data, detail.loading, downloadAttachment, editRecord, loadHistory, props.boardId, props.client, props.onRecordContext, props.recordId, resources.data, resources.loading, session.jurisdictionId, session.me]);
 
   if (board.loading && !board.data) return <Loading label="Loading board…" />;
   if (board.error && !board.data) return <ErrorNote message={board.error} />;
@@ -175,7 +238,9 @@ export function BoardSurface(props: {
     title: b.title,
     description: "",
     fields: [...b.fields],
-    views: [...b.views],
+    // The open view carries the refinement, so the table orders and filters
+    // the rows exactly as the server read them.
+    views: b.views.map((candidate) => candidate.key === viewKey ? refinedView(candidate, refinement) : candidate),
     ...(b.inputLayout ? { inputLayout: b.inputLayout } : {}),
     ...(b.detailLayout ? { detailLayout: b.detailLayout } : {}),
   };
@@ -214,13 +279,25 @@ export function BoardSurface(props: {
     view.reload();
     detail.reload();
   }
+  async function exportView(format: "csv" | "xlsx") {
+    if (!viewKey) return;
+    setNotice(null);
+    try {
+      saveBlob(await props.client.exportBoardView(props.boardId, viewKey, format, query), `${viewKey}.${format}`);
+    } catch (reason) {
+      setNotice(`The export failed: ${reason instanceof Error ? reason.message : "unknown error"}.`);
+    }
+  }
+  const runImport: ImportRun = (file, options) => props.client.importBoardRecords(props.boardId, file, {
+    ...options, ...(incidentViewId ? { incidentId: incidentViewId } : {}),
+  });
 
   return (
     <Scroll>
       <SurfaceHeader
         title={b.title}
         actions={
-          <>
+          <div className="board-tools">
             {props.onDesign ? (
               <ActionButton kind="secondary" onClick={props.onDesign}>Customize board</ActionButton>
             ) : null}
@@ -232,9 +309,11 @@ export function BoardSurface(props: {
                 <Icon name="add" decorative size={16} /> New record
               </ActionButton>
             ) : null}
-          </>
+          </div>
         }
       />
+      {offline.data === false ? <p className="board-note" role="note">{OFFLINE_SYNC_UNAVAILABLE}</p> : null}
+      {notice ? <p className="board-note" role="status">{notice}</p> : null}
       {viewKey ? (
         <BoardWorkspace
           client={props.client}
@@ -253,6 +332,14 @@ export function BoardSurface(props: {
           onSelectRecord={navigateRecord}
           onFilter={saveFilter}
           onRetry={view.reload}
+          refinement={refinement}
+          onRefine={setRefinement}
+          groups={view.data?.groups ?? null}
+          tools={<>
+            <ActionButton onClick={() => void exportView("csv")}>Export CSV</ActionButton>
+            <ActionButton onClick={() => void exportView("xlsx")}>Export Excel</ActionButton>
+            {canWrite ? <ActionButton onClick={() => setImporting(true)}>Import records</ActionButton> : null}
+          </>}
         />
       ) : view.loading ? (
         <Loading label="Loading records…" />
@@ -299,6 +386,13 @@ export function BoardSurface(props: {
             {...(session.jurisdictionId ? { onUpload: (file: File) => uploadPickedFile(props.client, session.jurisdictionId!, file) } : {})}
           />
         ) : null}
+      </Drawer>
+      <Drawer open={importing} title={`Import ${b.title} records`} onClose={() => setImporting(false)}>
+        <BoardImport fields={b.fields} run={runImport} onImported={(created) => {
+          setImporting(false);
+          setNotice(`Imported ${created} record${created === 1 ? "" : "s"}.`);
+          view.reload();
+        }} />
       </Drawer>
     </Scroll>
   );
@@ -410,6 +504,10 @@ function BoardWorkspace(props: {
   readonly onSelectRecord: (recordId: string | null) => void;
   readonly onFilter: (filter: string | null) => void;
   readonly onRetry: () => void;
+  readonly refinement: ViewRefinement;
+  readonly onRefine: (next: ViewRefinement) => void;
+  readonly groups: ViewRecordsResponse["groups"] | null;
+  readonly tools: ReactNode;
 }) {
   const view = props.template.views.find((candidate) => candidate.key === props.viewKey)!;
   const initial = useMemo(() => tableState(view.columns), [view.columns]);
@@ -436,6 +534,13 @@ function BoardWorkspace(props: {
       <Tabs id={`board-${props.template.key}-views`} label="Board views"
         tabs={props.template.views.map((candidate) => ({ id: candidate.key, label: candidate.title }))}
         value={props.viewKey} onChange={props.onSelectView} />
+      <div className="board-tools">
+        <ViewRefineControls fields={props.template.fields} value={props.refinement} onApply={props.onRefine} />
+        {props.tools}
+      </div>
+      {props.groups && view.groupBy ? (
+        <GroupCounts field={props.template.fields.find((field) => field.key === view.groupBy)} groups={props.groups} />
+      ) : null}
       {props.error && props.records.length > 0 ? (
         <p role="alert">Showing the last loaded records. {props.error}</p>
       ) : null}
@@ -512,10 +617,27 @@ export function BoardRecordDetailPane(props: {
   readonly context: Extract<BoardRecordContext, { readonly status: "ready" }>;
 }) {
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [tab, setTab] = useState("record");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const { context } = props;
   const fields = new Map(context.fields.map((field) => [field.key, field]));
   const sections = context.layout?.sections ?? [{ key: "details", title: "Details", fields: context.fields.map((field) => field.key) }];
-  return (
+  const lifecycle = context.lifecycle;
+  const archivedAt = context.detail.archivedAt ?? null;
+  async function act(run: () => Promise<void>) {
+    setBusy(true);
+    setActionError(null);
+    try {
+      await run();
+    } catch (reason) {
+      setActionError(reason instanceof Error ? reason.message : "The server refused the change.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  const record = (
     <div style={{ display: "grid", gap: 14 }}>
       {sections.map((section) => (
         <section key={section.key} aria-labelledby={`record-section-${section.key}`}>
@@ -558,9 +680,55 @@ export function BoardRecordDetailPane(props: {
           ))}</ol>
         ) : <p>No attributed history is available.</p>}
       </section>
-      {context.canEdit ? <ActionButton kind="primary" onClick={context.onEdit}>Edit record</ActionButton> : null}
+      {archivedAt ? <p role="status">Archived {formatDate(archivedAt)}. It is left out of default views until it is restored.</p> : null}
+      <div className="board-record-actions">
+        {context.canEdit ? <ActionButton kind="primary" onClick={context.onEdit}>Edit record</ActionButton> : null}
+        {lifecycle?.canArchive ? <ActionButton loading={busy && !confirmDelete} disabled={busy}
+          onClick={() => void act(() => lifecycle.onArchive(!archivedAt))}>
+          {archivedAt ? "Restore record" : "Archive record"}
+        </ActionButton> : null}
+        {lifecycle?.canDelete ? <ActionButton kind="danger" disabled={busy} onClick={() => {
+          setActionError(null);
+          setConfirmDelete(true);
+        }}>Delete record</ActionButton> : null}
+      </div>
+      {actionError && !confirmDelete ? <p role="alert">{actionError}</p> : null}
     </div>
   );
+  const tabsId = `record-${context.detail.id}`;
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      {context.history ? <>
+        <Tabs id={tabsId} label="Record detail" value={tab} onChange={setTab}
+          tabs={[{ id: "record", label: "Record" }, { id: "history", label: "Change history" }]} />
+        <div role="tabpanel" id={`${tabsId}-${tab}-panel`} aria-labelledby={`${tabsId}-${tab}-tab`}>
+          {tab === "history"
+            ? <RecordHistory key={`${context.detail.id}:${context.detail.updatedAt}:${archivedAt ?? ""}`}
+              load={context.history} fields={context.fields} />
+            : record}
+        </div>
+      </> : record}
+      {lifecycle ? <ModalDialog open={confirmDelete} title="Delete this record?" onClose={() => setConfirmDelete(false)}
+        footer={<>
+          <ActionButton onClick={() => setConfirmDelete(false)}>Keep record</ActionButton>
+          <ActionButton kind="danger" loading={busy} loadingLabel="Deleting…"
+            onClick={() => void act(lifecycle.onDelete)}>Delete record</ActionButton>
+        </>}>
+        <p>Deleting takes the record out of every view, map, export and offline copy. The deletion is recorded in
+          its history with the values it held, and it cannot be undone from this screen.</p>
+        {actionError ? <p role="alert">{actionError}</p> : null}
+      </ModalDialog> : null}
+    </div>
+  );
+}
+
+function saveBlob(blob: Blob, name: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = name;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 function formatDetailValue(value: unknown, type: FieldDef["type"]): string {

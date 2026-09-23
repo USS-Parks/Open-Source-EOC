@@ -175,35 +175,68 @@ read the **Workflow** section of the record context.
   recorded assignment, due time or schedule. History is append-only and has no
   edit controls.
 
-### Import, export, archive and record history
+### Filter, sort and group a board view
 
-The board screen does not yet have controls for these; they are available
-through the board routes listed in the [API reference](../API.md).
+Open **Filter, sort and group** above a board's table. The changes apply to
+the open view when you choose **Apply**, are read on the server, and carry to
+**Load more records** and to exports. **Clear** returns to the view as its
+designer defined it. A refinement never shows records or fields your account
+cannot read.
 
-- **Export** a view as CSV or Excel with
-  `GET /api/v1/boards/{board}/views/{view}/export?format=csv` or
-  `format=xlsx`. The file holds the record id and the view's columns you may
-  read, under the view's filters and any conditions, sort or `archived`
-  option you add. In CSV, text that a spreadsheet would run as a formula
-  starts with a single quote. One export holds at most 50,000 records.
-- **Import** a CSV or Excel file with `POST /api/v1/boards/{board}/import`,
-  as a form upload with the file last. Each column heading maps to the field
-  with that key or label, ignoring case; an optional `mapping` form field
-  maps headings to field keys explicitly, and `null` skips a heading. The `id`
-  column is always skipped: an import creates new records. Run it first with
-  `?dryRun=true`: nothing is written and the response lists every row error
-  by row number, counting the heading row as 1. Without `dryRun`, every row
-  is written or, when any row fails, none is. An import sends no
-  notifications. The file limit is 10 MB and 10,000 rows.
-- **Archive** a record to take it out of the default views, and **restore**
-  it to bring it back. Add `archived=include` or `archived=only` to a view to
-  see archived records.
-- **Delete** is for jurisdiction administrators. The record disappears from
-  every view, map and export, and from sync documents; its history remains.
-- **History** of a record, oldest first, is at
-  `GET /api/v1/boards/{board}/records/{record}/history`: who, in which
-  position, when, and each field changed with its value before and after. An
-  update recorded before this history existed shows no earlier value.
+- **Conditions**: choose a field, an operator and a value; every condition
+  must hold. Text and enumerations offer contains, starts with, is, is not, is
+  one of and is not one of; numbers offer comparisons and is between; dates
+  offer is after, is before and is between, each against a time such as
+  "24 hours ago" or a specific time. Every listed field also offers is empty
+  and is not empty; references, people and attachments offer only those two,
+  and geometry is not listed. A condition with no value is refused with its
+  number.
+- **Sort**: add up to four sort keys, most significant first, each ascending
+  or descending.
+- **Group by**: rows arrive in order of the chosen field, and the counts above
+  the table give the records in each group over the whole view, not only the
+  loaded page.
+- **Archived records**: leave archived records out (the default), include
+  them, or list only them. An archived record carries an "Archived" tag in the
+  first column.
+
+Column filters and header sorts in the table still work on the loaded rows.
+
+### Archive, delete and read a record's history
+
+Select a record to open it in the record context.
+
+- **Archive record** takes the record out of the default views; its
+  references and history stay. It is offered to writers the record's edit
+  rule admits. List archived records as above, select one, and choose
+  **Restore record** to bring it back.
+- **Delete record** is offered to jurisdiction administrators. A confirmation
+  states that the deletion is recorded in the record's history with the values
+  it held and cannot be undone from the screen. The record then disappears
+  from every view, map, export and offline copy.
+- **Change history** lists the record's changes oldest first: what happened,
+  when, who and in which position, and each field changed with its value
+  before and after. **Load more history** reads the next page. An update
+  recorded before this history existed shows no earlier value.
+
+### Export and import board records
+
+- **Export CSV** and **Export Excel** download the open view under its current
+  refinement: the record id and the columns you may read, at most 50,000
+  records. In CSV, text that a spreadsheet would run as a formula starts with
+  a single quote; an import removes it again.
+- **Import records** is offered to writers. Choose a CSV or Excel file with a
+  heading row. The server proposes a board field for each heading that matches
+  a field key or label, ignoring case; change any under **Map columns to
+  fields**, or choose **Do not import**. The `id` column is never imported:
+  an import creates new records.
+- The file is checked as soon as it is chosen, and again with **Check file**
+  after a mapping change. The check writes nothing and lists every row error
+  by row number, counting the heading row as 1. To fix errors, correct the
+  file and choose it again; the mapping is kept.
+- **Import** is available only after a check of the current file and mapping
+  finds no errors. It writes every row or, if any row fails, none, and sends
+  no notifications. The file limit is 10 MB and 10,000 rows.
 
 ### Reach contacts and page a duty officer
 
@@ -310,6 +343,13 @@ an exact receipt. Failed means the client lacks verified acceptance; rejection
 and a lost response are both possible. Failed, conflict, or authentication-
 required states retain the supported queue for recovery. Reconnect and
 reconcile before reporting the work as received or complete.
+
+A board whose record rules restrict some of its records is not available for
+offline sync to anyone the rules restrict. Its board screen says so, and Smart
+Forms does not queue reports for it; enter them on the board screen while
+connected. Work already queued for such a board stays on the device, the
+continuity panel shows **Offline sync unavailable**, and the other queued work
+is still delivered.
 
 ## 6. Hand off the shift
 

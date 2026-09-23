@@ -255,6 +255,27 @@
   padding: var(--eoc-space-2, 8px) 0;
 }
 
+.board-designer__checks.board-access__grants {
+  display: grid;
+}
+
+.board-access__grant {
+  align-items: flex-start;
+}
+
+.board-access__grant input {
+  margin-top: 0.2rem;
+}
+
+.board-access__grant span {
+  display: grid;
+  gap: 2px;
+}
+
+.board-access__grant small {
+  color: var(--eoc-text-muted);
+}
+
 @media (max-width: 760px) {
   .board-designer__grid--2,
   .board-designer__grid--3,

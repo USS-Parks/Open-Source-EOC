@@ -1,5 +1,6 @@
 import {
   FieldClient,
+  RESTRICTED_SYNC_MESSAGE,
   SyncTransportError,
   type ContinuityScope,
   type SyncAck,
@@ -14,6 +15,7 @@ export type FieldSubmissionPhase =
   | "synced"
   | "conflict"
   | "auth_required"
+  | "restricted"
   | "failed";
 
 export interface FieldSubmissionState {
@@ -141,12 +143,19 @@ export class FieldSubmissionQueue {
     if (operations.length === 0) return this.state(scope);
     const boardIds = [...new Set(operations.map((item) => item.boardId))];
     let last: SyncAck | null = null;
+    let restricted = false;
     try {
       for (const boardId of boardIds) {
-        while ((await this.fields.pendingOperations(scope)).some((item) => item.boardId === boardId)) {
-          const receipt = await this.syncOne(scope, boardId, token);
-          if (!receipt) break;
-          last = receipt;
+        try {
+          while ((await this.fields.pendingOperations(scope)).some((item) => item.boardId === boardId)) {
+            const receipt = await this.syncOne(scope, boardId, token);
+            if (!receipt) break;
+            last = receipt;
+          }
+        } catch (error) {
+          // A restricted board is never synced; its reports stay queued and the other boards still deliver.
+          if (!(error instanceof SyncTransportError && error.code === "restricted")) throw error;
+          restricted = true;
         }
       }
       const pending = (await this.fields.pendingOperations(scope)).length;
@@ -160,6 +169,7 @@ export class FieldSubmissionQueue {
           message: `${retained.conflicts} field submission conflict${retained.conflicts === 1 ? "" : "s"} retained for review.`,
         };
       }
+      if (restricted) return { phase: "restricted", pending, receipt: last, message: RESTRICTED_SYNC_MESSAGE };
       return {
         phase: pending === 0 ? "synced" : "queued",
         pending,

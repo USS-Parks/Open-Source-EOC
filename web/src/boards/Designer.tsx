@@ -1,11 +1,13 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   allEnums,
   BoardTemplateSchema,
   DashboardTemplateSchema,
   FIELD_TYPES,
   FormDefinitionSchema,
+  LocalFieldSchema,
   READ_LEVELS,
+  referenceLabelKeys,
   templateDiff,
   WRITE_LEVELS,
   GEOMETRY_KINDS,
@@ -13,13 +15,16 @@ import {
   type BoardTemplate,
   type FieldDef,
   type FormLayout,
+  type RecordAccess,
   type ViewDef,
 } from "@openeoc/shared";
 import type { ApiClient } from "../app/api/client.js";
+import { useAsync } from "../app/data/hooks.js";
 import { ActionButton, Tabs } from "../design/controls.js";
 import { Button, EnumSelect, Panel, TextField } from "../design/components.js";
 import { BoardView } from "./BoardView.js";
 import { RecordForm } from "./RecordForm.js";
+import { RecordAccessEditor } from "./record-access.js";
 import "./designer.css";
 
 export interface DesignerPositionOption {
@@ -33,7 +38,8 @@ export interface DesignerPositionOption {
  * input, no script input, and no escape hatch by construction. Saving
  * produces the next template version; the diff is shown before save.
  * Given a client and jurisdiction, an Import tab also takes board templates,
- * forms and dashboard templates from files.
+ * forms and dashboard templates from files; given a client and the board
+ * being customized, a Local fields tab adds fields to that board alone.
  */
 export function Designer(props: {
   base?: BoardTemplate;
@@ -42,9 +48,11 @@ export function Designer(props: {
   saveLabel?: string;
   client?: ApiClient;
   jurisdictionId?: string;
+  boardId?: string;
 }) {
   const importer = props.client && props.jurisdictionId
     ? { client: props.client, jurisdictionId: props.jurisdictionId } : null;
+  const localBoard = props.client && props.boardId ? { client: props.client, boardId: props.boardId } : null;
   const [key, setKey] = useState(props.base?.key ?? "");
   const [title, setTitle] = useState(props.base?.title ?? "");
   const [description, setDescription] = useState(props.base?.description ?? "");
@@ -53,6 +61,7 @@ export function Designer(props: {
   const [inputLayout, setInputLayout] = useState<FormLayout | undefined>(props.base?.inputLayout);
   const [detailLayout, setDetailLayout] = useState<FormLayout | undefined>(props.base?.detailLayout);
   const [workflow, setWorkflow] = useState<BoardWorkflow | undefined>(props.base?.workflow);
+  const [recordAccess, setRecordAccess] = useState<RecordAccess | undefined>(props.base?.recordAccess);
   const [tab, setTab] = useState("fields");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -67,6 +76,7 @@ export function Designer(props: {
     ...(inputLayout ? { inputLayout } : {}),
     ...(detailLayout ? { detailLayout } : {}),
     ...(workflow ? { workflow } : {}),
+    ...(recordAccess ? { recordAccess } : {}),
   });
 
   async function save() {
@@ -88,7 +98,7 @@ export function Designer(props: {
   }
 
   const parsedDraft = useMemo(() => BoardTemplateSchema.safeParse(draft()),
-    [description, detailLayout, fields, inputLayout, key, title, views, workflow]);
+    [description, detailLayout, fields, inputLayout, key, recordAccess, title, views, workflow]);
   const diff =
     props.base && parsedDraft.success ? templateDiff(props.base, parsedDraft.data) : null;
 
@@ -106,7 +116,9 @@ export function Designer(props: {
       <Tabs id="board-designer" label="Board configuration" value={tab} onChange={setTab}
         tabs={[{ id: "fields", label: "Fields" }, { id: "layouts", label: "Layouts" },
           { id: "views", label: "Views" }, { id: "routing", label: "Routing" },
+          { id: "access", label: "Record access" },
           { id: "preview", label: "Review & preview" },
+          ...(localBoard ? [{ id: "local", label: "Local fields" }] : []),
           ...(importer ? [{ id: "import", label: "Import" }] : [])]} />
 
       {tab === "fields" ? <Panel title="Fields">
@@ -145,6 +157,11 @@ export function Designer(props: {
 
       {tab === "preview" ? <DesignerPreview template={parsedDraft.success ? parsedDraft.data : null}
         error={parsedDraft.success ? null : describeIssues(parsedDraft.error.issues, "board")} diff={diff} /> : null}
+
+      {tab === "access" ? <RecordAccessEditor value={recordAccess} hasWorkflow={Boolean(workflow)}
+        onChange={setRecordAccess} /> : null}
+
+      {tab === "local" && localBoard ? <LocalFields {...localBoard} /> : null}
 
       {tab === "import" && importer ? <DefinitionImport {...importer} /> : null}
 
@@ -231,6 +248,8 @@ function ExistingFieldEditor(props: {
         options={WRITE_LEVELS.map((value) => ({ value, label: value }))}
         onChange={(write) => props.onChange({ ...field, write: write as FieldDef["write"] })} />
     </div>
+    {field.type === "record_ref" ? <LabelFieldsInput label={`${field.key} label fields`}
+      value={referenceLabelKeys(field)} onChange={(keys) => props.onChange(withLabelKeys(field, keys))} /> : null}
     <div className="board-designer__field-actions">
       <Check label={`${field.key} required`} checked={field.required}
         onChange={(required) => props.onChange({ ...field, required })} />
@@ -253,7 +272,7 @@ function FieldEditor(props: { fields: readonly FieldDef[]; onAdd: (field: FieldD
   const [write, setWrite] = useState<string>("member");
   const [geometryKind, setGeometryKind] = useState<string>("any");
   const [targetBoardKey, setTargetBoardKey] = useState("");
-  const [labelField, setLabelField] = useState("");
+  const [labelKeys, setLabelKeys] = useState<string[]>([]);
   const [conditionEnabled, setConditionEnabled] = useState(false);
   const [conditionField, setConditionField] = useState("");
   const [conditionOp, setConditionOp] = useState<string>("eq");
@@ -278,7 +297,7 @@ function FieldEditor(props: { fields: readonly FieldDef[]; onAdd: (field: FieldD
       write,
       ...(type === "enum" && enumId ? { enumId } : {}),
       ...(type === "geometry" ? { geometryKind } : {}),
-      ...(type === "record_ref" ? { targetBoardKey, labelField } : {}),
+      ...(type === "record_ref" ? withLabelKeys({ targetBoardKey }, labelKeys) : {}),
       ...(conditionEnabled && conditionField ? {
         condition: { field: conditionField, op: conditionOp, value: configuredConditionValue },
       } : {}),
@@ -292,7 +311,7 @@ function FieldEditor(props: { fields: readonly FieldDef[]; onAdd: (field: FieldD
     setEnumId(defaultEnumId);
     setRequired(false);
     setTargetBoardKey("");
-    setLabelField("");
+    setLabelKeys([]);
     setConditionEnabled(false);
     setConditionField("");
     setConditionValue("");
@@ -321,7 +340,7 @@ function FieldEditor(props: { fields: readonly FieldDef[]; onAdd: (field: FieldD
         ) : null}
         {type === "record_ref" ? <>
           <TextField label="Target template key" value={targetBoardKey} onChange={setTargetBoardKey} />
-          <TextField label="Target label field" value={labelField} onChange={setLabelField} />
+          <LabelFieldsInput label="Target label fields" value={labelKeys} onChange={setLabelKeys} />
         </> : null}
         <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input
@@ -784,6 +803,111 @@ async function importDefinition(client: ApiClient, jurisdictionId: string, kind:
   if (!dashboard.success) throw new Error(describeIssues(dashboard.error.issues, "dashboard template"));
   const result = await client.importDashboardTemplate(dashboard.data);
   return `Dashboard template ${dashboard.data.title} (${result.key}), version ${result.version}`;
+}
+
+const LOCAL_TYPES = FIELD_TYPES.filter((type) => type !== "record_ref");
+const levelOptions = (levels: readonly string[]) => levels.map((value) => ({ value, label: value }));
+
+/**
+ * Local fields: `x_` fields an administrator adds to one board at once,
+ * outside any template version. They are never required, and a later
+ * template version adding a field of the same name replaces them.
+ */
+function LocalFields(props: { client: ApiClient; boardId: string }) {
+  const board = useAsync(() => props.client.getBoard(props.boardId), [props.boardId]);
+  const [key, setKey] = useState("");
+  const [label, setLabel] = useState("");
+  const [type, setType] = useState<string>("text");
+  const [values, setValues] = useState("");
+  const [geometryKind, setGeometryKind] = useState<string>("any");
+  const [read, setRead] = useState<string>("any");
+  const [write, setWrite] = useState<string>("member");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [added, setAdded] = useState<string | null>(null);
+  const trimmed = key.trim();
+  const fullKey = trimmed && !trimmed.startsWith("x_") ? `x_${trimmed}` : trimmed;
+  const locals = (board.data?.fields ?? []).filter((field) => field.key.startsWith("x_"));
+
+  async function add() {
+    setError(null);
+    setAdded(null);
+    const parsed = LocalFieldSchema.safeParse({
+      key: fullKey, label, type, required: false, read, write,
+      ...(type === "enum" ? { values: values.split(",").map((value) => value.trim()).filter(Boolean) } : {}),
+      ...(type === "geometry" ? { geometryKind } : {}),
+    });
+    if (!parsed.success) {
+      setError(describeIssues(parsed.error.issues, "local field"));
+      return;
+    }
+    setBusy(true);
+    try {
+      await props.client.addLocalField(props.boardId, parsed.data);
+      setAdded(parsed.data.key);
+      setKey(""); setLabel(""); setValues("");
+      board.reload();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "The local field was not added.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <Panel title="Local fields">
+    <div className="board-designer__stack">
+      <p>A local field is added to this board now, without publishing a template version. Its key starts
+        with <code>x_</code>, it is never required, and a later template version that adds a field of the same
+        name replaces it. Record rules, conditions, calculations and references need a template version.</p>
+      {board.error ? <p role="alert">{board.error}</p> : null}
+      {locals.length ? <ul aria-label="Local fields on this board">
+        {locals.map((field) => <li key={field.key}><strong>{field.label}</strong> <code>{field.key}: {field.type}</code></li>)}
+      </ul> : board.data ? <p>This board has no local fields.</p> : null}
+      <div className="board-designer__grid board-designer__grid--3">
+        <Input label="Local field key" value={key} onChange={setKey} />
+        <Input label="Local field label" value={label} onChange={setLabel} />
+        <Select label="Local field type" value={type} options={levelOptions(LOCAL_TYPES)} onChange={setType} />
+        {type === "enum" ? <Input label="Allowed values, separated by commas" value={values} onChange={setValues} /> : null}
+        {type === "geometry" ? <Select label="Local geometry kind" value={geometryKind}
+          options={levelOptions(GEOMETRY_KINDS)} onChange={setGeometryKind} /> : null}
+        <Select label="Local field readable by" value={read} options={levelOptions(READ_LEVELS)} onChange={setRead} />
+        <Select label="Local field writable by" value={write} options={levelOptions(WRITE_LEVELS)} onChange={setWrite} />
+      </div>
+      {fullKey ? <p>Saved as <code>{fullKey}</code>.</p> : null}
+      {error ? <p role="alert" style={{ color: "var(--eoc-status-critical)" }}>{error}</p> : null}
+      {added ? <p role="status">Added {added} to this board.</p> : null}
+      <div><ActionButton kind="primary" loading={busy} disabled={busy} onClick={() => void add()}>Add local field</ActionButton></div>
+    </div>
+  </Panel>;
+}
+
+/** Target field keys for a reference label, typed as a comma list; up to four, in display order. */
+function LabelFieldsInput(props: { label: string; value: readonly string[]; onChange: (keys: string[]) => void }) {
+  const hintId = useId();
+  const [raw, setRaw] = useState(props.value.join(", "));
+  const parse = (text: string) => text.split(",").map((item) => item.trim()).filter(Boolean);
+  // A change from outside, such as the reset after adding a field, replaces the typed text.
+  const shown = parse(raw).join(",") === props.value.join(",") ? raw : props.value.join(", ");
+  return <div className="board-designer__stack">
+    <label className="board-designer__control"><span>{props.label}</span>
+      <input value={shown} aria-describedby={hintId} onChange={(event) => {
+        setRaw(event.target.value);
+        props.onChange(parse(event.target.value));
+      }} />
+    </label>
+    <small id={hintId} className="board-designer__field-note">
+      Up to four target field keys, in display order, separated by commas. The label joins their values with &quot; / &quot;.
+    </small>
+  </div>;
+}
+
+/** A reference's label keys as a template stores them: one as `labelField`, several as `labelFields`. */
+function withLabelKeys<T extends object>(field: T, keys: readonly string[]): T {
+  const rest = { ...field } as T & { labelField?: string; labelFields?: string[] };
+  delete rest.labelField;
+  delete rest.labelFields;
+  if (keys.length === 1) return { ...rest, labelField: keys[0]! };
+  return keys.length ? { ...rest, labelFields: [...keys] } : rest;
 }
 
 async function toBase64(file: Blob): Promise<string> {

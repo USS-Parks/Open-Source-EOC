@@ -733,3 +733,27 @@ describe("ApiClient screens for existing engines", () => {
       JSON.stringify({ rows: [{ parcelId: "P1", address: "1 Main", structureType: "single_family", replacementValue: 100 }] })]);
   });
 });
+
+describe("board view refinements and local fields", () => {
+  it("sends view refinements with the page cursor and posts a local field", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(res(200, { records: [], nextCursor: null }));
+    const client = new ApiClient({ fetchImpl });
+    await client.boardViewPage("b/1", "all", {
+      incidentId: "i1", archived: "include", groupBy: "status",
+      where: [{ field: "summary", op: "contains", value: "bridge" }],
+      sorts: [{ field: "status", dir: "asc" }, { field: "quantity", dir: "desc" }],
+    }, { cursor: "next" });
+    const url = new URL(String(fetchImpl.mock.calls[0]?.[0]), "http://local");
+    expect(url.pathname).toBe("/api/v1/boards/b%2F1/views/all");
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      incidentId: "i1", archived: "include", groupBy: "status", cursor: "next",
+      where: JSON.stringify([{ field: "summary", op: "contains", value: "bridge" }]),
+      sort: "status:asc,quantity:desc",
+    });
+    fetchImpl.mockResolvedValueOnce(res(201, { ok: true }));
+    const field = { key: "x_generator", label: "Generator", type: "boolean" as const, required: false, read: "any" as const, write: "member" as const };
+    expect(await client.addLocalField("b/1", field)).toEqual({ ok: true });
+    expect(fetchImpl.mock.calls[1]).toEqual(["/api/v1/boards/b%2F1/local-fields",
+      expect.objectContaining({ method: "POST", body: JSON.stringify(field) })]);
+  });
+});

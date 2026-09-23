@@ -33,13 +33,29 @@ export interface SyncAck {
   readonly exact: boolean;
 }
 
-export type SyncErrorCode = "auth_required" | "conflict" | "failed";
+/** `restricted`: the board has record rules this caller does not pass for every record, so it is never synced. */
+export type SyncErrorCode = "auth_required" | "conflict" | "failed" | "restricted";
 
 export class SyncTransportError extends Error {
   constructor(readonly code: SyncErrorCode, message: string) {
     super(message);
     this.name = "SyncTransportError";
   }
+}
+
+export const RESTRICTED_SYNC_MESSAGE =
+  "Offline sync is unavailable for this board: some of its records are restricted. Its queued work stays on this device; enter it on the board screen while connected.";
+
+/**
+ * The server refuses a restricted board with its authorization code and this
+ * message; it is told apart here so the refusal is not taken for an expired
+ * session, which a new session would not cure.
+ */
+function syncFailure(code: SyncErrorCode | undefined, message: string | undefined): SyncTransportError {
+  if (message?.startsWith("records on this board are restricted")) {
+    return new SyncTransportError("restricted", RESTRICTED_SYNC_MESSAGE);
+  }
+  return new SyncTransportError(code ?? "failed", message ?? "sync failed");
 }
 
 export type PushFn = (
@@ -290,7 +306,7 @@ export class FieldClient {
           });
         } else if (message.type === "error") {
           clearTimeout(timer);
-          reject(new SyncTransportError(message.code ?? "failed", message.error ?? "sync failed"));
+          reject(syncFailure(message.code, message.error));
         }
         };
         void handle().catch((error: unknown) => {

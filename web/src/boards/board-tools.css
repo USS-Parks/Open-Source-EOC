@@ -1,0 +1,224 @@
+.board-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eoc-space-2, 8px);
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.board-tools > .board-refine {
+  flex: 1 1 320px;
+}
+
+.board-note {
+  margin: 0 0 var(--eoc-space-3, 12px);
+  border: 1px solid var(--eoc-border);
+  border-left: 4px solid var(--eoc-status-info);
+  border-radius: var(--eoc-radius-md, 6px);
+  background: var(--eoc-surface);
+  padding: var(--eoc-space-2, 8px) var(--eoc-space-3, 12px);
+}
+
+.board-refine {
+  min-width: 0;
+  border: 1px solid var(--eoc-border);
+  border-radius: var(--eoc-radius-md, 6px);
+  background: var(--eoc-surface);
+  padding: 0 var(--eoc-space-3, 12px);
+}
+
+.board-refine summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eoc-space-1, 4px) var(--eoc-space-3, 12px);
+  align-items: baseline;
+  min-height: 42px;
+  padding: var(--eoc-space-2, 8px) 0;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.board-refine summary small,
+.board-refine p,
+.board-history small {
+  color: var(--eoc-text-muted);
+  font-weight: 400;
+}
+
+.board-refine p {
+  margin: 0;
+}
+
+.board-refine__body {
+  display: grid;
+  gap: var(--eoc-space-3, 12px);
+  padding-bottom: var(--eoc-space-3, 12px);
+}
+
+.board-refine__group {
+  display: grid;
+  gap: var(--eoc-space-2, 8px);
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--eoc-border);
+  padding: var(--eoc-space-2, 8px) 0 0;
+}
+
+.board-refine__group legend {
+  padding: 0;
+  font-weight: 700;
+}
+
+.board-refine__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--eoc-space-2, 8px);
+  align-items: end;
+}
+
+.board-refine__control {
+  display: grid;
+  gap: var(--eoc-space-1, 4px);
+  min-width: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.board-refine__control input,
+.board-refine__control select,
+.board-import select,
+.board-import input[type="file"] {
+  box-sizing: border-box;
+  min-height: 42px;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--eoc-border);
+  border-radius: var(--eoc-radius-sm, 4px);
+  background: var(--eoc-surface);
+  color: var(--eoc-text);
+  font: inherit;
+  padding: 0.4rem 0.5rem;
+}
+
+.board-refine__checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eoc-space-1, 4px) var(--eoc-space-3, 12px);
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.board-refine__checks legend {
+  padding: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.board-refine__checks label {
+  display: inline-flex;
+  gap: var(--eoc-space-1, 4px);
+  align-items: center;
+  min-height: 32px;
+}
+
+.board-refine__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eoc-space-2, 8px);
+}
+
+.board-refine__counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eoc-space-2, 8px);
+  align-items: center;
+}
+
+.board-refine__counts ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eoc-space-2, 8px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.board-refine__counts li {
+  border: 1px solid var(--eoc-border);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.board-archived-tag {
+  margin-left: var(--eoc-space-1, 4px);
+  color: var(--eoc-text-muted);
+  font-size: 0.8em;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.board-history {
+  display: grid;
+  gap: var(--eoc-space-2, 8px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.board-history > li {
+  border-bottom: 1px solid var(--eoc-border);
+  padding-bottom: var(--eoc-space-2, 8px);
+}
+
+.board-history dl {
+  display: grid;
+  gap: 2px;
+  margin: var(--eoc-space-1, 4px) 0 0;
+}
+
+.board-history dl > div {
+  display: grid;
+  grid-template-columns: minmax(80px, 0.4fr) minmax(0, 1fr);
+  gap: var(--eoc-space-2, 8px);
+}
+
+.board-history dt {
+  color: var(--eoc-text-muted);
+}
+
+.board-history dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.board-record-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eoc-space-2, 8px);
+}
+
+.board-import {
+  display: grid;
+  gap: var(--eoc-space-3, 12px);
+  min-width: 0;
+}
+
+.board-import p {
+  margin: 0;
+}
+
+.board-import table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.board-import th,
+.board-import td {
+  border-bottom: 1px solid var(--eoc-border);
+  padding: var(--eoc-space-1, 4px) var(--eoc-space-2, 8px) var(--eoc-space-1, 4px) 0;
+  text-align: start;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}

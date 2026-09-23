@@ -2,6 +2,7 @@ import type { TaskCompletionReceipt } from "@openeoc/shared";
 import {
   type ContinuityScope,
   type FieldClient,
+  RESTRICTED_SYNC_MESSAGE,
   type SyncAck,
   SyncTransportError,
 } from "./field-client.js";
@@ -18,7 +19,8 @@ export type ContinuityPhase =
   | "synced"
   | "conflict"
   | "failed"
-  | "auth_required";
+  | "auth_required"
+  | "restricted";
 
 export interface ContinuitySnapshot {
   readonly scope: ContinuityScope;
@@ -103,9 +105,18 @@ export class ContinuityCoordinator {
     const boardReceipts: SyncAck[] = [];
     try {
       const queuedBoardOperations = await this.fields.pendingOperations(scope);
+      // A restricted board is never served for sync; its work stays queued
+      // and the other boards and tasks still deliver.
+      const restricted = new Set<string>();
       for (const operation of queuedBoardOperations) {
-        const receipt = await adapters.syncBoard(operation.boardId);
-        if (receipt) boardReceipts.push(receipt);
+        if (restricted.has(operation.boardId)) continue;
+        try {
+          const receipt = await adapters.syncBoard(operation.boardId);
+          if (receipt) boardReceipts.push(receipt);
+        } catch (error) {
+          if (!(error instanceof SyncTransportError && error.code === "restricted")) throw error;
+          restricted.add(operation.boardId);
+        }
       }
       const taskReceipts = await this.tasks.flush(
         scope.personId,
@@ -115,9 +126,9 @@ export class ContinuityCoordinator {
       const conflicts = retainedConflicts +
         boardReceipts.reduce((total, receipt) => total + receipt.conflicts, 0);
       await this.save(scope, {
-        phase: conflicts > 0 ? "conflict" : "synced",
+        phase: conflicts > 0 ? "conflict" : restricted.size > 0 ? "restricted" : "synced",
         conflicts,
-        lastError: null,
+        lastError: restricted.size > 0 ? RESTRICTED_SYNC_MESSAGE : null,
       });
       return { snapshot: await this.snapshot(scope), boardReceipts, taskReceipts };
     } catch (error) {

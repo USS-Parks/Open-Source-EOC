@@ -36,22 +36,73 @@ Test long names, missing values, narrow screens, and keyboard operation. A
 missing column value should remain visibly missing rather than becoming a
 synthetic default.
 
+## Reference labels from several fields
+
+A `record_ref` field names its target board and the target fields its label
+is made from. In the **Fields** tab, **Target label fields** takes up to four
+target field keys, in display order, separated by commas, for example
+`unit_id, name, station`; an existing reference field has the same control as
+*key* **label fields** when its row is opened. The label joins the values with
+" / ". One key is stored as `labelField`, several as `labelFields`. A label
+field the reader cannot read is left out of the label; a reader who can read
+none of them cannot pick or save the reference.
+
+## Restrict individual records
+
+The **Record access** tab limits who may read and who may edit each record,
+beyond the board's own roles. **Restrict individual records** starts a rule
+where the record's creator and the creator's position read and edit; **Remove
+record restriction** takes the rule away. Each grant is a checkbox with its
+meaning beside it, under **Who may read a record** and **Who may edit a
+record**, and any one checked grant is enough:
+
+- **Board members**: every holder of the member role on the board. An incident
+  participant from another organization counts as a member.
+- **Board viewers** and **Guests**: every holder of that role. They can hold
+  read grants only.
+- **The record's creator**: the person who created the record.
+- **The creator's position**: anyone assigned to the position the record was
+  created under.
+- **The assigned position**: anyone assigned to the position the record's
+  workflow is currently assigned to. It needs workflow routing.
+
+Each list needs at least one grant; the review tab names an empty one. The
+template stores the rule as `recordAccess` with `read` and `edit` lists.
+
+Jurisdiction administrators always read and edit every record. The database
+applies the rule, so a restricted record is absent from views, exports,
+reference choices, record detail, history, the chronology, dashboards and map
+layers for anyone it excludes, and so are files attached to it. Keep the
+creator or the creator's position in the read list unless writers should lose
+sight of what they submit; the tab warns when neither is checked. A person who
+cannot read every record of a board cannot open it for offline sync: the board
+screen says so, Smart Forms does not queue reports for it, and the continuity
+panel keeps any work queued for it on the device without asking for a new
+session.
+
+Two paths an administrator configures are not governed by the rule: a
+notification rule delivers the record to the destinations it names, and a
+sharing agreement sends the board's live edits to the partner instance. Point
+neither at a board whose records some people must not see unless every
+destination may see them all.
+
+## Local fields
+
+The **Local fields** tab appears when customizing an existing board. It adds a
+field to that board at once, without publishing a template version, and lists
+the local fields the board already has. A local field key starts with `x_`;
+the tab adds the prefix when it is missing. A local field is never required,
+cannot be a reference, and has no condition or calculation. Only a
+jurisdiction administrator can add one. When a later template version adds a
+field with the same key without the prefix, the upgrade replaces the local
+field with the template's.
+
 ## Template properties beyond the designer screen
 
-The properties below are part of the template definition and are validated
-when a version is registered or imported. Until the designer screen offers
-controls for them, add them to the template JSON of a new version.
-
-### Reference labels from several fields
-
-A `record_ref` field names its target board with `targetBoardKey` and the
-label operators see with `labelField`. To compose the label from more than one
-target field, list up to four keys in `labelFields`, in display order, for
-example `["unit_id", "name", "station"]`. The label joins the values with
-" / ". A label field the reader cannot read is left out of the label; a
-reader who can read none of them cannot pick or save the reference.
-
-### View conditions, sorts and groups
+View conditions, sort keys and groups are part of the template definition and
+are validated when a version is registered or imported. The designer's view
+editor offers the `eq`, `neq` and `in` filters and one sort key; add the
+properties below to the template JSON of a new version.
 
 - `filter` keeps its `eq`, `neq` and `in` rules. `where` adds conditions with
   more operators, all of which must hold: `not_in`, `contains` and
@@ -67,45 +118,18 @@ reader who can read none of them cannot pick or save the reference.
   the view carries the record count of each group over every matching record.
   A group field cannot be a geometry or calculated field.
 
-Operators can refine a view for one read with the same conditions, sort keys
-and group field; a refinement never widens what the reader may see.
+Operators refine a view for one read with the same conditions, sort keys and
+group field under **Filter, sort and group** on the board screen; a refinement
+never widens what the reader may see.
 
-### Restrict individual records
-
-`recordAccess` limits who may read and who may edit each record, beyond the
-board's own roles. It has a `read` list and an `edit` list of grants, and any
-one grant is enough:
-
-- `{ "kind": "role", "roles": ["member", "viewer", "guest"] }`: every holder
-  of a listed board role. An incident participant from another organization
-  counts as a member. Only `member` may appear in an edit grant.
-- `{ "kind": "creator" }`: the person who created the record.
-- `{ "kind": "creator_position" }`: anyone assigned to the position the
-  record was created under.
-- `{ "kind": "assigned_position" }`: anyone assigned to the position the
-  record's workflow is currently assigned to. The board needs a workflow.
-
-Jurisdiction administrators always read and edit every record. The database
-applies the rule, so a restricted record is absent from views, exports,
-reference choices, record detail, history, the chronology, dashboards and map
-layers for anyone it excludes, and so are files attached to it. Include
-`creator` or `creator_position` in the read list unless writers should lose
-sight of what they submit. A caller who cannot read every record of a board
-cannot open it for offline sync; they use its views.
-
-Two paths an administrator configures are not governed by the rule: a
-notification rule delivers the record to the destinations it names, and a
-sharing agreement sends the board's live edits to the partner instance. Point
-neither at a board whose records some people must not see unless every
-destination may see them all.
-
-### Archive and delete
+## Archive and delete
 
 Board writers who may edit a record can archive it: it leaves the default
 views and returns when restored, with references and history unchanged.
 Jurisdiction administrators can delete a record. Deletion keeps the row as a
 tombstone that no read path returns, records the prior values in the history,
-and removes the record from sync documents. Neither needs a template property.
+and removes the record from sync documents. Neither needs a template property;
+both are in the record detail on the board screen.
 
 ## Preview and publish a revision
 

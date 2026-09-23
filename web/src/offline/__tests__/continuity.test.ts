@@ -2,7 +2,7 @@ import type { TaskCompletionReceipt } from "@openeoc/shared";
 import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it } from "vitest";
 import { ContinuityCoordinator } from "../continuity.js";
-import { FieldClient, SyncTransportError } from "../field-client.js";
+import { FieldClient, RESTRICTED_SYNC_MESSAGE, SyncTransportError } from "../field-client.js";
 import { openOfflineStore } from "../store.js";
 import { TaskCompletionQueue } from "../task-completions.js";
 
@@ -96,6 +96,38 @@ describe("offline continuity state adapter", () => {
       phase: "auth_required",
       pendingBoardIds: [boardId],
       pendingTaskOperationIds: [taskOperationId],
+    });
+    store.close();
+  });
+
+  it("keeps a restricted board's work queued without asking for a new session and delivers the rest", async () => {
+    const store = await openOfflineStore(new IDBFactory(), "continuity-restricted");
+    const fields = new FieldClient(store);
+    const tasks = new TaskCompletionQueue(store);
+    const coordinator = new ContinuityCoordinator(store, fields, tasks);
+    const openBoard = "99999999-9999-4999-8999-999999999999";
+    await fields.open(scope, boardId);
+    await fields.edit(scope, boardId, "record-1", { status: "closed" });
+    await fields.open(scope, openBoard);
+    await fields.edit(scope, openBoard, "record-2", { status: "closed" });
+    await tasks.enqueue({ ...scope, taskId, operationId: taskOperationId });
+    const synced: string[] = [];
+    const result = await coordinator.reconnect(scope, {
+      syncBoard: async (id) => {
+        if (id === boardId) throw new SyncTransportError("restricted", RESTRICTED_SYNC_MESSAGE);
+        synced.push(id);
+        return fields.flush(scope, id, async (operation) => ({
+          operationId: operation.operationId, seq: 3, conflicts: 0, exact: true,
+        }));
+      },
+      completeTask: async () => taskReceipt(),
+    });
+    expect(synced).toEqual([openBoard]);
+    expect(result.snapshot).toMatchObject({
+      phase: "restricted",
+      pendingBoardIds: [boardId],
+      pendingTaskOperationIds: [],
+      lastError: RESTRICTED_SYNC_MESSAGE,
     });
     store.close();
   });

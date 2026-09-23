@@ -2150,6 +2150,12 @@ export class ApiClient {
   getMassNotification(massNotificationId: string): Promise<MassNotificationDetail> {
     return this.request("GET", `/api/v1/mass-notifications/${encodeURIComponent(massNotificationId)}`);
   }
+
+  // ---- Board local fields ----
+  /** Adds an `x_` field to one board at once, outside any template version; jurisdiction admins only. */
+  addLocalField(boardId: string, field: FieldDef): Promise<{ ok: true }> {
+    return this.request("POST", `/api/v1/boards/${encodeURIComponent(boardId)}/local-fields`, field as unknown as Record<string, unknown>);
+  }
 }
 
 // ---- Notification channel types ----

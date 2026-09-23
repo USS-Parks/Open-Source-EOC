@@ -7,6 +7,7 @@ import {
   type OperationalTableColumn,
   type OperationalTableViewState,
 } from "../design/table.js";
+import "./board-tools.css";
 
 /**
  * Display view: a board's records through one of its declared views.
@@ -37,11 +38,12 @@ function ResolvedBoardView(props: Parameters<typeof BoardView>[0] & {
   view: BoardTemplate["views"][number];
 }) {
   const fields = useMemo(() => new Map(props.template.fields.map((field) => [field.key, field])), [props.template.fields]);
-  const columns = useMemo<readonly OperationalTableColumn<ViewRecord>[]>(() => props.view.columns.map((key) => ({
+  const columns = useMemo<readonly OperationalTableColumn<ViewRecord>[]>(() => props.view.columns.map((key, index) => ({
     id: key,
     header: fields.get(key)?.label ?? key,
     value: (record) => formatCell(record[key]),
-    render: (record) => <span title={formatCell(record[key])}>{formatCell(record[key])}</span>,
+    render: (record) => <span title={formatCell(record[key])}>{formatCell(record[key])}
+      {index === 0 && record.archivedAt ? <span className="board-archived-tag">Archived</span> : null}</span>,
     sortable: true,
     filterable: true,
     missingLabel: "Unavailable",
@@ -57,7 +59,7 @@ function ResolvedBoardView(props: Parameters<typeof BoardView>[0] & {
   }, [defaultState, props.selectedRecordId, props.viewKey, props.viewState]);
 
   const filtered = useMemo(() => {
-    const base = applyView(props.view, props.records);
+    const base = applyView(props.view, props.records, { fields: props.template.fields });
     const rows = base.filter((record) => Object.entries(state.filters).every(([key, expected]) =>
       formatCell(record[key]).toLocaleLowerCase().includes(expected.trim().toLocaleLowerCase())));
     if (!state.sort) return rows;
@@ -66,7 +68,7 @@ function ResolvedBoardView(props: Parameters<typeof BoardView>[0] & {
       const order = formatCell(left[columnId]).localeCompare(formatCell(right[columnId]), undefined, { numeric: true });
       return direction === "asc" ? order : -order;
     });
-  }, [props.records, props.view, state.filters, state.sort]);
+  }, [props.records, props.template.fields, props.view, state.filters, state.sort]);
   const pageStart = state.page * state.pageSize;
   const rows = filtered.slice(pageStart, pageStart + state.pageSize);
   const selectedIds = props.selectedRecordId === undefined
