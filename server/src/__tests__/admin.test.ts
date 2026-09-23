@@ -49,7 +49,6 @@ describe("administration routes", () => {
       ["GET", `/api/v1/jurisdictions/${seed.jurisdictionId}/guests`],
       ["GET", `/api/v1/jurisdictions/${seed.jurisdictionId}/position-assignments`],
       ["GET", "/api/v1/persons?email=viewer@example.org"],
-      ["GET", "/api/v1/integrations"],
       ["PUT", `${members()}/${viewerId}`, { role: "admin" }],
       ["DELETE", `${members()}/${viewerId}`],
       ["PUT", `${members()}/${viewerId}/disabled`, { disabled: true }],
@@ -201,7 +200,8 @@ describe("administration routes", () => {
     expect(page2.nextCursor).toBeNull();
   });
 
-  it("report which optional integrations this deployment registers", async () => {
+  it("report which optional integrations this deployment registers, to any signed-in person", async () => {
+    expect((await call(memberToken, "GET", "/api/v1/integrations")).statusCode).toBe(200);
     const response = await call(adminToken, "GET", "/api/v1/integrations");
     expect(response.json()).toEqual({
       variable: "OPENEOC_INTEGRATIONS",

@@ -443,10 +443,9 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
 
   // Which optional integrations this deployment registers. Read-only: the
   // set comes from OPENEOC_INTEGRATIONS at start, not from the database.
-  app.get("/api/v1/integrations", { preHandler: authenticate }, async (req, reply) => {
-    const { isInstanceAdmin, memberships } = req.principal;
-    if (!isInstanceAdmin && !memberships.some((m) => m.role === "admin"))
-      throw new AuthError(403, "requires an administrator");
+  // Any signed-in person may read which optional integrations run: the
+  // console hides the entries of those that do not.
+  app.get("/api/v1/integrations", { preHandler: authenticate }, async (_req, reply) => {
     return reply.send({
       variable: "OPENEOC_INTEGRATIONS",
       integrations: (["collab", "facilities", "meetings", "tracking"] as const)

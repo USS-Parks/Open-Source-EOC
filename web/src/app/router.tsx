@@ -34,6 +34,7 @@ export type Surface =
   | { readonly kind: "smartforms" }
   | { readonly kind: "tracking" }
   | { readonly kind: "damage" }
+  | { readonly kind: "facilities" }
   | { readonly kind: "alerts" }
   | { readonly kind: "lifelines" }
   | { readonly kind: "lifeline"; readonly id: string }
@@ -170,6 +171,8 @@ function parseSurfacePath(clean: string): Surface {
       return { kind: "tracking" };
     case "damage":
       return { kind: "damage" };
+    case "facilities":
+      return { kind: "facilities" };
     case "alerts":
       return { kind: "alerts" };
     case "lifelines":
@@ -293,6 +296,8 @@ function surfacePath(surface: Surface): string {
       return "#/tracking";
     case "damage":
       return "#/damage";
+    case "facilities":
+      return "#/facilities";
     case "alerts":
       return "#/alerts";
     case "lifelines":

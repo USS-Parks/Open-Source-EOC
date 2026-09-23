@@ -85,20 +85,32 @@ export async function reportStatus(
   return { reportId };
 }
 
+/**
+ * A board row: the HAVE snapshot plus the registry fields the operator
+ * screen lists and maps. HAVE export serializes only the snapshot fields.
+ */
+export interface BoardFacility extends FacilitySnapshot {
+  readonly contact: string | null;
+  readonly location: { lon: number; lat: number } | null;
+  readonly staleAfterSeconds: number;
+}
+
 async function currentSnapshots(
   sql: Sql,
   jurisdictionId: string,
   kind: string | undefined,
   now: Date,
-): Promise<FacilitySnapshot[]> {
+): Promise<BoardFacility[]> {
   const facilities = kind
     ? await sql`
-        select id, name, kind, stale_after_seconds from facilities
+        select id, name, kind, contact, stale_after_seconds, ST_X(geom) as lon, ST_Y(geom) as lat
+        from facilities
         where jurisdiction_id = ${jurisdictionId} and kind = ${kind} order by name`
     : await sql`
-        select id, name, kind, stale_after_seconds from facilities
+        select id, name, kind, contact, stale_after_seconds, ST_X(geom) as lon, ST_Y(geom) as lat
+        from facilities
         where jurisdiction_id = ${jurisdictionId} order by name`;
-  const snapshots: FacilitySnapshot[] = [];
+  const snapshots: BoardFacility[] = [];
   for (const f of facilities) {
     const [latest] = await sql`
       select operating_status, ems_traffic, beds, capabilities, reported_at
@@ -116,6 +128,9 @@ async function currentSnapshots(
       capabilities: (latest?.capabilities as string[]) ?? [],
       lastUpdate: reportedAt ? reportedAt.toISOString() : "",
       stale: ageSec > (f.stale_after_seconds as number),
+      contact: (f.contact as string | null) ?? null,
+      location: f.lon === null ? null : { lon: f.lon as number, lat: f.lat as number },
+      staleAfterSeconds: f.stale_after_seconds as number,
     });
   }
   return snapshots;
@@ -128,7 +143,7 @@ export async function statusBoard(
   jurisdictionId: string,
   kind?: string,
   now = new Date(),
-): Promise<FacilitySnapshot[]> {
+): Promise<BoardFacility[]> {
   requireMember(actor, jurisdictionId);
   return currentSnapshots(sql, jurisdictionId, kind, now);
 }

@@ -168,3 +168,36 @@ describe("EDXL-HAVE export", () => {
     expect(xml).toContain("<EMSTrafficStatus>");
   });
 });
+
+describe("the registry on the board", () => {
+  it("carries each facility's contact, position and freshness window, and keeps them out of HAVE", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/facilities`,
+      headers: { authorization: `Bearer ${memberToken}` },
+      payload: {
+        name: "Orleans Shelter", kind: "shelter", contact: "Site lead 555-0100",
+        staleAfterSeconds: 7200, location: { lon: -123.53, lat: 41.3 },
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const board = await app.inject({
+      method: "GET",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/facilities/board?kind=shelter`,
+      headers: { authorization: `Bearer ${memberToken}` },
+    });
+    const rows = board.json().facilities as Array<Record<string, unknown>>;
+    expect(rows.find((f) => f.organizationName === "Orleans Shelter")).toMatchObject({
+      contact: "Site lead 555-0100", location: { lon: -123.53, lat: 41.3 }, staleAfterSeconds: 7200,
+    });
+    expect(rows.find((f) => f.organizationName === "Weitchpec Gym"))
+      .toMatchObject({ contact: null, location: null, staleAfterSeconds: 3600 });
+    const have = await app.inject({
+      method: "GET",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/facilities/have?kind=shelter`,
+      headers: { authorization: `Bearer ${memberToken}` },
+    });
+    expect(have.body).toContain("<OrganizationName>Orleans Shelter</OrganizationName>");
+    expect(have.body).not.toContain("555-0100");
+  });
+});

@@ -82,6 +82,7 @@ import type {
 } from "../../boards/workflow.js";
 import type { DamageSummary, DeclarationThresholds } from "@openeoc/shared";
 import type { DamageReportPage, DamageReportStatus, FieldAssessmentInput } from "../../damage/model.js";
+import type { FacilityBoardRow, FacilityInput, FacilityStatusInput } from "../../facilities/model.js";
 
 /**
  * The app shell's one door to the server. It carries the bearer access
@@ -1854,6 +1855,31 @@ export class ApiClient {
   /** The server delivers the request to the peer tier; a failed delivery answers 502 and nothing is recorded. */
   escalateResourceRequest(id: string, input: { peerName: string; peerBaseUrl: string; peerToken: string }): Promise<{ ok: true }> {
     return this.request("POST", `/api/v1/resource-requests/${encodeURIComponent(id)}/escalate`, input);
+  }
+
+  // ---- Facilities and shelters (optional integration) ----
+  /** The status board: every facility's registry fields, latest report and staleness. */
+  async facilityBoard(jurisdictionId: string): Promise<FacilityBoardRow[]> {
+    const result = await this.request<{ facilities: FacilityBoardRow[] }>(
+      "GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/facilities/board`,
+    );
+    return result.facilities;
+  }
+  /** Whether this server runs the facilities integration. */
+  async facilitiesEnabled(): Promise<boolean> {
+    const state = await this.listIntegrations();
+    return state.integrations.some((i) => i.key === "facilities" && i.enabled);
+  }
+  registerFacility(jurisdictionId: string, input: FacilityInput): Promise<{ id: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/facilities`, { ...input });
+  }
+  reportFacilityStatus(facilityId: string, input: FacilityStatusInput): Promise<{ reportId: string }> {
+    return this.request("POST", `/api/v1/facilities/${encodeURIComponent(facilityId)}/status`, { ...input });
+  }
+  /** The EDXL-HAVE document for the jurisdiction's facilities of one kind. */
+  async facilityHave(jurisdictionId: string, kind: string): Promise<string> {
+    const query = new URLSearchParams({ kind });
+    return (await this.requestResponse(`/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/facilities/have?${query}`)).text();
   }
 }
 

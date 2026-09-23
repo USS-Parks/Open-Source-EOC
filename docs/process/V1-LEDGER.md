@@ -1319,3 +1319,53 @@ tagging remain separately gated as section 1 of the roster states.
 - **Evidence level:** unit, real-database integration, browser and document.
 - **Guide:** `docs/guides/OPERATOR-QUICKSTART.md` JIC and resources sections.
 - **Rollback:** revert the commit.
+
+## V1 W3.4: facilities and shelters
+
+- **What changed.** Operations > Facilities, new `web/src/facilities/**`,
+  shown only where the server runs the facilities integration. Registry: name,
+  type from the HAVE facility kinds with readable labels, contact, position
+  and reporting window, with a registration form. Status board: operating
+  status, EMS traffic, last report and freshness (Current, Stale, No report
+  yet). Report status: operating status and EMS traffic from the HAVE
+  dictionaries, beds per HAVE bed type, a note; a shelter reports open spaces
+  and capacity. Hospital bed availability per hospital with an EDXL-HAVE
+  download. Shelters: capacity, occupied and open spaces. The existing map
+  component embedded in the screen draws hospitals and shelters with their
+  NAPSG symbols framed by operating status, with a legend.
+- **Deviations from the roster wording.** No edit: the engine has no update
+  route, so registry fields are set at registration, which the screen and
+  guide state. Capacity is the bed baseline on each report, not a registry
+  field; shelters report under the HAVE "other" bed type. The map is embedded
+  in the screen. "Report now" requests stay API only. The nav entry reuses the
+  `lifelines` icon; the set has no facilities icon.
+- **Ownership deviation.** `server/src/facilities/service.ts`: each board row
+  also returns contact, location and reporting window, which the map and
+  registry need, smaller than a new route; a failing-first test checks it and
+  that the contact never enters the HAVE XML.
+- **Integration fix: how the console learns the integration is on.** The
+  lane gated the entry by reading the facilities board and treating a 404 as
+  off, because `GET /api/v1/integrations` was admin-only; that cost a board
+  read, or a 404, on every console load. The integration list is not
+  sensitive to a signed-in person, who sees the entries anyway, so the route
+  now answers any signed-in person, and the console reads it. The admin test
+  asserts a member may read it.
+- **Schema, contract, dependencies:** none; the route's auth mode is unchanged
+  in the contract (bearer).
+- **Verification.** In the lane, 8 files passed 53 of 53, including
+  `facilities-browser.test.ts`: with the integration on, a member registers a
+  hospital and a shelter, reports each, backdates both 90 minutes so the
+  hourly hospital reads Stale and the two-hour shelter Current, reads HAVE
+  beds and downloads the XML, reads shelter occupancy 120, 80, 40, and finds
+  both on the map with their symbols; with it off, no entry and
+  `#/facilities` shows Page not found. Screenshots at 1440 and 390 light and
+  dark. After rebasing onto W3.6 and W3.8 and the integration change: the
+  facilities, facility symbols and admin browser walks, facilities, admin,
+  api-docs, every web test and the shared suite passed 602 of 602.
+  TypeScript and ESLint clean. Link checker 71 files.
+- **Evidence level:** unit, real-database, browser and document.
+- **Guide:** new `docs/guides/FACILITIES.md`, stating the integration is
+  optional and enabled by `OPENEOC_INTEGRATIONS=facilities`.
+- **Deferred:** editing and removing registry entries, which need an engine
+  route; a status-request screen.
+- **Rollback:** revert the commit.

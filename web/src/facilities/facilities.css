@@ -1,0 +1,22 @@
+/* Grid items default to min-width: auto; a wide table would widen the whole column. */
+.facilities-workspace > * { min-width: 0; }
+.facilities-toolbar, .facilities-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; margin-bottom: 10px; }
+.facilities-actions { justify-content: flex-start; margin: 12px 0 0; }
+.facilities-table { max-width: 100%; min-width: 0; overflow-x: auto; }
+.facilities-fieldset { border: 0; margin: 0; padding: 0; }
+.facilities-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.facilities-field input, .facilities-beds input { background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: 4px; color: var(--eoc-text); font: inherit; min-height: 44px; min-width: 0; padding: 6px; }
+.facilities-beds { align-items: center; display: grid; gap: 6px 10px; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); }
+.facilities-beds > span:nth-child(-n+3) { color: var(--eoc-text-muted); font-size: .72rem; font-weight: 700; text-transform: uppercase; }
+.facilities-subhead { font-size: .92rem; margin: 16px 0 8px; }
+.facilities-hospitals { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0; }
+.facilities-hospitals > li { background: var(--eoc-surface-raised); border: 1px solid var(--eoc-border); border-radius: var(--eoc-radius-sm); display: grid; gap: 8px; min-width: 0; padding: 12px; }
+.facilities-hospital-head { align-items: flex-start; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+.facilities-map-status { margin: 0 0 8px; }
+.facilities-legend { display: flex; flex-wrap: wrap; font-size: .84rem; gap: 6px 14px; list-style: none; margin: 0 0 10px; padding: 0; }
+.facilities-legend li { align-items: center; display: inline-flex; gap: 6px; }
+.facilities-legend span { border: 2px solid var(--eoc-surface); border-radius: 50%; box-shadow: 0 0 0 1px var(--eoc-border); display: inline-block; height: 12px; width: 12px; }
+.facilities-map-canvas { height: 460px; overflow: hidden; position: relative; }
+.facilities-map-canvas > * { inset: 0; position: absolute; }
+.facilities-notice { margin: 8px 0 0; }
+@container (max-width: 760px) { .facilities-hospitals { grid-template-columns: 1fr; } .facilities-map-canvas { height: 520px; } }

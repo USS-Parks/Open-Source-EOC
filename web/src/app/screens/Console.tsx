@@ -37,6 +37,7 @@ import { MessagesWorkspace } from "../../coordination/MessagesWorkspace.js";
 import { SmartFormsSurface } from "../surfaces/SmartFormsSurface.js";
 import { TrackingSurface } from "../surfaces/TrackingSurface.js";
 import { DamageSurface } from "../../damage/DamageSurface.js";
+import { FacilitiesSurface } from "../../facilities/FacilitiesSurface.js";
 import { BoardsIndex } from "../surfaces/lists.js";
 import { AlertsSurface } from "../surfaces/AlertsSurface.js";
 import { NotificationTray } from "../../notifications/NotificationTray.js";
@@ -63,6 +64,7 @@ const NAV: readonly NavGroup[] = [
     { key: "tracking", label: "Tracking", icon: "tracking" },
     { key: "damage", label: "Damage Assessment", icon: "fieldReports" },
     { key: "staffing", label: "Staffing", icon: "participants" },
+    { key: "facilities", label: "Facilities", icon: "lifelines" },
   ] },
   { key: "planning", label: "Planning", items: [
     { key: "operationalPeriods", label: "Operational Periods", icon: "operationalPeriods" },
@@ -87,6 +89,10 @@ const NAV: readonly NavGroup[] = [
 ];
 /** The rail without the administrator-only entries, for accounts that administer nothing. */
 const MEMBER_NAV: readonly NavGroup[] = NAV.map((group) => ({ ...group, items: group.items.filter((item) => item.key !== "admin" && item.key !== "federation") }));
+/** Facilities is an optional integration: its entry shows only where the server runs it. */
+function withFacilities(nav: readonly NavGroup[], enabled: boolean): readonly NavGroup[] {
+  return enabled ? nav : nav.map((group) => ({ ...group, items: group.items.filter((item) => item.key !== "facilities") }));
+}
 
 /**
  * The operations console: the map-first hybrid. The rail switches the
@@ -142,6 +148,15 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         : Promise.resolve([]),
     [viewingJurisdictionId, incident.selectedIncidentId],
   );
+  const facilities = useAsync(
+    () =>
+      viewingJurisdictionId && viewingMembership
+        ? client.facilitiesEnabled()
+        : Promise.resolve(false),
+    [viewingJurisdictionId, viewingMembership?.role],
+  );
+  // null while the check runs; an unreachable check hides the screen like a disabled one.
+  const facilitiesEnabled = facilities.error ? false : facilities.data;
   const notifications = useNotifications(client);
   const [lastNotificationCheck, setLastNotificationCheck] = useState<Date | null>(null);
   useEffect(() => {
@@ -270,7 +285,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       positionLabel={session.me?.position?.title ?? "No acting position"}
       periodControl={<OperationalPeriodControl />}
       positionControl={<PositionControl />}
-      nav={session.me?.isInstanceAdmin || session.me?.memberships.some((m) => m.role === "admin") ? NAV : MEMBER_NAV}
+      nav={withFacilities(session.me?.isInstanceAdmin || session.me?.memberships.some((m) => m.role === "admin") ? NAV : MEMBER_NAV, facilitiesEnabled === true)}
       activeNav={sectionOf(surface)}
       onNavigate={(key) => navigateInContext(sectionForNav(key))}
       userName={session.me?.person.displayName ?? ""}
@@ -317,6 +332,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         collections={collections.data ?? []}
         feeds={feeds.data ?? []}
         isAdmin={viewingMembership?.role === "admin"}
+        facilitiesEnabled={facilitiesEnabled}
         canAuthorAlerts={viewingMembership?.role === "admin" || viewingMembership?.role === "member"}
         actorEmail={session.me?.person.email ?? ""}
         isInstanceAdmin={session.me?.isInstanceAdmin === true}
@@ -388,6 +404,8 @@ function sectionForNav(key: string): Surface {
       return { kind: "damage" };
     case "staffing":
       return { kind: "staffing" };
+    case "facilities":
+      return { kind: "facilities" };
     case "lifelines":
       return { kind: "lifelines" };
     case "tasks":
@@ -435,6 +453,7 @@ function Center(props: {
   collections: readonly CollectionRef[];
   feeds: readonly FeedHealth[];
   isAdmin: boolean;
+  facilitiesEnabled: boolean | null;
   canAuthorAlerts: boolean;
   actorEmail: string;
   isInstanceAdmin: boolean;
@@ -611,6 +630,10 @@ function Center(props: {
       // Staffing writes need the admin-or-member role that alert authoring checks.
       return <StaffingSurface client={props.client} jurisdictionId={props.jurisdictionId} personId={props.personId}
         incidentId={props.incidentId} incidentName={props.incidentName} isAdmin={props.isAdmin} canWrite={props.canAuthorAlerts} />;
+    case "facilities":
+      return props.facilitiesEnabled === null ? <Loading label="Checking facilities…" />
+        : props.facilitiesEnabled ? <FacilitiesSurface client={props.client} jurisdictionId={props.jurisdictionId} theme={props.theme} canWrite={props.canAuthorAlerts} />
+        : <NotFoundState onMap={() => props.onNavigate({ kind: "map" })} onOverview={() => props.onNavigate({ kind: "dashboard" })} />;
     case "incidents":
       return (
         <IncidentsSurface
@@ -722,6 +745,7 @@ function pageFor(surface: Surface, scope: string): { readonly page: ShellPage; r
     case "tracking": return result("Operations", "Tracking", "boards");
     case "damage": return result("Operations", "Damage Assessment", "boards");
     case "staffing": return result("Operations", "Staffing", "boards");
+    case "facilities": return result("Operations", "Facilities", "boards");
     case "periods": return result("Planning", "Operational Periods", "planning");
     case "forms": return result("Planning", "ICS Forms", "planning");
     case "iap": return result("Planning", "IAP", "planning");
