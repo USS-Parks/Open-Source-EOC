@@ -128,6 +128,11 @@ export function metricsRoutes(
       throw new AuthError(401, "not authenticated");
     }
     const out = metrics.requestLines();
+    const memory = process.memoryUsage();
+    family(out, "openeoc_process_memory_bytes", "gauge",
+      "Process memory: resident set, V8 heap used and total, and external buffers.",
+      [[`{kind="rss"}`, memory.rss], [`{kind="heap_used"}`, memory.heapUsed],
+        [`{kind="heap_total"}`, memory.heapTotal], [`{kind="external"}`, memory.external]]);
     family(out, "openeoc_websocket_connections", "gauge",
       "Open WebSocket connections (board sync and dashboard streams).",
       [["", app.websocketServer.clients.size]]);

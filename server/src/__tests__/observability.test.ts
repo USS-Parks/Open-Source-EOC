@@ -175,6 +175,7 @@ describe("the metrics endpoint", () => {
     try {
       const metrics = await scrape();
       expect(metrics).toMatch(/^openeoc_websocket_connections 1$/m);
+    expect(metrics).toMatch(/^openeoc_process_memory_bytes\{kind="heap_used"\} \d+$/m);
       expect(metrics).toMatch(/^openeoc_sync_docs \d+$/m);
       expect(metrics).toMatch(/^openeoc_sync_hydrations_total \d+$/m);
       expect(metrics).toMatch(/^openeoc_db_pool_max 10$/m);

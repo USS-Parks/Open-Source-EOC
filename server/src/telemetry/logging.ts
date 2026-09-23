@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage } from "node:http";
-import type { FastifyServerOptions } from "fastify";
+import { LogController, type FastifyServerOptions } from "fastify";
 
 const LEVELS = ["fatal", "error", "warn", "info", "debug", "trace", "silent"] as const;
 export type LogLevel = (typeof LEVELS)[number];
@@ -76,7 +76,7 @@ export function requestId(req: IncomingMessage): string {
 export function loggingOptions(
   level: LogLevel,
   stream?: LogStream,
-): Pick<FastifyServerOptions, "logger" | "genReqId" | "disableRequestLogging"> {
+): Pick<FastifyServerOptions, "logger" | "genReqId" | "logController"> {
   return {
     logger: {
       level,
@@ -84,6 +84,7 @@ export function loggingOptions(
       ...(stream ? { stream } : {}),
     },
     genReqId: requestId,
-    disableRequestLogging: true,
+    // One line per request comes from observeRequests; Fastify's own two are off.
+    logController: new LogController({ disableRequestLogging: true }),
   };
 }
