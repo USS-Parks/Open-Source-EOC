@@ -2,20 +2,30 @@ import {
   applyView,
   BoardTemplateSchema,
   buildRecordSchema,
+  conditionHolds,
   deriveRecordValues,
   effectiveFields,
   geometryFieldKey,
   LocalFieldSchema,
+  referenceLabelKeys,
+  resolveTime,
+  roleReadsEveryRecord,
   STANDARD_TEMPLATES,
+  viewOrder,
   type BoardTemplate,
   type FieldDef,
   type FormLayout,
+  type ViewCondition,
   type ViewDef,
+  type ViewSort,
 } from "@openeoc/shared";
+import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { verifyPackage } from "./package.js";
 import type { Sql } from "../db/client.js";
-import { CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, decodeCursor, encodeCursor, type PageRequest } from "../db/cursor.js";
+import {
+  CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, cutPage, decodeCursor, encodeCursor, type Page, type PageRequest,
+} from "../db/cursor.js";
 import { AuthError, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 import { getIncidentAuthority, lockIncidentMutation } from "../incidents/participation.js";
@@ -303,14 +313,17 @@ export interface RecordWriteResult {
   readonly changed: boolean;
 }
 
-export async function createRecord(
+/**
+ * The board a caller may add records to, locked for the write: a board
+ * writer's own board, or a board an incident uses when the caller may
+ * contribute to that incident.
+ */
+export async function writableBoard(
   sql: Sql,
   actor: Principal,
   boardId: string,
-  data: Record<string, unknown>,
   incidentId?: string,
-): Promise<RecordWriteResult> {
-  let board: EffectiveBoard;
+): Promise<EffectiveBoard> {
   if (incidentId) {
     // Incident contribution (VEOC-79B1): a contributor participant, or an
     // owner writer, adds a record to a board the incident uses. Source
@@ -326,32 +339,69 @@ export async function createRecord(
       select 1 as ok from incident_boards
       where incident_id = ${incidentId} and board_id = ${boardId}`;
     if (!attached) throw new AuthError(400, "board is not part of this incident");
-    board = await getIncidentBoardReadShape(sql, actor, incidentId, boardId);
-  } else {
-    await lockBoardMutation(sql, boardId);
-    const effective = await getEffectiveBoard(sql, actor, boardId);
-    requireWriter(effective.role);
-    board = effective;
+    return getIncidentBoardReadShape(sql, actor, incidentId, boardId);
   }
+  await lockBoardMutation(sql, boardId);
+  const effective = await getEffectiveBoard(sql, actor, boardId);
+  requireWriter(effective.role);
+  return effective;
+}
+
+/** Validate a new record against a board: field write levels, schema, references. */
+export async function validateNewRecord(
+  sql: Sql,
+  actor: Principal,
+  board: EffectiveBoard,
+  data: Record<string, unknown>,
+  incidentId?: string,
+): Promise<Record<string, unknown>> {
   checkFieldWrites(board, Object.keys(data));
   const parsed = buildRecordSchema(board.fields).parse(data);
   await validateRecordReferences(sql, actor, board, parsed, incidentId);
-  const [row] = await sql`
+  return parsed;
+}
+
+/**
+ * Insert a validated record and its creation audit. The id is chosen here
+ * rather than returned by the insert: a record-level read rule may leave the
+ * creator unable to read what they wrote, and RETURNING would need that read.
+ */
+export async function insertRecord(
+  sql: Sql,
+  actor: Principal,
+  board: EffectiveBoard,
+  parsed: Record<string, unknown>,
+  incidentId?: string,
+  via?: "import",
+): Promise<string> {
+  const id = randomUUID();
+  await sql`
     insert into board_records
-      (board_id, data, created_by, created_by_position, geom, incident_id)
-    values (${boardId}, ${sql.json(parsed as never)}, ${actor.person.id},
+      (id, board_id, data, created_by, created_by_position, geom, incident_id)
+    values (${id}, ${board.id}, ${sql.json(parsed as never)}, ${actor.person.id},
             ${actor.position?.id ?? null}, ${geomExpr(sql, board.fields, parsed)},
-            ${incidentId ?? null})
-    returning id`;
-  const id = row!.id as string;
+            ${incidentId ?? null})`;
   await recordAudit(sql, actor, {
     jurisdictionId: board.jurisdictionId,
     ...(incidentId ? { incidentId } : {}),
     category: "board.record.created",
     subjectTable: "board_records",
     subjectId: id,
-    payload: { board: board.template.key, data: parsed },
+    payload: { board: board.template.key, data: parsed, ...(via ? { via } : {}) },
   });
+  return id;
+}
+
+export async function createRecord(
+  sql: Sql,
+  actor: Principal,
+  boardId: string,
+  data: Record<string, unknown>,
+  incidentId?: string,
+): Promise<RecordWriteResult> {
+  const board = await writableBoard(sql, actor, boardId, incidentId);
+  const parsed = await validateNewRecord(sql, actor, board, data, incidentId);
+  const id = await insertRecord(sql, actor, board, parsed, incidentId);
   return { id, data: parsed, boardKey: board.template.key,
     jurisdictionId: board.jurisdictionId, changed: true };
 }
@@ -387,9 +437,11 @@ export async function updateRecord(
   }
   checkFieldWrites(board, Object.keys(patch));
   const [existing] = await sql`
-    select data, incident_id from board_records where id = ${recordId} and board_id = ${boardId}
+    select data, incident_id, ${recordPermitted(sql, "edit")} as can_edit
+    from board_records where id = ${recordId} and board_id = ${boardId}
       and (${incidentId ?? null}::uuid is null or incident_id = ${incidentId ?? null})`;
   if (!existing) throw new AuthError(404, "record not found");
+  if (!existing.can_edit) throw new AuthError(403, "not permitted to edit this record");
   const previous = existing.data as Record<string, unknown>;
   const merged = { ...previous, ...patch };
   const accepted = new Set(board.fields.filter((field) => !field.calculation).map((field) => field.key));
@@ -420,7 +472,11 @@ export async function updateRecord(
     category: "board.record.updated",
     subjectTable: "board_records",
     subjectId: recordId,
-    payload: { board: board.template.key, patch: actualPatch },
+    payload: {
+      board: board.template.key,
+      patch: actualPatch,
+      previous: Object.fromEntries(Object.keys(actualPatch).map((key) => [key, previous[key] ?? null])),
+    },
   });
   return {
     id: recordId,
@@ -447,7 +503,9 @@ export async function getBoardRecordDetail(
   const board = shape.board;
   const [row] = await sql`
     select r.*, creator.display_name as creator_name, creator_pos.title as creator_position,
-           updater.display_name as updater_name
+           updater.display_name as updater_name,
+           public.board_record_permitted(r.board_id, r.incident_id, r.created_by,
+             r.created_by_position, r.id, 'edit') as can_edit
     from board_records r
     join persons creator on creator.id = r.created_by
     left join positions creator_pos on creator_pos.id = r.created_by_position
@@ -492,9 +550,187 @@ export async function getBoardRecordDetail(
     updatedAt: new Date((row.updated_at ?? row.created_at) as string).toISOString(),
     updatedBy: row.updated_by ? { personId: row.updated_by as string, displayName: row.updater_name as string,
       positionId: latestUpdate?.actor.positionId ?? null, positionTitle: latestUpdate?.actor.positionTitle ?? null } : null,
-    canEdit: shape.canContribute,
+    archivedAt: row.archived_at ? new Date(row.archived_at as string).toISOString() : null,
+    canEdit: shape.canContribute && Boolean(row.can_edit),
     history,
   };
+}
+
+/** The record-level rule for the current row of board_records, as a SQL expression. */
+function recordPermitted(sql: Sql, action: "read" | "edit"): never {
+  return sql`public.board_record_permitted(board_id, incident_id, created_by,
+    created_by_position, id, ${action})` as never;
+}
+
+/**
+ * Whether the caller reads every record on a board, so a shared document
+ * holding all of them may be served to it. Mirrors the SQL rule from the
+ * principal: an incident participant who is not a member reads as a member.
+ */
+export function readsEveryRecord(actor: Principal, board: EffectiveBoard, incidentScoped: boolean): boolean {
+  const membership = actor.memberships.find((m) => m.jurisdictionId === board.jurisdictionId);
+  const role = membership?.role ?? (incidentScoped ? "member" : "guest");
+  return roleReadsEveryRecord(board.template.recordAccess, role);
+}
+
+/**
+ * Archive or restore a record. Archive only hides it from default views; the
+ * record, its history and every reference stay as they were. Board writers
+ * whose record-level edit rule admits them may do it.
+ */
+export async function setRecordArchived(
+  sql: Sql,
+  actor: Principal,
+  boardId: string,
+  recordId: string,
+  archived: boolean,
+): Promise<{ archivedAt: string | null }> {
+  await lockBoardMutation(sql, boardId);
+  const board = await getEffectiveBoard(sql, actor, boardId);
+  requireWriter(board.role);
+  const [row] = await sql`
+    select incident_id, archived_at, ${recordPermitted(sql, "edit")} as can_edit
+    from board_records where id = ${recordId} and board_id = ${boardId}`;
+  if (!row) throw new AuthError(404, "record not found");
+  if (!row.can_edit) throw new AuthError(403, "not permitted to edit this record");
+  if (Boolean(row.archived_at) === archived) {
+    return { archivedAt: row.archived_at ? new Date(row.archived_at as string).toISOString() : null };
+  }
+  const [updated] = await sql`
+    update board_records
+    set archived_at = ${archived ? sql`now()` : null}, archived_by = ${archived ? actor.person.id : null}
+    where id = ${recordId} and board_id = ${boardId}
+    returning archived_at`;
+  const incidentId = row.incident_id as string | null;
+  await recordAudit(sql, actor, {
+    jurisdictionId: board.jurisdictionId,
+    ...(incidentId ? { incidentId } : {}),
+    category: archived ? "board.record.archived" : "board.record.restored",
+    subjectTable: "board_records",
+    subjectId: recordId,
+    payload: { board: board.template.key },
+  });
+  return { archivedAt: updated!.archived_at ? new Date(updated!.archived_at as string).toISOString() : null };
+}
+
+export interface DeletedRecord {
+  readonly jurisdictionId: string;
+  readonly boardKey: string;
+  readonly incidentId: string | null;
+  readonly previous: Record<string, unknown>;
+}
+
+/**
+ * Delete a record: jurisdiction admins only. The row becomes a tombstone no
+ * read path returns; the audit entry keeps the prior data, so the record's
+ * history stays complete.
+ */
+export async function deleteRecord(
+  sql: Sql,
+  actor: Principal,
+  boardId: string,
+  recordId: string,
+): Promise<DeletedRecord> {
+  await lockBoardMutation(sql, boardId);
+  const board = await getEffectiveBoard(sql, actor, boardId);
+  requireRole(actor, board.jurisdictionId, "admin");
+  const [row] = await sql`
+    select data, incident_id from board_records where id = ${recordId} and board_id = ${boardId}`;
+  if (!row) throw new AuthError(404, "record not found");
+  const [done] = await sql`select public.tombstone_board_record(${recordId}) as ok`;
+  if (!done?.ok) throw new AuthError(409, "record could not be deleted");
+  const incidentId = row.incident_id as string | null;
+  const previous = row.data as Record<string, unknown>;
+  await recordAudit(sql, actor, {
+    jurisdictionId: board.jurisdictionId,
+    ...(incidentId ? { incidentId } : {}),
+    category: "board.record.deleted",
+    subjectTable: "board_records",
+    subjectId: recordId,
+    payload: { board: board.template.key, previous },
+  });
+  return { jurisdictionId: board.jurisdictionId, boardKey: board.template.key, incidentId, previous };
+}
+
+export interface RecordHistoryEntry {
+  readonly seq: number;
+  readonly id: string;
+  readonly at: string;
+  readonly category: string;
+  readonly corrects: string | null;
+  readonly actor: {
+    readonly personId: string; readonly displayName: string;
+    readonly positionId: string | null; readonly positionTitle: string | null;
+  };
+  /** Fields this entry changed, each with its value before and after. */
+  readonly changes: ReadonlyArray<{ readonly field: string; readonly before: unknown; readonly after: unknown }>;
+}
+
+/**
+ * A record's change history, oldest first, a page at a time: who, in which
+ * position, when, and each readable field changed with its value before and
+ * after. It reads the audit log, so it covers every path that writes a
+ * record and outlives a delete; the audit policies apply the record's read
+ * rule. An update recorded before this history existed carries no before
+ * values, and those read as null.
+ */
+export async function listRecordHistory(
+  sql: Sql,
+  actor: Principal,
+  boardId: string,
+  recordId: string,
+  incidentId?: string,
+  page: PageRequest = {},
+): Promise<Page<RecordHistoryEntry>> {
+  const { board } = await getBoardReadShape(sql, actor, boardId, incidentId);
+  const readable = new Set(visibleFields(board).map((field) => field.key));
+  const after = decodeCursor(page.cursor, ["seq"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
+  const rows = await sql`
+    select e.seq, e.id, e.created_at, e.category, e.payload, e.corrects, e.person_id,
+           e.position_id, p.display_name, pos.title as position_title
+    from audit_events e
+    join persons p on p.id = e.person_id
+    left join positions pos on pos.id = e.position_id
+    where ((e.subject_table = 'board_records' and e.subject_id = ${recordId})
+       or e.corrects in (select original.id from audit_events original
+          where original.subject_table = 'board_records' and original.subject_id = ${recordId}))
+      and (${incidentId ?? null}::uuid is null or e.incident_id = ${incidentId ?? null})
+      and (${after?.[0] ?? null}::bigint is null or e.seq > ${after?.[0] ?? null}::bigint)
+    order by e.seq
+    limit ${limit + 1}`;
+  if (!after && rows.length === 0) throw new AuthError(404, "record not found");
+  const result = cutPage(rows, limit, (row) => [String(row.seq)]);
+  return {
+    nextCursor: result.nextCursor,
+    items: result.items.map((row) => ({
+      seq: Number(row.seq),
+      id: row.id as string,
+      at: new Date(row.created_at as string).toISOString(),
+      category: row.category as string,
+      corrects: row.corrects as string | null,
+      actor: {
+        personId: row.person_id as string, displayName: row.display_name as string,
+        positionId: row.position_id as string | null, positionTitle: row.position_title as string | null,
+      },
+      changes: historyChanges(row.payload as Record<string, unknown>).filter((change) => readable.has(change.field)),
+    })),
+  };
+}
+
+/** Field changes carried in one audit payload: a creation's data, an update's patch, a delete's prior data. */
+function historyChanges(payload: Record<string, unknown>): Array<{ field: string; before: unknown; after: unknown }> {
+  const object = (value: unknown) =>
+    value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  const data = object(payload.data);
+  const patch = object(payload.patch);
+  const previous = object(payload.previous);
+  if (data) return Object.entries(data).map(([field, after]) => ({ field, before: null, after }));
+  if (patch) {
+    return Object.entries(patch).map(([field, after]) => ({ field, before: previous?.[field] ?? null, after }));
+  }
+  if (previous) return Object.entries(previous).map(([field, before]) => ({ field, before, after: null }));
+  return [];
 }
 
 export interface ViewRecords {
@@ -503,12 +739,35 @@ export interface ViewRecords {
   readonly records: ReadonlyArray<Record<string, unknown> & { id: string }>;
   /** Opaque cursor for the next page; null on the last page. */
   readonly nextCursor: string | null;
+  /**
+   * Record count per value of the group field over every matching record,
+   * in group order. Returned with the first page of a grouped view only;
+   * the rows themselves arrive ordered by the group field.
+   */
+  readonly groups?: ReadonlyArray<{ readonly value: unknown; readonly count: number }>;
 }
+
+/** Request-time refinements of a view, ANDed with or replacing its own. */
+export interface ViewOptions extends PageRequest {
+  /** Archived records: left out (the default), included, or the only ones listed. */
+  readonly archived?: "exclude" | "include" | "only" | undefined;
+  /** Conditions ANDed with the view's own filters. */
+  readonly where?: readonly ViewCondition[] | undefined;
+  /** Sort keys replacing the view's own. */
+  readonly sorts?: readonly ViewSort[] | undefined;
+  /** Group field replacing the view's own. */
+  readonly groupBy?: string | undefined;
+}
+
+/** Text form of a float8 sort key as Postgres prints it. */
+const FLOAT_KEY = /^-?(Infinity|\d+(\.\d+)?(e[+-]\d+)?)$/;
 
 /**
  * One page of a board view, newest first unless the view sorts. Filters and
- * the sort run in SQL over an index-ordered keyset, so the first page costs
- * the same on a board of 50 records or 50,000.
+ * the sort run in SQL over a keyset carrying every sort key, so the first
+ * page costs the same on a board of 50 records or 50,000 and a walk returns
+ * each matching record once. Row-level rules (record access, deletion) are
+ * the database's; field visibility and archive are applied here.
  */
 export async function listViewRecords(
   sql: Sql,
@@ -516,7 +775,7 @@ export async function listViewRecords(
   boardId: string,
   viewKey: string,
   incidentId?: string,
-  page: PageRequest = {},
+  options: ViewOptions = {},
 ): Promise<ViewRecords> {
   let board: EffectiveBoard;
   if (incidentId) {
@@ -533,38 +792,59 @@ export async function listViewRecords(
   } else {
     board = await getEffectiveBoard(sql, actor, boardId);
   }
-  const view = board.template.views.find((v) => v.key === viewKey);
-  if (!view) throw new AuthError(404, "view not found");
+  const declared = board.template.views.find((v) => v.key === viewKey);
+  if (!declared) throw new AuthError(404, "view not found");
+  const { sort, sorts, ...rest } = declared;
+  const view: ViewDef = {
+    ...rest,
+    where: [...(declared.where ?? []), ...(options.where ?? [])],
+    ...(options.sorts ? { sorts: [...options.sorts] } : sorts ? { sorts } : sort ? { sort } : {}),
+    ...(options.groupBy ? { groupBy: options.groupBy } : {}),
+  };
+  const fields = new Map(board.fields.map((f) => [f.key, f]));
   const readable = new Set(
     board.fields.filter((f) => canRead(board.role, f.read)).map((f) => f.key),
   );
-  const calculated = new Set(board.fields.filter((f) => f.calculation).map((f) => f.key));
-  // ponytail: a sort on a calculated field has no stored value to index, so
-  // it orders within each page only; add a SQL expression if a template needs it.
-  const sort = view.sort && readable.has(view.sort.field) && !calculated.has(view.sort.field)
-    ? view.sort : null;
-  const after = decodeCursor(page.cursor, ["key", "at", "id"]);
-  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
-  const sortKey = () => (sort ? sql`coalesce(data ->> ${sort.field}, '')` : sql`''`);
-  const keyset = !after ? sql``
-    : !sort ? sql`and (created_at, id) < (${after[1]!}::text::timestamptz, ${after[2]!}::uuid)`
-      : sort.dir === "desc"
-        ? sql`and (${sortKey()}, created_at, id) < (${after[0]!}, ${after[1]!}::text::timestamptz, ${after[2]!}::uuid)`
-        : sql`and (${sortKey()} > ${after[0]!} or (${sortKey()} = ${after[0]!}
-            and (created_at, id) < (${after[1]!}::text::timestamptz, ${after[2]!}::uuid)))`;
-  const order = !sort ? sql`created_at desc, id desc`
-    : sort.dir === "desc" ? sql`${sortKey()} desc, created_at desc, id desc`
-      : sql`${sortKey()} asc, created_at desc, id desc`;
-  const filters = view.filter.reduce(
-    (clauses, filter) => sql`${clauses} ${viewFilterSql(sql, filter, readable, calculated)}`, sql``);
-  const rows = await sql`
-    select id, data, ${sortKey()} as page_key,
-           to_char(created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
-    from board_records
-    where board_id = ${boardId}
+  // ponytail: a calculated field has no stored value to sort by, so a sort on
+  // one orders within each page only; add a SQL expression if a template needs it.
+  const usable = (key: string) => readable.has(key) && fields.has(key) && !fields.get(key)!.calculation;
+  const order = viewOrder(view);
+  const keys = order.filter((s) => usable(s.field))
+    .map((s) => ({ ...sortKeySql(sql, fields.get(s.field)!), dir: s.dir }));
+  const now = new Date();
+  const width = Math.max(keys.length, 1);
+  const after = decodeCursor(options.cursor,
+    [...Array.from({ length: width }, () => "key" as const), "at", "id"]);
+  if (after && keys.some((key, i) => key.numeric && !FLOAT_KEY.test(after[i]!)))
+    throw new AuthError(400, "invalid page cursor");
+  const limit = options.limit ?? DEFAULT_PAGE_LIMIT;
+  let keyset = sql``;
+  if (after) {
+    let clause = sql`(created_at, id) < (${after[width]!}::text::timestamptz, ${after[width + 1]!}::uuid)`;
+    for (let i = keys.length - 1; i >= 0; i -= 1) {
+      const key = keys[i]!;
+      const value = key.numeric ? sql`${after[i]!}::float8` : sql`${after[i]!}`;
+      clause = sql`(${key.expr} ${key.dir === "asc" ? sql`>` : sql`<`} ${value}
+        or (${key.expr} = ${value} and ${clause}))`;
+    }
+    keyset = sql`and ${clause}`;
+  }
+  const archived = options.archived === "include" ? sql``
+    : options.archived === "only" ? sql`and archived_at is not null` : sql`and archived_at is null`;
+  const filters = [...view.filter, ...(view.where ?? [])].reduce(
+    (clauses, condition) => sql`${clauses} ${conditionSql(sql, condition, fields, readable, now)}`, sql``);
+  const scope = sql`board_id = ${boardId}
       and (${incidentId ?? null}::uuid is null or incident_id = ${incidentId ?? null})
-      ${filters} ${keyset}
-    order by ${order}
+      ${archived} ${filters}`;
+  const keyColumns = keys.reduce((cols, key, i) => sql`${cols}, (${key.expr})::text as ${sql(`k${i}`)}`, sql``);
+  const orderBy = keys.reduce((clauses, key) =>
+    sql`${clauses} ${key.expr} ${key.dir === "asc" ? sql`asc` : sql`desc`},`, sql``);
+  const rows = await sql`
+    select id, data, archived_at,
+           to_char(created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at ${keyColumns}
+    from board_records
+    where ${scope} ${keyset}
+    order by ${orderBy} created_at desc, id desc
     limit ${limit + 1}`;
   const pageRows = rows.slice(0, limit);
   const last = rows.length > limit ? pageRows.at(-1)! : null;
@@ -572,46 +852,122 @@ export async function listViewRecords(
     const data = deriveRecordValues(board.fields, r.data as Record<string, unknown>);
     const out: Record<string, unknown> & { id: string } = { id: r.id as string };
     for (const key of Object.keys(data)) if (readable.has(key)) out[key] = data[key];
+    if (r.archived_at) out.archivedAt = new Date(r.archived_at as string).toISOString();
     return out;
   });
   // One view semantics for server and browser (shared applyView): the SQL
   // above may admit extra rows, never fewer, and applyView has the last word.
-  const records = applyView(view, masked);
+  const records = applyView(view, masked, { fields: board.fields, now });
   const columns = view.columns.filter((c) => readable.has(c));
+  let groups: ViewRecords["groups"];
+  if (view.groupBy && usable(view.groupBy) && !options.cursor) {
+    const key = sortKeySql(sql, fields.get(view.groupBy)!);
+    const counted = await sql`
+      select data -> ${view.groupBy} as value, count(*)::int as count
+      from board_records where ${scope}
+      group by 1
+      order by min(${key.expr}) ${order[0]!.dir === "asc" ? sql`asc` : sql`desc`}`;
+    groups = counted.map((row) => ({ value: row.value ?? null, count: row.count as number }));
+  }
   return {
     view: view.key,
     columns,
     records,
     nextCursor: last
-      ? encodeCursor([last.page_key as string, last.page_at as string, last.id as string])
+      ? encodeCursor([
+          ...(keys.length ? keys.map((_, i) => last[`k${i}`] as string) : [""]),
+          last.page_at as string, last.id as string,
+        ])
       : null,
+    ...(groups ? { groups } : {}),
   };
 }
 
+/** A stored number, or null when the value is absent or not a number. */
+function numberSql(sql: Sql, key: string): never {
+  return sql`(case when jsonb_typeof(data -> ${key}) = 'number' then (data -> ${key})::float8 end)` as never;
+}
+
+/** A stored timestamp, or null when the value is absent or not a timestamp. */
+function timeSql(sql: Sql, key: string): never {
+  return sql`(case when jsonb_typeof(data -> ${key}) = 'string'
+    and pg_input_is_valid(data ->> ${key}, 'timestamptz') then (data ->> ${key})::timestamptz end)` as never;
+}
+
 /**
- * One view filter as a SQL predicate. An unreadable field is masked before
- * applyView sees it, so it reads as absent here too. A calculated field has no
- * stored value; applyView alone decides it, which can leave a page short.
- * ponytail: `in` compares the stored value's text form, which differs from
- * applyView's String() only for objects and exotic numbers such as 1e21.
+ * The SQL sort key of a field, matching applyView's order: numbers by value
+ * and datetimes by instant, an absent value first; anything else as text.
  */
-function viewFilterSql(
+function sortKeySql(sql: Sql, field: FieldDef): { expr: never; numeric: boolean } {
+  if (field.type === "number")
+    return { numeric: true, expr: sql`coalesce(${numberSql(sql, field.key)}, '-Infinity'::float8)` as never };
+  if (field.type === "datetime")
+    return { numeric: false,
+      expr: sql`coalesce(to_char(${timeSql(sql, field.key)} at time zone 'UTC', ${CURSOR_AT_FORMAT}), '')` as never };
+  return { numeric: false, expr: sql`coalesce(data ->> ${field.key}, '')` as never };
+}
+
+/**
+ * One view condition as a SQL predicate that admits every row applyView
+ * keeps. An unreadable field is masked before applyView sees it, so it reads
+ * as absent here too, decided once for the whole page. A calculated field
+ * has no stored value; applyView alone decides it, which can leave a page
+ * short. ponytail: `in` compares the stored value's text form, which differs
+ * from applyView's String() only for objects and exotic numbers such as 1e21.
+ */
+function conditionSql(
   sql: Sql,
-  filter: ViewDef["filter"][number],
+  condition: ViewCondition,
+  fields: ReadonlyMap<string, FieldDef>,
   readable: ReadonlySet<string>,
-  calculated: ReadonlySet<string>,
+  now: Date,
 ): never {
-  const { field, op, value } = filter;
-  const values = Array.isArray(value) ? value : null;
-  if (calculated.has(field)) return sql`` as never;
-  if (!readable.has(field)) {
-    const keepsAbsent = op === "neq" || (op === "in" && Boolean(values?.includes("undefined")));
-    return (keepsAbsent ? sql`` : sql`and false`) as never;
+  const { field, op, value } = condition;
+  const def = fields.get(field);
+  if (def?.calculation) return sql`` as never;
+  if (!def || !readable.has(field))
+    return (conditionHolds(condition, undefined, now) ? sql`` : sql`and false`) as never;
+  const json = sql`data -> ${field}`;
+  const text = sql`data ->> ${field}`;
+  const values = Array.isArray(value) ? value.map(String) : null;
+  const time = (bound: unknown) => {
+    const ms = resolveTime(bound, now);
+    return ms === null ? null : sql`${new Date(ms).toISOString()}::timestamptz`;
+  };
+  const scalar = sql`jsonb_typeof(${json}) in ('string', 'number', 'boolean')`;
+  switch (op) {
+    case "eq": return (values ? sql`and false` : sql`and ${json} = ${sql.json(value as never)}`) as never;
+    case "neq": return (values ? sql`` : sql`and ${json} is distinct from ${sql.json(value as never)}`) as never;
+    case "in": return (values?.length ? sql`and ${text} in ${sql(values)}` : sql`and false`) as never;
+    case "not_in":
+      return (values?.length ? sql`and (${text} is null or ${text} not in ${sql(values)})` : sql``) as never;
+    case "contains":
+      return sql`and ${scalar} and strpos(lower(${text}), lower(${String(value)})) > 0` as never;
+    case "starts_with":
+      return sql`and ${scalar} and starts_with(lower(${text}), lower(${String(value)}))` as never;
+    case "gt": return sql`and ${numberSql(sql, field)} > ${Number(value)}::float8` as never;
+    case "gte": return sql`and ${numberSql(sql, field)} >= ${Number(value)}::float8` as never;
+    case "lt": return sql`and ${numberSql(sql, field)} < ${Number(value)}::float8` as never;
+    case "lte": return sql`and ${numberSql(sql, field)} <= ${Number(value)}::float8` as never;
+    case "before": case "after": {
+      const bound = time(value);
+      if (!bound) return sql`and false` as never;
+      return (op === "before" ? sql`and ${timeSql(sql, field)} < ${bound}` : sql`and ${timeSql(sql, field)} > ${bound}`) as never;
+    }
+    case "between": {
+      const [lo, hi] = Array.isArray(value) ? value : [];
+      if (typeof lo === "number" && typeof hi === "number")
+        return sql`and ${numberSql(sql, field)} between ${lo}::float8 and ${hi}::float8` as never;
+      const from = time(lo);
+      const to = time(hi);
+      if (!from || !to) return sql`and false` as never;
+      return sql`and ${timeSql(sql, field)} between ${from} and ${to}` as never;
+    }
+    case "is_empty":
+      return sql`and (${json} is null or ${json} = 'null'::jsonb or ${json} = '""'::jsonb)` as never;
+    case "is_not_empty":
+      return sql`and ${json} is not null and ${json} <> 'null'::jsonb and ${json} <> '""'::jsonb` as never;
   }
-  if (op === "eq") return (values ? sql`and false` : sql`and data -> ${field} = ${sql.json(value as never)}`) as never;
-  if (op === "neq")
-    return (values ? sql`` : sql`and data -> ${field} is distinct from ${sql.json(value as never)}`) as never;
-  return (values?.length ? sql`and data ->> ${field} in ${sql(values)}` : sql`and false`) as never;
 }
 
 export interface BoardListItem {
@@ -718,6 +1074,34 @@ export interface RecordReferenceOption {
   readonly boardId: string;
 }
 
+/**
+ * A reference label composed from the target record's label fields, in
+ * order. A label field the caller cannot read is left out; null when no
+ * readable label field holds a value.
+ */
+function composeReferenceLabel(
+  field: FieldDef,
+  target: EffectiveBoard,
+  data: Readonly<Record<string, unknown>>,
+): string | null {
+  const derived = deriveRecordValues(target.fields, data);
+  const parts = referenceLabelKeys(field).flatMap((key) => {
+    const def = target.fields.find((candidate) => candidate.key === key);
+    const value = derived[key];
+    if (!def || !canRead(target.role, def.read)) return [];
+    return typeof value === "string" || typeof value === "number" ? [String(value)] : [];
+  });
+  return parts.length ? parts.join(" / ") : null;
+}
+
+/** Whether a reference target shows the caller at least one of its label fields. */
+function hasReadableLabel(field: FieldDef, target: EffectiveBoard): boolean {
+  return referenceLabelKeys(field).some((key) => {
+    const def = target.fields.find((candidate) => candidate.key === key);
+    return Boolean(def && canRead(target.role, def.read));
+  });
+}
+
 /** Incident-scoped, stable reference choices for a declared record_ref field. */
 export async function listRecordReferenceOptions(
   sql: Sql,
@@ -733,6 +1117,7 @@ export async function listRecordReferenceOptions(
   if (!field || !canRead(source.role, field.read)) throw new AuthError(404, "reference field not found");
   const boundedLimit = Math.max(1, Math.min(limit, 100));
   const options: RecordReferenceOption[] = [];
+  const targets = new Map<string, EffectiveBoard>();
   let cursor = after;
   while (options.length < boundedLimit) {
     const rows = await sql`
@@ -741,6 +1126,7 @@ export async function listRecordReferenceOptions(
       join boards b on b.id = r.board_id
       join incident_boards ib on ib.board_id = b.id and ib.incident_id = ${incidentId}
       where r.incident_id = ${incidentId}
+        and r.archived_at is null
         and b.template_key = ${field.targetBoardKey!}
         and (${cursor ?? null}::uuid is null or r.id > ${cursor ?? null})
       order by r.id
@@ -748,13 +1134,11 @@ export async function listRecordReferenceOptions(
     if (!rows.length) break;
     for (const row of rows) {
       cursor = row.id as string;
-      const target = await getIncidentBoardReadShape(sql, actor, incidentId, row.board_id as string);
-      const label = target.fields.find((candidate) => candidate.key === field.labelField);
-      if (!label || !canRead(target.role, label.read)) continue;
-      const derived = deriveRecordValues(target.fields, row.data as Record<string, unknown>);
-      const value = derived[label.key];
-      if (typeof value === "string" || typeof value === "number")
-        options.push({ id: row.id as string, label: String(value), boardId: row.board_id as string });
+      const targetId = row.board_id as string;
+      const target = targets.get(targetId) ?? await getIncidentBoardReadShape(sql, actor, incidentId, targetId);
+      targets.set(targetId, target);
+      const label = composeReferenceLabel(field, target, row.data as Record<string, unknown>);
+      if (label !== null) options.push({ id: row.id as string, label, boardId: targetId });
       if (options.length === boundedLimit) break;
     }
     if (rows.length < 100) break;
@@ -784,8 +1168,7 @@ export async function validateRecordReferences(
         and b.template_key = ${field.targetBoardKey!}`;
     if (!row) throw new AuthError(400, `field ${field.key} references a record outside this incident`);
     const target = await getIncidentBoardReadShape(sql, actor, incidentId, row.board_id as string);
-    const label = target.fields.find((candidate) => candidate.key === field.labelField);
-    if (!label || !canRead(target.role, label.read))
+    if (!hasReadableLabel(field, target))
       throw new AuthError(403, `field ${field.key} target label is not readable`);
   }
 }

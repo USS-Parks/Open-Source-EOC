@@ -10,10 +10,12 @@ import {
   getIncidentBoardReadShape,
   lockBoardMutation,
   checkFieldWrites,
+  readsEveryRecord,
   validateRecordReferences,
   visibleFields,
   type EffectiveBoard,
 } from "../boards/service.js";
+import { onRecordRemoved, type RecordRemoval } from "../boards/removals.js";
 import { recordAudit } from "../audit/service.js";
 import { notifyBoardEvent, type BoardEvent } from "../notify/engine.js";
 import { onBoardEvent, publishBoardEvent } from "../events/bus.js";
@@ -104,6 +106,7 @@ export interface HubStats {
 export class BoardSyncHub {
   private entries = new Map<string, HubEntry>();
   private readonly unlisten: () => void;
+  private readonly unlistenRemovals: () => void;
   private readonly idleEvictMs: number;
   private readonly snapshotThreshold: number;
   private hydrations = 0;
@@ -121,6 +124,23 @@ export class BoardSyncHub {
         if (key.startsWith(`${event.boardId}:`)) entry.rows.clear();
       }
     });
+    this.unlistenRemovals = onRecordRemoved((removal) => this.dropRecord(removal));
+  }
+
+  /**
+   * Drop a deleted record from every open document of its board and send the
+   * deletion to their subscribers. The durable removal is already in the log
+   * (appendRecordRemoval, in the deleting transaction); this is the live half.
+   */
+  private dropRecord(removal: RecordRemoval): void {
+    for (const [key, entry] of this.entries) {
+      if (!key.startsWith(`${removal.boardId}:`)) continue;
+      entry.rows.clear();
+      const update = removeRecordKeys(entry.doc, removal.recordId);
+      if (!update) continue;
+      entry.encoded = null;
+      for (const fn of entry.subscribers) fn(update, "server");
+    }
   }
 
   stats(): HubStats {
@@ -135,6 +155,7 @@ export class BoardSyncHub {
   /** Release timers and listeners. Safe to call twice. */
   close(): void {
     this.unlisten();
+    this.unlistenRemovals();
     for (const entry of this.entries.values()) {
       if (entry.idle) clearTimeout(entry.idle);
     }
@@ -411,50 +432,72 @@ export class BoardSyncHub {
           const keys = existing ? changedFieldKeys(prior, incoming) : Object.keys(incoming);
           checkFieldWrites(board, keys);
         }
-        const parsed = schema.safeParse(data);
-        if (!parsed.success) {
-          if (relaxed.safeParse(data).success) continue; // pending, not conflict
+        const conflict = async (reason: string) => {
           conflicts += 1;
           await tx`
             insert into sync_conflicts
               (board_id, incident_id, record_id, reason, rejected_data, origin_person)
-            values (${board.id}, ${incidentId}, ${recordId},
-                    ${parsed.error.issues[0]?.message ?? "schema violation"},
+            values (${board.id}, ${incidentId}, ${recordId}, ${reason},
                     ${tx.json(data as never)}, ${actor.person.id})`;
           await recordAudit(tx, actor, {
             jurisdictionId: board.jurisdictionId,
             category: "sync.conflict",
             subjectTable: "board_records",
             subjectId: recordId,
-            payload: { reason: parsed.error.issues[0]?.message ?? "schema violation" },
+            payload: { reason },
             ...(incidentId ? { incidentId } : {}),
           });
+        };
+        const parsed = schema.safeParse(data);
+        if (!parsed.success) {
+          if (relaxed.safeParse(data).success) continue; // pending, not conflict
+          await conflict(parsed.error.issues[0]?.message ?? "schema violation");
           continue;
         }
         if (incidentId) {
           await validateRecordReferences(tx, actor, board, parsed.data, incidentId);
         }
-        if (existing) {
-          await tx`
-            update board_records
-            set data = ${tx.json(parsed.data as never)}, updated_by = ${actor.person.id},
-                updated_at = now(), geom = ${geomExpr(tx, board.fields, parsed.data)}
-            where id = ${recordId} and board_id = ${board.id}
-              and (${incidentId}::uuid is null or incident_id = ${incidentId})`;
-        } else {
-          await tx`
-            insert into board_records
-              (id, board_id, incident_id, data, created_by, created_by_position, geom)
-            values (${recordId}, ${board.id}, ${incidentId}, ${tx.json(parsed.data as never)},
-                    ${actor.person.id}, ${actor.position?.id ?? null},
-                    ${geomExpr(tx, board.fields, parsed.data)})`;
+        // A write to a deleted record, or one the record's edit rule refuses
+        // (the update then touches no row), is a visible conflict, never a
+        // silent loss or a resurrection.
+        if (!existing) {
+          const [gone] = await tx`select board_record_tombstoned(${recordId}, ${board.id}) as deleted`;
+          if (gone!.deleted) {
+            await conflict("record was deleted");
+            continue;
+          }
         }
+        const written = existing
+          ? await tx`
+              update board_records
+              set data = ${tx.json(parsed.data as never)}, updated_by = ${actor.person.id},
+                  updated_at = now(), geom = ${geomExpr(tx, board.fields, parsed.data)}
+              where id = ${recordId} and board_id = ${board.id}
+                and (${incidentId}::uuid is null or incident_id = ${incidentId})`
+          : await tx`
+              insert into board_records
+                (id, board_id, incident_id, data, created_by, created_by_position, geom)
+              values (${recordId}, ${board.id}, ${incidentId}, ${tx.json(parsed.data as never)},
+                      ${actor.person.id}, ${actor.position?.id ?? null},
+                      ${geomExpr(tx, board.fields, parsed.data)})`;
+        if (written.count === 0) {
+          await conflict("not permitted to edit this record");
+          continue;
+        }
+        // Values before and after go into the audit entry, so the record's
+        // history shows what a sync write changed.
+        const prior = existing ? existing.data as Record<string, unknown> : {};
+        const changed = changedFieldKeys(prior, parsed.data);
         await recordAudit(tx, actor, {
           jurisdictionId: board.jurisdictionId,
           category: existing ? "board.record.updated" : "board.record.created",
           subjectTable: "board_records",
           subjectId: recordId,
-          payload: { board: board.template.key, via: "sync" },
+          payload: existing
+            ? { board: board.template.key, via: "sync",
+                patch: Object.fromEntries(changed.map((key) => [key, parsed.data[key] ?? null])),
+                previous: Object.fromEntries(changed.map((key) => [key, prior[key] ?? null])) }
+            : { board: board.template.key, via: "sync", data: parsed.data },
           ...(incidentId ? { incidentId } : {}),
         });
         committed.push({ recordId, existing: Boolean(existing) });
@@ -502,6 +545,10 @@ export class BoardSyncHub {
       const board = incidentId
         ? { ...(await getIncidentBoardReadShape(tx, actor, incidentId, boardId)), role: "member" as const }
         : await getEffectiveBoard(tx, actor, boardId);
+      // A document holds every record of its scope, so a board with
+      // record-level rules is served only to callers who read every record.
+      if (!readsEveryRecord(actor, board, incidentId !== null))
+        throw new AuthError(403, "records on this board are restricted; use its views");
       const cached = this.entries.get(key);
       // A template upgrade changes the fields the doc was built from, so the
       // cached doc and every projection taken from it are rebuilt, not reused.
@@ -687,6 +734,42 @@ function changedFieldKeys(
 ): string[] {
   return Object.keys(after).filter((key) =>
     JSON.stringify(before[key]) !== JSON.stringify(after[key]));
+}
+
+/** Delete every key of one record from a document; the resulting update, or null if none. */
+function removeRecordKeys(doc: Y.Doc, recordId: string): Uint8Array | null {
+  const records = doc.getMap<unknown>("records");
+  const keys = [...records.keys()].filter((key) => key.startsWith(`${recordId}/`));
+  if (keys.length === 0) return null;
+  const updates: Uint8Array[] = [];
+  const capture = (update: Uint8Array) => { updates.push(update); };
+  doc.on("update", capture);
+  doc.transact(() => { for (const key of keys) records.delete(key); });
+  doc.off("update", capture);
+  return updates[0] ?? null;
+}
+
+/**
+ * Remove a deleted record from the durable sync log, inside the deleting
+ * transaction. The board-wide replay folds in every scope's updates and the
+ * board-wide snapshot, so deleting the record's keys from it covers every
+ * item any document holds; the update is appended under the record's own
+ * scope, which both that scope's replay and the board-wide replay apply.
+ */
+export async function appendRecordRemoval(tx: Sql, boardId: string, recordId: string): Promise<void> {
+  const doc = new Y.Doc();
+  try {
+    const [snapshot] = await tx`
+      select state from sync_snapshots where board_id = ${boardId} and incident_id is null`;
+    if (snapshot) Y.applyUpdate(doc, new Uint8Array(snapshot.state as Buffer));
+    const updates = await tx`
+      select update_data from sync_updates where board_id = ${boardId} order by seq`;
+    for (const row of updates) Y.applyUpdate(doc, new Uint8Array(row.update_data as Buffer));
+    const removal = removeRecordKeys(doc, recordId);
+    if (removal) await tx`select append_board_record_removal(${recordId}, ${Buffer.from(removal)})`;
+  } finally {
+    doc.destroy();
+  }
 }
 
 function boardEventFor(

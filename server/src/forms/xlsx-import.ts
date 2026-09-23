@@ -178,6 +178,27 @@ function worksheetPaths(parts: Parts): ReadonlyMap<string, string> {
 }
 
 export function readXlsFormWorkbook(buffer: Buffer): XlsFormSheets {
+  const parts = unzipWorkbook(buffer);
+  const paths = worksheetPaths(parts);
+  const strings = sharedStrings(parts);
+  const read = (name: string): SheetRow[] => {
+    const path = paths.get(name);
+    const text = path ? decode(parts, path) : undefined;
+    return text ? worksheetRows(text, strings) : [];
+  };
+  const settingsRows = read("settings");
+  return { survey: read("survey"), choices: read("choices"), settings: settingsRows[0] };
+}
+
+/** Rows of a workbook's first worksheet keyed by its header row, under the same bounds. */
+export function readFirstWorksheet(buffer: Buffer): SheetRow[] {
+  const parts = unzipWorkbook(buffer);
+  const [path] = worksheetPaths(parts).values();
+  const text = path ? decode(parts, path) : undefined;
+  return text ? worksheetRows(text, sharedStrings(parts)) : [];
+}
+
+function unzipWorkbook(buffer: Buffer): Parts {
   let entries = 0;
   let inflated = 0;
   let parts: Parts;
@@ -203,16 +224,7 @@ export function readXlsFormWorkbook(buffer: Buffer): XlsFormSheets {
   } catch (error) {
     throw new Error(`not a readable .xlsx workbook: ${(error as Error).message}`, { cause: error });
   }
-
-  const paths = worksheetPaths(parts);
-  const strings = sharedStrings(parts);
-  const read = (name: string): SheetRow[] => {
-    const path = paths.get(name);
-    const text = path ? decode(parts, path) : undefined;
-    return text ? worksheetRows(text, strings) : [];
-  };
-  const settingsRows = read("settings");
-  return { survey: read("survey"), choices: read("choices"), settings: settingsRows[0] };
+  return parts;
 }
 
 export function importXlsFormWorkbook(

@@ -62,7 +62,7 @@ export function auditCsv(entries: readonly ChronologyEntry[]): string {
  * RFC 4180 quoting. A cell a spreadsheet would read as a formula gains a
  * leading single quote, so opening an export never runs one.
  */
-function csvCell(value: string): string {
+export function csvCell(value: string): string {
   const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
   return /[",\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
 }

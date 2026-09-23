@@ -79,6 +79,8 @@ export const FieldDefSchema = z
     /** For record_ref fields: target template key and readable label field. */
     targetBoardKey: z.string().regex(/^[a-z][a-z0-9_]*$/).optional(),
     labelField: z.string().regex(/^[a-z][a-z0-9_]*$/).optional(),
+    /** For record_ref fields: several target fields composing the label, in order. */
+    labelFields: z.array(z.string().regex(/^[a-z][a-z0-9_]*$/)).min(1).max(4).optional(),
   })
   .superRefine((f, ctx) => {
     if (f.type === "enum" && !f.enumId && (!f.values || f.values.length === 0)) {
@@ -87,8 +89,8 @@ export const FieldDefSchema = z
     if (f.type === "enum" && f.enumId && !dictionaryValues(f.enumId)) {
       ctx.addIssue({ code: "custom", message: `unknown dictionary enum ${f.enumId}` });
     }
-    if (f.type === "record_ref" && (!f.targetBoardKey || !f.labelField)) {
-      ctx.addIssue({ code: "custom", message: `record_ref field ${f.key} needs targetBoardKey and labelField` });
+    if (f.type === "record_ref" && (!f.targetBoardKey || referenceLabelKeys(f).length === 0)) {
+      ctx.addIssue({ code: "custom", message: `record_ref field ${f.key} needs targetBoardKey and labelField or labelFields` });
     }
     if (f.calculation && f.type !== "number") {
       ctx.addIssue({ code: "custom", message: `calculated field ${f.key} must be numeric` });
@@ -96,6 +98,62 @@ export const FieldDefSchema = z
   });
 
 export type FieldDef = z.infer<typeof FieldDefSchema>;
+
+/** The target fields a record_ref label is composed from, in order. */
+export function referenceLabelKeys(field: { labelField?: string | undefined; labelFields?: readonly string[] | undefined }): string[] {
+  return field.labelFields ? [...field.labelFields] : field.labelField ? [field.labelField] : [];
+}
+
+/**
+ * Operators of a view condition. `eq`, `neq` and `in` mean what they mean in
+ * the older `filter` list; the rest are pushed down to SQL the same way.
+ */
+export const VIEW_CONDITION_OPS = [
+  "eq", "neq", "in", "not_in", "contains", "starts_with",
+  "gt", "gte", "lt", "lte", "between", "before", "after", "is_empty", "is_not_empty",
+] as const;
+
+/** A relative time: now, or now plus or minus whole minutes, hours or days. */
+export const RELATIVE_TIME = /^now(?:[+-]\d{1,6}[mhd])?$/;
+
+const isoWithOffset = z.iso.datetime({ offset: true });
+
+/** Whether a condition value names a time: an ISO timestamp with offset or a relative time. */
+export function isTimeValue(value: unknown): value is string {
+  return typeof value === "string" && (RELATIVE_TIME.test(value) || isoWithOffset.safeParse(value).success);
+}
+
+function conditionValueFits(op: (typeof VIEW_CONDITION_OPS)[number], value: unknown): boolean {
+  switch (op) {
+    case "eq": case "neq": return value !== undefined && !Array.isArray(value);
+    case "in": case "not_in": return Array.isArray(value) && value.every((item) => typeof item === "string");
+    case "contains": case "starts_with": return typeof value === "string" && value.length > 0;
+    case "gt": case "gte": case "lt": case "lte": return typeof value === "number";
+    case "before": case "after": return isTimeValue(value);
+    case "between":
+      return Array.isArray(value) && value.length === 2 && (
+        (typeof value[0] === "number" && typeof value[1] === "number" && value[0] <= value[1])
+        || (isTimeValue(value[0]) && isTimeValue(value[1])));
+    case "is_empty": case "is_not_empty": return value === undefined;
+  }
+}
+
+export const ViewConditionSchema = z.object({
+  field: z.string().min(1),
+  op: z.enum(VIEW_CONDITION_OPS),
+  value: z.union([
+    z.string().max(400), z.number().finite(), z.boolean(),
+    z.array(z.union([z.string().max(400), z.number().finite()])).max(100),
+  ]).optional(),
+}).strict().superRefine((condition, ctx) => {
+  if (!conditionValueFits(condition.op, condition.value))
+    ctx.addIssue({ code: "custom", message: `condition ${condition.op} on ${condition.field} has an unusable value` });
+});
+
+export type ViewCondition = z.infer<typeof ViewConditionSchema>;
+
+export const ViewSortSchema = z.object({ field: z.string(), dir: z.enum(["asc", "desc"]) });
+export type ViewSort = z.infer<typeof ViewSortSchema>;
 
 export const ViewDefSchema = z.object({
   key: z.string().regex(/^[a-z][a-z0-9_]*$/),
@@ -111,10 +169,48 @@ export const ViewDefSchema = z.object({
       }),
     )
     .default([]),
-  sort: z.object({ field: z.string(), dir: z.enum(["asc", "desc"]) }).optional(),
+  /** Further conditions, ANDed with `filter`, using the full operator set. */
+  where: z.array(ViewConditionSchema).max(16).optional(),
+  sort: ViewSortSchema.optional(),
+  /** Ordered sort keys; replaces `sort` when a view needs more than one. */
+  sorts: z.array(ViewSortSchema).min(1).max(4).optional(),
+  /** Group rows by one field: rows arrive ordered by it and the first page counts each group. */
+  groupBy: z.string().regex(/^[a-z][a-z0-9_]*$/).optional(),
 });
 
 export type ViewDef = z.infer<typeof ViewDefSchema>;
+
+/**
+ * Who may read or edit a record, beyond the board-level roles. Any listed
+ * grant suffices; jurisdiction admins always may. `role` covers every holder
+ * of a board role (an incident participant reads as a member), `creator` the
+ * person who created the record, `creator_position` anyone assigned to the
+ * position it was created under, and `assigned_position` anyone assigned to
+ * the position its workflow is currently assigned to.
+ */
+export const RecordGrantSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("role"), roles: z.array(z.enum(["member", "viewer", "guest"])).min(1).max(3) }).strict(),
+  z.object({ kind: z.literal("creator") }).strict(),
+  z.object({ kind: z.literal("creator_position") }).strict(),
+  z.object({ kind: z.literal("assigned_position") }).strict(),
+]);
+
+export const RecordAccessSchema = z.object({
+  read: z.array(RecordGrantSchema).min(1).max(8),
+  edit: z.array(RecordGrantSchema).min(1).max(8),
+}).strict().superRefine((access, ctx) => {
+  for (const grant of access.edit)
+    if (grant.kind === "role" && grant.roles.some((role) => role !== "member"))
+      ctx.addIssue({ code: "custom", message: "only the member role can hold an edit grant" });
+});
+
+export type RecordAccess = z.infer<typeof RecordAccessSchema>;
+
+/** Whether a board role reads every record under a record access rule. */
+export function roleReadsEveryRecord(access: RecordAccess | undefined, role: string): boolean {
+  if (!access || role === "admin") return true;
+  return access.read.some((grant) => grant.kind === "role" && (grant.roles as readonly string[]).includes(role));
+}
 
 export const FormLayoutSchema = z.object({
   sections: z.array(z.object({
@@ -137,6 +233,8 @@ export const BoardTemplateSchema = z
     inputLayout: FormLayoutSchema.optional(),
     detailLayout: FormLayoutSchema.optional(),
     workflow: BoardWorkflowSchema.optional(),
+    /** Record-level read and edit rules; absent, every board reader reads every record. */
+    recordAccess: RecordAccessSchema.optional(),
   })
   .superRefine((t, ctx) => {
     const keys = new Set<string>();
@@ -147,11 +245,31 @@ export const BoardTemplateSchema = z
       if (f.key.startsWith("x_"))
         ctx.addIssue({ code: "custom", message: `template fields may not use the local x_ namespace (${f.key})` });
     }
+    const fieldByKey = new Map(t.fields.map((field) => [field.key, field]));
     for (const v of t.views) {
       for (const c of v.columns)
         if (!keys.has(c))
           ctx.addIssue({ code: "custom", message: `view ${v.key} references unknown field ${c}` });
+      if (v.sort && v.sorts)
+        ctx.addIssue({ code: "custom", message: `view ${v.key} declares both sort and sorts` });
+      for (const s of v.sorts ?? [])
+        if (!keys.has(s.field))
+          ctx.addIssue({ code: "custom", message: `view ${v.key} sorts by unknown field ${s.field}` });
+      if (v.groupBy) {
+        const group = fieldByKey.get(v.groupBy);
+        if (!group || group.type === "geometry" || group.calculation)
+          ctx.addIssue({ code: "custom", message: `view ${v.key} cannot group by ${v.groupBy}` });
+      }
+      for (const condition of v.where ?? []) {
+        const field = fieldByKey.get(condition.field);
+        if (!field) ctx.addIssue({ code: "custom", message: `view ${v.key} filters unknown field ${condition.field}` });
+        else if (!conditionFitsField(condition, field))
+          ctx.addIssue({ code: "custom", message: `view ${v.key} cannot apply ${condition.op} to ${field.type} field ${field.key}` });
+      }
     }
+    const grants = [...(t.recordAccess?.read ?? []), ...(t.recordAccess?.edit ?? [])];
+    if (grants.some((grant) => grant.kind === "assigned_position") && !t.workflow)
+      ctx.addIssue({ code: "custom", message: "an assigned_position grant needs a workflow" });
     for (const [name, layout] of [["input", t.inputLayout], ["detail", t.detailLayout]] as const) {
       if (!layout) continue;
       const used = new Set<string>();
@@ -220,6 +338,18 @@ export const BoardTemplateSchema = z
   });
 
 export type BoardTemplate = z.infer<typeof BoardTemplateSchema>;
+
+/** Whether a condition's operator suits the type of the field it tests. */
+export function conditionFitsField(condition: ViewCondition, field: FieldDef): boolean {
+  switch (condition.op) {
+    case "gt": case "gte": case "lt": case "lte": return field.type === "number";
+    case "before": case "after": return field.type === "datetime";
+    case "between":
+      return typeof (condition.value as unknown[])[0] === "number" ? field.type === "number" : field.type === "datetime";
+    case "contains": case "starts_with": return field.type === "text" || field.type === "enum";
+    default: return field.type !== "geometry";
+  }
+}
 
 export function dictionaryValues(enumId: string): readonly string[] | null {
   const found = allEnums().find((e) => e.id === enumId);

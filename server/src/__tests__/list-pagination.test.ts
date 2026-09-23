@@ -122,12 +122,15 @@ describe("board view pages", () => {
     expect(pageSizes.slice(0, -1).every((size) => size === 25)).toBe(true);
   });
 
-  it("pages a sorted view in sort order, both directions", async () => {
-    for (const [view, field, dir] of [["by_name", "name", "asc"], ["by_rank", "rank", "desc"]] as const) {
+  it("pages a sorted view in sort order, both directions, numbers by value", async () => {
+    for (const [view, key, dir] of [
+      ["by_name", admin`coalesce(data ->> 'name', '')`, "asc"],
+      ["by_rank", admin`(data ->> 'rank')::float8`, "desc"],
+    ] as const) {
       const { items } = await walk(`/api/v1/boards/${probeBoardId}/views/${view}`, "records", memberToken, 17);
       const expected = await admin`
         select id from board_records where board_id = ${probeBoardId}
-        order by coalesce(data ->> ${field}, '') ${dir === "asc" ? admin`asc` : admin`desc`}, created_at desc, id desc`;
+        order by ${key} ${dir === "asc" ? admin`asc` : admin`desc`}, created_at desc, id desc`;
       expect(ids(items)).toEqual(expected.map((row) => row.id as string));
     }
   });

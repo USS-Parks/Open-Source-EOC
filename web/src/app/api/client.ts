@@ -1,5 +1,6 @@
 import type {
   FieldDef,
+  ViewCondition,
   ViewDef,
   ViewRecord,
   DashboardSnapshot,
@@ -282,12 +283,15 @@ export interface BoardRecordDetailResponse {
   readonly createdAt: string; readonly createdBy: BoardRecordActor;
   readonly updatedAt: string; readonly updatedBy: BoardRecordActor | null;
   readonly canEdit: boolean; readonly history: readonly BoardRecordHistoryEntry[];
+  readonly archivedAt?: string | null;
 }
 export interface ViewRecordsResponse {
   readonly view: string;
   readonly columns: readonly string[];
   readonly records: readonly ViewRecord[];
   readonly nextCursor: string | null;
+  /** Record count per group value; first page of a grouped view only. */
+  readonly groups?: ReadonlyArray<{ readonly value: unknown; readonly count: number }>;
 }
 /** Keyset paging for list endpoints: pass a page's `nextCursor` to read the next. */
 export interface PageOptions {
@@ -1924,6 +1928,48 @@ export class ApiClient {
   testNotificationChannel(jurisdictionId: string, kind: NotificationChannelKind, to: string): Promise<{ receipt: Readonly<Record<string, unknown>> }> {
     return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/notification-channels/${kind}/test`, { to });
   }
+
+  // ---- Board engine: refined views, archive, delete, history, import and export ----
+
+  /** One page of a view refined for this read: extra conditions, sort keys, a group field, archived records. */
+  boardViewPage(boardId: string, viewKey: string, query: BoardViewQuery = {}, page: PageOptions = {}): Promise<ViewRecordsResponse> {
+    const params = pageParams(page, boardViewParams(query));
+    return this.request("GET", `/api/v1/boards/${encodeURIComponent(boardId)}/views/${encodeURIComponent(viewKey)}${params.size ? `?${params}` : ""}`);
+  }
+  /** Every page of a view as one CSV or .xlsx file, under the same refinements. */
+  exportBoardView(boardId: string, viewKey: string, format: "csv" | "xlsx", query: BoardViewQuery = {}): Promise<Blob> {
+    const params = boardViewParams(query);
+    params.set("format", format);
+    return this.requestBlob(`/api/v1/boards/${encodeURIComponent(boardId)}/views/${encodeURIComponent(viewKey)}/export?${params}`);
+  }
+  /** Validate (dryRun) or commit a CSV or .xlsx file of records; a commit writes every row or none. */
+  importBoardRecords(
+    boardId: string,
+    file: Blob,
+    options: { dryRun?: boolean; incidentId?: string; mapping?: Readonly<Record<string, string | null>> } = {},
+  ): Promise<BoardImportResult> {
+    const form = new FormData();
+    if (options.mapping) form.append("mapping", JSON.stringify(options.mapping));
+    form.append("file", file, "import");
+    const params = new URLSearchParams({ dryRun: String(options.dryRun ?? false) });
+    if (options.incidentId) params.set("incidentId", options.incidentId);
+    return this.request("POST", `/api/v1/boards/${encodeURIComponent(boardId)}/import?${params}`, form);
+  }
+  /** One page of a record's change history, oldest first. */
+  boardRecordHistory(boardId: string, recordId: string, incidentId?: string | null, page: PageOptions = {}): Promise<{ entries: BoardRecordChange[]; nextCursor: string | null }> {
+    const params = pageParams(page, new URLSearchParams(incidentId ? { incidentId } : {}));
+    return this.request("GET", `/api/v1/boards/${encodeURIComponent(boardId)}/records/${encodeURIComponent(recordId)}/history${params.size ? `?${params}` : ""}`);
+  }
+  archiveRecord(boardId: string, recordId: string): Promise<{ archivedAt: string | null }> {
+    return this.request("POST", `/api/v1/boards/${encodeURIComponent(boardId)}/records/${encodeURIComponent(recordId)}/archive`);
+  }
+  restoreRecord(boardId: string, recordId: string): Promise<{ archivedAt: string | null }> {
+    return this.request("POST", `/api/v1/boards/${encodeURIComponent(boardId)}/records/${encodeURIComponent(recordId)}/restore`);
+  }
+  /** Jurisdiction admins only; the record stays in history. */
+  deleteRecord(boardId: string, recordId: string): Promise<{ ok: true }> {
+    return this.request("DELETE", `/api/v1/boards/${encodeURIComponent(boardId)}/records/${encodeURIComponent(recordId)}`);
+  }
 }
 
 // ---- Notification channel types ----
@@ -1937,6 +1983,41 @@ export interface NotificationChannelView {
   readonly secretStorageAvailable: boolean;
   /** SMS only: what the fixture provider recorded instead of sending, newest first. */
   readonly fixtureMessages?: ReadonlyArray<{ readonly messageId: string; readonly to: string; readonly body: string; readonly at: string }>;
+}
+
+
+// ---- Board engine types ----
+
+/** Request-time refinements of a board view. */
+export interface BoardViewQuery {
+  readonly incidentId?: string;
+  readonly archived?: "exclude" | "include" | "only";
+  readonly where?: readonly ViewCondition[];
+  readonly sorts?: ReadonlyArray<{ readonly field: string; readonly dir: "asc" | "desc" }>;
+  readonly groupBy?: string;
+}
+function boardViewParams(query: BoardViewQuery): URLSearchParams {
+  const params = new URLSearchParams();
+  if (query.incidentId) params.set("incidentId", query.incidentId);
+  if (query.archived) params.set("archived", query.archived);
+  if (query.where?.length) params.set("where", JSON.stringify(query.where));
+  if (query.sorts?.length) params.set("sort", query.sorts.map((s) => `${s.field}:${s.dir}`).join(","));
+  if (query.groupBy) params.set("groupBy", query.groupBy);
+  return params;
+}
+export interface BoardRecordChange {
+  readonly seq: number; readonly id: string; readonly at: string; readonly category: string;
+  readonly corrects: string | null; readonly actor: BoardRecordActor;
+  readonly changes: ReadonlyArray<{ readonly field: string; readonly before: unknown; readonly after: unknown }>;
+}
+export interface BoardImportResult {
+  readonly dryRun: boolean;
+  readonly rows: number;
+  readonly created: number;
+  readonly mapping: Readonly<Record<string, string>>;
+  readonly ignored: readonly string[];
+  readonly errorCount: number;
+  readonly errors: ReadonlyArray<{ readonly row: number; readonly field?: string; readonly message: string }>;
 }
 
 // ---- JIC list types ----

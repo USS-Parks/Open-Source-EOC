@@ -1720,3 +1720,74 @@ tagging remain separately gated as section 1 of the roster states.
 - **Result:** wave W2 is complete: W2.0 through W2.11 are receipted and on
   `origin/main`. The gate's suite leg is green after the recorded fix, its heap
   leg is met, and its hardware leg is carried to `R1-REAL`.
+
+## V1 W4.1 part one: board engine depth
+
+- **What changed.** The engine half of board depth in `shared/src/boards/**`
+  and `server/src/boards/**`:
+  - Reference labels compose from up to four target fields (`labelFields`),
+    omitting any the caller cannot read.
+  - Record-level access: templates declare `recordAccess` with read and edit
+    grants by role, creator, creator position or workflow-assigned position.
+    The database enforces it through restrictive row-level policies on
+    `board_records` and `audit_events`, which covers every read path: views and
+    cursor pages, detail, history, references, exports, the chronology,
+    dashboards, map layers and sync rows. REST and sync writes check the edit
+    rule and the policy refuses the update at the database too.
+  - Archive and restore keep records out of default views and bring them back
+    with `archived=include|only`. Delete is admin-only and a tombstone: the
+    prior data stays in the audit entry, and a Yjs removal is appended to the
+    sync log in the same transaction and pushed to open documents.
+  - A cursor-paged history route per record with who, position, when, and
+    values before and after, built on `audit_events`; sync writes now record
+    before and after values too.
+  - Export of a view as CSV with the formula guard and as XLSX; import of CSV or
+    XLSX with header mapping, a dry run returning per-row errors, and an
+    all-or-nothing commit; new `server/src/boards/transfer.ts`.
+  - Ten more filter operators including relative dates, pushed to SQL, in a new
+    view property `where`; multi-key sort with every key in the cursor; grouped
+    views returning counts.
+- **Deviations.** The operators live in `where` rather than widening `filter`,
+  whose three-operator type the designer depends on. The assigned-position
+  grant uses the workflow assignment, because no position field type exists.
+  A board with record rules is served over sync only to callers who read every
+  record; others use views, because filtering one shared document per reader
+  would leak through the Yjs log. Grouped views return counts on the first
+  page. Numbers now sort by value, not as text, which changed one expectation
+  in `list-pagination.test.ts`. Import creates records only and sends no
+  notifications, capped at 10 MB and 10,000 rows; export caps at 50,000 rows.
+  Ownership deviations: `server/src/sync/hub.ts` (restricted-board refusal,
+  edit-rule and deleted-record conflicts, audit values, the removal listener),
+  `server/src/forms/xlsx-import.ts` (a shared worksheet reader),
+  `server/src/audit/export.ts` (the CSV cell helper exported).
+- **Integration fix: files on restricted records.** The lane found that a file
+  attached to a restricted record was listed by the file table's own rules, so
+  its name, text and bytes reached callers the record excludes. Migration 0119
+  now carries a restrictive `files_record_scope` policy applying the record's
+  read rule to files attached to it; a new test shows the outsider neither
+  listing nor fetching the file while the author does.
+- **Recorded, not changed.** A notification rule delivers a restricted record
+  to its configured destinations, and a sharing agreement federates a
+  restricted board's live edits; both are administrator-configured, and
+  `docs/guides/DESIGNER.md` now says neither is governed by the rule. A record
+  a client holds from an incident projection is not retracted from its saved
+  copy after delete, though the server never serves it again.
+- **Schema:** migration `0119_board_engine_depth.sql`: archive and tombstone
+  columns, a generated `record_access` column, five SECURITY DEFINER
+  functions, four restrictive policies. Six routes and new view parameters;
+  `docs/API.md` regenerated. No dependency: `fflate` writes XLSX and the
+  existing reader reads it back.
+- **Verification.** In the lane: `board-engine.test.ts` 17 of 17 three times;
+  seven board suites 84 of 84; sync, federation, dashboards, forms, ipaws,
+  api-docs, xlsform-reader and audit 69 of 69; web boards, client and shared
+  177 of 177; the workspace browser walk and load 12 of 12, the first page over
+  50,000 records in 5 ms unfiltered and 30 ms filtered. After rebasing onto
+  W3.9, W4.5, route coverage and W4.0 part one, with the file policy: 19 server
+  suites, every web test and the shared suite 743 of 743, and the boards
+  workspace browser walk and `load.test.ts` serial 5 of 5. TypeScript and
+  ESLint clean. Link checker 71 files.
+- **Evidence level:** unit, real-database, integration, browser and document.
+- **Deferred:** the board screen controls, W4.1 part two. Parity row F1's
+  evidence is added at the W4 gate.
+- **Rollback:** revert the commit and drop the migration's policies, functions
+  and columns.

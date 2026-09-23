@@ -161,6 +161,36 @@ read the **Workflow** section of the record context.
   recorded assignment, due time or schedule. History is append-only and has no
   edit controls.
 
+### Import, export, archive and record history
+
+The board screen does not yet have controls for these; they are available
+through the board routes listed in the [API reference](../API.md).
+
+- **Export** a view as CSV or Excel with
+  `GET /api/v1/boards/{board}/views/{view}/export?format=csv` or
+  `format=xlsx`. The file holds the record id and the view's columns you may
+  read, under the view's filters and any conditions, sort or `archived`
+  option you add. In CSV, text that a spreadsheet would run as a formula
+  starts with a single quote. One export holds at most 50,000 records.
+- **Import** a CSV or Excel file with `POST /api/v1/boards/{board}/import`,
+  as a form upload with the file last. Each column heading maps to the field
+  with that key or label, ignoring case; an optional `mapping` form field
+  maps headings to field keys explicitly, and `null` skips a heading. The `id`
+  column is always skipped: an import creates new records. Run it first with
+  `?dryRun=true`: nothing is written and the response lists every row error
+  by row number, counting the heading row as 1. Without `dryRun`, every row
+  is written or, when any row fails, none is. An import sends no
+  notifications. The file limit is 10 MB and 10,000 rows.
+- **Archive** a record to take it out of the default views, and **restore**
+  it to bring it back. Add `archived=include` or `archived=only` to a view to
+  see archived records.
+- **Delete** is for jurisdiction administrators. The record disappears from
+  every view, map and export, and from sync documents; its history remains.
+- **History** of a record, oldest first, is at
+  `GET /api/v1/boards/{board}/records/{record}/history`: who, in which
+  position, when, and each field changed with its value before and after. An
+  update recorded before this history existed shows no earlier value.
+
 ## 4. Plan and brief
 
 - Prepare IAP content against the selected incident and a real incident-area

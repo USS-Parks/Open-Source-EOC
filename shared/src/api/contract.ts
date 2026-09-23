@@ -36,6 +36,7 @@ export interface ApiContract {
 }
 
 const routeKeys = `
+DELETE /api/v1/boards/:boardId/records/:recordId
 DELETE /api/v1/guests/:grantId
 DELETE /api/v1/incidents/:incidentId/dashboard-configs/:key
 DELETE /api/v1/incidents/:incidentId/saved-state/:kind/:key
@@ -47,8 +48,10 @@ GET /api/v1/auth/oidc/start
 GET /api/v1/boards/:boardId
 GET /api/v1/boards/:boardId/record-references/:fieldKey
 GET /api/v1/boards/:boardId/records/:recordId/detail
+GET /api/v1/boards/:boardId/records/:recordId/history
 GET /api/v1/boards/:boardId/records/:recordId/workflow
 GET /api/v1/boards/:boardId/views/:viewKey
+GET /api/v1/boards/:boardId/views/:viewKey/export
 GET /api/v1/cap/alerts/:id
 GET /api/v1/corrective-actions/:id
 GET /api/v1/dashboard-templates/:key/:version/export
@@ -163,10 +166,13 @@ POST /api/v1/auth/mfa/activate
 POST /api/v1/auth/mfa/enroll
 POST /api/v1/auth/mfa/verify
 POST /api/v1/auth/resume
+POST /api/v1/boards/:boardId/import
 POST /api/v1/boards/:boardId/local-fields
 POST /api/v1/boards/:boardId/records
+POST /api/v1/boards/:boardId/records/:recordId/archive
 POST /api/v1/boards/:boardId/records/:recordId/cot
 POST /api/v1/boards/:boardId/records/:recordId/edxl
+POST /api/v1/boards/:boardId/records/:recordId/restore
 POST /api/v1/boards/:boardId/records/:recordId/workflow/approvals
 POST /api/v1/boards/:boardId/records/:recordId/workflow/escalations
 POST /api/v1/boards/:boardId/records/:recordId/workflow/transitions

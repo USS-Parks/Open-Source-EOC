@@ -36,6 +36,77 @@ Test long names, missing values, narrow screens, and keyboard operation. A
 missing column value should remain visibly missing rather than becoming a
 synthetic default.
 
+## Template properties beyond the designer screen
+
+The properties below are part of the template definition and are validated
+when a version is registered or imported. Until the designer screen offers
+controls for them, add them to the template JSON of a new version.
+
+### Reference labels from several fields
+
+A `record_ref` field names its target board with `targetBoardKey` and the
+label operators see with `labelField`. To compose the label from more than one
+target field, list up to four keys in `labelFields`, in display order, for
+example `["unit_id", "name", "station"]`. The label joins the values with
+" / ". A label field the reader cannot read is left out of the label; a
+reader who can read none of them cannot pick or save the reference.
+
+### View conditions, sorts and groups
+
+- `filter` keeps its `eq`, `neq` and `in` rules. `where` adds conditions with
+  more operators, all of which must hold: `not_in`, `contains` and
+  `starts_with` (text and enumerations, ignoring case), `gt`, `gte`, `lt`,
+  `lte` and `between` for numbers, `before`, `after` and `between` for
+  datetimes, and `is_empty` and `is_not_empty`. A datetime value is an ISO
+  timestamp with an offset or a relative time: `now`, or `now` plus or minus a
+  whole number of minutes, hours or days, such as `now-7d`.
+- `sorts` lists up to four sort keys, most significant first, and replaces
+  `sort`. Numbers sort by value and datetimes by instant; an empty value sorts
+  first in ascending order.
+- `groupBy` names one field. Rows arrive ordered by it, and the first page of
+  the view carries the record count of each group over every matching record.
+  A group field cannot be a geometry or calculated field.
+
+Operators can refine a view for one read with the same conditions, sort keys
+and group field; a refinement never widens what the reader may see.
+
+### Restrict individual records
+
+`recordAccess` limits who may read and who may edit each record, beyond the
+board's own roles. It has a `read` list and an `edit` list of grants, and any
+one grant is enough:
+
+- `{ "kind": "role", "roles": ["member", "viewer", "guest"] }`: every holder
+  of a listed board role. An incident participant from another organization
+  counts as a member. Only `member` may appear in an edit grant.
+- `{ "kind": "creator" }`: the person who created the record.
+- `{ "kind": "creator_position" }`: anyone assigned to the position the
+  record was created under.
+- `{ "kind": "assigned_position" }`: anyone assigned to the position the
+  record's workflow is currently assigned to. The board needs a workflow.
+
+Jurisdiction administrators always read and edit every record. The database
+applies the rule, so a restricted record is absent from views, exports,
+reference choices, record detail, history, the chronology, dashboards and map
+layers for anyone it excludes, and so are files attached to it. Include
+`creator` or `creator_position` in the read list unless writers should lose
+sight of what they submit. A caller who cannot read every record of a board
+cannot open it for offline sync; they use its views.
+
+Two paths an administrator configures are not governed by the rule: a
+notification rule delivers the record to the destinations it names, and a
+sharing agreement sends the board's live edits to the partner instance. Point
+neither at a board whose records some people must not see unless every
+destination may see them all.
+
+### Archive and delete
+
+Board writers who may edit a record can archive it: it leaves the default
+views and returns when restored, with references and history unchanged.
+Jurisdiction administrators can delete a record. Deletion keeps the row as a
+tombstone that no read path returns, records the prior values in the history,
+and removes the record from sync documents. Neither needs a template property.
+
 ## Preview and publish a revision
 
 1. Review the structural diff from the current version.
