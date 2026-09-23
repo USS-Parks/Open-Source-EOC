@@ -15,6 +15,7 @@ import {
 import { isDeepStrictEqual } from "node:util";
 import { verifyPackage } from "./package.js";
 import type { Sql } from "../db/client.js";
+import { CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, decodeCursor, encodeCursor, type PageRequest } from "../db/cursor.js";
 import { AuthError, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 import { getIncidentAuthority, lockIncidentMutation } from "../incidents/participation.js";
@@ -500,14 +501,22 @@ export interface ViewRecords {
   readonly view: string;
   readonly columns: readonly string[];
   readonly records: ReadonlyArray<Record<string, unknown> & { id: string }>;
+  /** Opaque cursor for the next page; null on the last page. */
+  readonly nextCursor: string | null;
 }
 
+/**
+ * One page of a board view, newest first unless the view sorts. Filters and
+ * the sort run in SQL over an index-ordered keyset, so the first page costs
+ * the same on a board of 50 records or 50,000.
+ */
 export async function listViewRecords(
   sql: Sql,
   actor: Principal,
   boardId: string,
   viewKey: string,
   incidentId?: string,
+  page: PageRequest = {},
 ): Promise<ViewRecords> {
   let board: EffectiveBoard;
   if (incidentId) {
@@ -526,24 +535,83 @@ export async function listViewRecords(
   }
   const view = board.template.views.find((v) => v.key === viewKey);
   if (!view) throw new AuthError(404, "view not found");
-  const rows = await sql`
-    select id, data, created_at from board_records
-    where board_id = ${boardId}
-      and (${incidentId ?? null}::uuid is null or incident_id = ${incidentId ?? null})
-    order by created_at desc`;
   const readable = new Set(
     board.fields.filter((f) => canRead(board.role, f.read)).map((f) => f.key),
   );
-  const masked = rows.map((r) => {
+  const calculated = new Set(board.fields.filter((f) => f.calculation).map((f) => f.key));
+  // ponytail: a sort on a calculated field has no stored value to index, so
+  // it orders within each page only; add a SQL expression if a template needs it.
+  const sort = view.sort && readable.has(view.sort.field) && !calculated.has(view.sort.field)
+    ? view.sort : null;
+  const after = decodeCursor(page.cursor, ["key", "at", "id"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
+  const sortKey = () => (sort ? sql`coalesce(data ->> ${sort.field}, '')` : sql`''`);
+  const keyset = !after ? sql``
+    : !sort ? sql`and (created_at, id) < (${after[1]!}::text::timestamptz, ${after[2]!}::uuid)`
+      : sort.dir === "desc"
+        ? sql`and (${sortKey()}, created_at, id) < (${after[0]!}, ${after[1]!}::text::timestamptz, ${after[2]!}::uuid)`
+        : sql`and (${sortKey()} > ${after[0]!} or (${sortKey()} = ${after[0]!}
+            and (created_at, id) < (${after[1]!}::text::timestamptz, ${after[2]!}::uuid)))`;
+  const order = !sort ? sql`created_at desc, id desc`
+    : sort.dir === "desc" ? sql`${sortKey()} desc, created_at desc, id desc`
+      : sql`${sortKey()} asc, created_at desc, id desc`;
+  const filters = view.filter.reduce(
+    (clauses, filter) => sql`${clauses} ${viewFilterSql(sql, filter, readable, calculated)}`, sql``);
+  const rows = await sql`
+    select id, data, ${sortKey()} as page_key,
+           to_char(created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
+    from board_records
+    where board_id = ${boardId}
+      and (${incidentId ?? null}::uuid is null or incident_id = ${incidentId ?? null})
+      ${filters} ${keyset}
+    order by ${order}
+    limit ${limit + 1}`;
+  const pageRows = rows.slice(0, limit);
+  const last = rows.length > limit ? pageRows.at(-1)! : null;
+  const masked = pageRows.map((r) => {
     const data = deriveRecordValues(board.fields, r.data as Record<string, unknown>);
     const out: Record<string, unknown> & { id: string } = { id: r.id as string };
     for (const key of Object.keys(data)) if (readable.has(key)) out[key] = data[key];
     return out;
   });
-  // One view semantics for server and browser (shared applyView).
+  // One view semantics for server and browser (shared applyView): the SQL
+  // above may admit extra rows, never fewer, and applyView has the last word.
   const records = applyView(view, masked);
   const columns = view.columns.filter((c) => readable.has(c));
-  return { view: view.key, columns, records };
+  return {
+    view: view.key,
+    columns,
+    records,
+    nextCursor: last
+      ? encodeCursor([last.page_key as string, last.page_at as string, last.id as string])
+      : null,
+  };
+}
+
+/**
+ * One view filter as a SQL predicate. An unreadable field is masked before
+ * applyView sees it, so it reads as absent here too. A calculated field has no
+ * stored value; applyView alone decides it, which can leave a page short.
+ * ponytail: `in` compares the stored value's text form, which differs from
+ * applyView's String() only for objects and exotic numbers such as 1e21.
+ */
+function viewFilterSql(
+  sql: Sql,
+  filter: ViewDef["filter"][number],
+  readable: ReadonlySet<string>,
+  calculated: ReadonlySet<string>,
+): never {
+  const { field, op, value } = filter;
+  const values = Array.isArray(value) ? value : null;
+  if (calculated.has(field)) return sql`` as never;
+  if (!readable.has(field)) {
+    const keepsAbsent = op === "neq" || (op === "in" && Boolean(values?.includes("undefined")));
+    return (keepsAbsent ? sql`` : sql`and false`) as never;
+  }
+  if (op === "eq") return (values ? sql`and false` : sql`and data -> ${field} = ${sql.json(value as never)}`) as never;
+  if (op === "neq")
+    return (values ? sql`` : sql`and data -> ${field} is distinct from ${sql.json(value as never)}`) as never;
+  return (values?.length ? sql`and data ->> ${field} in ${sql(values)}` : sql`and false`) as never;
 }
 
 export interface BoardListItem {

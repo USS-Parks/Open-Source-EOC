@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
+import { CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, decodeCursor, encodeCursor, pageQuery } from "../db/cursor.js";
 import { AuthError } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 import { ChannelSchema, ConditionSchema, runScheduledRules } from "./engine.js";
@@ -47,9 +48,13 @@ export function notifyRoutes(
   );
 
   app.get("/api/v1/notifications", { preHandler: authenticate }, async (req, reply) => {
+    const page = z.object(pageQuery).parse(req.query);
+    const after = decodeCursor(page.cursor, ["at", "id"]);
+    const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
     const rows = await withPerson(sql, req.principal.person.id, (tx) => {
       return tx`
         select n.id, n.channel, n.title, n.body, n.status, n.detail,
+          to_char(n.created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at,
           n.person_id, n.position_id, n.created_at, n.read_at,
           n.acknowledged_at, n.acknowledged_by,
           (n.person_id = ${req.principal.person.id} or (n.position_id is not null and exists (
@@ -65,10 +70,12 @@ export function notifyRoutes(
         left join persons recipient on recipient.id = n.person_id
         left join positions position on position.id = n.position_id
         left join persons acknowledger on acknowledger.id = n.acknowledged_by
-        left join incidents incident on incident.id::text = n.detail ->> 'incidentId'
-        order by n.created_at desc limit 100`;
+        left join incidents incident on incident.id = n.incident_id
+        ${after ? tx`where (n.created_at, n.id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : tx``}
+        order by n.created_at desc, n.id desc limit ${limit + 1}`;
     });
-    const notifications = rows.map((row) => {
+    const last = rows.length > limit ? rows[limit - 1]! : null;
+    const notifications = rows.slice(0, limit).map(({ page_at: _pageAt, ...row }) => {
       const detail = row.detail as Record<string, unknown>;
       const destination = row.position_id
         ? `Position · ${String(row.position_title ?? "Assigned position")}`
@@ -81,7 +88,10 @@ export function notifyRoutes(
               : "Configured external channel";
       return { ...row, destination };
     });
-    return reply.send({ notifications });
+    return reply.send({
+      notifications,
+      nextCursor: last ? encodeCursor([last.page_at as string, last.id as string]) : null,
+    });
   });
 
   app.post(

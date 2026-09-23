@@ -54,6 +54,10 @@ describe("ApiClient", () => {
     client.setTokens({ accessToken: "A", resumeToken: "R" });
     await client.boardView("board-a", "all", "incident-a");
     expect(fetchImpl.mock.calls[0]?.[0]).toBe("/api/v1/boards/board-a/views/all?incidentId=incident-a");
+    await client.boardView("board-a", "all", undefined, { cursor: "next-page", limit: 50 });
+    expect(fetchImpl.mock.calls[1]?.[0]).toBe("/api/v1/boards/board-a/views/all?cursor=next-page&limit=50");
+    await client.notificationPage({ cursor: "older" });
+    expect(fetchImpl.mock.calls[2]?.[0]).toBe("/api/v1/notifications?cursor=older");
   });
 
   it("uses the versioned board authoring routes without a parallel configuration API", async () => {

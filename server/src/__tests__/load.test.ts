@@ -8,20 +8,21 @@ import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
  * Load and scale benchmarks (R1). These are the committed floor as a
- * regression guard: a board holding the SharePoint-lesson volume of 5,000
- * records still serves a view quickly, and a 150-operation concurrent burst
- * (mixed reads and writes, the shape of a 150-user activation) completes
- * within budget. Budgets are generous so CI variance never flakes; the
- * measured numbers are printed and published in the capacity receipt under docs/process.
+ * regression guard: a board holding 50,000 records serves the first page of
+ * a view in under 300 ms, and a 150-operation concurrent burst (mixed reads
+ * and writes, the shape of a 150-user activation) completes within budget.
+ * The burst budgets are generous so CI variance never flakes; the measured
+ * numbers are printed and published in the capacity receipt under docs/process.
  */
 
-// Budgets: deliberately loose ceilings that only a pathological regression
-// (an unindexed scan, an accidental N+1, a lock storm) would breach.
-const VIEW_5000_BUDGET_MS = 5000;
+// The first-page budget is the acceptance bound for paged board views. The
+// burst budgets are loose ceilings that only a pathological regression (an
+// unindexed scan, an accidental N+1, a lock storm) would breach.
+const FIRST_PAGE_BUDGET_MS = 300;
 const BURST_WALL_BUDGET_MS = 30000;
 const BURST_P95_BUDGET_MS = 6000;
 const CONCURRENCY = 150;
-const VOLUME = 5000;
+const VOLUME = 50000;
 
 let admin: Sql;
 let runtime: Sql;
@@ -72,21 +73,27 @@ function percentile(values: number[], p: number): number {
   return sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))]!;
 }
 
-describe("board record volume (the 5,000-item lesson)", () => {
-  it(`serves a view over ${VOLUME} records within budget`, async () => {
+describe("board record volume", () => {
+  it(`lists the first page of a view over ${VOLUME} records within budget`, async () => {
     await admin`
-      insert into board_records (board_id, data, created_by)
-      select ${boardId}, jsonb_build_object('entry', 'Log line ' || g, 'notable', false), ${adminId}
+      insert into board_records (board_id, data, created_by, created_at)
+      select ${boardId}, jsonb_build_object('entry', 'Log line ' || g, 'notable', g % 10 = 0), ${adminId},
+             now() - make_interval(secs => g)
       from generate_series(1, ${VOLUME}) g`;
-    const t0 = performance.now();
-    const res = await auth("GET", `/api/v1/boards/${boardId}/views/all`);
-    const ms = performance.now() - t0;
-    expect(res.statusCode).toBe(200);
-    expect(res.json().records.length).toBe(VOLUME);
-    // eslint-disable-next-line no-console
-    console.log(`[load] view over ${VOLUME} records: ${ms.toFixed(0)}ms`);
-    expect(ms).toBeLessThan(VIEW_5000_BUDGET_MS);
-  }, 60000);
+    await admin`analyze board_records`;
+    for (const view of ["all", "notable"]) {
+      await auth("GET", `/api/v1/boards/${boardId}/views/${view}`); // warm the connection and plan
+      const t0 = performance.now();
+      const res = await auth("GET", `/api/v1/boards/${boardId}/views/${view}`);
+      const ms = performance.now() - t0;
+      expect(res.statusCode).toBe(200);
+      expect(res.json().records).toHaveLength(100);
+      expect(res.json().nextCursor).toEqual(expect.any(String));
+      // eslint-disable-next-line no-console
+      console.log(`[load] first page of view ${view} over ${VOLUME} records: ${ms.toFixed(0)}ms`);
+      expect(ms).toBeLessThan(FIRST_PAGE_BUDGET_MS);
+    }
+  }, 120000);
 });
 
 describe("150-concurrent activation profile", () => {

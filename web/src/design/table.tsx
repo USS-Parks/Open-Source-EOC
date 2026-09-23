@@ -2,6 +2,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
   type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
@@ -84,6 +85,8 @@ interface OperationalTableProps<Row> {
   ) => void;
   readonly bulkActions?: readonly OperationalTableBulkAction[];
   readonly toolbar?: ReactNode;
+  /** Fetch the next server page into `rows`; present only while the server has more. */
+  readonly onLoadMore?: () => Promise<void>;
 }
 
 const DEFAULT_WIDTH = 180;
@@ -327,6 +330,20 @@ export function OperationalTable<Row>(props: OperationalTableProps<Row>) {
   };
   const selectedForAction = [...safeSelectedIds].sort();
   const selectionDisabled = props.status !== "ready" || eligibleIds.size === 0;
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const loadMore = async () => {
+    if (!props.onLoadMore) return;
+    setLoadingMore(true);
+    setLoadMoreError(null);
+    try {
+      await props.onLoadMore();
+    } catch (error) {
+      setLoadMoreError(error instanceof Error ? error.message : "More records could not be loaded.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const columnStyle = (column: OperationalTableColumn<Row>): CSSProperties => {
     const pin = props.viewState.pinned[column.id];
@@ -520,7 +537,17 @@ export function OperationalTable<Row>(props: OperationalTableProps<Row>) {
             disabled={props.status === "loading" || !props.hasNextPage}
             onClick={() => changeView({ page: props.viewState.page + 1 }, "page")}
           >Next</ActionButton>
+          {props.onLoadMore ? (
+            <ActionButton
+              kind="quiet"
+              loading={loadingMore}
+              loadingLabel="Loading more…"
+              disabled={props.status === "loading"}
+              onClick={() => void loadMore()}
+            >Load more records</ActionButton>
+          ) : null}
         </div>
+        {loadMoreError ? <span role="alert">{loadMoreError}</span> : null}
       </div>
     </section>
   );

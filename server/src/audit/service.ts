@@ -1,4 +1,5 @@
 import type { Sql } from "../db/client.js";
+import { DEFAULT_PAGE_LIMIT, decodeCursor, encodeCursor, type PageRequest } from "../db/cursor.js";
 import { AuthError, type Principal } from "../auth/service.js";
 
 export interface AuditInput {
@@ -64,24 +65,49 @@ export interface ChronologyEntry {
   readonly line: string;
 }
 
-export interface ChronologyQuery {
+export interface ChronologyQuery extends PageRequest {
   readonly jurisdictionId: string;
   readonly from?: Date | undefined;
   readonly to?: Date | undefined;
   readonly positionId?: string | undefined;
 }
 
-/**
- * The reimbursement-grade chronology (F2): ordered, attributed, and
- * renderable as one line per event for documentation packages.
- */
+export interface ChronologyPage {
+  readonly entries: ChronologyEntry[];
+  /** Opaque cursor for the next page; null on the last page. */
+  readonly nextCursor: string | null;
+}
+
+/** The whole chronology for a documentation package, read page by page. */
 export async function exportChronology(
   sql: Sql,
   actor: Principal,
-  query: ChronologyQuery,
+  query: Omit<ChronologyQuery, "cursor" | "limit">,
 ): Promise<ChronologyEntry[]> {
+  const entries: ChronologyEntry[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await listChronology(sql, actor, { ...query, cursor, limit: 500 });
+    entries.push(...page.entries);
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  return entries;
+}
+
+/**
+ * The reimbursement-grade chronology (F2): ordered, attributed, and
+ * renderable as one line per event for documentation packages. Paged in
+ * sequence order, so walking every cursor reproduces the whole record.
+ */
+export async function listChronology(
+  sql: Sql,
+  actor: Principal,
+  query: ChronologyQuery,
+): Promise<ChronologyPage> {
   const member = actor.memberships.some((m) => m.jurisdictionId === query.jurisdictionId);
   if (!member) throw new AuthError(403, "no access to this jurisdiction");
+  const after = decodeCursor(query.cursor, ["seq"]);
+  const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
   const rows = await sql`
     select e.seq, e.created_at, e.category, e.payload, e.corrects,
            p.display_name as person, pos.title as position_title
@@ -92,8 +118,10 @@ export async function exportChronology(
       and (${query.from ?? null}::timestamptz is null or e.created_at >= ${query.from ?? null})
       and (${query.to ?? null}::timestamptz is null or e.created_at <= ${query.to ?? null})
       and (${query.positionId ?? null}::uuid is null or e.position_id = ${query.positionId ?? null})
-    order by e.seq asc`;
-  return rows.map((r) => {
+      ${after ? sql`and e.seq > ${after[0]!}::bigint` : sql``}
+    order by e.seq asc
+    limit ${limit + 1}`;
+  const entries = rows.slice(0, limit).map((r) => {
     const at = new Date(r.created_at as string).toISOString();
     const position = (r.position_title as string | null) ?? null;
     const who = position ? `${r.person as string} (${position})` : (r.person as string);
@@ -108,4 +136,8 @@ export async function exportChronology(
       line: `${at} ${who}: ${r.category as string}${r.corrects ? " (correction)" : ""}`,
     };
   });
+  return {
+    entries,
+    nextCursor: rows.length > limit ? encodeCursor([String(entries.at(-1)!.seq)]) : null,
+  };
 }

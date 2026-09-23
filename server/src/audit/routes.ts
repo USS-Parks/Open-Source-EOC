@@ -2,12 +2,14 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
-import { correctAudit, exportChronology } from "./service.js";
+import { pageQuery } from "../db/cursor.js";
+import { correctAudit, listChronology } from "./service.js";
 
 const ChronologyQuery = z.object({
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
   positionId: z.string().uuid().optional(),
+  ...pageQuery,
 });
 
 const CorrectionBody = z.object({
@@ -26,10 +28,10 @@ export function auditRoutes(
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
       const query = ChronologyQuery.parse(req.query);
-      const entries = await withPerson(sql, req.principal.person.id, (tx) =>
-        exportChronology(tx, req.principal, { jurisdictionId, ...query }),
+      const page = await withPerson(sql, req.principal.person.id, (tx) =>
+        listChronology(tx, req.principal, { jurisdictionId, ...query }),
       );
-      return reply.send({ entries });
+      return reply.send(page);
     },
   );
 

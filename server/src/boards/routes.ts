@@ -3,6 +3,7 @@ import { z } from "zod";
 import { WorkflowAssignmentRequestSchema } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
+import { pageQuery } from "../db/cursor.js";
 import { notifyBoardEvent, type BoardEvent } from "../notify/engine.js";
 import { publishBoardEvent } from "../events/bus.js";
 import {
@@ -295,9 +296,9 @@ export function boardRoutes(
       const { boardId, viewKey } = req.params as { boardId: string; viewKey: string };
       // Optional incident scope: narrow the view to the records this incident
       // holds on the board (VEOC-79B2).
-      const { incidentId } = z.object({ incidentId: z.string().uuid().optional() }).parse(req.query);
+      const query = z.object({ incidentId: z.string().uuid().optional(), ...pageQuery }).parse(req.query);
       const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        listViewRecords(tx, req.principal, boardId, viewKey, incidentId),
+        listViewRecords(tx, req.principal, boardId, viewKey, query.incidentId, query),
       );
       return reply.send(result);
     },

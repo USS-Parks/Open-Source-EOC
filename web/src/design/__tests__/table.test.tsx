@@ -267,6 +267,38 @@ describe("operational table", () => {
     expect(getByRole("button", { name: "Next" }).hasAttribute("disabled")).toBe(false);
   });
 
+  it("loads the next server page on request and reports a failed load", async () => {
+    const onLoadMore = vi.fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("The server did not answer."));
+    const { getByRole } = render(
+      <Theme name="light">
+        <OperationalTable
+          tableId="work"
+          caption="Work"
+          columns={columns}
+          rows={rows}
+          rowId={(row) => row.id}
+          datasetKey="work"
+          status="ready"
+          viewState={createOperationalTableViewState(columns)}
+          onViewStateChange={() => undefined}
+          totalRows={3}
+          hasPreviousPage={false}
+          hasNextPage={false}
+          selectedIds={new Set()}
+          onSelectionChange={() => undefined}
+          onLoadMore={onLoadMore}
+        />
+      </Theme>,
+    );
+    fireEvent.click(getByRole("button", { name: "Load more records" }));
+    await waitFor(() => expect(getByRole("button", { name: "Load more records" }).hasAttribute("disabled")).toBe(false));
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
+    fireEvent.click(getByRole("button", { name: "Load more records" }));
+    await waitFor(() => expect(getByRole("alert").textContent).toBe("The server did not answer."));
+  });
+
   it("renders explicit loading, empty, and failed states", () => {
     const { getByRole, rerender, getByText } = render(<Harness status="loading" />);
     expect(getByRole("status").textContent).toContain("Loading Priority work");

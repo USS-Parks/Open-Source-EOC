@@ -385,3 +385,74 @@ tagging remain separately gated as section 1 of the roster states.
 - **Rollback:** revert the commit; migration 0105 adds tables and one function
   only. `OPENEOC_REQUIRE_ADMIN_MFA=0` disables admin enforcement without a
   code change.
+
+## V1 W2.3: pagination and push-down
+
+- **What changed.**
+  - Board views page by cursor in `server/src/boards/service.ts`. The cursor
+    carries the sort key, `created_at` to the microsecond, and the record id;
+    a page defaults to 100 rows with a maximum of 500, and the response adds
+    `nextCursor`. View filters and sorts run in SQL. The shared view function
+    still runs on each page, so SQL may admit an extra row but never drops one
+    the view keeps; a filter on a field the caller cannot read behaves as if
+    the field were absent, as before.
+  - The audit chronology pages by sequence through a new `listChronology`;
+    `exportChronology` reads page by page with its old signature, so AAR
+    composition is unchanged.
+  - The notification inbox pages by `(created_at, id)`, and the text-cast
+    incident join is replaced by a typed `notifications.incident_id` column.
+  - The web client's `boardView` takes a cursor and limit and returns
+    `nextCursor`; a new `notificationPage` returns a page and its cursor. The
+    operational table in `web/src/design/table.tsx` gains an optional load-more
+    control with loading and error states, wired in the board surface.
+  - New shared `server/src/db/cursor.ts`. Timestamps are bound as text so the
+    driver cannot truncate microseconds through a JavaScript `Date`.
+- **Defaults and deviations.** A BEFORE INSERT trigger fills
+  `notifications.incident_id` from `detail.incidentId`, so every writer is
+  covered without editing each insert; the column has no foreign key, so a
+  stray id cannot fail a write. A view sorted by a calculated field is ordered
+  within a page only, and a filter on a calculated field is decided in memory,
+  so such a page can come back short while a cursor walk still returns every
+  match. Ownership deviations: the cursor and limit parameters on the view
+  route in `server/src/boards/routes.ts`, about fifteen lines in
+  `BoardSurface.tsx` and `BoardView.tsx`, and the new cursor helper. No
+  chronology client method was added; the audit screen in W3.1 adds it with its
+  caller.
+- **Schema:** migration `0104_list_pagination.sql` replaces
+  `board_records_board` with `board_records_board_page (board_id, created_at
+  desc, id desc)`, adds `notifications_page`, and adds
+  `notifications.incident_id` with a backfill, a partial index and the trigger.
+- **Contract:** no new routes. The chronology response changes from
+  `{ entries }` to `{ entries, nextCursor }`; the view and notification
+  responses gain `nextCursor`. No dependency change.
+- **Acceptance:** in `load.test.ts`, the first page of an unfiltered view over
+  50,000 records returned in 7 ms and a filtered view in 20 ms, against the
+  300 ms bound.
+- **Verification:** new `list-pagination.test.ts`, 7 tests: full cursor walks
+  over rows whose timestamps differ only in microseconds, filtered views
+  returning full pages, sorted views both directions, `in`, calculated and
+  unreadable-field filters, malformed cursor and oversized page refused with
+  400, chronology and inbox walks, and the typed incident join. In the lane,
+  18 neighbouring server suites passed 82 of 82, seven web files 52 of 52,
+  and `boards-workspace-browser.test.ts` 1 of 1. After rebasing onto the
+  observability and MFA changes: list-pagination, boards, notify, audit,
+  delivery-outbox, mfa, api-docs, ipaws and the web client, table and auth
+  tests passed 91 of 91. TypeScript and ESLint clean.
+- **Evidence level:** unit, real-database and browser.
+- **Not finished here, carried to W2.11.** Gate line 5 requires every list
+  endpoint paginated. These lists can grow without bound in an activation and
+  live outside this unit's files: messages and threads, CAP alerts, damage
+  reports, sitreps, IAPs and revisions, resource requests, AAR observations
+  and corrective actions, staffing check-ins, tracking events, operational
+  relationships and incident tasks. Feed items and OGC items are capped at
+  1,000 but have no cursor. Also carried: the existing cursors in
+  `files/service.ts` and `dashboards/service.ts` pass `created_at` through a
+  JavaScript `Date` and can skip rows written in the same millisecond; and the
+  relationship picker in `AssessmentRelationships.tsx` now sees only the
+  newest 100 records per board. Deliberately unpaginated because they stay
+  small: template versions, boards per jurisdiction, positions, forms,
+  incident boards, positions and libraries, facilities, feeds, dashboards, and
+  a single record's history.
+- **Rollback:** revert the commit; undoing the schema means dropping the
+  trigger, function, column and two indexes and recreating
+  `board_records_board`.

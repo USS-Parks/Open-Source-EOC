@@ -18,6 +18,7 @@ import type {
   EffectiveBoardResponse,
   FileMetaRef,
   RecordReferenceOption,
+  ViewRecordsResponse,
 } from "../api/client.js";
 import { useSession } from "../auth/session.js";
 import { useAsync } from "../data/hooks.js";
@@ -71,6 +72,16 @@ export function BoardSurface(props: {
     () => (viewKey ? props.client.boardView(props.boardId, viewKey, incidentViewId ?? undefined) : Promise.resolve(null)),
     [incidentViewId, props.boardId, viewKey],
   );
+  // Pages added with "Load more" extend the first page they were read after,
+  // so a reload or a view change starts again from the newest records.
+  const [more, setMore] = useState<{ base: ViewRecordsResponse; records: readonly ViewRecord[]; nextCursor: string | null } | null>(null);
+  const loaded = view.data && more?.base === view.data ? more
+    : view.data ? { base: view.data, records: view.data.records, nextCursor: view.data.nextCursor ?? null } : null;
+  const nextCursor = loaded?.nextCursor ?? null;
+  const loadMore = loaded && nextCursor && viewKey ? async () => {
+    const next = await props.client.boardView(props.boardId, viewKey, incidentViewId ?? undefined, { cursor: nextCursor });
+    setMore({ base: loaded.base, records: [...loaded.records, ...next.records], nextCursor: next.nextCursor });
+  } : undefined;
   const detail = useAsync(
     () => (props.recordId
       ? props.client.boardRecordDetail(props.boardId, props.recordId, incidentViewId)
@@ -217,7 +228,8 @@ export function BoardSurface(props: {
           boardId={props.boardId}
           template={template}
           viewKey={viewKey}
-          records={view.data?.records ?? []}
+          records={loaded?.records ?? []}
+          onLoadMore={loadMore}
           loading={view.loading && !view.data}
           error={view.error}
           personId={session.me?.person.id ?? null}
@@ -374,6 +386,7 @@ function BoardWorkspace(props: {
   readonly template: BoardTemplate;
   readonly viewKey: string;
   readonly records: readonly ViewRecord[];
+  readonly onLoadMore: (() => Promise<void>) | undefined;
   readonly loading: boolean;
   readonly error: string | null;
   readonly personId: string | null;
@@ -425,6 +438,7 @@ function BoardWorkspace(props: {
           ? { status: "error" as const }
           : props.loading ? { status: "loading" as const } : {})}
         {...(props.error ? { errorMessage: props.error } : {})}
+        {...(props.onLoadMore ? { onLoadMore: props.onLoadMore } : {})}
         onRetry={props.onRetry}
         toolbar={props.personId && props.incidentId ? (
           <PersistedViews client={props.client} personId={props.personId} incidentId={props.incidentId}

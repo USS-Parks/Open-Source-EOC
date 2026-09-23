@@ -267,6 +267,17 @@ export interface ViewRecordsResponse {
   readonly view: string;
   readonly columns: readonly string[];
   readonly records: readonly ViewRecord[];
+  readonly nextCursor: string | null;
+}
+/** Keyset paging for list endpoints: pass a page's `nextCursor` to read the next. */
+export interface PageOptions {
+  readonly cursor?: string;
+  readonly limit?: number;
+}
+function pageParams(page: PageOptions, params = new URLSearchParams()): URLSearchParams {
+  if (page.cursor) params.set("cursor", page.cursor);
+  if (page.limit !== undefined) params.set("limit", String(page.limit));
+  return params;
 }
 export interface LifelineCurrent {
   readonly lifeline: string;
@@ -683,10 +694,11 @@ export class ApiClient {
   getBoard(boardId: string, incidentId?: string | null): Promise<EffectiveBoardResponse> {
     return this.request<EffectiveBoardResponse>("GET", `/api/v1/boards/${boardId}${incidentId ? `?incidentId=${encodeURIComponent(incidentId)}` : ""}`);
   }
-  boardView(boardId: string, viewKey: string, incidentId?: string): Promise<ViewRecordsResponse> {
+  boardView(boardId: string, viewKey: string, incidentId?: string, page: PageOptions = {}): Promise<ViewRecordsResponse> {
+    const params = pageParams(page, new URLSearchParams(incidentId ? { incidentId } : {}));
     return this.request<ViewRecordsResponse>(
       "GET",
-      `/api/v1/boards/${boardId}/views/${viewKey}${incidentId ? `?incidentId=${encodeURIComponent(incidentId)}` : ""}`,
+      `/api/v1/boards/${boardId}/views/${viewKey}${params.size ? `?${params}` : ""}`,
     );
   }
   updateRecord(boardId: string, recordId: string, patch: Record<string, unknown>, incidentId?: string | null): Promise<{ ok: true }> {
@@ -832,12 +844,13 @@ export class ApiClient {
     return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/esf-assessments/${framework}/${encodeURIComponent(esf)}/decisions`, body);
   }
 
+  /** The newest page of the inbox. */
   async notifications(): Promise<RawNotification[]> {
-    const r = await this.request<{ notifications: RawNotification[] }>(
-      "GET",
-      "/api/v1/notifications",
-    );
-    return r.notifications;
+    return (await this.notificationPage()).notifications;
+  }
+  notificationPage(page: PageOptions = {}): Promise<{ notifications: RawNotification[]; nextCursor: string | null }> {
+    const params = pageParams(page);
+    return this.request("GET", `/api/v1/notifications${params.size ? `?${params}` : ""}`);
   }
   markNotificationRead(id: string): Promise<{ ok: true }> {
     return this.request<{ ok: true }>("POST", `/api/v1/notifications/${id}/read`);

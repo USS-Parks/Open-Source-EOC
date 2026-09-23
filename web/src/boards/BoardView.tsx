@@ -25,6 +25,7 @@ export function BoardView(props: {
   status?: "ready" | "loading" | "empty" | "error";
   errorMessage?: string;
   onRetry?: () => void;
+  onLoadMore?: () => Promise<void>;
 }) {
   const view = props.template.views.find((v) => v.key === props.viewKey);
   if (!view) return <p role="alert">Unknown view: {props.viewKey}</p>;
@@ -92,6 +93,7 @@ function ResolvedBoardView(props: Parameters<typeof BoardView>[0] & {
       status={props.status ?? (props.records.length ? "ready" : "empty")}
       {...(props.errorMessage ? { errorMessage: props.errorMessage } : {})}
       {...(props.onRetry ? { onRetry: props.onRetry } : {})}
+      {...(props.onLoadMore ? { onLoadMore: props.onLoadMore } : {})}
       emptyTitle="No records in this view"
       emptyDescription="Clear a filter or choose another board view."
       viewState={state}
