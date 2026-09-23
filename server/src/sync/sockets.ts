@@ -23,6 +23,11 @@ export const DEFAULT_SOCKET_LIMITS: SocketLimits = {
   maxBufferedBytes: 16 * 1024 * 1024,
 };
 
+function queuedBytes(socket: WebSocket): number {
+  const transport = (socket as WebSocket & { _socket?: { writableLength?: number } })._socket;
+  return socket.bufferedAmount + (transport?.writableLength ?? 0);
+}
+
 /**
  * Discipline for every WebSocket the server accepts, whatever its route.
  *
@@ -52,7 +57,7 @@ export function disciplineSockets(app: FastifyInstance, limits: SocketLimits): v
       // covered without each one remembering to check the queue.
       const send = socket.send.bind(socket) as (...args: unknown[]) => void;
       socket.send = ((...args: unknown[]) => {
-        if (socket.bufferedAmount <= limits.maxBufferedBytes) return send(...args);
+        if (queuedBytes(socket) <= limits.maxBufferedBytes) return send(...args);
         if (socket.readyState === socket.OPEN) socket.close(1013, "slow consumer");
       }) as WebSocket["send"];
     });
