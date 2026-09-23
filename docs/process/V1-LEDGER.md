@@ -905,3 +905,78 @@ tagging remain separately gated as section 1 of the roster states.
 - **Guide:** `docs/IPAWS-ENABLEMENT.md` walks configuration, MOA, enable and
   the two-person send on the screen.
 - **Rollback:** revert the commit; no schema is involved.
+
+## V1 W3.0: administration
+
+- **What changed.** A new Administration screen in the shell, under Data and
+  administration, in `web/src/admin/**` and `AdminSurface.tsx`, with five
+  tabs:
+  - People: create an account, add an existing account, change role, disable
+    or enable sign-in, see and reset two-step sign-in with a recorded reason,
+    remove a member; the kit table loads more by cursor.
+  - Positions: add a position; assign, reassign and revoke holders.
+  - Guest access: grant with scopes and an end time, revoke; ended grants stay
+    listed.
+  - Records: retention periods per data class; audit download as CSV or
+    signed JSON, verified by the guide's own script in the browser test.
+  - Deployment: which optional integrations are enabled and the variable that
+    controls them, read-only, answering gate line 21's visibility; provisioning
+    for instance administrators.
+  The navigation entry is hidden unless the account administers something, and
+  the server refuses every route to anyone else.
+- **Defaults applied.** A role change or removal never leaves a jurisdiction
+  without an admin (409 under a per-jurisdiction lock). Removing a member ends
+  their position assignments there. Disabling an account or resetting its
+  second factor affects the person everywhere, so a jurisdiction admin may do
+  it only when they administer every jurisdiction the person belongs to; an
+  instance admin may do it for anyone; nobody may do it to their own account.
+- **Deviation: engine code.** The W3 rule is "no new engine code except client
+  methods", but most admin tasks in the guide had no route and could only be
+  done in SQL. Ten routes and migration `0113_administration.sql` were added,
+  allowed for that case: person lookup by email; the paged member list;
+  member role, removal, disabled flag and second-factor reset; the paged guest
+  list; the position holder list; assignment revoke; and the integration
+  state. Every one that changes a role, membership or the disabled flag calls
+  `forgetPerson` after its transaction commits. `POST /api/v1/persons` now
+  records `membership.added`. The integration route lives in `app.ts` because
+  the integration set is built there.
+- **Integration fixes: attribution and effect.** Two existing gaps surfaced in
+  review and were closed in this commit, because INV-2 requires every mutation
+  to carry an attributed audit event and a revoked holder should stop acting
+  at once.
+  - Guest grant create and revoke, position assign, reassign and revoke were
+    not audited. They now record `guest.granted`, `guest.revoked`,
+    `position.assigned`, `position.reassigned` with the former holders, and
+    `position.revoked`. Two audit tests that counted every event in their
+    jurisdiction now scope to board records, and the chronology test now
+    expects the setup's position assignment as the first attributed event,
+    which is the correct record.
+  - Revoking or reassigning a position left the former holder signed into it
+    until their own sign-out. New SECURITY DEFINER
+    `end_position_signins(position, person)` in 0113, which checks that the
+    caller administers the position's jurisdiction, closes the holder's open
+    position sign-ins and clears the position from their live sessions; the
+    routes then drop that person's cached principal.
+- **Schema:** 0113 adds membership update and delete policies, the delete grant
+  on `jurisdiction_memberships`, and five SECURITY DEFINER functions granted
+  only to `app_runtime`. Contract: ten routes and three tag aliases;
+  `docs/API.md` regenerated. No dependency change.
+- **Verification.** `admin.test.ts` 11 tests, including the new one: a member
+  signed into a position loses it when the position is reassigned, the
+  incoming holder loses it when revoked, no position sign-in stays open, and
+  the five categories are recorded in order. `admin-browser.test.ts` 2 tests:
+  the full admin walk with six screenshots (1440 light and dark, 390), and a
+  member who does not see the entry. After rebasing onto W2.4, W2.7, W2.11
+  and W3.5: all 25 server suites that read audit events or the chronology
+  passed 215 of 215; the admin browser walk, api-docs, ipaws and every web test
+  passed 449 of 449. TypeScript and ESLint clean. Link checker 69 files.
+- **Evidence level:** unit, real-database integration, browser and document.
+- **Deferred:** the position picker reads one page of up to 500 members; guest
+  board scopes offer the boards the console lists; the kit table's row
+  checkbox names a UUID in its accessible label, for A11Y-T1. An instance
+  admin with no membership cannot reach the console; bootstrap makes the first
+  instance admin an admin of the first jurisdiction.
+- **Guide:** `docs/guides/ADMIN.md` points every admin task at the screen,
+  keeping `curl` only for bootstrap.
+- **Rollback:** revert the commit, drop the five functions and two policies
+  from 0113 and revoke the delete grant.

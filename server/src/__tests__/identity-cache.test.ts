@@ -183,8 +183,8 @@ describe("principal cache", () => {
     });
     expect((await createPosition("granted_check")).statusCode).toBe(201);
 
-    // No route demotes an admin in this version; an operator does it in SQL,
-    // and the cached principal catches up when its TTL lapses.
+    // A demotion made in SQL, outside the API, reaches the cached principal
+    // when its TTL lapses; the API's own demotion is tested in admin.test.ts.
     await admin`
       update jurisdiction_memberships set role = 'member'
       where person_id = ${seed.memberId} and jurisdiction_id = ${karukId}`;

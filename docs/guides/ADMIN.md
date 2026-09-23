@@ -14,6 +14,34 @@ and schedule tested backups before an activation.
 Demo accounts and data are for exercises only. Remove or rotate the seeded
 credentials before real operations.
 
+### The first administrator
+
+Every administrative task below is done on the **Administration** screen, which
+needs an administrator to sign in. The first one is created once, outside the
+application: the Windows desktop setup asks for the first administrator and
+jurisdiction and creates both, and the server path does it as described under
+"First incident" in [the deployment guide](../../deploy/README.md). After that,
+no administrative task needs `psql` or `curl`.
+
+## The Administration screen
+
+**Administration**, under Data and administration in the navigation rail,
+appears only to jurisdiction administrators and instance administrators. The
+server refuses every administration request from anyone else, whatever the
+screen shows. The screen acts on the jurisdiction selected in the console.
+
+| Tab | What it does |
+|---|---|
+| People | Create accounts, add existing accounts, change roles, disable sign-in, reset two-step sign-in, remove people from the jurisdiction |
+| Positions | Add positions; assign, reassign and revoke their holders |
+| Guest access | Grant and revoke time-boxed read access for mutual-aid accounts |
+| Records | Set retention periods; download the audit trail |
+| Deployment | Show which optional integrations are enabled; provision a jurisdiction (instance administrators) |
+
+A change to a role, a membership, the disabled flag or a guest grant applies to
+the person's next request, including a request from a session they already
+have open.
+
 ## People, roles, positions, and participants
 
 - **Admin** manages the jurisdiction and owner-authorized incident work.
@@ -27,6 +55,47 @@ credentials before real operations.
 
 Do not replace incident participation with a broad board grant. Board and
 position grants keep their exact scope and do not confer incident authority.
+
+### Manage people
+
+On the **People** tab:
+
+- **Create an account.** Choose "Create a new account", enter the name, email,
+  a first password of at least 12 characters and the role, and select **Add
+  person**. Give the password to the person by a separate channel. An
+  administrator enrolls in two-step sign-in at the first sign-in.
+- **Add an existing account.** Choose "Add an existing account" and enter the
+  account's email and the role. The person keeps their password and any access
+  they hold elsewhere.
+- **Change a role, disable sign-in, reset two-step sign-in or remove a
+  person.** Select the person's name in the table. Role changes and removals
+  never leave the jurisdiction without an administrator. Removing a person also
+  ends their position assignments in the jurisdiction.
+
+Disabling an account ends its sign-in everywhere at once and keeps its records
+and history. Because it reaches every jurisdiction the person belongs to, a
+jurisdiction administrator may disable only a person whose every membership is
+in a jurisdiction that administrator administers; an instance administrator may
+disable anyone. Nobody disables their own account; ask another administrator.
+
+Membership changes, disabling and enabling, and two-step sign-in resets are
+recorded in the audit trail.
+
+### Positions
+
+On the **Positions** tab each position shows who holds it. **Assign** adds a
+holder. **Reassign** replaces every current holder with the chosen person, for
+shift change. **Revoke** ends one person's assignment. A person already acting
+in a position keeps acting in it until they sign out of it, so end the outgoing
+session as well. **Add a position** creates a position beyond the standard ICS
+set that provisioning creates.
+
+### Guest access
+
+On the **Guest access** tab, enter the guest's account email, choose what they
+may read (positions, or individual boards) and when access ends, and select
+**Grant access**. The guest signs in with their own account. **Revoke access**
+ends a grant before it expires. Ended grants stay listed with their state.
 
 ## Two-step sign-in (MFA)
 
@@ -58,9 +127,12 @@ Local password accounts support a second factor: a time-based one-time code
 - **Single sign-on.** OIDC sign-in does not pass through this step. Require a
   second factor in the identity provider for accounts that sign in that way.
 - **Lost authenticator and recovery codes.** There is no self-service reset.
-  An operator with database owner access deletes the person's rows from
-  `mfa_recovery_codes` and `person_mfa`; the person enrolls again at the next
-  sign-in. Treat this as an identity-verification event and record why.
+  Verify the person's identity, then on the **People** tab select their name,
+  enter the reason and select **Reset two-step sign-in**. Their authenticator
+  secret and recovery codes are deleted, the reason is recorded in the audit
+  trail, and they enroll again at their next sign-in. The same authority rule
+  as disabling applies, and nobody resets their own. The table shows who has
+  enrolled.
 
 ## Prepare an incident
 
@@ -74,6 +146,13 @@ Local password accounts support a second factor: a time-based one-time code
 6. Confirm task assignments and prerequisites before operators begin work.
 
 ## Optional integrations
+
+Collaboration channels, facilities and shelters, meetings and briefings, and
+patient, evacuee and asset tracking register their routes only when their names
+(`collab`, `facilities`, `meetings`, `tracking`) are listed in
+`OPENEOC_INTEGRATIONS` in the server environment. The **Deployment** tab shows
+which are enabled. It cannot change them: edit the variable and restart the
+server.
 
 IPAWS, collaboration, meeting, federation, feed, and webhook adapters require
 separate configuration. A local alert, release, message, or request is not proof
@@ -129,10 +208,10 @@ access is not a routine administrative workflow.
 
 ## Retention and audit export
 
-Nothing is deleted by default. A jurisdiction admin sets a retention period in
-days per data class with `PUT /api/v1/jurisdictions/:jurisdictionId/retention`,
-for example `{"policies": [{"dataClass": "feed_items", "retentionDays": 90}]}`;
-`null` keeps a class indefinitely. `GET` on the same path lists every class.
+Nothing is deleted by default. On the **Records** tab a jurisdiction
+administrator enters a retention period in days for a data class and selects
+**Save retention**; an empty field keeps that class indefinitely. Automation can
+use `GET` and `PUT /api/v1/jurisdictions/:jurisdictionId/retention` instead.
 The scheduler's purge runs hourly (`OPENEOC_SCHEDULER_RETENTION_MS`), deletes
 at most 5,000 expired rows per class per jurisdiction per run, and records a
 `retention.purged` audit event with the count per table, attributed to the
@@ -154,17 +233,23 @@ integrations; this version does not treat them as holding patient-level data.
 
 ### Export the audit trail
 
-`GET /api/v1/jurisdictions/:jurisdictionId/audit/export?format=csv` (or
-`format=json`) returns one page of the jurisdiction's audit events to an
-admin, 100 by default and up to 500 with `limit`. Pass the next page's cursor
-as `cursor`. CSV repeats its header row on every page and carries the next
-cursor in the `x-next-cursor` response header, absent on the last page. A cell
-that begins with `=`, `+`, `-`, `@`, a tab or a carriage return gains a leading
-single quote so a spreadsheet never runs it as a formula.
+On the **Records** tab, **Download audit CSV** saves the jurisdiction's whole
+audit trail, oldest first, as `audit-export.csv`. A cell that begins with `=`,
+`+`, `-`, `@`, a tab or a carriage return gains a leading single quote so a
+spreadsheet never runs it as a formula. **Download signed JSON** saves
+`audit-export.json`, an array of signed pages; it needs `OPENEOC_SECRET_KEY` on
+the server and reports an error without it.
 
-`format=json` requires `OPENEOC_SECRET_KEY` and answers 409 without it. It
-returns `{ page, signature }`, where `page` holds the entries, `firstSeq`,
-`lastSeq`, the `cursor` it was read from and `nextCursor`. To verify a page,
+Automation reads the same export a page at a time from
+`GET /api/v1/jurisdictions/:jurisdictionId/audit/export?format=csv` (or
+`format=json`), 100 events by default and up to 500 with `limit`, passing the
+next page's cursor as `cursor`. CSV repeats its header row on every page and
+carries the next cursor in the `x-next-cursor` response header, absent on the
+last page.
+
+Each signed page is `{ page, signature }`, where `page` holds the entries,
+`firstSeq`, `lastSeq`, the `cursor` it was read from and `nextCursor`. To
+verify a page,
 derive a key with HKDF-SHA256 from the UTF-8 bytes of `OPENEOC_SECRET_KEY`,
 an empty salt and the info string `openeoc audit export v1`, 32 bytes long;
 compute HMAC-SHA256 over the RFC 8785 canonical JSON of `page` (object keys
@@ -175,17 +260,23 @@ pages is complete when the first page's `cursor` is null, each later page's
 between them are expected.
 
 ```js
-// node verify.mjs page.json, with OPENEOC_SECRET_KEY in the environment
+// node verify.mjs audit-export.json, with OPENEOC_SECRET_KEY in the environment.
+// Accepts the screen's array of pages or a single page read from the API.
 import { createHmac, hkdfSync } from "node:crypto";
 import { readFileSync } from "node:fs";
 const canonical = (v) => Array.isArray(v) ? `[${v.map(canonical).join(",")}]`
   : v !== null && typeof v === "object"
     ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(",")}}`
     : JSON.stringify(v);
-const { page, signature } = JSON.parse(readFileSync(process.argv[2], "utf8"));
+const pages = [JSON.parse(readFileSync(process.argv[2], "utf8"))].flat();
 const key = Buffer.from(hkdfSync("sha256", process.env.OPENEOC_SECRET_KEY, "", "openeoc audit export v1", 32));
-const mac = createHmac("sha256", key).update(canonical(page)).digest("hex");
-console.log(mac === signature.value ? "valid" : "INVALID");
+let ok = true;
+pages.forEach(({ page, signature }, i) => {
+  const mac = createHmac("sha256", key).update(canonical(page)).digest("hex");
+  const linked = i === 0 || page.cursor === pages[i - 1].page.nextCursor;
+  if (mac !== signature.value || !linked) ok = false;
+});
+console.log(ok ? "valid" : "INVALID");
 ```
 
 The signature is a keyed MAC: whoever can verify it could also produce one, so

@@ -1,5 +1,6 @@
 import { COMMAND_STAFF, GENERAL_STAFF } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
+import { recordAudit } from "../audit/service.js";
 import {
   addMembership,
   AuthError,
@@ -61,6 +62,13 @@ export async function createGuestGrant(
     values (${input.jurisdictionId}, ${input.personId}, ${input.scopes as string[]},
             ${input.expiresAt}, ${actor.person.id})
     returning id`;
+  await recordAudit(sql, actor, {
+    jurisdictionId: input.jurisdictionId,
+    category: "guest.granted",
+    subjectTable: "guest_grants",
+    subjectId: row!.id as string,
+    payload: { personId: input.personId, scopes: input.scopes, expiresAt: input.expiresAt.toISOString() },
+  });
   return row!.id as string;
 }
 
@@ -73,9 +81,19 @@ export async function revokeGuestGrant(
   const [grant] = await sql`select jurisdiction_id, person_id from guest_grants where id = ${grantId}`;
   if (!grant) throw new AuthError(404, "grant not found");
   requireAdmin(actor, grant.jurisdiction_id as string);
-  await sql`
+  const revoked = await sql`
     update guest_grants set revoked_at = now(), revoked_by = ${actor.person.id}
-    where id = ${grantId} and revoked_at is null`;
+    where id = ${grantId} and revoked_at is null
+    returning id`;
+  if (revoked.length > 0) {
+    await recordAudit(sql, actor, {
+      jurisdictionId: grant.jurisdiction_id as string,
+      category: "guest.revoked",
+      subjectTable: "guest_grants",
+      subjectId: grantId,
+      payload: { personId: grant.person_id as string },
+    });
+  }
   return grant.person_id as string;
 }
 

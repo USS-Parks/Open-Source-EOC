@@ -494,6 +494,39 @@ describe("ApiClient", () => {
     expect(urls).toEqual(["/api/v1/incidents/incident%2Fa/lifeline-assessments"]);
   });
 
+  it("sends administration changes to their routes and walks the CSV export by its header cursor", async () => {
+    const calls: Array<{ url: string; method: string; body: unknown }> = [];
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      calls.push({ url: String(url), method: init.method ?? "GET", body: init.body ? JSON.parse(String(init.body)) : undefined });
+      if (String(url).includes("format=csv")) {
+        return { ...res(200, null), text: async () => "seq,at\r\n1,now\r\n", headers: new Headers({ "x-next-cursor": "c2" }) };
+      }
+      if (String(url).startsWith("/api/v1/persons")) return res(200, { person: { id: "p/1", displayName: "Guest", email: "g@x.org" } });
+      return res(200, { ok: true });
+    }) as unknown as typeof fetch;
+    const client = new ApiClient({ fetchImpl });
+    expect((await client.findPersonByEmail("g+1@x.org")).id).toBe("p/1");
+    await client.listMembers("j/1", { cursor: "next", limit: 50 });
+    await client.setMemberRole("j/1", "p/1", "viewer");
+    await client.setMemberDisabled("j/1", "p/1", true);
+    await client.resetMemberMfa("j/1", "p/1", "lost phone");
+    await client.removeMember("j/1", "p/1");
+    await client.revokePositionAssignment("pos/1", "p/1");
+    const page = await client.auditExportCsvPage("j/1", "c1");
+    expect(page).toEqual({ csv: "seq,at\r\n1,now\r\n", nextCursor: "c2" });
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      "GET /api/v1/persons?email=g%2B1%40x.org",
+      "GET /api/v1/jurisdictions/j%2F1/members?cursor=next&limit=50",
+      "PUT /api/v1/jurisdictions/j%2F1/members/p%2F1",
+      "PUT /api/v1/jurisdictions/j%2F1/members/p%2F1/disabled",
+      "POST /api/v1/jurisdictions/j%2F1/members/p%2F1/mfa-reset",
+      "DELETE /api/v1/jurisdictions/j%2F1/members/p%2F1",
+      "DELETE /api/v1/positions/pos%2F1/assignments/p%2F1",
+      "GET /api/v1/jurisdictions/j%2F1/audit/export?format=csv&limit=500&cursor=c1",
+    ]);
+    expect(calls.slice(2, 5).map((c) => c.body)).toEqual([{ role: "viewer" }, { disabled: true }, { reason: "lost phone" }]);
+  });
+
   it("surfaces the server error envelope as a typed ApiError", async () => {
     const fetchImpl = (async (url: string) => {
       const u = String(url);

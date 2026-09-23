@@ -20,6 +20,7 @@ import { MapSurface } from "../surfaces/MapSurface.js";
 import { DashboardSurface, parseDashboardViewState, type DashboardViewState } from "../surfaces/DashboardSurface.js";
 import { BoardSurface, BoardRecordDetailPane, type BoardRecordContext } from "../surfaces/BoardSurface.js";
 import { TemplatesSurface } from "../surfaces/TemplatesSurface.js";
+import { AdminSurface } from "../surfaces/AdminSurface.js";
 import { SitrepSurface, SitrepWorkspace } from "../surfaces/SitrepSurface.js";
 import { FormsSurface } from "../surfaces/FormsSurface.js";
 import { IapSurface } from "../surfaces/IapSurface.js";
@@ -73,8 +74,11 @@ const NAV: readonly NavGroup[] = [
     { key: "datasets", label: "Datasets", icon: "datasets" },
     { key: "feeds", label: "Feeds", icon: "feeds" },
     { key: "templates", label: "Templates", icon: "templates" },
+    { key: "admin", label: "Administration", icon: "settings" },
   ] },
 ];
+/** The rail without Administration, for accounts that administer nothing. */
+const MEMBER_NAV: readonly NavGroup[] = NAV.map((group) => ({ ...group, items: group.items.filter((item) => item.key !== "admin") }));
 
 /**
  * The operations console: the map-first hybrid. The rail switches the
@@ -258,7 +262,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       positionLabel={session.me?.position?.title ?? "No acting position"}
       periodControl={<OperationalPeriodControl />}
       positionControl={<PositionControl />}
-      nav={NAV}
+      nav={session.me?.isInstanceAdmin || session.me?.memberships.some((m) => m.role === "admin") ? NAV : MEMBER_NAV}
       activeNav={sectionOf(surface)}
       onNavigate={(key) => navigateInContext(sectionForNav(key))}
       userName={session.me?.person.displayName ?? ""}
@@ -384,6 +388,8 @@ function sectionForNav(key: string): Surface {
       return { kind: "jic" };
     case "templates":
       return { kind: "templates" };
+    case "admin":
+      return { kind: "admin" };
     default:
       return { kind: "map" };
   }
@@ -659,6 +665,9 @@ function Center(props: {
       return <TemplatesSurface client={props.client} jurisdictionId={props.jurisdictionId} boards={props.boards} boardId={s.id}
         isInstanceAdmin={props.isInstanceAdmin} isJurisdictionAdmin={props.isAdmin}
         onOpenBoard={props.onOpenBoard} onDesignBoard={(id) => props.onNavigate({ kind: "board-design", id })} />;
+    case "admin":
+      return <AdminSurface client={props.client} jurisdictionId={props.jurisdictionId} personId={props.personId}
+        isAdmin={props.isAdmin} isInstanceAdmin={props.isInstanceAdmin} boards={props.boards} />;
     case "not-found":
       return <NotFoundState onMap={() => props.onNavigate({ kind: "map" })} onOverview={() => props.onNavigate({ kind: "dashboard" })} />;
   }
@@ -693,6 +702,7 @@ function pageFor(surface: Surface, scope: string): { readonly page: ShellPage; r
     case "datasets": return result("Data and administration", "Datasets", "map");
     case "feeds": return result("Data and administration", "Feeds", "map");
     case "templates": return result("Data and administration", "Templates", "boards");
+    case "admin": return result("Data and administration", "Administration", "boards");
     case "alerts": return result("Notifications", "Notification center", "boards");
     case "not-found": return result("Navigation", "Page not found", "boards");
   }

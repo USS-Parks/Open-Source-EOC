@@ -1,4 +1,5 @@
 import type { Sql } from "../db/client.js";
+import { recordAudit } from "../audit/service.js";
 import { hashPassword, verifyPassword } from "./passwords.js";
 import { forgetPerson } from "./principal-cache.js";
 import { hashToken, newToken } from "./tokens.js";
@@ -253,6 +254,13 @@ export async function assignPosition(
   await sql`
     insert into position_assignments (position_id, person_id, assigned_by)
     values (${positionId}, ${personId}, ${actor.person.id})`;
+  await recordAudit(sql, actor, {
+    jurisdictionId: pos.jurisdiction_id as string,
+    category: "position.assigned",
+    subjectTable: "positions",
+    subjectId: positionId,
+    payload: { personId },
+  });
 }
 
 /**
@@ -266,16 +274,28 @@ export async function reassignPosition(
   actor: Principal,
   positionId: string,
   personId: string,
-): Promise<void> {
+): Promise<string[]> {
   const [pos] = await sql`select jurisdiction_id from positions where id = ${positionId}`;
   if (!pos) throw new AuthError(404, "position not found");
   requireAdmin(actor, pos.jurisdiction_id as string);
-  await sql`
+  const outgoing = await sql`
     update position_assignments set revoked_at = now()
-    where position_id = ${positionId} and revoked_at is null`;
+    where position_id = ${positionId} and revoked_at is null
+    returning person_id`;
+  const former = [...new Set(outgoing.map((r) => r.person_id as string))].filter((id) => id !== personId);
+  // The outgoing holder stops acting in the position now, not at their next sign-out.
+  for (const id of former) await sql`select end_position_signins(${positionId}, ${id})`;
   await sql`
     insert into position_assignments (position_id, person_id, assigned_by)
     values (${positionId}, ${personId}, ${actor.person.id})`;
+  await recordAudit(sql, actor, {
+    jurisdictionId: pos.jurisdiction_id as string,
+    category: "position.reassigned",
+    subjectTable: "positions",
+    subjectId: positionId,
+    payload: { personId, formerHolders: former },
+  });
+  return former;
 }
 
 /** Signing into a position requires an active assignment; holding follows. */

@@ -22,6 +22,8 @@ import { checkAllowed, recordFailure, recordSuccess } from "./auth/rate-limit.js
 import { hashToken } from "./auth/tokens.js";
 import { activateEnrollment, beginEnrollment, passwordLogin, verifyMfa } from "./auth/mfa.js";
 import { createGuestGrant, listPositions, provisionJurisdiction, revokeGuestGrant } from "./auth/authz.js";
+import { adminRoutes } from "./auth/admin-routes.js";
+import { recordAudit } from "./audit/service.js";
 import { OidcClient, oidcSettingsFromEnv, type OidcSettings } from "./auth/oidc.js";
 import { aarRoutes } from "./aar/routes.js";
 import { auditRoutes } from "./audit/routes.js";
@@ -392,9 +394,10 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
     async (req, reply) => {
       const { positionId } = req.params as { positionId: string };
       const body = AssignBody.parse(req.body);
-      await withPerson(sql, req.principal.person.id, (tx) =>
+      const former = await withPerson(sql, req.principal.person.id, (tx) =>
         reassignPosition(tx, req.principal, positionId, body.personId),
       );
+      for (const personId of former) forgetPerson(personId);
       await syncCollabForPosition(req.principal, positionId);
       return reply.status(201).send({ ok: true });
     },
@@ -427,10 +430,28 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
     const personId = await withPerson(sql, req.principal.person.id, async (tx) => {
       const id = await createPerson(tx, body);
       await addMembership(tx, id, body.jurisdictionId, body.role);
+      await recordAudit(tx, req.principal, {
+        jurisdictionId: body.jurisdictionId, category: "membership.added",
+        subjectTable: "persons", subjectId: id, payload: { role: body.role, previousRole: null },
+      });
       return id;
     });
     return reply.status(201).send({ id: personId });
   });
+
+  // Which optional integrations this deployment registers. Read-only: the
+  // set comes from OPENEOC_INTEGRATIONS at start, not from the database.
+  app.get("/api/v1/integrations", { preHandler: authenticate }, async (req, reply) => {
+    const { isInstanceAdmin, memberships } = req.principal;
+    if (!isInstanceAdmin && !memberships.some((m) => m.role === "admin"))
+      throw new AuthError(403, "requires an administrator");
+    return reply.send({
+      variable: "OPENEOC_INTEGRATIONS",
+      integrations: (["collab", "facilities", "meetings", "tracking"] as const)
+        .map((key) => ({ key, enabled: integrations.has(key) })),
+    });
+  });
+  adminRoutes(app, sql, authenticate);
 
   boardRoutes(app, sql, authenticate, {
     trustedTemplateKeys: options.trustedTemplateKeys ?? [],

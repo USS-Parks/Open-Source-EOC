@@ -1579,4 +1579,155 @@ export class ApiClient {
     if (!res.ok) throw new ApiError(res.status, res.statusText || `HTTP ${res.status}`);
     return res.blob();
   }
+
+  // ---- Administration ----
+
+  listMembers(jurisdictionId: string, page: PageOptions = {}): Promise<MembersPage> {
+    const query = pageParams(page).toString();
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/members${query ? `?${query}` : ""}`);
+  }
+  async findPersonByEmail(email: string): Promise<PersonRef> {
+    const result = await this.request<{ person: PersonRef }>("GET", `/api/v1/persons?${new URLSearchParams({ email })}`);
+    return result.person;
+  }
+  createPerson(input: { email: string; displayName: string; password: string; jurisdictionId: string; role: MemberRole }): Promise<{ id: string }> {
+    return this.request("POST", "/api/v1/persons", input);
+  }
+  async setMemberRole(jurisdictionId: string, personId: string, role: MemberRole): Promise<void> {
+    await this.request("PUT", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/members/${encodeURIComponent(personId)}`, { role });
+  }
+  async removeMember(jurisdictionId: string, personId: string): Promise<void> {
+    await this.request("DELETE", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/members/${encodeURIComponent(personId)}`);
+  }
+  async setMemberDisabled(jurisdictionId: string, personId: string, disabled: boolean): Promise<void> {
+    await this.request("PUT", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/members/${encodeURIComponent(personId)}/disabled`, { disabled });
+  }
+  async resetMemberMfa(jurisdictionId: string, personId: string, reason: string): Promise<void> {
+    await this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/members/${encodeURIComponent(personId)}/mfa-reset`, { reason });
+  }
+  listGuestGrants(jurisdictionId: string, page: PageOptions = {}): Promise<GuestGrantPage> {
+    const query = pageParams(page).toString();
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/guests${query ? `?${query}` : ""}`);
+  }
+  createGuestGrant(jurisdictionId: string, input: { personId: string; scopes: readonly string[]; expiresAt: string }): Promise<{ id: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/guests`, input);
+  }
+  async revokeGuestGrant(grantId: string): Promise<void> {
+    await this.request("DELETE", `/api/v1/guests/${encodeURIComponent(grantId)}`);
+  }
+  createPosition(jurisdictionId: string, input: { key: string; title: string }): Promise<{ id: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/positions`, input);
+  }
+  async listPositionHolders(jurisdictionId: string): Promise<PositionHolder[]> {
+    const result = await this.request<{ assignments: PositionHolder[] }>(
+      "GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/position-assignments`,
+    );
+    return result.assignments;
+  }
+  async assignPosition(positionId: string, personId: string): Promise<void> {
+    await this.request("POST", `/api/v1/positions/${encodeURIComponent(positionId)}/assignments`, { personId });
+  }
+  async reassignPosition(positionId: string, personId: string): Promise<void> {
+    await this.request("POST", `/api/v1/positions/${encodeURIComponent(positionId)}/reassignments`, { personId });
+  }
+  async revokePositionAssignment(positionId: string, personId: string): Promise<void> {
+    await this.request("DELETE", `/api/v1/positions/${encodeURIComponent(positionId)}/assignments/${encodeURIComponent(personId)}`);
+  }
+  provisionJurisdiction(input: { slug: string; name: string; adminPersonId: string }): Promise<{ jurisdictionId: string; positions: number }> {
+    return this.request("POST", "/api/v1/provision/jurisdictions", input);
+  }
+  listIntegrations(): Promise<IntegrationState> {
+    return this.request("GET", "/api/v1/integrations");
+  }
+  async getRetention(jurisdictionId: string): Promise<RetentionPolicy[]> {
+    const result = await this.request<{ policies: RetentionPolicy[] }>("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/retention`);
+    return result.policies;
+  }
+  async setRetention(jurisdictionId: string, policies: ReadonlyArray<{ dataClass: string; retentionDays: number | null }>): Promise<RetentionPolicy[]> {
+    const result = await this.request<{ policies: RetentionPolicy[] }>(
+      "PUT", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/retention`, { policies },
+    );
+    return result.policies;
+  }
+  /** One signed JSON page of the audit export; requires the server's secret key. */
+  auditExportSignedPage(jurisdictionId: string, cursor?: string): Promise<SignedAuditPage> {
+    const query = new URLSearchParams({ format: "json", limit: "500" });
+    if (cursor) query.set("cursor", cursor);
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/audit/export?${query}`);
+  }
+  /** One CSV page of the audit export; the next page's cursor arrives in a response header. */
+  async auditExportCsvPage(jurisdictionId: string, cursor?: string): Promise<{ csv: string; nextCursor: string | null }> {
+    const query = new URLSearchParams({ format: "csv", limit: "500" });
+    if (cursor) query.set("cursor", cursor);
+    const url = `${this.baseUrl}/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/audit/export?${query}`;
+    const once = (): Promise<Response> =>
+      this.fetchImpl(url, { method: "GET", headers: this.accessToken ? { authorization: `Bearer ${this.accessToken}` } : {} });
+    let res = await once();
+    if (res.status === 401 && this.resumeToken) {
+      try {
+        await this.resume();
+      } catch {
+        this.clearTokens();
+        throw new SessionExpiredError();
+      }
+      res = await once();
+    }
+    if (!res.ok) throw new ApiError(res.status, res.statusText || `HTTP ${res.status}`);
+    return { csv: await res.text(), nextCursor: res.headers.get("x-next-cursor") };
+  }
+}
+
+// ---- Administration types ----
+
+export type MemberRole = "admin" | "member" | "viewer";
+export interface AdminMember {
+  readonly personId: string;
+  readonly displayName: string;
+  readonly email: string;
+  readonly role: MemberRole;
+  readonly disabled: boolean;
+  readonly mfaEnrolled: boolean;
+  readonly instanceAdmin: boolean;
+}
+export interface MembersPage {
+  readonly jurisdiction: { readonly id: string; readonly slug: string; readonly name: string };
+  readonly members: readonly AdminMember[];
+  readonly nextCursor: string | null;
+}
+export interface PersonRef {
+  readonly id: string;
+  readonly displayName: string;
+  readonly email: string;
+}
+export interface AdminGuestGrant {
+  readonly id: string;
+  readonly person: PersonRef;
+  readonly scopes: readonly string[];
+  readonly expiresAt: string;
+  readonly createdAt: string;
+  readonly revokedAt: string | null;
+}
+export interface GuestGrantPage {
+  readonly grants: readonly AdminGuestGrant[];
+  readonly nextCursor: string | null;
+}
+export interface PositionHolder {
+  readonly positionId: string;
+  readonly personId: string;
+  readonly displayName: string;
+  readonly assignedAt: string;
+}
+export interface IntegrationState {
+  readonly variable: string;
+  readonly integrations: ReadonlyArray<{ readonly key: string; readonly enabled: boolean }>;
+}
+export interface RetentionPolicy {
+  readonly dataClass: string;
+  readonly retentionDays: number | null;
+  readonly updatedAt: string | null;
+  readonly updatedBy: string | null;
+}
+export interface SignedAuditPage {
+  readonly page: { readonly nextCursor: string | null } & Readonly<Record<string, unknown>>;
+  readonly signature: Readonly<Record<string, unknown>>;
 }

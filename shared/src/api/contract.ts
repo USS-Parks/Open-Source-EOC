@@ -39,6 +39,8 @@ const routeKeys = `
 DELETE /api/v1/guests/:grantId
 DELETE /api/v1/incidents/:incidentId/dashboard-configs/:key
 DELETE /api/v1/incidents/:incidentId/saved-state/:kind/:key
+DELETE /api/v1/jurisdictions/:jurisdictionId/members/:personId
+DELETE /api/v1/positions/:positionId/assignments/:personId
 GET /api/v1/aar/:aarId/pdf
 GET /api/v1/auth/oidc/callback
 GET /api/v1/auth/oidc/start
@@ -90,6 +92,7 @@ GET /api/v1/incidents/:incidentId/participants
 GET /api/v1/incidents/:incidentId/saved-state
 GET /api/v1/incidents/:incidentId/saved-state/:kind/:key
 GET /api/v1/incidents/:incidentId/tasks
+GET /api/v1/integrations
 GET /api/v1/jurisdictions/:jurisdictionId/audit/export
 GET /api/v1/jurisdictions/:jurisdictionId/boards
 GET /api/v1/jurisdictions/:jurisdictionId/cap/alerts
@@ -105,13 +108,16 @@ GET /api/v1/jurisdictions/:jurisdictionId/feeds
 GET /api/v1/jurisdictions/:jurisdictionId/files
 GET /api/v1/jurisdictions/:jurisdictionId/forms
 GET /api/v1/jurisdictions/:jurisdictionId/forms/:key
+GET /api/v1/jurisdictions/:jurisdictionId/guests
 GET /api/v1/jurisdictions/:jurisdictionId/incidents
 GET /api/v1/jurisdictions/:jurisdictionId/ipaws
 GET /api/v1/jurisdictions/:jurisdictionId/ipaws/sends
 GET /api/v1/jurisdictions/:jurisdictionId/jic/public
 GET /api/v1/jurisdictions/:jurisdictionId/lifelines
 GET /api/v1/jurisdictions/:jurisdictionId/meetings/config
+GET /api/v1/jurisdictions/:jurisdictionId/members
 GET /api/v1/jurisdictions/:jurisdictionId/notification-allowlist
+GET /api/v1/jurisdictions/:jurisdictionId/position-assignments
 GET /api/v1/jurisdictions/:jurisdictionId/positions
 GET /api/v1/jurisdictions/:jurisdictionId/resource-requests
 GET /api/v1/jurisdictions/:jurisdictionId/retention
@@ -129,6 +135,7 @@ GET /api/v1/ogc/collections
 GET /api/v1/ogc/collections/:boardId/items
 GET /api/v1/ogc/conformance
 GET /api/v1/peers/:peerId/pending
+GET /api/v1/persons
 GET /api/v1/ready
 GET /api/v1/resource-requests/:id
 GET /api/v1/resource-requests/:id/costs/export
@@ -234,6 +241,7 @@ POST /api/v1/jurisdictions/:jurisdictionId/ipaws/test
 POST /api/v1/jurisdictions/:jurisdictionId/jic/inquiries
 POST /api/v1/jurisdictions/:jurisdictionId/jic/releases
 POST /api/v1/jurisdictions/:jurisdictionId/libraries
+POST /api/v1/jurisdictions/:jurisdictionId/members/:personId/mfa-reset
 POST /api/v1/jurisdictions/:jurisdictionId/notification-rules
 POST /api/v1/jurisdictions/:jurisdictionId/notifications/run-scheduled
 POST /api/v1/jurisdictions/:jurisdictionId/peers
@@ -272,6 +280,8 @@ PUT /api/v1/jurisdictions/:jurisdictionId/collab/backend
 PUT /api/v1/jurisdictions/:jurisdictionId/ipaws/config
 PUT /api/v1/jurisdictions/:jurisdictionId/lifelines
 PUT /api/v1/jurisdictions/:jurisdictionId/meetings/config
+PUT /api/v1/jurisdictions/:jurisdictionId/members/:personId
+PUT /api/v1/jurisdictions/:jurisdictionId/members/:personId/disabled
 PUT /api/v1/jurisdictions/:jurisdictionId/messaging-settings
 PUT /api/v1/jurisdictions/:jurisdictionId/notification-allowlist
 PUT /api/v1/jurisdictions/:jurisdictionId/retention
@@ -309,10 +319,13 @@ const tagAliases: Readonly<Record<string, string>> = {
   "data-packs": "datasets",
   "guests": "auth",
   "incident-templates": "incidents",
+  "integrations": "auth",
   "me": "auth",
+  "members": "auth",
   "operational-area": "incidents",
   "operational-relationships": "incidents",
   "persons": "auth",
+  "position-assignments": "auth",
   "positions": "auth",
   "provision": "auth",
   "resource-requests": "resources",

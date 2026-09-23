@@ -83,7 +83,8 @@ describe("attribution on every state change (INV-2)", () => {
 
     const events = await admin`
       select id, category, person_id, position_id, created_at from audit_events
-      where jurisdiction_id = ${seed.jurisdictionId} order by seq`;
+      where jurisdiction_id = ${seed.jurisdictionId} and category like 'board.record.%'
+      order by seq`;
     expect(events).toHaveLength(2);
     firstEventId = events[0]!.id as string;
     expect(events[0]!.category).toBe("board.record.created");
@@ -146,16 +147,18 @@ describe("the reimbursement-grade chronology (F2)", () => {
       line: string;
       position: string | null;
     }>;
+    // The setup's position assignment is itself an attributed event.
     expect(entries.map((e) => e.category)).toEqual([
+      "position.assigned",
       "board.record.created",
       "board.record.updated",
       "correction",
     ]);
-    expect(entries[0]!.position).toBe("Operations Section Chief");
-    expect(entries[0]!.line).toMatch(
+    expect(entries[1]!.position).toBe("Operations Section Chief");
+    expect(entries[1]!.line).toMatch(
       /^\d{4}-\d{2}-\d{2}T.*Admin \(Operations Section Chief\): board\.record\.created$/,
     );
-    expect(entries[2]!.line).toContain("(correction)");
+    expect(entries[3]!.line).toContain("(correction)");
     const seqs = entries.map((e) => e.seq);
     expect([...seqs].sort((a, b) => a - b)).toEqual(seqs);
   });
