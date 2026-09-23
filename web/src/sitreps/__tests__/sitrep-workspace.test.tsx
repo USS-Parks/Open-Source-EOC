@@ -55,6 +55,8 @@ function client(overrides: Partial<ApiClient> = {}): ApiClient {
     logJicInquiry: vi.fn().mockResolvedValue({ id: "40000000-0000-4000-8000-000000000004" }),
     assignJicInquiry: vi.fn().mockResolvedValue({ ok: true }),
     answerJicInquiry: vi.fn().mockResolvedValue({ ok: true }),
+    listJicReleases: vi.fn().mockResolvedValue({ releases: [], nextCursor: null }),
+    listJicInquiries: vi.fn().mockResolvedValue({ inquiries: [], nextCursor: null }),
     ...overrides,
   } as unknown as ApiClient;
 }
@@ -212,6 +214,45 @@ describe("incident SITREP composition and JIC preparation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Log inquiry" }));
     const answer = await screen.findByRole("button", { name: "Answer with approved release" }) as HTMLButtonElement;
     expect(answer.disabled).toBe(true);
+  });
+
+  it("lets a second approver pick a waiting release and answer an inquiry logged elsewhere", async () => {
+    const releaseId = "50000000-0000-4000-8000-000000000005";
+    const api = client({
+      listJicReleases: vi.fn().mockResolvedValue({
+        releases: [{
+          id: releaseId, incidentId: archived.incidentId, title: "Detour update", body: "Use the detour.",
+          status: "pending", requiredAgencies: ["County PIO", "Public Health"], decidedByMe: false,
+          decisions: [{ agency: "County PIO", decision: "approve", note: null, decidedAt: "2026-09-21T18:05:00Z" }],
+          createdAt: "2026-09-21T18:01:00Z", submittedAt: "2026-09-21T18:02:00Z",
+        }],
+        nextCursor: null,
+      }) as ApiClient["listJicReleases"],
+      listJicInquiries: vi.fn().mockResolvedValue({
+        inquiries: [{
+          id: "60000000-0000-4000-8000-000000000006", incidentId: archived.incidentId, outlet: "Times-Standard",
+          subject: "Detour", question: "How long?", status: "assigned",
+          assignedPositionId: "30000000-0000-4000-8000-000000000003", responseReleaseId: null,
+          createdAt: "2026-09-21T18:03:00Z", answeredAt: null,
+        }],
+        nextCursor: null,
+      }) as ApiClient["listJicInquiries"],
+    });
+    render(<Theme name="light"><JicPreparation client={api} jurisdictionId="jurisdiction-a" sitrep={archived} /></Theme>);
+    expect(api.listJicReleases).toHaveBeenCalledWith("jurisdiction-a", { statuses: ["pending"], incidentId: archived.incidentId });
+    expect(api.listJicInquiries).toHaveBeenCalledWith("jurisdiction-a", { statuses: ["open", "assigned"], incidentId: archived.incidentId });
+    expect(await screen.findByText(/· Public Information Officer/)).toBeTruthy();
+    expect(await screen.findByText("Awaiting Public Health")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+    expect(await screen.findByRole("heading", { name: "Review: Detour update" })).toBeTruthy();
+    expect(screen.getByText("Already approved")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Approve for County PIO" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Approve for Public Health" }));
+    await waitFor(() => expect(api.decideJicRelease).toHaveBeenCalledWith(releaseId, { agency: "Public Health", decision: "approve" }));
+    const answer = screen.getByRole("button", { name: "Answer with approved release" }) as HTMLButtonElement;
+    await waitFor(() => expect(answer.disabled).toBe(false));
+    fireEvent.click(answer);
+    await waitFor(() => expect(api.answerJicInquiry).toHaveBeenCalledWith("60000000-0000-4000-8000-000000000006", releaseId));
   });
 
   it("keeps operator text after a rejected draft save", async () => {

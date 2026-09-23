@@ -1881,6 +1881,59 @@ export class ApiClient {
     const query = new URLSearchParams({ kind });
     return (await this.requestResponse(`/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/facilities/have?${query}`)).text();
   }
+
+  /** One page of releases, newest first, each with its approval chain so far. */
+  listJicReleases(jurisdictionId: string, filter: JicListFilter = {}, page: PageOptions = {}): Promise<{ releases: JicReleaseListItem[]; nextCursor: string | null }> {
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/jic/releases${jicListQuery(filter, page)}`);
+  }
+  /** One page of media inquiries, newest first. */
+  listJicInquiries(jurisdictionId: string, filter: JicListFilter = {}, page: PageOptions = {}): Promise<{ inquiries: JicInquiryListItem[]; nextCursor: string | null }> {
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/jic/inquiries${jicListQuery(filter, page)}`);
+  }
+}
+
+// ---- JIC list types ----
+
+export interface JicListFilter {
+  /** Any of these statuses; omitted, every status. */
+  readonly statuses?: readonly string[];
+  readonly incidentId?: string;
+}
+export interface JicReleaseListItem {
+  readonly id: string;
+  readonly incidentId: string | null;
+  readonly title: string;
+  readonly body: string;
+  readonly status: string;
+  readonly requiredAgencies: readonly string[];
+  readonly decisions: ReadonlyArray<{
+    readonly agency: string;
+    readonly decision: "approve" | "reject";
+    readonly note: string | null;
+    readonly decidedAt: string;
+  }>;
+  /** Whether the signed-in person already decided; each person decides once per release. */
+  readonly decidedByMe: boolean;
+  readonly createdAt: string;
+  readonly submittedAt: string | null;
+}
+export interface JicInquiryListItem {
+  readonly id: string;
+  readonly incidentId: string | null;
+  readonly outlet: string;
+  readonly subject: string;
+  readonly question: string;
+  readonly status: "open" | "assigned" | "answered";
+  readonly assignedPositionId: string | null;
+  readonly responseReleaseId: string | null;
+  readonly createdAt: string;
+  readonly answeredAt: string | null;
+}
+function jicListQuery(filter: JicListFilter, page: PageOptions): string {
+  const params = pageParams(page);
+  if (filter.statuses?.length) params.set("status", filter.statuses.join(","));
+  if (filter.incidentId) params.set("incidentId", filter.incidentId);
+  return params.size ? `?${params}` : "";
 }
 
 // ---- Administration types ----

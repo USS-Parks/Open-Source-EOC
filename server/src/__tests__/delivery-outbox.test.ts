@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
+import WebSocket from "ws";
 import * as Y from "yjs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
@@ -11,7 +12,8 @@ import { auth, freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
  * The outbound delivery queue. A board write queues its webhooks inside its
  * own transaction and returns; the worker delivers, retries with backoff,
  * dead-letters, and opens a circuit on a target that keeps failing. The same
- * worker pushes the federation outbox to a linked peer.
+ * worker pushes the federation outbox to a linked peer, which a live edit on
+ * a shared board fills.
  */
 
 interface Instance {
@@ -81,6 +83,28 @@ async function write(inst: Instance, entry: string): Promise<number> {
   });
   expect(res.statusCode).toBe(201);
   return performance.now() - started;
+}
+
+/** Add a record to an instance's board over its live sync socket. */
+async function syncEdit(inst: Instance, entry: string): Promise<void> {
+  const doc = new Y.Doc();
+  doc.transact(() => doc.getMap("records").set(`${randomUUID()}/entry`, entry));
+  const update = Buffer.from(Y.encodeStateAsUpdate(doc)).toString("base64");
+  const socket = new WebSocket(`${inst.baseUrl.replace("http", "ws")}/api/v1/sync/boards/${inst.boardId}`);
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("sync timeout")), 10000);
+    socket.on("open", () => socket.send(JSON.stringify({ type: "auth", token: inst.adminToken })));
+    socket.on("error", reject);
+    socket.on("message", (raw: Buffer) => {
+      const msg = JSON.parse(raw.toString()) as { type: string; error?: string };
+      if (msg.type === "state") return socket.send(JSON.stringify({ type: "update", update }));
+      if (msg.type !== "synced" && msg.type !== "error") return;
+      clearTimeout(timer);
+      socket.close();
+      if (msg.type === "error") reject(new Error(msg.error));
+      else resolve();
+    });
+  });
 }
 
 async function clearRules(inst: Instance): Promise<void> {
@@ -267,6 +291,36 @@ describe("the worker pushes the federation outbox to a linked peer", () => {
     const entries = await state.admin`
       select data ->> 'entry' as entry from board_records where board_id = ${state.boardId}`;
     expect(entries.map((r) => r.entry)).toContain("county: bridge closed");
+  });
+
+  it("forwards a live edit on a shared board and never echoes it back to its sender", async () => {
+    // The state also shares its board onward with a third partner, which
+    // still receives what arrives from the county.
+    const region = await state.app.inject({
+      method: "POST",
+      url: `/api/v1/jurisdictions/${state.jurisdictionId}/peers`,
+      headers: auth(state.adminToken),
+      payload: { name: "region" },
+    });
+    await state.app.inject({
+      method: "POST",
+      url: `/api/v1/peers/${region.json().id as string}/agreements`,
+      headers: auth(state.adminToken),
+      payload: { boardId: state.boardId, canRead: true },
+    });
+
+    await syncEdit(county, "county: shelter open at the gym");
+    const waiting = await county.admin`
+      select p.name from federation_outbox o join peers p on p.id = o.peer_id where o.delivered_at is null`;
+    expect(waiting.map((r) => r.name)).toEqual(["state"]);
+
+    expect((await new DeliveryWorker(county.runtime).drain()).federated).toBe(1);
+    const entries = await state.admin`
+      select data ->> 'entry' as entry from board_records where board_id = ${state.boardId}`;
+    expect(entries.map((r) => r.entry)).toContain("county: shelter open at the gym");
+    const onward = await state.admin`
+      select p.name from federation_outbox o join peers p on p.id = o.peer_id`;
+    expect(onward.map((r) => r.name)).toEqual(["region"]);
   });
 
   it("refuses a link from a non-admin", async () => {

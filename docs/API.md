@@ -289,8 +289,10 @@ set, and then require that value as a bearer token.
 - `POST /api/v1/jic/releases/:releaseId/decisions`: Run jic releases decisions (auth: bearer; audience: operator)
 - `POST /api/v1/jic/releases/:releaseId/publish`: Run jic releases publish (auth: bearer; audience: operator)
 - `POST /api/v1/jic/releases/:releaseId/submit`: Run jic releases submit (auth: bearer; audience: operator)
+- `GET /api/v1/jurisdictions/:jurisdictionId/jic/inquiries`: Read jurisdictions jic inquiries (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/jic/inquiries`: Run jurisdictions jic inquiries (auth: bearer; audience: operator)
 - `GET /api/v1/jurisdictions/:jurisdictionId/jic/public`: Read jurisdictions jic public (auth: bearer; audience: operator)
+- `GET /api/v1/jurisdictions/:jurisdictionId/jic/releases`: Read jurisdictions jic releases (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/jic/releases`: Run jurisdictions jic releases (auth: bearer; audience: operator)
 
 ### libraries

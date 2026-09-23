@@ -67,6 +67,9 @@ const SNAPSHOT_THRESHOLD = 200;
 
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
+/** Origin prefix of an update received from a federation peer; the peer id follows. */
+export const FEDERATION_ORIGIN = "federation:";
+
 export interface ApplyResult {
   readonly operationId: string | null;
   readonly seq: number;
@@ -319,6 +322,15 @@ export class BoardSyncHub {
                   ${context?.operationId ?? null}, ${digest},
                   ${context ? checkpoint.conflicts : null})
           returning seq`;
+        // A jurisdiction-wide update to a shared board queues for every peer
+        // that may read it, in this transaction, never back to the peer it came
+        // from. Incident-scoped docs are not federated.
+        if (!incidentId) {
+          const fromPeer = originSession.startsWith(FEDERATION_ORIGIN)
+            ? originSession.slice(FEDERATION_ORIGIN.length)
+            : null;
+          await tx`select queue_federation(${boardId}::uuid, ${Buffer.from(update)}, ${fromPeer}::uuid)`;
+        }
         // Notifications queue in this transaction; the outbox worker sends them.
         for (const c of checkpoint.committed) {
           await notifyBoardEvent(tx, actor, boardEventFor(board, c, before, after));

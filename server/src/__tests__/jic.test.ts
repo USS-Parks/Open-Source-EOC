@@ -1,7 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
+import { createPerson } from "../auth/service.js";
 import { ensureStandardTemplates } from "../boards/service.js";
+import { ensureStandardIncidentTemplates } from "../incidents/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
@@ -269,6 +271,95 @@ describe("media inquiries tie answers to approved language", () => {
       responseReleaseId: draft.id,
     });
     expect(bad.statusCode).toBe(409);
+  });
+});
+
+describe("review queue and open inquiries", () => {
+  it("lists releases and inquiries by status and incident, paged, for any member", async () => {
+    await ensureStandardIncidentTemplates(admin);
+    const incidentId = (
+      await req("POST", `/api/v1/jurisdictions/${jurisdictionId}/incidents`, {
+        templateKey: "daily_ops", name: "Klamath flooding", kind: "incident",
+      })
+    ).json().incidentId as string;
+    const draft = async (title: string, scoped: boolean) => (
+      await req("POST", `/api/v1/jurisdictions/${jurisdictionId}/jic/releases`, {
+        title, body: `${title}.`, requiredAgencies: ["county pio", "public health"],
+        ...(scoped ? { incidentId } : {}),
+      })
+    ).json().id as string;
+    const waiting = await draft("Evacuation warning for Klamath Glen", true);
+    await draft("Unsubmitted note", true);
+    const elsewhere = await draft("Burn ban reminder", false);
+    for (const id of [waiting, elsewhere]) await req("POST", `/api/v1/jic/releases/${id}/submit`, {});
+    await req("POST", `/api/v1/jic/releases/${waiting}/decisions`, { agency: "county pio", decision: "approve", note: "ok" });
+
+    const memberToken = (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/login",
+        payload: { email: "member@example.org", password: "another-good-password" },
+      })
+    ).json().accessToken as string;
+    const read = (token: string, url: string) =>
+      app.inject({ method: "GET", url, headers: { authorization: `Bearer ${token}` } });
+    const releases = `/api/v1/jurisdictions/${jurisdictionId}/jic/releases`;
+
+    // A second approver sees the release waiting on them, with the chain so far.
+    const asMember = await read(memberToken, `${releases}?status=pending&incidentId=${incidentId}`);
+    expect(asMember.statusCode).toBe(200);
+    expect(asMember.json()).toEqual({
+      releases: [expect.objectContaining({
+        id: waiting, incidentId, title: "Evacuation warning for Klamath Glen", status: "pending",
+        requiredAgencies: ["county pio", "public health"], decidedByMe: false,
+        decisions: [expect.objectContaining({ agency: "county pio", decision: "approve", note: "ok" })],
+      })],
+      nextCursor: null,
+    });
+    const asAdmin = await read(adminToken, `${releases}?status=pending&incidentId=${incidentId}`);
+    expect(asAdmin.json().releases[0].decidedByMe).toBe(true);
+
+    // Every pending release in the jurisdiction, one page at a time.
+    const first = (await read(adminToken, `${releases}?status=pending&limit=1`)).json();
+    expect(first.releases).toHaveLength(1);
+    expect(first.nextCursor).toEqual(expect.any(String));
+    const second = (await read(adminToken, `${releases}?status=pending&limit=1&cursor=${first.nextCursor as string}`)).json();
+    expect(second.releases[0].id).not.toBe(first.releases[0].id);
+    expect((await read(adminToken, `${releases}?status=draft,pending&incidentId=${incidentId}`)).json().releases)
+      .toHaveLength(2);
+    expect((await read(adminToken, `${releases}?status=waiting`)).statusCode).toBe(400);
+
+    const positionId = (
+      await req("POST", `/api/v1/jurisdictions/${jurisdictionId}/positions`, { key: "jic_pio_list", title: "PIO" })
+    ).json().id as string;
+    const inquiry = async (subject: string) => (
+      await req("POST", `/api/v1/jurisdictions/${jurisdictionId}/jic/inquiries`, {
+        outlet: "KHSU Radio", subject, question: `${subject}?`, incidentId,
+      })
+    ).json().id as string;
+    const open = await inquiry("Road closures");
+    const assigned = await inquiry("Shelter capacity");
+    await req("POST", `/api/v1/jic/inquiries/${assigned}/assign`, { positionId });
+    const inquiries = `/api/v1/jurisdictions/${jurisdictionId}/jic/inquiries?incidentId=${incidentId}`;
+    const unanswered = (await read(memberToken, `${inquiries}&status=open,assigned`)).json();
+    expect(unanswered.inquiries.map((i: { id: string }) => i.id).sort()).toEqual([open, assigned].sort());
+    expect(unanswered.inquiries.find((i: { id: string }) => i.id === assigned)).toMatchObject({
+      outlet: "KHSU Radio", subject: "Shelter capacity", status: "assigned", assignedPositionId: positionId,
+    });
+    expect((await read(memberToken, `${inquiries}&status=open`)).json().inquiries.map((i: { id: string }) => i.id))
+      .toEqual([open]);
+
+    // Someone with no membership in the jurisdiction reads neither list.
+    await createPerson(admin, { email: "outsider@example.org", displayName: "Outsider", password: "outsider-password-1" });
+    const outsider = (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/login",
+        payload: { email: "outsider@example.org", password: "outsider-password-1" },
+      })
+    ).json().accessToken as string;
+    expect((await read(outsider, releases)).statusCode).toBe(403);
+    expect((await read(outsider, inquiries)).statusCode).toBe(403);
   });
 });
 

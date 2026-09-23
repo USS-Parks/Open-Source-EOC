@@ -111,8 +111,8 @@ async function makeAgreement(inst: Instance, peerId: string, boardId: string): P
   if (res.statusCode !== 201) throw new Error(`agreement failed: ${res.body}`);
 }
 
-/** Edit an instance's board over its sync WS; return the Yjs update bytes. */
-async function pushEdit(inst: Instance, entry: string): Promise<string> {
+/** Edit an instance's board over its sync WS. */
+async function pushEdit(inst: Instance, entry: string): Promise<void> {
   const doc = new Y.Doc();
   doc.transact(() => doc.getMap("records").set(`${randomUUID()}/entry`, entry));
   const update = Buffer.from(Y.encodeStateAsUpdate(doc)).toString("base64");
@@ -135,17 +135,6 @@ async function pushEdit(inst: Instance, entry: string): Promise<string> {
       }
     });
   });
-  return update;
-}
-
-async function queue(inst: Instance, peerId: string, boardId: string, update: string): Promise<void> {
-  const res = await inst.app.inject({
-    method: "POST",
-    url: `/api/v1/peers/${peerId}/queue`,
-    headers: { authorization: `Bearer ${inst.adminToken}` },
-    payload: { boardId, update },
-  });
-  if (res.statusCode !== 201) throw new Error(`queue failed: ${res.body}`);
 }
 
 async function pendingFor(inst: Instance, peerId: string): Promise<Array<{ updateBase64: string }>> {
@@ -165,11 +154,10 @@ async function entriesOn(inst: Instance): Promise<string[]> {
 
 describe("county-to-state sharing survives a partition in both directions", () => {
   it("strands edits in both outboxes, then converges on reconnect with attribution", async () => {
-    // Partition: each instance edits its own board and queues for the peer.
-    const updCounty = await pushEdit(county, "county: levee overtopping");
-    await queue(county, peerCountySide, county.boardId, updCounty);
-    const updState = await pushEdit(state, "state: mobilizing task force");
-    await queue(state, peerStateSide, state.boardId, updState);
+    // Partition: each instance edits its own shared board over live sync, and
+    // the edit queues for the peer in the same transaction.
+    await pushEdit(county, "county: levee overtopping");
+    await pushEdit(state, "state: mobilizing task force");
 
     // During the partition nothing has crossed.
     expect(await entriesOn(county)).toEqual(["county: levee overtopping"]);
@@ -187,6 +175,8 @@ describe("county-to-state sharing survives a partition in both directions", () =
     });
     expect(r1.statusCode).toBe(200);
     expect(r1.json().conflicts).toBe(0);
+    // What arrived from the county is not queued back to it.
+    expect(await pendingFor(state, peerStateSide)).toHaveLength(1);
 
     // Deliver state → county.
     const toCounty = await pendingFor(state, peerStateSide);
@@ -288,6 +278,17 @@ describe("agreement scope", () => {
     });
     expect(res.statusCode).toBe(403);
     expect(res.json().error).toBe("board is not in this jurisdiction");
+  });
+
+  it("answers 409 to a second agreement for the same peer and board", async () => {
+    const res = await county.app.inject({
+      method: "POST",
+      url: `/api/v1/peers/${peerCountySide}/agreements`,
+      headers: { authorization: `Bearer ${county.adminToken}` },
+      payload: { boardId: county.boardId, canRead: true },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe("this board is already shared with that peer");
   });
 });
 

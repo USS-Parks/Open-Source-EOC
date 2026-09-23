@@ -113,7 +113,9 @@ GET /api/v1/jurisdictions/:jurisdictionId/guests
 GET /api/v1/jurisdictions/:jurisdictionId/incidents
 GET /api/v1/jurisdictions/:jurisdictionId/ipaws
 GET /api/v1/jurisdictions/:jurisdictionId/ipaws/sends
+GET /api/v1/jurisdictions/:jurisdictionId/jic/inquiries
 GET /api/v1/jurisdictions/:jurisdictionId/jic/public
+GET /api/v1/jurisdictions/:jurisdictionId/jic/releases
 GET /api/v1/jurisdictions/:jurisdictionId/lifelines
 GET /api/v1/jurisdictions/:jurisdictionId/meetings/config
 GET /api/v1/jurisdictions/:jurisdictionId/members

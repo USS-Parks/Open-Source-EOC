@@ -1418,3 +1418,58 @@ tagging remain separately gated as section 1 of the roster states.
   still under Boards. The Settings engine gaps above remain.
 - **Guide:** `docs/guides/OPERATOR-QUICKSTART.md`.
 - **Rollback:** revert the commit.
+
+## V1 W3.11: engine gaps the screens exposed
+
+- **Why this unit exists.** W3.6 and W3.8 found four engine gaps outside what
+  a presentation unit may change. The unit is added to the roster's W3 table
+  in this commit.
+- **Automatic forwarding.** When the sync hub records an update to a board it
+  now queues the same bytes in `federation_outbox`, in the same transaction,
+  for every peer whose agreement can read that board, through new SECURITY
+  DEFINER `queue_federation(board, payload, exclude_peer)` granted only to
+  `app_runtime`, so queueing does not depend on the editor's role. An update
+  that arrived from peer P is never queued back to P; it is still forwarded to
+  the board's other readers.
+- **Limits of forwarding, stated plainly.** Incident-scoped sync updates are
+  not federated, because agreements are per board and the peer applies without
+  incident scope. REST record writes are not forwarded: the console's board
+  and map forms save through REST and the continuity client syncs per incident,
+  so the console's own edits do not reach peers automatically; only
+  jurisdiction-wide edits over the live sync socket are forwarded, plus updates
+  passed on from other peers. No converter was built, because a standalone Yjs
+  update per REST write would carry a fresh client id and concurrent map sets
+  would then resolve by client-id order rather than time. The federation guide
+  states exactly what is and is not forwarded. This bounds F3 and is carried to
+  the final reconciliation.
+- **Duplicate agreement:** a second agreement for the same peer and board
+  answers 409 "this board is already shared with that peer" instead of 500.
+- **JIC lists.** New `GET /api/v1/jurisdictions/:jurisdictionId/jic/releases`
+  and `.../jic/inquiries`, readable by any member, cursor-paged, with optional
+  `incidentId` and a comma-separated `status` set; a release carries its
+  approval chain and `decidedByMe`. The JIC panel gains "Waiting for review",
+  the incident's pending releases the signed-in person has not decided, with
+  the agencies still awaited and a Review button, and loads unanswered
+  inquiries from the server.
+- **Cost date:** `addCost` uses `coalesce(date, current_date)`, so a cost with
+  no date takes today instead of failing.
+- **Schema:** migration `0115_forwarding_and_release_list.sql`, the function
+  and a `press_releases_jurisdiction` index. Contract: two routes;
+  `docs/API.md` regenerated. No dependency change.
+- **Verification.** Before the fixes, resource, federation, delivery-outbox
+  and jic ran 25 passed and 6 failed: automatic queue, the 409, a status
+  count, the list routes (404) and the omitted cost date (500). After, in the
+  lane: 11 files 107 of 107; `jic-resources-browser` 3 of 3, including a second
+  administrator in a separate browser session finding and approving the
+  pending release; `federation-browser` 2 of 2; shared 115 of 115. The first
+  federation test now relies on automatic queueing and asserts no echo. After
+  rebasing onto W3.4 and W3.10: federation, delivery-outbox,
+  sync-hub-lifecycle, sync, continuity-sync, jic, resource, api-docs, ipaws,
+  both browser walks, every web test and the shared suite passed 659 of 659.
+  TypeScript and ESLint clean. Link checker 71 files.
+- **Evidence level:** unit, integration, real-database with two instances,
+  browser and document.
+- **Found, not changed:** `POST /api/v1/peers/:peerId/queue` ignores the
+  path's peer and queues for every reader of the board; the guide describes
+  that behaviour. The incident exclusion has no dedicated test.
+- **Rollback:** revert the commit; 0115 adds a function and an index.

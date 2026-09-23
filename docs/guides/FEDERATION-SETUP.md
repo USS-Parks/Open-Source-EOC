@@ -2,7 +2,8 @@
 
 Federation lets two instances (a county and a state, say) share boards without
 either depending on the other being online. Delivery is store-and-forward:
-local edits queue and deliver when the link returns, and both sides converge.
+queued updates deliver when the link returns, and both sides converge.
+[How updates flow](#how-updates-flow) says which edits queue.
 
 ## Register a peer
 
@@ -66,8 +67,23 @@ this screen are not used for it.
 
 ## How updates flow
 
-- Local edits to a shared board queue in an outbox, one entry per peer allowed
-  to read it.
+- An update applied to a shared board's jurisdiction-wide sync document, over
+  the live sync socket `/api/v1/sync/boards/:boardId` joined without an
+  incident, queues in the outbox in the same transaction that records it: one
+  entry per peer whose agreement lets it read the board. If the edit rolls
+  back, nothing is queued.
+- An update received from a peer is queued the same way for the board's other
+  readers, but never back to the peer it came from, so two instances sharing
+  a board do not echo updates to each other.
+- Two kinds of change are not forwarded in this release. Edits to an
+  incident-scoped sync document (the continuity client joins with an
+  incident) are not federated, because an agreement covers a board and the
+  peer applies updates to its board's jurisdiction-wide document. Records
+  created or changed through the REST record routes are not forwarded
+  either: those routes change board rows without producing a sync update, and
+  the console's board and map forms use them. The route
+  `POST /api/v1/peers/:peerId/queue` still queues a sync update by hand for
+  every peer that reads the board.
 - The server's delivery worker pushes each linked peer's batch to its receive
   lane over the peer token. While the peer is unreachable the entries stay
   queued and are retried with backoff; they never expire. The peer applies a

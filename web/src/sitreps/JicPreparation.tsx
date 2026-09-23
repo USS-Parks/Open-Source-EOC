@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { SitrepRow } from "@openeoc/shared";
-import type { ApiClient } from "../app/api/client.js";
+import type { ApiClient, JicReleaseListItem } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import { Button, StatusBadge, type Status } from "../design/components.js";
 import { Icon } from "../design/icons/index.js";
@@ -25,12 +25,15 @@ const INQUIRY_STATUS: Readonly<Record<LoggedInquiry["status"], { readonly label:
 /** How many public messages the panel lists; the feed route returns up to 100. */
 const FEED_SHOWN = 10;
 
+/** Only approved or published language can answer an inquiry. */
+const citable = (status: string | null) => status === "approved" || status === "published";
+
 function errorText(caught: unknown): string {
   return caught instanceof Error ? caught.message : String(caught);
 }
 
 /**
- * The submitted release's approval chain and publication. Each required
+ * A submitted release's approval chain and publication. Each required
  * agency approves or rejects; the server settles the chain and only an
  * approved release can publish. A peer agency decides from its own instance.
  */
@@ -38,6 +41,10 @@ function ReleaseReview(props: {
   readonly client: ApiClient;
   readonly releaseId: string;
   readonly agencies: readonly string[];
+  /** A release picked from the review queue, named in the heading. */
+  readonly title?: string;
+  /** Decisions already on the chain, recorded in other sessions. */
+  readonly recorded?: Readonly<Record<string, "approve" | "reject">>;
   readonly onStatus: (status: string) => void;
   readonly onPublished: () => void;
 }) {
@@ -80,10 +87,11 @@ function ReleaseReview(props: {
     return result.status;
   });
   const shown = RELEASE_STATUS[status] ?? { label: status, tone: "unknown" as const };
+  const heading = props.title ? `Review: ${props.title}` : "Review and publication";
 
   return (
-    <section className="eoc-jic-section" aria-label="Review and publication">
-      <h3>Review and publication</h3>
+    <section className="eoc-jic-section" aria-label={heading}>
+      <h3>{heading}</h3>
       <p className="eoc-jic-status">Review status <StatusBadge status={shown.tone}>{shown.label}</StatusBadge></p>
       {props.agencies.length === 0 ? (
         <p className="eoc-jic-guidance">
@@ -104,6 +112,8 @@ function ReleaseReview(props: {
                 <strong>{agency}</strong>
                 {decided[agency] ? (
                   <span>{decided[agency] === "approve" ? "Approved" : "Rejected"} by you</span>
+                ) : props.recorded?.[agency] ? (
+                  <span>Already {props.recorded[agency] === "approve" ? "approved" : "rejected"}</span>
                 ) : (
                   <span className="eoc-jic-actions">
                     <Button onClick={() => void decide(agency, "approve")} disabled={busy}>Approve for {agency}</Button>
@@ -152,13 +162,13 @@ interface LoggedInquiry {
   readonly outlet: string;
   readonly subject: string;
   readonly status: "open" | "assigned" | "answered";
-  readonly position?: string;
+  readonly positionId?: string;
 }
 
 /**
  * Media inquiries for the incident: log, assign to a position, answer with
- * approved release language. The server keeps every inquiry; this list holds
- * the ones logged in this view.
+ * approved release language. The list starts from the incident's unanswered
+ * inquiries on the server, so ones logged in another session appear too.
  */
 function MediaInquiries(props: {
   readonly client: ApiClient;
@@ -167,6 +177,10 @@ function MediaInquiries(props: {
   readonly answerReleaseId: string | null;
 }) {
   const positions = useAsync(() => props.client.listPositions(props.jurisdictionId), [props.jurisdictionId]);
+  const open = useAsync(
+    () => props.client.listJicInquiries(props.jurisdictionId, { statuses: ["open", "assigned"], incidentId: props.incidentId }),
+    [props.jurisdictionId, props.incidentId],
+  );
   const [outlet, setOutlet] = useState("");
   const [subject, setSubject] = useState("");
   const [question, setQuestion] = useState("");
@@ -174,6 +188,21 @@ function MediaInquiries(props: {
   const [targets, setTargets] = useState<Readonly<Record<string, string>>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open.data) return;
+    const listed = open.data.inquiries;
+    setInquiries((current) => [
+      ...current,
+      ...listed.filter((inquiry) => !current.some((shown) => shown.id === inquiry.id)).map((inquiry) => ({
+        id: inquiry.id,
+        outlet: inquiry.outlet,
+        subject: inquiry.subject,
+        status: inquiry.status,
+        ...(inquiry.assignedPositionId ? { positionId: inquiry.assignedPositionId } : {}),
+      })),
+    ]);
+  }, [open.data]);
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -201,9 +230,9 @@ function MediaInquiries(props: {
     const positionId = targets[inquiry.id];
     if (!positionId) return;
     await props.client.assignJicInquiry(inquiry.id, positionId);
-    const title = positions.data?.find((position) => position.id === positionId)?.title;
-    update(inquiry.id, { status: "assigned", ...(title ? { position: title } : {}) });
+    update(inquiry.id, { status: "assigned", positionId });
   });
+  const positionTitle = (id: string | undefined) => positions.data?.find((position) => position.id === id)?.title;
   const answer = (inquiry: LoggedInquiry) => run(async () => {
     if (!props.answerReleaseId) return;
     await props.client.answerJicInquiry(inquiry.id, props.answerReleaseId);
@@ -214,7 +243,7 @@ function MediaInquiries(props: {
     <section className="eoc-jic-section" aria-label="Media inquiries">
       <h3>Media inquiries</h3>
       <p className="eoc-jic-guidance">
-        An answer cites this panel&apos;s release once it is approved or published. The server keeps every inquiry; this list shows the ones logged here.
+        An answer cites the release reviewed in this panel once it is approved or published. Unanswered inquiries for this incident are listed, including ones logged in another session.
       </p>
       <form onSubmit={(event) => { event.preventDefault(); void log(); }}>
         <label>
@@ -237,10 +266,11 @@ function MediaInquiries(props: {
         <ul className="eoc-jic-list">
           {inquiries.map((inquiry) => {
             const shown = INQUIRY_STATUS[inquiry.status];
+            const position = positionTitle(inquiry.positionId);
             return (
               <li key={inquiry.id}>
                 <span><strong>{inquiry.outlet}</strong> · {inquiry.subject}</span>
-                <span><StatusBadge status={shown.tone}>{shown.label}</StatusBadge>{inquiry.position ? ` · ${inquiry.position}` : ""}</span>
+                <span><StatusBadge status={shown.tone}>{shown.label}</StatusBadge>{position ? ` · ${position}` : ""}</span>
                 {inquiry.status === "answered" ? null : (
                   <>
                     <label>
@@ -266,6 +296,7 @@ function MediaInquiries(props: {
         </ul>
       ) : null}
       {positions.error ? <ErrorNote message={positions.error} /> : null}
+      {open.error ? <ErrorNote message={open.error} /> : null}
       {error ? <ErrorNote message={error} /> : null}
     </section>
   );
@@ -301,7 +332,17 @@ export function JicPreparation(props: {
   const [state, setState] = useState<"idle" | "saving" | "draft" | "submitting" | "submitted">("idle");
   const [releaseStatus, setReleaseStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reviewing, setReviewing] = useState<JicReleaseListItem | null>(null);
+  const [reviewStatus, setReviewStatus] = useState<string | null>(null);
   const feed = useAsync(() => props.client.listJicPublicFeed(props.jurisdictionId), [props.jurisdictionId]);
+  const pending = useAsync(
+    () => incidentId
+      ? props.client.listJicReleases(props.jurisdictionId, { statuses: ["pending"], incidentId })
+      : Promise.resolve(null),
+    [props.jurisdictionId, incidentId],
+  );
+  // Releases on this incident still waiting on a decision this person may record.
+  const waiting = (pending.data?.releases ?? []).filter((release) => !release.decidedByMe && release.id !== releaseId);
 
   useEffect(() => {
     setTitle(`${incidentName} public information update`);
@@ -312,6 +353,8 @@ export function JicPreparation(props: {
     setState("idle");
     setReleaseStatus(null);
     setError(null);
+    setReviewing(null);
+    setReviewStatus(null);
   }, [props.sitrep.id, incidentName]);
 
   const save = async () => {
@@ -423,6 +466,47 @@ export function JicPreparation(props: {
           onPublished={feed.reload}
         />
       ) : null}
+      {incidentId ? (
+        <section className="eoc-jic-section" aria-label="Waiting for review">
+          <h3>Waiting for review</h3>
+          {pending.error ? <ErrorNote message={pending.error} /> : null}
+          {pending.data && waiting.length === 0 ? (
+            <p className="eoc-jic-guidance">No release on this incident is waiting on your decision.</p>
+          ) : null}
+          {waiting.length ? (
+            <ul className="eoc-jic-list">
+              {waiting.map((release) => {
+                const decided = new Set(release.decisions.map((decision) => decision.agency));
+                const awaiting = release.requiredAgencies.filter((agency) => !decided.has(agency));
+                return (
+                  <li key={release.id}>
+                    <strong>{release.title}</strong>
+                    <small>Awaiting {awaiting.length ? awaiting.join(", ") : "no agency"}</small>
+                    <Button onClick={() => { setReviewing(release); setReviewStatus(null); }} disabled={reviewing?.id === release.id}>
+                      Review
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+          <div className="eoc-jic-actions">
+            <Button onClick={pending.reload}>Refresh list</Button>
+          </div>
+        </section>
+      ) : null}
+      {reviewing ? (
+        <ReleaseReview
+          key={reviewing.id}
+          client={props.client}
+          releaseId={reviewing.id}
+          agencies={reviewing.requiredAgencies}
+          title={reviewing.title}
+          recorded={Object.fromEntries(reviewing.decisions.map((decision) => [decision.agency, decision.decision]))}
+          onStatus={(status) => { setReviewStatus(status); pending.reload(); }}
+          onPublished={feed.reload}
+        />
+      ) : null}
       <section className="eoc-jic-section" aria-label="Public information feed">
         <h3>Public information feed</h3>
         {feed.error ? <ErrorNote message={feed.error} /> : null}
@@ -444,7 +528,7 @@ export function JicPreparation(props: {
           client={props.client}
           jurisdictionId={props.jurisdictionId}
           incidentId={incidentId}
-          answerReleaseId={releaseId && (releaseStatus === "approved" || releaseStatus === "published") ? releaseId : null}
+          answerReleaseId={releaseId && citable(releaseStatus) ? releaseId : reviewing && citable(reviewStatus) ? reviewing.id : null}
         />
       ) : null}
       <footer>

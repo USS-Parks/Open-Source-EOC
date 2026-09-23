@@ -2,12 +2,15 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
+import { pageQuery } from "../db/cursor.js";
 import {
   answerInquiry,
   assignInquiry,
   decideLocal,
   draftRelease,
+  listInquiries,
   listPublicFeed,
+  listReleases,
   logInquiry,
   publishRelease,
   receivePeerDecision,
@@ -50,6 +53,14 @@ const InquiryBody = z.object({
 });
 const AssignBody = z.object({ positionId: z.string().uuid() });
 const AnswerBody = z.object({ responseReleaseId: z.string().uuid() });
+/** List query: optional incident, a comma-separated status set, and the page. */
+const listQuery = <T extends readonly [string, ...string[]]>(statuses: T) => z.object({
+  incidentId: z.string().uuid().optional(),
+  status: z.string().transform((value) => value.split(",")).pipe(z.array(z.enum(statuses))).optional(),
+  ...pageQuery,
+});
+const ReleaseListQuery = listQuery(["draft", "pending", "approved", "published", "rejected"]);
+const InquiryListQuery = listQuery(["open", "assigned", "answered"]);
 
 export function jicRoutes(
   app: FastifyInstance,
@@ -71,6 +82,32 @@ export function jicRoutes(
         }),
       );
       return reply.status(201).send(result);
+    },
+  );
+
+  app.get(
+    "/api/v1/jurisdictions/:jurisdictionId/jic/releases",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const { incidentId, status, ...page } = ReleaseListQuery.parse(req.query);
+      const { items, nextCursor } = await withPerson(sql, req.principal.person.id, (tx) =>
+        listReleases(tx, req.principal, jurisdictionId, { statuses: status, incidentId }, page),
+      );
+      return reply.send({ releases: items, nextCursor });
+    },
+  );
+
+  app.get(
+    "/api/v1/jurisdictions/:jurisdictionId/jic/inquiries",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const { incidentId, status, ...page } = InquiryListQuery.parse(req.query);
+      const { items, nextCursor } = await withPerson(sql, req.principal.person.id, (tx) =>
+        listInquiries(tx, req.principal, jurisdictionId, { statuses: status, incidentId }, page),
+      );
+      return reply.send({ inquiries: items, nextCursor });
     },
   );
 

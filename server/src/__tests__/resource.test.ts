@@ -354,6 +354,20 @@ describe("cost export for reimbursement", () => {
     expect(res.body).toContain("5400.00");
     expect(res.body).toContain("TOTAL,6360.50");
   });
+
+  it("records today's date when the incurred date is omitted", async () => {
+    const id = (
+      await post(county, `/api/v1/jurisdictions/${county.jurisdictionId}/resource-requests`, {
+        origin: "eoc",
+        item: "Light tower",
+      })
+    ).json().id as string;
+    const res = await post(county, `/api/v1/resource-requests/${id}/costs`, { category: "equipment", amountCents: 12000 });
+    expect(res.statusCode).toBe(201);
+    const [row] = await county.admin`
+      select incurred_at = current_date as today from rr_costs where id = ${res.json().id as string}`;
+    expect(row!.today).toBe(true);
+  });
 });
 
 describe("escalation to a peer that never answers", () => {

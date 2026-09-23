@@ -280,7 +280,7 @@ export async function addCost(
   const [row] = await sql`
     insert into rr_costs (request_id, category, description, amount_cents, incurred_at, recorded_by)
     values (${requestId}, ${input.category}, ${input.description ?? ""}, ${input.amountCents},
-            ${input.incurredAt ?? null}, ${actor.person.id})
+            coalesce(${input.incurredAt ?? null}::date, current_date), ${actor.person.id})
     returning id`;
   await recordAudit(sql, actor, {
     jurisdictionId: req.jurisdiction_id,

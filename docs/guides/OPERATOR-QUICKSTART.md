@@ -172,18 +172,23 @@ beside the briefing carries one release through review and publication.
 3. An approved release shows **Publish release**. Choose the public
    information feed, the incident collaboration channels, or both. The status
    line names the outlets that accepted it. The panel does not send CAP alerts.
-4. **Public information feed** lists the ten most recent releases the
+4. **Waiting for review** lists the incident's submitted releases that still
+   wait on a decision you can record, whoever drafted them and wherever, with
+   the agencies still awaited. Select **Review** to open one: agencies already
+   decided show as already approved or rejected, and you decide for the
+   others as in step 2. An approved release can then be published from there
+   as in step 3. Select **Refresh list** to read the queue again.
+5. **Public information feed** lists the ten most recent releases the
    organization has published.
-5. Under **Media inquiries**, log the outlet, subject and question, assign the
-   inquiry to a position, and answer it with the panel's release once that
-   release is approved or published. An answer always cites approved
-   language. Answering closes the inquiry; there is no separate close step.
+6. Under **Media inquiries**, log the outlet, subject and question, assign the
+   inquiry to a position, and answer it with the release reviewed in the panel
+   once that release is approved or published. The list also shows the
+   incident's unanswered inquiries logged in other sessions. An answer always
+   cites approved language. Answering closes the inquiry; there is no separate
+   close step.
 
-The panel follows the release drafted in it and the inquiries logged in it,
-and leaving the SITREP clears that view. The server keeps every release,
-decision and inquiry, and **Chronology** under **All events** records them, but
-no screen lists pending releases or open inquiries yet. A second approver
-therefore cannot open a release drafted in another session.
+Leaving the SITREP clears the panel. The server keeps every release, decision
+and inquiry, and **Chronology** under **All events** records them.
 
 ## 5. Work through a connection loss
 

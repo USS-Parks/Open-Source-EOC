@@ -10,13 +10,14 @@ import { hashToken, newToken } from "../auth/tokens.js";
 import { withPerson } from "../db/context.js";
 import { recordAudit } from "../audit/service.js";
 import { encryptSecret, hasSecretKey } from "../secrets/envelope.js";
-import type { BoardSyncHub } from "../sync/hub.js";
+import { FEDERATION_ORIGIN, type BoardSyncHub } from "../sync/hub.js";
 
 /**
  * Instance federation, store-and-forward (F3). Peers are mutually
  * authenticated; sharing agreements scope which boards a peer may read or
- * write. Local edits are queued in an outbox that survives a partition;
- * the delivery worker pushes it to every linked peer, and when a link
+ * write. Live sync edits to a shared board are queued, by the sync hub, in an
+ * outbox that survives a partition; the delivery worker pushes it to every
+ * linked peer, and when a link
  * returns after a partition the stranded batch goes then. The peer applies it
  * through the offline reconciliation path, so both sides converge with no
  * synchronous dual-commit and every jurisdiction keeps its own data.
@@ -56,7 +57,11 @@ export async function createAgreement(
       (peer_id, board_id, can_read, can_write, remote_board_id, created_by)
     values (${peerId}, ${boardId}, ${perms.canRead ?? true}, ${perms.canWrite ?? false},
             ${perms.remoteBoardId ?? null}, ${actor.person.id})
-    returning id`;
+    returning id`.catch((error: unknown) => {
+    if (error && typeof error === "object" && "code" in error && error.code === "23505")
+      throw new AuthError(409, "this board is already shared with that peer");
+    throw error;
+  });
   return { id: row!.id as string };
 }
 
@@ -281,7 +286,7 @@ export async function receiveUpdates(
       localAdmin,
       targetBoardId,
       new Uint8Array(Buffer.from(u, "base64")),
-      `federation:${peer.id as string}`,
+      `${FEDERATION_ORIGIN}${peer.id as string}`,
     );
     conflicts += result.conflicts;
   }

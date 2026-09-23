@@ -609,6 +609,9 @@ describe("audit chronology client", () => {
     await client.logJicInquiry("j/1", { outlet: "KHSU", subject: "Detour", question: "How long?", incidentId: "i1" });
     await client.assignJicInquiry("q/1", "p1");
     await client.answerJicInquiry("q/1", "r1");
+    await client.listJicReleases("j/1", { statuses: ["pending"], incidentId: "i1" });
+    await client.listJicInquiries("j/1", { statuses: ["open", "assigned"] }, { cursor: "c2", limit: 50 });
+    await client.listJicInquiries("j/1");
     expect(fetchImpl.mock.calls.map((call) => [(call[1] as RequestInit).method, String(call[0]), (call[1] as RequestInit).body])).toEqual([
       ["POST", "/api/v1/jic/releases/r%2F1/decisions", JSON.stringify({ agency: "County PIO", decision: "approve", note: "ok" })],
       ["POST", "/api/v1/jic/releases/r%2F1/publish", JSON.stringify({ toPublicFeed: true, toCollab: false })],
@@ -616,6 +619,9 @@ describe("audit chronology client", () => {
       ["POST", "/api/v1/jurisdictions/j%2F1/jic/inquiries", JSON.stringify({ outlet: "KHSU", subject: "Detour", question: "How long?", incidentId: "i1" })],
       ["POST", "/api/v1/jic/inquiries/q%2F1/assign", JSON.stringify({ positionId: "p1" })],
       ["POST", "/api/v1/jic/inquiries/q%2F1/answer", JSON.stringify({ responseReleaseId: "r1" })],
+      ["GET", "/api/v1/jurisdictions/j%2F1/jic/releases?status=pending&incidentId=i1", undefined],
+      ["GET", "/api/v1/jurisdictions/j%2F1/jic/inquiries?cursor=c2&limit=50&status=open%2Cassigned", undefined],
+      ["GET", "/api/v1/jurisdictions/j%2F1/jic/inquiries", undefined],
     ]);
   });
 

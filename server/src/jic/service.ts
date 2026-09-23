@@ -8,6 +8,14 @@ import {
 } from "../auth/service.js";
 import { hashToken } from "../auth/tokens.js";
 import { withPerson } from "../db/context.js";
+import {
+  CURSOR_AT_FORMAT,
+  DEFAULT_PAGE_LIMIT,
+  cutPage,
+  decodeCursor,
+  type Page,
+  type PageRequest,
+} from "../db/cursor.js";
 import { recordAudit } from "../audit/service.js";
 import { authorAlert } from "../cap/service.js";
 import { postAnnouncement } from "../collab/service.js";
@@ -291,6 +299,125 @@ export async function listPublicFeed(
     body: r.body as string,
     publishedAt: (r.published_at as Date).toISOString(),
   }));
+}
+
+export interface ListFilter {
+  readonly statuses?: readonly string[] | undefined;
+  readonly incidentId?: string | undefined;
+}
+
+export interface ReleaseListItem {
+  readonly id: string;
+  readonly incidentId: string | null;
+  readonly title: string;
+  readonly body: string;
+  readonly status: string;
+  readonly requiredAgencies: string[];
+  readonly decisions: Array<{ agency: string; decision: string; note: string | null; decidedAt: string }>;
+  /** Whether the reader already recorded a decision; each person decides once per release. */
+  readonly decidedByMe: boolean;
+  readonly createdAt: string;
+  readonly submittedAt: string | null;
+}
+
+/**
+ * A jurisdiction's releases, newest first, with each approval chain so far.
+ * With status "pending" it is the review queue a second approver works from.
+ */
+export async function listReleases(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+  filter: ListFilter,
+  page: PageRequest,
+): Promise<Page<ReleaseListItem>> {
+  requireMember(actor, jurisdictionId);
+  const after = decodeCursor(page.cursor, ["at", "id"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
+  const rows = await sql`
+    select r.id, r.incident_id, r.title, r.body, r.status, r.required_agencies, r.created_at,
+           r.submitted_at,
+           coalesce((select json_agg(json_build_object('agency', a.agency, 'decision', a.decision,
+                                                       'note', a.note, 'decidedAt', a.decided_at)
+                                     order by a.decided_at)
+                     from press_release_approvals a where a.release_id = r.id), '[]') as decisions,
+           exists (select 1 from press_release_approvals a
+                   where a.release_id = r.id and a.decided_by_person = ${actor.person.id}) as decided_by_me,
+           to_char(r.created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
+    from press_releases r
+    where r.jurisdiction_id = ${jurisdictionId}
+      ${filter.statuses ? sql`and r.status = any(${filter.statuses as string[]})` : sql``}
+      ${filter.incidentId ? sql`and r.incident_id = ${filter.incidentId}` : sql``}
+      ${after ? sql`and (r.created_at, r.id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : sql``}
+    order by r.created_at desc, r.id desc limit ${limit + 1}`;
+  const { items, nextCursor } = cutPage(rows, limit, (r) => [r.page_at as string, r.id as string]);
+  return {
+    items: items.map((r) => ({
+      id: r.id as string,
+      incidentId: (r.incident_id as string | null) ?? null,
+      title: r.title as string,
+      body: r.body as string,
+      status: r.status as string,
+      requiredAgencies: r.required_agencies as string[],
+      decisions: r.decisions as ReleaseListItem["decisions"],
+      decidedByMe: r.decided_by_me as boolean,
+      createdAt: (r.created_at as Date).toISOString(),
+      submittedAt: r.submitted_at ? (r.submitted_at as Date).toISOString() : null,
+    })),
+    nextCursor,
+  };
+}
+
+export interface InquiryListItem {
+  readonly id: string;
+  readonly incidentId: string | null;
+  readonly outlet: string;
+  readonly subject: string;
+  readonly question: string;
+  readonly status: string;
+  readonly assignedPositionId: string | null;
+  readonly responseReleaseId: string | null;
+  readonly createdAt: string;
+  readonly answeredAt: string | null;
+}
+
+/** A jurisdiction's media inquiries, newest first. */
+export async function listInquiries(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+  filter: ListFilter,
+  page: PageRequest,
+): Promise<Page<InquiryListItem>> {
+  requireMember(actor, jurisdictionId);
+  const after = decodeCursor(page.cursor, ["at", "id"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
+  const rows = await sql`
+    select id, incident_id, outlet, subject, question, status, assigned_position,
+           response_release_id, created_at, answered_at,
+           to_char(created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
+    from media_inquiries
+    where jurisdiction_id = ${jurisdictionId}
+      ${filter.statuses ? sql`and status = any(${filter.statuses as string[]})` : sql``}
+      ${filter.incidentId ? sql`and incident_id = ${filter.incidentId}` : sql``}
+      ${after ? sql`and (created_at, id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : sql``}
+    order by created_at desc, id desc limit ${limit + 1}`;
+  const { items, nextCursor } = cutPage(rows, limit, (r) => [r.page_at as string, r.id as string]);
+  return {
+    items: items.map((r) => ({
+      id: r.id as string,
+      incidentId: (r.incident_id as string | null) ?? null,
+      outlet: r.outlet as string,
+      subject: r.subject as string,
+      question: r.question as string,
+      status: r.status as string,
+      assignedPositionId: (r.assigned_position as string | null) ?? null,
+      responseReleaseId: (r.response_release_id as string | null) ?? null,
+      createdAt: (r.created_at as Date).toISOString(),
+      answeredAt: r.answered_at ? (r.answered_at as Date).toISOString() : null,
+    })),
+    nextCursor,
+  };
 }
 
 interface ReleaseRow {

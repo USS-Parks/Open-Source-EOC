@@ -4,6 +4,7 @@ import type { FastifyInstance } from "fastify";
 import type { Browser, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
+import { addMembership, createPerson } from "../auth/service.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
 import { buildDir, buildWeb, launchBrowser, listen, login, post, serveStatic, shotDir } from "./browser.js";
@@ -12,7 +13,9 @@ import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 /**
  * The JIC and resource follow-through in a real browser. A release drafted
  * from a frozen SITREP is submitted, approved and published, and a media
- * inquiry is logged, assigned and answered with it. A resource request gets a
+ * inquiry is logged, assigned and answered with it. A second administrator,
+ * signed in separately, finds a release waiting on them and approves it.
+ * A resource request gets a
  * reimbursement cost and its CSV export, then escalates to a second running
  * instance over a peer token; that tier's status reports come back over its
  * own token and show in the originating request's history.
@@ -21,6 +24,7 @@ import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 const DIST = buildDir("jic-resources-app");
 const SHOTS = shotDir("jic-resources");
 const RELEASE_TITLE = "Klamath Bridge Closure public information update";
+const SECOND_TITLE = "Sandbag distribution";
 
 let admin: Sql;
 let runtime: Sql;
@@ -170,6 +174,70 @@ describe("real-browser JIC and resource follow-through", () => {
     await inquiries.scrollIntoViewIfNeeded();
     await page.screenshot({ path: join(SHOTS, "jic-light-390.png"), fullPage: false });
     await page.setViewportSize({ width: 1440, height: 1000 });
+  }, 120_000);
+
+  it("lets a second administrator find a release waiting on them and approve it from their own session", async () => {
+    // The first administrator drafts, submits and approves for their agency elsewhere.
+    const token = await login(app);
+    const releaseId = (await post(app, token, `/api/v1/jurisdictions/${jurisdictionId}/jic/releases`, {
+      incidentId, title: SECOND_TITLE, body: "Sandbags are available at the Weitchpec fire hall.",
+      requiredAgencies: ["County PIO", "Public Health"],
+    })).id as string;
+    await post(app, token, `/api/v1/jic/releases/${releaseId}/submit`, {}, 200);
+    await post(app, token, `/api/v1/jic/releases/${releaseId}/decisions`, { agency: "County PIO", decision: "approve" }, 200);
+    await post(app, token, `/api/v1/jurisdictions/${jurisdictionId}/jic/inquiries`, {
+      outlet: "Times-Standard", subject: "Sandbag supply", question: "Where can residents get sandbags?", incidentId,
+    });
+    const secondId = await createPerson(admin, {
+      email: "second.pio@example.org", displayName: "Second PIO", password: "second-approver-password",
+    });
+    await addMembership(admin, secondId, jurisdictionId, "admin");
+
+    // A new browser context is a separate session with its own sign-in.
+    const second = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    try {
+      second.on("pageerror", (error) => pageErrors.push(error.message));
+      await second.route("**/*", (route) => {
+        const url = route.request().url();
+        if (url.startsWith(baseUrl) || url.startsWith("data:") || url.startsWith("blob:")) return route.continue();
+        externalRequests.push(url);
+        return route.abort();
+      });
+      await second.goto(`${baseUrl}/app/index.html`, { waitUntil: "load" });
+      await second.getByLabel("Email").fill("second.pio@example.org");
+      await second.getByLabel("Password").fill("second-approver-password");
+      await second.getByRole("button", { name: "Sign in" }).click();
+      await second.getByLabel("Selected incident").selectOption(incidentId);
+      await second.getByRole("button", { name: "JIC", exact: true }).click();
+      await second.getByRole("heading", { name: "JIC preparation" }).waitFor();
+      await second.getByRole("button", { name: /OP 1/ }).click();
+      const jic = second.getByRole("complementary", { name: "JIC draft" });
+      const waiting = jic.getByRole("region", { name: "Waiting for review" }).getByRole("listitem").filter({ hasText: SECOND_TITLE });
+      await waiting.getByText("Awaiting Public Health").waitFor();
+      await jic.getByRole("region", { name: "Media inquiries" }).getByText(/Sandbag supply/).waitFor();
+      await waiting.getByRole("button", { name: "Review" }).click();
+
+      const review = jic.getByRole("region", { name: `Review: ${SECOND_TITLE}` });
+      await review.getByText("Already approved").waitFor();
+      const decided = second.waitForResponse((response) =>
+        response.request().method() === "POST" && response.url().endsWith(`/jic/releases/${releaseId}/decisions`));
+      await review.getByRole("button", { name: "Approve for Public Health" }).click();
+      expect((await decided).status()).toBe(200);
+      await review.getByText("Approved", { exact: true }).waitFor();
+      await jic.getByText("No release on this incident is waiting on your decision.").waitFor();
+      await review.scrollIntoViewIfNeeded();
+      await second.screenshot({ path: join(SHOTS, "jic-second-approver-light-1440.png"), fullPage: false });
+    } finally {
+      await second.close();
+    }
+
+    const [release] = await admin`select status from press_releases where id = ${releaseId}`;
+    expect(release).toEqual({ status: "approved" });
+    const approvals = await admin`
+      select agency, decided_by_person from press_release_approvals where release_id = ${releaseId} order by agency`;
+    expect(approvals.map((row) => row.agency)).toEqual(["County PIO", "Public Health"]);
+    expect(approvals[1]!.decided_by_person).toBe(secondId);
+    expect(approvals[0]!.decided_by_person).not.toBe(secondId);
   }, 120_000);
 
   it("records and exports a cost, escalates to a peer tier, and shows the tier's reports", async () => {
