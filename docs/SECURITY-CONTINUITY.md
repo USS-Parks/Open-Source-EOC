@@ -59,8 +59,10 @@ style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src
 - Both limiters key on the client address. `X-Forwarded-For` is ignored unless
   the request comes from a peer named in `OPENEOC_TRUST_PROXY`, so a client
   cannot pick its own address.
-- A 30-second request timeout caps unfinished requests (slowloris defense)
-  without affecting established WebSocket sessions.
+- Request headers must arrive within 60 seconds (Node's `headersTimeout`, the
+  slowloris defense), and a whole request within five minutes, long enough for
+  a maximum-size upload over a slow field link. Neither affects established
+  WebSocket sessions.
 - Every WebSocket, whatever its route, must send its authentication frame
   within 10 seconds, may not send a frame over 1 MiB, answers a ping every 30
   seconds or is terminated, and is closed rather than buffered when more than
@@ -104,9 +106,11 @@ grant, proven in the security suite. Attribution is total (INV-2).
 | Variable | Effect | Default |
 |---|---|---|
 | `OPENEOC_DATABASE_URL` | Owner connection (migrations, seeding). Required. | — |
-| `OPENEOC_RUNTIME_URL` | `app_runtime` connection the app serves on; RLS applies. | owner URL |
-| `OPENEOC_SECRET_KEY` | Key for credential envelopes (IPAWS, collaboration, Jitsi). | — |
+| `OPENEOC_RUNTIME_URL` | `app_runtime` connection the app serves on; RLS applies. The server refuses to start without it, or on a role that bypasses RLS. | none |
+| `OPENEOC_ALLOW_OWNER_RUNTIME` | `1` overrides that refusal for a single-user development server. | unset |
+| `OPENEOC_SECRET_KEY` | Key for credential envelopes (IPAWS, collaboration, Jitsi, MFA, peer tokens); rotate with `rotate-secret-key`. | none |
 | `OPENEOC_DATA_DIR` | Blob storage directory. | `./data/blobs` |
+| `OPENEOC_MAX_UPLOAD_MB` / `OPENEOC_JURISDICTION_QUOTA_MB` | Largest single upload, and total stored file bytes per jurisdiction, in megabytes. | `25` / `10240` |
 | `OPENEOC_RATELIMIT_MAX` | Flood-limiter ceiling per client per window; `0` disables. | `1200` |
 | `OPENEOC_RATELIMIT_WINDOW_MS` | Flood-limiter window. | `10000` |
 | `OPENEOC_TRUST_PROXY` | Reverse proxy addresses or CIDRs (comma-separated) whose `X-Forwarded-For` is trusted; `true` trusts every peer. | off |

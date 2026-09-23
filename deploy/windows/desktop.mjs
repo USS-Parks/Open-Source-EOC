@@ -293,24 +293,14 @@ async function prepareDatabase(paths, config, { bootstrap = false, bootstrapInpu
       return result;
     }
     if (!bootstrapInput) throw new Error("Production bootstrap identity is required");
-    const auth = await importServer("server/src/auth/service.ts");
-    const { provisionJurisdiction } = await importServer("server/src/auth/authz.ts");
-    const personId = await auth.createPerson(owner, {
-      email: bootstrapInput.email,
-      displayName: bootstrapInput.displayName,
-      password: bootstrapInput.password,
-    });
-    await owner`update persons set is_instance_admin = true where id = ${personId}`;
-    const actor = await auth.principalForPerson(owner, personId);
-    const provisioned = await provisionJurisdiction(owner, actor, {
-      slug: bootstrapInput.jurisdictionSlug,
-      name: bootstrapInput.jurisdictionName,
-      adminPersonId: personId,
-    });
+    // The same bootstrap the server's `bootstrap` command runs.
+    const { bootstrapInstance } = await importServer("server/src/main.ts");
+    const provisioned = await bootstrapInstance(owner, bootstrapInput);
+    if (!provisioned.created) throw new Error("An instance admin already exists in this profile's database");
     writeJsonAtomic(resolve(paths.root, "bootstrap.json"), {
       profile: config.profile,
       synthetic: false,
-      adminPersonId: personId,
+      adminPersonId: provisioned.personId,
       jurisdictionId: provisioned.jurisdictionId,
       positions: provisioned.positions,
     });
@@ -320,23 +310,11 @@ async function prepareDatabase(paths, config, { bootstrap = false, bootstrapInpu
   }
 }
 
-function productionBootstrap(args) {
+async function productionBootstrap(args) {
   const password = process.env.OPENEOC_BOOTSTRAP_PASSWORD ?? "";
   delete process.env.OPENEOC_BOOTSTRAP_PASSWORD;
-  const input = {
-    email: String(args["admin-email"] ?? "").trim().toLowerCase(),
-    displayName: String(args["admin-name"] ?? "").trim(),
-    jurisdictionSlug: String(args["jurisdiction-slug"] ?? "").trim(),
-    jurisdictionName: String(args["jurisdiction-name"] ?? "").trim(),
-    password,
-  };
-  if (!/^\S+@\S+\.\S+$/.test(input.email)) throw new Error("Production admin email is required");
-  if (!input.displayName) throw new Error("Production admin display name is required");
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(input.jurisdictionSlug))
-    throw new Error("Jurisdiction slug must use lowercase letters, numbers, and single hyphens");
-  if (!input.jurisdictionName) throw new Error("Jurisdiction name is required");
-  if (input.password.length < 12) throw new Error("Production admin password must contain at least 12 characters");
-  return input;
+  const { bootstrapInput } = await importServer("server/src/main.ts");
+  return bootstrapInput(args, password);
 }
 
 async function setupProfile(args) {
@@ -370,7 +348,7 @@ async function setupProfile(args) {
   validateProfilePlans(configuredPlans({ profile, pgPort: config.pgPort, httpPort: config.httpPort, root: paths.root }));
   await assertPortFree(config.pgPort, `${profile} PostgreSQL`);
   await assertPortFree(config.httpPort, `${profile} HTTP`);
-  const productionInput = config.synthetic ? null : productionBootstrap(args);
+  const productionInput = config.synthetic ? null : await productionBootstrap(args);
 
   for (const path of [paths.root, paths.pgData, paths.blobs, paths.browser, paths.logs]) ensureDirectory(path);
   secureDirectory(paths.secrets);
@@ -567,13 +545,16 @@ async function serveProfile(args) {
   ensureSecretKey(paths);
   process.env.OPENEOC_SECRET_KEY ??= readFileSync(paths.secretKey, "utf8").trim();
   const runtimePassword = readFileSync(paths.runtimePassword, "utf8").trim();
-  const [{ connect }, { buildApp }, { Scheduler }] = await Promise.all([
+  const [{ connect }, { buildApp }, { Scheduler }, { checkRuntimeRole }] = await Promise.all([
     importServer("server/src/db/client.ts"),
     importServer("server/src/app.ts"),
     importServer("server/src/scheduler/scheduler.ts"),
+    importServer("server/src/main.ts"),
   ]);
   const runtimeUrl = databaseUrl("app_runtime", runtimePassword, config);
   const runtime = connect({ url: runtimeUrl });
+  // Refuses, with no override, if app_runtime could bypass row-level security.
+  await checkRuntimeRole(runtime, { OPENEOC_RUNTIME_URL: runtimeUrl });
   const app = buildApp(runtime, { oidc: null, logStream: rotatingLog(resolve(paths.logs, "server.log")) });
   const scheduler = new Scheduler(runtime, { lockUrl: runtimeUrl, logger: app.log });
   app.metrics.delivery = scheduler.delivery;

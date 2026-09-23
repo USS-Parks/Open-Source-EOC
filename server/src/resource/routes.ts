@@ -131,6 +131,10 @@ export function resourceRoutes(
         method: "POST",
         headers: { "content-type": "application/json", "x-peer-token": body.peerToken },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15_000),
+      }).catch(() => {
+        // Unreachable, or silent past the timeout; the transaction rolls back.
+        throw new AuthError(502, "escalation delivery failed");
       });
       if (!res.ok) throw new AuthError(502, "escalation delivery failed");
     };

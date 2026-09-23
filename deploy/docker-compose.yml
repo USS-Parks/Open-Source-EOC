@@ -38,9 +38,10 @@ services:
     environment:
       # Owner connection: runs migrations and seeds templates.
       OPENEOC_DATABASE_URL: postgres://openeoc_owner:${OPENEOC_DB_PASSWORD:-change-me-in-.env}@db:5432/openeoc
-      # App connection: app_runtime, so Row-Level Security applies. The
-      # migrations create the app_runtime role; set its password once and put
-      # the URL here (see deploy/README.md, "Runtime role").
+      # App connection: app_runtime, so Row-Level Security applies. The API
+      # refuses to start without it; install.sh sets the role's password and
+      # writes this URL to deploy/.env (see deploy/README.md, "The two
+      # database identities").
       OPENEOC_RUNTIME_URL: ${OPENEOC_RUNTIME_URL:-}
       # Server-side secret key for credential envelopes (IPAWS, collab, Jitsi).
       OPENEOC_SECRET_KEY: ${OPENEOC_SECRET_KEY:-}
@@ -49,6 +50,9 @@ services:
       # (see deploy/backup.sh); without this the store is the ephemeral
       # container layer and every upload is lost on the next `up`.
       OPENEOC_DATA_DIR: /data/blobs
+      # Upload limits in megabytes: one file, and all files of one jurisdiction.
+      OPENEOC_MAX_UPLOAD_MB: ${OPENEOC_MAX_UPLOAD_MB:-25}
+      OPENEOC_JURISDICTION_QUOTA_MB: ${OPENEOC_JURISDICTION_QUOTA_MB:-10240}
       HOST: 0.0.0.0
       PORT: 8080
       # Logs are JSON lines on stdout (see deploy/README.md, "Logs and metrics").

@@ -276,12 +276,17 @@ export function adapterFor(
   throw new CollabBackendError(400, `unknown collaboration backend: ${kind}`);
 }
 
-/** Default transport: a real HTTP call. */
-export const httpTransport: HttpTransport = async (req) => {
+/**
+ * Default transport: a real HTTP call. The timeout covers the whole
+ * exchange, body included, so an unresponsive backend fails the call
+ * instead of holding it open.
+ */
+export const httpTransport = async (req: HttpRequest, timeoutMs = 15_000): Promise<HttpResponse> => {
   const res = await fetch(req.url, {
     method: req.method,
     headers: { ...req.headers },
     ...(req.body !== undefined ? { body: req.body } : {}),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   return { status: res.status, body: await res.text() };
 };

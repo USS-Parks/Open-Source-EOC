@@ -148,9 +148,18 @@ export function parseIpawsResponse(res: IpawsHttpResponse): IpawsResult {
   return { accepted: true, detail: "accepted", httpStatus: res.status };
 }
 
-/** The default transport: a real HTTP POST to IPAWS-OPEN. */
-export const httpTransport: IpawsTransport = async (req) => {
-  const res = await fetch(req.url, { method: req.method, headers: { ...req.headers }, body: req.body });
+/**
+ * The default transport: a real HTTP POST to IPAWS-OPEN. The timeout covers
+ * the whole exchange, body included; a send that times out is reported as
+ * failed, never as accepted.
+ */
+export const httpTransport = async (req: IpawsRequest, timeoutMs = 30_000): Promise<IpawsHttpResponse> => {
+  const res = await fetch(req.url, {
+    method: req.method,
+    headers: { ...req.headers },
+    body: req.body,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
   return { status: res.status, body: await res.text() };
 };
 

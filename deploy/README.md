@@ -62,22 +62,27 @@ Security is always the second wall:
 - **Runtime** (`OPENEOC_RUNTIME_URL`) is `app_runtime`; the app runs on it and
   RLS applies to every query.
 
-First boot: leave `OPENEOC_RUNTIME_URL` empty so the app can migrate and come
-up on the owner connection (a warning is logged). Then set the `app_runtime`
-password once:
+The server refuses to start when `OPENEOC_RUNTIME_URL` is unset, and when the
+role it names bypasses RLS: a superuser, a role with `BYPASSRLS`, or a role
+that owns a table with row-level security. The error names the cause.
+`OPENEOC_ALLOW_OWNER_RUNTIME=1` overrides the refusal for a single-user
+development server and logs a warning at startup; never set it in production.
+
+`install.sh` generates the `app_runtime` password, creates the role with it
+before the first migration, and writes `OPENEOC_RUNTIME_URL` to `deploy/.env`.
+An `.env` from an earlier install with an empty `OPENEOC_RUNTIME_URL` gains the
+password and URL on the next run. To set it by hand instead:
 
 ```
 docker compose exec db psql -U openeoc_owner -d openeoc \
   -c "alter role app_runtime login password 'a-strong-password'"
 ```
 
-put its URL in `deploy/.env`:
+then put its URL in `deploy/.env` and re-apply with `docker compose up -d`:
 
 ```
 OPENEOC_RUNTIME_URL=postgres://app_runtime:a-strong-password@db:5432/openeoc
 ```
-
-and re-apply: `docker compose up -d`. From now on the app runs under RLS.
 
 ## The web bundle
 
@@ -89,12 +94,79 @@ Serve `web/dist` with any static host. The commented `web` service in
 [docker-compose.yml](./docker-compose.yml) shows an nginx sidecar; point it at
 the built `web/dist`.
 
-## First incident
+## First jurisdiction and admin
 
-Create the first jurisdiction and admin (an instance bootstrap; do it once via
-`psql` or the provisioning endpoint), sign in, activate an incident from a
-scenario template, and you have a working EOC. The full scripted path is in the
-VEOC-41 quickstart.
+The `bootstrap` command creates the instance administrator and the first
+jurisdiction, with that person as its admin and the standard ICS positions.
+It runs the migrations first, reads the password from
+`OPENEOC_BOOTSTRAP_PASSWORD` or, when that is unset, from standard input, and
+never prints it. The password needs at least 12 characters.
+
+```
+read -rs OPENEOC_BOOTSTRAP_PASSWORD && export OPENEOC_BOOTSTRAP_PASSWORD
+docker compose run --rm -e OPENEOC_BOOTSTRAP_PASSWORD api \
+  tsx server/src/main.ts bootstrap \
+  --admin-email=chief@county.example --admin-name="County Chief" \
+  --jurisdiction-slug=county-oes --jurisdiction-name="County OES"
+unset OPENEOC_BOOTSTRAP_PASSWORD
+```
+
+Running it again once any instance administrator exists changes nothing and
+exits 0. The administrator enrolls in two-step sign-in at first sign-in. Then
+activate an incident from a scenario template and you have a working EOC.
+
+## Uploads
+
+Files upload as `multipart/form-data`: the text fields `name`, and optionally
+`attachedKind`, `attachedId` and `supersedes`, followed by one `file` part
+whose own content type is the stored type. The bytes stream to disk while
+their SHA-256 is computed; nothing holds a whole file in memory.
+
+- `OPENEOC_MAX_UPLOAD_MB` (default 25) caps one file. A larger file is refused
+  with 413 and nothing is kept.
+- `OPENEOC_JURISDICTION_QUOTA_MB` (default 10240) caps the total size of every
+  stored file version in one jurisdiction. An upload that would pass it is
+  refused with 409 and a message giving the bytes in use. Two uploads that
+  race for the last of the quota are checked one after the other, so only
+  one can take it. Identical content is stored once on disk but counts
+  against the quota each time it is uploaded.
+
+## Outbound timeouts
+
+Every outbound HTTP call carries a timeout: collaboration backends and peer
+escalation 15 seconds, IPAWS-OPEN 30 seconds, webhook, push and federation
+deliveries and feed polls 10 seconds, and OpenID Connect requests 30 seconds
+(the client library's default). A call that times out fails; it is never
+reported as delivered.
+
+## Rotating the secret key
+
+`OPENEOC_SECRET_KEY` encrypts stored credentials: TOTP secrets, the IPAWS
+credential, collaboration and meeting secrets, and federation peer tokens. The
+`rotate-secret-key` command re-encrypts all of them from the current key to a
+new one in one transaction. Each value is decrypted with the current key and
+the new value is checked before it is written; if any value fails, nothing
+changes. It prints the count per table.
+
+1. Back up first (`./backup.sh`), and keep the current key until the new one
+   is confirmed.
+2. Stop the API: `docker compose stop api`.
+3. Run the rotation with the new key:
+
+   ```
+   new_key="$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | head -c 44)"
+   docker compose run --rm -e OPENEOC_NEW_SECRET_KEY="$new_key" api \
+     tsx server/src/main.ts rotate-secret-key
+   ```
+
+4. Replace `OPENEOC_SECRET_KEY` in `deploy/.env` with the new key.
+5. Start the API: `docker compose up -d`.
+
+Signed audit export pages are keyed from `OPENEOC_SECRET_KEY`. Pages exported
+before a rotation verify only with the old key, so record it with those
+exports if they may need verifying later. On the Windows desktop the key is
+the profile's `secrets/envelope.key`; see
+[the desktop guide](../docs/WINDOWS-DESKTOP.md#rotating-the-credential-key).
 
 ## Air-gapped install
 
@@ -228,8 +300,12 @@ upgrade path begins with a database whose first receipt is
 | Variable | Purpose |
 |---|---|
 | `OPENEOC_DATABASE_URL` | Owner connection: migrations and seeding |
-| `OPENEOC_RUNTIME_URL` | `app_runtime` connection: the app under RLS |
+| `OPENEOC_RUNTIME_URL` | `app_runtime` connection: the app under RLS; required |
+| `OPENEOC_ALLOW_OWNER_RUNTIME` | `1` lets a development server run without RLS; never in production |
 | `OPENEOC_SECRET_KEY` | Server key for credential envelopes (IPAWS, collab, Jitsi, MFA secrets) and signed audit export |
+| `OPENEOC_NEW_SECRET_KEY` | The new key, read only by `rotate-secret-key` |
+| `OPENEOC_BOOTSTRAP_PASSWORD` | First admin's password, read only by `bootstrap` |
+| `OPENEOC_MAX_UPLOAD_MB` / `OPENEOC_JURISDICTION_QUOTA_MB` | Upload limits; see [Uploads](#uploads) |
 | `OPENEOC_REQUIRE_ADMIN_MFA` | Admins must enroll in two-step sign-in (default on; `0` turns it off) |
 | `HOST` / `PORT` | API bind address (default `0.0.0.0:8080`) |
 | `OPENEOC_LOG_LEVEL` | Log level (default `info`) |

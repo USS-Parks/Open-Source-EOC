@@ -158,10 +158,12 @@ export function trustProxyFromEnv(value = process.env.OPENEOC_TRUST_PROXY ?? "")
 
 export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstance {
   // requestTimeout caps how long an unfinished request may occupy a
-  // connection (slowloris defense and continuity under load); it applies to
-  // request receipt, not to established WebSocket sessions.
+  // connection (continuity under load); it applies to request receipt, not to
+  // established WebSocket sessions. Five minutes lets a maximum-size upload
+  // finish over a slow field link; headers alone are still cut off by Node's
+  // 60-second headersTimeout, which is the slowloris defense.
   const app = Fastify({
-    requestTimeout: 30_000,
+    requestTimeout: 300_000,
     trustProxy: options.trustProxy ?? trustProxyFromEnv(),
     ...loggingOptions(options.logLevel ?? logLevelFromEnv(), options.logStream),
   });

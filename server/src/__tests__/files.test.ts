@@ -1,12 +1,14 @@
-import { mkdtempSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
-import { createJurisdiction } from "../auth/service.js";
+import { addMembership, createJurisdiction } from "../auth/service.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { auth, freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
+import { multipartUpload } from "./multipart.js";
 
 let admin: Sql;
 let runtime: Sql;
@@ -55,17 +57,18 @@ afterAll(async () => {
 
 
 
-async function upload(name: string, text: string, extra: Record<string, unknown> = {}) {
-  return app.inject({
+async function upload(
+  name: string,
+  content: string | Buffer,
+  extra: Record<string, string> = {},
+  options: { target?: FastifyInstance; jurisdictionId?: string; contentType?: string } = {},
+) {
+  const body = await multipartUpload({ name, ...extra }, content, options.contentType ?? "text/plain");
+  return (options.target ?? app).inject({
     method: "POST",
-    url: `/api/v1/jurisdictions/${seed.jurisdictionId}/files`,
-    headers: auth(memberToken),
-    payload: {
-      name,
-      contentType: "text/plain",
-      dataBase64: Buffer.from(text).toString("base64"),
-      ...extra,
-    },
+    url: `/api/v1/jurisdictions/${options.jurisdictionId ?? seed.jurisdictionId}/files`,
+    headers: { ...auth(memberToken), ...body.headers },
+    payload: body.payload,
   });
 }
 
@@ -194,17 +197,125 @@ describe("content-addressed, immutable file storage", () => {
   });
 
   it("refuses disallowed types and empty content", async () => {
-    const exe = await app.inject({
+    const exe = await upload("tool.exe", "MZ", {}, { contentType: "application/x-msdownload" });
+    expect(exe.statusCode).toBe(400);
+    const empty = await upload("empty.txt", "");
+    expect(empty.statusCode).toBe(400);
+    expect(empty.json().error).toBe("empty file");
+  });
+
+  it("no longer accepts the base64 JSON body", async () => {
+    const res = await app.inject({
       method: "POST",
       url: `/api/v1/jurisdictions/${seed.jurisdictionId}/files`,
       headers: auth(memberToken),
-      payload: {
-        name: "tool.exe",
-        contentType: "application/x-msdownload",
-        dataBase64: Buffer.from("MZ").toString("base64"),
-      },
+      payload: { name: "old.txt", contentType: "text/plain", dataBase64: Buffer.from("x").toString("base64") },
     });
-    expect(exe.statusCode).toBe(400);
+    expect(res.statusCode).toBe(415);
+  });
+
+  it("round-trips binary content byte for byte", async () => {
+    const bytes = Buffer.from(Array.from({ length: 2048 }, (_, i) => i % 256));
+    const up = await upload("all-bytes.png", bytes, {}, { contentType: "image/png" });
+    expect(up.statusCode, up.body).toBe(201);
+    expect(up.json().sha256).toBe(createHash("sha256").update(bytes).digest("hex"));
+    const dl = await app.inject({
+      method: "GET",
+      url: `/api/v1/files/${up.json().id as string}/content`,
+      headers: auth(memberToken),
+    });
+    expect(dl.headers["content-type"]).toBe("image/png");
+    expect(dl.rawPayload.equals(bytes)).toBe(true);
+    const [row] = await admin`select size from files where id = ${up.json().id as string}`;
+    expect(Number(row!.size)).toBe(bytes.length);
+  });
+});
+
+describe("upload size limit and per-jurisdiction quota", () => {
+  // 0.004 MB = 4194 bytes per file; 0.006 MB = 6291 bytes per jurisdiction.
+  const MAX = 4194;
+  let limited: FastifyInstance;
+  let dataDir: string;
+
+  beforeAll(async () => {
+    dataDir = process.env.OPENEOC_DATA_DIR!;
+    process.env.OPENEOC_MAX_UPLOAD_MB = "0.004";
+    process.env.OPENEOC_JURISDICTION_QUOTA_MB = "0.006";
+    try {
+      limited = buildApp(runtime, { oidc: null });
+    } finally {
+      delete process.env.OPENEOC_MAX_UPLOAD_MB;
+      delete process.env.OPENEOC_JURISDICTION_QUOTA_MB;
+    }
+  });
+
+  afterAll(async () => {
+    await limited.close();
+  });
+
+  async function freshJurisdiction(slug: string): Promise<string> {
+    const id = await createJurisdiction(admin, slug, slug);
+    await addMembership(admin, seed.memberId, id, "member");
+    return id;
+  }
+
+  const staged = () => readdirSync(dataDir).filter((name) => name.startsWith(".upload-"));
+
+  it("streams up to the per-file limit and refuses one byte more with 413", async () => {
+    const jurisdictionId = await freshJurisdiction("quota-size");
+    const over = await upload("over.txt", "x".repeat(MAX + 1), {}, { target: limited, jurisdictionId });
+    expect(over.statusCode).toBe(413);
+    expect(over.json().error).toBe(`file exceeds the ${MAX} byte limit`);
+    const exact = await upload("exact.txt", "y".repeat(MAX), {}, { target: limited, jurisdictionId });
+    expect(exact.statusCode, exact.body).toBe(201);
+    expect(staged()).toEqual([]);
+  });
+
+  it("refuses an upload that would exceed the jurisdiction's quota", async () => {
+    const jurisdictionId = await freshJurisdiction("quota-full");
+    const first = await upload("first.txt", "a".repeat(4000), {}, { target: limited, jurisdictionId });
+    expect(first.statusCode).toBe(201);
+    const second = await upload("second.txt", "b".repeat(3000), {}, { target: limited, jurisdictionId });
+    expect(second.statusCode).toBe(409);
+    expect(second.json().error).toMatch(/^jurisdiction file quota exceeded: 4000 of 6291 bytes in use/);
+    // Another jurisdiction's quota is its own.
+    const elsewhere = await upload("elsewhere.txt", "c".repeat(3000), {}, {
+      target: limited,
+      jurisdictionId: await freshJurisdiction("quota-other"),
+    });
+    expect(elsewhere.statusCode).toBe(201);
+    expect(staged()).toEqual([]);
+  });
+
+  it("admits only one of two concurrent uploads that together exceed the quota", async () => {
+    const jurisdictionId = await freshJurisdiction("quota-race");
+    // Hold the files table so both uploads are inside their transactions at
+    // once, each waiting on a lock, before either can read the usage.
+    let tableLocked!: () => void;
+    const locked = new Promise<void>((resolve) => (tableLocked = resolve));
+    const holder = admin.begin(async (tx) => {
+      await tx`lock table files in access exclusive mode`;
+      tableLocked();
+      for (let attempt = 0; attempt < 400; attempt++) {
+        const [waiting] = await admin`
+          select count(*)::int as n from pg_stat_activity
+          where datname = current_database() and usename = 'app_runtime' and wait_event_type = 'Lock'`;
+        if (waiting!.n >= 2) return;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      throw new Error("the two uploads never waited together");
+    });
+    await locked;
+    const results = await Promise.all([
+      upload("left.txt", "l".repeat(4000), {}, { target: limited, jurisdictionId }),
+      upload("right.txt", "r".repeat(4000), {}, { target: limited, jurisdictionId }),
+    ]);
+    await holder;
+    expect(results.map((r) => r.statusCode).sort()).toEqual([201, 409]);
+    const [usage] = await admin`
+      select count(*)::int as files, coalesce(sum(size), 0)::int as bytes
+      from files where jurisdiction_id = ${jurisdictionId}`;
+    expect(usage).toEqual({ files: 1, bytes: 4000 });
   });
 });
 

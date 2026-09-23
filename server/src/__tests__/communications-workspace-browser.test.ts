@@ -8,6 +8,7 @@ import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
 import { auth, buildDir, buildWeb, launchBrowser, listen, login, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { multipartUpload } from "./multipart.js";
 
 const DIST = buildDir("d27-app");
 const SHOTS = shotDir("d27");
@@ -155,13 +156,18 @@ beforeAll(async () => {
   await request(token, "POST", `/api/v1/threads/${thread.json().id as string}/messages`, {
     body: "Accessible transport route is ready for review.",
   });
-  await request(token, "POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/files`, {
-    name: "d27-evacuation-route.txt",
-    contentType: "text/plain",
-    dataBase64: Buffer.from("Route 96 staging and accessible transport notes.").toString("base64"),
-    attachedKind: "record",
-    attachedId: recordId,
+  const seededFile = await multipartUpload(
+    { name: "d27-evacuation-route.txt", attachedKind: "record", attachedId: recordId },
+    "Route 96 staging and accessible transport notes.",
+    "text/plain",
+  );
+  const seeded = await app.inject({
+    method: "POST",
+    url: `/api/v1/jurisdictions/${seed.jurisdictionId}/files`,
+    headers: { ...auth(token), ...seededFile.headers },
+    payload: seededFile.payload,
   });
+  expect(seeded.statusCode, seeded.body).toBe(201);
 
   baseUrl = await listen(app);
   browser = await launchBrowser();

@@ -1,13 +1,21 @@
+import multipart from "@fastify/multipart";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { AuthError, requireWriter } from "../auth/service.js";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
-import { BlobStore, getFileMeta, listFiles, search, uploadFile } from "./service.js";
+import {
+  BlobStore,
+  getFileMeta,
+  listFiles,
+  search,
+  uploadFile,
+  uploadLimitsFromEnv,
+} from "./service.js";
 
-const UploadBody = z.object({
+/** Text fields of a multipart upload; they must precede the file part. */
+const UploadFields = z.object({
   name: z.string().min(1).max(255),
-  contentType: z.string().min(1),
-  dataBase64: z.string().min(1),
   attachedKind: z.enum(["none", "board", "record", "incident", "library"]).optional(),
   attachedId: z.string().uuid().optional(),
   supersedes: z.string().uuid().optional(),
@@ -42,23 +50,51 @@ export function fileRoutes(
   store: BlobStore,
   authenticate: (req: FastifyRequest) => Promise<void>,
 ): void {
+  const limits = uploadLimitsFromEnv();
+  void app.register(multipart);
+
+  /**
+   * Streaming upload: multipart/form-data with the text fields first and one
+   * `file` part last, whose own Content-Type is the stored type. The bytes go
+   * straight to disk; nothing buffers the file in memory.
+   */
   app.post(
     "/api/v1/jurisdictions/:jurisdictionId/files",
-    { preHandler: authenticate, bodyLimit: 40 * 1024 * 1024 },
+    { preHandler: authenticate },
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
-      const body = UploadBody.parse(req.body);
-      const content = Buffer.from(body.dataBase64, "base64");
-      const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        uploadFile(tx, store, req.principal, {
+      // Refuse before reading a byte of the body.
+      requireWriter(req.principal, jurisdictionId);
+      if (!req.isMultipart()) throw new AuthError(415, "upload must be multipart/form-data");
+      // One byte over the limit reaches the store, which refuses it with 413.
+      const part = await req
+        .file({ limits: { fileSize: limits.maxFileBytes + 1, files: 1, fields: 8, fieldSize: 4096, parts: 9 } })
+        .catch((err: unknown) => {
+          // Parser limits carry their own 4xx status; anything else here is a malformed body.
+          const status = (err as { statusCode?: unknown }).statusCode;
+          const code = typeof status === "number" && status >= 400 && status < 500 ? status : 400;
+          throw new AuthError(code, err instanceof Error ? err.message : "malformed upload");
+        });
+      if (!part) throw new AuthError(400, "a file part is required");
+      const fields: Record<string, unknown> = { name: part.filename };
+      for (const [key, entry] of Object.entries(part.fields)) {
+        if (entry && !Array.isArray(entry) && entry.type === "field") fields[key] = entry.value;
+      }
+      const body = UploadFields.parse(fields);
+      const result = await uploadFile(
+        sql,
+        store,
+        req.principal,
+        {
           jurisdictionId,
           name: body.name,
-          contentType: body.contentType,
-          content,
+          contentType: part.mimetype,
+          content: part.file,
           attachedKind: body.attachedKind,
           attachedId: body.attachedId,
           supersedes: body.supersedes,
-        }),
+        },
+        limits,
       );
       return reply.status(201).send(result);
     },

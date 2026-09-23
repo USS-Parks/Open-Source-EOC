@@ -22,30 +22,32 @@ export function hasSecretKey(): boolean {
   return Boolean(process.env.OPENEOC_SECRET_KEY);
 }
 
-function key(): Buffer {
-  const raw = process.env.OPENEOC_SECRET_KEY;
+function key(raw = process.env.OPENEOC_SECRET_KEY): Buffer {
   if (!raw) throw new SecretKeyMissing();
   // Accept any-length operator input; derive a stable 256-bit key from it.
   return createHash("sha256").update(raw, "utf8").digest();
 }
 
-/** Encrypt a UTF-8 secret to a self-describing "v1:iv:tag:ciphertext" blob. */
-export function encryptSecret(plaintext: string): string {
+/**
+ * Encrypt a UTF-8 secret to a self-describing "v1:iv:tag:ciphertext" blob.
+ * `rawKey` defaults to OPENEOC_SECRET_KEY; key rotation passes both keys.
+ */
+export function encryptSecret(plaintext: string, rawKey?: string): string {
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", key(), iv);
+  const cipher = createCipheriv("aes-256-gcm", key(rawKey), iv);
   const ct = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
   return [FORMAT, iv.toString("base64"), tag.toString("base64"), ct.toString("base64")].join(":");
 }
 
 /** Decrypt a blob produced by {@link encryptSecret}. */
-export function decryptSecret(blob: string): string {
+export function decryptSecret(blob: string, rawKey?: string): string {
   const parts = blob.split(":");
   if (parts.length !== 4 || parts[0] !== FORMAT) throw new Error("malformed secret envelope");
   const iv = Buffer.from(parts[1]!, "base64");
   const tag = Buffer.from(parts[2]!, "base64");
   const ct = Buffer.from(parts[3]!, "base64");
-  const decipher = createDecipheriv("aes-256-gcm", key(), iv);
+  const decipher = createDecipheriv("aes-256-gcm", key(rawKey), iv);
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(ct), decipher.final()]).toString("utf8");
 }

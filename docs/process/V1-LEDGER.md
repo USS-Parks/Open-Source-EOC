@@ -1080,3 +1080,71 @@ tagging remain separately gated as section 1 of the roster states.
 - **Guide:** `docs/guides/OPERATOR-QUICKSTART.md` explains transitions,
   approvals, due times, escalations and history.
 - **Rollback:** revert the commit.
+
+## V1 W2.6: secure by default
+
+- **Refusal to serve.** The server refuses to start when
+  `OPENEOC_RUNTIME_URL` is unset, and when the runtime role would bypass
+  row-level security: a superuser, a `BYPASSRLS` role, or the owner or a
+  member of the owner of a table whose security is not forced.
+  `checkRuntimeRole` in `server/src/main.ts`; `OPENEOC_ALLOW_OWNER_RUNTIME=1`
+  overrides and logs a warning. This is gate line 8. The Windows desktop
+  `serve` path runs the same check with no override.
+- **Commands.** `main.ts` dispatches `serve` (default), `bootstrap` and
+  `rotate-secret-key`. `bootstrap` takes the admin email and name and the
+  jurisdiction slug and name as flags, the password from
+  `OPENEOC_BOOTSTRAP_PASSWORD` or standard input, never printed; it runs
+  migrations, then creates the instance admin, jurisdiction, membership and
+  standard positions in one transaction under an advisory lock, and exits 0
+  changing nothing when an instance admin exists. The desktop setup now calls
+  the same implementation. `rotate-secret-key`, new
+  `server/src/secrets/rotate.ts`, re-encrypts every envelope column in one
+  owner transaction, verifying each value decrypts first, and rolls back
+  entirely on one failure: `person_mfa.secret_envelope`,
+  `ipaws_config.credential_envelope`, `collab_backends.token_envelope`,
+  `meeting_config.secret_envelope`, `peers.outbound_token`.
+- **Uploads.** The base64 JSON upload is replaced by streaming
+  `multipart/form-data` on the same route through `@fastify/multipart`. Bytes
+  stream to a staging file while SHA-256 is computed, so no transaction is
+  open during the transfer. Over `OPENEOC_MAX_UPLOAD_MB` (default 25) answers
+  413; the quota check, file row, audit entry and move into the blob store run
+  in one transaction under a per-jurisdiction advisory lock, so concurrent
+  uploads cannot jointly exceed `OPENEOC_JURISDICTION_QUOTA_MB` (default 10240),
+  answering 409 with the bytes in use; a non-multipart request answers 415.
+  The web client sends `FormData`. The concurrency test returned two 201s
+  without the lock.
+- **Timeouts.** Collab 15 seconds, IPAWS 30, resource escalation 15, where a
+  timeout answers 502 and rolls back. Meetings makes no outbound call, OIDC
+  relies on openid-client's 30 second default, and feeds and the outbox
+  already had timeouts. "The two connectors" was read as collab and IPAWS.
+- **Deploy.** `install.sh` generates the `app_runtime` password, creates the
+  role before the first migration and writes `OPENEOC_RUNTIME_URL`, filling it
+  in on an older `.env`. `docker-compose.yml` passes the upload limits.
+- **Integration fix: request timeout.** The global 30 second `requestTimeout`
+  would cut off a 25 MB upload on any link slower than about 7 Mbit/s, which
+  is ordinary in the field. It is now five minutes; headers alone are still
+  cut off by Node's 60 second `headersTimeout`, which is the slowloris
+  defense. `docs/SECURITY-CONTINUITY.md` states both.
+- **Deviations.** The quota is one environment default per jurisdiction with
+  no override route. It counts every stored version even when content is
+  deduplicated on disk. Multipart text fields must precede the file part.
+  Desktop key rotation is documented steps, not a launcher action. No
+  migration was needed.
+- **Known risk.** An IPAWS send that times out rolls the confirmation back as
+  a network error did before; if IPAWS had accepted it, a retry could send
+  twice. CAP identifiers are unique per message, which IPAWS checks.
+- **Contract:** same method and path, no change. **Dependency:**
+  `@fastify/multipart` 10.1.2, MIT, with `@fastify/busboy` 3.2.2 and
+  `@fastify/deepmerge` 3.2.1, both MIT. License scan 294 packages; advisory
+  gate 0 high or critical with no exceptions.
+- **Verification.** In the lane, a 16-file batch passed 147 of 148, the red
+  being the known ipaws setup-lock timeout, which passed 20 of 20 alone. After
+  rebasing onto W3.0, W3.1, W3.5 and W3.7 with the timeout fix: 17 server
+  suites and every web test at four workers passed 556 of 556; ipaws,
+  `communications-workspace-browser` (upload through the UI) and `load.test.ts`
+  serial passed 25 of 25. `pnpm test:desktop` 19 passed. TypeScript and ESLint
+  clean. Link checker 69 files. A CLI smoke run: bootstrap from standard input
+  exits 0, a second bootstrap changes nothing, serve with no runtime URL is
+  refused, rotate prints counts.
+- **Evidence level:** unit, real-database integration, browser and document.
+- **Rollback:** revert the commit and drop the dependency; no schema change.

@@ -6,7 +6,6 @@ import type {
   FileMetaRef,
   SearchHit,
 } from "../app/api/client.js";
-import { readAsBase64 } from "../app/data/files.js";
 import { EmptyState, Loading, SurfaceHeader } from "../app/screens/parts.js";
 import "./workspace.css";
 
@@ -180,7 +179,7 @@ export function FilesWorkspace(props: FilesWorkspaceProps) {
     const result = await props.client.uploadFile(props.jurisdictionId, {
       name: file.name,
       contentType: file.type || "application/octet-stream",
-      dataBase64: await readAsBase64(file),
+      file,
       ...attachment,
     });
     setUploadMessage(`Stored ${file.name} as version ${result.version}.`);

@@ -1,11 +1,21 @@
-import { createHash } from "node:crypto";
-import { mkdirSync, existsSync } from "node:fs";
-import { readFile, writeFile, rename } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { createWriteStream, existsSync, mkdirSync } from "node:fs";
+import { readFile, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import type { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import type { Sql } from "../db/client.js";
+import { withPerson } from "../db/context.js";
 import { AuthError, requireWriter, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 import { CURSOR_AT_FORMAT, cutPage, decodeCursor } from "../db/cursor.js";
+
+/** An upload written to a staging file, not yet visible in the store. */
+export interface StagedBlob {
+  readonly path: string;
+  readonly sha256: string;
+  readonly size: number;
+}
 
 /**
  * Content-addressed blob store on plain disk (threat B10, INV-3): the
@@ -21,16 +31,46 @@ export class BlobStore {
     return join(this.root, hash.slice(0, 2), hash);
   }
 
-  async put(content: Buffer): Promise<{ sha256: string; size: number }> {
-    const sha256 = createHash("sha256").update(content).digest("hex");
-    const path = this.pathFor(sha256);
-    if (!existsSync(path)) {
-      mkdirSync(dirname(path), { recursive: true });
-      const tmp = `${path}.tmp-${process.pid}-${Date.now()}`;
-      await writeFile(tmp, content);
-      await rename(tmp, path);
+  /**
+   * Stream an upload to a staging file, hashing and counting as it goes, so
+   * no upload is ever held in memory. More than `maxBytes` fails with 413
+   * and leaves nothing behind.
+   */
+  async stage(source: Readable, maxBytes: number): Promise<StagedBlob> {
+    const path = join(this.root, `.upload-${randomUUID()}`);
+    const hash = createHash("sha256");
+    let size = 0;
+    try {
+      await pipeline(
+        source,
+        async function* (chunks: AsyncIterable<Buffer>) {
+          for await (const chunk of chunks) {
+            size += chunk.length;
+            if (size > maxBytes) throw new AuthError(413, `file exceeds the ${maxBytes} byte limit`);
+            hash.update(chunk);
+            yield chunk;
+          }
+        },
+        createWriteStream(path, { flags: "wx" }),
+      );
+    } catch (err) {
+      await rm(path, { force: true });
+      throw err;
     }
-    return { sha256, size: content.length };
+    return { path, sha256: hash.digest("hex"), size };
+  }
+
+  /** Move a staged upload into the store under its hash. */
+  async commit(staged: StagedBlob): Promise<void> {
+    const path = this.pathFor(staged.sha256);
+    if (existsSync(path)) return;
+    mkdirSync(dirname(path), { recursive: true });
+    await rename(staged.path, path);
+  }
+
+  /** Remove a staging file; a no-op once it has been committed. */
+  async discard(staged: StagedBlob): Promise<void> {
+    await rm(staged.path, { force: true });
   }
 
   async get(sha256: string): Promise<Buffer> {
@@ -52,62 +92,115 @@ const ALLOWED_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ]);
 
-export const DEFAULT_MAX_BYTES = 25 * 1024 * 1024;
+export interface UploadLimits {
+  /** Largest single file, in bytes. */
+  readonly maxFileBytes: number;
+  /** Total bytes of stored file versions one jurisdiction may hold. */
+  readonly quotaBytes: number;
+}
+
+const MIB = 1024 * 1024;
+
+/**
+ * OPENEOC_MAX_UPLOAD_MB (default 25) caps one file and
+ * OPENEOC_JURISDICTION_QUOTA_MB (default 10240) caps the sum of every stored
+ * file version in one jurisdiction. An invalid value fails at startup.
+ */
+export function uploadLimitsFromEnv(env: NodeJS.ProcessEnv = process.env): UploadLimits {
+  const mb = (name: string, fallback: number): number => {
+    const raw = env[name];
+    if (raw === undefined || raw === "") return fallback * MIB;
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive number of megabytes`);
+    return Math.floor(value * MIB);
+  };
+  return {
+    maxFileBytes: mb("OPENEOC_MAX_UPLOAD_MB", 25),
+    quotaBytes: mb("OPENEOC_JURISDICTION_QUOTA_MB", 10240),
+  };
+}
 
 export interface UploadInput {
   readonly jurisdictionId: string;
   readonly name: string;
   readonly contentType: string;
-  readonly content: Buffer;
+  readonly content: Readable;
   readonly attachedKind?: "none" | "board" | "record" | "incident" | "library" | undefined;
   readonly attachedId?: string | undefined;
   readonly supersedes?: string | undefined;
 }
 
+/** Namespace of the per-jurisdiction quota lock, in the two-key advisory lock space. */
+const QUOTA_LOCK = 0x0f11e5;
+
+/**
+ * Store one upload. The bytes stream to a staging file before any
+ * transaction opens, so a slow client holds no database connection. The
+ * quota check, the file row and the move into the store then run in one
+ * transaction under a per-jurisdiction advisory lock, so two concurrent
+ * uploads cannot both pass a check only one of them fits.
+ */
 export async function uploadFile(
   sql: Sql,
   store: BlobStore,
   actor: Principal,
   input: UploadInput,
-  maxBytes = DEFAULT_MAX_BYTES,
+  limits: UploadLimits,
 ): Promise<{ id: string; sha256: string; version: number }> {
   requireWriter(actor, input.jurisdictionId);
   if (!ALLOWED_TYPES.has(input.contentType))
     throw new AuthError(400, `content type not allowed: ${input.contentType}`);
-  if (input.content.length === 0) throw new AuthError(400, "empty file");
-  if (input.content.length > maxBytes)
-    throw new AuthError(400, `file exceeds the ${maxBytes} byte limit`);
-  await assertAttachmentTarget(sql, input.jurisdictionId, input.attachedKind ?? "none", input.attachedId);
+  const staged = await store.stage(input.content, limits.maxFileBytes);
+  try {
+    if (staged.size === 0) throw new AuthError(400, "empty file");
+    return await withPerson(sql, actor.person.id, async (tx) => {
+      await tx`select pg_advisory_xact_lock(${QUOTA_LOCK}, hashtext(${input.jurisdictionId}))`;
+      const [usage] = await tx`
+        select coalesce(sum(size), 0)::bigint as used from files
+        where jurisdiction_id = ${input.jurisdictionId}`;
+      const used = Number(usage!.used);
+      if (used + staged.size > limits.quotaBytes)
+        throw new AuthError(
+          409,
+          `jurisdiction file quota exceeded: ${used} of ${limits.quotaBytes} bytes in use, this file is ${staged.size} bytes`,
+        );
+      await assertAttachmentTarget(tx, input.jurisdictionId, input.attachedKind ?? "none", input.attachedId);
 
-  let version = 1;
-  if (input.supersedes) {
-    const [prev] = await sql`
-      select version, jurisdiction_id from files where id = ${input.supersedes}`;
-    if (!prev) throw new AuthError(404, "superseded file not found");
-    if ((prev.jurisdiction_id as string) !== input.jurisdictionId)
-      throw new AuthError(400, "version chain cannot cross jurisdictions");
-    version = (prev.version as number) + 1;
+      let version = 1;
+      if (input.supersedes) {
+        const [prev] = await tx`
+          select version, jurisdiction_id from files where id = ${input.supersedes}`;
+        if (!prev) throw new AuthError(404, "superseded file not found");
+        if ((prev.jurisdiction_id as string) !== input.jurisdictionId)
+          throw new AuthError(400, "version chain cannot cross jurisdictions");
+        version = (prev.version as number) + 1;
+      }
+
+      const [row] = await tx`
+        insert into files
+          (jurisdiction_id, name, content_type, size, sha256, version, supersedes,
+           attached_kind, attached_id, uploaded_by, uploaded_by_position)
+        values
+          (${input.jurisdictionId}, ${input.name}, ${input.contentType}, ${staged.size}, ${staged.sha256},
+           ${version}, ${input.supersedes ?? null}, ${input.attachedKind ?? "none"},
+           ${input.attachedId ?? null}, ${actor.person.id}, ${actor.position?.id ?? null})
+        returning id`;
+      const id = row!.id as string;
+      await recordAudit(tx, actor, {
+        jurisdictionId: input.jurisdictionId,
+        category: "file.uploaded",
+        subjectTable: "files",
+        subjectId: id,
+        payload: { name: input.name, sha256: staged.sha256, version },
+      });
+      // Last, so a failed move rolls the row back instead of leaving it
+      // pointing at no bytes.
+      await store.commit(staged);
+      return { id, sha256: staged.sha256, version };
+    });
+  } finally {
+    await store.discard(staged);
   }
-
-  const { sha256, size } = await store.put(input.content);
-  const [row] = await sql`
-    insert into files
-      (jurisdiction_id, name, content_type, size, sha256, version, supersedes,
-       attached_kind, attached_id, uploaded_by, uploaded_by_position)
-    values
-      (${input.jurisdictionId}, ${input.name}, ${input.contentType}, ${size}, ${sha256},
-       ${version}, ${input.supersedes ?? null}, ${input.attachedKind ?? "none"},
-       ${input.attachedId ?? null}, ${actor.person.id}, ${actor.position?.id ?? null})
-    returning id`;
-  const id = row!.id as string;
-  await recordAudit(sql, actor, {
-    jurisdictionId: input.jurisdictionId,
-    category: "file.uploaded",
-    subjectTable: "files",
-    subjectId: id,
-    payload: { name: input.name, sha256, version },
-  });
-  return { id, sha256, version };
 }
 
 export type FileAttachmentKind = "none" | "board" | "record" | "incident" | "library";

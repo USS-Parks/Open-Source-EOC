@@ -99,7 +99,7 @@ $env:OPENEOC_ENABLE_ACCEPTANCE_PROFILE = '1'
 .\deploy\windows\Open-Source-EOC.ps1 -Action Start -Profile acceptance -NoBrowser
 ```
 
-The application binds PostgreSQL and HTTP to `127.0.0.1` only. The launch process runs current lexical migrations through the PostgreSQL owner, closes the owner connection, and starts the server with the separate `app_runtime` credential. Row-level security therefore remains active for every application request. The server does not use the owner fallback in `server/src/main.ts`.
+The application binds PostgreSQL and HTTP to `127.0.0.1` only. The launch process runs current lexical migrations through the PostgreSQL owner, closes the owner connection, and starts the server with the separate `app_runtime` credential. Row-level security therefore remains active for every application request. Before listening, the server confirms that `app_runtime` cannot bypass row-level security and refuses to serve if it could; the desktop path has no override.
 
 The same Fastify process serves the API and stamped frontend. It validates every static path, supports bounded single byte ranges for PMTiles, serves approved local public assets without copying them, and provides runtime map and font URLs through a same-origin script. The document policy permits local MapLibre workers, styles, images, and fonts while API responses keep their existing strict policy.
 
@@ -115,6 +115,35 @@ Status reports configuration state, build freshness, exact profile-owned process
 Stop checks the application command line and ownership token, the browser user-data directory, and the PostgreSQL data directory before stopping anything. It does not kill a process merely because that process occupies a configured port. Configuration, database data, blobs, logs, and browser state remain in place for the next start.
 
 Stop a profile before making a filesystem backup. Preserve its entire profile directory so the database, attachments, configuration, and generated credentials remain together. Restore only to the same trusted Windows account and keep the secret directory private.
+
+## Rotating the credential key
+
+The profile's `secrets/envelope.key` encrypts its stored credentials: TOTP secrets, the IPAWS credential, collaboration and meeting secrets, and federation peer tokens. The server's `rotate-secret-key` command re-encrypts all of them to a new key in one transaction and changes nothing if any value fails. Stop the profile and back up its directory first, then run from the repository root. In an installed copy, use `runtime\pgsql\bin` for `$pgBin`, `.\runtime\node\node.exe` for `$node`, and `$env:LOCALAPPDATA\Open Source EOC\profiles\<profile>` for `$profileDir`.
+
+```powershell
+$profileDir = 'deploy\windows\out\profiles\production'
+$pgBin = 'deploy\test-runtime\out\pgsql\bin'
+$node = 'node'
+$config = Get-Content "$profileDir\profile.json" | ConvertFrom-Json
+& "$pgBin\pg_ctl.exe" -D "$profileDir\pgdata" -o "-p $($config.pgPort) -h 127.0.0.1" -w start
+$owner = [uri]::EscapeDataString((Get-Content "$profileDir\secrets\postgres.password").Trim())
+$env:OPENEOC_DATABASE_URL = "postgres://postgres:$owner@127.0.0.1:$($config.pgPort)/$($config.database)"
+$env:OPENEOC_SECRET_KEY = (Get-Content "$profileDir\secrets\envelope.key").Trim()
+$bytes = New-Object byte[] 36
+[Security.Cryptography.RNGCryptoServiceProvider]::Create().GetBytes($bytes)
+$env:OPENEOC_NEW_SECRET_KEY = [Convert]::ToBase64String($bytes)
+& $node --import ./deploy/windows/ts-loader.mjs server/src/main.ts rotate-secret-key
+```
+
+Only when the command has printed its counts, save the new key and stop PostgreSQL:
+
+```powershell
+Set-Content -NoNewline -Path "$profileDir\secrets\envelope.key" -Value $env:OPENEOC_NEW_SECRET_KEY
+& "$pgBin\pg_ctl.exe" -D "$profileDir\pgdata" -m fast -w stop
+Remove-Item Env:OPENEOC_DATABASE_URL, Env:OPENEOC_SECRET_KEY, Env:OPENEOC_NEW_SECRET_KEY
+```
+
+If the command fails, the database still uses the old key; leave `envelope.key` as it is. Signed audit export pages made before the rotation verify only with the old key.
 
 ## Large local map assets
 

@@ -538,7 +538,7 @@ export interface ApiClientOptions {
   readonly onTokens?: (tokens: Tokens | null) => void;
 }
 
-type Body = Record<string, unknown> | undefined;
+type Body = Record<string, unknown> | FormData | undefined;
 
 export class ApiClient {
   private accessToken: string | null = null;
@@ -635,10 +635,12 @@ export class ApiClient {
 
   private async raw<T>(method: string, path: string, body: Body, auth: boolean): Promise<T> {
     const headers: Record<string, string> = {};
-    if (body !== undefined) headers["content-type"] = "application/json";
+    // FormData sets its own multipart content type, boundary included.
+    const form = body instanceof FormData;
+    if (body !== undefined && !form) headers["content-type"] = "application/json";
     if (auth && this.accessToken) headers["authorization"] = `Bearer ${this.accessToken}`;
     const init: RequestInit = { method, headers };
-    if (body !== undefined) init.body = JSON.stringify(body);
+    if (body !== undefined) init.body = form ? body : JSON.stringify(body);
     const res = await this.fetchImpl(`${this.baseUrl}${path}`, init);
     if (!res.ok) {
       let message = res.statusText || `HTTP ${res.status}`;
@@ -1434,21 +1436,23 @@ export class ApiClient {
     );
     return r.hits;
   }
+  /** Streams the file as multipart/form-data; the text fields go first, as the server requires. */
   uploadFile(
     jurisdictionId: string,
     body: {
       name: string;
       contentType: string;
-      dataBase64: string;
+      file: Blob;
       attachedKind?: FileAttachmentKind;
       attachedId?: string;
     },
   ): Promise<UploadResult> {
-    return this.request<UploadResult>(
-      "POST",
-      `/api/v1/jurisdictions/${jurisdictionId}/files`,
-      body as unknown as Record<string, unknown>,
-    );
+    const form = new FormData();
+    form.append("name", body.name);
+    if (body.attachedKind !== undefined) form.append("attachedKind", body.attachedKind);
+    if (body.attachedId !== undefined) form.append("attachedId", body.attachedId);
+    form.append("file", new Blob([body.file], { type: body.contentType }), body.name);
+    return this.request<UploadResult>("POST", `/api/v1/jurisdictions/${jurisdictionId}/files`, form);
   }
   fileMeta(fileId: string): Promise<FileMetaRef> {
     return this.request<FileMetaRef>("GET", `/api/v1/files/${fileId}`);

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../app.js";
 import { addMembership, createJurisdiction, createPerson, principalForPerson, type Principal } from "../auth/service.js";
 import { withPerson } from "../db/context.js";
@@ -353,5 +353,41 @@ describe("cost export for reimbursement", () => {
     expect(res.body).toContain("Amount (USD)");
     expect(res.body).toContain("5400.00");
     expect(res.body).toContain("TOTAL,6360.50");
+  });
+});
+
+describe("escalation to a peer that never answers", () => {
+  it("bounds the delivery with a timeout, answers 502 and leaves the request unescalated", async () => {
+    const id = (
+      await post(county, `/api/v1/jurisdictions/${county.jurisdictionId}/resource-requests`, {
+        origin: "field",
+        item: "Water Tender",
+        quantity: 1,
+        priority: "priority",
+      })
+    ).json().id as string;
+    await post(county, `/api/v1/resource-requests/${id}/transition`, { toState: "triaged" });
+    await post(county, `/api/v1/resource-requests/${id}/transition`, { toState: "sourcing" });
+    const sent: RequestInit[] = [];
+    // A silent peer: the call ends the way fetch ends when its timeout fires.
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      sent.push(init ?? {});
+      throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    });
+    try {
+      const res = await post(county, `/api/v1/resource-requests/${id}/escalate`, {
+        peerName: "state",
+        peerBaseUrl: "https://state.invalid",
+        peerToken: "peer-token",
+      });
+      expect(res.statusCode).toBe(502);
+      expect(res.json().error).toBe("escalation delivery failed");
+    } finally {
+      fetchSpy.mockRestore();
+    }
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.signal).toBeInstanceOf(AbortSignal);
+    const [row] = await county.admin`select state from resource_requests where id = ${id}`;
+    expect(row!.state).toBe("sourcing");
   });
 });

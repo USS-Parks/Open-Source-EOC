@@ -5,6 +5,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "dependencies": {
+    "@fastify/multipart": "^10.1.2",
     "@fastify/websocket": "^11.3.0",
     "@openeoc/shared": "workspace:*",
     "fast-xml-parser": "^5.11.1",

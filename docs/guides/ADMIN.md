@@ -281,7 +281,9 @@ console.log(ok ? "valid" : "INVALID");
 
 The signature is a keyed MAC: whoever can verify it could also produce one, so
 it proves a page came from a holder of the server key, not from a particular
-person.
+person. After the key is rotated
+([deploy/README.md](../../deploy/README.md#rotating-the-secret-key)), pages
+signed before the rotation verify only with the old key.
 
 ### Forward the audit trail to syslog
 

@@ -257,14 +257,17 @@ describe("ApiClient", () => {
     expect((await client.completeIap("iap1")).ok).toBe(true);
   });
 
-  it("uploads a file, searches, and downloads content", async () => {
+  it("uploads a file as multipart, searches, and downloads content", async () => {
     const blob = new Blob([new Uint8Array([1, 2, 3])], { type: "application/octet-stream" });
+    let sent: RequestInit | undefined;
     const fetchImpl = (async (url: string, init: RequestInit) => {
       const u = String(url);
       if (u.endsWith("/auth/login"))
         return res(200, { accessToken: "A", resumeToken: "R", sessionId: "S" });
-      if (u.endsWith("/files") && init.method === "POST")
+      if (u.endsWith("/files") && init.method === "POST") {
+        sent = init;
         return res(201, { id: "f1", sha256: "abc", version: 1 });
+      }
       if (u.includes("/search?q="))
         return res(200, { hits: [{ kind: "file", id: "f1", title: "plan.pdf" }] });
       if (u.endsWith("/files/f1/content"))
@@ -277,9 +280,15 @@ describe("ApiClient", () => {
     const up = await client.uploadFile("j", {
       name: "plan.pdf",
       contentType: "application/pdf",
-      dataBase64: "AQID",
+      file: blob,
     });
     expect(up.id).toBe("f1");
+    const form = sent!.body as FormData;
+    expect([...form.keys()]).toEqual(["name", "file"]);
+    expect(form.get("name")).toBe("plan.pdf");
+    expect((form.get("file") as File).type).toBe("application/pdf");
+    // The browser writes the multipart content type with its boundary.
+    expect((sent!.headers as Record<string, string>)["content-type"]).toBeUndefined();
     const hits = await client.searchJurisdiction("j", "plan");
     expect(hits[0]!.kind).toBe("file");
     const dl = await client.downloadFile("f1");
