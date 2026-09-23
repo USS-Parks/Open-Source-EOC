@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regenerate the bundled offline vector basemap (VEOC-75).
+# Regenerate the bundled offline vector basemap from the toolchain.
 #
 # Produces web/public/basemap/basemap.pmtiles and the label glyph stack under
 # web/public/fonts, from Natural Earth 10m (public domain) clipped to
@@ -13,7 +13,7 @@
 #   - a TrueType font for labels (defaults to Liberation Sans, SIL OFL)
 #
 # Usage (from the repository root):
-#   deploy/basemap/build-bundled-basemap.sh
+#   tools/basemap/build-bundled-basemap.sh
 
 set -euo pipefail
 
@@ -46,7 +46,7 @@ tippecanoe -o "${PUB}/basemap/basemap.pmtiles" -f \
 
 echo "Generating label glyphs from ${FONT}..."
 FONT_TTF="${FONT}" FONT_STACK="${FONT_STACK}" OUT="${PUB}/fonts" \
-  node "${ROOT}/deploy/basemap/build-glyphs.mjs"
+  node "${ROOT}/tools/basemap/build-glyphs.mjs"
 
 rm -rf "${WORK}"
 echo "Done: web/public/basemap/basemap.pmtiles and web/public/fonts/${FONT_STACK}"

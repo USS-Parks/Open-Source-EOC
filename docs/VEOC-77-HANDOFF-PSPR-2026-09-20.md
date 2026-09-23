@@ -20,7 +20,7 @@ push, branch, install, or new data source: read the approval state per prompt.
    distinct approval unless he grants session-wide express consent (he did
    for VEOC-77; ask again this session).
 2. The tail of `docs/VEOC-EXECUTION-LEDGER.md`: receipts VEOC-76, 76a, 77.
-3. `deploy/basemap/README.md`: the basemap stack as it now stands.
+3. `tools/basemap/README.md`: the basemap stack as it now stands.
 4. Basho's standing direction from this session, verbatim in spirit: he
    makes scope, sourcing, and tooling decisions, not the model. Put each such
    decision to him with options before acting. He removed a Docker fallback
@@ -124,7 +124,7 @@ propose per prompt.
 
 ### Prompt 8: jurisdiction and ownership overlays (roads by owner, land ownership)
 
-- Pipeline: `deploy/basemap/overlays.sh` fetching the section 3 sources into
+- Pipeline: `tools/basemap/overlays.sh` fetching the section 3 sources into
   GeoJSON with `ogr2ogr` (ArcGIS services paginated with
   `resultOffset`, shapefiles read directly, reprojected to EPSG:4326), then
   tippecanoe or planetiler into `overlays.pmtiles` with layers
@@ -153,7 +153,7 @@ propose per prompt.
 - Polygon board layers (evacuation zones, closures, flood, fire perimeters)
   gain a fill-pattern by status. MapLibre needs a sprite for `fill-pattern`:
   generate diagonal-hatch PNGs per status color at build time
-  (`deploy/basemap/build-sprite.mjs`, no new dependency; write the PNGs and a
+  (`tools/basemap/build-sprite.mjs`, no new dependency; write the PNGs and a
   `sprite.json` by hand) into `web/public/sprite/`, and declare `sprite` on
   every style. Keep the solid fill at low opacity underneath.
 - FEMA flood zones through the overlay pipeline for the operations bbox
@@ -170,7 +170,7 @@ propose per prompt.
 
 ### Prompt 13: NAPSG facility icons
 
-- `deploy/basemap/build-napsg-sprite.mjs`: download the catalog JSON and the
+- `tools/basemap/build-napsg-sprite.mjs`: download the catalog JSON and the
   PNGs for a chosen subset (critical facilities: hospital, clinic, fire
   station, police, school, shelter, EOC, airport, helipad; plus the incident
   and lifeline packs Basho names), build `sprite.json` and `sprite.png` at 1x

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Generate a self-hosted California street basemap as PMTiles (VEOC-74).
+# Generate a self-hosted California street basemap from the offline toolchain as PMTiles.
 #
 # This runs on a build machine with network access and disk, NOT inside a
 # constrained CI sandbox: it downloads a ~1 GB OpenStreetMap extract and writes
@@ -11,9 +11,9 @@
 #   - ~10 GB free disk and ~4 GB RAM for a state-sized build
 #
 # Usage:
-#   deploy/basemap/generate-california.sh [output_dir]
+#   tools/basemap/generate-california.sh [output_dir]
 #
-# The default output directory, deploy/basemap/out, is gitignored: the tiles
+# The default output directory, tools/basemap/out, is gitignored: the tiles
 # are a deploy artifact, never a committed file.
 #
 # The result, california.pmtiles, is served over HTTP with range requests and
@@ -71,4 +71,4 @@ echo "Done: ${OUT_DIR}/california.pmtiles"
 echo "      ${OUT_DIR}/buildings.pmtiles (unless skipped)"
 echo "Next: build a glyph stack and (optionally) a sprite, host all three over"
 echo "HTTP with range requests, and set the OPENEOC_BASEMAP_* settings."
-echo "See deploy/basemap/README.md."
+echo "See tools/basemap/README.md."

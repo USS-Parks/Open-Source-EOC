@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Build source-backed California jurisdiction overlays. No npm dependencies.
+// Build source-backed California jurisdiction overlays in the offline toolchain. No npm dependencies.
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, extname, join, resolve } from "node:path";

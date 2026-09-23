@@ -1,3 +1,4 @@
+// Offline basemap generation support; not part of the deployed runtime.
 package org.openeoc.basemap;
 
 import com.fasterxml.jackson.databind.ObjectMapper;

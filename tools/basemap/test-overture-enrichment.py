@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Focused tests for the H14 exact-identity lookup contract."""
+"""Focused offline-toolchain tests for the H14 exact-identity lookup contract."""
 
 import importlib.util
 import unittest

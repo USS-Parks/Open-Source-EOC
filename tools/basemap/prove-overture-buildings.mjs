@@ -1,3 +1,4 @@
+// Browser proof for generated basemap artifacts; not deployed with the runtime.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { createReadStream, existsSync, statSync } from "node:fs";

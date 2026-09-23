@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Build the licensed H13 NAPSG facility sprite from vendored originals. No npm dependencies.
+// Build the licensed H13 NAPSG facility sprite from vendored originals in the offline toolchain. No npm dependencies.
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";

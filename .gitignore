@@ -3,14 +3,18 @@ dist/
 build/
 coverage/
 *.tsbuildinfo
+__pycache__/
+*.pyc
 .pnpm-store/
 target/
 .env
 .env.*
 !.env.example
 *.log
-# Generated street-tile artifacts (deploy/basemap/generate-california.sh),
-# and a local copy served by the dev server for the basemap testbed.
+# Generated street-tile artifacts (tools/basemap/generate-california.sh),
+# and a local copy served by the dev server for the basemap testbed. Keep the
+# legacy deploy path ignored so existing local artifacts are not disturbed.
+tools/basemap/out/
 deploy/basemap/out/
 # Portable, loopback-only database runtime and ephemeral test data.
 deploy/test-runtime/out/

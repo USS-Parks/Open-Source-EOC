@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build an exact OSM-way lookup from a local Overture buildings GeoParquet."""
+"""Build an exact OSM-way lookup from a local Overture buildings GeoParquet in the offline toolchain."""
 
 from __future__ import annotations
 
@@ -11,8 +11,6 @@ import re
 from collections import Counter
 from pathlib import Path
 from typing import Final
-
-import duckdb
 
 
 RELEASE: Final = "2026-08-19.0"
@@ -54,6 +52,8 @@ def sql_case() -> str:
 
 
 def build_lookup(args: argparse.Namespace) -> dict[str, object]:
+    import duckdb
+
     source = args.source.resolve()
     state = args.state.resolve()
     output = args.output.resolve()

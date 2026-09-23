@@ -17,7 +17,7 @@ import {
  * class, water, boundaries, buildings, and place and road labels, all served
  * from a deployment's own `california.pmtiles` with a self-hosted glyph stack,
  * so the map stays offline-capable and license-clean (OpenStreetMap, ODbL). The
- * tiles are produced by deploy/basemap; this module only builds the style that
+ * tiles are produced by tools/basemap; this module only builds the style that
  * renders them. Operational layers mount on top at runtime, unchanged.
  *
  * The palette stays deliberately calm (color reserved for operational status,

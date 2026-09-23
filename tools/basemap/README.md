@@ -1,4 +1,4 @@
-# Basemaps
+# Basemap generation and proof toolchain
 
 The common operating picture has two self-hosted basemaps, both offline-capable
 with no third-party tile provider:
@@ -34,13 +34,13 @@ it into the app.
 On a machine with Java 21+, about 10 GB of free disk, and network access:
 
 ```
-deploy/basemap/generate-california.sh
+tools/basemap/generate-california.sh
 ```
 
 This uses [planetiler](https://github.com/onthegomap/planetiler) to download the
 California extract from Geofabrik and write `california.pmtiles` in the
 OpenMapTiles schema, which the app's street style is written against. Output
-lands in `deploy/basemap/out/` (gitignored) unless a directory is given. For a
+lands in `tools/basemap/out/` (gitignored) unless a directory is given. For a
 different area, change `--area` in the script (a Geofabrik region path such as
 `us/oregon`), or point planetiler at a local `.osm.pbf` with `--osm-path`.
 
@@ -71,7 +71,7 @@ acquisition manifest under `web/public/napsg/`. Rebuild the MapLibre 1x and 2x
 sprite pairs offline with Node only:
 
 ```
-node deploy/basemap/build-napsg-sprite.mjs
+node tools/basemap/build-napsg-sprite.mjs
 ```
 
 The builder verifies every original against the acquisition manifest, accepts
@@ -81,7 +81,7 @@ entry retains the source URL and SHA-256 plus NAPSG and CC BY 4.0 attribution.
 Optional arguments select another input and output directory:
 
 ```
-node deploy/basemap/build-napsg-sprite.mjs ./approved-napsg-input ./sprite-output
+node tools/basemap/build-napsg-sprite.mjs ./approved-napsg-input ./sprite-output
 ```
 
 The COP also registers the individual local PNGs at runtime so bundled and
@@ -193,7 +193,7 @@ extension directory, the same California OSM PBF and Planetiler JAR used by the
 base archive, Python with DuckDB, and JDK 21. Pass those paths explicitly:
 
 ```powershell
-./deploy/basemap/build-overture-buildings.ps1 `
+./tools/basemap/build-overture-buildings.ps1 `
   -OverturePath <overture-buildings.geoparquet> `
   -OsmPath <us_california.osm.pbf> `
   -PlanetilerJar <planetiler-0.9.0.jar> `
@@ -245,7 +245,7 @@ source subtype is outside the documented crosswalk.
 
 With the street and building archives in `web/public/basemap/`, run
 `pnpm --dir web exec vite --host 127.0.0.1 --port 5173 --strictPort`, then
-`node deploy/basemap/prove-buildings.mjs` from the repository root. The proof
+`node tools/basemap/prove-buildings.mjs` from the repository root. The proof
 uses the existing server Playwright dependency and installed Chrome; set
 `OPENEOC_CHROMIUM` to an executable path if Chrome is elsewhere. An optional
 first argument selects another local testbed URL.
@@ -254,25 +254,25 @@ The proof renders Eureka at zoom 15 in both themes, checks typed and untyped
 footprints, promoted OSM IDs, attribution, the Building use legend, and the
 Buildings group toggled off and back on. Both archives must return HTTP 206;
 external requests and browser/map errors fail the run. Four PNGs and
-`evidence.json` land in `deploy/basemap/out/proof-9b/` (gitignored).
+`evidence.json` land in `tools/basemap/out/proof-9b/` (gitignored).
 This verifies archive rendering, not the live record-to-building status join.
 That integration still requires board records from a running backend.
 
 To check a candidate Overture archive before it replaces the shipped one, run
-`node deploy/basemap/prove-overture-buildings.mjs` with `OPENEOC_H14_ARCHIVE`
+`node tools/basemap/prove-overture-buildings.mjs` with `OPENEOC_H14_ARCHIVE`
 naming the candidate PMTiles, `OPENEOC_CHROMIUM` and `OPENEOC_SHOT_DIR` set;
 it serves the candidate through its own Vite testbed and writes its evidence
 under the shot directory.
 
 ## 9. California road jurisdiction and public land overlays
 
-Run `node deploy/basemap/build-overlays.mjs` (or `overlays.sh`) on the build
+Run `node tools/basemap/build-overlays.mjs` (or `overlays.sh`) on the build
 machine with Node, Java 21, GDAL and the existing Planetiler JAR available.
 Set `OPENEOC_JAVA`, `OPENEOC_OGR2OGR`, `OPENEOC_OGRINFO` and
 `OPENEOC_PLANETILER_JAR` when those tools are not on PATH. The default build
 covers California; `OPENEOC_OVERLAY_BBOX=west,south,east,north` restricts it
 to a chosen build extent. This reference archive does not define an incident
-operational area. Output stays under `deploy/basemap/out/`. ZIP source
+operational area. Output stays under `tools/basemap/out/`. ZIP source
 inspection also uses the operating system tar command; GDAL reads archives
 directly without extraction. Builds fetch current data by default. To resume
 an interrupted build using its validated source cache, set
@@ -322,12 +322,12 @@ The geographic build envelope is statewide; county source availability is
 reported separately. This does not establish multi-organization incident
 workflow parity. Do not treat a missing layer as zero roads or zero risk.
 
-With the Vite testbed running, `node deploy/basemap/prove-overlays.mjs`
+With the Vite testbed running, `node tools/basemap/prove-overlays.mjs`
 checks both themes over California, Humboldt and San Diego, plus a Nevada
 interior exclusion check, including real
 archive range responses, source coverage, independent toggles and no external
 requests. Its PNGs and JSON receipt land in `out/proof-8/`.
-`node deploy/basemap/prove-overlay-modes.mjs` additionally verifies external
+`node tools/basemap/prove-overlay-modes.mjs` additionally verifies external
 style mounting and late coverage disabling previously selected empty layers.
 It expects a real regional archive and manifest at
 `out/proof-8-san-diego-pack/` with empty NPS and county layers. Its minimal

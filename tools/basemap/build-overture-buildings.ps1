@@ -1,3 +1,4 @@
+# Offline candidate-archive builder; not part of the deployed runtime.
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)][string]$OverturePath,

@@ -1,3 +1,4 @@
+# Offline Planetiler schema; not a deployed runtime file.
 schema_name: Open Source EOC California jurisdiction overlays
 schema_description: >-
   California state and federal road agency layers, configured county-jurisdiction

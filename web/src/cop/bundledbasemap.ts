@@ -12,11 +12,11 @@ import {
 /**
  * The bundled offline vector basemap. Natural Earth 10m and US Census
  * county data, clipped to California and tiled to PMTiles with tippecanoe (see
- * deploy/basemap), rendered as real vector tiles with labeled towns, highways,
+ * tools/basemap), rendered as real vector tiles with labeled towns, highways,
  * urban footprints, water, and county lines. This ships with the app, needs no
  * external tile provider, and works fully offline. It is a genuine step up from
  * the raw-GeoJSON fallback; a deployment that hosts full OpenStreetMap street
- * tiles (deploy/basemap/generate-california.sh + streetstyle.ts) overrides it.
+ * tiles (tools/basemap/generate-california.sh + streetstyle.ts) overrides it.
  *
  * The palette stays calm: color is reserved for operational status (INV-8), so
  * the basemap never competes with the incident symbology drawn on top.

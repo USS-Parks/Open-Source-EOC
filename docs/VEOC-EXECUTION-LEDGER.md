@@ -5066,3 +5066,28 @@ increment proves it and that coverage follows the incident area.
 - **Result:** W1.5 is complete. No schema, dependency, operator data or runtime
   port changed. Next: W1.6, move the basemap generation and proof toolchain out
   of the deploy tree while leaving IT-run deployment assets in place.
+
+## V1 W1.6: move basemap generation out of the deploy tree
+
+- **Repository boundary:** all 17 tracked basemap builders, schemas, offline
+  enrichment code, focused tests, browser proofs and their README moved from
+  `deploy/basemap/` to `tools/basemap/`. The tracked deploy tree no longer
+  contains build-machine or proof tooling.
+- **References:** executable examples, asset provenance, live source comments,
+  the prior handoff's tool references, ignore rules and the Node-tool ESLint
+  environment now point at `tools/basemap/`. Completed ledger receipts and
+  historical ownership rows retain the paths that were true when written.
+- **Local artifact preservation:** the ignored `deploy/basemap/out/` directory
+  is approximately 15 GB and contains user-owned generated evidence and map
+  artifacts. It was neither moved nor deleted. Its legacy ignore remains; new
+  tool runs default to the ignored `tools/basemap/out/` path.
+- **Verification:** the Overture enrichment contract passed 2 of 2 tests; all
+  seven Node tools parsed; Git Bash parsed all three shell entry points.
+  Recursive TypeScript and full ESLint passed after extending the existing
+  Node-tool environment to `tools/**/*.mjs`; the license scan passed all 300
+  packages and the link checker passed all 64 currently tracked Markdown
+  files. `git diff --check` is clean.
+- **Result:** W1.6 is complete. No generated archive, deployment runtime,
+  schema, dependency or operator behavior changed. Next: W1.7, restructure the
+  documentation tree and remove the superseded canonical-reference PNG
+  originals while preserving the authoritative JPGs.

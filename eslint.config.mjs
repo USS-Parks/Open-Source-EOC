@@ -2,7 +2,7 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["**/dist/**", "**/node_modules/**", "field-node/**", "deploy/test-runtime/out/**", "deploy/windows/out/**", "deploy/basemap/out/**"] },
+  { ignores: ["**/dist/**", "**/node_modules/**", "field-node/**", "deploy/test-runtime/out/**", "deploy/windows/out/**", "tools/basemap/out/**", "deploy/basemap/out/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -16,7 +16,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["scripts/**", "deploy/**/*.mjs"],
+    files: ["scripts/**", "deploy/**/*.mjs", "tools/**/*.mjs"],
     languageOptions: {
       globals: {
         console: "readonly",

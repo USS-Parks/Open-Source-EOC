@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build California jurisdiction overlays into a deploy-time PMTiles archive.
+# Build California jurisdiction overlays from the offline toolchain into a PMTiles archive.
 # Requires Node 24, GDAL/PROJ, Java 21, tar for ZIP listing, and Planetiler 0.9.0.
 # Optional environment:
 #   OPENEOC_OVERLAY_BBOX=west,south,east,north (within California)

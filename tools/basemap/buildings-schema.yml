@@ -1,3 +1,4 @@
+# Offline Planetiler schema; not a deployed runtime file.
 schema_name: Open Source EOC buildings
 schema_description: >-
   Building footprints with their OpenStreetMap building tag as `class`, keyed

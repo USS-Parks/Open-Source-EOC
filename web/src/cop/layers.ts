@@ -348,7 +348,7 @@ export const BUILDING_USE_LEGEND: readonly { readonly id: BuildingUse; readonly 
   { id: "other", title: "Untyped" },
 ];
 
-/** A self-hosted buildings PMTiles archive (deploy/basemap, buildings schema). */
+/** A self-hosted buildings PMTiles archive (tools/basemap, buildings schema). */
 export interface BuildingsConfig {
   readonly pmtilesUrl: string;
   /** Present only when this archive carries the exact-way H14 enrichment. */

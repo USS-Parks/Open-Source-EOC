@@ -16,7 +16,7 @@ interface RuntimeConfig {
   /** A full MapLibre style URL that replaces the bundled basemap. */
   readonly OPENEOC_BASEMAP_STYLE_URL?: string;
   /** A self-hosted OpenMapTiles-schema PMTiles archive (produced by
-   * deploy/basemap). When set, the app builds a themed street style over it,
+   * tools/basemap). When set, the app builds a themed street style over it,
    * giving street-level detail while staying self-hosted and offline-capable. */
   readonly OPENEOC_BASEMAP_PMTILES_URL?: string;
   /** A glyph (font) PBF range URL for the street style's labels. Optional:
@@ -27,7 +27,7 @@ interface RuntimeConfig {
   readonly OPENEOC_BASEMAP_FONT?: string;
   /** Optional sprite base URL for the street style's icons. */
   readonly OPENEOC_BASEMAP_SPRITE_URL?: string;
-  /** A self-hosted buildings PMTiles archive (deploy/basemap buildings
+  /** A self-hosted buildings PMTiles archive (tools/basemap buildings
    * schema): footprints classed by use, colorable by operational status. */
   readonly OPENEOC_BUILDINGS_PMTILES_URL?: string;
   /** Overture release carried by an H14-enriched buildings archive. Omit for

@@ -1,4 +1,4 @@
-// Generate MapLibre glyph PBF ranges from a TrueType font (VEOC-75).
+// Generate MapLibre glyph PBF ranges from a TrueType font in the offline toolchain.
 // Used by build-bundled-basemap.sh. Requires the 'fontnik' npm package.
 //
 // Env: FONT_TTF (path to .ttf), FONT_STACK (dir name the style requests),
