@@ -83,6 +83,127 @@ function RequestRow(props: {
   );
 }
 
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Dollars as typed ("5,400.00", "$96.05") to whole cents; null when unreadable. */
+function toCents(value: string): number | null {
+  const plain = value.replace(/[$,\s]/g, "");
+  return /^\d+(\.\d{1,2})?$/.test(plain) ? Math.round(Number(plain) * 100) : null;
+}
+
+const formStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))",
+  gap: 8,
+  alignItems: "end",
+  minWidth: 0,
+};
+
+/**
+ * Reimbursement costs and escalation for the selected request. Escalation
+ * hands the request to a higher tier over the peer token that tier issued;
+ * the tier works it as its own request and its status reports land in this
+ * request's history.
+ */
+function RequestCostsAndEscalation(props: {
+  client: ApiClient;
+  request: ResourceRequestSummary;
+  canMutate: boolean;
+  onEscalated: () => void;
+}) {
+  const [category, setCategory] = useState("");
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
+  const [incurredOn, setIncurredOn] = useState(() => new Date().toLocaleDateString("en-CA"));
+  const [peerName, setPeerName] = useState("");
+  const [peerBaseUrl, setPeerBaseUrl] = useState("");
+  const [peerToken, setPeerToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const open = props.request.state !== "closed" && props.request.state !== "cancelled";
+
+  const run = async (action: () => Promise<string | null>) => {
+    setBusy(true);
+    setNotice(null);
+    setError(null);
+    try {
+      setNotice(await action());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const recordCost = () => run(async () => {
+    const cents = toCents(amount);
+    if (!category.trim()) throw new Error("Enter a cost category.");
+    if (cents === null) throw new Error("Enter the amount in dollars, for example 5400.00.");
+    if (!incurredOn) throw new Error("Enter the date the cost was incurred.");
+    await props.client.addResourceRequestCost(props.request.id, {
+      category: category.trim(),
+      amountCents: cents,
+      incurredAt: incurredOn,
+      ...(description.trim() ? { description: description.trim() } : {}),
+    });
+    setCategory("");
+    setAmount("");
+    setDescription("");
+    return `Cost recorded: ${category.trim()}, $${(cents / 100).toFixed(2)}.`;
+  });
+  const exportCosts = () => run(async () => {
+    saveBlob(await props.client.exportResourceRequestCosts(props.request.id), `resource-request-${props.request.id.slice(0, 8)}-costs.csv`);
+    return null;
+  });
+  const escalate = () => run(async () => {
+    const name = peerName.trim();
+    if (!name || !peerBaseUrl.trim() || !peerToken) throw new Error("Enter the peer name, its address and the peer token it issued.");
+    await props.client.escalateResourceRequest(props.request.id, { peerName: name, peerBaseUrl: peerBaseUrl.trim(), peerToken });
+    setPeerToken("");
+    props.onEscalated();
+    return `Escalated to ${name}. Status reports from ${name} appear in the request history.`;
+  });
+
+  return (
+    <Panel title={`${props.request.item}: costs and mutual aid`}>
+      <div style={{ display: "grid", gap: 16, minWidth: 0 }}>
+        <section aria-label="Reimbursement costs" style={{ display: "grid", gap: 8, minWidth: 0 }}>
+          <h3 style={{ margin: 0 }}>Reimbursement costs</h3>
+          {props.canMutate ? <div style={formStyle}>
+            <div style={{ minWidth: 0 }}><TextField label="Cost category" value={category} onChange={setCategory} /></div>
+            <div style={{ minWidth: 0 }}><TextField label="Amount (USD)" value={amount} onChange={setAmount} /></div>
+            <div style={{ minWidth: 0 }}><TextField label="Cost description" value={description} onChange={setDescription} /></div>
+            <label style={{ display: "grid", gap: 4, minWidth: 0 }}>Incurred on<input type="date" value={incurredOn} onChange={(event) => setIncurredOn(event.target.value)} style={selectStyle} /></label>
+            <Button kind="primary" onClick={() => void recordCost()} disabled={busy}>Record cost</Button>
+          </div> : null}
+          <div><Button onClick={() => void exportCosts()} disabled={busy}>Export costs (CSV)</Button></div>
+        </section>
+        {props.canMutate && open ? <section aria-label="Escalate to another tier" style={{ display: "grid", gap: 8, minWidth: 0 }}>
+          <h3 style={{ margin: 0 }}>Escalate to another tier</h3>
+          <p style={{ margin: 0, color: "var(--eoc-text-muted)" }}>Use the peer token the receiving tier issued when it registered this organization. The token is sent once and not stored.</p>
+          <div style={formStyle}>
+            <div style={{ minWidth: 0 }}><TextField label="Peer name" value={peerName} onChange={setPeerName} /></div>
+            <div style={{ minWidth: 0 }}><TextField label="Peer address" value={peerBaseUrl} onChange={setPeerBaseUrl} /></div>
+            <div style={{ minWidth: 0 }}><TextField label="Peer token" type="password" value={peerToken} onChange={setPeerToken} /></div>
+            <Button onClick={() => void escalate()} disabled={busy}>Escalate request</Button>
+          </div>
+        </section> : null}
+        {notice ? <p role="status" style={{ margin: 0, color: "var(--eoc-status-success)" }}>{notice}</p> : null}
+        {error ? <p role="alert" style={{ margin: 0, color: "var(--eoc-status-critical)" }}>{error}</p> : null}
+      </div>
+    </Panel>
+  );
+}
+
 /**
  * The 213RR resource-request board (F5). Submit a request, and move each one
  * through the NIMS ordering lifecycle; the allowed next states come straight
@@ -211,6 +332,15 @@ export function ResourcesSurface(props: {
         {detail.loading && selectedRequest ? <Loading label="Loading request history…" /> : null}
         {detail.error ? <ErrorNote message={detail.error} /> : null}
         {detail.data ? <ResourceRequestDetailPanel detail={detail.data} onClose={() => selectRequest(null)} /> : null}
+        {detail.data ? (
+          <RequestCostsAndEscalation
+            key={detail.data.id}
+            client={props.client}
+            request={detail.data}
+            canMutate={canMutate}
+            onEscalated={detail.reload}
+          />
+        ) : null}
 
         {error ? (
           <p role="alert" style={{ color: "var(--eoc-status-critical)" }}>

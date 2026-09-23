@@ -1275,3 +1275,47 @@ tagging remain separately gated as section 1 of the roster states.
 - **Evidence level:** unit, integration, real-database, browser and document.
 - **Guide:** `docs/guides/FEDERATION-SETUP.md`, "The Federation screen".
 - **Rollback:** revert the commit.
+
+## V1 W3.8: JIC and resources completion
+
+- **Route count confirmed at 7 and 5.** JIC, six now wired: release
+  decisions, publish, the public feed, inquiry create, assign and answer;
+  `POST /api/v1/jic/approvals/receive` stays unwired as peer-token machine
+  audience. Resources, three now wired: cost entry, the cost export and
+  escalation; `receive` and `report` stay unwired as peer-token machine
+  audience.
+- **What changed.** In `web/src/sitreps/JicPreparation.tsx`, after submit the
+  panel shows the review chain and the operator approves or rejects per named
+  agency with a note, the server's refusal shown; an approved release
+  publishes to the public feed, the incident collaboration channels or both,
+  and the panel says which accepted it; the ten latest public releases are
+  listed; media inquiries are logged, assigned to a position and answered with
+  the panel's release. In `ResourcesSurface.tsx` the selected request gains a
+  costs and mutual aid panel: record a cost, export the costs CSV, and
+  escalate with a peer name, address and token, showing the server's error;
+  the upper tier's status reports appear in the history and move the request.
+- **Deviations.** No list route exists for releases or inquiries, so the panel
+  shows only the release drafted and the inquiries logged in it; a second
+  approver signed in elsewhere cannot find a release waiting on them. The
+  engine has no inquiry close step. Publishing to CAP is not offered, because
+  the engine needs a full CAP draft. Cost category is free text. The JIC side
+  panel is no longer sticky, being taller than the screen. Ownership deviation:
+  `web/src/sitreps/sitreps.css`.
+- **Engine gaps found, carried to W3.11:** list routes for pending releases
+  and open inquiries, so a second approver can act from their own session;
+  and `addCost` binds a missing incurred date as null into a `NOT NULL DEFAULT
+  CURRENT_DATE` column, which should fail rather than default. The screen
+  always sends a date.
+- **Schema, contract, dependencies:** none.
+- **Verification.** In the lane, 11 files passed 72 of 72, including
+  `jic-resources-browser.test.ts` with a second running instance as the upper
+  tier: escalation over real HTTP refused with a wrong token (502 shown) and
+  accepted with the right one, "assigned" and "deployed" reported back, and
+  database checks for the approval, the public message, the answered inquiry
+  and the received request. After rebasing onto W3.2, W3.3 and W3.6: the JIC
+  and resources, resources and SITREP briefing browser walks, jic, resource,
+  sitreps, api-docs, every web test and the shared suite passed 604 of 604.
+  TypeScript and ESLint clean. Link checker 70 files.
+- **Evidence level:** unit, real-database integration, browser and document.
+- **Guide:** `docs/guides/OPERATOR-QUICKSTART.md` JIC and resources sections.
+- **Rollback:** revert the commit.

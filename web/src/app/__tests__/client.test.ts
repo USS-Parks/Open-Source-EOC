@@ -598,6 +598,47 @@ describe("audit chronology client", () => {
     expect(JSON.parse(await blob.text())).toEqual([first, second]);
     expect(String(fetchImpl.mock.calls[1]?.[0])).toContain("format=json&limit=500&cursor=c2");
   });
+
+  it("sends JIC review, publication and inquiry calls to their routes", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(res(200, { ok: true }));
+    const client = new ApiClient({ fetchImpl });
+    await client.decideJicRelease("r/1", { agency: "County PIO", decision: "approve", note: "ok" });
+    await client.publishJicRelease("r/1", { toPublicFeed: true, toCollab: false });
+    fetchImpl.mockResolvedValueOnce(res(200, { public: [{ id: "m1", title: "T", body: "B", publishedAt: "2026-09-23T00:00:00.000Z" }] }));
+    expect(await client.listJicPublicFeed("j/1")).toEqual([{ id: "m1", title: "T", body: "B", publishedAt: "2026-09-23T00:00:00.000Z" }]);
+    await client.logJicInquiry("j/1", { outlet: "KHSU", subject: "Detour", question: "How long?", incidentId: "i1" });
+    await client.assignJicInquiry("q/1", "p1");
+    await client.answerJicInquiry("q/1", "r1");
+    expect(fetchImpl.mock.calls.map((call) => [(call[1] as RequestInit).method, String(call[0]), (call[1] as RequestInit).body])).toEqual([
+      ["POST", "/api/v1/jic/releases/r%2F1/decisions", JSON.stringify({ agency: "County PIO", decision: "approve", note: "ok" })],
+      ["POST", "/api/v1/jic/releases/r%2F1/publish", JSON.stringify({ toPublicFeed: true, toCollab: false })],
+      ["GET", "/api/v1/jurisdictions/j%2F1/jic/public", undefined],
+      ["POST", "/api/v1/jurisdictions/j%2F1/jic/inquiries", JSON.stringify({ outlet: "KHSU", subject: "Detour", question: "How long?", incidentId: "i1" })],
+      ["POST", "/api/v1/jic/inquiries/q%2F1/assign", JSON.stringify({ positionId: "p1" })],
+      ["POST", "/api/v1/jic/inquiries/q%2F1/answer", JSON.stringify({ responseReleaseId: "r1" })],
+    ]);
+  });
+
+  it("records, exports and escalates a resource request's costs and hand-off", async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(res(201, { id: "c1" }))
+      .mockResolvedValueOnce({ ...res(200, null), blob: async () => new Blob(["Request,Item\nTOTAL,1.00\n"]) })
+      .mockResolvedValueOnce(res(200, { ok: true }))
+      .mockResolvedValueOnce(res(502, { error: "escalation delivery failed" }));
+    const client = new ApiClient({ fetchImpl });
+    expect(await client.addResourceRequestCost("q/1", { category: "fuel", amountCents: 100, incurredAt: "2026-09-23" })).toEqual({ id: "c1" });
+    expect(await (await client.exportResourceRequestCosts("q/1")).text()).toContain("TOTAL,1.00");
+    const escalation = { peerName: "state", peerBaseUrl: "https://state.example", peerToken: "t" };
+    await client.escalateResourceRequest("q/1", escalation);
+    await expect(client.escalateResourceRequest("q/1", escalation)).rejects.toMatchObject({ status: 502, message: "escalation delivery failed" });
+    expect(fetchImpl.mock.calls.map((call) => [(call[1] as RequestInit).method, String(call[0])])).toEqual([
+      ["POST", "/api/v1/resource-requests/q%2F1/costs"],
+      ["GET", "/api/v1/resource-requests/q%2F1/costs/export"],
+      ["POST", "/api/v1/resource-requests/q%2F1/escalate"],
+      ["POST", "/api/v1/resource-requests/q%2F1/escalate"],
+    ]);
+    expect((fetchImpl.mock.calls[2]?.[1] as RequestInit).body).toBe(JSON.stringify(escalation));
+  });
 });
 
 describe("staffing client", () => {

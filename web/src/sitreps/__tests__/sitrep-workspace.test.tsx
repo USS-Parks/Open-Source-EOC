@@ -48,6 +48,13 @@ function client(overrides: Partial<ApiClient> = {}): ApiClient {
     composeSitrep: vi.fn().mockResolvedValue(archived),
     draftJicRelease: vi.fn().mockResolvedValue({ id: "20000000-0000-4000-8000-000000000002" }),
     submitJicRelease: vi.fn().mockResolvedValue({ ok: true }),
+    decideJicRelease: vi.fn().mockResolvedValue({ status: "approved" }),
+    publishJicRelease: vi.fn().mockResolvedValue({ status: "published", channels: ["public_feed"] }),
+    listJicPublicFeed: vi.fn().mockResolvedValue([]),
+    listPositions: vi.fn().mockResolvedValue([{ id: "30000000-0000-4000-8000-000000000003", key: "pio", title: "Public Information Officer" }]),
+    logJicInquiry: vi.fn().mockResolvedValue({ id: "40000000-0000-4000-8000-000000000004" }),
+    assignJicInquiry: vi.fn().mockResolvedValue({ ok: true }),
+    answerJicInquiry: vi.fn().mockResolvedValue({ ok: true }),
     ...overrides,
   } as unknown as ApiClient;
 }
@@ -141,6 +148,70 @@ describe("incident SITREP composition and JIC preparation", () => {
     fireEvent.click(submit);
     await waitFor(() => expect(api.submitJicRelease).toHaveBeenCalled());
     expect(await screen.findByText(/submitted for review/)).toBeTruthy();
+  });
+
+  it("approves a submitted release, publishes it, and answers a logged inquiry with it", async () => {
+    const api = client();
+    render(<Theme name="light"><JicPreparation client={api} jurisdictionId="jurisdiction-a" sitrep={archived} /></Theme>);
+    expect(await screen.findByText("Nothing is published yet.")).toBeTruthy();
+    fireEvent.change(screen.getByRole("textbox", { name: "Required reviewing agencies" }), { target: { value: "County PIO" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save JIC draft" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Submit for review" }));
+    fireEvent.change(await screen.findByRole("textbox", { name: "Decision note" }), { target: { value: "Cleared by counsel" } });
+    fireEvent.click(screen.getByRole("button", { name: "Approve for County PIO" }));
+    await waitFor(() => expect(api.decideJicRelease).toHaveBeenCalledWith("20000000-0000-4000-8000-000000000002", {
+      agency: "County PIO", decision: "approve", note: "Cleared by counsel",
+    }));
+    expect(await screen.findByText("Approved")).toBeTruthy();
+    const answer = () => screen.getByRole("button", { name: "Answer with approved release" }) as HTMLButtonElement;
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Media outlet" }), { target: { value: "KHSU Radio" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Inquiry subject" }), { target: { value: "Detour length" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Question" }), { target: { value: "How long is the detour?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Log inquiry" }));
+    await waitFor(() => expect(api.logJicInquiry).toHaveBeenCalledWith("jurisdiction-a", {
+      outlet: "KHSU Radio", subject: "Detour length", question: "How long is the detour?", incidentId: archived.incidentId,
+    }));
+    expect(await screen.findByText("Logged")).toBeTruthy();
+    fireEvent.change(await screen.findByRole("combobox", { name: "Assign to position: Detour length" }), {
+      target: { value: "30000000-0000-4000-8000-000000000003" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+    await waitFor(() => expect(api.assignJicInquiry).toHaveBeenCalledWith(
+      "40000000-0000-4000-8000-000000000004", "30000000-0000-4000-8000-000000000003"));
+    expect(await screen.findByText(/· Public Information Officer/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Publish release" }));
+    await waitFor(() => expect(api.publishJicRelease).toHaveBeenCalledWith("20000000-0000-4000-8000-000000000002", {
+      toPublicFeed: true, toCollab: false,
+    }));
+    expect(await screen.findByText("Published to the public information feed")).toBeTruthy();
+    await waitFor(() => expect(api.listJicPublicFeed).toHaveBeenCalledTimes(2));
+    expect(answer().disabled).toBe(false);
+    fireEvent.click(answer());
+    await waitFor(() => expect(api.answerJicInquiry).toHaveBeenCalledWith(
+      "40000000-0000-4000-8000-000000000004", "20000000-0000-4000-8000-000000000002"));
+    expect(await screen.findByText("Answered")).toBeTruthy();
+  });
+
+  it("keeps an inquiry unanswered until the release is approved and shows a refused decision", async () => {
+    const api = client({
+      decideJicRelease: vi.fn().mockRejectedValue(new Error("that agency must approve over its peer token")) as ApiClient["decideJicRelease"],
+    });
+    render(<Theme name="light"><JicPreparation client={api} jurisdictionId="jurisdiction-a" sitrep={archived} /></Theme>);
+    fireEvent.change(screen.getByRole("textbox", { name: "Required reviewing agencies" }), { target: { value: "State OES" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save JIC draft" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Submit for review" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Approve for State OES" }));
+    expect(await screen.findByText("that agency must approve over its peer token")).toBeTruthy();
+    expect(screen.getByText("In review")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Publish release" })).toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: "Media outlet" }), { target: { value: "Times-Standard" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Inquiry subject" }), { target: { value: "Bridge" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Question" }), { target: { value: "Is the bridge open?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Log inquiry" }));
+    const answer = await screen.findByRole("button", { name: "Answer with approved release" }) as HTMLButtonElement;
+    expect(answer.disabled).toBe(true);
   });
 
   it("keeps operator text after a rejected draft save", async () => {

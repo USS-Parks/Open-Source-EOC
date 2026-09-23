@@ -1820,6 +1820,41 @@ export class ApiClient {
   createSharingAgreement(peerId: string, input: { boardId: string; canRead: boolean; canWrite: boolean; remoteBoardId?: string }): Promise<{ id: string }> {
     return this.request("POST", `/api/v1/peers/${encodeURIComponent(peerId)}/agreements`, input);
   }
+
+  // ---- JIC review, publication and media inquiries; resource costs and escalation ----
+
+  decideJicRelease(releaseId: string, input: { agency: string; decision: "approve" | "reject"; note?: string }): Promise<{ status: string }> {
+    return this.request("POST", `/api/v1/jic/releases/${encodeURIComponent(releaseId)}/decisions`, input);
+  }
+  publishJicRelease(releaseId: string, input: { toPublicFeed: boolean; toCollab: boolean }): Promise<{ status: string; channels: string[] }> {
+    return this.request("POST", `/api/v1/jic/releases/${encodeURIComponent(releaseId)}/publish`, input);
+  }
+  async listJicPublicFeed(jurisdictionId: string): Promise<Array<{ id: string; title: string; body: string; publishedAt: string }>> {
+    const result = await this.request<{ public: Array<{ id: string; title: string; body: string; publishedAt: string }> }>(
+      "GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/jic/public`,
+    );
+    return result.public;
+  }
+  logJicInquiry(jurisdictionId: string, input: { outlet: string; subject: string; question: string; incidentId?: string }): Promise<{ id: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/jic/inquiries`, input);
+  }
+  assignJicInquiry(inquiryId: string, positionId: string): Promise<{ ok: true }> {
+    return this.request("POST", `/api/v1/jic/inquiries/${encodeURIComponent(inquiryId)}/assign`, { positionId });
+  }
+  answerJicInquiry(inquiryId: string, responseReleaseId: string): Promise<{ ok: true }> {
+    return this.request("POST", `/api/v1/jic/inquiries/${encodeURIComponent(inquiryId)}/answer`, { responseReleaseId });
+  }
+  addResourceRequestCost(id: string, input: { category: string; amountCents: number; incurredAt: string; description?: string }): Promise<{ id: string }> {
+    return this.request("POST", `/api/v1/resource-requests/${encodeURIComponent(id)}/costs`, input);
+  }
+  /** The request's recorded costs as the reimbursement CSV, with its total row. */
+  exportResourceRequestCosts(id: string): Promise<Blob> {
+    return this.requestBlob(`/api/v1/resource-requests/${encodeURIComponent(id)}/costs/export`);
+  }
+  /** The server delivers the request to the peer tier; a failed delivery answers 502 and nothing is recorded. */
+  escalateResourceRequest(id: string, input: { peerName: string; peerBaseUrl: string; peerToken: string }): Promise<{ ok: true }> {
+    return this.request("POST", `/api/v1/resource-requests/${encodeURIComponent(id)}/escalate`, input);
+  }
 }
 
 // ---- Administration types ----

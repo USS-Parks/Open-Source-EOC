@@ -36,7 +36,9 @@ impact count or from ESF activation. Unknown or missing never means stable.
 - Use **Tasks** for My Tasks or authorized Team Tasks. Start and complete only
   work permitted by your current assignment; dependencies can block completion.
 - Use **Resources** for the 213RR lifecycle. Submitted, triaged, assigned, and
-  fulfilled are distinct states. Do not infer delivery from submission.
+  fulfilled are distinct states. Do not infer delivery from submission. Costs
+  and escalation are described under
+  [Record costs and escalate a request](#record-costs-and-escalate-a-request).
 - Use **Smart Forms** for supported field reports. Select the attached incident
   board and read the queue receipt after submission.
 - Use the **Lifelines** and **ESFs** tabs in **ESFs & Lifelines** to record
@@ -69,6 +71,31 @@ come first; **Load more records** reads the next page.
   Both export the organization's whole audit trail, not the filtered view. The
   signed file is a JSON array of signed pages in order; verify each page as
   described in [Export the audit trail](ADMIN.md#export-the-audit-trail).
+
+### Record costs and escalate a request
+
+Select **History** on a request in **Resources**. The costs and mutual aid
+panel sits below the request history.
+
+- **Reimbursement costs**: enter the category, the amount in dollars, a
+  description and the date the cost was incurred, then choose **Record cost**.
+  **Export costs (CSV)** downloads every cost recorded on the request with a
+  total row, for reimbursement documentation. Read-only access can export but
+  not record.
+- **Escalate to another tier**: when the request cannot be filled locally,
+  enter the higher tier's peer name, its address and the peer token that tier
+  issued when it registered your organization, then choose
+  **Escalate request**. The server delivers the request at once. When the tier
+  cannot be reached or refuses the token, the panel shows
+  "escalation delivery failed" and nothing is recorded. The token is sent once
+  and not stored. The panel does not offer escalation for a closed or
+  cancelled request.
+- The receiving tier works the escalated request as its own. Its status
+  reports arrive over the token your organization issued it and appear in the
+  request history as "*peer* reported *state*". A reported state that the
+  lifecycle allows also moves the request. The receive and report exchanges
+  run between the two servers and have no screen. See
+  [Resource escalation across tiers](FEDERATION-SETUP.md#resource-escalation-across-tiers).
 
 ### Move a board record through its workflow
 
@@ -107,10 +134,40 @@ read the **Workflow** section of the record context.
 - Use **Situation / SITREP** to compose from the selected incident. Review source warnings and
   period provenance before treating it as a shift briefing.
 - Prepare JIC language as a draft, then save and submit the exact saved content.
-  Approval and publication are separate server actions.
+  Approval and publication are separate server actions, described under
+  [Review, publish and answer from the JIC panel](#review-publish-and-answer-from-the-jic-panel).
 - A local CAP exercise record or alert draft is not evidence of IPAWS delivery.
   Check the dedicated submission status and external acknowledgement only when
   that integration is configured.
+
+### Review, publish and answer from the JIC panel
+
+Open **JIC** under Coordination, then a frozen SITREP. The JIC draft panel
+beside the briefing carries one release through review and publication.
+
+1. Name the reviewing agencies, save the draft, and submit the saved content.
+   A release that names no reviewing agency cannot be approved.
+2. Under **Review and publication**, record your own agency's decision with
+   **Approve for** or **Reject for** that agency, with an optional note. Each
+   person records one decision per release. An agency registered as a
+   federation peer decides from its own instance over its peer token, and the
+   panel refuses it here. The release is approved when every named agency
+   approves and rejected when any agency rejects.
+3. An approved release shows **Publish release**. Choose the public
+   information feed, the incident collaboration channels, or both. The status
+   line names the outlets that accepted it. The panel does not send CAP alerts.
+4. **Public information feed** lists the ten most recent releases the
+   organization has published.
+5. Under **Media inquiries**, log the outlet, subject and question, assign the
+   inquiry to a position, and answer it with the panel's release once that
+   release is approved or published. An answer always cites approved
+   language. Answering closes the inquiry; there is no separate close step.
+
+The panel follows the release drafted in it and the inquiries logged in it,
+and leaving the SITREP clears that view. The server keeps every release,
+decision and inquiry, and **Chronology** under **All events** records them, but
+no screen lists pending releases or open inquiries yet. A second approver
+therefore cannot open a release drafted in another session.
 
 ## 5. Work through a connection loss
 
