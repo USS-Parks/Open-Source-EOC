@@ -645,3 +645,73 @@ tagging remain separately gated as section 1 of the roster states.
   W3.1. Purged rows are counted in the audit event, not archived.
 - **Rollback:** revert the commit and drop the three functions, two tables,
   the new index, and the `audit_events.xact` index and column.
+
+## V1 W2.7: threat-model controls
+
+- **B7, webhook allowlist.** Each jurisdiction has an allowlist of outbound
+  destinations, new `server/src/notify/allowlist.ts`, managed by admin-only
+  `GET` and `PUT /api/v1/jurisdictions/:jurisdictionId/notification-allowlist`
+  and audited as `notification.allowlist_updated`. It is enforced when a rule
+  is created (an unlisted URL answers 422) and again by the delivery worker
+  before every send: a queued delivery whose destination was removed is
+  dead-lettered with a clear error and never contacted. A host admitted only
+  by a `*.suffix` entry must resolve to public addresses; loopback, private
+  and link-local targets need an exact-origin entry. The worker no longer
+  follows redirects.
+- **B7, per-rule rate caps.** Each rule caps its queued deliveries, default 60
+  per ten minutes, configurable up to 600 per 1,440 minutes. Excess is counted
+  on one `suppressed` notification per rule and window, visible to admins in
+  the notification list, never dropped silently. In-app notices are not
+  capped.
+- **B9, two-person IPAWS send.** Every send to IPAWS-OPEN is a pending request
+  that a different admin must confirm within fifteen minutes; it can be
+  cancelled and expires. The audit records `ipaws.send.requested`,
+  `ipaws.send.confirmed`, `ipaws.send.cancelled` and `ipaws.submitted` with
+  both identities, and a check constraint in the database refuses a
+  same-person confirmation.
+- **B5** is marked not applicable in `docs/THREAT-MODEL.md`, citing ADR-0004 as
+  restated by the documentation truth pass.
+- **Defaults applied.** An empty allowlist denies every external webhook and
+  push. Entries are an https origin, a `*.host` suffix with at least two
+  labels, or an http origin only for a loopback host. An exact-origin entry
+  counts as naming a private host explicitly. DNS is checked at send time;
+  rule creation checks list membership.
+- **Deviations, recorded.** The two-person rule covers every send through the
+  HTTP transport, including the test-environment handshake, not only enabled
+  live sends: otherwise one admin could label a real endpoint `test` and send
+  alone. Only an injected fixture transport still sends single-handed, and it
+  refuses the HTTP transport. `POST /cap/alerts/:alertId/ipaws` and
+  `POST /ipaws/test` now answer 202 with a pending request; no web client
+  calls either route yet.
+- **Residual risk, stated.** `fetch` resolves the host again after the address
+  check, so a DNS rebinding window remains for a suffix-admitted host whose
+  DNS an attacker controls. Closing it means pinning the checked address in
+  the HTTP dispatcher; it is marked in the code and left for a later unit.
+  Concurrent transactions can exceed a rate cap slightly. Federation peer
+  endpoints are governed by B3, not this allowlist.
+- **Schema:** migration `0112_outbound_controls.sql`:
+  `notification_allowlists` with row-level security; rule rate-cap columns
+  with range checks; `delivery_outbox.rule_id` backfilled and indexed;
+  `suppressed` added to the notification statuses; SECURITY DEFINER
+  `admit_rule_delivery`; `claim_deliveries` recreated to return the
+  jurisdiction's allowlist; `ipaws_send_requests` with row-level security and
+  the second-person constraint.
+- **Contract:** five routes added, the allowlist pair and the IPAWS send
+  list, confirm and cancel; `docs/API.md` regenerated. No dependency change;
+  the address check uses Node's `net.BlockList` and `dns/promises`.
+- **Tests updated:** notify, ipaws, delivery-outbox, observability and
+  scheduler now configure the allowlist before creating webhook rules.
+- **Verification:** in the lane, 11 suites passed 74 of 74. After rebasing onto
+  W2.9: notify, ipaws, delivery-outbox, observability, scheduler, retention,
+  alerts, cap, api-docs, security, list-pagination, identity-cache,
+  workflow-runtime and alerts-workspace-browser passed 97 of 98. The one red
+  was `ipaws.test.ts` "refuses to transmit while configured but not enabled",
+  a 30 second timeout: the test creates a second fresh database inside its
+  body, which waits on the cluster-wide setup lock while other lanes were
+  creating databases. Per HZ-C it was retried in isolation and passed 20 of
+  20, twice. TypeScript and ESLint clean. Link checker 69 files.
+- **Evidence level:** unit, real-database integration and document.
+- **Deferred:** the allowlist screen and the IPAWS confirmation screen belong
+  to W3.0 and W3.5.
+- **Rollback:** revert the code; the 0112 schema is additive and the prior
+  code runs against it.

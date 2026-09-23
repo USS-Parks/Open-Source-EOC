@@ -107,9 +107,11 @@ GET /api/v1/jurisdictions/:jurisdictionId/forms
 GET /api/v1/jurisdictions/:jurisdictionId/forms/:key
 GET /api/v1/jurisdictions/:jurisdictionId/incidents
 GET /api/v1/jurisdictions/:jurisdictionId/ipaws
+GET /api/v1/jurisdictions/:jurisdictionId/ipaws/sends
 GET /api/v1/jurisdictions/:jurisdictionId/jic/public
 GET /api/v1/jurisdictions/:jurisdictionId/lifelines
 GET /api/v1/jurisdictions/:jurisdictionId/meetings/config
+GET /api/v1/jurisdictions/:jurisdictionId/notification-allowlist
 GET /api/v1/jurisdictions/:jurisdictionId/positions
 GET /api/v1/jurisdictions/:jurisdictionId/resource-requests
 GET /api/v1/jurisdictions/:jurisdictionId/retention
@@ -225,6 +227,8 @@ POST /api/v1/jurisdictions/:jurisdictionId/guests
 POST /api/v1/jurisdictions/:jurisdictionId/incidents
 POST /api/v1/jurisdictions/:jurisdictionId/ipaws/enable
 POST /api/v1/jurisdictions/:jurisdictionId/ipaws/moa
+POST /api/v1/jurisdictions/:jurisdictionId/ipaws/sends/:sendId/cancel
+POST /api/v1/jurisdictions/:jurisdictionId/ipaws/sends/:sendId/confirm
 POST /api/v1/jurisdictions/:jurisdictionId/ipaws/test
 POST /api/v1/jurisdictions/:jurisdictionId/jic/inquiries
 POST /api/v1/jurisdictions/:jurisdictionId/jic/releases
@@ -268,6 +272,7 @@ PUT /api/v1/jurisdictions/:jurisdictionId/ipaws/config
 PUT /api/v1/jurisdictions/:jurisdictionId/lifelines
 PUT /api/v1/jurisdictions/:jurisdictionId/meetings/config
 PUT /api/v1/jurisdictions/:jurisdictionId/messaging-settings
+PUT /api/v1/jurisdictions/:jurisdictionId/notification-allowlist
 PUT /api/v1/jurisdictions/:jurisdictionId/retention
 PUT /api/v1/peers/:peerId/link
 `

@@ -265,6 +265,9 @@ set, and then require that value as a bearer token.
 - `PUT /api/v1/jurisdictions/:jurisdictionId/ipaws/config`: Set jurisdictions ipaws config (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/ipaws/enable`: Run jurisdictions ipaws enable (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/ipaws/moa`: Run jurisdictions ipaws moa (auth: bearer; audience: operator)
+- `GET /api/v1/jurisdictions/:jurisdictionId/ipaws/sends`: Read jurisdictions ipaws sends (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/ipaws/sends/:sendId/cancel`: Run jurisdictions ipaws sends cancel (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/ipaws/sends/:sendId/confirm`: Run jurisdictions ipaws sends confirm (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/ipaws/test`: Run jurisdictions ipaws test (auth: bearer; audience: operator)
 
 ### jic
@@ -309,6 +312,11 @@ set, and then require that value as a bearer token.
 ### metrics
 
 - `GET /api/v1/metrics`: Read metrics (auth: metrics-token; audience: system)
+
+### notification-allowlist
+
+- `GET /api/v1/jurisdictions/:jurisdictionId/notification-allowlist`: Read jurisdictions notification allowlist (auth: bearer; audience: operator)
+- `PUT /api/v1/jurisdictions/:jurisdictionId/notification-allowlist`: Set jurisdictions notification allowlist (auth: bearer; audience: operator)
 
 ### notification-rules
 

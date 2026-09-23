@@ -114,6 +114,13 @@ describe("a slow request is findable from the log and the metrics", () => {
 
 describe("a failed delivery is findable from the log and the metrics", () => {
   it("logs the dead letter with its delivery id and error, and counts it", async () => {
+    const allow = await app.inject({
+      method: "PUT",
+      url: `/api/v1/jurisdictions/${jurisdictionId}/notification-allowlist`,
+      headers: auth(adminToken),
+      payload: { entries: ["http://127.0.0.1:9"] },
+    });
+    expect(allow.statusCode).toBe(200);
     const rule = await app.inject({
       method: "POST",
       url: `/api/v1/jurisdictions/${jurisdictionId}/notification-rules`,

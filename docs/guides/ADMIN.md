@@ -87,6 +87,26 @@ accepts it. Failed attempts retry with increasing delay; after eight failures
 the notification is marked `failed` with the last error. A target that keeps
 failing is paused for a minute at a time without using up attempts.
 
+Webhook and push rules reach only destinations on the jurisdiction's
+notification allowlist, which an admin sets with
+`PUT /api/v1/jurisdictions/:jurisdictionId/notification-allowlist`. The list
+starts empty, so no external destination is reachable until an admin adds
+one. An entry is an exact origin such as `https://hooks.example.org` or
+`https://ntfy.example.org:8443`, or a host suffix such as `*.example.org`
+(https only). Plain http is accepted only for an exact loopback origin. A
+host admitted by a suffix must resolve to a public address; to reach a
+private, loopback or link-local host, list its exact origin. A rule whose
+destination is not listed is refused when it is created. Removing a
+destination later stops delivery to it: queued notifications for it are
+marked `failed` with the reason, and redirects from a destination are not
+followed.
+
+Each rule queues at most 60 webhook or push deliveries per 10 minutes unless
+it was created with a different `rateLimit` (`max` up to 600, `windowMinutes`
+up to 1440). Deliveries beyond the cap are not sent; they are counted on one
+`suppressed` notification per rule and window, which admins see with the
+other notifications.
+
 Scheduled notification rules, due briefings and feed polls run on their own
 through the server's scheduler; no one has to trigger them. A scheduled rule
 or briefing runs under an enabled admin of its jurisdiction, so a jurisdiction

@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
+import { destinationRefusal } from "../notify/allowlist.js";
 import { matches, signWebhookBody, type BoardEvent } from "../notify/engine.js";
 import { DeliveryWorker } from "../notify/outbox.js";
 import { auth, freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
@@ -24,6 +25,34 @@ let memberToken: string;
 let webhookSecret: string;
 let recordId: string;
 let worker: DeliveryWorker;
+
+async function allow(entries: string[], token = adminToken) {
+  return app.inject({
+    method: "PUT",
+    url: `/api/v1/jurisdictions/${seed.jurisdictionId}/notification-allowlist`,
+    headers: auth(token),
+    payload: { entries },
+  });
+}
+
+async function createRule(payload: Record<string, unknown>) {
+  return app.inject({
+    method: "POST",
+    url: `/api/v1/jurisdictions/${seed.jurisdictionId}/notification-rules`,
+    headers: auth(adminToken),
+    payload,
+  });
+}
+
+async function writeRecord(token: string): Promise<void> {
+  const res = await app.inject({
+    method: "POST",
+    url: `/api/v1/boards/${boardId}/records`,
+    headers: auth(token),
+    payload: { item: "Cots", quantity: 10, priority: "immediate", state: "submitted" },
+  });
+  expect(res.statusCode).toBe(201);
+}
 
 beforeAll(async () => {
   ({ admin, runtime } = await freshDb());
@@ -53,6 +82,8 @@ beforeAll(async () => {
 
   adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
   memberToken = await tokenFor(app, "member@example.org", "another-good-password");
+  // The discard port stands in for a target that is listed but dead.
+  await allow([receiverUrl, "http://127.0.0.1:9"]);
 
   // Requesting position: admin signs into ops chief, then creates the 213RR.
   const pos = await app.inject({
@@ -251,5 +282,148 @@ describe("the 213RR notification lane (F4 acceptance)", () => {
     expect(second.json().fired).toBe(0); // interval guard holds
     await worker.drain();
     expect(received).toHaveLength(1);
+  });
+});
+
+describe("the notification allowlist", () => {
+  it("is read and replaced by admins only, and stored in normalized form", async () => {
+    const url = `/api/v1/jurisdictions/${seed.jurisdictionId}/notification-allowlist`;
+    expect((await app.inject({ method: "GET", url, headers: auth(memberToken) })).statusCode).toBe(403);
+    expect((await allow([receiverUrl], memberToken)).statusCode).toBe(403);
+
+    for (const bad of [
+      "http://hooks.example.org",
+      "https://hooks.example.org/path",
+      "*.org",
+      "ftp://hooks.example.org",
+    ]) {
+      expect((await allow([bad])).statusCode, bad).toBe(422);
+    }
+
+    const put = await allow([
+      "https://Hooks.Example.org:443",
+      "*.Example.net",
+      receiverUrl,
+      "http://127.0.0.1:9",
+    ]);
+    expect(put.statusCode).toBe(200);
+    const expected = ["https://hooks.example.org", "*.example.net", receiverUrl, "http://127.0.0.1:9"];
+    expect(put.json().entries).toEqual(expected);
+    const got = await app.inject({ method: "GET", url, headers: auth(adminToken) });
+    expect(got.json().entries).toEqual(expected);
+    const [audit] = await admin`
+      select payload from audit_events where category = 'notification.allowlist_updated'
+      order by seq desc limit 1`;
+    expect((audit!.payload as { entries: string[] }).entries).toEqual(expected);
+    await allow([receiverUrl, "http://127.0.0.1:9"]);
+  });
+
+  it("refuses a rule whose destination is not listed", async () => {
+    for (const channel of [
+      { kind: "webhook", url: "https://unlisted.example.com/hook" },
+      { kind: "ntfy", url: "http://127.0.0.1:1", topic: "loopback-but-unlisted" },
+    ]) {
+      const res = await createRule({ event: "record.created", channels: [channel] });
+      expect(res.statusCode).toBe(422);
+      expect(res.json().error).toContain("allowlist");
+    }
+  });
+
+  it("refuses a queued delivery whose destination was removed from the list", async () => {
+    await admin`update notification_rules set enabled = false`;
+    const rule = await createRule({
+      boardId,
+      event: "record.created",
+      channels: [{ kind: "webhook", url: `${receiverUrl}/removed` }],
+    });
+    expect(rule.statusCode).toBe(201);
+    await allow(["http://127.0.0.1:9"]);
+    await writeRecord(adminToken);
+    received = [];
+    expect((await worker.drain()).dead).toBe(1);
+    expect(received).toHaveLength(0);
+    const [note] = await admin`
+      select status, detail ->> 'error' as error from notifications
+      where rule_id = ${rule.json().id as string}`;
+    expect(note).toMatchObject({ status: "failed" });
+    expect(note!.error).toContain("allowlist");
+    await allow([receiverUrl, "http://127.0.0.1:9"]);
+  });
+
+  it("refuses a private address reached through a host suffix, not one named exactly", async () => {
+    await admin`update notification_rules set enabled = false`;
+    await allow(["*.example.test", receiverUrl]);
+    const rule = await createRule({
+      boardId,
+      event: "record.created",
+      channels: [
+        { kind: "webhook", url: "https://hooks.example.test/private" },
+        { kind: "ntfy", url: receiverUrl, topic: "named" },
+      ],
+    });
+    expect(rule.statusCode).toBe(201);
+    await writeRecord(adminToken);
+    received = [];
+    // The suffix host resolves into the loopback range; nothing is fetched.
+    const resolving = new DeliveryWorker(runtime, {
+      maxAttempts: 1,
+      resolve: async () => [{ address: "127.0.0.1", family: 4 }],
+    });
+    const pass = await resolving.drain();
+    expect(pass).toMatchObject({ delivered: 1, dead: 1 });
+    expect(received.map((r) => r.path)).toEqual(["/named"]);
+    const [failed] = await admin`
+      select detail ->> 'error' as error from notifications
+      where rule_id = ${rule.json().id as string} and status = 'failed'`;
+    expect(failed!.error).toContain("private address");
+    // The same suffix host on a public address may be sent to.
+    expect(
+      await destinationRefusal(["*.example.test"], "https://hooks.example.test/x", async () => [
+        { address: "203.0.113.7", family: 4 },
+      ]),
+    ).toBeNull();
+    await allow([receiverUrl, "http://127.0.0.1:9"]);
+  });
+});
+
+describe("per-rule rate caps", () => {
+  it("queues up to the cap and records the excess on one notice an admin can see", async () => {
+    await admin`update notification_rules set enabled = false`;
+    const rule = await createRule({
+      boardId,
+      event: "record.created",
+      channels: [{ kind: "ntfy", url: receiverUrl, topic: "capped" }],
+      rateLimit: { max: 2, windowMinutes: 10 },
+    });
+    expect(rule.statusCode).toBe(201);
+    const ruleId = rule.json().id as string;
+    // A member writes: the cap holds even for a caller who cannot read the queue.
+    for (let i = 0; i < 5; i += 1) await writeRecord(memberToken);
+
+    const [queued] = await admin`
+      select count(*)::int as n from delivery_outbox where rule_id = ${ruleId}`;
+    expect(queued!.n).toBe(2);
+    const suppressed = await admin`
+      select detail from notifications where rule_id = ${ruleId} and status = 'suppressed'`;
+    expect(suppressed).toHaveLength(1);
+    expect(suppressed[0]!.detail).toMatchObject({ suppressed: 3, limit: 2, windowMinutes: 10 });
+
+    const tray = await app.inject({ method: "GET", url: "/api/v1/notifications", headers: auth(adminToken) });
+    const shown = (tray.json().notifications as Array<{ status: string; detail: { suppressed?: number } }>)
+      .find((n) => n.status === "suppressed");
+    expect(shown?.detail.suppressed).toBe(3);
+
+    received = [];
+    await worker.drain();
+    expect(received.filter((r) => r.path === "/capped")).toHaveLength(2);
+  });
+
+  it("bounds the cap a rule may ask for", async () => {
+    const res = await createRule({
+      event: "record.created",
+      channels: [{ kind: "ntfy", url: receiverUrl, topic: "too-many" }],
+      rateLimit: { max: 601, windowMinutes: 10 },
+    });
+    expect(res.statusCode).toBe(400);
   });
 });

@@ -1,16 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { API_CONTRACT, generateApiDocs } from "@openeoc/shared";
 import { buildApp } from "../app.js";
-import { principalForPerson, type Principal } from "../auth/service.js";
+import { addMembership, createPerson, principalForPerson, type Principal } from "../auth/service.js";
 import { withPerson } from "../db/context.js";
 import { configure, postAlert } from "../ipaws/service.js";
 import {
   buildPostCapRequest,
+  httpTransport,
   parseIpawsResponse,
   type IpawsRequest,
   type IpawsTransport,
@@ -71,6 +74,8 @@ let jurisdictionId: string;
 let adminId: string;
 let adminToken: string;
 let memberToken: string;
+let secondId: string;
+let secondToken: string;
 let adminPrincipal: Principal;
 let priorKey: string | undefined;
 
@@ -104,10 +109,17 @@ beforeAll(async () => {
   const seed = await seedIdentity(admin);
   jurisdictionId = seed.jurisdictionId;
   adminId = seed.adminId;
+  secondId = await createPerson(admin, {
+    email: "second-admin@example.org",
+    displayName: "Second Admin",
+    password: "second-admin-password",
+  });
+  await addMembership(admin, secondId, jurisdictionId, "admin");
   app = buildApp(runtime, { oidc: null });
   await app.ready();
   adminToken = await login("admin@example.org", "correct-horse-battery");
   memberToken = await login("member@example.org", "another-good-password");
+  secondToken = await login("second-admin@example.org", "second-admin-password");
   adminPrincipal = await principalForPerson(runtime, adminId);
 }, 60000);
 
@@ -352,6 +364,143 @@ describe("transmission requires enablement and eligibility", () => {
         postAlert(tx, adminPrincipal, jurisdictionId, id, okTransport()),
       ),
     ).rejects.toThrow(/not IPAWS-eligible/);
+  });
+});
+
+describe("a send to the real endpoint takes two admins", () => {
+  // A loopback stand-in for IPAWS-OPEN that answers with the recorded acceptance.
+  let endpoint: Server;
+  let hits = 0;
+
+  beforeAll(async () => {
+    endpoint = createServer((req, res) => {
+      hits += 1;
+      req.resume();
+      res.writeHead(200, { "content-type": "text/xml" });
+      res.end(accepted);
+    });
+    await new Promise<void>((resolve) => endpoint.listen(0, "127.0.0.1", resolve));
+    const { port } = endpoint.address() as AddressInfo;
+    const cfg = await app.inject({
+      method: "PUT",
+      url: `/api/v1/jurisdictions/${jurisdictionId}/ipaws/config`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { environment: "test", cogId: "123456", endpointUrl: `http://127.0.0.1:${port}/IPAWS` },
+    });
+    expect(cfg.json()).toMatchObject({ enabled: true, configured: true });
+  });
+
+  afterAll(async () => {
+    await new Promise((resolve) => endpoint.close(resolve));
+  });
+
+  function call(method: "GET" | "POST", path: string, token: string, payload?: object) {
+    const url = `/api/v1/jurisdictions/${jurisdictionId}${path}`;
+    const headers = { authorization: `Bearer ${token}` };
+    return payload === undefined
+      ? app.inject({ method, url, headers })
+      : app.inject({ method, url, headers, payload });
+  }
+
+  async function requestLive(): Promise<string> {
+    const { id } = await authorAlert(eligibleDraft);
+    const res = await call("POST", `/cap/alerts/${id}/ipaws`, adminToken);
+    expect(res.statusCode).toBe(202);
+    return res.json().id as string;
+  }
+
+  it("holds the request until a different admin confirms, and audits both", async () => {
+    const { id: alertId } = await authorAlert(eligibleDraft);
+    const requested = await call("POST", `/cap/alerts/${alertId}/ipaws`, adminToken);
+    expect(requested.statusCode).toBe(202);
+    const request = requested.json();
+    expect(request).toMatchObject({ kind: "live", status: "pending", requestedBy: adminId });
+    expect(Date.parse(request.expiresAt) - Date.parse(request.requestedAt)).toBe(15 * 60_000);
+    expect(hits).toBe(0);
+
+    const own = await call("POST", `/ipaws/sends/${request.id}/confirm`, adminToken);
+    expect(own.statusCode).toBe(403);
+    expect(own.json().error).toContain("different admin");
+    expect((await call("POST", `/ipaws/sends/${request.id}/confirm`, memberToken)).statusCode).toBe(403);
+    expect((await call("GET", "/ipaws/sends", memberToken)).statusCode).toBe(403);
+    const listed = await call("GET", "/ipaws/sends", secondToken);
+    expect(listed.json().sends[0]).toMatchObject({ id: request.id, status: "pending" });
+    expect(hits).toBe(0);
+
+    const confirmed = await call("POST", `/ipaws/sends/${request.id}/confirm`, secondToken);
+    expect(confirmed.statusCode).toBe(200);
+    expect(confirmed.json()).toMatchObject({
+      accepted: true,
+      request: { status: "confirmed", requestedBy: adminId, decidedBy: secondId },
+    });
+    expect(hits).toBe(1);
+    expect((await call("POST", `/ipaws/sends/${request.id}/confirm`, secondToken)).statusCode).toBe(409);
+
+    const trail = await admin`
+      select category, person_id, payload from audit_events
+      where category like 'ipaws.s%' and (subject_id = ${request.id} or subject_id = ${alertId})
+      order by seq`;
+    expect(trail.map((e) => [e.category, e.person_id])).toEqual([
+      ["ipaws.send.requested", adminId],
+      ["ipaws.send.confirmed", secondId],
+      ["ipaws.submitted", secondId],
+    ]);
+    expect(trail[1]!.payload).toMatchObject({ requestedBy: adminId, confirmedBy: secondId });
+    expect(trail[2]!.payload).toMatchObject({ requestId: request.id, requestedBy: adminId });
+    const [sub] = await admin`
+      select submitted_by from ipaws_submissions where id = ${confirmed.json().submissionId as string}`;
+    expect(sub!.submitted_by).toBe(secondId);
+  });
+
+  it("lets an unconfirmed request lapse", async () => {
+    const requestId = await requestLive();
+    await admin`update ipaws_send_requests set expires_at = now() - interval '1 second' where id = ${requestId}`;
+    const listed = await call("GET", "/ipaws/sends", secondToken);
+    expect(listed.json().sends.find((s: { id: string }) => s.id === requestId).status).toBe("expired");
+    const before = hits;
+    const res = await call("POST", `/ipaws/sends/${requestId}/confirm`, secondToken);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toContain("expired");
+    expect(hits).toBe(before);
+  });
+
+  it("lets an admin cancel a pending request, which then cannot be confirmed", async () => {
+    const requestId = await requestLive();
+    const cancelled = await call("POST", `/ipaws/sends/${requestId}/cancel`, adminToken);
+    expect(cancelled.statusCode).toBe(200);
+    expect(cancelled.json()).toMatchObject({ status: "cancelled", decidedBy: adminId });
+    expect((await call("POST", `/ipaws/sends/${requestId}/confirm`, secondToken)).statusCode).toBe(409);
+    expect((await call("POST", `/ipaws/sends/${requestId}/cancel`, secondToken)).statusCode).toBe(409);
+    const [audit] = await admin`
+      select person_id from audit_events
+      where category = 'ipaws.send.cancelled' and subject_id = ${requestId}`;
+    expect(audit!.person_id).toBe(adminId);
+  });
+
+  it("applies to the test-environment handshake as well", async () => {
+    const { id } = await authorAlert(eligibleDraft);
+    const requested = await call("POST", "/ipaws/test", adminToken, { alertId: id });
+    expect(requested.statusCode).toBe(202);
+    expect(requested.json()).toMatchObject({ kind: "handshake", status: "pending" });
+    const before = hits;
+    const confirmed = await call("POST", `/ipaws/sends/${requested.json().id as string}/confirm`, secondToken);
+    expect(confirmed.json().accepted).toBe(true);
+    expect(hits).toBe(before + 1);
+  });
+
+  it("refuses a single-handed send through the real transport", async () => {
+    const { id } = await authorAlert(eligibleDraft);
+    await expect(
+      withPerson(runtime, adminId, (tx) => postAlert(tx, adminPrincipal, jurisdictionId, id, httpTransport)),
+    ).rejects.toThrow(/second admin/);
+  });
+
+  it("holds the rule in the database too", async () => {
+    const requestId = await requestLive();
+    await expect(
+      admin`update ipaws_send_requests set status = 'confirmed', decided_by = requested_by
+            where id = ${requestId}`,
+    ).rejects.toThrow(/second_person/);
   });
 });
 

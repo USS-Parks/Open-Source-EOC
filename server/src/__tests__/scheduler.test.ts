@@ -89,6 +89,13 @@ beforeAll(async () => {
   await receiver.listen({ port: 0, host: "127.0.0.1" });
   const addr = receiver.server.address();
   receiverUrl = `http://127.0.0.1:${typeof addr === "object" && addr ? addr.port : 0}`;
+  const allow = await app.inject({
+    method: "PUT",
+    url: `/api/v1/jurisdictions/${seed.jurisdictionId}/notification-allowlist`,
+    headers: auth(adminToken),
+    payload: { entries: [receiverUrl] },
+  });
+  expect(allow.statusCode).toBe(200);
 }, 60000);
 
 afterAll(async () => {

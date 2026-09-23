@@ -4,8 +4,9 @@ import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import { CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, decodeCursor, encodeCursor, pageQuery } from "../db/cursor.js";
-import { AuthError } from "../auth/service.js";
+import { AuthError, requireAdmin } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
+import { admittedBy, normalizeEntry } from "./allowlist.js";
 import { ChannelSchema, ConditionSchema, runScheduledRules } from "./engine.js";
 
 const RuleBody = z.object({
@@ -14,7 +15,16 @@ const RuleBody = z.object({
   condition: ConditionSchema.default({ op: "any" }),
   channels: z.array(ChannelSchema).min(1),
   scheduleIntervalMinutes: z.number().int().positive().optional(),
+  // External deliveries this rule may queue per window; the rest are suppressed.
+  rateLimit: z
+    .object({
+      max: z.number().int().min(1).max(600),
+      windowMinutes: z.number().int().min(1).max(1440),
+    })
+    .default({ max: 60, windowMinutes: 10 }),
 });
+
+const AllowlistBody = z.object({ entries: z.array(z.string().min(1).max(300)).max(100) });
 
 export function notifyRoutes(
   app: FastifyInstance,
@@ -31,19 +41,87 @@ export function notifyRoutes(
       const body = RuleBody.parse(req.body);
       const needsSecret = body.channels.some((c) => c.kind === "webhook");
       const secret = needsSecret ? randomBytes(24).toString("hex") : null;
-      const [row] = await withPerson(sql, req.principal.person.id, (tx) => {
+      const [row] = await withPerson(sql, req.principal.person.id, async (tx) => {
+        const [list] = await tx`
+          select entries from notification_allowlists where jurisdiction_id = ${jurisdictionId}`;
+        for (const channel of body.channels) {
+          if (channel.kind !== "inapp" && !admittedBy((list?.entries as string[]) ?? [], channel.url))
+            throw new AuthError(422, `${channel.url} is not on this jurisdiction's notification allowlist`);
+        }
         return tx`
           insert into notification_rules
             (jurisdiction_id, board_id, event, condition, channels, webhook_secret,
-             schedule_interval_minutes, created_by)
+             schedule_interval_minutes, rate_limit_max, rate_limit_window_minutes, created_by)
           values
             (${jurisdictionId}, ${body.boardId}, ${body.event},
              ${tx.json(body.condition as never)}, ${tx.json(body.channels as never)},
-             ${secret}, ${body.scheduleIntervalMinutes ?? null}, ${req.principal.person.id})
+             ${secret}, ${body.scheduleIntervalMinutes ?? null}, ${body.rateLimit.max},
+             ${body.rateLimit.windowMinutes}, ${req.principal.person.id})
           returning id`;
       });
       // The webhook secret is returned exactly once, at creation.
       return reply.status(201).send({ id: row!.id as string, webhookSecret: secret });
+    },
+  );
+
+  app.get(
+    "/api/v1/jurisdictions/:jurisdictionId/notification-allowlist",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId } = req.params as { jurisdictionId: string };
+      requireAdmin(req.principal, jurisdictionId);
+      const [row] = await withPerson(sql, req.principal.person.id, (tx) => {
+        return tx`
+          select entries, updated_at from notification_allowlists
+          where jurisdiction_id = ${jurisdictionId}`;
+      });
+      return reply.send({
+        entries: (row?.entries as string[] | undefined) ?? [],
+        updatedAt: row ? (row.updated_at as Date).toISOString() : null,
+      });
+    },
+  );
+
+  /**
+   * Replace the destinations webhook and push rules may reach. With no
+   * entries nothing external is reachable, and the worker refuses queued
+   * deliveries to a destination removed here.
+   */
+  app.put(
+    "/api/v1/jurisdictions/:jurisdictionId/notification-allowlist",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId } = req.params as { jurisdictionId: string };
+      requireAdmin(req.principal, jurisdictionId);
+      const body = AllowlistBody.parse(req.body);
+      const entries = [
+        ...new Set(
+          body.entries.map((raw) => {
+            const entry = normalizeEntry(raw);
+            if (!entry)
+              throw new AuthError(
+                422,
+                `${raw} is not an allowed destination: use an https origin, a *.host suffix, or an http loopback origin`,
+              );
+            return entry;
+          }),
+        ),
+      ];
+      await withPerson(sql, req.principal.person.id, async (tx) => {
+        await tx`
+          insert into notification_allowlists (jurisdiction_id, entries, updated_by)
+          values (${jurisdictionId}, ${entries}::text[], ${req.principal.person.id})
+          on conflict (jurisdiction_id) do update set
+            entries = excluded.entries, updated_by = excluded.updated_by, updated_at = now()`;
+        await recordAudit(tx, req.principal, {
+          jurisdictionId,
+          category: "notification.allowlist_updated",
+          subjectTable: "notification_allowlists",
+          subjectId: jurisdictionId,
+          payload: { entries },
+        });
+      });
+      return reply.send({ entries });
     },
   );
 

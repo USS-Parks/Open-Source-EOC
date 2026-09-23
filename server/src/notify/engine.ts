@@ -54,18 +54,22 @@ export function signWebhookBody(secret: string, body: string): string {
  * inside the caller's write transaction and never touches the network: an
  * in-app notice is written as delivered, and a webhook or push is written as a
  * pending notification plus a delivery row that the outbox worker sends.
+ * A rule over its rate cap queues nothing more for the window; the database
+ * counts the suppressed deliveries on one notification an admin can see.
  */
 export async function notifyBoardEvent(
   tx: Sql,
   actor: Principal,
   event: BoardEvent,
 ): Promise<void> {
+  // A fixed order keeps concurrent writers locking suppression notices alike.
   const rules = await tx`
     select id, board_id, event, condition, channels, webhook_secret
     from notification_rules
     where jurisdiction_id = ${event.jurisdictionId} and enabled
       and event = ${event.event}
-      and (board_id is null or board_id = ${event.boardId})`;
+      and (board_id is null or board_id = ${event.boardId})
+    order by id`;
   for (const rule of rules) {
     const condition = ConditionSchema.parse(rule.condition ?? {});
     if (!matches(condition, event)) continue;
@@ -94,6 +98,8 @@ async function enqueue(
     await log(tx, event, ruleId, "inapp", "delivered", { title, positionId });
     return;
   }
+  const [admitted] = await tx`select admit_rule_delivery(${ruleId}) as ok`;
+  if (!admitted!.ok) return;
   let target: string;
   let headers: Record<string, string>;
   let body: string;
@@ -121,8 +127,8 @@ async function enqueue(
   }
   const notificationId = await log(tx, event, ruleId, channel.kind, "pending", detail);
   await tx`
-    insert into delivery_outbox (jurisdiction_id, notification_id, kind, target, headers, body)
-    values (${event.jurisdictionId}, ${notificationId}, ${channel.kind}, ${target},
+    insert into delivery_outbox (jurisdiction_id, rule_id, notification_id, kind, target, headers, body)
+    values (${event.jurisdictionId}, ${ruleId}, ${notificationId}, ${channel.kind}, ${target},
             ${tx.json(headers as never)}, ${body})`;
 }
 

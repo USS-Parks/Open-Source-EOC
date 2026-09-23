@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from "fastify";
 import type { Sql } from "../db/client.js";
 import { decryptSecret } from "../secrets/envelope.js";
 import { markDelivered } from "../federation/service.js";
+import { destinationRefusal, type Resolve } from "./allowlist.js";
 
 /**
  * The outbound delivery worker. Board writes queue webhooks and pushes in
@@ -14,6 +15,10 @@ import { markDelivered } from "../federation/service.js";
  * The same pass pushes the federation outbox to every peer with a link. Those
  * entries never dead-letter: store-and-forward holds through a partition of
  * any length, so they back off and wait.
+ *
+ * A destination that is no longer on its jurisdiction's allowlist, or that a
+ * host-suffix entry lets resolve to a private address, is dead-lettered
+ * without being contacted.
  *
  * The worker acts for no person. It reaches the queue only through the
  * narrow SECURITY DEFINER functions in the delivery migration.
@@ -28,6 +33,8 @@ export interface DeliveryWorkerOptions {
   readonly breakerThreshold?: number;
   readonly breakerCooldownMs?: number;
   readonly now?: () => number;
+  /** Host resolution for the private-address check; the system resolver by default. */
+  readonly resolve?: Resolve;
   /** Retries, dead letters and deferred federation pushes are logged here. */
   readonly logger?: Pick<FastifyBaseLogger, "warn" | "error">;
 }
@@ -54,6 +61,7 @@ export class DeliveryWorker {
   private readonly breakerThreshold: number;
   private readonly breakerCooldownMs: number;
   private readonly now: () => number;
+  private readonly resolve: Resolve | undefined;
   private readonly log: Pick<FastifyBaseLogger, "warn" | "error"> | null;
   private readonly totals = { delivered: 0, retried: 0, dead: 0, deferred: 0, federated: 0 };
   // ponytail: per-process breaker state; a second node keeps its own, which
@@ -72,6 +80,7 @@ export class DeliveryWorker {
     this.breakerThreshold = options.breakerThreshold ?? 5;
     this.breakerCooldownMs = options.breakerCooldownMs ?? 60_000;
     this.now = options.now ?? Date.now;
+    this.resolve = options.resolve;
     this.log = options.logger ?? null;
   }
 
@@ -93,6 +102,7 @@ export class DeliveryWorker {
           row.headers as Record<string, string>,
           row.body as string,
           Number(row.attempts),
+          row.allowlist as string[],
         );
         counts[outcome] += 1;
       }),
@@ -110,8 +120,15 @@ export class DeliveryWorker {
     headers: Record<string, string>,
     body: string,
     attempts: number,
+    allowlist: readonly string[],
   ): Promise<"delivered" | "retried" | "dead" | "deferred"> {
     const key = circuitKey(target);
+    const refused = await destinationRefusal(allowlist, target, this.resolve);
+    if (refused) {
+      this.log?.error({ deliveryId: id, target: key, error: refused }, "delivery refused");
+      await this.settle(id, "dead", refused, null);
+      return "dead";
+    }
     const circuit = this.circuits.get(key);
     if (circuit && circuit.openUntil > this.now()) {
       await this.settle(id, "deferred", "circuit open", new Date(circuit.openUntil));
@@ -122,6 +139,8 @@ export class DeliveryWorker {
         method: "POST",
         headers,
         body,
+        // A redirect could lead anywhere, including off the allowlist.
+        redirect: "manual",
         signal: AbortSignal.timeout(this.timeoutMs),
       });
       if (!res.ok) throw new Error(`target responded ${res.status}`);
