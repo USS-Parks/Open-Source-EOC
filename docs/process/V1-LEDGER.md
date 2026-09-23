@@ -1677,3 +1677,46 @@ tagging remain separately gated as section 1 of the roster states.
 - **Deferred:** part two, contacts, groups, mass notification, receipts and
   escalation. A relay behind a private CA needs `NODE_EXTRA_CA_CERTS`.
 - **Rollback:** revert the code; the prior code runs against the 0118 schema.
+
+## V1 W2 milestone gate
+
+- **Command:** `pnpm check:gate` with `OPENEOC_TEST_DB_TAG=gate` on `91b6058`:
+  recursive TypeScript, full ESLint, the license scan (303 packages), the link
+  checker (69 files), the advisory gate (0 high or critical, no exceptions),
+  the desktop and installer tests (19 passed), then the serial Vitest path at
+  `--maxWorkers=1`.
+- **Serial suite: red, then fixed, stated plainly.** 199 of 200 files and 1,115
+  of 1,116 tests passed in 927 seconds, in one run, with no load retries
+  needed. The one failure was real: the shared contract test enumerated the
+  accepted auth modes and did not know the `metrics-token` mode W2.8 added,
+  because that lane never ran the shared suite. The test was corrected in
+  `0642725` and the shared suite then passed 141 of 141. The lane brief now
+  requires the shared suite of any unit touching `shared/**`. The serial path
+  was not re-run end to end for a one-line test fix.
+- **Two-hour synthetic activation.** New `scripts/soak.mjs` against a server
+  started by `main.ts` on this workstation under the `app_runtime` role, with
+  the process memory gauges added in `91b6058`: 150 member sockets across ten
+  boards, each editing its own record every 7.5 to 22.5 seconds, a read every
+  10 to 30 seconds, a tenth of the sockets dropped and reconnected every five
+  minutes, and the access token renewed through the resume token. A first run
+  was stopped at 16 minutes because the driver did not renew its token, so
+  churned sockets could not sign in again; the fix is in `0642725` and the run
+  restarted clean.
+  - 119 one-minute samples, 71,106 edits acknowledged, 0 errors.
+  - Heap used: median of the first fifth after a ten-minute warm-up 89.2 MB,
+    of the last fifth 87.6 MB, a change of minus 1.7 percent: flat. Heap
+    oscillated between about 60 and 110 MB throughout.
+  - Resident memory rose from 249 MB to a plateau of 340 to 390 MB within the
+    first half hour, tracking V8's heap reserve (heap total about 200 MB), and
+    did not climb after it.
+  - Edit round trip: median per-minute p95 50 ms, worst per-minute p95 103 ms,
+    the last minute p95 23 ms and maximum 36 ms. Sockets held at 150, reading
+    135 in the minute after each churn.
+- **150-socket fan-out.** Recorded by W2.4's serial acceptance: every update
+  reached all 149 live readers under 100 ms beside a stalled reader.
+- **Boundary kept.** These runs are on this Windows workstation, not on
+  deployment hardware. The roster's real-hardware leg stays with `R1-REAL` on
+  the release candidate, an external input in section 7 item 7.
+- **Result:** wave W2 is complete: W2.0 through W2.11 are receipted and on
+  `origin/main`. The gate's suite leg is green after the recorded fix, its heap
+  leg is met, and its hardware leg is carried to `R1-REAL`.
