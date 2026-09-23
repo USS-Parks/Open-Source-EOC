@@ -4,7 +4,7 @@ import type { WebSocket } from "ws";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { AuthError, principalFromToken, type Principal } from "../auth/service.js";
-import type { BoardSyncHub } from "./hub.js";
+import { RestrictedBoardError, type BoardSyncHub } from "./hub.js";
 import { MAX_PAYLOAD_BYTES } from "./sockets.js";
 
 /** Longest base64 update accepted: it and the largest envelope fit in one frame. */
@@ -61,7 +61,7 @@ export function registerSyncRoutes(app: FastifyInstance, sql: Sql, hub: BoardSyn
     let principal: Principal | null = null;
     let unsubscribe: (() => void) | null = null;
 
-    const fail = (error: string, code: "auth_required" | "conflict" | "failed" = "failed") => {
+    const fail = (error: string, code: "auth_required" | "restricted" | "conflict" | "failed" = "failed") => {
       socket.send(JSON.stringify({ type: "error", error, code }));
       socket.close();
     };
@@ -111,7 +111,9 @@ export function registerSyncRoutes(app: FastifyInstance, sql: Sql, hub: BoardSyn
             JSON.stringify({ type: "synced", ...result }),
           );
         } catch (err) {
-          const code = err instanceof AuthError && [401, 403, 404].includes(err.status)
+          const code = err instanceof RestrictedBoardError
+            ? "restricted"
+            : err instanceof AuthError && [401, 403, 404].includes(err.status)
             ? "auth_required"
             : err instanceof AuthError && err.status === 409
               ? "conflict"

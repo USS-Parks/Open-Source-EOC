@@ -16,18 +16,33 @@ import {
   type EffectiveBoard,
 } from "../boards/service.js";
 import { onRecordRemoved, type RecordRemoval } from "../boards/removals.js";
+import { onRecordWritten, type RecordWrite } from "../boards/record-sync.js";
 import { recordAudit } from "../audit/service.js";
 import { notifyBoardEvent, type BoardEvent } from "../notify/engine.js";
 import { onBoardEvent, publishBoardEvent } from "../events/bus.js";
 import { getIncidentAuthority } from "../incidents/participation.js";
 
 /**
+ * A board whose record-level rules this caller does not clear for every
+ * record: its document cannot be served, and a client must use its views. A
+ * distinct code tells it apart from a lapsed session, which a new session
+ * would cure and this would not.
+ */
+export class RestrictedBoardError extends AuthError {
+  constructor() {
+    super(403, "records on this board are restricted; use its views");
+  }
+}
+
+/**
  * The board sync hub (ADR-0003). One Y.Doc per board; the durable state is
  * the append-only sync_updates log, hydrated on first access and merged
- * with any REST-created records. Every applied update checkpoints the
- * changed records into board_records (the queryable truth) under the
- * originating principal, validated against the board schema; a record the
- * schema refuses becomes a visible conflict, never a silent loss.
+ * with any board fields the log has not seen. Every applied update
+ * checkpoints the changed records into board_records (the queryable truth)
+ * under the originating principal, validated against the board schema; a
+ * record the schema refuses becomes a visible conflict, never a silent loss.
+ * A record written over REST reaches the log as a server-authored update
+ * (boards/record-sync.ts) and is folded into open documents from there.
  */
 
 interface HubEntry {
@@ -107,6 +122,7 @@ export class BoardSyncHub {
   private entries = new Map<string, HubEntry>();
   private readonly unlisten: () => void;
   private readonly unlistenRemovals: () => void;
+  private readonly unlistenWrites: () => void;
   private readonly idleEvictMs: number;
   private readonly snapshotThreshold: number;
   private hydrations = 0;
@@ -125,6 +141,26 @@ export class BoardSyncHub {
       }
     });
     this.unlistenRemovals = onRecordRemoved((removal) => this.dropRecord(removal));
+    this.unlistenWrites = onRecordWritten((write) => this.foldRecordWrite(write));
+  }
+
+  /**
+   * Fold a committed REST write into the open documents that hold its record,
+   * the board-wide one and its incident's, and send it to their subscribers.
+   * The durable update is already in the log (appendRecordWrite, in the
+   * writing transaction); it needs no history, so it applies as it is.
+   */
+  private foldRecordWrite(write: RecordWrite): void {
+    const keys = [entryKey(write.boardId, null)];
+    if (write.incidentId) keys.push(entryKey(write.boardId, write.incidentId));
+    for (const key of keys) {
+      const entry = this.entries.get(key);
+      if (!entry) continue;
+      Y.applyUpdate(entry.doc, write.update);
+      entry.encoded = null;
+      entry.rows.clear();
+      for (const fn of entry.subscribers) fn(write.update, "server");
+    }
   }
 
   /**
@@ -156,6 +192,7 @@ export class BoardSyncHub {
   close(): void {
     this.unlisten();
     this.unlistenRemovals();
+    this.unlistenWrites();
     for (const entry of this.entries.values()) {
       if (entry.idle) clearTimeout(entry.idle);
     }
@@ -548,7 +585,7 @@ export class BoardSyncHub {
       // A document holds every record of its scope, so a board with
       // record-level rules is served only to callers who read every record.
       if (!readsEveryRecord(actor, board, incidentId !== null))
-        throw new AuthError(403, "records on this board are restricted; use its views");
+        throw new RestrictedBoardError();
       const cached = this.entries.get(key);
       // A template upgrade changes the fields the doc was built from, so the
       // cached doc and every projection taken from it are rebuilt, not reused.
@@ -593,6 +630,11 @@ export class BoardSyncHub {
       idle: null,
     };
     this.entries.set(key, entry);
+    // REST writes lengthen the log without passing through apply(), so a
+    // hydration that replayed a long tail compacts it here as well.
+    if (entry.sinceSnapshot >= this.snapshotThreshold) {
+      await this.writeSnapshot(actor, boardId, incidentId, entry);
+    }
     return entry;
   }
 }
@@ -646,15 +688,18 @@ async function hydrateBoardDoc(
   return { doc, throughSeq, sinceSnapshot: updates.length };
 }
 
-/** Seed rows the sync log has not seen, without disturbing ones it has. */
+/**
+ * Seed row fields the sync log has not seen, without disturbing ones it has.
+ * Per field rather than per record: a record written before its board's REST
+ * writes reached the log may hold only its later-edited fields there.
+ */
 function applyBoardRows(doc: Y.Doc, rows: Map<string, Record<string, unknown>>): void {
   const records = doc.getMap<unknown>("records");
   doc.transact(() => {
-    const seen = new Set<string>();
-    for (const key of records.keys()) seen.add(key.split("/")[0]!);
     for (const [id, data] of rows) {
-      if (seen.has(id)) continue;
-      for (const [key, value] of Object.entries(data)) records.set(`${id}/${key}`, value);
+      for (const [key, value] of Object.entries(data)) {
+        if (!records.has(`${id}/${key}`)) records.set(`${id}/${key}`, value);
+      }
     }
   });
 }
@@ -760,10 +805,14 @@ export async function appendRecordRemoval(tx: Sql, boardId: string, recordId: st
   const doc = new Y.Doc();
   try {
     const [snapshot] = await tx`
-      select state from sync_snapshots where board_id = ${boardId} and incident_id is null`;
+      select through_seq, state from sync_snapshots where board_id = ${boardId} and incident_id is null`;
     if (snapshot) Y.applyUpdate(doc, new Uint8Array(snapshot.state as Buffer));
+    // The board-wide snapshot already holds every scope's updates through its
+    // sequence number, so only the rows after it need replaying.
     const updates = await tx`
-      select update_data from sync_updates where board_id = ${boardId} order by seq`;
+      select update_data from sync_updates
+      where board_id = ${boardId} and seq > ${snapshot ? Number(snapshot.through_seq) : 0}
+      order by seq`;
     for (const row of updates) Y.applyUpdate(doc, new Uint8Array(row.update_data as Buffer));
     const removal = removeRecordKeys(doc, recordId);
     if (removal) await tx`select append_board_record_removal(${recordId}, ${Buffer.from(removal)})`;

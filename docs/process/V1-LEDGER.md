@@ -2112,3 +2112,73 @@ tagging remain separately gated as section 1 of the roster states.
 - **Deferred:** an incident picker on the screen, deleting PA items, stale
   marking in the census, insurance amounts.
 - **Rollback:** revert the commit and drop `damage_pa_items`.
+
+## V1 W4.12: REST record writes through the sync log
+
+- **What was wrong.** Records written over REST changed `board_records` only.
+  A live sync socket missed console edits until it reconnected, a rebuilt
+  document kept old values for records already in the log, and federation
+  never saw console edits.
+- **What changed.** `insertRecord` and `updateRecord` in
+  `server/src/boards/service.ts`, the only REST writers of record data, call
+  `appendRecordWrite`, new `server/src/boards/record-sync.ts`, inside the
+  writing transaction. That covers the create and patch routes, import commit,
+  form submissions, EDXL, sitreps and the demo seed. Archive and restore change
+  no document-visible data, workflow transitions write no record data, delete
+  already logged a removal, and the hub's own checkpoint writes the table
+  directly, so no update is produced twice. New SECURITY DEFINER
+  `append_board_record_write`, granted only to `app_runtime`, refuses unless
+  the caller made the record's latest write, stores the row under the record's
+  scope, and calls `queue_federation` only for records with no incident. A new
+  `afterCommit` in `withPerson` runs only after commit, and the hub applies the
+  same bytes to the board-wide and incident documents and pushes them to
+  subscribers. Rebuild now seeds rows per field, so a record that predates this
+  change rebuilds whole; a rebuild replaying at least the snapshot threshold
+  writes a snapshot; and the delete path's replay starts after the snapshot.
+- **Ordering rule, stated.** Each update sets every field as a new entry with
+  its own client id, above the 32-bit range Yjs gives ordinary clients, whole
+  seconds in the high bits and a random draw below, strictly rising within a
+  process, needing no log history. A REST write beats every sync edit made
+  without seeing it; a sync edit made after the REST write reached that client
+  beats it; REST writes on one instance apply in commit order; REST writes to
+  one field on two federated instances settle by server clock to the second,
+  then by the draw. Every copy converges on one value: deterministic, not
+  wall-clock last-writer-wins. The losing sync edit stays in the log with no
+  conflict entry. `docs/adr/ADR-0003-sync-architecture.md` gains the addendum.
+- **Defaults.** An incident record's update carries only the fields incident
+  documents show; the rest go to the board-wide log alone and are not
+  federated, because a stale hidden field in the board-wide document would
+  otherwise be written back over the row on the next board-wide edit. Incident
+  records and deletes are not federated, consistent with W3.11; the federation
+  guide now says exactly what is forwarded. Ownership deviation:
+  `server/src/db/context.ts`.
+- **Integration: a distinct restricted-board code.** W4.1 part two recognized
+  the restricted-sync refusal by its message text. `sync/hub.ts` now throws
+  `RestrictedBoardError`, the sync route sends it as code `restricted`, and the
+  web client keys on the code; the board engine test asserts the error type.
+- **Schema:** migration `0121_record_write_sync.sql`, one function. No route,
+  contract or dependency change.
+- **Verification.** In the lane: new `record-sync.test.ts`, 7 tests across two
+  instances, all failing with the append disabled, the rebuild tests failing
+  with the old seeding, the incident test failing without the field filter;
+  sync, lifecycle, continuity, federation, delivery-outbox, board-engine,
+  boards, workflow and pagination 73 of 73; a 23-file batch 140 of 140 with one
+  two-database setup timeout that passed rerun; `federation-browser` 2 of 2;
+  `load.test.ts` serial 4 of 4, fan-out p95 61.1 ms and maximum 63.0 ms, 32 KiB
+  bulk p95 50.1 ms, 150 mixed operations p95 1,482 ms, within budget on a host
+  shared with other lanes. After rebasing onto W4.0 part two, W4.1 part two and
+  W4.11, with the restricted code: record-sync, board-engine, sync, lifecycle,
+  continuity, federation, boards, workflow, runtime, pagination, forms, edxl,
+  sitreps, api-docs, every web test and the shared suite 751 of 751; the
+  delivery-outbox, federation, board records and continuity walks serial 12 of
+  12. TypeScript and ESLint clean. Link checker 71 files.
+- **Evidence level:** unit, integration, real-database with two instances,
+  browser and document.
+- **Limits:** deletes are not federated; records existing before a board was
+  shared are not backfilled; a losing concurrent sync edit is not surfaced as a
+  conflict; each REST write adds a log row and a client entry to the board's
+  Yjs state; two instances can draw the same client id about once in 2^20
+  writes to one board in one second; a REST write committing while a document
+  is first being built can miss that one live update until the next apply or
+  the idle document is dropped.
+- **Rollback:** revert the commit and drop `append_board_record_write`.

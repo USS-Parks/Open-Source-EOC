@@ -47,14 +47,11 @@ export const RESTRICTED_SYNC_MESSAGE =
   "Offline sync is unavailable for this board: some of its records are restricted. Its queued work stays on this device; enter it on the board screen while connected.";
 
 /**
- * The server refuses a restricted board with its authorization code and this
- * message; it is told apart here so the refusal is not taken for an expired
- * session, which a new session would not cure.
+ * The server refuses a restricted board with its own code, so the refusal is
+ * not taken for an expired session, which a new session would not cure.
  */
 function syncFailure(code: SyncErrorCode | undefined, message: string | undefined): SyncTransportError {
-  if (message?.startsWith("records on this board are restricted")) {
-    return new SyncTransportError("restricted", RESTRICTED_SYNC_MESSAGE);
-  }
+  if (code === "restricted") return new SyncTransportError("restricted", RESTRICTED_SYNC_MESSAGE);
   return new SyncTransportError(code ?? "failed", message ?? "sync failed");
 }
 

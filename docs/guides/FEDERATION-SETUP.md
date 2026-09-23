@@ -72,18 +72,32 @@ this screen are not used for it.
   incident, queues in the outbox in the same transaction that records it: one
   entry per peer whose agreement lets it read the board. If the edit rolls
   back, nothing is queued.
+- A record created or changed through the REST record routes (the console's
+  board and map forms, board import, form submissions and the other server
+  paths that add records) is written to the board's sync log as an update in
+  the same transaction. Live sync sockets receive it without reconnecting,
+  and a record with no incident queues for the board's readers exactly like
+  a live sync edit.
 - An update received from a peer is queued the same way for the board's other
   readers, but never back to the peer it came from, so two instances sharing
   a board do not echo updates to each other.
-- Two kinds of change are not forwarded in this release. Edits to an
+- Three kinds of change are not forwarded in this release. Edits to an
   incident-scoped sync document (the continuity client joins with an
-  incident) are not federated, because an agreement covers a board and the
-  peer applies updates to its board's jurisdiction-wide document. Records
-  created or changed through the REST record routes are not forwarded
-  either: those routes change board rows without producing a sync update, and
-  the console's board and map forms use them. The route
+  incident) and REST writes to a record that belongs to an incident are not
+  federated, because an agreement covers a board and the peer applies
+  updates to its board's jurisdiction-wide document. Deleting a record is not
+  forwarded: the partner keeps its copy. The route
   `POST /api/v1/peers/:peerId/queue` still queues a sync update by hand for
   every peer that reads the board.
+- Records that existed before the board was shared are not sent. A later
+  change to one reaches the partner as the changed fields only, and the
+  partner does not list the record until every required field has arrived.
+- When a console edit and a field edit to the same field cross, both
+  instances settle on the same value: the console's REST write wins over any
+  edit made without seeing it, and an edit made after it arrived wins over
+  it. Two console edits to one field on different instances settle by the
+  servers' clocks, to the second. The losing edit stays in the sync log but
+  is not listed as a conflict.
 - The server's delivery worker pushes each linked peer's batch to its receive
   lane over the peer token. While the peer is unreachable the entries stay
   queued and are retried with backoff; they never expire. The peer applies a

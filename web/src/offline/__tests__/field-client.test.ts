@@ -343,7 +343,7 @@ class RefusingSocket {
 
   send(): void {
     queueMicrotask(() => this.onmessage?.({
-      data: JSON.stringify({ type: "error", error: this.error, code: "auth_required" }),
+      data: JSON.stringify({ type: "error", error: this.error, code: this.error.startsWith("records on this board are restricted") ? "restricted" : "auth_required" }),
     } as MessageEvent));
   }
 

@@ -56,7 +56,7 @@ afterAll(async () => {
   await admin.end();
 });
 
-/** A record written the way REST writes one, bypassing the sync log. */
+/** A record written straight to the table, bypassing the sync log. */
 async function insertRecord(summary: string): Promise<void> {
   await admin`
     insert into board_records (board_id, incident_id, data, created_by)

@@ -8,7 +8,7 @@ import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { readFirstWorksheet } from "../forms/xlsx-import.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
-import { BoardSyncHub } from "../sync/hub.js";
+import { BoardSyncHub, RestrictedBoardError } from "../sync/hub.js";
 import { auth, freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 import { multipartUpload } from "./multipart.js";
 
@@ -270,6 +270,8 @@ describe("record-level access", () => {
 
   it("serves a restricted board's sync state only to callers who read every record", async () => {
     const outsider = await principalForPerson(runtime, outsiderId);
+    // Its own error type, which the sync route sends as the code "restricted".
+    await expect(hub.open(outsider, privateBoard)).rejects.toBeInstanceOf(RestrictedBoardError);
     await expect(hub.open(outsider, privateBoard)).rejects.toMatchObject({ status: 403 });
     await expect(hub.open(outsider, privateBoard, incidentId)).rejects.toMatchObject({ status: 403 });
     const author = await principalForPerson(runtime, authorId);

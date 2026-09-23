@@ -22,6 +22,7 @@ import {
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { verifyPackage } from "./package.js";
+import { appendRecordWrite } from "./record-sync.js";
 import type { Sql } from "../db/client.js";
 import {
   CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, cutPage, decodeCursor, encodeCursor, type Page, type PageRequest,
@@ -389,7 +390,13 @@ export async function insertRecord(
     subjectId: id,
     payload: { board: board.template.key, data: parsed, ...(via ? { via } : {}) },
   });
+  await appendRecordWrite(sql, board.id, id, incidentId ?? null, parsed, incidentFields(board));
   return id;
+}
+
+/** The fields an incident scope's sync documents project: those a member reads. */
+function incidentFields(board: EffectiveBoard): ReadonlySet<string> {
+  return new Set(visibleFields({ ...board, role: "member" }).map((field) => field.key));
 }
 
 export async function createRecord(
@@ -478,6 +485,7 @@ export async function updateRecord(
       previous: Object.fromEntries(Object.keys(actualPatch).map((key) => [key, previous[key] ?? null])),
     },
   });
+  await appendRecordWrite(sql, boardId, recordId, recordIncidentId, actualPatch, incidentFields(board));
   return {
     id: recordId,
     data: persisted,
