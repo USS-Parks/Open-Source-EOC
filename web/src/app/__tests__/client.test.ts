@@ -223,7 +223,7 @@ describe("ApiClient", () => {
 
   it("lists IAPs and advances the workflow", async () => {
     const fetchImpl = (async (url: string) => {
-      const u = String(url);
+      const u = String(url).split("?")[0]!;
       if (u.endsWith("/auth/login"))
         return res(200, { accessToken: "A", resumeToken: "R", sessionId: "S" });
       if (u.endsWith("/iaps"))
@@ -307,7 +307,7 @@ describe("ApiClient", () => {
 
   it("submits, lists, and advances a resource request", async () => {
     const fetchImpl = (async (url: string, init: RequestInit) => {
-      const u = String(url);
+      const u = String(url).split("?")[0]!;
       if (u.endsWith("/auth/login"))
         return res(200, { accessToken: "A", resumeToken: "R", sessionId: "S" });
       if (u.endsWith("/resource-requests") && init.method === "POST") return res(201, { id: "r1" });
@@ -324,6 +324,24 @@ describe("ApiClient", () => {
     expect((await client.submitResourceRequest("j", { origin: "eoc", item: "Cots", quantity: 50 })).id).toBe("r1");
     expect((await client.listResourceRequests("j"))[0]!.state).toBe("submitted");
     expect((await client.transitionResourceRequest("r1", "triaged")).state).toBe("triaged");
+  });
+
+  it("reads a picker list to its last page by cursor", async () => {
+    const asked: string[] = [];
+    const fetchImpl = (async (url: string) => {
+      const u = String(url);
+      if (u.endsWith("/auth/login"))
+        return res(200, { accessToken: "A", resumeToken: "R", sessionId: "S" });
+      asked.push(u.split("?")[1] ?? "");
+      return u.includes("cursor=c1")
+        ? res(200, { requests: [{ id: "r2", item: "Tarps" }], nextCursor: null })
+        : res(200, { requests: [{ id: "r1", item: "Cots" }], nextCursor: "c1" });
+    }) as unknown as typeof fetch;
+
+    const client = new ApiClient({ fetchImpl });
+    await client.login("e@x.org", "pw");
+    expect((await client.listResourceRequests("j", "i1")).map((request) => request.id)).toEqual(["r1", "r2"]);
+    expect(asked).toEqual(["incidentId=i1&limit=500", "incidentId=i1&cursor=c1&limit=500"]);
   });
 
   it("records observations, composes an AAR, and downloads its PDF", async () => {

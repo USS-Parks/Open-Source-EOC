@@ -133,7 +133,10 @@ export interface TaskAnalytics {
 }
 
 export interface TaskListResponse {
+  /** One page of the filtered set; `analytics` counts all of it. */
   readonly tasks: readonly IncidentTask[];
+  /** Cursor for the next page; null or absent on the last page. */
+  readonly nextCursor?: string | null;
   readonly analytics: TaskAnalytics;
   readonly filters: TaskListQuery;
 }

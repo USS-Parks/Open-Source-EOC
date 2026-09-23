@@ -10,6 +10,7 @@ import {
 import type { Sql } from "../db/client.js";
 import { AuthError, requireMember, requireWriter, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
+import { CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, cutPage, decodeCursor, type Page, type PageRequest } from "../db/cursor.js";
 import { lockIncidentMutation } from "../incidents/participation.js";
 
 /**
@@ -277,10 +278,14 @@ export async function listAlerts(
   sql: Sql,
   actor: Principal,
   jurisdictionId: string,
-): Promise<Array<Record<string, unknown>>> {
+  page: PageRequest,
+): Promise<Page<Record<string, unknown>>> {
   requireMember(actor, jurisdictionId);
+  const after = decodeCursor(page.cursor, ["at", "id"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
   const rows = await sql`
-    select a.id, a.identifier, a.origin, a.status, a.msg_type, a.scope, a.ipaws_eligible,
+    select to_char(a.created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at,
+      a.id, a.identifier, a.origin, a.status, a.msg_type, a.scope, a.ipaws_eligible,
       a.incident_id, a.created_at, a.alert #>> '{info,0,headline}' as headline,
       a.alert #>> '{info,0,event}' as event, review.revision as review_revision,
       review.state as review_state, review.created_at as reviewed_at,
@@ -299,14 +304,20 @@ export async function listAlerts(
       where cap_alert_id = a.id order by submitted_at desc, id desc limit 1
     ) submission on true
     left join persons submitter on submitter.id = submission.submitted_by
-    where a.jurisdiction_id = ${jurisdictionId} order by a.created_at desc`;
-  return rows.map((r) => ({
-    ...r,
-    ipaws_eligible: Boolean(r.ipaws_eligible),
-    created_at: (r.created_at as Date).toISOString(),
-    reviewed_at: r.reviewed_at ? (r.reviewed_at as Date).toISOString() : null,
-    transmission: transmissionFromRow(r),
-  }));
+    where a.jurisdiction_id = ${jurisdictionId}
+      ${after ? sql`and (a.created_at, a.id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : sql``}
+    order by a.created_at desc, a.id desc limit ${limit + 1}`;
+  const { items, nextCursor } = cutPage(rows, limit, (r) => [r.page_at as string, r.id as string]);
+  return {
+    items: items.map(({ page_at: _pageAt, ...r }) => ({
+      ...r,
+      ipaws_eligible: Boolean(r.ipaws_eligible),
+      created_at: (r.created_at as Date).toISOString(),
+      reviewed_at: r.reviewed_at ? (r.reviewed_at as Date).toISOString() : null,
+      transmission: transmissionFromRow(r),
+    })),
+    nextCursor,
+  };
 }
 
 function transmissionFromRow(row: Record<string, unknown>): AlertTransmissionResult {

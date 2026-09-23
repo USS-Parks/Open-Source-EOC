@@ -1,6 +1,9 @@
 import type { Sql } from "../db/client.js";
 import { AuthError, requireAdmin, requireMember, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
+import {
+  CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, cutPage, decodeCursor, readAllPages, type Page, type PageRequest,
+} from "../db/cursor.js";
 
 /**
  * Native messaging (R6, INV-3): direct and group threads with person and
@@ -106,36 +109,44 @@ export interface MessageRow {
 }
 
 /**
- * Read a thread. RLS already gates participation; the retention window
- * additionally hides messages older than the jurisdiction's policy.
+ * Read a thread in sequence order, from `after` or the page cursor. RLS
+ * already gates participation; the retention window additionally hides
+ * messages older than the jurisdiction's policy.
  */
 export async function listMessages(
   sql: Sql,
   actor: Principal,
   threadId: string,
-  afterSeq = 0,
-): Promise<MessageRow[]> {
+  page: PageRequest & { readonly after?: number | undefined },
+): Promise<Page<MessageRow>> {
   const [thread] = await sql`select jurisdiction_id from threads where id = ${threadId}`;
   if (!thread) throw new AuthError(404, "thread not found");
+  const cursor = decodeCursor(page.cursor, ["seq"]);
+  const afterSeq = cursor ? cursor[0]! : String(page.after ?? 0);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
   const rows = await sql`
     select m.id, m.seq, m.body, m.created_at, p.display_name as sender,
            pos.title as sender_position
     from messages m
     join persons p on p.id = m.sender_person
     left join positions pos on pos.id = m.sender_position
-    where m.thread_id = ${threadId} and m.seq > ${afterSeq}
+    where m.thread_id = ${threadId} and m.seq > ${afterSeq}::bigint
       and m.created_at > now() - make_interval(days => coalesce(
         (select message_retention_days from jurisdiction_settings
          where jurisdiction_id = ${thread.jurisdiction_id as string}), 36500))
-    order by m.seq`;
-  return rows.map((r) => ({
-    id: r.id as string,
-    seq: Number(r.seq),
-    sender: r.sender as string,
-    senderPosition: (r.sender_position as string | null) ?? null,
-    body: r.body as string,
-    at: new Date(r.created_at as string).toISOString(),
-  }));
+    order by m.seq limit ${limit + 1}`;
+  const { items, nextCursor } = cutPage(rows, limit, (r) => [String(r.seq)]);
+  return {
+    items: items.map((r) => ({
+      id: r.id as string,
+      seq: Number(r.seq),
+      sender: r.sender as string,
+      senderPosition: (r.sender_position as string | null) ?? null,
+      body: r.body as string,
+      at: new Date(r.created_at as string).toISOString(),
+    })),
+    nextCursor,
+  };
 }
 
 export interface ThreadRecipient {
@@ -157,13 +168,20 @@ export async function listThreads(
   sql: Sql,
   actor: Principal,
   jurisdictionId: string,
-): Promise<ThreadSummary[]> {
+  page: PageRequest,
+): Promise<Page<ThreadSummary>> {
   requireMemberOrGuest(actor, jurisdictionId);
-  const rows = await sql`
-    select id, kind, title, incident_id from threads
+  const after = decodeCursor(page.cursor, ["at", "id"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
+  const fetched = await sql`
+    select id, kind, title, incident_id,
+      to_char(created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
+    from threads
     where jurisdiction_id = ${jurisdictionId} and is_thread_participant(id)
-    order by created_at desc`;
-  if (rows.length === 0) return [];
+      ${after ? sql`and (created_at, id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : sql``}
+    order by created_at desc, id desc limit ${limit + 1}`;
+  const { items: rows, nextCursor } = cutPage(fetched, limit, (row) => [row.page_at as string, row.id as string]);
+  if (rows.length === 0) return { items: [], nextCursor };
   const threadIds = rows.map((row) => row.id as string);
   const members = await sql`
     select m.thread_id, m.member_kind,
@@ -181,18 +199,21 @@ export async function listThreads(
     ) holder on true
     where m.thread_id in ${sql(threadIds)} and m.removed_at is null
     order by m.added_at, m.id`;
-  return rows.map((row) => ({
-    id: row.id as string,
-    kind: row.kind as string,
-    title: row.title as string,
-    incidentId: (row.incident_id as string | null) ?? null,
-    recipients: members.filter((member) => member.thread_id === row.id).map((member) => ({
-      kind: member.member_kind as "person" | "position",
-      id: member.recipient_id as string,
-      label: member.recipient_label as string,
-      currentHolders: member.current_holders as string[],
+  return {
+    items: rows.map((row) => ({
+      id: row.id as string,
+      kind: row.kind as string,
+      title: row.title as string,
+      incidentId: (row.incident_id as string | null) ?? null,
+      recipients: members.filter((member) => member.thread_id === row.id).map((member) => ({
+        kind: member.member_kind as "person" | "position",
+        id: member.recipient_id as string,
+        label: member.recipient_label as string,
+        currentHolders: member.current_holders as string[],
+      })),
     })),
-  }));
+    nextCursor,
+  };
 }
 
 /** Export a thread as ordered record lines (the incident-record view). */
@@ -201,7 +222,7 @@ export async function exportThread(
   actor: Principal,
   threadId: string,
 ): Promise<string[]> {
-  const messages = await listMessages(sql, actor, threadId);
+  const messages = await readAllPages((page) => listMessages(sql, actor, threadId, page));
   return messages.map((m) => {
     const who = m.senderPosition ? `${m.sender} (${m.senderPosition})` : m.sender;
     return `${m.at} ${who}: ${m.body}`;

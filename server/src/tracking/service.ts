@@ -3,6 +3,7 @@ import { CUSTODY_STATES, TRACKING_KINDS } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { AuthError, requireMember, requireWriter, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
+import { CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, cutPage, decodeCursor, type PageRequest } from "../db/cursor.js";
 
 /**
  * Scan-first tracking and reunification (F11). Every object is a
@@ -125,14 +126,18 @@ export interface TrackedObjectView {
   /** Present only when the actor is cleared for restricted details. */
   readonly restricted?: Record<string, unknown>;
   readonly restrictedRedacted: boolean;
+  /** One page of the custody chain, oldest first. */
   readonly chain: readonly TrackingEventView[];
+  /** Cursor for the next page of `chain`; null on the last page. */
+  readonly nextCursor: string | null;
 }
 
-/** The full object with its custody chain; restricted masked by role. */
+/** The object with a page of its custody chain; restricted masked by role. */
 export async function getObject(
   sql: Sql,
   actor: Principal,
   objectId: string,
+  page: PageRequest,
 ): Promise<TrackedObjectView> {
   const [obj] = await sql`
     select id, jurisdiction_id, tag, kind, label, restricted
@@ -140,7 +145,17 @@ export async function getObject(
   if (!obj) throw new AuthError(404, "object not found");
   const jurisdictionId = obj.jurisdiction_id as string;
   requireMember(actor, jurisdictionId);
-  const events = await chainOf(sql, objectId);
+  const after = decodeCursor(page.cursor, ["at", "at", "id"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
+  const rows = await sql`
+    select id, custody_state, station, agency, location, note, occurred_at,
+      to_char(occurred_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_occurred,
+      to_char(created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
+    from tracking_events where object_id = ${objectId}
+      ${after ? sql`and (occurred_at, created_at, id) > (${after[0]!}::text::timestamptz,
+        ${after[1]!}::text::timestamptz, ${after[2]!}::uuid)` : sql``}
+    order by occurred_at, created_at, id limit ${limit + 1}`;
+  const events = cutPage(rows, limit, (r) => [r.page_occurred as string, r.page_at as string, r.id as string]);
   const cleared = canSeeRestricted(actor, jurisdictionId);
   return {
     id: obj.id as string,
@@ -149,22 +164,16 @@ export async function getObject(
     label: obj.label as string,
     ...(cleared ? { restricted: obj.restricted as Record<string, unknown> } : {}),
     restrictedRedacted: !cleared,
-    chain: events,
+    chain: events.items.map((r) => ({
+      custodyState: r.custody_state as string,
+      station: (r.station as string | null) ?? null,
+      agency: (r.agency as string | null) ?? null,
+      location: (r.location as string | null) ?? null,
+      note: (r.note as string | null) ?? null,
+      occurredAt: new Date(r.occurred_at as string).toISOString(),
+    })),
+    nextCursor: events.nextCursor,
   };
-}
-
-async function chainOf(sql: Sql, objectId: string): Promise<TrackingEventView[]> {
-  const rows = await sql`
-    select custody_state, station, agency, location, note, occurred_at
-    from tracking_events where object_id = ${objectId} order by occurred_at, created_at`;
-  return rows.map((r) => ({
-    custodyState: r.custody_state as string,
-    station: (r.station as string | null) ?? null,
-    agency: (r.agency as string | null) ?? null,
-    location: (r.location as string | null) ?? null,
-    note: (r.note as string | null) ?? null,
-    occurredAt: new Date(r.occurred_at as string).toISOString(),
-  }));
 }
 
 export interface ReunificationAnswer {

@@ -4,6 +4,7 @@ import { ResourceRequestAssignmentSchema } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { AuthError } from "../auth/service.js";
 import { withPerson } from "../db/context.js";
+import { pageQuery } from "../db/cursor.js";
 import {
   addCost,
   assign,
@@ -96,11 +97,11 @@ export function resourceRoutes(
       const { jurisdictionId } = req.params as { jurisdictionId: string };
       // Optional incident scope: narrow the 213RR list to the selected
       // incident's requests so the surface reconciles with its context (79B2).
-      const { incidentId } = z.object({ incidentId: z.string().uuid().optional() }).parse(req.query);
-      const requests = await withPerson(sql, req.principal.person.id, (tx) =>
-        listRequests(tx, req.principal, jurisdictionId, incidentId),
+      const { incidentId, ...page } = z.object({ incidentId: z.string().uuid().optional(), ...pageQuery }).parse(req.query);
+      const { items, nextCursor } = await withPerson(sql, req.principal.person.id, (tx) =>
+        listRequests(tx, req.principal, jurisdictionId, incidentId, page),
       );
-      return reply.send({ requests });
+      return reply.send({ requests: items, nextCursor });
     },
   );
 

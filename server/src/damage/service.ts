@@ -18,6 +18,7 @@ import {
 } from "../auth/service.js";
 import { hashToken, newToken } from "../auth/tokens.js";
 import { withPerson } from "../db/context.js";
+import { CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, cutPage, decodeCursor, type Page, type PageRequest } from "../db/cursor.js";
 import { recordAudit } from "../audit/service.js";
 import { rateLimit } from "../security/rate-limit.js";
 
@@ -219,17 +220,26 @@ export async function listAssessments(
   sql: Sql,
   actor: Principal,
   jurisdictionId: string,
-  filter: { status?: string; source?: string } = {},
-): Promise<Array<Record<string, unknown>>> {
+  filter: { status?: string; source?: string },
+  page: PageRequest,
+): Promise<Page<Record<string, unknown>>> {
   requireMember(actor, jurisdictionId);
+  const after = decodeCursor(page.cursor, ["at", "id"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
   const rows = await sql`
-    select id, address, degree, source, status, estimated_loss, reporter_contact, created_at
+    select id, address, degree, source, status, estimated_loss, reporter_contact, created_at,
+      to_char(created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
     from damage_assessments
     where jurisdiction_id = ${jurisdictionId}
       and (${filter.status ?? null}::text is null or status = ${filter.status ?? null})
       and (${filter.source ?? null}::text is null or source = ${filter.source ?? null})
-    order by created_at desc`;
-  return rows.map((r) => ({ ...r, estimated_loss: Number(r.estimated_loss) }));
+      ${after ? sql`and (created_at, id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : sql``}
+    order by created_at desc, id desc limit ${limit + 1}`;
+  const { items, nextCursor } = cutPage(rows, limit, (r) => [r.page_at as string, r.id as string]);
+  return {
+    items: items.map(({ page_at: _pageAt, ...r }) => ({ ...r, estimated_loss: Number(r.estimated_loss) })),
+    nextCursor,
+  };
 }
 
 async function approvedRows(

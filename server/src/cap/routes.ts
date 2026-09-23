@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
+import { pageQuery } from "../db/cursor.js";
 import { authorAlert, CapValidationError, createAlertDraft, getAlert, ingestAlert, listAlerts, reviewAlert } from "./service.js";
 
 const AuthorBody = z.object({
@@ -91,10 +92,11 @@ export function capRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
-      const alerts = await withPerson(sql, req.principal.person.id, (tx) =>
-        listAlerts(tx, req.principal, jurisdictionId),
+      const page = z.object(pageQuery).parse(req.query);
+      const { items, nextCursor } = await withPerson(sql, req.principal.person.id, (tx) =>
+        listAlerts(tx, req.principal, jurisdictionId, page),
       );
-      return reply.send({ alerts });
+      return reply.send({ alerts: items, nextCursor });
     },
   );
 

@@ -1,8 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
+import { pageQuery } from "../db/cursor.js";
 import { AuthError } from "../auth/service.js";
-import { createFeed, feedItems, ingestPush, listFeeds, pollFeed } from "./service.js";
+import { FEED_PAGE_LIMIT, createFeed, feedItems, ingestPush, listFeeds, pollFeed } from "./service.js";
 
 export function feedRoutes(
   app: FastifyInstance,
@@ -50,8 +52,12 @@ export function feedRoutes(
 
   app.get("/api/v1/feeds/:feedId/items", { preHandler: authenticate }, async (req, reply) => {
     const { feedId } = req.params as { feedId: string };
+    const page = z.object({
+      cursor: pageQuery.cursor,
+      limit: z.coerce.number().int().min(1).max(FEED_PAGE_LIMIT).optional(),
+    }).parse(req.query);
     const result = await withPerson(sql, req.principal.person.id, (tx) =>
-      feedItems(tx, req.principal, feedId),
+      feedItems(tx, req.principal, feedId, page),
     );
     return reply.header("content-type", "application/geo+json").send(result);
   });

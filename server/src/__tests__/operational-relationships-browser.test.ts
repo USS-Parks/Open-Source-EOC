@@ -186,7 +186,7 @@ describe("map relationship browser journey", () => {
       "lifeline|fema_community_lifelines|transportation",
     );
     const created = page.waitForResponse((response) =>
-      response.url().endsWith(`/api/v1/incidents/${incidentId}/operational-relationships`)
+      new URL(response.url()).pathname.endsWith(`/api/v1/incidents/${incidentId}/operational-relationships`)
       && response.request().method() === "POST");
     await page.getByRole("button", { name: "Link selected feature", exact: true }).click();
     expect((await created).status()).toBe(201);
@@ -210,7 +210,7 @@ describe("map relationship browser journey", () => {
     const reloadedItems = page.waitForResponse((response) =>
       response.url().includes(`/api/v1/datasets/${datasetId}/items`) && response.status() === 200);
     const reloadedRelationships = page.waitForResponse((response) =>
-      response.url().endsWith(`/api/v1/incidents/${incidentId}/operational-relationships`)
+      new URL(response.url()).pathname.endsWith(`/api/v1/incidents/${incidentId}/operational-relationships`)
       && response.request().method() === "GET" && response.status() === 200);
     await page.reload({ waitUntil: "load" });
     await Promise.all([reloadedItems, reloadedRelationships]);
@@ -230,7 +230,7 @@ describe("map relationship browser journey", () => {
     await relationshipPanel.getByLabel("Link type").selectOption("board_record");
     await relationshipPanel.getByLabel("Incident board or facility record").selectOption(boardRecordId);
     const boardLinkCreated = page.waitForResponse((response) =>
-      response.url().endsWith(`/api/v1/incidents/${incidentId}/operational-relationships`)
+      new URL(response.url()).pathname.endsWith(`/api/v1/incidents/${incidentId}/operational-relationships`)
       && response.request().method() === "POST");
     await relationshipPanel.getByRole("button", { name: "Add recorded link", exact: true }).click();
     expect((await boardLinkCreated).status()).toBe(201);
@@ -240,7 +240,7 @@ describe("map relationship browser journey", () => {
     await relationshipPanel.getByLabel("Link type").selectOption("iap_objective");
     await relationshipPanel.getByLabel("IAP objective snapshot").selectOption(`${iapId}:${iapRevision}:0`);
     const iapLinkCreated = page.waitForResponse((response) =>
-      response.url().endsWith(`/api/v1/incidents/${incidentId}/operational-relationships`)
+      new URL(response.url()).pathname.endsWith(`/api/v1/incidents/${incidentId}/operational-relationships`)
       && response.request().method() === "POST");
     await relationshipPanel.getByRole("button", { name: "Add recorded link", exact: true }).click();
     expect((await iapLinkCreated).status()).toBe(201);
@@ -262,7 +262,7 @@ describe("map relationship browser journey", () => {
     await admin`update iaps set content_revision = content_revision + 1,
       content = ${admin.json(revisedContent as never)} where id = ${iapId}`;
     const refreshedRelationships = page.waitForResponse((response) =>
-      response.url().endsWith(`/api/v1/incidents/${incidentId}/operational-relationships`)
+      new URL(response.url()).pathname.endsWith(`/api/v1/incidents/${incidentId}/operational-relationships`)
       && response.request().method() === "GET" && response.status() === 200);
     await page.reload({ waitUntil: "load" });
     await refreshedRelationships;

@@ -11,6 +11,7 @@ import type {
 import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
+import { CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, cutPage, decodeCursor, type PageRequest } from "../db/cursor.js";
 import { resolveWorkflowAssignment } from "../boards/workflow.js";
 import {
   getIncidentAuthority,
@@ -42,7 +43,7 @@ interface TaskRow extends Record<string, unknown> {
 }
 
 const taskSelect = `
-  select c.id, c.incident_id, c.item, c.category, c.status, c.due_at, c.revision,
+  select c.id, c.incident_id, c.item, c.category, c.status, c.due_at, c.sort_order, c.revision,
     c.position_id, pos.title as position_title,
     pos.jurisdiction_id as position_organization_id,
     c.assigned_participant_id, ip.person_id as participant_person_id,
@@ -143,24 +144,34 @@ function assignedMatch(task: IncidentTask, actor: Principal, value: string): boo
   return task.assignment?.id === value;
 }
 
-/** List and aggregate the same complete filtered task set, without pagination. */
+/**
+ * Aggregate the complete filtered task set and return one page of it. The
+ * analytics count every match, so every task row is read; `on_page` marks
+ * the rows after the cursor, compared in SQL in the list's own order.
+ */
 export async function listIncidentTasks(
   sql: Sql,
   actor: Principal,
   incidentId: string,
   filters: TaskListQuery,
+  page: PageRequest,
 ): Promise<TaskListResponse> {
   await getIncidentAuthority(sql, actor, incidentId);
-  const rows = await sql.unsafe(`${taskSelect} where c.incident_id = $1
-    order by c.status, c.due_at nulls last, c.sort_order, c.id`, [incidentId]);
+  const after = decodeCursor(page.cursor, ["key", "atOrInfinity", "int", "id"]);
+  const rows = await sql.unsafe(`select task.*,
+      coalesce(to_char(task.due_at at time zone 'UTC', '${CURSOR_AT_FORMAT}'), 'infinity') as page_due,
+      ($2::text is null or (task.status, coalesce(task.due_at, 'infinity'), task.sort_order, task.id)
+        > ($2::text, $3::text::timestamptz, $4::text::integer, $5::uuid)) as on_page
+    from (${taskSelect} where c.incident_id = $1) task
+    order by task.status, coalesce(task.due_at, 'infinity'), task.sort_order, task.id`,
+  [incidentId, ...(after ?? [null, null, null, null])]);
   const now = Date.now();
-  const taskRows = rows as unknown as TaskRow[];
-  const dependencies = await taskDependencies(sql, taskRows.map((task) => task.id));
-  const tasks = taskRows.map((task) => toTask(task, dependencies.get(task.id))).filter((task) =>
+  const matching = (rows as unknown as TaskRow[]).map((row) => ({ row, task: toTask(row) })).filter(({ task }) =>
     (filters.status === undefined || task.status === filters.status) &&
     (filters.category === undefined || task.category === filters.category) &&
     (filters.assignment === undefined || assignedMatch(task, actor, filters.assignment)) &&
     (filters.due === undefined || dueBucket(task, now) === filters.due));
+  const tasks = matching.map(({ task }) => task);
   const byStatus: Record<TaskStatus, number> = { open: 0, in_progress: 0, completed: 0 };
   const byCategory: Record<string, number> = {};
   let overdue = 0;
@@ -176,8 +187,12 @@ export async function listIncidentTasks(
     else if (bucket === "upcoming") upcoming += 1;
     else if (bucket === "none") withoutDue += 1;
   }
+  const paged = cutPage(matching.filter(({ row }) => row.on_page), page.limit ?? DEFAULT_PAGE_LIMIT,
+    ({ row }) => [row.status, row.page_due as string, String(row.sort_order), row.id]);
+  const dependencies = await taskDependencies(sql, paged.items.map(({ row }) => row.id));
   return {
-    tasks,
+    tasks: paged.items.map(({ row }) => toTask(row, dependencies.get(row.id))),
+    nextCursor: paged.nextCursor,
     analytics: {
       total: tasks.length,
       byStatus,

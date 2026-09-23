@@ -3,6 +3,7 @@ import { z } from "zod";
 import { IapWorkspaceQuerySchema, WorkflowAssignmentRequestSchema } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
+import { pageQuery, splitPageQuery } from "../db/cursor.js";
 import {
   approveIap,
   buildForm,
@@ -104,9 +105,10 @@ export function iapRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { incidentId } = req.params as { incidentId: string };
-      const query = IapWorkspaceQuerySchema.parse(req.query);
+      const { page, filters } = splitPageQuery(req.query);
+      const query = IapWorkspaceQuerySchema.parse(filters);
       const workspace = await withPerson(sql, req.principal.person.id, (tx) =>
-        queryIapWorkspace(tx, req.principal, incidentId, query),
+        queryIapWorkspace(tx, req.principal, incidentId, query, page),
       );
       return reply.send(workspace);
     },
@@ -138,10 +140,11 @@ export function iapRoutes(
 
   app.get("/api/v1/iap/:iapId/revisions", { preHandler: authenticate }, async (req, reply) => {
     const { iapId } = req.params as { iapId: string };
-    const revisions = await withPerson(sql, req.principal.person.id, (tx) =>
-      listIapRevisions(tx, req.principal, iapId),
+    const page = z.object(pageQuery).parse(req.query);
+    const { items, nextCursor } = await withPerson(sql, req.principal.person.id, (tx) =>
+      listIapRevisions(tx, req.principal, iapId, page),
     );
-    return reply.send({ revisions });
+    return reply.send({ revisions: items, nextCursor });
   });
 
   app.get("/api/v1/iap/:iapId/revisions/:revision/pdf", {

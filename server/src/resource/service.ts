@@ -17,6 +17,7 @@ import {
 } from "../auth/service.js";
 import { hashToken } from "../auth/tokens.js";
 import { withPerson } from "../db/context.js";
+import { DEFAULT_PAGE_LIMIT, cutPage, decodeCursor, type Page, type PageRequest } from "../db/cursor.js";
 import { recordAudit } from "../audit/service.js";
 import { resolveWorkflowAssignment } from "../boards/workflow.js";
 import { getIncidentAuthority, lockIncidentMutation } from "../incidents/participation.js";
@@ -398,13 +399,20 @@ export async function listRequests(
   sql: Sql,
   actor: Principal,
   jurisdictionId: string,
-  incidentId?: string,
-): Promise<ResourceRequestSummary[]> {
+  incidentId: string | undefined,
+  page: PageRequest,
+): Promise<Page<ResourceRequestSummary>> {
   requireMember(actor, jurisdictionId);
+  const after = decodeCursor(page.cursor, ["key", "id"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
   const rows = await sql.unsafe(`${requestSelect}
     where r.jurisdiction_id = $1 and ($2::uuid is null or r.incident_id = $2)
-    order by r.item`, [jurisdictionId, incidentId ?? null]);
-  return rows.map((row) => requestSummary(row as Record<string, unknown>));
+      and ($3::text is null or (r.item, r.id) > ($3::text, $4::uuid))
+    order by r.item, r.id limit $5`,
+  [jurisdictionId, incidentId ?? null, after?.[0] ?? null, after?.[1] ?? null, limit + 1]);
+  const { items, nextCursor } = cutPage(rows as unknown as Record<string, unknown>[], limit,
+    (row) => [row.item as string, row.id as string]);
+  return { items: items.map(requestSummary), nextCursor };
 }
 
 export async function getRequest(

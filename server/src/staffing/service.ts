@@ -8,6 +8,7 @@ import {
 } from "../auth/service.js";
 import { hashToken, newToken } from "../auth/tokens.js";
 import { recordAudit } from "../audit/service.js";
+import { CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, cutPage, decodeCursor, type PageRequest } from "../db/cursor.js";
 
 /**
  * Staffing. Check-in/out is bound to a position and lands in the
@@ -181,6 +182,8 @@ export interface StaffingSummary {
     since: string;
     method: string;
   }>;
+  /** Cursor for the next page of `onDuty`; the other lists are whole. */
+  readonly nextCursor: string | null;
   readonly vacantPositions: ReadonlyArray<{ id: string; key: string; title: string }>;
   readonly upcomingShifts: ReadonlyArray<{
     id: string;
@@ -192,26 +195,35 @@ export interface StaffingSummary {
 }
 
 /**
- * Live staffing picture: who is currently on duty, which positions have no
- * one checked in (vacancies), and the shifts scheduled ahead.
+ * Live staffing picture: who is currently on duty (paged, earliest check-in
+ * first), which positions have no one checked in (vacancies), and the shifts
+ * scheduled ahead.
  */
 export async function staffingSummary(
   sql: Sql,
   actor: Principal,
   jurisdictionId: string,
+  page: PageRequest,
   now = new Date(),
 ): Promise<StaffingSummary> {
   requireMember(actor, jurisdictionId);
+  const after = decodeCursor(page.cursor, ["at", "id"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
   const onDutyRows = await sql`
-    select c.id, c.person_id, p.display_name, c.position_id, pos.title, c.checked_in_at, c.method
+    select c.id, c.person_id, p.display_name, c.position_id, pos.title, c.checked_in_at, c.method,
+      to_char(c.checked_in_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
     from staff_checkins c
     join persons p on p.id = c.person_id
     join positions pos on pos.id = c.position_id
     where c.jurisdiction_id = ${jurisdictionId} and c.checked_out_at is null
-    order by c.checked_in_at`;
-  const staffed = new Set(onDutyRows.map((r) => r.position_id as string));
+      ${after ? sql`and (c.checked_in_at, c.id) > (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : sql``}
+    order by c.checked_in_at, c.id limit ${limit + 1}`;
+  const onDuty = cutPage(onDutyRows, limit, (r) => [r.page_at as string, r.id as string]);
   const positions = await sql`
-    select id, key, title from positions where jurisdiction_id = ${jurisdictionId} order by key`;
+    select id, key, title from positions pos
+    where jurisdiction_id = ${jurisdictionId} and not exists (
+      select 1 from staff_checkins c where c.position_id = pos.id and c.checked_out_at is null)
+    order by key`;
   const shifts = await sql`
     select s.id, pos.title as position_title, p.display_name, s.starts_at, s.ends_at
     from shifts s
@@ -220,7 +232,7 @@ export async function staffingSummary(
     where s.jurisdiction_id = ${jurisdictionId} and s.ends_at > ${now}
     order by s.starts_at limit 50`;
   return {
-    onDuty: onDutyRows.map((r) => ({
+    onDuty: onDuty.items.map((r) => ({
       checkinId: r.id as string,
       personId: r.person_id as string,
       personName: r.display_name as string,
@@ -229,9 +241,8 @@ export async function staffingSummary(
       since: new Date(r.checked_in_at as string).toISOString(),
       method: r.method as string,
     })),
-    vacantPositions: positions
-      .filter((p) => !staffed.has(p.id as string))
-      .map((p) => ({ id: p.id as string, key: p.key as string, title: p.title as string })),
+    nextCursor: onDuty.nextCursor,
+    vacantPositions: positions.map((p) => ({ id: p.id as string, key: p.key as string, title: p.title as string })),
     upcomingShifts: shifts.map((s) => ({
       id: s.id as string,
       positionTitle: s.position_title as string,

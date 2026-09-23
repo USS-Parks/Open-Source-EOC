@@ -86,7 +86,10 @@ export interface IapWorkspaceSummary {
 }
 
 export interface IapWorkspaceResponse {
+  /** One page of the filtered set, newest first; `summary` and `facets` count all of it. */
   readonly iaps: readonly IapWorkspaceItem[];
+  /** Cursor for the next page; null or absent on the last page. */
+  readonly nextCursor?: string | null;
   readonly query: IapWorkspaceQuery;
   readonly summary: IapWorkspaceSummary;
   readonly facets: {

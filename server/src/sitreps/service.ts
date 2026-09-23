@@ -16,6 +16,7 @@ import {
   visibleFields,
 } from "../boards/service.js";
 import { recordAudit } from "../audit/service.js";
+import { CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, cutPage, decodeCursor, type Page, type PageRequest } from "../db/cursor.js";
 import { listCurrentLifelineAssessments } from "../lifelines/service.js";
 import { getIncidentAuthority, lockIncidentMutation } from "../incidents/participation.js";
 import { listCurrentEsfAssessments } from "../esf/service.js";
@@ -415,8 +416,9 @@ export async function listSitreps(
   sql: Sql,
   actor: Principal,
   jurisdictionId: string,
-  incidentId?: string,
-): Promise<Array<{ id: string; period: string; composedAt: string; composedBy: string;
+  incidentId: string | undefined,
+  page: PageRequest,
+): Promise<Page<{ id: string; period: string; composedAt: string; composedBy: string;
   incidentId: string | null; incidentName: string | null; revision: number; sourceTime: string }>> {
   requireMember(actor, jurisdictionId);
   if (incidentId) {
@@ -424,34 +426,36 @@ export async function listSitreps(
     if (authority.jurisdictionId !== jurisdictionId)
       throw new AuthError(400, "incident belongs to another jurisdiction");
   }
-  const rows = incidentId ? await sql`
+  const after = decodeCursor(page.cursor, ["at", "id"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
+  const rows = await sql`
     select s.id, s.period, s.composed_at, s.incident_id, s.content,
-      p.display_name, i.name as incident_name
-    from sitreps s join persons p on p.id = s.composed_by
-    left join incidents i on i.id = s.incident_id
-    where s.jurisdiction_id = ${jurisdictionId} and s.incident_id = ${incidentId}
-    order by s.composed_at desc`
-    : await sql`
-    select s.id, s.period, s.composed_at, s.incident_id, s.content,
-      p.display_name, i.name as incident_name
+      p.display_name, i.name as incident_name,
+      to_char(s.composed_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
     from sitreps s join persons p on p.id = s.composed_by
     left join incidents i on i.id = s.incident_id
     where s.jurisdiction_id = ${jurisdictionId}
-    order by s.composed_at desc`;
-  return rows.map((r) => {
-    const content = SitrepContentSchema.parse(r.content);
-    const composedAt = new Date(r.composed_at as string).toISOString();
-    return {
-      id: r.id as string,
-      period: r.period as string,
-      composedAt,
-      composedBy: r.display_name as string,
-      incidentId: (r.incident_id as string | null) ?? null,
-      incidentName: content.incident?.name ?? (r.incident_name as string | null) ?? null,
-      revision: content.revision ?? 1,
-      sourceTime: content.sourceTime ?? composedAt,
-    };
-  });
+      ${incidentId ? sql`and s.incident_id = ${incidentId}` : sql``}
+      ${after ? sql`and (s.composed_at, s.id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : sql``}
+    order by s.composed_at desc, s.id desc limit ${limit + 1}`;
+  const { items, nextCursor } = cutPage(rows, limit, (r) => [r.page_at as string, r.id as string]);
+  return {
+    items: items.map((r) => {
+      const content = SitrepContentSchema.parse(r.content);
+      const composedAt = new Date(r.composed_at as string).toISOString();
+      return {
+        id: r.id as string,
+        period: r.period as string,
+        composedAt,
+        composedBy: r.display_name as string,
+        incidentId: (r.incident_id as string | null) ?? null,
+        incidentName: content.incident?.name ?? (r.incident_name as string | null) ?? null,
+        revision: content.revision ?? 1,
+        sourceTime: content.sourceTime ?? composedAt,
+      };
+    }),
+    nextCursor,
+  };
 }
 
 /** The briefing view's source: one archived sitrep, exactly as composed. */

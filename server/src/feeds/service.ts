@@ -10,6 +10,7 @@ import {
 } from "../auth/service.js";
 import { hashToken, newToken } from "../auth/tokens.js";
 import { recordAudit } from "../audit/service.js";
+import { CURSOR_AT_FORMAT, cutPage, decodeCursor, type PageRequest } from "../db/cursor.js";
 import { parseFeed, type NormalizedItem } from "./parse.js";
 
 /**
@@ -308,13 +309,19 @@ export interface FeedItemsResult {
   readonly feed: FeedHealth;
   readonly numberReturned: number;
   readonly features: ReadonlyArray<Record<string, unknown>>;
+  /** Cursor for the next page, most recently fetched first; null on the last page. */
+  readonly nextCursor: string | null;
 }
+
+/** A map layer wants the whole feed, so a feed page is larger than the list default. */
+export const FEED_PAGE_LIMIT = 1000;
 
 /** Items as a GeoJSON layer with provenance and staleness on every feature. */
 export async function feedItems(
   sql: Sql,
   actor: Principal,
   feedId: string,
+  page: PageRequest = {},
   now = new Date(),
 ): Promise<FeedItemsResult> {
   const [feed] = await sql`
@@ -328,15 +335,21 @@ export async function feedItems(
   if (!feed) throw new AuthError(404, "feed not found");
   requireMember(actor, feed.jurisdiction_id as string);
   const health = healthOf(feed, now);
-  const rows = await sql`
+  const after = decodeCursor(page.cursor, ["at", "id"]);
+  const limit = page.limit ?? FEED_PAGE_LIMIT;
+  const fetched = await sql`
     select id, external_id, title, severity, properties, track, fetched_at,
-           ST_AsGeoJSON(geom)::jsonb as geometry
+           ST_AsGeoJSON(geom)::jsonb as geometry,
+           to_char(fetched_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
     from feed_items where feed_id = ${feedId}
-    order by fetched_at desc limit 1000`;
+      ${after ? sql`and (fetched_at, id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : sql``}
+    order by fetched_at desc, id desc limit ${limit + 1}`;
+  const { items: rows, nextCursor } = cutPage(fetched, limit, (r) => [r.page_at as string, r.id as string]);
   return {
     type: "FeatureCollection",
     feed: health,
     numberReturned: rows.length,
+    nextCursor,
     features: rows.map((r) => ({
       type: "Feature",
       id: r.id as string,

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
+import { pageQuery } from "../db/cursor.js";
 import {
   checkIn,
   checkOut,
@@ -101,8 +102,9 @@ export function staffingRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const page = z.object(pageQuery).parse(req.query);
       const summary = await withPerson(sql, req.principal.person.id, (tx) =>
-        staffingSummary(tx, req.principal, jurisdictionId),
+        staffingSummary(tx, req.principal, jurisdictionId, page),
       );
       return reply.send(summary);
     },

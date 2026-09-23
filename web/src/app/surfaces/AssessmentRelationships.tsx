@@ -1,26 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import type { OperationalRelationship, OperationalRelationshipCreate, TaskListResponse, ViewRecord } from "@openeoc/shared";
-import type { ApiClient, BoardListItem, IapResult, ResourceRequestSummary } from "../api/client.js";
+import type { IncidentTask, OperationalRelationship, OperationalRelationshipCreate, ViewRecord } from "@openeoc/shared";
+import { readAllPages, type ApiClient, type BoardListItem, type IapResult, type ResourceRequestSummary } from "../api/client.js";
 import { useAsync } from "../data/hooks.js";
 import "./AssessmentRelationships.css";
 
 type Source = OperationalRelationshipCreate["source"];
 type LinkKind = Extract<OperationalRelationshipCreate["target"]["kind"], "task" | "resource_request" | "board_record" | "iap_objective">;
 type RelationshipBoard = Pick<BoardListItem, "id" | "title">;
-
-const EMPTY_TASKS: TaskListResponse = {
-  tasks: [],
-  analytics: {
-    total: 0,
-    byStatus: { open: 0, in_progress: 0, completed: 0 },
-    byCategory: {},
-    overdue: 0,
-    dueNext24Hours: 0,
-    upcoming: 0,
-    withoutDue: 0,
-  },
-  filters: {},
-};
 
 function iapObjectives(iap: IapResult): readonly string[] {
   const form = iap.content.forms.find((item) => item.id === "ICS-202");
@@ -55,7 +41,12 @@ export function AssessmentRelationships(props: {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const relationships = useAsync(() => typeof props.client.listOperationalRelationships === "function" ? props.client.listOperationalRelationships(props.incidentId) : Promise.resolve([]), [props.client, props.incidentId]);
-  const tasks = useAsync(() => typeof props.client.listIncidentTasks === "function" ? props.client.listIncidentTasks(props.incidentId) : Promise.resolve(EMPTY_TASKS), [props.client, props.incidentId]);
+  const tasks = useAsync(() => typeof props.client.listIncidentTasks === "function"
+    ? readAllPages(async (page) => {
+      const result = await props.client.listIncidentTasks(props.incidentId, {}, page);
+      return { items: result.tasks, nextCursor: result.nextCursor };
+    })
+    : Promise.resolve([] as IncidentTask[]), [props.client, props.incidentId]);
   const resources = useAsync(() => props.jurisdictionId && typeof props.client.listResourceRequests === "function" ? props.client.listResourceRequests(props.jurisdictionId, props.incidentId) : Promise.resolve([] as ResourceRequestSummary[]), [props.client, props.incidentId, props.jurisdictionId]);
   const boardRecords = useAsync(async () => {
     if (!props.boards?.length) return [];
@@ -66,8 +57,12 @@ export function AssessmentRelationships(props: {
       const definition = await props.client.getBoard(board.id, props.incidentId);
       const view = definition.views[0];
       if (!view) return [];
-      const response = await props.client.boardView(board.id, view.key, props.incidentId);
-      return response.records.map((record) => ({
+      // The picker offers every record, so it reads the view to its last page.
+      const records = await readAllPages(async (page) => {
+        const response = await props.client.boardView(board.id, view.key, props.incidentId, page);
+        return { items: response.records, nextCursor: response.nextCursor };
+      });
+      return records.map((record) => ({
         value: record.id,
         label: boardRecordLabel(board, record),
       }));
@@ -110,11 +105,11 @@ export function AssessmentRelationships(props: {
     const values = report?.payload.relatedLifelines;
     return Array.isArray(values) && values.includes(props.source.definitionKey);
   }), [esfOverview.data, props.source.definitionKey]);
-  const options = kind === "task" ? (tasks.data?.tasks ?? []).map((task) => ({ value: task.id, label: `${task.item} · ${task.status}` }))
+  const options = kind === "task" ? (tasks.data ?? []).map((task) => ({ value: task.id, label: `${task.item} · ${task.status}` }))
     : kind === "resource_request" ? (resources.data ?? []).map((resource) => ({ value: resource.id, label: `${resource.item} · ${resource.state}` }))
       : kind === "board_record" ? (boardRecords.data ?? [])
       : objectives;
-  const taskLabels = new Map((tasks.data?.tasks ?? []).map((task) => [task.id, task.item]));
+  const taskLabels = new Map((tasks.data ?? []).map((task) => [task.id, task.item]));
   const resourceLabels = new Map((resources.data ?? []).map((resource) => [resource.id, resource.item]));
   const optionsUnavailable = kind === "task" ? Boolean(tasks.error)
     : kind === "resource_request" ? Boolean(resources.error) || !props.jurisdictionId

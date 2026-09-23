@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
+import { pageQuery } from "../db/cursor.js";
 import {
   createThread,
   exportThread,
@@ -53,10 +54,11 @@ export function messagingRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
-      const threads = await withPerson(sql, req.principal.person.id, (tx) =>
-        listThreads(tx, req.principal, jurisdictionId),
+      const page = z.object(pageQuery).parse(req.query);
+      const { items, nextCursor } = await withPerson(sql, req.principal.person.id, (tx) =>
+        listThreads(tx, req.principal, jurisdictionId, page),
       );
-      return reply.send({ threads });
+      return reply.send({ threads: items, nextCursor });
     },
   );
 
@@ -78,11 +80,11 @@ export function messagingRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { threadId } = req.params as { threadId: string };
-      const after = Number((req.query as { after?: string }).after ?? 0);
-      const messages = await withPerson(sql, req.principal.person.id, (tx) =>
-        listMessages(tx, req.principal, threadId, after),
+      const page = z.object({ ...pageQuery, after: z.coerce.number().int().min(0).optional() }).parse(req.query);
+      const { items, nextCursor } = await withPerson(sql, req.principal.person.id, (tx) =>
+        listMessages(tx, req.principal, threadId, page),
       );
-      return reply.send({ messages });
+      return reply.send({ messages: items, nextCursor });
     },
   );
 

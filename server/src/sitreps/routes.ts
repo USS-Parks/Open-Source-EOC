@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
+import { pageQuery } from "../db/cursor.js";
 import {
   composeSitrep,
   currentLifelines,
@@ -19,7 +20,7 @@ const ComposeBody = z.object({
   period: z.string().min(1),
   incidentId: z.string().uuid().optional(),
 });
-const ListQuery = z.object({ incidentId: z.string().uuid().optional() });
+const ListQuery = z.object({ incidentId: z.string().uuid().optional(), ...pageQuery });
 
 export function sitrepRoutes(
   app: FastifyInstance,
@@ -70,10 +71,10 @@ export function sitrepRoutes(
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
       const query = ListQuery.parse(req.query);
-      const sitreps = await withPerson(sql, req.principal.person.id, (tx) =>
-        listSitreps(tx, req.principal, jurisdictionId, query.incidentId),
+      const { items, nextCursor } = await withPerson(sql, req.principal.person.id, (tx) =>
+        listSitreps(tx, req.principal, jurisdictionId, query.incidentId, query),
       );
-      return reply.send({ sitreps });
+      return reply.send({ sitreps: items, nextCursor });
     },
   );
 

@@ -11,8 +11,9 @@ beforeEach(() => { vi.stubGlobal("indexedDB", new IDBFactory()); });
 const incidentId = "11111111-1111-4111-8111-111111111111";
 const task: IncidentTask = { id: "22222222-2222-4222-8222-222222222222", incidentId, item: "Establish command", category: "command", status: "open", dueAt: "2026-09-22T10:00:00.000Z", revision: 1, assignment: { kind: "position", id: "33333333-3333-4333-8333-333333333333", organizationId: "44444444-4444-4444-8444-444444444444", title: "Incident Commander", personId: null }, dependencies: [], completedAt: null, completedBy: null };
 function response(tasks: readonly IncidentTask[]) { return { tasks, analytics: { total: tasks.length, byStatus: { open: tasks.filter((item) => item.status === "open").length, in_progress: 0, completed: 0 }, byCategory: { command: tasks.length }, overdue: 0, dueNext24Hours: 1, upcoming: 0, withoutDue: 0 }, filters: {} }; }
-function renderSurface(props: { closed?: boolean } = {}) {
-  const listIncidentTasks = vi.fn(async (_id: string, _query: TaskListQuery) => response([task]));
+function renderSurface(props: { closed?: boolean; nextPage?: readonly IncidentTask[] } = {}) {
+  const listIncidentTasks = vi.fn(async (_id: string, _query: TaskListQuery, page?: { cursor?: string }) =>
+    page?.cursor ? response(props.nextPage ?? []) : { ...response([task]), nextCursor: props.nextPage ? "next" : null });
   const operationIds: string[] = [];
   const updateInputs: TaskMetadataPatch[] = [];
   const receipt: TaskCompletionReceipt = { operationId: "55555555-5555-4555-8555-555555555555", taskId: task.id, incidentId, status: "completed", revision: 2, completedAt: "2026-09-21T12:00:00.000Z", completedBy: { personId: "66666666-6666-4666-8666-666666666666", positionId: task.assignment!.id, organizationId: task.assignment!.organizationId, participationId: null, title: "Incident Commander" } };
@@ -23,6 +24,14 @@ function renderSurface(props: { closed?: boolean } = {}) {
   return { client, listIncidentTasks, operationIds, updateInputs };
 }
 describe("tasks surface", () => {
+  it("loads the next page of tasks into the table", async () => {
+    const { listIncidentTasks } = renderSurface({ nextPage: [{ ...task, id: "77777777-7777-4777-8777-777777777777", item: "Open shelter" }] });
+    await screen.findByText("Establish command");
+    expect(screen.queryByText("Open shelter")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Load more records" }));
+    expect(await screen.findByText("Open shelter")).toBeTruthy();
+    expect(listIncidentTasks).toHaveBeenCalledWith(incidentId, { assignment: "mine" }, { cursor: "next" });
+  });
   it("renders My Tasks and Team Tasks with authoritative category, due, and completion fields", async () => {
     const { listIncidentTasks } = renderSurface();
     expect(await screen.findByText("Establish command")).toBeTruthy();

@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import type { Sql } from "../db/client.js";
 import { AuthError, requireWriter, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
+import { CURSOR_AT_FORMAT, cutPage, decodeCursor } from "../db/cursor.js";
 
 /**
  * Content-addressed blob store on plain disk (threat B10, INV-3): the
@@ -179,7 +180,7 @@ export async function listFiles(
   options: { readonly attachedKind?: FileAttachmentKind | undefined; readonly attachedId?: string | undefined; readonly cursor?: string | undefined; readonly limit: number },
 ): Promise<FilePage> {
   requireReader(actor, jurisdictionId);
-  const cursor = decodeFileCursor(options.cursor);
+  const after = decodeCursor(options.cursor, ["at", "id"]);
   const limit = Math.max(1, Math.min(options.limit, 100));
   if (options.attachedId !== undefined && options.attachedKind === undefined)
     throw new AuthError(400, "attachment kind is required with an attachment id");
@@ -194,7 +195,8 @@ export async function listFiles(
            case when f.attached_kind = 'record' then br.board_id
                 when f.attached_kind = 'board' then f.attached_id else null end as attached_board_id,
            case when f.attached_kind = 'record' then br.incident_id
-                else null end as attached_incident_id
+                else null end as attached_incident_id,
+           to_char(f.created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
     from files f
     join persons p on p.id = f.uploaded_by
     left join positions pos on pos.id = f.uploaded_by_position
@@ -202,17 +204,11 @@ export async function listFiles(
     where f.jurisdiction_id = ${jurisdictionId}
       and (${options.attachedKind ?? null}::text is null or f.attached_kind = ${options.attachedKind ?? null})
       and (${options.attachedId ?? null}::uuid is null or f.attached_id = ${options.attachedId ?? null})
-      and (${cursor?.at ?? null}::timestamptz is null
-        or (f.created_at, f.id) < (${cursor?.at ?? null}::timestamptz, ${cursor?.id ?? null}::uuid))
+      ${after ? sql`and (f.created_at, f.id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : sql``}
     order by f.created_at desc, f.id desc
     limit ${limit + 1}`;
-  const page = rows.slice(0, limit);
-  return {
-    files: page.map(fileMetaFromRow),
-    nextCursor: rows.length > limit
-      ? encodeFileCursor(page.at(-1)!.created_at as Date | string, page.at(-1)!.id as string)
-      : null,
-  };
+  const { items, nextCursor } = cutPage(rows, limit, (row) => [row.page_at as string, row.id as string]);
+  return { files: items.map(fileMetaFromRow), nextCursor };
 }
 
 export interface SearchHit {
@@ -301,24 +297,6 @@ function fileMetaFromRow(row: Record<string, unknown>): FileMeta {
       positionTitle: (row.uploaded_by_position as string | null) ?? null,
     },
   };
-}
-
-function encodeFileCursor(at: Date | string, id: string): string {
-  return Buffer.from(JSON.stringify([new Date(at).toISOString(), id]), "utf8").toString("base64url");
-}
-
-function decodeFileCursor(cursor: string | undefined): { readonly at: string; readonly id: string } | null {
-  if (!cursor) return null;
-  try {
-    const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as unknown;
-    if (!Array.isArray(value) || value.length !== 2 || typeof value[0] !== "string" ||
-        !Number.isFinite(Date.parse(value[0])) || typeof value[1] !== "string" ||
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value[1]))
-      throw new Error("bad cursor");
-    return { at: value[0], id: value[1] };
-  } catch {
-    throw new AuthError(400, "invalid file cursor");
-  }
 }
 
 async function assertAttachmentTarget(

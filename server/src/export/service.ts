@@ -1,6 +1,7 @@
 import type { SitrepRow } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { AuthError, requireAdmin, type Principal } from "../auth/service.js";
+import { readAllPages } from "../db/cursor.js";
 import { currentLifelines, getSitrep, listSitreps } from "../sitreps/service.js";
 
 /**
@@ -68,7 +69,7 @@ export async function exportJurisdiction(
     });
   }
 
-  const sitrepList = await listSitreps(sql, actor, jurisdictionId);
+  const sitrepList = await readAllPages((page) => listSitreps(sql, actor, jurisdictionId, undefined, page));
   const sitreps: SitrepRow[] = [];
   for (const s of sitrepList) sitreps.push(await getSitrep(sql, actor, s.id));
   const lifelines = await currentLifelines(sql, actor, jurisdictionId);

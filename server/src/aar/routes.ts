@@ -9,6 +9,7 @@ import {
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
+import { pageQuery } from "../db/cursor.js";
 import {
   composeAndStoreAar,
   createCorrectiveAction,
@@ -115,11 +116,11 @@ export function aarRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { incidentId } = req.params as { incidentId: string };
-      const query = z.object({ periodRevision: periodRevisionSchema.optional() }).parse(req.query);
-      const observations = await withPerson(sql, req.principal.person.id, (tx) =>
-        listObservations(tx, req.principal, incidentId, query),
+      const { periodRevision, ...page } = z.object({ periodRevision: periodRevisionSchema.optional(), ...pageQuery }).parse(req.query);
+      const { items, nextCursor } = await withPerson(sql, req.principal.person.id, (tx) =>
+        listObservations(tx, req.principal, incidentId, { periodRevision }, page),
       );
-      return reply.send({ observations });
+      return reply.send({ observations: items, nextCursor });
     },
   );
 
@@ -216,8 +217,9 @@ export function aarRoutes(
         incidentId: z.string().uuid().optional(),
         periodRevision: periodRevisionSchema.optional(),
         includeComplete: z.enum(["true", "false"]).optional(),
+        ...pageQuery,
       }).parse(req.query);
-      const actions = await withPerson(sql, req.principal.person.id, (tx) =>
+      const { items, nextCursor } = await withPerson(sql, req.principal.person.id, (tx) =>
         listCorrectiveActions(tx, req.principal, jurisdictionId, {
           ...(query.status !== undefined ? { status: query.status } : {}),
           ...(query.priority !== undefined ? { priority: query.priority } : {}),
@@ -225,9 +227,9 @@ export function aarRoutes(
           ...(query.incidentId !== undefined ? { incidentId: query.incidentId } : {}),
           ...(query.periodRevision !== undefined ? { periodRevision: query.periodRevision } : {}),
           includeComplete: query.includeComplete === "true",
-        }),
+        }, query),
       );
-      return reply.send({ correctiveActions: actions });
+      return reply.send({ correctiveActions: items, nextCursor });
     },
   );
 }

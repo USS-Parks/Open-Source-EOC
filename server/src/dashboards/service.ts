@@ -19,6 +19,7 @@ import {
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
+import { CURSOR_AT_FORMAT, cutPage, decodeCursor } from "../db/cursor.js";
 import {
   getEffectiveBoard,
   getIncidentBoardReadShape,
@@ -446,24 +447,6 @@ function filtersFragment(
     ${dateTo ? sql`and coalesce(updated_at, created_at) < ${dateTo}` : sql``}` as never;
 }
 
-function cursorValue(cursor: string | undefined): { at: string; id: string } | null {
-  if (!cursor) return null;
-  try {
-    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as unknown;
-    if (!Array.isArray(parsed) || parsed.length !== 2 ||
-        typeof parsed[0] !== "string" || !Number.isFinite(Date.parse(parsed[0])) ||
-        typeof parsed[1] !== "string" ||
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(parsed[1]))
-      throw new Error("bad cursor");
-    return { at: parsed[0], id: parsed[1] };
-  } catch {
-    throw new AuthError(400, "invalid contribution cursor");
-  }
-}
-
-function contributionCursor(at: string, id: string): string {
-  return Buffer.from(JSON.stringify([at, id]), "utf8").toString("base64url");
-}
 
 export async function listDashboardContributions(
   sql: Sql,
@@ -514,7 +497,7 @@ export async function listDashboardContributions(
   const groupClause = groupFilter === undefined
     ? sql``
     : sql`and coalesce(data ->> ${groupFilter.field}, '') = ${String(groupFilter.equals)}`;
-  const parsedCursor = cursorValue(cursor);
+  const after = decodeCursor(cursor, ["at", "id"]);
   const limit = Math.max(1, Math.min(requestedLimit, 100));
   const geometryProjection = geometryKey && readable.has(geometryKey)
     ? sql`ST_AsGeoJSON(geom)::jsonb`
@@ -530,13 +513,13 @@ export async function listDashboardContributions(
       where board_id = ${boardId} ${baseFilters} ${groupClause}
         ${incidentClause} ${viewportClause}
     )
-    select id, data, at, at::text as cursor_at, ${geometryProjection} as geometry
+    select id, data, at, to_char(at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at,
+      ${geometryProjection} as geometry
     from matched
-    where (${parsedCursor?.at ?? null}::timestamptz is null
-      or (at, id) < (${parsedCursor?.at ?? null}::timestamptz, ${parsedCursor?.id ?? null}::uuid))
+    ${after ? sql`where (at, id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : sql``}
     order by at desc, id desc
     limit ${limit + 1}`;
-  const page = rows.slice(0, limit);
+  const { items: page, nextCursor } = cutPage(rows, limit, (row) => [row.page_at as string, row.id as string]);
   const columns = widget.kind === "list"
     ? widget.columns.filter((column) => readable.has(column))
     : [...readable];
@@ -558,12 +541,7 @@ export async function listDashboardContributions(
           : {}),
       };
     }),
-    nextCursor: rows.length > limit
-      ? contributionCursor(
-          page.at(-1)!.cursor_at as string,
-          page.at(-1)!.id as string,
-        )
-      : null,
+    nextCursor,
   };
 }
 

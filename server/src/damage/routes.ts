@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
+import { pageQuery } from "../db/cursor.js";
 import { AuthError } from "../auth/service.js";
 import {
   aggregate,
@@ -93,13 +94,14 @@ export function damageRoutes(
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
       const q = req.query as { status?: string; source?: string };
-      const rows = await withPerson(sql, req.principal.person.id, (tx) =>
+      const page = z.object(pageQuery).parse(req.query);
+      const { items, nextCursor } = await withPerson(sql, req.principal.person.id, (tx) =>
         listAssessments(tx, req.principal, jurisdictionId, {
           ...(q.status ? { status: q.status } : {}),
           ...(q.source ? { source: q.source } : {}),
-        }),
+        }, page),
       );
-      return reply.send({ assessments: rows });
+      return reply.send({ assessments: items, nextCursor });
     },
   );
 

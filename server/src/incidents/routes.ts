@@ -8,6 +8,7 @@ import {
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
+import { splitPageQuery } from "../db/cursor.js";
 import { getIncidentArea, listIncidentAreaHistory, reviseIncidentArea } from "./area.js";
 import { incidentParticipationRoutes } from "./participation-routes.js";
 import {
@@ -123,9 +124,10 @@ export function incidentRoutes(
 
   app.get("/api/v1/incidents/:incidentId/tasks", { preHandler: authenticate }, async (req) => {
     const incidentId = IncidentId.parse((req.params as { incidentId: string }).incidentId);
-    const filters = TaskListQuerySchema.parse(req.query);
+    const { page, filters: query } = splitPageQuery(req.query);
+    const filters = TaskListQuerySchema.parse(query);
     return withPerson(sql, req.principal.person.id, (tx) =>
-      listIncidentTasks(tx, req.principal, incidentId, filters));
+      listIncidentTasks(tx, req.principal, incidentId, filters, page));
   });
 
   app.patch(

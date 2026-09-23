@@ -279,6 +279,22 @@ function pageParams(page: PageOptions, params = new URLSearchParams()): URLSearc
   if (page.limit !== undefined) params.set("limit", String(page.limit));
   return params;
 }
+/**
+ * Read a keyset-paged list to its end, for pickers and lookups that must see
+ * every row. Operational lists show a page and load more instead.
+ */
+export async function readAllPages<T>(
+  read: (page: PageOptions) => Promise<{ readonly items: readonly T[]; readonly nextCursor: string | null | undefined }>,
+): Promise<T[]> {
+  const items: T[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await read(cursor ? { cursor, limit: 500 } : { limit: 500 });
+    items.push(...page.items);
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  return items;
+}
 export interface LifelineCurrent {
   readonly lifeline: string;
   readonly status: string;
@@ -311,7 +327,7 @@ export interface FeedHealth {
   readonly ingestAuthorized: boolean;
   readonly currentItemCount: number | null;
 }
-export type FeedItemsResponse = CopFeatureCollection & { readonly feed: FeedHealth };
+export type FeedItemsResponse = CopFeatureCollection & { readonly feed: FeedHealth; readonly nextCursor?: string | null };
 export type DatasetItemsPageResponse = CopFeatureCollection & {
   readonly page: { readonly limit: number; readonly offset: number; readonly returned: number; readonly hasMore: boolean };
 };
@@ -919,8 +935,10 @@ export class ApiClient {
     );
     return r.feeds;
   }
-  feedItems(feedId: string): Promise<FeedItemsResponse> {
-    return this.request<FeedItemsResponse>("GET", `/api/v1/feeds/${feedId}/items`);
+  /** A page of feed items, most recently fetched first; the default page holds up to 1,000. */
+  feedItems(feedId: string, page: PageOptions = {}): Promise<FeedItemsResponse> {
+    const params = pageParams(page);
+    return this.request<FeedItemsResponse>("GET", `/api/v1/feeds/${feedId}/items${params.size ? `?${params}` : ""}`);
   }
   createFeed(
     jurisdictionId: string,
@@ -1047,8 +1065,9 @@ export class ApiClient {
   closeIncident(incidentId: string): Promise<{ ok: true }> {
     return this.request<{ ok: true }>("POST", `/api/v1/incidents/${incidentId}/close`);
   }
-  listIncidentTasks(incidentId: string, filters: TaskListQuery = {}): Promise<TaskListResponse> {
-    const query = new URLSearchParams();
+  /** One page of the filtered tasks; the analytics count every match. */
+  listIncidentTasks(incidentId: string, filters: TaskListQuery = {}, page: PageOptions = {}): Promise<TaskListResponse> {
+    const query = pageParams(page);
     for (const [key, value] of Object.entries(filters)) {
       if (value !== undefined) query.set(key, value);
     }
@@ -1060,25 +1079,31 @@ export class ApiClient {
   completeIncidentTask(incidentId: string, taskId: string, operationId: string): Promise<TaskCompletionReceipt> {
     return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/tasks/${encodeURIComponent(taskId)}/complete`, { operationId });
   }
-  async listOperationalRelationships(incidentId: string): Promise<readonly OperationalRelationship[]> {
-    const result = await this.request<{ relationships: readonly OperationalRelationship[] }>(
-      "GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/operational-relationships`,
-    );
-    return result.relationships;
+  /** Every relationship of the incident, read page by page: its callers look links up by target. */
+  listOperationalRelationships(incidentId: string): Promise<readonly OperationalRelationship[]> {
+    return readAllPages(async (page) => {
+      const result = await this.request<{ relationships: readonly OperationalRelationship[]; nextCursor: string | null }>(
+        "GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/operational-relationships?${pageParams(page)}`,
+      );
+      return { items: result.relationships, nextCursor: result.nextCursor };
+    });
   }
   createOperationalRelationship(incidentId: string, input: OperationalRelationshipCreate): Promise<OperationalRelationship> {
     return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/operational-relationships`, input);
   }
-  async listResourceRequests(
+  /** Every request in scope, read page by page: the request pickers and the 213RR board need all of them. */
+  listResourceRequests(
     jurisdictionId: string,
     incidentId?: string | null,
   ): Promise<ResourceRequestSummaryContract[]> {
-    const query = incidentId ? `?incidentId=${encodeURIComponent(incidentId)}` : "";
-    const r = await this.request<{ requests: ResourceRequestSummaryContract[] }>(
-      "GET",
-      `/api/v1/jurisdictions/${jurisdictionId}/resource-requests${query}`,
-    );
-    return r.requests;
+    return readAllPages(async (page) => {
+      const query = pageParams(page, new URLSearchParams(incidentId ? { incidentId } : {}));
+      const r = await this.request<{ requests: ResourceRequestSummaryContract[]; nextCursor: string | null }>(
+        "GET",
+        `/api/v1/jurisdictions/${jurisdictionId}/resource-requests?${query}`,
+      );
+      return { items: r.requests, nextCursor: r.nextCursor };
+    });
   }
   submitResourceRequest(
     jurisdictionId: string,
@@ -1247,12 +1272,15 @@ export class ApiClient {
       body as unknown as Record<string, unknown>,
     );
   }
-  async listMessages(threadId: string, after = 0): Promise<Message[]> {
-    const r = await this.request<{ messages: Message[] }>(
-      "GET",
-      `/api/v1/threads/${threadId}/messages?after=${after}`,
-    );
-    return r.messages;
+  /** Every message after `after`, read page by page: a conversation shows the whole thread. */
+  listMessages(threadId: string, after = 0): Promise<Message[]> {
+    return readAllPages(async (page) => {
+      const r = await this.request<{ messages: Message[]; nextCursor: string | null }>(
+        "GET",
+        `/api/v1/threads/${threadId}/messages?${pageParams(page, new URLSearchParams({ after: String(after) }))}`,
+      );
+      return { items: r.messages, nextCursor: r.nextCursor };
+    });
   }
   postMessage(threadId: string, body: string): Promise<{ id: string; deduplicated: boolean }> {
     return this.request<{ id: string; deduplicated: boolean }>(
@@ -1337,18 +1365,22 @@ export class ApiClient {
       body as unknown as Record<string, unknown>,
     );
   }
-  async listIaps(incidentId: string): Promise<IapListItem[]> {
-    const r = await this.request<{ iaps: IapListItem[] }>(
-      "GET",
-      `/api/v1/incidents/${incidentId}/iaps`,
-    );
-    return r.iaps;
+  /** Every IAP of the incident, read page by page, for the planning objective picker. */
+  listIaps(incidentId: string): Promise<IapListItem[]> {
+    return readAllPages(async (page) => {
+      const r = await this.request<{ iaps: IapListItem[]; nextCursor: string | null }>(
+        "GET",
+        `/api/v1/incidents/${incidentId}/iaps?${pageParams(page)}`,
+      );
+      return { items: r.iaps, nextCursor: r.nextCursor };
+    });
   }
   getIap(iapId: string): Promise<IapResult> {
     return this.request<IapResult>("GET", `/api/v1/iap/${iapId}`);
   }
-  queryIapWorkspace(incidentId: string, query: IapWorkspaceQuery): Promise<IapWorkspaceResponse> {
-    const params = new URLSearchParams();
+  /** One page of the workspace, newest first; the summary and facets count every match. */
+  queryIapWorkspace(incidentId: string, query: IapWorkspaceQuery, page: PageOptions = {}): Promise<IapWorkspaceResponse> {
+    const params = pageParams(page);
     for (const [key, value] of Object.entries(query)) {
       if (value !== undefined) params.set(key, String(value));
     }

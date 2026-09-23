@@ -3,6 +3,7 @@ import { z } from "zod";
 import { BoardTemplateSchema, effectiveFields, geometryFieldKey, type FieldDef } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
+import { CURSOR_AT_FORMAT, cutPage, decodeCursor, pageQuery } from "../db/cursor.js";
 import { getEffectiveBoard, visibleFields } from "../boards/service.js";
 
 /**
@@ -18,6 +19,7 @@ const ItemsQuery = z.object({
     .regex(/^-?[\d.]+,-?[\d.]+,-?[\d.]+,-?[\d.]+$/)
     .optional(),
   limit: z.coerce.number().int().min(1).max(1000).default(100),
+  cursor: pageQuery.cursor,
 });
 
 const CONFORMANCE = [
@@ -86,16 +88,15 @@ export function geoRoutes(
         if (!geomKey) return null;
         const readable = new Set(visibleFields(board).map((f) => f.key));
         const bbox = query.bbox?.split(",").map(Number);
-        const rows = bbox
-          ? await tx`
-              select id, data from board_records
-              where board_id = ${boardId} and geom is not null
-                and geom && ST_MakeEnvelope(${bbox[0]!}, ${bbox[1]!}, ${bbox[2]!}, ${bbox[3]!}, 4326)
-              order by created_at desc limit ${query.limit}`
-          : await tx`
-              select id, data from board_records
-              where board_id = ${boardId} and geom is not null
-              order by created_at desc limit ${query.limit}`;
+        const after = decodeCursor(query.cursor, ["at", "id"]);
+        const fetched = await tx`
+          select id, data, to_char(created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
+          from board_records
+          where board_id = ${boardId} and geom is not null
+            ${bbox ? tx`and geom && ST_MakeEnvelope(${bbox[0]!}, ${bbox[1]!}, ${bbox[2]!}, ${bbox[3]!}, 4326)` : tx``}
+            ${after ? tx`and (created_at, id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : tx``}
+          order by created_at desc, id desc limit ${query.limit + 1}`;
+        const { items: rows, nextCursor } = cutPage(fetched, query.limit, (r) => [r.page_at as string, r.id as string]);
         const features = rows.map((r) => {
           const data = r.data as Record<string, unknown>;
           const properties: Record<string, unknown> = {};
@@ -109,13 +110,24 @@ export function geoRoutes(
             properties,
           };
         });
-        return features;
+        return { features, nextCursor };
       });
       if (result === null) return reply.status(404).send({ error: "not a feature collection" });
+      // OGC API Features paging: the next page is a `next` link, not a body field.
+      const next = result.nextCursor === null ? [] : [{
+        rel: "next",
+        href: `/api/v1/ogc/collections/${boardId}/items?${new URLSearchParams({
+          ...(query.bbox ? { bbox: query.bbox } : {}),
+          limit: String(query.limit),
+          cursor: result.nextCursor,
+        })}`,
+        type: "application/geo+json",
+      }];
       return reply.header("content-type", "application/geo+json").send({
         type: "FeatureCollection",
-        numberReturned: result.length,
-        features: result,
+        numberReturned: result.features.length,
+        features: result.features,
+        links: next,
       });
     },
   );

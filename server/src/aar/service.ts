@@ -16,6 +16,9 @@ import type { Sql } from "../db/client.js";
 import { AuthError, requireMember, requireWriter, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 import { exportChronology } from "../audit/service.js";
+import {
+  CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, cutPage, decodeCursor, readAllPages, type Page, type PageRequest,
+} from "../db/cursor.js";
 import { resolveWorkflowAssignment, type ResolvedWorkflowAssignment } from "../boards/workflow.js";
 import { getIncidentAuthority } from "../incidents/participation.js";
 
@@ -91,29 +94,38 @@ export async function listObservations(
   sql: Sql,
   actor: Principal,
   incidentId: string,
-  options: { periodRevision?: number | undefined } = {},
-): Promise<AarObservation[]> {
+  options: { periodRevision?: number | undefined },
+  page: PageRequest,
+): Promise<Page<AarObservation>> {
   const { jurisdictionId } = await incidentJurisdiction(sql, incidentId);
   requireMember(actor, jurisdictionId);
   await operationalPeriod(sql, incidentId, options.periodRevision);
+  const after = decodeCursor(page.cursor, ["at", "id"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
   const rows = await sql`
     select id, capability, capability_element, kind, observation, recommendation,
-      operational_period_revision, created_at
+      operational_period_revision, created_at,
+      to_char(created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
     from aar_observations
     where incident_id = ${incidentId}
       and (${options.periodRevision ?? null}::integer is null
         or operational_period_revision = ${options.periodRevision ?? null})
-    order by created_at, id`;
-  return rows.map((r) => ({
-    id: r.id as string,
-    capability: r.capability as string,
-    capabilityElement: (r.capability_element as string | null) ?? "none",
-    kind: r.kind as "strength" | "improvement",
-    observation: r.observation as string,
-    recommendation: (r.recommendation as string | null) ?? null,
-    operationalPeriodRevision: (r.operational_period_revision as number | null) ?? null,
-    createdAt: new Date(r.created_at as Date | string).toISOString(),
-  }));
+      ${after ? sql`and (created_at, id) > (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : sql``}
+    order by created_at, id limit ${limit + 1}`;
+  const { items, nextCursor } = cutPage(rows, limit, (r) => [r.page_at as string, r.id as string]);
+  return {
+    items: items.map((r) => ({
+      id: r.id as string,
+      capability: r.capability as string,
+      capabilityElement: (r.capability_element as string | null) ?? "none",
+      kind: r.kind as "strength" | "improvement",
+      observation: r.observation as string,
+      recommendation: (r.recommendation as string | null) ?? null,
+      operationalPeriodRevision: (r.operational_period_revision as number | null) ?? null,
+      createdAt: new Date(r.created_at as Date | string).toISOString(),
+    })),
+    nextCursor,
+  };
 }
 
 export async function createCorrectiveAction(
@@ -247,14 +259,18 @@ export async function listCorrectiveActions(
     incidentId?: string | undefined;
     periodRevision?: number | undefined;
     includeComplete?: boolean;
-  } = {},
-): Promise<CorrectiveActionRow[]> {
+  },
+  page: PageRequest,
+): Promise<Page<CorrectiveActionRow>> {
   requireMember(actor, jurisdictionId);
   if (options.periodRevision !== undefined && !options.incidentId)
     throw new AuthError(400, "operational period requires an incident filter");
   if (options.incidentId) await operationalPeriod(sql, options.incidentId, options.periodRevision);
+  const after = decodeCursor(page.cursor, ["at", "id"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
   const rows = await sql`
     select ca.*, completed.display_name as completed_by_name,
+      to_char(ca.created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at,
       coalesce(ca.assignment_snapshot ->> 'positionTitle',
         ca.assignment_snapshot ->> 'incidentPositionTitle', pos.title, per.display_name) as owner
     from corrective_actions ca
@@ -269,8 +285,10 @@ export async function listCorrectiveActions(
       and (${options.periodRevision ?? null}::integer is null
         or ca.operational_period_revision = ${options.periodRevision ?? null})
       and (${options.includeComplete ?? false} or ca.status <> 'complete')
-    order by ca.created_at, ca.id`;
-  return rows.map(toCorrectiveAction);
+      ${after ? sql`and (ca.created_at, ca.id) > (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : sql``}
+    order by ca.created_at, ca.id limit ${limit + 1}`;
+  const { items, nextCursor } = cutPage(rows, limit, (r) => [r.page_at as string, r.id as string]);
+  return { items: items.map(toCorrectiveAction), nextCursor };
 }
 
 async function loadCorrectiveActionForUpdate(sql: Sql, id: string): Promise<Record<string, unknown>> {
@@ -399,12 +417,12 @@ export async function getAarAnalytics(
 ) {
   const { jurisdictionId } = await incidentJurisdiction(sql, incidentId);
   requireMember(actor, jurisdictionId);
-  const observations = await listObservations(sql, actor, incidentId, options);
-  const correctiveActions = await listCorrectiveActions(sql, actor, jurisdictionId, {
+  const observations = await readAllPages((page) => listObservations(sql, actor, incidentId, options, page));
+  const correctiveActions = await readAllPages((page) => listCorrectiveActions(sql, actor, jurisdictionId, {
     includeComplete: true,
     incidentId,
     ...(options.periodRevision !== undefined ? { periodRevision: options.periodRevision } : {}),
-  });
+  }, page));
   return { observations, correctiveActions, analytics: summarizeAar(observations, correctiveActions) };
 }
 
@@ -424,11 +442,11 @@ export async function composeAndStoreAar(
   const selectedPeriod = await operationalPeriod(sql, incidentId, input.periodRevision);
   const periodOptions = input.periodRevision === undefined ? {}
     : { periodRevision: input.periodRevision };
-  const observations = await listObservations(sql, actor, incidentId, periodOptions);
-  const correctiveActions: AarCorrectiveAction[] = await listCorrectiveActions(
+  const observations = await readAllPages((page) => listObservations(sql, actor, incidentId, periodOptions, page));
+  const correctiveActions: AarCorrectiveAction[] = await readAllPages((page) => listCorrectiveActions(
     sql, actor, jurisdictionId,
-    { includeComplete: true, incidentId, ...periodOptions },
-  );
+    { includeComplete: true, incidentId, ...periodOptions }, page,
+  ));
   const chronology = await exportChronology(sql, actor, {
     jurisdictionId,
     ...(selectedPeriod ? {

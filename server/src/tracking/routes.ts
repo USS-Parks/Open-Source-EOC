@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
+import { pageQuery } from "../db/cursor.js";
 import { getObject, registerObject, reunify, scanEvent } from "./service.js";
 
 const RegisterBody = z.object({
@@ -55,8 +56,9 @@ export function trackingRoutes(
 
   app.get("/api/v1/tracked-objects/:id", { preHandler: authenticate }, async (req, reply) => {
     const { id } = req.params as { id: string };
+    const page = z.object(pageQuery).parse(req.query);
     const result = await withPerson(sql, req.principal.person.id, (tx) =>
-      getObject(tx, req.principal, id),
+      getObject(tx, req.principal, id, page),
     );
     return reply.send(result);
   });

@@ -30,6 +30,9 @@ import {
 import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
+import {
+  CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, cutPage, decodeCursor, readAllPages, type Page, type PageRequest,
+} from "../db/cursor.js";
 import { getIncidentBoardReadShape, visibleFields } from "../boards/service.js";
 import { getIncidentAuthority, type IncidentAuthority } from "../incidents/participation.js";
 import { resolveWorkflowAssignment } from "../boards/workflow.js";
@@ -766,12 +769,17 @@ function facet(values: readonly { key: string; label: string }[]): { key: string
   return [...counts.values()].sort((a, b) => a.label.localeCompare(b.label));
 }
 
-/** Query the incident-isolated working/published IAP workspace. */
+/**
+ * Query the incident-isolated working/published IAP workspace. The summary
+ * and facets count the whole filtered set, so every matching row is read;
+ * only the page after the cursor is returned.
+ */
 export async function queryIapWorkspace(
   sql: Sql,
   actor: Principal,
   incidentId: string,
   query: IapWorkspaceQuery,
+  page: PageRequest,
 ): Promise<IapWorkspaceResponse> {
   await getIncidentAuthority(sql, actor, incidentId);
   if (query.periodRevision !== undefined) {
@@ -781,8 +789,11 @@ export async function queryIapWorkspace(
         and period_label is not null and period_starts_at is not null and period_ends_at is not null`;
     if (!period) throw new AuthError(400, "operational period revision is not available for this incident");
   }
+  const after = decodeCursor(page.cursor, ["at", "id"]);
   const rows = await sql`
-    select i.id, i.operational_period, i.period_revision, i.status, i.form_ids,
+    select to_char(i.created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at,
+      ${after ? sql`(i.created_at, i.id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : sql`true`} as on_page,
+      i.id, i.operational_period, i.period_revision, i.status, i.form_ids,
       i.created_at, i.submitted_at, i.approved_at,
       prep.display_name as prepared_by, submitter.display_name as submitted_by,
       approver.display_name as approved_by,
@@ -848,8 +859,11 @@ export async function queryIapWorkspace(
   const byState = Object.fromEntries(states.map((state) => [
     state, iaps.filter((iap) => iap.status === state).length,
   ])) as Record<IapDisplayState, number>;
+  const onPage = rows.flatMap((row, index) => row.on_page ? [{ at: row.page_at as string, iap: iaps[index]! }] : []);
+  const paged = cutPage(onPage, page.limit ?? DEFAULT_PAGE_LIMIT, (entry) => [entry.at, entry.iap.id]);
   return {
-    iaps,
+    iaps: paged.items.map((entry) => entry.iap),
+    nextCursor: paged.nextCursor,
     query,
     summary: {
       total: iaps.length,
@@ -880,8 +894,11 @@ export async function listIaps(
   actor: Principal,
   incidentId: string,
 ): Promise<IapListItem[]> {
-  const workspace = await queryIapWorkspace(sql, actor, incidentId, { view: "all" });
-  return workspace.iaps.map((iap) => ({
+  const iaps = await readAllPages(async (page) => {
+    const workspace = await queryIapWorkspace(sql, actor, incidentId, { view: "all" }, page);
+    return { items: [...workspace.iaps], nextCursor: workspace.nextCursor ?? null };
+  });
+  return iaps.map((iap) => ({
     id: iap.id,
     operationalPeriod: iap.operationalPeriod,
     status: iap.status,
@@ -911,11 +928,14 @@ export async function listIapRevisions(
   sql: Sql,
   actor: Principal,
   iapId: string,
-): Promise<IapRevisionSummary[]> {
+  page: PageRequest,
+): Promise<Page<IapRevisionSummary>> {
   const [selected] = await sql`
     select incident_id, revision_root_id from iaps where id = ${iapId}`;
   if (!selected) throw new AuthError(404, "IAP not found");
   await getIncidentAuthority(sql, actor, selected.incident_id as string);
+  const after = decodeCursor(page.cursor, ["seq", "id"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
   const rows = await sql`
     select i.id, i.revision_number, i.content_revision, i.status, i.supersedes_iap_id,
       i.created_at, i.approved_at, prep.display_name as prepared_by,
@@ -924,18 +944,23 @@ export async function listIapRevisions(
     left join persons prep on prep.id = i.prepared_by
     left join persons approver on approver.id = i.approved_by
     where i.revision_root_id = ${selected.revision_root_id as string}
-    order by i.revision_number`;
-  return rows.map((row) => ({
-    id: row.id as string,
-    revisionNumber: Number(row.revision_number),
-    contentRevision: Number(row.content_revision),
-    status: row.status as string,
-    supersedesIapId: (row.supersedes_iap_id as string | null) ?? null,
-    createdAt: iso(row.created_at),
-    preparedBy: (row.prepared_by as string | null) ?? null,
-    approvedBy: (row.approved_by as string | null) ?? null,
-    approvedAt: row.approved_at ? iso(row.approved_at) : null,
-  }));
+      ${after ? sql`and (i.revision_number, i.id) > (${after[0]!}::integer, ${after[1]!}::uuid)` : sql``}
+    order by i.revision_number, i.id limit ${limit + 1}`;
+  const { items, nextCursor } = cutPage(rows, limit, (row) => [String(row.revision_number), row.id as string]);
+  return {
+    items: items.map((row) => ({
+      id: row.id as string,
+      revisionNumber: Number(row.revision_number),
+      contentRevision: Number(row.content_revision),
+      status: row.status as string,
+      supersedesIapId: (row.supersedes_iap_id as string | null) ?? null,
+      createdAt: iso(row.created_at),
+      preparedBy: (row.prepared_by as string | null) ?? null,
+      approvedBy: (row.approved_by as string | null) ?? null,
+      approvedAt: row.approved_at ? iso(row.approved_at) : null,
+    })),
+    nextCursor,
+  };
 }
 
 /** Resolve one exact accessible lineage revision and render its stored snapshot. */

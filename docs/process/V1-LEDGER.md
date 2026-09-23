@@ -715,3 +715,63 @@ tagging remain separately gated as section 1 of the roster states.
   to W3.0 and W3.5.
 - **Rollback:** revert the code; the 0112 schema is additive and the prior
   code runs against it.
+
+## V1 W2.11: remaining list pagination
+
+- **Why this unit exists.** W2.3 deferred every unbounded list outside its
+  files, and gate line 5 requires every list endpoint paginated. The unit is
+  added to the roster's W2 table in this commit with the next free number.
+- **What changed.** These lists page by cursor through the shared helper,
+  keeping their array key and adding `nextCursor`, default 100 and maximum
+  500: threads; messages by sequence, where `after` still works and gains a
+  limit; CAP alerts; damage reports; sitreps; the IAP workspace, whose summary
+  and facets still count the whole filtered set; IAP revisions; resource
+  requests; AAR observations; corrective actions; staffing check-ins, with
+  vacancies now decided in SQL over every open check-in; the tracking custody
+  chain; operational relationships, where the rule hiding an IAP-objective
+  link the caller cannot read moved into SQL so pages stay full; and incident
+  tasks, whose analytics still count every match. Feed items gain a cursor at
+  their existing 1,000 page; OGC items gain an OGC API Features `next` link at
+  their existing limits. The file and dashboard-contribution cursors use the
+  shared helper with microsecond timestamps bound as text.
+- **Callers.** Exports, the AAR analytics and composition, the thread export
+  and the server-side IAP list read every page. The web client's pickers and
+  lookups that need the whole set read every page, so none silently loses rows;
+  the relationship picker reads the board view to the end instead of gaining a
+  search, because it is a plain select with no text input. The Tasks table
+  gains "Load more".
+- **Deviations, recorded.** Screens left on the first page: the Messages
+  thread list, the Alerts CAP list whose filters run in the browser over that
+  page, the Sitrep archive, the IAP workspace and revision lists, and the map
+  layers at their prior caps. Their load-more controls go to those surfaces'
+  owners in W3. Client methods whose screens stay on the first page did not
+  gain cursor parameters no caller would pass. `nextCursor` is optional on the
+  shared task and IAP workspace response types. A non-integer `after` now
+  answers 400 instead of failing with 500, and file and dashboard cursors
+  issued before the upgrade answer 400 and the client restarts from the first
+  page. Ownership deviations: `server/src/export/service.ts`, two shared
+  contract types, and the relationships browser test, whose waits now match
+  the path because the client adds `limit`.
+- **Left unpaginated with reasons:** the AAR analytics route, which is its
+  summary's input; reunification search, capped at 25 rows; vacant positions
+  and upcoming shifts, capped at 50; the thread export, a complete record by
+  design; and the small lists W2.3 named.
+- **Schema:** migration `0109_list_pagination.sql` adds (sort key, id)
+  indexes for thirteen lists and drops seven indexes they supersede.
+- **Contract:** no new routes; responses gain `nextCursor` and OGC items
+  gain `links`. No dependency change.
+- **Verification:** new `list-pagination-operational.test.ts`, 37 tests: 18
+  cursor walks over rows whose sort timestamps differ by microseconds, 18
+  refusals of a malformed cursor and an oversized limit, and the legacy
+  `after`. In the lane: 30 neighbouring server suites in two batches, 81 of 81
+  and 133 of 133; 14 web files 90 of 90; `tasks-browser` 1 of 1;
+  `operational-relationships-browser` 1 of 1 after its wait fix. Run as one
+  30-file batch, ipaws and resource timed out under load and passed alone,
+  per HZ-C. After rebasing onto W2.2 through W2.9 and W2.7, two batches
+  passed 103 of 103 and 207 of 207, the second including every web app test.
+  TypeScript and ESLint clean. Link checker 69 files.
+- **Evidence level:** unit, real-database and browser.
+- **Known limit:** a cursor walk over feed items that overlaps a poll can miss
+  or repeat an item the poll re-fetched, because the list sorts by fetch time.
+- **Rollback:** revert the commit, drop the new indexes and recreate the
+  seven dropped ones.

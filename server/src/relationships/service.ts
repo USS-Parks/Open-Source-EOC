@@ -1,6 +1,7 @@
 import { deriveRecordValues, type IapDocument, type OperationalRelationship, type OperationalRelationshipCreate, type OperationalRelationshipTarget } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
+import { CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, cutPage, decodeCursor, type Page, type PageRequest } from "../db/cursor.js";
 import { getIncidentBoardReadShape, visibleFields } from "../boards/service.js";
 import { getIncidentAuthority } from "../incidents/participation.js";
 import { requireAssessmentWrite } from "../lifelines/assessment-common.js";
@@ -135,16 +136,20 @@ export async function createOperationalRelationship(sql: Sql, actor: Principal, 
   return relationship;
 }
 
-export async function listOperationalRelationships(sql: Sql, actor: Principal, incidentId: string): Promise<readonly OperationalRelationship[]> {
+export async function listOperationalRelationships(sql: Sql, actor: Principal, incidentId: string, page: PageRequest): Promise<Page<OperationalRelationship>> {
   await getIncidentAuthority(sql, actor, incidentId);
+  const after = decodeCursor(page.cursor, ["at", "id"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
+  // An IAP objective link shows only while the caller can read its IAP.
   const rows = await sql`select r.*, p.display_name as person_name, j.name as organization_name,
-    i.id as target_iap_visible_id, i.content_revision as current_iap_content_revision, br.board_id as target_board_id,
-    br.data as target_board_data
+    i.content_revision as current_iap_content_revision, br.board_id as target_board_id,
+    br.data as target_board_data, to_char(r.created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
     from operational_relationships r join persons p on p.id = r.created_by join jurisdictions j on j.id = r.organization_id
     left join iaps i on i.id = r.target_iap_id
     left join board_records br on r.target_kind = 'board_record' and br.id = r.target_id
-    where r.incident_id = ${incidentId} order by r.created_at desc, r.id desc`;
-  const visible = (rows as Row[]).filter((row) =>
-    row.target_kind !== "iap_objective" || row.target_iap_visible_id !== null);
-  return Promise.all(visible.map((row) => toRelationship(sql, actor, incidentId, row)));
+    where r.incident_id = ${incidentId} and (r.target_kind <> 'iap_objective' or i.id is not null)
+      ${after ? sql`and (r.created_at, r.id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : sql``}
+    order by r.created_at desc, r.id desc limit ${limit + 1}`;
+  const { items, nextCursor } = cutPage(rows as Row[], limit, (row) => [row.page_at as string, row.id as string]);
+  return { items: await Promise.all(items.map((row) => toRelationship(sql, actor, incidentId, row))), nextCursor };
 }
