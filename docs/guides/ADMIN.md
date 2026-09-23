@@ -106,3 +106,80 @@ blocks later incident mutations.
 The audit trail is append-only. Corrections are new attributed actions rather
 than edits to history. Use domain screens for operational decisions; database
 access is not a routine administrative workflow.
+
+## Retention and audit export
+
+Nothing is deleted by default. A jurisdiction admin sets a retention period in
+days per data class with `PUT /api/v1/jurisdictions/:jurisdictionId/retention`,
+for example `{"policies": [{"dataClass": "feed_items", "retentionDays": 90}]}`;
+`null` keeps a class indefinitely. `GET` on the same path lists every class.
+The scheduler's purge runs hourly (`OPENEOC_SCHEDULER_RETENTION_MS`), deletes
+at most 5,000 expired rows per class per jurisdiction per run, and records a
+`retention.purged` audit event with the count per table, attributed to the
+admin who last set the jurisdiction's policy.
+
+| Data class | Tables | A row expires when |
+|---|---|---|
+| `notifications` | `notifications` and their `delivery_outbox` rows | it was created before the period and is not pending |
+| `deliveries` | `delivery_outbox`, `federation_outbox` | a delivered or dead delivery was created before the period; a federation entry was received by the peer before the period |
+| `feed_items` | `feed_items` | its source has not returned it within the period |
+| `tracking` | `tracked_objects`, `tracking_events` | the object's latest event is older than the period; the whole chain goes together |
+| `staff_checkins` | `staff_checkins` | it was checked out before the period; open check-ins stay |
+
+Never purged: the audit trail, meaning `audit_events` and every table guarded
+by an append-only trigger, and incident records, including those of closed
+incidents, because records retention law varies by jurisdiction. The audit
+trail leaves only by export. Tracking and facilities are optional
+integrations; this version does not treat them as holding patient-level data.
+
+### Export the audit trail
+
+`GET /api/v1/jurisdictions/:jurisdictionId/audit/export?format=csv` (or
+`format=json`) returns one page of the jurisdiction's audit events to an
+admin, 100 by default and up to 500 with `limit`. Pass the next page's cursor
+as `cursor`. CSV repeats its header row on every page and carries the next
+cursor in the `x-next-cursor` response header, absent on the last page. A cell
+that begins with `=`, `+`, `-`, `@`, a tab or a carriage return gains a leading
+single quote so a spreadsheet never runs it as a formula.
+
+`format=json` requires `OPENEOC_SECRET_KEY` and answers 409 without it. It
+returns `{ page, signature }`, where `page` holds the entries, `firstSeq`,
+`lastSeq`, the `cursor` it was read from and `nextCursor`. To verify a page,
+derive a key with HKDF-SHA256 from the UTF-8 bytes of `OPENEOC_SECRET_KEY`,
+an empty salt and the info string `openeoc audit export v1`, 32 bytes long;
+compute HMAC-SHA256 over the RFC 8785 canonical JSON of `page` (object keys
+sorted, no whitespace); compare it with `signature.value` in hex. A set of
+pages is complete when the first page's `cursor` is null, each later page's
+`cursor` equals the previous page's `nextCursor`, and the last page's
+`nextCursor` is null. Sequence numbers are shared by all jurisdictions, so gaps
+between them are expected.
+
+```js
+// node verify.mjs page.json, with OPENEOC_SECRET_KEY in the environment
+import { createHmac, hkdfSync } from "node:crypto";
+import { readFileSync } from "node:fs";
+const canonical = (v) => Array.isArray(v) ? `[${v.map(canonical).join(",")}]`
+  : v !== null && typeof v === "object"
+    ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(",")}}`
+    : JSON.stringify(v);
+const { page, signature } = JSON.parse(readFileSync(process.argv[2], "utf8"));
+const key = Buffer.from(hkdfSync("sha256", process.env.OPENEOC_SECRET_KEY, "", "openeoc audit export v1", 32));
+const mac = createHmac("sha256", key).update(canonical(page)).digest("hex");
+console.log(mac === signature.value ? "valid" : "INVALID");
+```
+
+The signature is a keyed MAC: whoever can verify it could also produce one, so
+it proves a page came from a holder of the server key, not from a particular
+person.
+
+### Forward the audit trail to syslog
+
+Set `OPENEOC_SYSLOG_URL` to `udp://host:514` or `tcp://host:514`. The scheduler
+then sends every jurisdiction's audit events as RFC 5424 messages (facility log
+audit, severity informational, message id `audit`, the event as JSON) every 10
+seconds (`OPENEOC_SCHEDULER_SYSLOG_MS`). TCP frames each message by octet count
+(RFC 6587); a UDP message is cut at 8 KiB, so use TCP for large events.
+Forwarding starts with events written after the sink first runs; use the export
+for earlier history. A failed send is retried on the next run, so after a
+failure an event can arrive twice but is not lost. A long-running database
+transaction holds forwarding back until it finishes.

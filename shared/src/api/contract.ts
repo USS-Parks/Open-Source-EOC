@@ -90,6 +90,7 @@ GET /api/v1/incidents/:incidentId/participants
 GET /api/v1/incidents/:incidentId/saved-state
 GET /api/v1/incidents/:incidentId/saved-state/:kind/:key
 GET /api/v1/incidents/:incidentId/tasks
+GET /api/v1/jurisdictions/:jurisdictionId/audit/export
 GET /api/v1/jurisdictions/:jurisdictionId/boards
 GET /api/v1/jurisdictions/:jurisdictionId/cap/alerts
 GET /api/v1/jurisdictions/:jurisdictionId/chronology
@@ -111,6 +112,7 @@ GET /api/v1/jurisdictions/:jurisdictionId/lifelines
 GET /api/v1/jurisdictions/:jurisdictionId/meetings/config
 GET /api/v1/jurisdictions/:jurisdictionId/positions
 GET /api/v1/jurisdictions/:jurisdictionId/resource-requests
+GET /api/v1/jurisdictions/:jurisdictionId/retention
 GET /api/v1/jurisdictions/:jurisdictionId/reunification
 GET /api/v1/jurisdictions/:jurisdictionId/search
 GET /api/v1/jurisdictions/:jurisdictionId/sitreps
@@ -266,6 +268,7 @@ PUT /api/v1/jurisdictions/:jurisdictionId/ipaws/config
 PUT /api/v1/jurisdictions/:jurisdictionId/lifelines
 PUT /api/v1/jurisdictions/:jurisdictionId/meetings/config
 PUT /api/v1/jurisdictions/:jurisdictionId/messaging-settings
+PUT /api/v1/jurisdictions/:jurisdictionId/retention
 PUT /api/v1/peers/:peerId/link
 `
   .trim()

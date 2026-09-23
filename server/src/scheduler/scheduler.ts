@@ -2,17 +2,20 @@ import postgres from "postgres";
 import type { FastifyBaseLogger } from "fastify";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
+import { forwardAudit, syslogTarget } from "../audit/syslog.js";
 import { principalForPerson, requireAdmin, type Principal } from "../auth/service.js";
 import { runDueFeeds } from "../feeds/service.js";
 import { runDueBriefings } from "../meetings/service.js";
 import { runScheduledRules } from "../notify/engine.js";
 import { DeliveryWorker } from "../notify/outbox.js";
+import { purgeExpired } from "../retention/service.js";
 
 /**
  * The in-process scheduler. Every node runs one; the node holding a
  * PostgreSQL session advisory lock is the leader and the only one that runs
- * the jobs: scheduled notification rules, due briefings, feed polls and the
- * outbox worker. The others retry the lock on an interval, so when the leader
+ * the jobs: scheduled notification rules, due briefings, feed polls, the
+ * outbox worker, the retention purge and, when configured, audit forwarding
+ * to syslog. The others retry the lock on an interval, so when the leader
  * stops or its session ends one of them takes over. A brief overlap during a
  * handover is tolerated: rule firing and outbox claims are atomic, and feed
  * items upsert.
@@ -22,7 +25,7 @@ import { DeliveryWorker } from "../notify/outbox.js";
  * the pool, and the stale handle would then run queries on another session.
  */
 
-export type JobName = "rules" | "briefings" | "feeds" | "outbox";
+export type JobName = "rules" | "briefings" | "feeds" | "outbox" | "retention" | "syslog";
 
 export interface SchedulerOptions {
   /** Connection string for the lock session; the entrypoint passes the runtime URL. */
@@ -34,6 +37,8 @@ export interface SchedulerOptions {
   readonly leaderRetryMs?: number;
   /** Run due briefings; defaults to the meetings integration being enabled. */
   readonly briefings?: boolean;
+  /** Where to forward audit events; defaults to OPENEOC_SYSLOG_URL, and unset is off. */
+  readonly syslogUrl?: string;
 }
 
 export interface SchedulerStatus {
@@ -47,6 +52,8 @@ const DEFAULT_MS: Record<JobName, number> = {
   briefings: 60_000,
   feeds: 60_000,
   outbox: 2_000,
+  retention: 3_600_000,
+  syslog: 10_000,
 };
 
 // ponytail: one fixed key per database; two applications sharing one database
@@ -85,15 +92,18 @@ export class Scheduler {
       onnotice: () => undefined,
     });
     this.retryMs = options.leaderRetryMs ?? msFromEnv("OPENEOC_SCHEDULER_LEADER_MS", 10_000);
+    const syslog = syslogTarget(options.syslogUrl ?? process.env.OPENEOC_SYSLOG_URL);
     const runs: Record<JobName, () => Promise<unknown>> = {
       rules: () => this.runRules(),
       briefings: () => this.runBriefings(),
       feeds: () => runDueFeeds(this.sql),
       outbox: () => this.delivery.drain(),
+      retention: () => this.runRetention(),
+      syslog: () => (syslog ? forwardAudit(this.sql, syslog) : Promise.resolve(0)),
     };
     const briefings = options.briefings ?? meetingsEnabled();
     this.jobs = (Object.keys(runs) as JobName[])
-      .filter((name) => name !== "briefings" || briefings)
+      .filter((name) => (name !== "briefings" || briefings) && (name !== "syslog" || syslog))
       .map((name) => ({
         name,
         ms:
@@ -192,6 +202,11 @@ export class Scheduler {
       requireAdmin(actor, jurisdictionId);
       await runScheduledRules(this.sql, actor, jurisdictionId, now);
     });
+  }
+
+  private async runRetention(): Promise<void> {
+    const purged = await purgeExpired(this.sql);
+    if (Object.keys(purged).length > 0) this.log.info({ purged }, "retention purge");
   }
 
   private async runBriefings(): Promise<void> {

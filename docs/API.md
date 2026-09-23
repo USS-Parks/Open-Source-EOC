@@ -25,6 +25,7 @@ set, and then require that value as a bearer token.
 ### audit
 
 - `POST /api/v1/audit/:eventId/corrections`: Run audit corrections (auth: bearer; audience: operator)
+- `GET /api/v1/jurisdictions/:jurisdictionId/audit/export`: Read jurisdictions audit export (auth: bearer; audience: operator)
 
 ### auth
 
@@ -357,6 +358,11 @@ set, and then require that value as a bearer token.
 - `POST /api/v1/resource-requests/:id/transition`: Run resource requests transition (auth: bearer; audience: operator)
 - `POST /api/v1/resource-requests/receive`: Run resource requests receive (auth: peer-token; audience: machine)
 - `POST /api/v1/resource-requests/report`: Run resource requests report (auth: peer-token; audience: machine)
+
+### retention
+
+- `GET /api/v1/jurisdictions/:jurisdictionId/retention`: Read jurisdictions retention (auth: bearer; audience: operator)
+- `PUT /api/v1/jurisdictions/:jurisdictionId/retention`: Set jurisdictions retention (auth: bearer; audience: operator)
 
 ### reunification
 

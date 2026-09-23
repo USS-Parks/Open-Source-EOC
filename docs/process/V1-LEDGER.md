@@ -577,3 +577,71 @@ tagging remain separately gated as section 1 of the roster states.
   adds those routes.
 - **Rollback:** revert the commit; `OPENEOC_PRINCIPAL_CACHE_MS=0` turns the
   cache off at runtime.
+
+## V1 W2.9: retention and export
+
+- **Decision default set and applied.** Section 7 item 5 names the retention
+  and HIPAA question without a default; the integrating session set this one.
+  Nothing is purged until a jurisdiction admin sets a period for a data
+  class. The audit trail, `audit_events` and every table with an append-only
+  trigger, is never purged, only exported. Incident records are not purged,
+  closed incidents included, because records retention law varies. Tracking
+  and facilities are not treated as holding patient-level data in v1.
+- **Retention policies.** New `retention_policies`: one row per jurisdiction
+  per data class, 1 to 36,500 days or null to keep. `GET` and
+  `PUT /api/v1/jurisdictions/:jurisdictionId/retention`, admin only; each
+  change records `retention.policy.updated`.
+- **Purge.** A new hourly scheduler job calls `retention_purge(batch)`, a
+  SECURITY DEFINER function with an explicit table allowlist per class:
+  settled notifications with their delivery rows; delivered or dead delivery
+  rows and peer-received federation entries; feed items not fetched within the
+  period; tracked objects and their events once the latest event is older than
+  the period; closed staff check-ins. At most 5,000 rows per class per
+  jurisdiction per run. A test asserts no allowlisted table carries a delete
+  trigger, with `audit_events` as the positive control.
+- **Audit export.** `GET /api/v1/jurisdictions/:jurisdictionId/audit/export`,
+  admin only, paged by the chronology cursor. CSV per RFC 4180 with a header on
+  every page, the next cursor in `x-next-cursor`, and a leading quote on cells
+  starting with `=`, `+`, `-`, `@`, tab or carriage return. Signed JSON
+  returns the page with `firstSeq`, `lastSeq`, its cursor and `nextCursor`,
+  and an HMAC-SHA256 over the RFC 8785 canonical form, keyed by HKDF from
+  `OPENEOC_SECRET_KEY` under a distinct label so it is never the envelope key;
+  409 without a key. Chronology entries gain id, person, position, incident
+  and subject fields; the AAR reads only `line` and is unchanged.
+- **Syslog forwarding.** Optional through `OPENEOC_SYSLOG_URL`, UDP or TCP,
+  RFC 5424 messages, TCP framed by octet count, standard library only. A
+  scheduler job every ten seconds forwards after a high-water mark that moves
+  only after a successful send. The write path never awaits the network.
+- **Deviations, recorded.**
+  1. One `retention.purged` audit event per jurisdiction per run, and only
+     when something was deleted, so empty hourly runs do not clutter the
+     chronology the AAR is built from.
+  2. `audit_events` gains an `xact xid8` column and index, added nullable with
+     the default set afterwards so existing rows are not rewritten.
+     Forwarding walks events in (transaction, sequence) order and never past
+     the oldest transaction still running; a mark on sequence alone would skip
+     an event whose transaction commits after a later-numbered one.
+  3. The retention routes are registered in `server/src/audit/routes.ts`;
+     `server/src/retention/` holds the service.
+  4. Forwarding starts at the job's first run; earlier history is available
+     through the export. UDP messages are cut at 8 KiB.
+  5. Ownership deviations: `server/src/scheduler/scheduler.ts` (two jobs),
+     `docs/guides/ADMIN.md`, `deploy/README.md`.
+- **Schema:** migration `0110_retention.sql`: `retention_policies`,
+  `audit_forwarding` (reached only through functions),
+  `delivery_outbox_notification` index, `audit_events.xact`, and three
+  functions granted only to `app_runtime`. Three routes added to the contract;
+  `docs/API.md` regenerated. No dependency change.
+- **Verification:** new `retention.test.ts`, 10 tests covering policy access
+  and validation, the delete-trigger check, purge scope by class,
+  jurisdiction and age, the purge audit counts, open check-ins kept, CSV walk
+  and formula guard, signature verify and tamper, the 409, UDP once-only
+  forwarding, TCP framing, and scheduler wiring. After rebasing onto W2.5:
+  retention, audit, aar, scheduler, observability, api-docs, ipaws,
+  identity-cache, list-pagination, migrate-baseline and security passed 74 of
+  74. TypeScript and ESLint clean. Link checker 69 files.
+- **Evidence level:** unit, integration, real-database and document.
+- **Deferred:** the admin screen for retention and export belongs to W3.0 and
+  W3.1. Purged rows are counted in the audit event, not archived.
+- **Rollback:** revert the commit and drop the three functions, two tables,
+  the new index, and the `audit_events.xact` index and column.

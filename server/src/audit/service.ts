@@ -56,10 +56,16 @@ export async function correctAudit(
 
 export interface ChronologyEntry {
   readonly seq: number;
+  readonly id: string;
   readonly at: string;
+  readonly personId: string;
   readonly person: string;
+  readonly positionId: string | null;
   readonly position: string | null;
+  readonly incidentId: string | null;
   readonly category: string;
+  readonly subjectTable: string | null;
+  readonly subjectId: string | null;
   readonly payload: Record<string, unknown>;
   readonly corrects: string | null;
   readonly line: string;
@@ -109,7 +115,8 @@ export async function listChronology(
   const after = decodeCursor(query.cursor, ["seq"]);
   const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
   const rows = await sql`
-    select e.seq, e.created_at, e.category, e.payload, e.corrects,
+    select e.seq, e.id, e.created_at, e.person_id, e.position_id, e.incident_id,
+           e.category, e.subject_table, e.subject_id, e.payload, e.corrects,
            p.display_name as person, pos.title as position_title
     from audit_events e
     join persons p on p.id = e.person_id
@@ -127,10 +134,16 @@ export async function listChronology(
     const who = position ? `${r.person as string} (${position})` : (r.person as string);
     return {
       seq: Number(r.seq),
+      id: r.id as string,
       at,
+      personId: r.person_id as string,
       person: r.person as string,
+      positionId: (r.position_id as string | null) ?? null,
       position,
+      incidentId: (r.incident_id as string | null) ?? null,
       category: r.category as string,
+      subjectTable: (r.subject_table as string | null) ?? null,
+      subjectId: (r.subject_id as string | null) ?? null,
       payload: r.payload as Record<string, unknown>,
       corrects: (r.corrects as string | null) ?? null,
       line: `${at} ${who}: ${r.category as string}${r.corrects ? " (correction)" : ""}`,
