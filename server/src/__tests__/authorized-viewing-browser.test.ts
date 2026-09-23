@@ -164,7 +164,8 @@ describe("authorized viewing in a real browser", () => {
       (globalThis as unknown as { location: { hash: string } }).location.hash = `#/dashboard/${id}`;
     }, dashboardB);
     await page.getByRole("alert").filter({ hasText: "dashboard not found" }).waitFor({ timeout: 5000 });
-    expect(await page.getByText("EOC Status").count()).toBe(0);
+    await page.getByText("Closed roads").waitFor({ state: "detached", timeout: 5000 });
+    expect(await page.getByText("Closed roads").count()).toBe(0);
     await page.evaluate((id) => {
       (globalThis as unknown as { location: { hash: string } }).location.hash = `#/dashboard/${id}`;
     }, dashboardA);
