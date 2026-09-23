@@ -456,3 +456,63 @@ tagging remain separately gated as section 1 of the roster states.
 - **Rollback:** revert the commit; undoing the schema means dropping the
   trigger, function, column and two indexes and recreating
   `board_records_board`.
+
+## V1 W2.2: scheduler
+
+- **What changed.** New `server/src/scheduler/scheduler.ts`: one in-process
+  scheduler per API process. The process holding a PostgreSQL session advisory
+  lock leads and runs four jobs: scheduled notification rules, due briefings,
+  feed polls and the outbox worker. Others retry the lock on an interval and
+  take over when the leader stops or its session ends. Each job runs on
+  election, then waits its interval after each run, so a job never overlaps
+  itself; a failing job is logged as `scheduled job failed` with its name and
+  never stops the others or the process. Timers are unref'd and `stop()` waits
+  for runs in flight. The trigger endpoints are unchanged.
+- **Both deploy paths.** `server/src/main.ts` (the container path) and the
+  Windows desktop `serveProfile` both start and stop the scheduler, which
+  closes the gap carried from the W2.8 receipt: the desktop path ran no
+  delivery worker. Ownership deviation: `deploy/windows/desktop.mjs`.
+- **Defaults and deviations.**
+  - All four jobs run on the leader only, including the outbox, for simplicity.
+  - The lock is held on its own one-connection client rather than a reserved
+    pool connection: a reserved postgres.js connection that drops returns to
+    the pool, and the stale handle could then run on another session. The
+    leader checks every `OPENEOC_SCHEDULER_LEADER_MS` (default 10000) that
+    `pg_backend_pid()` still matches the session that took the lock and steps
+    down if not. Cost: one database connection per process.
+  - Acting identity: new SECURITY DEFINER `scheduler_due(work, due_at)`
+    returns, per jurisdiction with due rules or briefings, one enabled admin,
+    preferring the due item's author, and the work runs under that admin's
+    principal with row-level security on. Deviation from an author-only rule:
+    briefing runs require an admin, and members schedule briefings, so an
+    author-only rule would never fire them. A jurisdiction with no enabled
+    admin runs none of this work. Feeds still run under each feed's creator.
+  - Briefings are scheduled only when `OPENEOC_INTEGRATIONS` includes
+    `meetings`.
+  - Intervals from `OPENEOC_SCHEDULER_{RULES,BRIEFINGS,FEEDS,OUTBOX}_MS`,
+    defaults 30000, 60000, 60000 and 2000; an invalid value fails at startup.
+  - Metrics gain `openeoc_scheduler_leader` and
+    `openeoc_scheduler_last_run_seconds{job}`. Ownership deviation:
+    `server/src/telemetry/metrics.ts`.
+  - Integration cleanup: the delivery worker's own polling loop,
+    `DeliveryWorker.start()` and `stop()`, had no callers once the scheduler
+    ran the outbox, and was removed.
+- **Schema:** migration `0107_scheduler.sql`, one function granted only to
+  `app_runtime`. No routes, no contract change, no dependency change.
+- **Acceptance:** `scheduler.test.ts` fires a scheduled rule to a local
+  receiver, a member's briefing and a feed poll with no manual call, and checks
+  the rule fired exactly once and the leader metric.
+- **Verification:** `scheduler.test.ts` 3 tests: the acceptance; two
+  schedulers where exactly one leads and the other takes over when it stops;
+  a job made to fail (its function revoked) that is logged while the outbox
+  still delivers. After rebasing onto W2.3 and W2.10: scheduler, notify,
+  delivery-outbox, observability, feeds and meetings passed 33 of 33.
+  `pnpm test:desktop` 19 passed. TypeScript and ESLint clean. The desktop
+  path was checked by loading the module, not by running a profile.
+- **Guides:** `deploy/README.md` and `docs/guides/ADMIN.md` describe the
+  intervals and the single leader.
+- **Evidence level:** real-database integration and document.
+- **Known limit:** `runDueBriefings` reads and stamps due briefings in
+  separate steps, so a leader handover overlapping a run could notify a
+  briefing twice. Rare; not addressed here.
+- **Rollback:** revert the commit; migration 0107 adds one function only.

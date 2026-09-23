@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { Sql } from "../db/client.js";
 import { AuthError } from "../auth/service.js";
 import type { DrainResult } from "../notify/outbox.js";
+import type { SchedulerStatus } from "../scheduler/scheduler.js";
 import type { BoardSyncHub } from "../sync/hub.js";
 
 /** Upper bounds, in seconds, of the request duration histogram. */
@@ -15,13 +16,14 @@ interface Histogram {
 }
 
 /**
- * Process-local request counters, and the delivery worker when this process
- * runs one (the entrypoint attaches it). Request ids are never labels: they
- * are unbounded, so a slow request is counted here by route and found by id
- * in the log.
+ * Process-local request counters, and the scheduler and its delivery worker
+ * when this process runs them (the entrypoint attaches them). Request ids are
+ * never labels: they are unbounded, so a slow request is counted here by
+ * route and found by id in the log.
  */
 export class Metrics {
   delivery: { stats(): DrainResult } | null = null;
+  scheduler: { status(): SchedulerStatus } | null = null;
   private readonly requests = new Map<string, number>();
   private readonly slow = new Map<string, number>();
   private readonly durations = new Map<string, Histogram>();
@@ -142,6 +144,15 @@ export function metricsRoutes(
       family(out, "openeoc_delivery_outcomes_total", "counter",
         "Delivery worker outcomes in this process since start.",
         Object.entries(metrics.delivery.stats()).map(([outcome, n]) => [labels({ outcome }), n]));
+    }
+    if (metrics.scheduler) {
+      const status = metrics.scheduler.status();
+      family(out, "openeoc_scheduler_leader", "gauge",
+        "1 when this process holds the scheduler lock and runs the scheduled jobs.",
+        [["", status.leader ? 1 : 0]]);
+      family(out, "openeoc_scheduler_last_run_seconds", "gauge",
+        "Unix time each scheduled job last finished a run in this process.",
+        Object.entries(status.lastRun).map(([job, at]) => [labels({ job }), at.getTime() / 1000]));
     }
     family(out, "openeoc_db_pool_max", "gauge",
       "Configured maximum connections of this process's database client.",

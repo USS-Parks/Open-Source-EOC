@@ -90,6 +90,28 @@ Restore is destructive to the database and refuses to run without the explicit
 confirmation flag. If the matching blob archive is absent, restore warns and
 file downloads remain unavailable until those bytes are recovered.
 
+## Scheduler
+
+Every API process runs one scheduler, in both the Docker and the Windows
+desktop deployments. The process holding a PostgreSQL advisory lock on the
+runtime database is the leader and the only one that runs the scheduled jobs;
+the others retry the lock and one takes over when the leader stops or loses
+its database session. No cron job or manual call is needed.
+
+| Job | Interval variable | Default |
+|---|---|---|
+| Scheduled notification rules | `OPENEOC_SCHEDULER_RULES_MS` | 30000 |
+| Due briefings (only with the `meetings` integration) | `OPENEOC_SCHEDULER_BRIEFINGS_MS` | 60000 |
+| Feed polls (each feed keeps its own poll interval) | `OPENEOC_SCHEDULER_FEEDS_MS` | 60000 |
+| Outbound webhook, push and federation deliveries | `OPENEOC_SCHEDULER_OUTBOX_MS` | 2000 |
+
+`OPENEOC_SCHEDULER_LEADER_MS` (default 10000) sets how often a follower retries
+the lock and the leader confirms it still holds it. Each job waits its interval
+after a run finishes, so a run never overlaps itself; a failed run logs
+`scheduled job failed` at `error` with the job name and the next run proceeds.
+Scheduled rules and briefings run under an enabled admin of their
+jurisdiction, preferring the author of the due item.
+
 ## Logs and metrics
 
 The API writes one JSON line per event through Fastify's pino logger.
@@ -118,8 +140,10 @@ redacted before a line is written.
 404. It reports request counts by method, route pattern and status class, a
 duration histogram, slow request counts by route, open WebSocket connections,
 sync hub counters, delivery queue depth (pending and dead), undelivered
-federation entries, delivery worker outcomes, the database client's configured
-maximum connections and the runtime role's open connections by state.
+federation entries, delivery worker outcomes, whether the process is the
+scheduler leader and when each scheduled job last ran, the database client's
+configured maximum connections and the runtime role's open connections by
+state.
 
 To find a slow request, look for `openeoc_http_slow_requests_total` rising on a
 route, then search the log for `"msg":"slow request"` on that route; its
@@ -172,3 +196,4 @@ upgrade path begins with a database whose first receipt is
 | `OPENEOC_LOG_LEVEL` | Log level (default `info`) |
 | `OPENEOC_SLOW_REQUEST_MS` | Slow request threshold in milliseconds (default 1000) |
 | `OPENEOC_METRICS_TOKEN` | Scrape token for `GET /api/v1/metrics`; unset serves 404 |
+| `OPENEOC_SCHEDULER_*_MS` | Scheduler intervals; see [Scheduler](#scheduler) |

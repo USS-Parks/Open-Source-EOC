@@ -567,16 +567,22 @@ async function serveProfile(args) {
   ensureSecretKey(paths);
   process.env.OPENEOC_SECRET_KEY ??= readFileSync(paths.secretKey, "utf8").trim();
   const runtimePassword = readFileSync(paths.runtimePassword, "utf8").trim();
-  const [{ connect }, { buildApp }] = await Promise.all([
+  const [{ connect }, { buildApp }, { Scheduler }] = await Promise.all([
     importServer("server/src/db/client.ts"),
     importServer("server/src/app.ts"),
+    importServer("server/src/scheduler/scheduler.ts"),
   ]);
-  const runtime = connect({ url: databaseUrl("app_runtime", runtimePassword, config) });
+  const runtimeUrl = databaseUrl("app_runtime", runtimePassword, config);
+  const runtime = connect({ url: runtimeUrl });
   const app = buildApp(runtime, { oidc: null, logStream: rotatingLog(resolve(paths.logs, "server.log")) });
+  const scheduler = new Scheduler(runtime, { lockUrl: runtimeUrl, logger: app.log });
+  app.metrics.delivery = scheduler.delivery;
+  app.metrics.scheduler = scheduler;
   let closing = false;
   const close = async () => {
     if (closing) return;
     closing = true;
+    await scheduler.stop();
     await app.close();
     await runtime.end();
     const record = readPid(paths.appPid);
@@ -589,6 +595,7 @@ async function serveProfile(args) {
   });
   registerStaticHost(app, { distRoot, publicRoot, runtimeConfig: await desktopRuntimeConfig(publicRoot) });
   await app.listen({ host: "127.0.0.1", port: config.httpPort });
+  scheduler.start();
   console.log(`DESKTOP_READY profile=${profile} url=http://127.0.0.1:${config.httpPort}`);
   process.on("SIGINT", () => void close().then(() => process.exit(0)));
   process.on("SIGTERM", () => void close().then(() => process.exit(0)));

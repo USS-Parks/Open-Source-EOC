@@ -5,7 +5,7 @@ import { connect } from "./db/client.js";
 import { migrate } from "./db/migrate.js";
 import { ensureStandardTemplates } from "./boards/service.js";
 import { ensureStandardIncidentTemplates } from "./incidents/service.js";
-import { DeliveryWorker } from "./notify/outbox.js";
+import { Scheduler } from "./scheduler/scheduler.js";
 
 /**
  * Production entrypoint. Two database identities, matching the
@@ -47,14 +47,15 @@ export async function start(): Promise<StartResult> {
   const host = process.env.HOST ?? "0.0.0.0";
   // Fastify logs the listening address.
   await app.listen({ port, host });
-  const delivery = new DeliveryWorker(sql, { logger: app.log });
-  app.metrics.delivery = delivery;
-  delivery.start();
+  const scheduler = new Scheduler(sql, { lockUrl: runtimeUrl, logger: app.log });
+  app.metrics.delivery = scheduler.delivery;
+  app.metrics.scheduler = scheduler;
+  scheduler.start();
   const url = `http://${host}:${port}`;
   return {
     url,
     close: async () => {
-      await delivery.stop();
+      await scheduler.stop();
       await app.close();
       await sql.end();
     },

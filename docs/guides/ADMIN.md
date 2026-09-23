@@ -87,6 +87,12 @@ accepts it. Failed attempts retry with increasing delay; after eight failures
 the notification is marked `failed` with the last error. A target that keeps
 failing is paused for a minute at a time without using up attempts.
 
+Scheduled notification rules, due briefings and feed polls run on their own
+through the server's scheduler; no one has to trigger them. A scheduled rule
+or briefing runs under an enabled admin of its jurisdiction, so a jurisdiction
+with no enabled admin runs none. Intervals are in
+[the deployment guide](../../deploy/README.md#scheduler).
+
 - IPAWS setup: [IPAWS enablement](../IPAWS-ENABLEMENT.md)
 - Federation setup: [Federation setup](./FEDERATION-SETUP.md)
 

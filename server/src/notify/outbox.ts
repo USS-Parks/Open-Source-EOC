@@ -59,9 +59,6 @@ export class DeliveryWorker {
   // ponytail: per-process breaker state; a second node keeps its own, which
   // only means each node probes a dead target on its own schedule.
   private readonly circuits = new Map<string, Circuit>();
-  private timer: NodeJS.Timeout | null = null;
-  private running: Promise<unknown> | null = null;
-  private stopped = false;
 
   constructor(
     private readonly sql: Sql,
@@ -83,35 +80,7 @@ export class DeliveryWorker {
     return { ...this.totals };
   }
 
-  /** Poll every `intervalMs` until {@link stop}. */
-  start(intervalMs = 2_000): void {
-    this.stopped = false;
-    const tick = (): void => {
-      if (this.stopped) return;
-      this.running = this.drain()
-        .catch((err: unknown) => {
-          if (this.log) this.log.error({ err }, "delivery worker pass failed");
-          else console.error("[openeoc] delivery worker pass failed", err);
-        })
-        .finally(() => {
-          this.running = null;
-          if (!this.stopped) {
-            this.timer = setTimeout(tick, intervalMs);
-            this.timer.unref();
-          }
-        });
-    };
-    tick();
-  }
-
-  async stop(): Promise<void> {
-    this.stopped = true;
-    if (this.timer) clearTimeout(this.timer);
-    this.timer = null;
-    await this.running;
-  }
-
-  /** One pass over everything due. Tests call this directly. */
+  /** One pass over everything due. The scheduler runs it on an interval; tests call it directly. */
   async drain(): Promise<DrainResult> {
     const counts = { delivered: 0, retried: 0, dead: 0, deferred: 0, federated: 0 };
     const leaseSeconds = Math.ceil(this.timeoutMs / 1000) + 30;
