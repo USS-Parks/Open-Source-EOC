@@ -54,6 +54,33 @@ describe("dashboard saved view configuration", () => {
     });
   });
 
+  it("adds a kanban summary with the charts and upcoming calendar items with the lists", () => {
+    const onSave = vi.fn();
+    const views: DashboardTemplate = {
+      key: "board_views", version: 1, title: "Board views",
+      widgets: [
+        { kind: "kanban", key: "by_status", title: "Closures by status", board: "road_closures", field: "status" },
+        { kind: "calendar", key: "reopenings", title: "Reopenings", board: "road_closures", field: "reopen_estimate", labelField: "road", limit: 10 },
+        { kind: "chart", key: "counts", title: "Closure counts", board: "road_closures", groupBy: "status", display: "bar" },
+      ],
+    };
+    render(
+      <DashboardConfigurator current={null} initialKey="board-views" dashboards={[{ ...dashboards[0]!, template: views }]}
+        saving={false} error={null} onSave={onSave} onCancel={() => undefined} />,
+    );
+    for (const name of ["Closures by status", "Reopenings", "Closure counts"]) {
+      fireEvent.click(screen.getByRole("checkbox", { name: new RegExp(name) }));
+    }
+    expect([...(screen.getByLabelText("Reopenings presentation") as HTMLSelectElement).options].map((option) => option.value))
+      .toEqual(["list"]);
+    fireEvent.click(screen.getByRole("button", { name: "Save view" }));
+    expect(onSave.mock.calls[0]?.[2].panels).toMatchObject([
+      { widgetKey: "by_status", presentation: "chart" },
+      { widgetKey: "reopenings", presentation: "list" },
+      { widgetKey: "counts", presentation: "chart" },
+    ]);
+  });
+
   it("shows validation instead of silently saving an empty composition", () => {
     const onSave = vi.fn();
     render(

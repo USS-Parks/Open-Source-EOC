@@ -7,6 +7,7 @@ import {
   type DashboardFilterMode,
   type DashboardFilterSet,
   type DashboardPanelSnapshot,
+  type DashboardWidget,
   type SavedStatePayload,
   type SavedStateRecord,
   type ViewportBbox,
@@ -51,10 +52,10 @@ function parseComposition(state: SavedStateRecord): DashboardComposition {
 
 function presentationCompatible(
   presentation: DashboardComposition["panels"][number]["presentation"],
-  widgetKind: "tile" | "chart" | "status" | "list",
+  widgetKind: DashboardWidget["kind"],
 ): boolean {
   if (presentation === "tile") return widgetKind === "tile";
-  if (presentation === "chart") return widgetKind === "chart";
+  if (presentation === "chart") return widgetKind === "chart" || widgetKind === "kanban";
   if (presentation === "status") return widgetKind === "status";
   if (presentation === "list") return widgetKind !== "status";
   return widgetKind !== "status";

@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { BoardTemplate, FieldDef, FormLayout, ViewRecord } from "@openeoc/shared";
 import { BoardImport, type ImportRun } from "../../boards/BoardImport.js";
+import {
+  BoardModeBody,
+  BoardModeControls,
+  initialModeState,
+  modeQuery,
+  type BoardModeBodyProps,
+  type BoardModeState,
+} from "../../boards/BoardModes.js";
 import { BoardView } from "../../boards/BoardView.js";
 import { RecordForm } from "../../boards/RecordForm.js";
 import { RecordHistory, type HistoryPageLoader } from "../../boards/RecordHistory.js";
@@ -92,11 +100,17 @@ export function BoardSurface(props: {
     ? route.routeContext.view!
     : (board.data?.views[0]?.key ?? null);
   const [refinement, setRefinement] = useState<ViewRefinement>(NO_REFINEMENT);
-  useEffect(() => setRefinement(NO_REFINEMENT), [props.boardId]);
-  const query = useMemo(() => ({
+  // The view mode, its field and the calendar range are screen state, like the refinement.
+  const [mode, setMode] = useState<BoardModeState>(() => initialModeState());
+  useEffect(() => {
+    setRefinement(NO_REFINEMENT);
+    setMode(initialModeState());
+  }, [props.boardId]);
+  const boardFields = board.data?.fields;
+  const query = useMemo(() => modeQuery({
     ...(incidentViewId ? { incidentId: incidentViewId } : {}),
     ...refinementQuery(refinement),
-  }), [incidentViewId, refinement]);
+  }, mode, boardFields ?? []), [boardFields, incidentViewId, mode, refinement]);
   const view = useAsync(
     () => (viewKey ? props.client.boardViewPage(props.boardId, viewKey, query) : Promise.resolve(null)),
     [props.boardId, query, viewKey],
@@ -115,6 +129,11 @@ export function BoardSurface(props: {
   // A caller whom a record rule restricts is never served the board for offline sync.
   const offline = useAsync(async () => (board.data ? offlineSyncAvailable(props.client, board.data) : true),
     [board.data, props.client]);
+  // Kanban needs the board's workflow to keep a workflow state field out of drag and drop.
+  const kanban = mode.mode === "kanban";
+  const workflow = useAsync(async () => kanban && board.data
+    ? (await props.client.getTemplateVersion(board.data.templateKey, board.data.templateVersion)).workflow ?? null
+    : null, [kanban, board.data?.templateKey, board.data?.templateVersion]);
   const detail = useAsync(
     () => (props.recordId
       ? props.client.boardRecordDetail(props.boardId, props.recordId, incidentViewId)
@@ -279,6 +298,12 @@ export function BoardSurface(props: {
     view.reload();
     detail.reload();
   }
+  // A kanban move is an ordinary record update; the server applies the edit rules and its refusal is shown.
+  async function moveRecord(recordId: string, field: string, value: string) {
+    await props.client.updateRecord(props.boardId, recordId, { [field]: value }, incidentViewId);
+    view.reload();
+    if (recordId === props.recordId) detail.reload();
+  }
   async function exportView(format: "csv" | "xlsx") {
     if (!viewKey) return;
     setNotice(null);
@@ -335,6 +360,11 @@ export function BoardSurface(props: {
           refinement={refinement}
           onRefine={setRefinement}
           groups={view.data?.groups ?? null}
+          mode={mode}
+          onMode={setMode}
+          canWrite={canWrite}
+          workflow={workflow.loading && !workflow.data ? undefined : workflow.data}
+          onMove={moveRecord}
           tools={<>
             <ActionButton onClick={() => void exportView("csv")}>Export CSV</ActionButton>
             <ActionButton onClick={() => void exportView("xlsx")}>Export Excel</ActionButton>
@@ -508,6 +538,11 @@ function BoardWorkspace(props: {
   readonly onRefine: (next: ViewRefinement) => void;
   readonly groups: ViewRecordsResponse["groups"] | null;
   readonly tools: ReactNode;
+  readonly mode: BoardModeState;
+  readonly onMode: (next: BoardModeState) => void;
+  readonly canWrite: boolean;
+  readonly workflow: BoardModeBodyProps["workflow"];
+  readonly onMove: BoardModeBodyProps["onMove"];
 }) {
   const view = props.template.views.find((candidate) => candidate.key === props.viewKey)!;
   const initial = useMemo(() => tableState(view.columns), [view.columns]);
@@ -538,33 +573,41 @@ function BoardWorkspace(props: {
         <ViewRefineControls fields={props.template.fields} value={props.refinement} onApply={props.onRefine} />
         {props.tools}
       </div>
-      {props.groups && view.groupBy ? (
-        <GroupCounts field={props.template.fields.find((field) => field.key === view.groupBy)} groups={props.groups} />
-      ) : null}
-      {props.error && props.records.length > 0 ? (
-        <p role="alert">Showing the last loaded records. {props.error}</p>
-      ) : null}
-      <BoardView
-        template={props.template}
-        viewKey={props.viewKey}
-        records={props.records}
-        viewState={viewState}
-        onViewStateChange={updateView}
-        selectedRecordId={props.selectedRecordId}
-        onSelectRecord={props.onSelectRecord}
-        {...(props.error && props.records.length === 0
-          ? { status: "error" as const }
-          : props.loading ? { status: "loading" as const } : {})}
-        {...(props.error ? { errorMessage: props.error } : {})}
-        {...(props.onLoadMore ? { onLoadMore: props.onLoadMore } : {})}
-        onRetry={props.onRetry}
-        toolbar={props.personId && props.incidentId ? (
-          <PersistedViews client={props.client} personId={props.personId} incidentId={props.incidentId}
-            tableId={`board.${props.boardId}.${props.template.key}.${props.viewKey}`}
-            tableSchema={`${props.template.version}:${view.columns.join(",")}`}
-            viewState={viewState} onApply={applySaved} />
-        ) : <strong>{view.title}</strong>}
-      />
+      <BoardModeControls value={props.mode} fields={props.template.fields} onChange={props.onMode} />
+      {props.mode.mode !== "list" ? (
+        <BoardModeBody state={props.mode} onChange={props.onMode} fields={props.template.fields} columns={view.columns}
+          records={props.records} groups={props.groups ?? null} loading={props.loading} error={props.error}
+          onLoadMore={props.onLoadMore} canWrite={props.canWrite} workflow={props.workflow} onMove={props.onMove}
+          onSelectRecord={props.onSelectRecord} selectedRecordId={props.selectedRecordId} />
+      ) : <>
+        {props.groups && view.groupBy ? (
+          <GroupCounts field={props.template.fields.find((field) => field.key === view.groupBy)} groups={props.groups} />
+        ) : null}
+        {props.error && props.records.length > 0 ? (
+          <p role="alert">Showing the last loaded records. {props.error}</p>
+        ) : null}
+        <BoardView
+          template={props.template}
+          viewKey={props.viewKey}
+          records={props.records}
+          viewState={viewState}
+          onViewStateChange={updateView}
+          selectedRecordId={props.selectedRecordId}
+          onSelectRecord={props.onSelectRecord}
+          {...(props.error && props.records.length === 0
+            ? { status: "error" as const }
+            : props.loading ? { status: "loading" as const } : {})}
+          {...(props.error ? { errorMessage: props.error } : {})}
+          {...(props.onLoadMore ? { onLoadMore: props.onLoadMore } : {})}
+          onRetry={props.onRetry}
+          toolbar={props.personId && props.incidentId ? (
+            <PersistedViews client={props.client} personId={props.personId} incidentId={props.incidentId}
+              tableId={`board.${props.boardId}.${props.template.key}.${props.viewKey}`}
+              tableSchema={`${props.template.version}:${view.columns.join(",")}`}
+              viewState={viewState} onApply={applySaved} />
+          ) : <strong>{view.title}</strong>}
+        />
+      </>}
     </div>
   );
 }

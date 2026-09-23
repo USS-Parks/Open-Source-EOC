@@ -81,7 +81,7 @@ function blankDraft(field: FieldDef): DraftCondition {
   return { field: field.key, op: operatorsFor(field)[0]!, value: time ? "now-24h" : "", value2: time ? "now" : "", values: [] };
 }
 
-function enumValues(field: FieldDef): readonly string[] {
+export function enumValues(field: FieldDef): readonly string[] {
   return field.values ?? (field.enumId ? dictionaryValues(field.enumId) : null) ?? [];
 }
 

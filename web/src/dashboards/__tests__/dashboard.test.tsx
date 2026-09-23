@@ -107,4 +107,30 @@ describe("the dashboard renders a computed snapshot and nothing else", () => {
     // The seeded chart carries no field, so its groups are not buttons.
     expect(screen.queryByLabelText("Filter by normal")).toBeNull();
   });
+
+  it("shows kanban column counts in order and the upcoming calendar items", () => {
+    const at = "2026-09-24T16:00:00.000Z";
+    render(
+      <Theme name="light">
+        <Dashboard snapshot={{
+          dashboardId: "d1", title: "Board views", computedAt: new Date().toISOString(),
+          widgets: [
+            { kind: "kanban", key: "by_status", title: "Closures by status", field: "status", columns: [
+              { value: "closed", count: 2 }, { value: "one_lane", count: 0 }, { value: null, count: 1 },
+            ] },
+            { kind: "calendar", key: "reopenings", title: "Reopenings", field: "reopen_estimate", items: [
+              { id: "r1", at, label: "SR-96" }, { id: "r2", at, label: null },
+            ] },
+            { kind: "calendar", key: "empty", title: "Nothing due", field: "reopen_estimate", items: [] },
+          ],
+        }} />
+      </Theme>,
+    );
+    expect([...screen.getByTestId("widget-by_status").querySelectorAll("li")].map((item) => item.textContent))
+      .toEqual(["Closed2", "One lane0", "No value1"]);
+    const upcoming = screen.getByTestId("widget-reopenings");
+    expect(upcoming.querySelector("time")!.getAttribute("dateTime")).toBe(at);
+    expect([...upcoming.querySelectorAll("li > span")].map((item) => item.textContent)).toEqual(["SR-96", "Untitled record"]);
+    expect(screen.getByTestId("widget-empty").textContent).toContain("Nothing scheduled from now on.");
+  });
 });

@@ -7,9 +7,12 @@ import {
   type OperationalTableColumn,
 } from "../design/table.js";
 import { LIFELINE_STATUS_COLOR, ESF_STATUS_COLOR } from "@openeoc/shared";
+import { valueLabel } from "../boards/BoardModes.js";
 import type {
+  CalendarResult,
   ChartResult,
   DashboardSnapshot,
+  KanbanResult,
   ListResult,
   StatusResult,
   TileResult,
@@ -84,7 +87,59 @@ function renderBody(w: WidgetResult, onDrill?: Drill | undefined) {
   if (w.kind === "tile") return <Tile widget={w} />;
   if (w.kind === "chart") return <Chart widget={w} onDrill={onDrill} />;
   if (w.kind === "status") return <StatusGrid widget={w} />;
+  if (w.kind === "kanban") return <KanbanSummary widget={w} />;
+  if (w.kind === "calendar") return <Upcoming widget={w} />;
   return <List widget={w} />;
+}
+
+/** Record counts per kanban column, in the field's own order. */
+function KanbanSummary(props: { widget: KanbanResult }) {
+  return (
+    <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexWrap: "wrap", gap: 8 }}>
+      {props.widget.columns.map((column) => (
+        <li
+          key={column.value ?? ""}
+          style={{
+            display: "grid",
+            gap: 2,
+            minWidth: 96,
+            flex: "1 1 96px",
+            border: "1px solid var(--eoc-border)",
+            borderTop: "3px solid var(--eoc-brand-teal)",
+            borderRadius: 6,
+            padding: "6px 10px",
+          }}
+        >
+          <span style={{ fontSize: 12, color: "var(--eoc-text-muted)" }}>{valueLabel(column.value)}</span>
+          <strong style={{ fontSize: 22, fontVariantNumeric: "tabular-nums" }}>{column.count}</strong>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** The next dated records, soonest first, in the viewer's timezone. */
+function Upcoming(props: { widget: CalendarResult }) {
+  if (props.widget.items.length === 0) {
+    return <p style={{ margin: 0, color: "var(--eoc-text-muted)" }}>Nothing scheduled from now on.</p>;
+  }
+  return (
+    <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
+      {props.widget.items.map((item) => (
+        <li
+          key={item.id}
+          style={{ display: "grid", gap: 2, borderLeft: "3px solid var(--eoc-brand-teal)", paddingLeft: 8 }}
+        >
+          <time dateTime={item.at} style={{ fontSize: 12, color: "var(--eoc-text-muted)" }}>
+            {new Date(item.at).toLocaleString([], {
+              weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+            })}
+          </time>
+          <span>{item.label ?? "Untitled record"}</span>
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 const TILE_STATUS: Record<TileResult["level"], Status> = {

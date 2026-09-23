@@ -1,8 +1,10 @@
 import {
   DashboardTemplateSchema,
+  dictionaryValues,
   geometryFieldKey,
   STANDARD_DASHBOARDS,
   tileLevel,
+  type CalendarResult,
   type ChartResult,
   type DashboardContributionPage,
   type DashboardFilterSet,
@@ -10,6 +12,7 @@ import {
   type DashboardSnapshot,
   type DashboardTemplate,
   type DashboardWidget,
+  type KanbanResult,
   type ListResult,
   type StatusResult,
   type TileResult,
@@ -280,7 +283,7 @@ async function computeWidget(
         count(*)::int as n,
         count(*) filter (where created_at > now() - interval '24 hours')::int as recent
       from board_records
-      where board_id = ${boardId} ${filtersClause} ${incidentClause} ${viewportClause}`;
+      where board_id = ${boardId} and archived_at is null ${filtersClause} ${incidentClause} ${viewportClause}`;
     const value = (row?.n as number) ?? 0;
     return {
       kind: "tile",
@@ -296,7 +299,7 @@ async function computeWidget(
     const rows = await sql`
       select coalesce(data ->> ${widget.groupBy}, '') as v, count(*)::int as n
       from board_records
-      where board_id = ${boardId} ${filtersClause} ${incidentClause} ${viewportClause}
+      where board_id = ${boardId} and archived_at is null ${filtersClause} ${incidentClause} ${viewportClause}
       group by 1 order by 1`;
     return {
       kind: "chart",
@@ -306,6 +309,59 @@ async function computeWidget(
       field: widget.groupBy,
       groups: rows.map((r) => ({ value: r.v as string, count: r.n as number })),
     } satisfies ChartResult;
+  }
+
+  if (widget.kind === "kanban") {
+    // Archived records stay out, as they stay out of the board's own kanban.
+    const field = effective.fields.find((candidate) => candidate.key === widget.field);
+    const rows = await sql`
+      select data ->> ${widget.field} as v, count(*)::int as n
+      from board_records
+      where board_id = ${boardId} and archived_at is null
+        ${filtersClause} ${incidentClause} ${viewportClause}
+      group by 1`;
+    const counts = new Map(rows.map((r) => [(r.v as string | null) ?? null, r.n as number]));
+    const values = field?.type === "enum"
+      ? field.values ?? (field.enumId ? dictionaryValues(field.enumId) : null) ?? []
+      : [];
+    const extra = [...counts.keys()].filter((v): v is string => v !== null && !values.includes(v)).sort();
+    return {
+      kind: "kanban",
+      key: widget.key,
+      title: widget.title,
+      field: widget.field,
+      columns: [
+        ...[...values, ...extra].map((value) => ({ value, count: counts.get(value) ?? 0 })),
+        ...(counts.has(null) ? [{ value: null, count: counts.get(null)! }] : []),
+      ],
+    } satisfies KanbanResult;
+  }
+
+  if (widget.kind === "calendar") {
+    const rows = await sql`
+      select id, at, label from (
+        select id, data ->> ${widget.labelField} as label,
+          case when jsonb_typeof(data -> ${widget.field}) = 'string'
+            and pg_input_is_valid(data ->> ${widget.field}, 'timestamptz')
+            then (data ->> ${widget.field})::timestamptz end as at
+        from board_records
+        where board_id = ${boardId} and archived_at is null
+          ${filtersClause} ${incidentClause} ${viewportClause}
+      ) dated
+      where at >= now()
+      order by at, id
+      limit ${widget.limit}`;
+    return {
+      kind: "calendar",
+      key: widget.key,
+      title: widget.title,
+      field: widget.field,
+      items: rows.map((r) => ({
+        id: r.id as string,
+        at: new Date(r.at as Date | string).toISOString(),
+        label: (r.label as string | null) ?? null,
+      })),
+    } satisfies CalendarResult;
   }
 
   if (widget.kind === "status") {
@@ -320,7 +376,7 @@ async function computeWidget(
                  order by coalesce(updated_at, created_at) desc
                ) as rn
         from board_records
-        where board_id = ${boardId} and data ? ${widget.groupBy}
+        where board_id = ${boardId} and archived_at is null and data ? ${widget.groupBy}
           ${filtersClause} ${incidentClause} ${viewportClause}
       ) latest where rn = 1 order by g`;
     return {
@@ -339,7 +395,7 @@ async function computeWidget(
   const columns = widget.columns.filter((c) => readable.has(c));
   const rows = await sql`
     select id, data from board_records
-    where board_id = ${boardId} ${filtersClause} ${incidentClause} ${viewportClause}
+    where board_id = ${boardId} and archived_at is null ${filtersClause} ${incidentClause} ${viewportClause}
     order by coalesce(updated_at, created_at) desc
     limit ${widget.limit}`;
   return {
@@ -403,6 +459,8 @@ function widgetFieldsReadable(
   if (filters?.category && !readable.has(filters.category.field)) return false;
   if (operationalPeriodFilter && !readable.has(operationalPeriodFilter.field)) return false;
   if (widget.kind === "chart") return readable.has(widget.groupBy);
+  if (widget.kind === "kanban") return readable.has(widget.field);
+  if (widget.kind === "calendar") return readable.has(widget.field) && readable.has(widget.labelField);
   if (widget.kind === "status")
     return readable.has(widget.groupBy) && readable.has(widget.valueField);
   return true;
@@ -413,6 +471,8 @@ function missingResult(widget: DashboardWidget, readable?: ReadonlySet<string>):
   if (widget.kind === "tile") return { kind: "tile", ...base, value: 0, level: "normal" };
   if (widget.kind === "chart") return { kind: "chart", ...base, display: widget.display, groups: [] };
   if (widget.kind === "status") return { kind: "status", ...base, groups: [] };
+  if (widget.kind === "kanban") return { kind: "kanban", ...base, columns: [] };
+  if (widget.kind === "calendar") return { kind: "calendar", ...base, items: [] };
   return {
     kind: "list",
     ...base,
@@ -504,13 +564,13 @@ export async function listDashboardContributions(
     : sql`null::jsonb`;
   const [countRow] = await sql`
     select count(*)::int as total from board_records
-    where board_id = ${boardId} ${baseFilters} ${groupClause}
+    where board_id = ${boardId} and archived_at is null ${baseFilters} ${groupClause}
       ${incidentClause} ${viewportClause}`;
   const rows = await sql`
     with matched as (
       select id, data, coalesce(updated_at, created_at) as at, geom
       from board_records
-      where board_id = ${boardId} ${baseFilters} ${groupClause}
+      where board_id = ${boardId} and archived_at is null ${baseFilters} ${groupClause}
         ${incidentClause} ${viewportClause}
     )
     select id, data, at, to_char(at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at,

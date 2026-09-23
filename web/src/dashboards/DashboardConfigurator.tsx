@@ -37,9 +37,14 @@ function dashboardPanel(
     source: "dashboard",
     dashboardId,
     widgetKey: widget.key,
-    presentation: widget.kind === "status" ? "status" : widget.kind,
+    presentation: presentationOptions(widget)[0]!,
   };
 }
+
+// A kanban summary sits with the charts and upcoming calendar items with the activity lists.
+const PRESENTATION: Readonly<Record<DashboardTemplate["widgets"][number]["kind"], DashboardCompositionPanel["presentation"]>> = {
+  tile: "tile", chart: "chart", status: "status", list: "list", kanban: "chart", calendar: "list",
+};
 
 function optionIdentity(panel: DashboardCompositionPanel): string {
   return panel.source === "impact"
@@ -47,9 +52,9 @@ function optionIdentity(panel: DashboardCompositionPanel): string {
     : `dashboard:${panel.dashboardId}:${panel.widgetKey}`;
 }
 
-function presentationOptions(widget: DashboardTemplate["widgets"][number]): readonly string[] {
+function presentationOptions(widget: DashboardTemplate["widgets"][number]): readonly DashboardCompositionPanel["presentation"][] {
   if (widget.kind === "list") return ["list", "map"];
-  return [widget.kind];
+  return [PRESENTATION[widget.kind]];
 }
 
 export function DashboardConfigurator(props: DashboardConfiguratorProps) {

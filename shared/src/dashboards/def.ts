@@ -148,11 +148,29 @@ export const ListWidgetSchema = z.object({
   limit: z.number().int().positive().max(100).default(10),
 });
 
+/** Record counts per value of an enum field, one column per value in the field's own order. */
+export const KanbanWidgetSchema = z.object({
+  ...widgetBase,
+  kind: z.literal("kanban"),
+  field: z.string().regex(KEY),
+});
+
+/** The next records by a datetime field, soonest first, from now on. */
+export const CalendarWidgetSchema = z.object({
+  ...widgetBase,
+  kind: z.literal("calendar"),
+  field: z.string().regex(KEY),
+  labelField: z.string().regex(KEY),
+  limit: z.number().int().positive().max(50).default(10),
+});
+
 export const DashboardWidgetSchema = z.discriminatedUnion("kind", [
   TileWidgetSchema,
   ChartWidgetSchema,
   StatusWidgetSchema,
   ListWidgetSchema,
+  KanbanWidgetSchema,
+  CalendarWidgetSchema,
 ]);
 export type DashboardWidget = z.infer<typeof DashboardWidgetSchema>;
 
@@ -207,7 +225,24 @@ export interface ListResult {
   readonly columns: readonly string[];
   readonly records: ReadonlyArray<Record<string, unknown> & { readonly id: string }>;
 }
-export type WidgetResult = TileResult | ChartResult | StatusResult | ListResult;
+export interface KanbanResult {
+  readonly kind: "kanban";
+  readonly key: string;
+  readonly title: string;
+  readonly missing?: boolean;
+  readonly field?: string;
+  /** Every enum value in order, then any other stored value; null is "no value". */
+  readonly columns: ReadonlyArray<{ readonly value: string | null; readonly count: number }>;
+}
+export interface CalendarResult {
+  readonly kind: "calendar";
+  readonly key: string;
+  readonly title: string;
+  readonly missing?: boolean;
+  readonly field?: string;
+  readonly items: ReadonlyArray<{ readonly id: string; readonly at: string; readonly label: string | null }>;
+}
+export type WidgetResult = TileResult | ChartResult | StatusResult | ListResult | KanbanResult | CalendarResult;
 
 export interface DashboardSnapshot {
   readonly dashboardId: string;

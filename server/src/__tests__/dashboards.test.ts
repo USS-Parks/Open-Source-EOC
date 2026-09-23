@@ -342,3 +342,79 @@ describe("runtime dashboard filter", () => {
     expect(chartFiltered.groups.reduce((s, g) => s + g.count, 0)).toBe(2);
   });
 });
+
+describe("kanban and calendar widgets", () => {
+  interface Kanban { columns: { value: string | null; count: number }[] }
+  interface Upcoming { items: { id: string; at: string; label: string | null }[] }
+
+  it("counts kanban columns in the enum's order and lists what is upcoming, leaving archived records out", async () => {
+    const registered = await app.inject({
+      method: "POST",
+      url: "/api/v1/dashboard-templates",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        key: "road_views", version: 1, title: "Road views",
+        widgets: [
+          { kind: "kanban", key: "by_status", title: "Closures by status", board: "road_closures", field: "status" },
+          { kind: "calendar", key: "reopenings", title: "Reopenings", board: "road_closures",
+            field: "reopen_estimate", labelField: "road", limit: 2 },
+          { kind: "tile", key: "closures", title: "Closures", board: "road_closures" },
+          { kind: "chart", key: "closure_chart", title: "Closures by status", board: "road_closures", groupBy: "status" },
+        ],
+      },
+    });
+    expect(registered.statusCode, registered.body).toBe(201);
+    const created = await app.inject({
+      method: "POST",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/dashboards`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { templateKey: "road_views" },
+    });
+    const viewsId = created.json().id as string;
+    const read = async () => {
+      const res = await app.inject({
+        method: "GET", url: `/api/v1/dashboards/${viewsId}/data`, headers: { authorization: `Bearer ${memberToken}` },
+      });
+      expect(res.statusCode, res.body).toBe(200);
+      const snap = res.json() as DashboardSnapshot;
+      return {
+        kanban: widget<Kanban>(snap, "by_status"),
+        upcoming: widget<Upcoming>(snap, "reopenings"),
+        tile: widget<{ value: number }>(snap, "closures"),
+        chart: widget<{ groups: { value: string; count: number }[] }>(snap, "closure_chart"),
+      };
+    };
+
+    const hour = 3_600_000;
+    const at = (offset: number) => new Date(Date.now() + offset).toISOString();
+    await post("road_closures", { road: "Past reopening", reason: "slide", status: "closed", reopen_estimate: at(-hour) });
+    await post("road_closures", { road: "Later reopening", reason: "slide", status: "closed", reopen_estimate: at(48 * hour) });
+    await post("road_closures", { road: "Next reopening", reason: "slide", status: "closed", reopen_estimate: at(hour) });
+    await post("road_closures", { road: "Last reopening", reason: "slide", status: "closed", reopen_estimate: at(72 * hour) });
+    const before = await read();
+    expect(before.kanban.columns.map((column) => column.value)).toEqual(["closed", "one_lane", "reopened"]);
+    expect(before.kanban.columns[1]!.count).toBe(0);
+    const [counted] = await admin`
+      select count(*)::int as n from board_records
+      where board_id = ${roadsBoardId} and data ->> 'status' = 'closed' and archived_at is null`;
+    expect(before.kanban.columns[0]!.count).toBe(counted!.n);
+    // Soonest first, nothing in the past, and no more than the widget's limit.
+    expect(before.upcoming.items.map((item) => item.label)).toEqual(["Next reopening", "Later reopening"]);
+
+    const [next] = await admin`
+      select id from board_records where board_id = ${roadsBoardId} and data ->> 'road' = 'Next reopening'`;
+    const archived = await app.inject({
+      method: "POST",
+      url: `/api/v1/boards/${roadsBoardId}/records/${next!.id as string}/archive`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(archived.statusCode, archived.body).toBe(200);
+    const after = await read();
+    expect(after.kanban.columns[0]!.count).toBe(counted!.n - 1);
+    // Every widget counts what the board's default view shows: archived records are out.
+    expect(after.tile.value).toBe(before.tile.value - 1);
+    const closedIn = (c: typeof before.chart) => c.groups.find((g) => g.value === "closed")!.count;
+    expect(closedIn(after.chart)).toBe(closedIn(before.chart) - 1);
+    expect(after.upcoming.items.map((item) => item.label)).toEqual(["Later reopening", "Last reopening"]);
+  });
+});

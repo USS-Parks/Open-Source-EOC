@@ -144,6 +144,33 @@ Signed template packages can distribute an approved board definition to other
 instances. Trust of the signing key and local import authority are still
 required; package exchange does not share operational records.
 
+## Dashboard widgets
+
+A dashboard template lists widgets, each bound to a board template key
+(`board`) and computed on the server over the matching board. Besides `tile`,
+`status` and `list`, three widgets follow the board's view modes:
+
+- `chart` counts records by `groupBy`; with `"display": "bar"` it is the count
+  chart, and `"donut"` draws a ring.
+- `kanban` counts records per value of the enumeration `field`: one column per
+  value in the field's own order, zero included, then any other stored value,
+  then "No value".
+- `calendar` lists the next `limit` records (at most 50, 10 by default) whose
+  datetime `field` is now or later, soonest first, titled by `labelField`.
+
+```json
+{ "kind": "kanban", "key": "work_by_status", "title": "Work by status",
+  "board": "synthetic_ops", "field": "status" }
+{ "kind": "calendar", "key": "work_due", "title": "Work due",
+  "board": "synthetic_ops", "field": "due", "labelField": "summary", "limit": 5 }
+```
+
+Kanban and calendar widgets leave archived records out, as the board's own
+view does; the older widget kinds still count them. A widget whose fields the
+viewer cannot read shows as unavailable. In a saved incident overview, **Create
+saved view** or **Configure view** lists every widget: a kanban summary sits
+with the charts and a calendar with the activity lists.
+
 ## Import definitions
 
 The designer's **Import** tab takes definitions from files. Open it from

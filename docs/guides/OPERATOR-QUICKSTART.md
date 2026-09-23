@@ -202,6 +202,33 @@ cannot read.
 
 Column filters and header sorts in the table still work on the loaded rows.
 
+### Show a board as kanban, calendar or chart
+
+**Show records as** above a board's records switches between **List**,
+**Kanban**, **Calendar** and **Chart**. Every mode reads the open view under
+its current refinement, so a condition or the archived option applies to all
+four. The mode, its field and the calendar's month or week belong to the
+screen: a reload or another board starts again in **List**.
+
+- **Kanban**: choose an enumeration field under **Columns from**. Columns
+  follow the field's own order, and each count covers every matching record,
+  not only the loaded cards. A card shows the view's first column and two more.
+  Drag a card to another column, or use its **Move ... to** list, to change
+  that field; the change is an ordinary record update, so the server's edit
+  rules apply and a refusal is shown in its words with the card left in place.
+  A reader sees the columns without moving anything. When the field mirrors
+  the board's workflow states, cards do not move here: use a transition in the
+  record's **Workflow** section.
+- **Calendar**: choose a date and time field under **Dates from**. Records sit
+  on the day their value falls on in your timezone. **Month** and **Week**
+  change the span; **Previous**, **Today** and **Next** page through it, and
+  each page asks the server only for that range.
+- **Chart**: choose a field under **Count by**. Bars give the number of
+  matching records for each value, counted on the server; **Show as a table**
+  gives the same numbers with each value's share.
+
+Select a card or a calendar entry to open the record, as from the table.
+
 ### Archive, delete and read a record's history
 
 Select a record to open it in the record context.

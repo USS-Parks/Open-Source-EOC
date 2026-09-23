@@ -2182,3 +2182,50 @@ tagging remain separately gated as section 1 of the roster states.
   is first being built can miss that one live update until the next apply or
   the idle document is dropped.
 - **Rollback:** revert the commit and drop `append_board_record_write`.
+
+## V1 W4.2: views beyond the list
+
+- **What changed.** The board screen gains "Show records as": List, Kanban,
+  Calendar and Chart, new `web/src/boards/BoardModes.tsx`, each reading the
+  same server view under the current refinement.
+  - Kanban columns come from an enum field in the enum's order with human
+    labels, then other stored values, then "No value", counted by the view's
+    group counts. A card moves by drag and drop or a keyboard "Move to" list as
+    an ordinary record update; a refusal shows in the server's words and the
+    card stays. Readers cannot move cards, and a field whose values include
+    every workflow state cannot be dragged, with a note pointing to the
+    record's Workflow section.
+  - Calendar shows month and week, Sunday first, records on their day in the
+    viewer's timezone, paged by a `between` condition over the days shown.
+  - Chart draws horizontal bars of the server's group counts over any
+    groupable field in design tokens, with a "Show as a table" alternative.
+  - Dashboards gain a `kanban` widget, counts per column in enum order with
+    empty columns, and a `calendar` widget, the next records at or after now,
+    both computed on the server and offered by the configurator; the count
+    chart is the existing `chart` widget as bars.
+- **Defaults and deviations.** Mode, field and range are screen state, because
+  the route context holds only `view` and `filter`. A workflow state field is an
+  enum whose values contain every workflow state. The kanban and calendar
+  widgets have no drilldown. Kanban and chart replace a refinement's group
+  field, calendar its sorts. Ownership deviations: `BoardSurface.tsx`,
+  `server/src/dashboards/service.ts` and `config.ts`, and the shared widget
+  schemas.
+- **Integration fix: archived records in widgets.** The lane found the older
+  tile, chart, status and list widgets still counting archived records while
+  the board's default view and the new widgets leave them out. All six widget
+  queries now exclude archived records, and the widget test asserts the tile
+  and the chart each drop by one when a record is archived.
+- **Schema, contract:** none; shared widget schemas added. No dependency.
+- **Verification.** In the lane: board-engine, boards, api-docs, dashboards,
+  saved-dashboard-engine and incident-dashboard-scope 49 of 49; four browser
+  walks 7 of 7 serial, including kanban drag persisted and read back, calendar
+  placement in `America/Los_Angeles` where the record's UTC date is the next
+  day, chart counts against a database count, and a saved dashboard with the
+  three widgets; web and shared 698 of 698. With the archived fix: dashboards,
+  saved-dashboard-engine, incident-dashboard-scope, board-engine, boards,
+  api-docs, every web test and the shared suite 720 of 720; the board views,
+  dashboard, board records, workspace and KPI browser walks serial 8 of 8.
+  TypeScript and ESLint clean. Link checker 71 files.
+- **Evidence level:** unit, integration, real-database, browser and document.
+- **Deferred:** widget drilldown for kanban and calendar; mode state in the URL.
+- **Rollback:** revert the commit.
