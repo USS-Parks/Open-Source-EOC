@@ -1,4 +1,5 @@
-import * as XLSX from "xlsx";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
@@ -21,32 +22,15 @@ let adminToken: string;
 let memberToken: string;
 let boardId: string;
 
-/** Build a representative PDA-style XLSForm workbook as a real .xlsx. */
+/**
+ * A representative PDA-style XLSForm workbook, checked in as a real .xlsx so
+ * the reader is proven against a file it did not produce itself. Its survey
+ * carries text, select_one, geopoint and note questions; its choices sheet
+ * carries the closure_status list; its settings sheet carries the title.
+ */
 function pdaWorkbookBase64(): string {
-  const wb = XLSX.utils.book_new();
-  const survey = XLSX.utils.aoa_to_sheet([
-    ["type", "name", "label", "required", "relevant", "constraint", "constraint_message"],
-    ["text", "road", "Road", "yes", "", "", ""],
-    ["text", "reason", "Reason", "yes", "", "", ""],
-    ["select_one closure_status", "status", "Status", "yes", "", "", ""],
-    ["geopoint", "location", "Location", "yes", "", "", ""],
-    ["note", "thanks", "Report filed", "", "", "", ""],
-  ]);
-  XLSX.utils.book_append_sheet(wb, survey, "survey");
-  const choices = XLSX.utils.aoa_to_sheet([
-    ["list_name", "name", "label"],
-    ["closure_status", "closed", "Closed"],
-    ["closure_status", "one_lane", "One lane"],
-    ["closure_status", "reopened", "Reopened"],
-  ]);
-  XLSX.utils.book_append_sheet(wb, choices, "choices");
-  const settings = XLSX.utils.aoa_to_sheet([
-    ["form_title", "form_id"],
-    ["Road Closure Report", "closure_report"],
-  ]);
-  XLSX.utils.book_append_sheet(wb, settings, "settings");
-  const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
-  return Buffer.from(buffer).toString("base64");
+  const path = join(import.meta.dirname, "fixtures", "xlsform-road-closure.xlsx");
+  return readFileSync(path).toString("base64");
 }
 
 beforeAll(async () => {

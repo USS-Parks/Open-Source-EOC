@@ -5210,3 +5210,38 @@ increment proves it and that coverage follows the incident area.
   the mobile section drawer now names Templates, the last rail item.
 - **Result:** W1.9 is complete. Next: W1.10, replace the abandoned workbook
   parser on the XLSForm import path.
+
+## V1 W1.10: replace the abandoned workbook parser
+
+- **Problem:** `xlsx@0.18.5` is the last npm release of SheetJS and carries two
+  high advisories, GHSA-4r6h-8v6p-xvw6 and GHSA-5pgg-2g8v-p4x9, both accepted
+  in the allowlist until 2026-10-31. It parsed operator-uploaded workbooks on
+  `POST /api/v1/jurisdictions/:id/forms/import`.
+- **Replacement:** an .xlsx is a zip of XML parts, so the reader is now
+  `fflate` for the container and `fast-xml-parser`, already a dependency, for
+  the parts. `fflate@0.8.3` is MIT with no transitive dependencies. The reader
+  inflates only the workbook index, its relationships, the shared string table
+  and the worksheets; any other part, including embedded media or a macro
+  part, is never decompressed.
+- **Trust boundary:** the upload path now bounds entry count at 512, single
+  part at 32 MiB, total inflated size at 64 MiB, rows at 50,000 and columns at
+  512, and refuses a container it cannot read. The previous reader applied no
+  bound of any kind.
+- **Behavior held:** the reader resolves shared strings, rich-text runs and
+  inline strings, takes the first row as headers, trims every cell and drops
+  empty ones, which is what the previous `sheet_to_json` call did with
+  `defval: ""` and `raw: false`.
+- **Fixture:** `server/src/__tests__/fixtures/xlsform-road-closure.xlsx`, a
+  real 19 KB workbook generated once from the outgoing library and checked in,
+  replaces the workbook the test used to build with the same library it was
+  testing. The reader is now proven against a file it did not produce.
+- **Tests:** new `xlsform-reader.test.ts` covers the three sheets, shared
+  string resolution, and refusal of both a non-zip and a corrupt container.
+  `forms.test.ts` reads the fixture and is otherwise unchanged.
+- **Verification:** recursive TypeScript clean; full ESLint clean; the
+  advisory gate reports 0 high or critical findings and 0 time-bounded
+  exceptions with an empty allowlist; the license scan passed 300 packages;
+  the link checker passed 68 files; reader, forms and package tests passed 9
+  of 9.
+- **Result:** W1.10 is complete and the advisory allowlist is empty. Next:
+  W1.12, retire the roster stack.
