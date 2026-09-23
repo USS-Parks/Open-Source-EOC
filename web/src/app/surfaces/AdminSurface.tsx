@@ -4,6 +4,7 @@ import { Icon } from "../../design/icons/index.js";
 import "../../datasets/datasets.css";
 import type { ApiClient, BoardListItem } from "../api/client.js";
 import { EmptyState, Scroll, SurfaceHeader } from "../screens/parts.js";
+import { Channels } from "../../admin/Channels.js";
 import { Deployment } from "../../admin/Deployment.js";
 import { Guests } from "../../admin/Guests.js";
 import { People } from "../../admin/People.js";
@@ -15,6 +16,7 @@ const JURISDICTION_TABS = [
   { id: "positions", label: "Positions" },
   { id: "guests", label: "Guest access" },
   { id: "records", label: "Records" },
+  { id: "channels", label: "Channels" },
 ] as const;
 
 /**
@@ -54,6 +56,7 @@ export function AdminSurface(props: {
           {tab === "positions" ? <Positions client={props.client} jurisdictionId={props.jurisdictionId} /> : null}
           {tab === "guests" ? <Guests client={props.client} jurisdictionId={props.jurisdictionId} boards={props.boards} /> : null}
           {tab === "records" ? <Records client={props.client} jurisdictionId={props.jurisdictionId} /> : null}
+          {tab === "channels" ? <Channels client={props.client} jurisdictionId={props.jurisdictionId} /> : null}
           {tab === "deployment" ? <Deployment client={props.client} isInstanceAdmin={props.isInstanceAdmin} /> : null}
         </div>
       </div>

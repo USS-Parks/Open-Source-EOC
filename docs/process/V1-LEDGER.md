@@ -1613,3 +1613,67 @@ tagging remain separately gated as section 1 of the roster states.
   tiles drop nested JSON values, so the inspector shows scalars.
 - **Guide:** `docs/guides/OPERATOR-QUICKSTART.md`, "Read the map".
 - **Rollback:** revert the commit.
+
+## V1 W4.0 part one: email and SMS channels
+
+- **What changed.** Notification rules can send email and SMS. `ChannelSchema`
+  gains `email` (up to 50 addresses) and `sms` (up to 50 E.164 numbers). Each
+  recipient gets its own pending notification and delivery row inside the
+  write transaction, and the worker sends by kind: email through the
+  jurisdiction's SMTP relay, SMS through the fixture provider or an HTTP
+  provider. What the relay or provider answered, the SMTP reply, queue id and
+  Message-ID, or the provider's message id, is kept in the new
+  `delivery_outbox.receipt` for part two's delivery receipts. Admins configure
+  both channels and send a test from a new Channels tab under Administration,
+  new `web/src/admin/Channels.tsx`.
+- **Decisions.** Configuration is per jurisdiction in `notification_channels`,
+  the relay password or provider token envelope-encrypted, never returned,
+  shown as a fingerprint. The SMTP client is written in-house in
+  `server/src/notify/smtp.ts`, no dependency: STARTTLS and implicit TLS, never
+  falling back to plain text when STARTTLS was asked for; AUTH PLAIN or LOGIN;
+  multi-line replies; base64 body with dot-stuffing; RFC 2047 subjects; an idle
+  timeout on every connection; security mode `none` only without a user name.
+  The W2.7 allowlist governs the HTTP SMS provider URL, at save and before each
+  send; the SMTP relay is an admin-set host; recipients are people, not
+  endpoints, and are not allowlisted, but each counts against the rule's rate
+  cap. Fixture SMS keeps the last 200 messages in memory, listed as "fixture:
+  not sent". Circuits key on the relay or provider, never the recipient.
+- **Deviations.** Routes take a `:kind` parameter (`email|sms`) rather than a
+  path per kind. Test sends go out immediately outside the queue and are
+  audited as `notification.channel_tested`. A rule naming an unconfigured
+  channel answers 422, and a queued message for one is dead-lettered unsent. No
+  rule-authoring screen existed; `W3.12` builds it.
+- **Integration fix: permanent refusals.** An SMTP 5xx was retried like any
+  failure, eight times. A 5xx reply to MAIL, RCPT or the message itself now
+  raises `SmtpRefused` and the delivery is dead-lettered at once, without
+  counting against the relay's circuit, because the relay is working and
+  refused this recipient or message. A refusal at sign-in stays an ordinary
+  failure, so a wrong relay password does not dead-letter the queue while an
+  administrator corrects it. A new test shows a 550 dead-lettered after one
+  attempt and one relay session.
+- **Schema:** migration `0118_notification_channels.sql`:
+  `notification_channels` with admin-only row-level security; the delivery
+  kind check widened; `delivery_outbox.receipt`; `claim_deliveries` returning
+  the jurisdiction and channel settings with the secret still encrypted;
+  `settle_delivery` with a defaulted receipt argument, so prior code still runs.
+  Contract: three routes; `docs/API.md` regenerated. No dependency change.
+- **Verification.** In the lane: notify, delivery-outbox, observability,
+  scheduler, retention, api-docs, ipaws and notify-channels 66 of 66; the
+  channels browser walk and notify-channels 10 of 10; admin-browser 2 of 2;
+  migrate-baseline and upgrade 6 of 6; shared 115 of 115. The new tests cover
+  STARTTLS with AUTH PLAIN to a fake relay with command order, recipients,
+  subject, body and receipt; a 451 retried then dead-lettered; implicit TLS
+  with AUTH LOGIN, an encoded subject and dot-stuffing; an untrusted
+  certificate refused; a relay without STARTTLS refused before AUTH; fixture
+  SMS recorded and unsent; the HTTP provider form, basic auth and receipt, and
+  refusal once removed from the allowlist; admin-only configuration; the secret
+  absent from responses, rows and audit; per-recipient rate caps. After
+  rebasing onto W3.9, W4.5 and route coverage, with the refusal fix:
+  notify-channels, notify, delivery-outbox, observability, scheduler,
+  retention, api-docs, ipaws, migrate-baseline, the channels and admin browser
+  walks, every web test and the shared suite passed 674 of 674. TypeScript and
+  ESLint clean. Link checker 71 files.
+- **Evidence level:** unit, real-database integration, browser and document.
+- **Deferred:** part two, contacts, groups, mass notification, receipts and
+  escalation. A relay behind a private CA needs `NODE_EXTRA_CA_CERTS`.
+- **Rollback:** revert the code; the prior code runs against the 0118 schema.

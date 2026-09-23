@@ -1911,6 +1911,32 @@ export class ApiClient {
   importDashboardTemplate(template: DashboardTemplate): Promise<{ key: string; version: number }> {
     return this.request("POST", "/api/v1/dashboard-templates", template as unknown as Record<string, unknown>);
   }
+
+  // ---- Notification channels (Administration) ----
+  getNotificationChannel(jurisdictionId: string, kind: NotificationChannelKind): Promise<NotificationChannelView> {
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/notification-channels/${kind}`);
+  }
+  /** Omit `secret` to keep the stored password or token. */
+  saveNotificationChannel(jurisdictionId: string, kind: NotificationChannelKind, input: { settings: Record<string, unknown>; secret?: string }): Promise<NotificationChannelView> {
+    return this.request("PUT", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/notification-channels/${kind}`, input);
+  }
+  /** Sends one message now; answers with the relay's or provider's receipt, or fails with its error. */
+  testNotificationChannel(jurisdictionId: string, kind: NotificationChannelKind, to: string): Promise<{ receipt: Readonly<Record<string, unknown>> }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/notification-channels/${kind}/test`, { to });
+  }
+}
+
+// ---- Notification channel types ----
+
+export type NotificationChannelKind = "email" | "sms";
+export interface NotificationChannelView {
+  readonly kind: NotificationChannelKind;
+  readonly settings: Readonly<Record<string, unknown>> | null;
+  readonly credentialFingerprint: string | null;
+  readonly updatedAt: string | null;
+  readonly secretStorageAvailable: boolean;
+  /** SMS only: what the fixture provider recorded instead of sending, newest first. */
+  readonly fixtureMessages?: ReadonlyArray<{ readonly messageId: string; readonly to: string; readonly body: string; readonly at: string }>;
 }
 
 // ---- JIC list types ----

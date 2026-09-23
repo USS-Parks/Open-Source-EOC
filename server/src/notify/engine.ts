@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import type { Principal } from "../auth/service.js";
+import { E164 } from "./channels.js";
 
 /**
  * Notification engine (F4). Rules are data: an event, an optional
@@ -23,6 +24,8 @@ export const ChannelSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("inapp"), target: z.enum(["requesting_position"]) }),
   z.object({ kind: z.literal("webhook"), url: z.string().url() }),
   z.object({ kind: z.literal("ntfy"), url: z.string().url(), topic: z.string().min(1) }),
+  z.object({ kind: z.literal("email"), to: z.array(z.email()).min(1).max(50) }),
+  z.object({ kind: z.literal("sms"), to: z.array(E164).min(1).max(50) }),
 ]);
 export type Channel = z.infer<typeof ChannelSchema>;
 
@@ -52,8 +55,9 @@ export function signWebhookBody(secret: string, body: string): string {
 /**
  * Evaluate the rules for a board event and record what they ask for. Runs
  * inside the caller's write transaction and never touches the network: an
- * in-app notice is written as delivered, and a webhook or push is written as a
- * pending notification plus a delivery row that the outbox worker sends.
+ * in-app notice is written as delivered, and a webhook, push, email or SMS is
+ * written as a pending notification plus a delivery row that the outbox
+ * worker sends, one per email or SMS recipient.
  * A rule over its rate cap queues nothing more for the window; the database
  * counts the suppressed deliveries on one notification an admin can see.
  */
@@ -98,8 +102,14 @@ async function enqueue(
     await log(tx, event, ruleId, "inapp", "delivered", { title, positionId });
     return;
   }
-  const [admitted] = await tx`select admit_rule_delivery(${ruleId}) as ok`;
-  if (!admitted!.ok) return;
+  if (channel.kind === "email" || channel.kind === "sms") {
+    // One delivery per recipient, so each is capped, retried and receipted on its own.
+    const headers = channel.kind === "email" ? { subject: title } : {};
+    for (const to of channel.to) {
+      await queue(tx, event, ruleId, channel.kind, to, headers, summarize(event), { to, title });
+    }
+    return;
+  }
   let target: string;
   let headers: Record<string, string>;
   let body: string;
@@ -125,10 +135,29 @@ async function enqueue(
     body = summarize(event);
     detail = { topic: channel.topic, title };
   }
-  const notificationId = await log(tx, event, ruleId, channel.kind, "pending", detail);
+  await queue(tx, event, ruleId, channel.kind, target, headers, body, detail);
+}
+
+/**
+ * Queue one external delivery with its pending notification. Over the rule's
+ * cap, nothing is queued and the database counts the suppressed delivery.
+ */
+async function queue(
+  tx: Sql,
+  event: BoardEvent,
+  ruleId: string,
+  kind: "webhook" | "ntfy" | "email" | "sms",
+  target: string,
+  headers: Record<string, string>,
+  body: string,
+  detail: Record<string, unknown>,
+): Promise<void> {
+  const [admitted] = await tx`select admit_rule_delivery(${ruleId}) as ok`;
+  if (!admitted!.ok) return;
+  const notificationId = await log(tx, event, ruleId, kind, "pending", detail);
   await tx`
     insert into delivery_outbox (jurisdiction_id, rule_id, notification_id, kind, target, headers, body)
-    values (${event.jurisdictionId}, ${ruleId}, ${notificationId}, ${channel.kind}, ${target},
+    values (${event.jurisdictionId}, ${ruleId}, ${notificationId}, ${kind}, ${target},
             ${tx.json(headers as never)}, ${body})`;
 }
 

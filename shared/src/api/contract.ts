@@ -120,6 +120,7 @@ GET /api/v1/jurisdictions/:jurisdictionId/lifelines
 GET /api/v1/jurisdictions/:jurisdictionId/meetings/config
 GET /api/v1/jurisdictions/:jurisdictionId/members
 GET /api/v1/jurisdictions/:jurisdictionId/notification-allowlist
+GET /api/v1/jurisdictions/:jurisdictionId/notification-channels/:kind
 GET /api/v1/jurisdictions/:jurisdictionId/position-assignments
 GET /api/v1/jurisdictions/:jurisdictionId/positions
 GET /api/v1/jurisdictions/:jurisdictionId/resource-requests
@@ -247,6 +248,7 @@ POST /api/v1/jurisdictions/:jurisdictionId/jic/inquiries
 POST /api/v1/jurisdictions/:jurisdictionId/jic/releases
 POST /api/v1/jurisdictions/:jurisdictionId/libraries
 POST /api/v1/jurisdictions/:jurisdictionId/members/:personId/mfa-reset
+POST /api/v1/jurisdictions/:jurisdictionId/notification-channels/:kind/test
 POST /api/v1/jurisdictions/:jurisdictionId/notification-rules
 POST /api/v1/jurisdictions/:jurisdictionId/notifications/run-scheduled
 POST /api/v1/jurisdictions/:jurisdictionId/peers
@@ -289,6 +291,7 @@ PUT /api/v1/jurisdictions/:jurisdictionId/members/:personId
 PUT /api/v1/jurisdictions/:jurisdictionId/members/:personId/disabled
 PUT /api/v1/jurisdictions/:jurisdictionId/messaging-settings
 PUT /api/v1/jurisdictions/:jurisdictionId/notification-allowlist
+PUT /api/v1/jurisdictions/:jurisdictionId/notification-channels/:kind
 PUT /api/v1/jurisdictions/:jurisdictionId/retention
 PUT /api/v1/peers/:peerId/link
 `

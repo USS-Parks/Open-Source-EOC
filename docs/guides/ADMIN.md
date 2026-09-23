@@ -36,6 +36,7 @@ screen shows. The screen acts on the jurisdiction selected in the console.
 | Positions | Add positions; assign, reassign and revoke their holders |
 | Guest access | Grant and revoke time-boxed read access for mutual-aid accounts |
 | Records | Set retention periods; download the audit trail; export the jurisdiction |
+| Channels | Configure the email relay and SMS provider notification rules send through; send a test message |
 | Deployment | Show which optional integrations are enabled; provision a jurisdiction (instance administrators) |
 
 A change to a role, a membership, the disabled flag or a guest grant applies to
@@ -194,6 +195,49 @@ with no enabled admin runs none. Intervals are in
 
 - IPAWS setup: [IPAWS enablement](../IPAWS-ENABLEMENT.md)
 - Federation setup: [Federation setup](./FEDERATION-SETUP.md)
+
+### Email and SMS channels
+
+A rule can also send email and SMS. Each jurisdiction configures one SMTP
+relay and one SMS provider on the **Channels** tab of the Administration
+screen, or with `GET` and `PUT
+/api/v1/jurisdictions/:jurisdictionId/notification-channels/:kind`, where
+`kind` is `email` or `sms`. Nothing is sent by email or SMS until an
+administrator saves a relay or provider; a rule that names a channel the
+jurisdiction has not configured is refused when it is created.
+
+- **Email.** The relay's host, port, connection security, optional user name
+  and from address. Security is STARTTLS (upgraded before anything else is
+  sent, and never sent in plain text if the relay does not offer it), TLS
+  from the start, or none for a local relay that needs no sign-in. A relay
+  that needs a sign-in must use STARTTLS or TLS; the server signs in with
+  AUTH PLAIN or AUTH LOGIN.
+- **SMS.** The fixture provider records each message on the server and sends
+  nothing; the Channels tab lists what it recorded, marked `fixture: not
+  sent`. It keeps the last 200 messages in the memory of the server process
+  that recorded them, until that process restarts.
+  The HTTP provider posts a form with `To`, `From` and `Body` to the provider
+  URL with basic authentication, the shape Twilio-style APIs accept. Its URL
+  must be on the notification allowlist, checked when it is saved and again
+  before each send.
+
+The relay password or provider token is stored encrypted with the server key
+(`OPENEOC_SECRET_KEY`) and is never returned; the screen shows a fingerprint
+of the stored one. Saving without a new password keeps the stored one. Each
+change is recorded in the audit trail as `notification.channel_configured`.
+
+The email or SMS channel in a rule lists recipients: `{"kind": "email", "to":
+["duty@example.org"]}` or `{"kind": "sms", "to": ["+17075551234"]}`, with
+numbers in E.164 form and at most 50 recipients. Each recipient is its own
+delivery, retried and capped like a webhook: a rule's rate cap counts each
+recipient. The allowlist does not apply to addresses or numbers. When the
+relay or provider accepts a message, the delivery keeps its answer (the SMTP
+reply and queue id, or the provider's message id). A relay or provider that
+keeps failing is paused as a whole, not per recipient.
+
+**Send test email** and **Send test SMS** send one message at once, outside
+the queue, and show the relay's or provider's answer or its error. Each test
+is recorded as `notification.channel_tested`.
 
 ## During operations
 

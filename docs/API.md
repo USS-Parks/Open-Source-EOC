@@ -331,6 +331,12 @@ set, and then require that value as a bearer token.
 - `GET /api/v1/jurisdictions/:jurisdictionId/notification-allowlist`: Read jurisdictions notification allowlist (auth: bearer; audience: operator)
 - `PUT /api/v1/jurisdictions/:jurisdictionId/notification-allowlist`: Set jurisdictions notification allowlist (auth: bearer; audience: operator)
 
+### notification-channels
+
+- `GET /api/v1/jurisdictions/:jurisdictionId/notification-channels/:kind`: Read jurisdictions notification channels (auth: bearer; audience: operator)
+- `PUT /api/v1/jurisdictions/:jurisdictionId/notification-channels/:kind`: Set jurisdictions notification channels (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/notification-channels/:kind/test`: Run jurisdictions notification channels test (auth: bearer; audience: operator)
+
 ### notification-rules
 
 - `POST /api/v1/jurisdictions/:jurisdictionId/notification-rules`: Run jurisdictions notification rules (auth: bearer; audience: operator)
