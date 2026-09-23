@@ -26,6 +26,44 @@ closed at every step (INV-7).
 
 Miss any prerequisite and `enable` returns `409` naming what is missing.
 
+This project has not made a live send. Doing so needs Basho's authorized
+IPAWS-OPEN COG credentials and a signed MOA with FEMA; until both exist, the
+test suite reaches only a loopback stand-in that answers with the recorded
+IPAWS-OPEN responses.
+
+## On screen
+
+All of this is done in the notification center (the bell, then **Open
+center**).
+
+- **Where a send would go.** Under the heading, every member sees one line
+  naming the destination and whether IPAWS is enabled: *IPAWS not
+  configured*, *Fixture endpoint, not FEMA* (any endpoint that is not an
+  https FEMA IPAWS-OPEN host), *IPAWS test environment*, *Production IPAWS,
+  disabled*, or *LIVE production IPAWS*.
+- **Configure.** An admin opens the **IPAWS** tab, chooses the environment,
+  enters the COG id, the IPAWS-OPEN endpoint and the COG credential, and
+  selects **Save configuration**. The credential field clears once saved and
+  the credential is never shown again; the screen shows only its
+  fingerprint. To change the COG id or endpoint later, leave the credential
+  blank and the stored one is kept.
+- **Acknowledge the MOA.** Enter the MOA reference and select **Acknowledge
+  MOA**. The screen then shows the reference and when it was recorded.
+- **Enable.** **Enable IPAWS** stays unavailable until a credential and the
+  MOA are recorded. **Disable IPAWS** is always available.
+- **Request a send.** In **Alert records**, open a local alert that passes
+  the IPAWS profile, submit it for local review and approve it. An admin
+  then selects **Request IPAWS send**, or **Request test handshake** while a
+  test configuration is not yet enabled. Nothing is sent; the screen says a
+  different admin must confirm by the expiry time.
+- **Confirm.** A different admin opens the **IPAWS** tab. **Send requests**
+  lists each request with the alert headline, the requester, and the time
+  left to confirm, with **Confirm send** and **Cancel request**. The
+  requester sees **Confirm send** disabled on their own request. After
+  confirmation the request shows *Accepted by IPAWS-OPEN* or *Rejected by
+  IPAWS-OPEN* with the reason; a lapsed request shows *Expired without
+  confirmation*, and a withdrawn one *Cancelled*.
+
 ## The endpoints
 
 | Step | Call |

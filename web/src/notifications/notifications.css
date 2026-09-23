@@ -19,7 +19,7 @@
 .notification-workspace-header h2 { margin: 2px 0 4px; font-size: 22px; line-height: 1.2; color: var(--eoc-text-strong); }
 .notification-workspace-header p { max-width: 72ch; margin: 0; color: var(--eoc-text-muted); font-size: 13px; line-height: 1.45; }
 .notification-eyebrow { color: var(--eoc-brand-teal); font-size: 11px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
-.notification-workspace > .eoc-kit-tabs { padding-inline: 18px; background: var(--eoc-surface); }
+.notification-workspace > .eoc-kit-tabs { flex: 0 0 auto; padding-inline: 18px; background: var(--eoc-surface); }
 
 .notification-split {
   min-height: 0;

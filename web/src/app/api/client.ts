@@ -63,6 +63,14 @@ import type {
   CapAlert,
 } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
+import type {
+  IpawsConfigInput,
+  IpawsSendKind,
+  IpawsSendRequest,
+  IpawsSendResult,
+  IpawsStatus,
+  IpawsTrailEntry,
+} from "../../ipaws/model.js";
 
 /**
  * The app shell's one door to the server. It carries the bearer access
@@ -1508,6 +1516,46 @@ export class ApiClient {
     await this.request<{ ok: true }>(
       "DELETE", `/api/v1/incidents/${encodeURIComponent(incidentId)}/saved-state/table_view/${encodeURIComponent(key)}?expectedRevision=${encodeURIComponent(String(expectedRevision))}`,
     );
+  }
+  // ---- IPAWS-OPEN enablement and the two-person send ----
+  getIpawsStatus(jurisdictionId: string): Promise<IpawsStatus> {
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/ipaws`);
+  }
+  configureIpaws(jurisdictionId: string, input: IpawsConfigInput): Promise<IpawsStatus> {
+    return this.request("PUT", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/ipaws/config`, { ...input });
+  }
+  acknowledgeIpawsMoa(jurisdictionId: string, reference: string): Promise<IpawsStatus> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/ipaws/moa`, { reference });
+  }
+  setIpawsEnabled(jurisdictionId: string, enabled: boolean): Promise<IpawsStatus> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/ipaws/enable`, { enabled });
+  }
+  /** Ask for a send; the server answers with a pending request a different admin must confirm. */
+  requestIpawsSend(jurisdictionId: string, alertId: string, kind: IpawsSendKind): Promise<IpawsSendRequest> {
+    const base = `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}`;
+    return kind === "handshake"
+      ? this.request("POST", `${base}/ipaws/test`, { alertId })
+      : this.request("POST", `${base}/cap/alerts/${encodeURIComponent(alertId)}/ipaws`, {});
+  }
+  async listIpawsSends(jurisdictionId: string): Promise<IpawsSendRequest[]> {
+    const result = await this.request<{ sends: IpawsSendRequest[] }>(
+      "GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/ipaws/sends`,
+    );
+    return result.sends;
+  }
+  confirmIpawsSend(jurisdictionId: string, sendId: string): Promise<IpawsSendResult> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/ipaws/sends/${encodeURIComponent(sendId)}/confirm`, {});
+  }
+  cancelIpawsSend(jurisdictionId: string, sendId: string): Promise<IpawsSendRequest> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/ipaws/sends/${encodeURIComponent(sendId)}/cancel`, {});
+  }
+  /** IPAWS events from the jurisdiction chronology since `from`: one page, oldest first. */
+  async ipawsAuditTrail(jurisdictionId: string, from: string): Promise<IpawsTrailEntry[]> {
+    const query = new URLSearchParams({ from, limit: "500" });
+    const page = await this.request<{ entries: IpawsTrailEntry[] }>(
+      "GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/chronology?${query}`,
+    );
+    return page.entries.filter((entry) => entry.category.startsWith("ipaws."));
   }
   downloadFile(fileId: string): Promise<Blob> {
     return this.requestBlob(`/api/v1/files/${fileId}/content`);

@@ -1,0 +1,77 @@
+/* IPAWS mode strip: the marker text carries the meaning; color only reinforces it. */
+.ipaws-mode {
+  margin: 0;
+  padding: 8px 18px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  color: var(--eoc-text);
+  background: var(--eoc-surface-sunken);
+  border-bottom: 1px solid var(--eoc-border);
+  border-left: 4px solid var(--eoc-status-unknown);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.ipaws-mode strong { color: var(--eoc-text-strong); }
+.ipaws-mode-switch { font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: 11px; }
+.ipaws-mode[data-mode="fixture"] { border-left-style: dashed; border-left-color: var(--eoc-status-warning); }
+.ipaws-mode[data-mode="test"] { border-left-color: var(--eoc-status-warning); }
+.ipaws-mode[data-mode="live"] {
+  border-left-color: var(--eoc-status-critical);
+  background: color-mix(in srgb, var(--eoc-status-critical) 10%, var(--eoc-surface));
+}
+.ipaws-mode[data-mode="live"] strong { color: var(--eoc-status-critical); }
+
+.ipaws-workspace {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: minmax(300px, .9fr) minmax(360px, 1.1fr);
+  overflow: hidden;
+}
+.ipaws-config,
+.ipaws-sends { min-width: 0; overflow: auto; padding: 16px 18px; }
+.ipaws-config { border-right: 1px solid var(--eoc-border); background: var(--eoc-surface-sunken); }
+.ipaws-sends { background: var(--eoc-surface); }
+.ipaws-config h3,
+.ipaws-sends h3 { margin: 0 0 10px; color: var(--eoc-text-strong); font-size: 17px; }
+.ipaws-form { margin-bottom: 14px; padding: 12px; display: grid; gap: 10px; background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: var(--eoc-radius-md); }
+.ipaws-form h4 { margin: 0; font-size: 14px; color: var(--eoc-text-strong); }
+.ipaws-form p { margin: 0; overflow-wrap: anywhere; }
+.ipaws-form label { display: grid; gap: 5px; color: var(--eoc-text-muted); font-size: 12px; font-weight: 650; }
+.ipaws-form input,
+.ipaws-form select {
+  width: 100%;
+  min-height: 44px;
+  padding: 7px 9px;
+  font: inherit;
+  color: var(--eoc-text);
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border-strong);
+  border-radius: var(--eoc-radius-sm);
+}
+
+.ipaws-send-list { margin: 12px 0 0; padding: 0; display: grid; gap: 10px; list-style: none; }
+.ipaws-send-list > li { min-width: 0; padding: 12px; display: grid; gap: 10px; border: 1px solid var(--eoc-border); border-left: 4px solid var(--eoc-border-strong); border-radius: var(--eoc-radius-sm); }
+.ipaws-send-list > li[data-outcome="pending"] { border-left-color: var(--eoc-brand-teal); }
+.ipaws-send-list > li[data-outcome="accepted"] { border-left-color: var(--eoc-status-success); }
+.ipaws-send-list > li[data-outcome="rejected"] { border-left-color: var(--eoc-status-critical); }
+.ipaws-countdown { font-variant-numeric: tabular-nums; }
+.notification-state[data-state="pending"] { color: var(--eoc-brand-teal); border-color: currentColor; }
+.notification-state[data-state="accepted"] { color: var(--eoc-status-success); border-color: currentColor; }
+.notification-state[data-state="rejected"] { color: var(--eoc-status-critical); border-color: currentColor; }
+.notification-state[data-state="expired"],
+.notification-state[data-state="cancelled"] { border-style: dashed; }
+.ipaws-result { padding: 8px 10px; border-left: 3px solid var(--eoc-status-success); background: var(--eoc-surface-sunken); }
+.ipaws-result[data-accepted="false"] { border-left-color: var(--eoc-status-critical); }
+.ipaws-send-action { margin-top: 10px; display: grid; gap: 6px; }
+.ipaws-requested { margin: 10px 0 0; padding: 8px 10px; border-left: 3px solid var(--eoc-brand-teal); background: var(--eoc-brand-tint); }
+
+@media (max-width: 760px) {
+  .ipaws-mode { padding-inline: 14px; }
+  .ipaws-workspace { display: flex; flex-direction: column; overflow: auto; }
+  .ipaws-config,
+  .ipaws-sends { flex: 0 0 auto; overflow: visible; padding: 14px; }
+  .ipaws-config { border-right: 0; border-bottom: 1px solid var(--eoc-border); }
+}

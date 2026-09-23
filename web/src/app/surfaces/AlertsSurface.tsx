@@ -1,5 +1,5 @@
 import { CAP_CATEGORY, CAP_CERTAINTY, CAP_SCOPE, CAP_SEVERITY, CAP_URGENCY } from "@openeoc/shared";
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { ActionButton, Tabs } from "../../design/controls.js";
 import { Drawer } from "../../design/overlays.js";
 import { ErrorNote, Loading } from "../screens/parts.js";
@@ -13,8 +13,9 @@ import type {
   RawNotification,
 } from "../api/client.js";
 import "../../notifications/notifications.css";
+import { IpawsConfigPanel, IpawsModeBanner, IpawsSendAction, IpawsSendsPanel, type IpawsClient } from "../../ipaws/IpawsPanel.js";
 
-export interface AlertsClient {
+export interface AlertsClient extends IpawsClient {
   notifications(): Promise<RawNotification[]>;
   fieldSyncToken(): string;
   markNotificationRead(id: string): Promise<{ ok: true }>;
@@ -31,6 +32,9 @@ export interface AlertsSurfaceProps {
   readonly incidentId: string | null;
   readonly canAuthor: boolean;
   readonly actorEmail: string;
+  /** Jurisdiction admin: configures IPAWS and requests or confirms sends. */
+  readonly isAdmin?: boolean;
+  readonly personId?: string | null;
 }
 
 type InboxFilter = "all" | "unread" | "unacknowledged" | "failed";
@@ -198,6 +202,7 @@ function AlertDetail(props: {
   readonly canAuthor: boolean;
   readonly reviewing: boolean;
   readonly onReview: (state: AlertReviewState) => void;
+  readonly ipawsAction: ReactNode;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { if (props.summary) heading.current?.focus(); }, [props.summary?.id]);
@@ -240,6 +245,7 @@ function AlertDetail(props: {
         </> : null}
         {state === "approved" ? <p className="notification-muted">Approved locally. Approval does not transmit this alert.</p> : null}
       </footer>
+      {props.ipawsAction}
     </article>
   );
 }
@@ -359,9 +365,10 @@ function AlertComposer(props: {
   );
 }
 
-export function AlertsSurface({ client, jurisdictionId, incidentId, canAuthor, actorEmail }: AlertsSurfaceProps) {
+export function AlertsSurface({ client, jurisdictionId, incidentId, canAuthor, actorEmail, isAdmin = false, personId = null }: AlertsSurfaceProps) {
   const notes = useNotifications(client);
   const alerts = useAsync(() => client.listCapAlerts(jurisdictionId), [jurisdictionId]);
+  const ipaws = useAsync(() => client.getIpawsStatus(jurisdictionId), [client, jurisdictionId]);
   const [tab, setTab] = useState("inbox");
   const [inboxFilter, setInboxFilter] = useState<InboxFilter>("all");
   const [alertFilter, setAlertFilter] = useState<AlertFilter>("all");
@@ -407,6 +414,7 @@ export function AlertsSurface({ client, jurisdictionId, incidentId, canAuthor, a
     || item.review?.state === alertFilter);
   const selectedNote = notificationItems.find((item) => item.id === selectedNoteId) ?? null;
   const selectedAlert = alertItems.find((item) => item.id === selectedAlertId) ?? null;
+  const headlines = useMemo(() => new Map(alertItems.map((item) => [item.id, item.headline ?? item.event ?? item.identifier])), [alertItems]);
 
   async function openNotification(item: RawNotification) {
     setSelectedNoteId(item.id);
@@ -466,8 +474,14 @@ export function AlertsSurface({ client, jurisdictionId, incidentId, canAuthor, a
         <div><span className="notification-eyebrow">Operational communications</span><h2>Alerts and notifications</h2><p>Reading, acknowledgement, review, and external transmission remain separate states.</p></div>
         {canAuthor ? <ActionButton kind="primary" onClick={() => setComposerOpen(true)}>Compose local alert</ActionButton> : null}
       </header>
-      <Tabs id="notification-workspace" label="Alert workspace" value={tab} onChange={setTab} tabs={[{ id: "inbox", label: `Inbox (${notificationItems.length})` }, { id: "alerts", label: `Alert records (${alertItems.length})` }]} />
-      {tab === "inbox" ? (
+      <IpawsModeBanner status={ipaws.data} error={ipaws.error} />
+      <Tabs id="notification-workspace" label="Alert workspace" value={tab} onChange={setTab} tabs={[{ id: "inbox", label: `Inbox (${notificationItems.length})` }, { id: "alerts", label: `Alert records (${alertItems.length})` }, ...(isAdmin ? [{ id: "ipaws", label: "IPAWS" }] : [])]} />
+      {tab === "ipaws" && isAdmin ? (
+        <section id="notification-workspace-ipaws-panel" role="tabpanel" aria-labelledby="notification-workspace-ipaws-tab" className="ipaws-workspace">
+          {ipaws.data ? <IpawsConfigPanel key={jurisdictionId} client={client} jurisdictionId={jurisdictionId} status={ipaws.data} onChanged={ipaws.reload} /> : <Loading label="Loading IPAWS configuration…" />}
+          <IpawsSendsPanel client={client} jurisdictionId={jurisdictionId} personId={personId} headlines={headlines} onChanged={alerts.reload} />
+        </section>
+      ) : tab === "inbox" ? (
         <section id="notification-workspace-inbox-panel" role="tabpanel" aria-labelledby="notification-workspace-inbox-tab" className="notification-split">
           <div className="notification-list-pane">
             <label className="notification-filter">Show<select value={inboxFilter} onChange={(event: ChangeEvent<HTMLSelectElement>) => setInboxFilter(event.target.value as InboxFilter)}><option value="all">All notifications</option><option value="unread">Unread</option><option value="unacknowledged">Acknowledgement pending</option><option value="failed">Delivery failed</option></select></label>
@@ -487,7 +501,8 @@ export function AlertsSurface({ client, jurisdictionId, incidentId, canAuthor, a
               {filteredAlerts.map((item) => <li key={item.id}><button type="button" aria-pressed={item.id === selectedAlertId} onClick={() => selectAlert(item.id)}><span className="notification-list-title"><strong>{item.headline ?? item.event ?? item.identifier}</strong><span className="notification-state" data-state={item.status === "Exercise" || item.status === "Test" ? "exercise" : item.review?.state ?? "stored"}>{reviewLabel(item)}</span></span><span>{item.status} · {item.scope} · {formatTime(item.createdAt)}</span><small>{item.origin === "ingested" ? "Received externally · " : ""}Workspace outbound: {transmissionLabel(item.transmission)}</small></button></li>)}
             </ul>}
           </div>
-          <AlertDetail summary={selectedAlert} detail={alertDetail} loading={alertDetailLoading} error={alertDetailError} canAuthor={canAuthor} reviewing={reviewing} onReview={(state) => void review(state)} />
+          <AlertDetail summary={selectedAlert} detail={alertDetail} loading={alertDetailLoading} error={alertDetailError} canAuthor={canAuthor} reviewing={reviewing} onReview={(state) => void review(state)}
+            ipawsAction={selectedAlertId && alertDetail?.origin === "authored" ? <IpawsSendAction client={client} jurisdictionId={jurisdictionId} alertId={selectedAlertId} ipawsEligible={alertDetail.ipawsEligible} reviewState={alertDetail.review?.state ?? null} isAdmin={isAdmin} status={ipaws.data} /> : null} />
         </section>
       )}
       <AlertComposer open={composerOpen} client={client} jurisdictionId={jurisdictionId} incidentId={incidentId} actorEmail={actorEmail} onClose={() => setComposerOpen(false)} onSaved={saved} />

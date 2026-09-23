@@ -843,3 +843,65 @@ tagging remain separately gated as section 1 of the roster states.
   holds two notification sockets. Other polls remain for W5.1.
 - **Rollback:** revert the commit, then drop the trigger and the two
   functions from migration 0111.
+
+## V1 W3.5: IPAWS enablement and send
+
+- **What changed.** The alerts surface gives IPAWS an operator screen, in new
+  `web/src/ipaws/**`.
+  - Every member sees, under the heading, where a confirmed send would go and
+    whether IPAWS is on: not configured, fixture endpoint (not FEMA), test
+    environment, production disabled, or live production.
+  - Admins get an IPAWS tab for the COG id, endpoint, environment and
+    credential. The credential is a password field cleared once saved; only
+    the stored fingerprint shows afterwards. The tab records the MOA
+    acknowledgement and holds the enable toggle, unavailable until a
+    credential and the MOA are recorded.
+  - An approved, IPAWS-eligible local alert offers "Request IPAWS send", or
+    "Request test handshake" while a test configuration is not yet enabled;
+    either creates a pending two-person request.
+  - The send requests list shows headline, requester and a countdown, with
+    Confirm and Cancel; Confirm is disabled on the requester's own request
+    with a note saying why. Outcomes show as accepted or rejected with the
+    reason, submitted, expired or cancelled.
+  - Nine client methods were added in one block.
+- **Defaults applied.** The API carries no fixture flag, so any endpoint that
+  is not https on a `*.fema.gov` or `*.integratedpublicalertsystem.gov` host is
+  labelled "Fixture endpoint, not FEMA" whatever environment it claims.
+  Requester names and IPAWS answers come from one chronology page of up to 500
+  events covering the ten requests shown; past that, names fall back to
+  "Another admin" and outcomes to "Submitted", marked in the code. Only alerts
+  with an approved local review get the request action; an alert created with
+  status Actual through the API has no review state and gets none, which keeps
+  every IPAWS send behind a review. The dictionary has no IPAWS entries, so the
+  labels sit beside the components.
+- **Ownership deviations:** one line in `Console.tsx` passing the existing
+  admin and person props to the surface; one CSS property in
+  `web/src/notifications/notifications.css` so the tab row no longer clips on
+  narrow screens; IPAWS stubs in the alerts surface test's mock client.
+- **Integration.** Rebased onto W2.4, which had replaced the alerts surface's
+  notification poll with the push hook; the conflict was resolved keeping the
+  push hook and the new admin and person props. A fixture fingerprint in a
+  unit test tripped the secret scan's entropy rule and was replaced with a
+  plain placeholder.
+- **Schema, contract, dependencies:** none. No server code changed; the
+  browser test points the configured endpoint at a loopback server answering
+  with the recorded `postcap-accepted.xml`, the pattern the server tests use.
+- **Browser walk.** Admin A configures a test COG against the loopback
+  fixture, acknowledges the MOA, enables, approves the seeded eligible alert
+  and requests the send; A sees Confirm disabled. Admin B signs in, sees the
+  requester and countdown, and confirms. Both see "Accepted by IPAWS-OPEN".
+  The fixture endpoint takes 0 hits before confirmation and 1 after, no
+  browser request leaves the machine, the credential never appears in the
+  page, and the audit rows carry both identities. Six screenshots: wide
+  light, narrow light, wide dark and narrow dark.
+- **Verification:** in the lane, 9 files passed 78 of 78. After the rebase:
+  `ipaws-send-browser`, `alerts-workspace-browser`, alerts, cap, ipaws, the
+  IPAWS web tests, the alerts surface, client and notification stream tests
+  passed 77 of 77. TypeScript and ESLint clean.
+- **Evidence level:** unit, integration, browser and real-database.
+- **Boundary kept:** no live send until Basho supplies IPAWS-OPEN credentials
+  and the MOA; the guide says so. R2 closes to the edge of that external
+  gate. `docs/FACET-STATUS.md` row R2 is reconciled in `86+D35`.
+- **Guide:** `docs/IPAWS-ENABLEMENT.md` walks configuration, MOA, enable and
+  the two-person send on the screen.
+- **Rollback:** revert the commit; no schema is involved.

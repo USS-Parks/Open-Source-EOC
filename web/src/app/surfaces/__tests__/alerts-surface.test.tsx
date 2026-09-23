@@ -92,6 +92,19 @@ function makeClient() {
       detail = { ...detail, review };
       return review;
     }),
+    getIpawsStatus: vi.fn(async () => ({
+      enabled: false, environment: "test" as const, configured: false, cogId: null, endpointUrl: null,
+      credentialFingerprint: null, moaAcknowledged: false, moaReference: null, moaAcknowledgedAt: null,
+      secretStorageAvailable: true,
+    })),
+    configureIpaws: vi.fn(),
+    acknowledgeIpawsMoa: vi.fn(),
+    setIpawsEnabled: vi.fn(),
+    requestIpawsSend: vi.fn(),
+    listIpawsSends: vi.fn(async () => []),
+    confirmIpawsSend: vi.fn(),
+    cancelIpawsSend: vi.fn(),
+    ipawsAuditTrail: vi.fn(async () => []),
   };
   return client;
 }

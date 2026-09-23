@@ -601,7 +601,8 @@ function Center(props: {
       );
     case "alerts":
       return <AlertsSurface client={props.client} jurisdictionId={props.jurisdictionId}
-        incidentId={props.incidentId} canAuthor={props.canAuthorAlerts} actorEmail={props.actorEmail} />;
+        incidentId={props.incidentId} canAuthor={props.canAuthorAlerts} actorEmail={props.actorEmail}
+        isAdmin={props.isAdmin} personId={props.personId} />;
     case "lifelines":
     case "lifeline":
       return <LifelinesSurface client={props.client} incidentId={props.incidentId}
