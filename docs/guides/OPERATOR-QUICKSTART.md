@@ -15,6 +15,13 @@ briefings, plans, resources, and continuity.
 If an expected incident or action is absent, stop and ask an administrator to
 verify current authority. Do not work in a similarly named incident.
 
+Your own settings are in the account menu at the right of the command bar:
+the light or dark theme and **Sign out**. The command bar, or the context
+drawer on a narrow screen, holds the operational period and acting position.
+The navigation shows only the sections your account can use: Administration
+and Federation appear for administrators, and Templates for an instance
+administrator who also administers the selected organization.
+
 ## 2. Read before writing
 
 Open **Situation / Overview**, **Map**, and **ESFs & Lifelines** as the
@@ -41,6 +48,15 @@ impact count or from ESF activation. Unknown or missing never means stable.
   [Record costs and escalate a request](#record-costs-and-escalate-a-request).
 - Use **Smart Forms** for supported field reports. Select the attached incident
   board and read the queue receipt after submission.
+- Use **Operations / Field Reports** to read the reports as they arrive. It
+  shows the Field Reports board attached to the selected incident, or, when
+  the incident has none or no incident is selected, the organization's Field
+  Reports boards, with a **Field Reports board** selector when there is more
+  than one. Reports from Smart
+  Forms, field capture and offline sync all land there. Select a report to
+  open its record under **Boards**; **Capture a field report** opens Smart
+  Forms. When no board made from the Field Reports template exists, the screen
+  says so; ask an administrator to create one.
 - Use the **Lifelines** and **ESFs** tabs in **ESFs & Lifelines** to record
   attributable assessments, evidence, actions, organizations, and history.
   Resolve conflicting current reports only through the attributed decision

@@ -249,7 +249,7 @@ describe("the operations console in a real browser, offline", () => {
             await page.getByRole("button", { name: "All sections" }).click();
             expect(await page.getByRole("button", { name: "Close sections" }).evaluate(isFocused)).toBe(true);
             await page.keyboard.press("Shift+Tab");
-            expect(await page.getByRole("button", { name: "Templates", exact: true }).evaluate(isFocused)).toBe(true);
+            expect(await page.getByRole("button", { name: "Feeds", exact: true }).evaluate(isFocused)).toBe(true);
             await page.keyboard.press("Escape");
             expect(await page.getByRole("button", { name: "All sections" }).evaluate(isFocused)).toBe(true);
           }

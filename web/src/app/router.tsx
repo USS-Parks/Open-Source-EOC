@@ -49,6 +49,7 @@ export type Surface =
   | { readonly kind: "board-design"; readonly id: string }
   | { readonly kind: "admin" }
   | { readonly kind: "federation" }
+  | { readonly kind: "field-reports" }
   | { readonly kind: "not-found"; readonly path: string };
 
 export interface RouteContext {
@@ -98,6 +99,8 @@ export function sectionOf(surface: Surface): string {
       return "smartForms";
     case "periods":
       return "operationalPeriods";
+    case "field-reports":
+      return "fieldReports";
     case "lifeline":
     case "esf":
       return "lifelines";
@@ -199,6 +202,8 @@ function parseSurfacePath(clean: string): Surface {
       return { kind: "chronology" };
     case "staffing":
       return { kind: "staffing" };
+    case "field-reports":
+      return { kind: "field-reports" };
     default:
       return head ? { kind: "not-found", path: clean } : { kind: "map" };
   }
@@ -326,6 +331,8 @@ function surfacePath(surface: Surface): string {
       return "#/admin";
     case "federation":
       return "#/federation";
+    case "field-reports":
+      return "#/field-reports";
     case "not-found":
       return `#/${surface.path}`;
   }

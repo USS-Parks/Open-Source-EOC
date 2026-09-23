@@ -32,6 +32,7 @@ describe("surface hash routing", () => {
     { kind: "facilities" },
     { kind: "admin" },
     { kind: "federation" },
+    { kind: "field-reports" },
     { kind: "not-found", path: "not-a-workspace" },
   ];
 
@@ -58,6 +59,7 @@ describe("surface hash routing", () => {
     expect(sectionOf({ kind: "dashboard" })).toBe("overview");
     expect(sectionOf({ kind: "board-design", id: "b1" })).toBe("boards");
     expect(sectionOf({ kind: "periods" })).toBe("operationalPeriods");
+    expect(sectionOf({ kind: "field-reports" })).toBe("fieldReports");
     expect(sectionOf({ kind: "map" })).toBe("map");
   });
 

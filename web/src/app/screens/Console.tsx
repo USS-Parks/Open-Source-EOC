@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { BoardList } from "../../design/layout.js";
 import { Button } from "../../design/components.js";
 import type { ThemeName } from "../../design/tokens.js";
@@ -35,6 +35,7 @@ import { AarSurface } from "../surfaces/AarSurface.js";
 import { FeedsSurface } from "../surfaces/FeedsSurface.js";
 import { MessagesWorkspace } from "../../coordination/MessagesWorkspace.js";
 import { SmartFormsSurface } from "../surfaces/SmartFormsSurface.js";
+import { FieldReportsSurface } from "../surfaces/FieldReportsSurface.js";
 import { TrackingSurface } from "../surfaces/TrackingSurface.js";
 import { DamageSurface } from "../../damage/DamageSurface.js";
 import { FacilitiesSurface } from "../../facilities/FacilitiesSurface.js";
@@ -60,6 +61,7 @@ const NAV: readonly NavGroup[] = [
     { key: "boards", label: "Boards", icon: "boards" },
     { key: "resources", label: "Resources", icon: "resources" },
     { key: "tasks", label: "Tasks", icon: "tasks" },
+    { key: "fieldReports", label: "Field Reports", icon: "fieldReports" },
     { key: "smartForms", label: "Smart Forms", icon: "smartForms" },
     { key: "tracking", label: "Tracking", icon: "tracking" },
     { key: "damage", label: "Damage Assessment", icon: "fieldReports" },
@@ -87,11 +89,15 @@ const NAV: readonly NavGroup[] = [
     { key: "federation", label: "Federation", icon: "participants" },
   ] },
 ];
-/** The rail without the administrator-only entries, for accounts that administer nothing. */
-const MEMBER_NAV: readonly NavGroup[] = NAV.map((group) => ({ ...group, items: group.items.filter((item) => item.key !== "admin" && item.key !== "federation") }));
-/** Facilities is an optional integration: its entry shows only where the server runs it. */
-function withFacilities(nav: readonly NavGroup[], enabled: boolean): readonly NavGroup[] {
-  return enabled ? nav : nav.map((group) => ({ ...group, items: group.items.filter((item) => item.key !== "facilities") }));
+/** The rail without the entries this account or deployment cannot use, so no entry opens a refusal. */
+function railFor(administers: boolean, designsBoards: boolean, integrations: ReadonlySet<string>): readonly NavGroup[] {
+  const hidden = new Set([
+    ...(administers ? [] : ["admin", "federation"]),
+    ...(designsBoards ? [] : ["templates"]),
+    // Optional integrations register no routes when off, so their entries go too.
+    ...["facilities", "tracking"].filter((key) => !integrations.has(key)),
+  ]);
+  return NAV.map((group) => ({ ...group, items: group.items.filter((item) => !hidden.has(item.key)) }));
 }
 
 /**
@@ -148,15 +154,16 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         : Promise.resolve([]),
     [viewingJurisdictionId, incident.selectedIncidentId],
   );
-  const facilities = useAsync(
+  const integrations = useAsync(
     () =>
       viewingJurisdictionId && viewingMembership
-        ? client.facilitiesEnabled()
-        : Promise.resolve(false),
+        ? client.listIntegrations().then((state) => state.integrations.filter((i) => i.enabled).map((i) => i.key))
+        : Promise.resolve([]),
     [viewingJurisdictionId, viewingMembership?.role],
   );
+  const enabledIntegrations = useMemo(() => new Set<string>(integrations.data ?? []), [integrations.data]);
   // null while the check runs; an unreachable check hides the screen like a disabled one.
-  const facilitiesEnabled = facilities.error ? false : facilities.data;
+  const facilitiesEnabled = integrations.error ? false : integrations.data ? enabledIntegrations.has("facilities") : null;
   const notifications = useNotifications(client);
   const [lastNotificationCheck, setLastNotificationCheck] = useState<Date | null>(null);
   useEffect(() => {
@@ -285,7 +292,12 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       positionLabel={session.me?.position?.title ?? "No acting position"}
       periodControl={<OperationalPeriodControl />}
       positionControl={<PositionControl />}
-      nav={withFacilities(session.me?.isInstanceAdmin || session.me?.memberships.some((m) => m.role === "admin") ? NAV : MEMBER_NAV, facilitiesEnabled === true)}
+      nav={railFor(
+        Boolean(session.me?.isInstanceAdmin || session.me?.memberships.some((m) => m.role === "admin")),
+        // Board templates are published by an instance admin who also administers this jurisdiction.
+        Boolean(session.me?.isInstanceAdmin && viewingMembership?.role === "admin"),
+        enabledIntegrations,
+      )}
       activeNav={sectionOf(surface)}
       onNavigate={(key) => navigateInContext(sectionForNav(key))}
       userName={session.me?.person.displayName ?? ""}
@@ -329,6 +341,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         incidentClosed={Boolean(incident.selectedIncident?.closedAt)}
         incidentBoardIds={incident.incidentBoardIds}
         boards={boardItems}
+        boardsLoading={boards.loading && !boards.data}
         collections={collections.data ?? []}
         feeds={feeds.data ?? []}
         isAdmin={viewingMembership?.role === "admin"}
@@ -406,6 +419,8 @@ function sectionForNav(key: string): Surface {
       return { kind: "staffing" };
     case "facilities":
       return { kind: "facilities" };
+    case "fieldReports":
+      return { kind: "field-reports" };
     case "lifelines":
       return { kind: "lifelines" };
     case "tasks":
@@ -450,6 +465,7 @@ function Center(props: {
   incidentClosed: boolean;
   incidentBoardIds: ReadonlySet<string>;
   boards: readonly BoardListItem[];
+  boardsLoading: boolean;
   collections: readonly CollectionRef[];
   feeds: readonly FeedHealth[];
   isAdmin: boolean;
@@ -621,6 +637,10 @@ function Center(props: {
     case "smartforms":
       return <SmartFormsSurface client={props.client} jurisdictionId={props.discoveryJurisdictionId}
         incidentId={props.incidentId} onOpenMap={() => props.onNavigate({ kind: "map" })} />;
+    case "field-reports":
+      return <FieldReportsSurface client={props.client} boards={props.boards} boardsLoading={props.boardsLoading}
+        incidentId={props.incidentId} incidentBoardIds={props.incidentBoardIds}
+        onOpenSmartForms={() => props.onNavigate({ kind: "smartforms" })} />;
     case "tracking":
       return <TrackingSurface client={props.client} jurisdictionId={props.jurisdictionId} />;
     case "damage":
@@ -742,6 +762,7 @@ function pageFor(surface: Surface, scope: string): { readonly page: ShellPage; r
     case "resources": return result("Operations", "Resources", "boards");
     case "tasks": return result("Operations", "Tasks", "boards");
     case "smartforms": return result("Operations", "Smart Forms", "boards");
+    case "field-reports": return result("Operations", "Field Reports", "boards");
     case "tracking": return result("Operations", "Tracking", "boards");
     case "damage": return result("Operations", "Damage Assessment", "boards");
     case "staffing": return result("Operations", "Staffing", "boards");

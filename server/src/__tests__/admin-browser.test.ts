@@ -193,7 +193,7 @@ describe("administration screen", () => {
     const member = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     try {
       await signIn(member, "member@example.org", "another-good-password");
-      await member.getByRole("button", { name: "Templates", exact: true }).waitFor();
+      await member.getByRole("button", { name: "Feeds", exact: true }).waitFor();
       expect(await member.getByRole("button", { name: "Administration", exact: true }).count()).toBe(0);
       await member.goto(`${baseUrl}/app/index.html#/admin`, { waitUntil: "load" });
       await member.getByText("Administration is available to administrators.").waitFor();

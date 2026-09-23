@@ -1369,3 +1369,52 @@ tagging remain separately gated as section 1 of the roster states.
 - **Deferred:** editing and removing registry entries, which need an engine
   route; a status-request screen.
 - **Rollback:** revert the commit.
+
+## V1 W3.10: settings and field reports
+
+- **Field Reports built.** The engine has no route listing form submissions:
+  a submission is a record on a board plus a `form.submitted` audit event, and
+  the design documents define Field Reports as the operator route backed by the
+  configured Field Reports board. The new surface at `#/field-reports`, after
+  Tasks, shows the Field Reports board attached to the selected incident,
+  scoped to it, or the organization's Field Reports boards with a selector.
+  The existing board screen draws the records, so status, attachments, paging
+  and the record link behave as under Boards. "Capture a field report" opens
+  Smart Forms; a clear message appears when no Field Reports board exists.
+- **Settings removal confirmed.** The account menu already holds the only
+  self-service controls the engine offers, theme and sign-out, and the command
+  bar holds operational period and acting position. The engine has no route to
+  change one's display name, no session list, no self view of two-step
+  sign-in, and no personal notification preferences, so a Settings page would
+  duplicate the menu. Deviation: one of the "two new surfaces" was built.
+- **Rail defect found and fixed.** Walking every rail entry found Templates
+  opening "Board customization is unavailable for this account" for every
+  member and every jurisdiction admin who is not an instance admin. The rail
+  now hides Templates unless the account is an instance admin administering
+  the viewed jurisdiction, the check the Templates screen makes.
+- **Integration: optional integrations off the rail.** After rebasing onto
+  W3.4, the console's two nav helpers merged into one `railFor`, which hides
+  Administration and Federation from non-admins, Templates as above, and
+  Facilities and Tracking when their integration is off, reading
+  `GET /api/v1/integrations`, which any signed-in person may now read.
+  Tracking previously showed when off and opened onto actions that fail.
+- **Ownership deviations:** `router.tsx` additive; one line each in
+  `app-e2e`, `admin-browser` and `federation-browser` tests, whose "rail has
+  loaded" signal moved from Templates to Feeds.
+- **Schema, contract, dependencies:** none.
+- **Verification.** In the lane: web 490 of 490; `field-reports-browser`,
+  `admin-browser` and `federation-browser` 6 of 6, the rail walk red on
+  Templates before the fix; `app-e2e` 4 of 4. The new browser test opens the
+  incident's field reports and a record, follows "Capture a field report",
+  checks dark at 390 with no overflow or outside requests, and walks every rail
+  entry as an admin and a member, requiring each to show its own heading and no
+  refusal, placeholder or "Page not found". After rebasing onto W3.4 and the
+  rail merge: every rail-walking browser test (admin, facilities, federation,
+  field reports, field workspaces, app-e2e) and every web test passed 481 of
+  481. TypeScript and ESLint clean. Link checker 71 files.
+- **Evidence level:** unit, real-database integration, browser and document.
+- **Deferred:** a partner viewer who is not a member gets incident boards
+  without template keys, so Field Reports shows none for them; the board is
+  still under Boards. The Settings engine gaps above remain.
+- **Guide:** `docs/guides/OPERATOR-QUICKSTART.md`.
+- **Rollback:** revert the commit.
