@@ -85,9 +85,10 @@ Four units no earlier roster carried, plus one release-time decision.
 Everything else the audit found was already owned by an open V1 unit and is
 restated in section 5 under its existing ID.
 
-1. **`W1.11`, the in-flight landing.** `W1.8` is receipted at ledger line 5121
-   but its tree is uncommitted: the staged baseline migration, 101 deleted
-   migration files and four modified documents. Nothing else starts first.
+1. **`W1.11`, the in-flight landing.** `W1.8` is receipted in the frozen ledger
+   under "V1 W1.8: replace the pre-release migration chain with a guarded
+   baseline" but its tree is uncommitted: the staged baseline migration, 54
+   deleted migration files and four modified documents. Nothing starts first.
 2. **`W1.12`, the roster stack.** Five live rosters, listed in section 0.
 3. **`W1.13`, the ledger.** `VEOC-EXECUTION-LEDGER.md` is 398 KB and 5,149
    lines in one file. Receipts cite it by line number, so it is frozen, not
@@ -152,7 +153,7 @@ files other units own. `W1.0` through `W1.8` are complete.
 | `W1.9` | Client and console leftovers: remove the two navigation entries that render an unavailable panel (`Console.tsx` 646 Field Reports, 666 Settings) or build them in `W3.10`; remove the client methods no surface calls unless `W3` claims them. Acceptance: no navigation destination renders an unavailable panel | `W1.11` | `web/src/app/screens/Console.tsx`, `web/src/app/api/client.ts` | S |
 | `W1.10` | Replace `xlsx@0.18.5` on the XLSForm import path with a maintained reader, or vendor SheetJS's current build under its license with a pinned hash and an advisory allowlist entry. Acceptance: the `W0.1` advisory gate passes with no allowlist entry for a parser reachable from an operator upload | `W1.11` | `server/src/forms/xlsx-import.ts`, `server/package.json`, `pnpm-lock.yaml`, `scripts/license-scan.mjs` | S |
 | `W1.12` | Retire the roster stack per section 0: create `docs/process/archive/`, move the six documents with a supersession header naming this plan, repair every inbound link across `docs/`, `README.md` and `ROADMAP.md`, and rewrite the authority-documents section of `CLAUDE.md` to name this document alone. Acceptance: the docs link checker is green and `docs/process/` holds one roster | `W1.11` | `docs/process/**` moves, `CLAUDE.md`, link fixes | M |
-| `W1.13` | Freeze `docs/process/VEOC-EXECUTION-LEDGER.md` with a closing header stating that it is historical and that line references into it remain stable. Open `docs/process/V1-LEDGER.md` for every unit of this plan, carrying the same receipt template. Acceptance: no receipt is rewritten or moved, and the new ledger opens with `W1.11` | `W1.12` | the two ledger files | S |
+| `W1.13` | **DONE 2026-09-23.** Freeze `docs/process/VEOC-EXECUTION-LEDGER.md` with a notice marking it historical and pointing at its successor. Open `docs/process/V1-LEDGER.md` for every unit of this plan, carrying a receipt template. Acceptance: no receipt is rewritten or moved, and the new ledger opens with the first unit that runs after the freeze. The original wording said the new ledger opens with `W1.11`, which contradicted the same sentence, because `W1.11` ran first under this plan's execution order and its receipt was already in the historical ledger | `W1.12` | the two ledger files | S |
 | `W1.14` | Consolidate the server test suite: record per-directory line and assertion counts first, merge duplicated fixture and provisioning setup into the shared helpers in `server/src/__tests__/`, and collapse per-session acceptance files that assert the same behavior into one file per module. Acceptance: total assertions and covered lines do not fall, the gate stays green, and the receipt shows the before and after counts | `W1.11` | `server/src/**/*.test.ts`, `server/src/__tests__/**` | L |
 
 Gate after `W1`: full suite green at `--maxWorkers=1` with the gate tag; the
@@ -262,7 +263,7 @@ Astra as single writer, with Basho's inputs.
 
 | Unit | What | Depends on | Owns | Size |
 |---|---|---|---|---|
-| `79D+D33` | The integrated incident exercise as worded in the continuation roster row 24, closing the four legs at ledger lines 2356 to 2362, with D33's bounded visual and accessibility review. Closes the R3 boundary | W2, W3 | new exercise test files | L |
+| `79D+D33` | The integrated incident exercise as worded in the continuation roster row 24, closing the four legs left open by the receipt "VEOC-79D: Integrated cross-boundary incident exercise (partial)" in the frozen ledger, with D33's bounded visual and accessibility review. Closes the R3 boundary | W2, W3 | new exercise test files | L |
 | `M5` | Milestone gate | `79D+D33` | none | S |
 | `A11Y-T1` | The manual screen-reader pass (NVDA and VoiceOver) that has been scheduled and never run, plus reduced-motion and contrast handling | `79D+D33` | web accessibility fixes | M |
 | `D34` | Operator workflow comparison against the D01 baseline with representative operators, or its recorded absence. Closes the F14, F17 and INV-8 operator boundaries | Basho input | documents | M |

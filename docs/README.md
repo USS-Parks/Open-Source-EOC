@@ -37,7 +37,9 @@ not operational data or evidence of a live deployment.
 
 Execution history lives under [`process/`](process/). The active authority is
 the [Finish PSPR](process/FINISH-PSPR-2026-09-22.md); its evidence is recorded
-in the [execution ledger](process/VEOC-EXECUTION-LEDGER.md). Superseded
+in the [V1 ledger](process/V1-LEDGER.md). Receipts up to the roster retirement
+are in the frozen [execution ledger](process/VEOC-EXECUTION-LEDGER.md).
+Superseded
 rosters are in [`process/archive/`](process/archive/). Handoffs, research,
 audit receipts, and design-review material remain available under `process/`
 without obscuring the operator guides.

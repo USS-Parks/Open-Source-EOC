@@ -13,8 +13,9 @@ substantial, tested application. It does not establish a live pilot,
 commercial parity, representative-operator acceptance or release readiness.
 Current capability truth is in the
 [parity matrix](./docs/VEOC-PARITY-MATRIX.md), the
-[facet register](./docs/FACET-STATUS.md), and the
-[execution ledger](./docs/process/VEOC-EXECUTION-LEDGER.md).
+[facet register](./docs/FACET-STATUS.md), the
+[V1 ledger](./docs/process/V1-LEDGER.md), and the frozen
+[execution ledger](./docs/process/VEOC-EXECUTION-LEDGER.md) behind it.
 
 ## Current deployment boundary
 
@@ -36,7 +37,7 @@ not yet the version 1.0 release a county can install and operate unassisted.
 | Wave | Purpose | Current status |
 |---|---|---|
 | W0 | Close the Master roster and reconcile repository truth | Complete; gate passed 2026-09-22 |
-| W1 | Remove or relocate non-product and obsolete delivery surface | In progress; W1.0-W1.12 complete, W1.13 next |
+| W1 | Remove or relocate non-product and obsolete delivery surface | In progress; W1.0-W1.13 complete, W1.14 next |
 | W2 | Harden one real activation: queues, scheduling, scale, security, observability and retention | Not started |
 | W3 | Put an operator screen in front of delivered engines | Not started |
 | W4 | Add parity depth where engines or data are genuinely missing | Not started |

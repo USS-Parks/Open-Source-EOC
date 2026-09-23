@@ -29,7 +29,9 @@ commercial-parity certification.
   roster and the only live one.
 - `docs/process/archive/` holds the rosters it supersedes, including the
   completed technical roster and the acceptance work that carries forward.
-- `docs/process/VEOC-EXECUTION-LEDGER.md` contains prompt receipts and evidence.
+- `docs/process/V1-LEDGER.md` contains unit receipts and evidence for the
+  current roster. `docs/process/VEOC-EXECUTION-LEDGER.md` is frozen and holds
+  the receipts that preceded it.
 - `docs/VEOC-PARITY-MATRIX.md` and `docs/FACET-STATUS.md` contain current
   capability status and explicit remaining boundaries.
 - `docs/design/canonical-references/` is the visual authority.

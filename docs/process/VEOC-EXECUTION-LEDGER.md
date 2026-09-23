@@ -1,6 +1,16 @@
 # VEOC Execution Ledger
 
-Append-only session receipts for the roster in `VIRTUAL-EOC-PSPR-2026-09-17.md`.
+> **Frozen 2026-09-23.** This ledger is closed and historical. It holds every
+> receipt from VEOC-00 through the retirement of the roster stack. Nothing is
+> appended to it and no receipt in it is rewritten or moved. Receipts from the
+> Finish PSPR are in [`V1-LEDGER.md`](./V1-LEDGER.md).
+>
+> Find a receipt by its heading, not by line number. Adding this notice pushed
+> every line below it down by ten, so content cited by a line number written
+> before the freeze now sits ten lines further down than the citation says.
+
+Append-only session receipts for the roster now archived at
+`archive/VIRTUAL-EOC-PSPR-2026-09-17.md` and the plans that succeeded it.
 Never edit a prior receipt; corrections are new entries referencing the original.
 
 Execution authorization: Basho approved full sequential execution of the roster
