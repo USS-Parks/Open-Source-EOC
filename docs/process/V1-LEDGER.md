@@ -2229,3 +2229,56 @@ tagging remain separately gated as section 1 of the roster states.
 - **Evidence level:** unit, integration, real-database, browser and document.
 - **Deferred:** widget drilldown for kanban and calendar; mode state in the URL.
 - **Rollback:** revert the commit.
+
+## V1 W4.3: reporting
+
+- **What changed.** A report builder over boards, new `server/src/reports/**`
+  and `web/src/reports/**`, with migration `0124_reports.sql`.
+  - A report is a saved definition over one board: columns, view conditions
+    through the board engine's own `conditionSql`, up to two grouping fields,
+    count and sum totals per group and overall, sort keys, and optionally one
+    incident. It holds no board data. Every run reads the board as the person
+    running it, so record rules and field visibility apply, and the output
+    names what was left out.
+  - Output as JSON for the screen, and as PDF (paged with headings on every
+    page, WinAnsi Helvetica through the shared ICS PDF writer), Excel and CSV
+    with the formula guard. A run reads at most 50,000 records and answers 413
+    past that.
+  - Schedules run through the in-process scheduler as a new `reports` job,
+    interval or daily at a time in a named time zone. A due report is claimed by
+    moving its next run forward under `for update skip locked`, runs as its
+    owner, emails the file as an attachment through the jurisdiction's SMTP
+    channel to named addresses and to contacts' first email, optionally stores
+    it in Files, and records the run in `report_runs` and the audit.
+  - Members read and run reports, writers build them, the owner while still a
+    writer or an admin changes or deletes one, all under row-level security.
+    The Reports entry in the Planning rail is shown to members only.
+  - `docs/guides/REPORTS.md`, indexed from the guides README; the scheduler
+    table in `deploy/README.md` gains `OPENEOC_SCHEDULER_REPORTS_MS`.
+- **Defaults and deviations.** Scheduled email is sent directly, after the
+  claiming transaction commits, not through the delivery queue, because the
+  queue carries text bodies only. A failed send is recorded on the run and not
+  retried; the next run sends a fresh report. Ownership deviations, each
+  additive: `server/src/notify/smtp.ts` gains multipart attachments,
+  `server/src/boards/service.ts` exports `conditionSql`, `shared/src/ics/pdf.ts`
+  exports `escapeText`, and the scheduler gains the job.
+- **Schema, contract, dependencies.** Migration `0124`: `reports`,
+  `report_runs`, and two security definer functions, `reports_due` for the
+  scheduler's work discovery and `report_email_channel` for the owner's run.
+  Seven routes added to the contract and `docs/API.md`. No dependency.
+- **Verification.** The integrating session re-ran the unit after its rebase
+  onto `1bca393`, in lane d with tag `d`: `pnpm -r exec tsc --noEmit` exit 0;
+  `pnpm exec eslint .` exit 0; `pnpm exec vitest run` over reports,
+  reports-browser, notify-channels, scheduler, api-docs, boards, the shared ICS
+  tests, the router test and the route-coverage test, 9 files and 55 tests
+  passed, 0 failed; `node scripts/check-links.mjs` 72 files ok. The browser
+  walk builds a grouped report with a sum, previews, saves, downloads PDF and
+  Excel and schedules it, with light 1440 and dark 390 screenshots. The
+  real-database tests cover authority by role, a definition over fields the
+  author cannot use, two-level totals, rule-hidden records and columns, Excel
+  read back, CSV formula guard, PDF validity and paging, a daily run across a
+  daylight saving change, and a due run that emails the PDF, stores the file and
+  records the run.
+- **Evidence level:** unit, integration, real-database, browser and document.
+- **Deferred:** chart output in a report; retry of a failed scheduled send.
+- **Rollback:** revert both commits; migration `0124` adds only new objects.
