@@ -72,6 +72,9 @@ function makeClient() {
   let detail = alertDetail();
   const client: AlertsClient = {
     notifications: vi.fn(async () => [notification]),
+    fieldSyncToken: () => {
+      throw new Error("no live stream in this test");
+    },
     markNotificationRead: vi.fn(async () => {
       notification = { ...notification, read_at: "2026-09-21T18:01:00.000Z" };
       return { ok: true as const };

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, SessionExpiredError } from "../api/client.js";
+import { ApiError, SessionExpiredError, type RawNotification } from "../api/client.js";
 
 /**
  * Small data-fetching helpers. `useAsync` runs a promise when its deps
  * change and exposes {data, error, loading, reload}. `usePolled` adds a
  * fixed-interval refresh for the surfaces that should feel live until the
- * WebSocket streams are wired. Both cancel cleanly on unmount so a
- * late response never writes into a gone component.
+ * WebSocket streams are wired; `useNotifications` refetches the inbox when
+ * the server pushes a change. All cancel cleanly on unmount so a late
+ * response never writes into a gone component.
  */
 
 export interface AsyncState<T> {
@@ -68,4 +69,69 @@ export function usePolled<T>(
     return () => clearInterval(timer);
   }, [reload, intervalMs]);
   return state;
+}
+
+/** Longest wait between reconnect attempts, and so the slowest fallback refetch. */
+const STREAM_RETRY_MAX_MS = 60_000;
+
+/**
+ * The newest page of the notification inbox, refetched whenever the server
+ * signals a change on the notification stream. The signal carries no content;
+ * the refetch goes through the REST inbox. While the socket is down each
+ * reconnect attempt, backing off to once a minute, also refetches when the
+ * page is visible, which catches anything missed and renews an expired token
+ * through the REST path before the next attempt. `live` is true while the
+ * stream is subscribed.
+ */
+export function useNotifications(client: {
+  notifications(): Promise<RawNotification[]>;
+  fieldSyncToken(): string;
+}): AsyncState<RawNotification[]> & { readonly live: boolean } {
+  const state = useAsync(() => client.notifications(), [client]);
+  const { reload } = state;
+  const [live, setLive] = useState(false);
+  useEffect(() => {
+    let socket: WebSocket | null = null;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let failures = 0;
+    let stopped = false;
+    const later = () => {
+      failures += 1;
+      retry = setTimeout(connect, Math.min(STREAM_RETRY_MAX_MS, 1000 * 2 ** failures));
+    };
+    function connect() {
+      let token: string;
+      try {
+        token = client.fieldSyncToken();
+      } catch {
+        return later(); // signed out: nothing to refetch until a session returns
+      }
+      const url = new URL("/api/v1/notifications/stream", window.location.href);
+      url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+      const ws = new WebSocket(url);
+      socket = ws;
+      ws.onopen = () => ws.send(JSON.stringify({ type: "auth", token }));
+      ws.onmessage = (event: MessageEvent) => {
+        const { type } = JSON.parse(String(event.data)) as { type?: string };
+        if (type === "ready") {
+          failures = 0;
+          setLive(true);
+        }
+        if (type === "ready" || type === "changed") reload();
+      };
+      ws.onclose = () => {
+        if (stopped) return;
+        setLive(false);
+        if (document.visibilityState !== "hidden") reload();
+        later();
+      };
+    }
+    connect();
+    return () => {
+      stopped = true;
+      clearTimeout(retry);
+      socket?.close();
+    };
+  }, [client, reload]);
+  return { ...state, live };
 }

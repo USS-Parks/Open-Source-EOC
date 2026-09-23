@@ -198,4 +198,29 @@ describe("sync hub lifecycle", () => {
     await settle(EVICT_MS * 4);
     expect(hub.stats().entries).toBe(0);
   }, 60_000);
+
+  it("gives concurrent first opens of a scope one document, so every subscriber hears later updates", async () => {
+    const [board] = await admin`
+      insert into boards (jurisdiction_id, template_key, template_version, title)
+      values (${jurisdictionId}, 'significant_events', 1, 'Raced board') returning id`;
+    const raced = board!.id as string;
+    const racing = new BoardSyncHub(runtime);
+    try {
+      let heard = 0;
+      // Warm connections, so the opens below run their loads side by side.
+      await Promise.all(Array.from({ length: 8 }, () => runtime`select pg_sleep(0.05)`));
+      // Each subscribes as soon as its own open returns, as the sync route does.
+      await Promise.all(Array.from({ length: 8 }, async () => {
+        await racing.open(actor, raced);
+        racing.subscribe(raced, null, () => { heard += 1; });
+      }));
+      const doc = new Y.Doc();
+      doc.getMap("scratch").set("key", "value");
+      await racing.apply(actor, raced, Y.encodeStateAsUpdate(doc), randomUUID());
+      expect(heard).toBe(8);
+      expect(racing.stats().entries).toBe(1);
+    } finally {
+      racing.close();
+    }
+  });
 });

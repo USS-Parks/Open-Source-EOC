@@ -53,7 +53,9 @@ import { messagingRoutes } from "./messaging/routes.js";
 import { notifyRoutes } from "./notify/routes.js";
 import { resourceRoutes } from "./resource/routes.js";
 import { BoardSyncHub } from "./sync/hub.js";
+import { notificationStreamRoutes } from "./sync/notifications.js";
 import { registerSyncRoutes } from "./sync/routes.js";
+import { DEFAULT_SOCKET_LIMITS, disciplineSockets, MAX_PAYLOAD_BYTES, type SocketLimits } from "./sync/sockets.js";
 import { withPerson } from "./db/context.js";
 import { applySecurityHeaders } from "./security/headers.js";
 import { applyCors } from "./security/cors.js";
@@ -122,6 +124,8 @@ export interface BuildAppOptions {
   readonly requireAdminMfa?: boolean;
   /** Which peers may set X-Forwarded-For; defaults to OPENEOC_TRUST_PROXY (see trustProxyFromEnv). */
   readonly trustProxy?: boolean | string;
+  /** WebSocket auth deadline, heartbeat and backpressure ceiling; see sync/sockets.ts. */
+  readonly socketLimits?: Partial<SocketLimits>;
 }
 
 export type OptionalIntegration = "collab" | "facilities" | "meetings" | "tracking";
@@ -159,7 +163,8 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
     trustProxy: options.trustProxy ?? trustProxyFromEnv(),
     ...loggingOptions(options.logLevel ?? logLevelFromEnv(), options.logStream),
   });
-  void app.register(websocket);
+  void app.register(websocket, { options: { maxPayload: MAX_PAYLOAD_BYTES } });
+  disciplineSockets(app, { ...DEFAULT_SOCKET_LIMITS, ...options.socketLimits });
   const metrics = new Metrics();
   app.decorate("metrics", metrics);
   observeRequests(app, metrics, options.slowRequestMs ?? slowRequestMsFromEnv());
@@ -469,6 +474,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   const hub = new BoardSyncHub(sql);
   app.addHook("onClose", () => { hub.close(); });
   registerSyncRoutes(app, sql, hub);
+  notificationStreamRoutes(app, sql);
   federationRoutes(app, sql, hub, authenticate);
   metricsRoutes(
     app,

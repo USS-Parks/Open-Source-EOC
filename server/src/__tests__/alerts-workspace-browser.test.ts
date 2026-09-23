@@ -98,6 +98,17 @@ async function openCenter() {
 describe("real alert workspace", () => {
   it("keeps read, acknowledgement, local review, and external delivery visibly separate", async () => {
     await signIn();
+    // The inbox is pushed: a notification written elsewhere reaches the badge
+    // in seconds, well inside the one-minute fallback refetch.
+    await page.locator(".eoc-shell-sync", { hasText: "Live" }).waitFor({ state: "visible", timeout: 20000 });
+    const badge = page.getByRole("button", { name: /^Notifications, \d+ unread$/ });
+    const unread = Number(/(\d+) unread/.exec((await badge.getAttribute("aria-label")) ?? "")?.[1]);
+    await admin`
+      insert into notifications (jurisdiction_id, person_id, channel, title, body, status)
+      select jurisdiction_id, person_id, 'workflow', 'Staging area confirmed', 'Synthetic push check.', 'delivered'
+      from notifications limit 1`;
+    await page.getByRole("button", { name: `Notifications, ${unread + 1} unread` })
+      .waitFor({ state: "visible", timeout: 5000 });
     await openCenter();
     await page.getByRole("button", { name: /Shelter approval requested/ }).click();
     await page.getByText("Not acknowledged", { exact: true }).waitFor({ state: "visible" });

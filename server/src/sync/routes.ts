@@ -5,17 +5,22 @@ import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { AuthError, principalFromToken, type Principal } from "../auth/service.js";
 import type { BoardSyncHub } from "./hub.js";
+import { MAX_PAYLOAD_BYTES } from "./sockets.js";
+
+/** Longest base64 update accepted: it and the largest envelope fit in one frame. */
+export const MAX_UPDATE_CHARS = MAX_PAYLOAD_BYTES - 1024;
 
 const AuthMessage = z.object({ type: z.literal("auth"), token: z.string().min(1) });
 const SyncQuery = z.object({ incidentId: z.string().uuid().optional() }).strict();
+const Update = z.string().min(1).max(MAX_UPDATE_CHARS);
 const UpdateMessage = z.union([
   z.object({
     type: z.literal("update"),
-    update: z.string().min(1),
+    update: Update,
     operationId: z.string().uuid(),
     incidentId: z.string().uuid(),
   }).strict(),
-  z.object({ type: z.literal("update"), update: z.string().min(1) }).strict(),
+  z.object({ type: z.literal("update"), update: Update }).strict(),
 ]);
 
 /**
@@ -28,6 +33,18 @@ const UpdateMessage = z.union([
  *   server -> {type:"error", error}         then close, on any failure
  */
 export function registerSyncRoutes(app: FastifyInstance, sql: Sql, hub: BoardSyncHub): void {
+  // The hub hands every subscriber the same update in one synchronous pass,
+  // so the frame is encoded once per update rather than once per socket.
+  let lastUpdate: Uint8Array | null = null;
+  let lastFrame = Buffer.alloc(0);
+  const updateFrame = (update: Uint8Array): Buffer => {
+    if (update !== lastUpdate) {
+      lastUpdate = update;
+      lastFrame = Buffer.from(JSON.stringify({ type: "update", update: Buffer.from(update).toString("base64") }));
+    }
+    return lastFrame;
+  };
+
   void app.register(async (scoped) => {
     scoped.get("/api/v1/sync/boards/:boardId", { websocket: true }, (socket: WebSocket, req) => {
     const { boardId } = req.params as { boardId: string };
@@ -65,12 +82,7 @@ export function registerSyncRoutes(app: FastifyInstance, sql: Sql, hub: BoardSyn
             const { state } = await hub.open(principal, boardId, incidentId);
             unsubscribe = hub.subscribe(boardId, incidentId, (update, origin) => {
               if (origin !== sessionId && socket.readyState === socket.OPEN) {
-                socket.send(
-                  JSON.stringify({
-                    type: "update",
-                    update: Buffer.from(update).toString("base64"),
-                  }),
-                );
+                socket.send(updateFrame(update), { binary: false });
               }
             });
             socket.send(

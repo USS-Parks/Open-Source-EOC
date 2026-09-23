@@ -500,29 +500,37 @@ export class BoardSyncHub {
       const hydrated = await hydrateBoardDoc(tx, boardId, incidentId, board);
       return { board, hydrated, cached: cached ?? null };
     });
-    if (loaded.hydrated === null) {
-      const cached = loaded.cached!;
-      cached.board = loaded.board;
-      if (cached.idle) {
-        clearTimeout(cached.idle);
-        cached.idle = null;
+    // Concurrent first opens each hydrate. The first to finish installs its
+    // entry and the rest adopt it; replacing it would orphan the subscribers
+    // already on it, and they would never hear another update.
+    const current = this.entries.get(key);
+    const reuse = current?.templateVersion === loaded.board.template.version
+      ? current
+      : loaded.hydrated ? null : loaded.cached;
+    if (reuse) {
+      loaded.hydrated?.doc.destroy();
+      reuse.board = loaded.board;
+      if (reuse.idle) {
+        clearTimeout(reuse.idle);
+        reuse.idle = null;
       }
-      return cached;
+      return reuse;
     }
-    if (loaded.cached) {
-      loaded.cached.doc.destroy();
-      if (loaded.cached.idle) clearTimeout(loaded.cached.idle);
+    const hydrated = loaded.hydrated!;
+    if (current) {
+      current.doc.destroy();
+      if (current.idle) clearTimeout(current.idle);
     }
     const entry: HubEntry = {
-      doc: loaded.hydrated.doc,
+      doc: hydrated.doc,
       board: loaded.board,
-      subscribers: loaded.cached?.subscribers ?? new Set(),
+      subscribers: current?.subscribers ?? new Set(),
       encoded: null,
       rows: new Map(),
       templateVersion: loaded.board.template.version,
-      throughSeq: loaded.hydrated.throughSeq,
-      sinceSnapshot: loaded.hydrated.sinceSnapshot,
-      active: loaded.cached?.active ?? 0,
+      throughSeq: hydrated.throughSeq,
+      sinceSnapshot: hydrated.sinceSnapshot,
+      active: current?.active ?? 0,
       idle: null,
     };
     this.entries.set(key, entry);

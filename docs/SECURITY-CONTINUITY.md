@@ -61,6 +61,11 @@ style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src
   cannot pick its own address.
 - A 30-second request timeout caps unfinished requests (slowloris defense)
   without affecting established WebSocket sessions.
+- Every WebSocket, whatever its route, must send its authentication frame
+  within 10 seconds, may not send a frame over 1 MiB, answers a ping every 30
+  seconds or is terminated, and is closed rather than buffered when more than
+  16 MiB is queued for it, so one slow reader cannot hold memory or delay the
+  others.
 
 ## One application node
 

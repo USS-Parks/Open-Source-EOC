@@ -328,6 +328,7 @@ set, and then require that value as a bearer token.
 - `GET /api/v1/notifications`: Read notifications (auth: bearer; audience: operator)
 - `POST /api/v1/notifications/:notificationId/acknowledge`: Run notifications acknowledge (auth: bearer; audience: operator)
 - `POST /api/v1/notifications/:notificationId/read`: Run notifications read (auth: bearer; audience: operator)
+- `GET /api/v1/notifications/stream`: Read notifications stream (auth: bearer; audience: operator)
 
 ### ogc
 
@@ -429,6 +430,7 @@ set, and then require that value as a bearer token.
 
 - `/api/v1/sync/boards/:boardId`: CRDT board sync
 - `/api/v1/dashboards/:dashboardId/stream`: Live dashboard snapshots
+- `/api/v1/notifications/stream`: Notification change signals
 
 ## Webhook events
 

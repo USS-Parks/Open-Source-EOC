@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { ActionButton, Tabs } from "../../design/controls.js";
 import { Drawer } from "../../design/overlays.js";
 import { ErrorNote, Loading } from "../screens/parts.js";
-import { useAsync, usePolled } from "../data/hooks.js";
+import { useAsync, useNotifications } from "../data/hooks.js";
 import type {
   AlertReviewState,
   AlertTransmission,
@@ -16,6 +16,7 @@ import "../../notifications/notifications.css";
 
 export interface AlertsClient {
   notifications(): Promise<RawNotification[]>;
+  fieldSyncToken(): string;
   markNotificationRead(id: string): Promise<{ ok: true }>;
   acknowledgeNotification(id: string): Promise<{ ok: true; acknowledged_at: string; acknowledged_by: string }>;
   listCapAlerts(jurisdictionId: string): Promise<CapAlertSummary[]>;
@@ -359,7 +360,7 @@ function AlertComposer(props: {
 }
 
 export function AlertsSurface({ client, jurisdictionId, incidentId, canAuthor, actorEmail }: AlertsSurfaceProps) {
-  const notes = usePolled(() => client.notifications(), 8000, []);
+  const notes = useNotifications(client);
   const alerts = useAsync(() => client.listCapAlerts(jurisdictionId), [jurisdictionId]);
   const [tab, setTab] = useState("inbox");
   const [inboxFilter, setInboxFilter] = useState<InboxFilter>("all");

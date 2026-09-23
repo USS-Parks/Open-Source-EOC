@@ -1,5 +1,9 @@
+import { randomUUID } from "node:crypto";
+import type { Socket } from "node:net";
 import { performance } from "node:perf_hooks";
 import type { FastifyInstance } from "fastify";
+import WebSocket from "ws";
+import * as Y from "yjs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
@@ -13,6 +17,8 @@ import { freshDb, seedIdentity, type Sql } from "./helpers.js";
  * and writes, the shape of a 150-user activation) completes within budget.
  * The burst budgets are generous so CI variance never flakes; the measured
  * numbers are printed and published in the capacity receipt under docs/process.
+ * Live sync fan-out holds its bound with one subscriber stalled: the others
+ * are served within 100 ms and the stalled one is shed past its queue ceiling.
  */
 
 // The first-page budget is the acceptance bound for paged board views. The
@@ -22,6 +28,9 @@ const FIRST_PAGE_BUDGET_MS = 300;
 const BURST_WALL_BUDGET_MS = 30000;
 const BURST_P95_BUDGET_MS = 6000;
 const CONCURRENCY = 150;
+// Delivery bound for a live board update to each of 149 socket readers while
+// a 150th subscriber has stopped reading.
+const SOCKET_FANOUT_BUDGET_MS = 100;
 const VOLUME = 50000;
 
 let admin: Sql;
@@ -190,4 +199,110 @@ describe("150 distinct concurrent users (the release gate)", () => {
     expect(codes.every((c) => c >= 200 && c < 300)).toBe(true);
     expect(p95).toBeLessThan(BURST_P95_BUDGET_MS);
   }, 180000);
+});
+
+describe("150 WebSocket subscribers with one stalled reader", () => {
+  interface Peer {
+    readonly ws: WebSocket;
+    /** Resolved with the arrival time of the next pushed peer update. */
+    readonly updates: Array<(at: number) => void>;
+    readonly acks: Array<() => void>;
+  }
+
+  /** A valid Yjs update carrying `bytes` of payload outside the records map. */
+  function yUpdate(bytes: number): string {
+    const doc = new Y.Doc();
+    doc.getMap("scratch").set(randomUUID(), "x".repeat(bytes));
+    return Buffer.from(Y.encodeStateAsUpdate(doc)).toString("base64");
+  }
+
+  it("delivers each update to the other 149 in under 100 ms and sheds the stalled one", async () => {
+    // A listening app with a small queue ceiling, so the stalled reader is shed
+    // after a few bulk updates; the heartbeat is kept out of the way.
+    const wsApp = buildApp(runtime, {
+      oidc: null,
+      socketLimits: { maxBufferedBytes: 64 * 1024, heartbeatMs: 600_000 },
+    });
+    await wsApp.listen({ port: 0, host: "127.0.0.1" });
+    try {
+      const address = wsApp.server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      const syncBoard = (await auth("POST", `/api/v1/jurisdictions/${jurisdictionId}/boards`, {
+        templateKey: "significant_events",
+      })).json().id as string;
+
+      const open = async (): Promise<Peer> => {
+        const ws = new WebSocket(`ws://127.0.0.1:${port}/api/v1/sync/boards/${syncBoard}`);
+        const peer: Peer = { ws, updates: [], acks: [] };
+        await new Promise<void>((resolve, reject) => {
+          ws.on("open", () => ws.send(JSON.stringify({ type: "auth", token: adminToken })));
+          ws.on("error", reject);
+          ws.on("message", (raw: Buffer) => {
+            const at = performance.now();
+            // Classify by prefix so a large frame costs the harness no parse.
+            const head = raw.toString("utf8", 0, 20);
+            if (head.startsWith('{"type":"state"')) resolve();
+            else if (head.startsWith('{"type":"update"')) peer.updates.shift()?.(at);
+            else if (head.startsWith('{"type":"synced"')) peer.acks.shift()?.();
+            else reject(new Error(raw.toString()));
+          });
+        });
+        return peer;
+      };
+
+      // 150 subscribers on one board: 149 readers and one that stops reading.
+      // The writer is a separate socket, so every subscriber is a receiver.
+      const readers: Peer[] = [];
+      while (readers.length < 149) {
+        readers.push(...(await Promise.all(Array.from({ length: Math.min(10, 149 - readers.length) }, open))));
+      }
+      const stalled = await open();
+      const writer = await open();
+      const stalledSocket = (stalled.ws as unknown as { _socket: Socket })._socket;
+      stalledSocket.pause();
+      const stalledClosed = new Promise<number>((resolve) => stalled.ws.once("close", resolve));
+
+      const send = async (update: string): Promise<number[]> => {
+        const arrivals = readers.map((peer) => new Promise<number>((resolve) => peer.updates.push(resolve)));
+        const ack = new Promise<void>((resolve) => writer.acks.push(resolve));
+        const t0 = performance.now();
+        writer.ws.send(JSON.stringify({ type: "update", update }));
+        const times = await Promise.all(arrivals);
+        await ack;
+        return times.map((at) => at - t0);
+      };
+
+      // Ordinary edits of a few hundred bytes, interleaved with 32 KiB bulk
+      // updates that back the stalled reader's queue up past the ceiling. The
+      // kernel's socket buffers absorb the first few hundred KiB.
+      const edits: number[] = [];
+      const bulk: number[] = [];
+      let shed = false;
+      for (let round = 0; round < 40 && !shed; round += 1) {
+        bulk.push(...(await send(yUpdate(32 * 1024))));
+        edits.push(...(await send(yUpdate(256))));
+        shed = [...wsApp.websocketServer.clients].some((socket) => socket.readyState === WebSocket.CLOSING);
+      }
+      expect(shed).toBe(true);
+      // The others go on being served once the stalled reader is shed.
+      for (let round = 0; round < 10; round += 1) edits.push(...(await send(yUpdate(256))));
+
+      const all = [...edits, ...bulk];
+      // eslint-disable-next-line no-console
+      console.log(
+        `[load] 149 socket readers, ${edits.length / 149} edits: p95=${percentile(edits, 95).toFixed(1)}ms ` +
+          `max=${Math.max(...edits).toFixed(1)}ms; ${bulk.length / 149} bulk updates of 32 KiB: ` +
+          `p95=${percentile(bulk, 95).toFixed(1)}ms max=${Math.max(...bulk).toFixed(1)}ms`,
+      );
+      // Every update, bulk included, reaches every reader within the bound.
+      expect(Math.max(...all)).toBeLessThan(SOCKET_FANOUT_BUDGET_MS);
+
+      // Reading again, it drains its backlog and then finds the close reason.
+      stalledSocket.resume();
+      expect(await stalledClosed).toBe(1013);
+      for (const peer of [...readers, writer]) peer.ws.close();
+    } finally {
+      await wsApp.close();
+    }
+  }, 120000);
 });

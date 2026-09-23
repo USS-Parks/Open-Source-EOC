@@ -123,6 +123,7 @@ GET /api/v1/jurisdictions/:jurisdictionId/threads
 GET /api/v1/me
 GET /api/v1/metrics
 GET /api/v1/notifications
+GET /api/v1/notifications/stream
 GET /api/v1/ogc
 GET /api/v1/ogc/collections
 GET /api/v1/ogc/collections/:boardId/items
@@ -387,6 +388,7 @@ const rest: RestEndpoint[] = routeKeys.map((key) => {
 const websockets: WsChannel[] = [
   { path: "/api/v1/sync/boards/:boardId", summary: "CRDT board sync" },
   { path: "/api/v1/dashboards/:dashboardId/stream", summary: "Live dashboard snapshots" },
+  { path: "/api/v1/notifications/stream", summary: "Notification change signals" },
 ];
 
 const webhooks: WebhookEvent[] = [

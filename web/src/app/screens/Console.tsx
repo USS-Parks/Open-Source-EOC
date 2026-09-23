@@ -5,7 +5,7 @@ import type { ThemeName } from "../../design/tokens.js";
 import type { ApiClient, BoardListItem, DashboardListItem, CollectionRef, FeedHealth } from "../api/client.js";
 import { useSession } from "../auth/session.js";
 import { IncidentSwitcher, useIncident } from "../incident/context.js";
-import { useAsync, usePolled } from "../data/hooks.js";
+import { useAsync, useNotifications } from "../data/hooks.js";
 import {
   AppShell,
   type NavGroup,
@@ -130,7 +130,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         : Promise.resolve([]),
     [viewingJurisdictionId, incident.selectedIncidentId],
   );
-  const notifications = usePolled(() => client.notifications(), 8000, []);
+  const notifications = useNotifications(client);
   const [lastNotificationCheck, setLastNotificationCheck] = useState<Date | null>(null);
   useEffect(() => {
     if (!notifications.loading && !notifications.error && notifications.data) setLastNotificationCheck(new Date());
@@ -240,7 +240,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
     ? { state: "error", label: lastNotificationCheck ? `Update failed · checked ${formatTime(lastNotificationCheck)}` : "Updates unavailable" }
     : notifications.loading && !notifications.data
       ? { state: "checking", label: "Checking updates" }
-      : { state: "current", label: lastNotificationCheck ? `Checked ${formatTime(lastNotificationCheck)}` : "Update received" };
+      : { state: "current", label: notifications.live ? "Live" : lastNotificationCheck ? `Checked ${formatTime(lastNotificationCheck)}` : "Update received" };
   const sync: ShellSyncState = workspace.phase === "loading" || workspace.phase === "saving"
     ? { state: "checking", label: workspace.message ?? "Restoring workspace" }
     : workspace.phase === "conflict" || workspace.phase === "error"

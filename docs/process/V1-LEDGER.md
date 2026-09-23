@@ -775,3 +775,71 @@ tagging remain separately gated as section 1 of the roster states.
   or repeat an item the poll re-fetched, because the list sorts by fetch time.
 - **Rollback:** revert the commit, drop the new indexes and recreate the
   seven dropped ones.
+
+## V1 W2.4: WebSocket discipline
+
+- **What changed.** New `server/src/sync/sockets.ts` applies to every
+  WebSocket the server accepts, board sync, dashboard stream and notification
+  stream alike: a socket that sends no frame within ten seconds closes with
+  1008; a ping every thirty seconds, and a peer that has not answered by the
+  next ping is terminated; a send while the peer's queued bytes exceed the
+  ceiling closes the socket with 1013 instead of buffering. `@fastify/websocket`
+  is registered with a 1 MiB `maxPayload`, closing larger frames with 1009, and
+  the sync schema caps the base64 update at 1 MiB less 1 KiB so an update and
+  its envelope fit one frame. A peer update is now encoded once per broadcast
+  rather than once per socket; with 150 subscribers a 128 KiB broadcast fell
+  from about 131 ms to 71 ms.
+- **Notification push.** New channel `/api/v1/notifications/stream`. Migration
+  `0111_notification_push.sql` adds a trigger that announces each inserted or
+  updated notification id on commit through `pg_notify`, and a SECURITY
+  DEFINER `notification_audience(uuid[])` mirroring the read policy. The
+  server holds one LISTEN connection, opened by the first subscriber, and
+  sends a content-free `changed` signal only to sockets whose person may read
+  the row, throttled to one a second with a quiet-period change sent at once.
+  If the audience lookup fails or the LISTEN connection reconnects, every
+  socket is signalled and the client's RLS-filtered refetch decides. In the
+  web client `useNotifications` replaces the eight second poll in the console
+  and the alerts surface; it refetches on `ready` and `changed`, and while the
+  socket is down refetches when visible and reconnects with backoff capped at
+  sixty seconds. The shell reads "Live" while subscribed and keeps data during
+  a refetch.
+- **Defect found and fixed.** When several clients opened a board with no
+  loaded document, each open built its own copy and the last replaced the
+  others, so clients subscribed to a replaced copy never saw another update.
+  The first copy installed now wins and later opens adopt it. The new
+  `sync-hub-lifecycle` regression test failed three of three runs before the
+  fix and passes after. Ownership deviation: `server/src/sync/hub.ts`.
+- **Deviations, recorded.** The roster says "over the existing socket"; a new
+  channel was added because the web client holds no long-lived socket, field
+  sync opening one per flush. The auth deadline is "first frame within ten
+  seconds", which covers every protocol because each one's first frame is its
+  auth frame. The backpressure ceiling is 16 MiB rather than a lower figure,
+  because the board state frame on connect can be several MiB. The limits are
+  set through `BuildAppOptions.socketLimits`, not the environment. Ownership
+  deviations: three lines in `AlertsSurface.tsx` and its test mock, and the
+  load, browser and lifecycle tests.
+- **Contract:** `GET /api/v1/notifications/stream` added to the routes and the
+  WebSocket list; `docs/API.md` regenerated. No dependency change.
+- **Acceptance:** in `load.test.ts`, serial, 150 subscribers plus one writer:
+  every update reached all 149 live readers under 100 ms, asserted on the
+  maximum; edits p95 20.9 ms and maximum 22.1 ms, 32 KiB bulk updates p95
+  23.0 ms and maximum 25.8 ms. The stalled reader was closed with 1013.
+- **Verification.** New `sockets.test.ts`, 5 tests: auth deadline, 1 MiB
+  frame, schema bound, heartbeat, notification push to only the right sockets
+  including silence on rollback, and a bad token. In the lane the first full
+  `load.test.ts` run was red, the fan-out timing out at 120 seconds, which is
+  how the hub race was found; a 13-file batch at default workers was red with
+  three load timeouts on the shared database, and those files passed 24 of 24
+  alone. After rebasing onto W2.7 and W2.11: 15 server suites and all web app
+  tests at four workers passed 254 of 254; `load.test.ts` and
+  `alerts-workspace-browser.test.ts` serial passed 5 of 5. TypeScript and
+  ESLint clean. Link checker 69 files.
+- **Guide:** `docs/SECURITY-CONTINUITY.md` states the socket limits.
+- **Evidence level:** unit, real-database integration and browser.
+- **Limits:** a notification socket keeps its principal for its life, as
+  board sync does, so after logout it can receive content-free signals until
+  it closes. The LISTEN connection would not work behind a transaction-mode
+  pooler, which neither deploy path uses. With the alerts surface open a user
+  holds two notification sockets. Other polls remain for W5.1.
+- **Rollback:** revert the commit, then drop the trigger and the two
+  functions from migration 0111.
