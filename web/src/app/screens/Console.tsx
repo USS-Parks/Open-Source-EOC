@@ -349,6 +349,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         incidentCanManageParticipation={incident.selectedIncident?.canManageParticipation ?? false}
         incidentClosed={Boolean(incident.selectedIncident?.closedAt)}
         incidentBoardIds={incident.incidentBoardIds}
+        incidentBoardsLoading={incident.incidentBoardsLoading}
         boards={boardItems}
         boardsLoading={boards.loading && !boards.data}
         collections={collections.data ?? []}
@@ -481,6 +482,7 @@ function Center(props: {
   incidentCanManageParticipation: boolean;
   incidentClosed: boolean;
   incidentBoardIds: ReadonlySet<string>;
+  incidentBoardsLoading: boolean;
   boards: readonly BoardListItem[];
   boardsLoading: boolean;
   collections: readonly CollectionRef[];
@@ -575,6 +577,8 @@ function Center(props: {
     case "board":
       return <BoardSurface client={props.client} boardId={s.id} incidentId={props.routeContext.incidentId ?? null}
         incidentScoped={Boolean(props.routeContext.incidentId) && props.incidentBoardIds.has(s.id)}
+        incidentScopePending={Boolean(props.routeContext.incidentId)
+          && (props.incidentId !== props.routeContext.incidentId || props.incidentBoardsLoading)}
         {...(props.isAdmin && props.isInstanceAdmin ? { onDesign: () => props.onNavigate({ kind: "board-design", id: s.id }) } : {})}
         {...(props.recordId ? { recordId: props.recordId } : {})} onRecordContext={props.onRecordContext} />;
     case "sitreps":

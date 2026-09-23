@@ -79,6 +79,24 @@ describe("BoardSurface record context seam", () => {
     await waitFor(() => expect(onRecordContext).toHaveBeenLastCalledWith({ status: "missing" }));
   });
 
+  it("waits for incident board scope before reading a deep-linked record", async () => {
+    const onRecordContext = vi.fn<(state: BoardRecordContext | null) => void>();
+    const api = client();
+    const view = render(
+      <BoardSurface client={api} boardId="board-1" incidentId="incident-1"
+        incidentScopePending recordId="record-2" onRecordContext={onRecordContext} />,
+    );
+    await waitFor(() => expect(onRecordContext).toHaveBeenCalledWith({ status: "loading" }));
+    expect(api.boardRecordDetail).not.toHaveBeenCalled();
+
+    view.rerender(
+      <BoardSurface client={api} boardId="board-1" incidentId="incident-1"
+        incidentScoped recordId="record-2" onRecordContext={onRecordContext} />,
+    );
+    await waitFor(() => expect(api.boardRecordDetail).toHaveBeenCalledWith("board-1", "record-2", "incident-1"));
+    await waitFor(() => expect(onRecordContext).toHaveBeenLastCalledWith({ status: "missing" }));
+  });
+
   it("reads the next page under the same refinement", async () => {
     const api = client();
     const boardViewPage = vi.fn((_boardId: string, _viewKey: string, _query: unknown, page: { cursor?: string } = {}) =>

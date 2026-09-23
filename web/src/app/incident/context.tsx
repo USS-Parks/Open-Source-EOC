@@ -37,6 +37,7 @@ export interface IncidentValue {
    *  record with the incident only when its board belongs to it (VEOC-79B2). */
   readonly incidentBoardIds: ReadonlySet<string>;
   readonly incidentBoards: readonly IncidentBoardRef[];
+  readonly incidentBoardsLoading: boolean;
   readonly selectionNotice: string | null;
   readonly selectIncident: (id: string | null) => void;
   readonly reload: () => void;
@@ -156,11 +157,13 @@ export function IncidentProvider(props: { children: ReactNode }) {
       selectedIncident: selected,
       incidentBoardIds,
       incidentBoards,
+      incidentBoardsLoading: boards.loading,
       selectionNotice,
       selectIncident,
       reload: incidents.reload,
     };
-  }, [list, selectedId, incidentBoardIds, incidentBoards, selectionNotice, selectIncident, incidents.loading, incidents.error, incidents.reload]);
+  }, [list, selectedId, incidentBoardIds, incidentBoards, boards.loading,
+    selectionNotice, selectIncident, incidents.loading, incidents.error, incidents.reload]);
 
   return <IncidentContext.Provider value={value}>{props.children}</IncidentContext.Provider>;
 }

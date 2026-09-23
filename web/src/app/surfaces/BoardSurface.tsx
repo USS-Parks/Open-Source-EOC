@@ -76,6 +76,7 @@ export function BoardSurface(props: {
   boardId: string;
   incidentId?: string | null;
   incidentScoped?: boolean;
+  incidentScopePending?: boolean;
   recordId?: string;
   onDesign?: () => void;
   onRecordContext?: (state: BoardRecordContext | null) => void;
@@ -84,6 +85,7 @@ export function BoardSurface(props: {
   const session = useSession();
   const route = useSurface();
   const incidentViewId = props.incidentScoped ? props.incidentId : null;
+  const recordScopePending = Boolean(props.recordId && props.incidentId && props.incidentScopePending);
   const board = useAsync(
     () => props.client.getBoard(props.boardId, incidentViewId),
     [incidentViewId, props.boardId],
@@ -116,10 +118,11 @@ export function BoardSurface(props: {
   const offline = useAsync(async () => (board.data ? offlineSyncAvailable(props.client, board.data) : true),
     [board.data, props.client]);
   const detail = useAsync(
-    () => (props.recordId
+    () => (recordScopePending ? Promise.resolve(null)
+      : props.recordId
       ? props.client.boardRecordDetail(props.boardId, props.recordId, incidentViewId)
       : Promise.resolve(null)),
-    [incidentViewId, props.boardId, props.recordId],
+    [recordScopePending, incidentViewId, props.boardId, props.recordId],
   );
   const resources = useAsync(
     () => loadRecordResources(props.client, board.data?.fields ?? [], detail.data, props.boardId, incidentViewId),
@@ -185,7 +188,15 @@ export function BoardSurface(props: {
       props.onRecordContext?.(null);
       return;
     }
+    if (recordScopePending) {
+      props.onRecordContext?.({ status: "loading" });
+      return;
+    }
     if ((detail.loading && !detail.data) || (resources.loading && !resources.data)) {
+      props.onRecordContext?.({ status: "loading" });
+      return;
+    }
+    if (!detail.data && !detail.error) {
       props.onRecordContext?.({ status: "loading" });
       return;
     }
@@ -224,7 +235,9 @@ export function BoardSurface(props: {
       history: loadHistory,
     });
     return () => props.onRecordContext?.(null);
-  }, [archiveRecord, board.data, deleteRecord, detail.data, detail.loading, downloadAttachment, editRecord, loadHistory, props.boardId, props.client, props.onRecordContext, props.recordId, resources.data, resources.loading, session.jurisdictionId, session.me]);
+  }, [archiveRecord, board.data, deleteRecord, detail.data, detail.error, detail.loading, downloadAttachment,
+    editRecord, loadHistory, props.boardId, props.client, props.onRecordContext, props.recordId, recordScopePending,
+    resources.data, resources.loading, session.jurisdictionId, session.me]);
 
   if (board.loading && !board.data) return <Loading label="Loading board…" />;
   if (board.error && !board.data) return <ErrorNote message={board.error} />;
