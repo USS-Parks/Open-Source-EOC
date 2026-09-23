@@ -9,7 +9,7 @@ import {
 import { ensureStandardTemplates } from "../boards/service.js";
 import { withPerson } from "../db/context.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
-import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { auth, freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
 let admin: Sql;
 let runtime: Sql;
@@ -25,19 +25,9 @@ let viewerJurisdictionId: string;
 let firstIncidentId: string;
 let secondIncidentId: string;
 
-const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 const stateUrl = (incidentId: string, kind: string, key: string) =>
   `/api/v1/incidents/${incidentId}/saved-state/${kind}/${key}`;
 
-async function tokenFor(email: string, password: string): Promise<string> {
-  const response = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  expect(response.statusCode).toBe(200);
-  return response.json().accessToken as string;
-}
 
 async function activate(name: string): Promise<string> {
   const response = await app.inject({
@@ -86,9 +76,9 @@ beforeAll(async () => {
     method: "GET",
     url: "/api/v1/incidents/:incidentId/saved-state",
   })).toBe(true);
-  ownerToken = await tokenFor("admin@example.org", "correct-horse-battery");
-  memberToken = await tokenFor("member@example.org", "another-good-password");
-  viewerToken = await tokenFor("viewer@example.org", "viewer-good-password");
+  ownerToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
+  memberToken = await tokenFor(app, "member@example.org", "another-good-password");
+  viewerToken = await tokenFor(app, "viewer@example.org", "viewer-good-password");
   firstIncidentId = await activate("Saved State One");
   secondIncidentId = await activate("Saved State Two");
 });

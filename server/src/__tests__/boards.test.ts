@@ -8,7 +8,7 @@ import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
 import { withPerson } from "../db/context.js";
 import { onBoardEvent } from "../events/bus.js";
-import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { auth, freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
 const signer = generateSigningKeyPair();
 
@@ -52,21 +52,12 @@ afterAll(async () => {
   await admin.end();
 });
 
-async function tokenFor(email: string, password: string): Promise<string> {
-  const res = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  return res.json().accessToken as string;
-}
 
-const auth = (t: string) => ({ authorization: `Bearer ${t}` });
 
 describe("board lifecycle", () => {
   it("projects incident board shape and preserves cross-organization record history", async () => {
     await ensureStandardIncidentTemplates(admin);
-    const ownerToken = await tokenFor("admin@example.org", "correct-horse-battery");
+    const ownerToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
     const template = {
       key: "participant_operations",
       version: 1,
@@ -120,8 +111,8 @@ describe("board lifecycle", () => {
     expect((await grant("board-viewer@example.org", "viewer")).statusCode).toBe(201);
     const legacyGrant = await grant("legacy-board-contributor@example.org", "coordinator");
     expect(legacyGrant.statusCode, legacyGrant.body).toBe(201);
-    const contributorToken = await tokenFor("board-contributor@example.org", "board-contributor-password");
-    const participantViewerToken = await tokenFor("board-viewer@example.org", "board-viewer-password");
+    const contributorToken = await tokenFor(app, "board-contributor@example.org", "board-contributor-password");
+    const participantViewerToken = await tokenFor(app, "board-viewer@example.org", "board-viewer-password");
     const shapePath = `/api/v1/boards/${incidentBoard}?incidentId=${incidentId}`;
     const viewerShape = await app.inject({ method: "GET", url: shapePath, headers: auth(participantViewerToken) });
     expect(viewerShape.statusCode, viewerShape.body).toBe(200);
@@ -234,7 +225,7 @@ describe("board lifecycle", () => {
         actor: expect.objectContaining({ personId: legacyContributorId }),
         payload: { fields: ["public_note"] } }),
     ]);
-    const outsiderToken = await tokenFor("outsider@example.org", "outsider-password-1");
+    const outsiderToken = await tokenFor(app, "outsider@example.org", "outsider-password-1");
     expect((await app.inject({ method: "GET", url: legacyDetailPath,
       headers: auth(outsiderToken) })).statusCode).toBe(404);
 
@@ -262,9 +253,9 @@ describe("board lifecycle", () => {
 
   it("returns attributed record history without unreadable values or foreign incident rows", async () => {
     await ensureStandardIncidentTemplates(admin);
-    const token = await tokenFor("admin@example.org", "correct-horse-battery");
-    const viewer = await tokenFor("viewer@example.org", "viewer-password-long");
-    const outside = await tokenFor("outsider@example.org", "outsider-password-1");
+    const token = await tokenFor(app, "admin@example.org", "correct-horse-battery");
+    const viewer = await tokenFor(app, "viewer@example.org", "viewer-password-long");
+    const outside = await tokenFor(app, "outsider@example.org", "outsider-password-1");
     const board = await app.inject({ method: "POST", url: `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`,
       headers: auth(token), payload: { templateKey: "significant_events" } });
     const id = board.json().id as string;
@@ -296,7 +287,7 @@ describe("board lifecycle", () => {
   });
 
   it("admin creates a board from the standard library and a member posts a record", async () => {
-    const adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
+    const adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
     const create = await app.inject({
       method: "POST",
       url: `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`,
@@ -306,7 +297,7 @@ describe("board lifecycle", () => {
     expect(create.statusCode).toBe(201);
     boardId = create.json().id as string;
 
-    const memberToken = await tokenFor("member@example.org", "another-good-password");
+    const memberToken = await tokenFor(app, "member@example.org", "another-good-password");
     const rec = await app.inject({
       method: "POST",
       url: `/api/v1/boards/${boardId}/records`,
@@ -330,7 +321,7 @@ describe("board lifecycle", () => {
   });
 
   it("rejects records that violate the schema", async () => {
-    const memberToken = await tokenFor("member@example.org", "another-good-password");
+    const memberToken = await tokenFor(app, "member@example.org", "another-good-password");
     const bad = await app.inject({
       method: "POST",
       url: `/api/v1/boards/${boardId}/records`,
@@ -341,7 +332,7 @@ describe("board lifecycle", () => {
   });
 
   it("enforces admin-only fields at write time", async () => {
-    const memberToken = await tokenFor("member@example.org", "another-good-password");
+    const memberToken = await tokenFor(app, "member@example.org", "another-good-password");
     const res = await app.inject({
       method: "POST",
       url: `/api/v1/boards/${boardId}/records`,
@@ -354,7 +345,7 @@ describe("board lifecycle", () => {
       },
     });
     expect(res.statusCode).toBe(403);
-    const adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
+    const adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
     const ok = await app.inject({
       method: "POST",
       url: `/api/v1/boards/${boardId}/records`,
@@ -370,7 +361,7 @@ describe("board lifecycle", () => {
   });
 
   it("viewers read but cannot write", async () => {
-    const viewerToken = await tokenFor("viewer@example.org", "viewer-password-long");
+    const viewerToken = await tokenFor(app, "viewer@example.org", "viewer-password-long");
     const view = await app.inject({
       method: "GET",
       url: `/api/v1/boards/${boardId}/views/all`,
@@ -389,7 +380,7 @@ describe("board lifecycle", () => {
 
 describe("guest board scope (R3)", () => {
   it("a guest reads only the designated board, and outsiders see nothing", async () => {
-    const adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
+    const adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
     await app.inject({
       method: "POST",
       url: `/api/v1/jurisdictions/${seed.jurisdictionId}/guests`,
@@ -400,7 +391,7 @@ describe("guest board scope (R3)", () => {
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
       },
     });
-    const guestToken = await tokenFor("guest@example.org", "guest-password-long");
+    const guestToken = await tokenFor(app, "guest@example.org", "guest-password-long");
     const view = await app.inject({
       method: "GET",
       url: `/api/v1/boards/${boardId}/views/all`,
@@ -415,7 +406,7 @@ describe("guest board scope (R3)", () => {
     });
     expect(write.statusCode).toBe(403);
 
-    const outsiderToken = await tokenFor("outsider@example.org", "outsider-password-1");
+    const outsiderToken = await tokenFor(app, "outsider@example.org", "outsider-password-1");
     const denied = await app.inject({
       method: "GET",
       url: `/api/v1/boards/${boardId}/views/all`,
@@ -435,7 +426,7 @@ describe("guest board scope (R3)", () => {
 
 describe("upgrade with preserved customization (INV-5)", () => {
   it("keeps local fields, adopts new template fields, and re-converges duplicates", async () => {
-    const adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
+    const adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
     await app.inject({
       method: "POST",
       url: `/api/v1/boards/${boardId}/local-fields`,
@@ -491,7 +482,7 @@ describe("upgrade with preserved customization (INV-5)", () => {
 
 describe("signed package import", () => {
   it("imports a trusted package and refuses a tampered one", async () => {
-    const adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
+    const adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
     const custom = {
       ...STANDARD_TEMPLATES.find((t) => t.key === "shelters")!,
       key: "regional_shelters",

@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { createJurisdiction, addMembership } from "../auth/service.js";
 import { ensureStandardTemplates } from "../boards/service.js";
-import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
 /**
  * EDXL resource messaging: a 213RR emitted from one instance as
@@ -41,8 +41,8 @@ beforeAll(async () => {
 
   app = buildApp(runtime, { oidc: null });
   await app.listen({ port: 0, host: "127.0.0.1" });
-  const adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
-  memberToken = await tokenFor("member@example.org", "another-good-password");
+  const adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
+  memberToken = await tokenFor(app, "member@example.org", "another-good-password");
 
   boardA = await makeBoard(seed.jurisdictionId, adminToken);
   await makeBoard(jurisdictionB, adminToken); // B's resource-request board
@@ -62,14 +62,6 @@ afterAll(async () => {
   await admin.end();
 });
 
-async function tokenFor(email: string, password: string): Promise<string> {
-  const res = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  return res.json().accessToken as string;
-}
 
 async function makeBoard(jurisdictionId: string, token: string): Promise<string> {
   const res = await app.inject({

@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
 import { ensureStandardTemplates } from "../boards/service.js";
-import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { auth, freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
 let admin: Sql;
 let runtime: Sql;
@@ -18,8 +18,8 @@ beforeAll(async () => {
   await ensureStandardTemplates(admin);
   await ensureStandardIncidentTemplates(admin);
   app = buildApp(runtime, { oidc: null });
-  adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
-  memberToken = await tokenFor("member@example.org", "another-good-password");
+  adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
+  memberToken = await tokenFor(app, "member@example.org", "another-good-password");
 });
 
 afterAll(async () => {
@@ -28,13 +28,7 @@ afterAll(async () => {
   await admin.end();
 });
 
-async function tokenFor(email: string, password: string): Promise<string> {
-  const response = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email, password } });
-  expect(response.statusCode).toBe(200);
-  return response.json().accessToken as string;
-}
 
-const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 
 describe("notification read and acknowledgement", () => {
   it("keeps opening, reading, and acknowledgement as separately attributed state", async () => {

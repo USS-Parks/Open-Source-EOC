@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
-import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
 /**
  * Smart forms (F7): a real XLSForm .xlsx imports, and a capture
@@ -40,8 +40,8 @@ beforeAll(async () => {
   app = buildApp(runtime, { oidc: null });
   await app.listen({ port: 0, host: "127.0.0.1" });
 
-  adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
-  memberToken = await tokenFor("member@example.org", "another-good-password");
+  adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
+  memberToken = await tokenFor(app, "member@example.org", "another-good-password");
   const board = await app.inject({
     method: "POST",
     url: `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`,
@@ -57,14 +57,6 @@ afterAll(async () => {
   await admin.end();
 });
 
-async function tokenFor(email: string, password: string): Promise<string> {
-  const res = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  return res.json().accessToken as string;
-}
 
 describe("importing a real XLSForm workbook", () => {
   it("parses the survey, choices, and settings sheets into a stored form", async () => {

@@ -95,4 +95,32 @@ export async function seedIdentity(sql: Sql): Promise<SeedResult> {
   return { jurisdictionId, adminId, memberId };
 }
 
+/**
+ * Bearer token for a seeded account. Twenty-three test files carried their own
+ * copy of this login round trip; they now share this one so a change to the
+ * login contract lands in a single place.
+ */
+export async function tokenFor(
+  app: { inject(options: unknown): Promise<{ statusCode: number; json(): { accessToken?: string } }> },
+  email: string,
+  password: string,
+): Promise<string> {
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/login",
+    payload: { email, password },
+  });
+  if (response.statusCode !== 200) {
+    throw new Error(`login failed for ${email}: ${response.statusCode}`);
+  }
+  const token = response.json().accessToken;
+  if (!token) throw new Error(`login returned no access token for ${email}`);
+  return token;
+}
+
+/** Authorization header for a bearer token. */
+export const auth = (token: string): { authorization: string } => ({
+  authorization: `Bearer ${token}`,
+});
+
 export type { Sql };

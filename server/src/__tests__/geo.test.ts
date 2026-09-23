@@ -4,7 +4,7 @@ import { buildRecordSchema, STANDARD_TEMPLATES } from "@openeoc/shared";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { createPerson } from "../auth/service.js";
-import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { auth, freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
 let admin: Sql;
 let runtime: Sql;
@@ -19,8 +19,8 @@ beforeAll(async () => {
   seed = await seedIdentity(admin);
   await ensureStandardTemplates(admin);
   app = buildApp(runtime, { oidc: null });
-  adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
-  memberToken = await tokenFor("member@example.org", "another-good-password");
+  adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
+  memberToken = await tokenFor(app, "member@example.org", "another-good-password");
   const board = await app.inject({
     method: "POST",
     url: `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`,
@@ -36,16 +36,7 @@ afterAll(async () => {
   await admin.end();
 });
 
-async function tokenFor(email: string, password: string): Promise<string> {
-  const res = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  return res.json().accessToken as string;
-}
 
-const auth = (t: string) => ({ authorization: `Bearer ${t}` });
 
 describe("geometry fields validate as GeoJSON", () => {
   const closures = STANDARD_TEMPLATES.find((t) => t.key === "road_closures")!;
@@ -168,7 +159,7 @@ describe("boards with geometry are live OGC Feature collections (F6)", () => {
       displayName: "Geo Outsider",
       password: "geo-outsider-pass1",
     });
-    const outsiderToken = await tokenFor("geo-out@example.org", "geo-outsider-pass1");
+    const outsiderToken = await tokenFor(app, "geo-out@example.org", "geo-outsider-pass1");
     const denied = await app.inject({
       method: "GET",
       url: `/api/v1/ogc/collections/${boardId}/items`,

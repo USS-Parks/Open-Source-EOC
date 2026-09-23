@@ -5,7 +5,7 @@ import * as Y from "yjs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
-import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
 /**
  * Offline field loop: a field user edits in airplane
@@ -103,7 +103,7 @@ beforeAll(async () => {
   const address = app.server.address();
   baseUrl = `127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
 
-  const adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
+  const adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
   const board = await app.inject({
     method: "POST",
     url: `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`,
@@ -129,9 +129,6 @@ async function login(email: string, password: string): Promise<{ access: string;
   return { access: body.accessToken as string, resume: body.resumeToken as string };
 }
 
-async function tokenFor(email: string, password: string): Promise<string> {
-  return (await login(email, password)).access;
-}
 
 async function viewRecords(token: string): Promise<Array<Record<string, unknown>>> {
   const res = await app.inject({
@@ -144,7 +141,7 @@ async function viewRecords(token: string): Promise<Array<Record<string, unknown>
 
 describe("the full airplane-mode loop", () => {
   it("edits offline, reconnects, and reconciles into the server of record with an audit trail", async () => {
-    const token = await tokenFor("member@example.org", "another-good-password");
+    const token = await tokenFor(app, "member@example.org", "another-good-password");
     const durable: Durable = new Map();
     const client = new PersistentFieldClient(durable);
 
@@ -181,7 +178,7 @@ describe("the full airplane-mode loop", () => {
   });
 
   it("loses nothing across an app restart while still offline", async () => {
-    const token = await tokenFor("member@example.org", "another-good-password");
+    const token = await tokenFor(app, "member@example.org", "another-good-password");
     const durable: Durable = new Map();
 
     // Edit offline, then the app dies before any reconnect.

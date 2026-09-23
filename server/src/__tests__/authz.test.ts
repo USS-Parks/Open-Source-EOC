@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { createPerson } from "../auth/service.js";
 import { withPerson } from "../db/context.js";
-import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
 let admin: Sql;
 let runtime: Sql;
@@ -35,20 +35,12 @@ afterAll(async () => {
   await admin.end();
 });
 
-async function tokenFor(email: string, password: string): Promise<string> {
-  const res = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  return res.json().accessToken as string;
-}
 
 describe("provisioning (F16, one action)", () => {
   let hoopaId: string;
 
   it("an instance admin provisions a jurisdiction with the ICS position set", async () => {
-    const token = await tokenFor("root@example.org", "instance-admin-pass");
+    const token = await tokenFor(app, "root@example.org", "instance-admin-pass");
     const res = await app.inject({
       method: "POST",
       url: "/api/v1/provision/jurisdictions",
@@ -59,7 +51,7 @@ describe("provisioning (F16, one action)", () => {
     expect(res.json().positions).toBe(8);
     hoopaId = res.json().jurisdictionId as string;
 
-    const adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
+    const adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
     const list = await app.inject({
       method: "GET",
       url: `/api/v1/jurisdictions/${hoopaId}/positions`,
@@ -73,7 +65,7 @@ describe("provisioning (F16, one action)", () => {
   });
 
   it("a non-instance-admin cannot provision", async () => {
-    const token = await tokenFor("member@example.org", "another-good-password");
+    const token = await tokenFor(app, "member@example.org", "another-good-password");
     const res = await app.inject({
       method: "POST",
       url: "/api/v1/provision/jurisdictions",
@@ -91,8 +83,8 @@ describe("cross-jurisdiction default deny (INV-7)", () => {
     const positionId = position!.id as string;
     await admin`insert into position_assignments (position_id, person_id, assigned_by)
       values (${positionId}, ${seed.memberId}, ${seed.adminId})`;
-    const memberToken = await tokenFor("member@example.org", "another-good-password");
-    const adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
+    const memberToken = await tokenFor(app, "member@example.org", "another-good-password");
+    const adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
     const read = (token: string, filter = true) => app.inject({
       method: "GET",
       url: `/api/v1/jurisdictions/${seed.jurisdictionId}/positions${filter ? "?assignedToMe=true" : ""}`,
@@ -112,7 +104,7 @@ describe("cross-jurisdiction default deny (INV-7)", () => {
 
   it("a member of one jurisdiction cannot read another's positions", async () => {
     const [hoopa] = await admin`select id from jurisdictions where slug = 'hoopa'`;
-    const token = await tokenFor("member@example.org", "another-good-password");
+    const token = await tokenFor(app, "member@example.org", "another-good-password");
     const res = await app.inject({
       method: "GET",
       url: `/api/v1/jurisdictions/${hoopa!.id as string}/positions`,
@@ -143,8 +135,8 @@ describe("cross-jurisdiction default deny (INV-7)", () => {
 
 describe("identity-table RLS (parity audit finding 1)", () => {
   it("sessions are visible only to their own person, and never without a context", async () => {
-    await tokenFor("admin@example.org", "correct-horse-battery"); // mints an admin session
-    await tokenFor("member@example.org", "another-good-password"); // mints a member session
+    await tokenFor(app, "admin@example.org", "correct-horse-battery"); // mints an admin session
+    await tokenFor(app, "member@example.org", "another-good-password"); // mints a member session
     const adminSessions = await withPerson(
       runtime,
       seed.adminId,
@@ -196,7 +188,7 @@ describe("mutual-aid guest access (R3)", () => {
   let grantId: string;
 
   it("an admin issues a time-boxed positions:read grant and the guest can read", async () => {
-    const adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
+    const adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
     const res = await app.inject({
       method: "POST",
       url: `/api/v1/jurisdictions/${seed.jurisdictionId}/guests`,
@@ -210,7 +202,7 @@ describe("mutual-aid guest access (R3)", () => {
     expect(res.statusCode).toBe(201);
     grantId = res.json().id as string;
 
-    const guestToken = await tokenFor("mutualaid@example.org", "mutual-aid-password");
+    const guestToken = await tokenFor(app, "mutualaid@example.org", "mutual-aid-password");
     const list = await app.inject({
       method: "GET",
       url: `/api/v1/jurisdictions/${seed.jurisdictionId}/positions`,
@@ -220,7 +212,7 @@ describe("mutual-aid guest access (R3)", () => {
   });
 
   it("a guest can never write: position creation and self-granting fail", async () => {
-    const guestToken = await tokenFor("mutualaid@example.org", "mutual-aid-password");
+    const guestToken = await tokenFor(app, "mutualaid@example.org", "mutual-aid-password");
     const create = await app.inject({
       method: "POST",
       url: `/api/v1/jurisdictions/${seed.jurisdictionId}/positions`,
@@ -244,7 +236,7 @@ describe("mutual-aid guest access (R3)", () => {
   it("an expired grant stops working at both walls", async () => {
     await admin`update guest_grants set expires_at = now() - interval '1 minute'
       where id = ${grantId}`;
-    const guestToken = await tokenFor("mutualaid@example.org", "mutual-aid-password");
+    const guestToken = await tokenFor(app, "mutualaid@example.org", "mutual-aid-password");
     const list = await app.inject({
       method: "GET",
       url: `/api/v1/jurisdictions/${seed.jurisdictionId}/positions`,

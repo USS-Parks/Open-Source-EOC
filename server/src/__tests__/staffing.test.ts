@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
-import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
 /**
  * Staffing: check-in bound to positions feeds the activity log,
@@ -25,8 +25,8 @@ beforeAll(async () => {
   seed = await seedIdentity(admin);
   app = buildApp(runtime, { oidc: null });
   await app.listen({ port: 0, host: "127.0.0.1" });
-  adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
-  memberToken = await tokenFor("member@example.org", "another-good-password");
+  adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
+  memberToken = await tokenFor(app, "member@example.org", "another-good-password");
   opsPositionId = await makePosition("operations_section_chief", "Operations Section Chief");
   planPositionId = await makePosition("planning_section_chief", "Planning Section Chief");
 });
@@ -37,14 +37,6 @@ afterAll(async () => {
   await admin.end();
 });
 
-async function tokenFor(email: string, password: string): Promise<string> {
-  const res = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  return res.json().accessToken as string;
-}
 
 async function makePosition(key: string, title: string): Promise<string> {
   const res = await app.inject({

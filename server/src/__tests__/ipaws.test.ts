@@ -149,15 +149,47 @@ describe("IPAWS-OPEN connector against recorded fixtures", () => {
 });
 
 describe("frozen contract matches the running app", () => {
+  /**
+   * The contract publishes every route the product can serve, including the
+   * optional integrations and the identity-provider routes, so the app it is
+   * checked against enables all of them. A default deployment registers
+   * neither set. Route registration never touches the database.
+   */
+  let contractApp: FastifyInstance;
+
+  beforeAll(async () => {
+    contractApp = buildApp(
+      (() => {
+        throw new Error("route inventory must not query the database");
+      }) as unknown as Sql,
+      {
+        integrations: ["collab", "facilities", "meetings", "tracking"],
+        oidc: {
+          issuer: "https://identity.invalid",
+          clientId: "route-inventory",
+          clientSecret: "not-used",
+          redirectUri: "https://eoc.invalid/api/v1/auth/oidc/callback",
+        },
+      },
+    );
+    // Websocket and plugin-registered routes only exist once plugins load.
+    await contractApp.ready();
+  });
+
+  afterAll(async () => {
+    await contractApp.close();
+  });
+
   it("registers every REST endpoint the contract publishes", () => {
     for (const e of API_CONTRACT.rest) {
-      expect(app.hasRoute({ method: e.method, url: e.path }), `${e.method} ${e.path}`).toBe(true);
+      expect(contractApp.hasRoute({ method: e.method, url: e.path }), `${e.method} ${e.path}`)
+        .toBe(true);
     }
   });
 
   it("registers every WebSocket channel the contract publishes", () => {
     for (const w of API_CONTRACT.websockets) {
-      expect(app.hasRoute({ method: "GET", url: w.path }), w.path).toBe(true);
+      expect(contractApp.hasRoute({ method: "GET", url: w.path }), w.path).toBe(true);
     }
   });
 

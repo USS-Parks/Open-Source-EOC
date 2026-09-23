@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { DamageSummary } from "@openeoc/shared";
 import { buildApp } from "../app.js";
 import { rateLimit, resetRateLimit } from "../security/rate-limit.js";
-import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
 /**
  * Damage assessment (F8/F9): official assessments aggregate to
@@ -28,14 +28,14 @@ beforeAll(async () => {
   seed = await seedIdentity(admin);
   app = buildApp(runtime, { oidc: null });
   await app.listen({ port: 0, host: "127.0.0.1" });
-  adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
-  memberToken = await tokenFor("member@example.org", "another-good-password");
+  adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
+  memberToken = await tokenFor(app, "member@example.org", "another-good-password");
   const outsiderId = await admin`
     insert into persons (email, display_name, password_hash)
     select 'damage-outsider@example.org', 'Out', password_hash from persons
     where email = 'member@example.org' returning id`;
   void outsiderId;
-  outsiderToken = await tokenFor("damage-outsider@example.org", "another-good-password");
+  outsiderToken = await tokenFor(app, "damage-outsider@example.org", "another-good-password");
 });
 
 afterAll(async () => {
@@ -44,14 +44,6 @@ afterAll(async () => {
   await admin.end();
 });
 
-async function tokenFor(email: string, password: string): Promise<string> {
-  const res = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  return res.json().accessToken as string;
-}
 
 async function assess(payload: Record<string, unknown>, token = memberToken): Promise<void> {
   const res = await app.inject({

@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { addMembership, createJurisdiction, createPerson } from "../auth/service.js";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
-import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
 let admin: Sql;
 let runtime: Sql;
@@ -25,8 +25,8 @@ beforeAll(async () => {
   const address = app.server.address();
   baseUrl = `127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
 
-  adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
-  memberToken = await tokenFor("member@example.org", "another-good-password");
+  adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
+  memberToken = await tokenFor(app, "member@example.org", "another-good-password");
   const boardRes = await app.inject({
     method: "POST",
     url: `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`,
@@ -42,14 +42,6 @@ afterAll(async () => {
   await admin.end();
 });
 
-async function tokenFor(email: string, password: string): Promise<string> {
-  const res = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  return res.json().accessToken as string;
-}
 
 /** Headless sync client: local Y.Doc that works offline and reconciles. */
 class TestSyncClient {
@@ -353,7 +345,7 @@ describe("sync authorization (INV-7)", () => {
       password: "outsider-good-pass",
     });
     await addMembership(admin, outsiderId, otherJurisdiction, "admin");
-    const outsiderToken = await tokenFor("outsider@example.org", "outsider-good-pass");
+    const outsiderToken = await tokenFor(app, "outsider@example.org", "outsider-good-pass");
 
     const outsider = new TestSyncClient();
     await expect(outsider.connect(outsiderToken)).rejects.toThrow(

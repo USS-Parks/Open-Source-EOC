@@ -49,3 +49,52 @@ Every unit records, in this order:
 - **Evidence level:** document.
 - **Result:** W1.13 is complete. Committed with this receipt. No push
   performed. Next: W1.14, consolidate the server test suite.
+
+## V1 W1.14: consolidate the server test suite
+
+- **Baseline measured first, as the unit requires.** 98 server test files,
+  23,505 lines, 2,468 `expect` calls, 390 `it` or `test` blocks.
+- **After:** 98 files, 23,319 lines, 2,466 `expect` calls, 390 blocks. The
+  shared helpers grew from 100 to 126 lines.
+- **What was deduplicated.** Twenty-three files each carried a private
+  `tokenFor` performing the same login round trip, several with a private
+  one-line `auth` header helper beside it. Both now live in
+  `server/src/__tests__/helpers.ts` and take the app as an argument, so a
+  change to the login contract lands in one place instead of twenty-three.
+- **Assertion delta explained, not hidden.** The two `expect` calls that
+  disappeared were `expect(response.statusCode).toBe(200)` inside two of the
+  private `tokenFor` bodies. The shared helper raises a named error on a
+  non-200 login and on a missing token, so the guard is preserved and its
+  failure message is better; it is no longer counted as an `expect`. Test
+  blocks and every behavioral assertion are unchanged at 390.
+- **Second regression found and closed.** The route-table contract test in
+  `ipaws.test.ts` has been failing on `main` since the integration gating
+  commits, for the same reason `app-e2e.test.ts` was: it checked the frozen
+  contract against an app built with no optional integrations, while the
+  contract publishes every route the product can serve. It now builds its own
+  inventory app with all four integrations and the identity-provider routes
+  enabled, and awaits `ready()` so plugin-registered websocket routes exist.
+  That app never queries the database. This was a live red on `main`, not a
+  break introduced by this unit.
+- **What was not done, and why.** The unit also proposed collapsing
+  per-session acceptance files into one file per module. The evidence does not
+  support it. The files that look redundant by name are not: each
+  `*-browser.test.ts` drives a real browser against a surface while its
+  non-browser sibling exercises the API and the database, and the incident
+  scope files each pin a different isolation boundary. Merging them would
+  trade clear failure attribution for a smaller file count and risk the
+  coverage this unit is forbidden to reduce. No file was merged.
+- **Correction to the audit that produced this unit.** The status audit framed
+  "server test lines exceed server source lines" as bloat. That framing was
+  wrong. The server suite is integration-heavy by construction: a real
+  database per file, row-level security exercised as the runtime role, and
+  browser walks. For that shape more test code than source code is ordinary.
+  The genuine duplication was the login boilerplate, 186 lines, not the
+  23,000-line ratio. The audit document keeps its original wording as the
+  record of what was believed at the time; this receipt is the correction.
+- **Evidence level:** unit, integration, real-database and browser.
+- **Verification:** recursive TypeScript clean; full ESLint clean; `ipaws`
+  passed 14 of 14 after the fix, having failed 2 of 14 before it. The W1
+  milestone gate is recorded in the next receipt.
+- **Result:** W1.14 is complete. No push performed. Next: the W1 milestone
+  gate.

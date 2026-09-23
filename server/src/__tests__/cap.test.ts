@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { capToXml, CapAlertSchema, type CapAlert } from "@openeoc/shared";
 import { buildApp } from "../app.js";
-import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
 /**
  * CAP authoring and ingest: author from incident context with
@@ -37,7 +37,7 @@ beforeAll(async () => {
   seed = await seedIdentity(admin);
   app = buildApp(runtime, { oidc: null });
   await app.listen({ port: 0, host: "127.0.0.1" });
-  memberToken = await tokenFor("member@example.org", "another-good-password");
+  memberToken = await tokenFor(app, "member@example.org", "another-good-password");
 });
 
 afterAll(async () => {
@@ -46,14 +46,6 @@ afterAll(async () => {
   await admin.end();
 });
 
-async function tokenFor(email: string, password: string): Promise<string> {
-  const res = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  return res.json().accessToken as string;
-}
 
 describe("authoring CAP from incident context", () => {
   it("validates, stamps, stores, and marks an IPAWS-eligible alert", async () => {

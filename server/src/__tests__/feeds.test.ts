@@ -5,7 +5,7 @@ import { principalForPerson, type Principal } from "../auth/service.js";
 import { withPerson } from "../db/context.js";
 import { parseGeoRss } from "../feeds/parse.js";
 import { createFeed, feedItems, listFeeds, pollFeed, runDueFeeds } from "../feeds/service.js";
-import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
 /**
  * Feed framework: a simulated weather feed and a simulated
@@ -58,8 +58,8 @@ beforeAll(async () => {
     select 'outsider@example.org', 'Outsider', password_hash from persons
     where email = 'member@example.org' returning id`;
   void outsider;
-  memberToken = await tokenFor("member@example.org", "another-good-password");
-  outsiderToken = await tokenFor("outsider@example.org", "another-good-password");
+  memberToken = await tokenFor(app, "member@example.org", "another-good-password");
+  outsiderToken = await tokenFor(app, "outsider@example.org", "another-good-password");
 });
 
 afterAll(async () => {
@@ -68,14 +68,6 @@ afterAll(async () => {
   await admin.end();
 });
 
-async function tokenFor(email: string, password: string): Promise<string> {
-  const res = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  return res.json().accessToken as string;
-}
 
 async function newFeed(raw: Record<string, unknown>): Promise<{ id: string; ingestToken?: string }> {
   return withPerson(runtime, seed.adminId, (tx) =>

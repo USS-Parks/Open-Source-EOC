@@ -4,7 +4,7 @@ import { buildApp } from "../app.js";
 import { reportStatus, statusBoard } from "../facilities/service.js";
 import { principalForPerson, type Principal } from "../auth/service.js";
 import { withPerson } from "../db/context.js";
-import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
 /**
  * Facility status networks (F10): an always-on board with
@@ -27,7 +27,7 @@ beforeAll(async () => {
   seed = await seedIdentity(admin);
   app = buildApp(runtime, { oidc: null, integrations: ["facilities"] });
   await app.listen({ port: 0, host: "127.0.0.1" });
-  memberToken = await tokenFor("member@example.org", "another-good-password");
+  memberToken = await tokenFor(app, "member@example.org", "another-good-password");
   memberP = await principalForPerson(runtime, seed.memberId);
   hospitalA = await facility("Klamath General", "hospital");
   hospitalB = await facility("Requa Regional", "hospital");
@@ -40,14 +40,6 @@ afterAll(async () => {
   await admin.end();
 });
 
-async function tokenFor(email: string, password: string): Promise<string> {
-  const res = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  return res.json().accessToken as string;
-}
 
 async function facility(name: string, kind: string): Promise<string> {
   const res = await app.inject({

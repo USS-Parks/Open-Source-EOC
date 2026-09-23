@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
-import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
 /**
  * Tracking and reunification (F11): a scan tag carries one
@@ -36,9 +36,9 @@ beforeAll(async () => {
 
   app = buildApp(runtime, { oidc: null, integrations: ["tracking"] });
   await app.listen({ port: 0, host: "127.0.0.1" });
-  memberToken = await tokenFor("member@example.org", "another-good-password");
-  viewerToken = await tokenFor("viewer@example.org", "another-good-password");
-  outsiderToken = await tokenFor("tracking-outsider@example.org", "another-good-password");
+  memberToken = await tokenFor(app, "member@example.org", "another-good-password");
+  viewerToken = await tokenFor(app, "viewer@example.org", "another-good-password");
+  outsiderToken = await tokenFor(app, "tracking-outsider@example.org", "another-good-password");
 });
 
 afterAll(async () => {
@@ -47,14 +47,6 @@ afterAll(async () => {
   await admin.end();
 });
 
-async function tokenFor(email: string, password: string): Promise<string> {
-  const res = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  return res.json().accessToken as string;
-}
 
 async function scan(tag: string, custodyState: string, station: string, agency: string, location?: string): Promise<void> {
   const res = await app.inject({

@@ -6,7 +6,7 @@ import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardDashboards } from "../dashboards/service.js";
 import { addMembership, createJurisdiction, createPerson } from "../auth/service.js";
-import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
 /**
  * Dashboards: server-side aggregation over several boards with
@@ -60,10 +60,10 @@ beforeAll(async () => {
   const address = app.server.address();
   baseUrl = `127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
 
-  adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
-  memberToken = await tokenFor("member@example.org", "another-good-password");
-  outsiderToken = await tokenFor("outsider@example.org", "outsider-password-ok");
-  bAdminToken = await tokenFor("b-admin@example.org", "b-admin-password-ok");
+  adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
+  memberToken = await tokenFor(app, "member@example.org", "another-good-password");
+  outsiderToken = await tokenFor(app, "outsider@example.org", "outsider-password-ok");
+  bAdminToken = await tokenFor(app, "b-admin@example.org", "b-admin-password-ok");
 
   for (const key of ["lifelines", "shelters", "road_closures"]) {
     const res = await app.inject({
@@ -104,14 +104,6 @@ afterAll(async () => {
   await admin.end();
 });
 
-async function tokenFor(email: string, password: string): Promise<string> {
-  const res = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  return res.json().accessToken as string;
-}
 
 async function post(board: string, data: Record<string, unknown>): Promise<void> {
   const res = await app.inject({

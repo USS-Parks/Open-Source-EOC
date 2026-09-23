@@ -3,7 +3,7 @@ import { cotFromXml, cotToXml, type CotEvent } from "@openeoc/shared";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
-import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
 /**
  * CoT/TAK gateway (ADR-0008): a simulated ATAK track renders on
@@ -36,8 +36,8 @@ beforeAll(async () => {
   await ensureStandardTemplates(admin);
   app = buildApp(runtime, { oidc: null });
   await app.listen({ port: 0, host: "127.0.0.1" });
-  adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
-  memberToken = await tokenFor("member@example.org", "another-good-password");
+  adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
+  memberToken = await tokenFor(app, "member@example.org", "another-good-password");
   const board = await app.inject({
     method: "POST",
     url: `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`,
@@ -53,14 +53,6 @@ afterAll(async () => {
   await admin.end();
 });
 
-async function tokenFor(email: string, password: string): Promise<string> {
-  const res = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  return res.json().accessToken as string;
-}
 
 describe("inbound: an ATAK track renders on the COP", () => {
   it("ingests a CoT event and lands it as a COP feed feature", async () => {

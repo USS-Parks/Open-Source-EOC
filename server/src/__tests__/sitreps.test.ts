@@ -4,7 +4,7 @@ import type { SitrepRow, LifelineCurrent } from "@openeoc/shared";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
-import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
 /**
  * Situation reporting and briefing (F8): lifelines entry edits
@@ -27,8 +27,8 @@ beforeAll(async () => {
   app = buildApp(runtime, { oidc: null });
   await app.listen({ port: 0, host: "127.0.0.1" });
 
-  adminToken = await tokenFor("admin@example.org", "correct-horse-battery");
-  memberToken = await tokenFor("member@example.org", "another-good-password");
+  adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
+  memberToken = await tokenFor(app, "member@example.org", "another-good-password");
   for (const key of ["lifelines", "shelters", "road_closures", "significant_events"]) {
     const res = await app.inject({
       method: "POST",
@@ -54,14 +54,6 @@ afterAll(async () => {
   await admin.end();
 });
 
-async function tokenFor(email: string, password: string): Promise<string> {
-  const res = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { email, password },
-  });
-  return res.json().accessToken as string;
-}
 
 async function post(board: string, data: Record<string, unknown>): Promise<void> {
   const res = await app.inject({
@@ -207,7 +199,7 @@ describe("situation report composition and archive", () => {
       select 'briefing-outsider@example.org', 'Out', password_hash from persons
       where email = 'member@example.org' returning id`;
     void outsiderId;
-    const outToken = await tokenFor("briefing-outsider@example.org", "another-good-password");
+    const outToken = await tokenFor(app, "briefing-outsider@example.org", "another-good-password");
     const denied = await app.inject({
       method: "GET",
       url: `/api/v1/jurisdictions/${seed.jurisdictionId}/sitreps`,
