@@ -23,6 +23,7 @@ import {
   resolveInside,
   safeRelativePath,
   selectStaticFile,
+  staticCaching,
 } from "./lib/static-host.mjs";
 import { rotateIfLarger, rotatingLog } from "./lib/rotating-log.mjs";
 
@@ -68,6 +69,30 @@ test("single byte ranges are bounded for PMTiles and invalid ranges are refused"
   assert.deepEqual(parseByteRange("bytes=10-11", 10), { unsatisfiable: true });
   assert.deepEqual(parseByteRange("bytes=5-2", 10), { unsatisfiable: true });
   assert.deepEqual(parseByteRange("bytes=1-2,4-5", 10), { unsatisfiable: true });
+});
+
+test("hashed bundle files cache for a year and archives revalidate against a strong validator", () => {
+  const archive = { relativePath: "basemap/california.pmtiles", fromDist: false, size: 769826123, mtimeMs: 1789000000123.4 };
+  const plain = staticCaching(archive);
+  assert.equal(plain.cacheControl, "no-cache");
+  assert.match(plain.etag, /^"[0-9a-f]+-[0-9a-f]+"$/);
+  assert.equal(plain.notModified, false);
+  assert.equal(plain.honorRange, true);
+  assert.equal(staticCaching({ ...archive, headers: { "if-none-match": plain.etag } }).notModified, true);
+  assert.equal(staticCaching({ ...archive, headers: { "if-none-match": `"x", W/${plain.etag}` } }).notModified, true);
+  assert.equal(staticCaching({ ...archive, headers: { "if-none-match": '"stale"' } }).notModified, false);
+  // A replaced archive changes the validator, so a range tied to the old one gets the whole new file.
+  const replaced = staticCaching({ ...archive, size: archive.size + 1 });
+  assert.notEqual(replaced.etag, plain.etag);
+  assert.equal(staticCaching({ ...archive, size: archive.size + 1, headers: { "if-range": plain.etag } }).honorRange, false);
+  assert.equal(staticCaching({ ...archive, headers: { "if-range": plain.etag } }).honorRange, true);
+  assert.equal(staticCaching({ ...archive, headers: { "if-range": plain.lastModified } }).honorRange, true);
+  assert.equal(
+    staticCaching({ relativePath: "assets/index-BQY7sQL7.js", fromDist: true, size: 3, mtimeMs: 1 }).cacheControl,
+    "public, max-age=31536000, immutable",
+  );
+  // A public file that merely sits under an assets folder is not content hashed.
+  assert.equal(staticCaching({ relativePath: "assets/logo.svg", fromDist: false, size: 3, mtimeMs: 1 }).cacheControl, "no-cache");
 });
 
 test("desktop building attribution requires metadata matching the installed archive", async (t) => {

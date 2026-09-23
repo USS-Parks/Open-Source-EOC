@@ -59,16 +59,44 @@ export function selectStaticFile({ rawPath, distRoot, publicRoot, acceptsHtml = 
   const requested = relativePath || "index.html";
   const distFile = resolveInside(distRoot, requested);
   if (existsSync(distFile) && statSync(distFile).isFile())
-    return { file: distFile, relativePath: requested, index: requested === "index.html" };
+    return { file: distFile, relativePath: requested, index: requested === "index.html", fromDist: true };
   const publicFile = resolveInside(publicRoot, requested);
   if (existsSync(publicFile) && statSync(publicFile).isFile())
-    return { file: publicFile, relativePath: requested, index: false };
+    return { file: publicFile, relativePath: requested, index: false, fromDist: false };
   if (acceptsHtml && extname(requested) === "") {
     const indexFile = resolveInside(distRoot, "index.html");
     if (existsSync(indexFile) && statSync(indexFile).isFile())
-      return { file: indexFile, relativePath: "index.html", index: true };
+      return { file: indexFile, relativePath: "index.html", index: true, fromDist: true };
   }
   return null;
+}
+
+/**
+ * Cache rules for a static file. The build names every file under dist/assets
+ * after its content hash, so those are cached for a year and never revalidated.
+ * Everything else (the map archives, glyphs, overlays manifest) keeps its name
+ * across installs, so the browser stores it but revalidates each use against a
+ * strong validator; an unchanged file answers 304 with no body. ponytail: the
+ * validator is size plus modification time, not a digest, because hashing the
+ * 1.2 GB of archives would delay every start; a replaced archive changes both.
+ * A Range request whose If-Range names an older validator gets the whole file,
+ * so a map client never stitches ranges from two different archives.
+ */
+export function staticCaching({ relativePath, fromDist, size, mtimeMs, headers = {} }) {
+  const etag = `"${size.toString(16)}-${Math.floor(mtimeMs).toString(16)}"`;
+  const lastModified = new Date(Math.floor(mtimeMs / 1000) * 1000).toUTCString();
+  const cacheControl = fromDist && relativePath.startsWith("assets/")
+    ? "public, max-age=31536000, immutable"
+    : "no-cache";
+  const ifNoneMatch = String(headers["if-none-match"] ?? "");
+  const notModified = ifNoneMatch !== ""
+    && ifNoneMatch.split(",").some((tag) => {
+      const value = tag.trim().replace(/^W\//, "");
+      return value === "*" || value === etag;
+    });
+  const ifRange = headers["if-range"];
+  const honorRange = ifRange === undefined || ifRange === etag || ifRange === lastModified;
+  return { etag, lastModified, cacheControl, notModified, honorRange };
 }
 
 export function parseByteRange(header, size) {
@@ -200,9 +228,14 @@ export function registerStaticHost(app, { distRoot, publicRoot, runtimeConfig })
       return documentHeaders(reply).type(TYPES[".html"]).send(body);
     }
 
-    const size = statSync(selected.file).size;
-    const range = parseByteRange(request.headers.range, size);
-    reply.type(type).header("accept-ranges", "bytes");
+    const { size, mtimeMs } = statSync(selected.file);
+    const caching = staticCaching({ ...selected, size, mtimeMs, headers: request.headers });
+    reply.type(type).header("accept-ranges", "bytes")
+      .header("cache-control", caching.cacheControl)
+      .header("etag", caching.etag)
+      .header("last-modified", caching.lastModified);
+    if (caching.notModified) return reply.code(304).send();
+    const range = caching.honorRange ? parseByteRange(request.headers.range, size) : null;
     if (range && "unsatisfiable" in range)
       return reply.code(416).header("content-range", `bytes */${size}`).send();
     if (range) {

@@ -2302,3 +2302,36 @@ tagging remain separately gated as section 1 of the roster states.
 - **Deferred:** a HIPAA review before any deployment puts patient-level data in
   tracking or facilities.
 - **Rollback:** revert the commit.
+
+## V1 W5.2 part one: cache headers on the static host
+
+- **What changed.** The Windows static host, `deploy/windows/lib/static-host.mjs`,
+  sent no cache headers, so the browser had no validator for the map archives,
+  glyphs and bundle files and refetched them. A new `staticCaching` rule now
+  sets them for every static file:
+  - files under `dist/assets`, which the build names by content hash, are
+    `public, max-age=31536000, immutable`;
+  - everything else, the PMTiles archives, glyphs and the overlays manifest,
+    is `no-cache` with a strong `ETag` and `Last-Modified`, and an unchanged
+    file answers 304 with no body;
+  - a Range request whose `If-Range` names an older validator gets the whole
+    file, so a map client never joins ranges from two versions of an archive.
+    Byte-range serving is otherwise unchanged (HZ-F).
+  The document and `/runtime-config.js` stay `no-store`.
+- **Defaults and deviations.** The roster asks for content hashes on the
+  archives and glyphs. Their validator is size plus modification time, not a
+  digest, because hashing 1.2 GB of archives would delay every start; a
+  replaced archive changes both. The bundle files carry true content hashes in
+  their names. The Docker path gains its web service in W6.0, whose static
+  server sets its own validators; the compose part of this unit moves there.
+- **Schema, contract, dependencies:** none.
+- **Verification.** `node --test deploy/windows/desktop.test.mjs`: 14 tests
+  passed, 0 failed, including a new test of the year-long cache on hashed
+  bundle files, `no-cache` elsewhere, 304 on a matching `If-None-Match`
+  including a weak form, a new validator for a replaced archive, and `If-Range`
+  honored only for the current validator or date.
+- **Evidence level:** unit.
+- **Deferred:** part two, the county bounds for the map's find box served from
+  the bundle instead of a runtime fetch of the county GeoJSON, which waits for
+  the geocoding unit to land because both touch the map's search.
+- **Rollback:** revert the commit.
