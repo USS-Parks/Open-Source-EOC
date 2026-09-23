@@ -104,7 +104,7 @@ describe("field reporting and tracking workspace", () => {
       name: "field-photo.png", mimeType: "image/png",
       buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Wl9sAAAAASUVORK5CYII=", "base64"),
     });
-    await form.getByText("Attachment ready.").waitFor();
+    await form.getByText("Attached: field-photo.png. It uploads after the report synchronizes.").waitFor();
     await form.getByRole("button", { name: "Queue field report" }).click();
     await workspace.getByText("Report synchronized with retained server attribution.").waitFor();
 

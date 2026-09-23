@@ -1,16 +1,19 @@
+import type { Readable } from "node:stream";
 import {
-  allFields,
+  checkFormExpressions,
+  FORM_MEDIA_CONTENT_TYPES,
   FormDefinitionSchema,
-  geometryFieldKey,
-  submission,
+  formBoardData,
   runForm,
   type FormDefinition,
   type AnswerRecord,
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
+import { withPerson } from "../db/context.js";
 import { AuthError, requireAdmin, requireMember, type Principal } from "../auth/service.js";
-import { createRecord, getEffectiveBoard } from "../boards/service.js";
+import { createRecord, getEffectiveBoard, updateRecord } from "../boards/service.js";
 import { recordAudit } from "../audit/service.js";
+import { uploadFile, type BlobStore, type UploadLimits } from "../files/service.js";
 
 /**
  * Smart form service (F7). Imported XLSForm definitions are
@@ -35,6 +38,11 @@ export async function storeForm(
 ): Promise<{ key: string; version: number }> {
   requireAdmin(actor, jurisdictionId);
   const def = FormDefinitionSchema.parse(rawDef);
+  try {
+    checkFormExpressions(def);
+  } catch (error) {
+    throw new AuthError(400, (error as Error).message);
+  }
   const [existing] = await sql`
     select 1 from form_definitions
     where jurisdiction_id = ${jurisdictionId} and key = ${def.key} and version = ${def.version}`;
@@ -92,19 +100,12 @@ export async function getForm(
   return FormDefinitionSchema.parse(row.definition);
 }
 
-/** ODK geopoint "lat lon [alt] [acc]" -> GeoJSON Point [lon, lat]. */
-function geopointToGeoJson(value: unknown): Record<string, unknown> | null {
-  if (typeof value !== "string") return null;
-  const parts = value.trim().split(/\s+/).map(Number);
-  if (parts.length < 2 || Number.isNaN(parts[0]!) || Number.isNaN(parts[1]!)) return null;
-  return { type: "Point", coordinates: [parts[1]!, parts[0]!] };
-}
-
 /**
- * Run a submission and write it to a board. Field values map to board
- * fields by name; the form's geopoint becomes the board's geometry. The
- * capture is validated by the runner first (relevance-aware required and
- * constraint checks) and then by the board schema on write.
+ * Run a submission and write it to a board. The capture is validated by the
+ * runner first (relevance-aware required, choice membership under any
+ * choice_filter, geometry, repeat structure and constraints), mapped to
+ * board fields by the shared adapter the offline queue also uses, and then
+ * validated by the board schema on write.
  */
 export async function submitForm(
   sql: Sql,
@@ -118,27 +119,7 @@ export async function submitForm(
   const board = await getEffectiveBoard(sql, actor, input.boardId);
   if (board.jurisdictionId !== input.jurisdictionId)
     throw new AuthError(400, "board is not in this jurisdiction");
-  const sub = submission(def, input.answers);
-  const boardKeys = new Set(board.fields.map((f) => f.key));
-  const geomKey = geometryFieldKey(board.fields);
-  const geopointNames = allFields(def.nodes)
-    .filter((f) => f.type === "geopoint")
-    .map((f) => f.name);
-
-  const data: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(sub)) {
-    if (geopointNames.includes(k)) continue; // handled as geometry below
-    if (boardKeys.has(k)) data[k] = v;
-  }
-  if (geomKey) {
-    for (const name of geopointNames) {
-      const geo = geopointToGeoJson(sub[name]);
-      if (geo) {
-        data[geomKey] = geo;
-        break;
-      }
-    }
-  }
+  const data = formBoardData(def, board.fields, input.answers);
 
   const result = await createRecord(sql, actor, input.boardId, data);
   await recordAudit(sql, actor, {
@@ -149,4 +130,43 @@ export async function submitForm(
     payload: { form: def.key, board: board.template.key },
   });
   return { recordId: result.id };
+}
+
+const MEDIA_TYPES: ReadonlySet<string> = new Set(Object.values(FORM_MEDIA_CONTENT_TYPES).flat());
+
+/**
+ * Attach a photo or audio answer to the record its submission created. The
+ * bytes go through the file store's own upload path, attached to the record
+ * in the record's jurisdiction; when the board has an attachment field named
+ * like the question, that field is set to the new file as well.
+ */
+export async function attachFormMedia(
+  sql: Sql,
+  store: BlobStore,
+  actor: Principal,
+  input: { recordId: string; question: string; name: string; contentType: string; content: Readable },
+  limits: UploadLimits,
+): Promise<{ id: string; sha256: string; version: number; field: string | null }> {
+  if (!MEDIA_TYPES.has(input.contentType))
+    throw new AuthError(400, `photo and audio answers accept ${[...MEDIA_TYPES].join(", ")}`);
+  const [record] = await withPerson(sql, actor.person.id, (tx) => tx`
+    select r.board_id, b.jurisdiction_id from board_records r
+    join boards b on b.id = r.board_id where r.id = ${input.recordId}`);
+  if (!record) throw new AuthError(404, "record not found");
+  const boardId = record.board_id as string;
+  const file = await uploadFile(sql, store, actor, {
+    jurisdictionId: record.jurisdiction_id as string,
+    name: input.name,
+    contentType: input.contentType,
+    content: input.content,
+    attachedKind: "record",
+    attachedId: input.recordId,
+  }, limits);
+  const field = await withPerson(sql, actor.person.id, async (tx) => {
+    const board = await getEffectiveBoard(tx, actor, boardId);
+    if (!board.fields.some((f) => f.key === input.question && f.type === "attachment")) return null;
+    await updateRecord(tx, actor, boardId, input.recordId, { [input.question]: file.id });
+    return input.question;
+  });
+  return { ...file, field };
 }

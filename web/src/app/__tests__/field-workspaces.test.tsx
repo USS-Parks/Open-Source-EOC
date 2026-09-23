@@ -2,11 +2,10 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import axe from "axe-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { FormDefinition } from "@openeoc/shared";
+import { formBoardData, type FormDefinition } from "@openeoc/shared";
 import type { ApiClient, EffectiveBoardResponse } from "../api/client.js";
 import { SmartFormsSurface } from "../surfaces/SmartFormsSurface.js";
 import { TrackingSurface } from "../surfaces/TrackingSurface.js";
-import { formBoardData } from "../../field/FieldCapture.js";
 
 const INCIDENT = "10000000-0000-4000-8000-000000000001";
 const NEXT_INCIDENT = "10000000-0000-4000-8000-000000000005";
@@ -28,6 +27,7 @@ const queue = vi.hoisted(() => ({
 
 vi.mock("../../field/field-submissions.js", () => ({
   FieldSubmissionQueue: { open: vi.fn().mockResolvedValue(queue) },
+  MAX_ATTACHMENT_BYTES: 10 * 1024 * 1024,
 }));
 vi.mock("../auth/session.js", () => ({
   useSession: () => ({ me: { person: { id: PERSON } } }),
@@ -124,17 +124,20 @@ describe("field reporting", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Open map capture" }));
     expect(openMap).toHaveBeenCalledOnce();
-    expect(container.textContent).toContain("Attachments require a connection");
+    expect(container.textContent).toContain("Photos and audio queue with them and upload after the report synchronizes.");
     const results = await axe.run(container, { rules: { region: { enabled: false } } });
     expect(results.violations).toEqual([]);
   });
 
-  it("keeps a rejected sync queued and labels offline attachment limits", async () => {
+  it("keeps a rejected sync queued and takes a photo while offline", async () => {
     Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
     queue.state.mockResolvedValueOnce({ phase: "queued", pending: 1, receipt: null, message: "1 queued." });
     render(<SmartFormsSurface client={formsClient()} jurisdictionId={JURISDICTION} incidentId={INCIDENT} />);
     await screen.findByText("Offline capture");
-    expect(await screen.findByText("Reconnect before adding an attachment.")).toBeTruthy();
+    const photo = await screen.findByLabelText(/^Photo/) as HTMLInputElement;
+    expect(photo.disabled).toBe(false);
+    expect(photo.accept).toBe("image/*");
+    expect(photo.getAttribute("capture")).toBe("environment");
     expect((screen.getByRole("button", { name: "Sync 1 queued" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -158,10 +161,19 @@ describe("field reporting", () => {
     expect(client.getBoard).toHaveBeenCalledWith(BOARD, INCIDENT);
     expect(screen.getByText("Your organization's forms are submitted to the selected incident board.")).toBeTruthy();
 
+    // The photo is held with the draft and queued with the report, not uploaded on pick.
     const image = new File(["field image"], "home-library-photo.png", { type: "image/png" });
     fireEvent.change(screen.getByLabelText(/^Photo/), { target: { files: [image] } });
-    await waitFor(() => expect(client.uploadFile).toHaveBeenCalledWith(HOME_JURISDICTION,
-      expect.objectContaining({ name: "home-library-photo.png", contentType: "image/png" })));
+    await screen.findByText("Attached: home-library-photo.png. It uploads after the report synchronizes.");
+    expect(client.uploadFile).not.toHaveBeenCalled();
+    const form = screen.getByRole("form", { name: "Field report form" });
+    fireEvent.change(within(form).getByLabelText(/^Summary/), { target: { value: "Downed tree" } });
+    fireEvent.change(within(form).getByLabelText(/^Category/), { target: { value: "hazard" } });
+    fireEvent.click(within(form).getByRole("button", { name: "Queue field report" }));
+    await waitFor(() => expect(queue.enqueue).toHaveBeenCalledOnce());
+    const [, , , data, files] = queue.enqueue.mock.calls[0]!;
+    expect(data).toEqual({ summary: "Downed tree", category: "hazard" });
+    expect(files).toEqual([{ question: "photo", file: image }]);
   });
 });
 

@@ -128,7 +128,23 @@
 .eoc-field-controls > .eoc-field-note,
 .eoc-field-controls > .eoc-field-location,
 .eoc-field-controls > .eoc-field-choices,
-.eoc-field-controls > .eoc-field-calculation { grid-column: 1 / -1; }
+.eoc-field-controls > .eoc-field-calculation,
+.eoc-field-controls > .eoc-field-group,
+.eoc-field-controls > .eoc-field-repeat { grid-column: 1 / -1; }
+.eoc-field-group,
+.eoc-field-repeat { display: grid; gap: 12px; min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--eoc-border); border-radius: 4px; }
+.eoc-field-group > legend,
+.eoc-field-repeat > legend { color: var(--eoc-text-strong); font-weight: 750; }
+.eoc-field-repeat > button { justify-self: start; }
+.eoc-field-repeat-entry { display: grid; gap: 10px; padding: 12px; border-left: 3px solid var(--eoc-brand-teal); background: var(--eoc-surface-sunken); }
+.eoc-field-repeat-entry > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.eoc-field-media,
+.eoc-field-barcode { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.eoc-field-media > button { justify-self: start; }
+.eoc-field-media small,
+.eoc-field-location small[role="status"] { color: var(--eoc-text-muted); }
+.eoc-field-geometry-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.eoc-field-map { height: 440px; min-height: 320px; border: 1px solid var(--eoc-border); border-radius: 4px; overflow: hidden; }
 
 .eoc-field-note {
   padding: 10px 12px;

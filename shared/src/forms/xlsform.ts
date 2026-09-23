@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { checkExpression } from "./expr.js";
 
 /**
  * XLSForm model and import (F7). An imported form is data: a
@@ -20,14 +21,38 @@ export const XLSFORM_FIELD_TYPES = [
   "select_one",
   "select_multiple",
   "geopoint",
+  "geotrace",
+  "geoshape",
+  "barcode",
   "image",
+  "audio",
   "calculate",
 ] as const;
 export type FieldType = (typeof XLSFORM_FIELD_TYPES)[number];
 
+/**
+ * Upload types a photo or audio question accepts. Each is also on the file
+ * store's allowlist, so a capture the runner takes is one the server stores.
+ */
+export const FORM_MEDIA_CONTENT_TYPES = {
+  image: ["image/png", "image/jpeg", "image/gif"],
+  audio: ["audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/aac", "audio/ogg", "audio/webm", "audio/wav", "audio/x-wav"],
+} as const satisfies Record<"image" | "audio", readonly string[]>;
+
+/**
+ * XLSForm metadata question types. The platform records who submitted and
+ * when in the record's own audit trail, so these rows are skipped on import.
+ */
+const METADATA_TYPES = new Set([
+  "start", "end", "today", "deviceid", "subscriberid", "simserial", "phonenumber",
+  "username", "email", "audit", "start-geopoint",
+]);
+
 export interface Choice {
   readonly name: string;
   readonly label: string;
+  /** Extra choices-sheet columns, read by bare names in a choice_filter. */
+  readonly properties?: Readonly<Record<string, string>>;
 }
 
 export interface FormField {
@@ -42,6 +67,8 @@ export interface FormField {
   readonly calculation?: string;
   readonly list?: string;
   readonly choices?: readonly Choice[];
+  /** XLSForm choice_filter: a choice is offered only where this is true for its row. */
+  readonly choiceFilter?: string;
 }
 
 export interface FormContainer {
@@ -85,6 +112,9 @@ function truthy(v: string): boolean {
   return s === "yes" || s === "true" || s === "1";
 }
 
+/** Choices-sheet columns that are not filter properties. */
+const CHOICE_SHEET_COLUMNS = /^(list_name|list name|name|label|media|image|audio|video)(::|$)/;
+
 /** Group choices by list_name from the choices sheet. */
 function choiceLists(rows: readonly SheetRow[]): Map<string, Choice[]> {
   const lists = new Map<string, Choice[]>();
@@ -93,17 +123,22 @@ function choiceLists(rows: readonly SheetRow[]): Map<string, Choice[]> {
     const name = cell(row, "name");
     if (!list || !name) continue;
     const label = cell(row, "label", "label::English", "label::english") || name;
+    const properties = Object.fromEntries(Object.entries(row)
+      .filter(([column, value]) => !CHOICE_SHEET_COLUMNS.test(column) && String(value).trim() !== "")
+      .map(([column, value]) => [column, String(value).trim()]));
     if (!lists.has(list)) lists.set(list, []);
-    lists.get(list)!.push({ name, label });
+    lists.get(list)!.push({ name, label, ...(Object.keys(properties).length ? { properties } : {}) });
   }
   return lists;
 }
 
 /**
  * Import an XLSForm (as normalized sheet rows) into a FormDefinition.
- * Recognizes begin/end group and begin/end repeat, resolves select_one
- * and select_multiple to their choice lists, and keeps every logic
- * column for the runner. Unknown or blank-type rows are skipped.
+ * Recognizes begin/end group and begin/end repeat in either spelling,
+ * resolves select_one and select_multiple to their choice lists with any
+ * choice_filter, and keeps every logic column for the runner. Metadata rows
+ * are skipped; any other construct the runner cannot honor is refused with
+ * the survey row that carries it.
  */
 export function importXlsForm(
   sheets: XlsFormSheets,
@@ -119,23 +154,25 @@ export function importXlsForm(
   const stack: { container: Partial<FormContainer>; children: FormNode[] }[] = [];
   const top = (): FormNode[] => (stack.length ? stack[stack.length - 1]!.children : root);
 
-  for (const row of sheets.survey) {
+  for (const [index, row] of sheets.survey.entries()) {
     const rawType = cell(row, "type");
     if (!rawType) continue;
-    const [head, listName] = rawType.split(/\s+/);
+    // The header is sheet row 1, so the first survey row is row 2.
+    const at = `survey row ${index + 2}`;
+    const [head, listName, extra] = rawType.split(/\s+/);
     const name = cell(row, "name");
     const label = cell(row, "label", "label::English", "label::english");
     const relevant = cell(row, "relevant");
 
-    if (head === "begin" || head === "end") {
-      // XLSForm allows "begin group"/"begin_group" spellings.
-      const which = listName ?? "";
-      const isGroup = rawType.includes("group");
-      const isRepeat = rawType.includes("repeat");
-      void which;
-      if (head === "begin") {
+    const block = /^(begin|end)[\s_]+(group|repeat)$/.exec(rawType);
+    if (block) {
+      const kind = block[2] as FormContainer["kind"];
+      if (block[1] === "begin") {
+        if (kind === "repeat" && cell(row, "repeat_count")) {
+          throw new Error(`${at}: repeat_count is not supported; field users add entries themselves`);
+        }
         const container: Partial<FormContainer> = {
-          kind: isRepeat ? "repeat" : "group",
+          kind,
           name: name || `group_${top().length}`,
           ...(label ? { label } : {}),
           ...(relevant ? { relevant } : {}),
@@ -143,10 +180,12 @@ export function importXlsForm(
         stack.push({ container, children: [] });
       } else {
         const frame = stack.pop();
-        if (!frame) throw new Error("unbalanced end without begin");
-        void isGroup;
+        if (!frame) throw new Error(`${at}: unbalanced end without begin`);
+        if (frame.container.kind !== kind) {
+          throw new Error(`${at}: end ${kind} closes the ${frame.container.kind} '${frame.container.name}'`);
+        }
         top().push({
-          kind: frame.container.kind ?? "group",
+          kind,
           name: frame.container.name!,
           ...(frame.container.label ? { label: frame.container.label } : {}),
           ...(frame.container.relevant ? { relevant: frame.container.relevant } : {}),
@@ -156,9 +195,20 @@ export function importXlsForm(
       continue;
     }
 
-    if (!XLSFORM_FIELD_TYPES.includes(head as FieldType)) continue; // unknown widget, skip
+    if (METADATA_TYPES.has(head!)) continue;
+    if (!XLSFORM_FIELD_TYPES.includes(head as FieldType)) {
+      throw new Error(`${at}: question type '${rawType}' is not supported`);
+    }
     const type = head as FieldType;
-    if (!name) throw new Error(`row with type '${rawType}' has no name`);
+    if (!name) throw new Error(`${at}: row with type '${rawType}' has no name`);
+    const select = type === "select_one" || type === "select_multiple";
+    if (select) {
+      if (!listName) throw new Error(`${at}: ${type} '${name}' names no choice list`);
+      if (extra) throw new Error(`${at}: '${rawType}' is not supported; add an explicit other choice instead`);
+      if (!lists.has(listName)) throw new Error(`${at}: choice list '${listName}' is not on the choices sheet`);
+    }
+    const choiceFilter = cell(row, "choice_filter", "choice filter");
+    if (choiceFilter && !select) throw new Error(`${at}: choice_filter applies only to select questions`);
     const field: FormField = {
       kind: "field",
       name,
@@ -171,21 +221,51 @@ export function importXlsForm(
         ? { constraintMessage: cell(row, "constraint_message", "constraint message") }
         : {}),
       ...(cell(row, "calculation") ? { calculation: cell(row, "calculation") } : {}),
-      ...(listName ? { list: listName } : {}),
-      ...(listName && lists.has(listName) ? { choices: lists.get(listName)! } : {}),
+      ...(select ? { list: listName!, choices: lists.get(listName!)! } : {}),
+      ...(choiceFilter ? { choiceFilter } : {}),
     };
     top().push(field);
   }
 
   if (stack.length) throw new Error("unbalanced begin without end");
 
-  return {
+  const def: FormDefinition = {
     key: meta.key,
     version: meta.version ?? 1,
     title,
     nodes: root,
     ...(meta.boardTemplate ? { boardTemplate: meta.boardTemplate } : {}),
   };
+  checkFormExpressions(def);
+  return def;
+}
+
+/**
+ * Refuse a form whose relevant, constraint, calculation or choice_filter the
+ * runner cannot evaluate, naming the question and the column.
+ */
+export function checkFormExpressions(def: FormDefinition): void {
+  const check = (node: FormNode, column: string, src: string | undefined, columns = false): void => {
+    if (!src) return;
+    try {
+      checkExpression(src, columns);
+    } catch (error) {
+      throw new Error(`question '${node.name}' ${column}: ${(error as Error).message}`, { cause: error });
+    }
+  };
+  const walk = (nodes: readonly FormNode[]): void => {
+    for (const node of nodes) {
+      check(node, "relevant", node.relevant);
+      if (node.kind === "field") {
+        check(node, "constraint", node.constraint);
+        check(node, "calculation", node.calculation);
+        check(node, "choice_filter", node.choiceFilter, true);
+      } else {
+        walk(node.children);
+      }
+    }
+  };
+  walk(def.nodes);
 }
 
 /** Zod schema for a stored/transmitted form definition. */
@@ -201,7 +281,12 @@ export const FormFieldSchema: z.ZodType<FormField> = z.lazy(() =>
     constraintMessage: z.string().optional(),
     calculation: z.string().optional(),
     list: z.string().optional(),
-    choices: z.array(z.object({ name: z.string(), label: z.string() })).optional(),
+    choices: z.array(z.object({
+      name: z.string(),
+      label: z.string(),
+      properties: z.record(z.string(), z.string()).optional(),
+    })).optional(),
+    choiceFilter: z.string().optional(),
   }),
 ) as z.ZodType<FormField>;
 

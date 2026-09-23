@@ -202,6 +202,7 @@ POST /api/v1/federation/receive
 POST /api/v1/feeds/:feedId/ingest
 POST /api/v1/feeds/:feedId/poll
 POST /api/v1/forms/:key/submit
+POST /api/v1/forms/records/:recordId/attachments
 POST /api/v1/iap/:iapId/approve
 POST /api/v1/iap/:iapId/complete
 POST /api/v1/iap/:iapId/revisions

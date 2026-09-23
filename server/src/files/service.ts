@@ -78,12 +78,21 @@ export class BlobStore {
   }
 }
 
-/** Allowed upload types (threat B10): documents, images, data. No executables. */
+/** Allowed upload types (threat B10): documents, images, audio, data. No executables. */
 const ALLOWED_TYPES = new Set([
   "application/pdf",
   "image/png",
   "image/jpeg",
   "image/gif",
+  // Audio answers to field forms, as phones and browsers record them.
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/x-m4a",
+  "audio/aac",
+  "audio/ogg",
+  "audio/webm",
+  "audio/wav",
+  "audio/x-wav",
   "text/plain",
   "text/csv",
   "application/json",

@@ -68,7 +68,7 @@ const pdaSheets: XlsFormSheets = {
     { type: "text", name: "address", label: "Address" },
     { type: "decimal", name: "loss", label: "Estimated loss" },
     { type: "end repeat", name: "structures" },
-    { type: "calculate", name: "total_loss", calculation: "sum_placeholder" },
+    { type: "calculate", name: "total_loss", calculation: "coalesce(${displaced}, 0)" },
     { type: "note", name: "thanks", label: "Thank you" },
   ],
   choices: [

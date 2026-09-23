@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { runForm, type AnswerRecord } from "@openeoc/shared";
+import { formBoardData, runForm, type AnswerRecord } from "@openeoc/shared";
 import { OFFLINE_SYNC_UNAVAILABLE, offlineSyncAvailable } from "../../boards/record-access.js";
-import { FieldCaptureFields, formBoardData } from "../../field/FieldCapture.js";
+import { FieldCaptureFields, mediaAttachments } from "../../field/FieldCapture.js";
 import {
   FieldSubmissionQueue,
   type FieldSubmissionState,
@@ -13,7 +13,6 @@ import type { ApiClient } from "../api/client.js";
 import { useSession } from "../auth/session.js";
 import { subscribeOfflineQueueChange } from "../../offline/queue-events.js";
 import { useAsync } from "../data/hooks.js";
-import { uploadPickedFile } from "../data/files.js";
 import { Scroll, SurfaceHeader } from "../screens/parts.js";
 import "../../field/field-workspace.css";
 
@@ -66,6 +65,8 @@ export function SmartFormsSurface(props: SmartFormsSurfaceProps) {
   const [formKey, setFormKey] = useState("");
   const [boardId, setBoardId] = useState("");
   const [answers, setAnswers] = useState<AnswerRecord>({});
+  // Photo and audio files picked for the current draft, by the token their answer holds.
+  const [media, setMedia] = useState<ReadonlyMap<string, File>>(new Map());
   const [queue, setQueue] = useState<FieldSubmissionQueue | null>(null);
   const [queueState, setQueueState] = useState<FieldSubmissionState>(INITIAL_QUEUE);
   const [busy, setBusy] = useState(false);
@@ -89,6 +90,7 @@ export function SmartFormsSurface(props: SmartFormsSurfaceProps) {
     setFormKey("");
     setBoardId("");
     setAnswers({});
+    setMedia(new Map());
     setError(null);
     setMessage(null);
   }, [props.incidentId]);
@@ -159,14 +161,17 @@ export function SmartFormsSurface(props: SmartFormsSurfaceProps) {
     setBusy(true);
     try {
       const recordId = crypto.randomUUID();
+      const captured = mediaAttachments(definition.data, answers, media);
       const queued = await queue.enqueue(
         scope,
         activeBoard.id,
         recordId,
-        formBoardData(definition.data, activeBoard.fields, answers),
+        formBoardData(definition.data, activeBoard.fields, captured.answers, { omitMedia: true }),
+        captured.files,
       );
       setQueueState(queued);
       setAnswers({});
+      setMedia(new Map());
       setMessage(`Report ${recordId.slice(0, 8)} is durably queued on this device.`);
       if (online) {
         const synchronized = await synchronize(queue, scope);
@@ -219,9 +224,9 @@ export function SmartFormsSurface(props: SmartFormsSurfaceProps) {
           <span>{definition.data ? `Version ${definition.data.version}` : "Loading"}</span></header>
         {definition.loading && !definition.data ? <LoadingState label="Loading questions…" /> : null}
         {definition.data ? <form aria-label="Field report form" onSubmit={(event) => void submit(event)}>
-          <FieldCaptureFields definition={definition.data} answers={answers} online={online}
-            onChange={setAnswers} onUpload={(file) => uploadPickedFile(props.client, props.jurisdictionId, file)} />
-          <div className="eoc-field-submit"><div><strong>Durable board queue</strong><span>Attachments require a connection. Report fields can queue after this form is loaded.</span></div>
+          <FieldCaptureFields definition={definition.data} answers={answers} media={media}
+            onMedia={(token, file) => setMedia((current) => new Map(current).set(token, file))} onChange={setAnswers} />
+          <div className="eoc-field-submit"><div><strong>Durable board queue</strong><span>Reports queue on this device once this form is loaded. Photos and audio queue with them and upload after the report synchronizes.</span></div>
             <ActionButton kind="primary" type="submit" loading={busy} loadingLabel="Queueing report…" disabled={!activeBoard?.offline}>Queue field report</ActionButton></div>
         </form> : null}
         {message ? <p className="eoc-field-success" role="status">{message}</p> : null}

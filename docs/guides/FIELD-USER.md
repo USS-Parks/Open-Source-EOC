@@ -25,10 +25,34 @@ interruption, while distinguishing local queue state from server receipt.
    running; synced means the server acknowledged it; failed means acceptance is
    not verified and conflict needs an explicit review.
 
-The form definition must already be loaded. Report fields can queue after that.
-Attachments require a connection, and map record submission uses the connected
-map-capture path. The interface disables those actions while offline rather
-than implying they were stored.
+The form definition must already be loaded. Reports can queue after that,
+including their photos and audio. A queued file stays on the device until its
+report has synchronized, then uploads to the report's record; the status counts
+queued files beside queued reports. One file may be at most 10 MB, and the
+device holds at most 50 MB of queued files for one incident. Map record
+submission uses the connected map-capture path and is disabled while offline.
+
+## Question types
+
+- **Location** takes a latitude and longitude, typed or from **Use current
+  location**.
+- **Line** and **polygon** questions take points as `latitude longitude`
+  pairs separated by semicolons. Type them, or select **Draw on map** and tap
+  each point; **Undo point** removes the last one. A line needs two points. A
+  polygon needs three different points and must be closed: select **Close
+  polygon** to repeat the first point at the end.
+- **Barcode** questions take the code typed into the field. Where the browser
+  can read codes from an image, **Scan** takes a photo of the code and fills
+  the field; where it cannot, the screen says so and the typed entry is used.
+- **Photo** and **audio** questions take a picture or a recording from the
+  device camera, microphone or files. Photos may be PNG, JPEG or GIF; audio may
+  be MP3, M4A, AAC, Ogg, WebM or WAV.
+- **Cascading selects** offer only the choices that fit an earlier answer, such
+  as the towns of the chosen county. When the earlier answer changes, a choice it
+  no longer allows is flagged and must be chosen again.
+- **Repeat groups** collect one entry per item, such as one per crew. Select
+  **Add** to start an entry and **Remove** to drop one; each entry is checked on
+  its own.
 
 ## Complete an assigned task
 

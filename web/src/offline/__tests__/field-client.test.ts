@@ -329,6 +329,58 @@ describe("the field client works offline and survives restart", () => {
     expect(await fields.pendingBoardIds(scope)).toEqual(["board-restricted"]);
     queue.close();
   });
+
+  it("queues photo and audio files with a report and uploads them once its record synchronizes", async () => {
+    const idb = new IDBFactory();
+    const store = await openOfflineStore(idb, "queued-attachments");
+    const fields = new FieldClient(store, "", () =>
+      new ScriptedSocket(serverState({}), true, []) as unknown as WebSocket);
+    const uploads: Array<{ url: string; init: RequestInit }> = [];
+    let refuse = true;
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      uploads.push({ url, init });
+      if (refuse) return new Response(JSON.stringify({ error: "file store unavailable" }), { status: 503 });
+      return new Response(JSON.stringify({ id: "file", field: null }), { status: 201 });
+    }) as unknown as typeof fetch;
+    const queue = FieldSubmissionQueue.from(store, fields, "https://eoc.example", fetchImpl);
+    const photo = new File(["photo bytes"], "culvert.png", { type: "image/png" });
+    const voice = new File(["audio bytes"], "crew.wav", { type: "audio/wav" });
+    await queue.enqueue(scope, "board-1", "record-1", { summary: "Culvert failure" },
+      [{ question: "photo", file: photo }, { question: "crews[0].voice_note", file: voice }]);
+    await expect(queue.state(scope)).resolves.toMatchObject({
+      phase: "queued", pending: 3, message: "1 field submission and 2 attachments queued on this device.",
+    });
+
+    // The record synchronizes; the refused upload stays queued with the server's reason.
+    const refused = await queue.sync(scope, "transient-token");
+    expect(refused).toMatchObject({ phase: "failed", pending: 2 });
+    expect(refused.message).toBe("culvert.png was not uploaded: file store unavailable. It stays queued.");
+    queue.close();
+
+    // After a restart the files are still on the device and upload on the next pass.
+    const revivedStore = await openOfflineStore(idb, "queued-attachments");
+    const revived = FieldSubmissionQueue.from(revivedStore, new FieldClient(revivedStore), "https://eoc.example", fetchImpl);
+    await expect(revived.state(scope)).resolves.toMatchObject({ pending: 2, message: "2 attachments queued on this device." });
+    refuse = false;
+    await expect(revived.sync(scope, "transient-token")).resolves.toMatchObject({ phase: "synced", pending: 0 });
+    const sent = uploads.slice(1);
+    expect(sent.map((upload) => upload.url)).toEqual([
+      "https://eoc.example/api/v1/forms/records/record-1/attachments",
+      "https://eoc.example/api/v1/forms/records/record-1/attachments",
+    ]);
+    expect(sent[0]!.init).toMatchObject({ method: "POST", headers: { authorization: "Bearer transient-token" } });
+    const form = sent[1]!.init.body as FormData;
+    expect(form.get("question")).toBe("crews[0].voice_note");
+    expect(await (form.get("file") as File).text()).toBe("audio bytes");
+    expect((form.get("file") as File).name).toBe("crew.wav");
+
+    // A file over the per-attachment cap is refused before anything is queued.
+    const huge = new File([new Uint8Array(10 * 1024 * 1024 + 1)], "huge.png", { type: "image/png" });
+    await expect(revived.enqueue(scope, "board-1", "record-2", { summary: "Too big" }, [{ question: "photo", file: huge }]))
+      .rejects.toThrow("huge.png is larger than the 10 MB a queued attachment may be.");
+    await expect(revived.state(scope)).resolves.toMatchObject({ phase: "ready", pending: 0 });
+    revived.close();
+  });
 });
 
 /** A server that refuses the sync right after authentication. */

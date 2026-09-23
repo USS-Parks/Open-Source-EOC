@@ -4,8 +4,9 @@ import { FormDefinitionSchema, type AnswerRecord, type FormDefinition } from "@o
 import { AuthError } from "../auth/service.js";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
+import { uploadLimitsFromEnv, type BlobStore } from "../files/service.js";
 import { importXlsFormWorkbook } from "./xlsx-import.js";
-import { FormValidationError, getForm, listForms, storeForm, submitForm } from "./service.js";
+import { attachFormMedia, FormValidationError, getForm, listForms, storeForm, submitForm } from "./service.js";
 
 const ImportBody = z.object({
   key: z.string().min(1),
@@ -18,6 +19,11 @@ const SubmitBody = z.object({
   jurisdictionId: z.string().uuid(),
   boardId: z.string().uuid(),
   answers: z.record(z.string(), z.unknown()),
+});
+/** The question a photo or audio file answers; a repeat entry reads `repeat[0].question`. */
+const MediaFields = z.object({
+  name: z.string().min(1).max(255),
+  question: z.string().regex(/^[A-Za-z_][A-Za-z0-9_.[\]-]*$/).max(200),
 });
 
 export function formRoutes(
@@ -111,4 +117,48 @@ export function formRoutes(
       throw err;
     }
   });
+}
+
+/**
+ * A photo or audio answer for a record a form submission created, sent
+ * after the record exists: multipart with the `question` field first and
+ * one `file` part last, as the file upload route takes it. Registered
+ * beside the file routes because it writes through the same blob store.
+ */
+export function formMediaRoutes(
+  app: FastifyInstance,
+  sql: Sql,
+  store: BlobStore,
+  authenticate: (req: FastifyRequest) => Promise<void>,
+): void {
+  const limits = uploadLimitsFromEnv();
+  app.post(
+    "/api/v1/forms/records/:recordId/attachments",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { recordId } = z.object({ recordId: z.string().uuid() }).parse(req.params);
+      if (!req.isMultipart()) throw new AuthError(415, "upload must be multipart/form-data");
+      const part = await req
+        .file({ limits: { fileSize: limits.maxFileBytes + 1, files: 1, fields: 4, fieldSize: 1024, parts: 5 } })
+        .catch((err: unknown) => {
+          const status = (err as { statusCode?: unknown }).statusCode;
+          const code = typeof status === "number" && status >= 400 && status < 500 ? status : 400;
+          throw new AuthError(code, err instanceof Error ? err.message : "malformed upload");
+        });
+      if (!part) throw new AuthError(400, "a file part is required");
+      const fields: Record<string, unknown> = { name: part.filename };
+      for (const [key, entry] of Object.entries(part.fields)) {
+        if (entry && !Array.isArray(entry) && entry.type === "field") fields[key] = entry.value;
+      }
+      const body = MediaFields.parse(fields);
+      const result = await attachFormMedia(sql, store, req.principal, {
+        recordId,
+        question: body.question,
+        name: body.name,
+        contentType: part.mimetype,
+        content: part.file,
+      }, limits);
+      return reply.status(201).send(result);
+    },
+  );
 }

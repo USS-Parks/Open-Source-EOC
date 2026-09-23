@@ -49,11 +49,17 @@ function tokenize(src: string): Tok[] {
       i = end + 1;
       continue;
     }
-    if (c >= "0" && c <= "9") {
+    if ((c >= "0" && c <= "9") || (c === "." && /[0-9]/.test(src[i + 1] ?? ""))) {
       let j = i + 1;
       while (j < n && ((src[j]! >= "0" && src[j]! <= "9") || src[j] === ".")) j++;
       toks.push({ t: "num", v: Number(src.slice(i, j)) });
       i = j;
+      continue;
+    }
+    if (c === ".") {
+      // The current question's own value, as in a constraint such as ". >= 0".
+      toks.push({ t: "var", v: "." });
+      i++;
       continue;
     }
     if (c === "(") {
@@ -101,6 +107,7 @@ type Node =
   | { k: "num"; v: number }
   | { k: "str"; v: string }
   | { k: "var"; v: string }
+  | { k: "col"; v: string }
   | { k: "bin"; op: string; l: Node; r: Node }
   | { k: "neg"; e: Node }
   | { k: "call"; name: string; args: Node[] };
@@ -179,7 +186,8 @@ class Parser {
       return e;
     }
     if (t.t === "name") {
-      if (this.peek()?.t !== "lparen") throw new ExprError(`bare name '${t.v}' (expected a call)`);
+      // A bare name is a choices-sheet column, meaningful only in a choice_filter.
+      if (this.peek()?.t !== "lparen") return { k: "col", v: t.v };
       this.eat(); // (
       const args: Node[] = [];
       if (this.peek()?.t !== "rparen") {
@@ -253,7 +261,7 @@ const FUNCS: Record<string, (args: Scalar[]) => Scalar> = {
   "false": () => false,
 };
 
-function evalNode(node: Node, bindings: Bindings): Scalar {
+function evalNode(node: Node, bindings: Bindings, columns?: Bindings): Scalar {
   switch (node.k) {
     case "num":
       return node.v;
@@ -263,19 +271,23 @@ function evalNode(node: Node, bindings: Bindings): Scalar {
       const v = bindings[node.v];
       return v === undefined ? null : v;
     }
+    case "col": {
+      if (!columns) throw new ExprError(`bare name '${node.v}' outside a choice filter`);
+      return columns[node.v] ?? null;
+    }
     case "neg":
-      return -toNum(evalNode(node.e, bindings));
+      return -toNum(evalNode(node.e, bindings, columns));
     case "call": {
       const fn = FUNCS[node.name];
       if (!fn) throw new ExprError(`unsupported function '${node.name}()'`);
-      return fn(node.args.map((a) => evalNode(a, bindings)));
+      return fn(node.args.map((a) => evalNode(a, bindings, columns)));
     }
     case "bin": {
       const op = node.op;
-      if (op === "and") return toBool(evalNode(node.l, bindings)) && toBool(evalNode(node.r, bindings));
-      if (op === "or") return toBool(evalNode(node.l, bindings)) || toBool(evalNode(node.r, bindings));
-      const l = evalNode(node.l, bindings);
-      const r = evalNode(node.r, bindings);
+      if (op === "and") return toBool(evalNode(node.l, bindings, columns)) && toBool(evalNode(node.r, bindings, columns));
+      if (op === "or") return toBool(evalNode(node.l, bindings, columns)) || toBool(evalNode(node.r, bindings, columns));
+      const l = evalNode(node.l, bindings, columns);
+      const r = evalNode(node.r, bindings, columns);
       switch (op) {
         case "=":
           return equals(l, r);
@@ -320,13 +332,38 @@ function compile(src: string): Node {
   return node;
 }
 
-/** Evaluate an expression to its raw scalar. */
-export function evaluate(src: string, bindings: Bindings): Scalar {
-  return evalNode(compile(src), bindings);
+/**
+ * Evaluate an expression to its raw scalar. `columns` are the current
+ * choice's sheet columns, which bare names read inside a choice_filter.
+ */
+export function evaluate(src: string, bindings: Bindings, columns?: Bindings): Scalar {
+  return evalNode(compile(src), bindings, columns);
 }
 
-/** Evaluate to a boolean (for `relevant` and `constraint`). Empty = true. */
-export function evaluateBool(src: string | undefined | null, bindings: Bindings): boolean {
+/** Evaluate to a boolean (for `relevant`, `constraint`, `choice_filter`). Empty = true. */
+export function evaluateBool(
+  src: string | undefined | null,
+  bindings: Bindings,
+  columns?: Bindings,
+): boolean {
   if (!src || !src.trim()) return true;
-  return toBool(evaluate(src, bindings));
+  return toBool(evaluate(src, bindings, columns));
+}
+
+/**
+ * Refuse an expression the engine cannot run: bad syntax, a function outside
+ * the supported set, or a bare column name where no choice row is in scope.
+ * Import calls this so an unsupported form fails at the door, not in the field.
+ */
+export function checkExpression(src: string, allowColumns = false): void {
+  const walk = (node: Node): void => {
+    if (node.k === "col" && !allowColumns) throw new ExprError(`bare name '${node.v}' outside a choice filter`);
+    if (node.k === "call") {
+      if (!FUNCS[node.name]) throw new ExprError(`unsupported function '${node.name}()'`);
+      node.args.forEach(walk);
+    }
+    if (node.k === "neg") walk(node.e);
+    if (node.k === "bin") { walk(node.l); walk(node.r); }
+  };
+  walk(compile(src));
 }

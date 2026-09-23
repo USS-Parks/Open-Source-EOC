@@ -47,6 +47,7 @@ import { meetingRoutes } from "./meetings/routes.js";
 import { feedRoutes } from "./feeds/routes.js";
 import { fileRoutes } from "./files/routes.js";
 import { formRoutes } from "./forms/routes.js";
+import { formMediaRoutes } from "./forms/routes.js";
 import { sitrepRoutes } from "./sitreps/routes.js";
 import { staffingRoutes } from "./staffing/routes.js";
 import { trackingRoutes } from "./tracking/routes.js";
@@ -509,6 +510,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   const blobs = new BlobStore(process.env.OPENEOC_DATA_DIR ?? "./data/blobs");
   exportRoutes(app, sql, blobs, authenticate);
   fileRoutes(app, sql, blobs, authenticate);
+  formMediaRoutes(app, sql, blobs, authenticate);
   const hub = new BoardSyncHub(sql);
   app.addHook("onClose", () => { hub.close(); });
   registerSyncRoutes(app, sql, hub);
