@@ -28,6 +28,8 @@ describe("surface hash routing", () => {
     { kind: "jic" },
     { kind: "templates" },
     { kind: "board-design", id: "b1" },
+    { kind: "contacts" },
+    { kind: "mass-notification" },
     { kind: "damage" },
     { kind: "facilities" },
     { kind: "admin" },

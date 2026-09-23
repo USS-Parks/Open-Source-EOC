@@ -1,0 +1,14 @@
+.contacts-field { display: grid; gap: 4px; min-width: 0; }
+.contacts-field textarea, .contacts-field input[type="file"] { background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: 4px; color: var(--eoc-text); font: inherit; min-height: 44px; padding: 6px; }
+.contacts-check { align-items: center; align-self: end; display: flex; gap: 8px; min-height: 44px; }
+.contacts-check input { height: 20px; width: 20px; }
+.contacts-checks { border: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; padding: 0; }
+.contacts-checks legend { font-weight: 600; margin-bottom: 4px; padding: 0; }
+.contacts-order { display: grid; gap: 6px; margin: 0; padding-left: 1.4em; }
+.contacts-order li { overflow-wrap: anywhere; }
+.contacts-order li > .d21-card-actions { margin-top: 4px; }
+.contacts-import-rows { display: grid; gap: 6px; list-style: none; margin: 12px 0 0; padding: 0; }
+.contacts-import-rows li { border-top: 1px solid var(--eoc-border); display: grid; gap: 2px; overflow-wrap: anywhere; padding-top: 6px; }
+.contacts-receipts { display: grid; gap: 10px; list-style: none; margin: 0; padding: 0; }
+.contacts-deliveries { display: grid; gap: 4px; list-style: none; margin: 0; padding: 0; }
+.contacts-deliveries li { align-items: baseline; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: .86rem; overflow-wrap: anywhere; }

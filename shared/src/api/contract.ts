@@ -37,12 +37,15 @@ export interface ApiContract {
 
 const routeKeys = `
 DELETE /api/v1/boards/:boardId/records/:recordId
+DELETE /api/v1/contact-groups/:groupId
+DELETE /api/v1/contacts/:contactId
 DELETE /api/v1/guests/:grantId
 DELETE /api/v1/incidents/:incidentId/dashboard-configs/:key
 DELETE /api/v1/incidents/:incidentId/saved-state/:kind/:key
 DELETE /api/v1/jurisdictions/:jurisdictionId/members/:personId
 DELETE /api/v1/positions/:positionId/assignments/:personId
 GET /api/v1/aar/:aarId/pdf
+GET /api/v1/ack/:token
 GET /api/v1/auth/oidc/callback
 GET /api/v1/auth/oidc/start
 GET /api/v1/boards/:boardId
@@ -101,6 +104,8 @@ GET /api/v1/jurisdictions/:jurisdictionId/boards
 GET /api/v1/jurisdictions/:jurisdictionId/cap/alerts
 GET /api/v1/jurisdictions/:jurisdictionId/chronology
 GET /api/v1/jurisdictions/:jurisdictionId/collab
+GET /api/v1/jurisdictions/:jurisdictionId/contact-groups
+GET /api/v1/jurisdictions/:jurisdictionId/contacts
 GET /api/v1/jurisdictions/:jurisdictionId/corrective-actions
 GET /api/v1/jurisdictions/:jurisdictionId/damage/assessments
 GET /api/v1/jurisdictions/:jurisdictionId/dashboards
@@ -120,6 +125,7 @@ GET /api/v1/jurisdictions/:jurisdictionId/jic/inquiries
 GET /api/v1/jurisdictions/:jurisdictionId/jic/public
 GET /api/v1/jurisdictions/:jurisdictionId/jic/releases
 GET /api/v1/jurisdictions/:jurisdictionId/lifelines
+GET /api/v1/jurisdictions/:jurisdictionId/mass-notifications
 GET /api/v1/jurisdictions/:jurisdictionId/meetings/config
 GET /api/v1/jurisdictions/:jurisdictionId/members
 GET /api/v1/jurisdictions/:jurisdictionId/notification-allowlist
@@ -133,6 +139,7 @@ GET /api/v1/jurisdictions/:jurisdictionId/search
 GET /api/v1/jurisdictions/:jurisdictionId/sitreps
 GET /api/v1/jurisdictions/:jurisdictionId/staffing
 GET /api/v1/jurisdictions/:jurisdictionId/threads
+GET /api/v1/mass-notifications/:massNotificationId
 GET /api/v1/me
 GET /api/v1/metrics
 GET /api/v1/notifications
@@ -159,6 +166,7 @@ GET /api/v1/tracked-objects/:id
 PATCH /api/v1/boards/:boardId/records/:recordId
 PATCH /api/v1/corrective-actions/:id
 PATCH /api/v1/incidents/:incidentId/tasks/:taskId
+POST /api/v1/ack/:token
 POST /api/v1/audit/:eventId/corrections
 POST /api/v1/auth/login
 POST /api/v1/auth/logout
@@ -228,6 +236,9 @@ POST /api/v1/jurisdictions/:jurisdictionId/cap/drafts
 POST /api/v1/jurisdictions/:jurisdictionId/cap/ingest
 POST /api/v1/jurisdictions/:jurisdictionId/checkins
 POST /api/v1/jurisdictions/:jurisdictionId/checkins/scan
+POST /api/v1/jurisdictions/:jurisdictionId/contact-groups
+POST /api/v1/jurisdictions/:jurisdictionId/contacts
+POST /api/v1/jurisdictions/:jurisdictionId/contacts/import
 POST /api/v1/jurisdictions/:jurisdictionId/corrective-actions
 POST /api/v1/jurisdictions/:jurisdictionId/cot/ingest
 POST /api/v1/jurisdictions/:jurisdictionId/damage/assessments
@@ -253,6 +264,7 @@ POST /api/v1/jurisdictions/:jurisdictionId/ipaws/test
 POST /api/v1/jurisdictions/:jurisdictionId/jic/inquiries
 POST /api/v1/jurisdictions/:jurisdictionId/jic/releases
 POST /api/v1/jurisdictions/:jurisdictionId/libraries
+POST /api/v1/jurisdictions/:jurisdictionId/mass-notifications
 POST /api/v1/jurisdictions/:jurisdictionId/members/:personId/mfa-reset
 POST /api/v1/jurisdictions/:jurisdictionId/notification-channels/:kind/test
 POST /api/v1/jurisdictions/:jurisdictionId/notification-rules
@@ -285,6 +297,8 @@ POST /api/v1/resource-requests/report
 POST /api/v1/templates
 POST /api/v1/templates/import
 POST /api/v1/threads/:threadId/messages
+PUT /api/v1/contact-groups/:groupId
+PUT /api/v1/contacts/:contactId
 PUT /api/v1/iap/:iapId/ics-204
 PUT /api/v1/incidents/:incidentId/dashboard-configs/:key
 PUT /api/v1/incidents/:incidentId/operational-area
@@ -315,6 +329,8 @@ const noAuth = new Set([
   "POST /api/v1/auth/mfa/enroll",
   "POST /api/v1/auth/mfa/verify",
   "POST /api/v1/auth/resume",
+  "GET /api/v1/ack/:token",
+  "POST /api/v1/ack/:token",
 ]);
 const peerAuth = new Set([
   "POST /api/v1/federation/receive",
@@ -355,12 +371,17 @@ const machineRoutes = new Set([
   // The manual federation queue and its read; the sync hub queues shared-board edits itself.
   "POST /api/v1/peers/:peerId/queue",
   "GET /api/v1/peers/:peerId/pending",
+  // The mass notification acknowledgement link, opened by a recipient from an email or SMS.
+  "GET /api/v1/ack/:token",
+  "POST /api/v1/ack/:token",
 ]);
 for (const key of machineRoutes) {
   if (!routeKeys.includes(key)) throw new Error(`machine route is not in the contract: ${key}`);
 }
 
 const tagAliases: Readonly<Record<string, string>> = {
+  "ack": "mass-notifications",
+  "contact-groups": "contacts",
   "corrective-actions": "aar",
   "dashboard-configs": "dashboards",
   "data-packs": "datasets",

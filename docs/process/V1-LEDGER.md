@@ -1937,3 +1937,70 @@ tagging remain separately gated as section 1 of the roster states.
   the only awaiting entry is local board fields, owed by W4.1 part two.
 - **Result:** wave W3 is complete: W3.0 through W3.13 are receipted and on
   `origin/main`, and the gate is green after the recorded fix.
+
+## V1 W4.0 part two: contacts and mass notification
+
+- **What changed.** A per-jurisdiction contacts directory, new
+  `server/src/contacts/**`: name, organization, title, up to five emails and
+  five E.164 phones, optional links to a member account and a position, notes,
+  an active flag; groups hold members in call-down order; members read, admins
+  write, cursor-paged. CSV import, RFC 4180 parsed in-house, with header
+  mapping, a dry run and an all-or-nothing commit. Mass notification, new
+  `server/src/notify/mass.ts`, to a group or chosen contacts by email, SMS and
+  in-app: one notification per contact and channel, email and SMS through the
+  existing delivery queue so retries, dead letters and receipts apply
+  unchanged, and a record per send. Receipts per contact and channel: queued,
+  retrying, sent with the relay's or provider's answer, failed with the error,
+  delivered in-app, and the acknowledgement state. Call-down: a new scheduler
+  job notifies contacts in group order, moving on when a contact has not
+  acknowledged within the interval, stopping at N acknowledgements (default 1)
+  and ending "unacknowledged" after the last. New Contacts and Mass
+  Notification screens under Coordination.
+- **Acknowledgement link.** `GET` and `POST /api/v1/ack/:token`, no sign-in.
+  Opening the link only shows an Acknowledge button and pressing it records the
+  acknowledgement, so mail scanners that fetch links cannot end a call-down.
+  Tokens are 128 random bits stored as a SHA-256 hash, expire 24 hours after
+  their message is sent, are limited to 30 requests a minute per address, and
+  the pages show nothing about the send. In-app recipients acknowledge through
+  the existing notification route, carried to the recipient by a trigger.
+  New optional `OPENEOC_PUBLIC_URL` sets the link base.
+- **Decisions.** A mass send is not a rule, so no rule cap applies; it is
+  bounded at 500 contacts per send from the admin-kept directory. Each channel
+  uses the contact's first email or phone; in-app goes to the linked person,
+  else the linked position. Members and admins send; viewers read. A send over
+  an unconfigured channel shows as a failed receipt through the worker's dead
+  letter, because members cannot read channel settings under row-level
+  security. Inbound SMS reply acknowledgement was skipped: the HTTP provider
+  has no inbound path. Migration 0120 recreates `scheduler_due` with a
+  `calldowns` branch; the rules and briefings branches are unchanged.
+- **Schema:** migration `0120_contacts.sql`: contacts, groups, group members,
+  mass notifications and recipients, all with row-level security and composite
+  keys keeping group members in the group's jurisdiction;
+  `notifications.mass_recipient_id` and its trigger; SECURITY DEFINER
+  `acknowledge_mass_token` and `mass_notification_deliveries`; the default
+  table UPDATE grant on the two mass tables revoked and replaced by
+  column-level grants, so the runtime role cannot write acknowledgements
+  directly. Contract: 14 routes, the two acknowledgement routes auth `none`
+  and machine audience; `docs/API.md` regenerated. No dependency change.
+- **Verification.** In the lane: contacts, mass-notification and nine
+  neighbouring suites 86 of 86; every web test and the shared suite 627 of
+  627; the admin and new mass notification browser walks 3 of 3. The browser
+  walk creates three contacts and a group in the screens, sends a call-down by
+  email to the fake relay and SMS to the fixture, sees "250 2.0.0 Ok: queued
+  as" and "fixture: not sent", runs the job with the clock eleven minutes
+  ahead so the second contact is called, opens that contact's link from the
+  relay's email in a separate 390 px page and acknowledges, and sees
+  "Acknowledged · 1 of 3 acknowledged" with the third never called. After
+  rebasing onto W3.12, resolving the contract, client and guide conflicts:
+  contacts, mass-notification, notify, notify-channels, delivery-outbox,
+  scheduler, retention, api-docs, ipaws, migrate-baseline, every web test and
+  the shared suite passed 718 of 718; the mass notification, admin and
+  notification rules browser walks serial passed. TypeScript and ESLint clean.
+  Link checker 71 files.
+- **Evidence level:** unit, real-database integration, browser and document.
+- **Deferred:** inbound SMS acknowledgement; contacts and mass notification
+  records in the jurisdiction export and in the retention classes, where their
+  notifications and deliveries are already purged under existing classes;
+  duplicate detection and a group column in CSV import.
+- **Rollback:** revert the code; 0120 only adds, and its `scheduler_due`
+  behaves as before for rules and briefings.

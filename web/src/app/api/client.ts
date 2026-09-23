@@ -85,6 +85,18 @@ import type {
 import type { DamageSummary, DeclarationThresholds } from "@openeoc/shared";
 import type { DamageBaselineRow, DamageReportPage, DamageReportStatus, FieldAssessmentInput } from "../../damage/model.js";
 import type { FacilityBoardRow, FacilityInput, FacilityStatusInput } from "../../facilities/model.js";
+import type {
+  Contact,
+  ContactGroup,
+  ContactGroupsPage,
+  ContactImportResult,
+  ContactInput,
+  ContactsPage,
+  ImportMapping,
+  MassNotificationDetail,
+  MassNotificationsPage,
+  MassSendInput,
+} from "../../contacts/model.js";
 
 /**
  * The app shell's one door to the server. It carries the bearer access
@@ -2088,6 +2100,55 @@ export class ApiClient {
   }
   importDamageBaseline(jurisdictionId: string, rows: readonly DamageBaselineRow[]): Promise<{ imported: number }> {
     return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/damage/baseline`, { rows });
+  }
+
+  // ---- Contacts and mass notification ----
+  listContacts(jurisdictionId: string, search = "", page: PageOptions = {}): Promise<ContactsPage> {
+    const params = pageParams(page, new URLSearchParams(search ? { q: search } : {}));
+    const query = params.size ? `?${params}` : "";
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/contacts${query}`);
+  }
+  createContact(jurisdictionId: string, input: ContactInput): Promise<Contact> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/contacts`,
+      input as unknown as Record<string, unknown>);
+  }
+  updateContact(contactId: string, input: ContactInput): Promise<Contact> {
+    return this.request("PUT", `/api/v1/contacts/${encodeURIComponent(contactId)}`, input as unknown as Record<string, unknown>);
+  }
+  deleteContact(contactId: string): Promise<void> {
+    return this.request("DELETE", `/api/v1/contacts/${encodeURIComponent(contactId)}`);
+  }
+  /** A dry run reports each row and writes nothing; a commit imports every row or none. */
+  importContacts(jurisdictionId: string, input: { csv: string; dryRun: boolean; mapping?: ImportMapping }): Promise<ContactImportResult> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/contacts/import`,
+      input as unknown as Record<string, unknown>);
+  }
+  listContactGroups(jurisdictionId: string, page: PageOptions = {}): Promise<ContactGroupsPage> {
+    const params = pageParams(page);
+    const query = params.size ? `?${params}` : "";
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/contact-groups${query}`);
+  }
+  createContactGroup(jurisdictionId: string, input: { name: string; contactIds: readonly string[] }): Promise<ContactGroup> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/contact-groups`,
+      input as unknown as Record<string, unknown>);
+  }
+  updateContactGroup(groupId: string, input: { name: string; contactIds: readonly string[] }): Promise<ContactGroup> {
+    return this.request("PUT", `/api/v1/contact-groups/${encodeURIComponent(groupId)}`, input as unknown as Record<string, unknown>);
+  }
+  deleteContactGroup(groupId: string): Promise<void> {
+    return this.request("DELETE", `/api/v1/contact-groups/${encodeURIComponent(groupId)}`);
+  }
+  listMassNotifications(jurisdictionId: string, page: PageOptions = {}): Promise<MassNotificationsPage> {
+    const params = pageParams(page);
+    const query = params.size ? `?${params}` : "";
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/mass-notifications${query}`);
+  }
+  sendMassNotification(jurisdictionId: string, input: MassSendInput): Promise<{ id: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/mass-notifications`,
+      input as unknown as Record<string, unknown>);
+  }
+  getMassNotification(massNotificationId: string): Promise<MassNotificationDetail> {
+    return this.request("GET", `/api/v1/mass-notifications/${encodeURIComponent(massNotificationId)}`);
   }
 }
 

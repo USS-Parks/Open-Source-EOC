@@ -205,6 +205,47 @@ through the board routes listed in the [API reference](../API.md).
   position, when, and each field changed with its value before and after. An
   update recorded before this history existed shows no earlier value.
 
+### Reach contacts and page a duty officer
+
+**Coordination / Contacts** is the jurisdiction's directory of people to
+reach: name, organization, title, email addresses, phone numbers in E.164 form
+(with the country code, such as `+17075550100`), notes, and an optional link to
+an account or a position. Every member of the jurisdiction reads it.
+Administrators add, change and delete contacts, import them from a CSV file,
+and keep **Groups**: named lists of contacts in call-down order. An inactive
+contact stays in the directory but is skipped by every send.
+
+**Coordination / Mass Notification** sends one message to a group or to chosen
+contacts. Members and administrators send; viewers follow the sends.
+
+1. Enter a **Subject** and a **Message**.
+2. Under **Send to**, choose **A contact group** or **Chosen contacts**. Chosen
+   contacts are notified in the order you tick them.
+3. Tick the **Channels**: Email, SMS and In app. In-app notices reach contacts
+   linked to an account or position. A contact without an address for a
+   channel is skipped on that channel, and the receipts say so.
+4. Choose the **Mode**. **Everyone at once** notifies every contact now.
+   **Call-down, one contact at a time** notifies the first contact, and when
+   that contact has not acknowledged within **Minutes to wait for each
+   acknowledgement**, the next one. It stops when **Acknowledgements that end
+   the call-down** have come in, or after the last contact's wait.
+5. Select **Send notification**. The receipts open.
+
+The receipts list each contact in order: when it was notified or **Not
+called**, whether and how it acknowledged, and for each channel **Queued**,
+**Retrying**, **Sent** or **Failed** with the relay's or provider's answer or
+the error, or **Delivered** for an in-app notice. They refresh while open, and
+**Refresh receipts** refreshes them at once. The list of sends shows each
+send's state: **Sent** for a broadcast, **Calling down**, **Acknowledged**, or
+**Call-down ended without an acknowledgement**.
+
+Email and SMS carry an acknowledgement link for that one recipient. Opening it
+shows an **Acknowledge** button; the acknowledgement is recorded when the
+recipient selects it. A contact linked to your account acknowledges an in-app
+notice in the notification center as usual, which acknowledges the send too.
+A call-down moves to the next contact at once when the current contact
+acknowledges and more acknowledgements are needed.
+
 ## 4. Plan and brief
 
 - Prepare IAP content against the selected incident and a real incident-area

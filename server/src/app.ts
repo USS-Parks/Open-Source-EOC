@@ -54,6 +54,8 @@ import { BlobStore } from "./files/service.js";
 import { geoRoutes } from "./geo/routes.js";
 import { messagingRoutes } from "./messaging/routes.js";
 import { notifyRoutes } from "./notify/routes.js";
+import { massNotificationRoutes } from "./notify/mass.js";
+import { contactRoutes } from "./contacts/routes.js";
 import { resourceRoutes } from "./resource/routes.js";
 import { BoardSyncHub } from "./sync/hub.js";
 import { notificationStreamRoutes } from "./sync/notifications.js";
@@ -498,6 +500,8 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   esfRoutes(app, sql, authenticate);
   operationalRelationshipRoutes(app, sql, authenticate);
   notifyRoutes(app, sql, authenticate);
+  massNotificationRoutes(app, sql, authenticate);
+  contactRoutes(app, sql, authenticate);
   messagingRoutes(app, sql, authenticate);
   geoRoutes(app, sql, authenticate);
   const blobs = new BlobStore(process.env.OPENEOC_DATA_DIR ?? "./data/blobs");

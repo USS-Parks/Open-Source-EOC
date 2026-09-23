@@ -46,11 +46,12 @@ and total attribution (INV-2) are the standing mitigations everywhere.
 | B13 | Jitsi meeting bridge (conditional: `OPENEOC_INTEGRATIONS=meetings`) | T2, T6 | meeting-token theft, room guessing, unauthorized moderator access | routes absent by default; room names are random; JWT secrets stay in server-side envelopes; incident membership and role determine join authority |
 | B14 | Object tracking and reunification (conditional: `OPENEOC_INTEGRATIONS=tracking`) | T2, T5 | disclosure of restricted person data, custody-event forgery, cross-jurisdiction search | routes absent by default; jurisdiction scope enforced server-side; restricted attributes require elevated membership; custody changes are attributed and audited |
 | B15 | Facility status and HAVE exchange (conditional: `OPENEOC_INTEGRATIONS=facilities`) | T2, T6 | disclosure of HIPAA-adjacent capacity data, false status reports, stale availability | routes absent by default; jurisdiction scope enforced server-side; reports carry source and time; stale status remains explicit; exports use the authorized read path |
+| B16 | Mass notification acknowledgement link, `GET` and `POST /api/v1/ack/:token`, no sign-in | T1, T2 | forged or guessed acknowledgements stopping a call-down, acknowledgement by a mail scanner, disclosure of the message or the recipient, token replay after the incident, bombing contacts through mass sends | each token is 128 random bits naming one recipient of one send, stored only as a SHA-256 hash; malformed tokens are refused before the database is asked; the link expires 24 hours after its message is sent; opening the link records nothing, only its button does, so a link-fetching scanner cannot acknowledge; the pages carry no message, name or address, a `no-store` cache header and a CSP with `form-action 'self'` and no script; 30 link requests per source address per minute beside the shared flood limiter; acknowledgement is written only by SECURITY DEFINER functions, the runtime role holds no update grant on it; mass sends need a member or admin, reach only the directory administrators keep, at most 500 contacts per send, audited as `notification.mass_sent` |
 
 ## Standing adversarial test policy
 
 Each session that opens a surface ships negative tests named for its row
-(B1-B15) and they run in `pnpm check` forever. VEOC-37 re-verifies the whole
+(B1-B16) and they run in `pnpm check` forever. VEOC-37 re-verifies the whole
 table adversarially before release.
 
 ## Out of scope (baseline)

@@ -140,6 +140,18 @@ set, and then require that value as a bearer token.
 - `GET /api/v1/jurisdictions/:jurisdictionId/collab`: Read jurisdictions collab (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=collab)
 - `PUT /api/v1/jurisdictions/:jurisdictionId/collab/backend`: Set jurisdictions collab backend (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=collab)
 
+### contacts
+
+- `DELETE /api/v1/contact-groups/:groupId`: Delete contact groups (auth: bearer; audience: operator)
+- `PUT /api/v1/contact-groups/:groupId`: Set contact groups (auth: bearer; audience: operator)
+- `DELETE /api/v1/contacts/:contactId`: Delete contacts (auth: bearer; audience: operator)
+- `PUT /api/v1/contacts/:contactId`: Set contacts (auth: bearer; audience: operator)
+- `GET /api/v1/jurisdictions/:jurisdictionId/contact-groups`: Read jurisdictions contact groups (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/contact-groups`: Run jurisdictions contact groups (auth: bearer; audience: operator)
+- `GET /api/v1/jurisdictions/:jurisdictionId/contacts`: Read jurisdictions contacts (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/contacts`: Run jurisdictions contacts (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/contacts/import`: Run jurisdictions contacts import (auth: bearer; audience: operator)
+
 ### cot
 
 - `POST /api/v1/jurisdictions/:jurisdictionId/cot/ingest`: Run jurisdictions cot ingest (auth: bearer; audience: machine)
@@ -316,6 +328,14 @@ set, and then require that value as a bearer token.
 
 - `GET /api/v1/jurisdictions/:jurisdictionId/lifelines`: Read jurisdictions lifelines (auth: bearer; audience: operator)
 - `PUT /api/v1/jurisdictions/:jurisdictionId/lifelines`: Set jurisdictions lifelines (auth: bearer; audience: operator)
+
+### mass-notifications
+
+- `GET /api/v1/ack/:token`: Read ack (auth: none; audience: machine)
+- `POST /api/v1/ack/:token`: Run ack (auth: none; audience: machine)
+- `GET /api/v1/jurisdictions/:jurisdictionId/mass-notifications`: Read jurisdictions mass notifications (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/mass-notifications`: Run jurisdictions mass notifications (auth: bearer; audience: operator)
+- `GET /api/v1/mass-notifications/:massNotificationId`: Read mass notifications (auth: bearer; audience: operator)
 
 ### meetings
 

@@ -213,6 +213,7 @@ its database session. No cron job or manual call is needed.
 | Due briefings (only with the `meetings` integration) | `OPENEOC_SCHEDULER_BRIEFINGS_MS` | 60000 |
 | Feed polls (each feed keeps its own poll interval) | `OPENEOC_SCHEDULER_FEEDS_MS` | 60000 |
 | Outbound webhook, push and federation deliveries | `OPENEOC_SCHEDULER_OUTBOX_MS` | 2000 |
+| Mass notification call-downs | `OPENEOC_SCHEDULER_CALLDOWNS_MS` | 30000 |
 | Retention purge (only classes a jurisdiction admin has given a period) | `OPENEOC_SCHEDULER_RETENTION_MS` | 3600000 |
 | Audit forwarding to syslog (only with `OPENEOC_SYSLOG_URL`) | `OPENEOC_SCHEDULER_SYSLOG_MS` | 10000 |
 
@@ -315,4 +316,5 @@ upgrade path begins with a database whose first receipt is
 | `OPENEOC_SCHEDULER_*_MS` | Scheduler intervals; see [Scheduler](#scheduler) |
 | `OPENEOC_TRUST_PROXY` | Reverse proxy addresses or CIDRs whose `X-Forwarded-For` is trusted, or `true`; unset trusts none |
 | `OPENEOC_PRINCIPAL_CACHE_MS` | How long a request principal is cached, in milliseconds (default 5000; `0` turns it off) |
+| `OPENEOC_PUBLIC_URL` | Address mass notification acknowledgement links point at, such as `https://eoc.example.org`; unset uses the address the sender reached the server on. See the [administrator guide](../docs/guides/ADMIN.md#contacts-and-mass-notification) |
 | `OPENEOC_SYSLOG_URL` | Forward audit events to syslog, `udp://host:514` or `tcp://host:514`; unset is off. See the [administrator guide](../docs/guides/ADMIN.md#forward-the-audit-trail-to-syslog) |

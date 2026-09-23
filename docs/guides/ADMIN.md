@@ -332,6 +332,60 @@ keeps failing is paused as a whole, not per recipient.
 the queue, and show the relay's or provider's answer or its error. Each test
 is recorded as `notification.channel_tested`.
 
+### Contacts and mass notification
+
+The **Contacts** screen under Coordination is the jurisdiction's contact
+directory and its call-down groups. Members read it; only administrators add,
+change, delete, group and import contacts, and row-level security holds the
+same rule in the database. A contact may be linked to an account that is a
+member of the jurisdiction, or to one of its positions, so that mass
+notifications also reach it in the app. Changes are audited as
+`contact.created`, `contact.updated`, `contact.deleted`, `contact.imported`,
+`contact_group.saved` and `contact_group.deleted`.
+
+**Import from CSV** reads a comma-separated file whose first row names the
+columns, quoted as spreadsheets write it. Columns are matched to name,
+organization, title, email and phone by their header names; change the match
+under the column pickers and **Check file** again. Several addresses or
+numbers in one cell are separated by semicolons or commas, and numbers such as
+`+1 (707) 555-0100` are reduced to E.164. **Check file** writes nothing and
+lists every row with its problems. The import adds every row or, when any row
+has a problem, none. At most 2,000 rows go in one import.
+
+Members and administrators send mass notifications from the **Mass
+Notification** screen, as described in the
+[operator quickstart](OPERATOR-QUICKSTART.md#reach-contacts-and-page-a-duty-officer).
+Each contact and channel becomes its own notification and, for email and SMS,
+its own delivery through the jurisdiction's relay and provider, retried and
+receipted like any other; each send is audited as `notification.mass_sent`.
+A mass send is not a notification rule and no rule rate cap applies to it. It
+is bounded instead by its size, at most 500 contacts, all from the directory
+administrators keep. The scheduler advances call-downs every 30 seconds
+(`OPENEOC_SCHEDULER_CALLDOWNS_MS`), as a jurisdiction administrator.
+
+**Acknowledgement links.** Each email and SMS carries a link with a random
+token for that one recipient of that one send; only a hash of the token is
+stored. The link needs no sign-in. Opening it shows a page with one
+**Acknowledge** button and nothing about the message, so a mail scanner that
+fetches links does not acknowledge by itself; the button records the
+acknowledgement. A link works for 24 hours after its message is sent, and
+answers "not valid or has expired" after that. Each address may open 30 links
+a minute. Links point at `OPENEOC_PUBLIC_URL` when it is set, otherwise at the
+address the sender reached the server on; set it when recipients reach the
+server by a different address than operators do, or when a reverse proxy in
+front of it is not named in `OPENEOC_TRUST_PROXY`. The server must be reachable
+from recipients' phones for the link to work; an in-app notice, acknowledged
+in the notification center, does not depend on it. SMS replies are not read.
+
+**Retention.** Contacts are kept until an administrator deletes them; deleting
+a contact removes it from its groups. Mark a contact inactive instead to keep
+it on record while no send reaches it. A mass notification keeps its own
+record of each recipient, with the name and the address used when it was
+sent, and deleting the contact does not change that record. Mass notification
+records are not purged by the retention classes; their notifications and
+deliveries are, under `notifications` and `deliveries`, after which the
+receipts show only the acknowledgement state.
+
 ## During operations
 
 Monitor authorization, source freshness, failed ingestion, offline queues, and

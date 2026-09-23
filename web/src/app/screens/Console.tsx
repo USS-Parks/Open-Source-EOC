@@ -48,6 +48,8 @@ import { ContinuityPanel } from "../../offline/ContinuityPanel.js";
 import { ChronologySurface } from "../../audit/ChronologySurface.js";
 import { StaffingSurface } from "../../staffing/StaffingSurface.js";
 import { FederationSurface } from "../../federation/FederationSurface.js";
+import { ContactsSurface } from "../../contacts/ContactsSurface.js";
+import { MassNotificationSurface } from "../../contacts/MassNotificationSurface.js";
 
 const NAV: readonly NavGroup[] = [
   { key: "situation", label: "Situation", items: [
@@ -79,6 +81,8 @@ const NAV: readonly NavGroup[] = [
     { key: "messages", label: "Messages", icon: "messages" },
     { key: "jic", label: "JIC", icon: "jic" },
     { key: "files", label: "Files", icon: "files" },
+    { key: "contacts", label: "Contacts", icon: "participants" },
+    { key: "massNotification", label: "Mass Notification", icon: "alerts" },
   ] },
   { key: "data", label: "Data and administration", items: [
     { key: "incidentSetup", label: "Incident Setup", icon: "incidentSetup" },
@@ -90,9 +94,11 @@ const NAV: readonly NavGroup[] = [
   ] },
 ];
 /** The rail without the entries this account or deployment cannot use, so no entry opens a refusal. */
-function railFor(administers: boolean, designsBoards: boolean, integrations: ReadonlySet<string>): readonly NavGroup[] {
+function railFor(administers: boolean, designsBoards: boolean, integrations: ReadonlySet<string>, member: boolean): readonly NavGroup[] {
   const hidden = new Set([
     ...(administers ? [] : ["admin", "federation"]),
+    // The directory and mass notification belong to members of the jurisdiction in view.
+    ...(member ? [] : ["contacts", "massNotification"]),
     ...(designsBoards ? [] : ["templates"]),
     // Optional integrations register no routes when off, so their entries go too.
     ...["facilities", "tracking"].filter((key) => !integrations.has(key)),
@@ -297,6 +303,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         // Board templates are published by an instance admin who also administers this jurisdiction.
         Boolean(session.me?.isInstanceAdmin && viewingMembership?.role === "admin"),
         enabledIntegrations,
+        Boolean(viewingMembership),
       )}
       activeNav={sectionOf(surface)}
       onNavigate={(key) => navigateInContext(sectionForNav(key))}
@@ -443,6 +450,10 @@ function sectionForNav(key: string): Surface {
       return { kind: "federation" };
     case "chronology":
       return { kind: "chronology" };
+    case "contacts":
+      return { kind: "contacts" };
+    case "massNotification":
+      return { kind: "mass-notification" };
     default:
       return { kind: "map" };
   }
@@ -758,6 +769,11 @@ function Center(props: {
     case "chronology":
       return <ChronologySurface client={props.client} jurisdictionId={props.jurisdictionId}
         incidentId={props.incidentId} incidentName={props.incidentName} isAdmin={props.isAdmin} />;
+    case "contacts":
+      return <ContactsSurface client={props.client} jurisdictionId={props.jurisdictionId} isAdmin={props.isAdmin} />;
+    case "mass-notification":
+      // Sending needs the admin-or-member role that alert authoring checks; viewers follow the sends.
+      return <MassNotificationSurface client={props.client} jurisdictionId={props.jurisdictionId} canSend={props.canAuthorAlerts} />;
     case "not-found":
       return <NotFoundState onMap={() => props.onNavigate({ kind: "map" })} onOverview={() => props.onNavigate({ kind: "dashboard" })} />;
   }
@@ -793,6 +809,8 @@ function pageFor(surface: Surface, scope: string): { readonly page: ShellPage; r
     case "messages": return result("Coordination", "Messages", "boards");
     case "jic": return result("Coordination", "JIC", "planning");
     case "files": return result("Coordination", "Files", "boards");
+    case "contacts": return result("Coordination", "Contacts", "boards");
+    case "mass-notification": return result("Coordination", "Mass Notification", "boards");
     case "incidents": return result("Data and administration", "Incident Setup", "boards");
     case "datasets": return result("Data and administration", "Datasets", "map");
     case "feeds": return result("Data and administration", "Feeds", "map");
