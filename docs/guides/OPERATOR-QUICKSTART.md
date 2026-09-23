@@ -44,6 +44,32 @@ impact count or from ESF activation. Unknown or missing never means stable.
   Resolve conflicting current reports only through the attributed decision
   workflow.
 
+### Read and correct the chronology
+
+**Situation / Chronology** lists the attributed, append-only record of actions
+for the selected incident, or for the whole organization when no incident is
+selected. Each entry shows its time, a plain event name, who recorded it and
+under which position, a short detail and its event number. The oldest entries
+come first; **Load more records** reads the next page.
+
+- **Significant events**, the default view, keeps operational milestones:
+  incident activation and closure, incident area and period revisions,
+  resource request submission, status changes and escalations, IPAWS alert
+  sends, IAP submission, approval and completion, published JIC releases,
+  composed SITREPs, facility status reports, and corrections. **All events**
+  shows every entry the server lets you read, including routine board and form
+  activity. Entries on the Significant Events board are board records; read
+  them in **Boards** or under **All events**.
+- **Event type**, **From** and **To** narrow either view on the server.
+- To correct an entry, choose **Add correction**, state what was wrong and
+  what is right, and choose **Record correction**. The original entry does not
+  change. The correction is a new entry, attributed to you and your acting
+  position, that names the event it corrects.
+- A jurisdiction admin also sees **Export CSV** and **Export signed JSON**.
+  Both export the organization's whole audit trail, not the filtered view. The
+  signed file is a JSON array of signed pages in order; verify each page as
+  described in [Export the audit trail](ADMIN.md#export-the-audit-trail).
+
 ## 4. Plan and brief
 
 - Prepare IAP content against the selected incident and a real incident-area

@@ -980,3 +980,56 @@ tagging remain separately gated as section 1 of the roster states.
   keeping `curl` only for bootstrap.
 - **Rollback:** revert the commit, drop the five functions and two policies
   from 0113 and revoke the delete grant.
+
+## V1 W3.1: audit chronology
+
+- **What changed.** A Chronology screen under Situation, in new
+  `web/src/audit/**`, follows the selected incident or covers the whole
+  jurisdiction when none is selected. Tabs switch between "Significant events",
+  the default, and "All events"; an event type selector and From and To times
+  filter on the server. Each entry shows its time, a plain event name, who
+  recorded it under which position, a short detail and its event number.
+  "Load more records" pages through the operational table. "Add correction"
+  records a note through the existing corrections route and the correction
+  appears as a new attributed entry reading "Corrects event N". Jurisdiction
+  admins see "Export CSV" and "Export signed JSON". Three client methods, one
+  Surface kind and one navigation entry.
+- **Defaults applied.** The significant set: incident activated, closed and
+  area revised; resource request submitted, status changed, escalated and
+  escalation received; the four IPAWS send events; IAP submitted, approved and
+  completed; JIC release published; SITREP composed; facility status reported;
+  and corrections. CAP authoring is local and excluded; the audit trail has no
+  category for lifeline status or EOC activation level, so none is listed.
+  Category labels live beside the screen, not in the doctrinal dictionary, with
+  unknown keys humanized. Export covers the whole jurisdiction trail, because
+  the export route takes no filters; the client reads every page and writes
+  one CSV with a single header row, or a JSON array of the signed pages.
+- **Deviations, recorded.** The chronology route gains `incidentId` and
+  `category` query parameters, no new route. `requestBlob` in the client now
+  calls a private `requestResponse` with the same session renewal, because CSV
+  export needs the `x-next-cursor` header.
+- **Integration fix: corrections by viewers.** The lane found that
+  `correctAudit` had no role check and the insert policy counts viewers as
+  members, so a viewer could record a correction. A correction amends the
+  record, so it now requires a writer, admin or member; a new audit test shows
+  a viewer refused with 403. The screen shows the correction action to every
+  reader and displays the server's refusal.
+- **Schema, contract, dependencies:** none; `docs/API.md` unchanged.
+- **Verification.** In the lane, 10 files passed 80 of 80, including
+  `chronology-browser.test.ts`: significant events for a seeded incident, the
+  type filter, All events 100 rows then Load more to the full count, a
+  correction shown as "Admin (Operations Section Chief)" with "Corrects event
+  N", and a CSV with one header row containing the correction. After rebasing
+  onto W3.0 and W3.5, with the viewer fix: audit, retention, aar, api-docs,
+  the chronology, admin and IPAWS browser walks, and every web test passed 461
+  of 461. TypeScript and ESLint clean. Link checker 69 files.
+- **Evidence level:** unit, integration, real-database, browser and document.
+- **Known limits.** Entries on the Significant Events board are board records
+  sharing one category and appear under All events only; the guide says so.
+  The existing `positionId` filter is not on the screen. The chronology has no
+  index on incident or category, so a sparse filter over a very large trail
+  scans the jurisdiction's sequence index. Export holds the trail in browser
+  memory.
+- **Guide:** `docs/guides/OPERATOR-QUICKSTART.md` describes the screen,
+  significant events, corrections and export.
+- **Rollback:** revert the commit.

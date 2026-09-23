@@ -11,6 +11,9 @@ const ChronologyQuery = z.object({
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
   positionId: z.string().uuid().optional(),
+  incidentId: z.string().uuid().optional(),
+  /** Comma-separated event categories; an entry matching any one is kept. */
+  category: z.string().max(4000).transform((value) => value.split(",").filter(Boolean)).optional(),
   ...pageQuery,
 });
 

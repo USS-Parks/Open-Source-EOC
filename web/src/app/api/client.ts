@@ -71,6 +71,7 @@ import type {
   IpawsStatus,
   IpawsTrailEntry,
 } from "../../ipaws/model.js";
+import type { ChronologyFilters, ChronologyPage } from "../../audit/chronology.js";
 
 /**
  * The app shell's one door to the server. It carries the bearer access
@@ -1560,7 +1561,57 @@ export class ApiClient {
   downloadFile(fileId: string): Promise<Blob> {
     return this.requestBlob(`/api/v1/files/${fileId}/content`);
   }
+  // ---- Audit chronology ----
+  listChronology(jurisdictionId: string, filters: ChronologyFilters = {}, page: PageOptions = {}): Promise<ChronologyPage> {
+    const query = pageParams(page);
+    if (filters.incidentId) query.set("incidentId", filters.incidentId);
+    if (filters.categories?.length) query.set("category", filters.categories.join(","));
+    if (filters.from) query.set("from", filters.from);
+    if (filters.to) query.set("to", filters.to);
+    const suffix = query.size > 0 ? `?${query}` : "";
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/chronology${suffix}`);
+  }
+  /** Record a correction: a new attributed event pointing at the original, which stays as it was. */
+  async correctAuditEvent(eventId: string, note: string): Promise<string> {
+    const result = await this.request<{ id: string }>(
+      "POST", `/api/v1/audit/${encodeURIComponent(eventId)}/corrections`, { note },
+    );
+    return result.id;
+  }
+  /**
+   * The jurisdiction's whole audit trail as one file, read export page by
+   * export page: CSV with a single header row, or a JSON array of the signed
+   * pages in order, each verifiable on its own.
+   */
+  async exportAuditTrail(jurisdictionId: string, format: "csv" | "json"): Promise<Blob> {
+    // Holds the whole trail in memory; stream to a file if trails outgrow a browser tab.
+    const path = (cursor: string | null) =>
+      `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/audit/export?format=${format}&limit=500${
+        cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`;
+    const parts: string[] = [];
+    let cursor: string | null = null;
+    do {
+      if (format === "json") {
+        const signed: { page: { nextCursor: string | null } } = await this.request("GET", path(cursor));
+        parts.push(JSON.stringify(signed));
+        cursor = signed.page.nextCursor;
+      } else {
+        const res = await this.requestResponse(path(cursor));
+        const text = await res.text();
+        // Every page repeats the header row; the file keeps the first.
+        parts.push(parts.length ? text.slice(text.indexOf("\r\n") + 2) : text);
+        cursor = res.headers.get("x-next-cursor");
+      }
+    } while (cursor);
+    return format === "json"
+      ? new Blob([`[${parts.join(",")}]`], { type: "application/json" })
+      : new Blob(parts, { type: "text/csv" });
+  }
   private async requestBlob(path: string): Promise<Blob> {
+    return (await this.requestResponse(path)).blob();
+  }
+  /** An authorized GET that renews the session once on 401; a failed response throws ApiError. */
+  private async requestResponse(path: string): Promise<Response> {
     const once = (): Promise<Response> => {
       const headers: Record<string, string> = {};
       if (this.accessToken) headers["authorization"] = `Bearer ${this.accessToken}`;
@@ -1577,7 +1628,7 @@ export class ApiClient {
       res = await once();
     }
     if (!res.ok) throw new ApiError(res.status, res.statusText || `HTTP ${res.status}`);
-    return res.blob();
+    return res;
   }
 
   // ---- Administration ----

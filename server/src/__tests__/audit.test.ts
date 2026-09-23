@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
+import { addMembership, createPerson } from "../auth/service.js";
 import { withPerson } from "../db/context.js";
 import { auth, freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
@@ -116,6 +117,23 @@ describe("append-only at every layer (contract item 10)", () => {
 });
 
 describe("corrections reference, never replace", () => {
+  it("a viewer may read the record but not correct it", async () => {
+    const viewerId = await createPerson(admin, {
+      email: "audit-viewer@example.org",
+      displayName: "Viewer",
+      password: "viewer-good-password",
+    });
+    await addMembership(admin, viewerId, seed.jurisdictionId, "viewer");
+    const viewerToken = await tokenFor(app, "audit-viewer@example.org", "viewer-good-password");
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/audit/${firstEventId}/corrections`,
+      headers: auth(viewerToken),
+      payload: { note: "A viewer tries to amend the record." },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
   it("a correction is a new event and the original is untouched", async () => {
     const res = await app.inject({
       method: "POST",
@@ -174,5 +192,41 @@ describe("the reimbursement-grade chronology (F2)", () => {
       (tx) => tx`select id from audit_events`,
     );
     expect(rows).toHaveLength(0);
+  });
+});
+
+describe("chronology filters", () => {
+  it("keeps one incident's events of the named categories, in sequence", async () => {
+    const incidentA = "7a1d2c3e-0000-4000-8000-00000000000a";
+    const incidentB = "7a1d2c3e-0000-4000-8000-00000000000b";
+    for (const [incidentId, category] of [
+      [incidentA, "incident.activated"],
+      [incidentA, "board.record.created"],
+      [incidentB, "rr.submitted"],
+      [incidentA, "rr.submitted"],
+    ] as const) {
+      await admin`
+        insert into audit_events (jurisdiction_id, incident_id, person_id, category)
+        values (${seed.jurisdictionId}, ${incidentId}, ${seed.adminId}, ${category})`;
+    }
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/chronology?incidentId=${incidentA}&category=incident.activated,rr.submitted`,
+      headers: auth(memberToken),
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    const entries = res.json().entries as Array<{ seq: number; category: string; incidentId: string }>;
+    expect(entries.map((e) => [e.incidentId, e.category])).toEqual([
+      [incidentA, "incident.activated"],
+      [incidentA, "rr.submitted"],
+    ]);
+    expect(entries[0]!.seq).toBeLessThan(entries[1]!.seq);
+
+    const bad = await app.inject({
+      method: "GET",
+      url: `/api/v1/jurisdictions/${seed.jurisdictionId}/chronology?incidentId=not-a-uuid`,
+      headers: auth(memberToken),
+    });
+    expect(bad.statusCode).toBe(400);
   });
 });

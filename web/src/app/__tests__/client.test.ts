@@ -543,3 +543,50 @@ describe("ApiClient", () => {
     });
   });
 });
+
+describe("audit chronology client", () => {
+  const reply = (body: string, headers: Record<string, string> = {}) => ({
+    ok: true, status: 200, statusText: "OK", headers: new Headers(headers),
+    text: async () => body, json: async () => JSON.parse(body),
+  });
+
+  it("sends the chronology filters and page, and posts a correction note", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(res(200, { entries: [], nextCursor: null }));
+    const client = new ApiClient({ fetchImpl });
+    await client.listChronology("j/1", { incidentId: "i1", categories: ["incident.activated", "correction"],
+      from: "2026-09-23T00:00:00.000Z" }, { cursor: "next", limit: 50 });
+    const url = new URL(String(fetchImpl.mock.calls[0]?.[0]), "http://local");
+    expect(url.pathname).toBe("/api/v1/jurisdictions/j%2F1/chronology");
+    expect(Object.fromEntries(url.searchParams)).toEqual({ cursor: "next", limit: "50", incidentId: "i1",
+      category: "incident.activated,correction", from: "2026-09-23T00:00:00.000Z" });
+    await client.listChronology("j");
+    expect(fetchImpl.mock.calls[1]?.[0]).toBe("/api/v1/jurisdictions/j/chronology");
+    fetchImpl.mockResolvedValueOnce(res(201, { id: "c1" }));
+    expect(await client.correctAuditEvent("e1", "Road reopened at 09:10")).toBe("c1");
+    expect(fetchImpl.mock.calls[2]?.[0]).toBe("/api/v1/audit/e1/corrections");
+    expect(fetchImpl.mock.calls[2]?.[1]).toMatchObject({ method: "POST", body: JSON.stringify({ note: "Road reopened at 09:10" }) });
+  });
+
+  it("joins every CSV export page under one header row", async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(reply("seq,id\r\n1,a\r\n", { "x-next-cursor": "c2" }))
+      .mockResolvedValueOnce(reply("seq,id\r\n2,b\r\n"));
+    const client = new ApiClient({ fetchImpl });
+    const blob = await client.exportAuditTrail("j", "csv");
+    expect(await blob.text()).toBe("seq,id\r\n1,a\r\n2,b\r\n");
+    expect(fetchImpl.mock.calls.map((call) => String(call[0]))).toEqual([
+      "/api/v1/jurisdictions/j/audit/export?format=csv&limit=500",
+      "/api/v1/jurisdictions/j/audit/export?format=csv&limit=500&cursor=c2",
+    ]);
+  });
+
+  it("keeps each signed JSON export page whole, in order", async () => {
+    const first = { page: { cursor: null, nextCursor: "c2", entries: [] }, signature: { value: "s1" } };
+    const second = { page: { cursor: "c2", nextCursor: null, entries: [] }, signature: { value: "s2" } };
+    const fetchImpl = vi.fn().mockResolvedValueOnce(res(200, first)).mockResolvedValueOnce(res(200, second));
+    const client = new ApiClient({ fetchImpl });
+    const blob = await client.exportAuditTrail("j", "json");
+    expect(JSON.parse(await blob.text())).toEqual([first, second]);
+    expect(String(fetchImpl.mock.calls[1]?.[0])).toContain("format=json&limit=500&cursor=c2");
+  });
+});

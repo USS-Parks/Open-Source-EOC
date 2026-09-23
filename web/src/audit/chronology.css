@@ -1,0 +1,25 @@
+.eoc-chronology { display: grid; gap: 16px; min-width: 0; padding: 16px; color: var(--eoc-text); }
+.eoc-chronology-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: end; padding: 4px 2px; border-bottom: 2px solid var(--eoc-brand-teal, var(--eoc-status-info)); }
+.eoc-chronology-eyebrow { margin: 0 0 4px; color: var(--eoc-text-muted); font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.eoc-chronology-header h1 { margin: 0; color: var(--eoc-text-strong, var(--eoc-text)); font-size: clamp(1.45rem, 2vw, 2rem); }
+.eoc-chronology-header p:not(.eoc-chronology-eyebrow) { margin: 6px 0 0; color: var(--eoc-text-muted); }
+.eoc-chronology-export { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border-left: 3px solid var(--eoc-brand-teal, var(--eoc-status-info)); background: var(--eoc-surface-raised); }
+.eoc-chronology-export p { flex-basis: 100%; margin: 0; font-size: .86rem; font-weight: 700; }
+.eoc-chronology-controls { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--eoc-border); border-radius: var(--eoc-radius-md); background: var(--eoc-surface); }
+.eoc-chronology-filters { display: grid; grid-template-columns: repeat(3, minmax(150px, 240px)); gap: 10px; align-items: end; }
+.eoc-chronology-filters > label, .eoc-chronology-correction label { display: grid; gap: 4px; }
+.eoc-chronology-filters input, .eoc-chronology-correction textarea { min-height: 44px; padding: 6px; color: var(--eoc-text); background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: 4px; font: inherit; }
+.eoc-chronology-event { display: grid; gap: 2px; }
+.eoc-chronology-event small { color: var(--eoc-text-muted); }
+.eoc-chronology-notice { margin: 0; padding: 10px 12px; border: 1px solid var(--eoc-status-success); border-radius: 4px; color: var(--eoc-status-success); background: var(--eoc-surface); }
+.eoc-chronology-notice.is-error { border-color: var(--eoc-status-critical); color: var(--eoc-status-critical); }
+.eoc-chronology-correction { display: grid; gap: 12px; }
+.eoc-chronology-correction p { margin: 0; color: var(--eoc-text-muted); }
+.eoc-chronology-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+[data-table-id="audit-chronology"] .eoc-btn { min-height: 36px; padding: 4px 8px; font-size: .85rem; }
+@media (max-width: 720px) {
+  .eoc-chronology { padding: 10px; }
+  .eoc-chronology-header, .eoc-chronology-filters { grid-template-columns: minmax(0, 1fr); }
+  .eoc-chronology-header > *, .eoc-chronology-filters > * { min-width: 0; }
+  .eoc-chronology-filters input { max-width: 100%; }
+}

@@ -42,6 +42,7 @@ import { NotificationTray } from "../../notifications/NotificationTray.js";
 import { LifelinesSurface } from "../surfaces/LifelinesSurface.js";
 import { EsfSurface } from "../surfaces/EsfSurface.js";
 import { ContinuityPanel } from "../../offline/ContinuityPanel.js";
+import { ChronologySurface } from "../../audit/ChronologySurface.js";
 
 const NAV: readonly NavGroup[] = [
   { key: "situation", label: "Situation", items: [
@@ -49,6 +50,7 @@ const NAV: readonly NavGroup[] = [
     { key: "map", label: "Map", icon: "map" },
     { key: "lifelines", label: "ESFs & Lifelines", icon: "lifelines" },
     { key: "sitreps", label: "SITREP", icon: "sitrep" },
+    { key: "chronology", label: "Chronology", icon: "fieldReports" },
   ] },
   { key: "operations", label: "Operations", items: [
     { key: "boards", label: "Boards", icon: "boards" },
@@ -390,6 +392,8 @@ function sectionForNav(key: string): Surface {
       return { kind: "templates" };
     case "admin":
       return { kind: "admin" };
+    case "chronology":
+      return { kind: "chronology" };
     default:
       return { kind: "map" };
   }
@@ -668,6 +672,9 @@ function Center(props: {
     case "admin":
       return <AdminSurface client={props.client} jurisdictionId={props.jurisdictionId} personId={props.personId}
         isAdmin={props.isAdmin} isInstanceAdmin={props.isInstanceAdmin} boards={props.boards} />;
+    case "chronology":
+      return <ChronologySurface client={props.client} jurisdictionId={props.jurisdictionId}
+        incidentId={props.incidentId} incidentName={props.incidentName} isAdmin={props.isAdmin} />;
     case "not-found":
       return <NotFoundState onMap={() => props.onNavigate({ kind: "map" })} onOverview={() => props.onNavigate({ kind: "dashboard" })} />;
   }
@@ -683,6 +690,7 @@ function pageFor(surface: Surface, scope: string): { readonly page: ShellPage; r
     case "esf": return result("Situation", "ESF coordination", "map");
     case "sitreps": return result("Situation", "SITREP", "planning");
     case "sitrep": return result("Situation", "Situation report", "planning");
+    case "chronology": return result("Situation", "Chronology", "boards");
     case "boards": return result("Operations", "Boards", "boards");
     case "board": return result("Operations", "Board detail", "boards");
     case "board-design": return result("Operations", "Board customization", "boards");

@@ -1,6 +1,6 @@
 import type { Sql } from "../db/client.js";
 import { DEFAULT_PAGE_LIMIT, decodeCursor, encodeCursor, type PageRequest } from "../db/cursor.js";
-import { AuthError, type Principal } from "../auth/service.js";
+import { AuthError, requireWriter, type Principal } from "../auth/service.js";
 
 export interface AuditInput {
   readonly jurisdictionId: string;
@@ -44,6 +44,8 @@ export async function correctAudit(
   const [original] = await sql`
     select jurisdiction_id, incident_id from audit_events where id = ${originalEventId}`;
   if (!original) throw new AuthError(404, "audit event not found");
+  // A correction is a write to the record: viewers may read it, not amend it.
+  requireWriter(actor, original.jurisdiction_id as string);
   const incidentId = original.incident_id as string | null;
   return recordAudit(sql, actor, {
     jurisdictionId: original.jurisdiction_id as string,
@@ -76,6 +78,8 @@ export interface ChronologyQuery extends PageRequest {
   readonly from?: Date | undefined;
   readonly to?: Date | undefined;
   readonly positionId?: string | undefined;
+  readonly incidentId?: string | undefined;
+  readonly category?: readonly string[] | undefined;
 }
 
 export interface ChronologyPage {
@@ -114,6 +118,7 @@ export async function listChronology(
   if (!member) throw new AuthError(403, "no access to this jurisdiction");
   const after = decodeCursor(query.cursor, ["seq"]);
   const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
+  const categories = query.category?.length ? query.category : null;
   const rows = await sql`
     select e.seq, e.id, e.created_at, e.person_id, e.position_id, e.incident_id,
            e.category, e.subject_table, e.subject_id, e.payload, e.corrects,
@@ -125,6 +130,8 @@ export async function listChronology(
       and (${query.from ?? null}::timestamptz is null or e.created_at >= ${query.from ?? null})
       and (${query.to ?? null}::timestamptz is null or e.created_at <= ${query.to ?? null})
       and (${query.positionId ?? null}::uuid is null or e.position_id = ${query.positionId ?? null})
+      and (${query.incidentId ?? null}::uuid is null or e.incident_id = ${query.incidentId ?? null})
+      and (${categories}::text[] is null or e.category = any(${categories}::text[]))
       ${after ? sql`and e.seq > ${after[0]!}::bigint` : sql``}
     order by e.seq asc
     limit ${limit + 1}`;
