@@ -45,18 +45,29 @@ if (!base || boards.length === 0 || !args["metrics-token"]) {
   process.exit(2);
 }
 
+let window = [];
+let errors = 0;
+let stopping = false;
+
 const login = await fetch(`${base}/api/v1/auth/login`, {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({ email: args.email, password: args.password }),
 });
 if (!login.ok) throw new Error(`login failed: ${login.status}`);
-const token = (await login.json()).accessToken;
-const auth = { authorization: `Bearer ${token}` };
+// Access tokens expire after fifteen minutes; renew every ten through the
+// resume token, as the web client does, so reconnecting sockets stay signed in.
+let { accessToken: token, resumeToken } = await login.json();
+const renew = setInterval(async () => {
+  const res = await fetch(`${base}/api/v1/auth/resume`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ resumeToken }),
+  });
+  if (!res.ok) { errors += 1; return; }
+  ({ accessToken: token, resumeToken = resumeToken } = await res.json());
+}, 10 * 60_000);
 
-let window = [];
-let errors = 0;
-let stopping = false;
 const jitter = (ms) => ms / 2 + Math.random() * ms;
 
 /** One simulated operator: a socket on a board, editing one record of their own. */
@@ -108,7 +119,7 @@ function operator(index) {
     if (stopping) return;
     const paths = ["/api/v1/me", "/api/v1/notifications", `/api/v1/boards/${board}/views/all`];
     try {
-      const res = await fetch(`${base}${paths[Math.floor(Math.random() * paths.length)]}`, { headers: auth });
+      const res = await fetch(`${base}${paths[Math.floor(Math.random() * paths.length)]}`, { headers: { authorization: `Bearer ${token}` } });
       if (!res.ok && res.status !== 404) errors += 1;
       await res.arrayBuffer();
     } catch {
@@ -167,6 +178,7 @@ const sampler = setInterval(() => void sample().catch(() => { errors += 1; }), s
 await new Promise((resolve) => setTimeout(resolve, minutes * 60_000));
 stopping = true;
 clearInterval(churn);
+clearInterval(renew);
 clearInterval(sampler);
 for (const op of operators) op.close();
 
