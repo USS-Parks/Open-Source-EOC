@@ -1,8 +1,8 @@
 # Contributing
 
 Thanks for considering a contribution. This project is governed by the build
-roster in `docs/process/VIRTUAL-EOC-PSPR-2026-09-17.md`; work that lands must fit a
-roster session or be agreed with the lead maintainer first.
+roster in `docs/process/FINISH-PSPR-2026-09-22.md`; work that lands must fit a
+roster unit or be agreed with the lead maintainer first.
 
 ## Setup
 

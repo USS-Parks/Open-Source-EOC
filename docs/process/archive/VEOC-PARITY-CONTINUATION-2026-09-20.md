@@ -1,5 +1,9 @@
 # California hybrid parity continuation
 
+> **Superseded 2026-09-23.** This roster is archived and is not executed.
+> The live roster is [the Finish PSPR](../FINISH-PSPR-2026-09-22.md).
+> Its table rows 24 and 25 carry forward as the binding parity wording for the acceptance wave.
+
 **Current execution authority:** the focused roster amendment at the end of
 this document supersedes the earlier sequence and any conflicting completion
 claims. Earlier sections are retained as plan history.

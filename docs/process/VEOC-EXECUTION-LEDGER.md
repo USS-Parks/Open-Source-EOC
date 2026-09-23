@@ -2565,7 +2565,7 @@ loop for the map.
   main, using human-written language in the commit and GitHub communication.
   This publishes the draft for review; it does not start design implementation.
 - **Baseline:** `996f29c3895690501b491c732094794bae954918` on canonical main.
-- **Change:** added [the Design PSPR](./VEOC-DESIGN-PSPR-2026-09-20.md), with
+- **Change:** added [the Design PSPR](./archive/VEOC-DESIGN-PSPR-2026-09-20.md), with
   36 prompts (D00-D35), five milestones, shared ownership with the existing
   roster, proportionate gates, and a dedicated ESF/Lifeline workspace contract.
   Linked it from `ROADMAP.md`, the canonical PSPR, and the parity continuation.
@@ -5245,3 +5245,37 @@ increment proves it and that coverage follows the incident area.
   of 9.
 - **Result:** W1.10 is complete and the advisory allowlist is empty. Next:
   W1.12, retire the roster stack.
+
+## V1 W1.12: retire the roster stack
+
+- **Moved:** six rosters to `docs/process/archive/` with `git mv`, so history
+  follows them: the original canonical roster, the parity continuation, the
+  design roster, the Master PSPR, the V1 PSPR and the VEOC-77 handoff. Each
+  now opens with a supersession header naming the Finish PSPR as the live
+  roster and stating what of it carries forward.
+- **Kept in `docs/process/`:** the Finish PSPR, the execution ledger, the
+  platform research, which is a basis and not a roster, and the session
+  artifacts for VEOC-37 through VEOC-43, VEOC-79, VEOC-80 and the usability
+  script. `docs/process/design/` is unchanged.
+- **Links repaired:** six broken relative links after the move. `ROADMAP.md`
+  and `docs/README.md` now point at the Finish PSPR rather than the V1 PSPR;
+  the ledger's Design PSPR link gains the `archive/` segment; the Design
+  PSPR's own two outbound links gain a `../` level.
+- **Plain-text paths repaired:** `README.md`, `CONTRIBUTING.md`,
+  `GOVERNANCE.md`, `STATUS-AUDIT-2026-09-22.md` and the D00 design baseline.
+  `CONTRIBUTING.md` and `GOVERNANCE.md` named the original roster as the
+  governing one and now name the Finish PSPR.
+- **Fragile references removed:** the binding design wording was cited as
+  "lines 495 to 517", which the supersession header would have shifted. Both
+  the header and the Finish PSPR now cite the D33 to D35 prompts by name.
+- **`CLAUDE.md`:** the authority section names one live roster and points the
+  rest at `docs/process/archive/`. The fan-out grant, the commit hygiene
+  section and the user review gate no longer name superseded plans. The
+  commit hygiene section now states plainly that pushing is Basho's separate
+  instruction.
+- **Not touched:** `SESSION-HANDOFF-2026-09-20.md` references the parity
+  continuation but is Basho's untracked material under hazard HZ-D.
+- **Verification:** the link checker passed all 68 tracked Markdown files. No
+  TypeScript, JavaScript, JSON or workflow file referenced any moved path.
+- **Result:** W1.12 is complete and `docs/process/` holds one roster. Next:
+  W1.13, freeze this ledger and open the one this plan writes to.

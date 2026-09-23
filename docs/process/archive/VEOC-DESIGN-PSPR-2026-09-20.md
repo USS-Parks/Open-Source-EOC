@@ -1,5 +1,10 @@
 # Open Source EOC Design PSPR
 
+> **Superseded 2026-09-23.** This roster is archived and is not executed.
+> The live roster is [the Finish PSPR](../FINISH-PSPR-2026-09-22.md).
+> Its D33 through D35 prompts carry forward as the binding design wording for
+> the acceptance wave.
+
 **Initiative:** A unified visual identity and operator experience combining Esri's geographic situational awareness with WebEOC's operational coordination, with a measurable ambition of substantially faster workflows.
 
 **Status:** Approved for execution through Basho's Master PSPR approval on 2026-09-21. Execution order, ownership and landing are governed by `docs/process/MASTER-PSPR-2026-09-21.md`. This document remains the design specification and the binding wording of D00 to D35. The prior publication approval alone did not authorize implementation.
@@ -21,8 +26,8 @@ This Design PSPR has **36 focused prompts, D00 through D35**. They decompose des
 Related authority documents:
 - [Canonical PSPR](./VIRTUAL-EOC-PSPR-2026-09-17.md).
 - [Current implementation continuation](./VEOC-PARITY-CONTINUATION-2026-09-20.md).
-- [Execution ledger](./VEOC-EXECUTION-LEDGER.md).
-- [Facet status register](../FACET-STATUS.md).
+- [Execution ledger](../VEOC-EXECUTION-LEDGER.md).
+- [Facet status register](../../FACET-STATUS.md).
 - Supplied reference screenshots are local user-owned inputs, not published assets. The local path is `Reference Screenshots/`.
 
 The ownership rules are:

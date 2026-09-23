@@ -1,5 +1,9 @@
 # Master PSPR - Open-Source-EOC parity and design, one roster for Astra 6
 
+> **Superseded 2026-09-23.** This roster is archived and is not executed.
+> The live roster is [the Finish PSPR](../FINISH-PSPR-2026-09-22.md).
+> Its authority register and execution model carry forward into that plan's sections 1 and 8.
+
 Written 2026-09-21. One execution plan for two rosters: the remaining parity
 roster (orders 8 to 25 of the amended table in
 `docs/process/VEOC-PARITY-CONTINUATION-2026-09-20.md`) and the design roster (D00 to

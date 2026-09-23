@@ -2,11 +2,10 @@
 
 ## Authority documents
 
-- `docs/process/V1-PSPR-2026-09-22.md` is the current approved execution plan: order, ownership, gates and landing from the evaluation build to version 1.0.
-- `docs/process/MASTER-PSPR-2026-09-21.md` is technically complete through M4. It preserves the completed parity/design roster and the acceptance wording carried into V1.
-- `docs/process/VIRTUAL-EOC-PSPR-2026-09-17.md` is the original Plan / Sequential Prompt Roster. Its universal execution contract remains binding where the later plans do not supersede it.
-- `docs/process/VIRTUAL-EOC-PLATFORM-RESEARCH-2026-09-17.md` is the research basis behind the roster.
-- Session receipts append to `docs/process/VEOC-EXECUTION-LEDGER.md` (created by VEOC-00).
+- `docs/process/FINISH-PSPR-2026-09-22.md` is the only live roster and the approved execution authority: order, ownership, gates and landing from the evaluation build to version 1.0. Approved by Basho 2026-09-23.
+- `docs/process/archive/` holds the rosters it supersedes. They are read for history, never executed. Each carries a supersession header. The universal execution contract and product invariants of the original roster remain binding where the Finish PSPR does not supersede them.
+- `docs/process/VIRTUAL-EOC-PLATFORM-RESEARCH-2026-09-17.md` is the research basis behind the roster and is not superseded.
+- Session receipts append to `docs/process/VEOC-EXECUTION-LEDGER.md`.
 
 ## CRITICAL: Branch & Worktree Authority (CANON, set by Basho, 2026-09-17)
 
@@ -34,8 +33,8 @@ branches need no per-session or per-wave re-approval. Everything outside this
 grant still falls under the rule above.
 
 - Fan-out runs only under a plan Basho has approved for execution. The current
-  plan is `docs/process/V1-PSPR-2026-09-22.md`; it carries forward the Master PSPR's
-  zipper where its execution model permits parallel lanes.
+  plan is `docs/process/FINISH-PSPR-2026-09-22.md`; it carries the zipper
+  forward where its execution model permits parallel lanes.
 - Scope: branches named `lane/*` and their worktrees, created by the
   integrating session outside the canonical checkout, and their removal once
   their work is on `main`. Lane branches are local and are never pushed.
@@ -52,11 +51,11 @@ grant still falls under the rule above.
 
 ## CRITICAL: Commit & PR Hygiene (ABSOLUTE, set by Basho, 2026-09-17)
 
-The Master PSPR's 2026-09-21 execution grant is historical and complete. The
-V1 PSPR records the active session's full STS, commit and fast-forward push
-authority. Push each accepted landing while that grant applies; do not publish
-unfinished lane work. External actions and user-owned release decisions remain
-separately gated.
+The earlier execution grants are historical and complete. The Finish PSPR
+records the active session's full STS, commit and fast-forward landing
+authority, granted by Basho on 2026-09-23. Pushing is Basho's separate
+instruction to give; do not publish unfinished lane work. External actions and
+user-owned release decisions remain separately gated.
 
 Basho's standing instruction, 2026-09-22: under an active plan-wide grant, do
 not ask before a commit, a landing or a push, and do not ask per unit about
@@ -107,9 +106,9 @@ writes before. Follow the same discipline as the Mighty-Eel-OS protocol:
 ### User review gate, 2026-09-21
 
 Basho is the sole final approver of visual quality and functional suitability.
-The Master PSPR is technically complete; the V1 PSPR is now the execution
-authority. Automated tests and technical reviews are evidence, not final user
-acceptance. Canonical design references remain authoritative.
+The earlier rosters are technically complete; the Finish PSPR is now the
+execution authority. Automated tests and technical reviews are evidence, not
+final user acceptance. Canonical design references remain authoritative.
 
 - Execute one numbered prompt at a time, in roster order, unless work is fanned
   out under the standing grant above. Under fan-out, each lane executes one

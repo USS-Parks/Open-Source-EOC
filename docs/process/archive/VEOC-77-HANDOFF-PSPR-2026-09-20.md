@@ -1,5 +1,9 @@
 # VEOC-77 Handoff: Plan / Sequential Prompt Roster for the next session
 
+> **Superseded 2026-09-23.** This roster is archived and is not executed.
+> The live roster is [the Finish PSPR](../FINISH-PSPR-2026-09-22.md).
+> Complete. Kept for the receipts that cite it.
+
 **Current order and acceptance:** follow the [focused continuation amendment](./VEOC-PARITY-CONTINUATION-2026-09-20.md#focused-roster-amendment-2026-09-20).
 It retains handoff prompts 10 through 15, strengthens their incident/data
 acceptance and places the integrated exercise after its implementation

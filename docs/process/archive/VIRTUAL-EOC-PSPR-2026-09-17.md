@@ -1,5 +1,9 @@
 # Virtual EOC (VEOC): Canonical Plan / Sequential Prompt Roster
 
+> **Superseded 2026-09-23.** This roster is archived and is not executed.
+> The live roster is [the Finish PSPR](../FINISH-PSPR-2026-09-22.md).
+> Historical. All 46 of its prompts are receipted in the execution ledger.
+
 **Current continuation:** the [focused roster amendment](./VEOC-PARITY-CONTINUATION-2026-09-20.md#focused-roster-amendment-2026-09-20)
 records the remaining execution order, restored acceptance criteria and FOUO
 scope as of 2026-09-20. It supersedes conflicting historical sequence/status

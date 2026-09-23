@@ -1,7 +1,7 @@
 # Status audit against the original PSPR
 
 Audited 2026-09-22 on `main` at `7b69b67` with 64 uncommitted working-tree
-changes. Authority read: `docs/process/VIRTUAL-EOC-PSPR-2026-09-17.md`
+changes. Authority read: `docs/process/archive/VIRTUAL-EOC-PSPR-2026-09-17.md`
 (VEOC-00 through VEOC-43, 46 prompts).
 
 ## 1. Completion
@@ -33,7 +33,8 @@ exercise, AR7/INV-3 second-machine air-gap proof, INV-10 second maintainer.
 
 ### Against v1: 15 of 66 units, 23 percent by count
 
-Source: `docs/process/V1-PSPR-2026-09-22.md`, the live plan. W0 is complete
+Source: `docs/process/archive/V1-PSPR-2026-09-22.md`, the live plan at the time
+of the audit and since superseded. W0 is complete
 (6 units) and W1 is complete through W1.8 (9 units). W1.9, W1.10, and all of
 W2 through W7 are open.
 

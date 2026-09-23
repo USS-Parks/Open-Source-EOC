@@ -10,7 +10,7 @@
 ## Decision making
 
 - Product scope and sequence are governed by the build roster
-  (`docs/process/VIRTUAL-EOC-PSPR-2026-09-17.md`). Changes to the roster are
+  (`docs/process/FINISH-PSPR-2026-09-22.md`). Changes to the roster are
   decisions of the lead maintainer, recorded by amendment in the roster
   itself and in the execution ledger.
 - Technical decisions inside a roster session are made by whoever executes

@@ -23,7 +23,7 @@ to name this document alone.
 | `VIRTUAL-EOC-PSPR-2026-09-17.md` | Archive. Historical. Its 46 prompts are all receipted. |
 | `VIRTUAL-EOC-PLATFORM-RESEARCH-2026-09-17.md` | Keep in place. Research basis, not a roster. |
 | `VEOC-PARITY-CONTINUATION-2026-09-20.md` | Archive, except rows 24 and 25, quoted in `W7` here. |
-| `VEOC-DESIGN-PSPR-2026-09-20.md` | Archive, except lines 495 to 517, quoted in `W7` here. |
+| `VEOC-DESIGN-PSPR-2026-09-20.md` | Archive, except its D33 to D35 prompts, quoted in `W7` here. |
 | `MASTER-PSPR-2026-09-21.md` | Archive. Its authority register and execution model carry forward in sections 1 and 8. |
 | `V1-PSPR-2026-09-22.md` | Archive. Its open units are restated in full in section 5 with their IDs unchanged. |
 | `VEOC-77-HANDOFF-PSPR-2026-09-20.md` | Archive. Complete. |

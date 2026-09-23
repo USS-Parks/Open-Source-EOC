@@ -22,9 +22,9 @@ Source inspection can establish structure and implemented behavior. It cannot es
 
 | Source | D00 use | Evidence limitation |
 |---|---|---|
-| `docs/process/MASTER-PSPR-2026-09-21.md`, sections 7.2, 8.1, 8.3, 8.5, and 10.2 | Authoritative engine/presentation split, exact implementation unit, dependencies, and file ownership | Scheduling and ownership source, not proof that a unit has landed |
-| `docs/process/VEOC-DESIGN-PSPR-2026-09-20.md`, sections 2 through 9 | Product boundaries, workspace model, component contract, D00 to D35 acceptance, reuse ledger | Approved requirement, not delivered behavior |
-| `docs/process/VIRTUAL-EOC-PSPR-2026-09-17.md`, sections 1 and 3 | Universal execution contract and product invariants | Governance source |
+| `docs/process/archive/MASTER-PSPR-2026-09-21.md`, sections 7.2, 8.1, 8.3, 8.5, and 10.2 | Authoritative engine/presentation split, exact implementation unit, dependencies, and file ownership | Scheduling and ownership source, not proof that a unit has landed |
+| `docs/process/archive/VEOC-DESIGN-PSPR-2026-09-20.md`, sections 2 through 9 | Product boundaries, workspace model, component contract, D00 to D35 acceptance, reuse ledger | Approved requirement, not delivered behavior |
+| `docs/process/archive/VIRTUAL-EOC-PSPR-2026-09-17.md`, sections 1 and 3 | Universal execution contract and product invariants | Governance source |
 | `docs/VEOC-PARITY-MATRIX.md` and `docs/FACET-STATUS.md` | Existing parity claims and open evidence distinctions | Status records must be reconciled to source and receipts before final release claims |
 | `web/src/app/**`, `web/src/cop/**`, `web/src/boards/**`, `web/src/dashboards/**`, `web/src/sitreps/**`, `web/src/design/**` | Current screen and component behavior | Source review only; no runtime viewport or assistive-technology exercise in D00 |
 | `Reference Screenshots/` in the canonical checkout | Fourteen local files supplied by Basho: three Open Source EOC concepts, four map-style references, three identical WebEOC AAR dashboard copies, two identical WebEOC checklist copies, one WebEOC IAP view, and one Esri-style map/dashboard/lifeline montage | Local user-owned inputs. Never staged. Vendor/reference images are direction, not proof of our implementation |

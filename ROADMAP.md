@@ -2,10 +2,11 @@
 
 ## Current program
 
-The [V1 PSPR](./docs/process/V1-PSPR-2026-09-22.md) is the approved execution
-authority. It begins after technical completion of the
-[Master PSPR](./docs/process/MASTER-PSPR-2026-09-21.md) and turns the current
-evaluation build into a county-deployable release.
+The [Finish PSPR](./docs/process/FINISH-PSPR-2026-09-22.md) is the approved
+execution authority and the only live roster. It turns the current evaluation
+build into a county-deployable release. The rosters it supersedes, including
+the Master PSPR and the V1 PSPR whose unit identifiers it keeps, are in
+[`docs/process/archive/`](./docs/process/archive/).
 
 The Master roster is complete through Phase 3 and M4. That establishes a
 substantial, tested application. It does not establish a live pilot,
@@ -35,7 +36,7 @@ not yet the version 1.0 release a county can install and operate unassisted.
 | Wave | Purpose | Current status |
 |---|---|---|
 | W0 | Close the Master roster and reconcile repository truth | Complete; gate passed 2026-09-22 |
-| W1 | Remove or relocate non-product and obsolete delivery surface | In progress; W1.0-W1.11 complete, W1.12 next |
+| W1 | Remove or relocate non-product and obsolete delivery surface | In progress; W1.0-W1.12 complete, W1.13 next |
 | W2 | Harden one real activation: queues, scheduling, scale, security, observability and retention | Not started |
 | W3 | Put an operator screen in front of delivered engines | Not started |
 | W4 | Add parity depth where engines or data are genuinely missing | Not started |
