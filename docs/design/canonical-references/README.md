@@ -16,21 +16,10 @@ relationships. Adapt narrow layouts without losing essential controls. Use
 real supported map data and truthful states; concept labels do not authorize
 inventing data, doctrine, participation or command authority.
 
-The original user-owned Reference Screenshots and design-previews directories
-remain untouched. These copies preserve the exact files attached in this task.
-
-## Full-resolution originals reaffirmed by Basho
-
-The following exact PNG copies preserve the three local files Basho named
-later in the same session. Prefer these for visual comparison; the JPGs above
-remain the original attachment receipt.
-
-- [Light overview original](01-overview-light-original.png):
-  Reference Screenshots/ChatGPT Image Sep 21, 2026, 06_10_07 AM.png.
-- [Dark overview original](02-overview-dark-original.png):
-  Reference Screenshots/ChatGPT Image Sep 21, 2026, 06_10_22 AM.png.
-- [Lifelines workspace original](03-lifelines-light-original.png):
-  Reference Screenshots/ChatGPT Image Sep 21, 2026, 06_10_27 AM.png.
+The original user-owned `Reference Screenshots` and `design-previews`
+directories remain untouched. The three committed JPGs above are the canonical
+repository copies. Superseded full-resolution PNG duplicates remain available
+in Git history rather than adding 4.8 MB to every checkout.
 
 ## California ESF requirement
 

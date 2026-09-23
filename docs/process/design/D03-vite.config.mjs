@@ -1,8 +1,8 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import webConfig from "../../web/vite.config.ts";
+import webConfig from "../../../web/vite.config.ts";
 
-const laneRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const laneRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const webModules = resolve(laneRoot, "web/node_modules");
 
 export default {

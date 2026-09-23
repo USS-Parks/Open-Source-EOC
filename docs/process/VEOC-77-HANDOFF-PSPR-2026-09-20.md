@@ -19,7 +19,7 @@ push, branch, install, or new data source: read the approval state per prompt.
    AI trailers, no branches or worktrees, commit and push each need Basho's
    distinct approval unless he grants session-wide express consent (he did
    for VEOC-77; ask again this session).
-2. The tail of `docs/VEOC-EXECUTION-LEDGER.md`: receipts VEOC-76, 76a, 77.
+2. The tail of `docs/process/VEOC-EXECUTION-LEDGER.md`: receipts VEOC-76, 76a, 77.
 3. `tools/basemap/README.md`: the basemap stack as it now stands.
 4. Basho's standing direction from this session, verbatim in spirit: he
    makes scope, sourcing, and tooling decisions, not the model. Put each such

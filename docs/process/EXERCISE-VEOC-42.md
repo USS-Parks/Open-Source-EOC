@@ -41,7 +41,7 @@ here contacts anyone or stands up anything outside this repository.
 | Standards interchange | EDXL, HAVE, CoT emitted and consumed | F20 |
 
 The full step-by-step is the scripted scenario in
-[DEMO-SCENARIO.md](./DEMO-SCENARIO.md), whose facet coverage is checked in CI.
+[DEMO-SCENARIO.md](../DEMO-SCENARIO.md), whose facet coverage is checked in CI.
 
 ## Data-collection plan
 

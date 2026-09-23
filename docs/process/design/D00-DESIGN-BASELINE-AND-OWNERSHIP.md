@@ -22,14 +22,14 @@ Source inspection can establish structure and implemented behavior. It cannot es
 
 | Source | D00 use | Evidence limitation |
 |---|---|---|
-| `docs/MASTER-PSPR-2026-09-21.md`, sections 7.2, 8.1, 8.3, 8.5, and 10.2 | Authoritative engine/presentation split, exact implementation unit, dependencies, and file ownership | Scheduling and ownership source, not proof that a unit has landed |
-| `docs/VEOC-DESIGN-PSPR-2026-09-20.md`, sections 2 through 9 | Product boundaries, workspace model, component contract, D00 to D35 acceptance, reuse ledger | Approved requirement, not delivered behavior |
-| `docs/VIRTUAL-EOC-PSPR-2026-09-17.md`, sections 1 and 3 | Universal execution contract and product invariants | Governance source |
+| `docs/process/MASTER-PSPR-2026-09-21.md`, sections 7.2, 8.1, 8.3, 8.5, and 10.2 | Authoritative engine/presentation split, exact implementation unit, dependencies, and file ownership | Scheduling and ownership source, not proof that a unit has landed |
+| `docs/process/VEOC-DESIGN-PSPR-2026-09-20.md`, sections 2 through 9 | Product boundaries, workspace model, component contract, D00 to D35 acceptance, reuse ledger | Approved requirement, not delivered behavior |
+| `docs/process/VIRTUAL-EOC-PSPR-2026-09-17.md`, sections 1 and 3 | Universal execution contract and product invariants | Governance source |
 | `docs/VEOC-PARITY-MATRIX.md` and `docs/FACET-STATUS.md` | Existing parity claims and open evidence distinctions | Status records must be reconciled to source and receipts before final release claims |
 | `web/src/app/**`, `web/src/cop/**`, `web/src/boards/**`, `web/src/dashboards/**`, `web/src/sitreps/**`, `web/src/design/**` | Current screen and component behavior | Source review only; no runtime viewport or assistive-technology exercise in D00 |
 | `Reference Screenshots/` in the canonical checkout | Fourteen local files supplied by Basho: three Open Source EOC concepts, four map-style references, three identical WebEOC AAR dashboard copies, two identical WebEOC checklist copies, one WebEOC IAP view, and one Esri-style map/dashboard/lifeline montage | Local user-owned inputs. Never staged. Vendor/reference images are direction, not proof of our implementation |
 | `docs/design-previews/2026-09-21/` in the canonical checkout | Light dashboard, dark dashboard, and ESF/Lifeline workspace concepts plus their generation prompts | Local untracked inputs, absent from this lane and never staged. All three images are synthetic design concepts, not delivered UI |
-| `docs/VIRTUAL-EOC-PLATFORM-RESEARCH-2026-09-17.md` | Product-level reference traits from Esri, WebEOC/Juvare, COBRA, and Microsoft Teams EOC | Research basis, not a pixel specification or current vendor acceptance result |
+| `docs/process/VIRTUAL-EOC-PLATFORM-RESEARCH-2026-09-17.md` | Product-level reference traits from Esri, WebEOC/Juvare, COBRA, and Microsoft Teams EOC | Research basis, not a pixel specification or current vendor acceptance result |
 
 The three Open Source EOC images under `Reference Screenshots/` visually match the three canonical design concepts inspected under `docs/design-previews/2026-09-21/`. D03 must inventory them as local inputs and build only missing repository-resident compositions as coded gallery pages with mock data labeled as mock.
 

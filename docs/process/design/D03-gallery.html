@@ -11,7 +11,7 @@
   <body>
     <div id="composition-review-root"></div>
     <script type="module">
-      import { mountCompositionReview } from "../../web/design-review/gallery.tsx";
+      import { mountCompositionReview } from "../../../web/design-review/gallery.tsx";
       const root = document.querySelector("#composition-review-root");
       if (!root) throw new Error("Composition review root is missing");
       mountCompositionReview(root);

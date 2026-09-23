@@ -5091,3 +5091,29 @@ increment proves it and that coverage follows the incident area.
   schema, dependency or operator behavior changed. Next: W1.7, restructure the
   documentation tree and remove the superseded canonical-reference PNG
   originals while preserving the authoritative JPGs.
+
+## V1 W1.7: put role guidance before process history
+
+- **Entry point:** added `docs/README.md` with the operator, viewer, field,
+  administrator, designer, federation and standards guides first, followed by
+  install, security, architecture, product-status and process references.
+- **Process boundary:** moved 17 planning, receipt, handoff, research and audit
+  documents into `docs/process/`. Moved all 20 design-process files into
+  `docs/process/design/`. `docs/design/` now retains only the canonical visual
+  reference package.
+- **Canonical assets:** retained the exact three authoritative JPGs and their
+  recorded SHA-256 values. Removed the three superseded full-resolution PNG
+  duplicates, reducing every checkout by 4,785,878 bytes; Git history remains
+  the recovery path. User-owned `Reference Screenshots/` and
+  `docs/design-previews/` were not touched or staged.
+- **References:** updated repository governance links, active plan and receipt
+  paths, role-guide links, design gallery imports and the moved Vite review
+  root. Completed historical path statements remain history where they describe
+  the tree at the time of execution.
+- **Verification:** all 66 tracked Markdown files passed the relative-link
+  checker; the moved Vite config parsed; recursive TypeScript and full ESLint
+  passed; the license scan passed all 300 packages; and `git diff --check` is
+  clean. The canonical JPG hashes still match their recorded receipts.
+- **Result:** W1.7 is complete. No application source, route, schema,
+  dependency or runtime behavior changed. Next: W1.8, replace the pre-release
+  migration chain with one guarded baseline.

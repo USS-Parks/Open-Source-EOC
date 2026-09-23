@@ -32,7 +32,7 @@ This is the sole top-level execution roster for the Virtual EOC side project. It
 ## 1. Universal execution contract
 
 Note, 2026-09-21: under the approved Master PSPR
-(`docs/MASTER-PSPR-2026-09-21.md`), item 6 applies per lane: each lane
+(`docs/process/MASTER-PSPR-2026-09-21.md`), item 6 applies per lane: each lane
 executes one unit at a time and work lands on `main` in dependency order
 through one integrator. Items 3 and 4 are unchanged; Basho's standing grant
 for `lane/*` worktrees is recorded in `CLAUDE.md`. INV-8 is read with the
@@ -60,7 +60,7 @@ Every session executor must obey all of the following:
 
 ## 2. Required session receipt
 
-At the end of every prompt, append a receipt to `docs/VEOC-EXECUTION-LEDGER.md` in the project repository containing:
+At the end of every prompt, append a receipt to `docs/process/VEOC-EXECUTION-LEDGER.md` in the project repository containing:
 
 - session ID, title, UTC and local timestamps, starting and ending HEAD;
 - facet IDs (F1-F20), requirement IDs (R1-R6), and anti-requirement IDs (AR1-AR7) addressed, with disposition (`open`, `implemented`, `verified`, or `deferred`);
@@ -142,7 +142,7 @@ Anti-requirements AR1-AR7 map to invariants INV-1..INV-9 as annotated in section
 
 ### VEOC-00: Freeze the baseline and create the execution ledger
 
-**Prompt:** In the project repository, resolve HEAD, branch, remotes, toolchain versions (Node, pnpm, Rust, Python), and hash this roster and the research document. Create `docs/VEOC-EXECUTION-LEDGER.md` and `docs/FACET-STATUS.md` (F1-F20, R1-R6, AR1-AR7, INV-1..10, all `open`) without touching product code. Record any pre-existing user changes separately.
+**Prompt:** In the project repository, resolve HEAD, branch, remotes, toolchain versions (Node, pnpm, Rust, Python), and hash this roster and the research document. Create `docs/process/VEOC-EXECUTION-LEDGER.md` and `docs/FACET-STATUS.md` (F1-F20, R1-R6, AR1-AR7, INV-1..10, all `open`) without touching product code. Record any pre-existing user changes separately.
 
 **Acceptance:** The baseline is reconstructible; every facet maps to one primary session; the receipt records that no commit, push, or branch action occurred.
 

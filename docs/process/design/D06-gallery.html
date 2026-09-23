@@ -9,8 +9,8 @@
   <body>
     <div id="kit-review-root"></div>
     <script type="module">
-      import "../../web/src/design/base.css";
-      import { mountKitReview } from "../../web/design-review/kit-gallery.tsx";
+      import "../../../web/src/design/base.css";
+      import { mountKitReview } from "../../../web/design-review/kit-gallery.tsx";
       const root = document.querySelector("#kit-review-root");
       if (!root) throw new Error("Component review root is missing");
       mountKitReview(root);

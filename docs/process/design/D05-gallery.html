@@ -9,8 +9,8 @@
   <body>
     <div id="d05-icon-root"></div>
     <script type="module">
-      import "../../web/src/design/base.css";
-      import { mountIconGallery } from "../../web/design-review/IconGallery.tsx";
+      import "../../../web/src/design/base.css";
+      import { mountIconGallery } from "../../../web/design-review/IconGallery.tsx";
       const root = document.querySelector("#d05-icon-root");
       if (!root) throw new Error("D05 icon root is missing");
       mountIconGallery(root);

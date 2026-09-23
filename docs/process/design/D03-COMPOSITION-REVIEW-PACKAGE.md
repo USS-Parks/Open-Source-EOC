@@ -12,7 +12,7 @@ The package has three parts:
 
 - Supplied Overview and ESF/Lifeline concept images, inventoried below as synthetic design references.
 - Missing compositions implemented in the isolated `CompositionReview` export in `web/design-review/gallery.tsx`.
-- `docs/design/D03-gallery.html`, a separate Vite entry that mounts the review export without changing `App.tsx`, `main.tsx`, or the operational application.
+- `docs/process/design/D03-gallery.html`, a separate Vite entry that mounts the review export without changing `App.tsx`, `main.tsx`, or the operational application.
 
 Every record in the coded gallery is synthetic. Controls are interactive review props only and perform no application or network write. Generic inline map symbols and icons are proposals, not NAPSG symbols.
 
@@ -106,13 +106,13 @@ FOUO and other handling markings remain persistent when incident policy metadata
 From lane `d`, start only the local Vite server:
 
 ```powershell
-pnpm --filter @openeoc/web exec vite .. --config ../docs/design/D03-vite.config.mjs --host 127.0.0.1 --port 5175 --strictPort
+pnpm --filter @openeoc/web exec vite .. --config ../docs/process/design/D03-vite.config.mjs --host 127.0.0.1 --port 5175 --strictPort
 ```
 
 Open:
 
 ```text
-http://127.0.0.1:5175/docs/design/D03-gallery.html
+http://127.0.0.1:5175/docs/process/design/D03-gallery.html
 ```
 
 Use the Screen selector, theme control, and `Preview 390 px` control. The narrow All sections button opens the complete D02 navigation sheet. The review page needs no database and makes no external request.

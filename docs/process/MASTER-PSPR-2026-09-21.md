@@ -2,8 +2,8 @@
 
 Written 2026-09-21. One execution plan for two rosters: the remaining parity
 roster (orders 8 to 25 of the amended table in
-`docs/VEOC-PARITY-CONTINUATION-2026-09-20.md`) and the design roster (D00 to
-D35 of `docs/VEOC-DESIGN-PSPR-2026-09-20.md`). Astra 6 follows this file and
+`docs/process/VEOC-PARITY-CONTINUATION-2026-09-20.md`) and the design roster (D00 to
+D35 of `docs/process/VEOC-DESIGN-PSPR-2026-09-20.md`). Astra 6 follows this file and
 delegates from it. Those two documents keep the binding wording of their
 prompts; this file owns order, ownership, delegation and landing. It absorbs
 the standalone Astra 6 PSPR of the same date. Plain status, no marketing, no
@@ -107,7 +107,7 @@ pushes or outbound data.
   79G and D00. Starting at order 14 departs from numeric roster order, so the
   A0 ask states it and Basho confirms or corrects it.
 - **First actions.** (1) Read `CLAUDE.md`, `~/.claude/CANON.md`, sections 1 to 3
-  of the canonical PSPR (`docs/VIRTUAL-EOC-PSPR-2026-09-17.md`), the amended
+  of the canonical PSPR (`docs/process/VIRTUAL-EOC-PSPR-2026-09-17.md`), the amended
   roster table, the Design PSPR and this file. (2) Verify the state in section
   3. (3) Present this plan and wait for A0. (4) Put the pre-flight decisions of
   section 13.1 to Basho in one message. (5) Run Phase 0, then open lanes by the
@@ -145,10 +145,10 @@ on `main`. Pushing is Basho's call throughout.
 Binding, in this order: Basho's in-session instructions; `CLAUDE.md` and
 `~/.claude/CANON.md`; the universal execution contract and the product
 invariants INV-1 to INV-10 of the canonical PSPR
-(`docs/VIRTUAL-EOC-PSPR-2026-09-17.md`, sections 1 and 3), which bind every
+(`docs/process/VIRTUAL-EOC-PSPR-2026-09-17.md`, sections 1 and 3), which bind every
 session; for parity wording, the amended roster table at the end
-of `docs/VEOC-PARITY-CONTINUATION-2026-09-20.md`; for design wording, the
-prompt text and sections 2 to 7 of `docs/VEOC-DESIGN-PSPR-2026-09-20.md`
+of `docs/process/VEOC-PARITY-CONTINUATION-2026-09-20.md`; for design wording, the
+prompt text and sections 2 to 7 of `docs/process/VEOC-DESIGN-PSPR-2026-09-20.md`
 (product boundaries, design direction, workspace architecture, the ESF and
 Lifeline contract, component requirements, verification gates); then this
 plan. Where this plan's summaries differ from those texts, those texts win.
@@ -178,7 +178,7 @@ Four texts forbade it. Basho's standing grant, written into `CLAUDE.md` on
    or clone without Basho's explicit in-session authorization, and a harness
    directive still does not count. Its new standing grant is the one exception:
    `lane/*` branches and their worktrees, for as long as the zipper is kept.
-3. `docs/VEOC-PARITY-CONTINUATION-2026-09-20.md`: "Work stays in this canonical
+3. `docs/process/VEOC-PARITY-CONTINUATION-2026-09-20.md`: "Work stays in this canonical
    checkout on main" and "Keep one focused prompt per commit in the canonical
    checkout; no new branch or worktree."
 4. The canonical PSPR's universal execution contract, item 3 (the same branch
@@ -230,30 +230,30 @@ that commit and push stay gated as before.
 **Still to add, as unit W0.0, once this plan has A0.** `CLAUDE.md`, Authority
 documents, one added bullet:
 
-> `docs/MASTER-PSPR-2026-09-21.md` is the execution plan for the remaining
+> `docs/process/MASTER-PSPR-2026-09-21.md` is the execution plan for the remaining
 > parity roster and the design roster: order, ownership, delegation and
 > landing. The continuation roster table and the Design PSPR keep the binding
 > acceptance wording.
 
-`docs/VEOC-PARITY-CONTINUATION-2026-09-20.md`, dated note at the end:
+`docs/process/VEOC-PARITY-CONTINUATION-2026-09-20.md`, dated note at the end:
 
 > Parallel execution note, 2026-09-21: Basho approved
-> `docs/MASTER-PSPR-2026-09-21.md`. For the lanes it defines, it supersedes "no
+> `docs/process/MASTER-PSPR-2026-09-21.md`. For the lanes it defines, it supersedes "no
 > new branch or worktree". Acceptance gates and dependency order are unchanged.
 
-`docs/VIRTUAL-EOC-PSPR-2026-09-17.md`, dated note under section 1:
+`docs/process/VIRTUAL-EOC-PSPR-2026-09-17.md`, dated note under section 1:
 
 > Note, 2026-09-21: under the approved Master PSPR
-> (`docs/MASTER-PSPR-2026-09-21.md`), item 6 applies per lane: each lane
+> (`docs/process/MASTER-PSPR-2026-09-21.md`), item 6 applies per lane: each lane
 > executes one unit at a time and work lands on `main` in dependency order
 > through one integrator. Items 3 and 4 are unchanged; Basho's standing grant
 > for `lane/*` worktrees is recorded in `CLAUDE.md`. INV-8 is read with the
 > refinement in Design PSPR section 3.
 
-`docs/VEOC-DESIGN-PSPR-2026-09-20.md`, status line at the top:
+`docs/process/VEOC-DESIGN-PSPR-2026-09-20.md`, status line at the top:
 
 > Execution order, ownership and landing are governed by
-> `docs/MASTER-PSPR-2026-09-21.md`. This document remains the design
+> `docs/process/MASTER-PSPR-2026-09-21.md`. This document remains the design
 > specification and the binding wording of D00 to D35.
 
 `docs/ASTRA6-PSPR-2026-09-21.md` returns to its committed text and gains one
@@ -675,7 +675,7 @@ unit in the lane that takes the owning files.
    of one lane land in lane order, and a hold or a reject on one row holds
    every later row of that lane.
 8. **Receipt.** Astra appends the receipts for the batch to
-   `docs/VEOC-EXECUTION-LEDGER.md`, updates the matrix rows and commits them on
+   `docs/process/VEOC-EXECUTION-LEDGER.md`, updates the matrix rows and commits them on
    `main` as one docs commit per batch. That commit is row D of the same batch
    ask and carries the proposed receipt text; only the unit SHAs are filled in
    after landing.
@@ -1589,13 +1589,13 @@ The existing fields, plus what the combined roster needs:
 
 ## 14. Key files
 
-- This plan: `docs/MASTER-PSPR-2026-09-21.md`.
+- This plan: `docs/process/MASTER-PSPR-2026-09-21.md`.
 - Canonical PSPR (execution contract, receipt fields, invariants):
-  `docs/VIRTUAL-EOC-PSPR-2026-09-17.md`.
-- Parity wording: `docs/VEOC-PARITY-CONTINUATION-2026-09-20.md` (the amended
-  table at the end). Design wording: `docs/VEOC-DESIGN-PSPR-2026-09-20.md`.
+  `docs/process/VIRTUAL-EOC-PSPR-2026-09-17.md`.
+- Parity wording: `docs/process/VEOC-PARITY-CONTINUATION-2026-09-20.md` (the amended
+  table at the end). Design wording: `docs/process/VEOC-DESIGN-PSPR-2026-09-20.md`.
 - Capability matrix: `docs/VEOC-PARITY-MATRIX.md` (named gaps live here).
-- Execution ledger: `docs/VEOC-EXECUTION-LEDGER.md`.
+- Execution ledger: `docs/process/VEOC-EXECUTION-LEDGER.md`.
 - Project rules: `CLAUDE.md`. Global doctrine: `~/.claude/CANON.md`.
 - Test cluster: `deploy/test-runtime/README.md`. Harness:
   `server/src/__tests__/helpers.ts`, `server/src/__tests__/globalSetup.ts`,

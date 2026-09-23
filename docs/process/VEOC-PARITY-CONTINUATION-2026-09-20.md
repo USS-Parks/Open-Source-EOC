@@ -275,5 +275,5 @@ Completion requires the included capability matrix, operator scenarios and
 release evidence to agree; remaining gaps must be explicit in the disposition.
 
 Parallel execution note, 2026-09-21: Basho approved
-`docs/MASTER-PSPR-2026-09-21.md`. For the lanes it defines, it supersedes "no
+`docs/process/MASTER-PSPR-2026-09-21.md`. For the lanes it defines, it supersedes "no
 new branch or worktree". Acceptance gates and dependency order are unchanged.

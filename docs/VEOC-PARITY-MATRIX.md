@@ -11,7 +11,7 @@ This matrix reconciles [FACET-STATUS.md](./FACET-STATUS.md): its `verified`
 labels recorded earlier implementation gates, not demonstrated commercial-
 product parity. Where local behavior is a completed increment but not full
 parity, the status here is `partial` with the owning prompt named. Historical
-receipts in [VEOC-EXECUTION-LEDGER.md](./VEOC-EXECUTION-LEDGER.md) are not
+receipts in [VEOC-EXECUTION-LEDGER.md](./process/VEOC-EXECUTION-LEDGER.md) are not
 rewritten; overbroad status claims are corrected here, not erased there.
 
 ## Scope, exclusions, and rules

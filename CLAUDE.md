@@ -2,11 +2,11 @@
 
 ## Authority documents
 
-- `docs/V1-PSPR-2026-09-22.md` is the current approved execution plan: order, ownership, gates and landing from the evaluation build to version 1.0.
-- `docs/MASTER-PSPR-2026-09-21.md` is technically complete through M4. It preserves the completed parity/design roster and the acceptance wording carried into V1.
-- `docs/VIRTUAL-EOC-PSPR-2026-09-17.md` is the original Plan / Sequential Prompt Roster. Its universal execution contract remains binding where the later plans do not supersede it.
-- `docs/VIRTUAL-EOC-PLATFORM-RESEARCH-2026-09-17.md` is the research basis behind the roster.
-- Session receipts append to `docs/VEOC-EXECUTION-LEDGER.md` (created by VEOC-00).
+- `docs/process/V1-PSPR-2026-09-22.md` is the current approved execution plan: order, ownership, gates and landing from the evaluation build to version 1.0.
+- `docs/process/MASTER-PSPR-2026-09-21.md` is technically complete through M4. It preserves the completed parity/design roster and the acceptance wording carried into V1.
+- `docs/process/VIRTUAL-EOC-PSPR-2026-09-17.md` is the original Plan / Sequential Prompt Roster. Its universal execution contract remains binding where the later plans do not supersede it.
+- `docs/process/VIRTUAL-EOC-PLATFORM-RESEARCH-2026-09-17.md` is the research basis behind the roster.
+- Session receipts append to `docs/process/VEOC-EXECUTION-LEDGER.md` (created by VEOC-00).
 
 ## CRITICAL: Branch & Worktree Authority (CANON, set by Basho, 2026-09-17)
 
@@ -34,7 +34,7 @@ branches need no per-session or per-wave re-approval. Everything outside this
 grant still falls under the rule above.
 
 - Fan-out runs only under a plan Basho has approved for execution. The current
-  plan is `docs/V1-PSPR-2026-09-22.md`; it carries forward the Master PSPR's
+  plan is `docs/process/V1-PSPR-2026-09-22.md`; it carries forward the Master PSPR's
   zipper where its execution model permits parallel lanes.
 - Scope: branches named `lane/*` and their worktrees, created by the
   integrating session outside the canonical checkout, and their removal once

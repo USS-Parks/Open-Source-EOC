@@ -4,7 +4,7 @@
 
 **Status:** Implemented in the additive design seam; verification evidence is recorded below.
 
-**Binding visual reference:** [Lifelines workspace](canonical-references/03-lifelines-light.jpg) governs the compact right-side drawer, teal primary action, grouped detail density, and responsive stacking. D08 does not replace the reference composition.
+**Binding visual reference:** [Lifelines workspace](../../design/canonical-references/03-lifelines-light.jpg) governs the compact right-side drawer, teal primary action, grouped detail density, and responsive stacking. D08 does not replace the reference composition.
 
 ## 1. Reuse and authority
 
@@ -71,7 +71,7 @@ When `unsaved` is true, close attempts open an alert dialog. “Keep editing” 
 Open [D08-gallery.html](D08-gallery.html) through the root-controlled preview:
 
 ```text
-http://127.0.0.1:5175/docs/design/D08-gallery.html
+http://127.0.0.1:5175/docs/process/design/D08-gallery.html
 ```
 
 The machine-specific browser script was retired during the V1 consolidation.

@@ -2,7 +2,7 @@
 
 **Initiative:** A unified visual identity and operator experience combining Esri's geographic situational awareness with WebEOC's operational coordination, with a measurable ambition of substantially faster workflows.
 
-**Status:** Approved for execution through Basho's Master PSPR approval on 2026-09-21. Execution order, ownership and landing are governed by `docs/MASTER-PSPR-2026-09-21.md`. This document remains the design specification and the binding wording of D00 to D35. The prior publication approval alone did not authorize implementation.
+**Status:** Approved for execution through Basho's Master PSPR approval on 2026-09-21. Execution order, ownership and landing are governed by `docs/process/MASTER-PSPR-2026-09-21.md`. This document remains the design specification and the binding wording of D00 to D35. The prior publication approval alone did not authorize implementation.
 
 **Scope:** The authenticated California-wide application, including its dashboard, navigation, maps, operational workspaces, forms, icons, branding, reports, and field experience.
 
@@ -22,7 +22,7 @@ Related authority documents:
 - [Canonical PSPR](./VIRTUAL-EOC-PSPR-2026-09-17.md).
 - [Current implementation continuation](./VEOC-PARITY-CONTINUATION-2026-09-20.md).
 - [Execution ledger](./VEOC-EXECUTION-LEDGER.md).
-- [Facet status register](./FACET-STATUS.md).
+- [Facet status register](../FACET-STATUS.md).
 - Supplied reference screenshots are local user-owned inputs, not published assets. The local path is `Reference Screenshots/`.
 
 The ownership rules are:

@@ -4,7 +4,7 @@
 
 **Status:** Implemented in the additive design seam; verification evidence is recorded below.
 
-**Binding visual references:** [light overview](canonical-references/01-overview-light.jpg), [dark overview](canonical-references/02-overview-dark.jpg), and [light Lifelines workspace](canonical-references/03-lifelines-light.jpg). These images govern component shape, density, surface treatment, selection, and placement.
+**Binding visual references:** [light overview](../../design/canonical-references/01-overview-light.jpg), [dark overview](../../design/canonical-references/02-overview-dark.jpg), and [light Lifelines workspace](../../design/canonical-references/03-lifelines-light.jpg). These images govern component shape, density, surface treatment, selection, and placement.
 
 **Scope:** Reusable presentation components only. No route, workflow, persistence, authority, or operational engine is introduced.
 
@@ -78,7 +78,7 @@ P-SHELL and each operational surface must use the canonical images directly when
 Open [D06-gallery.html](D06-gallery.html) through the existing local Vite review server:
 
 ```text
-http://127.0.0.1:5175/docs/design/D06-gallery.html
+http://127.0.0.1:5175/docs/process/design/D06-gallery.html
 ```
 
 The machine-specific browser script was retired during the V1 consolidation.

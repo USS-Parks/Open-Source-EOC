@@ -12,7 +12,7 @@ Statuses are `verified`, `partial`, `open`, `deferred`, or `risk-accepted`.
 It does not mean commercial certification, pilot acceptance, or live external
 integration. Every `partial` and `open` row names its remaining boundary and
 the V1 owner. The design side is reconciled separately in the
-[design capability matrix](./design/D00-DESIGN-BASELINE-AND-OWNERSHIP.md#10-current-design-to-capability-reconciliation-2026-09-22).
+[design capability matrix](./process/design/D00-DESIGN-BASELINE-AND-OWNERSHIP.md#10-current-design-to-capability-reconciliation-2026-09-22).
 
 Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 

@@ -64,7 +64,7 @@ All D05 path geometry is original Open Source EOC artwork, distributed under the
 Apache-2.0 license. The retained canonical photographs inform scale, weight, and recognizable
 concepts; the icon paths are not traced or copied from external icon files.
 
-The visual authority remains the [canonical reference set](canonical-references/README.md):
+The visual authority remains the [canonical reference set](../../design/canonical-references/README.md):
 `01-overview-light.jpg`, `02-overview-dark.jpg`, and `03-lifelines-light.jpg`. The isolated gallery
 reviews the implementation against that authority; it does not replace or supersede the references.
 
@@ -74,7 +74,7 @@ replace those map symbols.
 
 ## Review fixture
 
-Open `/docs/design/D05-gallery.html` through the existing D03 Vite review server. The fixture shows
+Open `/docs/process/design/D05-gallery.html` through the existing D03 Vite review server. The fixture shows
 all navigation icons, all eight lifelines, light and dark themes, meaningful and decorative
 accessibility modes, and independent selected, disabled, and status examples.
 

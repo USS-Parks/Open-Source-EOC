@@ -25,10 +25,10 @@ commercial-parity certification.
 
 ## Governance and current truth
 
-- `docs/V1-PSPR-2026-09-22.md` is the current approved execution roster.
-- `docs/MASTER-PSPR-2026-09-21.md` records the completed technical roster and
+- `docs/process/V1-PSPR-2026-09-22.md` is the current approved execution roster.
+- `docs/process/MASTER-PSPR-2026-09-21.md` records the completed technical roster and
   the acceptance work that carries forward.
-- `docs/VEOC-EXECUTION-LEDGER.md` contains prompt receipts and evidence.
+- `docs/process/VEOC-EXECUTION-LEDGER.md` contains prompt receipts and evidence.
 - `docs/VEOC-PARITY-MATRIX.md` and `docs/FACET-STATUS.md` contain current
   capability status and explicit remaining boundaries.
 - `docs/design/canonical-references/` is the visual authority.

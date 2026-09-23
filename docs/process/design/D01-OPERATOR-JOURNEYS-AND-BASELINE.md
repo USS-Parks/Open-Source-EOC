@@ -15,7 +15,7 @@ No licensed Esri, WebEOC/Juvare, COBRA, or Microsoft Teams EOC comparison enviro
 The fixture data was synthetic and local, and external network requests were
 blocked. The machine-specific script was retired during the V1 consolidation
 so it cannot become a permanent regression test for the old interface. The
-compact durable receipt is `docs/design/D01-baseline.metrics.json`; the full
+compact durable receipt is `docs/process/design/D01-baseline.metrics.json`; the full
 raw result and corrected run log remain in the ignored canonical runtime
 evidence directory.
 

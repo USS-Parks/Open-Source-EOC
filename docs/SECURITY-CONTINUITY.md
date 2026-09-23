@@ -5,8 +5,8 @@ implements, and the knobs that tune them. Every control here is enforced in
 code and covered by a test in CI; this document points at where. It complements
 the deeper audit and capacity records:
 
-- [SECURITY-AUDIT-VEOC-37.md](./SECURITY-AUDIT-VEOC-37.md) — the adversarial audit.
-- [CAPACITY-VEOC-38.md](./CAPACITY-VEOC-38.md) — load, latency, and headroom.
+- [SECURITY-AUDIT-VEOC-37.md](./process/SECURITY-AUDIT-VEOC-37.md) — the adversarial audit.
+- [CAPACITY-VEOC-38.md](./process/CAPACITY-VEOC-38.md) — load, latency, and headroom.
 - [../deploy/README.md](../deploy/README.md) — deployment, backup, and restore.
 
 ## Transport and response headers

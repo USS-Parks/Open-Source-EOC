@@ -1,8 +1,8 @@
 # D04 semantic tokens and identity placement
 
-**Prompt:** D04  
-**Status:** Implemented in the design seam; static and browser evidence is recorded below.  
-**Decision source:** G-A approved the D03 recommended defaults without overrides.  
+**Prompt:** D04
+**Status:** Implemented in the design seam; static and browser evidence is recorded below.
+**Decision source:** G-A approved the D03 recommended defaults without overrides.
 **Scope:** Shared design tokens, semantic CSS, focused design tests, and a review-only gallery. This does not redesign the operational application shell.
 
 ## 1. Settled visual vocabulary
@@ -26,7 +26,7 @@ The compass shown in the review gallery is a local typographic placeholder for t
 | Charts | six theme-specific categorical colors | Labeled series; never condition or severity |
 | Conditions | normal, watch, critical, unknown, stale, unavailable, not applicable, zero | Text, marker, treatment, foreground, and background travel together |
 
-The implementation extends [tokens.ts](../../web/src/design/tokens.ts) and keeps every prior export and `ThemeTokens` field. [base.css](../../web/src/design/base.css) consumes the new CSS variables without changing current component APIs.
+The implementation extends [tokens.ts](../../../web/src/design/tokens.ts) and keeps every prior export and `ThemeTokens` field. [base.css](../../../web/src/design/base.css) consumes the new CSS variables without changing current component APIs.
 
 ## 3. Operational and data-state meaning
 
@@ -65,7 +65,7 @@ FOUO or other handling markings remain persistent shell context under P-SHELL an
 
 ## 6. Review surface
 
-The additive [TokenReview](../../web/design-review/gallery.tsx) export leaves the D03 `CompositionReview` and original component gallery intact. It displays:
+The additive [TokenReview](../../../web/design-review/gallery.tsx) export leaves the D03 `CompositionReview` and original component gallery intact. It displays:
 
 - product, organization, incident, and operational-period hierarchy;
 - neutral surface and brand swatches;
@@ -77,7 +77,7 @@ The additive [TokenReview](../../web/design-review/gallery.tsx) export leaves th
 Open the dedicated [D04 gallery entry](D04-gallery.html) through the already-running local Vite review server:
 
 ```text
-http://127.0.0.1:5175/docs/design/D04-gallery.html
+http://127.0.0.1:5175/docs/process/design/D04-gallery.html
 ```
 
 The machine-specific browser script was retired during the V1 consolidation.
@@ -103,7 +103,7 @@ Actual output and captures are in `deploy/test-runtime/out/d04-review/browser.lo
 
 ### Canonical-reference correction, 2026-09-21
 
-Basho reaffirmed the [three exact canonical photos](canonical-references/README.md).
+Basho reaffirmed the [three exact canonical photos](../../design/canonical-references/README.md).
 Photo 2 requires blue-navy dark surfaces. The initial charcoal values are
 superseded by canvas `#0b1b2b`, surface `#142738`, raised `#193044`, sunken
 `#091624` and overlay `#20374b`; operational and brand meanings stay intact.

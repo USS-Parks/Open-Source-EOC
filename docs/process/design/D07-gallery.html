@@ -9,8 +9,8 @@
   <body>
     <div id="d07-review-root"></div>
     <script type="module">
-      import "../../web/src/design/base.css";
-      import { mountOperationalTableReview } from "../../web/design-review/table-gallery.tsx";
+      import "../../../web/src/design/base.css";
+      import { mountOperationalTableReview } from "../../../web/design-review/table-gallery.tsx";
       const root = document.querySelector("#d07-review-root");
       if (!root) throw new Error("Operational table review root is missing");
       mountOperationalTableReview(root);

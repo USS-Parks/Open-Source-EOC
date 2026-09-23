@@ -4,7 +4,7 @@
 
 This unit implements the responsive application frame defined by D09 while preserving every current route and surface engine. It establishes the shared command bar, grouped navigation, page header, workspace arrangements, context drawer, and notification entry point. Persistent context, saved layout preferences, deep-link state, filter restoration, and browser Back behavior remain in the immediately following P-SHELL-CONTEXT unit.
 
-The visual proportions follow the canonical references in [`canonical-references`](canonical-references/README.md): navy command and navigation regions, restrained typography, teal selection and actions, compact information density, and a 340 px context drawer. The frame uses the original local compass geometry with provenance recorded in [`ASSET-LICENSES.md`](../ASSET-LICENSES.md).
+The visual proportions follow the canonical references in [`canonical-references`](../../design/canonical-references/README.md): navy command and navigation regions, restrained typography, teal selection and actions, compact information density, and a 340 px context drawer. The frame uses the original local compass geometry with provenance recorded in [`ASSET-LICENSES.md`](../../ASSET-LICENSES.md).
 
 ## Reuse contract
 

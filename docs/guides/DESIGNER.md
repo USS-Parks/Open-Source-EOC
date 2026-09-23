@@ -50,4 +50,4 @@ instances. Trust of the signing key and local import authority are still
 required; package exchange does not share operational records.
 
 For the timed walkthrough, see
-[the designer usability script](../DESIGNER-USABILITY-SCRIPT.md).
+[the designer usability script](../process/DESIGNER-USABILITY-SCRIPT.md).

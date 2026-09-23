@@ -12,7 +12,7 @@ import { freshDb, seedIdentity, type Sql } from "./helpers.js";
  * records still serves a view quickly, and a 150-operation concurrent burst
  * (mixed reads and writes, the shape of a 150-user activation) completes
  * within budget. Budgets are generous so CI variance never flakes; the
- * measured numbers are printed and published in docs/CAPACITY-VEOC-38.md.
+ * measured numbers are printed and published in the capacity receipt under docs/process.
  */
 
 // Budgets: deliberately loose ceilings that only a pathological regression
