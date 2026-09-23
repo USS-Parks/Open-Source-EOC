@@ -40,7 +40,7 @@ describe("API contract", () => {
   });
 
   it("gives every REST endpoint a declared auth mode", () => {
-    const modes = new Set(["bearer", "peer-token", "feed-token", "intake-token", "none"]);
+    const modes = new Set(["bearer", "peer-token", "feed-token", "intake-token", "metrics-token", "none"]);
     for (const e of API_CONTRACT.rest) {
       expect(modes.has(e.auth), `${e.method} ${e.path} has auth ${e.auth}`).toBe(true);
     }
