@@ -1902,3 +1902,38 @@ tagging remain separately gated as section 1 of the roster states.
 - **Deferred, needing engine routes:** a list of notification rules and a
   messaging settings read.
 - **Rollback:** revert the commit.
+
+## V1 W3 milestone gate
+
+- **Command:** `pnpm check:gate` with `OPENEOC_TEST_DB_TAG=gate` on `dfa4262`,
+  with four lanes running on the same host.
+- **Static gates:** TypeScript, ESLint, license scan, link checker, advisory
+  gate (0 high or critical) and the desktop and installer tests all green.
+- **Serial suite, red then resolved, stated plainly.** 223 of 228 files and
+  1,246 of 1,258 tests passed in 1,274 seconds. Five files did not:
+  - Two files, `boards-designer-browser` and `saved-dashboard-engine`, lost
+    their test worker to a Windows fast-fail (exit code 3221226505,
+    0xC0000409) at startup, the same host failure seen at the W1 gate.
+  - Two browser walks, `app-e2e` "restores scoped workspace context" and
+    `incident-workspace-browser` "responsive workspace proof", failed on
+    timing under load.
+  - `authorized-viewing-browser` "shows only the partner's host incident data"
+    failed on an assertion.
+  Per HZ-C the five were re-run alone and serial: four passed, 14 tests. The
+  authorized viewing walk failed again the same way, so it was a real
+  regression, not load.
+- **The regression and its fix.** W3.12 added a jurisdiction dashboards panel
+  to the Overview screen and rendered it for everyone given a jurisdiction,
+  including an authorized partner viewer who is not a member of it. On a
+  dashboard the partner may not open, the panel still listed the host's
+  dashboard titles, so the walk's assertion that no dashboard content shows
+  there found two. It was not a disclosure of the refused dashboard: the
+  titles belonged to the dashboard the partner is authorized for. The console
+  now gives the panel the jurisdiction only when the signed-in person is a
+  member of it, so a partner sees only the dashboards shared with their
+  incident. The authorized viewing, operator screens and dashboard browser
+  walks and every web app test then passed 151 of 151.
+- **Route coverage:** every operator route has a caller or a recorded reason;
+  the only awaiting entry is local board fields, owed by W4.1 part two.
+- **Result:** wave W3 is complete: W3.0 through W3.13 are receipted and on
+  `origin/main`, and the gate is green after the recorded fix.

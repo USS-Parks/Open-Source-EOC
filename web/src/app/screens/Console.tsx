@@ -547,7 +547,10 @@ function Center(props: {
             props.onDashboardContext({ ...props.routeContext, filter: filterState });
           }}
           onOpenMap={() => props.onNavigate({ kind: "map" })}
-          jurisdictionId={props.jurisdictionId}
+          // The jurisdiction's own dashboard list is for its members; a partner
+          // viewer sees only the dashboards shared with their incident.
+          {...(props.memberships.some((m) => m.jurisdictionId === props.jurisdictionId)
+            ? { jurisdictionId: props.jurisdictionId } : {})}
           isAdmin={props.isAdmin}
           onDashboardsChanged={props.onDashboardsChanged}
           filter={filter}
