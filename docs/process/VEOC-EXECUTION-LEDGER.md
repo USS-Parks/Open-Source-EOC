@@ -5147,3 +5147,32 @@ increment proves it and that coverage follows the incident area.
 - **Result:** W1.8 is complete. The schema is unchanged from the canonicalized
   fresh-migration result, and no deployed migration history was discarded.
   Next: W1.9, remove the dead client and console leftovers not claimed by W3.
+
+## Finish PSPR adopted; V1 W1.11: land the in-flight migration baseline
+
+- **Approval:** Basho approved `docs/process/FINISH-PSPR-2026-09-22.md` on
+  2026-09-23 with the instruction to run it stem to stern with full approval.
+  That grants A0 for the plan: standing commit and linear landing authority for
+  every unit that passes its gate. Pushing remains Basho's separate
+  instruction, and none was performed.
+- **Plan:** the finish roster supersedes the five overlapping rosters listed in
+  its section 0 and inherits the V1 unit identifiers unchanged so the receipts
+  already in this ledger still resolve. It adds `W1.11` through `W1.14` and
+  `W6.6` from the audit recorded in `STATUS-AUDIT-2026-09-22.md`.
+- **W1.11 scope:** the `W1.8` work was receipted above but its tree was never
+  committed: one staged baseline migration, 54 unstaged migration deletions,
+  the runner change, the new guard test and four modified documents.
+- **Verification:** targeted run of `migrate-baseline`, `upgrade` and `auth`
+  passed 14 of 14 tests at `--maxWorkers=1`. The latter two build their own
+  database through `freshDb()`, so each is a migrate-from-empty run against the
+  new baseline.
+- **Staging:** 61 files staged individually by path, never `git add .`. The set
+  is 54 migration deletions, `0001_baseline.sql`, `migrate-baseline.test.ts`,
+  `server/src/db/migrate.ts`, `ROADMAP.md`, `deploy/README.md`, the V1 roster
+  status line and the `W1.8` receipt.
+- **Untracked, deliberately not staged:** `PARITY-AUDIT-2026-09-20.md`,
+  `SESSION-HANDOFF-2026-09-20.md`, `Reference Screenshots/` and
+  `docs/design-previews/` are Basho's own material under hazard HZ-D.
+- **Result:** committed as `00deba5`. No tracked change remains, the unpushed
+  range is one commit with no merge, and `main` fast-forwards from `7b69b67`.
+  W1.11 is complete. Next: W1.9, the client and console leftovers.
