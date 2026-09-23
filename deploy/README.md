@@ -95,6 +95,14 @@ file downloads remain unavailable until those bytes are recovered.
 Upgrades preserve customization (INV-5), proven by
 `server/src/__tests__/upgrade.test.ts`:
 
+The pre-1.0 migration history was consolidated into `0001_baseline.sql` on
+2026-09-22 before any deployed instance existed. The runner deliberately
+refuses that baseline when `schema_migrations` contains a retired 0001 through
+0101 row. Do not erase or rename those receipts to force an upgrade. Preserve
+the database and use the source version that created it; the supported V1
+upgrade path begins with a database whose first receipt is
+`0001_baseline.sql`. New migrations continue at 0102.
+
 1. Back up first (`./backup.sh`).
 2. Pull the new code and `docker compose up -d --build`. The API runs the
    forward-only migrations on boot; re-running them is a clean no-op.

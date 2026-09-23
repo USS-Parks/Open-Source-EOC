@@ -5117,3 +5117,33 @@ increment proves it and that coverage follows the incident area.
 - **Result:** W1.7 is complete. No application source, route, schema,
   dependency or runtime behavior changed. Next: W1.8, replace the pre-release
   migration chain with one guarded baseline.
+
+## V1 W1.8: replace the pre-release migration chain with a guarded baseline
+
+- **Baseline:** replaced the 54 migrations from `0001` through `0101` with a
+  single `0001_baseline.sql` generated from a fresh database after applying the
+  complete retired chain. The dump excludes the receipt table, preserves the
+  guarded `app_runtime` role setup, contains no static seed rows, and applies
+  default privileges to the deployment owner rather than the generation role.
+- **Schema evidence:** the migrated source schema dump had SHA-256
+  `1B71E9D0161CA4988DDB6FB8E2481514ACA67F0D955D4D27ABBDD46087C87EA6`.
+  PostgreSQL canonicalized one redundant check-expression parenthesis; the
+  replayed canonical schema had SHA-256
+  `2B5239AB1CDF85CC2B141BA2931C07BBFB954E82E2FE481D137AEDF7DCE99F38`
+  and reproduced byte-for-byte on a second fresh replay.
+- **Upgrade guard:** the migration runner refuses any retired numbered receipt,
+  refuses unexplained nonempty history without the baseline receipt, and allows
+  only a fresh database or `0001_baseline.sql` followed by migrations numbered
+  `0102` or later. Receipt queries are schema-qualified, and each migration
+  restores `search_path` to `public` before commit.
+- **Documentation:** the deployment guide records that this pre-1.0 repository
+  has no supported in-place path from the retired migration receipts and warns
+  operators not to erase history to bypass the guard.
+- **Verification:** baseline compatibility tests passed 4 of 4. The focused
+  fresh-database, upgrade and reproducible-deploy gate passed 8 of 8 tests.
+  Recursive TypeScript and full ESLint passed; the license scan passed all 300
+  packages; the link checker passed all 66 tracked Markdown files; and
+  `git diff --check` is clean.
+- **Result:** W1.8 is complete. The schema is unchanged from the canonicalized
+  fresh-migration result, and no deployed migration history was discarded.
+  Next: W1.9, remove the dead client and console leftovers not claimed by W3.
