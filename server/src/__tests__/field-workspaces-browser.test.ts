@@ -40,7 +40,9 @@ beforeAll(async () => {
   actorId = seed.adminId;
   await ensureStandardTemplates(admin);
   await ensureStandardIncidentTemplates(admin);
-  app = buildApp(runtime, { oidc: null });
+  // This walk registers a tracked object, so the harness enables the optional
+  // integrations explicitly. A default deployment registers neither.
+  app = buildApp(runtime, { oidc: null, integrations: ["tracking", "facilities"] });
   serveStatic(app, "/d29-app", DIST);
   const token = await login(app);
   const incident = await post(app, token, `/api/v1/jurisdictions/${jurisdictionId}/incidents`, {

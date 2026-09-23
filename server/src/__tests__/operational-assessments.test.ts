@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
@@ -21,7 +18,6 @@ let participantId: string, targetParticipantId: string, otherIncidentParticipant
 let otherResourceId: string, legacyLifelineId: string, legacyEsfId: string;
 let preexistingEsfIncidentId: string, preexistingEsfRecordId: string;
 
-const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "migrations");
 
 const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 const lifelineUrl = () => `/api/v1/incidents/${incidentId}/lifeline-assessments`;
@@ -88,6 +84,7 @@ async function preparePreexistingEsfBackfill(): Promise<void> {
   await admin`
     insert into incident_boards (incident_id, board_id)
     values (${preexistingEsfIncidentId}, ${board!.id as string})`;
+  const legacyAssessedAt = new Date("2026-08-01T12:34:56.000Z");
   await admin`alter table board_records disable trigger board_records_operational_assessment`;
   try {
     const [record] = await admin`
@@ -98,19 +95,42 @@ async function preparePreexistingEsfBackfill(): Promise<void> {
           esf: "esf_12_energy",
           status: "stressed",
           note: "Pre-migration restricted ESF note",
-        } as never)}, ${memberPersonId}, ${new Date("2026-08-01T12:34:56.000Z")})
+        } as never)}, ${memberPersonId}, ${legacyAssessedAt})
       returning id`;
     preexistingEsfRecordId = record!.id as string;
   } finally {
     await admin`alter table board_records enable trigger board_records_operational_assessment`;
   }
-  const migration = readFileSync(
-    join(MIGRATIONS, "0085_esf_lifeline_assessments.sql"), "utf8",
-  );
-  const start = migration.indexOf("insert into operational_assessments (");
-  const end = migration.indexOf("\n\ncreate function capture_legacy_operational_assessment()", start);
-  if (start < 0 || end < 0) throw new Error("0085 backfill statement not found");
-  await admin.unsafe(migration.slice(start, end).trim());
+  // A legacy-shaped assessment row, as a database carrying board records from
+  // before the assessment tables existed would hold after its backfill. The
+  // backfill itself was a one-time migration and is gone with the pre-release
+  // migration squash, but the columns it wrote and the redaction the read path
+  // applies to them still ship, which is what the assertions below cover. The
+  // values mirror what that backfill produced for an esf_status record: no
+  // condition, unknown activation and capacity, the board status preserved as
+  // legacy_status, and the note carried as situation rather than as an
+  // impact statement.
+  await admin`
+    insert into operational_assessments (
+      domain, jurisdiction_id, incident_id, framework, definition_key,
+      definition_version, activation, capacity, legacy_status, payload,
+      assessed_at, source_kind, legacy_board_id, legacy_record_id, created_by,
+      home_organization_id, created_at
+    )
+    values (
+      'esf', ${ownerId}, ${preexistingEsfIncidentId}, 'federal', 'esf_12_energy',
+      1, 'unknown', 'unknown', 'stressed',
+      ${admin.json({
+        legacyData: {
+          esf: "esf_12_energy",
+          status: "stressed",
+          note: "Pre-migration restricted ESF note",
+        },
+        situation: "Pre-migration restricted ESF note",
+      } as never)},
+      ${legacyAssessedAt}, 'legacy_board', ${board!.id as string},
+      ${preexistingEsfRecordId}, ${memberPersonId}, ${ownerId}, ${legacyAssessedAt}
+    )`;
 }
 
 const lifelinePayload = (condition: string, extra: Record<string, unknown> = {}) => ({
