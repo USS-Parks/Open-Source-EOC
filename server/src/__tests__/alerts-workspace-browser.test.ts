@@ -100,7 +100,7 @@ describe("real alert workspace", () => {
     await signIn();
     // The inbox is pushed: a notification written elsewhere reaches the badge
     // in seconds, well inside the one-minute fallback refetch.
-    await page.locator(".eoc-shell-sync", { hasText: "Live" }).waitFor({ state: "visible", timeout: 20000 });
+    await page.locator(".eoc-shell-sync[data-live]").waitFor({ state: "visible", timeout: 20000 });
     const badge = page.getByRole("button", { name: /^Notifications, \d+ unread$/ });
     const unread = Number(/(\d+) unread/.exec((await badge.getAttribute("aria-label")) ?? "")?.[1]);
     await admin`

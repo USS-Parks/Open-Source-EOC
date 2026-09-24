@@ -473,6 +473,14 @@ export async function seedNorthCoast(
   // The morning's coordination traffic, in time order.
   later(at("09:28"), () => update("moreno", at("09:28"), "shelters", shelterIds["Arcata Community Center"]!, { occupancy: 187 }));
 
+  // By 09:40 Jordan Lee has read all but the three newest of their notifications.
+  later(at("09:40"), async () => {
+    const inbox = await api<{ notifications: { id: string; read_at: string | null; assigned_to_current_actor: boolean }[] }>(
+      "lee", at("09:40"), "GET", "/api/v1/notifications?limit=500");
+    const unread = inbox.notifications.filter((item) => item.assigned_to_current_actor && !item.read_at);
+    for (const item of unread.slice(3)) await api("lee", at("09:40"), "POST", `/api/v1/notifications/${item.id}/read`);
+  });
+
   // Run the morning in scenario time order, so the record of events reads in order.
   plan.sort((left, right) => left.when.getTime() - right.when.getTime());
   for (const step of plan) await step.run();

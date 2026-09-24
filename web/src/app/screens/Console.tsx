@@ -14,7 +14,6 @@ import {
   type WorkspaceArrangement,
 } from "../layout/AppShell.js";
 import { OperationalPeriodControl, PositionControl, useWorkspaceContext } from "../layout/context.js";
-import { PlaceSearch } from "../layout/PlaceSearch.js";
 import { parseRouteHash, sectionOf, surfaceHash, useSurface, type RouteContext, type Surface } from "../router.js";
 import { EmptyState, ErrorNote, LoadBoundary, Loading, NotFoundState } from "./parts.js";
 import type { DashboardSurfaceProps, DashboardViewState } from "../surfaces/DashboardSurface.js";
@@ -96,8 +95,8 @@ const NAV: readonly NavGroup[] = [
   ] },
   { key: "planning", label: "Planning", items: [
     { key: "operationalPeriods", label: "Operational Periods", icon: "operationalPeriods" },
-    { key: "forms", label: "ICS Forms", icon: "forms" },
     { key: "iap", label: "IAP", icon: "iap" },
+    { key: "forms", label: "ICS Forms", icon: "forms" },
     { key: "aar", label: "AAR", icon: "aar" },
     { key: "reports", label: "Reports", icon: "sitrep" },
   ] },
@@ -319,25 +318,22 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
     ? { state: "error", label: lastNotificationCheck ? `Update failed · checked ${formatTime(lastNotificationCheck)}` : "Updates unavailable" }
     : notifications.loading && !notifications.data
       ? { state: "checking", label: "Checking updates" }
-      : { state: "current", label: notifications.live ? "Live" : lastNotificationCheck ? `Checked ${formatTime(lastNotificationCheck)}` : "Update received" };
+      : { state: "current", live: notifications.live, label: lastNotificationCheck ? `Synced ${formatTime(lastNotificationCheck)}` : "Synced" };
   const sync: ShellSyncState = workspace.phase === "loading" || workspace.phase === "saving"
     ? { state: "checking", label: workspace.message ?? "Restoring workspace" }
     : workspace.phase === "conflict" || workspace.phase === "error"
       ? { state: "error", label: workspace.message ?? "Workspace settings unavailable" }
       : notificationSync;
   const scope = `${incident.selectedIncident?.name ?? "No incident selected"} · ${workspace.selectedPeriodLabel}`;
+  // The overview and the lifelines workspace keep their context drawer closed and offer no opener.
+  const drawerless = surface.kind === "lifelines" || surface.kind === "lifeline" || surface.kind === "esf" || surface.kind === "dashboard";
   const page = pageFor(surface, scope);
 
   return (
     <AppShell
       product="Open Source EOC"
-      organization="Emergency coordination"
+      organization="People · Information · Safer communities"
       context={<IncidentSwitcher />}
-      search={<PlaceSearch client={client} onChoose={(place) => {
-        // The focus store lives with the map, which loads on demand.
-        void import("../layout/map-focus.js").then((m) => m.requestMapFocus(place));
-        if (surface.kind !== "map") navigateInContext({ kind: "map" });
-      }} />}
       periodLabel={workspace.selectedPeriodLabel}
       positionLabel={session.me?.position?.title ?? "No acting position"}
       periodControl={<OperationalPeriodControl />}
@@ -360,7 +356,8 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       sync={sync}
       page={page.page}
       arrangement={page.arrangement}
-      layout={surface.kind === "lifelines" || surface.kind === "lifeline" || surface.kind === "esf" || surface.kind === "dashboard"
+      contextOpener={!drawerless}
+      layout={drawerless
         ? { ...workspace.layout(page.arrangement), drawerOpen: false }
         : workspace.layout(page.arrangement)}
       onLayoutChange={(next) => workspace.updateLayout(page.arrangement, next)}
@@ -842,13 +839,14 @@ function Center(props: {
 }
 
 function pageFor(surface: Surface, scope: string): { readonly page: ShellPage; readonly arrangement: WorkspaceArrangement } {
-  const result = (group: string, title: string, arrangement: WorkspaceArrangement) => ({ page: { group, title, scope }, arrangement });
+  const result = (group: string, title: string, arrangement: WorkspaceArrangement, line = scope) => ({ page: { group, title, scope: line }, arrangement });
+  const lifelines = "Essential service conditions and coordinated response";
   switch (surface.kind) {
     case "map": return result("Situation", "Map", "map");
-    case "dashboard": return result("Situation", "Overview", "map");
-    case "lifelines": return result("Situation", "ESFs & Lifelines", "map");
-    case "lifeline": return result("Situation", "Lifeline detail", "map");
-    case "esf": return result("Situation", "ESF coordination", "map");
+    case "dashboard": return result("Situation", "Incident overview", "map");
+    case "lifelines": return result("Situation", "ESFs & Lifelines", "map", lifelines);
+    case "lifeline": return result("Situation", "ESFs & Lifelines", "map", lifelines);
+    case "esf": return result("Situation", "ESFs & Lifelines", "map", lifelines);
     case "sitreps": return result("Situation", "SITREP", "planning");
     case "sitrep": return result("Situation", "Situation report", "planning");
     case "chronology": return result("Situation", "Chronology", "boards");
@@ -886,5 +884,5 @@ function pageFor(surface: Surface, scope: string): { readonly page: ShellPage; r
 }
 
 function formatTime(value: Date) {
-  return value.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(value);
 }

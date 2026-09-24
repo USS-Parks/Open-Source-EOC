@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import type { IncidentAreaRevision, SavedStatePayload, SavedStateRecord } from "@openeoc/shared";
+import { Icon } from "../../design/icons/index.js";
 import type { ThemeName } from "../../design/tokens.js";
 import { ApiError } from "../api/client.js";
 import { useSession } from "../auth/session.js";
@@ -234,7 +235,11 @@ export function WorkspaceContextProvider(props: {
       const preference = preferenceState ? parsePreferences(preferenceState.payload) : { theme: null, periodRevision: null };
       const requestedPeriod = route.context.incidentId === incidentId ? route.context.periodRevision : undefined;
       const candidate = requestedPeriod === undefined ? preference.periodRevision : requestedPeriod;
-      const selected = candidate && allPeriods.some((period) => period.revision === candidate) ? candidate : null;
+      // Without a saved or linked choice the workspace opens on the incident's current period.
+      const currentPeriod = current.operationalPeriod ? allPeriods.find((period) => period.revision === current.revision)?.revision ?? null : null;
+      const selected = candidate
+        ? allPeriods.some((period) => period.revision === candidate) ? candidate : null
+        : currentPeriod;
       const nextLayouts = { ...DEFAULT_LAYOUTS };
       for (const [arrangement, state] of [
         ["map", mapState], ["boards", boardsState], ["planning", planningState],
@@ -355,7 +360,8 @@ export function WorkspaceContextProvider(props: {
     }
   }, [client, enqueue, incidentId, layoutPayload, preferencePayload]);
 
-  const selectedPeriodLabel = periods.find((period) => period.revision === selectedPeriodRevision)?.label ?? "Not set";
+  const selectedPeriod = periods.find((period) => period.revision === selectedPeriodRevision);
+  const selectedPeriodLabel = selectedPeriod ? periodLabel(selectedPeriod) : "Not set";
   const value = useMemo<WorkspaceContextValue>(() => ({
     loadedScope,
     phase,
@@ -376,20 +382,32 @@ export function WorkspaceContextProvider(props: {
   return <WorkspaceContext.Provider value={value}>{props.children}</WorkspaceContext.Provider>;
 }
 
+/** "OP 03 · 0600–1800 PDT": the period's label and its hours in the viewer's time zone. */
+export function periodLabel(period: { readonly label: string; readonly startsAt: string; readonly endsAt: string }): string {
+  const starts = new Date(period.startsAt);
+  const ends = new Date(period.endsAt);
+  if (Number.isNaN(starts.getTime()) || Number.isNaN(ends.getTime())) return period.label;
+  const hours = (value: Date) => new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+    .format(value).replace(":", "");
+  const zone = new Intl.DateTimeFormat("en-US", { timeZoneName: "short" }).formatToParts(starts)
+    .find((part) => part.type === "timeZoneName")?.value ?? "";
+  return `${period.label} · ${hours(starts)}–${hours(ends)}${zone ? ` ${zone}` : ""}`;
+}
+
 export function OperationalPeriodControl() {
   const workspace = useWorkspaceContext();
   return (
-    <label className="eoc-shell-inline-control">
-      <span>Operational period</span>
+    <label className="eoc-shell-select is-plain is-period">
+      <Icon name="operationalPeriods" size={20} decorative className="eoc-shell-select-icon" />
       <select
         aria-label="Operational period"
         value={workspace.selectedPeriodRevision ?? ""}
         disabled={workspace.phase === "loading"}
         onChange={(event) => workspace.selectPeriod(event.target.value ? Number(event.target.value) : null)}
       >
-        <option value="">Not set</option>
+        <option value="">No operational period</option>
         {workspace.periods.map((period) => (
-          <option key={period.revision} value={period.revision}>{period.label}</option>
+          <option key={period.revision} value={period.revision}>{periodLabel(period)}</option>
         ))}
       </select>
     </label>
@@ -426,8 +444,8 @@ export function PositionControl() {
     ? [{ id: active.id, title: active.title }, ...positions]
     : positions;
   return (
-    <label className="eoc-shell-inline-control">
-      <span>Acting position</span>
+    <label className="eoc-shell-select is-plain is-position">
+      <Icon name="participants" size={20} decorative className="eoc-shell-select-icon" />
       <select
         aria-label="Acting position"
         value={active?.id ?? ""}
@@ -444,6 +462,7 @@ export function PositionControl() {
         <option value="">No acting position</option>
         {options.map((position) => <option key={position.id} value={position.id}>{position.title}</option>)}
       </select>
+      <Icon name="chevronDown" size={20} decorative className="eoc-shell-select-chevron" />
       {error ? <small id="position-switch-error" role="alert">{error}</small> : null}
     </label>
   );

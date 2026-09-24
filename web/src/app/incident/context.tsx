@@ -12,7 +12,7 @@ import type { IncidentBoardRef, IncidentSummary } from "../api/client.js";
 import { useSession } from "../auth/session.js";
 import { useAsync, usePolled } from "../data/hooks.js";
 import { parseRouteHash, replaceRouteContext, surfaceHash, type Surface } from "../router.js";
-import "./incident-switcher.css";
+import { Icon } from "../../design/icons/index.js";
 
 /**
  * The one selected incident for the whole operator workspace (VEOC-79B).
@@ -67,8 +67,14 @@ export function useIncident(): IncidentValue {
   return value;
 }
 
+const KIND_SUFFIX: Readonly<Record<string, string>> = {
+  exercise: "Exercise", planned_event: "Planned event", daily_ops: "Daily operations",
+};
+
+/** The incident's name, its kind when it is not a real-world incident, and closure. */
 export function incidentLabel(i: IncidentSummary): string {
-  return `${i.name}${i.closedAt ? " (closed)" : ""}`;
+  const kind = KIND_SUFFIX[i.kind];
+  return `${i.name}${kind ? ` · ${kind}` : ""}${i.closedAt ? " (closed)" : ""}`;
 }
 
 export function IncidentProvider(props: { children: ReactNode }) {
@@ -209,13 +215,12 @@ export function IncidentSwitcher() {
   if (incidents.length === 0)
     return <span className="eoc-muted">No active incident</span>;
   return (
-    <label className="incident-switcher">
-      <span className="eoc-muted">Incident</span>
+    <label className="eoc-shell-select is-incident">
+      <Icon name="incident" size={20} decorative className="eoc-shell-select-icon" />
       <select
         aria-label="Selected incident"
         value={selectedIncidentId ?? ""}
         onChange={(e) => selectIncident(e.target.value || null)}
-        className="incident-switcher-select"
       >
         {incidents.map((i) => (
           <option key={i.id} value={i.id}>
@@ -223,6 +228,7 @@ export function IncidentSwitcher() {
           </option>
         ))}
       </select>
+      <Icon name="chevronDown" size={20} decorative className="eoc-shell-select-chevron" />
       {selectionNotice ? <small role="alert">{selectionNotice}</small> : null}
     </label>
   );

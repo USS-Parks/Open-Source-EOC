@@ -31,7 +31,8 @@ import {
 } from "../config.js";
 import { useAsync } from "../data/hooks.js";
 import { uploadPickedFile } from "../data/files.js";
-import { useMapFocus } from "../layout/map-focus.js";
+import { requestMapFocus, useMapFocus } from "../layout/map-focus.js";
+import { PlaceSearch } from "../layout/PlaceSearch.js";
 import { EmptyState, Loading } from "../screens/parts.js";
 import { LIFELINE_LABELS } from "./lifeline-view.js";
 import "./map-surface.css";
@@ -402,6 +403,7 @@ export function MapSurface(props: {
       ) : null}
 
       <div className="map-surface-map">
+        <PlaceSearch client={props.client} onChoose={requestMapFocus} />
         <CopMap
           key={JSON.stringify([props.jurisdictionId, props.incidentId ?? null, props.theme, areaBbox, geoBoards.map((b) => b.id), feedAndDatasetLayers.map((f) => f.id), props.focusDatasetId ?? null, props.focusFeatureId ?? null])}
           theme={props.theme}

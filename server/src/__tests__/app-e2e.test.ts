@@ -249,7 +249,7 @@ describe("the operations console in a real browser, offline", () => {
             await page.getByRole("button", { name: "All sections" }).click();
             expect(await page.getByRole("button", { name: "Close sections" }).evaluate(isFocused)).toBe(true);
             await page.keyboard.press("Shift+Tab");
-            expect(await page.getByRole("button", { name: "Feeds", exact: true }).evaluate(isFocused)).toBe(true);
+            expect(await page.locator(".eoc-shell-theme-menu > button").evaluate(isFocused)).toBe(true);
             await page.keyboard.press("Escape");
             expect(await page.getByRole("button", { name: "All sections" }).evaluate(isFocused)).toBe(true);
           }
@@ -737,7 +737,7 @@ describe("the operations console in a real browser, offline", () => {
       await page.getByLabel("Email").fill("member@example.org");
       await page.getByLabel("Password").fill("another-good-password");
       await page.getByRole("button", { name: "Sign in" }).click();
-      await page.getByRole("option", { name: "Alpha night", exact: true }).waitFor({ state: "attached" });
+      await page.getByRole("option", { name: /^Alpha night · / }).waitFor({ state: "attached" });
       expect(await page.getByLabel("Operational period", { exact: true }).inputValue()).toBe("1");
       let save = afterSave();
       await page.getByLabel("Operational period", { exact: true }).selectOption("2"); await save;
@@ -746,7 +746,9 @@ describe("the operations console in a real browser, offline", () => {
       save = afterSave();
       await page.getByLabel("Operational period", { exact: true }).selectOption("2"); await save;
       save = afterSave();
-      await page.getByRole("button", { name: "Compact navigation", exact: true }).click(); await save;
+      await page.getByRole("button", { name: "Settings", exact: true }).click();
+      await page.getByRole("checkbox", { name: "Compact navigation" }).check(); await save;
+      await page.getByRole("button", { name: "Close Settings" }).click();
       const resize = page.getByRole("separator", { name: "Resize context drawer" });
       save = afterSave(); await resize.focus(); await page.keyboard.press("End"); await save;
       expect((await saved("workspace_layout", "map")).json().state.payload).toMatchObject({ drawerWidth: 520, compactNavigation: true });
@@ -761,7 +763,7 @@ describe("the operations console in a real browser, offline", () => {
       await positionRefresh;
       expect((await call(memberToken, "POST", `/api/v1/positions/${unassignedId}/sign-in`, {})).statusCode).toBe(403);
       await page.reload();
-      await page.getByRole("button", { name: "Expand navigation", exact: true }).waitFor();
+      await page.locator(".eoc-shell[data-compact-navigation]").waitFor();
       expect(await page.getByLabel("Operational period", { exact: true }).inputValue()).toBe("2");
       expect(await page.getByLabel("Acting position", { exact: true }).inputValue()).toBe(positionId);
       expect(await page.locator("[data-theme]").getAttribute("data-theme")).toBe("dark");
@@ -784,12 +786,13 @@ describe("the operations console in a real browser, offline", () => {
       await selected.getByText("Record unavailable in this view", { exact: true }).waitFor();
       expect(await selected.getByText("Context Bravo road").count()).toBe(0);
       await page.getByLabel("Selected incident").selectOption(second);
-      await page.getByRole("option", { name: "Bravo day", exact: true }).waitFor({ state: "attached" });
+      await page.getByRole("option", { name: /^Bravo day · / }).waitFor({ state: "attached" });
       expect(new URL(page.url()).hash).not.toContain("record=");
-      expect(await page.getByLabel("Operational period", { exact: true }).inputValue()).toBe("");
+      // With nothing saved for this incident, the workspace opens on its current period.
+      expect(await page.getByLabel("Operational period", { exact: true }).inputValue()).toBe("1");
       expect(await selected.count()).toBe(0);
       await page.getByLabel("Selected incident").selectOption(first);
-      await page.getByRole("option", { name: "Alpha night", exact: true }).waitFor({ state: "attached" });
+      await page.getByRole("option", { name: /^Alpha night · / }).waitFor({ state: "attached" });
       expect(await page.getByLabel("Operational period", { exact: true }).inputValue()).toBe("2");
       expect(errors).toEqual([]); expect(external).toEqual([]);
     } finally { await page.close(); }

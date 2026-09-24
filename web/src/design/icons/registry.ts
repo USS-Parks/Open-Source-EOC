@@ -217,6 +217,18 @@ export const iconRegistry = {
   chevronRight: icon("Open", "action", "Right-facing chevron", ACTION_SIZES, [
     { element: "polyline", points: "9 5 16 12 9 19" },
   ]),
+  chevronDown: icon("Choose", "action", "Downward chevron", ACTION_SIZES, [
+    { element: "polyline", points: "5 9 12 16 19 9" },
+  ]),
+  sun: icon("Light theme", "action", "Sun with eight rays", ACTION_SIZES, [
+    { element: "circle", cx: 12, cy: 12, r: 4 },
+    { element: "path", d: "M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M18.7 5.3l-1.8 1.8M7.1 16.9l-1.8 1.8" },
+  ]),
+  incident: icon("Incident", "action", "Incident folder with a check", ACTION_SIZES, [
+    { element: "path", d: "M3.5 7.5h17V20h-17Z" },
+    { element: "path", d: "M8 7.5V4.5h8v3" },
+    { element: "polyline", points: "8.5 13.5 11 16 15.5 11.5" },
+  ]),
   clock: icon("Time", "action", "Clock face", ACTION_SIZES, [
     { element: "circle", cx: 12, cy: 12, r: 9 },
     { element: "polyline", points: "12 7 12 12 16 14" },

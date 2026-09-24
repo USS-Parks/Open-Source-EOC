@@ -4110,3 +4110,62 @@ for writing when this was recorded, so this entry carries the requirement.
   The full serial suite is run at DF6 as the plan prescribes.
 - **Evidence level:** real-database and browser.
 - **Rollback:** revert the commit; migration 0131 only widens a check.
+
+## Design fidelity DF1: shell
+
+- **What changed.**
+  - `web/src/app/layout/AppShell.tsx` and `shell.css`: the command bar, rail
+    and page header after the frames. The brand block carries "PEOPLE ·
+    INFORMATION · SAFER COMMUNITIES" (decision 2). The command bar is one row:
+    the incident chip, the operational period chip, the position chip, "Synced
+    HH:MM" with its dot, the bell with its count and the account chip with
+    initials, name and position. The rail keeps every destination in its
+    group, styled as the frames' items, and scrolls (decision 3); Settings,
+    Help and the theme menu sit at its foot. The page header is the title, a
+    subtitle line and the page actions; surfaces fill the subtitle and actions
+    through `web/src/app/layout/page-chrome.tsx`. The FOUO marking sits above
+    the actions in dark and in a page footer in light, as each frame places
+    it. Measurements, colors, the rail's width and the active item's style
+    follow each theme's frame where the two frames differ.
+  - New `web/src/app/layout/ShellDialogs.tsx`: Settings (theme, compact
+    navigation, a link to Administration for administrators) and Help
+    (keyboard basics and the operator, viewer, field user and accessibility
+    guides from `docs/guides`, rendered in the dialog).
+  - The incident, period and position selectors are native selects styled as
+    the frames' chips. The incident label names a non-incident kind ("North
+    Coast Storm · Exercise"). The period chip reads "OP 03 · 0600–1800 PDT",
+    and a workspace with no saved or linked period opens on the incident's
+    current period instead of "Not set".
+  - The address search moved from the command bar onto the Map screen's map
+    (`MapSurface.tsx`, `map-surface.css`, placeholder "Search location…").
+    Compact navigation moved from the top of the rail into Settings. "Open
+    context" stays in the page actions on screens with a context drawer.
+  - The sync line reads "Synced HH:MM" in 24-hour time; live updates are
+    marked with `data-live`. New icons `chevronDown`, `sun` and `incident`;
+    the brand mark follows the light frame's ring and core.
+  - The seed has Jordan Lee read all but the three newest notifications by
+    09:40, so the bell shows 3 as in the frames.
+- **Defaults and deviations.** Differences left, each because the frames
+  disagree or the data is the scenario's: the dark frame's compass-star brand
+  mark (the build uses the light frame's ring in both themes); photographs in
+  the avatar (initials instead); the frames' three different user names (the
+  scenario's Jordan Lee); "Planning Section" where the position's title is
+  "Planning Section Chief"; the lifelines frame's narrower rail and smaller
+  rail type (the build follows the light overview frame); the dark frame's
+  filled rail icons; the rail's extra destinations, which move the lower
+  groups down (decision 3). The address search no longer opens the map from
+  another screen; it now lives on the map, as the frames place it.
+- **Schema, contract, dependencies:** none.
+- **Verification.** `pnpm check:static`: tsc, eslint, license scan (303
+  packages) and link check (98 files) pass. Web unit tests (`vitest run
+  web/src`): 87 files, 642 tests, after updating the shell frame and context
+  tests for the new controls and period labels; a new test drives Settings,
+  Help and the theme menu. Server directory (`vitest run server/src/__tests__/
+  --exclude load.test.ts`, 3 workers): 158 files, 721 tests; the one failure,
+  the activation test's incident option name, was updated for the kind label
+  and passes on rerun. Browser tests updated for the moved controls:
+  `app-e2e`, `alerts-workspace-browser`, `place-search-browser`,
+  `field-reports-browser`, `incident-activation-browser`. `pnpm fidelity`: 2
+  of 2, images refreshed.
+- **Evidence level:** unit, browser and real-database.
+- **Rollback:** revert the commit.

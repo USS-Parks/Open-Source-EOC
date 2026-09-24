@@ -10,7 +10,7 @@ const KIND_LABEL: Readonly<Record<PlaceResult["kind"], string>> = {
 };
 
 /**
- * The command bar's address and place search over the server's offline
+ * The map's address and place search over the server's offline
  * gazetteer. Typing searches; arrow keys move through the results, Enter
  * or a click chooses one, Escape closes the list and then clears the box.
  */
@@ -102,7 +102,7 @@ export function PlaceSearch(props: {
         type="search"
         role="combobox"
         aria-label="Search addresses and places"
-        placeholder="Search addresses and places"
+        placeholder="Search location…"
         autoComplete="off"
         spellCheck={false}
         aria-autocomplete="list"

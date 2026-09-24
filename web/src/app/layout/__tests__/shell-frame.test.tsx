@@ -39,7 +39,7 @@ const nav: readonly NavGroup[] = [
     { key: "messages", label: "Messages", icon: "messages" },
   ] },
   { key: "data", label: "Data and administration", items: [
-    { key: "settings", label: "Settings", icon: "settings" },
+    { key: "admin", label: "Administration", icon: "settings" },
   ] },
 ];
 
@@ -80,15 +80,43 @@ describe("responsive shell frame", () => {
     fireEvent.click(view.getByRole("button", { name: "Account menu" }));
     expect(view.getByRole("button", { name: "Use dark theme" })).not.toBeNull();
     expect(view.getByRole("button", { name: "Sign out" })).not.toBeNull();
-    expect(view.getAllByText("Planning Section")).toHaveLength(2);
+    // The account summary's second line and the open menu both name the position.
+    expect(view.getAllByText("Planning Section")).toHaveLength(3);
+  });
+
+  it("opens settings, help and the theme menu from the foot of the rail", async () => {
+    const onToggleTheme = vi.fn();
+    const onNavigate = vi.fn();
+    const view = frame({ onToggleTheme, onNavigate });
+    fireEvent.click(view.getByRole("button", { name: "Settings" }));
+    const settings = await view.findByRole("dialog", { name: "Settings" });
+    fireEvent.click(within(settings).getByRole("radio", { name: "Dark" }));
+    expect(onToggleTheme).toHaveBeenCalledTimes(1);
+    fireEvent.click(within(settings).getByRole("button", { name: "Open Administration" }));
+    expect(onNavigate).toHaveBeenCalledWith("admin");
+    expect(view.queryByRole("dialog", { name: "Settings" })).toBeNull();
+
+    fireEvent.click(view.getByRole("button", { name: "Help" }));
+    const help = await view.findByRole("dialog", { name: "Help" });
+    expect(within(help).getByRole("heading", { name: "Keyboard" })).not.toBeNull();
+    expect(await within(help).findByRole("heading", { name: "Operator Quickstart" })).not.toBeNull();
+    fireEvent.click(within(help).getByRole("tab", { name: "Viewer quickstart" }));
+    expect(await within(help).findByRole("heading", { name: "Viewer Quickstart" })).not.toBeNull();
+    fireEvent.click(within(help).getByRole("button", { name: "Close Help" }));
+
+    fireEvent.click(view.getByRole("button", { name: "Light theme" }));
+    fireEvent.click(view.getByRole("menuitemradio", { name: "Dark" }));
+    expect(onToggleTheme).toHaveBeenCalledTimes(2);
   });
 
   it("compacts navigation without removing accessible destination names", () => {
     const view = frame();
-    const toggle = view.getByRole("button", { name: "Compact navigation" });
-    fireEvent.click(toggle);
-    expect(view.getByRole("button", { name: "Expand navigation" })).not.toBeNull();
+    fireEvent.click(view.getByRole("button", { name: "Settings" }));
+    fireEvent.click(view.getByRole("checkbox", { name: "Compact navigation" }));
+    expect(view.container.querySelector(".eoc-shell")?.hasAttribute("data-compact-navigation")).toBe(true);
+    fireEvent.click(view.getByRole("button", { name: "Close Settings" }));
     expect(view.getByRole("button", { name: "Overview" })).not.toBeNull();
+    expect(view.getByRole("button", { name: "Administration" })).not.toBeNull();
     expect(view.getByRole("button", { name: "Settings" })).not.toBeNull();
   });
 
@@ -128,7 +156,7 @@ describe("responsive shell frame", () => {
     const close = await view.findByRole("button", { name: "Close sections" });
     await waitFor(() => expect(document.activeElement).toBe(close));
     expect(rail.hasAttribute("inert")).toBe(false);
-    const last = within(rail).getByRole("button", { name: "Settings" });
+    const last = within(rail).getByRole("button", { name: "Light theme" });
     last.focus();
     fireEvent.keyDown(last, { key: "Tab" });
     expect(document.activeElement).toBe(close);
@@ -244,11 +272,13 @@ describe("responsive shell frame", () => {
       periodControl: <select aria-label="Operational period"><option>Day 2</option></select>,
       positionControl: <select aria-label="Acting position"><option>Planning Section</option></select>,
     });
-    expect(view.getByRole("button", { name: "Expand navigation" })).not.toBeNull();
+    expect(view.container.querySelector(".eoc-shell")?.hasAttribute("data-compact-navigation")).toBe(true);
     expect(view.getByRole("button", { name: "Open context" })).not.toBeNull();
     expect(view.getByLabelText("Operational period")).not.toBeNull();
     expect(view.getByLabelText("Acting position")).not.toBeNull();
-    fireEvent.click(view.getByRole("button", { name: "Expand navigation" }));
+    fireEvent.click(view.getByRole("button", { name: "Settings" }));
+    fireEvent.click(view.getByRole("checkbox", { name: "Compact navigation" }));
+    fireEvent.click(view.getByRole("button", { name: "Close Settings" }));
     expect(onLayoutChange).toHaveBeenCalledWith({ compactNavigation: false, drawerOpen: false, drawerWidth: 404 });
     fireEvent.click(view.getByRole("button", { name: "Open context" }));
     expect(onLayoutChange).toHaveBeenCalledWith({ compactNavigation: false, drawerOpen: true, drawerWidth: 404 });

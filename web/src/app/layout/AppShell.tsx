@@ -10,6 +10,8 @@ import {
 import { Icon, destinationIconByKey, type DestinationIconKey } from "../../design/icons/index.js";
 import type { ThemeName } from "../../design/tokens.js";
 import { BrandMark } from "./BrandMark.js";
+import { PageChromeContext } from "./page-chrome.js";
+import { HelpDialog, SettingsDialog } from "./ShellDialogs.js";
 import "./shell.css";
 
 export interface NavItem {
@@ -36,11 +38,14 @@ export interface ShellLayoutState {
 export interface ShellSyncState {
   readonly state: "checking" | "current" | "error";
   readonly label: string;
+  /** Updates arrive as they happen rather than by polling. */
+  readonly live?: boolean;
 }
 
 export interface ShellPage {
   readonly group: string;
   readonly title: string;
+  /** The line under the title when the surface does not supply its own. */
   readonly scope: string;
 }
 
@@ -48,8 +53,6 @@ export interface AppShellProps {
   readonly product: string;
   readonly organization: string;
   readonly context: ReactNode;
-  /** The command bar search box, beside the incident context. */
-  readonly search?: ReactNode;
   readonly periodLabel: string;
   readonly positionLabel: string;
   readonly periodControl?: ReactNode;
@@ -66,6 +69,8 @@ export interface AppShellProps {
   readonly sync: ShellSyncState;
   readonly page: ShellPage;
   readonly arrangement: WorkspaceArrangement;
+  /** Screens whose context drawer stays closed offer no opener in the page header. */
+  readonly contextOpener?: boolean;
   readonly layout?: ShellLayoutState;
   readonly onLayoutChange?: (layout: ShellLayoutState) => void;
   readonly rightDock: ReactNode;
@@ -124,6 +129,58 @@ function trapTab(event: KeyboardEvent<HTMLElement>, container: HTMLElement) {
   }
 }
 
+function initials(name: string): string {
+  const parts = name.replace(/[^\p{L}\s]/gu, " ").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  return (parts.length === 1 ? parts[0]!.slice(0, 2) : `${parts[0]![0]}${parts.at(-1)![0]}`).toUpperCase();
+}
+
+/** The theme chooser at the foot of the rail: the current theme, and a menu of both. */
+function ThemeMenu(props: { readonly theme: ThemeName; readonly onChoose: (theme: ThemeName) => void }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const outside = (event: Event) => {
+      if (event.target instanceof Node && !root.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", outside);
+    return () => document.removeEventListener("pointerdown", outside);
+  }, [open]);
+  const choose = (theme: ThemeName) => {
+    props.onChoose(theme);
+    setOpen(false);
+    trigger.current?.focus();
+  };
+  return (
+    <div ref={root} className="eoc-shell-theme-menu" onKeyDown={(event) => {
+      if (event.key === "Escape" && open) {
+        event.preventDefault();
+        setOpen(false);
+        trigger.current?.focus();
+      }
+    }}>
+      <button ref={trigger} type="button" aria-haspopup="menu" aria-expanded={open}
+        aria-label={props.theme === "light" ? "Light theme" : "Theme, dark"} onClick={() => setOpen(!open)}>
+        <Icon name={props.theme === "light" ? "sun" : "theme"} size={20} decorative />
+        <span>{props.theme === "light" ? "Light theme" : "Theme"}</span>
+        <Icon name="chevronDown" size={16} decorative className="eoc-shell-theme-chevron" />
+      </button>
+      {open ? (
+        <div role="menu" aria-label="Theme" className="eoc-shell-theme-popup">
+          {(["light", "dark"] as const).map((theme) => (
+            <button key={theme} type="button" role="menuitemradio" aria-checked={props.theme === theme} onClick={() => choose(theme)}>
+              <Icon name={theme === "light" ? "sun" : "theme"} size={16} decorative />
+              {theme === "light" ? "Light" : "Dark"}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function AppShell(props: AppShellProps) {
   const [compactNav, setCompactNav] = useState(props.layout?.compactNavigation ?? false);
   const [navOpen, setNavOpen] = useState(false);
@@ -134,6 +191,9 @@ export function AppShell(props: AppShellProps) {
   );
   const [drawerWidth, setDrawerWidth] = useState(props.layout?.drawerWidth ?? 340);
   const [viewport, setViewport] = useState<ShellViewport>(currentViewport);
+  const [dialog, setDialog] = useState<"settings" | "help" | null>(null);
+  const [actionsSlot, setActionsSlot] = useState<HTMLElement | null>(null);
+  const [subtitleSlot, setSubtitleSlot] = useState<HTMLElement | null>(null);
   const mainRef = useRef<HTMLElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const navOpener = useRef<HTMLButtonElement>(null);
@@ -150,6 +210,7 @@ export function AppShell(props: AppShellProps) {
 
   const navModal = viewport === "narrow" && navOpen;
   const drawerModal = viewport !== "dock" && drawerOpen;
+  const administration = props.nav.some((group) => group.items.some((item) => item.key === "admin"));
 
   useEffect(() => {
     const layout = props.layout;
@@ -206,10 +267,7 @@ export function AppShell(props: AppShellProps) {
     }
   }, [drawerOpen]);
 
-  const shellStyle = {
-    "--eoc-shell-rail-width": compactNav ? "64px" : "224px",
-    "--eoc-shell-drawer-width": `${drawerWidth}px`,
-  } as CSSProperties;
+  const shellStyle = { "--eoc-shell-drawer-width": `${drawerWidth}px` } as CSSProperties;
 
   function openDrawer(invoker: HTMLElement) {
     drawerInvoker.current = invoker;
@@ -227,6 +285,11 @@ export function AppShell(props: AppShellProps) {
   function closeNavigation(target: "opener" | "workspace" | null) {
     navFocusTarget.current = target;
     setNavOpen(false);
+  }
+
+  function setCompact(next: boolean) {
+    setCompactNav(next);
+    publishLayout({ compactNavigation: next });
   }
 
   function resizeFromPointer(event: ReactPointerEvent<HTMLDivElement>) {
@@ -297,6 +360,10 @@ export function AppShell(props: AppShellProps) {
     });
   }
 
+  function chooseTheme(theme: ThemeName) {
+    if (theme !== props.theme) props.onToggleTheme();
+  }
+
   return (
     <div className="eoc-shell" data-arrangement={props.arrangement} data-compact-navigation={compactNav || undefined} data-drawer-open={drawerOpen || undefined} style={shellStyle}>
       <a className="eoc-shell-skip" href="#main" inert={drawerModal || undefined} aria-hidden={drawerModal || undefined} onClick={(event) => { event.preventDefault(); mainRef.current?.focus(); }}>
@@ -312,17 +379,19 @@ export function AppShell(props: AppShellProps) {
           <span><strong>{props.product}</strong><small>{props.organization}</small></span>
         </div>
         <div className="eoc-shell-context">{props.context}</div>
-        {props.search}
-        {viewport === "dock" ? <div className="eoc-shell-command-fact">{props.periodControl ?? <><span>Operational period</span><strong>{props.periodLabel}</strong></>}</div> : null}
-        {viewport === "dock" ? <div className="eoc-shell-command-fact">{props.positionControl ?? <><span>Acting position</span><strong>{props.positionLabel}</strong></>}</div> : null}
-        <div className="eoc-shell-sync" data-state={props.sync.state}><span aria-hidden="true" />{props.sync.label}</div>
-        <span className="eoc-shell-handling" aria-label="Handling marking: FOUO">FOUO</span>
+        {viewport === "dock" ? <div className="eoc-shell-chip is-period">{props.periodControl ?? <strong>{props.periodLabel}</strong>}</div> : null}
+        {viewport === "dock" ? <div className="eoc-shell-chip is-position">{props.positionControl ?? <strong>{props.positionLabel}</strong>}</div> : null}
+        <div className="eoc-shell-sync" data-state={props.sync.state} data-live={props.sync.live || undefined}><span aria-hidden="true" />{props.sync.label}</div>
         <button className="eoc-shell-notifications" type="button" aria-label={`Notifications, ${props.notificationCount} unread`} aria-expanded={drawerOpen} onClick={(event) => openDrawer(event.currentTarget)}>
-          <Icon name={destinationIconByKey.alerts} size={20} decorative />
+          <Icon name={destinationIconByKey.alerts} size={24} decorative />
           {props.notificationCount > 0 ? <span>{props.notificationCount}</span> : null}
         </button>
         <details className="eoc-shell-account">
-          <summary role="button" aria-label="Account menu"><span aria-hidden="true">{props.userName.trim().charAt(0) || "?"}</span><strong>{props.userName}</strong></summary>
+          <summary role="button" aria-label="Account menu">
+            <span className="eoc-shell-avatar" aria-hidden="true">{initials(props.userName)}</span>
+            <span className="eoc-shell-account-name"><strong>{props.userName}</strong><small>{props.positionLabel}</small></span>
+            <Icon name="chevronDown" size={20} decorative />
+          </summary>
           <div>
             <p><strong>{props.userName}</strong><span>{props.roleLabel}</span><span>{props.positionLabel}</span></p>
             <button type="button" onClick={props.onToggleTheme}>{props.theme === "dark" ? "Use light theme" : "Use dark theme"}</button>
@@ -336,9 +405,6 @@ export function AppShell(props: AppShellProps) {
         <nav ref={navRef} id="eoc-shell-navigation" className="eoc-shell-rail" data-open={navOpen || undefined} aria-label="Sections" aria-hidden={viewport === "narrow" && !navOpen ? true : undefined} inert={(drawerModal || (viewport === "narrow" && !navOpen)) || undefined} onKeyDown={onNavigationKeyDown}>
           <div className="eoc-shell-rail-top">
             <button ref={navClose} type="button" className="eoc-shell-nav-close" onClick={() => closeNavigation("opener")}>Close sections</button>
-            <button type="button" className="eoc-shell-compact-toggle" aria-pressed={compactNav} onClick={() => { const next = !compactNav; setCompactNav(next); publishLayout({ compactNavigation: next }); }}>
-              <span>{compactNav ? "Expand navigation" : "Compact navigation"}</span>
-            </button>
           </div>
           <div className="eoc-shell-nav-scroll">
             {props.nav.map((group) => (
@@ -348,7 +414,7 @@ export function AppShell(props: AppShellProps) {
                   const active = item.key === props.activeNav;
                   return (
                     <button key={item.key} type="button" aria-current={active ? "page" : undefined} aria-label={compactNav ? item.label : undefined} onClick={() => { props.onNavigate(item.key); closeNavigation(viewport === "narrow" ? "workspace" : null); }}>
-                      <Icon name={destinationIconByKey[item.icon]} size={20} selected={active} decorative />
+                      <Icon name={destinationIconByKey[item.icon]} size={24} selected={active} decorative />
                       <span>{item.label}</span>
                     </button>
                   );
@@ -356,14 +422,35 @@ export function AppShell(props: AppShellProps) {
               </section>
             ))}
           </div>
+          <div className="eoc-shell-rail-foot">
+            <button type="button" aria-label={compactNav ? "Settings" : undefined} aria-haspopup="dialog" onClick={() => setDialog("settings")}>
+              <Icon name="settings" size={20} decorative /><span>Settings</span>
+            </button>
+            <button type="button" aria-label={compactNav ? "Help" : undefined} aria-haspopup="dialog" onClick={() => setDialog("help")}>
+              <Icon name="help" size={20} decorative /><span>Help</span>
+            </button>
+            <ThemeMenu theme={props.theme} onChoose={chooseTheme} />
+          </div>
         </nav>
 
         <main ref={mainRef} id="main" className="eoc-shell-main" tabIndex={-1} aria-hidden={(navModal || drawerModal) || undefined} inert={(navModal || drawerModal) || undefined}>
           <header className="eoc-shell-page-header">
-            <div><span>{props.page.group}</span><h1>{props.page.title}</h1><p>{props.page.scope} · {props.sync.label}</p></div>
-            {!drawerOpen ? <button ref={drawerOpener} type="button" onClick={(event) => openDrawer(event.currentTarget)}>Open context</button> : null}
+            <div className="eoc-shell-page-title">
+              <h1>{props.page.title}</h1>
+              <p><span ref={setSubtitleSlot} className="eoc-shell-page-subtitle-slot" /><span className="eoc-shell-page-scope">{props.page.scope}</span></p>
+            </div>
+            <div className="eoc-shell-page-side">
+              <span className="eoc-shell-marking" aria-label="Handling marking: FOUO">FOUO</span>
+              <div className="eoc-shell-page-actions">
+                <div ref={setActionsSlot} className="eoc-shell-page-actions-slot" />
+                {!drawerOpen && props.contextOpener !== false ? <button ref={drawerOpener} type="button" className="eoc-shell-context-opener" onClick={(event) => openDrawer(event.currentTarget)}>Open context</button> : null}
+              </div>
+            </div>
           </header>
-          <div className="eoc-shell-workspace">{props.children}</div>
+          <PageChromeContext.Provider value={{ actions: actionsSlot, subtitle: subtitleSlot }}>
+            <div className="eoc-shell-workspace">{props.children}</div>
+          </PageChromeContext.Provider>
+          <footer className="eoc-shell-page-footer"><span aria-label="Handling marking: FOUO">FOUO</span></footer>
         </main>
 
         {drawerModal ? <div className="eoc-shell-drawer-overlay" aria-hidden="true" onPointerDown={closeDrawer} /> : null}
@@ -377,6 +464,11 @@ export function AppShell(props: AppShellProps) {
           </div>
         </div>
       </div>
+      <SettingsDialog open={dialog === "settings"} theme={props.theme} onTheme={chooseTheme}
+        compactNavigation={compactNav} onCompactNavigation={setCompact}
+        onOpenAdministration={administration ? () => { setDialog(null); props.onNavigate("admin"); } : undefined}
+        onClose={() => setDialog(null)} />
+      <HelpDialog open={dialog === "help"} onClose={() => setDialog(null)} />
     </div>
   );
 }

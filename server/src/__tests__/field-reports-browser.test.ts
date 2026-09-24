@@ -83,7 +83,8 @@ async function walkRail(page: Page): Promise<string[]> {
   const labels = await rail.locator("span").allTextContents();
   for (const [index, label] of labels.entries()) {
     await rail.nth(index).click();
-    await page.locator(".eoc-shell-page-header h1").getByText(label, { exact: true }).waitFor();
+    // The overview's page is the incident overview.
+    await page.locator(".eoc-shell-page-header h1").getByText(label === "Overview" ? "Incident overview" : label, { exact: true }).waitFor();
     expect(await rail.nth(index).getAttribute("aria-current"), label).toBe("page");
     await page.waitForTimeout(300);
     expect(await page.locator(".eoc-shell-workspace").textContent(), label).not.toMatch(PLACEHOLDER);

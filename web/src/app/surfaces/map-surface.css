@@ -13,7 +13,19 @@
 .map-surface-source { display: grid; flex: 1 1 320px; gap: 4px; min-width: min(100%, 260px); }
 .map-surface-links-title { font-size: 13px; margin: 12px 0 6px; }
 .map-surface-links { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }
-.map-surface-map { flex: 1; min-height: 0; }
-.map-surface-overlay { max-height: 78%; overflow: auto; position: absolute; right: 24px; top: 64px; width: 360px; z-index: 5; }
+.map-surface-map { position: relative; flex: 1; min-height: 0; }
+/* Address and place search, over the map's top right beside its controls. */
+.map-surface-map .eoc-shell-search { position: absolute; z-index: 6; top: 10px; right: 56px; width: min(300px, calc(100% - 120px)); }
+.map-surface-map .eoc-shell-search input { width: 100%; min-height: 38px; padding: 6px 10px 6px 34px; color: var(--eoc-text); background: var(--eoc-surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='m15.5 15.5 5 5'/%3E%3C/svg%3E") no-repeat 10px center / 16px; border: 1px solid var(--eoc-border-strong); border-radius: var(--eoc-radius-sm); box-shadow: var(--eoc-shadow-sm); font: inherit; font-size: 13px; }
+.eoc-shell-search-popup { position: absolute; z-index: 80; top: calc(100% + 4px); right: 0; width: min(380px, calc(100vw - 96px)); max-height: 60vh; overflow: auto; padding: 4px; color: var(--eoc-text); background: var(--eoc-surface-overlay); border: 1px solid var(--eoc-border-strong); border-radius: var(--eoc-radius-md); box-shadow: var(--eoc-shadow-lg); }
+.eoc-shell-search-popup[hidden] { display: none; }
+.eoc-shell-search-popup p { margin: 0; color: var(--eoc-text-muted); font-size: 12px; }
+.eoc-shell-search-popup p:not(:empty) { padding: 8px; }
+.eoc-shell-search-popup ul { margin: 0; padding: 0; list-style: none; }
+.eoc-shell-search-popup li { display: grid; gap: 2px; padding: 7px 8px; border-radius: var(--eoc-radius-sm); cursor: pointer; }
+.eoc-shell-search-popup li[aria-selected="true"] { background: var(--eoc-selection); }
+.eoc-shell-search-popup li strong { font-size: 13px; }
+.eoc-shell-search-popup li span { color: var(--eoc-text-muted); font-size: 12px; }
+.map-surface-overlay { max-height: 78%; overflow: auto; position: absolute; right: 24px; top: 64px; width: 360px; z-index: 10; }
 .map-surface-error { color: var(--eoc-status-critical); margin: 8px 0 0; }
 .map-surface-actions { margin-top: 8px; }

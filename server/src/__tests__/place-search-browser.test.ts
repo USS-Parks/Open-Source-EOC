@@ -96,27 +96,23 @@ afterAll(async () => {
 });
 
 describe("real-browser address and place search", () => {
-  it("opens the map on a chosen address from another screen and on a place from the map", async () => {
+  it("moves the map to a chosen address and to a chosen place from the map's search", async () => {
     await page.goto(`${baseUrl}/app/index.html`, { waitUntil: "load" });
     await page.getByLabel("Email").fill("admin@example.org");
     await page.getByLabel("Password").fill("correct-horse-battery");
     await page.getByRole("button", { name: "Sign in" }).click();
+    await page.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "Map", exact: true }).click();
+    await page.waitForSelector('[data-testid="cop-map"]');
     const box = page.getByRole("combobox", { name: "Search addresses and places" });
     await box.waitFor();
-    await page.getByRole("button", { name: "Boards", exact: true }).click();
-    await page.waitForFunction("location.hash.startsWith('#/boards')");
-    expect(await page.locator('[data-testid="cop-map"]').count()).toBe(0);
 
-    // From a screen other than the map: the address, first, switches to the map.
+    // An address, first.
     await box.fill("816 3rd street eureka");
-    const options = page.getByRole("option");
+    const options = page.getByRole("listbox", { name: "Addresses and places" }).getByRole("option");
     await options.first().waitFor();
     expect(await options.first().textContent()).toBe("816 3rd StreetAddress · Eureka");
     await page.screenshot({ path: join(SHOTS, "place-search-address-light.png"), fullPage: false });
     await box.press("Enter");
-    await page.waitForSelector('[data-testid="cop-map"]');
-    // The map is the console's home route.
-    expect(new URL(page.url()).hash).toMatch(/^#\/(\?|$)/);
     await atPlace(page, -124.16261, 40.80401, 18);
 
     // On the map: the city of Eureka ranks above Eureka Way, and the map moves to it.
