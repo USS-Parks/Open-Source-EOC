@@ -2960,3 +2960,52 @@ tagging remain separately gated as section 1 of the roster states.
 - **Deferred:** the eight gaps above; the W4 milestone suite, which runs once
   the installable web app unit lands, since it closes wave W4.
 - **Rollback:** revert both commits.
+
+## V1 W5.0: code splitting
+
+- **What changed.**
+  - `Console.tsx` loads all 35 center surfaces, the board record pane and the
+    continuity panel with `React.lazy` behind `Suspense`, using the kit's
+    `Loading`. The place search reaches the map focus store by a dynamic
+    import. MapLibre's stylesheet moves from `main.tsx` into `CopMap.tsx`, so
+    it loads with the map, and the two MapLibre overrides in
+    `web/src/design/base.css` now start with `.maplibregl-map` so they still
+    win over the later stylesheet in the dark theme.
+  - After the console appears it loads the remaining surface modules in the
+    background, one at a time, so a screen this page load never showed still
+    opens after the network drops. Loading all forty at once starved the
+    console's own API calls on HTTP/1.1; one at a time does not.
+  - `scripts/bundle-budget.mjs` builds with Vite's API into a temporary folder
+    without `web/public`, sums the entry and every chunk it imports statically,
+    gzipped, and fails over 300 kB. Run it with
+    `pnpm --filter @openeoc/web bundle-budget`.
+- **Defaults and deviations.** Plain dynamic imports, no `manualChunks`, no
+  service worker. `router.tsx` and `vite.config.ts` needed no change. The
+  budget is not part of `pnpm check`, because it needs a Vite build that
+  hosted CI does not otherwise run. Ownership deviations: `CopMap.tsx` (the
+  stylesheet import), `base.css` (two selectors) and one added test in
+  `continuity-console-browser.test.ts`.
+- **Schema, contract, dependencies:** none.
+- **Verification.** First-load JavaScript, measured as the manifest entry plus
+  its static imports, each gzipped at zlib's default level, 1 kB = 1000
+  bytes: 657.6 kB in one chunk before, 159.8 kB in ten chunks after (index
+  92.3, shared 45.9, hooks 8.6, Icon 4.4, react 3.0, router 2.1, tokens 1.2,
+  session 1.1, components 0.9, jsx-runtime 0.3). MapLibre (280.3 kB) and the
+  Yjs field tree (26.4 kB) now load on demand. In the lane, tag `c`, on
+  `e3660f7`: tsc and eslint exit 0; 11 walk files (app-e2e, cop-e2e,
+  boards-workspace, field-offline, field-workspaces, continuity-console,
+  place-search, cop-kpi, dashboard, admin, route-coverage) with
+  `--maxWorkers=2`, 19 of 20 tests passed, the one failure being the
+  `app-e2e.test.ts:783` race that "V1 CI stability part two" fixed on `main`;
+  web unit tests 593 of 593 on the first run and 592 of 593 on the last, with
+  `standing-lifelines.test.tsx` passing 2 of 2 alone; the new offline test
+  fails with the background loading turned off. The integrating session
+  rebased onto `bc64e68` and ran tsc and eslint exit 0, the budget script
+  (159.9 kB, under 300 kB), and `pnpm exec vitest run` over app-e2e,
+  incident-lifecycle-browser, webeoc-side-by-side-browser and
+  continuity-console-browser, 4 files and 8 tests passed.
+- **Evidence level:** unit, browser, real-database and build.
+- **Deferred:** an error screen for a surface that fails to load before the
+  background loading reaches it, left to the installable web app unit's
+  precache.
+- **Rollback:** revert both commits.
