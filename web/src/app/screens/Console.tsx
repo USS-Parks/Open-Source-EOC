@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import { BoardList } from "../../design/layout.js";
 import { Button } from "../../design/components.js";
 import type { ThemeName } from "../../design/tokens.js";
@@ -15,44 +15,64 @@ import {
 } from "../layout/AppShell.js";
 import { OperationalPeriodControl, PositionControl, useWorkspaceContext } from "../layout/context.js";
 import { PlaceSearch } from "../layout/PlaceSearch.js";
-import { requestMapFocus } from "../layout/map-focus.js";
 import { parseRouteHash, sectionOf, surfaceHash, useSurface, type RouteContext, type Surface } from "../router.js";
 import { EmptyState, ErrorNote, Loading, NotFoundState } from "./parts.js";
-import { MapSurface } from "../surfaces/MapSurface.js";
-import { DashboardSurface, parseDashboardViewState, type DashboardViewState } from "../surfaces/DashboardSurface.js";
-import { BoardSurface, BoardRecordDetailPane, type BoardRecordContext } from "../surfaces/BoardSurface.js";
-import { TemplatesSurface } from "../surfaces/TemplatesSurface.js";
-import { AdminSurface } from "../surfaces/AdminSurface.js";
-import { SitrepSurface, SitrepWorkspace } from "../surfaces/SitrepSurface.js";
-import { FormsSurface } from "../surfaces/FormsSurface.js";
-import { IapSurface } from "../surfaces/IapSurface.js";
-import { FilesWorkspace } from "../../coordination/FilesWorkspace.js";
-import { IncidentsSurface } from "../surfaces/IncidentsSurface.js";
-import { IncidentAreaEditor } from "../surfaces/IncidentAreaEditor.js";
-import { IncidentParticipants } from "../surfaces/IncidentParticipants.js";
-import { TasksSurface } from "../surfaces/TasksSurface.js";
-import { IncidentDatasets } from "../surfaces/IncidentDatasets.js";
-import { ResourcesSurface } from "../surfaces/ResourcesSurface.js";
-import { AarSurface } from "../surfaces/AarSurface.js";
-import { FeedsSurface } from "../surfaces/FeedsSurface.js";
-import { MessagesWorkspace } from "../../coordination/MessagesWorkspace.js";
-import { SmartFormsSurface } from "../surfaces/SmartFormsSurface.js";
-import { FieldReportsSurface } from "../surfaces/FieldReportsSurface.js";
-import { TrackingSurface } from "../surfaces/TrackingSurface.js";
-import { DamageSurface } from "../../damage/DamageSurface.js";
-import { FacilitiesSurface } from "../../facilities/FacilitiesSurface.js";
+import type { DashboardSurfaceProps, DashboardViewState } from "../surfaces/DashboardSurface.js";
+import type { BoardRecordContext } from "../surfaces/BoardSurface.js";
 import { BoardsIndex } from "../surfaces/lists.js";
-import { AlertsSurface } from "../surfaces/AlertsSurface.js";
 import { NotificationTray } from "../../notifications/NotificationTray.js";
-import { LifelinesSurface } from "../surfaces/LifelinesSurface.js";
-import { EsfSurface } from "../surfaces/EsfSurface.js";
-import { ContinuityPanel } from "../../offline/ContinuityPanel.js";
-import { ChronologySurface } from "../../audit/ChronologySurface.js";
-import { StaffingSurface } from "../../staffing/StaffingSurface.js";
-import { FederationSurface } from "../../federation/FederationSurface.js";
-import { ContactsSurface } from "../../contacts/ContactsSurface.js";
-import { MassNotificationSurface } from "../../contacts/MassNotificationSurface.js";
-import { ReportsSurface } from "../../reports/ReportsSurface.js";
+
+/**
+ * Every surface, the map with MapLibre and PMTiles, and the Yjs offline tree
+ * load on first use, so first paint carries only the shell and the boards
+ * list. Once the console is up it fetches the rest in the background, so a
+ * screen not yet opened still opens after the network drops.
+ */
+const onDemandModules: Array<() => Promise<unknown>> = [];
+function onDemand<P extends object>(load: () => Promise<ComponentType<P>>) {
+  onDemandModules.push(load);
+  return lazy(() => load().then((component) => ({ default: component })));
+}
+
+const MapSurface = onDemand(() => import("../surfaces/MapSurface.js").then((m) => m.MapSurface));
+// The route carries the dashboard view state as text; its parser ships with the surface.
+const DashboardSurface = onDemand(() => import("../surfaces/DashboardSurface.js").then((m) =>
+  function RoutedDashboard(props: Omit<DashboardSurfaceProps, "viewState"> & { readonly routeFilter?: string | undefined }) {
+    return <m.DashboardSurface {...props} viewState={m.parseDashboardViewState(props.routeFilter)} />;
+  }));
+const BoardSurface = onDemand(() => import("../surfaces/BoardSurface.js").then((m) => m.BoardSurface));
+const BoardRecordDetailPane = onDemand(() => import("../surfaces/BoardSurface.js").then((m) => m.BoardRecordDetailPane));
+const TemplatesSurface = onDemand(() => import("../surfaces/TemplatesSurface.js").then((m) => m.TemplatesSurface));
+const AdminSurface = onDemand(() => import("../surfaces/AdminSurface.js").then((m) => m.AdminSurface));
+const SitrepSurface = onDemand(() => import("../surfaces/SitrepSurface.js").then((m) => m.SitrepSurface));
+const SitrepWorkspace = onDemand(() => import("../surfaces/SitrepSurface.js").then((m) => m.SitrepWorkspace));
+const FormsSurface = onDemand(() => import("../surfaces/FormsSurface.js").then((m) => m.FormsSurface));
+const IapSurface = onDemand(() => import("../surfaces/IapSurface.js").then((m) => m.IapSurface));
+const FilesWorkspace = onDemand(() => import("../../coordination/FilesWorkspace.js").then((m) => m.FilesWorkspace));
+const IncidentsSurface = onDemand(() => import("../surfaces/IncidentsSurface.js").then((m) => m.IncidentsSurface));
+const IncidentAreaEditor = onDemand(() => import("../surfaces/IncidentAreaEditor.js").then((m) => m.IncidentAreaEditor));
+const IncidentParticipants = onDemand(() => import("../surfaces/IncidentParticipants.js").then((m) => m.IncidentParticipants));
+const TasksSurface = onDemand(() => import("../surfaces/TasksSurface.js").then((m) => m.TasksSurface));
+const IncidentDatasets = onDemand(() => import("../surfaces/IncidentDatasets.js").then((m) => m.IncidentDatasets));
+const ResourcesSurface = onDemand(() => import("../surfaces/ResourcesSurface.js").then((m) => m.ResourcesSurface));
+const AarSurface = onDemand(() => import("../surfaces/AarSurface.js").then((m) => m.AarSurface));
+const FeedsSurface = onDemand(() => import("../surfaces/FeedsSurface.js").then((m) => m.FeedsSurface));
+const MessagesWorkspace = onDemand(() => import("../../coordination/MessagesWorkspace.js").then((m) => m.MessagesWorkspace));
+const SmartFormsSurface = onDemand(() => import("../surfaces/SmartFormsSurface.js").then((m) => m.SmartFormsSurface));
+const FieldReportsSurface = onDemand(() => import("../surfaces/FieldReportsSurface.js").then((m) => m.FieldReportsSurface));
+const TrackingSurface = onDemand(() => import("../surfaces/TrackingSurface.js").then((m) => m.TrackingSurface));
+const DamageSurface = onDemand(() => import("../../damage/DamageSurface.js").then((m) => m.DamageSurface));
+const FacilitiesSurface = onDemand(() => import("../../facilities/FacilitiesSurface.js").then((m) => m.FacilitiesSurface));
+const AlertsSurface = onDemand(() => import("../surfaces/AlertsSurface.js").then((m) => m.AlertsSurface));
+const LifelinesSurface = onDemand(() => import("../surfaces/LifelinesSurface.js").then((m) => m.LifelinesSurface));
+const EsfSurface = onDemand(() => import("../surfaces/EsfSurface.js").then((m) => m.EsfSurface));
+const ContinuityPanel = onDemand(() => import("../../offline/ContinuityPanel.js").then((m) => m.ContinuityPanel));
+const ChronologySurface = onDemand(() => import("../../audit/ChronologySurface.js").then((m) => m.ChronologySurface));
+const StaffingSurface = onDemand(() => import("../../staffing/StaffingSurface.js").then((m) => m.StaffingSurface));
+const FederationSurface = onDemand(() => import("../../federation/FederationSurface.js").then((m) => m.FederationSurface));
+const ContactsSurface = onDemand(() => import("../../contacts/ContactsSurface.js").then((m) => m.ContactsSurface));
+const MassNotificationSurface = onDemand(() => import("../../contacts/MassNotificationSurface.js").then((m) => m.MassNotificationSurface));
+const ReportsSurface = onDemand(() => import("../../reports/ReportsSurface.js").then((m) => m.ReportsSurface));
 
 const NAV: readonly NavGroup[] = [
   { key: "situation", label: "Situation", items: [
@@ -184,6 +204,14 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
     if (surface.kind !== "board" || !routeContext.recordId) setRecordContext(null);
   }, [routeContext.recordId, surface.kind]);
 
+  useEffect(() => {
+    // One module at a time, so the warm-up never takes the connections the
+    // console's own requests need. Best effort: opening a surface loads it anyway.
+    void (async () => {
+      for (const load of onDemandModules) await load().catch(() => undefined);
+    })();
+  }, []);
+
   if (!jurisdictionId) {
     return (
       <EmptyState
@@ -229,7 +257,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
           {recordContext?.status === "missing" ? <p role="status">Record unavailable in this view</p> : null}
           {recordContext?.status === "ready" ? (
             <>
-              <BoardRecordDetailPane context={recordContext} />
+              <Suspense fallback={null}><BoardRecordDetailPane context={recordContext} /></Suspense>
               <Button
                 kind="quiet"
                 onClick={() => navigate(
@@ -255,13 +283,15 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
           </Button>
         </section>
       ) : null}
-      <ContinuityPanel
-        client={client}
-        personId={session.me?.person.id ?? null}
-        incidentId={incident.selectedIncidentId}
-        onRecoverSession={session.recoverSession}
-        onOpenBoards={() => navigateInContext({ kind: "boards" })}
-      />
+      <Suspense fallback={null}>
+        <ContinuityPanel
+          client={client}
+          personId={session.me?.person.id ?? null}
+          incidentId={incident.selectedIncidentId}
+          onRecoverSession={session.recoverSession}
+          onOpenBoards={() => navigateInContext({ kind: "boards" })}
+        />
+      </Suspense>
       <section aria-label="Boards">
         <h2 style={dockHeading}>Boards</h2>
         {boardItems.length === 0 ? (
@@ -299,7 +329,8 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       organization="Emergency coordination"
       context={<IncidentSwitcher />}
       search={<PlaceSearch client={client} onChoose={(place) => {
-        requestMapFocus(place);
+        // The focus store lives with the map, which loads on demand.
+        void import("../layout/map-focus.js").then((m) => m.requestMapFocus(place));
         if (surface.kind !== "map") navigateInContext({ kind: "map" });
       }} />}
       periodLabel={workspace.selectedPeriodLabel}
@@ -330,74 +361,76 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       onLayoutChange={(next) => workspace.updateLayout(page.arrangement, next)}
       rightDock={dock}
     >
-      <Center
-        // Remount the whole center when the incident changes, so no records,
-        // cached responses or polling timers from the previous incident
-        // survive the switch (VEOC-79B teardown).
-        key={incident.selectedIncidentId ?? "no-incident"}
-        surface={surface}
-        recordId={routeContext.recordId}
-        recordBoardId={routeContext.boardId}
-        onRecordContext={receiveRecordContext}
-        theme={props.theme}
-        client={client}
-        personId={session.me?.person.id ?? null}
-        positionKey={session.me?.position?.key ?? null}
-        onDashboardsChanged={dashboards.reload}
-        jurisdictionId={viewingJurisdictionId ?? jurisdictionId}
-        resourceJurisdictionId={resourceJurisdictionId ?? jurisdictionId}
-        discoveryJurisdictionId={jurisdictionId}
-        canActivateIncident={session.me?.memberships.some((membership) => membership.jurisdictionId === jurisdictionId && membership.role === "admin") ?? false}
-        incidentId={incident.selectedIncidentId}
-        incidentName={incident.selectedIncident?.name ?? null}
-        incidentJurisdictionId={incident.selectedIncident?.jurisdictionId ?? null}
-        periodRevision={workspace.selectedPeriodRevision}
-        operationalPeriod={workspace.selectedPeriodRevision === null ? null : workspace.selectedPeriodLabel}
-        incidentCanManage={incident.selectedIncident?.canEditArea ?? false}
-        incidentCanManageParticipation={incident.selectedIncident?.canManageParticipation ?? false}
-        incidentClosed={Boolean(incident.selectedIncident?.closedAt)}
-        incidentBoardIds={incident.incidentBoardIds}
-        boards={boardItems}
-        boardsLoading={boards.loading && !boards.data}
-        collections={collections.data ?? []}
-        feeds={feeds.data ?? []}
-        isAdmin={viewingMembership?.role === "admin"}
-        facilitiesEnabled={facilitiesEnabled}
-        integrations={enabledIntegrations}
-        memberships={session.me?.memberships ?? []}
-        canAuthorAlerts={viewingMembership?.role === "admin" || viewingMembership?.role === "member"}
-        actorEmail={session.me?.person.email ?? ""}
-        isInstanceAdmin={session.me?.isInstanceAdmin === true}
-        canWriteResources={resourceMembership?.role === "admin" || resourceMembership?.role === "member"}
-        collectionsError={collections.error}
-        firstDashboardId={dashboards.data?.[0]?.id}
-        dashboards={dashboards.data ?? []}
-        routeContext={routeContext}
-        onDashboardContext={(change) => navigate(surface, { ...baseContext, ...change })}
-        onNavigate={navigateInContext}
-        onOpenBoard={(id) => navigateInContext({ kind: "board", id })}
-        onOpenRecord={(boardId, recordId, sourceIncidentId) => navigate(
-          { kind: "board", id: boardId },
-          { ...(sourceIncidentId ? { incidentId: sourceIncidentId } : {}), recordId },
-        )}
-        onOpenIncident={(incidentId) => navigate({ kind: "incidents" }, { incidentId })}
-        {...(canReturn && returnRoute ? {
-          onReturn: () => navigate(returnRoute.surface, returnRoute.context),
-        } : {})}
-        onOpenSitrep={(id) => navigateInContext({ kind: "sitrep", id })}
-        onOpenBoardRecord={(boardId, recordId) => navigate(
-          { kind: "board", id: boardId },
-          { ...baseContext, recordId },
-        )}
-        onDashboardFilter={(id, f) =>
-          navigate(
-            f
-              ? { kind: "dashboard", id, filterField: f.field, filterEquals: f.equals }
-              : { kind: "dashboard", id },
-            { ...baseContext, ...routeContext },
-          )
-        }
-      />
+      <Suspense fallback={<Loading />}>
+        <Center
+          // Remount the whole center when the incident changes, so no records,
+          // cached responses or polling timers from the previous incident
+          // survive the switch.
+          key={incident.selectedIncidentId ?? "no-incident"}
+          surface={surface}
+          recordId={routeContext.recordId}
+          recordBoardId={routeContext.boardId}
+          onRecordContext={receiveRecordContext}
+          theme={props.theme}
+          client={client}
+          personId={session.me?.person.id ?? null}
+          positionKey={session.me?.position?.key ?? null}
+          onDashboardsChanged={dashboards.reload}
+          jurisdictionId={viewingJurisdictionId ?? jurisdictionId}
+          resourceJurisdictionId={resourceJurisdictionId ?? jurisdictionId}
+          discoveryJurisdictionId={jurisdictionId}
+          canActivateIncident={session.me?.memberships.some((membership) => membership.jurisdictionId === jurisdictionId && membership.role === "admin") ?? false}
+          incidentId={incident.selectedIncidentId}
+          incidentName={incident.selectedIncident?.name ?? null}
+          incidentJurisdictionId={incident.selectedIncident?.jurisdictionId ?? null}
+          periodRevision={workspace.selectedPeriodRevision}
+          operationalPeriod={workspace.selectedPeriodRevision === null ? null : workspace.selectedPeriodLabel}
+          incidentCanManage={incident.selectedIncident?.canEditArea ?? false}
+          incidentCanManageParticipation={incident.selectedIncident?.canManageParticipation ?? false}
+          incidentClosed={Boolean(incident.selectedIncident?.closedAt)}
+          incidentBoardIds={incident.incidentBoardIds}
+          boards={boardItems}
+          boardsLoading={boards.loading && !boards.data}
+          collections={collections.data ?? []}
+          feeds={feeds.data ?? []}
+          isAdmin={viewingMembership?.role === "admin"}
+          facilitiesEnabled={facilitiesEnabled}
+          integrations={enabledIntegrations}
+          memberships={session.me?.memberships ?? []}
+          canAuthorAlerts={viewingMembership?.role === "admin" || viewingMembership?.role === "member"}
+          actorEmail={session.me?.person.email ?? ""}
+          isInstanceAdmin={session.me?.isInstanceAdmin === true}
+          canWriteResources={resourceMembership?.role === "admin" || resourceMembership?.role === "member"}
+          collectionsError={collections.error}
+          firstDashboardId={dashboards.data?.[0]?.id}
+          dashboards={dashboards.data ?? []}
+          routeContext={routeContext}
+          onDashboardContext={(change) => navigate(surface, { ...baseContext, ...change })}
+          onNavigate={navigateInContext}
+          onOpenBoard={(id) => navigateInContext({ kind: "board", id })}
+          onOpenRecord={(boardId, recordId, sourceIncidentId) => navigate(
+            { kind: "board", id: boardId },
+            { ...(sourceIncidentId ? { incidentId: sourceIncidentId } : {}), recordId },
+          )}
+          onOpenIncident={(incidentId) => navigate({ kind: "incidents" }, { incidentId })}
+          {...(canReturn && returnRoute ? {
+            onReturn: () => navigate(returnRoute.surface, returnRoute.context),
+          } : {})}
+          onOpenSitrep={(id) => navigateInContext({ kind: "sitrep", id })}
+          onOpenBoardRecord={(boardId, recordId) => navigate(
+            { kind: "board", id: boardId },
+            { ...baseContext, recordId },
+          )}
+          onDashboardFilter={(id, f) =>
+            navigate(
+              f
+                ? { kind: "dashboard", id, filterField: f.field, filterEquals: f.equals }
+                : { kind: "dashboard", id },
+              { ...baseContext, ...routeContext },
+            )
+          }
+        />
+      </Suspense>
     </AppShell>
   );
 }
@@ -555,7 +588,7 @@ function Center(props: {
           theme={props.theme}
           dashboards={props.dashboards}
           configKey={props.routeContext.view ?? null}
-          {...(props.routeContext.filter ? { viewState: parseDashboardViewState(props.routeContext.filter) } : {})}
+          routeFilter={props.routeContext.filter}
           onConfigKey={(key) => {
             const next = { ...props.routeContext };
             if (key) next.view = key;

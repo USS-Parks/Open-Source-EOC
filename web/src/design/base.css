@@ -188,8 +188,9 @@ textarea {
   border-radius: 2px;
 }
 
-/* MapLibre popup and scale, themed to the current surface. */
-.maplibregl-popup-content {
+/* MapLibre popup and scale, themed to the current surface. Scoped to the map
+   container so they outrank MapLibre's stylesheet, which loads with the map. */
+.maplibregl-map .maplibregl-popup-content {
   background: var(--eoc-surface);
   color: var(--eoc-text);
   border: 1px solid var(--eoc-border);
@@ -202,7 +203,7 @@ textarea {
   font-size: 16px;
   padding: 0 6px;
 }
-.maplibregl-ctrl-scale {
+.maplibregl-map .maplibregl-ctrl-scale {
   background: color-mix(in srgb, var(--eoc-surface) 80%, transparent);
   color: var(--eoc-text-muted);
   border-color: var(--eoc-border);

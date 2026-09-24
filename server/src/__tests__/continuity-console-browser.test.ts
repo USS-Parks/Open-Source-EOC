@@ -179,4 +179,20 @@ describe("Console continuity panel", () => {
     expect(pageErrors).toEqual([]);
     expect(externalRequests).toEqual([]);
   }, 120_000);
+
+  it("opens a screen this load never showed after the network drops", async () => {
+    await page.evaluate("window.location.hash = '#/boards'");
+    await page.reload({ waitUntil: "load" });
+    const continuity = page.getByRole("region", { name: "Offline continuity" });
+    await continuity.waitFor();
+    // Screens load on demand; the console fetches the ones not yet shown in the background.
+    await page.waitForLoadState("networkidle");
+    await page.context().setOffline(true);
+    await page.getByRole("button", { name: "Smart Forms", exact: true }).click();
+    // The screen renders its own offline state; its form list needs a connection.
+    await page.getByText("Field forms unavailable").waitFor();
+    await continuity.waitFor();
+    await page.context().setOffline(false);
+    expect(pageErrors).toEqual([]);
+  }, 60_000);
 });

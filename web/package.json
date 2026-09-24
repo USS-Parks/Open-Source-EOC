@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "bundle-budget": "node ../scripts/bundle-budget.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
