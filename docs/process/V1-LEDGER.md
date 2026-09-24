@@ -3081,3 +3081,81 @@ tagging remain separately gated as section 1 of the roster states.
   unit; the setup program does not stop running profiles before replacing
   files, documented as a manual step; a first real upgrade on each path.
 - **Rollback:** revert both commits; no schema to unwind.
+
+## V1 W4.13: gaps the WebEOC side-by-side run found
+
+- **Unit wording (added during execution).** Gaps the WebEOC side-by-side run
+  found: a board created from the Templates screen reaches the Boards list and
+  the rule and report pickers without a reload; a screen creates a board from
+  an already published template; notification rules are listed, changed,
+  paused and removed; rule messages read in human labels; stored enum values
+  show as their labels in the list and the report; and a live guest board
+  socket stops receiving once the guest's grant is revoked or the incident is
+  locked. Acceptance: each has a test that fails before the fix. Gaps 6 (dark
+  theme plain buttons) and 7 (the report table's last heading at 390 wide) go
+  to W5.1; gap 5 (voice, Teams and Slack channels) is out of scope.
+- **What changed.**
+  - The console reads its board list again when Templates creates a board.
+    Templates gains "Create a board from a published template", over a new
+    `GET /api/v1/templates` catalogue.
+  - The Notifications tab lists rules with Pause, Change and Remove, over
+    `GET /api/v1/jurisdictions/:id/notification-rules` (cursor paged) and
+    `PATCH` and `DELETE /api/v1/notification-rules/:ruleId`, for jurisdiction
+    admins as create is. Changes and removals are audited as
+    `notification.rule_changed` and `notification.rule_removed`; removal is a
+    soft delete (`removed_at`) because notifications and outbox rows point at
+    the rule.
+  - Email, SMS, push and in-app text uses the board title, the record's first
+    text field, field labels and value labels, for example "Shelter status
+    record updated: McKinleyville Library" and "Status: Closed (was
+    Normal)", and spells out only fields every reader of the board may see.
+    Webhook bodies are unchanged.
+  - Enum values show as labels in the board list, group counts, and the
+    report screen, PDF and Excel, through a shared `choiceLabel` in the
+    dictionary.
+  - After a guest grant revocation or an incident lock commits, every live
+    guest board socket is checked again under row-level security and closed
+    with `auth_required` if access is gone; a member's socket stays open.
+  - `docs/WEBEOC-SIDE-BY-SIDE.md` marks the closed gaps with their tests;
+    `docs/guides/ADMIN.md` documents rule management and drops two stale
+    sentences (no rule list; the lockdown socket caveat); `DESIGNER.md` notes
+    creating a board from a published template.
+- **Defaults and deviations.** Pausing a rule does not re-check the webhook
+  allowlist; new channels are checked. The templates catalogue is not paged.
+  Board CSV and Excel exports, report CSV and JSON and webhooks keep stored
+  codes, so exports import back unchanged. Labels are made from the stored
+  value (underscores to spaces, first letter capitalised), the kanban's rule,
+  since templates carry no per-value labels. The create-from-published control
+  sits on Templates, which only an instance administrator who also administers
+  the jurisdiction opens. Ownership deviations: one post-commit call each in
+  `server/src/app.ts` (guest revoke) and `server/src/incidents/routes.ts`
+  (lock), placed after the commit because the re-check must see it;
+  `server/src/boards/routes.ts` (the catalogue); `shared/src/dictionary/index.ts`;
+  three added lines in `Console.tsx`, re-applied by hand when the rebase met
+  the code splitting unit's rewrite of the same block; `ReportsSurface.tsx`;
+  three stale lines in `ADMIN.md`.
+- **Schema, contract, dependencies.** Migration `0129`:
+  `notification_rules.removed_at` and the check
+  `notification_rules_removed_disabled`. Four routes added to the contract and
+  `docs/API.md`, each called by the web client. No dependency.
+- **Verification.** In the lane, tag `b`, on `bc64e68`: tsc and eslint exit 0;
+  `pnpm exec vitest run` over 23 server and web files, 147 tests passed;
+  seven browser walks (webeoc-side-by-side, notification-rules, reports,
+  board-records, board-views, boards-designer, incident-lifecycle), 10 tests
+  passed; link checker ok, 87 files. The integrating session rebased onto
+  `4ff06ea` and ran tsc and eslint exit 0, and `pnpm exec vitest run` over
+  api-docs, route-coverage, notification-rule-management,
+  sync-guest-withdrawal, security-headers, incident-lifecycle,
+  webeoc-side-by-side-browser, app-e2e and templates-surface, 9 files and 36
+  tests passed. Failing before the fix: with `sync/routes.ts`, `app.ts` and
+  `incidents/routes.ts` put back to `main`, both socket tests failed ("still
+  open"); the rule routes, the catalogue and the label text do not exist on
+  the old code, so their tests cannot pass there.
+- **Evidence level:** unit, real-database, socket, browser and document.
+- **Deferred:** labels in change history, record detail, kanban cards and the
+  calendar; an audit entry for rule creation; a create-from-published control
+  for a jurisdiction admin who is not an instance admin; a guest socket that
+  joins between the commit and the re-check is not closed, though its next
+  join is refused.
+- **Rollback:** revert both commits; a database that ran `0129` keeps an unused
+  nullable column and its check.
