@@ -4501,3 +4501,18 @@ for writing when this was recorded, so this entry carries the requirement.
 - **Evidence level:** unit, real-database, browser and the full serial gate.
 - **Acceptance.** Awaiting Basho's review of `DESIGN-FIDELITY-REVIEW.md`.
 - **Rollback:** revert the commits; they add documents only.
+
+## V1 grant: partner sharing
+
+Basho, 2026-09-24, after the design fidelity review: "The db access rules
+need to be changed so that adjacent partners with access to the incident can
+share this type of data," and "Partner organization permissions need to be
+changed to allow for a greater freedom of information sharing."
+`docs/process/PARTNER-SHARING-PSPR-2026-09-24.md` was drafted from a map of
+every partner refusal (resource requests, positions, assessment links and
+owners, threads and their audit rows) and approved as written: "Run it STS
+now with my full approval and permissions granted across the board." The
+approval takes every default in the plan's section 2 and is the recorded
+approval of widening FOUO reads to the incident's participating
+organizations, as VEOC-80 was for the partner map. Receipts for its units
+follow here.
