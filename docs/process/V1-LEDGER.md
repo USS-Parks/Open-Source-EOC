@@ -2565,3 +2565,72 @@ tagging remain separately gated as section 1 of the roster states.
   rather than the nearest settlement; "St" as "Saint".
 - **Rollback:** revert both commits; unsetting `OPENEOC_GAZETTEER_PATH` alone
   turns search off.
+
+## V1 W4.8: resources
+
+- **What changed.** A NIMS resource typing catalog, a resource pool with
+  demobilization, and a cost rollup in Resources.
+  - The catalog holds five starter kinds from the shared dictionary
+    (`shared/src/dictionary/resource-typing.ts`): Incident Management Team,
+    Engine, Water Tender, Hand Crew and Dozer, citing NIMS Third Edition (2017)
+    and NWCG PMS 200 and stating that they are not RTLT titles or IDs. An
+    administrator adds local kinds and imports definitions from an RTLT CSV
+    export (`server/src/resource/typing.ts`): header synonyms; type levels as
+    digits, "Type n", Roman numerals or "Single Type"; rows grouped by RTLT
+    ID; all or nothing with up to 20 row errors shown; a new import replaces
+    the previous one; a source note required; 5,000 rows and 5 MB.
+  - A request may name a kind and the least capable type that fills it. Kind
+    and type are checked on every request and pool write.
+  - Pool statuses are available, assigned, out of service and demobilized,
+    moved by a table in the dictionary. Assignment needs a request in sourcing,
+    assigned or deployed, of the same kind, asking for a type the resource
+    meets or betters; a request on a closed incident answers 409, and leaving
+    assigned stays allowed. Demobilization is final and records the return
+    condition and the checks made, which are this project's own short list,
+    not ICS-221 text. Every move is audited.
+  - Each request's recorded cost total rides on the request list; the screen
+    totals it per request, per kind and overall, and export stays on the
+    existing CSV route.
+  - `docs/guides/OPERATOR-QUICKSTART.md` gains "Type resources, keep the pool
+    and demobilize".
+- **Defaults and deviations.** No section 7 item applies. Against the
+  implementer's own design: no separate cost route, since `costCents` on the
+  existing request list meets "surfaced from the existing routes"; no status
+  event table, since the append-only audit log holds every move and the
+  resource row holds the demobilization record; the starter kinds carry empty
+  capability text rather than invented text. Pool and catalog reads are
+  members only, as the existing resource request routes are; guest read of the
+  resource module is a named gap against the FOUO access model, deferred as a
+  module-wide change.
+- **Schema, contract, dependencies.** Migration `0127_resource_typing.sql`:
+  `resource_kinds` (members read, admins insert and delete), `resources`
+  (members read, writers insert and update, checks tying assigned to a request
+  and demobilized to a return condition and date), and nullable
+  `resource_kind` and `resource_type` on `resource_requests`, all under
+  row-level security. Six routes added to the contract and `docs/API.md`. No
+  dependency.
+- **Verification.** In the lane, tag `c`, on `888750a`: `pnpm -r exec tsc
+  --noEmit` exit 0; `pnpm exec eslint .` exit 0; `pnpm exec vitest run` over
+  resource-typing, resource-typing-browser, resource, resources-browser,
+  jic-resources-browser, incident-resource-scope, export, api-docs,
+  resources-surface, route-coverage, the web client test, the shared dictionary
+  test and the shared resource lifecycle test, 13 files and 87 tests passed, 0
+  failed; link checker ok, 73 files. The real-database tests cover authority by
+  role and for outsiders (403, and 404 on a resource they cannot see), catalog
+  rights and the duplicate local kind 409, all-or-nothing import and
+  replacement, kind and type checks, valid and invalid moves with
+  demobilization final, the assignment rule, the closed-incident 409 and cost
+  totals on the incident-scoped list. The browser walk imports two RTLT
+  definitions, pools, assigns and demobilizes a typed engine and reads the
+  rollup, with light and dark 1440 and dark 390 screenshots. The integrating
+  session rebased onto `4630771`, which carries the WebEOC importer and
+  address search routes, and ran tsc and eslint exit 0, `pnpm exec vitest run`
+  over api-docs, route-coverage, the contract test, resource-typing and
+  resource, 5 files and 29 tests passed, and the link checker ok, 86 files.
+- **Evidence level:** unit, integration, real-database, browser and document.
+- **Deferred:** the full RTLT dataset (no download is available, a named gap);
+  a per-resource history view; a cap on resources per request against its
+  quantity; editing or deleting local kinds; changing a pool resource's kind or
+  type; guest read of the resource module.
+- **Rollback:** revert both commits; migration `0127` adds only new tables and
+  two nullable columns.
