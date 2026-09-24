@@ -3561,3 +3561,102 @@ tagging remain separately gated as section 1 of the roster states.
   selector to it; the map's record panel shows nothing when its form fails to
   load.
 - **Rollback:** revert both commits.
+
+## V1 79D+D33 part two: the integrated visual and accessibility review
+
+- **What changed.**
+  - New `server/src/__tests__/d33-review-browser.test.ts` runs the D33 review
+    as one walk on the real build and PostgreSQL: sign-in with two-step
+    enrollment and verification, the console shell and twelve views (map,
+    overview, board list, a 500-row board, record detail, record form,
+    Resources, Incident Setup with the master view, Reports, Mass
+    Notification, Smart Forms, Administration) and the update notice, in light
+    and dark at 1440 and 390 and at 720 for 200 percent zoom. Every screen runs
+    axe from the installed axe-core with no serious or critical result
+    allowed; no sideways page scroll at 390 or 720; each view walked by
+    keyboard from the skip link with every ring measured at 3:1 and no trap;
+    the command bar, rail and page header fixed between routes; long names, a
+    500-row board, a 403 refusal, the network off, an empty list, a slow load
+    and a map form failing with a 500 exercised.
+  - New `docs/design/D33-REVIEW.md`: the review set, the evidence reused (the
+    galleries' axe tests, the token contrast test, app-e2e's keyboard traps,
+    the installable app walk) and 26 findings with severity and disposition.
+  - Fixed, 14 findings, none blocking and 11 major: focus rings on the navy
+    command bar and rail (2.0:1, now the signal teal at 7.7:1); the impact
+    indicator strip, now a named focusable group; board view tabs naming a
+    panel that did not exist; input and select borders and the dark strong
+    border token (#6b7785 to #7a8694) so they hold 3:1; unstyled links below
+    contrast (the enrollment link at 1.62:1 in dark); "Failed to fetch" shown
+    for a lost connection; the three findings from part one (another
+    incident's boards in the dock, board list, map layer list and point board
+    choice, fixed by the board list carrying `incidentIds`; the selector not
+    following a new activation; the map's record panel blank when its form
+    fails, now naming the board and the reason); MapLibre controls without
+    focus under forced colours; sign-in screens without a main landmark and
+    heading; board list "Open" buttons without the board's name; empty
+    filter-row header cells; "warn" shown as "Watch" on the overview tile.
+- **Defaults and deviations.** The input border rule and the dark border token
+  are visible changes, left for Basho's review. Keyboard walks run in the
+  light theme; dark rings are covered by the token test and the dark
+  higher-contrast walk. The drawer's aside element is kept. Ownership
+  deviation: `server/src/boards/service.ts`, where `listBoards` returns each
+  board's `incidentIds` under row-level security, the root cause of the
+  other-incident boards.
+- **Schema, contract, dependencies.** No migration, route or dependency; the
+  boards list response gains `incidentIds`.
+- **Verification.** In the lane, tag `b`, on `df0ea3f`: tsc and eslint exit 0;
+  `pnpm exec vitest run web/`, 88 files and 660 tests passed; the review walk
+  9 of 9; the walks of the changed screens with boards, board-authoring and
+  route-coverage, 21 files, all passed except `cross-boundary-browser`, which
+  failed 2 of 5 runs under two-worker load at its wait for the shelters
+  indicator after "Zoom to extent" and passed alone and on a rerun of its
+  batch, its cause not established; bundle budget 160.8 kB; link checker ok,
+  94 files after staging. Failing first: the new unit tests before their
+  fixes; the walk before the fixes for the navy rings, the enrollment link,
+  the forced-colours map controls, the impact strip and the board tabs.
+- **Evidence level:** unit, real-database browser and document.
+- **Deferred:** findings 15 to 25 in `D33-REVIEW.md`, assigned to Basho (two
+  primary button styles side by side, "Unavailable" for an empty optional
+  field, the board list's Open column at 390, "required" in the error colour
+  before input, no product identity on sign-in) or to `86+D35` (incident
+  board titles from template keys, raw state keys on Resources, tab sets
+  without panels on Chronology, Tasks and the designer, the phone drawer's
+  dialog role, the drawer preference saved from a phone, loading notes not
+  announced); the cross-boundary wait under load.
+- **Rollback:** revert the commit (it carries this and the next unit).
+
+## V1 A11Y-T1: reduced motion, higher contrast and the screen-reader script
+
+- **What changed.**
+  - Under `prefers-reduced-motion: reduce`, one rule in `base.css` stops every
+    animation and removes every transition, including ones added later; the
+    kit spinner only slows. MapLibre jumps its camera under the preference,
+    and the walk proves it both ways: the zoom control and a 600 ms bookmark
+    flight arrive within 150 ms reduced and take at least 150 ms and 500 ms
+    without it.
+  - `tokens.ts` gains higher-contrast tokens; `Theme` follows
+    `prefers-contrast: more` live and strengthens text, muted text, borders
+    and focus in both themes, with a 3 px ring. Under `forced-colors: active`
+    focus rings and the selected section and tab stay visible, map controls
+    included.
+  - Tests: `motion.test.ts`; contrast tests asserting AA text and 3:1 borders
+    and focus on every surface for the higher-contrast tokens; the walk under
+    higher contrast (every ring 3:1 in both themes on the map and Resources)
+    and forced colours (every stop shows a ring).
+  - New `docs/guides/ACCESSIBILITY.md`, indexed from the guides README: what
+    the console supports, its known limits (the map canvas is visual; its
+    features are reached through the find box, layer list and inspector), and
+    the NVDA and VoiceOver script: seven tasks, what to record per task and
+    where.
+- **Defaults and deviations.** The manual screen-reader pass needs a person and
+  is scripted, not run: it is Basho's input, recorded in this ledger as "V1
+  A11Y-T1: screen-reader pass" when done. Transitions are removed rather than
+  shortened, since a near-zero transition still starts on every property and
+  the walk caught focus rings mid-transition. Deviation from the roster order:
+  this unit landed with D33 part two, before `M5`, so the milestone gate
+  covers it.
+- **Schema, contract, dependencies:** none.
+- **Verification:** the run recorded in the part two receipt above.
+- **Evidence level:** unit, browser and document.
+- **Deferred:** the NVDA and VoiceOver pass (Basho).
+- **Rollback:** revert the commit.
