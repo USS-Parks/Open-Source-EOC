@@ -3493,3 +3493,71 @@ tagging remain separately gated as section 1 of the roster states.
   upgrade install.
 - **Rollback:** revert both commits; the generated stage and setup are ignored
   files and can be deleted.
+
+## V1 79D+D33 part one: the integrated cross-boundary exercise
+
+- **What changed.**
+  - New `server/src/__tests__/cross-boundary-legs.test.ts`, on real
+    PostgreSQL with a second peer instance, runs one connected workflow over
+    the four legs the frozen receipt "VEOC-79D: Integrated cross-boundary
+    incident exercise (partial)" left open: two wildfire incidents; area and
+    partner onboarding; the partner's shelter dataset reconciled between the
+    COP layer (3 features, 2 inside the incident area), the impact indicator
+    (2, naming the partner's dataset) and a direct PostGIS count; a partner
+    field report queued offline that reaches the server only on reconnect and
+    keeps its author and position in the record, the sync log and the audit,
+    mapped by the owner's roster to "Valley Mutual Aid" and "Mutual Aid
+    Liaison" even after revocation, while a report queued after revocation is
+    refused and stays on the device; cross-organization resource requests on
+    the incident; a record federated to a peer instance with the same record
+    id and attributed there to "Valley City EOC", with the incident report
+    kept home; the plan, revocation and closeout. The second incident sees
+    none of it.
+  - New `server/src/__tests__/cross-boundary-browser.test.ts` walks the flow
+    with owner and partner in two browser contexts: activate, draw the area
+    with a period, add the partner; the partner sees only that incident,
+    posts a road closure from the map and requests cots; the owner assigns an
+    engine request to the partner as supplier, checks the map and dashboard
+    (1 closed road here, 0 in the second incident), assembles and approves the
+    plan, revokes the partner (whose view drops to no active incident) and
+    closes the incident; the second stays open.
+  - A defect the walk found: a partner who is not a member of the owner's
+    organization could not post a field impact on the map, because the map
+    read the board's form without the incident and the server refused it,
+    and the panel stayed blank. `MapSurface.tsx` now reads the form and saves
+    the record in the incident's scope.
+  - The existing exercise's header comment, which said resources and COP
+    were not incident-scoped yet, is corrected; its assertions are unchanged.
+- **Defaults and deviations.** Leg 1 is exercised in the form the product
+  ships: the owner assigns its own request on the incident to the partner as
+  supplier, and the partner's own request on the incident is received by the
+  partner's organization. The roster's literal "the partner requests and the
+  owner assigns" is blocked: a request belongs to its receiving
+  organization (the frozen receipt "D22: incident resource coordination"),
+  and resource request reads are members only ("V1 W4.8: resources" defers
+  guest read of the module), so the owner cannot see a partner-received
+  request and the partner cannot read the owner's request it supplies.
+  Changing that changes the ownership model, and it is recorded as a blocker
+  for Basho's decision. The partner's dataset is loaded through the API as a
+  feed push would. Ownership deviations: `MapSurface.tsx` and its test.
+- **Schema, contract, dependencies:** none.
+- **Verification.** In the lane, tag `b`, on `5875c2f`: tsc and eslint exit 0;
+  `pnpm exec vitest run` over cross-boundary, cross-boundary-legs,
+  cross-boundary-browser, map-surface, field-workspaces-browser and app-e2e,
+  6 files and 22 tests passed, 0 failed. Before the fix, map-surface ran 1
+  failed and 8 passed, and the walk timed out on the map's record form. The
+  integrating session rebased onto `e395af4`, which changes only the Windows
+  deploy tree and the ledger. Screenshots: light 1440 (owner setup, partner
+  COP, owner COP), dark 1440 (plan, closeout), light 390 (revoked partner,
+  no sideways scroll); no page errors, no outside requests.
+- **Evidence level:** unit, real-database with two instances, browser.
+- **Findings carried to part two and the reconciliation:** the owner's record
+  detail shows no position title or organization for a partner's record,
+  since positions are readable only inside their organization (a policy or
+  schema change); across federation the peer attributes a batch to the
+  sending instance, not the author, as the federation guide states; with one
+  incident selected, the dock and map layer list still show the other
+  incident's empty boards; activating an incident does not switch the
+  selector to it; the map's record panel shows nothing when its form fails to
+  load.
+- **Rollback:** revert both commits.
