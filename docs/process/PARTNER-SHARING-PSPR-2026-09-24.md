@@ -41,6 +41,31 @@ boards, the whole position roster and jurisdiction threads stay as they are.
 with VEOC-80 (`docs/process/VEOC-80-POLICY-APPROVAL.md`), Basho's approval of
 this plan is the recorded approval of that expansion.
 
+**The VEOC reports this plan answers.** Basho, 2026-09-24: "Make sure to
+incorporate the VEOC report into the plan." Two reports bear on it:
+
+- The VEOC parity matrix (`docs/VEOC-PARITY-MATRIX.md`) carries the partner
+  gaps this plan closes. Row F5: "a partner cannot read the owner's request
+  it supplies and the owner cannot see a partner-received request, pending
+  Basho's decision on request ownership." Row R3: "the partner requests and
+  the owner assigns" is blocked by the request ownership model, and "the
+  owner's record detail shows no position title or organization for a
+  partner's record." Row F2 records the same position gap. The matrix's
+  release note lists R3 as waiting on Basho's request ownership decision;
+  Basho's direction above is that decision: requests on an incident are
+  shared by every organization on it, and a partner may request from the
+  owner, who assigns. PS1 and PS2 close these, and PS5 moves the rows.
+- The VEOC-80 policy approval sets the conditions a partner read policy meets
+  before it lands, and every unit here meets them: the policy is written as a
+  migration and exercised first on throwaway test databases; it passes a real
+  database allow and deny gate and a browser allow and deny gate; an
+  independent review reads it before it lands; data stays limited to the
+  incident the reader can read; writes keep their authority except where a
+  decision below names the new write. Where a policy needs a SECURITY DEFINER
+  helper to read a row its own policy guards, the helper returns a boolean
+  only, is granted to the application role alone, and its reason is written
+  beside it.
+
 ## 2. Decisions, with the default the plan uses
 
 | # | Question | Default |
@@ -52,6 +77,7 @@ this plan is the recorded approval of that expansion.
 | 5 | Who may name the owner of a stabilization action? | Any contributor or coordinator writing the assessment, from the incident's positions and its active participants. This names who is expected to act; it does not create a task or an obligation in the owner's workflow. |
 | 6 | May the participant a request is assigned to record its progress? | Yes: the delivery transitions after assignment (deployed, demobilizing, closed) and notes, for requests assigned to that participant. |
 | 7 | Does sharing continue after the incident closes? | Yes, for as long as the grant lasts, as incident reads do today. |
+| 8 | Request ownership (the VEOC parity matrix's open decision for R3): may a partner request from the incident's owner? | Yes. A contributor or coordinator submits a request the owner receives and runs through triage, sourcing and assignment; the request belongs to the owner, and every organization on the incident reads it. |
 
 ## 3. Units
 
@@ -62,11 +88,11 @@ closed, the screens that read the new access, and a receipt.
 
 | Unit | What | Acceptance |
 |---|---|---|
-| PS1 | **Shared incident requests.** `rr_read` and `rr_events_read` add requests whose incident the reader can read (decision 1); `rr_costs_*` unchanged (decision 2). Request services read incident requests by incident for participants; the assigned participant records the delivery transitions (decision 6), with the audit row written to the owning organization through a narrow `audit_append` allowance for the request's own events. The Resources screen shows a participant the incident's requests from every organization, marked with each owner; the overview's request counts are the same for every reader. | Real-database tests: a partner viewer reads the owner's and another partner's incident requests and their history but not their costs, nor any request outside the incident; revocation and expiry end access; the assignee advances only its own assigned request; `cross-boundary-legs` and `resource` expectations move from per-organization lists to the shared list. Browser: a partner sees the county's requests on Resources. |
-| PS2 | **Incident positions.** `positions_read` and `assignments_read` add positions attached to an incident the reader can read, through `incident_positions`, and their current holders; the rest of the roster stays members only. Task and incident views then show position titles and holders to participants. | Tests: a partner reads the incident's positions and holders, not the jurisdiction's other positions; the task list shows a position owner's title to a partner. |
+| PS1 | **Shared incident requests** (matrix rows F5 and R3). `rr_read` and `rr_events_read` add requests whose incident the reader can read (decision 1); `rr_costs_*` unchanged (decision 2). Request services read incident requests by incident for participants; the assigned participant records the delivery transitions (decision 6), with the audit row written to the owning organization through a narrow `audit_append` allowance for the request's own events. "The partner requests and the owner assigns": a contributor or coordinator submits a request that the incident's owner receives, triages and assigns, with its submission event, audit row and the requester's own notification allowed narrowly. The Resources screen shows a participant the incident's requests from every organization, marked with each owner; the overview's request counts are the same for every reader. | Real-database allow and deny tests: a partner viewer reads the owner's and another partner's incident requests and their history but not their costs, nor any request outside the incident; revocation and expiry end access; the assignee advances only its own assigned request and only by delivery steps; a partner contributor requests from the owner and the owner assigns it, a partner viewer cannot request, and nobody requests from an organization that does not own the incident; `cross-boundary-legs` and `resource` expectations move from per-organization lists to the shared list. Browser allow and deny: a partner sees the county's requests on Resources and requests from the county; an outsider sees none. Independent review of the migration before it lands. |
+| PS2 | **Incident positions** (matrix rows F2 and R3). `positions_read` and `assignments_read` add positions attached to an incident the reader can read, through `incident_positions`, and their current holders; the rest of the roster stays members only. Task and incident views then show position titles and holders to participants. A record's detail names a partner author's incident position title and organization from the author's grant, so the owner sees who wrote a partner's record. | Allow and deny tests: a partner reads the incident's positions and holders, not the jurisdiction's other positions; the task list shows a position owner's title to a partner; the owner's record detail names a partner author's position and organization. Independent review of the migration. |
 | PS3 | **Linked actions across organizations.** Stabilization actions link any request or incident board record the writer can now read, and name their owner from the incident's positions and active participants (decision 5). The drawer shows the owner and opens the linked request for any reader. | Tests: a partner liaison links the county's request and names "Logistics Section Chief"; a link to another incident's request is still refused; the operational relationships service follows the same rule. |
 | PS4 | **Incident-wide threads.** A thread gains an audience: members only (today's) or the whole incident. Read and post policies admit active participants of the thread's incident for incident-wide threads (decisions 3 and 4), computed live from the grant, so revocation cuts access. The partner's `message.sent` audit row is allowed into the owning organization for its own post. Messages show the sender's organization; the Messages screen lets a partner read and post in the incident's threads. Attachments stay out of scope. | Tests: a partner reads and posts in an incident-wide thread, reads nothing in a members-only thread, loses both on revocation; a viewer reads but cannot post; the activity feed shows the partner's message. Browser: a partner posts and the owner sees it. |
-| PS5 | **Scenario and review.** The North Coast seed uses the new access as the frames do: the Energy liaison links the generator request and the substation crew request, naming the Logistics Section Chief and the Utility liaison; the Caltrans liaison posts the road status message. `DESIGN-FIDELITY-REVIEW.md` drops the differences this closes; `pnpm fidelity` refreshes the images. The full serial gate runs. | Frames 2 and 3 show the linked actions and the Caltrans message; `pnpm check:gate` green. |
+| PS5 | **Scenario and review.** The North Coast seed uses the new access as the frames do: the Energy liaison links the generator request and the substation crew request, naming the Logistics Section Chief and the Utility liaison; the Caltrans liaison posts the road status message. `DESIGN-FIDELITY-REVIEW.md` drops the differences this closes; `pnpm fidelity` refreshes the images. The VEOC parity matrix, `docs/FACET-STATUS.md` and `RELEASE-DECISION.md` record rows F2, F5 and R3 as the receipts now support, with Basho's request ownership decision cited. The full serial gate runs. | Frames 2 and 3 show the linked actions and the Caltrans message; `pnpm check:gate` green. |
 
 ## 4. Risks the units handle
 
