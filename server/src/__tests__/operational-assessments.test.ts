@@ -399,6 +399,47 @@ describe("operational assessments", () => {
     );
   });
 
+  it("records a stabilization objective and the next update time, and refuses an update due before the assessment", async () => {
+    const assessedAt = "2026-09-23T16:35:00.000Z";
+    const created = await app.inject({
+      method: "POST", url: lifelineUrl(), headers: auth(memberToken),
+      payload: lifelinePayload("unstable", {
+        lifeline: "water_systems",
+        assessedAt,
+        stabilizationObjective: "Restore treatment to grid power.",
+        nextUpdateAt: "2026-09-23T17:30:00-07:00",
+      }),
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json()).toMatchObject({
+      stabilizationObjective: "Restore treatment to grid power.",
+      nextUpdateAt: "2026-09-24T00:30:00.000Z",
+    });
+    const [row] = await admin`
+      select stabilization_objective, next_update_at from operational_assessments where id = ${created.json().id as string}`;
+    expect(row).toMatchObject({ stabilization_objective: "Restore treatment to grid power." });
+    expect(new Date(row!.next_update_at as string).toISOString()).toBe("2026-09-24T00:30:00.000Z");
+
+    const current = await app.inject({ method: "GET", url: lifelineUrl(), headers: auth(partnerToken) });
+    const water = current.json().states.find((state: { lifeline: string }) => state.lifeline === "water_systems");
+    expect(water.reports[0]).toMatchObject({ stabilizationObjective: "Restore treatment to grid power." });
+    const history = await app.inject({ method: "GET", url: `${lifelineUrl()}/water_systems/history`, headers: auth(memberToken) });
+    expect(history.json().reports[0]).toMatchObject({ nextUpdateAt: "2026-09-24T00:30:00.000Z" });
+
+    const early = await app.inject({
+      method: "POST", url: lifelineUrl(), headers: auth(memberToken),
+      payload: lifelinePayload("unstable", { lifeline: "water_systems", assessedAt, nextUpdateAt: "2026-09-23T16:00:00.000Z" }),
+    });
+    expect(early.statusCode).toBe(400);
+    await expect(admin`
+      insert into operational_assessments
+        (domain, jurisdiction_id, incident_id, framework, definition_key, definition_version,
+         condition, payload, assessed_at, source_kind, created_by, home_organization_id, next_update_at)
+      values ('lifeline', ${ownerId}, ${incidentId}, 'fema_community_lifelines', 'water_systems', 1,
+        'unstable', '{}'::jsonb, ${assessedAt}, 'native', ${memberPersonId}, ${ownerId}, ${"2026-09-23T16:00:00.000Z"})
+    `).rejects.toThrow(/next_update_after_assessment/);
+  });
+
   it("keeps ESF activation and capacity independent and reuses normalized assignment", async () => {
     const created = await app.inject({
       method: "POST", url: esfUrl(), headers: auth(adminToken),

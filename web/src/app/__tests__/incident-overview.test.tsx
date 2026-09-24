@@ -58,7 +58,7 @@ const energy = {
   id: "e1", incidentId: INCIDENT, lifeline: "energy", definitionVersion: 1, condition: "unstable",
   assessedAt: "2026-09-24T09:35:00-07:00", sourceKind: "native", legacyStatus: null,
   payload: { impactStatement: "Two substations offline.", operationalPeriod: "OP 03" },
-  supersedesAssessmentId: null, legacyBoardId: null, legacyRecordId: null,
+  stabilizationObjective: null, nextUpdateAt: null, supersedesAssessmentId: null, legacyBoardId: null, legacyRecordId: null,
   attribution: { personId: "a", personName: "A. Brooks", positionId: null, positionTitle: "Utility liaison", participationId: "g", homeOrganizationId: "o4", homeOrganizationName: "CA Energy Commission", recordedAt: "2026-09-24T09:35:00-07:00" },
 } satisfies LifelineAssessmentReport;
 

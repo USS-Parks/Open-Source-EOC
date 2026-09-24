@@ -243,6 +243,19 @@ export const iconRegistry = {
   minus: icon("Zoom out", "action", "Horizontal bar", ACTION_SIZES, [
     { element: "line", x1: 5, y1: 12, x2: 19, y2: 12 },
   ]),
+  target: icon("Objective", "action", "Target rings with an arrow", ACTION_SIZES, [
+    { element: "circle", cx: 11, cy: 13, r: 7.5 },
+    { element: "circle", cx: 11, cy: 13, r: 3.5 },
+    { element: "path", d: "M11 13 19.5 4.5M16.5 4.5h3v3" },
+  ]),
+  power: icon("Electricity", "action", "Lightning bolt", ACTION_SIZES, [
+    { element: "path", d: "M13.5 2.5 5.5 13.5h6l-1 8 8-11h-6Z" },
+  ]),
+  fuel: icon("Fuel", "action", "Fuel pump", ACTION_SIZES, [
+    { element: "rect", x: 4.5, y: 3.5, width: 9, height: 17, rx: 1.5 },
+    { element: "line", x1: 4.5, y1: 9.5, x2: 13.5, y2: 9.5 },
+    { element: "path", d: "M13.5 7.5h2.5l2.5 2.5v7.5a1.5 1.5 0 0 1-3 0V13h-2" },
+  ]),
   sun: icon("Light theme", "action", "Sun with eight rays", ACTION_SIZES, [
     { element: "circle", cx: 12, cy: 12, r: 4 },
     { element: "path", d: "M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M18.7 5.3l-1.8 1.8M7.1 16.9l-1.8 1.8" },

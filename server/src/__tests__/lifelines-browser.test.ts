@@ -155,7 +155,7 @@ describe("real incident Lifelines presentation", () => {
 
     const hazardous = page.locator('[data-lifeline="hazardous_materials"]');
     expect(await hazardous.getAttribute("data-condition")).toBe("unknown");
-    expect(await hazardous.locator(".eoc-lifeline-impact").textContent()).toBe("No current assessment");
+    expect(await hazardous.locator(".eoc-lw-card-impact").textContent()).toBe("No current assessment");
 
     await page.getByRole("button", { name: "Open Energy details" }).focus();
     await page.keyboard.press("Enter");

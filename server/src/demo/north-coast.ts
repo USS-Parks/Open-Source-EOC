@@ -462,55 +462,110 @@ export async function seedNorthCoast(
   }
 
   // Lifeline assessments, each by the liaison of the reporting organization.
-  const lifeline = (who: string, when: string, input: Record<string, unknown>) =>
-    later(at(when), () => api(who, at(when), "POST", `/api/v1/incidents/${incidentId}/lifeline-assessments`, {
-      definitionVersion: 1, assessedAt: iso(when), operationalPeriod: "OP 03", confidence: "confirmed",
-      components: [], evidence: [], responsibleOrganizationIds: [], actions: [], ...input,
-    }));
+  // Each supersedes that lifeline's previous assessment, so OP 02's reports
+  // stand as history under OP 03's.
+  const assessments: Record<string, string> = {};
+  const lifeline = (who: string, when: string, input: Record<string, unknown>, days = 0) =>
+    later(at(when, days), async () => {
+      const key = input.lifeline as string;
+      const prior = assessments[key];
+      const created = await api<{ id: string }>(who, at(when, days), "POST", `/api/v1/incidents/${incidentId}/lifeline-assessments`, {
+        definitionVersion: 1, assessedAt: iso(when, days), operationalPeriod: "OP 03", confidence: "confirmed",
+        components: [], evidence: [], responsibleOrganizationIds: [], actions: [],
+        ...(prior ? { supersedesAssessmentId: prior } : {}), ...input,
+      });
+      assessments[key] = created.id;
+    });
+  // OP 02, overnight: the storm's first damage.
+  lifeline("brooks", "23:40", {
+    lifeline: "energy", condition: "stabilizing", operationalPeriod: "OP 02",
+    impactStatement: "Scattered outages in Arcata. Crews restoring feeders overnight.",
+    stabilizationObjective: "Restore power to critical facilities.",
+    nextUpdateAt: iso("06:30"),
+  }, -1);
+  lifeline("rkim", "23:50", {
+    lifeline: "transportation", condition: "stabilizing", operationalPeriod: "OP 02",
+    impactStatement: "One lane of US-101 closed north of Arcata. Detours in place.",
+    nextUpdateAt: iso("06:00"),
+  }, -1);
+  lifeline("chen", "00:30", {
+    lifeline: "water_systems", condition: "stable", operationalPeriod: "OP 02",
+    impactStatement: "Treatment and distribution normal.",
+    nextUpdateAt: iso("06:30"),
+  });
+  lifeline("okafor", "01:10", {
+    lifeline: "communications", condition: "unstable", operationalPeriod: "OP 02",
+    impactStatement: "Repeater outage in the Eureka hills. Cellular service degraded.",
+    nextUpdateAt: iso("07:00"),
+  });
+  // OP 03, this morning.
   lifeline("ortiz", "09:18", {
     lifeline: "hazardous_materials", condition: "unknown", confidence: "unknown",
     impactStatement: "Assessment pending. Field teams are surveying the waterfront for displaced containers.",
+    stabilizationObjective: "Account for every container moved by the flooding.",
+    // Due before the scenario clock, so the update reads as overdue.
+    nextUpdateAt: iso("09:30"),
+    components: [{ key: "waterfront", label: "Waterfront storage", condition: "unknown", affectedGeography: "Eureka waterfront" }],
   });
   lifeline("rkim", "09:18", {
     lifeline: "transportation", condition: "unstable",
     impactStatement: "Three access routes closed. US-101 is closed at two segments and SR-299 east of Arcata.",
     stabilizationOutlook: "Reopen US-101 northbound by midday once debris is cleared.",
+    stabilizationObjective: "Restore one open route between Eureka and Arcata.",
+    nextUpdateAt: iso("11:00"),
     components: [
-      { key: "highways", label: "Highways and roads", condition: "unstable" },
-      { key: "bridges", label: "Bridges", condition: "stabilizing" },
+      { key: "highways", label: "Highways and roads", condition: "unstable", affectedGeography: "US-101 corridor", causes: ["Debris and flooding"] },
+      { key: "bridges", label: "Bridges", condition: "stabilizing", affectedGeography: "Mad River", dependencies: ["Caltrans bridge inspection"] },
     ],
   });
   lifeline("reyes", "09:15", {
     lifeline: "food_hydration_shelter", condition: "stabilizing",
     impactStatement: "8 shelters supporting 312 people. Additional capacity is being readied in Eureka.",
+    stabilizationObjective: "Shelter everyone displaced with meals and water on site.",
+    nextUpdateAt: iso("12:00"),
+    components: [{ key: "shelters", label: "Congregate shelters", condition: "stabilizing", affectedGeography: "Arcata", dependencies: ["Backup power at Wendy's Shelter"] }],
   });
   lifeline("alvarez", "09:20", {
     lifeline: "safety_security", condition: "stable",
     impactStatement: "Patrol coverage maintained. Normal patrols with no critical issues.",
+    stabilizationObjective: "Keep patrol coverage across the incident area.",
+    nextUpdateAt: iso("12:00"),
   });
   lifeline("chen", "09:22", {
     lifeline: "water_systems", condition: "stabilizing",
     impactStatement: "Treatment on backup power. Minor service disruptions and no boil notice.",
+    stabilizationObjective: "Return treatment plants to grid power.",
+    nextUpdateAt: iso("11:30"),
+    components: [{ key: "treatment", label: "Drinking water treatment", condition: "stabilizing", affectedGeography: "Blue Lake", dependencies: ["Grid power from the Arcata substation", "Generator fuel"] }],
   });
   lifeline("singh", "09:25", {
     lifeline: "health_medical", condition: "stable",
     impactStatement: "Emergency services available. Hospitals operating with no surge at this time.",
+    stabilizationObjective: "Keep hospitals and EMS at normal capacity.",
+    nextUpdateAt: iso("13:00"),
+    components: [{ key: "hospitals", label: "Hospitals", condition: "stable", affectedGeography: "Eureka", dependencies: ["Open routes for ambulances"] }],
   });
   lifeline("okafor", "09:28", {
     lifeline: "communications", condition: "stabilizing",
     impactStatement: "Backup links in use. Partial outages with redundant systems carrying traffic.",
+    stabilizationObjective: "Restore the Eureka hills repeater.",
+    nextUpdateAt: iso("11:00"),
+    components: [{ key: "radio", label: "Public safety radio", condition: "stabilizing", affectedGeography: "Eureka", dependencies: ["Power at the repeater site"] }],
   });
   lifeline("brooks", "09:35", {
     lifeline: "energy", condition: "unstable",
     impactStatement: "Two substations offline. Backup generation supports priority facilities.",
-    stabilizationOutlook: "Restore power to critical facilities.",
+    stabilizationObjective: "Restore power to critical facilities.",
+    stabilizationOutlook: "Partial restoration expected by mid-afternoon once both substations are inspected.",
+    nextUpdateAt: iso("10:30"),
     components: [
-      { key: "electricity", label: "Electricity", condition: "unstable" },
-      { key: "fuel", label: "Fuel", condition: "stabilizing" },
+      { key: "electricity", label: "Electricity", condition: "unstable", affectedGeography: "Arcata", causes: ["Two substations offline"] },
+      { key: "fuel", label: "Fuel", condition: "stabilizing", affectedGeography: "Eureka", dependencies: ["Diesel deliveries to generators"] },
     ],
     evidence: [{ kind: "reported", description: "Utility outage report", sourceOrganizationId: organizations["cec"], observedAt: iso("09:30") }],
     responsibleOrganizationIds: [organizations["cec"]],
     actions: [
+      // The county's requests are not readable by a partner liaison, so the actions name the work without linking it.
       { key: "generator_request", title: "Generator request", status: "in_progress", responsibleOrganizationId: organizations["cal-oes"] },
       { key: "inspect_substation", title: "Inspect substation", status: "planned", responsibleOrganizationId: organizations["cec"] },
     ],

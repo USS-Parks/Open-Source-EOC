@@ -10,7 +10,13 @@ import {
 } from "@openeoc/shared";
 import type { ApiClient, LifelineAssessmentOverviewResponse } from "../api/client.js";
 import { LifelinesSurface } from "../surfaces/LifelinesSurface.js";
+import { PageChromeContext } from "../layout/page-chrome.js";
 import { LIFELINE_KEYS, projectLifeline } from "../surfaces/lifeline-view.js";
+
+// The assessment form reads the selected incident for its organization choices.
+vi.mock("../incident/context.js", () => ({
+  useIncident: () => ({ selectedIncident: { id: "00000000-0000-4000-8000-000000000020", jurisdictionId: "00000000-0000-4000-8000-000000000011", name: "Harbor Storm" } }),
+}));
 
 const PERIOD = {
   label: "OP 3",
@@ -54,7 +60,7 @@ function report(
       operationalPeriod: "OP 3",
       ...payload,
     },
-    supersedesAssessmentId: null,
+    stabilizationObjective: null, nextUpdateAt: null, supersedesAssessmentId: null,
     legacyBoardId: null,
     legacyRecordId: null,
     attribution,
@@ -109,6 +115,11 @@ function client(): ApiClient {
   return {
     listIncidentLifelineAssessments: vi.fn().mockResolvedValue(overview),
     getIncidentArea: vi.fn().mockResolvedValue(area),
+    lifelineAssessmentHistory: vi.fn().mockResolvedValue({ reports: [] }),
+    listIncidentEsfAssessments: vi.fn().mockResolvedValue({ states: [] }),
+    listIncidentParticipants: vi.fn().mockResolvedValue([]),
+    listPositions: vi.fn().mockResolvedValue([]),
+    listResourceRequests: vi.fn().mockResolvedValue([]),
   } as unknown as ApiClient;
 }
 
@@ -129,7 +140,7 @@ describe("Community Lifelines overview", () => {
         onClose={() => undefined}
       />,
     );
-    await screen.findByRole("heading", { name: "Community Lifelines" });
+    await screen.findByRole("navigation", { name: "ESFs and Lifelines views" });
     const cards = [...container.querySelectorAll<HTMLElement>(".eoc-lifeline-card")];
     expect(cards).toHaveLength(8);
     expect(new Set(cards.map((card) => card.dataset.lifeline))).toEqual(new Set(LIFELINE_KEYS));
@@ -143,7 +154,7 @@ describe("Community Lifelines overview", () => {
 
     const unknown = container.querySelector<HTMLElement>('[data-lifeline="hazardous_materials"]')!;
     expect(unknown.dataset.condition).toBe("unknown");
-    expect(unknown.querySelector(".eoc-lifeline-impact")?.textContent).toBe("No current assessment");
+    expect(unknown.querySelector(".eoc-lw-card-impact")?.textContent).toBe("No current assessment");
 
     fireEvent.click(within(energy).getByRole("button", { name: "Open Energy details" }));
     expect(onOpen).toHaveBeenCalledWith("energy");
@@ -159,7 +170,7 @@ describe("Community Lifelines overview", () => {
     const drawer = await screen.findByRole("complementary", { name: "Energy" });
     expect(within(drawer).getByText("North district")).toBeTruthy();
     expect(within(drawer).getByText("Confirmed · 1 evidence item")).toBeTruthy();
-    expect(within(drawer).getByText("1 open action")).toBeTruthy();
+    expect(within(drawer).getByRole("heading", { name: "Linked actions (1)" })).toBeTruthy();
 
     const results = await axe.run(container, { rules: { region: { enabled: false } } });
     expect(results.violations).toEqual([]);
@@ -180,6 +191,90 @@ describe("Community Lifelines overview", () => {
     const noPeriod = projectLifeline(states[0], "safety_security", null);
     expect(noPeriod.freshnessLabel).toBe("No current operational period");
     expect(noPeriod.freshness).toBe("unknown");
+  });
+
+  it("filters, switches period, compares, and shows the objective, next update and linked actions", async () => {
+    const earlier = { revision: 2, label: "OP 2", startsAt: "2026-09-20T18:00:00-07:00", endsAt: "2026-09-21T06:00:00-07:00" };
+    const current = { revision: 3, ...PERIOD };
+    const energyNow = {
+      ...report("energy", "unstable", "2026-09-21T16:35:00.000Z", {
+        components: [{ key: "electricity", label: "Electricity", condition: "unstable", affectedGeography: "Arcata", dependencies: ["Substation crews"] }],
+        actions: [
+          { key: "generator", title: "Generator request", status: "in_progress", linkedResourceRequestId: "11111111-1111-4111-8111-111111111111" },
+          { key: "inspect", title: "Inspect substation", status: "planned", assignment: { kind: "position", positionTitle: "Utility liaison" } },
+        ],
+      }),
+      stabilizationObjective: "Restore power to critical facilities.",
+      nextUpdateAt: "2026-09-21T17:30:00.000Z",
+    };
+    const energyEarlier = { ...report("energy", "stabilizing", "2026-09-21T06:00:00.000Z", { operationalPeriod: "OP 2" }), id: "00000000-0000-4000-8000-00000000e002" };
+    const overviewNow: LifelineAssessmentOverviewResponse = {
+      ...overview,
+      states: states.map((item) => item.lifeline === "energy" ? state("energy", "unstable", [energyNow]) : item),
+    };
+    const api = {
+      ...client(),
+      listIncidentLifelineAssessments: vi.fn().mockResolvedValue(overviewNow),
+      lifelineAssessmentHistory: vi.fn((_incident: string, key: string) =>
+        Promise.resolve({ reports: key === "energy" ? [energyNow, energyEarlier] : [] })),
+    } as unknown as ApiClient;
+    const onSelectPeriod = vi.fn();
+    const onOpenResourceRequest = vi.fn();
+    const onView = vi.fn();
+    const actions = document.body.appendChild(document.createElement("div"));
+    const surface = (props: Partial<Parameters<typeof LifelinesSurface>[0]>) => (
+      <PageChromeContext.Provider value={{ actions, subtitle: null }}>
+        <LifelinesSurface client={api} incidentId={area.incidentId} selectedLifeline={null} periods={[earlier, current]}
+          selectedPeriodRevision={3} onSelectPeriod={onSelectPeriod} onOpen={() => undefined} onClose={() => undefined}
+          onView={onView} onOpenResourceRequest={onOpenResourceRequest} {...props} />
+      </PageChromeContext.Provider>
+    );
+    const { container, rerender } = render(surface({}));
+    await waitFor(() => expect(container.querySelectorAll(".eoc-lifeline-card")).toHaveLength(8));
+
+    fireEvent.change(screen.getByLabelText("Condition"), { target: { value: "unstable" } });
+    expect([...container.querySelectorAll<HTMLElement>(".eoc-lifeline-card")].map((card) => card.dataset.lifeline))
+      .toEqual(["energy", "transportation"]);
+    fireEvent.change(screen.getByLabelText("Condition"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Incident area"), { target: { value: "Arcata" } });
+    expect(container.querySelectorAll(".eoc-lifeline-card")).toHaveLength(1);
+    fireEvent.change(screen.getByLabelText("Incident area"), { target: { value: "" } });
+
+    fireEvent.change(screen.getByLabelText("Current period"), { target: { value: "2" } });
+    expect(onSelectPeriod).toHaveBeenCalledWith(2);
+    await waitFor(() => expect(api.lifelineAssessmentHistory).toHaveBeenCalledTimes(8));
+    fireEvent.click(screen.getByRole("button", { name: "Compare periods" }));
+    const energyCard = container.querySelector<HTMLElement>('[data-lifeline="energy"]')!;
+    await waitFor(() => expect(energyCard.querySelector(".eoc-lw-card-compare")?.textContent).toBe("OP 2: Stabilizing · worsened"));
+
+    rerender(surface({ selectedPeriodRevision: 2 }));
+    await waitFor(() => expect(container.querySelector<HTMLElement>('[data-lifeline="energy"]')!.dataset.condition).toBe("stabilizing"));
+    expect(container.querySelector<HTMLElement>('[data-lifeline="safety_security"]')!.dataset.condition).toBe("unknown");
+
+    rerender(surface({ selectedPeriodRevision: 3, selectedLifeline: "energy" }));
+    const drawer = await screen.findByRole("complementary", { name: "Energy" });
+    expect(within(drawer).getByText("Restore power to critical facilities.")).toBeTruthy();
+    expect(drawer.querySelector(".eoc-lw-drawer-assessed")?.textContent).toContain("Utility Liaison");
+    expect(within(drawer).getByText("Assigned")).toBeTruthy();
+    fireEvent.click(within(drawer).getByRole("button", { name: /Generator request/ }));
+    expect(onOpenResourceRequest).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111");
+    expect(within(drawer).queryByRole("button", { name: /Inspect substation/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Dependencies" }));
+    expect(onView).toHaveBeenCalledWith("dependencies");
+    rerender(surface({ view: "dependencies" }));
+    expect(await screen.findByText("Substation crews")).toBeTruthy();
+    rerender(surface({ view: "history" }));
+    const history = await screen.findByRole("table");
+    expect(within(history).getAllByRole("row")).toHaveLength(3);
+    expect(within(history).getByText("Superseded")).toBeTruthy();
+
+    rerender(surface({}));
+    fireEvent.click(screen.getByRole("button", { name: "New assessment" }));
+    const created = await screen.findByRole("complementary", { name: "New assessment" });
+    fireEvent.change(within(created).getByLabelText("Lifeline"), { target: { value: "water_systems" } });
+    expect(within(created).getByLabelText("Next update")).toBeTruthy();
+    expect(within(created).getByLabelText("Stabilization objective")).toBeTruthy();
   });
 
   it("clears the prior incident cards while a changed incident is loading", async () => {

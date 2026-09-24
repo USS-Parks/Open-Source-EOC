@@ -22,6 +22,8 @@ describe("surface hash routing", () => {
     { kind: "sitrep", id: "s1" },
     { kind: "alerts" },
     { kind: "lifelines" },
+    { kind: "lifelines", view: "dependencies" },
+    { kind: "lifelines", view: "history" },
     { kind: "lifeline", id: "energy" },
     { kind: "esf", id: "utilities" },
     { kind: "tasks" },

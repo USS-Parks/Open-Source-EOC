@@ -173,7 +173,7 @@ describe("real incident Community Lifeline assessment workflow", () => {
 
     await page.getByRole("status").filter({ hasText: "Assessment recorded" }).waitFor();
     await energy.getByText("North district feeder damage limits service", { exact: true }).waitFor();
-    await page.getByRole("button", { name: "History" }).click();
+    await page.getByRole("button", { name: "View history" }).click();
     await page.getByText("Utility field team confirmed feeder damage", { exact: true }).waitFor();
     expect(await page.getByText(/Admin · No acting position/).first().isVisible()).toBe(true);
     expect(await page.getByText("Inspect and isolate damaged feeder", { exact: true }).isVisible()).toBe(true);

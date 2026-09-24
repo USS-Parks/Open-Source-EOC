@@ -17,6 +17,7 @@ import { Icon, type IconName } from "../../design/icons/index.js";
 import type { OperationalState } from "../../design/tokens.js";
 import { EsfAssessmentForm, type EsfOrganizationOption } from "./EsfAssessmentForm.js";
 import { AssessmentRelationships } from "./AssessmentRelationships.js";
+import { LifelineTabs } from "./lifeline-tabs.js";
 import "./EsfSurface.css";
 
 const REFRESH_MS = 30_000;
@@ -39,6 +40,8 @@ export interface EsfSurfaceProps {
   readonly operationalPeriod: string | null;
   readonly onOpen: (id: string) => void;
   readonly onOpenLifelines: () => void;
+  /** The lifelines workspace's dependencies or assessment history view. */
+  readonly onOpenLifelineView?: (view: "dependencies" | "history") => void;
   readonly onOpenLifeline?: (id: string) => void;
   readonly onOpenTask?: (id: string) => void;
   readonly onOpenResourceRequest?: (id: string) => void;
@@ -263,10 +266,13 @@ export function EsfSurface(props: EsfSurfaceProps) {
 
   return (
     <section className="eoc-esf" aria-labelledby="eoc-esf-title">
+      <LifelineTabs active="esf" onSelect={(tab) => {
+        if (tab === "lifelines") props.onOpenLifelines();
+        else if (tab !== "esf") props.onOpenLifelineView?.(tab);
+      }} />
       <header className="eoc-esf-heading"><div><span className="eoc-esf-eyebrow">Coordination</span><h2 id="eoc-esf-title">Emergency Support Functions</h2>
         <p>Activation, capacity, organizations, missions, priorities, actions, and period handoffs from attributed assessments.</p></div>
-        <div className="eoc-esf-heading-actions"><span>{framework === "california" ? "California" : "Federal"} definition v{overview.data.definitions[framework].version}</span>
-          <ActionButton kind="quiet" onClick={props.onOpenLifelines}>Community Lifelines</ActionButton></div></header>
+        <div className="eoc-esf-heading-actions"><span>{framework === "california" ? "California" : "Federal"} definition v{overview.data.definitions[framework].version}</span></div></header>
       <div className="eoc-esf-framework-tabs" role="tablist" aria-label="ESF framework">
         <button type="button" role="tab" aria-selected={framework === "california"} onClick={() => { setFramework("california"); if (selectedFramework === "federal") props.onClose(); }}>California (18)</button>
         <button type="button" role="tab" aria-selected={framework === "federal"} onClick={() => { setFramework("federal"); if (selectedFramework === "california") props.onClose(); }}>Federal (15)</button>

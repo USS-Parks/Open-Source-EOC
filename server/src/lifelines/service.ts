@@ -59,6 +59,8 @@ function toReport(row: Record<string, unknown>): LifelineAssessmentReport {
     sourceKind: row.source_kind as "native" | "legacy_board",
     legacyStatus: (row.legacy_status as string | null) ?? null,
     payload: row.payload as Record<string, unknown>,
+    stabilizationObjective: (row.stabilization_objective as string | null) ?? null,
+    nextUpdateAt: row.next_update_at ? new Date(row.next_update_at as Date | string).toISOString() : null,
     supersedesAssessmentId: (row.supersedes_id as string | null) ?? null,
     legacyBoardId: (row.legacy_board_id as string | null) ?? null,
     legacyRecordId: (row.legacy_record_id as string | null) ?? null,
@@ -172,13 +174,14 @@ export async function createLifelineAssessment(
       (domain, jurisdiction_id, incident_id, framework, definition_key,
        definition_version, condition, payload, assessed_at, source_kind,
        supersedes_id, created_by, position_id, position_title, participation_id,
-       home_organization_id)
+       home_organization_id, stabilization_objective, next_update_at)
     values ('lifeline', ${context.jurisdictionId}, ${incidentId},
       'fema_community_lifelines', ${input.lifeline}, ${input.definitionVersion},
       ${input.condition}, ${sql.json(payload as never)}, ${new Date(input.assessedAt)},
       'native', ${input.supersedesAssessmentId ?? null}, ${actor.person.id},
       ${context.positionId}, ${context.positionTitle}, ${context.participationId},
-      ${context.homeOrganizationId}) returning id`;
+      ${context.homeOrganizationId}, ${input.stabilizationObjective ?? null},
+      ${input.nextUpdateAt ? new Date(input.nextUpdateAt) : null}) returning id`;
   const [row] = await sql.unsafe(
     `${assessmentSelect} where a.id = $1`, [created!.id as string],
   );

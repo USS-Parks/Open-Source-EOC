@@ -228,5 +228,121 @@ export function projectLifeline(
   };
 }
 
+/** The card's one line: the impact statement's first sentence. */
+export function shortImpact(impact: string): string {
+  const first = /^(.+?[.!?])(\s|$)/.exec(impact.trim())?.[1] ?? impact.trim();
+  return first.replace(/\.$/, "");
+}
 
+/** "09:35 PDT": a time of day in the viewer's zone. */
+export function timeOfDay(value: string | null): string {
+  if (!value) return "Not reported";
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return "Not reported";
+  return new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short" })
+    .format(new Date(timestamp));
+}
 
+export interface PeriodWindow {
+  readonly label: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
+}
+
+/** The report that stood for a lifeline in a period: its latest report naming that period, or assessed inside it. */
+export function reportInPeriod(
+  reports: readonly LifelineAssessmentReport[],
+  period: PeriodWindow,
+): LifelineAssessmentReport | null {
+  const starts = Date.parse(period.startsAt);
+  const ends = Date.parse(period.endsAt);
+  const inPeriod = reports.filter((report) => {
+    const named = text(object(report.payload)?.operationalPeriod);
+    if (named) return named === period.label;
+    const assessed = Date.parse(report.assessedAt);
+    return assessed >= starts && assessed <= ends;
+  });
+  return [...inPeriod].sort((a, b) => Date.parse(b.assessedAt) - Date.parse(a.assessedAt))[0] ?? null;
+}
+
+/** A single report as a lifeline's state, for a period that has closed. */
+export function stateOf(lifeline: string, report: LifelineAssessmentReport | null): LifelineCurrentState {
+  return { lifeline, condition: report?.condition ?? null, conflict: false, reports: report ? [report] : [], decision: null };
+}
+
+export interface ComponentItem {
+  readonly label: string;
+  readonly condition: string | null;
+  readonly geography: string | null;
+  readonly dependencies: readonly string[];
+  readonly causes: readonly string[];
+}
+
+export function componentItems(report: LifelineAssessmentReport | null): readonly ComponentItem[] {
+  return list(object(report?.payload)?.components).flatMap((value) => {
+    const item = object(value);
+    const label = text(item?.label);
+    const strings = (key: string) => list(item?.[key]).flatMap((entry) => text(entry) ? [text(entry)!] : []);
+    return label ? [{
+      label,
+      condition: text(item?.condition),
+      geography: text(item?.affectedGeography),
+      dependencies: strings("dependencies"),
+      causes: strings("causes"),
+    }] : [];
+  });
+}
+
+export interface LinkedAction {
+  readonly key: string;
+  readonly title: string;
+  readonly status: string;
+  readonly statusLabel: string;
+  readonly owner: string;
+  readonly resourceRequestId: string | null;
+  readonly boardRecordId: string | null;
+}
+
+const ACTION_STATUS: Readonly<Record<string, string>> = {
+  planned: "Planned", in_progress: "In progress", blocked: "Blocked", complete: "Complete",
+};
+
+/** A stabilization action's owner: its assignee, else its responsible organization. */
+export function linkedActions(
+  report: LifelineAssessmentReport | null,
+  organizationNames: ReadonlyMap<string, string>,
+): readonly LinkedAction[] {
+  return list(object(report?.payload)?.actions).flatMap((value, index) => {
+    const item = object(value);
+    const title = text(item?.title);
+    if (!item || !title) return [];
+    const assignment = object(item.assignment);
+    const status = text(item.status) ?? "planned";
+    const assignee = text(assignment?.positionTitle) ?? text(assignment?.incidentPositionTitle);
+    const organization = text(item.responsibleOrganizationId);
+    return [{
+      key: text(item.key) ?? `action-${index}`,
+      title,
+      status,
+      // A planned action someone has taken on reads as assigned.
+      statusLabel: status === "planned" && assignee ? "Assigned" : ACTION_STATUS[status] ?? status,
+      owner: assignee ?? (organization ? organizationNames.get(organization) ?? "Responsible organization" : "No owner named"),
+      resourceRequestId: text(item.linkedResourceRequestId),
+      boardRecordId: text(item.linkedBoardRecordId),
+    }];
+  });
+}
+
+/** Whether a report's committed next update has passed. */
+export function updateOverdue(report: LifelineAssessmentReport | null, now: Date): boolean {
+  return Boolean(report?.nextUpdateAt && Date.parse(report.nextUpdateAt) < now.getTime());
+}
+
+const SEVERITY: Readonly<Record<LifelineCondition, number>> = { stable: 0, stabilizing: 1, unstable: 2, unknown: -1 };
+
+/** How a lifeline moved between two periods. */
+export function conditionTrend(before: LifelineCondition | null, after: LifelineCondition): "worse" | "better" | "same" | "unknown" {
+  if (!before || before === "unknown" || after === "unknown") return before === after ? "same" : "unknown";
+  const change = SEVERITY[after] - SEVERITY[before];
+  return change > 0 ? "worse" : change < 0 ? "better" : "same";
+}

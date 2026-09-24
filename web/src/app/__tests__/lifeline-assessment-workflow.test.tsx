@@ -49,7 +49,7 @@ function report(id: string, condition = "stabilizing"): LifelineAssessmentReport
       evidence: [{ kind: "reported", description: "Utility field report", sourceReference: "EOC-17" }],
       actions: [{ key: "inspect", title: "Inspect feeder", status: "in_progress", dueAt: "2026-09-21T21:00:00.000Z" }],
     },
-    supersedesAssessmentId: null,
+    stabilizationObjective: null, nextUpdateAt: null, supersedesAssessmentId: null,
     legacyBoardId: null,
     legacyRecordId: null,
     attribution,

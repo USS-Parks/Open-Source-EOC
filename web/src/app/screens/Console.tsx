@@ -13,7 +13,7 @@ import {
   type ShellSyncState,
   type WorkspaceArrangement,
 } from "../layout/AppShell.js";
-import { OperationalPeriodControl, PositionControl, useWorkspaceContext } from "../layout/context.js";
+import { OperationalPeriodControl, PositionControl, useWorkspaceContext, type OperationalPeriodChoice } from "../layout/context.js";
 import { parseRouteHash, sectionOf, surfaceHash, useSurface, type RouteContext, type Surface } from "../router.js";
 import { EmptyState, ErrorNote, LoadBoundary, Loading, NotFoundState } from "./parts.js";
 import type { DashboardSurfaceProps, DashboardViewState } from "../surfaces/DashboardSurface.js";
@@ -389,6 +389,8 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
           incidentName={incident.selectedIncident?.name ?? null}
           incidentJurisdictionId={incident.selectedIncident?.jurisdictionId ?? null}
           periodRevision={workspace.selectedPeriodRevision}
+          periods={workspace.periods}
+          onSelectPeriod={workspace.selectPeriod}
           operationalPeriod={workspace.selectedPeriodRevision === null ? null : workspace.selectedPeriodLabel}
           incidentCanManage={incident.selectedIncident?.canEditArea ?? false}
           incidentCanManageParticipation={incident.selectedIncident?.canManageParticipation ?? false}
@@ -530,6 +532,8 @@ function Center(props: {
   incidentName: string | null;
   incidentJurisdictionId: string | null;
   periodRevision: number | null;
+  periods: readonly OperationalPeriodChoice[];
+  onSelectPeriod: (revision: number | null) => void;
   operationalPeriod: string | null;
   incidentCanManage: boolean;
   incidentCanManageParticipation: boolean;
@@ -797,6 +801,11 @@ function Center(props: {
         jurisdictionId={props.jurisdictionId} canWrite={props.canAuthorAlerts}
         relationshipBoards={relationshipBoards}
         selectedLifeline={s.kind === "lifeline" ? s.id : null}
+        view={s.kind === "lifelines" ? s.view ?? null : null}
+        periods={props.periods}
+        selectedPeriodRevision={props.periodRevision}
+        onSelectPeriod={props.onSelectPeriod}
+        onView={(tab) => props.onNavigate(tab === "dependencies" || tab === "history" ? { kind: "lifelines", view: tab } : { kind: "lifelines" })}
         onOpen={(id) => props.onNavigate({ kind: "lifeline", id })}
         onClose={() => props.onNavigate({ kind: "lifelines" })}
         onOpenEsfs={() => props.onNavigate({ kind: "esf" })}
@@ -814,6 +823,7 @@ function Center(props: {
         onOpen={(id) => props.onNavigate({ kind: "esf", id })}
         onClose={() => props.onNavigate({ kind: "esf" })}
         onOpenLifelines={() => props.onNavigate({ kind: "lifelines" })}
+        onOpenLifelineView={(view) => props.onNavigate({ kind: "lifelines", view })}
         onOpenLifeline={(id) => props.onNavigate({ kind: "lifeline", id })}
         onOpenTask={() => props.onNavigate({ kind: "tasks" })}
         onOpenResourceRequest={(id) => props.onNavigate({ kind: "resources", id })}

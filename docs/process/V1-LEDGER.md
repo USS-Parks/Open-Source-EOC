@@ -4353,3 +4353,86 @@ for writing when this was recorded, so this entry carries the requirement.
 - **Evidence level:** unit, real-database and browser.
 - **Rollback:** revert the commit; the template versions are additive and
   existing boards keep their versions until upgraded.
+
+## Design fidelity DF4: ESFs & Lifelines workspace
+
+- **What changed.**
+  - `web/src/app/surfaces/LifelinesSurface.tsx` is rebuilt after frame 3.
+    Page actions: "Compare periods", which adds each lifeline's condition in
+    the period before the one shown and whether it worsened or improved, and
+    "New assessment", which opens a drawer with a lifeline choice and the
+    assessment form (superseding the standing report). Tabs (Community
+    Lifelines, ESF coordination, Dependencies, Assessment history, in
+    `lifeline-tabs.tsx`) are routes: `#/lifelines`, `#/esf`,
+    `#/lifelines/dependencies`, `#/lifelines/history`; the ESF screen carries
+    the same tabs. Filters: incident area (the affected geographies the
+    assessments report), operational period (the shell's period: an earlier
+    period shows the reports that stood then, read from history), and
+    condition. Cards are tinted by condition with the condition pill, the
+    impact's first sentence, the source and the assessment time; a stale
+    report, an unresolved conflict and an overdue next update still show on
+    the card. Titles wrap between words only, which fixes the mid-word break.
+  - The drawer runs the page's full height beside the header, as in the
+    frame: condition, "Assessed HH:MM · <position>", the impact, affected
+    components with icons and their geography, the stabilization objective
+    (with the outlook beneath when there is one), the next update (marked
+    overdue once passed), and "Linked actions (N)" from the assessment's
+    stabilization actions: owner (assignee, else responsible organization),
+    status ("Assigned" for a planned action with an assignee), and a link to
+    the resource request when one is attached. "Update assessment" and "View
+    history" open the form and the history with decisions; the remaining
+    assessment details sit under a disclosure and the operational
+    relationships stay visible below.
+  - "Related ESF coordination" lists the activated functions that report a
+    related lifeline: function, activation, coordinating organization and
+    open missions, the open lifeline's functions first, each opening its ESF.
+    Dependencies lists component dependencies and causes and the functions
+    supporting each lifeline; Assessment history lists every lifeline report
+    with its period, author and whether it stands or was superseded.
+  - Engine: migration `0133_assessment_follow_up.sql` adds
+    `stabilization_objective` and `next_update_at` to
+    `operational_assessments`, with a check that the next update comes after
+    the assessment; the lifeline contract accepts both (the same rule in the
+    schema), reports return them, and the assessment form records them. The
+    form's condition choices read "Disrupted" for unstable, as everywhere
+    else.
+  - New icons: target, power and fuel.
+  - The North Coast seed gives every lifeline an objective and a next update
+    (Hazardous Materials' is overdue at 09:42), component geographies,
+    dependencies and causes, and four OP 02 assessments that the OP 03
+    reports supersede.
+- **Defaults and deviations.** Differences left: owners of the Energy
+  actions show their organizations (Cal OES, CA Energy Commission) where the
+  frame shows "Logistics" and "Utility liaison", and "Inspect substation"
+  reads "Planned": a partner liaison may not assign work to county positions
+  or link county requests, which row-level security refuses, so the seeded
+  actions are named but not linked, and they carry no chevron. The
+  coordinator column shows organizations where the frame shows liaison
+  titles. Source names follow the seeded organizations ("Cal OES"). The
+  condition filter is labelled "Condition" where the frame's label reads "All
+  conditions". "Food, Hydration, Shelter" wraps onto two lines at this card
+  width. The Hazardous Materials icon remains the registry's drawing. The
+  standing jurisdiction lifeline status stays below the table.
+- **Schema, contract, dependencies.** Migration 0133; two optional fields on
+  the lifeline assessment contract and two on reports. No new route or
+  dependency.
+- **Verification.** `pnpm check:static`: pass (303 packages, 98 files). Web and
+  shared unit tests: 114 files, 822 tests, including new cases in
+  `lifelines-surface.test.tsx` (condition and area filters, the period
+  switch, compare, the drawer's objective, position and linked actions,
+  dependencies, history, new assessment) and the router's new views.
+  Real-database: `operational-assessments.test.ts` gains the objective and
+  next update round trip through current and history, the 400 for an update
+  due before the assessment, and the database check; with `demo`,
+  `esf-assignment` and `incident-overview`: 4 files, 16 tests. Browser:
+  `lifelines`, `lifeline-assessment`, `esf-workspace`,
+  `operational-relationships`, `operator-screens`, `cop-kpi`, `dashboard`,
+  `export-import`, `sitrep-briefing` and `d33-review` pass after three test
+  updates for the new names ("View history", the card impact class) and
+  moving relationships out of the disclosure. In the dev build the tabs,
+  compare (Energy "OP 02: Stabilizing · worsened"), dependencies and the
+  twelve-row history were checked against the seeded scenario. `pnpm
+  fidelity`: 2 of 2, images refreshed.
+- **Evidence level:** unit, real-database and browser.
+- **Rollback:** revert the commit; migration 0133 only adds nullable columns
+  and a check.

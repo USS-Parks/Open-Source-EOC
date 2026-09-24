@@ -58,6 +58,10 @@ export const CreateLifelineAssessmentSchema = z.object({
   impactStatement: TextSchema,
   operationalPeriod: z.string().trim().min(1).max(160).optional(),
   stabilizationOutlook: z.string().trim().max(4_000).optional(),
+  /** What stabilized means for this lifeline in this incident. */
+  stabilizationObjective: z.string().trim().min(1).max(4_000).optional(),
+  /** When the reporting liaison will assess again; after the assessment time. */
+  nextUpdateAt: TimestampSchema.optional(),
   components: z.array(LifelineComponentInputSchema).max(100).default([]),
   evidence: z.array(z.discriminatedUnion("kind", [
     ReportedEvidenceSchema, ImpactEvidenceRequestSchema,
@@ -68,7 +72,10 @@ export const CreateLifelineAssessmentSchema = z.object({
     .refine((items) => new Set(items.map((item) => item.key)).size === items.length,
       "duplicate stabilization action key"),
   supersedesAssessmentId: z.string().uuid().optional(),
-}).strict();
+}).strict().refine(
+  (input) => !input.nextUpdateAt || Date.parse(input.nextUpdateAt) > Date.parse(input.assessedAt),
+  { message: "the next update must come after the assessment", path: ["nextUpdateAt"] },
+);
 
 export const AssessmentDecisionSchema = z.object({
   selectedAssessmentId: z.string().uuid(),
@@ -113,6 +120,8 @@ export interface LifelineAssessmentReport {
   readonly sourceKind: "native" | "legacy_board";
   readonly legacyStatus: string | null;
   readonly payload: Record<string, unknown>;
+  readonly stabilizationObjective: string | null;
+  readonly nextUpdateAt: string | null;
   readonly supersedesAssessmentId: string | null;
   readonly legacyBoardId: string | null;
   readonly legacyRecordId: string | null;

@@ -210,6 +210,9 @@ export function LifelineAssessmentForm(props: LifelineAssessmentFormProps) {
   const [assessedAt, setAssessedAt] = useState(() => localDateTime(baselineReport?.assessedAt ?? null, true));
   const [impactStatement, setImpactStatement] = useState(() => initialText(baselineReport, "impactStatement"));
   const [outlook, setOutlook] = useState(() => initialText(baselineReport, "stabilizationOutlook"));
+  const [objective, setObjective] = useState(() => baselineReport?.stabilizationObjective ?? "");
+  // Each assessment commits to its own next update; the last one's time has usually passed.
+  const [nextUpdate, setNextUpdate] = useState("");
   const [components, setComponents] = useState<ComponentDraft[]>(() => componentDrafts(baselineReport));
   const [evidence, setEvidence] = useState<EvidenceDraft[]>(() => evidenceDrafts(baselineReport));
   const [actions, setActions] = useState<ActionDraft[]>(() => actionDrafts(baselineReport));
@@ -266,6 +269,11 @@ export function LifelineAssessmentForm(props: LifelineAssessmentFormProps) {
       setError("Enter a valid assessment time.");
       return;
     }
+    const nextUpdateAt = isoDateTime(nextUpdate);
+    if (nextUpdateAt && Date.parse(nextUpdateAt) <= Date.parse(assessed)) {
+      setError("The next update must come after the assessment time.");
+      return;
+    }
     setSubmitting(true);
     try {
       const responsibleOrganizationIds = [...new Set([
@@ -281,6 +289,8 @@ export function LifelineAssessmentForm(props: LifelineAssessmentFormProps) {
         impactStatement: impactStatement.trim(),
         ...(props.period ? { operationalPeriod: props.period.label } : {}),
         ...(outlook.trim() ? { stabilizationOutlook: outlook.trim() } : {}),
+        ...(objective.trim() ? { stabilizationObjective: objective.trim() } : {}),
+        ...(nextUpdateAt ? { nextUpdateAt } : {}),
         components: components.map((component, index) => ({
           key: component.key || keyFor("component", component.label, index),
           label: component.label.trim(),
@@ -334,18 +344,20 @@ export function LifelineAssessmentForm(props: LifelineAssessmentFormProps) {
   return (
     <form className="eoc-lifeline-assessment-form" onSubmit={submit}>
       <div className="eoc-lifeline-form-grid">
-        <label>Condition<select value={condition} onChange={(event) => setCondition(event.target.value as typeof condition)}><option value="stable">Stable</option><option value="stabilizing">Stabilizing</option><option value="unstable">Unstable</option><option value="unknown">Unknown</option></select></label>
+        <label>Condition<select value={condition} onChange={(event) => setCondition(event.target.value as typeof condition)}><option value="stable">Stable</option><option value="stabilizing">Stabilizing</option><option value="unstable">Disrupted</option><option value="unknown">Unknown</option></select></label>
         <label>Confidence<select value={confidence} onChange={(event) => setConfidence(event.target.value as typeof confidence)}><option value="confirmed">Confirmed</option><option value="estimated">Estimated</option><option value="unknown">Unknown</option></select></label>
         <label>Assessed at<input type="datetime-local" required value={assessedAt} onChange={(event) => setAssessedAt(event.target.value)} /></label>
         <label>Operational period<input value={props.period?.label ?? "Not set"} readOnly /></label>
       </div>
       <label>Impact explanation<textarea required maxLength={4000} rows={4} value={impactStatement} onChange={(event) => setImpactStatement(event.target.value)} /></label>
+      <label>Stabilization objective<textarea maxLength={4000} rows={2} value={objective} onChange={(event) => setObjective(event.target.value)} /></label>
       <label>Stabilization outlook<textarea maxLength={4000} rows={3} value={outlook} onChange={(event) => setOutlook(event.target.value)} /></label>
+      <label>Next update<input type="datetime-local" value={nextUpdate} onChange={(event) => setNextUpdate(event.target.value)} /></label>
 
       <fieldset><legend>Component assessments</legend>
         {components.map((component) => <div className="eoc-lifeline-repeat" key={component.id}>
           <label>Component name<input required maxLength={160} value={component.label} onChange={(event) => updateComponent(component.id, { label: event.target.value })} /></label>
-          <label>Condition<select value={component.condition} onChange={(event) => updateComponent(component.id, { condition: event.target.value as ComponentDraft["condition"] })}><option value="stable">Stable</option><option value="stabilizing">Stabilizing</option><option value="unstable">Unstable</option><option value="unknown">Unknown</option></select></label>
+          <label>Condition<select value={component.condition} onChange={(event) => updateComponent(component.id, { condition: event.target.value as ComponentDraft["condition"] })}><option value="stable">Stable</option><option value="stabilizing">Stabilizing</option><option value="unstable">Disrupted</option><option value="unknown">Unknown</option></select></label>
           <label>Affected geography<input maxLength={1000} value={component.affectedGeography} onChange={(event) => updateComponent(component.id, { affectedGeography: event.target.value })} /></label>
           <label>Component impact<textarea rows={2} maxLength={4000} value={component.impactStatement} onChange={(event) => updateComponent(component.id, { impactStatement: event.target.value })} /></label>
           <label>Causes, one per line<textarea rows={2} value={component.causes} onChange={(event) => updateComponent(component.id, { causes: event.target.value })} /></label>
