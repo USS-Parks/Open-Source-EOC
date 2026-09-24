@@ -1,0 +1,50 @@
+# The HTTPS front end of the compose stack. Caddy terminates TLS for
+# OPENEOC_DOMAIN, redirects HTTP to HTTPS (its default for a site with a host
+# name), proxies the API and its WebSocket streams, and serves the web bundle
+# and the map archives. install.sh writes both variables to deploy/.env:
+# OPENEOC_TLS is an ACME account email for an automatic certificate, or the
+# certificate and key paths of a supplied pair.
+#
+# The cache rules match the Windows static host. file_server answers byte
+# ranges and If-Range, and 304 on a matching ETag or Last-Modified. Nothing
+# here compresses, so PMTiles range reads stay exact.
+
+{$OPENEOC_DOMAIN} {
+	tls {$OPENEOC_TLS}
+
+	@archives path /basemap/california.pmtiles /basemap/buildings.pmtiles /basemap/overlays.pmtiles /basemap/overlays-manifest.json
+	@document path / /index.html
+
+	# The API, including the WebSocket sync and notification streams.
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+
+	# Written by install.sh; names only the archives that passed their checksum.
+	handle /runtime-config.js {
+		root * /srv/basemap
+		header Cache-Control no-store
+		file_server
+	}
+
+	# Archives install.sh fetched into deploy/basemap, revalidated on each use.
+	handle @archives {
+		root * /srv
+		header Cache-Control no-cache
+		file_server
+	}
+
+	# The web bundle. The build names every file under /assets by its content
+	# hash; everything else keeps its name, so it is revalidated.
+	handle {
+		root * /srv/web
+		route {
+			try_files {path} /index.html
+			header Cache-Control no-cache
+			header /assets/* Cache-Control "public, max-age=31536000, immutable"
+			header @document Cache-Control no-store
+			header @document Content-Security-Policy "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self' data:; frame-ancestors 'none'; img-src 'self' data: blob:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:"
+			file_server
+		}
+	}
+}

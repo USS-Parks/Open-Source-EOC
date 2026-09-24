@@ -4,16 +4,131 @@ Single-node deployment for a county-IT skill level, including the air-gapped
 path. The whole system of record is one PostgreSQL database; the API is a
 Node service; the web bundle is static files.
 
-## Quick start (connected)
+## One-command install
+
+On a Linux host with Docker Engine, the compose plugin, `curl` and
+`sha256sum`, from the repository's `deploy` directory:
 
 ```
-cd deploy
+OPENEOC_DOMAIN=eoc.county.example \
+OPENEOC_ACME_EMAIL=it@county.example \
+OPENEOC_ADMIN_EMAIL=chief@county.example \
+OPENEOC_ADMIN_NAME="County Chief" \
+OPENEOC_JURISDICTION_SLUG=county-oes \
+OPENEOC_JURISDICTION_NAME="County OES" \
+OPENEOC_BASEMAP_URL=https://downloads.county.example/openeoc-basemap \
 ./install.sh
 ```
 
-`install.sh` checks Docker, generates secrets into `deploy/.env` on first run,
-builds and starts [docker-compose.yml](./docker-compose.yml), and waits for the
-database and API to answer. The API comes up on `http://localhost:8080`.
+`install.sh` stops with a message naming the problem at the first step that
+fails. In order, it:
+
+1. checks for Docker, the compose plugin, a running daemon, `curl` and
+   `sha256sum`;
+2. on the first run, generates the database password, the `app_runtime`
+   password and `OPENEOC_SECRET_KEY` into `deploy/.env` (mode 600); they are
+   never printed;
+3. records the host name and the certificate choice in `deploy/.env` (see
+   [Certificates](#certificates));
+4. fetches and checks the map archives (see [Map archives](#map-archives));
+5. starts the database, sets the `app_runtime` password and builds the `api`
+   and `web` images;
+6. creates the first jurisdiction and administrator with the
+   [bootstrap command](#first-jurisdiction-and-admin), unless an instance
+   administrator already exists;
+7. starts the stack and waits until `https://<OPENEOC_DOMAIN>/` serves the
+   sign-in page and the API behind it answers, then prints the address.
+
+The first administrator's password is generated, passed to the bootstrap
+command through the environment, never printed, and written to
+`deploy/admin-password.txt`, readable only by the account that ran the script.
+Sign in with it, store it in the county's password manager, and delete the
+file. The administrator enrolls in two-step sign-in at the first sign-in.
+
+Running `./install.sh` again keeps the secrets, the certificate choice and the
+verified archives, checks the archives again, and does not bootstrap again;
+the administrator variables are then not needed. Values already in
+`deploy/.env` win over the environment; edit the file to change them.
+
+### The stack
+
+| Service | Image | What it does |
+|---|---|---|
+| `db` | `postgis/postgis:16-3.4` | PostgreSQL and PostGIS, the system of record |
+| `api` | `deploy/Dockerfile`, target `api`, on `node:22-slim` | The API on port 8080, published on the host's loopback only |
+| `web` | `deploy/Dockerfile`, target `web`, on `caddy:2.10.0-alpine` | TLS on 443 and a redirect from 80; proxies `/api/`, WebSocket streams included, to `api`; serves the web bundle and the map archives |
+
+The `web` image builds the bundle with `pnpm --filter @openeoc/web build` and
+adds a `<script src="/runtime-config.js">` tag to its page, as the Windows
+desktop host does. The API trusts `X-Forwarded-For` from private addresses
+(`OPENEOC_TRUST_PROXY=uniquelocal`), because only Caddy on the compose network
+and the host's loopback can reach it.
+
+### Certificates
+
+Choose one on the first run:
+
+- **Automatic (ACME).** Set `OPENEOC_ACME_EMAIL`. `OPENEOC_DOMAIN` must resolve
+  in public DNS to this host, and ports 80 and 443 must reach it from the
+  internet. Caddy obtains and renews the certificate and keeps it in the
+  `caddy-data` volume.
+- **A supplied pair.** Set `OPENEOC_TLS_CERT` and `OPENEOC_TLS_KEY` to PEM files:
+  the certificate with its chain, and its private key. The script copies them
+  to `deploy/tls/`. This is the choice for an air-gapped host or a certificate
+  from the county's own CA. To replace the pair, copy the new files over
+  `deploy/tls/cert.pem` and `deploy/tls/key.pem` and run
+  `docker compose restart web`.
+
+Either way, HTTP on port 80 redirects to HTTPS.
+
+### Map archives
+
+The street basemap, buildings, overlays and the address search gazetteer
+(built as in [the basemap toolchain](../tools/basemap/README.md)) are
+published as release files beside a `SHA256SUMS` list in the format
+`sha256sum` writes: `<sha256>  <file name>` per line. The names the stack
+uses are `california.pmtiles`, `buildings.pmtiles`, `overlays.pmtiles`,
+`overlays-manifest.json` and `gazetteer.tsv`.
+
+- With `OPENEOC_BASEMAP_URL` set to the directory holding them, the script
+  fetches `SHA256SUMS` and every file it lists that is not yet in
+  `deploy/basemap/`. A download is checked before it is kept.
+- Every listed file is checked against its SHA-256 on every run. A file that
+  does not match stops the install; nothing is served from it.
+- A `SHA256SUMS` already in `deploy/basemap/` is used as it is. The list
+  fetched from the release protects against a damaged or cut-short download,
+  not against a replaced release; to guard against that, copy a `SHA256SUMS`
+  obtained from a trusted source into `deploy/basemap/` before the first run.
+- No public release location exists yet, so there is no default. Without
+  `OPENEOC_BASEMAP_URL` and without a `SHA256SUMS`, the map shows the bundled
+  California basemap and address search reports unavailable.
+
+The script writes `deploy/basemap/runtime-config.js`, which names only the
+archives that passed their check. The API reads `gazetteer.tsv` from the same
+directory.
+
+### Caching
+
+Caddy's `file_server` serves the static files with the same rules as the
+Windows static host:
+
+| Files | `Cache-Control` |
+|---|---|
+| The bundle's `/assets/`, named by content hash | `public, max-age=31536000, immutable` |
+| Map archives, glyphs, the overlays manifest and other static files | `no-cache`, with `ETag` and `Last-Modified`; an unchanged file answers 304 |
+| The page and `/runtime-config.js` | `no-store` |
+
+Byte-range requests and `If-Range` are answered by `file_server`, and nothing
+in the stack compresses these responses, so the map's range reads of the
+archives work.
+
+### What has been verified
+
+`deploy/install.test.mjs` runs `install.sh` against stand-ins for `docker` and
+`curl`: the first run, a re-run, a checksum mismatch, the refusals and a
+supplied pair. `docker compose config` accepts the compose file. No image has
+been built or pulled, Caddy has not loaded the Caddyfile, and no certificate
+has been issued. The first real run on a Linux host is still to be done.
 
 ## One application node
 
@@ -90,13 +205,14 @@ OPENEOC_RUNTIME_URL=postgres://app_runtime:a-strong-password@db:5432/openeoc
 pnpm --filter @openeoc/web build
 ```
 
-Serve `web/dist` with any static host. The commented `web` service in
-[docker-compose.yml](./docker-compose.yml) shows an nginx sidecar; point it at
-the built `web/dist`.
+The compose stack's `web` image does this itself. To serve `web/dist` from
+another static host instead, add the `runtime-config.js` script tag to its
+page, serve that file, and apply the rules under [Caching](#caching).
 
 ## First jurisdiction and admin
 
-The `bootstrap` command creates the instance administrator and the first
+`install.sh` runs this step on the first install. To run it by hand:
+the `bootstrap` command creates the instance administrator and the first
 jurisdiction, with that person as its admin and the standard ICS positions.
 It runs the migrations first, reads the password from
 `OPENEOC_BOOTSTRAP_PASSWORD` or, when that is unset, from standard input, and
@@ -172,15 +288,18 @@ the profile's `secrets/envelope.key`; see
 
 Nothing in the running stack calls out: the API talks only to PostgreSQL, the
 map basemap is served from local PMTiles, and there are no external tile or
-font fetches at runtime. To install with networking disabled:
+font fetches at runtime. The one exception is Caddy's certificate requests
+when an ACME email is chosen. To install with networking disabled:
 
 1. On a connected machine, pull and save the images:
-   `docker save postgis/postgis:16-3.4 node:22-slim -o openeoc-images.tar`,
+   `docker save postgis/postgis:16-3.4 node:22-slim caddy:2.10.0-alpine -o openeoc-images.tar`,
    and vendor the pnpm store (`pnpm fetch`) into the transfer bundle.
-2. Move the bundle and the repository to the air-gapped host.
+2. Move the bundle and the repository to the air-gapped host, with the map
+   archives and their `SHA256SUMS` copied into `deploy/basemap/`.
 3. `docker load -o openeoc-images.tar`, then `./install.sh` with networking
-   off. The build installs from the vendored store; no fetch leaves the host.
-4. Provide the PMTiles basemap file locally and point the web config at it.
+   off, a supplied certificate pair and no `OPENEOC_BASEMAP_URL`. The build
+   installs from the vendored store, the archives are checked in place, and
+   no fetch leaves the host.
 
 The install is designed to reach a working demo incident in well under an hour
 on a clean machine.
@@ -267,8 +386,9 @@ row.
 
 Rotation:
 
-- **Docker.** Both services use the `json-file` driver with `max-size: 10m`
-  and `max-file: 5`. Read the API log with `docker compose logs api`.
+- **Docker.** All three services use the `json-file` driver with
+  `max-size: 10m` and `max-file: 5`. Read the API log with
+  `docker compose logs api` and Caddy's with `docker compose logs web`.
 - **Windows desktop.** The server writes `server.log` in the profile's `logs`
   directory and rotates it at 10 MB, keeping `server.log.1` through
   `server.log.5`. `app.log`, `app-error.log` and `postgres.log` hold console
@@ -292,7 +412,11 @@ upgrade path begins with a database whose first receipt is
 
 1. Back up first (`./backup.sh`).
 2. Pull the new code and `docker compose up -d --build`. The API runs the
-   forward-only migrations on boot; re-running them is a clean no-op.
+   forward-only migrations on boot; re-running them is a clean no-op. An
+   install made before the HTTPS front end has no `OPENEOC_DOMAIN` or
+   `OPENEOC_TLS` in `deploy/.env`, and compose refuses every command until
+   they are there: run `./install.sh` once with a host name and a
+   certificate choice instead.
 3. Customized boards keep their local `x_` fields and all records; a board
    template version upgrade re-converges to the new template while keeping
    local fields and data.
@@ -319,4 +443,11 @@ upgrade path begins with a database whose first receipt is
 | `OPENEOC_PRINCIPAL_CACHE_MS` | How long a request principal is cached, in milliseconds (default 5000; `0` turns it off) |
 | `OPENEOC_PUBLIC_URL` | Address mass notification acknowledgement links point at, such as `https://eoc.example.org`; unset uses the address the sender reached the server on. See the [administrator guide](../docs/guides/ADMIN.md#contacts-and-mass-notification) |
 | `OPENEOC_SYSLOG_URL` | Forward audit events to syslog, `udp://host:514` or `tcp://host:514`; unset is off. See the [administrator guide](../docs/guides/ADMIN.md#forward-the-audit-trail-to-syslog) |
-| `OPENEOC_GAZETTEER_PATH` | Path to the offline address search file, read once at startup; unset or unreadable reports search unavailable and the server runs on. See [building the gazetteer](../tools/basemap/README.md#10-offline-address-search-gazetteer) |
+| `OPENEOC_GAZETTEER_PATH` | Path to the offline address search file, read once at startup; unset or unreadable reports search unavailable and the server runs on. The compose stack sets `/basemap/gazetteer.tsv`. See [building the gazetteer](../tools/basemap/README.md#10-offline-address-search-gazetteer) |
+| `OPENEOC_DOMAIN` | The host name Caddy serves and certifies; required by compose, written to `deploy/.env` by `install.sh` |
+| `OPENEOC_TLS` | Caddy's `tls` argument: an ACME email, or the container paths of a supplied pair; written by `install.sh` from the next two rows |
+| `OPENEOC_ACME_EMAIL` | `install.sh` only: request an automatic certificate with this ACME account email. See [Certificates](#certificates) |
+| `OPENEOC_TLS_CERT` / `OPENEOC_TLS_KEY` | `install.sh` only: PEM certificate (with chain) and key to use instead of ACME |
+| `OPENEOC_BASEMAP_URL` | `install.sh` only: directory URL of the map archive release and its `SHA256SUMS`; no default. See [Map archives](#map-archives) |
+| `OPENEOC_ADMIN_EMAIL` / `OPENEOC_ADMIN_NAME` | `install.sh` only: the first administrator, needed until one exists |
+| `OPENEOC_JURISDICTION_SLUG` / `OPENEOC_JURISDICTION_NAME` | `install.sh` only: the first jurisdiction, needed until an administrator exists |

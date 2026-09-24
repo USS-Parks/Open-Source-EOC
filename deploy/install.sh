@@ -1,19 +1,37 @@
 #!/usr/bin/env bash
-# OpenEOC single-node installer (VEOC-40). Aimed at county-IT skill levels:
-# it checks prerequisites, generates secrets on first run, brings the stack
-# up, waits for health, and prints the next step. Idempotent and safe to
-# re-run. Works air-gapped when the images are already present locally
-# (see deploy/README.md).
+# OpenEOC single-node installer, aimed at county-IT skill levels. One command
+# on a Linux host with Docker: it checks prerequisites, generates secrets on
+# first run, fetches and verifies the map archives, builds and starts the
+# stack behind Caddy with TLS, creates the first jurisdiction and
+# administrator, and waits for the sign-in page over HTTPS. Each step stops
+# the install with a message when it fails. Idempotent: a re-run keeps the
+# secrets and never bootstraps twice. Works air-gapped when the images and
+# archives are already present locally (see deploy/README.md).
 set -euo pipefail
+# Everything this script writes (secrets, the TLS pair, the password) is private.
+umask 077
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$here"
 
 say() { printf '\n\033[1m[openeoc]\033[0m %s\n' "$*"; }
 fail() { printf '\n\033[31m[openeoc] %s\033[0m\n' "$*" >&2; exit 1; }
+# wait_for <tries> <seconds> <command...>: succeeds as soon as the command does.
+wait_for() {
+  local tries="$1" delay="$2"
+  shift 2
+  for _ in $(seq 1 "$tries"); do
+    "$@" && return 0
+    sleep "$delay"
+  done
+  return 1
+}
 
 command -v docker >/dev/null 2>&1 || fail "docker is required. Install Docker Engine, then re-run."
 docker compose version >/dev/null 2>&1 || fail "the docker compose plugin is required."
+docker info >/dev/null 2>&1 || fail "the Docker daemon is not running, or this account cannot use it."
+command -v curl >/dev/null 2>&1 || fail "curl is required."
+command -v sha256sum >/dev/null 2>&1 || fail "sha256sum (coreutils) is required."
 
 new_password() { head -c 24 /dev/urandom | base64 | tr -d '/+=' | head -c 32; }
 
@@ -45,16 +63,89 @@ if [ -z "${OPENEOC_RUNTIME_URL:-}" ]; then
   mv .env.new .env
 fi
 
+# The HTTPS front end: the host name and the certificate source. Both are kept
+# in .env, which wins over the environment on a re-run.
+[ -n "${OPENEOC_DOMAIN:-}" ] \
+  || fail "Set OPENEOC_DOMAIN to this server's host name, for example: OPENEOC_DOMAIN=eoc.county.example ./install.sh"
+[[ "$OPENEOC_DOMAIN" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]] \
+  || fail "OPENEOC_DOMAIN must be a host name, such as eoc.county.example."
+if [ -z "${OPENEOC_TLS:-}" ]; then
+  if [ -n "${OPENEOC_TLS_CERT:-}${OPENEOC_TLS_KEY:-}" ]; then
+    [ -r "${OPENEOC_TLS_CERT:-}" ] && [ -r "${OPENEOC_TLS_KEY:-}" ] \
+      || fail "OPENEOC_TLS_CERT and OPENEOC_TLS_KEY must both name readable PEM files."
+    mkdir -p tls
+    cp "$OPENEOC_TLS_CERT" tls/cert.pem
+    cp "$OPENEOC_TLS_KEY" tls/key.pem
+    OPENEOC_TLS="/etc/openeoc/tls/cert.pem /etc/openeoc/tls/key.pem"
+  elif [ -n "${OPENEOC_ACME_EMAIL:-}" ]; then
+    email='^[^[:space:]@"{}]+@[^[:space:]@"{}]+\.[^[:space:]@"{}]+$'
+    [[ "$OPENEOC_ACME_EMAIL" =~ $email ]] || fail "OPENEOC_ACME_EMAIL must be an email address."
+    OPENEOC_TLS="$OPENEOC_ACME_EMAIL"
+  else
+    fail "Choose the certificate: OPENEOC_ACME_EMAIL=you@county.example for an automatic one, or OPENEOC_TLS_CERT and OPENEOC_TLS_KEY naming your own PEM pair."
+  fi
+fi
+for key in OPENEOC_DOMAIN OPENEOC_TLS; do
+  grep -q "^$key=" .env || printf '%s="%s"\n' "$key" "${!key}" >> .env
+done
+mkdir -p tls basemap
+
+# Map archives. SHA256SUMS lists each file with its SHA-256; a file missing
+# here is fetched from OPENEOC_BASEMAP_URL, and every listed file is checked
+# before use. A SHA256SUMS already in deploy/basemap, copied from a trusted
+# source or an air-gapped transfer, is used as it is. With neither, the map
+# shows the bundled basemap.
+sums=basemap/SHA256SUMS
+base_url="${OPENEOC_BASEMAP_URL:-}"
+base_url="${base_url%/}"
+if [ ! -f "$sums" ] && [ -n "$base_url" ]; then
+  say "Fetching the basemap checksum list"
+  curl -fsSL --retry 3 -o "$sums.part" "$base_url/SHA256SUMS" \
+    || { rm -f "$sums.part"; fail "could not fetch $base_url/SHA256SUMS"; }
+  mv "$sums.part" "$sums"
+fi
+matches() { local actual; actual="$(sha256sum "$1")" && [ "${actual%% *}" = "$2" ]; }
+config=""
+if [ -f "$sums" ]; then
+  while read -r sum name || [ -n "$sum" ]; do
+    [ -n "$sum" ] || continue
+    sum="${sum,,}"
+    name="${name#\*}"
+    name="${name%$'\r'}"
+    [[ "$sum" =~ ^[0-9a-f]{64}$ && "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] \
+      || fail "basemap/SHA256SUMS has a line that is not '<sha256>  <file name>'; refusing it."
+    if [ -f "basemap/$name" ]; then
+      matches "basemap/$name" "$sum" \
+        || fail "basemap/$name does not match its SHA-256 checksum; refusing to use it. Remove it and re-run to fetch it again."
+    else
+      [ -n "$base_url" ] || fail "basemap/$name is listed in SHA256SUMS but missing. Copy it in, or set OPENEOC_BASEMAP_URL."
+      say "Fetching $name"
+      curl -fL --retry 3 --progress-bar -o "basemap/$name.part" "$base_url/$name" \
+        || { rm -f "basemap/$name.part"; fail "could not fetch $base_url/$name"; }
+      matches "basemap/$name.part" "$sum" \
+        || { rm -f "basemap/$name.part"; fail "$name from $base_url does not match its SHA-256 checksum; refusing to use it."; }
+      mv "basemap/$name.part" "basemap/$name"
+    fi
+    case "$name" in
+      california.pmtiles) config+="\"OPENEOC_BASEMAP_PMTILES_URL\":\"/basemap/$name\"," ;;
+      buildings.pmtiles) config+="\"OPENEOC_BUILDINGS_PMTILES_URL\":\"/basemap/$name\"," ;;
+      overlays.pmtiles) config+="\"OPENEOC_OVERLAYS_PMTILES_URL\":\"/basemap/$name\"," ;;
+      overlays-manifest.json) config+="\"OPENEOC_OVERLAYS_MANIFEST_URL\":\"/basemap/$name\"," ;;
+    esac
+  done < "$sums"
+  say "Map archives match basemap/SHA256SUMS"
+else
+  say "No basemap release set (OPENEOC_BASEMAP_URL); the map shows the bundled basemap."
+fi
+# The page loads this ahead of the app; it names only the archives checked above.
+printf 'globalThis.OPENEOC = Object.freeze({%s});\n' "${config%,}" > basemap/runtime-config.js
+
 say "Starting the database"
 docker compose up -d db
 
 say "Waiting for the database to be healthy"
-for _ in $(seq 1 40); do
-  if docker compose exec -T db pg_isready -U openeoc_owner -d openeoc >/dev/null 2>&1; then
-    break
-  fi
-  sleep 3
-done
+wait_for 40 3 docker compose exec -T db pg_isready -U openeoc_owner -d openeoc >/dev/null 2>&1 \
+  || fail "the database did not become healthy. See: docker compose logs db"
 
 if [ -n "${OPENEOC_RUNTIME_PASSWORD:-}" ]; then
   say "Setting the app_runtime password"
@@ -66,18 +157,61 @@ alter role app_runtime login password :'pw';
 SQL
 fi
 
-say "Building and starting the API"
-docker compose up -d --build
+# The first jurisdiction and administrator are created once. Before the first
+# migration the query fails, which also means there is no administrator yet.
+admin="$(docker compose exec -T db psql -U openeoc_owner -d openeoc -tAc \
+  'select 1 from persons where is_instance_admin limit 1' 2>/dev/null || true)"
+if [ "$admin" = 1 ]; then
+  say "An administrator exists; the first-administrator step is skipped"
+else
+  for key in OPENEOC_ADMIN_EMAIL OPENEOC_ADMIN_NAME OPENEOC_JURISDICTION_SLUG OPENEOC_JURISDICTION_NAME; do
+    [ -n "${!key:-}" ] || fail "Set $key for the first administrator and jurisdiction (see deploy/README.md)."
+  done
+fi
 
-say "Waiting for the API to answer"
-for _ in $(seq 1 40); do
-  if curl -fsS "http://localhost:8080/api/v1/me" >/dev/null 2>&1; then break; fi
-  # 401 is a healthy answer from an auth-gated endpoint.
-  code="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:8080/api/v1/me" || true)"
-  [ "$code" = "401" ] && break
-  sleep 3
-done
+say "Building the images"
+docker compose build
 
-say "Up. API on http://localhost:8080"
-say "Next: create the first jurisdiction and admin with the bootstrap command"
-say "(see deploy/README.md, 'First jurisdiction and admin')."
+created=""
+if [ "$admin" != 1 ]; then
+  # The password is generated, passed by environment rather than argument,
+  # never printed, and kept only once the bootstrap reports it created the
+  # administrator.
+  say "Creating the first jurisdiction and administrator"
+  OPENEOC_BOOTSTRAP_PASSWORD="$(new_password)"
+  export OPENEOC_BOOTSTRAP_PASSWORD
+  printf '%s\n' "$OPENEOC_BOOTSTRAP_PASSWORD" > admin-password.txt.new
+  out="$(docker compose run --rm -T -e OPENEOC_BOOTSTRAP_PASSWORD api tsx server/src/main.ts bootstrap \
+    --admin-email="$OPENEOC_ADMIN_EMAIL" --admin-name="$OPENEOC_ADMIN_NAME" \
+    --jurisdiction-slug="$OPENEOC_JURISDICTION_SLUG" --jurisdiction-name="$OPENEOC_JURISDICTION_NAME")" \
+    || { rm -f admin-password.txt.new; fail "the bootstrap command failed; see the error above, then re-run."; }
+  unset OPENEOC_BOOTSTRAP_PASSWORD
+  if printf '%s\n' "$out" | grep -q '^Bootstrapped:'; then
+    mv admin-password.txt.new admin-password.txt
+    created=1
+  else
+    rm -f admin-password.txt.new
+    say "An administrator already exists; nothing was changed"
+  fi
+fi
+
+say "Starting the stack"
+docker compose up -d
+
+# The sign-in page, and a 401 from the API behind it, over HTTPS. The name is
+# resolved to this host so split DNS does not matter, and -k because a
+# supplied pair may chain to a private CA this host does not trust.
+https_ready() {
+  local page code
+  page="$(curl -ksS --resolve "$OPENEOC_DOMAIN:443:127.0.0.1" "https://$OPENEOC_DOMAIN/" 2>/dev/null)" || return 1
+  code="$(curl -ks -o /dev/null -w '%{http_code}' --resolve "$OPENEOC_DOMAIN:443:127.0.0.1" \
+    "https://$OPENEOC_DOMAIN/api/v1/me")" || return 1
+  [[ "$page" == *'id="root"'* && "$code" == 401 ]]
+}
+say "Waiting for https://$OPENEOC_DOMAIN (a new certificate can take a minute)"
+wait_for 60 5 https_ready || fail "https://$OPENEOC_DOMAIN did not answer. See: docker compose logs web api"
+
+say "Up. Sign in at https://$OPENEOC_DOMAIN"
+if [ -n "$created" ]; then
+  say "First administrator: $OPENEOC_ADMIN_EMAIL. The password is in deploy/admin-password.txt, readable only by this account. Store it safely, then delete the file. Two-step sign-in is set up at the first sign-in."
+fi

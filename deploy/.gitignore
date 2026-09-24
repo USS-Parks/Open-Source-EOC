@@ -1,0 +1,6 @@
+# Written by install.sh and backup.sh on the host: the fetched map archives,
+# a supplied TLS pair, the first administrator's password and backups.
+basemap/
+tls/
+admin-password.txt*
+backups/

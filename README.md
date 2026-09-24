@@ -13,8 +13,8 @@ deployment:
 
 - the Windows proof used a prepared host and local map archives; independent
   media transfer and second-machine setup have not been proven;
-- the Docker path does not yet ship a web service, TLS termination or
-  first-administrator bootstrap;
+- the Docker path's one-command HTTPS install (`deploy/install.sh`) is
+  validated offline only; its first run on a Linux host has not been made;
 - live IPAWS, real-hardware 150-user load, representative-operator comparison,
   manual screen-reader evidence and a pilot remain open;
 - observability, scheduled work, durable outbound delivery, MFA, retention,

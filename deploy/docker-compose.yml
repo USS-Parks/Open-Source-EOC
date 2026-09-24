@@ -1,8 +1,8 @@
-# OpenEOC single-node reference (VEOC-40). Postgres/PostGIS plus the API.
-# Air-gap friendly: images are pinned by digest-able tags and can be
-# pre-loaded with `docker load`; nothing here calls out at runtime. The web
-# bundle is built with `pnpm --filter @openeoc/web build` and served by any
-# static host (an nginx service is shown commented below).
+# OpenEOC single node: PostgreSQL/PostGIS, the API, and Caddy in front of both
+# serving HTTPS, the web bundle and the map archives. Run install.sh, which
+# writes deploy/.env. Air-gap friendly: images are pinned by version tag and
+# can be pre-loaded with `docker load`; nothing here calls out at runtime
+# except Caddy's ACME certificate requests when an ACME email is chosen.
 
 # Container logs rotate by size: five files of 10 MB per service.
 x-logging: &logging
@@ -32,6 +32,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
+      target: api
     depends_on:
       db:
         condition: service_healthy
@@ -60,23 +61,45 @@ services:
       OPENEOC_SLOW_REQUEST_MS: ${OPENEOC_SLOW_REQUEST_MS:-1000}
       # Unset leaves GET /api/v1/metrics answering 404.
       OPENEOC_METRICS_TOKEN: ${OPENEOC_METRICS_TOKEN:-}
-      # Set to the reverse proxy address when one fronts the API; unset trusts none.
-      OPENEOC_TRUST_PROXY: ${OPENEOC_TRUST_PROXY:-}
+      # Caddy's X-Forwarded-For names the client. Only Caddy on this network
+      # and this host's loopback reach the API, and both have private
+      # addresses, so private addresses are the trusted proxies.
+      OPENEOC_TRUST_PROXY: ${OPENEOC_TRUST_PROXY:-uniquelocal}
+      # Offline address search, when install.sh fetched a gazetteer; a missing
+      # file logs a warning and search reports unavailable.
+      OPENEOC_GAZETTEER_PATH: ${OPENEOC_GAZETTEER_PATH:-/basemap/gazetteer.tsv}
+    # Loopback only: clients reach the API through Caddy over HTTPS.
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
       - openeoc-blobs:/data/blobs
+      - ./basemap:/basemap:ro
     restart: unless-stopped
     logging: *logging
 
-  # web:
-  #   image: nginx:1.27-alpine
-  #   volumes:
-  #     - ../web/dist:/usr/share/nginx/html:ro
-  #   ports:
-  #     - "8081:80"
-  #   depends_on: [api]
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: web
+    depends_on: [api]
+    environment:
+      OPENEOC_DOMAIN: ${OPENEOC_DOMAIN:?run install.sh, or set OPENEOC_DOMAIN in deploy/.env}
+      OPENEOC_TLS: ${OPENEOC_TLS:?run install.sh, or set OPENEOC_TLS in deploy/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./basemap:/srv/basemap:ro
+      - ./tls:/etc/openeoc/tls:ro
+      # Certificates and the ACME account; keep them across recreation.
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+    logging: *logging
 
 volumes:
   openeoc-db:
   openeoc-blobs:
+  caddy-data:
+  caddy-config:

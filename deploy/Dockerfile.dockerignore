@@ -1,0 +1,20 @@
+# Build context for deploy/Dockerfile: the source tree, without local state,
+# secrets, host dependencies or the fetched map archives.
+.git
+.claude
+.vitest
+**/node_modules
+**/dist
+**/.env
+data
+deploy/admin-password.txt*
+deploy/backups
+deploy/basemap
+deploy/test-runtime/out
+deploy/tls
+deploy/windows/out
+tools/basemap/out
+web/public/basemap/california.pmtiles
+web/public/basemap/buildings.pmtiles
+web/public/basemap/overlays.pmtiles
+web/public/basemap/overlays-manifest.json
