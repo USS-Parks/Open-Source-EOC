@@ -28,6 +28,7 @@ substitute. Re-select context before acting.
 | Moderate damage reports and prepare declaration support | [Damage assessment](./DAMAGE-ASSESSMENT.md) |
 | Track facility and shelter status, hospital beds and shelter capacity | [Facilities and shelters](./FACILITIES.md) |
 | Build, run, download and schedule reports over boards | [Reports](./REPORTS.md) |
+| Use the console by keyboard, screen reader, zoom, reduced motion or higher contrast, and run the screen-reader check | [Accessibility](./ACCESSIBILITY.md) |
 | Train staff with job aids and a tabletop exercise | [Training kit](./training/README.md) |
 | Create or revise board schemas | [Board designer guide](./DESIGNER.md) |
 | Move records from WebEOC | [WebEOC migration](./MIGRATION.md) |

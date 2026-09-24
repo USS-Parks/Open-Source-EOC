@@ -66,8 +66,9 @@ describe("plain button contrast (WCAG 2.1 AA)", () => {
   });
 
   it("changes button and row colors at once for reduced motion, so a theme switch never shows a half-faded button", () => {
-    const outsideNoPreference = baseCss.replace(/@media \(prefers-reduced-motion: no-preference\) \{[\s\S]*?\n\}/g, "");
+    const outsideMotionQueries = baseCss.replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/@media \(prefers-reduced-motion: (no-preference|reduce)\) \{[\s\S]*?\n\}/g, "");
     expect(baseCss).toMatch(/@media \(prefers-reduced-motion: no-preference\)/);
-    expect(outsideNoPreference).not.toMatch(/transition/);
+    expect(outsideMotionQueries).not.toMatch(/transition/);
   });
 });

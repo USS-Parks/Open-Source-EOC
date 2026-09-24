@@ -987,13 +987,16 @@ export interface BoardListItem {
   readonly templateVersion: number;
   /** Whether the board carries a geometry field (so it appears on the COP). */
   readonly hasGeometry: boolean;
+  /** The incidents the board serves, so the shell can keep another incident's boards out of view. */
+  readonly incidentIds: string[];
 }
 
 /**
  * The active boards in a jurisdiction the caller belongs to. Discovery for
  * the app shell's navigation: any membership role may list (viewers included),
  * and RLS is the second wall. `hasGeometry` mirrors the OGC collections rule
- * so the client can mark which boards also render as a COP layer.
+ * so the client can mark which boards also render as a COP layer. The
+ * incident links are read under the same row-level security.
  */
 export async function listBoards(
   sql: Sql,
@@ -1003,7 +1006,9 @@ export async function listBoards(
   if (!actor.memberships.some((m) => m.jurisdictionId === jurisdictionId))
     throw new AuthError(403, "no access to this jurisdiction");
   const rows = await sql`
-    select b.id, b.title, b.template_key, b.template_version, b.local_fields, t.definition
+    select b.id, b.title, b.template_key, b.template_version, b.local_fields, t.definition,
+      coalesce((select array_agg(ib.incident_id::text order by ib.incident_id)
+        from incident_boards ib where ib.board_id = b.id), '{}') as incident_ids
     from boards b join board_templates t
       on t.key = b.template_key and t.version = b.template_version
     where b.jurisdiction_id = ${jurisdictionId} and b.archived_at is null
@@ -1018,6 +1023,7 @@ export async function listBoards(
       templateKey: r.template_key as string,
       templateVersion: r.template_version as number,
       hasGeometry: geometryFieldKey(fields) !== null,
+      incidentIds: r.incident_ids as string[],
     };
   });
 }

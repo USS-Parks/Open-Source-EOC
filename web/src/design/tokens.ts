@@ -6,7 +6,7 @@
 
 export type ThemeName = "light" | "dark";
 
-interface ThemeTokens {
+export interface ThemeTokens {
   readonly bg: string;
   readonly surface: string;
   readonly surfaceRaised: string;
@@ -68,7 +68,7 @@ export const themes: Readonly<Record<ThemeName, ThemeTokens>> = {
     textStrong: "#ffffff",
     textMuted: "#9ca3af",
     border: "#374151",
-    borderStrong: "#6b7785",
+    borderStrong: "#7a8694",
     focus: "#60a5fa",
     brandNavy: "#12324a",
     brandNavyText: "#ffffff",
@@ -84,6 +84,35 @@ export const themes: Readonly<Record<ThemeName, ThemeTokens>> = {
     statusUnknown: "#9ca3af",
   },
 };
+
+/**
+ * Stronger text, borders and focus for a higher-contrast preference
+ * (prefers-contrast: more), laid over either theme. Measured in
+ * __tests__/contrast.test.ts.
+ */
+export const moreContrast: Readonly<Record<ThemeName, Partial<ThemeTokens>>> = {
+  light: {
+    text: "#101820",
+    textMuted: "#374151",
+    border: "#6b7280",
+    borderStrong: "#374151",
+    focus: "#1e3a8a",
+  },
+  dark: {
+    text: "#f3f4f6",
+    textMuted: "#d1d5db",
+    border: "#8b95a1",
+    borderStrong: "#c3cad3",
+    focus: "#93c5fd",
+  },
+};
+
+export type ContrastPreference = "normal" | "more";
+
+/** A theme's tokens with the higher-contrast layer applied when asked for. */
+export function themeTokens(theme: ThemeName, contrast: ContrastPreference = "normal"): ThemeTokens {
+  return contrast === "more" ? { ...themes[theme], ...moreContrast[theme] } : themes[theme];
+}
 
 export const fontStack =
   'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif';
@@ -172,8 +201,8 @@ const shadows: Record<ThemeName, { sm: string; md: string; lg: string }> = {
 };
 
 /** Emit the theme as CSS custom properties for a style attribute or tag. */
-export function toCssVariables(theme: ThemeName): Record<string, string> {
-  const t = themes[theme];
+export function toCssVariables(theme: ThemeName, contrast: ContrastPreference = "normal"): Record<string, string> {
+  const t = themeTokens(theme, contrast);
   return {
     "--eoc-bg": t.bg,
     "--eoc-surface": t.surface,

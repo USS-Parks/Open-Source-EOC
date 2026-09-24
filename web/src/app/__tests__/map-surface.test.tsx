@@ -132,6 +132,18 @@ it("reads an incident board's form in the incident's scope, so a partner who is 
   await waitFor(() => expect(getBoard).toHaveBeenCalledWith("roads", "incident-a"));
 });
 
+it("says why the record panel is empty when the board's form fails to load", async () => {
+  const client = { getBoard: vi.fn().mockRejectedValue(new Error("HTTP 500: board unavailable")) } as unknown as ApiClient;
+  render(<MapSurface client={client} theme="light" jurisdictionId="j1" feeds={[]}
+    collections={[{ id: "roads", title: "Road Closures" }]} />);
+  fireEvent.click(screen.getByRole("button", { name: "Add point" }));
+  fireEvent.change(screen.getByLabelText("Longitude"), { target: { value: "-123.5" } });
+  fireEvent.change(screen.getByLabelText("Latitude"), { target: { value: "41.3" } });
+  fireEvent.click(screen.getByRole("button", { name: "Use coordinates" }));
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toBe("The form for Road Closures could not be loaded: HTTP 500: board unavailable");
+});
+
 it("links an exact routed dataset feature to a recorded assessment", async () => {
   const datasetId = "11111111-1111-4111-8111-111111111111";
   const createOperationalRelationship = vi.fn().mockResolvedValue({ id: "relationship-1" });

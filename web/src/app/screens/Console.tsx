@@ -4,7 +4,7 @@ import { Button } from "../../design/components.js";
 import type { ThemeName } from "../../design/tokens.js";
 import type { ApiClient, BoardListItem, DashboardListItem, CollectionRef, FeedHealth, Membership } from "../api/client.js";
 import { useSession } from "../auth/session.js";
-import { IncidentSwitcher, useIncident } from "../incident/context.js";
+import { boardsInScope, IncidentSwitcher, useIncident } from "../incident/context.js";
 import { useAsync, useNotifications } from "../data/hooks.js";
 import {
   AppShell,
@@ -237,7 +237,11 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
   const canReturn = Boolean(returnRoute && returnRoute.context.incidentId === incident.selectedIncidentId
     && returnRoute.surface.kind !== "not-found");
 
-  const boardItems = boards.data ?? [];
+  const boardItems: readonly BoardListItem[] = boards.data ?? [];
+  // Navigation lists and the map show the selected incident's boards and the
+  // jurisdiction's own; another incident's boards stay out of the way.
+  const scopedBoards = boardsInScope(boardItems, incident.selectedIncidentId);
+  const outOfScope = new Set(boardItems.filter((board) => !scopedBoards.includes(board)).map((board) => board.id));
   const dock = (
     <>
       {workspace.message && (workspace.phase === "conflict" || workspace.phase === "error") ? (
@@ -294,11 +298,11 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       </Suspense>
       <section aria-label="Boards">
         <h2 className="eoc-dock-heading">Boards</h2>
-        {boardItems.length === 0 ? (
+        {scopedBoards.length === 0 ? (
           <p className="eoc-flush eoc-muted">No boards yet.</p>
         ) : (
           <BoardList
-            boards={boardItems.map((b) => ({ id: b.id, name: b.title }))}
+            boards={scopedBoards.map((b) => ({ id: b.id, name: b.title }))}
             onOpen={(id) => navigateInContext({ kind: "board", id })}
           />
         )}
@@ -391,8 +395,10 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
           incidentClosed={Boolean(incident.selectedIncident?.closedAt)}
           incidentBoardIds={incident.incidentBoardIds}
           boards={boardItems}
+          boardsInView={scopedBoards}
+          onIncidentActivated={incident.selectWhenListed}
           boardsLoading={boards.loading && !boards.data}
-          collections={collections.data ?? []}
+          collections={(collections.data ?? []).filter((collection) => !outOfScope.has(collection.id))}
           feeds={feeds.data ?? []}
           isAdmin={viewingMembership?.role === "admin"}
           facilitiesEnabled={facilitiesEnabled}
@@ -527,6 +533,8 @@ function Center(props: {
   incidentClosed: boolean;
   incidentBoardIds: ReadonlySet<string>;
   boards: readonly BoardListItem[];
+  boardsInView: readonly BoardListItem[];
+  onIncidentActivated: (incidentId: string) => Promise<void>;
   boardsLoading: boolean;
   collections: readonly CollectionRef[];
   feeds: readonly FeedHealth[];
@@ -616,7 +624,7 @@ function Center(props: {
       );
     }
     case "boards":
-      return <BoardsIndex boards={props.boards} onOpen={props.onOpenBoard} />;
+      return <BoardsIndex boards={props.boardsInView} onOpen={props.onOpenBoard} />;
     case "board":
       return <BoardSurface client={props.client} boardId={s.id} incidentId={props.routeContext.incidentId ?? null}
         incidentScoped={Boolean(props.routeContext.incidentId) && props.incidentBoardIds.has(s.id)}
@@ -734,6 +742,7 @@ function Center(props: {
           integrations={props.integrations}
           memberships={props.memberships}
           positionKey={props.positionKey}
+          onActivated={props.onIncidentActivated}
         />
       );
     case "datasets":

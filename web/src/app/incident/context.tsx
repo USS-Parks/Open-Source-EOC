@@ -39,7 +39,24 @@ export interface IncidentValue {
   readonly incidentBoards: readonly IncidentBoardRef[];
   readonly selectionNotice: string | null;
   readonly selectIncident: (id: string | null) => void;
+  /** Select an incident the list does not show yet, such as one just
+   *  activated, once the server lists it; an id the next list read still
+   *  lacks is dropped. Settles when the list read is in. */
+  readonly selectWhenListed: (id: string) => Promise<void>;
   readonly reload: () => void;
+}
+
+/**
+ * The boards that belong in view for the selected incident: jurisdiction
+ * boards that serve no incident, and the selected incident's own. Another
+ * incident's boards stay out. With no incident selected every board shows.
+ */
+export function boardsInScope<T extends { readonly incidentIds?: readonly string[] }>(
+  boards: readonly T[],
+  incidentId: string | null,
+): readonly T[] {
+  if (!incidentId) return boards;
+  return boards.filter((board) => !board.incidentIds?.length || board.incidentIds.includes(incidentId));
 }
 
 const IncidentContext = createContext<IncidentValue | null>(null);
@@ -133,6 +150,23 @@ export function IncidentProvider(props: { children: ReactNode }) {
     location.hash = surfaceHash(surface, { incidentId: id });
   }, [list]);
 
+  // A selection waiting for the next list read: selected if the server lists
+  // it, dropped if a newer list still does not. The caller learns either way.
+  const pending = useRef<{ id: string; since: readonly IncidentSummary[]; done: () => void } | null>(null);
+  const reloadIncidents = incidents.reload;
+  const selectWhenListed = useCallback((id: string) => new Promise<void>((done) => {
+    pending.current?.done();
+    pending.current = { id, since: list, done };
+    reloadIncidents();
+  }), [list, reloadIncidents]);
+  useEffect(() => {
+    const wanted = pending.current;
+    if (!wanted || list === wanted.since) return;
+    pending.current = null;
+    if (list.some((incident) => incident.id === wanted.id)) selectIncident(wanted.id);
+    wanted.done();
+  }, [list, selectIncident]);
+
   // The boards the selected incident uses, so a contributed record is tagged
   // with the incident only when its board belongs to it.
   const activeId = list.find((i) => i.id === selectedId)?.id ?? null;
@@ -158,9 +192,10 @@ export function IncidentProvider(props: { children: ReactNode }) {
       incidentBoards,
       selectionNotice,
       selectIncident,
+      selectWhenListed,
       reload: incidents.reload,
     };
-  }, [list, selectedId, incidentBoardIds, incidentBoards, selectionNotice, selectIncident, incidents.loading, incidents.error, incidents.reload]);
+  }, [list, selectedId, incidentBoardIds, incidentBoards, selectionNotice, selectIncident, selectWhenListed, incidents.loading, incidents.error, incidents.reload]);
 
   return <IncidentContext.Provider value={value}>{props.children}</IncidentContext.Provider>;
 }

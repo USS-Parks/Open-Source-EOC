@@ -51,7 +51,9 @@ describe("the dashboard renders a computed snapshot and nothing else", () => {
       </Theme>,
     );
     expect(screen.getByTestId("tile-closed_roads-value").textContent).toBe("2");
-    expect(screen.getByText("warn")).toBeTruthy();
+    // The tile level reads in operator words, not the server's key.
+    expect(screen.getByText("Watch")).toBeTruthy();
+    expect(screen.queryByText("warn")).toBeNull();
     expect(screen.getByText("+3 last 24h")).toBeTruthy();
     expect(screen.getByLabelText("Shelters by status: 3 total")).toBeTruthy();
     expect(screen.getByText("unstable")).toBeTruthy();

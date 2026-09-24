@@ -18,11 +18,55 @@ textarea {
   font-family: var(--eoc-font, system-ui, sans-serif);
 }
 
-/* One keyboard focus ring, everywhere. */
-:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+/* One keyboard focus ring, everywhere; a higher-contrast preference widens it. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
   outline: 2px solid var(--eoc-focus);
+  outline-width: var(--eoc-focus-width, 2px);
   outline-offset: 2px;
   border-radius: var(--eoc-radius-sm, 4px);
+}
+
+/* Text fields and selects keep a 3:1 boundary so they can be found (WCAG
+   1.4.11). Screen stylesheets draw their controls with the lighter divider
+   border, so this rule outranks them; the navy command bar and a field
+   marked invalid keep their own. */
+.eoc-theme :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]), select, textarea):not(.eoc-shell-command *, [aria-invalid="true"]) {
+  border-color: var(--eoc-border-strong);
+}
+
+/* A reduced-motion preference stops every animation and transition, including
+   ones added later. Animations jump to their end; transitions are removed
+   rather than shortened, since a short duration would start one on every
+   property. The kit spinner only slows, so work in progress still shows. */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.eoc-kit-spinner),
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .eoc-theme { --eoc-focus-width: 3px; }
+}
+
+/* Forced colors replace the theme with system colors; selection and focus
+   stay visible without the theme's fills. */
+@media (forced-colors: active) {
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible,
+  /* MapLibre draws its controls' focus as a shadow, which forced colors remove. */
+  .maplibregl-ctrl-group button:focus-visible,
+  .maplibregl-ctrl-attrib-button:focus-visible {
+    outline: 3px solid Highlight;
+  }
+  .eoc-shell-nav-scroll button[aria-current="page"],
+  .eoc-kit-tabs button[aria-selected="true"] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
 }
 
 /* Buttons: quiet motion, clear hover and active. Without a motion
@@ -61,6 +105,11 @@ textarea {
   color: var(--eoc-text);
   background: var(--eoc-bg);
   font-family: var(--eoc-font);
+}
+/* A link no screen styles takes the theme's action color; the browser's own
+   blue is unreadable on the dark theme. */
+:where(.eoc-theme) a {
+  color: var(--eoc-brand-teal);
 }
 
 /* Button. The minimum height is the glove and touchscreen target, so field

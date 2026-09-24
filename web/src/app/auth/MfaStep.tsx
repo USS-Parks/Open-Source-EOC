@@ -53,7 +53,7 @@ export function MfaStep(props: { challenge: MfaChallenge; onCancel: () => void }
   if (recoveryCodes) {
     return (
       <div className="sign-in-box is-wide">
-        <Panel title="Save your recovery codes">
+        <Panel title="Save your recovery codes" level={1}>
           <p className="sign-in-lead">
             Each code signs you in once if you lose your authenticator. Print or copy them
             and store them offline now. They will not be shown again.
@@ -77,7 +77,7 @@ export function MfaStep(props: { challenge: MfaChallenge; onCancel: () => void }
       }}
       className="sign-in-box is-wide"
     >
-      <Panel title={enrolling ? "Set up two-step sign-in" : "Two-step sign-in"}>
+      <Panel title={enrolling ? "Set up two-step sign-in" : "Two-step sign-in"} level={1}>
         <div className="eoc-stack">
           {enrolling ? (
             <>

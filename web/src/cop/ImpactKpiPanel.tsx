@@ -283,7 +283,8 @@ export function ImpactKpiPanel(props: {
           : loading ? <span role="status">Updating…</span>
             : <span aria-hidden="true">&nbsp;</span>}
       </div>
-      <div className="eoc-impact-strip">
+      {/* The strip scrolls sideways on a narrow screen, so the keyboard can reach it. */}
+      <div className="eoc-impact-strip" role="group" aria-label="Impact indicator cards" tabIndex={0}>
         {CATEGORIES.map((categoryKey) => {
           const category = analysis?.impact.categories[categoryKey];
           return (

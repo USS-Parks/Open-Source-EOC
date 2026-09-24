@@ -1,4 +1,4 @@
-import { Button, StatusBadge } from "../../design/components.js";
+import { StatusBadge } from "../../design/components.js";
 import type { BoardListItem } from "../api/client.js";
 import { EmptyState, Scroll } from "../screens/parts.js";
 
@@ -37,7 +37,10 @@ export function BoardsIndex(props: {
                   )}
                 </td>
                 <td>
-                  <Button onClick={() => props.onOpen(b.id)}>Open</Button>
+                  {/* Every row's button says "Open"; its name says which board. */}
+                  <button type="button" className="eoc-btn is-quiet" aria-label={`Open ${b.title}`} onClick={() => props.onOpen(b.id)}>
+                    Open
+                  </button>
                 </td>
               </tr>
             ))}

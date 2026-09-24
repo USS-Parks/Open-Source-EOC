@@ -112,6 +112,12 @@ const TILE_STATUS: Record<TileResult["level"], Status> = {
   warn: "warning",
   critical: "critical",
 };
+/** The level in operator words, the same as the operational state labels. */
+const TILE_LEVEL: Record<TileResult["level"], string> = {
+  normal: "Normal",
+  warn: "Watch",
+  critical: "Critical",
+};
 
 function Tile(props: { widget: TileResult }) {
   const trend = props.widget.trend ?? 0;
@@ -119,7 +125,7 @@ function Tile(props: { widget: TileResult }) {
     <div>
       <p className="dash-tile-value">
         <span data-testid={`tile-${props.widget.key}-value`}>{props.widget.value}</span>{" "}
-        <StatusBadge status={TILE_STATUS[props.widget.level]}>{props.widget.level}</StatusBadge>
+        <StatusBadge status={TILE_STATUS[props.widget.level]}>{TILE_LEVEL[props.widget.level]}</StatusBadge>
       </p>
       {trend > 0 ? (
         <p className="dash-tile-trend">

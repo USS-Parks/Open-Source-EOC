@@ -25,6 +25,21 @@
 
 .eoc-shell-skip:focus { left: 8px; }
 
+/* The command bar and rail stay navy in both themes, where the theme's focus
+   blue measures about 2:1. Their controls take the light signal color, and
+   full-height buttons keep the ring inside their edges. The account menu
+   opens on the page surface and keeps the theme's ring. */
+.eoc-shell-command :where(a, button, input, select, summary):focus-visible,
+.eoc-shell-rail button:focus-visible {
+  outline: 2px solid #63d5cf;
+  outline-width: var(--eoc-focus-width, 2px);
+  outline-offset: 2px;
+}
+.eoc-shell-notifications:focus-visible,
+.eoc-shell-mobile-nav:focus-visible,
+.eoc-shell-account summary:focus-visible { outline-offset: -4px; }
+.eoc-shell-account > div button:focus-visible { outline-color: var(--eoc-focus); }
+
 .eoc-shell-command {
   z-index: 30;
   min-width: 0;

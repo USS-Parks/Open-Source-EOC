@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   chartCategories,
   contrastRatio,
+  moreContrast,
   operationalStates,
+  themeTokens,
   themes,
+  toCssVariables,
 } from "../tokens.js";
 
 const AA_TEXT = 4.5;
@@ -36,6 +39,13 @@ describe("token contrast (WCAG 2.1 AA)", () => {
       it(`focus indicator on surface meets ${AA_NON_TEXT}:1`, () => {
         expect(contrastRatio(t.focus, t.surface)).toBeGreaterThanOrEqual(AA_NON_TEXT);
       });
+      // Text fields and selects draw their boundary with borderStrong on every surface they sit on.
+      for (const [surface, color] of [["bg", t.bg], ["surface", t.surface], ["surfaceRaised", t.surfaceRaised],
+        ["surfaceOverlay", t.surfaceOverlay]] as const) {
+        it(`control boundary on ${surface} meets ${AA_NON_TEXT}:1`, () => {
+          expect(contrastRatio(t.borderStrong, color)).toBeGreaterThanOrEqual(AA_NON_TEXT);
+        });
+      }
       it(`brand signal on navy meets ${AA_NON_TEXT}:1`, () => {
         expect(contrastRatio(t.brandSignal, t.brandNavy)).toBeGreaterThanOrEqual(AA_NON_TEXT);
       });
@@ -51,6 +61,37 @@ describe("token contrast (WCAG 2.1 AA)", () => {
       }
     });
   }
+
+  describe("higher-contrast preference", () => {
+    for (const name of ["light", "dark"] as const) {
+      const normal = themes[name];
+      const more = themeTokens(name, "more");
+      const surfaces = [["bg", more.bg], ["surface", more.surface], ["surfaceRaised", more.surfaceRaised],
+        ["surfaceOverlay", more.surfaceOverlay]] as const;
+      for (const [surface, color] of surfaces) {
+        it(`${name}: text and muted text on ${surface} meet ${AA_TEXT}:1`, () => {
+          expect(contrastRatio(more.text, color)).toBeGreaterThanOrEqual(AA_TEXT);
+          expect(contrastRatio(more.textMuted, color)).toBeGreaterThanOrEqual(AA_TEXT);
+        });
+        it(`${name}: borders and the focus ring on ${surface} meet ${AA_NON_TEXT}:1`, () => {
+          expect(contrastRatio(more.border, color)).toBeGreaterThanOrEqual(AA_NON_TEXT);
+          expect(contrastRatio(more.borderStrong, color)).toBeGreaterThanOrEqual(AA_NON_TEXT);
+          expect(contrastRatio(more.focus, color)).toBeGreaterThanOrEqual(AA_NON_TEXT);
+        });
+      }
+      it(`${name}: every strengthened token contrasts more with the surface than the theme's own`, () => {
+        for (const key of Object.keys(moreContrast[name]) as Array<keyof typeof normal>) {
+          expect(contrastRatio(more[key], more.surface)).toBeGreaterThan(contrastRatio(normal[key], normal.surface));
+        }
+      });
+      it(`${name}: emits the stronger values as the theme's CSS variables`, () => {
+        expect(toCssVariables(name, "more")).toMatchObject({
+          "--eoc-border": more.border, "--eoc-text-muted": more.textMuted, "--eoc-focus": more.focus,
+        });
+        expect(toCssVariables(name)["--eoc-border"]).toBe(normal.border);
+      });
+    }
+  });
 
   it("keeps brand and chart emphasis distinct from operational status colors", () => {
     for (const name of ["light", "dark"] as const) {

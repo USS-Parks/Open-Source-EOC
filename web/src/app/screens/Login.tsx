@@ -26,14 +26,14 @@ export function Login() {
 
   if (challenge) {
     return (
-      <div className="sign-in-frame">
+      <main className="sign-in-frame">
         <MfaStep challenge={challenge} onCancel={() => { setChallenge(null); setPassword(""); }} />
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="sign-in-frame">
+    <main className="sign-in-frame">
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -41,7 +41,7 @@ export function Login() {
         }}
         className="sign-in-box"
       >
-        <Panel title="Open Source EOC">
+        <Panel title="Open Source EOC" level={1}>
           <p className="sign-in-lead eoc-muted">
             Sign in to the operations console.
           </p>
@@ -59,6 +59,6 @@ export function Login() {
           </div>
         </Panel>
       </form>
-    </div>
+    </main>
   );
 }

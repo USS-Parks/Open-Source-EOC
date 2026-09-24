@@ -464,6 +464,11 @@ export function MapSurface(props: {
         <div className="map-surface-overlay">
           <Panel title="New map record">
             {board.loading && !board.data ? <Loading label="Loading form…" /> : null}
+            {board.error ? (
+              <p role="alert" className="map-surface-error">
+                The form for {geoBoards.find((b) => b.id === activeBoard)?.title ?? "this board"} could not be loaded: {board.error}
+              </p>
+            ) : null}
             {board.data ? (
               geomKey ? (
                 <RecordForm

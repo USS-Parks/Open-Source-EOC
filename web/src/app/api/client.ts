@@ -152,6 +152,8 @@ export interface BoardListItem {
   readonly templateKey: string;
   readonly templateVersion: number;
   readonly hasGeometry: boolean;
+  /** The incidents the board serves; empty for a jurisdiction board. */
+  readonly incidentIds?: readonly string[];
 }
 export interface TemplateVersionSummary {
   readonly key: string;
@@ -590,6 +592,8 @@ export class SessionExpiredError extends Error {
     this.name = "SessionExpiredError";
   }
 }
+/** What a screen shows when a request got no answer at all. */
+export const NO_CONNECTION = "No connection to the server. Check the network connection and try again.";
 
 export interface ApiClientOptions {
   readonly baseUrl?: string;
@@ -701,7 +705,15 @@ export class ApiClient {
     if (auth && this.accessToken) headers["authorization"] = `Bearer ${this.accessToken}`;
     const init: RequestInit = { method, headers };
     if (body !== undefined) init.body = form ? body : JSON.stringify(body);
-    const res = await this.fetchImpl(`${this.baseUrl}${path}`, init);
+    let res: Response;
+    try {
+      res = await this.fetchImpl(`${this.baseUrl}${path}`, init);
+    } catch (err) {
+      // fetch rejects with a TypeError when no response arrives at all; the
+      // browser's wording ("Failed to fetch") means nothing to an operator.
+      if (err instanceof TypeError) throw new Error(NO_CONNECTION, { cause: err });
+      throw err;
+    }
     if (!res.ok) {
       let message = res.statusText || `HTTP ${res.status}`;
       try {

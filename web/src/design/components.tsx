@@ -1,10 +1,27 @@
-import type { CSSProperties, ReactNode, SelectHTMLAttributes } from "react";
+import { useSyncExternalStore, type CSSProperties, type ReactNode, type SelectHTMLAttributes } from "react";
 import { toCssVariables, type ThemeName } from "./tokens.js";
 
-/** Wraps a subtree in a theme; the app mounts one at the root. */
+const MORE_CONTRAST = "(prefers-contrast: more)";
+
+function watchContrast(onChange: () => void): () => void {
+  if (typeof matchMedia !== "function") return () => undefined;
+  const query = matchMedia(MORE_CONTRAST);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+const wantsMoreContrast = () => typeof matchMedia === "function" && matchMedia(MORE_CONTRAST).matches;
+
+/**
+ * Wraps a subtree in a theme; the app mounts one at the root. A
+ * higher-contrast preference in the operating system strengthens text,
+ * borders and focus in either theme, and follows the setting live.
+ */
 export function Theme(props: { name: ThemeName; children: ReactNode }) {
+  const more = useSyncExternalStore(watchContrast, wantsMoreContrast, () => false);
   return (
-    <div data-theme={props.name} className="eoc-theme" style={toCssVariables(props.name) as CSSProperties}>
+    <div data-theme={props.name} data-contrast={more ? "more" : undefined} className="eoc-theme"
+      style={toCssVariables(props.name, more ? "more" : "normal") as CSSProperties}>
       {props.children}
     </div>
   );
@@ -102,11 +119,12 @@ export function EnumSelect(props: {
   );
 }
 
-/** Titled surface section. */
-export function Panel(props: { title: string; children: ReactNode }) {
+/** Titled surface section; a page made of one panel titles itself at level 1. */
+export function Panel(props: { title: string; level?: 1 | 2; children: ReactNode }) {
+  const Heading = props.level === 1 ? "h1" : "h2";
   return (
     <section aria-label={props.title} className="eoc-panel">
-      <h2 className="eoc-panel-title">{props.title}</h2>
+      <Heading className="eoc-panel-title">{props.title}</Heading>
       {props.children}
     </section>
   );

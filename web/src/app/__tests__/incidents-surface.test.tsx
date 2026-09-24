@@ -18,7 +18,7 @@ const detail = {
   boards: [], checklists: [], libraries: [],
 };
 
-function setup(options: { isAdmin?: boolean; positionKey?: string | null; detail?: object } = {}) {
+function setup(options: { isAdmin?: boolean; positionKey?: string | null; detail?: object; onActivated?: (id: string) => void } = {}) {
   const client = {
     listIncidents: vi.fn().mockResolvedValue([incident]),
     listIncidentTemplates: vi.fn().mockResolvedValue([{ key: "wildfire", title: "Wildfire" }]),
@@ -33,7 +33,8 @@ function setup(options: { isAdmin?: boolean; positionKey?: string | null; detail
     completeChecklistItem: vi.fn().mockResolvedValue({ ok: true }),
   };
   render(<IncidentsSurface client={client as unknown as ApiClient} jurisdictionId="j1" isAdmin={options.isAdmin ?? true}
-    theme="light" positionKey={options.positionKey ?? null} />);
+    theme="light" positionKey={options.positionKey ?? null}
+    {...(options.onActivated ? { onActivated: options.onActivated } : {})} />);
   return client;
 }
 
@@ -89,6 +90,15 @@ it("activates the selected incident type and presents explicit relationship cont
   expect(await screen.findByText("Incident Commander")).toBeTruthy();
   expect(screen.getByText(/they do not by themselves transfer ownership or establish unified command/i)).toBeTruthy();
   expect(screen.getByText("Host owner administrator")).toBeTruthy();
+});
+
+it("hands the incident it activates to the workspace selection", async () => {
+  const onActivated = vi.fn();
+  setup({ onActivated });
+  await screen.findByRole("button", { name: "Activate" });
+  fireEvent.change(screen.getByLabelText("Incident name"), { target: { value: "Coastal surge" } });
+  fireEvent.click(screen.getByRole("button", { name: "Activate" }));
+  await waitFor(() => expect(onActivated).toHaveBeenCalledWith("incident-new"));
 });
 
 it("requires an explicit closeout confirmation", async () => {

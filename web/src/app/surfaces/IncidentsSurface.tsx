@@ -40,6 +40,9 @@ export function IncidentsSurface(props: {
   memberships?: readonly Membership[];
   /** The signed-in person's current position key, which may complete that position's checklist items. */
   positionKey?: string | null;
+  /** Called with a newly activated incident, so the workspace can switch to
+   *  it; activation stays busy until the switch settles. */
+  onActivated?: (incidentId: string) => Promise<void> | void;
 }) {
   const [reload, setReload] = useState(0);
   const [selectedIncident, setSelectedIncident] = useState<string | null>(null);
@@ -95,6 +98,7 @@ export function IncidentsSurface(props: {
       });
       setName("");
       setSelectedIncident(activated.incidentId);
+      await props.onActivated?.(activated.incidentId);
     });
 
   const addLibrary = () =>

@@ -565,11 +565,13 @@ function BoardWorkspace(props: {
     props.onFilter(encodeFilters(next.filters));
   }, [props.onFilter]);
 
+  const tabsId = `board-${props.template.key}-views`;
   return (
     <div className="board-surface">
-      <Tabs id={`board-${props.template.key}-views`} label="Board views"
+      <Tabs id={tabsId} label="Board views"
         tabs={props.template.views.map((candidate) => ({ id: candidate.key, label: candidate.title }))}
         value={props.viewKey} onChange={props.onSelectView} />
+      <div role="tabpanel" id={`${tabsId}-${props.viewKey}-panel`} aria-labelledby={`${tabsId}-${props.viewKey}-tab`} className="board-surface">
       <div className="board-tools">
         <ViewRefineControls fields={props.template.fields} value={props.refinement} onApply={props.onRefine} />
         {props.tools}
@@ -609,6 +611,7 @@ function BoardWorkspace(props: {
           ) : <strong>{view.title}</strong>}
         />
       </>}
+      </div>
     </div>
   );
 }

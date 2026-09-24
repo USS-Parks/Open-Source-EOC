@@ -30,6 +30,14 @@ const me = {
 };
 
 describe("ApiClient", () => {
+  it("says the server could not be reached when the network is gone, instead of the browser's fetch error", async () => {
+    const client = new ApiClient({ fetchImpl: vi.fn().mockRejectedValue(new TypeError("Failed to fetch")) });
+    await expect(client.listReports("j1")).rejects.toThrow(
+      "No connection to the server. Check the network connection and try again.");
+    const aborted = new ApiClient({ fetchImpl: vi.fn().mockRejectedValue(new DOMException("The operation was aborted.", "AbortError")) });
+    await expect(aborted.listReports("j1")).rejects.toThrow("The operation was aborted.");
+  });
+
   it("keeps saved dashboard scope, typed filters, paging and revision preconditions in requests", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(res(200, {}));
     const client = new ApiClient({ fetchImpl });

@@ -475,7 +475,7 @@ export function OperationalTable<Row>(props: OperationalTableProps<Row>) {
                             onChange={(event) => setFilter(column.id, event.target.value)}
                           />
                         </label>
-                      ) : null}
+                      ) : <span className="eoc-sr-only">No filter for {column.header}</span>}
                     </th>
                   );
                 })}
