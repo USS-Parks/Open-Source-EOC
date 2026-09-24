@@ -245,7 +245,7 @@ describe("cross-boundary incident exercise in a real browser", () => {
       if (await shelters.getByText("2", { exact: true }).count()) return true;
       await zoomToExtent.click();
       return false;
-    }, { timeout: 60_000, intervals: [1_500] }).toBe(true);
+    }, { timeout: 60_000, interval: 1_500 }).toBe(true);
     await owner.screenshot({ path: join(SHOTS, "cross-boundary-owner-cop-light-1440.png"), fullPage: false });
     expect(await closedRoads(owner, incidentA)).toBe(1);
 
