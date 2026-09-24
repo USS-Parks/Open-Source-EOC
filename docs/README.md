@@ -31,6 +31,7 @@ not operational data or evidence of a live deployment.
 - [Architecture decisions](adr/)
 - [Capability facet status](FACET-STATUS.md)
 - [Parity matrix](VEOC-PARITY-MATRIX.md)
+- [WebEOC side-by-side evaluation](WEBEOC-SIDE-BY-SIDE.md)
 - [Canonical visual references](design/canonical-references/README.md)
 
 ## Plans, receipts, handoffs, and design process

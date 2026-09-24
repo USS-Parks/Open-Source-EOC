@@ -1,7 +1,8 @@
 # VEOC Facet, Requirement, and Invariant Status Register
 
-Reconciled 2026-09-22 through `56d2558` using the source-backed method from
-VEOC-79E. This register and the
+Reconciled 2026-09-23 through `57b0287` using the source-backed method from
+VEOC-79E, against the receipts in the [V1 ledger](./process/V1-LEDGER.md),
+cited by their heading. This register and the
 [parity capability matrix](./VEOC-PARITY-MATRIX.md) now use the same current
 status. Historical receipts remain valid for the increment they proved, but an
 older `verified` label does not erase a later documented depth, live-system,
@@ -20,24 +21,24 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 
 | ID | Description | Current evidence | Status | Remaining boundary / owner |
 |---|---|---|---|---|
-| F1 | Board primitive: versioned schema, input + display views | VEOC-09/10; `b7cb680`; P-BOARDS-1 `48edf63`; P-BOARDS-2 `75464fc` | verified | - |
-| F2 | Position login + immutable activity/position logs | VEOC-07/11; `ca0d130` | verified | - |
-| F3 | Store-and-forward federation, local replication | VEOC-30 | verified | - |
-| F4 | Board-triggered notifications, webhooks, multi-channel | VEOC-14; governed workflow notifications `6c8dddc` | partial | Durable outbox, retries and write-path decoupling: W2.1 |
-| F5 | ICS forms, IAP builder, 213RR lifecycle | VEOC-34/35; incident-context IAP `8c96103`; P-IAP `a5b96f9` | verified | - |
+| F1 | Board primitive: versioned schema, input + display views | VEOC-09/10; `b7cb680`; P-BOARDS-1 `48edf63`; P-BOARDS-2 `75464fc`; "V1 W4.1 part one: board engine depth"; "V1 W4.1 part two: board screen controls"; "V1 W4.2: views beyond the list"; "V1 W4.12: REST record writes through the sync log"; the [WebEOC side-by-side run](./WEBEOC-SIDE-BY-SIDE.md) | verified | Not claimed: views authored with saved conditions, sorts or groups; a screen that creates a board from an already published template outside incident activation |
+| F2 | Position login + immutable activity/position logs | VEOC-07/11; `ca0d130`; "V1 W3.1: audit chronology"; "V1 W3.0: administration" | verified | - |
+| F3 | Store-and-forward federation, local replication | VEOC-30; "V1 W2.1: outbound delivery queue"; "V1 W3.6: federation and peers"; "V1 W3.11: engine gaps the screens exposed"; "V1 W4.12: REST record writes through the sync log" | partial | Incident-tagged record edits and deletes are not federated and records that predate an agreement are not backfilled; carried to 86+D35 by the W3.11 receipt |
+| F4 | Board-triggered notifications, webhooks, multi-channel | VEOC-14; governed workflow notifications `6c8dddc`; "V1 W2.1: outbound delivery queue"; "V1 W2.2: scheduler"; "V1 W2.7: threat-model controls"; "V1 W4.0 part one: email and SMS channels"; "V1 W3.12: screens for the remaining operator routes"; "V1 W4.0 part two: contacts and mass notification"; the side-by-side run | verified | Not claimed: voice; Teams or Slack as a rule channel; a live relay or SMS provider (Finish PSPR section 7 item 6); inbound SMS acknowledgement; managing a rule after it is created |
+| F5 | ICS forms, IAP builder, 213RR lifecycle | VEOC-34/35; incident-context IAP `8c96103`; P-IAP `a5b96f9`; "V1 W3.8: JIC and resources completion"; "V1 W4.8: resources" | verified | - |
 | F6 | Any board as a live geospatial layer; field-to-COP loop | VEOC-79B/79C2; P-COP `e20e772`; D29 `d1c5d63` | verified | - |
-| F7 | Offline XLSForm-compatible smart forms | VEOC-22; durable field reconciliation `d1c5d63` | partial | Remaining question and capture types: W4.7 |
-| F8 | FEMA doctrine as schema: Lifelines, PDA outputs | VEOC-20/23; D13; P-LIFE-1 through P-LIFE-4 | partial | PA categories and shelter-census depth: W3.2 / W3.4 |
-| F9 | Pre-disaster baseline data for damage assessment | VEOC-23; 79G impact analysis | partial | Live parcel rolls and replacement-cost coverage: W3.2 / pilot data |
-| F10 | Always-on facility status networks + status queries | VEOC-28 | verified | - |
-| F11 | Scan-first tracking objects + reunification | VEOC-25 | verified | - |
+| F7 | Offline XLSForm-compatible smart forms | VEOC-22; durable field reconciliation `d1c5d63`; "V1 W4.7: field depth" | verified | Not claimed: `range`, `or_other` and `repeat_count` (refused by row); live-video barcode scanning; in-page audio recording; a continuous GPS trace; repeats as child records |
+| F8 | FEMA doctrine as schema: Lifelines, PDA outputs | VEOC-20/23; D13; P-LIFE-1 through P-LIFE-4; "V1 W3.2: damage assessment"; "V1 W4.11: Public Assistance and shelter census" | verified | Not claimed: the census with the facilities integration off; the PA guide edition, left for Basho to confirm; deleting PA items; stale marking in the census |
+| F9 | Pre-disaster baseline data for damage assessment | VEOC-23; 79G impact analysis; "V1 W3.2: damage assessment"; "V1 W3.12: screens for the remaining operator routes" | partial | Live parcel rolls and replacement-cost coverage need data acquisition, and baselines do not feed the declaration summary: pilot data |
+| F10 | Always-on facility status networks + status queries | VEOC-28; "V1 W3.4: facilities and shelters"; "V1 W3.13: screens for the optional integrations" | verified | Optional integration ("V1 W6.6: gated-module disposition") |
+| F11 | Scan-first tracking objects + reunification | VEOC-25; "V1 W3.13: screens for the optional integrations" | verified | Optional integration ("V1 W6.6: gated-module disposition") |
 | F12 | Incident templates instantiating ICS org + checklists | VEOC-12; `ca0d130` | verified | - |
-| F13 | Scenario libraries, reference libraries, checklists | VEOC-12; task rules/receipts `ecd5249`; P-TASKS `d867488` | verified | - |
+| F13 | Scenario libraries, reference libraries, checklists | VEOC-12; task rules/receipts `ecd5249`; P-TASKS `d867488`; "V1 W3.12: screens for the remaining operator routes" | verified | Not claimed: CBRNE or HAZMAT reference content, which does not ship |
 | F14 | Calm-screen map-first SPA discipline | VEOC-05/17; P-SHELL `ef13b0c`, `64e3cf5`; P-COP `e20e772` | verified | Representative-operator acceptance remains D34 |
-| F15 | Per-incident auto-provisioned collaboration space | VEOC-32/33; `8c96103` | verified | - |
-| F16 | One-click role-based provisioning; ten-minute viewer path | VEOC-08/41 | verified | - |
+| F15 | Per-incident auto-provisioned collaboration space | VEOC-32/33; `8c96103`; "V1 W3.13: screens for the optional integrations" | verified | Optional integration ("V1 W6.6: gated-module disposition") |
+| F16 | One-click role-based provisioning; ten-minute viewer path | VEOC-08/41; "V1 W3.0: administration"; "V1 W2.6: secure by default" | verified | - |
 | F17 | Daily-ops usability against skill decay | Responsive persistent workspaces integrated through M3 | partial | Representative operator comparison: D34 |
-| F18 | Sensor and drone live feeds into the COP | VEOC-79C1/C2; P-COP `e20e772` | partial | Scheduled URL polling and live source evidence: W2.2 / live gate |
+| F18 | Sensor and drone live feeds into the COP | VEOC-79C1/C2; P-COP `e20e772`; "V1 W2.2: scheduler" | partial | Live source evidence: live gate |
 | F19 | NAPSG/DHS incident symbology shipped | Agreed nine-type licensed subset `389afe1`; P-COP composition | verified | Broader catalog remains intentionally unmapped, not claimed |
 | F20 | Native standards interchange | VEOC-26 through VEOC-29 and VEOC-31 | verified | - |
 
@@ -45,12 +46,12 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 
 | ID | Requirement | Current evidence | Status | Remaining boundary / owner |
 |---|---|---|---|---|
-| R1 | At least 150 concurrent users per instance | VEOC-38 in-process benchmark | partial | Real-hardware socketed run: R1-REAL |
-| R2 | IPAWS integration enable-at-will | VEOC-31 model and endpoint | partial | Two-person UI/send and authorized test credentials: W2.7 / W3.5 / Basho |
+| R1 | At least 150 concurrent users per instance | VEOC-38 in-process benchmark; "V1 W2.4: WebSocket discipline"; "V1 W2 milestone gate" two-hour synthetic activation on this workstation | partial | Real-hardware socketed run: R1-REAL |
+| R2 | IPAWS integration enable-at-will | VEOC-31 model and endpoint; "V1 W2.7: threat-model controls"; "V1 W3.5: IPAWS enablement and send"; "V1 W2.10: MFA" | partial | No live send until IPAWS-OPEN test credentials and the MOA: Basho |
 | R3 | Agency, organization, and volunteer conglomerate COP access | VEOC-79B database/DOM isolation; P-SHELL incident URLs `64e3cf5` | partial | Integrated multi-organization exercise: 79D+D33 |
-| R4 | Fluid Command and General Staff work; JIC component | VEOC-12/33A/34; D26 `79019cc` | verified | - |
-| R5 | File sharing | VEOC-15; tenant-safe download `451ed16` | verified | - |
-| R6 | Private and group messaging | VEOC-15A/32; source-context workspace `b253180` | verified | - |
+| R4 | Fluid Command and General Staff work; JIC component | VEOC-12/33A/34; D26 `79019cc`; "V1 W3.8: JIC and resources completion"; "V1 W3.11: engine gaps the screens exposed"; "V1 W3.3: staffing" | verified | - |
+| R5 | File sharing | VEOC-15; tenant-safe download `451ed16`; "V1 W2.6: secure by default" | verified | - |
+| R6 | Private and group messaging | VEOC-15A/32; source-context workspace `b253180`; "V1 W3.12: screens for the remaining operator routes" | verified | - |
 
 ## Anti-requirements (research section 4)
 
@@ -58,7 +59,7 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 |---|---|---|---|---|
 | AR1 | No per-seat surge pricing structure | INV-1 | verified | - |
 | AR2 | No unconstrained board divergence | INV-5 | verified | - |
-| AR3 | No admin customization requiring hand-written HTML/JS | INV-6; `b7cb680`, `48edf63`, `75464fc` | verified | - |
+| AR3 | No admin customization requiring hand-written HTML/JS | INV-6; `b7cb680`, `48edf63`, `75464fc`; "V1 W4.1 part two: board screen controls" | verified | - |
 | AR4 | No in-place-upgrade dead ends | INV-5 | verified | - |
 | AR5 | No proprietary-only interchange, substrate lock-in, or unbundling | INV-4, INV-9 | verified | - |
 | AR6 | No session timeouts mid-incident, free-text drift, join-poor dashboards | INV-8 | verified | - |
@@ -83,5 +84,8 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 
 - The register describes the current tree, not the status at VEOC-43.
 - `partial` retains the proven increment while naming the unproven remainder.
+- On 2026-09-23, F4, F7 and F8 moved to `verified` on their receipts and F3
+  moved to `partial` on the federation bound its receipts state. The assessed
+  gaps, including G-MFA and G-TILES, are tracked in the parity matrix only.
 - Live readiness, operator acceptance and release disposition remain with the
   V1 roster. This register does not synthesize those results.
