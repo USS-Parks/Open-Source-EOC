@@ -31,6 +31,7 @@ import {
 } from "../config.js";
 import { useAsync } from "../data/hooks.js";
 import { uploadPickedFile } from "../data/files.js";
+import { useMapFocus } from "../layout/map-focus.js";
 import { EmptyState, Loading } from "../screens/parts.js";
 import { LIFELINE_LABELS } from "./lifeline-view.js";
 
@@ -135,6 +136,7 @@ export function MapSurface(props: {
   const [relationshipBusy, setRelationshipBusy] = useState(false);
   const [relationshipNotice, setRelationshipNotice] = useState<string | null>(null);
   const [relationshipError, setRelationshipError] = useState<string | null>(null);
+  const focusOnSearch = useMapFocus();
 
   const geoBoards = props.collections;
   const activeBoard = boardId || geoBoards[0]?.id || "";
@@ -496,6 +498,7 @@ export function MapSurface(props: {
           onBoundsChange={updateImpactBounds}
           picking={adding && !point}
           onPickPoint={placePoint}
+          onMap={focusOnSearch}
         />
       </div>
 

@@ -417,3 +417,27 @@ organization. Times are local, 24-hour.
 
 For a safe practice run, use the
 [synthetic incident demonstration](../DEMO-SCENARIO.md).
+
+## 7. Find an address or place
+
+The **Search addresses and places** box in the command bar finds a street
+address, a street, a city or town, or a named place such as a courthouse, an
+airport or a peak. It works without an internet connection.
+
+- Type at least two characters. An exact address comes first, then the
+  closest name matches. Each result says what it is (**Address**, **Street**,
+  **Place** or **Point of interest**); streets, addresses and points of
+  interest also name the nearest town, which is not always the city the
+  address is in. Among equally good matches, the one nearer your
+  jurisdiction's map area comes first.
+- Abbreviations work either way (`st` and `street`, `mt` and `mount`, `n` and
+  `north`), and a partly typed word matches: `mount sh` finds Mount Shasta.
+- Move through the results with the arrow keys and press **Enter**, or select
+  one. The map opens if another screen is showing, centers on the result and
+  marks it. The mark stays until you choose another result or leave the map.
+- **Escape** closes the list; a second **Escape** clears the box.
+- House numbers come from OpenStreetMap and are not complete. When a number
+  is missing, the street is listed instead, so you can find the block.
+- "Offline address search is unavailable on this server" means the deployment
+  has no address search file configured; tell the administrator. Typed
+  coordinates still work in **Find on map**.

@@ -53,6 +53,7 @@ import { staffingRoutes } from "./staffing/routes.js";
 import { trackingRoutes } from "./tracking/routes.js";
 import { BlobStore } from "./files/service.js";
 import { geoRoutes } from "./geo/routes.js";
+import { geocodeRoutes, loadGazetteer } from "./geocode/routes.js";
 import { messagingRoutes } from "./messaging/routes.js";
 import { notifyRoutes } from "./notify/routes.js";
 import { massNotificationRoutes } from "./notify/mass.js";
@@ -133,6 +134,8 @@ export interface BuildAppOptions {
   readonly trustProxy?: boolean | string;
   /** WebSocket auth deadline, heartbeat and backpressure ceiling; see sync/sockets.ts. */
   readonly socketLimits?: Partial<SocketLimits>;
+  /** Offline address search file; defaults to OPENEOC_GAZETTEER_PATH. Unset reports search unavailable. */
+  readonly gazetteerPath?: string | null;
 }
 
 export type OptionalIntegration = "collab" | "facilities" | "meetings" | "tracking";
@@ -507,6 +510,10 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   reportRoutes(app, sql, authenticate);
   messagingRoutes(app, sql, authenticate);
   geoRoutes(app, sql, authenticate);
+  geocodeRoutes(app, authenticate, loadGazetteer(
+    options.gazetteerPath === undefined ? process.env.OPENEOC_GAZETTEER_PATH : options.gazetteerPath ?? undefined,
+    app.log,
+  ));
   const blobs = new BlobStore(process.env.OPENEOC_DATA_DIR ?? "./data/blobs");
   exportRoutes(app, sql, blobs, authenticate);
   fileRoutes(app, sql, blobs, authenticate);

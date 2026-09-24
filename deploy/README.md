@@ -319,3 +319,4 @@ upgrade path begins with a database whose first receipt is
 | `OPENEOC_PRINCIPAL_CACHE_MS` | How long a request principal is cached, in milliseconds (default 5000; `0` turns it off) |
 | `OPENEOC_PUBLIC_URL` | Address mass notification acknowledgement links point at, such as `https://eoc.example.org`; unset uses the address the sender reached the server on. See the [administrator guide](../docs/guides/ADMIN.md#contacts-and-mass-notification) |
 | `OPENEOC_SYSLOG_URL` | Forward audit events to syslog, `udp://host:514` or `tcp://host:514`; unset is off. See the [administrator guide](../docs/guides/ADMIN.md#forward-the-audit-trail-to-syslog) |
+| `OPENEOC_GAZETTEER_PATH` | Path to the offline address search file, read once at startup; unset or unreadable reports search unavailable and the server runs on. See [building the gazetteer](../tools/basemap/README.md#10-offline-address-search-gazetteer) |

@@ -333,6 +333,86 @@ It expects a real regional archive and manifest at
 `out/proof-8-san-diego-pack/` with empty NPS and county layers. Its minimal
 external style is a UI test fixture, not a visual-parity reference.
 
+## 10. Offline address search gazetteer
+
+The command bar's address search reads a gazetteer file on the server, built
+from the street basemap archive of step 1. Build it on the same machine, with
+Node only (no network, no other tools):
+
+```
+node tools/basemap/build-gazetteer.mjs tools/basemap/out/california.pmtiles
+```
+
+Options:
+
+- `--out <file>` writes elsewhere; the default is
+  `tools/basemap/out/gazetteer.tsv` (gitignored). The file is written beside
+  the target and renamed into place, so a failed build never leaves half a file.
+- `--addresses <file>` merges county address points (below).
+- `--zoom <z>` reads another zoom level; the default is the archive's highest,
+  14 for the planetiler output, which holds every house number.
+
+The archive must be the OpenMapTiles-schema street basemap. The bundled
+Natural Earth basemap has no streets and gives an almost empty gazetteer.
+
+For California the build reads 212,094 tiles in about 30 seconds and writes
+about 144 MB: 7,636 places, 511,673 named streets, 308,390 points of interest
+and 3,230,662 house numbers. It prints these counts as JSON when it finishes.
+
+What the file holds:
+
+- **Places**: cities, towns, villages, hamlets, suburbs, neighbourhoods,
+  islands and other named places from the `place` layer (not states or
+  countries).
+- **Streets**: every named road, path and ferry from `transportation_name`,
+  with a road known only by its route number (such as `101`) under that
+  number. Pieces of one street within about 2 km of each other are one entry.
+- **Points of interest**: named features from the `poi`, `aerodrome_label`
+  and `mountain_peak` layers.
+- **House numbers**: from the `housenumber` layer, each attached to the nearest
+  named street (not a path, track or ferry) within about 120 m in the same
+  tile. A number with no such street is dropped; statewide that is 41,646
+  numbers, about 1.3 percent.
+
+Each street and point of interest names the nearest town. That is the nearest
+settlement point, not the city whose limits hold the address.
+
+Not included: unit numbers, ZIP codes, reverse lookup (coordinates to an
+address), and anything unnamed. House number coverage is what OpenStreetMap
+holds, which is far from complete in rural counties. When a searched number is
+missing, the search still offers the street.
+
+### County address points
+
+`--addresses` takes either a CSV with a header row naming `number`, `street`,
+`city` (optional), `lon` and `lat` in any order, or a GeoJSON file of points
+with `number`, `street` and `city` properties. Coordinates are WGS84 longitude
+and latitude; reproject a county export (often State Plane) before the build.
+A point joins the OpenStreetMap street of the same name within about 2 km, and
+a county number replaces the OpenStreetMap one for the same house. A point on
+a street OpenStreetMap does not have starts a new street entry. Rows without a
+number, a street or valid coordinates are skipped and counted.
+
+No county address point file ships with the repository, so the merge is
+tested with fixtures only. Check the first real county file against the
+printed counts before publishing it.
+
+### Serve it
+
+Copy the file to the API server and set `OPENEOC_GAZETTEER_PATH` to its path
+(see the [configuration reference](../../deploy/README.md#configuration-reference)).
+The server reads it once at startup, which for California takes about 3
+seconds and adds about 230 MB of memory (the file itself plus its word index).
+Restart the server after replacing the file. Without the variable, or with an
+unreadable file, the server logs a warning, keeps running, and the search box
+tells operators that address search is unavailable. A loaded gazetteer
+answers a typical search in 3 ms or less and a short prefix such as `san fr`
+in about 15 ms.
+
+The gazetteer is a derived OpenStreetMap database under the ODbL, like the
+street tiles: keep it a deployment artifact and keep the OpenStreetMap
+attribution with any copy you distribute.
+
 ## Attribution
 
 OpenStreetMap data is ODbL: the map must display "© OpenStreetMap contributors".

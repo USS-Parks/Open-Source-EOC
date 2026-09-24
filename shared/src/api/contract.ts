@@ -68,6 +68,7 @@ GET /api/v1/datasets/:datasetId/items
 GET /api/v1/feeds/:feedId/items
 GET /api/v1/files/:fileId
 GET /api/v1/files/:fileId/content
+GET /api/v1/geocode/search
 GET /api/v1/health
 GET /api/v1/iap/:iapId
 GET /api/v1/iap/:iapId/pdf

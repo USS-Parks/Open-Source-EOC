@@ -48,6 +48,8 @@ export interface AppShellProps {
   readonly product: string;
   readonly organization: string;
   readonly context: ReactNode;
+  /** The command bar search box, beside the incident context. */
+  readonly search?: ReactNode;
   readonly periodLabel: string;
   readonly positionLabel: string;
   readonly periodControl?: ReactNode;
@@ -309,6 +311,7 @@ export function AppShell(props: AppShellProps) {
           <span><strong>{props.product}</strong><small>{props.organization}</small></span>
         </div>
         <div className="eoc-shell-context">{props.context}</div>
+        {props.search}
         {viewport === "dock" ? <div className="eoc-shell-command-fact">{props.periodControl ?? <><span>Operational period</span><strong>{props.periodLabel}</strong></>}</div> : null}
         {viewport === "dock" ? <div className="eoc-shell-command-fact">{props.positionControl ?? <><span>Acting position</span><strong>{props.positionLabel}</strong></>}</div> : null}
         <div className="eoc-shell-sync" data-state={props.sync.state}><span aria-hidden="true" />{props.sync.label}</div>

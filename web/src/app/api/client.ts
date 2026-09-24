@@ -482,6 +482,18 @@ export interface SearchHit {
   readonly boardId?: string;
   readonly incidentId?: string | null;
 }
+export interface PlaceResult {
+  readonly kind: "address" | "street" | "place" | "poi";
+  readonly label: string;
+  readonly detail: string;
+  readonly lon: number;
+  readonly lat: number;
+  readonly zoom: number;
+}
+export interface PlaceSearch {
+  readonly available: boolean;
+  readonly results: readonly PlaceResult[];
+}
 export type FileAttachmentKind = "none" | "board" | "record" | "incident" | "library";
 export interface FileMetaRef {
   readonly id: string;
@@ -1459,6 +1471,11 @@ export class ApiClient {
       `/api/v1/jurisdictions/${jurisdictionId}/search?q=${encodeURIComponent(q)}`,
     );
     return r.hits;
+  }
+  /** Offline address and place search; available is false when the deployment has no gazetteer. */
+  searchPlaces(q: string, near?: readonly [number, number]): Promise<PlaceSearch> {
+    const query = new URLSearchParams({ q, ...(near ? { near: near.join(",") } : {}) });
+    return this.request("GET", `/api/v1/geocode/search?${query}`);
   }
   /** Streams the file as multipart/form-data; the text fields go first, as the server requires. */
   uploadFile(

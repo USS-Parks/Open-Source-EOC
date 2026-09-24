@@ -14,6 +14,8 @@ import {
   type WorkspaceArrangement,
 } from "../layout/AppShell.js";
 import { OperationalPeriodControl, PositionControl, useWorkspaceContext } from "../layout/context.js";
+import { PlaceSearch } from "../layout/PlaceSearch.js";
+import { requestMapFocus } from "../layout/map-focus.js";
 import { parseRouteHash, sectionOf, surfaceHash, useSurface, type RouteContext, type Surface } from "../router.js";
 import { EmptyState, ErrorNote, Loading, NotFoundState } from "./parts.js";
 import { MapSurface } from "../surfaces/MapSurface.js";
@@ -296,6 +298,10 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       product="Open Source EOC"
       organization="Emergency coordination"
       context={<IncidentSwitcher />}
+      search={<PlaceSearch client={client} onChoose={(place) => {
+        requestMapFocus(place);
+        if (surface.kind !== "map") navigateInContext({ kind: "map" });
+      }} />}
       periodLabel={workspace.selectedPeriodLabel}
       positionLabel={session.me?.position?.title ?? "No acting position"}
       periodControl={<OperationalPeriodControl />}

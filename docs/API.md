@@ -252,6 +252,10 @@ set, and then require that value as a bearer token.
 - `GET /api/v1/jurisdictions/:jurisdictionId/forms/:key`: Read jurisdictions forms (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/forms/import`: Run jurisdictions forms import (auth: bearer; audience: operator)
 
+### geocode
+
+- `GET /api/v1/geocode/search`: Read geocode search (auth: bearer; audience: operator)
+
 ### health
 
 - `GET /api/v1/health`: Read health (auth: none; audience: system)
