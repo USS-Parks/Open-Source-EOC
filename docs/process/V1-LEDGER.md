@@ -3330,3 +3330,63 @@ tagging remain separately gated as section 1 of the roster states.
   busy, seen only under the DevTools harness.
 - **Rollback:** revert the three commits; browsers that installed the worker
   keep it until the next deploy's `sw.js` replaces it.
+
+## V1 W5.1: style consolidation
+
+- **What changed.**
+  - Inline style objects across about 50 web files became classes: kit rules
+    in `web/src/design/base.css` for Button, TextField, EnumSelect, Panel,
+    StatusBadge, the layout parts, the surface building blocks (Loading,
+    ErrorNote, EmptyState, Scroll, SurfaceHeader) and eight shared helpers;
+    per-module stylesheets for admin, incidents, resources, the map screen,
+    dashboard widgets, board parts, sign-in, integrations, federation and
+    field reports. Lines with `style={{` went from 452 to 13 and named style
+    props from 96 to 7; the 20 that remain carry values computed at run time
+    (column widths and pin offsets, progress and chart bar widths, theme
+    variables, the rail width, condition-badge variables, data-driven legend
+    colours, and the icon's merged style). The roster's figures of 240 and 536
+    came from greps that counted differently; these are the measured counts.
+  - The three display defects carried from earlier receipts: the map's search
+    icons sit in a wrapper with their input, so they no longer drop over an
+    open results list or sit out of place in the smart form's map; button and
+    row colour transitions run only without a reduced-motion preference, so a
+    theme switch no longer shows grey half-faded plain buttons (side-by-side
+    gap 6); report cells pad less on a phone, so a four-column report keeps
+    every heading in the panel, and wider ones scroll inside it (gap 7).
+  - `usePolled` keeps the last data on screen during a background refresh,
+    pauses while the page is hidden and refreshes on return, and backs off
+    after failures, doubling to five minutes and resetting on success. The
+    COP map poll and the mass notification receipts use the same scheduler;
+    the notification socket is untouched.
+  - `docs/WEBEOC-SIDE-BY-SIDE.md` marks gaps 6 and 7 fixed;
+    `docs/EVALUATOR.md` counts seven gaps closed and one open.
+- **Defaults and deviations.** Gap 6's cause was not the tokens, which already
+  met AA (plain buttons at least 5.51:1 in both themes), but a 0.12 second
+  colour transition still running after the theme switch; no token changed.
+  Primary buttons in the dark theme keep their light fill and dark label
+  (12.3:1), the existing design, for Basho's review. The COP poll backs off
+  only when every source fails. Two declarations that inline styles had always
+  overridden were removed so screens stay identical, and kit selectors are
+  compound so a screen's stylesheet cannot restyle them. Ownership
+  deviations: the defect assertions in `cop-e2e`, `field-depth-browser` and
+  `webeoc-side-by-side-browser`.
+- **Schema, contract, dependencies:** none.
+- **Verification.** In the lane, tag `b`, on `1099fe7`: tsc and eslint exit 0;
+  `pnpm exec vitest run web/`, 87 files and 617 tests passed; three polling
+  tests fail against the old hook and pass on the new one; the three new walk
+  checks fail on the base build; 30 browser walks, 29 passed, the thirtieth,
+  `boards-designer-browser`, failing at the same line on the untouched base
+  (recorded in the next receipt); bundle budget 159.5 kB. About 180 screenshots
+  before and after were compared by pixel: apart from the three defects, the
+  differences were timestamps, identifiers and data order, map tiles loading
+  at a different moment, one scroll offset, text smoothing where transitions
+  are now off, final instead of mid-fade colours in dark shots, and the
+  standalone map's search icon 2 px higher. The integrating session rebased
+  onto `5b24d84`, which carries the installable web app, and ran tsc and
+  eslint exit 0, the bundle budget (160.2 kB) and `pnpm exec vitest run` over
+  polling, button-contrast, session, pwa-browser, cop-e2e,
+  webeoc-side-by-side-browser, field-depth-browser and app-e2e, 8 files and 38
+  tests passed.
+- **Evidence level:** unit, browser, pixel comparison and document.
+- **Deferred:** Basho's visual review of the dark primary buttons.
+- **Rollback:** revert the two commits.
