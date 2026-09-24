@@ -116,9 +116,15 @@ export function MapSurface(props: {
 
   const geoBoards = props.collections;
   const activeBoard = boardId || geoBoards[0]?.id || "";
+  // A point dropped onto one of the selected incident's boards is contributed
+  // to that incident; other boards stay jurisdiction-local. The form is read
+  // in the same scope, so a partner who is not a member of the board's
+  // jurisdiction gets it through the incident.
+  const scopedIncident =
+    props.incidentId && props.incidentBoardIds?.has(activeBoard) ? props.incidentId : undefined;
   const board = useAsync(
-    () => (adding && activeBoard ? props.client.getBoard(activeBoard) : Promise.resolve(null)),
-    [adding, activeBoard],
+    () => (adding && activeBoard ? props.client.getBoard(activeBoard, scopedIncident) : Promise.resolve(null)),
+    [adding, activeBoard, scopedIncident],
   );
 
   const feedLayers = props.feeds.filter((f) => f.enabled).map((f) => ({ id: f.id, title: f.name }));
@@ -247,11 +253,6 @@ export function MapSurface(props: {
   const save = (data: Record<string, unknown>) => {
     setBusy(true);
     setError(null);
-    // Field-to-COP loop (VEOC-79B2): a point dropped onto one of the selected
-    // incident's boards is contributed to that incident; other boards stay
-    // jurisdiction-local.
-    const scopedIncident =
-      props.incidentId && props.incidentBoardIds?.has(activeBoard) ? props.incidentId : undefined;
     props.client
       .createRecord(activeBoard, data, scopedIncident)
       .then(() => reset())

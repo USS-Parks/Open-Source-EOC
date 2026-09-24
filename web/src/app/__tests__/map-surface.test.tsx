@@ -120,6 +120,18 @@ it("places a point from validated WGS84 coordinates with the keyboard", async ()
   );
 });
 
+it("reads an incident board's form in the incident's scope, so a partner who is not a member can place a point", async () => {
+  const getBoard = vi.fn().mockResolvedValue({
+    id: "roads", title: "Road Closures", role: "member", canContribute: true,
+    fields: [{ key: "location", label: "Location", type: "geometry", geometryKind: "point" }], views: [],
+  });
+  const client = { getBoard, listIncidentDatasets: vi.fn().mockResolvedValue([]) } as unknown as ApiClient;
+  render(<MapSurface client={client} theme="light" jurisdictionId="partner-org" feeds={[]}
+    collections={[{ id: "roads", title: "Road Closures" }]} incidentId="incident-a" incidentBoardIds={new Set(["roads"])} />);
+  fireEvent.click(screen.getByRole("button", { name: "Add point" }));
+  await waitFor(() => expect(getBoard).toHaveBeenCalledWith("roads", "incident-a"));
+});
+
 it("links an exact routed dataset feature to a recorded assessment", async () => {
   const datasetId = "11111111-1111-4111-8111-111111111111";
   const createOperationalRelationship = vi.fn().mockResolvedValue({ id: "relationship-1" });

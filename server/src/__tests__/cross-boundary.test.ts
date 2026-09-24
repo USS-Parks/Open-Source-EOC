@@ -7,13 +7,14 @@ import { ensureStandardIncidentTemplates } from "../incidents/service.js";
 import { freshDb, type Sql } from "./helpers.js";
 
 /**
- * The integrated cross-boundary exercise (VEOC-79D): one owner and one partner
- * organization drive a single incident end to end through the pieces built in
- * 79-79C, while a second incident stays isolated and every partner
- * contribution keeps its attribution. Resource coordination and COP/KPI
- * reconciliation across organizations are not exercised here: those records
- * are not incident-scoped yet (a deferred data-model change), so this proves
- * the integrated incident foundation, not whole-system hybrid parity.
+ * The integrated cross-boundary exercise: one owner and one partner
+ * organization drive a single incident end to end through activation, the
+ * operational area, participation, data onboarding, the plan, revocation and
+ * closeout, while a second incident stays isolated and every partner
+ * contribution keeps its attribution. Resource requests, COP and KPI
+ * reconciliation, offline reconnect and federation are exercised in
+ * cross-boundary-legs.test.ts, and the operator walk in
+ * cross-boundary-browser.test.ts.
  */
 
 let admin: Sql, runtime: Sql, app: FastifyInstance;
