@@ -4472,3 +4472,32 @@ for writing when this was recorded, so this entry carries the requirement.
   after the fixes and show the single header and teal primaries.
 - **Evidence level:** unit and browser.
 - **Rollback:** revert the commit.
+
+## Design fidelity DF6: gate
+
+- **What changed.** New `DESIGN-FIDELITY-REVIEW.md` at the repository root:
+  the three side-by-side images from `pnpm fidelity`
+  (`docs/design/fidelity/`), a region checklist for each canonical frame
+  giving every remaining difference and its reason, a list of what each
+  control in the frames does, the gate result, and the items open for Basho.
+- **Defaults and deviations.** The differences are the ones recorded in the
+  DF1 to DF5 receipts and gathered in the review, with their reasons: where
+  the frames disagree with each other (brand mark, rail width, icon fill),
+  where the scenario's data differs from the frames' illustration (names,
+  the incident area's extent, the priority mix, the recent pair), and where
+  the engine's permissions refuse what a frame implies (a partner liaison
+  assigning county positions or linking county requests; partner messages in
+  incident threads).
+- **Schema, contract, dependencies.** None.
+- **Verification.** `pnpm check:gate` at `023beaa`: static checks pass (tsc,
+  eslint, the license scan over 303 packages, the link check over 98 files);
+  the advisory gate reports no high or critical advisories and no
+  exceptions; the desktop tests pass 27 of 27; the serial Vitest run with one
+  worker passes 278 files and 1,577 tests in 1,398 s, and the load test 1
+  file and 4 tests, nothing skipped. The side-by-side images are the ones
+  committed with DF4. GitHub Actions did not run the jobs for these commits:
+  GitHub reports failed account payments or a spending limit, so the jobs
+  never started.
+- **Evidence level:** unit, real-database, browser and the full serial gate.
+- **Acceptance.** Awaiting Basho's review of `DESIGN-FIDELITY-REVIEW.md`.
+- **Rollback:** revert the commits; they add documents only.
