@@ -1,23 +1,32 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { ResourceRequestAssignmentSchema } from "@openeoc/shared";
+import {
+  DEMOBILIZATION_CHECKS,
+  RESOURCE_RETURN_CONDITIONS,
+  RESOURCE_STATUSES,
+  ResourceRequestAssignmentSchema,
+} from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { AuthError } from "../auth/service.js";
 import { withPerson } from "../db/context.js";
 import { pageQuery } from "../db/cursor.js";
 import {
   addCost,
+  addResource,
   assign,
   escalate,
   exportCosts,
   getRequest,
   listRequests,
+  listResources,
   receiveEscalation,
   reportBack,
   submitRequest,
   transition,
+  transitionResource,
   type EscalationPayload,
 } from "./service.js";
+import { addLocalKind, importKinds, listKinds } from "./typing.js";
 
 /**
  * 213RR resource-request routes (F5). Submission, the guarded
@@ -34,6 +43,8 @@ const SubmitBody = z.object({
   neededBy: z.coerce.date().optional(),
   notes: z.string().optional(),
   incidentId: z.string().uuid().optional(),
+  resourceKind: z.string().min(1).max(200).optional(),
+  resourceType: z.number().int().min(1).max(10).optional(),
 });
 const TransitionBody = z.object({ toState: z.string().min(1), note: z.string().optional() });
 const AssignBody = z.union([
@@ -63,6 +74,26 @@ const CostBody = z.object({
   amountCents: z.number().int().nonnegative(),
   incurredAt: z.string().optional(),
 });
+const JurisdictionParams = z.object({ jurisdictionId: z.uuid() });
+const TypeLevel = z.object({ type: z.number().int().min(1).max(10), capability: z.string().max(2000) });
+const KindBody = z.object({
+  name: z.string().trim().min(1).max(200),
+  discipline: z.string().trim().max(200).default(""),
+  levels: z.array(TypeLevel).max(10).default([]),
+  notes: z.string().max(4000).default(""),
+});
+const ImportBody = z.object({ csv: z.string().min(1).max(5_000_000), sourceNote: z.string().trim().min(1).max(500) });
+const ResourceBody = z.object({
+  name: z.string().trim().min(1).max(200),
+  kind: z.string().min(1).max(200),
+  type: z.number().int().min(1).max(10).nullable().default(null),
+});
+const ResourceMoveBody = z.object({
+  to: RESOURCE_STATUSES.schema,
+  requestId: z.uuid().optional(),
+  returnCondition: RESOURCE_RETURN_CONDITIONS.schema.optional(),
+  checks: z.array(DEMOBILIZATION_CHECKS.schema).max(DEMOBILIZATION_CHECKS.values.length).optional(),
+});
 
 export function resourceRoutes(
   app: FastifyInstance,
@@ -84,6 +115,8 @@ export function resourceRoutes(
           ...(body.neededBy !== undefined ? { neededBy: body.neededBy } : {}),
           ...(body.notes !== undefined ? { notes: body.notes } : {}),
           ...(body.incidentId !== undefined ? { incidentId: body.incidentId } : {}),
+          ...(body.resourceKind !== undefined ? { resourceKind: body.resourceKind } : {}),
+          ...(body.resourceType !== undefined ? { resourceType: body.resourceType } : {}),
         }),
       );
       return reply.status(201).send(result);
@@ -193,4 +226,51 @@ export function resourceRoutes(
       return reply.header("content-type", "text/csv").send(csv);
     },
   );
+
+  // The typing catalog: members read it, administrators add local kinds and import RTLT definitions.
+  app.get("/api/v1/jurisdictions/:jurisdictionId/resources/kinds", { preHandler: authenticate }, async (req, reply) => {
+    const { jurisdictionId } = JurisdictionParams.parse(req.params);
+    return reply.send(await withPerson(sql, req.principal.person.id, (tx) => listKinds(tx, req.principal, jurisdictionId)));
+  });
+
+  app.post("/api/v1/jurisdictions/:jurisdictionId/resources/kinds", { preHandler: authenticate }, async (req, reply) => {
+    const { jurisdictionId } = JurisdictionParams.parse(req.params);
+    const body = KindBody.parse(req.body);
+    const result = await withPerson(sql, req.principal.person.id, (tx) => addLocalKind(tx, req.principal, jurisdictionId, body));
+    return reply.status(201).send(result);
+  });
+
+  app.post(
+    "/api/v1/jurisdictions/:jurisdictionId/resources/kinds/import",
+    { preHandler: authenticate, bodyLimit: 5 * 1024 * 1024 },
+    async (req, reply) => {
+      const { jurisdictionId } = JurisdictionParams.parse(req.params);
+      const body = ImportBody.parse(req.body);
+      return reply.send(await withPerson(sql, req.principal.person.id, (tx) =>
+        importKinds(tx, req.principal, jurisdictionId, body.csv, body.sourceNote)));
+    },
+  );
+
+  // The resource pool: members read it, writers add resources and move their status.
+  app.get("/api/v1/jurisdictions/:jurisdictionId/resources", { preHandler: authenticate }, async (req, reply) => {
+    const { jurisdictionId } = JurisdictionParams.parse(req.params);
+    const page = z.object(pageQuery).parse(req.query);
+    const { items, nextCursor } = await withPerson(sql, req.principal.person.id, (tx) =>
+      listResources(tx, req.principal, jurisdictionId, page));
+    return reply.send({ resources: items, nextCursor });
+  });
+
+  app.post("/api/v1/jurisdictions/:jurisdictionId/resources", { preHandler: authenticate }, async (req, reply) => {
+    const { jurisdictionId } = JurisdictionParams.parse(req.params);
+    const body = ResourceBody.parse(req.body);
+    const result = await withPerson(sql, req.principal.person.id, (tx) => addResource(tx, req.principal, jurisdictionId, body));
+    return reply.status(201).send(result);
+  });
+
+  app.post("/api/v1/resources/:resourceId/transition", { preHandler: authenticate }, async (req, reply) => {
+    const { resourceId } = z.object({ resourceId: z.uuid() }).parse(req.params);
+    const body = ResourceMoveBody.parse(req.body);
+    return reply.send(await withPerson(sql, req.principal.person.id, (tx) =>
+      transitionResource(tx, req.principal, resourceId, body)));
+  });
 }

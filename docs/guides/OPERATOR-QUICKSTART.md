@@ -146,6 +146,35 @@ panel sits below the request history.
   run between the two servers and have no screen. See
   [Resource escalation across tiers](FEDERATION-SETUP.md#resource-escalation-across-tiers).
 
+### Type resources, keep the pool and demobilize
+
+**Resources** also holds the organization's resource pool, a cost rollup and
+the NIMS resource typing catalog. In NIMS typing, Type 1 is the most capable.
+
+- **Request intake**: choose a **Resource kind** and, where the kind has type
+  levels, a **Resource type**. The type is the least capable one that fills the
+  request; **Any type** takes every type of the kind. A request with no kind
+  cannot take a pool resource.
+- **Resource pool**: enter the **Resource name**, choose its kind and its one
+  type, then choose **Add to pool**. Each resource is available, assigned, out
+  of service or demobilized. Choose the **Next status** and **Update status**.
+  To assign, pick the request: only requests in sourcing, assigned or deployed
+  whose kind matches and whose type the resource meets or betters are offered.
+  The server refuses assignment to a request on a closed incident; a resource
+  can still leave it. To demobilize, record the **Return condition** and tick
+  the demobilization checks made. Demobilization is final. Read-only access
+  sees the pool but cannot change it. Every move is in the audit log.
+- **Cost rollup**: the costs recorded on the requests in scope, per request and
+  per kind, with the total. Record and export costs from the request's
+  history, as above.
+- **Resource typing catalog**: **Show the *n* kinds** lists every kind, its type
+  levels and its source. The starter kinds are a small subset, not RTLT titles.
+  An administrator adds a local kind with a name, a discipline and a number of
+  type levels, and imports the FEMA Resource Typing Library Tool (RTLT) export
+  as a CSV with a name, an RTLT ID and a type level per row, and a note saying
+  where the file came from. A file with any bad row imports nothing and the
+  first 20 errors are shown; a new import replaces the previous one.
+
 ### Move a board record through its workflow
 
 A board designer can give a board a workflow: named states, the transitions

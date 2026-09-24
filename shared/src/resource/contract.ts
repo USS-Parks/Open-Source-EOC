@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { WorkflowAssignmentRequestSchema } from "../boards/workflow.js";
+import type { ResourceKindDefinition } from "../dictionary/resource-typing.js";
 
 export const ResourceOrganizationSchema = z.object({
   id: z.uuid(),
@@ -41,8 +42,33 @@ export const ResourceRequestSummarySchema = z.object({
   receivingOrganization: ResourceOrganizationSchema,
   supplyingOrganization: ResourceOrganizationSchema.nullable(),
   assignment: ResourceAssignmentViewSchema.nullable(),
+  /** The catalog kind requested, and the least capable type that fills it; null takes any type. */
+  resourceKind: z.string().nullable(),
+  resourceType: z.number().int().nullable(),
+  /** Every cost recorded on the request, in cents. */
+  costCents: z.number().int().nonnegative(),
 });
 export type ResourceRequestSummary = z.infer<typeof ResourceRequestSummarySchema>;
+
+/** A kind in a jurisdiction's typing catalog: seeded, added locally, or imported from the RTLT. */
+export interface ResourceKind extends ResourceKindDefinition {
+  readonly source: "seed" | "local" | "rtlt";
+  readonly rtltId: string | null;
+  readonly sourceNote: string;
+}
+
+/** A resource in a jurisdiction's pool. */
+export interface PoolResource {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: string;
+  readonly type: number | null;
+  readonly status: string;
+  readonly request: { readonly id: string; readonly item: string } | null;
+  readonly returnCondition: string | null;
+  readonly demobilizationChecks: readonly string[];
+  readonly updatedAt: string;
+}
 
 export const ResourceRequestChronologySchema = z.object({
   fromState: z.string().nullable(),

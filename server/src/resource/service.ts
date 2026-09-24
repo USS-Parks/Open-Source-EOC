@@ -1,7 +1,10 @@
 import {
+  RESOURCE_STATUS_TRANSITIONS,
   canTransition,
   formatCostExport,
+  typeSatisfies,
   type CostRow,
+  type PoolResource,
   type ResourceAssignmentView,
   type ResourceRequestAssignment,
   type ResourceRequestDetail,
@@ -21,6 +24,7 @@ import { DEFAULT_PAGE_LIMIT, cutPage, decodeCursor, type Page, type PageRequest 
 import { recordAudit } from "../audit/service.js";
 import { resolveWorkflowAssignment } from "../boards/workflow.js";
 import { getIncidentAuthority, lockIncidentMutation } from "../incidents/participation.js";
+import { requireKind } from "./typing.js";
 
 /**
  * The 213RR resource lifecycle, server side (F5). A request moves
@@ -39,6 +43,9 @@ export interface SubmitInput {
   readonly neededBy?: Date | undefined;
   readonly notes?: string | undefined;
   readonly incidentId?: string | undefined;
+  /** A kind from the typing catalog and, optionally, the least capable type that fills the request. */
+  readonly resourceKind?: string | undefined;
+  readonly resourceType?: number | undefined;
 }
 
 export async function submitRequest(
@@ -49,14 +56,16 @@ export async function submitRequest(
 ): Promise<{ id: string }> {
   requireWriter(actor, jurisdictionId);
   if (input.incidentId) await requireOpenIncidentScope(sql, actor, input.incidentId, jurisdictionId);
+  if (input.resourceType !== undefined && !input.resourceKind) throw new AuthError(400, "a type needs a resource kind");
+  if (input.resourceKind) await requireKind(sql, jurisdictionId, input.resourceKind, input.resourceType ?? null, false);
   const [row] = await sql`
     insert into resource_requests
       (jurisdiction_id, receiving_organization_id, incident_id, origin, item, quantity, priority, state, notes,
-       needed_by, requested_by)
+       needed_by, requested_by, resource_kind, resource_type)
     values
       (${jurisdictionId}, ${jurisdictionId}, ${input.incidentId ?? null}, ${input.origin}, ${input.item},
        ${input.quantity ?? 1}, ${input.priority ?? "routine"}, 'submitted', ${input.notes ?? null},
-       ${input.neededBy ?? null}, ${actor.person.id})
+       ${input.neededBy ?? null}, ${actor.person.id}, ${input.resourceKind ?? null}, ${input.resourceType ?? null})
     returning id`;
   const id = row!.id as string;
   await appendEvent(sql, id, null, "submitted", "request submitted", actor.person.id, null);
@@ -79,11 +88,13 @@ interface RequestRow {
   item: string;
   requested_by: string;
   assigned_position: string | null;
+  resource_kind: string | null;
+  resource_type: number | null;
 }
 
 async function loadRequest(sql: Sql, requestId: string): Promise<RequestRow> {
   const [row] = (await sql`
-    select jurisdiction_id, incident_id, state, item, requested_by, assigned_position
+    select jurisdiction_id, incident_id, state, item, requested_by, assigned_position, resource_kind, resource_type
     from resource_requests where id = ${requestId}`) as unknown as RequestRow[];
   if (!row) throw new AuthError(404, "resource request not found");
   return row;
@@ -330,7 +341,9 @@ const requestSelect = `
     participant.role as assigned_participant_role,
     person.display_name as assigned_participant_person_name,
     participant_org.id as assigned_participant_organization_id,
-    participant_org.name as assigned_participant_organization_name
+    participant_org.name as assigned_participant_organization_name,
+    r.resource_kind, r.resource_type,
+    (select coalesce(sum(c.amount_cents), 0) from rr_costs c where c.request_id = r.id)::bigint as cost_cents
   from resource_requests r
   join jurisdictions receiving on receiving.id = coalesce(r.receiving_organization_id, r.jurisdiction_id)
   left join jurisdictions supplying on supplying.id = r.supplying_organization_id
@@ -386,6 +399,9 @@ function requestSummary(row: Record<string, unknown>): ResourceRequestSummary {
     receivingOrganization,
     supplyingOrganization: organization(row, "supplying"),
     assignment: assignmentView(row),
+    resourceKind: (row.resource_kind as string | null) ?? null,
+    resourceType: (row.resource_type as number | null) ?? null,
+    costCents: Number(row.cost_cents),
   };
 }
 
@@ -438,6 +454,136 @@ export async function getRequest(
       at: (e.at as Date).toISOString(),
     })),
   };
+}
+
+/**
+ * The jurisdiction's resource pool. A resource is one definite kind and type
+ * from the typing catalog; its status moves by the dictionary table, one
+ * request at a time, and ends at demobilization. Each move is audited. The
+ * resource's status and its request's lifecycle move independently.
+ */
+function poolResource(row: Record<string, unknown>): PoolResource {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    kind: row.resource_kind as string,
+    type: (row.resource_type as number | null) ?? null,
+    status: row.status as string,
+    request: row.request_id ? { id: row.request_id as string, item: row.request_item as string } : null,
+    returnCondition: (row.return_condition as string | null) ?? null,
+    demobilizationChecks: row.demobilization_checks as string[],
+    updatedAt: (row.updated_at as Date).toISOString(),
+  };
+}
+
+export async function listResources(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+  page: PageRequest,
+): Promise<Page<PoolResource>> {
+  requireMember(actor, jurisdictionId);
+  const after = decodeCursor(page.cursor, ["key", "id"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
+  const rows = await sql`
+    select s.id, s.name, s.resource_kind, s.resource_type, s.status, s.request_id, r.item as request_item,
+      s.return_condition, s.demobilization_checks, s.updated_at
+    from resources s left join resource_requests r on r.id = s.request_id
+    where s.jurisdiction_id = ${jurisdictionId}
+      and (${after?.[0] ?? null}::text is null or (s.name, s.id) > (${after?.[0] ?? null}::text, ${after?.[1] ?? null}::uuid))
+    order by s.name, s.id limit ${limit + 1}`;
+  const { items, nextCursor } = cutPage(rows as unknown as Record<string, unknown>[], limit,
+    (row) => [row.name as string, row.id as string]);
+  return { items: items.map(poolResource), nextCursor };
+}
+
+export async function addResource(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+  input: { name: string; kind: string; type: number | null },
+): Promise<{ id: string }> {
+  requireWriter(actor, jurisdictionId);
+  await requireKind(sql, jurisdictionId, input.kind, input.type, true);
+  const [row] = await sql`
+    insert into resources (jurisdiction_id, name, resource_kind, resource_type, created_by, updated_by)
+    values (${jurisdictionId}, ${input.name}, ${input.kind}, ${input.type}, ${actor.person.id}, ${actor.person.id})
+    returning id`;
+  const id = row!.id as string;
+  await recordAudit(sql, actor, {
+    jurisdictionId,
+    category: "resource.added",
+    subjectTable: "resources",
+    subjectId: id,
+    payload: { name: input.name, kind: input.kind, type: input.type },
+  });
+  return { id };
+}
+
+export interface ResourceMove {
+  readonly to: string;
+  /** Required to assign: the request the resource goes to. */
+  readonly requestId?: string | undefined;
+  /** Required to demobilize, with the checks made. */
+  readonly returnCondition?: string | undefined;
+  readonly checks?: readonly string[] | undefined;
+}
+
+export async function transitionResource(
+  sql: Sql,
+  actor: Principal,
+  resourceId: string,
+  move: ResourceMove,
+): Promise<{ status: string }> {
+  const [resource] = await sql`
+    select jurisdiction_id, resource_kind, resource_type, status, request_id from resources where id = ${resourceId}`;
+  if (!resource) throw new AuthError(404, "resource not found");
+  const jurisdictionId = resource.jurisdiction_id as string;
+  const from = resource.status as string;
+  requireWriter(actor, jurisdictionId);
+  if (!(RESOURCE_STATUS_TRANSITIONS[from] ?? []).includes(move.to))
+    throw new AuthError(409, `cannot move a resource from ${from} to ${move.to}`);
+  let incidentId: string | null = null;
+  if (move.to === "assigned") {
+    if (!move.requestId) throw new AuthError(400, "name the request to assign the resource to");
+    const req = await loadRequest(sql, move.requestId);
+    if (req.jurisdiction_id !== jurisdictionId) throw new AuthError(409, "the request belongs to another jurisdiction");
+    if (!["sourcing", "assigned", "deployed"].includes(req.state))
+      throw new AuthError(409, `a ${req.state} request does not take resources`);
+    if (req.incident_id) await requireOpenIncidentScope(sql, actor, req.incident_id, jurisdictionId);
+    if (req.resource_kind !== resource.resource_kind ||
+        !typeSatisfies(resource.resource_type as number | null, req.resource_type))
+      throw new AuthError(409, "the resource is not the kind and type the request asks for");
+    incidentId = req.incident_id;
+  }
+  const demobilized = move.to === "demobilized";
+  if (demobilized && !move.returnCondition) throw new AuthError(400, "record the return condition to demobilize");
+  const checks = demobilized ? [...new Set(move.checks ?? [])] : [];
+  const [updated] = await sql`
+    update resources set
+      status = ${move.to},
+      request_id = ${move.to === "assigned" ? move.requestId! : null},
+      return_condition = ${demobilized ? move.returnCondition! : null},
+      demobilization_checks = ${checks}::text[],
+      demobilized_at = case when ${demobilized} then now() end,
+      updated_by = ${actor.person.id}, updated_at = now()
+    where id = ${resourceId} and status = ${from}
+    returning id`;
+  if (!updated) throw new AuthError(409, "the resource changed; reload and try again");
+  await recordAudit(sql, actor, {
+    jurisdictionId,
+    ...(incidentId ? { incidentId } : {}),
+    category: "resource.status",
+    subjectTable: "resources",
+    subjectId: resourceId,
+    payload: {
+      from,
+      to: move.to,
+      requestId: move.to === "assigned" ? move.requestId : (resource.request_id as string | null),
+      ...(demobilized ? { returnCondition: move.returnCondition, checks } : {}),
+    },
+  });
+  return { status: move.to };
 }
 
 async function appendEvent(

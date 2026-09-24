@@ -138,6 +138,8 @@ GET /api/v1/jurisdictions/:jurisdictionId/position-assignments
 GET /api/v1/jurisdictions/:jurisdictionId/positions
 GET /api/v1/jurisdictions/:jurisdictionId/reports
 GET /api/v1/jurisdictions/:jurisdictionId/resource-requests
+GET /api/v1/jurisdictions/:jurisdictionId/resources
+GET /api/v1/jurisdictions/:jurisdictionId/resources/kinds
 GET /api/v1/jurisdictions/:jurisdictionId/retention
 GET /api/v1/jurisdictions/:jurisdictionId/reunification
 GET /api/v1/jurisdictions/:jurisdictionId/search
@@ -284,6 +286,9 @@ POST /api/v1/jurisdictions/:jurisdictionId/positions
 POST /api/v1/jurisdictions/:jurisdictionId/reports
 POST /api/v1/jurisdictions/:jurisdictionId/reports/preview
 POST /api/v1/jurisdictions/:jurisdictionId/resource-requests
+POST /api/v1/jurisdictions/:jurisdictionId/resources
+POST /api/v1/jurisdictions/:jurisdictionId/resources/kinds
+POST /api/v1/jurisdictions/:jurisdictionId/resources/kinds/import
 POST /api/v1/jurisdictions/:jurisdictionId/shifts
 POST /api/v1/jurisdictions/:jurisdictionId/sitreps
 POST /api/v1/jurisdictions/:jurisdictionId/status-queries
@@ -306,6 +311,7 @@ POST /api/v1/resource-requests/:id/escalate
 POST /api/v1/resource-requests/:id/transition
 POST /api/v1/resource-requests/receive
 POST /api/v1/resource-requests/report
+POST /api/v1/resources/:resourceId/transition
 POST /api/v1/templates
 POST /api/v1/templates/import
 POST /api/v1/threads/:threadId/messages

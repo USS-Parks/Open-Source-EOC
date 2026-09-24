@@ -1,5 +1,15 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { RESOURCE_REQUEST_TRANSITIONS, type ResourceRequestAssignment } from "@openeoc/shared";
+import {
+  DEMOBILIZATION_CHECK_LABELS,
+  DEMOBILIZATION_CHECKS,
+  RESOURCE_REQUEST_TRANSITIONS,
+  RESOURCE_RETURN_CONDITIONS,
+  RESOURCE_STATUS_TRANSITIONS,
+  typeSatisfies,
+  type PoolResource,
+  type ResourceKind,
+  type ResourceRequestAssignment,
+} from "@openeoc/shared";
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../../design/components.js";
 import { Icon } from "../../design/icons/Icon.js";
 import { ResourceRequestDetailPanel } from "../../resources/ResourceRequestDetail.js";
@@ -47,6 +57,7 @@ function assignmentLabel(request: ResourceRequestSummary): string {
 
 function RequestRow(props: {
   req: ResourceRequestSummary;
+  kindText: string;
   positions: readonly { id: string; title: string }[];
   participants: readonly { id: string; personName: string; incidentPositionTitle: string; organizationName: string }[];
   incidentId: string | null;
@@ -74,7 +85,7 @@ function RequestRow(props: {
     <li style={{ ...rowStyle, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", alignItems: "start", padding: 14, minWidth: 0 }}>
       <div style={{ display: "grid", gap: 10, minWidth: 0 }}>
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}><StatusBadge status={stateStatus(props.req.state)}>{props.req.state}</StatusBadge><strong>{props.req.item}</strong><span style={{ color: "var(--eoc-text-muted)" }}>×{props.req.quantity}</span><span style={{ color: "var(--eoc-text-muted)" }}>{props.req.priority} priority</span></div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))", gap: 8, color: "var(--eoc-text-muted)", fontSize: "0.92em" }}><span>Receiving: {props.req.receivingOrganization.name}</span><span>Supplying: {props.req.supplyingOrganization?.name ?? "Not identified"}</span><span>Owner: {assignmentLabel(props.req)}</span></div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))", gap: 8, color: "var(--eoc-text-muted)", fontSize: "0.92em" }}><span>Receiving: {props.req.receivingOrganization.name}</span><span>Supplying: {props.req.supplyingOrganization?.name ?? "Not identified"}</span><span>Owner: {assignmentLabel(props.req)}</span>{props.kindText ? <span>Kind: {props.kindText}</span> : null}</div>
         {props.canMutate && needsAssignment ? <div style={{ display: "grid", gap: 8 }}><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: 8, alignItems: "end", minWidth: 0 }}><label style={{ display: "grid", gap: 4, minWidth: 0 }}>Assign to named authority<select aria-label={`Assignment for ${props.req.item}`} value={target} onChange={(event) => setTarget(event.target.value)} style={selectStyle}><option value="">Choose a position or incident participant</option>{props.positions.length ? <optgroup label="Positions">{props.positions.map((position) => <option key={position.id} value={`position:${position.id}`}>{position.title}</option>)}</optgroup> : null}{props.participants.length ? <optgroup label="Incident participants">{props.participants.map((participant) => <option key={participant.id} value={`participant:${participant.id}`}>{participant.personName} · {participant.incidentPositionTitle} · {participant.organizationName}</option>)}</optgroup> : null}</select></label><Button kind="primary" onClick={assign} disabled={props.busy || !target}>Assign and advance</Button></div>{props.positions.length === 0 && props.participants.length === 0 ? <span role="status" style={{ color: "var(--eoc-text-muted)" }}>No eligible position or active incident participant is available for assignment.</span> : null}</div> : null}
         {props.canMutate && transitions.length ? <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: 8, alignItems: "end", minWidth: 0 }}><label style={{ display: "grid", gap: 4, minWidth: 0 }}>Next action<select aria-label={`Next state for ${props.req.item}`} value={to} onChange={(event) => setTo(event.target.value)} style={selectStyle}>{transitions.map((state) => <option key={state} value={state}>{state}</option>)}</select></label><div style={{ minWidth: 0 }}><TextField label="Transition note" value={note} onChange={setNote} /></div><Button onClick={() => props.onAdvance(props.req.id, to, note)} disabled={props.busy || !to}>Advance</Button></div> : !needsAssignment ? <span style={{ color: "var(--eoc-text-muted)" }}>{props.canMutate ? "Lifecycle complete" : "Read-only request"}</span> : !props.canMutate ? <span style={{ color: "var(--eoc-text-muted)" }}>Read-only request</span> : null}
       </div>
@@ -119,6 +130,7 @@ function RequestCostsAndEscalation(props: {
   request: ResourceRequestSummary;
   canMutate: boolean;
   onEscalated: () => void;
+  onCostRecorded: () => void;
 }) {
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
@@ -158,6 +170,7 @@ function RequestCostsAndEscalation(props: {
     setCategory("");
     setAmount("");
     setDescription("");
+    props.onCostRecorded();
     return `Cost recorded: ${category.trim()}, $${(cents / 100).toFixed(2)}.`;
   });
   const exportCosts = () => run(async () => {
@@ -204,6 +217,277 @@ function RequestCostsAndEscalation(props: {
   );
 }
 
+const plain = (value: string) => value.replaceAll("_", " ");
+const usd = (cents: number) => (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
+const mutedStyle: CSSProperties = { margin: 0, color: "var(--eoc-text-muted)" };
+const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", textAlign: "left" };
+const cellStyle: CSSProperties = { padding: "6px 8px", borderBottom: "1px solid var(--eoc-border)", verticalAlign: "top" };
+
+/** "Engine, Type 3", the kind's name when the catalog has it, else its key. */
+function kindText(kinds: readonly ResourceKind[], key: string | null, type: number | null): string {
+  if (!key) return "";
+  const name = kinds.find((kind) => kind.key === key)?.name ?? key;
+  return type === null ? name : `${name}, Type ${type}`;
+}
+
+/** Kind and type pickers. A request may leave both open; a pool resource names one definite type. */
+function KindTypeFields(props: {
+  kinds: readonly ResourceKind[];
+  kind: string;
+  type: string;
+  onKind: (kind: string) => void;
+  onType: (type: string) => void;
+  forRequest: boolean;
+}) {
+  const types = (props.kinds.find((kind) => kind.key === props.kind)?.levels ?? []).map((level) => String(level.type));
+  return (
+    <>
+      <div style={{ minWidth: 0 }}><EnumSelect
+        label="Resource kind"
+        values={["", ...props.kinds.map((kind) => kind.key)]}
+        labels={{ "": props.forRequest ? "Not typed" : "Choose a kind", ...Object.fromEntries(props.kinds.map((kind) => [kind.key, kind.name])) }}
+        value={props.kind}
+        onChange={(kind) => { props.onKind(kind); props.onType(""); }}
+      /></div>
+      {types.length ? <div style={{ minWidth: 0 }}><EnumSelect
+        label="Resource type"
+        values={["", ...types]}
+        labels={{ "": props.forRequest ? "Any type" : "Choose a type", ...Object.fromEntries(types.map((type) => [type, `Type ${type}`])) }}
+        value={props.type}
+        onChange={props.onType}
+      /></div> : null}
+    </>
+  );
+}
+
+const poolBadge: Record<string, BadgeStatus> = { available: "success", assigned: "info", out_of_service: "warning", demobilized: "unknown" };
+
+function PoolRow(props: {
+  resource: PoolResource;
+  kinds: readonly ResourceKind[];
+  requests: readonly ResourceRequestSummary[];
+  canMutate: boolean;
+  busy: boolean;
+  onMove: (id: string, move: { to: string; requestId?: string; returnCondition?: string; checks?: string[] }) => void;
+}) {
+  const r = props.resource;
+  const nexts = RESOURCE_STATUS_TRANSITIONS[r.status] ?? [];
+  const [to, setTo] = useState(nexts[0] ?? "");
+  const [requestId, setRequestId] = useState("");
+  const [condition, setCondition] = useState("ready");
+  const [checks, setChecks] = useState<string[]>([]);
+  useEffect(() => setTo((RESOURCE_STATUS_TRANSITIONS[r.status] ?? [])[0] ?? ""), [r.status]);
+  const eligible = props.requests.filter((q) => ["sourcing", "assigned", "deployed"].includes(q.state)
+    && q.resourceKind === r.kind && typeSatisfies(r.type, q.resourceType));
+  const apply = () => props.onMove(r.id, to === "assigned" ? { to, requestId }
+    : to === "demobilized" ? { to, returnCondition: condition, checks } : { to });
+  return (
+    <li style={{ ...rowStyle, display: "grid", gap: 10, padding: 14, minWidth: 0 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+        <StatusBadge status={poolBadge[r.status] ?? "unknown"}>{plain(r.status)}</StatusBadge>
+        <strong>{r.name}</strong>
+        <span style={{ color: "var(--eoc-text-muted)" }}>{kindText(props.kinds, r.kind, r.type)}</span>
+      </div>
+      {r.request ? <span style={mutedStyle}>Assigned to request: {r.request.item}</span> : null}
+      {r.status === "demobilized" ? <span style={mutedStyle}>
+        Returned {plain(r.returnCondition ?? "")}. Checks made: {r.demobilizationChecks.length
+          ? r.demobilizationChecks.map((check) => DEMOBILIZATION_CHECK_LABELS[check] ?? check).join("; ") : "none"}.
+      </span> : null}
+      {props.canMutate && nexts.length ? <div style={formStyle}>
+        <label style={{ display: "grid", gap: 4, minWidth: 0 }}>Next status<select aria-label={`Next status for ${r.name}`} value={to} onChange={(event) => setTo(event.target.value)} style={selectStyle}>{nexts.map((status) => <option key={status} value={status}>{plain(status)}</option>)}</select></label>
+        {to === "assigned" ? <label style={{ display: "grid", gap: 4, minWidth: 0 }}>Matching request<select aria-label={`Request for ${r.name}`} value={requestId} onChange={(event) => setRequestId(event.target.value)} style={selectStyle}><option value="">{eligible.length ? "Choose a request" : "No open request of this kind and type"}</option>{eligible.map((q) => <option key={q.id} value={q.id}>{q.item} ({kindText(props.kinds, q.resourceKind, q.resourceType)})</option>)}</select></label> : null}
+        {to === "demobilized" ? <label style={{ display: "grid", gap: 4, minWidth: 0 }}>Return condition<select aria-label={`Return condition for ${r.name}`} value={condition} onChange={(event) => setCondition(event.target.value)} style={selectStyle}>{RESOURCE_RETURN_CONDITIONS.values.map((value) => <option key={value} value={value}>{plain(value)}</option>)}</select></label> : null}
+        {to === "demobilized" ? <fieldset style={{ margin: 0, minWidth: 0, border: "1px solid var(--eoc-border)", borderRadius: 4 }}>
+          <legend>Demobilization checks for {r.name}</legend>
+          {DEMOBILIZATION_CHECKS.values.map((check) => <label key={check} style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 32 }}>
+            <input type="checkbox" checked={checks.includes(check)} onChange={(event) => setChecks(event.target.checked ? [...checks, check] : checks.filter((c) => c !== check))} />
+            {DEMOBILIZATION_CHECK_LABELS[check]}
+          </label>)}
+        </fieldset> : null}
+        <Button onClick={apply} disabled={props.busy || !to || (to === "assigned" && !requestId)}>Update status</Button>
+      </div> : null}
+    </li>
+  );
+}
+
+/** The jurisdiction's pool of typed resources: add one, assign it to a matching request, take it out of service, demobilize it. */
+function ResourcePool(props: {
+  client: ApiClient;
+  jurisdictionId: string;
+  kinds: readonly ResourceKind[];
+  requests: readonly ResourceRequestSummary[];
+  canMutate: boolean;
+}) {
+  const pool = useAsync(() => props.client.listResources(props.jurisdictionId), [props.jurisdictionId]);
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState("");
+  const [type, setType] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const run = async (action: () => Promise<unknown>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      pool.reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const add = () => run(async () => {
+    if (!name.trim() || !kind) throw new Error("Enter the resource name and choose its kind.");
+    await props.client.addResource(props.jurisdictionId, { name: name.trim(), kind, type: type ? Number(type) : null });
+    setName("");
+  });
+  const list = pool.data ?? [];
+  return (
+    <Panel title="Resource pool">
+      <div style={{ display: "grid", gap: 12, minWidth: 0 }}>
+        {props.canMutate ? <div style={formStyle}>
+          <div style={{ minWidth: 0 }}><TextField label="Resource name" value={name} onChange={setName} /></div>
+          <KindTypeFields kinds={props.kinds} kind={kind} type={type} onKind={setKind} onType={setType} forRequest={false} />
+          <Button kind="primary" onClick={() => void add()} disabled={busy}>Add to pool</Button>
+        </div> : null}
+        {pool.loading && !pool.data ? <Loading label="Loading the resource pool…" /> : null}
+        {pool.error && !pool.data ? <ErrorNote message={pool.error} /> : null}
+        {pool.data && list.length === 0 ? <p style={mutedStyle}>No resources in the pool.</p> : null}
+        {list.length ? <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
+          {list.map((resource) => <PoolRow key={resource.id} resource={resource} kinds={props.kinds} requests={props.requests}
+            canMutate={props.canMutate} busy={busy} onMove={(id, move) => void run(() => props.client.transitionResource(id, move))} />)}
+        </ul> : null}
+        {error ? <p role="alert" style={{ margin: 0, color: "var(--eoc-status-critical)" }}>{error}</p> : null}
+      </div>
+    </Panel>
+  );
+}
+
+/** Recorded costs of the requests in scope, from the request list, with a total per kind. */
+function CostRollup(props: {
+  kinds: readonly ResourceKind[];
+  requests: readonly ResourceRequestSummary[];
+  incidentScoped: boolean;
+}) {
+  const costed = props.requests.filter((request) => request.costCents > 0);
+  const label = (request: ResourceRequestSummary) => kindText(props.kinds, request.resourceKind, null) || "Not typed";
+  const byKind = new Map<string, number>();
+  for (const request of costed) byKind.set(label(request), (byKind.get(label(request)) ?? 0) + request.costCents);
+  const total = costed.reduce((sum, request) => sum + request.costCents, 0);
+  return (
+    <Panel title="Cost rollup">
+      <p style={{ ...mutedStyle, marginBottom: 12 }}>{props.incidentScoped ? "Costs recorded on this incident's requests." : "Costs recorded on every request of the organization."} Record and export a request's costs from its history.</p>
+      {costed.length === 0 ? <p style={mutedStyle}>No costs recorded in this scope.</p> : <div style={{ overflowX: "auto" }}>
+        <table style={tableStyle}>
+          <thead><tr><th scope="col" style={cellStyle}>Request</th><th scope="col" style={cellStyle}>Kind</th><th scope="col" style={cellStyle}>Recorded</th></tr></thead>
+          <tbody>{costed.map((request) => <tr key={request.id}>
+            <td style={cellStyle}>{request.item}</td>
+            <td style={cellStyle}>{kindText(props.kinds, request.resourceKind, request.resourceType) || "Not typed"}</td>
+            <td style={cellStyle}>{usd(request.costCents)}</td>
+          </tr>)}</tbody>
+          <tfoot>
+            {[...byKind].map(([kind, cents]) => <tr key={kind}><th scope="row" colSpan={2} style={cellStyle}>{kind} total</th><td style={cellStyle}>{usd(cents)}</td></tr>)}
+            <tr><th scope="row" colSpan={2} style={cellStyle}>All requests</th><td style={cellStyle}><strong>{usd(total)}</strong></td></tr>
+          </tfoot>
+        </table>
+      </div>}
+    </Panel>
+  );
+}
+
+const sourceText = (kind: ResourceKind) => kind.source === "seed" ? "Starter" : kind.source === "local" ? "Local" : `RTLT ${kind.rtltId ?? ""}`;
+
+/** The NIMS typing catalog: starter kinds, local kinds and RTLT definitions; administrators add and import. */
+function TypingCatalog(props: {
+  client: ApiClient;
+  jurisdictionId: string;
+  kinds: readonly ResourceKind[];
+  canManage: boolean;
+  onChanged: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [discipline, setDiscipline] = useState("");
+  const [levelCount, setLevelCount] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [sourceNote, setSourceNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const run = async (action: () => Promise<string>) => {
+    setBusy(true);
+    setNotice(null);
+    setError(null);
+    try {
+      setNotice(await action());
+      props.onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const addKind = () => run(async () => {
+    const count = levelCount.trim() === "" ? 0 : Number(levelCount);
+    if (!name.trim()) throw new Error("Enter the name of the kind.");
+    if (!Number.isInteger(count) || count < 0 || count > 10) throw new Error("Enter from 1 to 10 type levels, or leave it blank for a single type.");
+    await props.client.addResourceKind(props.jurisdictionId, {
+      name: name.trim(), discipline: discipline.trim(), notes: "",
+      levels: Array.from({ length: count }, (_, index) => ({ type: index + 1, capability: "" })),
+    });
+    setName("");
+    setDiscipline("");
+    setLevelCount("");
+    return `Added ${name.trim()} to the catalog.`;
+  });
+  const importFile = () => run(async () => {
+    if (!file) throw new Error("Choose the RTLT export file.");
+    if (!sourceNote.trim()) throw new Error("Say where the file came from.");
+    const result = await props.client.importResourceKinds(props.jurisdictionId, { csv: await file.text(), sourceNote: sourceNote.trim() });
+    return `Imported ${result.imported} definitions from the RTLT export.`;
+  });
+  return (
+    <Panel title="Resource typing catalog">
+      <div style={{ display: "grid", gap: 12, minWidth: 0 }}>
+        <p style={mutedStyle}>NIMS resource typing: Type 1 is the most capable. The starter kinds are a small subset; import the FEMA Resource Typing Library Tool (RTLT) export for the authoritative catalog.</p>
+        <details>
+          <summary>Show the {props.kinds.length} kinds</summary>
+          <div style={{ overflowX: "auto", marginTop: 8 }}>
+            <table style={tableStyle}>
+              <thead><tr><th scope="col" style={cellStyle}>Kind</th><th scope="col" style={cellStyle}>Discipline</th><th scope="col" style={cellStyle}>Types</th><th scope="col" style={cellStyle}>Source</th></tr></thead>
+              <tbody>{props.kinds.map((kind) => <tr key={kind.key}>
+                <td style={cellStyle}>{kind.name}</td>
+                <td style={cellStyle}>{kind.discipline}</td>
+                <td style={cellStyle}>{kind.levels.length === 0 ? "Single type" : kind.levels.map((level) => level.capability ? `Type ${level.type}: ${level.capability}` : `Type ${level.type}`).join("; ")}</td>
+                <td style={cellStyle} title={kind.sourceNote}>{sourceText(kind)}</td>
+              </tr>)}</tbody>
+            </table>
+          </div>
+        </details>
+        {props.canManage ? <section aria-label="Add a local kind" style={{ display: "grid", gap: 8, minWidth: 0 }}>
+          <h3 style={{ margin: 0 }}>Add a local kind</h3>
+          <div style={formStyle}>
+            <div style={{ minWidth: 0 }}><TextField label="Kind name" value={name} onChange={setName} /></div>
+            <div style={{ minWidth: 0 }}><TextField label="Discipline" value={discipline} onChange={setDiscipline} /></div>
+            <div style={{ minWidth: 0 }}><TextField label="Type levels (blank for a single type)" value={levelCount} onChange={setLevelCount} /></div>
+            <Button onClick={() => void addKind()} disabled={busy}>Add kind</Button>
+          </div>
+        </section> : null}
+        {props.canManage ? <section aria-label="Import RTLT definitions" style={{ display: "grid", gap: 8, minWidth: 0 }}>
+          <h3 style={{ margin: 0 }}>Import RTLT definitions</h3>
+          <p style={mutedStyle}>A CSV with a name, an RTLT ID and a type level per row. Every row imports or none does, and the import replaces the previous one.</p>
+          <div style={formStyle}>
+            <label style={{ display: "grid", gap: 4, minWidth: 0 }}>RTLT export (CSV)<input type="file" accept=".csv,text/csv" onChange={(event) => setFile(event.target.files?.[0] ?? null)} style={{ ...selectStyle, minWidth: 0 }} /></label>
+            <div style={{ minWidth: 0 }}><TextField label="Where the file came from" value={sourceNote} onChange={setSourceNote} /></div>
+            <Button onClick={() => void importFile()} disabled={busy}>Import definitions</Button>
+          </div>
+        </section> : null}
+        {notice ? <p role="status" style={{ margin: 0, color: "var(--eoc-status-success)" }}>{notice}</p> : null}
+        {error ? <p role="alert" style={{ margin: 0, color: "var(--eoc-status-critical)" }}>{error}</p> : null}
+      </div>
+    </Panel>
+  );
+}
+
 /**
  * The 213RR resource-request board (F5). Submit a request, and move each one
  * through the NIMS ordering lifecycle; the allowed next states come straight
@@ -228,10 +512,14 @@ export function ResourcesSurface(props: {
     () => props.incidentId ? props.client.listIncidentParticipants(props.incidentId) : Promise.resolve([]),
     [props.incidentId],
   );
+  const catalog = useAsync(() => props.client.listResourceKinds(props.jurisdictionId), [props.jurisdictionId]);
+  const kinds = catalog.data?.kinds ?? [];
   const [item, setItem] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [priority, setPriority] = useState("routine");
   const [notes, setNotes] = useState("");
+  const [requestKind, setRequestKind] = useState("");
+  const [requestType, setRequestType] = useState("");
   const [selectedRequest, setSelectedRequest] = useState<string | null>(props.selectedRequestId ?? null);
   useEffect(() => {
     if (props.selectedRequestId !== undefined) setSelectedRequest(props.selectedRequestId);
@@ -273,10 +561,14 @@ export function ResourcesSurface(props: {
         // Tag the request to the working incident so it lists in that context;
         // with no incident selected it stays a jurisdiction-wide request (79B2).
         ...(props.incidentId ? { incidentId: props.incidentId } : {}),
+        ...(requestKind ? { resourceKind: requestKind } : {}),
+        ...(requestType ? { resourceType: Number(requestType) } : {}),
       });
       setItem("");
       setQuantity("1");
       setNotes("");
+      setRequestKind("");
+      setRequestType("");
     });
 
   const list = requests.data ?? [];
@@ -300,6 +592,7 @@ export function ResourcesSurface(props: {
             <div style={{ minWidth: 0 }}><TextField label="Quantity" value={quantity} onChange={setQuantity} /></div>
             <div style={{ minWidth: 0 }}><EnumSelect label="Priority" values={PRIORITIES} value={priority} onChange={setPriority} /></div>
             <div style={{ minWidth: 0 }}><TextField label="Request notes" value={notes} onChange={setNotes} /></div>
+            <KindTypeFields kinds={kinds} kind={requestKind} type={requestType} onKind={setRequestKind} onType={setRequestType} forRequest />
           </div><div style={{ marginTop: 12 }}><Button kind="primary" onClick={submit} disabled={busy}>Submit request</Button></div></> : <p role="status" style={{ marginBottom: 0, color: "var(--eoc-text-muted)" }}>{props.closed ? "This incident is closed. Request history remains available." : "Your access is read-only. Request history remains available."}</p>}
         </Panel>
 
@@ -315,6 +608,7 @@ export function ResourcesSurface(props: {
                 <RequestRow
                   key={r.id}
                   req={r}
+                  kindText={kindText(kinds, r.resourceKind, r.resourceType)}
                   positions={positions.data ?? []}
                   participants={activeParticipants}
                   incidentId={props.incidentId}
@@ -339,6 +633,7 @@ export function ResourcesSurface(props: {
             request={detail.data}
             canMutate={canMutate}
             onEscalated={detail.reload}
+            onCostRecorded={requests.reload}
           />
         ) : null}
 
@@ -347,6 +642,12 @@ export function ResourcesSurface(props: {
             {error}
           </p>
         ) : null}
+
+        <ResourcePool client={props.client} jurisdictionId={props.jurisdictionId} kinds={kinds} requests={list} canMutate={props.canMutate ?? true} />
+        <CostRollup kinds={kinds} requests={list} incidentScoped={props.incidentId !== null} />
+        {catalog.error && !catalog.data ? <ErrorNote message={catalog.error} /> : null}
+        {catalog.data ? <TypingCatalog client={props.client} jurisdictionId={props.jurisdictionId} kinds={kinds}
+          canManage={catalog.data.canManage} onChanged={catalog.reload} /> : null}
       </div>
     </Scroll>
   );

@@ -8,7 +8,13 @@ import {
   ICS_SECTIONS,
   RESOURCE_REQUEST_STATES,
   RESOURCE_REQUEST_TRANSITIONS,
+  RESOURCE_KIND_SEED,
+  RESOURCE_STATUSES,
+  RESOURCE_STATUS_TRANSITIONS,
+  DEMOBILIZATION_CHECKS,
+  DEMOBILIZATION_CHECK_LABELS,
   toJsonSchemas,
+  typeSatisfies,
 } from "../index.js";
 
 describe("citation lint", () => {
@@ -52,6 +58,34 @@ describe("doctrine shape", () => {
     }
     expect(RESOURCE_REQUEST_TRANSITIONS["closed"]).toHaveLength(0);
     expect(RESOURCE_REQUEST_TRANSITIONS["cancelled"]).toHaveLength(0);
+  });
+
+  it("resource status moves stay inside the statuses and demobilized is terminal", () => {
+    const statuses = RESOURCE_STATUSES.values;
+    expect(Object.keys(RESOURCE_STATUS_TRANSITIONS).sort()).toEqual([...statuses].sort());
+    for (const [from, targets] of Object.entries(RESOURCE_STATUS_TRANSITIONS)) {
+      for (const t of targets) expect(statuses, `${from} -> ${t}`).toContain(t);
+    }
+    expect(RESOURCE_STATUS_TRANSITIONS["demobilized"]).toHaveLength(0);
+    expect(Object.keys(DEMOBILIZATION_CHECK_LABELS).sort()).toEqual([...DEMOBILIZATION_CHECKS.values].sort());
+  });
+
+  it("seed kinds have unique unprefixed keys and consecutive type levels from 1", () => {
+    const keys = RESOURCE_KIND_SEED.map((kind) => kind.key);
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const kind of RESOURCE_KIND_SEED) {
+      expect(kind.key, kind.key).toMatch(/^[a-z_]+$/);
+      expect(kind.levels.map((level) => level.type)).toEqual(kind.levels.map((_, index) => index + 1));
+    }
+  });
+
+  it("a more capable type, a lower number, fills a request for a less capable one", () => {
+    expect(typeSatisfies(2, 3)).toBe(true);
+    expect(typeSatisfies(3, 3)).toBe(true);
+    expect(typeSatisfies(4, 3)).toBe(false);
+    expect(typeSatisfies(null, 3)).toBe(false);
+    expect(typeSatisfies(null, null)).toBe(true);
+    expect(typeSatisfies(5, null)).toBe(true);
   });
 });
 

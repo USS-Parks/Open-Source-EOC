@@ -61,6 +61,9 @@ import type {
   ResourceRequestAssignment as ResourceRequestAssignmentContract,
   ResourceRequestDetail as ResourceRequestDetailContract,
   ResourceRequestSummary as ResourceRequestSummaryContract,
+  ResourceKind,
+  ResourceTypeLevel,
+  PoolResource,
   CapAlert,
   IncidentImpactComparison,
 } from "@openeoc/shared";
@@ -1168,6 +1171,8 @@ export class ApiClient {
       priority?: string;
       notes?: string;
       incidentId?: string;
+      resourceKind?: string;
+      resourceType?: number;
     },
   ): Promise<{ id: string }> {
     return this.request<{ id: string }>(
@@ -1892,6 +1897,33 @@ export class ApiClient {
   /** The server delivers the request to the peer tier; a failed delivery answers 502 and nothing is recorded. */
   escalateResourceRequest(id: string, input: { peerName: string; peerBaseUrl: string; peerToken: string }): Promise<{ ok: true }> {
     return this.request("POST", `/api/v1/resource-requests/${encodeURIComponent(id)}/escalate`, input);
+  }
+
+  // ---- Resource typing catalog and resource pool ----
+  listResourceKinds(jurisdictionId: string): Promise<{ kinds: ResourceKind[]; canManage: boolean }> {
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/resources/kinds`);
+  }
+  addResourceKind(jurisdictionId: string, input: { name: string; discipline: string; levels: ResourceTypeLevel[]; notes: string }): Promise<{ key: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/resources/kinds`, input);
+  }
+  /** Replaces the previous import; every row imports or none does. */
+  importResourceKinds(jurisdictionId: string, input: { csv: string; sourceNote: string }): Promise<{ imported: number }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/resources/kinds/import`, input);
+  }
+  /** The whole pool, read page by page: the assignment pickers need every resource. */
+  listResources(jurisdictionId: string): Promise<PoolResource[]> {
+    return readAllPages(async (page) => {
+      const r = await this.request<{ resources: PoolResource[]; nextCursor: string | null }>(
+        "GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/resources?${pageParams(page)}`,
+      );
+      return { items: r.resources, nextCursor: r.nextCursor };
+    });
+  }
+  addResource(jurisdictionId: string, input: { name: string; kind: string; type: number | null }): Promise<{ id: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/resources`, input);
+  }
+  transitionResource(resourceId: string, input: { to: string; requestId?: string; returnCondition?: string; checks?: string[] }): Promise<{ status: string }> {
+    return this.request("POST", `/api/v1/resources/${encodeURIComponent(resourceId)}/transition`, input);
   }
 
   // ---- Facilities and shelters (optional integration) ----
