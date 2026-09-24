@@ -383,8 +383,29 @@ export interface IncidentSummary {
   readonly name: string;
   readonly kind: string;
   readonly closedAt: string | null;
+  readonly archivedAt?: string | null;
+  readonly lockedAt?: string | null;
   readonly canManageParticipation: boolean;
   readonly canEditArea: boolean;
+}
+export type IncidentArchiveFilter = "exclude" | "include" | "only";
+export interface IncidentOverviewRow {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: string;
+  readonly activatedAt: string;
+  readonly closedAt: string | null;
+  readonly archivedAt: string | null;
+  readonly lockedAt: string | null;
+  readonly operationalPeriod: { label: string; startsAt: string; endsAt: string } | null;
+  readonly openResourceRequests: number;
+  readonly openTasks: number;
+  readonly boardRecords: number;
+  readonly participatingOrganizations: number;
+}
+export interface IncidentOverviewPage {
+  readonly incidents: IncidentOverviewRow[];
+  readonly nextCursor: string | null;
 }
 export interface IncidentBoardRef {
   readonly id: string;
@@ -1121,6 +1142,23 @@ export class ApiClient {
   }
   closeIncident(incidentId: string): Promise<{ ok: true }> {
     return this.request<{ ok: true }>("POST", `/api/v1/incidents/${incidentId}/close`);
+  }
+  /** One page of the jurisdiction's master view, newest incident first. */
+  incidentOverview(jurisdictionId: string, archived: IncidentArchiveFilter, page: PageOptions = {}): Promise<IncidentOverviewPage> {
+    const query = pageParams(page, new URLSearchParams({ archived }));
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/incidents/overview?${query}`);
+  }
+  archiveIncident(incidentId: string): Promise<{ ok: true }> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/archive`);
+  }
+  unarchiveIncident(incidentId: string): Promise<{ ok: true }> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/unarchive`);
+  }
+  lockIncident(incidentId: string): Promise<{ ok: true }> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/lockdown`);
+  }
+  unlockIncident(incidentId: string): Promise<{ ok: true }> {
+    return this.request("DELETE", `/api/v1/incidents/${encodeURIComponent(incidentId)}/lockdown`);
   }
   /** One page of the filtered tasks; the analytics count every match. */
   listIncidentTasks(incidentId: string, filters: TaskListQuery = {}, page: PageOptions = {}): Promise<TaskListResponse> {

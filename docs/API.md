@@ -291,13 +291,18 @@ set, and then require that value as a bearer token.
 
 - `GET /api/v1/incident-templates`: Read incident templates (auth: bearer; audience: operator)
 - `GET /api/v1/incidents/:incidentId`: Read incidents (auth: bearer; audience: operator)
+- `POST /api/v1/incidents/:incidentId/archive`: Run incidents archive (auth: bearer; audience: operator)
+- `DELETE /api/v1/incidents/:incidentId/lockdown`: Delete incidents lockdown (auth: bearer; audience: operator)
+- `POST /api/v1/incidents/:incidentId/lockdown`: Run incidents lockdown (auth: bearer; audience: operator)
 - `GET /api/v1/incidents/:incidentId/operational-area`: Read incidents operational area (auth: bearer; audience: operator)
 - `PUT /api/v1/incidents/:incidentId/operational-area`: Set incidents operational area (auth: bearer; audience: operator)
 - `GET /api/v1/incidents/:incidentId/operational-area/history`: Read incidents operational area history (auth: bearer; audience: operator)
 - `GET /api/v1/incidents/:incidentId/operational-relationships`: Read incidents operational relationships (auth: bearer; audience: operator)
 - `POST /api/v1/incidents/:incidentId/operational-relationships`: Run incidents operational relationships (auth: bearer; audience: operator)
+- `POST /api/v1/incidents/:incidentId/unarchive`: Run incidents unarchive (auth: bearer; audience: operator)
 - `GET /api/v1/jurisdictions/:jurisdictionId/incidents`: Read jurisdictions incidents (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/incidents`: Run jurisdictions incidents (auth: bearer; audience: operator)
+- `GET /api/v1/jurisdictions/:jurisdictionId/incidents/overview`: Read jurisdictions incidents overview (auth: bearer; audience: operator)
 
 ### ipaws
 

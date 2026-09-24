@@ -2,10 +2,15 @@ import { z } from "zod";
 import {
   COMMAND_STAFF,
   GENERAL_STAFF,
+  RESOURCE_REQUEST_STATES,
   TaskTemplateItemSchema,
+  nextStates,
   workflowDueAt,
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
+import {
+  CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, cutPage, decodeCursor, type Page, type PageRequest,
+} from "../db/cursor.js";
 import { AuthError, requireAdmin, requireMember, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 import { STANDARD_TITLES } from "../auth/authz.js";
@@ -275,38 +280,150 @@ export interface IncidentSummary {
   readonly name: string;
   readonly kind: string;
   readonly closedAt: string | null;
+  readonly archivedAt: string | null;
+  readonly lockedAt: string | null;
   readonly canManageParticipation: boolean;
   readonly canEditArea: boolean;
 }
+
+/** Archived incidents are left out of a list unless the caller asks for them. */
+export type IncidentArchiveFilter = "exclude" | "include" | "only";
+
+const archiveFilter = (sql: Sql, archived: IncidentArchiveFilter) =>
+  archived === "include" ? sql``
+    : archived === "only" ? sql`and i.archived_at is not null`
+    : sql`and i.archived_at is null`;
+
+const isoOrNull = (value: unknown) => value ? new Date(value as string).toISOString() : null;
 
 /** Open incidents first, for the operator to pick one (forms, IAP, ops). */
 export async function listIncidents(
   sql: Sql,
   actor: Principal,
   jurisdictionId: string,
+  archived: IncidentArchiveFilter = "exclude",
 ): Promise<IncidentSummary[]> {
   requireMember(actor, jurisdictionId);
   const rows = await sql`
-    select id, jurisdiction_id, name, kind, closed_at,
-      is_admin_of(jurisdiction_id) as can_manage,
-      can_revise_incident_area(id) as can_edit
-    from incidents
-    where jurisdiction_id = ${jurisdictionId}
+    select i.id, i.jurisdiction_id, i.name, i.kind, i.closed_at, i.archived_at, i.locked_at,
+      is_admin_of(i.jurisdiction_id) as can_manage,
+      can_revise_incident_area(i.id) as can_edit
+    from incidents i
+    where (i.jurisdiction_id = ${jurisdictionId}
       or exists (select 1 from incident_participants ip
-        where ip.incident_id = incidents.id and ip.organization_id = ${jurisdictionId}
+        where ip.incident_id = i.id and ip.organization_id = ${jurisdictionId}
           and ip.person_id = ${actor.person.id} and ip.revoked_at is null
           and ip.expires_at > now()
-          and eligible_incident_person(ip.person_id, ip.organization_id))
-    order by closed_at nulls first, name`;
+          and eligible_incident_person(ip.person_id, ip.organization_id)))
+      ${archiveFilter(sql, archived)}
+    order by i.closed_at nulls first, i.name`;
   return rows.map((r) => ({
     id: r.id as string,
     jurisdictionId: r.jurisdiction_id as string,
     name: r.name as string,
     kind: r.kind as string,
     closedAt: (r.closed_at as string | null) ?? null,
+    archivedAt: isoOrNull(r.archived_at),
+    lockedAt: isoOrNull(r.locked_at),
     canManageParticipation: Boolean(r.can_manage),
     canEditArea: Boolean(r.can_edit),
   }));
+}
+
+export interface IncidentOverviewRow {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: string;
+  readonly activatedAt: string;
+  readonly closedAt: string | null;
+  readonly archivedAt: string | null;
+  readonly lockedAt: string | null;
+  readonly operationalPeriod: { label: string; startsAt: string; endsAt: string } | null;
+  readonly openResourceRequests: number;
+  readonly openTasks: number;
+  readonly boardRecords: number;
+  readonly participatingOrganizations: number;
+}
+
+/** Request states with no way out; every other state is still open work. */
+const FINISHED_REQUEST_STATES = RESOURCE_REQUEST_STATES.values.filter((state) => nextStates(state).length === 0);
+
+/**
+ * The jurisdiction's master view: every incident it owns, newest first, with
+ * its rollups computed in one statement. Each count runs under the reader's
+ * row-level security, so it counts only what the reader may see.
+ */
+export async function listIncidentOverview(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+  archived: IncidentArchiveFilter,
+  page: PageRequest,
+): Promise<Page<IncidentOverviewRow>> {
+  requireMember(actor, jurisdictionId);
+  const after = decodeCursor(page.cursor, ["at", "id"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
+  const rows = await sql`
+    with page as (
+      select i.id, i.name, i.kind, i.activated_at, i.closed_at, i.archived_at, i.locked_at
+      from incidents i
+      where i.jurisdiction_id = ${jurisdictionId} ${archiveFilter(sql, archived)}
+        ${after ? sql`and (i.activated_at, i.id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : sql``}
+      order by i.activated_at desc, i.id desc limit ${limit + 1}
+    ), requests as (
+      select incident_id, count(*)::int as n from resource_requests
+      where incident_id in (select id from page) and state <> all(${FINISHED_REQUEST_STATES as string[]})
+      group by incident_id
+    ), tasks as (
+      select incident_id, count(*)::int as n from checklist_items
+      where incident_id in (select id from page) and status <> 'completed'
+      group by incident_id
+    ), records as (
+      select ib.incident_id, count(*)::int as n from incident_boards ib
+      join board_records r on r.board_id = ib.board_id
+      where ib.incident_id in (select id from page) and r.deleted_at is null
+      group by ib.incident_id
+    ), organizations as (
+      select incident_id, count(distinct organization_id)::int as n from incident_participants
+      where incident_id in (select id from page) and revoked_at is null and expires_at > now()
+      group by incident_id
+    )
+    select p.*, to_char(p.activated_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at,
+      period.period_label, period.period_starts_at, period.period_ends_at,
+      coalesce(requests.n, 0) as open_requests, coalesce(tasks.n, 0) as open_tasks,
+      coalesce(records.n, 0) as board_records, coalesce(organizations.n, 0) as organizations
+    from page p
+    left join lateral (
+      select a.period_label, a.period_starts_at, a.period_ends_at from incident_area_revisions a
+      where a.incident_id = p.id order by a.revision desc limit 1
+    ) period on true
+    left join requests on requests.incident_id = p.id
+    left join tasks on tasks.incident_id = p.id
+    left join records on records.incident_id = p.id
+    left join organizations on organizations.incident_id = p.id
+    order by p.activated_at desc, p.id desc`;
+  const { items, nextCursor } = cutPage(rows, limit, (r) => [r.page_at as string, r.id as string]);
+  return {
+    items: items.map((r) => ({
+      id: r.id as string,
+      name: r.name as string,
+      kind: r.kind as string,
+      activatedAt: new Date(r.activated_at as string).toISOString(),
+      closedAt: isoOrNull(r.closed_at),
+      archivedAt: isoOrNull(r.archived_at),
+      lockedAt: isoOrNull(r.locked_at),
+      operationalPeriod: r.period_label === null ? null : {
+        label: r.period_label as string,
+        startsAt: new Date(r.period_starts_at as string).toISOString(),
+        endsAt: new Date(r.period_ends_at as string).toISOString(),
+      },
+      openResourceRequests: Number(r.open_requests),
+      openTasks: Number(r.open_tasks),
+      boardRecords: Number(r.board_records),
+      participatingOrganizations: Number(r.organizations),
+    })),
+    nextCursor,
+  };
 }
 
 export async function getIncident(
@@ -402,6 +519,49 @@ export async function closeIncident(
     jurisdictionId: incident.jurisdiction_id as string,
     incidentId,
     category: "incident.closed",
+    subjectTable: "incidents",
+    subjectId: incidentId,
+  });
+}
+
+/** Each lifecycle change: the state it sets, on or off, its conflict, and its audit category. */
+const LIFECYCLE_CHANGES = {
+  archive: ["archived", true, "incident is already archived", "incident.archived"],
+  unarchive: ["archived", false, "incident is not archived", "incident.unarchived"],
+  lock: ["locked", true, "incident is already locked", "incident.locked"],
+  unlock: ["locked", false, "incident is not locked", "incident.unlocked"],
+} as const;
+export type IncidentLifecycleChange = keyof typeof LIFECYCLE_CHANGES;
+
+/**
+ * Archive, unarchive, lock or unlock one incident, as an administrator of the
+ * owning jurisdiction. Only a closed incident is archived. A lock withholds
+ * the incident's boards from guest grants at the row-level security wall (see
+ * has_guest_scope); members and participating organizations keep their read.
+ */
+export async function changeIncidentLifecycle(
+  sql: Sql,
+  actor: Principal,
+  incidentId: string,
+  change: IncidentLifecycleChange,
+): Promise<void> {
+  const [state, on, conflict, category] = LIFECYCLE_CHANGES[change];
+  await lockIncidentMutation(sql, incidentId);
+  const [incident] = await sql`
+    select jurisdiction_id, closed_at, archived_at, locked_at from incidents where id = ${incidentId}`;
+  if (!incident) throw new AuthError(404, "incident not found");
+  requireAdmin(actor, incident.jurisdiction_id as string);
+  if (Boolean(incident[`${state}_at`]) === on) throw new AuthError(409, conflict);
+  if (change === "archive" && !incident.closed_at)
+    throw new AuthError(409, "close the incident before archiving it");
+  await sql`
+    update incidents set ${sql(`${state}_at`)} = ${on ? sql`now()` : null},
+      ${sql(`${state}_by`)} = ${on ? actor.person.id : null}
+    where id = ${incidentId}`;
+  await recordAudit(sql, actor, {
+    jurisdictionId: incident.jurisdiction_id as string,
+    incidentId,
+    category,
     subjectTable: "incidents",
     subjectId: incidentId,
   });

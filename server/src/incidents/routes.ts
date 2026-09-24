@@ -14,11 +14,14 @@ import { incidentParticipationRoutes } from "./participation-routes.js";
 import {
   STANDARD_INCIDENT_TEMPLATES,
   activateIncident,
+  changeIncidentLifecycle,
   closeIncident,
   completeChecklistItem,
   createLibrary,
   getIncident,
+  listIncidentOverview,
   listIncidents,
+  type IncidentLifecycleChange,
 } from "./service.js";
 import {
   archiveForIncident,
@@ -44,6 +47,9 @@ const LibraryBody = z.object({
   forTemplate: z.string().optional(),
 });
 const IncidentId = z.string().uuid();
+const ArchiveQuery = z.object({
+  archived: z.enum(["exclude", "include", "only"]).default("exclude"),
+}).strict();
 
 export function incidentRoutes(
   app: FastifyInstance,
@@ -84,12 +90,33 @@ export function incidentRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const { archived } = ArchiveQuery.parse(req.query);
       const incidents = await withPerson(sql, req.principal.person.id, (tx) =>
-        listIncidents(tx, req.principal, jurisdictionId),
+        listIncidents(tx, req.principal, jurisdictionId, archived),
       );
       return reply.send({ incidents });
     },
   );
+
+  app.get("/api/v1/jurisdictions/:jurisdictionId/incidents/overview", { preHandler: authenticate }, async (req) => {
+    const { jurisdictionId } = req.params as { jurisdictionId: string };
+    const { page, filters } = splitPageQuery(req.query);
+    const { archived } = ArchiveQuery.parse(filters);
+    const { items, nextCursor } = await withPerson(sql, req.principal.person.id, (tx) =>
+      listIncidentOverview(tx, req.principal, jurisdictionId, archived, page));
+    return { incidents: items, nextCursor };
+  });
+
+  const lifecycle = (change: IncidentLifecycleChange) => async (req: FastifyRequest) => {
+    const incidentId = IncidentId.parse((req.params as { incidentId: string }).incidentId);
+    await withPerson(sql, req.principal.person.id, (tx) =>
+      changeIncidentLifecycle(tx, req.principal, incidentId, change));
+    return { ok: true };
+  };
+  app.post("/api/v1/incidents/:incidentId/archive", { preHandler: authenticate }, lifecycle("archive"));
+  app.post("/api/v1/incidents/:incidentId/unarchive", { preHandler: authenticate }, lifecycle("unarchive"));
+  app.post("/api/v1/incidents/:incidentId/lockdown", { preHandler: authenticate }, lifecycle("lock"));
+  app.delete("/api/v1/incidents/:incidentId/lockdown", { preHandler: authenticate }, lifecycle("unlock"));
 
   app.get("/api/v1/incidents/:incidentId", { preHandler: authenticate }, async (req, reply) => {
     const { incidentId } = req.params as { incidentId: string };

@@ -92,6 +92,12 @@ incident uses it.
   which lists its checklists and libraries. **Mark complete** appears on the
   checklist items of the position you are signed into; the server refuses
   anyone else.
+- **Incident Setup** also carries the **Jurisdiction master view**: each
+  incident's status, open resource requests and tasks, board records,
+  participating organizations and operational period. An archived incident is
+  left out of the command bar's incident choices; choose **Archived only**
+  under **Archived incidents** to find it. **Guest access locked** means guest
+  grants cannot read that incident; members are unaffected.
 - In **Messages**, **Export thread** downloads the selected thread as text,
   one line per message with its time and sender.
 

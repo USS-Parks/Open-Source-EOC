@@ -1,13 +1,26 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { ThemeName } from "../../design/tokens.js";
 import { IncidentAreaEditor } from "./IncidentAreaEditor.js";
 import { IncidentParticipants } from "./IncidentParticipants.js";
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../../design/components.js";
-import type { ApiClient, LibraryKind, Membership } from "../api/client.js";
+import {
+  OperationalTable,
+  createOperationalTableViewState,
+  type OperationalTableColumn,
+  type OperationalTableViewState,
+} from "../../design/table.js";
+import type {
+  ApiClient, IncidentArchiveFilter, IncidentOverviewPage, IncidentOverviewRow, LibraryKind, Membership,
+} from "../api/client.js";
+import { formatTime } from "../../datasets/format.js";
 import { IncidentCollaboration } from "../../integrations/collab.js";
 import { IncidentMeetings } from "../../integrations/meetings.js";
 import { useAsync } from "../data/hooks.js";
 import { ErrorNote, Loading, Scroll, SurfaceHeader } from "../screens/parts.js";
+
+const KIND_LABELS: Readonly<Record<string, string>> = {
+  incident: "Incident", daily_ops: "Daily operations", planned_event: "Planned event",
+};
 
 /**
  * Incident lifecycle for the operator (F12): activate an incident from a
@@ -103,7 +116,7 @@ export function IncidentsSurface(props: {
   return (
     <Scroll>
       <SurfaceHeader title="Incidents" />
-      <div style={{ display: "grid", gap: 16, maxWidth: selectedIncident ? 1320 : 760 }}>
+      <div style={{ display: "grid", gap: 16, maxWidth: 1320 }}>
         {props.isAdmin && tpls.length > 0 ? (
           <Panel title="Activate an incident">
             <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
@@ -117,7 +130,7 @@ export function IncidentsSurface(props: {
               <TextField label="Incident name" value={name} onChange={setName} />
               <EnumSelect label="Incident type" values={["incident", "daily_ops", "planned_event"]} value={kind}
                 onChange={(value) => setKind(value as typeof kind)}
-                labels={{ incident: "Incident", daily_ops: "Daily operations", planned_event: "Planned event" }} />
+                labels={KIND_LABELS} />
             </div>
             <div style={{ marginTop: 12 }}>
               <Button kind="primary" onClick={activate} disabled={busy}>
@@ -173,6 +186,7 @@ export function IncidentsSurface(props: {
                   <div style={{ display: "grid", gap: 6 }}>
                     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
                       <StatusBadge status={i.closedAt ? "unknown" : "info"}>{i.closedAt ? "closed" : "open"}</StatusBadge>
+                      {i.lockedAt ? <StatusBadge status="warning">Guest access locked</StatusBadge> : null}
                       <strong>{i.name}</strong>
                       <span style={{ color: "var(--eoc-text-muted)", fontSize: "0.9em" }}>{i.kind.replaceAll("_", " ")}</span>
                     </div>
@@ -193,8 +207,16 @@ export function IncidentsSurface(props: {
           ) : null}
         </Panel>
 
+        <IncidentMasterView client={props.client} jurisdictionId={props.jurisdictionId} isAdmin={props.isAdmin}
+          reload={reload} busy={busy} run={run} />
+
         {list.filter((i) => i.id === selectedIncident).map((incident) => <Panel key={incident.id} title={incident.name + ": incident setup"}>
           <div style={{ display: "grid", gap: 16 }}>
+            {incident.lockedAt ? <p role="status" style={{ margin: 0, padding: "8px 12px", borderRadius: 4,
+              border: "1px solid var(--eoc-status-warning)", color: "var(--eoc-text)" }}>
+              <strong>Guest access is locked.</strong> Guest grants cannot read this incident's boards or records
+              until an administrator lifts the lockdown. Members and participating organizations keep their access.
+            </p> : null}
             <p style={{ margin: 0 }}>The host organization is the jurisdiction that owns this incident. Its owner administrators activate and manage participation. Participants receive only their explicit grant. Incident positions describe operational command assignments; they do not by themselves transfer ownership or establish unified command.</p>
             {detail.loading && !detail.data ? <Loading label="Loading incident setup…" /> : null}
             {detail.error ? <ErrorNote message={detail.error} /> : null}
@@ -259,6 +281,94 @@ export function IncidentsSurface(props: {
       </div>
     </Scroll>
   );
+}
+
+const overviewStatus = (row: IncidentOverviewRow) => row.archivedAt ? "Archived" : row.closedAt ? "Closed" : "Open";
+
+/**
+ * The jurisdiction's master view: every incident it owns with its open work
+ * and records, read a page at a time. Archived incidents appear only when the
+ * filter asks for them. Administrators archive closed incidents here and
+ * apply or lift a lockdown, which withholds one incident from guest grants.
+ */
+function IncidentMasterView(props: {
+  client: ApiClient;
+  jurisdictionId: string;
+  isAdmin: boolean;
+  reload: number;
+  busy: boolean;
+  run: (fn: () => Promise<unknown>, done?: string) => Promise<void>;
+}) {
+  const { client, isAdmin, busy, run } = props;
+  const [archived, setArchived] = useState<IncidentArchiveFilter>("exclude");
+  const [tableState, setTableState] = useState<OperationalTableViewState>(() => createOperationalTableViewState([
+    // Display order: state and controls first, then the rollups, then dates.
+    { id: "incident", width: 200 }, { id: "status", width: 130 }, { id: "guests", width: 160 },
+    { id: "actions", width: 260 }, { id: "requests", width: 190 }, { id: "tasks", width: 140 },
+    { id: "records", width: 150 }, { id: "organizations", width: 210 }, { id: "period", width: 190 },
+    { id: "kind", width: 160 }, { id: "opened", width: 180 }, { id: "closed", width: 180 },
+  ], { pageSize: 25 }));
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const response = useAsync(
+    () => client.incidentOverview(props.jurisdictionId, archived),
+    [props.jurisdictionId, archived, props.reload],
+  );
+  // Pages added with "Load more" extend the first page they were read after.
+  const [more, setMore] = useState<{ base: IncidentOverviewPage; rows: IncidentOverviewRow[]; nextCursor: string | null } | null>(null);
+  const loaded = response.data && more?.base === response.data ? more
+    : response.data ? { base: response.data, rows: response.data.incidents, nextCursor: response.data.nextCursor } : null;
+  const loadMore = loaded?.nextCursor ? async () => {
+    const next = await client.incidentOverview(props.jurisdictionId, archived, { cursor: loaded.nextCursor! });
+    setMore({ base: loaded.base, rows: [...loaded.rows, ...next.incidents], nextCursor: next.nextCursor });
+  } : undefined;
+  const rows = loaded?.rows ?? [];
+  const columns = useMemo<readonly OperationalTableColumn<IncidentOverviewRow>[]>(() => [
+    { id: "incident", header: "Incident", value: (row) => row.name, sortable: true, filterable: true, render: (row) => <strong>{row.name}</strong> },
+    { id: "status", header: "Status", value: overviewStatus, sortable: true, filterable: true,
+      render: (row) => <StatusBadge status={row.closedAt ? "unknown" : "info"}>{overviewStatus(row)}</StatusBadge> },
+    { id: "kind", header: "Type", value: (row) => KIND_LABELS[row.kind] ?? row.kind, sortable: true, filterable: true },
+    { id: "opened", header: "Opened", value: (row) => row.activatedAt, sortable: true, render: (row) => formatTime(row.activatedAt) },
+    { id: "closed", header: "Closed", value: (row) => row.closedAt ?? "", sortable: true, missingLabel: "Still open",
+      render: (row) => row.closedAt ? formatTime(row.closedAt) : "Still open" },
+    { id: "period", header: "Operational period", value: (row) => row.operationalPeriod?.label ?? "", filterable: true, missingLabel: "No period set" },
+    { id: "requests", header: "Open resource requests", value: (row) => row.openResourceRequests, sortable: true, align: "end" },
+    { id: "tasks", header: "Open tasks", value: (row) => row.openTasks, sortable: true, align: "end" },
+    { id: "records", header: "Board records", value: (row) => row.boardRecords, sortable: true, align: "end" },
+    { id: "organizations", header: "Participating organizations", value: (row) => row.participatingOrganizations, sortable: true, align: "end" },
+    { id: "guests", header: "Guest access", value: (row) => row.lockedAt ? "Locked" : "Guest grants apply", sortable: true, filterable: true,
+      render: (row) => row.lockedAt ? <StatusBadge status="warning">Locked</StatusBadge> : <span>Guest grants apply</span> },
+    ...(isAdmin ? [{ id: "actions", header: "Action", value: () => "Available actions", render: (row: IncidentOverviewRow) =>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {row.archivedAt
+          ? <Button disabled={busy} onClick={() => void run(() => client.unarchiveIncident(row.id), `${row.name} is back in the incident lists.`)}>Unarchive</Button>
+          : row.closedAt
+            ? <Button disabled={busy} onClick={() => void run(() => client.archiveIncident(row.id), `${row.name} is archived.`)}>Archive</Button>
+            : null}
+        {row.lockedAt
+          ? <Button disabled={busy} onClick={() => void run(() => client.unlockIncident(row.id), `Guest access to ${row.name} is restored.`)}>Lift lockdown</Button>
+          : <Button kind="danger" disabled={busy} onClick={() => void run(() => client.lockIncident(row.id), `Guest access to ${row.name} is locked.`)}>Lock guest access</Button>}
+      </div> }] : []),
+  ], [busy, client, isAdmin, run]);
+  const status = response.loading && !response.data ? "loading" : response.error && !response.data ? "error" : rows.length === 0 ? "empty" : "ready";
+
+  return <Panel title="Jurisdiction master view">
+    <div style={{ display: "grid", gap: 12 }}>
+      <p style={{ margin: 0, color: "var(--eoc-text-muted)" }}>Every incident this jurisdiction owns, with its open work and records.
+        A lockdown withholds one incident's boards and records from guest grants; members and participating organizations keep their access.</p>
+      <div style={{ maxWidth: 280 }}>
+        <EnumSelect label="Archived incidents" values={["exclude", "include", "only"]} value={archived}
+          onChange={(value) => setArchived(value as IncidentArchiveFilter)}
+          labels={{ exclude: "Hide archived", include: "Show archived too", only: "Archived only" }} />
+      </div>
+      <OperationalTable tableId="incident-master-view" caption="Incidents in this jurisdiction" columns={columns} rows={rows}
+        rowId={(row) => row.id} datasetKey={`${props.jurisdictionId}:${archived}`} status={status}
+        errorMessage={response.error ?? "The master view could not be loaded."} onRetry={response.reload}
+        emptyTitle={archived === "only" ? "No archived incidents" : "No incidents"}
+        emptyDescription={archived === "only" ? "An administrator archives a closed incident from this view." : "Activate an incident to see it here."}
+        viewState={tableState} onViewStateChange={setTableState} totalRows={null} hasPreviousPage={false} hasNextPage={false}
+        selectedIds={selected} onSelectionChange={setSelected} {...(loadMore ? { onLoadMore: loadMore } : {})} />
+    </div>
+  </Panel>;
 }
 
 /**

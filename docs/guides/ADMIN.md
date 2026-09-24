@@ -397,6 +397,30 @@ The audit trail is append-only. Corrections are new attributed actions rather
 than edits to history. Use domain screens for operational decisions; database
 access is not a routine administrative workflow.
 
+### Archive and lock down an incident
+
+The **Jurisdiction master view** on **Incident Setup** lists every incident the
+jurisdiction owns with its status, guest access, open resource requests, open
+tasks, board records, participating organizations, operational period and
+dates. Members read it; the **Action** column is for administrators.
+
+- **Archive** appears on a closed incident; an open incident cannot be
+  archived. An archived incident leaves the incident list and the command
+  bar's incident choices. Nothing is deleted: its records stay readable to
+  those who could read them, and it stays read-only because it is closed.
+  Choose **Archived only** or **Show archived too** under **Archived
+  incidents** to find it, and **Unarchive** to return it to the lists.
+- **Lock guest access** withholds one incident's boards and their records from
+  guest grants. The database enforces it, so every later guest read from a
+  screen, search or export is refused. A board a guest already has open keeps
+  receiving live changes until it is closed or reloaded. Members of the
+  jurisdiction and participating organizations keep their access. A lockdown
+  is off by default and never applied automatically. **Lift lockdown**
+  restores guest read. The incident list and the incident's setup show when
+  guest access is locked.
+
+Archiving, unarchiving, locking and lifting are recorded in the audit trail.
+
 ## Retention and audit export
 
 Nothing is deleted by default. On the **Records** tab a jurisdiction

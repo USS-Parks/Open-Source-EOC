@@ -25,6 +25,7 @@ function setup(options: { isAdmin?: boolean; positionKey?: string | null; detail
     activateIncident: vi.fn().mockResolvedValue({ incidentId: "incident-new" }),
     getIncident: vi.fn().mockResolvedValue(options.detail ?? detail),
     closeIncident: vi.fn().mockResolvedValue({ ok: true }),
+    incidentOverview: vi.fn().mockResolvedValue({ incidents: [], nextCursor: null }),
     getIncidentArea: vi.fn().mockResolvedValue({ incidentId: "incident-a", revision: 0, geometry: null, operationalPeriod: null, reason: "", createdAt: null, createdBy: null, positionId: null, createdByName: null, positionTitle: null }),
     incidentAreaHistory: vi.fn().mockResolvedValue([]),
     listIncidentParticipants: vi.fn().mockResolvedValue([]),
@@ -104,6 +105,7 @@ it("offers collaboration and meeting actions only where each integration runs, t
   const client = {
     listIncidents: vi.fn().mockResolvedValue([incident]),
     listIncidentTemplates: vi.fn().mockResolvedValue([]),
+    incidentOverview: vi.fn().mockResolvedValue({ incidents: [], nextCursor: null }),
     getIncident: vi.fn().mockResolvedValue(detail),
     getIncidentArea: vi.fn().mockResolvedValue({ incidentId: "incident-a", revision: 0, geometry: null, operationalPeriod: null, reason: "", createdAt: null, createdBy: null, positionId: null, createdByName: null, positionTitle: null }),
     incidentAreaHistory: vi.fn().mockResolvedValue([]),
@@ -134,4 +136,41 @@ it("offers collaboration and meeting actions only where each integration runs, t
   await open(["collab", "meetings"]);
   expect(screen.queryByRole("region", { name: "River Fire: collaboration channels" })).toBeNull();
   expect(screen.queryByRole("region", { name: "River Fire: meetings and briefings" })).toBeNull();
+});
+
+it("shows the jurisdiction master view and gives administrators archive and lockdown", async () => {
+  const flood = {
+    id: "incident-b", name: "Harbor Flood", kind: "daily_ops", activatedAt: "2026-09-20T08:00:00.000Z",
+    closedAt: "2026-09-21T08:00:00.000Z", archivedAt: null, lockedAt: "2026-09-21T09:00:00.000Z",
+    operationalPeriod: { label: "OP-3", startsAt: "2026-09-20T08:00:00.000Z", endsAt: "2026-09-20T20:00:00.000Z" },
+    openResourceRequests: 2, openTasks: 5, boardRecords: 12, participatingOrganizations: 3,
+  };
+  const client = {
+    listIncidents: vi.fn().mockResolvedValue([{ ...incident, lockedAt: "2026-09-21T09:00:00.000Z" }]),
+    listIncidentTemplates: vi.fn().mockResolvedValue([]),
+    incidentOverview: vi.fn().mockResolvedValue({ incidents: [flood], nextCursor: null }),
+    archiveIncident: vi.fn().mockResolvedValue({ ok: true }),
+    unlockIncident: vi.fn().mockResolvedValue({ ok: true }),
+  };
+  const show = async (isAdmin: boolean) => {
+    cleanup();
+    render(<IncidentsSurface client={client as unknown as ApiClient} jurisdictionId="j1" isAdmin={isAdmin} theme="light" />);
+    const table = await screen.findByRole("table", { name: "Incidents in this jurisdiction" });
+    return within(table).getByRole("row", { name: /Harbor Flood/ });
+  };
+
+  const row = await show(true);
+  for (const text of ["Closed", "Daily operations", "OP-3", "12", "Locked"]) expect(within(row).getByText(text)).toBeTruthy();
+  expect(screen.getByText("Guest access locked")).toBeTruthy();
+  fireEvent.click(within(row).getByRole("button", { name: "Archive" }));
+  await screen.findByText("Harbor Flood is archived.");
+  expect(client.archiveIncident).toHaveBeenCalledWith("incident-b");
+  fireEvent.click(within(await screen.findByRole("row", { name: /Harbor Flood/ })).getByRole("button", { name: "Lift lockdown" }));
+  await screen.findByText("Guest access to Harbor Flood is restored.");
+  expect(client.unlockIncident).toHaveBeenCalledWith("incident-b");
+  fireEvent.change(screen.getByLabelText("Archived incidents"), { target: { value: "only" } });
+  await waitFor(() => expect(client.incidentOverview).toHaveBeenLastCalledWith("j1", "only"));
+
+  const readOnly = await show(false);
+  expect(within(readOnly).queryByRole("button")).toBeNull();
 });

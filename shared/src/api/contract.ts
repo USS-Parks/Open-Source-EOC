@@ -41,6 +41,7 @@ DELETE /api/v1/contact-groups/:groupId
 DELETE /api/v1/contacts/:contactId
 DELETE /api/v1/guests/:grantId
 DELETE /api/v1/incidents/:incidentId/dashboard-configs/:key
+DELETE /api/v1/incidents/:incidentId/lockdown
 DELETE /api/v1/incidents/:incidentId/saved-state/:kind/:key
 DELETE /api/v1/jurisdictions/:jurisdictionId/members/:personId
 DELETE /api/v1/positions/:positionId/assignments/:personId
@@ -123,6 +124,7 @@ GET /api/v1/jurisdictions/:jurisdictionId/forms
 GET /api/v1/jurisdictions/:jurisdictionId/forms/:key
 GET /api/v1/jurisdictions/:jurisdictionId/guests
 GET /api/v1/jurisdictions/:jurisdictionId/incidents
+GET /api/v1/jurisdictions/:jurisdictionId/incidents/overview
 GET /api/v1/jurisdictions/:jurisdictionId/ipaws
 GET /api/v1/jurisdictions/:jurisdictionId/ipaws/sends
 GET /api/v1/jurisdictions/:jurisdictionId/jic/inquiries
@@ -214,6 +216,7 @@ POST /api/v1/iap/:iapId/revisions
 POST /api/v1/iap/:iapId/submit
 POST /api/v1/incidents/:incidentId/aar
 POST /api/v1/incidents/:incidentId/aar/observations
+POST /api/v1/incidents/:incidentId/archive
 POST /api/v1/incidents/:incidentId/briefings
 POST /api/v1/incidents/:incidentId/catalog/:sourceId/onboard
 POST /api/v1/incidents/:incidentId/close
@@ -227,11 +230,13 @@ POST /api/v1/incidents/:incidentId/esf-assessments/:framework/:esf/decisions
 POST /api/v1/incidents/:incidentId/iap
 POST /api/v1/incidents/:incidentId/lifeline-assessments
 POST /api/v1/incidents/:incidentId/lifeline-assessments/:lifeline/decisions
+POST /api/v1/incidents/:incidentId/lockdown
 POST /api/v1/incidents/:incidentId/meetings
 POST /api/v1/incidents/:incidentId/operational-relationships
 POST /api/v1/incidents/:incidentId/participants
 POST /api/v1/incidents/:incidentId/participants/:participantId/revoke
 POST /api/v1/incidents/:incidentId/tasks/:taskId/complete
+POST /api/v1/incidents/:incidentId/unarchive
 POST /api/v1/jic/approvals/receive
 POST /api/v1/jic/inquiries/:inquiryId/answer
 POST /api/v1/jic/inquiries/:inquiryId/assign
@@ -402,6 +407,7 @@ for (const key of machineRoutes) {
 
 const tagAliases: Readonly<Record<string, string>> = {
   "ack": "mass-notifications",
+  "archive": "incidents",
   "contact-groups": "contacts",
   "corrective-actions": "aar",
   "dashboard-configs": "dashboards",
@@ -409,6 +415,7 @@ const tagAliases: Readonly<Record<string, string>> = {
   "guests": "auth",
   "incident-templates": "incidents",
   "integrations": "auth",
+  "lockdown": "incidents",
   "me": "auth",
   "members": "auth",
   "operational-area": "incidents",
@@ -422,6 +429,7 @@ const tagAliases: Readonly<Record<string, string>> = {
   "status-queries": "facilities",
   "templates": "boards",
   "tracked-objects": "tracking",
+  "unarchive": "incidents",
 };
 
 function routeTag(path: string): string {
