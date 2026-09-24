@@ -4630,3 +4630,53 @@ follow here.
   and 659 tests.
 - **Evidence level:** unit, real-database and browser.
 - **Rollback:** revert the commit.
+- **Commit:** `c68b0b2`.
+
+## Partner sharing PS4: incident-wide threads
+
+- **What changed.** Migration `0136_incident_wide_threads.sql`: a thread's
+  audience is its members (every thread until now) or the whole incident. An
+  incident-wide thread belongs to the incident's owner, has no member rows,
+  and is read by everyone who can read the incident, viewers included, from
+  the live grant, so revocation and expiry end it. The owner's writers and
+  the incident's contributors and coordinators start and post in one while
+  the incident is open, through SECURITY DEFINER functions that set the
+  owner, the sender and the times and write `message.sent` into the owner's
+  record under its records policy; restrictive policies keep incident-wide
+  threads and their member rows from being made by hand. New route
+  `GET /api/v1/incidents/:incidentId/threads`; thread creation takes
+  `audience`. Messages carry the sender's organization (its incident grant's
+  when it wrote for a partner). The Messages screen shows a partner the
+  incident's threads, starts incident-wide threads ("Everyone on the
+  incident"), and names each sender's organization; a member chooses a
+  position or the whole incident.
+- **Defaults and deviations.** Decisions 3 and 4 as written. Reading
+  continues after close while the grant lasts (decision 7); posting and new
+  threads are refused once the incident closes, as every other incident
+  write is. Attachments stay out of scope. The owner's message retention
+  applies to partner readers as to its members.
+- **Independent review.** Nothing grants privileges. Applied: retention read
+  through a definer helper so partners see the owner's window; a sender's
+  position kept only when it is the owner's, so a partner writing from its
+  own desk is named by its grant; posting and starting refused on a closed
+  incident under a share lock; a revoked partner that started a thread no
+  longer finds it; restrictive insert policies for incident-wide threads and
+  their member rows.
+- **Schema, contract, dependencies.** Migration 0136; the contract adds the
+  incident thread route; `docs/API.md` regenerated. No dependencies.
+- **Verification.** `incident-thread-sharing.test.ts` passes 7 of 7 (a
+  partner contributor reads, posts and is deduplicated, named by its
+  organization; an owner member outside any member list reads and posts;
+  the audit row and the owner's activity feed; a partner starts a thread and
+  a viewer cannot; members threads stay closed to partners, viewers read but
+  cannot post, outsiders get 404, direct writes are refused; a partner's own
+  position is not kept; retention hides the same messages from partners;
+  revocation; read-only after close) with `messaging.test.ts` (16 tests in
+  all). `partner-sharing-browser.test.ts` passes 3 of 3: the Energy liaison
+  starts an incident-wide thread and posts, and the county reads the message
+  named "A. Brooks - CA Energy Commission". With the communications,
+  operator screens, app end-to-end, pagination, API docs and incident
+  overview suites: 7 files, 52 tests pass. The web workspace tests pass 6 of
+  6, including a partner-mode case. `pnpm check:static` passes.
+- **Evidence level:** unit, real-database and browser.
+- **Rollback:** revert the commit.

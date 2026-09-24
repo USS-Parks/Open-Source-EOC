@@ -87,6 +87,30 @@ describe("partner sharing on the North Coast Storm exercise", () => {
     await liaison.context().close();
   });
 
+  it("lets the utility liaison post in an incident-wide thread that the county reads", async () => {
+    const liaison = await signIn("a.brooks@cec.example", NORTH_COAST_PASSWORD);
+    await liaison.locator('select[aria-label="Selected incident"] option:checked', { hasText: "North Coast Storm" }).waitFor({ state: "attached" });
+    await rail(liaison, "Messages");
+    await liaison.getByLabel("Thread title").fill("Utility restoration");
+    await liaison.getByRole("button", { name: "Start thread" }).click();
+    await liaison.locator(".d27-recipient-context").getByText("Everyone on the incident").waitFor();
+    await liaison.getByRole("textbox", { name: "Message" }).fill("Substation 4 back on line at 10:15.");
+    await liaison.getByRole("button", { name: "Send" }).click();
+    await liaison.getByRole("status").filter({ hasText: "Message stored" }).waitFor();
+    await liaison.screenshot({ path: join(SHOTS, "liaison-messages.png") });
+    await liaison.context().close();
+
+    const county = await signIn("jordan.lee@humboldt.example", NORTH_COAST_PASSWORD);
+    await rail(county, "Messages");
+    await county.getByRole("button", { name: /Utility restoration/ }).click();
+    const message = county.getByRole("list", { name: "Stored messages" }).getByRole("listitem")
+      .filter({ hasText: "Substation 4 back on line at 10:15." });
+    await message.waitFor();
+    expect(await message.textContent()).toContain("CA Energy Commission");
+    await county.screenshot({ path: join(SHOTS, "county-messages.png") });
+    await county.context().close();
+  });
+
   it("shows a person outside the incident none of it", async () => {
     const outsider = await signIn(OUTSIDER.email, OUTSIDER.password);
     await rail(outsider, "Resources");

@@ -500,6 +500,7 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 
 ### threads
 
+- `GET /api/v1/incidents/:incidentId/threads`: Read incidents threads (auth: bearer; audience: operator)
 - `GET /api/v1/jurisdictions/:jurisdictionId/threads`: Read jurisdictions threads (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/threads`: Run jurisdictions threads (auth: bearer; audience: operator)
 - `GET /api/v1/threads/:threadId/export`: Read threads export (auth: bearer; audience: operator)

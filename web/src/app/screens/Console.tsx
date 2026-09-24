@@ -750,7 +750,8 @@ function Center(props: {
       );
     case "messages":
       return <MessagesWorkspace client={props.client} jurisdictionId={props.jurisdictionId}
-        incidentId={props.incidentId} incidentName={props.incidentName} isAdmin={props.isAdmin} />;
+        incidentId={props.incidentId} incidentName={props.incidentName} isAdmin={props.isAdmin}
+        isMember={props.memberships.some((m) => m.jurisdictionId === props.jurisdictionId)} />;
     case "smartforms":
       return <SmartFormsSurface client={props.client} jurisdictionId={props.discoveryJurisdictionId}
         incidentId={props.incidentId} onOpenMap={() => props.onNavigate({ kind: "map" })} />;

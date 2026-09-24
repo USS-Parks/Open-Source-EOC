@@ -13,6 +13,11 @@ export interface MessagesWorkspaceProps {
   readonly incidentName?: string | null;
   /** Jurisdiction administrators also set message retention and incident-record inclusion. */
   readonly isAdmin?: boolean;
+  /**
+   * False for a partner on another organization's incident: it reads and
+   * posts in the incident's threads and starts incident-wide ones only.
+   */
+  readonly isMember?: boolean;
 }
 
 function recipientDescription(recipient: ThreadRecipient): string {
@@ -24,11 +29,19 @@ function recipientDescription(recipient: ThreadRecipient): string {
 }
 
 function recipientSummary(thread: Thread): string {
+  if (thread.audience === "incident") return "Everyone on the incident";
   return thread.recipients.map(recipientDescription).join("; ") || "Recipient context unavailable";
 }
 
+function threadContext(thread: Thread): string {
+  if (thread.audience === "incident") return "Incident-wide thread";
+  return thread.incidentId ? "Incident thread" : "Jurisdiction thread";
+}
+
 export function MessagesWorkspace(props: MessagesWorkspaceProps) {
+  const member = props.isMember !== false;
   const [scope, setScope] = useState(props.incidentId ? "incident" : "all");
+  const [audience, setAudience] = useState(member ? "position" : "incident");
   const [selected, setSelected] = useState<string | null>(null);
   const [toPosition, setToPosition] = useState("");
   const [title, setTitle] = useState("");
@@ -42,14 +55,19 @@ export function MessagesWorkspace(props: MessagesWorkspaceProps) {
   const [inIncidentRecord, setInIncidentRecord] = useState(true);
   const [settingsSaved, setSettingsSaved] = useState<string | null>(null);
 
-  const threads = useAsync(
-    () => props.client.listThreads(props.jurisdictionId),
-    [props.client, props.jurisdictionId, reloadThreads],
-  );
+  const threads = useAsync(async () => {
+    // A partner reads only the incident's threads; a member also has its jurisdiction's.
+    const [own, incident] = await Promise.all([
+      member ? props.client.listThreads(props.jurisdictionId) : Promise.resolve([] as Thread[]),
+      props.incidentId ? props.client.listIncidentThreads(props.incidentId) : Promise.resolve([] as Thread[]),
+    ]);
+    return [...new Map([...own, ...incident].map((thread) => [thread.id, thread])).values()];
+  }, [props.client, props.jurisdictionId, props.incidentId, member, reloadThreads]);
   const positions = useAsync(
-    () => props.client.listPositions(props.jurisdictionId),
-    [props.client, props.jurisdictionId],
+    () => member ? props.client.listPositions(props.jurisdictionId) : Promise.resolve([]),
+    [props.client, props.jurisdictionId, member],
   );
+  const incidentWide = Boolean(props.incidentId) && scope === "incident" && audience === "incident";
   const visibleThreads = useMemo(
     () => (threads.data ?? []).filter((thread) =>
       scope === "all" || (props.incidentId !== null && props.incidentId !== undefined
@@ -79,6 +97,19 @@ export function MessagesWorkspace(props: MessagesWorkspaceProps) {
   };
 
   const createThread = () => void run(async () => {
+    if (incidentWide && props.incidentId) {
+      const result = await props.client.createThread(props.jurisdictionId, {
+        kind: "group",
+        title: title.trim() || `${props.incidentName ?? "Incident"} coordination`,
+        incidentId: props.incidentId,
+        audience: "incident",
+        members: [],
+      });
+      setTitle("");
+      setSelected(result.id);
+      setReloadThreads((value) => value + 1);
+      return;
+    }
     if (!toPosition) throw new Error("Choose a recipient position.");
     const position = (positions.data ?? []).find((candidate) => candidate.id === toPosition);
     const result = await props.client.createThread(props.jurisdictionId, {
@@ -149,16 +180,28 @@ export function MessagesWorkspace(props: MessagesWorkspaceProps) {
         <div className="d27-stack">
           <Panel title="New thread">
             <div className="d27-form-stack">
-              <EnumSelect
-                label="Recipient position"
-                values={positionOptions.map((position) => position.id)}
-                value={selectedPosition}
-                onChange={setToPosition}
-                labels={Object.fromEntries(positionOptions.map((position) => [position.id, position.title]))}
-                selectProps={{ disabled: busy || positionOptions.length === 0 }}
-              />
+              {props.incidentId && scope === "incident" ? (
+                <EnumSelect
+                  label="Audience"
+                  values={member ? ["position", "incident"] : ["incident"]}
+                  value={audience}
+                  onChange={setAudience}
+                  labels={{ position: "A position", incident: "Everyone on the incident" }}
+                  selectProps={{ disabled: busy }}
+                />
+              ) : null}
+              {incidentWide ? null : (
+                <EnumSelect
+                  label="Recipient position"
+                  values={positionOptions.map((position) => position.id)}
+                  value={selectedPosition}
+                  onChange={setToPosition}
+                  labels={Object.fromEntries(positionOptions.map((position) => [position.id, position.title]))}
+                  selectProps={{ disabled: busy || positionOptions.length === 0 }}
+                />
+              )}
               <TextField label="Thread title" value={title} onChange={setTitle} />
-              <Button kind="primary" onClick={createThread} disabled={busy || !selectedPosition}>
+              <Button kind="primary" onClick={createThread} disabled={busy || (!incidentWide && !selectedPosition)}>
                 Start thread
               </Button>
             </div>
@@ -184,7 +227,7 @@ export function MessagesWorkspace(props: MessagesWorkspaceProps) {
                     >
                       <span>{thread.title || "Untitled thread"}</span>
                       <small>{recipientSummary(thread)}</small>
-                      <small>{thread.incidentId ? "Incident thread" : "Jurisdiction thread"}</small>
+                      <small>{threadContext(thread)}</small>
                     </button>
                   </li>
                 ))}
@@ -215,7 +258,7 @@ export function MessagesWorkspace(props: MessagesWorkspaceProps) {
                 <span>Recipients</span>
                 <strong>{recipientSummary(activeSummary)}</strong>
                 <StatusBadge status={activeSummary.incidentId ? "info" : "unknown"}>
-                  {activeSummary.incidentId ? "Incident context" : "Jurisdiction context"}
+                  {activeSummary.audience === "incident" ? "Incident-wide" : activeSummary.incidentId ? "Incident context" : "Jurisdiction context"}
                 </StatusBadge>
                 <Button onClick={exportThread} disabled={busy}>Export thread</Button>
               </div>
@@ -227,6 +270,7 @@ export function MessagesWorkspace(props: MessagesWorkspaceProps) {
                     <div>
                       <strong>{message.sender ?? "Unknown sender"}</strong>
                       {message.senderPosition ? <span> - {message.senderPosition}</span> : null}
+                      {message.senderOrganization ? <span> - {message.senderOrganization}</span> : null}
                       <time dateTime={message.at}> - {new Date(message.at).toLocaleString()}</time>
                     </div>
                     <p>{message.body}</p>

@@ -106,6 +106,7 @@ GET /api/v1/incidents/:incidentId/saved-state
 GET /api/v1/incidents/:incidentId/saved-state/:kind/:key
 GET /api/v1/incidents/:incidentId/summary
 GET /api/v1/incidents/:incidentId/tasks
+GET /api/v1/incidents/:incidentId/threads
 GET /api/v1/integrations
 GET /api/v1/jurisdictions/:jurisdictionId/audit/export
 GET /api/v1/jurisdictions/:jurisdictionId/boards

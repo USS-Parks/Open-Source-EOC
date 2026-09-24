@@ -573,6 +573,8 @@ export interface Thread {
   readonly kind: string;
   readonly title: string;
   readonly incidentId: string | null;
+  /** Its members only, or everyone who can read its incident. */
+  readonly audience?: "members" | "incident";
   readonly recipients: readonly ThreadRecipient[];
 }
 export interface Message {
@@ -580,6 +582,7 @@ export interface Message {
   readonly seq: number;
   readonly sender: string | null;
   readonly senderPosition: string | null;
+  readonly senderOrganization?: string;
   readonly body: string;
   readonly at: string;
 }
@@ -1397,12 +1400,21 @@ export class ApiClient {
     );
     return r.threads;
   }
+  /** An incident's threads: its incident-wide ones and the member threads the reader is in. */
+  async listIncidentThreads(incidentId: string): Promise<Thread[]> {
+    const r = await this.request<{ threads: Thread[] }>(
+      "GET",
+      `/api/v1/incidents/${incidentId}/threads`,
+    );
+    return r.threads;
+  }
   createThread(
     jurisdictionId: string,
     body: {
       kind: "direct" | "group";
       title?: string;
       incidentId?: string;
+      audience?: "members" | "incident";
       members: ReadonlyArray<{ kind: "person" | "position"; id: string }>;
     },
   ): Promise<{ id: string }> {

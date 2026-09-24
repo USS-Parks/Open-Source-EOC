@@ -53,6 +53,7 @@ describe("messages workspace", () => {
     const createThread = vi.fn(async () => ({ id: "thread-2" }));
     const client = {
       listThreads: vi.fn(async () => [thread]),
+      listIncidentThreads: vi.fn(async () => [thread]),
       listPositions: vi.fn(async () => [{ id: "position-1", key: "operations", title: "Operations Section Chief" }]),
       listMessages: vi.fn(async () => [{
         id: "message-1",
@@ -93,6 +94,7 @@ describe("messages workspace", () => {
     const createThread = vi.fn(async () => ({ id: "thread-new" }));
     const client = {
       listThreads: vi.fn(async () => []),
+      listIncidentThreads: vi.fn(async () => []),
       listPositions: vi.fn(async () => [{ id: "position-1", key: "operations", title: "Operations Section Chief" }]),
       listMessages: vi.fn(async () => []),
       createThread,
@@ -116,11 +118,41 @@ describe("messages workspace", () => {
     ));
   });
 
+  it("gives a partner the incident's threads and incident-wide threads only", async () => {
+    const createThread = vi.fn(async () => ({ id: "thread-wide" }));
+    const wide: Thread = { id: "thread-wide", kind: "group", title: "Storm coordination", incidentId, audience: "incident", recipients: [] };
+    const client = {
+      listThreads: vi.fn(),
+      listIncidentThreads: vi.fn(async () => [wide]),
+      listPositions: vi.fn(),
+      listMessages: vi.fn(async () => [{
+        id: "message-1", seq: 1, sender: "A. Brooks", senderPosition: null,
+        senderOrganization: "CA Energy Commission", body: "Substation 4 is flooded.", at: "2026-09-21T18:05:00.000Z",
+      }]),
+      createThread,
+      postMessage: vi.fn(),
+    } as unknown as ApiClient;
+
+    render(<MessagesWorkspace client={client} jurisdictionId={jurisdictionId} incidentId={incidentId} incidentName="Redwood Fire" isMember={false} />);
+    const listed = await screen.findByRole("button", { name: /Storm coordination/ });
+    expect(listed.textContent).toContain("Everyone on the incident");
+    expect((await screen.findByText("Substation 4 is flooded.")).closest("li")?.textContent).toContain("CA Energy Commission");
+    expect(client.listThreads).not.toHaveBeenCalled();
+    expect(client.listPositions).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("Recipient position")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Thread title"), { target: { value: "Utility restoration" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start thread" }));
+    await waitFor(() => expect(createThread).toHaveBeenCalledWith(jurisdictionId,
+      { kind: "group", title: "Utility restoration", incidentId, audience: "incident", members: [] }));
+  });
+
   it("exports the selected thread, and lets only an administrator save message settings", async () => {
     const exportThread = vi.fn(async () => ["2026-09-21T18:05:00.000Z Alex Operator: Confirm the route."]);
     const setMessagingSettings = vi.fn(async () => ({ ok: true as const }));
     const client = {
       listThreads: vi.fn(async () => [thread]),
+      listIncidentThreads: vi.fn(async () => []),
       listPositions: vi.fn(async () => []),
       listMessages: vi.fn(async () => []),
       exportThread,

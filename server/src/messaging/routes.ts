@@ -6,6 +6,7 @@ import { pageQuery } from "../db/cursor.js";
 import {
   createThread,
   exportThread,
+  listIncidentThreads,
   listMessages,
   listThreads,
   postMessage,
@@ -16,9 +17,11 @@ const CreateThreadBody = z.object({
   kind: z.enum(["direct", "group"]),
   title: z.string().max(200).optional(),
   incidentId: z.string().uuid().optional(),
+  audience: z.enum(["members", "incident"]).optional(),
+  // A members thread needs at least one; an incident-wide thread has none.
   members: z
     .array(z.object({ kind: z.enum(["person", "position"]), id: z.string().uuid() }))
-    .min(1),
+    .default([]),
 });
 
 const PostBody = z.object({
@@ -57,6 +60,19 @@ export function messagingRoutes(
       const page = z.object(pageQuery).parse(req.query);
       const { items, nextCursor } = await withPerson(sql, req.principal.person.id, (tx) =>
         listThreads(tx, req.principal, jurisdictionId, page),
+      );
+      return reply.send({ threads: items, nextCursor });
+    },
+  );
+
+  app.get(
+    "/api/v1/incidents/:incidentId/threads",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { incidentId } = z.object({ incidentId: z.string().uuid() }).parse(req.params);
+      const page = z.object(pageQuery).parse(req.query);
+      const { items, nextCursor } = await withPerson(sql, req.principal.person.id, (tx) =>
+        listIncidentThreads(tx, incidentId, page),
       );
       return reply.send({ threads: items, nextCursor });
     },
