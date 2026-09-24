@@ -3435,3 +3435,61 @@ tagging remain separately gated as section 1 of the roster states.
   run internally.
 - **Result:** wave W4 is complete: W4.0 through W4.13 are receipted, and the
   gate is green after the recorded fix.
+
+## V1 W6.4: installer rebuild
+
+- **What changed.**
+  - The installer's version comes from the root `package.json` in
+    `Stage-Installer.ps1` and `Build-Installer.ps1`; the `.iss` refuses to
+    compile without an explicit version, and the installer README drops
+    `0.0.0`.
+  - With `-IncludeOptionalBasemaps`, the stage requires the California,
+    buildings and overlays archives and the address search gazetteer and stops
+    if one is missing, where it used to skip a missing archive silently.
+    `-OptionalBasemapRoot` lets a release workspace keep the ignored archives
+    outside the checkout.
+  - The gazetteer is staged at `tools/basemap/out/gazetteer.tsv`, outside
+    `web/public` so the static host never serves it, and the launcher sets
+    `OPENEOC_GAZETTEER_PATH` for every profile when the file exists and the
+    variable is unset.
+  - Two shipping defects fixed: the stage now carries `web/public/icons`,
+    which the service worker precaches, so the worker no longer fails to
+    install in an installed copy; and the stage leaves out
+    `server/src/__tests__` (162 files with synthetic fixture passwords), so
+    the only credentials shipped are the demo seed's.
+  - The installer README gains the check for installing on a second computer
+    from media with no network (verify the hash, install offline, start the
+    demo profile, sign in, open the map with the California basemap and
+    address search, record timings and screenshots); `docs/WINDOWS-DESKTOP.md`
+    covers the gazetteer and points to it. AR7 in the parity matrix and facet
+    register and INV-3 in the facet register state the rebuilt setup and its
+    hash and stay partial.
+- **Defaults and deviations.** The gazetteer travels with the archives because
+  it is built from `california.pmtiles`; the build in lane a matches the
+  address search unit's byte for byte. The icons fix, the test exclusion and
+  the refusal on a missing archive go beyond the roster wording.
+- **Schema, contract, dependencies:** none.
+- **Verification.** In the lane, tag `a`, on `5875c2f`: tsc and eslint exit 0;
+  `pnpm test:desktop` 25 passed; link checker ok, 92 files. The new installer
+  tests failed 3 of 8 against the base scripts (version, icons and gazetteer,
+  test exclusion). Desktop build 1.7 s. Stage 212.6 s with the Node runtime
+  from `C:/Program Files/nodejs` and PostgreSQL from the canonical test
+  runtime, both only read; `pnpm deploy` offline, 239 packages, 0 downloads;
+  the isolated module graph loaded; 9,754 files, 1,918,888,475 bytes,
+  including `california.pmtiles` 769,826,123, `buildings.pmtiles` 343,283,882
+  (its SHA-256 matching its Overture sidecar), `overlays.pmtiles` 85,793,945
+  and `gazetteer.tsv` 144,343,915. Inno Setup compiled in 578.0 s:
+  `Open-Source-EOC-Setup-0.9.0.exe`, 1,351,643,919 bytes, SHA-256
+  `dafddeb50fcdfdf9a85519d24a88e21ae1c87420357ad22d86927802b112a153`, in the
+  ignored `deploy/windows/out/installer/` of lane a. The files ISCC
+  compressed match the stage manifest, 9,754 of 9,754. The stage holds no
+  cluster data, test password, log, `.env` or profile secret; outside the
+  PostgreSQL binaries the only credential is the demo's synthetic password.
+- **Evidence level:** unit, build and package inspection. The setup was not
+  run on the build computer, because it would replace the installed copy.
+- **Deferred:** the second-machine install from media with no network, by the
+  README's check, which is Basho's external action and leaves AR7 and INV-3
+  partial until recorded; code signing; stopping running profiles before an
+  upgrade install.
+- **Rollback:** revert both commits; the generated stage and setup are ignored
+  files and can be deleted.
