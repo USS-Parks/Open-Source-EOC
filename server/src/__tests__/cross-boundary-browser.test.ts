@@ -237,13 +237,15 @@ describe("cross-boundary incident exercise in a real browser", () => {
     const shelters = owner.getByTestId("impact-kpi-shelters");
     await shelters.waitFor();
     await owner.getByText("Map tools and saved views", { exact: true }).click();
-    const twoShelters = owner.waitForResponse(async (r) => {
-      if (!r.url().includes(`/api/v1/incidents/${incidentA}/impact?bbox=`) || r.status() !== 200) return false;
-      return (await r.json()).impact.categories.shelters.value === 2;
-    });
-    await owner.getByRole("button", { name: "Zoom to extent" }).click();
-    await twoShelters;
-    await shelters.getByText("2", { exact: true }).waitFor();
+    // "Zoom to extent" frames the features loaded so far. Until the partner's
+    // shelter layer has loaded it frames only the road closure, where no
+    // shelter is in view, so zoom again until the shelters are framed.
+    const zoomToExtent = owner.getByRole("button", { name: "Zoom to extent" });
+    await expect.poll(async () => {
+      if (await shelters.getByText("2", { exact: true }).count()) return true;
+      await zoomToExtent.click();
+      return false;
+    }, { timeout: 60_000, intervals: [1_500] }).toBe(true);
     await owner.screenshot({ path: join(SHOTS, "cross-boundary-owner-cop-light-1440.png"), fullPage: false });
     expect(await closedRoads(owner, incidentA)).toBe(1);
 

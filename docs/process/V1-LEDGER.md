@@ -3660,3 +3660,30 @@ tagging remain separately gated as section 1 of the roster states.
 - **Evidence level:** unit, browser and document.
 - **Deferred:** the NVDA and VoiceOver pass (Basho).
 - **Rollback:** revert the commit.
+
+## V1 M5 milestone gate
+
+- **Command:** `pnpm check:gate` with `OPENEOC_TEST_DB_TAG=gate` on `main` at
+  `1557172`, with no lane running and the checkout untouched for the run
+  (three read-only auditors were reading files).
+- **Static gates:** TypeScript, ESLint, license scan (303 packages), link
+  checker (94 files), advisory gate (0 high or critical, 0 exceptions) and the
+  desktop and installer tests (25 passed) all green.
+- **Serial suite:** 267 of 268 files and 1,531 of 1,532 tests passed in 1,432
+  seconds. The one failure, `cross-boundary-browser`, waited 30 seconds for
+  the shelters indicator to read 2 after "Zoom to extent". A dump on a
+  reproduced run showed why: the walk's wait for an impact response of 2
+  matched the response for the state-wide view from before the zoom, and
+  "Zoom to extent" frames only the features loaded so far, so when the
+  partner's shelter layer had not arrived it framed the road closure alone, a
+  box about 2 km across with no shelter in it, and the indicator correctly
+  read 0. The product was right; the walk was not. It now zooms again until
+  the shelters are framed. This is the wait the D33 part two receipt recorded
+  as failing under load with its cause not established.
+- **Re-runs:** `cross-boundary-browser` alone four times after the change, 4 of
+  4 passed (before it, 1 of 3 alone reproduced the failure);
+  `pnpm exec vitest run server/src/__tests__/load.test.ts --maxWorkers=1`,
+  which the chain had not reached, 4 of 4 passed.
+- **Result:** `M5` is green after the recorded walk fix. Hosted CI still
+  starts no job (the billing notice recorded in "V1 CI stability: the
+  deep-link race and the recurring red runs").
