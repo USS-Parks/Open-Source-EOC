@@ -2737,3 +2737,31 @@ tagging remain separately gated as section 1 of the roster states.
   recorded.
 - **Rollback:** revert the commit; the county file is still served, so the
   runtime fetch returns unchanged.
+
+## V1 CI stability part two: a linked record outside the loaded rows
+
+- **What was wrong.** The incident lifecycle lane's integration run failed the
+  same `app-e2e.test.ts:783` wait after the workspace loader fix had landed.
+  A state dump showed the address again without its `record` parameter, but
+  with `incident` and `period` intact. The second writer: when a board's
+  table finished loading, the design kit's `OperationalTable` reconciled its
+  selection to the loaded rows and reported the change, and `BoardView` turned
+  that report into a navigation without the record. A record opened by link
+  that is not among the loaded rows (another incident's record, a record on a
+  later page, one a filter hides) lost the link whenever the table loaded
+  before the record detail answered.
+- **What changed.** `web/src/boards/BoardView.tsx` ignores the table's
+  "rows-reconciled" report when the selection is the route's opened record;
+  only the operator's own row choice changes it. The kit table is unchanged,
+  since its reconciling is right for bulk selection.
+- **Schema, contract, dependencies:** none.
+- **Verification.** Tag `main`: a new jsdom test in
+  `web/src/boards/__tests__/workspace.test.tsx`, "keeps a linked record that
+  is not among the loaded rows", failed on the old code (the select callback
+  was called once) and passes with the change; `pnpm exec vitest run
+  web/src/boards/__tests__ web/src/app/__tests__/board-record-context.test.tsx`,
+  7 files and 56 tests passed; the web package's tsc exit 0; `pnpm exec
+  vitest run` over app-e2e, boards-workspace-browser, board-records-browser
+  and board-views-browser with `--maxWorkers=2`, 4 files and 10 tests passed.
+- **Evidence level:** unit and browser.
+- **Rollback:** revert the commit.

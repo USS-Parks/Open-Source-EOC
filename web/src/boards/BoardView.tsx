@@ -78,8 +78,11 @@ function ResolvedBoardView(props: Parameters<typeof BoardView>[0] & {
     if (props.onViewStateChange) props.onViewStateChange(next, reason);
     else setLocalState(next);
   };
-  const changeSelection = (next: ReadonlySet<string>) => {
+  const changeSelection = (next: ReadonlySet<string>, reason: string) => {
     const newest = [...next].find((id) => !selectedIds.has(id)) ?? [...next][0] ?? null;
+    // An opened record may sit outside the loaded rows, as a linked record on
+    // another page or outside the incident does; only the operator changes it.
+    if (props.onSelectRecord && reason === "rows-reconciled") return;
     if (props.onSelectRecord) props.onSelectRecord(newest);
     else setLocalSelection(newest ? new Set([newest]) : new Set());
   };

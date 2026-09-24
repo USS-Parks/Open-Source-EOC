@@ -52,6 +52,26 @@ describe("board workspace", () => {
     expect(onSelect).toHaveBeenLastCalledWith("record-2");
   });
 
+  it("keeps a linked record that is not among the loaded rows", () => {
+    const onSelect = vi.fn();
+    const view = shelters.views.find((candidate) => candidate.key === "all")!;
+    render(
+      <BoardView
+        template={shelters}
+        viewKey="all"
+        records={records}
+        viewState={createOperationalTableViewState(view.columns.map((id) => ({ id })))}
+        onViewStateChange={() => undefined}
+        selectedRecordId="record-9"
+        onSelectRecord={onSelect}
+      />,
+    );
+    expect(screen.getByText("Hoopa High Gym")).toBeTruthy();
+    expect(onSelect).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText("Select record record-2"));
+    expect(onSelect).toHaveBeenLastCalledWith("record-2");
+  });
+
   it("uses the 81A input layout and preserves values after an awaited rejection", async () => {
     const onSubmit = vi.fn(async () => { throw new Error("Write authority changed"); });
     render(
