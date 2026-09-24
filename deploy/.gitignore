@@ -1,6 +1,2 @@
-# Written by install.sh and backup.sh on the host: the fetched map archives,
-# a supplied TLS pair, the first administrator's password and backups.
+# The basemap toolchain's local build workspace (tools/basemap).
 basemap/
-tls/
-admin-password.txt*
-backups/

@@ -32,7 +32,7 @@ commit.
 ## What to include
 
 - The version, from `GET /api/v1/health` or [the changelog](CHANGELOG.md), and
-  the deployment path: Docker, Windows desktop, or a source checkout.
+  the deployment path: the Windows desktop or a source checkout.
 - The affected part: the server, the web client, or the deploy scripts.
 - Steps to reproduce, using synthetic data.
 - The impact: what an attacker can read, change or stop, and what access they
@@ -51,9 +51,8 @@ In scope:
 - the server (`server/`) and the contracts it shares with the client
   (`shared/`);
 - the web client (`web/`), including the offline field client;
-- the deploy scripts and configuration in `deploy/`: the Docker install,
-  upgrade, backup and restore scripts, the Windows desktop launcher and the
-  installer build.
+- the deploy tooling in `deploy/`: the Windows desktop launcher, its backup
+  and upgrade actions, and the installer build.
 
 What matters most: a way around sign-in, two-step sign-in, roles, row-level
 security or the boundary between jurisdictions; any read by someone with no

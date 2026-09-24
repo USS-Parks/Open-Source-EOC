@@ -20,8 +20,10 @@ and no release has been tagged.
   assessment, resources, JIC review, an audit chronology, federation between
   jurisdictions, and field forms that work offline.
 - A web application served by one Node process with one PostgreSQL and
-  PostGIS database. It is packaged for a Linux host with Docker and for a
-  Windows computer as a desktop application.
+  PostGIS database. It runs on Windows and macOS machines: today as a Windows
+  desktop application, with a shared Windows host and macOS scheduled in
+  [the readiness plan](process/READINESS-PSPR-2026-09-24.md). There is no
+  Linux or Docker deployment.
 - Open source under Apache-2.0. There are no seat licenses, and read-only
   viewers cost nothing.
 - Built on the standards an EOC exchanges: CAP, EDXL, CoT, HAVE and GeoJSON.
@@ -79,8 +81,7 @@ project.
 | Administration | People, roles, positions, guest access, retention periods and audit export on screen, without the command line | unit, real-database, browser, document | "V1 W3.0: administration" |
 | Audit trail | An append-only chronology with filters, corrections and export; retention purges that never touch the audit trail | unit, integration, real-database, browser, document | "V1 W2.9: retention and export" and "V1 W3.1: audit chronology" |
 | Load | A two-hour synthetic activation with 150 connected users: 71,106 edits, 0 errors, memory flat. On a development workstation, not deployment hardware | a measured run on real PostgreSQL | "V1 W2 milestone gate" |
-| Upgrade and restore | A backup forced before every upgrade; a restore drill of 13,831 rows in about 3 seconds on the test database. No real upgrade has been run on either deployment path | unit, real-database, document | "V1 W6.1: versioning and upgrade" |
-| Docker install | The install script tested against stand-ins for Docker and the download tool. No image built, no certificate issued, no run on a Linux host | unit, document | "V1 W6.0: one-command server install" |
+| Upgrade and restore | A backup forced before every upgrade; a restore drill of 13,831 rows in about 3 seconds on the test database. No real upgrade of an installed copy has been run | unit, real-database, document | "V1 W6.1: versioning and upgrade" |
 | Windows desktop | Cold setup, the local map, row-level security at runtime, offline work recovery and restart, on the one prepared machine where it was built | a prepared-machine run | Parity matrix row AR7 |
 | Field forms | Offline forms with line and polygon capture, photo, audio and barcode questions, cascading selects and repeats | unit, integration, real-database, browser, document | "V1 W4.7: field depth" |
 | Several organizations in one incident | An owner and a mutual-aid partner share one incident: the same map and impact counts, a partner field report queued offline and still attributed after the partner is revoked, resource requests across the two organizations, a record sent to a second instance, the plan and closeout. A second incident sees none of it | unit, real-database with two instances, browser | "V1 79D+D33 part one: the integrated cross-boundary exercise" |
@@ -102,8 +103,7 @@ project.
   real activation anywhere.
 - **Install on a second machine.** The Windows path is proven only on the
   prepared machine where it was built. Moving it to another computer on
-  removable media and setting it up there is not proven. The Docker install
-  has not run on a Linux host.
+  removable media and setting it up there is not proven.
 - **Screen reader.** The manual pass with NVDA and VoiceOver has not been run.
 - **A second maintainer.** The project has one maintainer. See
   [Second maintainer](../GOVERNANCE.md#second-maintainer).
@@ -144,13 +144,6 @@ describes the synthetic county, incident and exercise accounts.
   synthetic incident and listens on `127.0.0.1` only. It needs the local
   toolchain the guide lists, including PostgreSQL with PostGIS. No installer is
   published yet.
-- **On a Linux server with Docker.** Follow
-  [the deployment guide](../deploy/README.md). `install.sh` is built to end at
-  an HTTPS sign-in page for your first administrator. It has been tested only
-  against stand-ins, so report what a real run does. This path has no demo
-  data: it starts with the first jurisdiction and its administrator. Without
-  map archives, the map shows the bundled California basemap and address
-  search is unavailable.
 - **As an exercise.** The [training kit](guides/training/README.md) has a
   tabletop exercise on the synthetic incident, a job aid for each position and
   an instructor outline.

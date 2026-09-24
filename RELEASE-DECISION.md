@@ -49,7 +49,7 @@ No line carries a written waiver.
 | 6 | Logs, metrics and rotation in both paths; retention enforced | Green | "V1 W2.8: observability"; "V1 W2.9: retention and export" |
 | 7 | MFA for administrators; two-person IPAWS send; webhook allowlists | Green | "V1 W2.10: MFA"; "V1 W2.7: threat-model controls"; "V1 W3.5: IPAWS enablement and send" |
 | 8 | Refuse to serve with row-level security off | Green | "V1 W2.6: secure by default" |
-| 9 | One-command HTTPS install; installer rebuilt with archives; backup scheduled; restore drill | External | Install tested against stand-ins ("V1 W6.0: one-command server install"); setup built, not installed ("V1 W6.4: installer rebuild"); schedule written, not run ("V1 W6.2: disaster recovery runbook"); drill recorded ("V1 W6.1: versioning and upgrade"). Missing: a first real run on a Linux host and of each schedule |
+| 9 | Windows and macOS setups, each with a workstation and a network host with HTTPS; installer rebuilt with archives; backup scheduled; restore drill (restated by ADR-0010: the platforms are Windows and macOS, and the Docker install is removed) | Open | Windows setup built, not installed ("V1 W6.4: installer rebuild"); schedule written, not run ("V1 W6.2: disaster recovery runbook"); drill recorded ("V1 W6.1: versioning and upgrade"). Missing: the Windows host and the macOS setups, scheduled in the readiness plan, and a first real run of each install and schedule |
 | 10 | Every operator route on a screen; no dead ends; administration without curl | Green | "V1 W3 milestone gate"; "V1 W3 route coverage: every operator route owes a screen"; "V1 W3.0: administration" |
 | 11 | Email and SMS with a contacts directory | Green | "V1 W4.0 part one: email and SMS channels"; "V1 W4.0 part two: contacts and mass notification", against a local relay and a fixture SMS provider |
 | 12 | Board CSV and Excel import and export; WebEOC importer with a guide | Green | "V1 W4.1 part one: board engine depth"; "V1 W4.1 part two: board screen controls"; "V1 W4.4: WebEOC migration" |
@@ -71,7 +71,7 @@ No line carries a written waiver.
 |---|---|
 | Deployment hardware for a two-hour `scripts/soak.mjs` run at 150 sockets on the release candidate | Gate 3; R1; INV-8 |
 | A second computer with no network, for the check in the [installer README](deploy/windows/installer/README.md) | AR7; INV-3 |
-| A Linux host with Docker, a domain and a certificate choice for the first `install.sh` run, then a first real upgrade and scheduled backup on each path | Gate 9; G-DR |
+| A Windows machine and a Mac to run the host setups and their scripted checks on, then a first real upgrade and scheduled backup on each | Gate 9; G-DR |
 | IPAWS-OPEN test credentials and the signed MOA | R2's live send |
 | Representative operators, with licensed WebEOC access if possible | F14; F17; INV-8; D34 |
 | The NVDA and VoiceOver pass by the [accessibility guide's script](docs/guides/ACCESSIBILITY.md), recorded as "V1 A11Y-T1: screen-reader pass" | Gate 16; G-A11Y |
@@ -88,7 +88,7 @@ No line carries a written waiver.
 |---|---|
 | May guests read the resource module (F5) | Resource reads are the owner's members and the incident's participants; guests do not read it |
 | Incident lockdown (G-INCLIFE) | Off by default; an administrator applies it per incident; it refuses guest reads only |
-| The version on `GET /api/v1/health` | Shown without sign-in, because `upgrade.sh` reads it; the alternative is the metrics route only |
+| The version on `GET /api/v1/health` | Shown without sign-in, so an administrator's upgrade check can read it; the alternative is the metrics route only |
 | Visual review | The current design stands: dark primary buttons with a light fill and dark label; the review's input border rule and dark border token; D33 findings 15 (two primary button styles), 18 ("Unavailable" for an empty optional field), 21 (the board list's Open column at 390), 24 ("required" in the error color before input) and 25 (no product identity on sign-in) |
 | SAML (G-MFA; section 7 item 3) | TOTP for local accounts, OIDC available, no SAML until an identity provider needs it |
 | The product name (section 7 item 8) | "Open Source EOC", short name "OpenEOC", as the README, installer and web app manifest carry |
@@ -151,12 +151,17 @@ categories; archiving the retired rosters (item 11); branch protection
   the peer; gazetteer reverse lookup, containment, containing city and "St"
   as "Saint"; parcel vector tiles.
 - **Offline and deploy:** opening the console offline after a restart; a
-  reload offline before the app has cached its files; the Docker path's
-  Overture sidecar, download resume and HTTP/3 port; stopping profiles before
-  the setup replaces files; removing a `.part` file after a failed Docker
-  backup; hard links for file store copies; an inject-card file and a
-  launcher note on the administrator two-step switch.
-- **Test stability:** the unreproduced `esf-workspace-browser` wait.
+  reload offline before the app has cached its files; stopping profiles
+  before the setup replaces files; hard links for file store copies; an
+  inject-card file and a launcher note on the administrator two-step switch.
+  The Docker path's items went with the path (ADR-0010).
+- **Test stability:** the intermittent test worker crash (Windows exit code
+  `0xC0000409`). The `esf-workspace-browser` wait was found and fixed
+  ("Partner sharing PS5: scenario, review and gate").
+
+Every item above is scheduled in
+[the readiness plan](docs/process/READINESS-PSPR-2026-09-24.md), approved
+2026-09-24.
 
 ## 4. The release decision
 
@@ -180,9 +185,7 @@ gate it has not met, so it needs no waiver. It requires, in order:
    `-IncludeOptionalBasemaps`. The existing setup was staged from `5875c2f`
    and predates the exercise, review, write path and interface changes.
 5. The tag `v0.9.0` on the release commit.
-6. Release assets: the setup with its SHA-256, and for the Docker path the
-   map archives with the `SHA256SUMS` that `install.sh` fetches from
-   `OPENEOC_BASEMAP_URL`.
+6. Release assets: the setup with its SHA-256.
 7. Announcement text that says evaluation-only and synthetic data only, and
    points to the [evaluator's page](docs/EVALUATOR.md).
 

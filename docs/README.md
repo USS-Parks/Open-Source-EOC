@@ -21,7 +21,7 @@ not operational data or evidence of a live deployment.
 ## Install and operate
 
 - [Windows desktop setup](WINDOWS-DESKTOP.md)
-- [Docker server install and operation](../deploy/README.md)
+- [Deploying on Windows and macOS](../deploy/README.md)
 - [Upgrade](guides/UPGRADE.md)
 - [Disaster recovery runbook](guides/DISASTER-RECOVERY.md)
 - [Accessibility](guides/ACCESSIBILITY.md)

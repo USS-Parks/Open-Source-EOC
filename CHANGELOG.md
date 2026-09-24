@@ -31,9 +31,8 @@ release is made.
   bundled basemap, and a notice offers a new version with Reload. A saved
   session is kept through a lost connection.
 - A disaster recovery runbook with recovery targets, a daily scheduled backup
-  with retention on both deployment paths (a systemd timer on the Docker host,
-  `-Action Backup` in the Windows launcher), and guidance for copies kept off
-  the host.
+  with retention (`-Action Backup` in the Windows launcher, run by a scheduled
+  task), and guidance for copies kept off the computer.
 - Reduced motion and higher contrast: animations and transitions stop under
   the reduced-motion preference and the map jumps instead of flying; stronger
   text, border and focus colors under the higher-contrast preference; focus
@@ -77,6 +76,13 @@ release is made.
   dropped over the results list.
 - The automated walk of the two-organization exercise waited on a map zoom
   that could frame too little, and passed an option vitest does not accept.
+
+### Removed
+
+- The Linux and Docker deployment path: the Compose stack, `install.sh`,
+  `upgrade.sh`, `backup.sh`, `restore.sh` and `schedule-backup.sh`. Open
+  Source EOC runs on Windows and macOS machines
+  ([ADR-0010](docs/adr/ADR-0010-windows-and-macos.md)).
 
 ### Security
 

@@ -34,16 +34,16 @@ does not establish the license of a separately sourced map, font, or symbol.
 | Installable app icons | `web/public/icons/icon-192.png`, `icon-512.png`, `maskable-512.png` | Drawn from the project's own compass mark (`web/src/app/layout/BrandMark.tsx`). The repository's Apache-2.0 `LICENSE` and `NOTICE` are local license text. | Distributed under Apache-2.0. |
 | Web app manifest and service worker | `web/public/manifest.webmanifest`, `web/public/sw.js` | Project source; the production build writes the precache list into `sw.js`. | Distributed under Apache-2.0. |
 | Liberation Sans glyph PBFs | `web/public/fonts/Liberation Sans Regular/` | The build script and basemap README identify Liberation Sans and state SIL OFL. The source TTF and an OFL text are not present. | Distributed derivative glyphs; license is project-recorded, without local upstream license text. |
-| Self-hosted OpenStreetMap street and building tiles | `tools/basemap/generate-california.sh`, `tools/basemap/buildings-schema.yml` | The generation guide records OpenStreetMap ODbL attribution and requires the map to display `© OpenStreetMap contributors`, which the app adds whenever the street archive is active. The generated statewide archives are not tracked. | Shipped in the Windows setup (see below); deployment-supplied on the Docker path. |
+| Self-hosted OpenStreetMap street and building tiles | `tools/basemap/generate-california.sh`, `tools/basemap/buildings-schema.yml` | The generation guide records OpenStreetMap ODbL attribution and requires the map to display `© OpenStreetMap contributors`, which the app adds whenever the street archive is active. The generated statewide archives are not tracked. | Shipped in the Windows setup (see below). |
 | NAPSG MapLibre facility sprite | `web/public/napsg/sprite.json`, `sprite.png`, `sprite@2x.json`, `sprite@2x.png` | `tools/basemap/build-napsg-sprite.mjs` deterministically builds both pixel ratios from the manifest-verified originals. Every sprite entry carries NAPSG attribution, CC BY 4.0 license URL, original source URL, and source SHA-256. | Distributed with local license text. |
-| North Coast imagery archive | Built by `tools/basemap/build-north-coast-rasters.mjs` into `web/public/basemap/north-coast-imagery.pmtiles`; not tracked. | USDA NAIP imagery fetched from the USGS National Map `USGSImageryOnly` tile service, a US government work in the public domain. The archive metadata and the map attribution credit "Imagery: USDA NAIP via USGS The National Map". | Generated; deployment-supplied. The Windows launcher and `deploy/install.sh` configure it when present. |
+| North Coast imagery archive | Built by `tools/basemap/build-north-coast-rasters.mjs` into `web/public/basemap/north-coast-imagery.pmtiles`; not tracked. | USDA NAIP imagery fetched from the USGS National Map `USGSImageryOnly` tile service, a US government work in the public domain. The archive metadata and the map attribution credit "Imagery: USDA NAIP via USGS The National Map". | Generated. The Windows launcher configures it when present. |
 | North Coast elevation archive | Built by the same script into `web/public/basemap/north-coast-terrain.pmtiles`; not tracked. | USGS 3DEP elevation fetched from the `3DEPElevation` image service, public domain, re-encoded as Terrarium PNG tiles. Credited as "Elevation: USGS 3DEP". | Generated; deployment-supplied, configured the same way. |
 | Incident map symbols | `web/src/cop/cartography.ts` | Original Open Source EOC SVG drawings for shelters, closures, the command post, facilities, cameras, weather stations and the helibase, registered as map images at runtime. | Distributed as software under Apache-2.0. |
 | Runtime hazard hatches | `web/src/cop/hazards.ts` | Generated in code from project-owned drawing instructions; there is no separate image asset. | Distributed as software under the repository license. |
 | D05 application icon family | `web/src/design/icons/` | Original Open Source EOC SVG path geometry. The repository's Apache-2.0 `LICENSE` and `NOTICE` are local license text. | Distributed as software under Apache-2.0. |
 | Application compass mark | `web/src/app/layout/BrandMark.tsx` | Original project SVG geometry extracted from the approved D03 composition. The repository's Apache-2.0 `LICENSE` and `NOTICE` cover the drawing instructions. | Distributed as software under Apache-2.0. |
 
-## What the Windows setup and the Docker path carry
+## What the Windows setup carries
 
 The `0.9.0` Windows setup, staged by
 `deploy/windows/installer/Stage-Installer.ps1` with
@@ -59,15 +59,6 @@ the one `COPYING` noted under the PostgreSQL runtime.
 | Address search gazetteer | `tools/basemap/out/gazetteer.tsv`, 144,343,915 bytes | Built by `tools/basemap/build-gazetteer.mjs` from `california.pmtiles`: a derived OpenStreetMap database under ODbL-1.0. The basemap README asks that any distributed copy keep the OpenStreetMap attribution. | Project-recorded; no ODbL text or attribution file in the setup |
 | Node.js runtime | `runtime/node/`, copied from the build machine's `C:/Program Files/nodejs`, which holds Node.js v24.15.0 at this reconciliation | Node.js is published under the MIT license, with its bundled components' notices in the project's `LICENSE` file. The copied directory has no `LICENSE` file. It also carries npm (Artistic License 2.0, `node_modules/npm/LICENSE` present) and Corepack (MIT, `node_modules/corepack/LICENSE.md` present). | Node.js license text absent from the setup |
 | PostgreSQL and PostGIS runtime | `runtime/pgsql/`, copied from `deploy/test-runtime/out/pgsql` | PostgreSQL 16.15 (EDB Windows binaries), under the PostgreSQL License; its `server_license.txt` is in `postgresql-16.15-4.zip` but did not reach the unpacked `pgsql` directory. The PostGIS 3.6.2 Windows bundle adds PostGIS with GEOS, PROJ, GDAL, SFCGAL, CGAL and Boost, and extras including pgRouting, osm2pgrouting, h3-pg, MobilityDB, pgPointCloud, pg_sphere and ogr_fdw. The bundle carries an Apache-2.0 `LICENSE`, a GPL-2.0 `bin/COPYING` and per-component notices; it does not state PostGIS's own license, which the PostGIS project publishes as GPL-2.0-or-later. Only `bin/COPYING` reached the unpacked directory. | One GPL-2.0 `COPYING` in the setup; the other notices absent |
-
-The Docker path pulls three images by tag when `deploy/install.sh` builds the
-stack. The repository does not redistribute them.
-
-| Image | Used for | License as recorded |
-|---|---|---|
-| `caddy:2.10.0-alpine` | The web service: TLS, the bundle and the archives | Caddy is Apache-2.0, as recorded when the image was added |
-| `postgis/postgis:16-3.4` | The database | PostgreSQL 16 (PostgreSQL License) with PostGIS 3.4 (GPL-2.0-or-later, per the PostGIS project); image contents not inventoried here |
-| `node:22-slim` | The API image base in `deploy/Dockerfile` | Node.js 22 (MIT) on a Debian base; image contents not inventoried here |
 
 ## License work open before a setup is published
 

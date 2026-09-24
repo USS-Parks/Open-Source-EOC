@@ -30,10 +30,11 @@ Current capability truth is in the
   address search gazetteer.
 - Installing that setup from media on a second, disconnected computer has not
   been done.
-- Docker Compose runs PostGIS, the API and a Caddy web service with TLS, and
-  `deploy/install.sh` is built to end at an HTTPS sign-in page with the first
-  administrator. It is tested against stand-ins only; no run on a Linux host
-  has been made.
+- Open Source EOC runs on Windows and macOS machines only
+  ([ADR-0010](./docs/adr/ADR-0010-windows-and-macos.md)); the Docker path was
+  removed on 2026-09-24. The shared Windows host and the macOS workstation and
+  host are scheduled in
+  [the readiness plan](./docs/process/READINESS-PSPR-2026-09-24.md).
 - The architecture is declared single-node for v1. Several runtime limiters,
   caches and live hubs are process-local.
 - Live IPAWS, live external data acquisition, real-hardware 150-user load and
@@ -83,8 +84,8 @@ inputs into proof.
   and per-incident lockdown.
 - An installable web app with an offline shell; reduced motion and higher
   contrast.
-- A one-command Docker install over HTTPS, upgrade with a forced backup, a
-  disaster recovery runbook with scheduled backups, the `0.9.0` Windows setup,
+- Upgrade with a forced backup, a disaster recovery runbook with scheduled
+  backups, the `0.9.0` Windows setup,
   a training kit, a security policy and a changelog.
 
 ## What blocks version 1.0

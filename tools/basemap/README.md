@@ -206,8 +206,7 @@ the map reads each archive's zoom range and bounds from its header:
 </script>
 ```
 
-The Windows launcher and `deploy/install.sh` set these whenever the archives
-are present. With imagery configured, the dark theme opens the map on it; both
+The Windows launcher sets these whenever the archives are present. With imagery configured, the dark theme opens the map on it; both
 themes open with the terrain shaded.
 
 ## 8. Buildings by use and status

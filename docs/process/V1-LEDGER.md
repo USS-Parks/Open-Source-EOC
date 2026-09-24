@@ -4728,3 +4728,60 @@ follow here.
 - **Evidence level:** unit, real-database, browser and the full serial gate
   as described.
 - **Rollback:** revert the commit.
+- **Commit:** `9794a4d`.
+
+## V1 grant: readiness
+
+Basho, 2026-09-24: "This will be run on Windows and Mac OS machines. Make sure
+that is the case. I do not want a Linux docker build, and NEVER specified that
+as a preference"; "I want a working demo so that I can test it on my windows
+machine. I want the system to work for 150 concurrent users"; "I want a
+platform that can successfully and demonstrably be air gapped"; then, on
+`docs/process/READINESS-PSPR-2026-09-24.md`: "Yes, run it STS with my full
+approval now. All necessary or unknown permissions are granted with my express
+authorization having been attained with this statement. Do not report back
+that you are 'finished' until there is a working downloadable .exe file for me
+to install and test out, aesthetically matching the three screenshot
+dashboard proofs submitted numerous times now. I don't need CalTrans or
+Wildfire or whatever else to be mirrored; I need the functions and features
+found on those proofs to work flawlessly, along with LOOK exactly as
+presented." The plan's section 3 defaults are the approved defaults. Its
+decision 9 stands: installing services and firewall rules changes a machine's
+system settings, so those steps are Basho's to run from a scripted check.
+Receipts for its units follow here.
+
+## Readiness RD1: Windows and macOS only
+
+- **What changed.** The Linux and Docker deployment path is removed:
+  `deploy/Dockerfile`, `Dockerfile.dockerignore`, `docker-compose.yml`,
+  `Caddyfile`, `install.sh`, `upgrade.sh`, `backup.sh`, `restore.sh`,
+  `schedule-backup.sh` and the two tests that ran them against stand-ins. New
+  `docs/adr/ADR-0010-windows-and-macos.md` records Windows and macOS as the
+  platforms, superseding the deployment parts of ADR-0004 and ADR-0007.
+  `deploy/README.md` is now the Windows and macOS deployment guide, keeping
+  every platform-independent operating fact (one application node, the two
+  database identities, uploads, timeouts, the secret key, the scheduler, logs
+  and metrics, upgrades, the configuration reference) and saying plainly
+  what is built (the Windows workstation) and what is scheduled (the Windows
+  host, macOS). The disaster recovery runbook and the upgrade guide cover
+  Windows only; README, ROADMAP, SECURITY, the administrator guide, the
+  documentation index, the continuity record, the asset inventory, the
+  evaluator's page, the parity matrix (F16, G-GEOCODE, G-DR), the facet
+  register, the basemap guide and the changelog's unreleased section no longer
+  describe a Docker path. Gate 9 in `RELEASE-DECISION.md` is restated for
+  Windows and macOS hosts and is open, and the open engineering list points
+  at the readiness plan. The restore drill test's comments and title no
+  longer cite the removed scripts; its two restore forms are unchanged.
+- **Defaults and deviations.** Decision 3 as written. The plan named the ADR
+  0012; the next free number is 0010, and the plan now says so.
+  `deploy/.gitignore` keeps only the basemap toolchain's local workspace.
+  Released changelog entries stay as history.
+- **Verification.** No tracked file outside the ledgers, archived rosters,
+  plans, the research document and the ADRs that record the history carries
+  a Docker or Linux deployment instruction (search over tracked Markdown,
+  scripts and sources). `pnpm check:static` passes (the link checker included);
+  the desktop and installer tests pass 27 of 27; `restore-drill.test.ts`
+  passes 1 of 1. The fourth full gate run of PS5 ran on this tree with these
+  changes in place.
+- **Evidence level:** document, unit and real-database.
+- **Rollback:** revert the commit.

@@ -2,7 +2,9 @@
 
 Status: superseded, 2026-09-22, by
 [ADR-0004](./ADR-0004-plugin-sandbox.md), which records the deployment paths
-that were actually built.
+that were actually built, and on 2026-09-24 by
+[ADR-0010](./ADR-0010-windows-and-macos.md): the platforms are Windows and
+macOS, with no Linux or Docker deployment.
 
 ## Decision
 

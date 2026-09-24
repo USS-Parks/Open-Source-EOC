@@ -93,9 +93,10 @@ grant, proven in the security suite. Attribution is total (INV-2).
   from the flood limiter.
 - The field client operates offline and syncs on reconnect; federation is
   store-and-forward. Disconnection is the normal case (INV-3).
-- Backups: `deploy/backup.sh` writes a database dump and a matching archive of
-  uploaded file blobs; `deploy/restore.sh` restores both. The two files share a
-  timestamp and must be retained together. A database-only restore leaves file
+- Backups: the Windows launcher's `Backup` action writes a database dump and a
+  matching copy of the uploaded files; the
+  [disaster recovery runbook](./guides/DISASTER-RECOVERY.md) restores both.
+  The two share a timestamp and must be retained together. A database-only restore leaves file
   metadata pointing at missing bytes.
 - Portability: `GET /api/v1/jurisdictions/:jurisdictionId/export` (admin) pulls
   the jurisdiction's operational record as JSON and its stored file bytes in

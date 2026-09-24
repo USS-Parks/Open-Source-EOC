@@ -1,146 +1,36 @@
-# Deploying OpenEOC (VEOC-40)
+# Deploying Open Source EOC
 
-Single-node deployment for a county-IT skill level, including the air-gapped
-path. The whole system of record is one PostgreSQL database; the API is a
-Node service; the web bundle is static files.
+Open Source EOC runs on Windows and macOS machines. The whole system of record
+is one PostgreSQL database with PostGIS; the API is a Node service; the web
+application is static files served by the same process. Nothing in the
+running system needs the internet.
 
-## One-command install
+There is no Linux or Docker deployment. See
+[ADR-0010](../docs/adr/ADR-0010-windows-and-macos.md).
 
-On a Linux host with Docker Engine, the compose plugin, `curl` and
-`sha256sum`, from the repository's `deploy` directory:
+## What is built today
 
-```
-OPENEOC_DOMAIN=eoc.county.example \
-OPENEOC_ACME_EMAIL=it@county.example \
-OPENEOC_ADMIN_EMAIL=chief@county.example \
-OPENEOC_ADMIN_NAME="County Chief" \
-OPENEOC_JURISDICTION_SLUG=county-oes \
-OPENEOC_JURISDICTION_NAME="County OES" \
-OPENEOC_BASEMAP_URL=https://downloads.county.example/openeoc-basemap \
-./install.sh
-```
-
-`install.sh` stops with a message naming the problem at the first step that
-fails. In order, it:
-
-1. checks for Docker, the compose plugin, a running daemon, `curl` and
-   `sha256sum`;
-2. on the first run, generates the database password, the `app_runtime`
-   password and `OPENEOC_SECRET_KEY` into `deploy/.env` (mode 600); they are
-   never printed;
-3. records the host name and the certificate choice in `deploy/.env` (see
-   [Certificates](#certificates));
-4. fetches and checks the map archives (see [Map archives](#map-archives));
-5. starts the database, sets the `app_runtime` password and builds the `api`
-   and `web` images;
-6. creates the first jurisdiction and administrator with the
-   [bootstrap command](#first-jurisdiction-and-admin), unless an instance
-   administrator already exists;
-7. starts the stack and waits until `https://<OPENEOC_DOMAIN>/` serves the
-   sign-in page and the API behind it answers, then prints the address.
-
-The first administrator's password is generated, passed to the bootstrap
-command through the environment, never printed, and written to
-`deploy/admin-password.txt`, readable only by the account that ran the script.
-Sign in with it, store it in the county's password manager, and delete the
-file. The administrator enrolls in two-step sign-in at the first sign-in.
-
-Running `./install.sh` again keeps the secrets, the certificate choice and the
-verified archives, checks the archives again, and does not bootstrap again;
-the administrator variables are then not needed. Values already in
-`deploy/.env` win over the environment; edit the file to change them.
-
-### The stack
-
-| Service | Image | What it does |
+| Machine | How it runs | Status |
 |---|---|---|
-| `db` | `postgis/postgis:16-3.4` | PostgreSQL and PostGIS, the system of record |
-| `api` | `deploy/Dockerfile`, target `api`, on `node:22-slim` | The API on port 8080, published on the host's loopback only |
-| `web` | `deploy/Dockerfile`, target `web`, on `caddy:2.10.0-alpine` | TLS on 443 and a redirect from 80; proxies `/api/`, WebSocket streams included, to `api`; serves the web bundle and the map archives |
+| Windows workstation | The setup in [`windows/installer`](windows/installer/README.md) installs Node, PostgreSQL with PostGIS, the web application and the offline map archives for the signed-in user. The server listens on `127.0.0.1` only. | Built |
+| Windows host | One Windows computer serving every other person and agency over HTTPS | Not built yet |
+| macOS workstation and host | The same, on a Mac | Not built yet |
 
-The `web` image builds the bundle with `pnpm --filter @openeoc/web build` and
-adds a `<script src="/runtime-config.js">` tag to its page, as the Windows
-desktop host does. The API trusts `X-Forwarded-For` from private addresses
-(`OPENEOC_TRUST_PROXY=uniquelocal`), because only Caddy on the compose network
-and the host's loopback can reach it.
+The host and macOS work is scheduled in
+[the readiness plan](../docs/process/READINESS-PSPR-2026-09-24.md). Until the
+host exists, organizations on separate machines share an incident through
+federation between workstations, with federation's known limits.
 
-### Certificates
-
-Choose one on the first run:
-
-- **Automatic (ACME).** Set `OPENEOC_ACME_EMAIL`. `OPENEOC_DOMAIN` must resolve
-  in public DNS to this host, and ports 80 and 443 must reach it from the
-  internet. Caddy obtains and renews the certificate and keeps it in the
-  `caddy-data` volume.
-- **A supplied pair.** Set `OPENEOC_TLS_CERT` and `OPENEOC_TLS_KEY` to PEM files:
-  the certificate with its chain, and its private key. The script copies them
-  to `deploy/tls/`. This is the choice for an air-gapped host or a certificate
-  from the county's own CA. To replace the pair, copy the new files over
-  `deploy/tls/cert.pem` and `deploy/tls/key.pem` and run
-  `docker compose restart web`.
-
-Either way, HTTP on port 80 redirects to HTTPS.
-
-### Map archives
-
-The street basemap, buildings, overlays and the address search gazetteer
-(built as in [the basemap toolchain](../tools/basemap/README.md)) are
-published as release files beside a `SHA256SUMS` list in the format
-`sha256sum` writes: `<sha256>  <file name>` per line. The names the stack
-uses are `california.pmtiles`, `buildings.pmtiles`, `overlays.pmtiles`,
-`overlays-manifest.json` and `gazetteer.tsv`.
-
-- With `OPENEOC_BASEMAP_URL` set to the directory holding them, the script
-  fetches `SHA256SUMS` and every file it lists that is not yet in
-  `deploy/basemap/`. A download is checked before it is kept.
-- Every listed file is checked against its SHA-256 on every run. A file that
-  does not match stops the install; nothing is served from it.
-- A `SHA256SUMS` already in `deploy/basemap/` is used as it is. The list
-  fetched from the release protects against a damaged or cut-short download,
-  not against a replaced release; to guard against that, copy a `SHA256SUMS`
-  obtained from a trusted source into `deploy/basemap/` before the first run.
-- No public release location exists yet, so there is no default. Without
-  `OPENEOC_BASEMAP_URL` and without a `SHA256SUMS`, the map shows the bundled
-  California basemap and address search reports unavailable.
-
-The script writes `deploy/basemap/runtime-config.js`, which names only the
-archives that passed their check. The API reads `gazetteer.tsv` from the same
-directory.
-
-### Caching
-
-Caddy's `file_server` serves the static files with the same rules as the
-Windows static host:
-
-| Files | `Cache-Control` |
-|---|---|
-| The bundle's `/assets/`, named by content hash | `public, max-age=31536000, immutable` |
-| Map archives, glyphs, the overlays manifest and other static files | `no-cache`, with `ETag` and `Last-Modified`; an unchanged file answers 304 |
-| The page and `/runtime-config.js` | `no-store` |
-
-Byte-range requests and `If-Range` are answered by `file_server`, and nothing
-in the stack compresses these responses, so the map's range reads of the
-archives work.
-
-The service worker `sw.js` and `manifest.webmanifest` sit beside the page and
-fall under the `no-cache` row, so browsers find a new build on their next
-check. Browsers run a service worker only over HTTPS or from localhost.
-
-### What has been verified
-
-`deploy/install.test.mjs` runs `install.sh` against stand-ins for `docker` and
-`curl`: the first run, a re-run, a checksum mismatch, the refusals and a
-supplied pair. `deploy/upgrade.test.mjs` runs `upgrade.sh`, `backup.sh` and
-`restore.sh` against the same kind of stand-ins. `docker compose config`
-accepts the compose file. No image has
-been built or pulled, Caddy has not loaded the Caddyfile, and no certificate
-has been issued. The first real run on a Linux host is still to be done.
+The [Windows desktop guide](../docs/WINDOWS-DESKTOP.md) covers the launcher's
+profiles, setup, start, stop and status from a source checkout, and the
+[installer guide](windows/installer/README.md) covers building and installing
+the setup.
 
 ## One application node
 
 Version 1 runs as exactly one API process against one PostgreSQL database. Do
-not put two API containers behind a load balancer. Several safeguards keep
-their state in that process's memory:
+not run two API processes against one database. Several safeguards keep their
+state in that process's memory:
 
 - the login and second-factor backoff (`server/src/auth/rate-limit.ts`);
 - the per-client flood limiter (`server/src/security/rate-limit.ts`);
@@ -150,17 +40,16 @@ their state in that process's memory:
 - the live board sync hub, which relays an edit only to WebSocket clients
   connected to the same process.
 
-With a second node, login guesses could be split across nodes, each node would
-grant its own flood ceiling, a sign-out or role change made on one node would
-reach the other only when its cached principal expired, and people connected
-to different nodes would not see each other's live edits. On the single node,
-a sign-out, position change, membership grant or guest grant made through the
-API takes effect on the next request. A change made directly in the database,
-such as a role edited or a person disabled in `psql`, takes effect within
-`OPENEOC_PRINCIPAL_CACHE_MS`. The scheduler elects its leader through a
-PostgreSQL advisory lock and the delivery worker claims its work with leases,
-so neither is what holds v1 to one node. A shared store for the limiters and
-the principal cache is a 1.x item.
+With a second process, login guesses could be split between them, each would
+grant its own flood ceiling, a sign-out or role change made on one would reach
+the other only when its cached principal expired, and people connected to
+different processes would not see each other's live edits. On the single
+process, a sign-out, position change, membership grant or guest grant made
+through the API takes effect on the next request. A change made directly in
+the database, such as a role edited or a person disabled in `psql`, takes
+effect within `OPENEOC_PRINCIPAL_CACHE_MS`. The scheduler elects its leader
+through a PostgreSQL advisory lock and the delivery worker claims its work
+with leases, so neither is what holds v1 to one process.
 
 ## Behind a reverse proxy
 
@@ -175,67 +64,35 @@ own address and step around the limiters.
 
 ## The two database identities
 
-Migrations and the running app use different roles on purpose, so Row-Level
-Security is always the second wall:
+Migrations and the running application use different roles on purpose, so
+row-level security is always the second wall:
 
 - **Owner** (`OPENEOC_DATABASE_URL`) runs migrations and seeds the standard
   templates. The migrations create the `app_runtime` role.
-- **Runtime** (`OPENEOC_RUNTIME_URL`) is `app_runtime`; the app runs on it and
-  RLS applies to every query.
+- **Runtime** (`OPENEOC_RUNTIME_URL`) is `app_runtime`; the application runs
+  on it and row-level security applies to every query.
 
 The server refuses to start when `OPENEOC_RUNTIME_URL` is unset, and when the
-role it names bypasses RLS: a superuser, a role with `BYPASSRLS`, or a role
-that owns a table with row-level security. The error names the cause.
+role it names bypasses row-level security: a superuser, a role with
+`BYPASSRLS`, or a role that owns a table with row-level security. The error
+names the cause. The Windows launcher generates both passwords at setup, keeps
+them in the profile's private `secrets` directory, and never prints them.
 `OPENEOC_ALLOW_OWNER_RUNTIME=1` overrides the refusal for a single-user
-development server and logs a warning at startup; never set it in production.
-
-`install.sh` generates the `app_runtime` password, creates the role with it
-before the first migration, and writes `OPENEOC_RUNTIME_URL` to `deploy/.env`.
-An `.env` from an earlier install with an empty `OPENEOC_RUNTIME_URL` gains the
-password and URL on the next run. To set it by hand instead:
-
-```
-docker compose exec db psql -U openeoc_owner -d openeoc \
-  -c "alter role app_runtime login password 'a-strong-password'"
-```
-
-then put its URL in `deploy/.env` and re-apply with `docker compose up -d`:
-
-```
-OPENEOC_RUNTIME_URL=postgres://app_runtime:a-strong-password@db:5432/openeoc
-```
-
-## The web bundle
-
-```
-pnpm --filter @openeoc/web build
-```
-
-The compose stack's `web` image does this itself. To serve `web/dist` from
-another static host instead, add the `runtime-config.js` script tag to its
-page, serve that file, and apply the rules under [Caching](#caching).
+development server from a source checkout and logs a warning at startup; the
+installed application has no override.
 
 ## First jurisdiction and admin
 
-`install.sh` runs this step on the first install. To run it by hand:
-the `bootstrap` command creates the instance administrator and the first
-jurisdiction, with that person as its admin and the standard ICS positions.
-It runs the migrations first, reads the password from
-`OPENEOC_BOOTSTRAP_PASSWORD` or, when that is unset, from standard input, and
-never prints it. The password needs at least 12 characters.
-
-```
-read -rs OPENEOC_BOOTSTRAP_PASSWORD && export OPENEOC_BOOTSTRAP_PASSWORD
-docker compose run --rm -e OPENEOC_BOOTSTRAP_PASSWORD api \
-  tsx server/src/main.ts bootstrap \
-  --admin-email=chief@county.example --admin-name="County Chief" \
-  --jurisdiction-slug=county-oes --jurisdiction-name="County OES"
-unset OPENEOC_BOOTSTRAP_PASSWORD
-```
-
-Running it again once any instance administrator exists changes nothing and
-exits 0. The administrator enrolls in two-step sign-in at first sign-in. Then
-activate an incident from a scenario template and you have a working EOC.
+A production profile's first setup asks for the first administrator's email,
+display name and password and for the first jurisdiction, then creates that
+person as the instance administrator and the jurisdiction with the standard
+ICS positions. See [First setup](../docs/WINDOWS-DESKTOP.md#first-setup). The
+server's `bootstrap` command does the same from a source checkout: it runs the
+migrations first, reads the password from `OPENEOC_BOOTSTRAP_PASSWORD` or,
+when that is unset, from standard input, never prints it, and needs at least
+12 characters. Running it again once any instance administrator exists changes
+nothing and exits 0. The administrator enrolls in two-step sign-in at the
+first sign-in.
 
 ## Uploads
 
@@ -259,105 +116,57 @@ Every outbound HTTP call carries a timeout: collaboration backends and peer
 escalation 15 seconds, IPAWS-OPEN 30 seconds, webhook, push and federation
 deliveries and feed polls 10 seconds, and OpenID Connect requests 30 seconds
 (the client library's default). A call that times out fails; it is never
-reported as delivered.
+reported as delivered. None of these calls is made unless an administrator
+configures the integration it belongs to.
 
 ## Rotating the secret key
 
-`OPENEOC_SECRET_KEY` encrypts stored credentials: TOTP secrets, the IPAWS
-credential, collaboration and meeting secrets, and federation peer tokens. The
+The key encrypts stored credentials: TOTP secrets, the IPAWS credential,
+collaboration and meeting secrets, and federation peer tokens. The
 `rotate-secret-key` command re-encrypts all of them from the current key to a
-new one in one transaction. Each value is decrypted with the current key and
-the new value is checked before it is written; if any value fails, nothing
-changes. It prints the count per table.
-
-1. Back up first (`./backup.sh`), and keep the current key until the new one
-   is confirmed.
-2. Stop the API: `docker compose stop api`.
-3. Run the rotation with the new key:
-
-   ```
-   new_key="$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | head -c 44)"
-   docker compose run --rm -e OPENEOC_NEW_SECRET_KEY="$new_key" api \
-     tsx server/src/main.ts rotate-secret-key
-   ```
-
-4. Replace `OPENEOC_SECRET_KEY` in `deploy/.env` with the new key.
-5. Start the API: `docker compose up -d`.
-
-Signed audit export pages are keyed from `OPENEOC_SECRET_KEY`. Pages exported
-before a rotation verify only with the old key, so record it with those
-exports if they may need verifying later. On the Windows desktop the key is
-the profile's `secrets/envelope.key`; see
+new one in one transaction; if any value fails, nothing changes. On Windows
+the key is the profile's `secrets/envelope.key`, and the steps are in
 [the desktop guide](../docs/WINDOWS-DESKTOP.md#rotating-the-credential-key).
+
+Signed audit export pages are keyed from the same key. Pages exported before a
+rotation verify only with the old key, so record it with those exports if
+they may need verifying later.
+
+## Map archives
+
+The street basemap, buildings, overlays, the North Coast imagery and
+elevation, and the address search gazetteer are built by
+[the basemap toolchain](../tools/basemap/README.md) and carried inside the
+setup, so a machine with no network has the full map. The launcher configures
+each archive it finds and leaves out any that is missing; the bundled
+California basemap is always present.
 
 ## Air-gapped install
 
-Nothing in the running stack calls out: the API talks only to PostgreSQL, the
-map basemap is served from local PMTiles, and there are no external tile or
-font fetches at runtime. The one exception is Caddy's certificate requests
-when an ACME email is chosen. To install with networking disabled:
-
-1. On a connected machine, pull and save the images:
-   `docker save postgis/postgis:16-3.4 node:22-slim caddy:2.10.0-alpine -o openeoc-images.tar`,
-   and vendor the pnpm store (`pnpm fetch`) into the transfer bundle.
-2. Move the bundle and the repository to the air-gapped host, with the map
-   archives and their `SHA256SUMS` copied into `deploy/basemap/`.
-3. `docker load -o openeoc-images.tar`, then `./install.sh` with networking
-   off, a supplied certificate pair and no `OPENEOC_BASEMAP_URL`. The build
-   installs from the vendored store, the archives are checked in place, and
-   no fetch leaves the host.
-
-The install is designed to reach a working demo incident in well under an hour
-on a clean machine.
+Nothing in the running system calls out: the API talks only to its own
+PostgreSQL, the map, fonts and icons are served from local files, and no
+update check, telemetry or tile fetch exists. The setup carries every runtime
+it needs, so it installs on a machine that has never had a network
+connection. The proof (a recorded run of every connection the installed system
+makes, and a run with the network unplugged) is scheduled in
+[the readiness plan](../docs/process/READINESS-PSPR-2026-09-24.md).
 
 ## Backup and restore
 
-```
-./backup.sh              # writes a database dump and matching blob archive
-./restore.sh ./backups/openeoc-<timestamp>.sql.gz --yes-drop-and-restore
-```
-
-Each backup consists of `openeoc-<timestamp>.sql.gz` and the matching
-`openeoc-<timestamp>.blobs.tar.gz`. Keep both files together and off the box.
-The database holds file metadata; the blob archive holds the uploaded bytes.
-Restore is destructive to the database and refuses to run without the explicit
-confirmation flag. If the matching blob archive is absent, restore warns and
-file downloads remain unavailable until those bytes are recovered.
-
-Both files are written readable only by the account that ran the script, each
-under a `.part` name until its command succeeds, so a failed run leaves no file
-that looks like a backup. Restore reads the whole dump first and refuses one
-that did not run to the end; it then drops the schema and replays the dump in
-one transaction, so an error leaves the database as it was.
-
-### Scheduled backups
-
-```
-sudo ./schedule-backup.sh   # daily at 02:30, as the owner of deploy/.env, keeping 14 days
-```
-
-It installs `openeoc-backup.service`, which runs `backup.sh`, and a
-persistent `openeoc-backup.timer`, then takes one backup through the service
-so a schedule that cannot work fails at once. `OPENEOC_BACKUP_SCHEDULE`,
-`OPENEOC_BACKUP_KEEP_DAYS` and `OPENEOC_BACKUP_USER` change the time, the days
-kept and the account. After both of its files are complete, `backup.sh`
-removes its own backups older than `OPENEOC_BACKUP_KEEP_DAYS` (default 14); a
-failed run removes nothing. The
+On Windows, `-Action Backup -Profile production` dumps the running profile's
+database and copies its file store into the profile's `backups` directory,
+keeping 14 days by default. The
 [disaster recovery runbook](../docs/guides/DISASTER-RECOVERY.md) covers the
-recovery targets, the Windows desktop's `Backup` action, copies off the host,
-restores and the quarterly restore test.
-
-`deploy/upgrade.test.mjs` runs the retention, and `schedule-backup.sh` against
-a `systemctl` stand-in that runs the unit's command. No real systemd has run
-the timer yet.
+recovery targets, the scheduled task, copies off the machine, restores and
+the quarterly restore test.
 
 ## Scheduler
 
-Every API process runs one scheduler, in both the Docker and the Windows
-desktop deployments. The process holding a PostgreSQL advisory lock on the
-runtime database is the leader and the only one that runs the scheduled jobs;
-the others retry the lock and one takes over when the leader stops or loses
-its database session. No cron job or manual call is needed.
+Every API process runs one scheduler. The process holding a PostgreSQL
+advisory lock on the runtime database is the leader and the only one that runs
+the scheduled jobs; the others retry the lock and one takes over when the
+leader stops or loses its database session. No task or manual call is
+needed.
 
 | Job | Interval variable | Default |
 |---|---|---|
@@ -417,46 +226,29 @@ route, then search the log for `"msg":"slow request"` on that route; its
 `"msg":"delivery dead-lettered"`; its `deliveryId` is the `delivery_outbox`
 row.
 
-Rotation:
-
-- **Docker.** All three services use the `json-file` driver with
-  `max-size: 10m` and `max-file: 5`. Read the API log with
-  `docker compose logs api` and Caddy's with `docker compose logs web`.
-- **Windows desktop.** The server writes `server.log` in the profile's `logs`
-  directory and rotates it at 10 MB, keeping `server.log.1` through
-  `server.log.5`. `app.log`, `app-error.log` and `postgres.log` hold console
-  output, crash traces and PostgreSQL messages; each is rotated the same way
-  when the launcher starts the process that writes it. The desktop app listens
-  on loopback only; set `OPENEOC_METRICS_TOKEN` in the environment of the
-  launcher to scrape it.
+On Windows the server writes `server.log` in the profile's `logs` directory and
+rotates it at 10 MB, keeping `server.log.1` through `server.log.5`. `app.log`,
+`app-error.log` and `postgres.log` hold console output, crash traces and
+PostgreSQL messages; each is rotated the same way when the launcher starts the
+process that writes it. Set `OPENEOC_METRICS_TOKEN` in the launcher's
+environment to scrape the metrics.
 
 ## Upgrades
 
-Upgrades preserve customization (INV-5), proven by
-`server/src/__tests__/upgrade.test.ts`:
+Installing a newer setup over an existing install keeps every profile's data:
+the launcher runs the forward-only migrations on the next start, and
+re-running them is a clean no-op. Upgrades preserve customization (INV-5),
+proven by `server/src/__tests__/upgrade.test.ts`: customized boards keep their
+local `x_` fields and all records, and a board template version upgrade
+re-converges to the new template while keeping local fields and data. Back up
+before upgrading.
 
 The pre-1.0 migration history was consolidated into `0001_baseline.sql` on
 2026-09-22 before any deployed instance existed. The runner deliberately
 refuses that baseline when `schema_migrations` contains a retired 0001 through
-0101 row. Do not erase or rename those receipts to force an upgrade. Preserve
-the database and use the source version that created it; the supported V1
-upgrade path begins with a database whose first receipt is
+0101 row. Do not erase or rename those receipts to force an upgrade. The
+supported V1 upgrade path begins with a database whose first receipt is
 `0001_baseline.sql`. New migrations continue at 0102.
-
-1. Put the new release in the repository checkout.
-2. Run `./upgrade.sh`. It takes a backup with `backup.sh` first and stops,
-   changing nothing, unless the dump is complete and the file archive
-   readable; no switch skips it. It then builds the images, runs
-   `docker compose up -d`, waits for the API to report ready, and prints the
-   old and new versions and the backup to go back to. The API runs the
-   forward-only migrations on boot; re-running them is a clean no-op. An
-   install made before the HTTPS front end has no `OPENEOC_DOMAIN` or
-   `OPENEOC_TLS` in `deploy/.env`, and compose refuses every command until
-   they are there: run `./install.sh` once with a host name and a
-   certificate choice first.
-3. Customized boards keep their local `x_` fields and all records; a board
-   template version upgrade re-converges to the new template while keeping
-   local fields and data.
 
 The [upgrade guide](../docs/guides/UPGRADE.md) states what upgrades in place
 and what does not, how to go back to the previous version, and the recorded
@@ -467,14 +259,14 @@ restore drill.
 | Variable | Purpose |
 |---|---|
 | `OPENEOC_DATABASE_URL` | Owner connection: migrations and seeding |
-| `OPENEOC_RUNTIME_URL` | `app_runtime` connection: the app under RLS; required |
-| `OPENEOC_ALLOW_OWNER_RUNTIME` | `1` lets a development server run without RLS; never in production |
-| `OPENEOC_SECRET_KEY` | Server key for credential envelopes (IPAWS, collab, Jitsi, MFA secrets) and signed audit export |
+| `OPENEOC_RUNTIME_URL` | `app_runtime` connection: the application under row-level security; required |
+| `OPENEOC_ALLOW_OWNER_RUNTIME` | `1` lets a source-checkout development server run without row-level security; never in production |
+| `OPENEOC_SECRET_KEY` | Server key for credential envelopes (IPAWS, collaboration, meetings, MFA secrets) and signed audit export |
 | `OPENEOC_NEW_SECRET_KEY` | The new key, read only by `rotate-secret-key` |
 | `OPENEOC_BOOTSTRAP_PASSWORD` | First admin's password, read only by `bootstrap` |
 | `OPENEOC_MAX_UPLOAD_MB` / `OPENEOC_JURISDICTION_QUOTA_MB` | Upload limits; see [Uploads](#uploads) |
 | `OPENEOC_REQUIRE_ADMIN_MFA` | Admins must enroll in two-step sign-in (default on; `0` turns it off) |
-| `HOST` / `PORT` | API bind address (default `0.0.0.0:8080`) |
+| `HOST` / `PORT` | API bind address for a source-checkout server (default `0.0.0.0:8080`); the Windows launcher binds `127.0.0.1` on the profile's port |
 | `OPENEOC_LOG_LEVEL` | Log level (default `info`) |
 | `OPENEOC_SLOW_REQUEST_MS` | Slow request threshold in milliseconds (default 1000) |
 | `OPENEOC_METRICS_TOKEN` | Scrape token for `GET /api/v1/metrics`; unset serves 404 |
@@ -484,11 +276,4 @@ restore drill.
 | `OPENEOC_PRINCIPAL_CACHE_MS` | How long a request principal is cached, in milliseconds (default 5000; `0` turns it off) |
 | `OPENEOC_PUBLIC_URL` | Address mass notification acknowledgement links point at, such as `https://eoc.example.org`; unset uses the address the sender reached the server on. See the [administrator guide](../docs/guides/ADMIN.md#contacts-and-mass-notification) |
 | `OPENEOC_SYSLOG_URL` | Forward audit events to syslog, `udp://host:514` or `tcp://host:514`; unset is off. See the [administrator guide](../docs/guides/ADMIN.md#forward-the-audit-trail-to-syslog) |
-| `OPENEOC_GAZETTEER_PATH` | Path to the offline address search file, read once at startup; unset or unreadable reports search unavailable and the server runs on. The compose stack sets `/basemap/gazetteer.tsv`. See [building the gazetteer](../tools/basemap/README.md#10-offline-address-search-gazetteer) |
-| `OPENEOC_DOMAIN` | The host name Caddy serves and certifies; required by compose, written to `deploy/.env` by `install.sh` |
-| `OPENEOC_TLS` | Caddy's `tls` argument: an ACME email, or the container paths of a supplied pair; written by `install.sh` from the next two rows |
-| `OPENEOC_ACME_EMAIL` | `install.sh` only: request an automatic certificate with this ACME account email. See [Certificates](#certificates) |
-| `OPENEOC_TLS_CERT` / `OPENEOC_TLS_KEY` | `install.sh` only: PEM certificate (with chain) and key to use instead of ACME |
-| `OPENEOC_BASEMAP_URL` | `install.sh` only: directory URL of the map archive release and its `SHA256SUMS`; no default. See [Map archives](#map-archives) |
-| `OPENEOC_ADMIN_EMAIL` / `OPENEOC_ADMIN_NAME` | `install.sh` only: the first administrator, needed until one exists |
-| `OPENEOC_JURISDICTION_SLUG` / `OPENEOC_JURISDICTION_NAME` | `install.sh` only: the first jurisdiction, needed until an administrator exists |
+| `OPENEOC_GAZETTEER_PATH` | Path to the offline address search file, read once at startup; unset or unreadable reports search unavailable and the server runs on. The Windows launcher sets it to the installed gazetteer. See [building the gazetteer](../tools/basemap/README.md#10-offline-address-search-gazetteer) |

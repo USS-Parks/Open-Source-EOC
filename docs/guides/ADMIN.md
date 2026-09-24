@@ -11,14 +11,14 @@ the `app_runtime` database role so Row-Level Security remains active. Protect
 the deployment environment, database password, and credential-envelope secret,
 and schedule tested backups before an activation.
 
-Upgrade with `deploy/upgrade.sh`, which backs up first and refuses to continue
-without a complete backup, or with the newer Windows setup program. The
+Upgrade with the newer Windows setup program; the launcher backs up the
+database before it migrates and does not migrate when that backup fails. The
 [upgrade guide](./UPGRADE.md) states which databases upgrade in place, the
 migration baseline boundary, and how to go back to the previous version.
 
 The [disaster recovery runbook](./DISASTER-RECOVERY.md) sets the recovery
-targets, schedules the daily backup on both deployment paths, and covers
-copies off the host, restores and the quarterly restore test.
+targets, schedules the daily backup, and covers copies off the computer,
+restores and the quarterly restore test.
 
 Demo accounts and data are for exercises only. Remove or rotate the seeded
 credentials before real operations.
@@ -28,9 +28,8 @@ credentials before real operations.
 Every administrative task below is done on the **Administration** screen, which
 needs an administrator to sign in. The first one is created once, outside the
 application: the Windows desktop setup asks for the first administrator and
-jurisdiction and creates both, and on the server path `install.sh` creates
-both on the first install, as described under "First jurisdiction and admin"
-in [the deployment guide](../../deploy/README.md#first-jurisdiction-and-admin).
+jurisdiction and creates both, as described under "First jurisdiction and
+admin" in [the deployment guide](../../deploy/README.md#first-jurisdiction-and-admin).
 After that, no administrative task needs `psql` or `curl`.
 
 ## The Administration screen

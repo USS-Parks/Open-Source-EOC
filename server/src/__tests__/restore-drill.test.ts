@@ -14,9 +14,9 @@ import { auth, freshDb, tokenFor, type Sql, type TestDb } from "./helpers.js";
 
 /**
  * The restore drill. A synthetic activation is dumped with pg_dump the way
- * deploy/backup.sh and the desktop launcher's pre-upgrade backup dump it, and
- * replayed with psql into a second database the way deploy/restore.sh and the
- * upgrade guide replay it: in one transaction that drops the public schema
+ * the desktop launcher's backup and pre-upgrade backup dump it, and replayed
+ * with psql into a second database the way the upgrade guide and the disaster
+ * recovery runbook replay it: in one transaction that drops the public schema
  * and runs the dump, stopping at the first error. Every row of every table,
  * every sequence and the migration history must come back each time, the
  * migration runner must find nothing to do, and the app must serve the
@@ -133,7 +133,7 @@ afterAll(async () => {
 });
 
 describe("restore drill", () => {
-  it("restores a dumped activation row for row in both deploy paths, needs no migration after it, and serves it", async () => {
+  it("restores a dumped activation row for row, streamed and from a file, needs no migration after it, and serves it", async () => {
     const dbName = async (sql: Sql) => (await sql<{ name: string }[]>`select current_database() as name`)[0]!.name;
     const sourceDb = await dbName(source.admin);
     const targetDb = await dbName(target.admin);
@@ -144,16 +144,16 @@ describe("restore drill", () => {
     expect(count("audit_events")).toBeGreaterThan(0);
     expect(count("schema_migrations")).toBeGreaterThan(1);
 
-    // Docker: backup.sh stores pg_dump's output gzipped; restore.sh pipes the
-    // schema drop and the dump into one psql transaction.
+    // The dump streamed into one psql transaction after the schema drop; the
+    // gzipped size is what a compressed off-computer copy holds.
     const dump = pg("pg_dump", ["--no-owner", "-d", sourceDb]);
     const gzipped = gzipSync(dump.stdout).length;
     const restore = pg("psql", ["-v", "ON_ERROR_STOP=1", "--single-transaction", "-q", "-d", targetDb],
       Buffer.concat([Buffer.from(`${DROP_SCHEMA}\n`), dump.stdout]));
     expect(await contents(target.admin)).toEqual(before);
 
-    // Windows desktop: the launcher's pre-upgrade dump file, replayed with the
-    // psql command the upgrade guide gives.
+    // The launcher's dump file, replayed with the psql command the upgrade
+    // guide gives.
     const dir = mkdtempSync(join(tmpdir(), "openeoc-restore-drill-"));
     let desktopRestoreMs: number;
     try {

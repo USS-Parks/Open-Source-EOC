@@ -24,8 +24,8 @@ Still open, and not in the project's hands:
 
 - the Windows setup is built with the map archives but has not been installed
   from media on a second, disconnected computer;
-- the Docker path's one-command HTTPS install (`deploy/install.sh`) is tested
-  against stand-ins only; its first run on a Linux host has not been made;
+- the shared host for Windows and the macOS workstation and host are
+  scheduled in [the readiness plan](./docs/process/READINESS-PSPR-2026-09-24.md);
 - live IPAWS, real-hardware 150-user load, representative-operator comparison,
   the manual screen-reader pass, a second maintainer and a pilot jurisdiction.
 
@@ -80,7 +80,7 @@ The identity provider owns the second factor for those accounts; see
 - `server/` - Node and Fastify backend in TypeScript.
 - `web/` - React operator application in TypeScript.
 - `shared/` - contracts and types shared by server and web.
-- `deploy/` - Docker, Windows desktop and local-data deployment tooling.
+- `deploy/` - Windows desktop, installer and local-data deployment tooling.
 - `docs/` - operator guides, architecture, evidence and governed plans.
 - `tools/` - map archive, gazetteer and map symbol build tools.
 - `scripts/` - repository checks: links, licenses, advisories, the bundle
@@ -102,6 +102,9 @@ Database-backed tests use the project-local test runtime documented in
 
 ## Deployment
 
-Use `docs/WINDOWS-DESKTOP.md` for the prepared Windows path and
-`deploy/README.md` for the Docker server path. Read their prerequisites and
-limitations before treating either as operational deployment guidance.
+Open Source EOC runs on Windows and macOS machines; there is no Linux or
+Docker deployment ([ADR-0010](./docs/adr/ADR-0010-windows-and-macos.md)).
+`deploy/README.md` says what is built for each platform and how it is
+operated, and `docs/WINDOWS-DESKTOP.md` covers the Windows launcher. Read
+their prerequisites and limitations before treating either as operational
+deployment guidance.

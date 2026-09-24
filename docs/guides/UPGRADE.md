@@ -1,8 +1,10 @@
 # Upgrade Guide
 
 This guide says which databases upgrade in place, what is not supported, and
-how to upgrade and go back on each deployment path. What each version changed
-is in [the changelog](../../CHANGELOG.md).
+how to upgrade and go back on Windows. The shared Windows host and macOS are
+scheduled in [the readiness plan](../process/READINESS-PSPR-2026-09-24.md);
+their steps join this guide when they are built. What each version changed is
+in [the changelog](../../CHANGELOG.md).
 
 ## Versions
 
@@ -17,7 +19,8 @@ The running server reports its version, without sign-in, at
 {"status":"ok","version":"0.9.0"}
 ```
 
-On a Docker host, read it with `curl http://127.0.0.1:8080/api/v1/health`.
+On Windows, `-Action Status -Profile production` reports it with the rest of
+the profile's state.
 
 ## What upgrades in place
 
@@ -60,9 +63,8 @@ If you see this error:
    fails or damages it.
 2. Keep that database, and run it with the source version that created it,
    for as long as you need what it holds.
-3. Install this version on a new, empty database: a new Docker install on
-   another host or with new volumes, or, on the Windows desktop, a new profile
-   after the old profile's directory is moved out of the data folder.
+3. Install this version on a new, empty database: a new profile, after the old
+   profile's directory is moved out of the data folder.
 4. No tool moves data from a database older than the baseline into a new one.
    Carry the records you need across with the board import (CSV or Excel), or
    enter them again.
@@ -76,66 +78,15 @@ the baseline, so only evaluation databases built from source before
 - **Going back to an older version with the same database.** Migrations only
   move forward, and an older version is not tested against a newer schema. To
   go back, restore the backup taken before the upgrade, with the older version
-  installed, as described below for each path.
-- **Upgrading without a backup.** `upgrade.sh` has no switch that skips its
-  backup, and the desktop launcher does not migrate when its backup fails.
+  installed, as described below.
+- **Upgrading without a backup.** The launcher does not migrate when its
+  pre-upgrade backup fails.
 - **Two API processes against one database**, including an old and a new
   version side by side during an upgrade (see
   [One application node](../../deploy/README.md#one-application-node)).
 - **A database built before the baseline**, as above.
 
-## Upgrade a Docker install
-
-1. Put the new release in the repository checkout on the host, for example
-   `git fetch` and `git checkout` of the release. On an air-gapped host, copy
-   the new source tree and any newer images across as for the
-   [first install](../../deploy/README.md#air-gapped-install).
-2. From `deploy/`, run:
-
-   ```
-   ./upgrade.sh
-   ```
-
-   It stops with a message at the first step that fails. In order, it:
-
-   1. checks for Docker, the compose plugin and `curl`, and that
-      `deploy/.env` has the host name and certificate choice (an install made
-      before the HTTPS front end runs `./install.sh` once first);
-   2. prints the running version;
-   3. runs `backup.sh`, and stops, having changed nothing, if the backup
-      fails, if the database dump is empty or does not end with pg_dump's
-      completion line, or if the file archive is not a readable gzip file.
-      The backup needs the `db` and `api` services running;
-   4. builds the new images and recreates the stack; the API applies the new
-      migrations as it starts;
-   5. waits up to five minutes for `GET /api/v1/ready`, then prints the old
-      and new versions and the two backup files.
-
-   An optional argument names the backup directory; the default is
-   `deploy/backups`.
-3. Sign in and check the incident you are working. Copy the two backup files
-   off the host and keep them until the new version has run through an
-   operational period.
-
-There is no switch to skip the backup. If it cannot be taken, the reason is
-printed above the refusal; fix it and run `./upgrade.sh` again.
-
-### Go back on Docker
-
-If the new version does not start, or you need the previous one back, use the
-backup `upgrade.sh` printed. Anything recorded after the upgrade is lost, so
-export what you need first.
-
-1. Check out the previous release in the repository checkout.
-2. `docker compose build` and `docker compose up -d`.
-3. `./restore.sh ./backups/openeoc-<timestamp>.sql.gz --yes-drop-and-restore`
-4. `docker compose restart api`
-
-`restore.sh` reads the whole dump before it drops anything and refuses one
-that did not run to the end. It then drops the schema and replays the dump in
-one transaction, so an error leaves the database as it was.
-
-## Upgrade the Windows desktop
+## Upgrade on Windows
 
 1. Stop each profile you use, for example
    `& "$env:LOCALAPPDATA\Programs\Open Source EOC\app\deploy\windows\Open Source EOC.cmd" -Action Stop -Profile production`.
@@ -152,11 +103,13 @@ one transaction, so an error leaves the database as it was.
    `PRE_UPGRADE_BACKUP path=` with its path, and only then migrates. If the
    dump fails or is empty, the launcher stops with the error and the database
    is not migrated.
+5. Sign in and check the incident you are working. Keep the profile copy
+   until the new version has run through an operational period.
 
 The pre-upgrade dump holds the database only. The copy from step 2 is the
 backup to go back to.
 
-### Go back on the Windows desktop
+### Go back
 
 With the profile copy: stop the profile, install the previous version's setup
 program, replace the profile directory with the copy, and start the profile.
@@ -184,15 +137,15 @@ rest of the database.
 
 ## Restore drill
 
-`server/src/__tests__/restore-drill.test.ts` runs the restore on both paths
-against a synthetic activation on real PostgreSQL. It loads the demo incident,
-adds 4,000 activity log entries, 1,000 road closures with locations and 200
-file records, dumps the database with `pg_dump --no-owner` as `backup.sh` and
-the desktop launcher do, and restores it into a second database twice: from
-standard input in one transaction, as `restore.sh` does, and from a file with
-the command above. After each restore every row of every table and every
-sequence matches the source; afterwards the migration runner finds nothing to
-apply, and the app signs in and serves the restored board.
+`server/src/__tests__/restore-drill.test.ts` runs the restore against a
+synthetic activation on real PostgreSQL. It loads the demo incident, adds
+4,000 activity log entries, 1,000 road closures with locations and 200 file
+records, dumps the database with `pg_dump --no-owner` as the launcher does,
+and restores it into a second database twice: streamed into `psql` in one
+transaction, and from a file with the command above. After each restore every
+row of every table and every sequence matches the source; afterwards the
+migration runner finds nothing to apply, and the app signs in and serves the
+restored board.
 
 Recorded on 2026-09-23 on the development workstation (Windows 11, PostgreSQL
 16.15 test cluster shared with other test runs):
@@ -200,10 +153,10 @@ Recorded on 2026-09-23 on the development workstation (Windows 11, PostgreSQL
 | Measure | Result |
 |---|---|
 | Tables and rows | 112 tables, 13,831 rows, 5,003 of them board records |
-| Dump size | 1.9 MB plain SQL, 0.2 MB gzipped as `backup.sh` stores it |
+| Dump size | 1.9 MB plain SQL, 0.2 MB gzipped |
 | `pg_dump` | 425 ms |
-| Restore from standard input (`restore.sh`) | 2,982 ms |
-| Restore from a file (desktop) | 2,889 ms |
+| Restore streamed into `psql` | 2,982 ms |
+| Restore from a file | 2,889 ms |
 
 The synthetic records repeat a pattern, so they compress far better than real
 records would. Time a restore of a copy of your own database before an

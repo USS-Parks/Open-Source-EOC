@@ -1,6 +1,8 @@
 # ADR-0004: Implemented extension and deployment architecture
 
-Status: accepted, 2026-09-22 (V1 W0.3)
+Status: accepted, 2026-09-22 (V1 W0.3). Its deployment paths are superseded,
+2026-09-24, by [ADR-0010](./ADR-0010-windows-and-macos.md): Windows and macOS
+only, and the Docker path removed. The extension model stands.
 
 Supersedes the original ADR-0004 QuickJS plugin-sandbox decision and
 [ADR-0007](./ADR-0007-deploy-targets.md). Neither earlier architecture was
