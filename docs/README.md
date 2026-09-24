@@ -5,6 +5,7 @@ from a clean install to a useful operator workflow.
 
 ## Start by role
 
+- [Evaluator deciding whether to pilot](EVALUATOR.md)
 - [Operator quickstart](guides/OPERATOR-QUICKSTART.md)
 - [Viewer quickstart](guides/VIEWER-QUICKSTART.md)
 - [Field user](guides/FIELD-USER.md)

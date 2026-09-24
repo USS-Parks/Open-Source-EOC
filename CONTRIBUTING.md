@@ -4,6 +4,8 @@ Thanks for considering a contribution. This project is governed by the build
 roster in `docs/process/FINISH-PSPR-2026-09-22.md`; work that lands must fit a
 roster unit or be agreed with the lead maintainer first.
 
+Report security vulnerabilities privately, as [SECURITY.md](SECURITY.md) says.
+
 ## Setup
 
 Requires Node 22+ and pnpm 10+. Then:

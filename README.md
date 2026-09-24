@@ -35,6 +35,7 @@ commercial-parity certification.
 - `docs/VEOC-PARITY-MATRIX.md` and `docs/FACET-STATUS.md` contain current
   capability status and explicit remaining boundaries.
 - `docs/design/canonical-references/` is the visual authority.
+- `docs/EVALUATOR.md` states scope, limits and evidence for a pilot decision.
 
 License: Apache-2.0. See `LICENSE`.
 
