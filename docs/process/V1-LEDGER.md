@@ -4024,3 +4024,17 @@ tagging remain separately gated as section 1 of the roster states.
   bundle; the Liberation Sans OFL text; three server packages without a
   license file); keeping the offered source for three years.
 - **Rollback:** revert both commits; the existing 0.9.0 setup is unaffected.
+
+## V1 grant: design fidelity
+
+Basho, 2026-09-24, after the release decision: the dashboard must adhere to
+the three canonical frames in `docs/design/canonical-references/` "without
+fail. Without concession. Without excuse." The integrating session had
+reported the shell close to the frames and the screens far from them, which
+no unit of the Finish PSPR had been scoped to close.
+`docs/process/DESIGN-FIDELITY-PSPR-2026-09-24.md` was drafted with a region by
+region gap inventory and approved for STS execution with commit and push per
+unit. Basho's answers: download public-domain imagery and elevation for the
+North Coast for the basemap; brand subtitle "PEOPLE · INFORMATION · SAFER
+COMMUNITIES"; keep every working screen in the rail, styled as the frames'
+items. Receipts for its units follow here.
