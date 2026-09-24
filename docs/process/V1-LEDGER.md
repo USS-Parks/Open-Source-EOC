@@ -3866,3 +3866,25 @@ tagging remain separately gated as section 1 of the roster states.
   status badges' case; a reload while offline before the installed app has
   cached its files shows the browser's offline page.
 - **Rollback:** revert both commits; no schema to unwind.
+
+## V1 final milestone gate
+
+- **Command:** `pnpm check:gate` with `OPENEOC_TEST_DB_TAG=gate` on `main` at
+  `ec11af5`, after every engineering unit had landed, with no lane running
+  tests and the checkout untouched for the run (one documents-only writer was
+  editing in its own worktree).
+- **Static gates:** TypeScript, ESLint, license scan (303 packages), link
+  checker (94 files), advisory gate (0 high or critical, 0 exceptions), and
+  the desktop and installer tests (25 passed), all green.
+- **Serial suite:** 273 of 273 files and 1,553 of 1,553 tests passed in 1,375
+  seconds, in one run with no re-run. The load benchmark then passed 4 of 4.
+  The command exited 0 after 1,494 seconds.
+- **Gate line 1** ("`pnpm check` green on `main` with `--maxWorkers=1` and the
+  gate tag, including the route-table contract test, the secret scan and the
+  advisory scan"): green on this run for the suite, the route-table test and
+  the advisory scan. The secret scan runs in the pre-commit hook on every
+  commit, which passed for every commit of this plan, and in hosted CI, which
+  still starts no job for the billing reason recorded in "V1 CI stability: the
+  deep-link race and the recurring red runs".
+- **Result:** the engineering waves are complete and the suite is green on the
+  final engineering commit.
