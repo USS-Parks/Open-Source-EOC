@@ -3203,3 +3203,61 @@ tagging remain separately gated as section 1 of the roster states.
   evaluator page's sentence on installing to a phone's home screen, updated
   when the installable web app unit lands.
 - **Rollback:** revert both commits.
+
+## V1 W6.2: disaster recovery runbook
+
+- **What changed.**
+  - New `docs/guides/DISASTER-RECOVERY.md`, indexed from the guides README and
+    pointed to from `ADMIN.md`, `UPGRADE.md`, the deploy README and
+    `docs/WINDOWS-DESKTOP.md`: default recovery point and time objectives per
+    failure with how each is built up; what is backed up and what is kept
+    apart or fetched again; scheduled backup and retention on both paths;
+    off-host copies (3-2-1, encryption before the copy leaves the host,
+    checking a copy by checksum, secrets kept apart); a restore for each
+    failure (database damaged, host lost, bad upgrade, records deleted: no
+    undelete and no partial restore, the values being in the deletion's audit
+    payload); checks after a restore; a quarterly restore test against the
+    drill numbers; who does what.
+  - New `deploy/schedule-backup.sh` installs `openeoc-backup.service` (running
+    `backup.sh` as the owner of `deploy/.env`) and a persistent daily
+    `openeoc-backup.timer`, then takes one backup through the service; the
+    schedule, kept days and user are settings, and a bad value is refused
+    before any unit file is written.
+  - `backup.sh` removes its own backups older than the kept days (default 14,
+    judged by the timestamp in the name) only after both files of a run are
+    complete, and leaves `.upload-*` staging files out of the file archive.
+  - The Windows launcher gains `-Action Backup` (`-KeepDays`): the
+    pre-upgrade `pg_dump` call writes `backups/openeoc-<UTC>.sql`, the file
+    store is copied to `openeoc-<UTC>.blobs`, both under `.part` names until
+    complete, then the same retention prunes, never touching `pre-upgrade-*`
+    dumps; a stopped profile's PostgreSQL is started for the dump and stopped
+    after.
+- **Defaults and deviations.** RPO 24 hours; RTO 1 hour for a damaged database
+  and 4 hours for a lost host; 14 days kept; backups at 02:30. A systemd timer
+  rather than cron or a compose loop, because a missed run happens at the next
+  boot and output goes to the journal; cron and a Windows scheduled task are
+  documented. Deviations: `.upload-*` files are left out of the archive so an
+  upload finishing mid-archive cannot fail an unattended run; the schedule and
+  retention tests extend `deploy/upgrade.test.mjs`. The integrating session
+  added the `docs/WINDOWS-DESKTOP.md` pointer the lane could not reach.
+- **Schema, contract, dependencies:** none.
+- **Verification.** In the lane, tag `a`, on `4ff06ea`: tsc and eslint exit 0;
+  `pnpm exec vitest run deploy/upgrade.test.mjs deploy/install.test.mjs`, 2
+  files and 13 tests passed, including retention (a failed run removes
+  nothing; old files removed, recent and unrelated kept; refusal of 0) and the
+  schedule script (unit contents, the order of reload, enable and start, five
+  refusals with no unit written); `pnpm test:desktop` 23 passed, including
+  the scheduled backup (failed and empty dumps remove nothing and leave no
+  `.part`, staging uploads left out, only scheduled backups past the kept days
+  removed) and the refusal for a profile not set up. The integrating session
+  rebased onto `1099fe7` and ran the link checker (ok, 92 files), the desktop
+  and installer tests (23 passed) and the two deploy tests (13 passed).
+- **Evidence level:** unit and document. No systemd timer, Windows scheduled
+  task or real profile backup was run; restore behavior is unchanged, so the
+  versioning unit's drill stands.
+- **Deferred:** removing a `.part` file after a failed Docker backup; hard
+  links to save space on file store copies; a first real scheduled run on
+  each path; a profile started during the few seconds the Backup action holds
+  its PostgreSQL is stopped with it, which the code notes.
+- **Rollback:** revert both commits, then disable and delete the systemd units
+  and unregister the Windows task; backups already written stay.
