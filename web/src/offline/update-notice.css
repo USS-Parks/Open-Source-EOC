@@ -1,0 +1,3 @@
+.eoc-update-notice { position: fixed; z-index: 400; right: 16px; bottom: 16px; max-width: calc(100vw - 32px); display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 12px 10px 14px; color: var(--eoc-text); background: var(--eoc-surface-raised); border: 1px solid var(--eoc-border-strong); border-left: 4px solid var(--eoc-brand-teal); border-radius: var(--eoc-radius-md); box-shadow: var(--eoc-shadow-md); font-family: var(--eoc-font); font-size: 14px; }
+.eoc-update-notice p { margin: 0; color: var(--eoc-text-strong); font-weight: 650; }
+.eoc-update-notice > div { display: flex; gap: 6px; margin-left: auto; }

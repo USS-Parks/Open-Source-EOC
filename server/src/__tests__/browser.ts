@@ -59,6 +59,8 @@ export function shotDir(name: string): string {
 
 /** Everything the web bundle is built from; a change to any of these forces a rebuild. */
 const BUNDLE_INPUTS = ["pnpm-lock.yaml", "shared/package.json", "shared/src", "web/index.html", "web/package.json", "web/src", "web/vite.config.ts"];
+// The build writes the service worker from web/public/sw.js and precaches the manifest and icons.
+BUNDLE_INPUTS.push("web/public/sw.js", "web/public/manifest.webmanifest", "web/public/icons");
 
 function collectFiles(path: string): string[] {
   if (!existsSync(path)) throw new Error(`Build input is missing: ${path}`);

@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { ApiClient, type Me, type MfaChallenge, type Tokens } from "../api/client.js";
+import { ApiClient, ApiError, SessionExpiredError, type Me, type MfaChallenge, type Tokens } from "../api/client.js";
 
 /**
  * Session state for the shell. The token pair is persisted per-viewer in
@@ -107,20 +107,37 @@ export function SessionProvider(props: { client?: ApiClient; children: ReactNode
       return;
     }
     client.setTokens(saved);
-    client
-      .me()
-      .then((m) => {
-        if (cancelled) return;
-        adoptMe(m);
-        setStatus("authed");
-      })
-      .catch(() => {
-        if (cancelled) return;
-        client.clearTokens();
-        setStatus("anon");
-      });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const attempt = () => {
+      clearTimeout(timer);
+      window.removeEventListener("online", attempt);
+      client
+        .me()
+        .then((m) => {
+          if (cancelled) return;
+          setError(null);
+          adoptMe(m);
+          setStatus("authed");
+        })
+        .catch((cause: unknown) => {
+          if (cancelled) return;
+          // Only the server's refusal ends a saved session. Without a
+          // connection the tokens are kept and the read is tried again.
+          if (cause instanceof SessionExpiredError || (cause instanceof ApiError && [401, 403].includes(cause.status))) {
+            client.clearTokens();
+            setStatus("anon");
+            return;
+          }
+          setError("No connection to the server. Your session is kept and resumes when the connection returns.");
+          window.addEventListener("online", attempt);
+          timer = setTimeout(attempt, 15_000);
+        });
+    };
+    attempt();
     return () => {
       cancelled = true;
+      clearTimeout(timer);
+      window.removeEventListener("online", attempt);
     };
   }, [adoptMe, client]);
 

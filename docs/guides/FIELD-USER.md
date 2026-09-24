@@ -13,6 +13,40 @@ interruption, while distinguishing local queue state from server receipt.
 4. Check the command-bar connection state. Cache preparation must finish before
    you rely on a disconnected path.
 
+## Install the app and work offline
+
+The console installs as an app. In Chrome or Edge, choose **Install** in the
+address bar or the browser menu; on an iPhone or iPad, choose **Share**, then
+**Add to Home Screen**. The app opens in its own window.
+
+After one visit with a connection, the device keeps a copy of the app: the code
+for every screen, the bundled California basemap, the map labels and the
+facility symbols. Without a connection:
+
+- A signed-in session keeps working. Every screen opens; screens that need live
+  data say it is unavailable, and field reports and task completions queue on
+  the device as described below.
+- Signing in needs the connection, so sign in before you leave coverage. If the
+  app is closed or reloaded while offline, it keeps your session and shows "No
+  connection to the server" until the connection returns, then opens where you
+  were; queued work stays on the device. Keep the app open while offline so
+  the screens stay usable.
+- The bundled basemap draws from the device copy. A street, buildings or
+  overlay map hosted by your deployment is read from the server as you pan and
+  needs the connection.
+- Map tiles your deployment serves from the app's own address stay available
+  once viewed with a connection, up to 50 MB. The oldest are dropped first, and
+  none are added when the device is nearly out of storage.
+- Records, boards and messages are never answered from this copy; they come
+  from the server or, for queued work, from the device's own queue.
+
+The app asks the browser to keep its storage, including queued work, when the
+device runs low on space. The browser decides.
+
+When a new version is published, a notice reads **A new version is ready**.
+Choose **Reload** when it suits you; queued work stays on the device through
+the reload. **Later** hides the notice until the app next starts.
+
 ## Queue a field report
 
 1. In **Smart Forms**, choose your organization's form and the attached incident

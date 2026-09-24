@@ -19,8 +19,9 @@ afterEach(() => {
   }
 });
 
-function makeClient(onResume?: () => boolean | void): ApiClient {
+function makeClient(onResume?: () => boolean | void, reachable: () => boolean = () => true): ApiClient {
   const fetchImpl = (async (url: string) => {
+    if (!reachable()) throw new TypeError("Failed to fetch");
     const u = String(url);
     const res = (status: number, body: unknown) => ({
       ok: status < 300,
@@ -129,6 +130,22 @@ describe("SessionProvider", () => {
     );
     await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("authed"));
     expect(screen.getByTestId("jur").textContent).toBe("j1");
+  });
+
+  it("keeps a saved session through a lost connection and resumes when it returns", async () => {
+    localStorage.setItem("openeoc.tokens", JSON.stringify({ accessToken: "A", resumeToken: "R" }));
+    let reachable = false;
+    render(
+      <SessionProvider client={makeClient(undefined, () => reachable)}>
+        <Probe />
+      </SessionProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId("error").textContent).toMatch(/no connection/i));
+    expect(screen.getByTestId("status").textContent).toBe("loading");
+    reachable = true;
+    window.dispatchEvent(new Event("online"));
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("authed"));
+    expect(screen.getByTestId("error").textContent).toBe("");
   });
 
   it("renews a live session for offline-work recovery without changing its jurisdiction", async () => {

@@ -122,6 +122,10 @@ Byte-range requests and `If-Range` are answered by `file_server`, and nothing
 in the stack compresses these responses, so the map's range reads of the
 archives work.
 
+The service worker `sw.js` and `manifest.webmanifest` sit beside the page and
+fall under the `no-cache` row, so browsers find a new build on their next
+check. Browsers run a service worker only over HTTPS or from localhost.
+
 ### What has been verified
 
 `deploy/install.test.mjs` runs `install.sh` against stand-ins for `docker` and

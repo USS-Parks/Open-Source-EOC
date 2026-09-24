@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Theme } from "../design/components.js";
 import type { ThemeName } from "../design/tokens.js";
+import { UpdateNotice } from "../offline/UpdateNotice.js";
 import { SessionProvider, useSession } from "./auth/session.js";
 import { IncidentProvider } from "./incident/context.js";
 import { WorkspaceContextProvider, useWorkspaceContext } from "./layout/context.js";
@@ -40,8 +41,8 @@ function WorkspaceConsole() {
 }
 
 function Gate(props: { theme: ThemeName; onThemeChange: (theme: ThemeName) => void }) {
-  const { status } = useSession();
-  if (status === "loading") return <Loading label="Starting…" />;
+  const { status, error } = useSession();
+  if (status === "loading") return <Loading label={error ?? "Starting…"} />;
   if (status === "anon") return <Login />;
   return (
     <IncidentProvider>
@@ -62,6 +63,7 @@ export function App() {
       <SessionProvider>
         <Gate theme={theme} onThemeChange={setTheme} />
       </SessionProvider>
+      <UpdateNotice />
     </Theme>
   );
 }
