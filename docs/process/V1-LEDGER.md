@@ -2904,3 +2904,59 @@ tagging remain separately gated as section 1 of the roster states.
   interrupted download; the HTTP/3 port; the first real run.
 - **Rollback:** revert both commits; the database and blob volumes are
   unchanged, and the `caddy-data` and `caddy-config` volumes can be removed.
+
+## V1 W4 gate: parity reconciliation and the WebEOC side-by-side
+
+- **What changed.**
+  - `docs/VEOC-PARITY-MATRIX.md` and `docs/FACET-STATUS.md` are reconciled to
+    the V1 ledger receipts through `57b0287`, citing receipts by heading. The
+    six gate rows F1, F4, F7, F8, F13 and G-TILES are verified, each stating
+    what is not claimed. F3 moves from verified to partial, because the
+    receipts "V1 W3.11: engine gaps the screens exposed" and "V1 W4.12: REST
+    record writes through the sync log" state that incident-tagged record
+    edits and deletes do not federate. G-MFA moves from open to partial: TOTP
+    is done and SAML waits on Basho's identity-provider decision. R2 names
+    only the live-credential gate. F9, F18, G-INGEST, G-CATALOG and G-PARCELS
+    carry updated evidence and owners.
+  - New `docs/WEBEOC-SIDE-BY-SIDE.md`, indexed from `docs/README.md`: a
+    17-task evaluation script across WebEOC's board, notification and
+    reporting modules, with the OpenEOC steps by real screen label, the
+    expected result, the internal run's result and evidence per task, and the
+    gaps found.
+  - New `server/src/__tests__/webeoc-side-by-side-browser.test.ts`: one Chrome
+    walk on real PostgreSQL following the script in order.
+- **Defaults and deviations.** The WebEOC column rests only on the research
+  document and the parity matrix, since no network was used. Tasks 9
+  (permissions) and 14 (escalation), and parts of tasks 1, 4 to 7 and 17,
+  cite existing walks rather than repeating them; at least one step of each
+  module runs in the new walk. F3 changed although it is not a gate row,
+  because its receipts state the bound. The matrix has no rows yet for
+  incident archival, the master view, lockdown or the installable web app;
+  F12, G-INCSCOPE, AR7 and INV-3 were left as they stood, and the
+  reconciliation unit `86+D35` adds or updates them. `README.md` and
+  `ROADMAP.md` are left to that unit.
+- **Gaps the run found,** recorded in the script: a board created on the
+  Templates screen is missing from Boards and the rule and report pickers
+  until reload; outside activation no screen creates a board from an already
+  published template; a notification rule cannot be listed, changed or
+  removed; rule emails and texts read as system text; no voice channel, and
+  Teams or Slack only as a generic webhook; low-contrast plain buttons in the
+  dark theme; the report table cuts its last heading at 390 wide; status
+  values show as stored codes in the list and report.
+- **Schema, contract, dependencies:** none.
+- **Verification.** In the lane, tag `d`, on `57b0287`: `pnpm -r exec tsc
+  --noEmit` exit 0; `pnpm exec eslint .` exit 0; `pnpm exec vitest run
+  server/src/__tests__/webeoc-side-by-side-browser.test.ts`, 1 file and 1
+  test passed. Among its assertions: group counts, kanban columns, CSV
+  headers over four rows, a WebEOC import of one record with one rejected and
+  its dataid kept, record history, a status-change rule delivering one email
+  and one SMS, a broadcast delivering four with receipts, report totals, a
+  PDF carrying the sums and a stored daily schedule; light and dark 1440 and
+  one 390 screenshot, no page errors, no external requests. The integrating
+  session rebased onto `2728957`, which carries the incident lifecycle and
+  server install units, re-ran the walk (1 file, 1 test passed) and ran the
+  link checker (ok, 87 files).
+- **Evidence level:** real-database, browser and document.
+- **Deferred:** the eight gaps above; the W4 milestone suite, which runs once
+  the installable web app unit lands, since it closes wave W4.
+- **Rollback:** revert both commits.
