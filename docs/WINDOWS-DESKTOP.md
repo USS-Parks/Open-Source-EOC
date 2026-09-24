@@ -116,6 +116,8 @@ Stop checks the application command line and ownership token, the browser user-d
 
 Stop a profile before making a filesystem backup. Preserve its entire profile directory so the database, attachments, configuration, and generated credentials remain together. Restore only to the same trusted Windows account and keep the secret directory private.
 
+For scheduled backups of a running profile, `-Action Backup -Profile production` dumps the database and copies the file store into the profile's `backups` directory and keeps 14 days by default; [the disaster recovery runbook](guides/DISASTER-RECOVERY.md) gives the scheduled task and the restore.
+
 ## Rotating the credential key
 
 The profile's `secrets/envelope.key` encrypts its stored credentials: TOTP secrets, the IPAWS credential, collaboration and meeting secrets, and federation peer tokens. The server's `rotate-secret-key` command re-encrypts all of them to a new key in one transaction and changes nothing if any value fails. Stop the profile and back up its directory first, then run from the repository root. In an installed copy, use `runtime\pgsql\bin` for `$pgBin`, `.\runtime\node\node.exe` for `$node`, and `$env:LOCALAPPDATA\Open Source EOC\profiles\<profile>` for `$profileDir`.

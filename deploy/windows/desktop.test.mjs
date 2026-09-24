@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import test from "node:test";
@@ -26,7 +26,7 @@ import {
   staticCaching,
 } from "./lib/static-host.mjs";
 import { rotateIfLarger, rotatingLog } from "./lib/rotating-log.mjs";
-import { backupBeforeMigrate } from "./lib/pre-upgrade-backup.mjs";
+import { backupBeforeMigrate, scheduledBackup } from "./lib/pre-upgrade-backup.mjs";
 
 function fixture() {
   const root = mkdtempSync(resolve(tmpdir(), "openeoc-windows-"));
@@ -265,6 +265,58 @@ test("a newer build backs up an existing profile database before migrating it, a
     assert.throws(() => backupBeforeMigrate({ ...pending, dump: (file) => writeFileSync(file, "") }), /missing or empty; the database was not migrated/);
   } finally {
     rmSync(backupsDir, { recursive: true, force: true });
+  }
+});
+
+test("a scheduled backup dumps the database and copies the file store, then removes only its own backups past the kept days", () => {
+  const root = mkdtempSync(resolve(tmpdir(), "openeoc-scheduled-backup-"));
+  try {
+    const backupsDir = resolve(root, "backups");
+    const blobsDir = resolve(root, "blobs");
+    mkdirSync(resolve(blobsDir, "ab"), { recursive: true });
+    writeFileSync(resolve(blobsDir, "ab/abcdef"), "stored file");
+    writeFileSync(resolve(blobsDir, ".upload-in-progress"), "partial");
+    mkdirSync(resolve(backupsDir, "openeoc-20260901T000000Z.blobs"), { recursive: true });
+    const earlier = ["openeoc-20260901T000000Z.sql", "openeoc-20260920T000000Z.sql", "pre-upgrade-20260801T000000Z.sql", "notes.txt"];
+    for (const name of earlier) writeFileSync(resolve(backupsDir, name), "x");
+    const now = new Date("2026-09-23T02:30:00Z");
+    const dump = (path) => writeFileSync(path, "-- PostgreSQL database dump complete\n");
+
+    for (const failing of [() => { throw new Error("pg_dump exited with 1"); }, (path) => writeFileSync(path, "")]) {
+      assert.throws(() => scheduledBackup({ backupsDir, blobsDir, dump: failing, now }), /no backup was written and none was removed/);
+      assert.deepEqual(readdirSync(backupsDir).sort(), [...earlier, "openeoc-20260901T000000Z.blobs"].sort());
+    }
+    assert.throws(() => scheduledBackup({ backupsDir, blobsDir, dump, keepDays: 0, now }), /whole number/);
+
+    const result = scheduledBackup({ backupsDir, blobsDir, dump, now });
+    assert.equal(result.database, resolve(backupsDir, "openeoc-20260923T023000Z.sql"));
+    assert.equal(readFileSync(resolve(result.files, "ab/abcdef"), "utf8"), "stored file");
+    assert.equal(existsSync(resolve(result.files, ".upload-in-progress")), false);
+    assert.deepEqual(result.removed.sort(), ["openeoc-20260901T000000Z.blobs", "openeoc-20260901T000000Z.sql"]);
+    assert.deepEqual(readdirSync(backupsDir).sort(), [
+      "notes.txt",
+      "openeoc-20260920T000000Z.sql",
+      "openeoc-20260923T023000Z.blobs",
+      "openeoc-20260923T023000Z.sql",
+      "pre-upgrade-20260801T000000Z.sql",
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("backing up a profile that is not set up changes nothing", { skip: process.platform !== "win32" }, () => {
+  const dataRoot = mkdtempSync(resolve(tmpdir(), "openeoc-backup-unconfigured-"));
+  try {
+    const result = spawnSync(process.execPath, [fileURLToPath(new URL("./desktop.mjs", import.meta.url)), "backup", "--profile=acceptance"], {
+      encoding: "utf8",
+      env: { ...process.env, OPENEOC_DESKTOP_DATA_ROOT: dataRoot, OPENEOC_ENABLE_ACCEPTANCE_PROFILE: "1" },
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Profile acceptance is not ready; nothing was backed up/);
+    assert.deepEqual(readdirSync(dataRoot), []);
+  } finally {
+    rmSync(dataRoot, { recursive: true, force: true });
   }
 });
 

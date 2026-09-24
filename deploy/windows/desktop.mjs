@@ -27,7 +27,7 @@ import {
 import { desktopRuntimeConfig, registerStaticHost } from "./lib/static-host.mjs";
 import { desktopBuildSourceFingerprint } from "./lib/build-fingerprint.mjs";
 import { rotateIfLarger, rotatingLog } from "./lib/rotating-log.mjs";
-import { backupBeforeMigrate } from "./lib/pre-upgrade-backup.mjs";
+import { backupBeforeMigrate, scheduledBackup } from "./lib/pre-upgrade-backup.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = resolve(process.env.OPENEOC_DESKTOP_APP_ROOT ?? resolve(dirname(scriptPath), "../.."));
@@ -255,6 +255,15 @@ function stopPostgres(paths) {
   return true;
 }
 
+/** A plain SQL dump of the profile database to a file, which restore replays. */
+function pgDump(config, ownerPassword) {
+  return (file) => execFileSync(pgExecutable("pg_dump"), ["--no-owner", "-f", file, "-d", config.database], {
+    env: pgEnvironment(ownerPassword, config),
+    stdio: ["ignore", "ignore", "pipe"],
+    windowsHide: true,
+  });
+}
+
 function databaseUrl(user, password, config) {
   return `postgres://${encodeURIComponent(user)}:${encodeURIComponent(password)}@127.0.0.1:${config.pgPort}/${config.database}`;
 }
@@ -282,11 +291,7 @@ async function prepareDatabase(paths, config, { bootstrap = false, bootstrapInpu
       applied: tracked ? (await owner`select name from public.schema_migrations`).map((row) => row.name) : [],
       files: readdirSync(migrations).filter((file) => file.endsWith(".sql")),
       backupsDir: resolve(paths.root, "backups"),
-      dump: (file) => execFileSync(pgExecutable("pg_dump"), ["--no-owner", "-f", file, "-d", config.database], {
-        env: pgEnvironment(ownerPassword, config),
-        stdio: ["ignore", "ignore", "pipe"],
-        windowsHide: true,
-      }),
+      dump: pgDump(config, ownerPassword),
     });
     if (backup) console.log(`PRE_UPGRADE_BACKUP path=${backup}`);
     await migrate(owner, migrations);
@@ -658,6 +663,29 @@ async function stopProfile(args) {
   console.log(`PROFILE_STOPPED profile=${profile} app=${appStopped} postgres=${postgresStopped} browser=${browserStopped}`);
 }
 
+/** Dump the profile database and copy its file store, then remove backups past the kept days. */
+async function backupProfile(args) {
+  const profile = validateProfileName(String(args.profile ?? "production"));
+  const { paths, config } = loadProfile(profile);
+  if (!config || config.state !== "ready") throw new Error(`Profile ${profile} is not ready; nothing was backed up`);
+  const ownerPassword = readFileSync(paths.ownerPassword, "utf8").trim();
+  // A stopped profile's database is started for the dump and stopped after it.
+  // ponytail: a profile started in those seconds loses its database when the
+  // backup stops it; check for an owned app process here if that ever bites.
+  const started = await startPostgres(paths, config, ownerPassword);
+  try {
+    const result = scheduledBackup({
+      backupsDir: resolve(paths.root, "backups"),
+      blobsDir: paths.blobs,
+      dump: pgDump(config, ownerPassword),
+      keepDays: Number(args["keep-days"] ?? 14),
+    });
+    console.log(`BACKUP_WRITTEN profile=${profile} database=${result.database} files=${result.files} removed=${result.removed.length}`);
+  } finally {
+    if (started) stopPostgres(paths);
+  }
+}
+
 async function profileStatus(args) {
   const profile = validateProfileName(String(args.profile ?? "production"));
   const { paths, config } = loadProfile(profile);
@@ -700,6 +728,7 @@ async function main() {
   if (action === "serve") return serveProfile(args);
   if (action === "status") return profileStatus(args);
   if (action === "stop") return stopProfile(args);
+  if (action === "backup") return backupProfile(args);
   throw new Error(`Unknown action: ${args.action}`);
 }
 

@@ -23,6 +23,7 @@ substitute. Re-select context before acting.
 | Coordinate incident work | [Operator quickstart](./OPERATOR-QUICKSTART.md) |
 | Configure people, incidents, and integrations | [Administrator guide](./ADMIN.md) |
 | Upgrade the server or desktop, and go back | [Upgrade guide](./UPGRADE.md) |
+| Schedule backups, keep copies off the host, and restore after a failure | [Disaster recovery runbook](./DISASTER-RECOVERY.md) |
 | Capture field reports and assigned completions | [Field user guide](./FIELD-USER.md) |
 | Moderate damage reports and prepare declaration support | [Damage assessment](./DAMAGE-ASSESSMENT.md) |
 | Track facility and shelter status, hospital beds and shelter capacity | [Facilities and shelters](./FACILITIES.md) |

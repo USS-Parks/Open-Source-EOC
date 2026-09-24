@@ -9,7 +9,9 @@ import { afterAll, describe, expect, it } from "vitest";
 // upgrade.sh, and the backup.sh and restore.sh it relies on, run against
 // stand-ins for docker, curl and sleep placed first on PATH, so the order of
 // their steps and their refusals are exercised with no Docker daemon, no
-// image and no network. Runs under the workspace vitest, as install.test.mjs.
+// image and no network. schedule-backup.sh runs against a systemctl stand-in
+// that starts the service by running its unit's command. Runs under the
+// workspace vitest, as install.test.mjs.
 
 const here = dirname(fileURLToPath(import.meta.url));
 // Git Bash on Windows; the bash on PATH there can be the WSL launcher.
@@ -46,6 +48,17 @@ case "$url" in
 esac
 `;
 
+// Starting the backup service runs its unit's command with its environment,
+// as systemd would.
+const SYSTEMCTL = `#!/usr/bin/env bash
+echo "systemctl $*" >> "$FAKE_STATE/log"
+if [ "$*" = "start openeoc-backup.service" ]; then
+  unit="$OPENEOC_SYSTEMD_DIR/openeoc-backup.service"
+  export "$(sed -n 's/^Environment=//p' "$unit")"
+  eval "$(sed -n 's/^ExecStart=//p' "$unit")"
+fi
+`;
+
 const dirs = [];
 afterAll(() => {
   for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
@@ -58,10 +71,11 @@ function setup() {
   const dir = mkdtempSync(join(tmpdir(), "openeoc-upgrade-"));
   dirs.push(dir);
   for (const sub of ["deploy", "bin", "state"]) mkdirSync(join(dir, sub));
-  for (const script of ["upgrade.sh", "backup.sh", "restore.sh"]) copyFileSync(join(here, script), join(dir, "deploy", script));
+  for (const script of ["upgrade.sh", "backup.sh", "restore.sh", "schedule-backup.sh"]) copyFileSync(join(here, script), join(dir, "deploy", script));
   writeFileSync(join(dir, "deploy/.env"), 'OPENEOC_DOMAIN="eoc.county.example"\nOPENEOC_TLS="it@county.example"\n');
   writeFileSync(join(dir, "bin/docker"), DOCKER, { mode: 0o755 });
   writeFileSync(join(dir, "bin/curl"), CURL, { mode: 0o755 });
+  writeFileSync(join(dir, "bin/systemctl"), SYSTEMCTL, { mode: 0o755 });
   writeFileSync(join(dir, "bin/sleep"), "#!/usr/bin/env bash\n", { mode: 0o755 });
   writeFileSync(join(dir, "state/version"), "0.9.0");
   return dir;
@@ -80,6 +94,8 @@ function run(dir, script, args = [], env = {}) {
 }
 
 const backups = (dir) => (existsSync(join(dir, "deploy/backups")) ? readdirSync(join(dir, "deploy/backups")) : []);
+/** The UTC timestamp backup.sh puts in a file name, `days` days ago. */
+const stampDaysAgo = (days) => new Date(Date.now() - days * 86_400_000).toISOString().replace(/\.\d+Z$/, "Z").replaceAll(/[-:]/g, "");
 
 describe("upgrade.sh", () => {
   it("backs up before it rebuilds or restarts anything, then reports the new version and the backup", () => {
@@ -153,5 +169,82 @@ describe("restore.sh", () => {
     expect(restored.log).toContain("exec -T db psql -v ON_ERROR_STOP=1 --single-transaction");
     expect(readFileSync(join(dir, "state/psql-input"), "utf8"))
       .toBe(`drop schema public cascade; create schema public;\n${COMPLETE_DUMP}`);
+  });
+});
+
+describe("backup.sh retention", () => {
+  it("removes its own backups past the kept days only after a new backup is written", () => {
+    const dir = setup();
+    mkdirSync(join(dir, "deploy/backups"));
+    const [old, recent] = [stampDaysAgo(20), stampDaysAgo(3)];
+    const pair = (stamp) => [`openeoc-${stamp}.sql.gz`, `openeoc-${stamp}.blobs.tar.gz`];
+    const others = ["notes.txt", "openeoc-cut.sql.gz"];
+    for (const name of [...pair(old), ...pair(recent), ...others]) writeFileSync(join(dir, "deploy/backups", name), "x");
+
+    const failed = run(dir, "backup.sh", [], { FAKE_DUMP: "fail" });
+    expect(failed.status).not.toBe(0);
+    expect(backups(dir)).toEqual(expect.arrayContaining([...pair(old), ...pair(recent)]));
+
+    const kept = run(dir, "backup.sh");
+    expect(kept.status, kept.out).toBe(0);
+    expect(kept.out).toContain("removed backup older than 14 days");
+    const after = backups(dir);
+    expect(after).not.toContain(pair(old)[0]);
+    expect(after).not.toContain(pair(old)[1]);
+    expect(after).toEqual(expect.arrayContaining([...pair(recent), ...others]));
+    expect(after.filter((name) => name.endsWith(".gz")).length).toBe(5);
+
+    const shorter = run(dir, "backup.sh", [], { OPENEOC_BACKUP_KEEP_DAYS: "2" });
+    expect(shorter.status, shorter.out).toBe(0);
+    expect(backups(dir)).not.toContain(pair(recent)[0]);
+    expect(backups(dir)).toEqual(expect.arrayContaining(others));
+
+    const refused = run(dir, "backup.sh", [], { OPENEOC_BACKUP_KEEP_DAYS: "0" });
+    expect(refused.status).toBe(2);
+    expect(refused.out).toContain("OPENEOC_BACKUP_KEEP_DAYS must be a whole number of days");
+  });
+});
+
+describe("schedule-backup.sh", () => {
+  it("installs a persistent timer whose service runs backup.sh as the install account, and proves it with one backup", () => {
+    const dir = setup();
+    const units = join(dir, "units");
+    mkdirSync(units);
+    const env = { OPENEOC_SYSTEMD_DIR: posix(units), OPENEOC_BACKUP_USER: "eoc", OPENEOC_BACKUP_KEEP_DAYS: "30" };
+    const scheduled = run(dir, "schedule-backup.sh", [], env);
+    expect(scheduled.status, scheduled.out).toBe(0);
+
+    const service = readFileSync(join(units, "openeoc-backup.service"), "utf8");
+    expect(service).toContain("Type=oneshot\nUser=eoc\nEnvironment=OPENEOC_BACKUP_KEEP_DAYS=30\n");
+    expect(service).toMatch(/^ExecStart=\/usr\/bin\/env bash "\/.*\/deploy\/backup\.sh" "\/.*\/deploy\/backups"$/m);
+    const timer = readFileSync(join(units, "openeoc-backup.timer"), "utf8");
+    expect(timer).toContain("OnCalendar=*-*-* 02:30:00\nPersistent=true\n");
+    expect(timer).toContain("WantedBy=timers.target");
+
+    const steps = ["systemctl daemon-reload", "systemctl enable --now openeoc-backup.timer", "systemctl start openeoc-backup.service", "exec -T db pg_dump"]
+      .map((step) => scheduled.log.indexOf(step));
+    expect(steps.every((at) => at >= 0), scheduled.log).toBe(true);
+    expect([...steps].sort((a, b) => a - b)).toEqual(steps);
+    expect(backups(dir).filter((name) => /^openeoc-\d{8}T\d{6}Z\.(sql|blobs\.tar)\.gz$/.test(name)).length).toBe(2);
+  });
+
+  it("refuses bad settings, and an install without deploy/.env, before writing any unit", () => {
+    for (const [args, env, message] of [
+      [[], { OPENEOC_BACKUP_KEEP_DAYS: "0" }, "OPENEOC_BACKUP_KEEP_DAYS must be a whole number"],
+      [[], { OPENEOC_BACKUP_SCHEDULE: "02:30\nExecStartPre=/bin/false" }, "OPENEOC_BACKUP_SCHEDULE must be a systemd calendar value"],
+      [["backups"], {}, "Give the backup directory as an absolute path"],
+      [["/srv/back%up"], {}, "must not contain %"],
+      [[], { NO_ENV: "1" }, "deploy/.env is missing"],
+    ]) {
+      const dir = setup();
+      const units = join(dir, "units");
+      mkdirSync(units);
+      if (env.NO_ENV) rmSync(join(dir, "deploy/.env"));
+      const refused = run(dir, "schedule-backup.sh", args, { OPENEOC_SYSTEMD_DIR: posix(units), OPENEOC_BACKUP_USER: "eoc", ...env });
+      expect(refused.status, message).not.toBe(0);
+      expect(refused.out).toContain(message);
+      expect(readdirSync(units)).toEqual([]);
+      expect(refused.log).not.toContain("systemctl");
+    }
   });
 });

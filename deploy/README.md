@@ -326,6 +326,27 @@ that looks like a backup. Restore reads the whole dump first and refuses one
 that did not run to the end; it then drops the schema and replays the dump in
 one transaction, so an error leaves the database as it was.
 
+### Scheduled backups
+
+```
+sudo ./schedule-backup.sh   # daily at 02:30, as the owner of deploy/.env, keeping 14 days
+```
+
+It installs `openeoc-backup.service`, which runs `backup.sh`, and a
+persistent `openeoc-backup.timer`, then takes one backup through the service
+so a schedule that cannot work fails at once. `OPENEOC_BACKUP_SCHEDULE`,
+`OPENEOC_BACKUP_KEEP_DAYS` and `OPENEOC_BACKUP_USER` change the time, the days
+kept and the account. After both of its files are complete, `backup.sh`
+removes its own backups older than `OPENEOC_BACKUP_KEEP_DAYS` (default 14); a
+failed run removes nothing. The
+[disaster recovery runbook](../docs/guides/DISASTER-RECOVERY.md) covers the
+recovery targets, the Windows desktop's `Backup` action, copies off the host,
+restores and the quarterly restore test.
+
+`deploy/upgrade.test.mjs` runs the retention, and `schedule-backup.sh` against
+a `systemctl` stand-in that runs the unit's command. No real systemd has run
+the timer yet.
+
 ## Scheduler
 
 Every API process runs one scheduler, in both the Docker and the Windows

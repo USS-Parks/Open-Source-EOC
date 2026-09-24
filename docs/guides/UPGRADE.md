@@ -208,3 +208,7 @@ Recorded on 2026-09-23 on the development workstation (Windows 11, PostgreSQL
 The synthetic records repeat a pattern, so they compress far better than real
 records would. Time a restore of a copy of your own database before an
 activation depends on it.
+
+The [disaster recovery runbook](./DISASTER-RECOVERY.md) uses these numbers as
+the reference for its quarterly restore test, and schedules the backups these
+restores start from.

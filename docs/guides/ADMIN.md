@@ -16,6 +16,10 @@ without a complete backup, or with the newer Windows setup program. The
 [upgrade guide](./UPGRADE.md) states which databases upgrade in place, the
 migration baseline boundary, and how to go back to the previous version.
 
+The [disaster recovery runbook](./DISASTER-RECOVERY.md) sets the recovery
+targets, schedules the daily backup on both deployment paths, and covers
+copies off the host, restores and the quarterly restore test.
+
 Demo accounts and data are for exercises only. Remove or rotate the seeded
 credentials before real operations.
 

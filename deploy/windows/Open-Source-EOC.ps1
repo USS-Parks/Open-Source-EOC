@@ -1,12 +1,14 @@
 [CmdletBinding()]
 param(
-  [ValidateSet('Build', 'Setup', 'Start', 'Status', 'Stop', 'Launch')]
+  [ValidateSet('Build', 'Setup', 'Start', 'Status', 'Stop', 'Launch', 'Backup')]
   [string]$Action = 'Launch',
   [string]$Profile = 'production',
   [ValidateRange(1024, 65535)]
   [int]$PgPort,
   [ValidateRange(1024, 65535)]
   [int]$HttpPort,
+  [ValidateRange(1, 36500)]
+  [int]$KeepDays,
   [switch]$NoBrowser,
   [string]$AdminEmail,
   [string]$AdminName,
@@ -53,6 +55,9 @@ if ($PSBoundParameters.ContainsKey('PgPort')) {
 }
 if ($PSBoundParameters.ContainsKey('HttpPort')) {
   $arguments += "--http-port=$HttpPort"
+}
+if ($Action -eq 'Backup' -and $PSBoundParameters.ContainsKey('KeepDays')) {
+  $arguments += "--keep-days=$KeepDays"
 }
 if (($Action -eq 'Start' -or $Action -eq 'Launch') -and $NoBrowser) {
   $arguments += '--no-browser'
