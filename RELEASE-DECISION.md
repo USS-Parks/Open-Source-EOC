@@ -19,8 +19,8 @@ this document.
   whose manual pass is scripted, not run; "V1 M5 milestone gate", green after
   a walk fix; "V1 D34: operator workflow comparison (absence recorded)";
   "V1 R1-REAL: the real-hardware 150-user run (boundary recorded)"; and this
-  reconciliation. The gate on the finished tree is "V1 final milestone gate",
-  being written from the run in progress.
+  reconciliation. The gate on the finished tree is "V1 final milestone gate":
+  273 of 273 test files and 1,553 of 1,553 tests in one serial run.
 - Units added during execution, each receipted: W2.11 remaining list
   pagination; W2.12 network calls out of every write path; W3.11 engine gaps;
   W3 route coverage; W3.12 and W3.13 screens for the remaining and optional
@@ -41,7 +41,7 @@ No line carries a written waiver.
 
 | # | Gate | State | Receipt, or what is missing |
 |---|---|---|---|
-| 1 | `pnpm check` green, serial, gate tag, with route-table, secret and advisory scans | See "V1 final milestone gate" | "V1 M5 milestone gate" was green on `1557172` after a walk fix. `pnpm check` runs no secret scan itself: gitleaks runs in the pre-commit hook and hosted CI, and hosted CI has started no job since `12d430e` for a billing reason on Basho's account |
+| 1 | `pnpm check` green, serial, gate tag, with route-table, secret and advisory scans | Green | "V1 final milestone gate" on `ec11af5`: every static gate, 273 of 273 files and 1,553 of 1,553 tests in one run, the load benchmark 4 of 4. `pnpm check` runs no secret scan itself: gitleaks runs in the pre-commit hook, which passed on every commit, and in hosted CI, which has started no job since `12d430e` for a billing reason on Basho's account |
 | 2 | Single-node declaration | Green | "V1 W2.5: rate limiting and identity caching" |
 | 3 | Heap flat over two hours with 150 sockets; real-hardware run recorded | External | Heap flat in "V1 W2 milestone gate". No deployment hardware: "V1 R1-REAL: the real-hardware 150-user run (boundary recorded)" |
 | 4 | No network call inside a write path; outbox worker and scheduler in both deploy paths | Green | "V1 W2.12: network calls out of every write path"; "V1 W2.1: outbound delivery queue"; "V1 W2.2: scheduler", whose desktop path was checked by loading the module, not by running a profile |
@@ -156,14 +156,15 @@ The roster sets the release act as Basho's: "tag, release assets, installer,
 announcement text; the pilot jurisdiction named or the release marked
 evaluation-only". No pilot jurisdiction, second maintainer or waiver,
 real-hardware run, operator comparison or screen-reader pass exists. Gate
-lines 3, 9, 16, 17, 18 and 20 are not green, and line 1 waits on the final
+lines 3, 9, 16, 17, 18 and 20 are not green; line 1 is green on the final
 gate.
 
 **Recommendation: tag the current build as an evaluation-only release,
 version `0.9.0`, the version every package already carries.** It claims no
 gate it has not met, so it needs no waiver. It requires, in order:
 
-1. "V1 final milestone gate" green on the release commit.
+1. The milestone gate green on the release commit, as "V1 final milestone
+   gate" was on `ec11af5`.
 2. The license work above done, since the setup is a release asset.
 3. The changelog's Unreleased section folded into the `0.9.0` entry with the
    release date, since no `0.9.0` was ever published.
@@ -180,8 +181,8 @@ gate it has not met, so it needs no waiver. It requires, in order:
 Alternatives:
 
 - **`1.0.0` marked evaluation-only.** Needs Basho's written waiver in the
-  ledger of every line not green (3, 9, 16, 17, 18 and 20, and 1 if the final
-  gate is red), the version changed in every package manifest with a
+  ledger of every line not green (3, 9, 16, 17, 18 and 20), the version
+  changed in every package manifest with a
   changelog entry, and then the same rebuild, tag, assets and announcement.
   Under [the support statement](GOVERNANCE.md#releases-and-support), 1.0
   starts security fixes for the latest minor version, so a 1.0 that is also

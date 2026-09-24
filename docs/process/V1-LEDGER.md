@@ -3888,3 +3888,74 @@ tagging remain separately gated as section 1 of the roster states.
   deep-link race and the recurring red runs".
 - **Result:** the engineering waves are complete and the suite is green on the
   final engineering commit.
+
+## V1 86+D35: reconciliation and release disposition
+
+- **Read-only audits per section.** Three auditors read the tree and the
+  ledgers without writing: the parity matrix's functional rows; the
+  requirement, anti-requirement, gap and invariant rows of the matrix and the
+  facet register with the 21 gate lines; and README, ROADMAP, the API
+  document, the design-to-capability matrix, the asset inventory, the guides
+  and every deferred item from the W4.4 receipt on. They found no row citing
+  evidence that does not exist, and they found stale rows, a few overclaims,
+  wrong commit citations and uncovered capabilities. They also found three
+  engineering gaps, fixed before this reconciliation rather than recorded:
+  network calls awaited inside write transactions and an unaudited rule
+  creation ("V1 W2.12: network calls out of every write path"), and six
+  review findings with no owner that could build them plus the missing error
+  screen for a screen that fails to load ("V1 W5.3: remaining interface
+  findings").
+- **What changed.**
+  - `docs/VEOC-PARITY-MATRIX.md` and `docs/FACET-STATUS.md`, reconciled through
+    `ec11af5`: every row cites its evidence by receipt heading and states what
+    is not claimed; owners name Basho or open engineering instead of retired
+    roster units; F1 and AR3 cite `32249fc` instead of the baseline `48edf63`;
+    the F5 owner agrees in both; G-IMPACT is `partial` and G-BUILDINGS
+    `verified` in place of labels that were not statuses; eight rows added
+    (G-MIGRATE, G-GEOCODE, G-INCLIFE, G-PWA, G-REPORT, G-DR, G-A11Y, G-OPS).
+  - `README.md` states the 0.9.0 evaluation build and names OIDC sign-in as
+    optional with its variables (gate line 21); `ROADMAP.md` shows the waves
+    and blockers as the ledger has them.
+  - The Finish PSPR's status line and section 1 bullet record the approval of
+    2026-09-23; nothing else in the roster changed.
+  - Section 10 of `docs/process/design/D00-DESIGN-BASELINE-AND-OWNERSHIP.md`,
+    the design-to-capability matrix, is current through `ec11af5`, with D20's
+    commit corrected to `de67c3d`.
+  - `docs/ASSET-LICENSES.md` inventories the icons, manifest, service worker,
+    Overture sidecar and county bounds; the archives, gazetteer and runtimes
+    the setup ships; the three container images; and the license work open
+    before a setup is published.
+  - Guide index and sentence fixes in `docs/README.md` and `docs/guides/`;
+    `docs/EVALUATOR.md` gains the exercise and accessibility rows and a
+    corrected R3 limit.
+  - `CHANGELOG.md`'s Unreleased section lists what landed after the 0.9.0
+    entry and states that the built setup was staged from `5875c2f`.
+  - Eleven reference captures from the review walk, 1.3 MB, in
+    `docs/design/final-captures/` with a README.
+  - `RELEASE-DECISION.md` at the repository root: what was executed, the 21
+    gate lines with their state and evidence, the remaining blockers grouped
+    as Basho's external inputs, Basho's decisions with the default in force,
+    known limits and open engineering, and one release decision. The
+    integrating session then set gate line 1 green from "V1 final milestone
+    gate".
+- **The release decision presented:** tag the current build as an
+  evaluation-only release, `0.9.0`, the version the packages carry, which
+  claims no gate it has not met and so needs no waiver, after the license
+  notices are in the setup, the changelog is folded into the 0.9.0 entry, and
+  the setup is rebuilt from the release commit. Alternatives: `1.0.0` marked
+  evaluation-only with Basho's written waiver of gate lines 3, 9, 16, 17, 18
+  and 20; or no release until the external inputs arrive. Tagging and
+  publishing are Basho's act.
+- **Defaults and deviations.** The reconciliation found one release blocker the
+  audits had not: the setup ships its runtimes and map data without their
+  license notices or a source offer for its GPL components; it is the next
+  unit. Gate line 20 stays open: coverage was never measured and the W1.11
+  receipt recorded no baseline.
+- **Schema, contract, dependencies:** none.
+- **Verification.** The writer's check of the 16 touched and new files: every
+  relative link and anchor resolves, no em-dash, consistent table columns; the
+  captures' hashes match their sources. The integrating session ran
+  `node scripts/check-links.mjs` after staging and rebasing onto `6752dd1`:
+  ok, 96 files.
+- **Evidence level:** document.
+- **Rollback:** revert the commit.
