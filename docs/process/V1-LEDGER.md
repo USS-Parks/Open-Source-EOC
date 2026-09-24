@@ -2399,3 +2399,66 @@ tagging remain separately gated as section 1 of the roster states.
   embedded capture map shows the map panel's search icons out of place in a
   narrow container, a style defect in the map's inline styles carried to W5.1.
 - **Rollback:** revert the commit; no schema to unwind.
+
+## V1 W4.4: WebEOC migration
+
+- **What changed.** Administrators move the records of a WebEOC board into a
+  board here from the CSV file WebEOC exports. Records only: processes, views,
+  links and menus are not migrated.
+  - `server/src/data-packs/webeoc.ts` maps each board field to a CSV column in
+    the data-pack mapping shape: the mapping sent with the request, else the
+    board's saved mapping, else a match of column heading to field key or
+    label.
+  - A dry run reports create, skip or reject for every row and writes nothing.
+    An import writes each valid row through `insertRecord`, so each record
+    gets its audit entry, change history and sync log entry and appears in live
+    views. Rejected rows go into a rejection CSV with row number, reasons and
+    the original cells, with the formula guard.
+  - WebEOC's bookkeeping columns (`dataid`, `prevdataid`, `entrydate`,
+    `username`, `positionname`, `subscribername`) are kept as `source` in the
+    creation audit payload. A ledger of imported dataids per board makes a
+    repeat import skip rows already imported.
+  - Local WebEOC dates are read in the WebEOC server's time zone, chosen by the
+    operator. Choice values match ignoring case, spaces, underscores and
+    hyphens.
+  - The screen is a "WebEOC migration" panel on Administration, Records
+    (`web/src/admin/WebeocImport.tsx`). `docs/guides/MIGRATION.md` is the
+    guide chapter, indexed from the guides README.
+- **Defaults and deviations.** An import writes the valid rows and reports the
+  rest, where the board import is all or nothing. Imported records carry no
+  incident. A bulk import sends no notifications. Limits are the board
+  import's: 10,000 rows and 10 MB. Deviation from the roster wording: "onto a
+  template" is done as onto a board made from a template, because records live
+  in boards. Ownership deviations: `server/src/boards/transfer.ts` exports
+  `coerceCell`; `server/src/boards/service.ts` `insertRecord` takes an
+  optional `source` for the creation audit payload. The unit was started by an
+  earlier session's lane and finished in this one, after its uncommitted work
+  was rebased onto `888750a`.
+- **Schema, contract, dependencies.** Migration `0123_webeoc_import.sql`:
+  `webeoc_mappings` and `webeoc_imported_rows`, row-level security limiting
+  both to writers of the board's jurisdiction with the board checked to belong
+  to it, and select and insert grants only on the imported rows. Three routes
+  added to the contract and `docs/API.md`, each called by the web client: GET
+  and PUT `/api/v1/boards/:boardId/webeoc-mapping`, POST
+  `/api/v1/boards/:boardId/webeoc-import`. No dependency.
+- **Verification.** In the lane, tag `b`, on `888750a`: `pnpm -r exec tsc
+  --noEmit` exit 0; `pnpm exec eslint .` exit 0; `pnpm exec vitest run` over
+  webeoc-import, webeoc-import-browser, board-engine, boards, data-packs,
+  data-pack-persistence, api-docs, admin-browser, the web admin notifications
+  and webeoc-import tests and route-coverage, 11 files and 61 tests passed, 0
+  failed. The first run had one red: the web test read the saved time zone one
+  render early; the test now waits for it, and the whole set was re-run. The
+  integrating session rebased onto `fa94a75`, which changes only the CI
+  workflow, and ran `node scripts/check-links.mjs` after staging: ok, 74 files.
+  The browser walk checks the fixture export (8 rows: 3 valid, 5 rejected)
+  and writes nothing, saves the mapping, imports 3 records, downloads a 5-row
+  rejection report and reads the records back on the board; in dark theme a
+  re-check with the saved mapping skips the 3 imported dataids. Light and dark
+  screenshots at 1440, dark at 390 with no horizontal scroll.
+- **Evidence level:** unit, integration, real-database, browser and document.
+- **Deferred:** value translation; latitude and longitude to a location;
+  person, record-reference and attachment fields; incident tagging; updating a
+  row already imported; linking rows by `prevdataid`; .xlsx on the screen,
+  which the server already reads.
+- **Rollback:** revert both commits, then drop `webeoc_imported_rows` and
+  `webeoc_mappings`.
