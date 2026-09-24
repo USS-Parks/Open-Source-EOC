@@ -38,7 +38,7 @@ import {
 const ActivateBody = z.object({
   templateKey: z.string().min(1),
   name: z.string().min(1),
-  kind: z.enum(["incident", "daily_ops", "planned_event"]).optional(),
+  kind: z.enum(["incident", "daily_ops", "planned_event", "exercise"]).optional(),
 });
 
 const LibraryBody = z.object({

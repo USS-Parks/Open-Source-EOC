@@ -20,7 +20,7 @@ import { ErrorNote, Loading, Scroll, SurfaceHeader } from "../screens/parts.js";
 import "./incidents.css";
 
 const KIND_LABELS: Readonly<Record<string, string>> = {
-  incident: "Incident", daily_ops: "Daily operations", planned_event: "Planned event",
+  incident: "Incident", daily_ops: "Daily operations", planned_event: "Planned event", exercise: "Exercise",
 };
 
 /**
@@ -60,7 +60,7 @@ export function IncidentsSurface(props: {
     [selectedIncident, reload],
   );
   const [templateKey, setTemplateKey] = useState("");
-  const [kind, setKind] = useState<"incident" | "daily_ops" | "planned_event">("incident");
+  const [kind, setKind] = useState<"incident" | "daily_ops" | "planned_event" | "exercise">("incident");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -133,7 +133,7 @@ export function IncidentsSurface(props: {
                 labels={Object.fromEntries(tpls.map((t) => [t.key, t.title]))}
               />
               <TextField label="Incident name" value={name} onChange={setName} />
-              <EnumSelect label="Incident type" values={["incident", "daily_ops", "planned_event"]} value={kind}
+              <EnumSelect label="Incident type" values={["incident", "daily_ops", "planned_event", "exercise"]} value={kind}
                 onChange={(value) => setKind(value as typeof kind)}
                 labels={KIND_LABELS} />
             </div>

@@ -4038,3 +4038,75 @@ unit. Basho's answers: download public-domain imagery and elevation for the
 North Coast for the basemap; brand subtitle "PEOPLE · INFORMATION · SAFER
 COMMUNITIES"; keep every working screen in the rail, styled as the frames'
 items. Receipts for its units follow here.
+
+## Design fidelity: function requirement
+
+Basho, 2026-09-24, after approving the plan for STS in this session with
+commit and push to `main`: "this isn't pageantry or purely performative. All
+of the facets and features displayed in the three screenshots need to be fully
+functional, not just dead ends or hood ornamentry." Every button, link,
+chevron, tab, filter, selector, map control and layer toggle the frames show
+does real work against real data. Where an engine lacks something a frame
+shows, the unit adds it to the engine with a migration and real-database tests
+rather than painting it. The plan document itself was open in Word and locked
+for writing when this was recorded, so this entry carries the requirement.
+
+## Design fidelity DF0: reference scenario and comparison harness
+
+- **What changed.**
+  - New `server/src/demo/north-coast.ts`: the North Coast Storm reference
+    scenario. Humboldt County OES activates "North Coast Storm" as an exercise
+    on a new Severe Storm template, then, through the HTTP API and each as the
+    person who would do it: three operational periods (OP 03 is 06:00 to
+    18:00 on the scenario day) over an incident area from Trinidad to Fortuna;
+    Jordan Lee assigned and signed in as Planning Section Chief; seven
+    participating organizations, each through a named liaison (Caltrans
+    District 1, Cal OES, American Red Cross, CA Dept. of Public Health, CA
+    Energy Commission, Cal EPA, State Water Resources Control Board); eight
+    open shelters ending at 312 occupants; four road closures drawn as lines
+    on real routes; 46 field reports with locations; 24 open resource requests,
+    six immediate, with needed-by times and participant owners; the
+    activation's tasks given due times in OP 03; eight lifeline assessments
+    with the canonical frames' conditions, times and liaisons; and California
+    ESF 12 and ESF 1 coordination. The morning runs in scenario time order.
+    `placeOnScenarioClock` moves every server-stamped time written during an
+    API call to the scenario time that call stands for (triggers off, owner
+    connection, scenario databases only), so the record of events reads at
+    09:42 local.
+  - New `server/src/__tests__/fidelity-browser.test.ts` and
+    `scripts/fidelity.mjs` (`pnpm fidelity`): seed, place on the clock, sign
+    in as Jordan Lee in Chromium at 1586 by 992 with the clock fixed at 09:42
+    America/Los_Angeles, capture the overview in both themes and ESFs &
+    Lifelines with Energy selected in both themes, and write each capture
+    that has a frame beside it. `pnpm fidelity` writes to
+    `docs/design/fidelity/`; a plain test run writes to the shot directory.
+  - New `docs/design/fidelity/README.md` and the three side-by-side images of
+    the baseline build.
+  - Engine additions the scenario needed: the `exercise` incident kind
+    (`server/migrations/0131_exercise_incidents.sql`, the activation route and
+    service types, the web client type, and the Incident Setup type choices)
+    and the Severe Storm incident template in
+    `server/src/incidents/service.ts` (command and general staff, the storm
+    board set including field reports, and position checklists).
+- **Defaults and deviations.** Deviations from the plan's DF0 wording, each
+  left for the unit that owns the engine change: request and task numbers,
+  field report verification, shelter locations and the planned shelter state,
+  cameras, weather stations, the command post and the helibase, the next
+  update time and stabilization objective, 12 tasks due in OP 03 (the
+  activation creates 9 and the API has no task creation), and the Caltrans
+  message (incident threads cannot include participants from another
+  organization). The frames' "near Trinidad" CA-255 closure is placed on real
+  geography instead: CA-255 runs on the Samoa peninsula, so the scenario uses
+  Westhaven Drive near Trinidad for that request and slide.
+- **Schema, contract, dependencies.** Migration 0131 widens
+  `incidents_kind_check`. No new dependencies.
+- **Verification.** `pnpm check:static`: tsc, eslint, license scan (303
+  packages) and link check (97 files) pass. `pnpm fidelity`: 2 of 2 tests pass
+  and write the three images; the first asserts every seeded audit event is at
+  or before the scenario clock and the incident kind is `exercise`. Vitest over
+  `web/src/app/__tests__/incidents-surface.test.tsx`,
+  `server/src/__tests__/incidents.test.ts` and
+  `server/src/__tests__/incident-lifecycle.test.ts`: 3 files, 19 tests pass.
+  The full serial suite is run at DF6 as the plan prescribes.
+- **Evidence level:** real-database and browser.
+- **Rollback:** revert the commit; migration 0131 only widens a check.

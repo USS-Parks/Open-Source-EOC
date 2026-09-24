@@ -13,6 +13,7 @@
     "check-links": "node scripts/check-links.mjs",
     "audit:advisories": "node scripts/advisory-gate.mjs",
     "test:desktop": "node --test deploy/windows/desktop.test.mjs deploy/windows/installer/installer.test.mjs",
+    "fidelity": "node scripts/fidelity.mjs",
     "test": "vitest run",
     "test:ci": "vitest run --exclude server/src/__tests__/load.test.ts && vitest run server/src/__tests__/load.test.ts --maxWorkers=1",
     "test:ci:serial": "vitest run --exclude server/src/__tests__/load.test.ts --maxWorkers=1 && vitest run server/src/__tests__/load.test.ts --maxWorkers=1"

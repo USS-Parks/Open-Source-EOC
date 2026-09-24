@@ -105,6 +105,42 @@ export const STANDARD_INCIDENT_TEMPLATES: readonly IncidentTemplate[] = [
     ],
   },
   {
+    key: "severe_storm",
+    title: "Severe Storm",
+    positions: [...COMMAND_STAFF.values, ...GENERAL_STAFF.values],
+    boards: [
+      "significant_events",
+      "activity_log",
+      "resource_request",
+      "shelters",
+      "road_closures",
+      "field_reports",
+      "sign_in_out",
+    ],
+    checklists: [
+      {
+        position: "incident_commander",
+        items: [
+          "Assume command and announce on the significant events board",
+          "Set initial incident objectives",
+          "Establish the operational period",
+        ],
+      },
+      {
+        position: "operations_section_chief",
+        items: ["Confirm road and utility status with field crews", "Open the resource request board"],
+      },
+      {
+        position: "planning_section_chief",
+        items: ["Collect lifeline assessments for the situation report", "Prepare the next operational period briefing"],
+      },
+      {
+        position: "public_information_officer",
+        items: ["Draft the initial public statement", "Confirm media contact roster"],
+      },
+    ],
+  },
+  {
     key: "daily_ops",
     title: "Daily Operations",
     positions: ["operations_section_chief"],
@@ -145,7 +181,7 @@ export async function activateIncident(
   input: {
     templateKey: string;
     name: string;
-    kind?: "incident" | "daily_ops" | "planned_event" | undefined;
+    kind?: "incident" | "daily_ops" | "planned_event" | "exercise" | undefined;
   },
 ): Promise<ActivationResult> {
   requireAdmin(actor, jurisdictionId);

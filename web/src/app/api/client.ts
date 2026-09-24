@@ -1074,7 +1074,7 @@ export class ApiClient {
   }
   activateIncident(
     jurisdictionId: string,
-    body: { templateKey: string; name: string; kind?: "incident" | "daily_ops" | "planned_event" },
+    body: { templateKey: string; name: string; kind?: "incident" | "daily_ops" | "planned_event" | "exercise" },
   ): Promise<{ incidentId: string }> {
     return this.request<{ incidentId: string }>(
       "POST",
