@@ -227,7 +227,7 @@ function StatusRequestPanel(props: PanelProps & { revision: number }) {
   };
   return (
     <Panel title="Status requests">
-      <p className="d21-muted" style={{ marginBottom: 12 }}>Ask every facility, or every facility of one type, to report now. Each facility's next status report answers the request.</p>
+      <p className="d21-muted is-lead">Ask every facility, or every facility of one type, to report now. Each facility's next status report answers the request.</p>
       <form onSubmit={submit}>
         <fieldset disabled={busy} className="d21-form-grid facilities-fieldset">
           <TextField label="Request" value={prompt} onChange={setPrompt} required />

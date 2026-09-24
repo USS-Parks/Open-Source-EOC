@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useState } from "react";
 import type { BoardWorkflow, IncidentParticipantGrant, WorkflowAssignmentRequest } from "@openeoc/shared";
 import { ownerOptions, type AarOwnerOption } from "../aar/model.js";
 import type { ApiClient, PositionRef } from "../app/api/client.js";
@@ -6,6 +6,7 @@ import { useAsync } from "../app/data/hooks.js";
 import { ActionButton } from "../design/controls.js";
 import { ConditionBadge } from "../design/feedback.js";
 import "../design/forms.css";
+import "./board-parts.css";
 import {
   approverLabel,
   assigneeLabel,
@@ -65,11 +66,6 @@ async function loadWorkflow(source: RecordWorkflowSource): Promise<WorkflowData 
   return { definition: pinned.workflow, runtime, positions, participants };
 }
 
-const heading: CSSProperties = { fontSize: "0.9rem", margin: "0 0 6px" };
-const subheading: CSSProperties = { fontSize: "0.82rem", margin: "4px 0" };
-const list: CSSProperties = { margin: 0, paddingLeft: 18, display: "grid", gap: 8 };
-const action: CSSProperties = { display: "grid", gap: 6, justifyItems: "start" };
-
 /**
  * The workflow runtime of one board record: current state, the transitions
  * leaving it, pending approvals, due time, escalations and the append-only
@@ -89,7 +85,7 @@ export function RecordWorkflowPanel(props: { readonly source: RecordWorkflowSour
   if (!loaded.data) {
     return loaded.error ? (
       <section aria-labelledby="record-workflow-title">
-        <h3 id="record-workflow-title" style={heading}>Workflow</h3>
+        <h3 id="record-workflow-title" className="board-record-heading">Workflow</h3>
         <p role="alert">Workflow unavailable: {loaded.error}</p>
       </section>
     ) : null;
@@ -134,7 +130,7 @@ export function RecordWorkflowPanel(props: { readonly source: RecordWorkflowSour
     const allowed: readonly AarOwnerOption[] = options.filter((option) =>
       rule.allowedTargets.includes(option.assignment.kind));
     return (
-      <div className="eoc-form-field" style={{ width: "100%" }}>
+      <div className="eoc-form-field board-workflow-picker">
         <label>
           {`Assign ${label} to${rule.required ? "" : " (optional)"}`}
           <select value={choices[key] ?? ""} disabled={busy !== null}
@@ -148,8 +144,8 @@ export function RecordWorkflowPanel(props: { readonly source: RecordWorkflowSour
   }
 
   return (
-    <section aria-labelledby="record-workflow-title" style={{ display: "grid", gap: 10 }}>
-      <h3 id="record-workflow-title" style={heading}>Workflow</h3>
+    <section aria-labelledby="record-workflow-title" className="board-workflow">
+      <h3 id="record-workflow-title" className="board-record-heading">Workflow</h3>
       <dl className="eoc-shell-record-context">
         <div>
           <dt>State</dt>
@@ -161,7 +157,7 @@ export function RecordWorkflowPanel(props: { readonly source: RecordWorkflowSour
         {model.due.kind === "scheduled" ? (
           <div>
             <dt>Due</dt>
-            <dd style={{ display: "grid", gap: 4, justifyItems: "start" }}>
+            <dd className="board-workflow-due">
               <span>{formatTime(model.due.at)}</span>
               <ConditionBadge state={model.due.overdue ? "critical" : "normal"}
                 label={model.due.overdue ? "Overdue" : "On time"} />
@@ -176,14 +172,14 @@ export function RecordWorkflowPanel(props: { readonly source: RecordWorkflowSour
       </dl>
 
       {pending ? (
-        <div role="group" aria-label="Awaiting approval" style={{ display: "grid", gap: 6 }}>
-          <p style={{ margin: 0 }}>
+        <div role="group" aria-label="Awaiting approval" className="board-workflow-group">
+          <p className="eoc-flush">
             <strong>{pending.transition.label}</strong> to {stateLabel(definition, pending.transition.to)} is
             awaiting approval{pending.requestedBy ? `, requested by ${who(pending.requestedBy)}` : ""}.
           </p>
-          <ul style={list}>
+          <ul className="board-workflow-list">
             {pending.approvals.map(({ rule, approvedBy }) => (
-              <li key={rule.key} style={action}>
+              <li key={rule.key} className="board-workflow-action">
                 <span>
                   {rule.label}: {approvedBy.length} of {rule.count} from {approverLabel(rule.approver)}
                   {approvedBy.length ? `, approved by ${approvedBy.map(who).join(", ")}` : ""}
@@ -204,12 +200,12 @@ export function RecordWorkflowPanel(props: { readonly source: RecordWorkflowSour
       ) : null}
 
       {source.canAct && model.transitions.length ? (
-        <div role="group" aria-label="Available transitions" style={{ display: "grid", gap: 10 }}>
+        <div role="group" aria-label="Available transitions" className="board-workflow-transitions">
           {model.transitions.map((transition) => {
             const key = `transition:${transition.key}`;
             const assignment = chosen(key, transition.assignment);
             return (
-              <div key={transition.key} style={action}>
+              <div key={transition.key} className="board-workflow-action">
                 {assigneePicker(key, transition.label, transition.assignment)}
                 <ActionButton kind="secondary" loading={busy === key}
                   disabled={busy !== null || Boolean(transition.assignment?.required && !assignment)}
@@ -231,19 +227,19 @@ export function RecordWorkflowPanel(props: { readonly source: RecordWorkflowSour
         </div>
       ) : null}
       {!pending && !model.transitions.length ? (
-        <p style={{ margin: 0 }}>No transitions leave this state.</p>
+        <p className="eoc-flush">No transitions leave this state.</p>
       ) : null}
 
       {model.escalations.length ? (
         <div role="group" aria-labelledby="record-workflow-escalations-title">
-          <h4 id="record-workflow-escalations-title" style={subheading}>Escalations</h4>
-          <ul style={list}>
+          <h4 id="record-workflow-escalations-title" className="board-workflow-subtitle">Escalations</h4>
+          <ul className="board-workflow-list">
             {model.escalations.map((step) => {
               const key = `escalation:${step.rule.key}:${step.occurrence}`;
               const name = humanKey(step.rule.key);
               const assignment = chosen(key, step.rule.assignment);
               return (
-                <li key={key} style={action}>
+                <li key={key} className="board-workflow-action">
                   <span>
                     {name}, occurrence {step.occurrence + 1}:{" "}
                     {step.escalated ? "escalated" : step.due ? `due since ${formatTime(step.scheduledAt)}`
@@ -273,9 +269,9 @@ export function RecordWorkflowPanel(props: { readonly source: RecordWorkflowSour
       {error ? <p className="eoc-form-submit-error" role="alert">{error}</p> : null}
 
       <div>
-        <h4 id="record-workflow-history-title" style={subheading}>Workflow history</h4>
+        <h4 id="record-workflow-history-title" className="board-workflow-subtitle">Workflow history</h4>
         {runtime.history.length ? (
-          <ol aria-labelledby="record-workflow-history-title" style={{ margin: 0, paddingLeft: 18 }}>
+          <ol aria-labelledby="record-workflow-history-title" className="board-workflow-history">
             {runtime.history.map((event) => {
               const note = historyNote(event, formatTime);
               return (
@@ -286,7 +282,7 @@ export function RecordWorkflowPanel(props: { readonly source: RecordWorkflowSour
               );
             })}
           </ol>
-        ) : <p style={{ margin: 0 }}>No workflow activity yet.</p>}
+        ) : <p className="eoc-flush">No workflow activity yet.</p>}
       </div>
     </section>
   );

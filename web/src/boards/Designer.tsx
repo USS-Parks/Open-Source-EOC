@@ -166,7 +166,7 @@ export function Designer(props: {
       {tab === "import" && importer ? <DefinitionImport {...importer} /> : null}
 
       {error ? (
-        <p role="alert" style={{ color: "var(--eoc-status-critical)" }}>
+        <p role="alert" className="board-designer__error">
           {error}
         </p>
       ) : null}
@@ -320,9 +320,9 @@ function FieldEditor(props: { fields: readonly FieldDef[]; onAdd: (field: FieldD
   }
 
   return (
-    <fieldset style={{ border: "1px solid var(--eoc-border)", borderRadius: 4, padding: 12 }}>
+    <fieldset className="board-designer__fieldset">
       <legend>Add field</legend>
-      <div style={{ display: "grid", gap: 8, maxWidth: 420 }}>
+      <div className="board-designer__narrow">
         <TextField label="Field key" value={key} onChange={setKey} />
         <TextField label="Field label" value={label} onChange={setLabel} />
         <EnumSelect label="Field type" values={FIELD_TYPES} value={type} onChange={setType} />
@@ -342,7 +342,7 @@ function FieldEditor(props: { fields: readonly FieldDef[]; onAdd: (field: FieldD
           <TextField label="Target template key" value={targetBoardKey} onChange={setTargetBoardKey} />
           <LabelFieldsInput label="Target label fields" value={labelKeys} onChange={setLabelKeys} />
         </> : null}
-        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <label className="eoc-inline">
           <input
             type="checkbox"
             checked={required}
@@ -414,14 +414,14 @@ function ViewEditor(props: { fieldKeys: readonly string[]; onAdd: (view: ViewDef
   }
 
   return (
-    <fieldset style={{ border: "1px solid var(--eoc-border)", borderRadius: 4, padding: 12 }}>
+    <fieldset className="board-designer__fieldset">
       <legend>Add view</legend>
-      <div style={{ display: "grid", gap: 8, maxWidth: 420 }}>
+      <div className="board-designer__narrow">
         <TextField label="View key" value={key} onChange={setKey} />
         <TextField label="View title" value={title} onChange={setTitle} />
         <div role="group" aria-label="View columns">
           {props.fieldKeys.map((f) => (
-            <label key={f} style={{ display: "inline-flex", gap: 4, marginRight: 12 }}>
+            <label key={f} className="board-designer__column">
               <input
                 type="checkbox"
                 checked={columns.includes(f)}
@@ -747,7 +747,7 @@ function DefinitionImport(props: { client: ApiClient; jurisdictionId: string }) 
   const picker = (kind: ImportKind, label: string, accept: string) =>
     <label className="board-designer__control"><span>{label}</span>
       {/* A file input's own minimum width would otherwise overflow its column. */}
-      <input type="file" accept={accept} disabled={busy} style={{ minWidth: 0, width: "100%" }}
+      <input type="file" accept={accept} disabled={busy} className="board-designer__file"
         onChange={(event) => void pick(kind, event.currentTarget)} /></label>;
   return <Panel title="Import definitions">
     <div className="board-designer__stack">
@@ -760,7 +760,7 @@ function DefinitionImport(props: { client: ApiClient; jurisdictionId: string }) 
         {picker("dashboard", "Dashboard template file", ".json,application/json")}
       </div>
       {busy ? <p role="status">Importing…</p> : null}
-      {error ? <p role="alert" style={{ color: "var(--eoc-status-critical)" }}>{error}</p> : null}
+      {error ? <p role="alert" className="board-designer__error">{error}</p> : null}
       {imported.length ? <section>
         <h4>Imported</h4>
         <ul aria-label="Imported definitions">
@@ -874,7 +874,7 @@ function LocalFields(props: { client: ApiClient; boardId: string }) {
         <Select label="Local field writable by" value={write} options={levelOptions(WRITE_LEVELS)} onChange={setWrite} />
       </div>
       {fullKey ? <p>Saved as <code>{fullKey}</code>.</p> : null}
-      {error ? <p role="alert" style={{ color: "var(--eoc-status-critical)" }}>{error}</p> : null}
+      {error ? <p role="alert" className="board-designer__error">{error}</p> : null}
       {added ? <p role="status">Added {added} to this board.</p> : null}
       <div><ActionButton kind="primary" loading={busy} disabled={busy} onClick={() => void add()}>Add local field</ActionButton></div>
     </div>

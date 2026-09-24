@@ -74,6 +74,37 @@ afterAll(async () => {
   await admin?.end();
 });
 
+/** Each plain button's label, transition time and label-to-background contrast, read from its computed style. */
+function plainButtonColors(buttons: unknown[]): { label: string; transition: string; contrast: number }[] {
+  type Style = { color: string; backgroundColor: string; transitionDuration: string };
+  const view = globalThis as unknown as { getComputedStyle(element: unknown): Style };
+  const luminance = (color: string) => {
+    const [r, g, b] = (color.match(/[\d.]+/g) ?? []).slice(0, 3).map((part) => {
+      const channel = Number(part) / 255;
+      return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+  };
+  return buttons.map((button) => {
+    const style = view.getComputedStyle(button);
+    const [light, dark] = [luminance(style.color), luminance(style.backgroundColor)].sort((x, y) => y - x);
+    return {
+      label: (button as { textContent: string }).textContent,
+      transition: style.transitionDuration,
+      contrast: Math.round(((light! + 0.05) / (dark! + 0.05)) * 100) / 100,
+    };
+  });
+}
+
+/** For each table scroller, how far its last column heading reaches past the scroller's right edge. */
+function headingOverrun(scrollers: unknown[]): number[] {
+  type Box = { right: number };
+  return scrollers.map((scroller) => {
+    const box = scroller as { getBoundingClientRect(): Box; querySelector(selector: string): { getBoundingClientRect(): Box } };
+    return Math.max(0, Math.round(box.querySelector("thead th:last-child").getBoundingClientRect().right - box.getBoundingClientRect().right));
+  });
+}
+
 async function setTheme(theme: "light" | "dark"): Promise<void> {
   await page.getByRole("button", { name: "Account menu" }).click();
   const switcher = page.getByRole("button", { name: theme === "light" ? "Use light theme" : "Use dark theme" });
@@ -443,9 +474,19 @@ describe("WebEOC side-by-side evaluation, internal run", () => {
     await boundary("reports");
 
     await setTheme("dark");
+    // Gap 6: the plain buttons take the dark colors at once, with no fade under reduced motion, and keep AA labels.
+    const buttons = await report.locator("button.eoc-btn").evaluateAll(plainButtonColors);
+    expect(buttons.length).toBeGreaterThan(3);
+    for (const button of buttons) {
+      expect.soft(button.transition, button.label).toMatch(/^0s(, 0s)*$/);
+      expect.soft(button.contrast, button.label).toBeGreaterThanOrEqual(4.5);
+    }
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole("button", { name: "Save schedule" }).waitFor();
     expect(await page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")).toBe(true);
+    // Gap 7: at phone width the report's row and totals tables keep every column heading inside the panel.
+    expect(await report.locator(".reports-scroll").evaluateAll(headingOverrun)).toEqual([0, 0]);
+    await report.locator(".reports-scroll").first().scrollIntoViewIfNeeded();
     await page.screenshot({ path: join(SHOTS, "side-by-side-reports-dark-390.png"), fullPage: false });
 
     expect(pageErrors).toEqual([]);

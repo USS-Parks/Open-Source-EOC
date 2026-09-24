@@ -113,8 +113,7 @@ project.
   since been closed: the board list after a new board is created, creating a
   board from a published template, managing a notification rule, the wording
   of rule messages, and status labels. Still open: the channels (no voice;
-  Teams and Slack only as a generic webhook), dark-theme contrast, and report
-  tables on narrow screens. That document keeps their current state, and the
+  Teams and Slack only as a generic webhook). That document keeps their current state, and the
   [limits carried from the receipts](WEBEOC-SIDE-BY-SIDE.md#boundaries-carried-from-the-receipts).
 - Edits and deletes of incident records are not sent to federation partners
   (parity row F3).

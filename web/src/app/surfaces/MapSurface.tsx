@@ -1,4 +1,4 @@
-import { useCallback, useState, type CSSProperties } from "react";
+import { useCallback, useState } from "react";
 import {
   CALIFORNIA_ESF_TITLES,
   LIFELINE_DEFINITION,
@@ -34,6 +34,7 @@ import { uploadPickedFile } from "../data/files.js";
 import { useMapFocus } from "../layout/map-focus.js";
 import { EmptyState, Loading } from "../screens/parts.js";
 import { LIFELINE_LABELS } from "./lifeline-view.js";
+import "./map-surface.css";
 
 type AssessmentSource = OperationalRelationshipCreate["source"];
 
@@ -56,31 +57,6 @@ function relationshipSourceLabel(link: OperationalRelationship): string {
   }
   return esfSourceLabel(link.source.framework, link.source.definitionKey);
 }
-
-const selectStyle: CSSProperties = {
-  fontFamily: "inherit",
-  fontSize: "1em",
-  width: "100%",
-  minWidth: 0,
-  maxWidth: "100%",
-  boxSizing: "border-box",
-  padding: 6,
-  minHeight: 44,
-  borderRadius: 4,
-  border: "1px solid var(--eoc-border)",
-  background: "var(--eoc-surface)",
-  color: "var(--eoc-text)",
-};
-
-const overlayStyle: CSSProperties = {
-  position: "absolute",
-  top: 64,
-  right: 24,
-  width: 360,
-  maxHeight: "78%",
-  overflow: "auto",
-  zIndex: 5,
-};
 
 /** Seconds since a dataset's last successful load, for the feed-style age line. */
 function ageSeconds(lastSuccessAt: string | null): number | null {
@@ -309,35 +285,16 @@ export function MapSurface(props: {
   const geomKey = fields.length ? geometryFieldKey(fields) : null;
 
   return (
-    <div
-      style={{
-        flex: 1,
-        minHeight: 0,
-        padding: 12,
-        position: "relative",
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-      }}
-    >
-      <div
-        role="status"
-        style={{
-          color: "var(--eoc-text-muted)",
-          fontSize: "0.9em",
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-        }}
-      >
-        <span style={{ fontWeight: 600, color: "var(--eoc-text)" }}>
+    <div className="map-surface">
+      <div role="status" className="map-surface-status">
+        <span className="map-surface-incident">
           {props.incidentName ?? "No incident selected"}
         </span>
         <span>· common operating picture</span>
       </div>
       {empty ? <EmptyState label="No operational layers yet" hint="The basemap is available. Add a geo-enabled board or feed to show incident information." /> : null}
       {geoBoards.length > 0 ? (
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <div className="map-surface-row">
           <Button
             kind={adding ? "primary" : "quiet"}
             onClick={() => (adding ? reset() : setAdding(true))}
@@ -347,8 +304,8 @@ export function MapSurface(props: {
           </Button>
           {adding ? (
             <>
-              <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <span style={{ color: "var(--eoc-text-muted)" }}>Board</span>
+              <label className="map-surface-pick">
+                <span className="eoc-muted">Board</span>
                 <select
                   aria-label="Map record board"
                   value={activeBoard}
@@ -357,7 +314,7 @@ export function MapSurface(props: {
                     setPoint(null);
                     setCoordinateError(null);
                   }}
-                  style={selectStyle}
+                  className="map-surface-select"
                 >
                   {geoBoards.map((b) => (
                     <option key={b.id} value={b.id}>
@@ -366,32 +323,32 @@ export function MapSurface(props: {
                   ))}
                 </select>
               </label>
-              <label style={{ display: "grid", gap: 3 }}>
-                <span style={{ color: "var(--eoc-text-muted)" }}>Longitude</span>
+              <label className="map-surface-coordinate">
+                <span className="eoc-muted">Longitude</span>
                 <input
                   aria-label="Longitude"
                   inputMode="decimal"
                   value={longitude}
                   onChange={(event) => setLongitude(event.target.value)}
-                  style={{ ...selectStyle, width: 116 }}
+                  className="map-surface-select is-coordinate"
                 />
               </label>
-              <label style={{ display: "grid", gap: 3 }}>
-                <span style={{ color: "var(--eoc-text-muted)" }}>Latitude</span>
+              <label className="map-surface-coordinate">
+                <span className="eoc-muted">Latitude</span>
                 <input
                   aria-label="Latitude"
                   inputMode="decimal"
                   value={latitude}
                   onChange={(event) => setLatitude(event.target.value)}
-                  style={{ ...selectStyle, width: 116 }}
+                  className="map-surface-select is-coordinate"
                 />
               </label>
               <Button onClick={useCoordinates}>Use coordinates</Button>
-              <span style={{ color: "var(--eoc-text-muted)" }}>
+              <span className="eoc-muted">
                 {point ? "Point placed. Fill the form, then save." : "Click the map or enter coordinates to place the point."}
               </span>
               {coordinateError ? (
-                <span role="alert" style={{ color: "var(--eoc-status-critical)" }}>{coordinateError}</span>
+                <span role="alert" className="eoc-text-critical">{coordinateError}</span>
               ) : null}
             </>
           ) : null}
@@ -404,17 +361,17 @@ export function MapSurface(props: {
 
       {selectedFeature && props.incidentId ? (
         <Panel title="Link selected dataset feature">
-          <div style={{ display: "flex", gap: 8, alignItems: "end", flexWrap: "wrap" }}>
-            <div style={{ minWidth: 220, flex: "1 1 280px" }}>
+          <div className="map-surface-link">
+            <div className="map-surface-feature">
               <strong>{selectedFeature.title}</strong>
-              <p style={{ margin: "4px 0 0", color: "var(--eoc-text-muted)" }}>
+              <p className="map-surface-note">
                 Dataset feature {selectedFeature.featureId}. The relationship records context only and does not change assessment status or command authority.
               </p>
             </div>
-            <label style={{ display: "grid", gap: 4, minWidth: "min(100%, 260px)", flex: "1 1 320px" }}>
+            <label className="map-surface-source">
               Recorded assessment
               <select aria-label="Recorded assessment" value={relationshipSource}
-                onChange={(event) => setRelationshipSource(event.target.value)} style={selectStyle}>
+                onChange={(event) => setRelationshipSource(event.target.value)} className="map-surface-select">
                 <option value="">Choose a Lifeline or ESF assessment</option>
                 {assessmentSources.map((candidate) => <option key={candidate.value} value={candidate.value}>{candidate.label}</option>)}
               </select>
@@ -423,13 +380,13 @@ export function MapSurface(props: {
               onClick={linkSelectedFeature}>{relationshipBusy ? "Linking…" : "Link selected feature"}</Button>
           </div>
           {assessmentSources.length === 0 ? <p role="status">No recorded Lifeline or ESF assessment is available to link.</p> : null}
-          {relationshipNotice ? <p role="status" style={{ color: "var(--eoc-status-success)" }}>{relationshipNotice}</p> : null}
-          {relationshipError ? <p role="alert" style={{ color: "var(--eoc-status-critical)" }}>{relationshipError}</p> : null}
+          {relationshipNotice ? <p role="status" className="eoc-text-success">{relationshipNotice}</p> : null}
+          {relationshipError ? <p role="alert" className="eoc-text-critical">{relationshipError}</p> : null}
           {relationships.error ? <p role="status">Existing assessment links are unavailable.</p> : (
             <section aria-label="Existing assessment links">
-              <h3 style={{ fontSize: 13, margin: "12px 0 6px" }}>Existing assessment links</h3>
-              {selectedFeatureLinks.length ? <ul style={{ display: "grid", gap: 6, margin: 0, padding: 0, listStyle: "none" }}>
-                {selectedFeatureLinks.map((link) => <li key={link.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <h3 className="map-surface-links-title">Existing assessment links</h3>
+              {selectedFeatureLinks.length ? <ul className="map-surface-links">
+                {selectedFeatureLinks.map((link) => <li key={link.id} className="map-surface-row">
                   <span>{relationshipSourceLabel(link)}</span>
                   {link.source.domain === "lifeline" && props.onOpenLifeline
                     ? <Button onClick={() => props.onOpenLifeline!(link.source.definitionKey)}>Open linked Lifeline</Button>
@@ -437,13 +394,13 @@ export function MapSurface(props: {
                       ? <Button onClick={() => props.onOpenEsf!(link.source.definitionKey)}>Open linked ESF</Button>
                       : null}
                 </li>)}
-              </ul> : <p style={{ margin: 0, color: "var(--eoc-text-muted)" }}>No recorded assessment links for this feature.</p>}
+              </ul> : <p className="eoc-flush eoc-muted">No recorded assessment links for this feature.</p>}
             </section>
           )}
         </Panel>
       ) : null}
 
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div className="map-surface-map">
         <CopMap
           key={JSON.stringify([props.jurisdictionId, props.incidentId ?? null, props.theme, areaBbox, geoBoards.map((b) => b.id), feedAndDatasetLayers.map((f) => f.id), props.focusDatasetId ?? null, props.focusFeatureId ?? null])}
           theme={props.theme}
@@ -503,7 +460,7 @@ export function MapSurface(props: {
       </div>
 
       {adding && point ? (
-        <div style={overlayStyle}>
+        <div className="map-surface-overlay">
           <Panel title="New map record">
             {board.loading && !board.data ? <Loading label="Loading form…" /> : null}
             {board.data ? (
@@ -515,15 +472,15 @@ export function MapSurface(props: {
                   onUpload={(file) => uploadPickedFile(props.client, props.jurisdictionId, file)}
                 />
               ) : (
-                <p style={{ color: "var(--eoc-text-muted)" }}>This board has no location field.</p>
+                <p className="eoc-muted">This board has no location field.</p>
               )
             ) : null}
             {error ? (
-              <p role="alert" style={{ color: "var(--eoc-status-critical)", margin: "8px 0 0" }}>
+              <p role="alert" className="map-surface-error">
                 {error}
               </p>
             ) : null}
-            <div style={{ marginTop: 8 }}>
+            <div className="map-surface-actions">
               <Button onClick={reset} disabled={busy}>
                 Cancel
               </Button>

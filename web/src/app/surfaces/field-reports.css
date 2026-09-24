@@ -1,0 +1,3 @@
+.field-reports-bar { align-items: end; display: flex; flex-wrap: wrap; gap: 12px; padding: 16px 16px 0; }
+.field-reports-bar > p { color: var(--eoc-text-muted); flex: 1 1 280px; margin: 0; }
+.field-reports-bar > label { display: grid; gap: 4px; }

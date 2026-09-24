@@ -7,6 +7,7 @@ import type { ApiClient, MeetingConfig } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import { SECTION_LABELS, useAction } from "./collab.js";
 import "../datasets/datasets.css";
+import "./integrations.css";
 
 /**
  * Meetings and briefings, shown only where the meetings integration runs:
@@ -17,10 +18,6 @@ import "../datasets/datasets.css";
 
 const BRIDGE_LABELS: Readonly<Record<string, string>> = { ...SECTION_LABELS, incident: "Whole incident" };
 const bridgeLabel = (section: string | null): string => BRIDGE_LABELS[section ?? "incident"] ?? section ?? "Whole incident";
-const fieldStyle = {
-  font: "inherit", minHeight: 44, padding: 6, borderRadius: 4, border: "1px solid var(--eoc-border)",
-  background: "var(--eoc-surface)", color: "var(--eoc-text)",
-} as const;
 
 /** The jurisdiction's Jitsi bridge. The token secret is stored encrypted and never shown. */
 export function MeetingSettings(props: { client: ApiClient; jurisdictionId: string }) {
@@ -61,11 +58,11 @@ function MeetingForm(props: { client: ApiClient; jurisdictionId: string; config:
   };
   return (
     <form onSubmit={save}>
-      <p className="d21-muted" style={{ marginBottom: 12 }}>
+      <p className="d21-muted is-lead">
         <StatusBadge status={inUse ? "success" : "unknown"}>{inUse ? "In use" : "Not in use"}</StatusBadge>{" "}
         {inUse ? `Incident bridges open on ${config.baseUrl}.` : "Incidents cannot open a bridge until a server is saved and in use."}
       </p>
-      <fieldset disabled={busy !== null} className="d21-form-grid" style={{ border: 0, margin: 0, padding: 0 }}>
+      <fieldset disabled={busy !== null} className="d21-form-grid">
         <TextField label="Jitsi server address" value={baseUrl} onChange={setBaseUrl} required />
         <TextField label="App id" value={appId} onChange={setAppId} />
         <TextField label="Token secret" type="password" value={secret} onChange={setSecret} />
@@ -74,7 +71,7 @@ function MeetingForm(props: { client: ApiClient; jurisdictionId: string; config:
             ? "A token secret is stored. It is never shown; leave the field blank to keep it. Each join link carries a signed token for that person, and administrators join as moderators."
             : "No token secret is stored, so join links are plain room links. Add an app id and secret to sign them."}
         </p>
-        <label className="d21-form-grid-wide" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <label className="d21-form-grid-wide eoc-inline">
           <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
           Offer meeting bridges for incidents
         </label>
@@ -124,22 +121,22 @@ export function IncidentMeetings(props: {
 
   return (
     <Panel title={`${props.incidentName}: meetings and briefings`}>
-      <h3 style={{ margin: "0 0 8px", fontSize: "1rem" }}>Bridges</h3>
+      <h3 className="integrations-heading">Bridges</h3>
       {bridges.error ? <p className="d21-error" role="alert">{bridges.error}</p> : null}
       {bridges.data?.length === 0 ? <p className="d21-muted">No bridge is open for this incident.</p> : null}
       {bridges.data?.length ? (
-        <ul aria-label="Open bridges" style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 6 }}>
+        <ul aria-label="Open bridges" className="integrations-bridges">
           {bridges.data.map((bridge) => (
             <li key={bridge.room}>
               {bridge.url
-                ? <a href={bridge.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--eoc-brand-teal)", fontWeight: 600 }}>Join the {bridgeLabel(bridge.section).toLowerCase()} bridge</a>
+                ? <a href={bridge.url} target="_blank" rel="noopener noreferrer" className="integrations-join">Join the {bridgeLabel(bridge.section).toLowerCase()} bridge</a>
                 : `${bridgeLabel(bridge.section)}: the meeting server is not set up.`}
             </li>
           ))}
         </ul>
       ) : null}
       {writable ? (
-        <div className="d21-form-grid" style={{ marginTop: 12, alignItems: "end" }}>
+        <div className="d21-form-grid integrations-open">
           <EnumSelect label="Bridge for" values={sections} labels={BRIDGE_LABELS} value={bridgeSection} onChange={setBridgeSection} />
           <div>
             <ActionButton kind="primary" loading={busy === "bridge"} loadingLabel="Opening…" disabled={busy !== null}
@@ -152,11 +149,11 @@ export function IncidentMeetings(props: {
         </div>
       ) : null}
 
-      <h3 style={{ margin: "16px 0 8px", fontSize: "1rem" }}>Briefings</h3>
+      <h3 className="integrations-heading is-later">Briefings</h3>
       {briefings.error ? <p className="d21-error" role="alert">{briefings.error}</p> : null}
       {briefings.data?.length === 0 ? <p className="d21-muted">No briefing is scheduled.</p> : null}
       {briefings.data?.length ? (
-        <div style={{ overflowX: "auto" }}>
+        <div className="integrations-scroll">
           <BoardTable caption="Scheduled briefings" columns={["Briefing", "For", "Starts", "Holders notified"]}
             rows={briefings.data.map((briefing) => [
               briefing.title, bridgeLabel(briefing.section), new Date(briefing.scheduledAt).toLocaleString(),
@@ -165,13 +162,13 @@ export function IncidentMeetings(props: {
         </div>
       ) : null}
       {writable ? (
-        <form onSubmit={schedule} style={{ marginTop: 12 }}>
-          <fieldset disabled={busy !== null} className="d21-form-grid" style={{ border: 0, margin: 0, padding: 0 }}>
+        <form onSubmit={schedule} className="eoc-space-above">
+          <fieldset disabled={busy !== null} className="d21-form-grid">
             <TextField label="Briefing title" value={title} onChange={setTitle} required />
-            <p style={{ display: "flex", flexDirection: "column", gap: 4, margin: 0 }}>
+            <p className="integrations-field">
               <label htmlFor={`briefing-when-${incidentId}`}>Starts</label>
               <input id={`briefing-when-${incidentId}`} type="datetime-local" required value={when}
-                onChange={(event) => setWhen(event.target.value)} style={fieldStyle} />
+                onChange={(event) => setWhen(event.target.value)} />
             </p>
             <EnumSelect label="Briefing for" values={sections} labels={BRIDGE_LABELS} value={briefingSection} onChange={setBriefingSection} />
             <div className="d21-form-grid-wide">

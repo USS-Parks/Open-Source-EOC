@@ -5,6 +5,7 @@ import { useAsync } from "../app/data/hooks.js";
 import { ErrorNote, Loading } from "../app/screens/parts.js";
 import { DATA_CLASS_LABELS, saveFile } from "./labels.js";
 import { WebeocImport } from "./WebeocImport.js";
+import "./admin.css";
 
 /**
  * Records retention per data class, the audit trail export and the
@@ -73,23 +74,22 @@ export function Records(props: { client: ApiClient; jurisdictionId: string }) {
   });
 
   return (
-    <div style={{ display: "grid", gap: 14, minWidth: 0 }}>
+    <div className="admin-tab">
       {error ? <p className="d21-error" role="alert">{error}</p> : null}
       {notice ? <p role="status">{notice}</p> : null}
       <Panel title="Retention">
         {policies.error ? <ErrorNote message={policies.error} /> : null}
         {!policies.data && !policies.error ? <Loading label="Loading retention periods…" /> : null}
-        {policies.data ? <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 12 }}>
+        {policies.data ? <fieldset disabled={busy} className="eoc-fieldset eoc-stack">
           <p className="d21-muted">Rows older than the period are deleted by the hourly purge. Leave a period empty to keep that class indefinitely. The audit trail and incident records are never purged.</p>
           <div className="d21-form-section-grid">
             {policies.data.map((p) => (
-              <div key={p.dataClass} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <div key={p.dataClass} className="admin-field">
                 <label htmlFor={`retention-${p.dataClass}`}>{DATA_CLASS_LABELS[p.dataClass] ?? "Other records"} (days)</label>
                 <input id={`retention-${p.dataClass}`} type="number" min={1} max={36500} inputMode="numeric" value={days[p.dataClass] ?? ""}
                   placeholder="Keep indefinitely"
                   onChange={(event) => setDays((current) => ({ ...current, [p.dataClass]: event.target.value }))}
-                  style={{ font: "inherit", minHeight: 44, padding: 6, borderRadius: 4, border: "1px solid var(--eoc-border)",
-                    background: "var(--eoc-surface)", color: "var(--eoc-text)" }} />
+                  className="admin-input" />
                 <span className="d21-muted">{p.updatedAt ? `Set ${new Date(p.updatedAt).toLocaleString()}` : "Never set"}</span>
               </div>
             ))}
@@ -104,7 +104,7 @@ export function Records(props: { client: ApiClient; jurisdictionId: string }) {
         <p className="d21-muted">CSV opens in a spreadsheet; cells that could run as formulas are quoted. Signed JSON carries a keyed signature per page for verification and needs the server's secret key.</p>
         <div className="d21-toolbar">
           <span className="d21-muted">The whole trail of this jurisdiction downloads, oldest first.</span>
-          <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <span className="admin-actions">
             <Button disabled={busy} onClick={() => void exportCsv()}>Download audit CSV</Button>
             <Button disabled={busy} onClick={() => void exportSigned()}>Download signed JSON</Button>
           </span>

@@ -9,6 +9,10 @@
 .reports-heading { font-size: 1em; margin: 16px 0 8px; }
 .reports-result { display: grid; gap: 8px; margin-top: 12px; min-width: 0; }
 .reports-scroll { max-width: 100%; overflow-x: auto; }
+/* On a phone the cells pad less, so a four-column report keeps every heading inside the panel. */
+@container (max-width: 480px) {
+  .reports-scroll .eoc-table th, .reports-scroll .eoc-table td { padding-inline: 6px; }
+}
 .reports-group td { font-weight: 600; }
 .reports-schedule { display: grid; gap: 10px; }
 .reports-runs { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }

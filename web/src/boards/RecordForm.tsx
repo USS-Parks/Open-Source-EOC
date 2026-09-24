@@ -1,6 +1,7 @@
 import type { FieldDef, FormLayout } from "@openeoc/shared";
 import { SchemaForm, type FieldOption } from "../design/forms.js";
 import type { DraftScope, ScopedDraftStore } from "../design/form-drafts.js";
+import "./board-parts.css";
 
 /**
  * Input view: renders a record form from the board's field definitions.
@@ -81,9 +82,9 @@ function GeometryControl(props: {
     }
   };
   return (
-    <fieldset disabled={props.disabled} style={{ border: 0, margin: 0, padding: 0 }}>
-      <legend style={{ marginBottom: 4 }}>{props.field.label} (point)</legend>
-      <div style={{ display: "flex", gap: 8 }}>
+    <fieldset disabled={props.disabled} className="eoc-fieldset">
+      <legend className="board-point-legend">{props.field.label} (point)</legend>
+      <div className="board-point-row">
         <label htmlFor={`${props.inputId}-longitude`}>Longitude
           <input id={`${props.inputId}-longitude`} value={lng === undefined ? "" : String(lng)}
             onChange={(event) => update(event.target.value === "" ? undefined : Number(event.target.value), lat)} />

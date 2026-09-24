@@ -4,6 +4,7 @@ import type { AdminGuestGrant, ApiClient, BoardListItem, GuestGrantPage } from "
 import { useAsync } from "../app/data/hooks.js";
 import { ErrorNote, Loading } from "../app/screens/parts.js";
 import { scopeLabel } from "./labels.js";
+import "./admin.css";
 
 /**
  * Guest access for mutual aid: an existing account from another organization
@@ -36,22 +37,21 @@ export function Guests(props: { client: ApiClient; jurisdictionId: string; board
   const options = ["positions:read", ...props.boards.map((b) => `board:${b.id}:read`)];
 
   return (
-    <div style={{ display: "grid", gap: 14, minWidth: 0 }}>
+    <div className="admin-tab">
       {error ? <p className="d21-error" role="alert">{error}</p> : null}
       {notice ? <p role="status">{notice}</p> : null}
       <Panel title="Grant guest access">
-        <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 12 }}>
+        <fieldset disabled={busy} className="eoc-fieldset eoc-stack">
           <div className="d21-form-grid">
             <TextField label="Guest account email" value={email} onChange={setEmail} required />
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>Access ends
+            <label className="admin-field">Access ends
               <input type="datetime-local" value={expires} onChange={(event) => setExpires(event.target.value)}
-                style={{ font: "inherit", minHeight: 44, padding: 6, borderRadius: 4, border: "1px solid var(--eoc-border)",
-                  background: "var(--eoc-surface)", color: "var(--eoc-text)" }} />
+                className="admin-input" />
             </label>
             <fieldset className="d21-form-section">
               <legend>Access</legend>
               {options.map((scope) => (
-                <label key={scope} style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 32 }}>
+                <label key={scope} className="eoc-check">
                   <input type="checkbox" checked={scopes.has(scope)} onChange={() => toggle(scope)} />
                   {scopeLabel(scope, props.boards)}
                 </label>
@@ -84,7 +84,7 @@ export function Guests(props: { client: ApiClient; jurisdictionId: string; board
                 <div className="d21-readiness-title">
                   <div><strong>{grant.person.displayName}</strong><span>{grant.person.email}</span></div>
                 </div>
-                <span style={{ alignSelf: "start" }}><StatusBadge status={state === "Active" ? "success" : "unknown"}>{state}</StatusBadge></span>
+                <span className="d21-readiness-badge"><StatusBadge status={state === "Active" ? "success" : "unknown"}>{state}</StatusBadge></span>
                 <dl className="d21-metrics">
                   <div><dt>Access</dt><dd>{grant.scopes.map((s) => scopeLabel(s, props.boards)).join("; ")}</dd></div>
                   <div><dt>Ends</dt><dd>{new Date(grant.revokedAt ?? grant.expiresAt).toLocaleString()}</dd></div>

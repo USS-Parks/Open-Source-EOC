@@ -4,6 +4,7 @@ import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../../design/
 import type { ApiClient } from "../api/client.js";
 import { useAsync } from "../data/hooks.js";
 import { ErrorNote, Loading } from "../screens/parts.js";
+import "./incidents.css";
 
 export function IncidentParticipants(props: {
   client: ApiClient; incidentId: string; incidentName: string; canManage: boolean; closed: boolean;
@@ -41,18 +42,18 @@ export function IncidentParticipants(props: {
   });
   if (roster.error) return <ErrorNote message={roster.error} />;
   return <Panel title={props.incidentName + ": participants"}>
-    <div style={{ display: "grid", gap: 16 }}>
-      <p style={{ margin: 0 }}>The host organization controls this incident. A participant grant gives only the selected person access to this incident; it does not establish unified command, transfer ownership, or grant access to another incident.</p>
-      {props.canManage && !props.closed ? <fieldset disabled={busy} style={{ border: 0, padding: 0, display: "grid", gap: 12 }}>
+    <div className="incidents-section">
+      <p className="eoc-flush">The host organization controls this incident. A participant grant gives only the selected person access to this incident; it does not establish unified command, transfer ownership, or grant access to another incident.</p>
+      {props.canManage && !props.closed ? <fieldset disabled={busy} className="incidents-fieldset">
         <TextField label="Organization code" value={organizationSlug} onChange={setOrganizationSlug} />
-        <p style={{ margin: 0, color: "var(--eoc-text-muted)" }}>Use the registered organization's code and the participant's existing account email.</p>
+        <p className="eoc-flush eoc-muted">Use the registered organization's code and the participant's existing account email.</p>
         <TextField label="Participant email" value={personEmail} onChange={setPersonEmail} />
         <TextField label="Incident position" value={positionTitle} onChange={setPositionTitle} />
         <EnumSelect label="Incident role" values={["viewer", "contributor", "coordinator"]} value={role}
           onChange={(value) => setRole(value as IncidentParticipantRole)}
           labels={{ viewer: "Read only", contributor: "Contributor", coordinator: "Coordinator" }} />
         <label>Participation expires <input type="datetime-local" value={expires} onChange={(event) => setExpires(event.target.value)} /></label>
-        <p style={{ margin: 0 }}>Expiry uses {Intl.DateTimeFormat().resolvedOptions().timeZone}. A coordinator may revise the operational area when the engine authorizes it. Only host-organization administrators manage participation.</p>
+        <p className="eoc-flush">Expiry uses {Intl.DateTimeFormat().resolvedOptions().timeZone}. A coordinator may revise the operational area when the engine authorizes it. Only host-organization administrators manage participation.</p>
         <TextField label="Participation reason" value={reason} onChange={setReason} />
         <div><Button kind="primary" onClick={() => void grant()} disabled={busy}>Add participant</Button></div>
       </fieldset> : null}
@@ -60,20 +61,20 @@ export function IncidentParticipants(props: {
       {error ? <p role="alert">{error}</p> : null}
       {roster.loading && !roster.data ? <Loading label="Loading participants…" /> : null}
       {roster.data?.length === 0 ? <p>No additional participants. The sponsoring organization's existing access remains in effect.</p> : null}
-      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 12 }}>
+      <ul className="incidents-participants">
         {(roster.data ?? []).map((participant) => {
           const ended = Boolean(participant.revokedAt) || Date.parse(participant.expiresAt) <= Date.now();
-          return <li key={participant.id} style={{ border: "1px solid var(--eoc-border)", borderRadius: 4, padding: 12 }}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+          return <li key={participant.id} className="incidents-participant">
+            <div className="incidents-row">
               <strong>{participant.personName}</strong><span>{participant.organizationName}</span>
               <StatusBadge status={ended ? "unknown" : "info"}>{participant.revokedAt ? "revoked" : ended ? "expired" : "active"}</StatusBadge>
             </div>
             <p>Participant grant: {participant.role} · Incident position: {participant.incidentPositionTitle} · Expires {new Date(participant.expiresAt).toLocaleString()}</p>
-            <p style={{ margin: 0, color: "var(--eoc-text-muted)" }}>The incident position is an assignment for this participant. It does not itself establish command authority.</p>
+            <p className="eoc-flush eoc-muted">The incident position is an assignment for this participant. It does not itself establish command authority.</p>
             {props.canManage && !participant.revokedAt ? <Button onClick={() => { setRevokeId(participant.id); setRevokeReason(""); }} disabled={busy}>End participation for {participant.personName}</Button> : null}
-            {revokeId === participant.id ? <div style={{ display: "grid", gap: 8, marginTop: 12 }}>
+            {revokeId === participant.id ? <div className="incidents-revoke">
               <TextField label="Reason for ending participation" value={revokeReason} onChange={setRevokeReason} />
-              <div style={{ display: "flex", gap: 8 }}>
+              <div className="incidents-pair">
                 <Button kind="danger" onClick={() => void revoke()} disabled={busy || !revokeReason.trim()}>End participation</Button>
                 <Button onClick={() => setRevokeId(null)} disabled={busy}>Cancel</Button>
               </div>

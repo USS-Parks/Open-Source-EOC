@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import * as maplibregl from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Protocol } from "pmtiles";
 import { Icon } from "../design/icons/index.js";
+import { pollWhileVisible } from "../app/data/hooks.js";
 import "./cop-workspace.css";
 import { withJurisdictionOverlays, readOverlayCoverage, type OverlayCoverage, VECTOR_OVERLAYS, ROAD_OVERLAYS, OWNERSHIP_LEVELS, overlayGroupOf, type JurisdictionOverlays } from "./overlays.js";
 import { themes, type ThemeName } from "../design/tokens.js";
@@ -784,9 +785,14 @@ export function CopMap(props: CopMapProps) {
       }
     };
 
+    // Rejects only when every read failed, so the poll backs off while the
+    // server is unreachable but keeps its pace when one source is down.
     const refresh = async () => {
       if (!styleReady) return;
+      let reads = 0;
+      let failed = 0;
       for (const board of props.boards) {
+        reads += 1;
         try {
           const raw = await props.fetchItems(board.id);
           const fc = tagFeatures(raw);
@@ -796,10 +802,12 @@ export function CopMap(props: CopMapProps) {
             pastPage ? tileTemplate("board", board.id) : undefined, false, visibleRef.current[board.id] ?? true);
         } catch {
           // A failed refresh keeps the last good picture; never blank the COP.
+          failed += 1;
         }
       }
       if (props.fetchFeedItems) {
         for (const feed of props.feeds ?? []) {
+          reads += 1;
           try {
             const res = await props.fetchFeedItems(feed.id);
             const fc = feed.kind === "fema-flood"
@@ -823,10 +831,12 @@ export function CopMap(props: CopMapProps) {
             }
           } catch {
             // A stale or failed feed keeps its last features; never blank the COP.
+            failed += 1;
           }
         }
       }
       if (map.isStyleLoaded()) joinBuildings();
+      if (reads > 0 && failed === reads) throw new Error("No map layer could be refreshed.");
     };
 
     map.on("load", async () => {
@@ -870,7 +880,7 @@ export function CopMap(props: CopMapProps) {
       const c = map.getCenter();
       paintReadout(c.lng, c.lat, map.getZoom());
       unbindBounds = bindCopMapBounds(map, () => onBoundsChangeRef.current);
-      void refresh();
+      refresh().catch(() => undefined);
     });
     map.on("moveend", () => {
       const c = map.getCenter();
@@ -878,10 +888,10 @@ export function CopMap(props: CopMapProps) {
     });
     // Newly rendered footprints become hit-testable once the map is idle.
     map.on("idle", joinBuildings);
-    const timer = setInterval(() => void refresh(), props.pollMs ?? 2000);
+    const stopPolling = pollWhileVisible(refresh, props.pollMs ?? 2000);
     return () => {
       active = false;
-      clearInterval(timer);
+      stopPolling();
       unbindBounds?.();
       styleReady = false;
       map.remove();
@@ -1224,40 +1234,38 @@ export function CopMap(props: CopMapProps) {
         </header>
         <div className="eoc-cop-filter">
           <label htmlFor="cop-layer-filter">Filter layer groups</label>
-          <Icon name="search" size={16} decorative />
-          <input
-            id="cop-layer-filter"
-            type="search"
-            placeholder="Layer name"
-            value={layerQuery}
-            onChange={(event) => setLayerQuery(event.target.value)}
-          />
+          <div className="eoc-cop-search">
+            <Icon name="search" size={16} decorative />
+            <input
+              id="cop-layer-filter"
+              type="search"
+              placeholder="Layer name"
+              value={layerQuery}
+              onChange={(event) => setLayerQuery(event.target.value)}
+            />
+          </div>
         </div>
         <EmptyLayerSearch visible={noLayerMatches} />
         <form onSubmit={(e) => void find(e)} className="eoc-cop-find">
           <label htmlFor="cop-feature-find">Find on map</label>
-          <Icon name="search" size={16} decorative />
-          <input
-            id="cop-feature-find"
-            type="search"
-            aria-label="Find on map"
-            placeholder="Record, county, or lat, lng"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+          <div className="eoc-cop-search">
+            <Icon name="search" size={16} decorative />
+            <input
+              id="cop-feature-find"
+              type="search"
+              aria-label="Find on map"
+              placeholder="Record, county, or lat, lng"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
           {results.length > 0 ? (
-            <ul style={{ listStyle: "none", margin: "6px 0 0", padding: 0, display: "grid", gap: 2 }}>
+            <ul className="eoc-cop-results">
               {results.map((r) => (
                 <li key={r.key}>
-                  <button
-                    type="button"
-                    onClick={() => goTo(r)}
-                    style={{ ...toolButtonStyle(false), width: "100%", textAlign: "left" }}
-                  >
-                    <span style={{ display: "block" }}>{r.title}</span>
-                    <span style={{ display: "block", fontSize: "0.8em", color: "var(--eoc-text-muted)" }}>
-                      {r.detail}
-                    </span>
+                  <button type="button" className="eoc-cop-tool" onClick={() => goTo(r)}>
+                    <span>{r.title}</span>
+                    <span>{r.detail}</span>
                   </button>
                 </li>
               ))}
@@ -1273,16 +1281,16 @@ export function CopMap(props: CopMapProps) {
           testId="reference-layer-group"
         >
         {shownBasemaps.length > 0 ? (
-          <div style={{ marginBottom: 12 }}>
-            <h3 style={headingStyle}>Basemap</h3>
-            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          <div className="eoc-cop-above">
+            <h3 className="eoc-cop-heading">Basemap</h3>
+            <div className="eoc-cop-buttons">
               {shownBasemaps.map((b) => (
                 <button
                   key={b.id}
                   type="button"
                   aria-pressed={basemapMode === b.id}
                   onClick={() => setBasemapMode(b.id)}
-                  style={{ ...toolButtonStyle(basemapMode === b.id), flex: 1 }}
+                  className="eoc-cop-tool is-grow"
                 >
                   {b.title}
                 </button>
@@ -1291,23 +1299,23 @@ export function CopMap(props: CopMapProps) {
           </div>
         ) : null}
         {shownRasters.length > 0 || (terrain && layerMatches("Hillshade")) || (vectors && shownVectors.length > 0) ? (
-          <div style={{ marginBottom: 12 }}>
-            <h3 style={headingStyle}>Overlays</h3>
-            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
+          <div className="eoc-cop-above">
+            <h3 className="eoc-cop-heading">Overlays</h3>
+            <ul className="eoc-cop-options">
               {vectors ? shownVectors.map((o) => (
                 <li key={o.id}>
-                  <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <label className="eoc-cop-check">
                     <input type="checkbox" disabled={coverage[o.id]?.available === false} checked={!!vectorOn[o.id]}
                       onChange={() => setVectorOn((v) => ({ ...v, [o.id]: !v[o.id] }))} />
                     {o.title}
                   </label>
-                  <small style={{ display: "block", marginLeft: 24, color: "var(--eoc-text-muted)" }}>{coverage[o.id]?.coverage ?? "Coverage unverified: source manifest unavailable"}</small>
-                  {vectorOn[o.id] && coverage[o.id]?.attribution ? <details style={{ marginLeft: 24, fontSize: "0.8em", color: "var(--eoc-text-muted)" }}><summary>Source</summary>{coverage[o.id]?.attribution}</details> : null}
+                  <small className="eoc-cop-note">{coverage[o.id]?.coverage ?? "Coverage unverified: source manifest unavailable"}</small>
+                  {vectorOn[o.id] && coverage[o.id]?.attribution ? <details className="eoc-cop-source"><summary>Source</summary>{coverage[o.id]?.attribution}</details> : null}
                 </li>
               )) : null}
               {terrain && layerMatches("Hillshade") ? (
                 <li>
-                  <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <label className="eoc-cop-check">
                     <input
                       type="checkbox"
                       checked={hillshade}
@@ -1319,7 +1327,7 @@ export function CopMap(props: CopMapProps) {
               ) : null}
               {shownRasters.map((o) => (
                 <li key={o.id}>
-                  <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <label className="eoc-cop-check">
                     <input
                       type="checkbox"
                       checked={!!overlayOn[o.id]}
@@ -1333,34 +1341,29 @@ export function CopMap(props: CopMapProps) {
           </div>
         ) : null}
         {vectors && Object.values(vectorOn).some(Boolean) ? (
-          <div style={{ marginBottom: 12 }}>
-            <h3 style={headingStyle}>Road jurisdiction and land ownership</h3>
-            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          <div className="eoc-cop-above">
+            <h3 className="eoc-cop-heading">Road jurisdiction and land ownership</h3>
+            <ul className="eoc-cop-legend">
               {ROAD_OVERLAYS.filter((r) => vectorOn[r.id]).map((r) => (
-                <li key={r.id}><span aria-hidden="true" style={{ display: "inline-block", width: 14, marginRight: 8, borderTop: "3px solid " + r[props.theme] }} />{r.title}</li>
+                <li key={r.id}><span aria-hidden="true" className="eoc-cop-road-key" style={{ borderTopColor: r[props.theme] }} />{r.title}</li>
               ))}
               {vectorOn.land_ownership ? OWNERSHIP_LEVELS.map((level) => (
-                <li key={level.id}><span aria-hidden="true" style={{ display: "inline-block", width: 12, height: 12, marginRight: 8, background: level[props.theme] }} />{level.id}</li>
+                <li key={level.id}><span aria-hidden="true" className="eoc-cop-land-key" style={{ backgroundColor: level[props.theme] }} />{level.id}</li>
               )) : null}
             </ul>
-            <p style={{ fontSize: "0.8em", color: "var(--eoc-text-muted)" }}>Coverage follows the configured source. Unmapped land does not imply private ownership.</p>
+            <p className="eoc-cop-fine">Coverage follows the configured source. Unmapped land does not imply private ownership.</p>
           </div>
         ) : null}
         {buildings ? (
-          <div style={{ marginBottom: 12 }}>
-            <h3 style={headingStyle}>Building use</h3>
-            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
+          <div className="eoc-cop-above">
+            <h3 className="eoc-cop-heading">Building use</h3>
+            <ul className="eoc-cop-options">
               {BUILDING_USE_LEGEND.map((u) => (
-                <li key={u.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.85em" }}>
+                <li key={u.id} className="eoc-cop-key">
                   <span
                     aria-hidden="true"
-                    style={{
-                      width: 12,
-                      height: 12,
-                      borderRadius: 2,
-                      background: BUILDING_USE_COLORS[props.theme][u.id],
-                      display: "inline-block",
-                    }}
+                    className="eoc-cop-swatch"
+                    style={{ backgroundColor: BUILDING_USE_COLORS[props.theme][u.id] }}
                   />
                   {u.title}
                 </li>
@@ -1369,12 +1372,12 @@ export function CopMap(props: CopMapProps) {
           </div>
         ) : null}
         {shownGroups.length > 0 ? (
-          <div style={{ marginBottom: 12 }}>
-            <h3 style={headingStyle}>Basemap layers</h3>
-            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
+          <div className="eoc-cop-above">
+            <h3 className="eoc-cop-heading">Basemap layers</h3>
+            <ul className="eoc-cop-options">
               {shownGroups.map((g) => (
                 <li key={g.id}>
-                  <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <label className="eoc-cop-check">
                     <input
                       type="checkbox"
                       checked={groupOn[g.id] ?? true}
@@ -1396,11 +1399,11 @@ export function CopMap(props: CopMapProps) {
           forceOpen={!!layerNeedle}
           testId="operational-layer-group"
         >
-        <h3 style={headingStyle}>Layers</h3>
-        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
+        <h3 className="eoc-cop-heading">Layers</h3>
+        <ul className="eoc-cop-options">
           {shownBoards.map((b) => (
             <li key={b.id}>
-              <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <label className="eoc-cop-check">
                 <input
                   type="checkbox"
                   checked={visible[b.id] ?? true}
@@ -1421,12 +1424,12 @@ export function CopMap(props: CopMapProps) {
           </p>
         ) : null}
         {shownFeeds.length > 0 ? (
-          <div style={{ marginTop: 12 }}>
-            <h3 style={headingStyle}>Feeds</h3>
-            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
+          <div className="eoc-cop-below">
+            <h3 className="eoc-cop-heading">Feeds</h3>
+            <ul className="eoc-cop-options">
               {shownFeeds.map((f) => (
                 <li key={f.id}>
-                  <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <label className="eoc-cop-check">
                     <input
                       type="checkbox"
                       checked={feedVisible[f.id] ?? true}
@@ -1438,21 +1441,21 @@ export function CopMap(props: CopMapProps) {
                   </label>
                   <LayerOpacity value={opacity[feedSourceId(f.id)] ?? 1}
                     onChange={(value) => setOpacity((o) => ({ ...o, [feedSourceId(f.id)]: value }))} />
-                  <small style={{ display: "block", marginLeft: 24, color: "var(--eoc-text-muted)" }}>
+                  <small className="eoc-cop-note">
                     {f.coverage ?? feedHealth[f.id]?.coverage ?? "Coverage unknown"}
                   </small>
                   {feedHealth[f.id] ? (
-                    <small style={{ display: "block", marginLeft: 24, color: "var(--eoc-text-muted)" }}>
+                    <small className="eoc-cop-note">
                       {feedHealth[f.id]!.stale ? "Stale last-good data" : `Freshness: ${formatAge(feedHealth[f.id]!.ageSeconds)}`}
                     </small>
                   ) : <small className="eoc-cop-layer-meta">Freshness unknown</small>}
                   {feedHealth[f.id]?.incomplete ? (
-                    <small role="status" style={{ display: "block", marginLeft: 24, color: "var(--eoc-status-warning)" }}>
+                    <small role="status" className="eoc-cop-note is-warning">
                       Display incomplete: bounded page limit reached.
                     </small>
                   ) : null}
                   {f.attribution || feedHealth[f.id]?.attribution ? (
-                    <details style={{ marginLeft: 24, fontSize: "0.8em", color: "var(--eoc-text-muted)" }}>
+                    <details className="eoc-cop-source">
                       <summary>Source</summary>{f.attribution ?? feedHealth[f.id]?.attribution}
                     </details>
                   ) : null}
@@ -1464,58 +1467,44 @@ export function CopMap(props: CopMapProps) {
         </WorkspaceSection>
         <WorkspaceSection title="Legends" icon="source" className="is-legends" defaultOpen testId="map-legends">
         {(props.feeds ?? []).some((feed) => feed.kind === "fema-flood") ? (
-          <div style={{ marginTop: 12 }}>
-            <h3 style={headingStyle}>Flood hazard (static reference)</h3>
-            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
+          <div className="eoc-cop-below">
+            <h3 className="eoc-cop-heading">Flood hazard (static reference)</h3>
+            <ul className="eoc-cop-options">
               {FLOOD_LEGEND.map((entry) => (
-                <li key={entry.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.85em" }}>
-                  <span aria-hidden="true" style={{
-                    width: 16, height: 12, display: "inline-block",
-                    backgroundColor: floodColor(entry.id, props.theme),
-                    backgroundImage: "repeating-linear-gradient(135deg, transparent 0 3px, currentColor 3px 4px)",
-                  }} />
+                <li key={entry.id} className="eoc-cop-key">
+                  <span aria-hidden="true" className="eoc-cop-swatch is-flood" style={{ backgroundColor: floodColor(entry.id, props.theme) }} />
                   {entry.title}
                 </li>
               ))}
             </ul>
-            <p style={{ fontSize: "0.8em", color: "var(--eoc-text-muted)" }}>
+            <p className="eoc-cop-fine">
               Static FEMA reference, separate from current incident status. Unmapped or unclassified areas remain unknown.
             </p>
-            <details style={{ fontSize: "0.8em", color: "var(--eoc-text-muted)" }}>
+            <details className="eoc-cop-fine">
               <summary>Source</summary>{FEMA_NFHL_ATTRIBUTION}
             </details>
           </div>
         ) : null}
-        <div style={{ marginTop: 12 }}>
+        <div className="eoc-cop-below">
           <details data-testid="facility-legend">
-            <summary style={headingStyle}>Facility types (NAPSG)</summary>
-            <ul style={{ listStyle: "none", margin: "8px 0 0", padding: 0, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6 }}>
+            <summary className="eoc-cop-heading">Facility types (NAPSG)</summary>
+            <ul className="eoc-cop-facility-key">
               {FACILITY_SYMBOLS.map((entry) => (
-                <li key={entry.type} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8em" }}>
-                  <img src={`${facilityAssetBase}${entry.assetFile}`} alt="" width={24} height={24} style={{ objectFit: "contain" }} />
+                <li key={entry.type}>
+                  <img src={`${facilityAssetBase}${entry.assetFile}`} alt="" width={24} height={24} />
                   {entry.title}
                 </li>
               ))}
             </ul>
-            <p style={{ fontSize: "0.75em", color: "var(--eoc-text-muted)" }}>{NAPSG_ATTRIBUTION}</p>
+            <p className="eoc-cop-fine is-smaller">{NAPSG_ATTRIBUTION}</p>
           </details>
         </div>
-        <div style={{ marginTop: 12 }}>
-          <h3 style={headingStyle}>Status</h3>
-          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
+        <div className="eoc-cop-below">
+          <h3 className="eoc-cop-heading">Status</h3>
+          <ul className="eoc-cop-options">
             {LEGEND.map((s) => (
-              <li key={s} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.85em" }}>
-                <span
-                  aria-hidden="true"
-                  style={{
-                    width: 12,
-                    height: 12,
-                    borderRadius: 6,
-                    background: statusColor(s, props.theme),
-                    backgroundImage: "repeating-linear-gradient(135deg, transparent 0 3px, currentColor 3px 4px)",
-                    display: "inline-block",
-                  }}
-                />
+              <li key={s} className="eoc-cop-key">
+                <span aria-hidden="true" className="eoc-cop-swatch is-status" style={{ backgroundColor: statusColor(s, props.theme) }} />
                 {s}
               </li>
             ))}
@@ -1523,20 +1512,20 @@ export function CopMap(props: CopMapProps) {
         </div>
         </WorkspaceSection>
         <WorkspaceSection title="Map tools and saved views" icon="settings" className="is-tools" testId="map-tools">
-        <div style={{ marginTop: 12 }}>
-          <h3 style={headingStyle}>Tools</h3>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            <button type="button" onClick={goHome} style={toolButtonStyle(false)}>
+        <div className="eoc-cop-below">
+          <h3 className="eoc-cop-heading">Tools</h3>
+          <div className="eoc-cop-buttons">
+            <button type="button" onClick={goHome} className="eoc-cop-tool">
               Home
             </button>
-            <button type="button" onClick={fitToFeatures} style={toolButtonStyle(false)}>
+            <button type="button" onClick={fitToFeatures} className="eoc-cop-tool">
               Zoom to extent
             </button>
             <button
               type="button"
               aria-pressed={measure === "distance"}
               onClick={() => setMeasure((m) => (m === "distance" ? "off" : "distance"))}
-              style={toolButtonStyle(measure === "distance")}
+              className="eoc-cop-tool"
             >
               {measure === "distance" ? "Measuring…" : "Measure"}
             </button>
@@ -1544,40 +1533,39 @@ export function CopMap(props: CopMapProps) {
               type="button"
               aria-pressed={measure === "area"}
               onClick={() => setMeasure((m) => (m === "area" ? "off" : "area"))}
-              style={toolButtonStyle(measure === "area")}
+              className="eoc-cop-tool"
             >
               {measure === "area" ? "Measuring area…" : "Measure area"}
             </button>
-            <button type="button" onClick={exportImage} style={toolButtonStyle(false)}>
+            <button type="button" onClick={exportImage} className="eoc-cop-tool">
               Export image
             </button>
           </div>
         </div>
-        <div style={{ marginTop: 12 }}>
-          <h3 style={headingStyle}>Bookmarks</h3>
-          <form onSubmit={saveBookmark} style={{ display: "flex", gap: 4 }}>
+        <div className="eoc-cop-below">
+          <h3 className="eoc-cop-heading">Bookmarks</h3>
+          <form onSubmit={saveBookmark} className="eoc-cop-bookmark">
             <input
               type="text"
               aria-label="Bookmark name"
               placeholder="Name this view"
               value={bookmarkName}
               onChange={(e) => setBookmarkName(e.target.value)}
-              style={{ ...inputStyle, flex: 1, minWidth: 0 }}
             />
-            <button type="submit" style={toolButtonStyle(false)}>
+            <button type="submit" className="eoc-cop-tool">
               Save view
             </button>
           </form>
           {bookmarks.length > 0 ? (
-            <ul style={{ listStyle: "none", margin: "6px 0 0", padding: 0, display: "grid", gap: 2 }}>
+            <ul className="eoc-cop-results">
               {bookmarks.map((b) => (
-                <li key={b.name} style={{ display: "flex", gap: 4 }}>
+                <li key={b.name} className="eoc-cop-bookmark">
                   <button
                     type="button"
                     onClick={() =>
                       mapRef.current?.flyTo({ center: b.center, zoom: b.zoom, duration: 600 })
                     }
-                    style={{ ...toolButtonStyle(false), flex: 1, textAlign: "left", minWidth: 0 }}
+                    className="eoc-cop-tool is-grow is-start"
                   >
                     {b.name}
                   </button>
@@ -1585,7 +1573,7 @@ export function CopMap(props: CopMapProps) {
                     type="button"
                     aria-label={`Remove bookmark ${b.name}`}
                     onClick={() => removeBookmark(b.name)}
-                    style={toolButtonStyle(false)}
+                    className="eoc-cop-tool"
                   >
                     ×
                   </button>
@@ -1602,26 +1590,9 @@ export function CopMap(props: CopMapProps) {
           data-testid="cop-map"
           role="region"
           aria-label="Common operating picture map"
-          style={{ position: "absolute", inset: 0, overflow: "hidden" }}
+          className="eoc-cop-map"
         />
-        <div
-          ref={readoutRef}
-          data-testid="cop-readout"
-          style={{
-            position: "absolute",
-            top: 8,
-            left: 8,
-            padding: "2px 8px",
-            fontSize: 12,
-            fontVariantNumeric: "tabular-nums",
-            color: "var(--eoc-text)",
-            background: "color-mix(in srgb, var(--eoc-surface) 85%, transparent)",
-            border: "1px solid var(--eoc-border)",
-            borderRadius: 4,
-            pointerEvents: "none",
-            whiteSpace: "pre-line",
-          }}
-        />
+        <div ref={readoutRef} data-testid="cop-readout" className="eoc-cop-readout" />
       </div>
       {selection ? <CopFeatureInspector selection={selection} onClose={closeInspection} /> : null}
     </div>
@@ -1649,36 +1620,4 @@ function LayerOpacity(props: { value: number; onChange: (value: number) => void 
       />
     </label>
   );
-}
-
-const headingStyle: CSSProperties = {
-  margin: "0 0 6px",
-  fontSize: "0.85em",
-  color: "var(--eoc-text-muted)",
-};
-
-const inputStyle: CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  fontFamily: "inherit",
-  fontSize: "0.9em",
-  padding: "4px 8px",
-  minHeight: 32,
-  borderRadius: 4,
-  border: "1px solid var(--eoc-border)",
-  background: "var(--eoc-surface)",
-  color: "var(--eoc-text)",
-};
-
-/** Shared style for the map's tool buttons (pressed state is a filled chip). */
-function toolButtonStyle(pressed: boolean): CSSProperties {
-  return {
-    padding: "4px 8px",
-    minHeight: 32,
-    borderRadius: 4,
-    cursor: "pointer",
-    border: "1px solid var(--eoc-border)",
-    background: pressed ? "var(--eoc-text)" : "var(--eoc-surface)",
-    color: pressed ? "var(--eoc-surface)" : "var(--eoc-text)",
-  };
 }

@@ -14,6 +14,7 @@ import { RecordForm } from "../../boards/RecordForm.js";
 import { RecordHistory, type HistoryPageLoader } from "../../boards/RecordHistory.js";
 import { RecordWorkflowPanel, type RecordWorkflowSource } from "../../boards/RecordWorkflow.js";
 import { OFFLINE_SYNC_UNAVAILABLE, offlineSyncAvailable } from "../../boards/record-access.js";
+import "../../boards/board-parts.css";
 import {
   GroupCounts,
   NO_REFINEMENT,
@@ -565,7 +566,7 @@ function BoardWorkspace(props: {
   }, [props.onFilter]);
 
   return (
-    <div style={{ display: "grid", gap: 12, minWidth: 0 }}>
+    <div className="board-surface">
       <Tabs id={`board-${props.template.key}-views`} label="Board views"
         tabs={props.template.views.map((candidate) => ({ id: candidate.key, label: candidate.title }))}
         value={props.viewKey} onChange={props.onSelectView} />
@@ -681,10 +682,10 @@ export function BoardRecordDetailPane(props: {
     }
   }
   const record = (
-    <div style={{ display: "grid", gap: 14 }}>
+    <div className="board-record">
       {sections.map((section) => (
         <section key={section.key} aria-labelledby={`record-section-${section.key}`}>
-          <h3 id={`record-section-${section.key}`} style={{ fontSize: "0.9rem", margin: "0 0 6px" }}>{section.title}</h3>
+          <h3 id={`record-section-${section.key}`} className="board-record-heading">{section.title}</h3>
           <dl className="eoc-shell-record-context">
             {section.fields.map((key) => {
               const field = fields.get(key);
@@ -711,12 +712,12 @@ export function BoardRecordDetailPane(props: {
       {downloadError ? <p role="alert">{downloadError}</p> : null}
       {context.workflow ? <RecordWorkflowPanel key={context.workflow.recordId} source={context.workflow} /> : null}
       <section aria-labelledby="record-attribution-title">
-        <h3 id="record-attribution-title" style={{ fontSize: "0.9rem", margin: "0 0 6px" }}>Attribution</h3>
+        <h3 id="record-attribution-title" className="board-record-heading">Attribution</h3>
         <p>Created {formatDate(context.detail.createdAt)} by {actorLabel(context.detail.createdBy)}.</p>
         {context.detail.updatedBy ? <p>Updated {formatDate(context.detail.updatedAt)} by {actorLabel(context.detail.updatedBy)}.</p> : null}
       </section>
       <section aria-labelledby="record-history-title">
-        <h3 id="record-history-title" style={{ fontSize: "0.9rem", margin: "0 0 6px" }}>History</h3>
+        <h3 id="record-history-title" className="board-record-heading">History</h3>
         {context.detail.history.length ? (
           <ol>{context.detail.history.map((entry) => (
             <li key={entry.id}>{formatDate(entry.at)} · {actorLabel(entry.actor)} · {historyLabel(entry.category, entry.payload, fields)}{entry.corrects ? " · correction" : ""}</li>
@@ -740,7 +741,7 @@ export function BoardRecordDetailPane(props: {
   );
   const tabsId = `record-${context.detail.id}`;
   return (
-    <div style={{ display: "grid", gap: 12 }}>
+    <div className="eoc-stack">
       {context.history ? <>
         <Tabs id={tabsId} label="Record detail" value={tab} onChange={setTab}
           tabs={[{ id: "record", label: "Record" }, { id: "history", label: "Change history" }]} />

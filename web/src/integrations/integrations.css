@@ -1,0 +1,9 @@
+.integrations-status { margin: 8px 0 0; }
+.integrations-heading { font-size: 1rem; margin: 0 0 8px; }
+.integrations-heading.is-later { margin-top: 16px; }
+.integrations-bridges { display: grid; gap: 6px; margin: 0; padding-left: 20px; }
+.integrations-join { color: var(--eoc-brand-teal); font-weight: 600; }
+.d21-form-grid.integrations-open { align-items: end; margin-top: 12px; }
+.integrations-scroll { overflow-x: auto; }
+.integrations-field { display: flex; flex-direction: column; gap: 4px; margin: 0; }
+.integrations-field > input { background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: 4px; color: var(--eoc-text); font: inherit; min-height: 44px; padding: 6px; }

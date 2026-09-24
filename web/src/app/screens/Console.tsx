@@ -242,7 +242,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
     <>
       {workspace.message && (workspace.phase === "conflict" || workspace.phase === "error") ? (
         <section className="eoc-shell-context-state" aria-label="Workspace settings status">
-          <h2 style={dockHeading}>Workspace settings</h2>
+          <h2 className="eoc-dock-heading">Workspace settings</h2>
           <p role="alert">{workspace.message}</p>
           <div>
             <Button kind="quiet" onClick={workspace.reloadSaved}>Reload saved settings</Button>
@@ -252,7 +252,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       ) : null}
       {surface.kind === "board" && routeContext.recordId ? (
         <section aria-label="Selected record">
-          <h2 style={dockHeading}>Selected record</h2>
+          <h2 className="eoc-dock-heading">Selected record</h2>
           {recordContext?.status === "loading" || !recordContext ? <p>Loading record context…</p> : null}
           {recordContext?.status === "missing" ? <p role="status">Record unavailable in this view</p> : null}
           {recordContext?.status === "ready" ? (
@@ -293,9 +293,9 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         />
       </Suspense>
       <section aria-label="Boards">
-        <h2 style={dockHeading}>Boards</h2>
+        <h2 className="eoc-dock-heading">Boards</h2>
         {boardItems.length === 0 ? (
-          <p style={{ color: "var(--eoc-text-muted)", margin: 0 }}>No boards yet.</p>
+          <p className="eoc-flush eoc-muted">No boards yet.</p>
         ) : (
           <BoardList
             boards={boardItems.map((b) => ({ id: b.id, name: b.title }))}
@@ -877,5 +877,3 @@ function pageFor(surface: Surface, scope: string): { readonly page: ShellPage; r
 function formatTime(value: Date) {
   return value.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
-
-const dockHeading = { margin: "0 0 8px", fontSize: "1em" } as const;

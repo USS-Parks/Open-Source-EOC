@@ -1,0 +1,4 @@
+.federation-token { display: grid; gap: 8px; margin-top: 12px; }
+.federation-wide { grid-column: 1 / -1; }
+.federation-link { border: 0; display: grid; gap: 8px; grid-column: 1 / -1; margin: 0; padding: 0; }
+.federation-fields { margin-top: 8px; }

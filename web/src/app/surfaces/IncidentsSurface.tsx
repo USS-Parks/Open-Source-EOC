@@ -17,6 +17,7 @@ import { IncidentCollaboration } from "../../integrations/collab.js";
 import { IncidentMeetings } from "../../integrations/meetings.js";
 import { useAsync } from "../data/hooks.js";
 import { ErrorNote, Loading, Scroll, SurfaceHeader } from "../screens/parts.js";
+import "./incidents.css";
 
 const KIND_LABELS: Readonly<Record<string, string>> = {
   incident: "Incident", daily_ops: "Daily operations", planned_event: "Planned event",
@@ -116,10 +117,10 @@ export function IncidentsSurface(props: {
   return (
     <Scroll>
       <SurfaceHeader title="Incidents" />
-      <div style={{ display: "grid", gap: 16, maxWidth: 1320 }}>
+      <div className="incidents-page">
         {props.isAdmin && tpls.length > 0 ? (
           <Panel title="Activate an incident">
-            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+            <div className="incidents-form-row">
               <EnumSelect
                 label="Scenario template"
                 values={tpls.map((t) => t.key)}
@@ -132,7 +133,7 @@ export function IncidentsSurface(props: {
                 onChange={(value) => setKind(value as typeof kind)}
                 labels={KIND_LABELS} />
             </div>
-            <div style={{ marginTop: 12 }}>
+            <div className="eoc-space-above">
               <Button kind="primary" onClick={activate} disabled={busy}>
                 Activate
               </Button>
@@ -142,7 +143,7 @@ export function IncidentsSurface(props: {
 
         {props.isAdmin ? (
           <Panel title="Add a library">
-            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+            <div className="incidents-form-row">
               <TextField label="Library title" value={libraryTitle} onChange={setLibraryTitle} />
               <EnumSelect label="Library kind" values={["scenario", "plan", "reference"]} value={libraryKind}
                 onChange={(value) => setLibraryKind(value as LibraryKind)}
@@ -151,12 +152,10 @@ export function IncidentsSurface(props: {
                 onChange={setLibraryTemplate}
                 labels={{ "": "No template", ...Object.fromEntries(tpls.map((t) => [t.key, t.title])) }} />
             </div>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 12 }}>Library content
-              <textarea rows={3} value={libraryBody} onChange={(event) => setLibraryBody(event.target.value)}
-                style={{ font: "inherit", padding: 6, borderRadius: 4, border: "1px solid var(--eoc-border)",
-                  background: "var(--eoc-surface)", color: "var(--eoc-text)" }} />
+            <label className="incidents-field">Library content
+              <textarea rows={3} value={libraryBody} onChange={(event) => setLibraryBody(event.target.value)} />
             </label>
-            <div style={{ marginTop: 12 }}>
+            <div className="eoc-space-above">
               <Button onClick={addLibrary} disabled={busy}>Add library</Button>
             </div>
           </Panel>
@@ -166,37 +165,26 @@ export function IncidentsSurface(props: {
           {incidents.loading && !incidents.data ? <Loading label="Loading incidents…" /> : null}
           {incidents.error && !incidents.data ? <ErrorNote message={incidents.error} /> : null}
           {incidents.data && list.length === 0 ? (
-            <p style={{ color: "var(--eoc-text-muted)", margin: 0 }}>No incidents yet.</p>
+            <p className="eoc-flush eoc-muted">No incidents yet.</p>
           ) : null}
           {list.length > 0 ? (
-            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
+            <ul className="incidents-list">
               {list.map((i) => (
-                <li
-                  key={i.id}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "minmax(0, 1fr) auto",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "8px 10px",
-                    border: "1px solid var(--eoc-border)",
-                    borderRadius: 4,
-                  }}
-                >
-                  <div style={{ display: "grid", gap: 6 }}>
-                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                <li key={i.id} className="incidents-item">
+                  <div className="incidents-item-body">
+                    <div className="incidents-row">
                       <StatusBadge status={i.closedAt ? "unknown" : "info"}>{i.closedAt ? "closed" : "open"}</StatusBadge>
                       {i.lockedAt ? <StatusBadge status="warning">Guest access locked</StatusBadge> : null}
                       <strong>{i.name}</strong>
-                      <span style={{ color: "var(--eoc-text-muted)", fontSize: "0.9em" }}>{i.kind.replaceAll("_", " ")}</span>
+                      <span className="incidents-kind">{i.kind.replaceAll("_", " ")}</span>
                     </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, color: "var(--eoc-text-muted)", fontSize: "0.9em" }}>
+                    <div className="incidents-authority">
                       <span>{i.canManageParticipation ? "Host owner administrator" : "No participation-administration authority"}</span>
                       <span aria-hidden="true">·</span>
                       <span>{i.canEditArea ? "Operational-area authority" : "No operational-area authority"}</span>
                     </div>
                   </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "flex-end" }}>
+                  <div className="incidents-item-actions">
                     <Button onClick={() => { setSelectedIncident(i.id); setCloseCandidate(null); }}>Operational area</Button>
                     <Button onClick={() => { setSelectedIncident(i.id); setCloseCandidate(null); }}>Participants</Button>
                     {i.canManageParticipation && !i.closedAt ? <Button kind="danger" onClick={() => setCloseCandidate(i.id)} disabled={busy}>Close incident</Button> : null}
@@ -211,33 +199,31 @@ export function IncidentsSurface(props: {
           reload={reload} busy={busy} run={run} />
 
         {list.filter((i) => i.id === selectedIncident).map((incident) => <Panel key={incident.id} title={incident.name + ": incident setup"}>
-          <div style={{ display: "grid", gap: 16 }}>
-            {incident.lockedAt ? <p role="status" style={{ margin: 0, padding: "8px 12px", borderRadius: 4,
-              border: "1px solid var(--eoc-status-warning)", color: "var(--eoc-text)" }}>
+          <div className="incidents-section">
+            {incident.lockedAt ? <p role="status" className="incidents-lockdown">
               <strong>Guest access is locked.</strong> Guest grants cannot read this incident's boards or records
               until an administrator lifts the lockdown. Members and participating organizations keep their access.
             </p> : null}
-            <p style={{ margin: 0 }}>The host organization is the jurisdiction that owns this incident. Its owner administrators activate and manage participation. Participants receive only their explicit grant. Incident positions describe operational command assignments; they do not by themselves transfer ownership or establish unified command.</p>
+            <p className="eoc-flush">The host organization is the jurisdiction that owns this incident. Its owner administrators activate and manage participation. Participants receive only their explicit grant. Incident positions describe operational command assignments; they do not by themselves transfer ownership or establish unified command.</p>
             {detail.loading && !detail.data ? <Loading label="Loading incident setup…" /> : null}
             {detail.error ? <ErrorNote message={detail.error} /> : null}
             {detail.data ? <section aria-label="Incident positions">
-              <h3 style={{ marginTop: 0 }}>Template positions</h3>
-              <p style={{ marginTop: 0, color: "var(--eoc-text-muted)" }}>These are the incident's available operational positions. Participant grants remain separate from command authority.</p>
-              {detail.data.positions.length ? <ul style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 8, margin: 0, paddingLeft: 20 }}>
+              <h3 className="incidents-first">Template positions</h3>
+              <p className="incidents-first eoc-muted">These are the incident's available operational positions. Participant grants remain separate from command authority.</p>
+              {detail.data.positions.length ? <ul className="incidents-positions">
                 {detail.data.positions.map((position) => <li key={position.id}>{position.title}</li>)}
               </ul> : <p>No template positions are attached.</p>}
             </section> : null}
             {detail.data ? <section aria-label="Incident checklists">
-              <h3 style={{ marginTop: 0 }}>Checklists</h3>
-              {detail.data.checklists.length ? <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
+              <h3 className="incidents-first">Checklists</h3>
+              {detail.data.checklists.length ? <ul className="incidents-list">
                 {detail.data.checklists.map((item) => {
                   const title = detail.data!.positions.find((p) => p.key === item.positionKey)?.title;
                   const done = item.status === "completed";
-                  return <li key={item.id} aria-label={item.item} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8,
-                    padding: "6px 10px", border: "1px solid var(--eoc-border)", borderRadius: 4 }}>
+                  return <li key={item.id} aria-label={item.item} className="incidents-check">
                     <StatusBadge status={done ? "success" : "info"}>{done ? "completed" : item.status.replaceAll("_", " ")}</StatusBadge>
-                    <strong style={{ flex: "1 1 240px" }}>{item.item}</strong>
-                    <span style={{ color: "var(--eoc-text-muted)", fontSize: "0.9em" }}>
+                    <strong>{item.item}</strong>
+                    <span className="incidents-kind">
                       {done && item.completedByPosition ? `Completed by ${item.completedByPosition}` : title ? `Assigned to ${title}` : "Assigned to a participant"}
                     </span>
                     {!done && !incident.closedAt && item.positionKey && item.positionKey === props.positionKey
@@ -249,8 +235,8 @@ export function IncidentsSurface(props: {
               </ul> : <p>No checklist items came with the template.</p>}
             </section> : null}
             {detail.data ? <section aria-label="Incident libraries">
-              <h3 style={{ marginTop: 0 }}>Libraries</h3>
-              {detail.data.libraries.length ? <ul style={{ margin: 0, paddingLeft: 20 }}>
+              <h3 className="incidents-first">Libraries</h3>
+              {detail.data.libraries.length ? <ul className="incidents-libraries">
                 {detail.data.libraries.map((library) => <li key={library.id}>{library.title} · {library.kind}</li>)}
               </ul> : <p>No libraries are attached. A library attaches when an incident is activated from its template.</p>}
             </section> : null}
@@ -263,9 +249,9 @@ export function IncidentsSurface(props: {
         </Panel>)}
 
         {list.filter((i) => i.id === closeCandidate).map((incident) => <Panel key={incident.id} title={"Close " + incident.name}>
-          <div style={{ display: "grid", gap: 12 }}>
-            <p style={{ margin: 0 }}>Closeout prevents new incident updates. Recorded history remains available under existing authorization. End participant grants separately when their access should end.</p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <div className="eoc-stack">
+            <p className="eoc-flush">Closeout prevents new incident updates. Recorded history remains available under existing authorization. End participant grants separately when their access should end.</p>
+            <div className="incidents-actions">
               <Button kind="danger" onClick={() => run(async () => { await props.client.closeIncident(incident.id); setCloseCandidate(null); setSelectedIncident(null); })} disabled={busy}>Confirm closeout</Button>
               <Button onClick={() => setCloseCandidate(null)} disabled={busy}>Keep incident open</Button>
             </div>
@@ -273,7 +259,7 @@ export function IncidentsSurface(props: {
         </Panel>)}
 
         {error ? (
-          <p role="alert" style={{ color: "var(--eoc-status-critical)" }}>
+          <p role="alert" className="eoc-text-critical">
             {error}
           </p>
         ) : null}
@@ -338,7 +324,7 @@ function IncidentMasterView(props: {
     { id: "guests", header: "Guest access", value: (row) => row.lockedAt ? "Locked" : "Guest grants apply", sortable: true, filterable: true,
       render: (row) => row.lockedAt ? <StatusBadge status="warning">Locked</StatusBadge> : <span>Guest grants apply</span> },
     ...(isAdmin ? [{ id: "actions", header: "Action", value: () => "Available actions", render: (row: IncidentOverviewRow) =>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      <div className="incidents-table-actions">
         {row.archivedAt
           ? <Button disabled={busy} onClick={() => void run(() => client.unarchiveIncident(row.id), `${row.name} is back in the incident lists.`)}>Unarchive</Button>
           : row.closedAt
@@ -352,10 +338,10 @@ function IncidentMasterView(props: {
   const status = response.loading && !response.data ? "loading" : response.error && !response.data ? "error" : rows.length === 0 ? "empty" : "ready";
 
   return <Panel title="Jurisdiction master view">
-    <div style={{ display: "grid", gap: 12 }}>
-      <p style={{ margin: 0, color: "var(--eoc-text-muted)" }}>Every incident this jurisdiction owns, with its open work and records.
+    <div className="eoc-stack">
+      <p className="eoc-flush eoc-muted">Every incident this jurisdiction owns, with its open work and records.
         A lockdown withholds one incident's boards and records from guest grants; members and participating organizations keep their access.</p>
-      <div style={{ maxWidth: 280 }}>
+      <div className="incidents-filter">
         <EnumSelect label="Archived incidents" values={["exclude", "include", "only"]} value={archived}
           onChange={(value) => setArchived(value as IncidentArchiveFilter)}
           labels={{ exclude: "Hide archived", include: "Show archived too", only: "Archived only" }} />

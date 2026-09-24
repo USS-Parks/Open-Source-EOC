@@ -50,12 +50,12 @@ export function JurisdictionLifelines(props: { client: ApiClient; jurisdictionId
           <li key={row.lifeline} className="d21-readiness-row" aria-label={lifelineLabel(row.lifeline)}>
             <div className="d21-readiness-title"><div><strong>{lifelineLabel(row.lifeline)}</strong>
               <span>{row.at ? `Recorded ${new Date(row.at).toLocaleString()}` : "Never recorded"}</span></div></div>
-            <span style={{ alignSelf: "start" }}><StatusBadge status={TONE[row.status] ?? "unknown"}>{STATUS_LABELS[row.status] ?? row.status}</StatusBadge></span>
-            {row.note ? <p className="d21-muted" style={{ margin: 0 }}>{row.note}</p> : null}
+            <span className="d21-readiness-badge"><StatusBadge status={TONE[row.status] ?? "unknown"}>{STATUS_LABELS[row.status] ?? row.status}</StatusBadge></span>
+            {row.note ? <p className="d21-muted">{row.note}</p> : null}
           </li>
         ))}
       </ul> : null}
-      {props.canWrite ? <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: "12px 0 0", display: "grid", gap: 12 }}>
+      {props.canWrite ? <fieldset disabled={busy} className="eoc-fieldset eoc-stack eoc-space-above">
         <div className="d21-form-grid">
           <EnumSelect label="Lifeline" values={COMMUNITY_LIFELINES.values} value={lifeline} onChange={setLifeline}
             labels={Object.fromEntries(COMMUNITY_LIFELINES.values.map((key) => [key, lifelineLabel(key)]))} />

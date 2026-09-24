@@ -1,0 +1,27 @@
+/* Dashboard widgets: server-computed snapshots rendered as cards. */
+.dash-title { margin: 0 0 8px; }
+.dash-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.dash-widget { background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: var(--eoc-radius-md); box-shadow: var(--eoc-shadow-sm); padding: 14px; }
+.dash-widget-title { color: var(--eoc-text-muted); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; margin: 0 0 10px; text-transform: uppercase; }
+.dash-meta { color: var(--eoc-text-muted); font-size: 12px; }
+.dash-kanban { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.dash-kanban > li { border: 1px solid var(--eoc-border); border-radius: 6px; border-top: 3px solid var(--eoc-brand-teal); display: grid; flex: 1 1 96px; gap: 2px; min-width: 96px; padding: 6px 10px; }
+.dash-kanban strong { font-size: 22px; font-variant-numeric: tabular-nums; }
+.dash-upcoming { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.dash-upcoming > li { border-left: 3px solid var(--eoc-brand-teal); display: grid; gap: 2px; padding-left: 8px; }
+.dash-tile-value { font-size: 32px; font-weight: 600; margin: 0; }
+.dash-tile-trend { color: var(--eoc-text-muted); font-size: 12px; margin: 4px 0 0; }
+.dash-drill { background: none; border: none; color: inherit; cursor: pointer; font: inherit; padding: 4px 2px; text-align: left; width: 100%; }
+.dash-bars { display: grid; gap: 4px; list-style: none; margin: 0; padding: 0; }
+.dash-bars.is-legend { min-width: 0; }
+.dash-bar-row { align-items: center; display: grid; gap: 8px; grid-template-columns: 1fr 2fr auto; }
+.dash-bar { align-self: center; background: var(--eoc-status-info); border-radius: 2px; height: 10px; min-width: 2px; }
+.dash-donut { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; }
+.dash-legend-row { align-items: center; display: flex; font-size: 12px; gap: 6px; width: 100%; }
+.dash-swatch { border-radius: 2px; flex: 0 0 auto; height: 10px; width: 10px; }
+.dash-legend-label { flex: 1; min-width: 0; }
+.dash-status-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.dash-status-item { align-items: center; border: 1px solid var(--eoc-border); border-radius: 6px; display: flex; gap: 8px; padding: 8px 10px; }
+.dash-status-icon { display: flex; }
+.dash-status-text { display: grid; min-width: 0; }
+.dash-status-name { font-size: 13px; font-weight: 600; }

@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { Button, Panel, TextField } from "../../design/components.js";
 import type { MfaChallenge } from "../api/client.js";
 import { useSession } from "./session.js";
-
-const mono = { fontFamily: "var(--eoc-font-mono, monospace)", overflowWrap: "anywhere" } as const;
+import "./sign-in.css";
 
 function message(cause: unknown): string {
   return cause instanceof Error ? cause.message : "Verification failed.";
@@ -53,13 +52,13 @@ export function MfaStep(props: { challenge: MfaChallenge; onCancel: () => void }
 
   if (recoveryCodes) {
     return (
-      <div style={{ width: "min(420px, 100%)" }}>
+      <div className="sign-in-box is-wide">
         <Panel title="Save your recovery codes">
-          <p style={{ marginTop: 0 }}>
+          <p className="sign-in-lead">
             Each code signs you in once if you lose your authenticator. Print or copy them
             and store them offline now. They will not be shown again.
           </p>
-          <ol aria-label="Recovery codes" style={{ ...mono, columns: 2, margin: "0 0 16px" }}>
+          <ol aria-label="Recovery codes" className="sign-in-code sign-in-codes">
             {recoveryCodes.map((recovery) => <li key={recovery}>{recovery}</li>)}
           </ol>
           <Button kind="primary" onClick={() => void completeSignIn()}>
@@ -76,33 +75,33 @@ export function MfaStep(props: { challenge: MfaChallenge; onCancel: () => void }
         event.preventDefault();
         void submit();
       }}
-      style={{ width: "min(420px, 100%)" }}
+      className="sign-in-box is-wide"
     >
       <Panel title={enrolling ? "Set up two-step sign-in" : "Two-step sign-in"}>
-        <div style={{ display: "grid", gap: 12 }}>
+        <div className="eoc-stack">
           {enrolling ? (
             <>
-              <p style={{ margin: 0 }}>
+              <p className="eoc-flush">
                 Administrator accounts need an authenticator app. Add this account to your app
                 with the setup key, then enter the six-digit code it shows.
               </p>
               {setup ? (
                 <>
                   <div>
-                    <div style={{ color: "var(--eoc-text-muted)" }}>Setup key</div>
-                    <code aria-label="Setup key" style={mono}>
+                    <div className="eoc-muted">Setup key</div>
+                    <code aria-label="Setup key" className="sign-in-code">
                       {setup.secret.match(/.{1,4}/g)?.join(" ")}
                     </code>
                   </div>
                   <div>
-                    <div style={{ color: "var(--eoc-text-muted)" }}>Setup link</div>
-                    <a href={setup.otpauthUri} style={mono}>{setup.otpauthUri}</a>
+                    <div className="eoc-muted">Setup link</div>
+                    <a href={setup.otpauthUri} className="sign-in-code">{setup.otpauthUri}</a>
                   </div>
                 </>
               ) : null}
             </>
           ) : (
-            <p style={{ margin: 0 }}>
+            <p className="eoc-flush">
               Enter the six-digit code from your authenticator app, or one of your recovery codes.
             </p>
           )}
@@ -113,7 +112,7 @@ export function MfaStep(props: { challenge: MfaChallenge; onCancel: () => void }
             required
           />
           {error ? (
-            <p role="alert" style={{ margin: 0, color: "var(--eoc-status-critical)" }}>{error}</p>
+            <p role="alert" className="eoc-flush eoc-text-critical">{error}</p>
           ) : null}
           <Button kind="primary" type="submit" disabled={busy || (enrolling && !setup)}>
             {busy ? "Verifying…" : "Verify"}

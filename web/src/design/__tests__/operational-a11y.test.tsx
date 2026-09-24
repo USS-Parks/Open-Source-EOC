@@ -3,6 +3,9 @@ import { cleanup, render } from "@testing-library/react";
 import axe from "axe-core";
 import { afterEach, describe, expect, it } from "vitest";
 import type { SitrepRow } from "@openeoc/shared";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Theme, Button, TextField, EnumSelect } from "../components.js";
 import { BriefingView } from "../../sitreps/BriefingView.js";
 
@@ -69,6 +72,8 @@ describe("operational surface accessibility", () => {
 
 describe("glove and touchscreen targets", () => {
   it("interactive controls meet a 44px minimum touch target", () => {
+    const sheet = document.head.appendChild(document.createElement("style"));
+    sheet.textContent = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../base.css"), "utf8");
     const { getByRole, getByLabelText } = render(
       <Theme name="light">
         <Button onClick={() => undefined}>Acknowledge</Button>
@@ -76,8 +81,9 @@ describe("glove and touchscreen targets", () => {
         <EnumSelect label="Status" values={["green", "red"]} value="green" onChange={() => undefined} />
       </Theme>,
     );
-    expect(getByRole("button").style.minHeight).toBe("44px");
-    expect(getByLabelText("Point of contact").style.minHeight).toBe("44px");
-    expect(getByLabelText("Status").style.minHeight).toBe("44px");
+    expect(getComputedStyle(getByRole("button")).minHeight).toBe("44px");
+    expect(getComputedStyle(getByLabelText("Point of contact")).minHeight).toBe("44px");
+    expect(getComputedStyle(getByLabelText("Status")).minHeight).toBe("44px");
+    sheet.remove();
   });
 });

@@ -418,13 +418,22 @@ receipts are named in each task.
 5. Of the channels the sources list for WebEOC, voice has no OpenEOC channel,
    and Teams and Slack are reachable only as a generic webhook whose body is
    not a chat message; that path was not exercised.
-6. In the dark theme, the plain buttons on Mass Notification, Reports and the
-   record context panel (Send notification, Refresh receipts, Show receipts,
-   Save schedule, Remove schedule, Files for this record) render as grey
-   blocks with low-contrast labels.
-7. At 390 wide, the report's row table cuts its last column heading at the
-   panel edge ("Occupied" reads "OCCUPIE"); the page itself does not scroll
-   sideways.
+6. Fixed. In the dark theme, the plain buttons on Mass Notification, Reports
+   and the record context panel (Send notification, Refresh receipts, Show
+   receipts, Save schedule, Remove schedule, Files for this record) render as
+   grey blocks with low-contrast labels. Their colors already met AA in both
+   themes; the grey was a 0.12 second color fade still running after the
+   theme switch, which ignored a reduced-motion preference. Buttons and rows
+   now change color at once under reduced motion. Tests: the walk above, which
+   reads each plain button's computed colors on Reports right after switching
+   to the dark theme; and the "plain button contrast (WCAG 2.1 AA)" tests in
+   [button-contrast.test.tsx](../web/src/design/__tests__/button-contrast.test.tsx).
+7. Fixed. At 390 wide, the report's row table cuts its last column heading at
+   the panel edge ("Occupied" reads "OCCUPIE"); the page itself does not
+   scroll sideways. On a phone the report tables now pad their cells less, so
+   a four-column report keeps every heading inside the panel; a wider one
+   scrolls inside its own container. Test: the walk above, which checks at 390
+   that no column heading of the report's tables reaches past the panel edge.
 8. Fixed. Status values show as stored ("normal", "compromised") in the list,
    the group counts and the report, where the kanban uses readable labels.
    They now show as labels in the list, the group counts and the report on

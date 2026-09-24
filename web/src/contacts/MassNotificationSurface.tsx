@@ -4,7 +4,7 @@ import { Icon } from "../design/icons/index.js";
 import "../datasets/datasets.css";
 import "./contacts.css";
 import { readAllPages, type ApiClient } from "../app/api/client.js";
-import { useAsync } from "../app/data/hooks.js";
+import { useAsync, usePolled } from "../app/data/hooks.js";
 import { ErrorNote, Loading, Scroll, SurfaceHeader } from "../app/screens/parts.js";
 import { formatTime } from "../datasets/format.js";
 import {
@@ -35,10 +35,11 @@ export function MassNotificationSurface(props: { client: ApiClient; jurisdiction
   const { client, jurisdictionId } = props;
   const [nonce, setNonce] = useState(0);
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
-  const sends = useAsync(() => client.listMassNotifications(jurisdictionId), [jurisdictionId, nonce]);
+  const [selected, setSelected] = useState<string | null>(null);
+  // While a send's receipts are open the list refreshes with them, so both agree.
+  const sends = usePolled(() => client.listMassNotifications(jurisdictionId), selected ? RECEIPT_REFRESH_MS : null, [jurisdictionId, nonce]);
   const [more, setMore] = useState<{ items: MassNotificationSummary[]; nextCursor: string | null } | null>(null);
   useEffect(() => setMore(null), [sends.data]);
-  const [selected, setSelected] = useState<string | null>(null);
   const list = [...(sends.data?.massNotifications ?? []), ...(more?.items ?? [])];
   const nextCursor = more ? more.nextCursor : (sends.data?.nextCursor ?? null);
 
@@ -65,7 +66,7 @@ export function MassNotificationSurface(props: { client: ApiClient; jurisdiction
           {sends.error && !sends.data ? <ErrorNote message={sends.error} /> : null}
           {!sends.data && !sends.error ? <Loading label="Loading sends…" /> : null}
           {sends.data && list.length === 0 ? <p className="d21-muted">Nothing sent yet.</p> : null}
-          <ul className="d21-readiness-list" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
+          <ul className="d21-readiness-list is-single">
             {list.map((m) => (
               <li key={m.id} className="d21-readiness-row" aria-label={`Send ${m.subject}`}>
                 <div className="d21-readiness-title">
@@ -74,8 +75,8 @@ export function MassNotificationSurface(props: { client: ApiClient; jurisdiction
                     <span>{m.sentBy} · {formatTime(m.createdAt)} · {m.groupName ?? "Chosen contacts"} · {m.channels.map((c) => CHANNEL_LABELS[c]).join(", ")}</span>
                   </div>
                 </div>
-                <span style={{ alignSelf: "start" }}><StatusBadge status={stateStatus(m.state)}>{stateLabel(m)}</StatusBadge></span>
-                <div className="d21-card-actions" style={{ justifyContent: "flex-start" }}>
+                <span className="d21-readiness-badge"><StatusBadge status={stateStatus(m.state)}>{stateLabel(m)}</StatusBadge></span>
+                <div className="d21-card-actions is-start">
                   <Button onClick={() => setSelected(m.id)}>Show receipts</Button>
                 </div>
               </li>
@@ -153,7 +154,7 @@ function Compose(props: { client: ApiClient; jurisdictionId: string; onSent: (id
 
   return (
     <Panel title="Compose">
-      <fieldset disabled={busy} className="d21-form-grid" style={{ border: 0, padding: 0, margin: 0 }}>
+      <fieldset disabled={busy} className="d21-form-grid">
         <div className="d21-form-grid-wide"><TextField label="Subject" value={subject} onChange={setSubject} required /></div>
         <label className="contacts-field d21-form-grid-wide">Message<textarea rows={4} value={message} onChange={(e) => setMessage(e.target.value)} /></label>
         <EnumSelect label="Send to" values={TARGETS} labels={TARGET_LABELS} value={target} onChange={setTarget} />
@@ -207,19 +208,15 @@ function Compose(props: { client: ApiClient; jurisdictionId: string; onSent: (id
 /** One send's receipts. A refresh here also refreshes the list of sends, so both agree. */
 function Receipts(props: { client: ApiClient; id: string; nonce: number; onRefresh: () => void; onClose: () => void }) {
   const { onRefresh } = props;
-  const detail = useAsync(() => props.client.getMassNotification(props.id), [props.id, props.nonce]);
-  useEffect(() => {
-    const timer = window.setInterval(onRefresh, RECEIPT_REFRESH_MS);
-    return () => window.clearInterval(timer);
-  }, [props.id, onRefresh]);
+  const detail = usePolled(() => props.client.getMassNotification(props.id), RECEIPT_REFRESH_MS, [props.id, props.nonce]);
   const m = detail.data;
   return (
     <Panel title={m ? `Receipts: ${m.subject}` : "Receipts"}>
       {detail.error && !m ? <ErrorNote message={detail.error} /> : null}
       {!m && !detail.error ? <Loading label="Loading receipts…" /> : null}
       {m ? (
-        <div style={{ display: "grid", gap: 12 }}>
-          <div className="d21-card-actions" style={{ justifyContent: "flex-start" }}>
+        <div className="eoc-stack">
+          <div className="d21-card-actions is-start">
             <StatusBadge status={stateStatus(m.state)}>{stateLabel(m)}</StatusBadge>
           </div>
           <dl className="d21-metrics">
@@ -227,7 +224,7 @@ function Receipts(props: { client: ApiClient; id: string; nonce: number; onRefre
             <div><dt>Sent</dt><dd>{m.sentBy} · {formatTime(m.createdAt)}</dd></div>
             <div><dt>To</dt><dd>{m.groupName ?? "Chosen contacts"}</dd></div>
           </dl>
-          <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{m.message}</p>
+          <p className="contacts-message">{m.message}</p>
           <ol className="contacts-receipts">
             {m.recipients.map((r) => (
               <li key={r.id} className="d21-card" aria-label={`Receipt for ${r.name}`}>

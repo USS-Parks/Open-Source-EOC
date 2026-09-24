@@ -1,12 +1,4 @@
-import type { CSSProperties } from "react";
 import type { IcsFormContent } from "@openeoc/shared";
-
-const cell: CSSProperties = {
-  border: "1px solid var(--eoc-border)",
-  padding: "5px 8px",
-  textAlign: "left",
-  verticalAlign: "top",
-};
 
 export const FORM_TITLES: Readonly<Record<string, string>> = {
   "ICS-201": "Incident Briefing",
@@ -44,23 +36,23 @@ export function FormPreview(props: { readonly form: IcsFormContent }) {
           <h4>{section.heading}</h4>
           {section.columns && section.rows ? (
             <div className="iap-table-scroll">
-              <table className="eoc-table" style={{ borderCollapse: "collapse", width: "100%" }}>
+              <table className="eoc-table">
                 <thead>
                   <tr>
-                    {section.columns.map((column) => <th key={column} style={cell}>{column}</th>)}
+                    {section.columns.map((column) => <th key={column}>{column}</th>)}
                   </tr>
                 </thead>
                 <tbody>
                   {section.rows.length === 0 ? (
                     <tr>
-                      <td style={{ ...cell, color: "var(--eoc-text-muted)" }} colSpan={section.columns.length}>
+                      <td className="iap-muted" colSpan={section.columns.length}>
                         (none recorded)
                       </td>
                     </tr>
                   ) : section.rows.map((row, rowIndex) => (
                     <tr key={rowIndex}>
                       {row.map((value, columnIndex) => (
-                        <td key={columnIndex} style={cell}>{value}</td>
+                        <td key={columnIndex}>{value}</td>
                       ))}
                     </tr>
                   ))}

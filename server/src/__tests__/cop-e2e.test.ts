@@ -22,6 +22,20 @@ const DIST = buildDir("cop-demo");
 const LATENCY_BUDGET_MS = 5000;
 const SHOTS = shotDir("cop");
 
+/** For each search box, whether its icon lies inside its input, left of where the typed text starts. */
+function searchIconsInInputs(boxes: unknown[]): boolean[] {
+  type Box = { left: number; right: number; top: number; bottom: number };
+  type Found = { getBoundingClientRect(): Box };
+  const view = globalThis as unknown as { getComputedStyle(element: Found): { paddingLeft: string } };
+  return boxes.map((box) => {
+    const scope = box as { querySelector(selector: string): Found };
+    const input = scope.querySelector("input");
+    const [icon, field] = [scope.querySelector("svg").getBoundingClientRect(), input.getBoundingClientRect()];
+    return icon.top >= field.top && icon.bottom <= field.bottom && icon.left >= field.left
+      && icon.right <= field.left + parseFloat(view.getComputedStyle(input).paddingLeft);
+  });
+}
+
 let admin: Sql;
 let runtime: Sql;
 let app: FastifyInstance;
@@ -211,6 +225,9 @@ describe("the COP in a real browser, offline", () => {
     });
     await find.fill("Sacramento");
     await find.press("Enter");
+    await page.getByRole("button", { name: /Sacramento/ }).waitFor();
+    // With results listed under the find box, both search icons stay inside their inputs.
+    expect(await page.locator(".eoc-cop-filter, .eoc-cop-find").evaluateAll(searchIconsInInputs)).toEqual([true, true]);
     await page.getByRole("button", { name: /Sacramento/ }).click();
     await page.waitForFunction(() => {
       const map = (globalThis as {__map?: { isMoving(): boolean; getCenter(): { lng: number; lat: number } }}).__map;
@@ -251,6 +268,12 @@ describe("the COP in a real browser, offline", () => {
     );
     expect(horizontalOverflow).toBe(false);
     await darkPage.screenshot({ path: join(SHOTS, "pcop-workspace-dark-narrow.png"), fullPage: true });
+    const darkFind = darkPage.getByLabel("Find on map");
+    await darkFind.fill("Sacramento");
+    await darkFind.press("Enter");
+    await darkPage.getByRole("button", { name: /Sacramento/ }).waitFor();
+    expect(await darkPage.locator(".eoc-cop-filter, .eoc-cop-find").evaluateAll(searchIconsInInputs)).toEqual([true, true]);
+    await darkPage.locator(".eoc-cop-find").screenshot({ path: join(SHOTS, "county-find-dark-390.png") });
     expect(darkErrors).toEqual([]);
     await darkPage.close();
 

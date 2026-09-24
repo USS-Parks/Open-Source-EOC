@@ -1,0 +1,3 @@
+/* The global incident switcher in the command bar. */
+.incident-switcher { align-items: center; display: flex; gap: 6px; min-width: 0; }
+.incident-switcher-select { background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: 4px; color: var(--eoc-text); font-family: inherit; font-size: 1em; max-width: 320px; min-height: 44px; padding: 6px 8px; }

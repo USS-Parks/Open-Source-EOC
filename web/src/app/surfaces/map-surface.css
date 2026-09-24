@@ -1,0 +1,19 @@
+/* The map screen around the COP. */
+.map-surface { display: flex; flex: 1; flex-direction: column; gap: 8px; min-height: 0; padding: 12px; position: relative; }
+.map-surface-status { align-items: center; color: var(--eoc-text-muted); display: flex; font-size: 0.9em; gap: 6px; }
+.map-surface-incident { color: var(--eoc-text); font-weight: 600; }
+.map-surface-row { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.map-surface-pick { align-items: center; display: flex; gap: 6px; }
+.map-surface-coordinate { display: grid; gap: 3px; }
+.map-surface-select { background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: 4px; box-sizing: border-box; color: var(--eoc-text); font-family: inherit; font-size: 1em; max-width: 100%; min-height: 44px; min-width: 0; padding: 6px; width: 100%; }
+.map-surface-select.is-coordinate { width: 116px; }
+.map-surface-link { align-items: end; display: flex; flex-wrap: wrap; gap: 8px; }
+.map-surface-feature { flex: 1 1 280px; min-width: 220px; }
+.map-surface-note { color: var(--eoc-text-muted); margin: 4px 0 0; }
+.map-surface-source { display: grid; flex: 1 1 320px; gap: 4px; min-width: min(100%, 260px); }
+.map-surface-links-title { font-size: 13px; margin: 12px 0 6px; }
+.map-surface-links { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.map-surface-map { flex: 1; min-height: 0; }
+.map-surface-overlay { max-height: 78%; overflow: auto; position: absolute; right: 24px; top: 64px; width: 360px; z-index: 5; }
+.map-surface-error { color: var(--eoc-status-critical); margin: 8px 0 0; }
+.map-surface-actions { margin-top: 8px; }

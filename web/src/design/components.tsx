@@ -1,17 +1,10 @@
 import type { CSSProperties, ReactNode, SelectHTMLAttributes } from "react";
-import { fontStack, toCssVariables, type ThemeName } from "./tokens.js";
+import { toCssVariables, type ThemeName } from "./tokens.js";
 
 /** Wraps a subtree in a theme; the app mounts one at the root. */
 export function Theme(props: { name: ThemeName; children: ReactNode }) {
-  const style: CSSProperties = {
-    ...toCssVariables(props.name),
-    background: "var(--eoc-bg)",
-    color: "var(--eoc-text)",
-    fontFamily: fontStack,
-    minHeight: "100%",
-  };
   return (
-    <div data-theme={props.name} style={style}>
+    <div data-theme={props.name} className="eoc-theme" style={toCssVariables(props.name) as CSSProperties}>
       {props.children}
     </div>
   );
@@ -19,30 +12,13 @@ export function Theme(props: { name: ThemeName; children: ReactNode }) {
 
 export type Status = "info" | "warning" | "critical" | "success" | "unknown";
 
-const statusVar: Record<Status, string> = {
-  info: "var(--eoc-status-info)",
-  warning: "var(--eoc-status-warning)",
-  critical: "var(--eoc-status-critical)",
-  success: "var(--eoc-status-success)",
-  unknown: "var(--eoc-status-unknown)",
-};
-
 /**
  * The only component that uses saturated color (INV-8). Renders as colored
  * text with a border, never a filled block, so a wall of badges stays calm.
  */
 export function StatusBadge(props: { status: Status; children: ReactNode }) {
   return (
-    <span
-      style={{
-        color: statusVar[props.status],
-        border: `1px solid ${statusVar[props.status]}`,
-        borderRadius: 4,
-        padding: "1px 8px",
-        fontSize: "0.85em",
-        fontWeight: 600,
-      }}
-    >
+    <span className="eoc-status-badge" data-status={props.status}>
       {props.children}
     </span>
   );
@@ -55,31 +31,12 @@ export function Button(props: {
   disabled?: boolean;
   type?: "button" | "submit";
 }) {
-  const kind = props.kind ?? "quiet";
-  const style: CSSProperties = {
-    fontFamily: "inherit",
-    fontSize: "1em",
-    padding: "6px 14px",
-    // Glove/touchscreen target: at least 44px so field users in PPE can hit it.
-    minHeight: 44,
-    borderRadius: 4,
-    cursor: props.disabled ? "not-allowed" : "pointer",
-    border: "1px solid var(--eoc-border)",
-    background: kind === "primary" ? "var(--eoc-text)" : "var(--eoc-surface)",
-    color:
-      kind === "primary"
-        ? "var(--eoc-surface)"
-        : kind === "danger"
-          ? "var(--eoc-status-critical)"
-          : "var(--eoc-text)",
-  };
   return (
     <button
       type={props.type ?? "button"}
-      className="eoc-btn"
+      className={`eoc-btn is-${props.kind ?? "quiet"}`}
       onClick={props.onClick}
       disabled={props.disabled}
-      style={style}
     >
       {props.children}
     </button>
@@ -98,24 +55,15 @@ export function TextField(props: {
 }) {
   const id = `tf-${fieldSeq++}`;
   return (
-    <p style={{ display: "flex", flexDirection: "column", gap: 4, margin: 0 }}>
+    <p className="eoc-input-field">
       <label htmlFor={id}>{props.label}</label>
       <input
         id={id}
+        className="eoc-input"
         type={props.type ?? "text"}
         value={props.value}
         required={props.required}
         onChange={(e) => props.onChange(e.target.value)}
-        style={{
-          fontFamily: "inherit",
-          fontSize: "1em",
-          padding: 6,
-          minHeight: 44,
-          borderRadius: 4,
-          border: "1px solid var(--eoc-border)",
-          background: "var(--eoc-surface)",
-          color: "var(--eoc-text)",
-        }}
       />
     </p>
   );
@@ -135,22 +83,13 @@ export function EnumSelect(props: {
 }) {
   const id = `es-${fieldSeq++}`;
   return (
-    <p style={{ display: "flex", flexDirection: "column", gap: 4, margin: 0 }}>
+    <p className="eoc-input-field">
       <label htmlFor={id}>{props.label}</label>
       <select
         id={id}
+        className="eoc-input"
         value={props.value}
         onChange={(e) => props.onChange(e.target.value)}
-        style={{
-          fontFamily: "inherit",
-          fontSize: "1em",
-          padding: 6,
-          minHeight: 44,
-          borderRadius: 4,
-          border: "1px solid var(--eoc-border)",
-          background: "var(--eoc-surface)",
-          color: "var(--eoc-text)",
-        }}
         {...props.selectProps}
       >
         {props.values.map((v) => (
@@ -166,17 +105,8 @@ export function EnumSelect(props: {
 /** Titled surface section. */
 export function Panel(props: { title: string; children: ReactNode }) {
   return (
-    <section
-      aria-label={props.title}
-      style={{
-        background: "var(--eoc-surface)",
-        border: "1px solid var(--eoc-border)",
-        borderRadius: "var(--eoc-radius-md)",
-        boxShadow: "var(--eoc-shadow-sm)",
-        padding: 16,
-      }}
-    >
-      <h2 style={{ marginTop: 0, fontSize: "1.05em", letterSpacing: "-0.01em" }}>{props.title}</h2>
+    <section aria-label={props.title} className="eoc-panel">
+      <h2 className="eoc-panel-title">{props.title}</h2>
       {props.children}
     </section>
   );

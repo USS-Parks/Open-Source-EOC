@@ -9,6 +9,7 @@ import {
 import type { AdminMember, ApiClient, MemberRole, MembersPage } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import { ROLE_LABELS } from "./labels.js";
+import "./admin.css";
 
 const ROLES = ["admin", "member", "viewer"] as const;
 
@@ -61,7 +62,7 @@ export function People(props: { client: ApiClient; jurisdictionId: string; actor
   const rows = members.slice(start, start + tableState.pageSize);
 
   return (
-    <div style={{ display: "grid", gap: 14, minWidth: 0 }}>
+    <div className="admin-tab">
       {error ? <p className="d21-error" role="alert">{error}</p> : null}
       {notice ? <p role="status">{notice}</p> : null}
       <OperationalTable
@@ -126,7 +127,7 @@ function PersonDetail(props: {
   const [confirmRemove, setConfirmRemove] = useState(false);
   return (
     <Panel title={m.displayName}>
-      <fieldset disabled={props.busy} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 12 }}>
+      <fieldset disabled={props.busy} className="eoc-fieldset eoc-stack">
         <dl className="d21-facts">
           <div><dt>Email</dt><dd>{m.email}</dd></div>
           <div><dt>Role</dt><dd>{ROLE_LABELS[m.role]}{m.instanceAdmin ? " · instance administrator" : ""}</dd></div>
@@ -136,7 +137,7 @@ function PersonDetail(props: {
         <div className="d21-form-grid">
           <EnumSelect label={`Role for ${m.displayName}`} values={ROLES} labels={ROLE_LABELS} value={role}
             onChange={(value) => setRole(value as MemberRole)} />
-          <div style={{ alignSelf: "end" }}>
+          <div className="admin-end">
             <Button kind="primary" onClick={() => props.onRole(role)} disabled={role === m.role}>Save role</Button>
           </div>
         </div>
@@ -160,7 +161,7 @@ function PersonDetail(props: {
         <div className="d21-toolbar">
           {confirmRemove ? <>
             <span className="d21-muted">Remove {m.displayName} from this jurisdiction and end their position assignments here?</span>
-            <span style={{ display: "flex", gap: 8 }}>
+            <span className="admin-pair">
               <Button kind="danger" onClick={props.onRemove}>Confirm removal</Button>
               <Button onClick={() => setConfirmRemove(false)}>Cancel</Button>
             </span>
@@ -200,7 +201,7 @@ function AddPerson(props: {
   });
   return (
     <Panel title="Add a person">
-      <fieldset disabled={props.busy} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 12 }}>
+      <fieldset disabled={props.busy} className="eoc-fieldset eoc-stack">
         <div className="d21-form-grid">
           <EnumSelect label="Account" values={["new", "existing"]} value={mode} onChange={setMode}
             labels={{ new: "Create a new account", existing: "Add an existing account" }} />

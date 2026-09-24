@@ -87,7 +87,7 @@ export function ReportsSurface(props: {
           {reports.error && !reports.data ? <ErrorNote message={reports.error} /> : null}
           {!reports.data && !reports.error ? <Loading label="Loading reports…" /> : null}
           {reports.data && list.length === 0 ? <p className="d21-muted">No reports yet.</p> : null}
-          <ul className="d21-readiness-list" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
+          <ul className="d21-readiness-list is-single">
             {list.map((report) => (
               <li key={report.id} className="d21-readiness-row" aria-label={`Report ${report.name}`}>
                 <div className="d21-readiness-title">
@@ -96,7 +96,7 @@ export function ReportsSurface(props: {
                     <span>{report.boardTitle ?? "Board unavailable"} · {report.owner.displayName} · {scheduleText(report.schedule)}</span>
                   </div>
                 </div>
-                <div className="d21-card-actions" style={{ justifyContent: "flex-start" }}>
+                <div className="d21-card-actions is-start">
                   <Button onClick={() => setMode({ kind: "open", id: report.id })}>Open {report.name}</Button>
                 </div>
               </li>
@@ -365,7 +365,7 @@ function ReportDetail(props: {
       <p className="d21-muted">
         {report.boardTitle ?? "Board unavailable"}{report.incidentId ? " · one incident" : ""} · built by {report.owner.displayName} · updated {formatTime(report.updatedAt)}
       </p>
-      <div className="d21-card-actions" style={{ justifyContent: "flex-start" }}>
+      <div className="d21-card-actions is-start">
         <Button kind="primary" disabled={busy} onClick={() => void act(async () => setResult(await client.runReport(id)), "The report did not run.")}>Run</Button>
         {FORMATS.map((format) => (
           <Button key={format} disabled={busy} onClick={() => void download(format)}>Download {FORMAT_LABELS[format]}</Button>
@@ -469,7 +469,7 @@ function ScheduleEditor(props: { client: ApiClient; jurisdictionId: string; repo
         {current ? `${scheduleText(current)}. Next run ${report.nextRunAt ? formatTime(report.nextRunAt) : "not set"}.` : "Not scheduled."}
         {" "}A scheduled run reads the board as {report.owner.displayName}, the report&apos;s owner; everyone who receives it sees what they can read.
       </p>
-      <fieldset disabled={busy} className="d21-form-grid" style={{ border: 0, padding: 0, margin: 0 }}>
+      <fieldset disabled={busy} className="d21-form-grid">
         <EnumSelect label="Runs" values={["daily", "interval"]} labels={{ daily: "Every day at a time", interval: "Every so many minutes" }}
           value={kind} onChange={setKind} />
         {kind === "interval" ? <TextField label="Minutes between runs" value={minutes} onChange={setMinutes} /> : (
@@ -498,7 +498,7 @@ function ScheduleEditor(props: { client: ApiClient; jurisdictionId: string; repo
       </fieldset>
       {error ? <p className="d21-error" role="alert">{error}</p> : null}
       {notice ? <p role="status">{notice}</p> : null}
-      <div className="d21-card-actions" style={{ justifyContent: "flex-start" }}>
+      <div className="d21-card-actions is-start">
         <Button kind="primary" disabled={busy} onClick={submit}>Save schedule</Button>
         {current ? <Button disabled={busy} onClick={() => void save(null)}>Remove schedule</Button> : null}
       </div>

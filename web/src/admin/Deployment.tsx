@@ -6,6 +6,7 @@ import { ErrorNote, Loading } from "../app/screens/parts.js";
 import { INTEGRATION_LABELS } from "./labels.js";
 import { CollabSettings } from "../integrations/collab.js";
 import { MeetingSettings } from "../integrations/meetings.js";
+import "./admin.css";
 
 /**
  * Deployment-wide settings: which optional integrations the server registers,
@@ -19,7 +20,7 @@ export function Deployment(props: { client: ApiClient; isInstanceAdmin: boolean;
   const { jurisdictionId } = props;
   const on = (key: string) => state.data?.integrations.some((i) => i.key === key && i.enabled) ?? false;
   return (
-    <div style={{ display: "grid", gap: 14, minWidth: 0 }}>
+    <div className="admin-tab">
       <Panel title="Optional integrations">
         {state.error ? <ErrorNote message={state.error} /> : null}
         {!state.data && !state.error ? <Loading label="Loading integrations…" /> : null}
@@ -33,13 +34,13 @@ export function Deployment(props: { client: ApiClient; isInstanceAdmin: boolean;
                     <span>Listed as <code>{integration.key}</code> in {state.data!.variable}</span>
                   </div>
                 </div>
-                <span style={{ alignSelf: "start" }}>
+                <span className="d21-readiness-badge">
                   <StatusBadge status={integration.enabled ? "success" : "unknown"}>{integration.enabled ? "Enabled" : "Not enabled"}</StatusBadge>
                 </span>
               </li>
             ))}
           </ul>
-          <p className="d21-muted" style={{ marginTop: 12 }}>This screen shows the deployment's setting and cannot change it. To enable an integration, add its name to {state.data.variable} in the server environment, for example {state.data.variable}=meetings,tracking, and restart the server.</p>
+          <p className="d21-muted is-spaced">This screen shows the deployment's setting and cannot change it. To enable an integration, add its name to {state.data.variable} in the server environment, for example {state.data.variable}=meetings,tracking, and restart the server.</p>
         </> : null}
       </Panel>
       {jurisdictionId && on("collab") ? <CollabSettings client={props.client} jurisdictionId={jurisdictionId} /> : null}
@@ -72,7 +73,7 @@ function Provision(props: { client: ApiClient }) {
   };
   return (
     <Panel title="Provision a jurisdiction">
-      <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 12 }}>
+      <fieldset disabled={busy} className="eoc-fieldset eoc-stack">
         <div className="d21-form-grid">
           <TextField label="Jurisdiction name" value={name} onChange={setName} required />
           <TextField label="Short name" value={slug} onChange={setSlug} required />

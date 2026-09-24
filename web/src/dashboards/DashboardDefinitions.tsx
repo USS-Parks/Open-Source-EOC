@@ -74,7 +74,7 @@ export function DashboardDefinitions(props: {
           })}
         </ul>
       )}
-      {props.isAdmin ? <fieldset disabled={busy} className="d21-form-section" style={{ marginTop: 12 }}>
+      {props.isAdmin ? <fieldset disabled={busy} className="d21-form-section is-spaced">
         <legend>Create a dashboard</legend>
         <div className="d21-form-section-grid">
           <TextField label="Dashboard template key" value={templateKey} onChange={setTemplateKey} required />

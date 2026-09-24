@@ -66,20 +66,28 @@
   font-size: 1rem;
 }
 
-.eoc-cop-filter,
-.eoc-cop-find {
+/* Scoped to the layer panel so a form around an embedded map cannot pad or
+   space the search boxes. */
+.eoc-cop-layers > .eoc-cop-filter,
+.eoc-cop-layers > .eoc-cop-find {
   position: relative;
   display: grid;
   gap: 5px;
   margin-bottom: 10px;
+  padding: 0;
 }
 
-.eoc-cop-filter > svg,
-.eoc-cop-find > svg {
+/* The search icon sits inside its input, whatever renders below it. */
+.eoc-cop-search {
+  position: relative;
+  display: grid;
+}
+
+.eoc-cop-search > svg {
   position: absolute;
+  top: 50%;
   left: 9px;
-  bottom: 8px;
-  color: var(--eoc-text-muted);
+  transform: translateY(-50%);
   pointer-events: none;
 }
 
@@ -98,8 +106,7 @@
   font-size: 0.88rem;
 }
 
-.eoc-cop-filter input,
-.eoc-cop-find input {
+.eoc-cop-layers .eoc-cop-search > input {
   padding-left: 32px;
 }
 
@@ -378,4 +385,93 @@
 .eoc-cop-opacity input {
   flex: 1;
   min-width: 0;
+}
+
+/* Layer panel parts, scoped to the panel so the rules of a form around an
+   embedded map do not reach its labels, lists and inputs. */
+.eoc-cop-layers .eoc-cop-above { margin-bottom: 12px; }
+.eoc-cop-layers .eoc-cop-below { margin-top: 12px; }
+.eoc-cop-layers .eoc-cop-heading { margin: 0 0 6px; color: var(--eoc-text-muted); font-size: 0.85em; }
+.eoc-cop-layers .eoc-cop-options,
+.eoc-cop-layers .eoc-cop-results,
+.eoc-cop-layers .eoc-cop-legend { margin: 0; padding: 0; list-style: none; }
+.eoc-cop-layers .eoc-cop-options { display: grid; gap: 4px; }
+.eoc-cop-layers .eoc-cop-results { margin-top: 6px; display: grid; gap: 2px; }
+.eoc-cop-layers .eoc-cop-check { display: flex; align-items: center; gap: 8px; }
+.eoc-cop-layers .eoc-cop-note { display: block; margin-left: 24px; color: var(--eoc-text-muted); }
+.eoc-cop-layers .eoc-cop-note.is-warning { color: var(--eoc-status-warning); }
+.eoc-cop-layers .eoc-cop-source { margin-left: 24px; color: var(--eoc-text-muted); font-size: 0.8em; }
+.eoc-cop-layers .eoc-cop-fine { color: var(--eoc-text-muted); font-size: 0.8em; }
+.eoc-cop-layers .eoc-cop-fine.is-smaller { font-size: 0.75em; }
+.eoc-cop-layers .eoc-cop-key { display: flex; align-items: center; gap: 8px; font-size: 0.85em; }
+.eoc-cop-layers .eoc-cop-road-key { width: 14px; margin-right: 8px; display: inline-block; border-top: 3px solid; }
+.eoc-cop-layers .eoc-cop-land-key { width: 12px; height: 12px; margin-right: 8px; display: inline-block; }
+.eoc-cop-layers .eoc-cop-swatch { width: 12px; height: 12px; display: inline-block; border-radius: 2px; }
+.eoc-cop-layers .eoc-cop-swatch.is-flood,
+.eoc-cop-layers .eoc-cop-swatch.is-status { background-image: repeating-linear-gradient(135deg, transparent 0 3px, currentColor 3px 4px); }
+.eoc-cop-layers .eoc-cop-swatch.is-flood { width: 16px; border-radius: 0; }
+.eoc-cop-layers .eoc-cop-swatch.is-status { border-radius: 6px; }
+.eoc-cop-layers .eoc-cop-facility-key {
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  list-style: none;
+}
+.eoc-cop-layers .eoc-cop-facility-key > li { display: flex; align-items: center; gap: 6px; font-size: 0.8em; }
+.eoc-cop-layers .eoc-cop-facility-key img { object-fit: contain; }
+.eoc-cop-layers .eoc-cop-buttons { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* Tool buttons; a pressed one is a filled chip. */
+.eoc-cop-layers .eoc-cop-tool {
+  min-height: 32px;
+  padding: 4px 8px;
+  color: var(--eoc-text);
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.eoc-cop-layers .eoc-cop-tool[aria-pressed="true"] { color: var(--eoc-surface); background: var(--eoc-text); }
+.eoc-cop-layers .eoc-cop-tool.is-grow { flex: 1; }
+.eoc-cop-layers .eoc-cop-tool.is-start { min-width: 0; text-align: left; }
+.eoc-cop-find .eoc-cop-results .eoc-cop-tool { width: 100%; text-align: left; }
+.eoc-cop-find .eoc-cop-results .eoc-cop-tool > span { display: block; }
+.eoc-cop-find .eoc-cop-results .eoc-cop-tool > span + span { color: var(--eoc-text-muted); font-size: 0.8em; }
+.eoc-cop-layers .eoc-cop-bookmark { display: flex; gap: 4px; }
+.eoc-cop-layers .eoc-cop-bookmark > input {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  flex: 1;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  color: var(--eoc-text);
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.9em;
+}
+
+.eoc-cop-map-frame > .eoc-cop-map {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.eoc-cop-map-frame > .eoc-cop-readout {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 2px 8px;
+  color: var(--eoc-text);
+  background: color-mix(in srgb, var(--eoc-surface) 85%, transparent);
+  border: 1px solid var(--eoc-border);
+  border-radius: 4px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: pre-line;
+  pointer-events: none;
 }

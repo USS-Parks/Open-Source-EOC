@@ -1,5 +1,6 @@
 import type { ResourceRequestDetail } from "@openeoc/shared";
 import { Button, Panel, StatusBadge } from "../design/components.js";
+import "./resources.css";
 
 function labelAssignment(detail: ResourceRequestDetail): string {
   if (!detail.assignment) return "Not assigned";
@@ -19,24 +20,24 @@ export function ResourceRequestDetailPanel(props: {
 }) {
   const { detail } = props;
   return <Panel title={`${detail.item}: request history`}>
-    <div style={{ display: "grid", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+    <div className="resources-detail">
+      <div className="resources-row">
         <StatusBadge status={detail.state === "closed" ? "success" : detail.state === "cancelled" ? "unknown" : "info"}>{detail.state}</StatusBadge>
         <span>{detail.quantity} requested · {detail.priority} priority</span>
       </div>
-      <dl style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))", gap: 12, margin: 0 }}>
-        <div><dt style={{ color: "var(--eoc-text-muted)" }}>Receiving organization</dt><dd style={{ margin: "4px 0 0" }}>{detail.receivingOrganization.name}</dd></div>
-        <div><dt style={{ color: "var(--eoc-text-muted)" }}>Supplying organization</dt><dd style={{ margin: "4px 0 0" }}>{detail.supplyingOrganization?.name ?? "Not identified"}</dd></div>
-        <div><dt style={{ color: "var(--eoc-text-muted)" }}>Assignment</dt><dd style={{ margin: "4px 0 0" }}>{labelAssignment(detail)}</dd></div>
+      <dl className="resources-facts">
+        <div><dt>Receiving organization</dt><dd>{detail.receivingOrganization.name}</dd></div>
+        <div><dt>Supplying organization</dt><dd>{detail.supplyingOrganization?.name ?? "Not identified"}</dd></div>
+        <div><dt>Assignment</dt><dd>{labelAssignment(detail)}</dd></div>
       </dl>
       <section aria-label="Request history">
-        <h3 style={{ marginTop: 0 }}>History</h3>
-        <ol style={{ display: "grid", gap: 8, margin: 0, paddingLeft: 20 }}>
+        <h3 className="resources-first">History</h3>
+        <ol className="resources-history">
           {detail.chronology.map((entry, index) => <li key={`${entry.at}-${index}`}>
             <strong>{eventLabel(entry.fromState, entry.toState)}</strong>
             <span> · {new Date(entry.at).toLocaleString()}</span>
             {entry.by ? <span> · {entry.by}</span> : null}
-            {entry.note ? <div style={{ color: "var(--eoc-text-muted)" }}>{entry.note}</div> : null}
+            {entry.note ? <div className="eoc-muted">{entry.note}</div> : null}
           </li>)}
         </ol>
       </section>

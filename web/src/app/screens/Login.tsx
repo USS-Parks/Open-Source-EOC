@@ -3,6 +3,7 @@ import { Button, Panel, TextField } from "../../design/components.js";
 import type { MfaChallenge } from "../api/client.js";
 import { MfaStep } from "../auth/MfaStep.js";
 import { useSession } from "../auth/session.js";
+import "../auth/sign-in.css";
 
 /** The sign-in surface shown while the session is anonymous. */
 export function Login() {
@@ -23,33 +24,32 @@ export function Login() {
     }
   }
 
-  const frame = { minHeight: "100vh", display: "grid", placeItems: "center", padding: 16 } as const;
   if (challenge) {
     return (
-      <div style={frame}>
+      <div className="sign-in-frame">
         <MfaStep challenge={challenge} onCancel={() => { setChallenge(null); setPassword(""); }} />
       </div>
     );
   }
 
   return (
-    <div style={frame}>
+    <div className="sign-in-frame">
       <form
         onSubmit={(e) => {
           e.preventDefault();
           void submit();
         }}
-        style={{ width: "min(380px, 100%)" }}
+        className="sign-in-box"
       >
         <Panel title="Open Source EOC">
-          <p style={{ marginTop: 0, color: "var(--eoc-text-muted)" }}>
+          <p className="sign-in-lead eoc-muted">
             Sign in to the operations console.
           </p>
-          <div style={{ display: "grid", gap: 12 }}>
+          <div className="eoc-stack">
             <TextField label="Email" value={email} onChange={setEmail} required />
             <TextField label="Password" type="password" value={password} onChange={setPassword} required />
             {error ? (
-              <p role="alert" style={{ margin: 0, color: "var(--eoc-status-critical)" }}>
+              <p role="alert" className="eoc-flush eoc-text-critical">
                 {error}
               </p>
             ) : null}

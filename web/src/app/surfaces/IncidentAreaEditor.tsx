@@ -9,6 +9,7 @@ import { ApiError, type ApiClient } from "../api/client.js";
 import { assetBase, basemapStyleUrl, jurisdictionMapBounds, streetBasemap } from "../config.js";
 import { useAsync } from "../data/hooks.js";
 import { ErrorNote, Loading } from "../screens/parts.js";
+import "./incidents.css";
 
 type Coordinate = [number, number];
 const EMPTY = async () => ({ type: "FeatureCollection" as const, features: [] });
@@ -130,18 +131,18 @@ export function IncidentAreaEditor(props: {
   if (current.error && !snapshot) return <ErrorNote message={current.error} />;
   if (!snapshot) return <Loading label="Loading incident area…" />;
   return <Panel title={props.incidentName + ": operational area"}>
-    <div style={{ display: "grid", gap: 12 }}>
-      <p style={{ margin: 0 }}>Revision {snapshot.revision}. {snapshot.geometry ? "An operational area is recorded." : "The operational area is not yet defined."} Geographic boundaries do not grant access or select participating organizations.</p>
+    <div className="eoc-stack">
+      <p className="eoc-flush">Revision {snapshot.revision}. {snapshot.geometry ? "An operational area is recorded." : "The operational area is not yet defined."} Geographic boundaries do not grant access or select participating organizations.</p>
       {preview ? <div role="status">Viewing revision {preview.revision}: {preview.reason}
         <Button onClick={() => { setPreview(null); fit(geometry); }}>Return to current draft</Button></div> : null}
-      <div style={{ height: 480, minHeight: 320 }}>
+      <div className="incidents-area-map">
         <CopMap key={props.theme} theme={props.theme} boards={[]} fetchItems={EMPTY}
           bundledBasemap={{ assetBase: assetBase() }} basemapStyleUrl={basemapStyleUrl()} streetBasemap={streetBasemap()}
           initialBounds={geometryBounds(snapshot.geometry) ?? jurisdictionMapBounds()}
           picking={drawing && !busy && !preview} onPickPoint={(point) => setPoints((existing) => existing.length < 9999 ? [...existing, point] : existing)}
           onMap={(value) => { value.doubleClickZoom.disable(); setMap(value); }} />
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      <div className="incidents-actions">
         <Button onClick={() => fit(shown)} disabled={!shown}>Focus area</Button>
         {props.canEdit && !preview ? <>
           <Button onClick={() => { setDrawing(true); setPoints([]); setError(null); }} disabled={busy || drawing}>Draw replacement boundary</Button>
@@ -155,23 +156,23 @@ export function IncidentAreaEditor(props: {
           <Button onClick={() => { setGeometry(null); setPoints([]); setDrawing(false); }} disabled={busy}>Mark area undefined</Button>
         </> : null}
       </div>
-      {props.canEdit && !preview ? <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", alignItems: "end" }}>
+      {props.canEdit && !preview ? <div className="incidents-area-coordinates">
         <TextField label="Longitude" value={coordinate.longitude} onChange={(longitude) => setCoordinate((value) => ({ ...value, longitude }))} />
         <TextField label="Latitude" value={coordinate.latitude} onChange={(latitude) => setCoordinate((value) => ({ ...value, latitude }))} />
         <Button onClick={addCoordinate} disabled={busy}>Add coordinate</Button>
-        <p style={{ margin: 0, color: "var(--eoc-text-muted)", gridColumn: "1 / -1" }}>Enter boundary points in order when map input is impractical, then close the boundary. Coordinates use longitude, latitude.</p>
+        <p className="incidents-area-hint">Enter boundary points in order when map input is impractical, then close the boundary. Coordinates use longitude, latitude.</p>
       </div> : null}
       {importName && !preview ? <p role="status">Imported area: {importName}. Save a revision to record it.</p> : null}
       {drawing ? <p role="status">Click boundary points on the map, then close the boundary. {points.length} points placed. The recorded area stays unchanged until you save.</p> : null}
-      {props.canEdit && !preview ? <fieldset disabled={busy || current.loading} style={{ border: 0, padding: 0, display: "grid", gap: 12 }}>
+      {props.canEdit && !preview ? <fieldset disabled={busy || current.loading} className="incidents-fieldset">
         <TextField label="Operational period" value={period.label} onChange={(label) => setPeriod((p) => ({ ...p, label }))} />
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+        <div className="incidents-area-period">
           <label>Period starts <input type="datetime-local" value={period.start} onChange={(e) => setPeriod((p) => ({ ...p, start: e.target.value }))} /></label>
           <label>Period ends <input type="datetime-local" value={period.end} onChange={(e) => setPeriod((p) => ({ ...p, end: e.target.value }))} /></label>
         </div>
-        <p style={{ margin: 0 }}>Times use {Intl.DateTimeFormat().resolvedOptions().timeZone}. Leave all period fields blank if not yet established.</p>
+        <p className="eoc-flush">Times use {Intl.DateTimeFormat().resolvedOptions().timeZone}. Leave all period fields blank if not yet established.</p>
         <TextField label="Reason for revision" value={reason} onChange={setReason} />
-        <div style={{ display: "flex", gap: 8 }}>
+        <div className="incidents-pair">
           <Button kind="primary" onClick={() => void save()} disabled={busy || drawing || !reason.trim()}>Save area revision</Button>
           <Button onClick={() => current.reload()} disabled={busy || current.loading}>Reload current revision</Button>
         </div>
@@ -180,10 +181,10 @@ export function IncidentAreaEditor(props: {
         : "Operational period not yet established"}</p>}
       {error ? <p role="alert">{error}</p> : null}
       {current.error && snapshot ? <ErrorNote message={current.error} /> : null}
-      <h3 style={{ marginBottom: 0 }}>Revision history</h3>
+      <h3 className="incidents-area-history">Revision history</h3>
       {history.error ? <ErrorNote message={history.error} /> : null}
-      {revisions.length === 0 ? <p>No area revisions yet.</p> : <ol style={{ paddingLeft: 24 }}>
-        {revisions.map((revision) => <li key={revision.revision} style={{ marginBottom: 10 }}>
+      {revisions.length === 0 ? <p>No area revisions yet.</p> : <ol className="incidents-area-revisions">
+        {revisions.map((revision) => <li key={revision.revision}>
           <Button onClick={() => { setPreview(revision); setDrawing(false); setPoints([]); fit(revision.geometry); }}>View revision {revision.revision}</Button>
           {" "}{revision.reason} · {revision.createdByName ?? "Operator"}{revision.homeOrganizationName ? " / " + revision.homeOrganizationName : ""}
           {(revision.incidentPositionTitle ?? revision.positionTitle) ? " / " + (revision.incidentPositionTitle ?? revision.positionTitle) : ""}

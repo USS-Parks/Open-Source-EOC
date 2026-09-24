@@ -6,13 +6,13 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type ReactNode,
 } from "react";
 import type { IncidentBoardRef, IncidentSummary } from "../api/client.js";
 import { useSession } from "../auth/session.js";
 import { useAsync, usePolled } from "../data/hooks.js";
 import { parseRouteHash, replaceRouteContext, surfaceHash, type Surface } from "../router.js";
+import "./incident-switcher.css";
 
 /**
  * The one selected incident for the whole operator workspace (VEOC-79B).
@@ -165,34 +165,22 @@ export function IncidentProvider(props: { children: ReactNode }) {
   return <IncidentContext.Provider value={value}>{props.children}</IncidentContext.Provider>;
 }
 
-const switcherSelect: CSSProperties = {
-  fontFamily: "inherit",
-  fontSize: "1em",
-  padding: "6px 8px",
-  minHeight: 44,
-  borderRadius: 4,
-  border: "1px solid var(--eoc-border)",
-  background: "var(--eoc-surface)",
-  color: "var(--eoc-text)",
-  maxWidth: 320,
-};
-
 /** The global incident switcher, shown in the command bar. */
 export function IncidentSwitcher() {
   const { incidents, selectedIncidentId, selectIncident, selectionNotice, loading, error } = useIncident();
-  if (error) return <span style={{ color: "var(--eoc-status-critical)" }}>Incidents unavailable</span>;
+  if (error) return <span className="eoc-text-critical">Incidents unavailable</span>;
   if (loading && incidents.length === 0)
-    return <span style={{ color: "var(--eoc-text-muted)" }}>Loading incidents…</span>;
+    return <span className="eoc-muted">Loading incidents…</span>;
   if (incidents.length === 0)
-    return <span style={{ color: "var(--eoc-text-muted)" }}>No active incident</span>;
+    return <span className="eoc-muted">No active incident</span>;
   return (
-    <label style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-      <span style={{ color: "var(--eoc-text-muted)" }}>Incident</span>
+    <label className="incident-switcher">
+      <span className="eoc-muted">Incident</span>
       <select
         aria-label="Selected incident"
         value={selectedIncidentId ?? ""}
         onChange={(e) => selectIncident(e.target.value || null)}
-        style={switcherSelect}
+        className="incident-switcher-select"
       >
         {incidents.map((i) => (
           <option key={i.id} value={i.id}>

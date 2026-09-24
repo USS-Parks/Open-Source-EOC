@@ -196,7 +196,7 @@ export function MessagesWorkspace(props: MessagesWorkspaceProps) {
               <div className="d27-form-stack">
                 <p className="d27-muted">Saving sets both values for the jurisdiction; the values in effect are not shown here. Messages older than the retention period are no longer shown or exported.</p>
                 <TextField label="Message retention in days (empty keeps all)" value={retentionDays} onChange={setRetentionDays} />
-                <label style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 32 }}>
+                <label className="eoc-check">
                   <input type="checkbox" checked={inIncidentRecord} onChange={(event) => setInIncidentRecord(event.target.checked)} />
                   Record incident thread messages in the incident audit trail
                 </label>

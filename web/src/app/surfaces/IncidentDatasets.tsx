@@ -192,7 +192,7 @@ export function IncidentDatasets(props: {
             <div className="d21-form-grid">
               <EnumSelect label="Dataset to load" values={loadable.map((d) => d.id)} value={target} onChange={setLoadTarget}
                 labels={Object.fromEntries(loadable.map((d) => [d.id, `${d.name} (${d.organizationName})`]))} />
-              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>Records file
+              <label className="d21-field">Records file
                 <input type="file" accept=".json,.geojson,application/json,application/geo+json"
                   onChange={(event) => setLoadFile(event.target.files?.[0] ?? null)} />
               </label>

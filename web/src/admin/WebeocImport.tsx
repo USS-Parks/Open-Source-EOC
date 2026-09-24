@@ -5,13 +5,11 @@ import type { ApiClient, WebeocImportReport, WebeocRowOutcome } from "../app/api
 import { useAsync } from "../app/data/hooks.js";
 import { ErrorNote, Loading } from "../app/screens/parts.js";
 import { saveFile } from "./labels.js";
+import "./admin.css";
 
-const INPUT_STYLE = {
-  font: "inherit", minHeight: 44, padding: 6, borderRadius: 4, border: "1px solid var(--eoc-border)",
-  background: "var(--eoc-surface)", color: "var(--eoc-text)", maxWidth: "100%",
-} as const;
+const INPUT = "admin-input is-bounded";
 /** A control that fills its cell of the form grid instead of spilling into the next. */
-const FILL_STYLE = { ...INPUT_STYLE, width: "100%", minWidth: 0, boxSizing: "border-box" } as const;
+const FILL = "admin-input is-bounded is-fill";
 const ZONES = Intl.supportedValuesOf("timeZone");
 const BROWSER_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 /** Rows listed on screen; the rejection report holds every rejected row. */
@@ -97,27 +95,27 @@ export function WebeocImport(props: { client: ApiClient; jurisdictionId: string 
 
   return (
     <Panel title="WebEOC migration">
-      <div style={{ display: "grid", gap: 12, minWidth: 0 }}>
+      <div className="admin-stack">
         <p className="d21-muted">Moves the records of one WebEOC board into a board here, from the CSV file WebEOC exports for that board. Records only: WebEOC processes, views, links and menus are not migrated. Check the file first; nothing is written until you choose Import. Import writes the valid rows and leaves the rejected rows out, so download the rejection report, correct those rows and import that file.</p>
         {boards.error ? <ErrorNote message={boards.error} /> : null}
         <div className="d21-form-section-grid">
-          <span style={{ display: "grid", gap: 4 }}>
+          <span className="admin-label">
             <label htmlFor={`${id}-board`}>Target board</label>
-            <select id={`${id}-board`} value={boardId} disabled={busy !== null} style={FILL_STYLE} onChange={(event) => setBoardId(event.target.value)}>
+            <select id={`${id}-board`} value={boardId} disabled={busy !== null} className={FILL} onChange={(event) => setBoardId(event.target.value)}>
               <option value="">Choose a board</option>
               {(boards.data ?? []).map((board) => <option key={board.id} value={board.id}>{board.title}</option>)}
             </select>
           </span>
           {target.data ? <>
-            <span style={{ display: "grid", gap: 4 }}>
+            <span className="admin-label">
               <label htmlFor={`${id}-zone`}>WebEOC server time zone</label>
-              <select id={`${id}-zone`} value={timeZone} disabled={busy !== null} style={FILL_STYLE} onChange={(event) => setTimeZone(event.target.value)}>
+              <select id={`${id}-zone`} value={timeZone} disabled={busy !== null} className={FILL} onChange={(event) => setTimeZone(event.target.value)}>
                 {(ZONES.includes(timeZone) ? ZONES : [timeZone, ...ZONES]).map((zone) => <option key={zone} value={zone}>{zone.replaceAll("_", " ")}</option>)}
               </select>
             </span>
-            <span style={{ display: "grid", gap: 4 }}>
+            <span className="admin-label">
               <label htmlFor={`${id}-file`}>WebEOC CSV export</label>
-              <input id={`${id}-file`} type="file" accept=".csv,text/csv" disabled={busy !== null} style={FILL_STYLE}
+              <input id={`${id}-file`} type="file" accept=".csv,text/csv" disabled={busy !== null} className={FILL}
                 onChange={(event) => choose(event.currentTarget)} />
             </span>
           </> : null}
@@ -126,14 +124,14 @@ export function WebeocImport(props: { client: ApiClient; jurisdictionId: string 
         {target.error ? <ErrorNote message={target.error} /> : null}
         {target.data?.saved.updatedAt ? <p className="d21-muted">This board has a saved mapping, last saved {new Date(target.data.saved.updatedAt).toLocaleString()}.</p> : null}
 
-        {columns.length ? <section aria-labelledby="webeoc-mapping-heading" style={{ display: "grid", gap: 8, minWidth: 0 }}>
-          <h3 id="webeoc-mapping-heading" style={{ margin: 0, fontSize: "1em" }}>Board fields and their WebEOC columns</h3>
-          <div style={{ overflowX: "auto", minWidth: 0 }}>
+        {columns.length ? <section aria-labelledby="webeoc-mapping-heading" className="admin-section">
+          <h3 id="webeoc-mapping-heading">Board fields and their WebEOC columns</h3>
+          <div className="admin-scroll">
             <table className="eoc-table">
               <thead><tr><th scope="col">Board field</th><th scope="col">WebEOC column</th></tr></thead>
               <tbody>{fields.map((field) => <tr key={field.key}>
                 <td>{field.label}{field.required && !field.condition ? " (required)" : ""}</td>
-                <td><select aria-label={`Column for ${field.label}`} value={mapping[field.key] ?? ""} disabled={busy !== null} style={INPUT_STYLE}
+                <td><select aria-label={`Column for ${field.label}`} value={mapping[field.key] ?? ""} disabled={busy !== null} className={INPUT}
                   onChange={(event) => {
                     const { [field.key]: _dropped, ...rest } = mapping;
                     setMapping(event.target.value ? { ...rest, [field.key]: event.target.value } : rest);
@@ -148,7 +146,7 @@ export function WebeocImport(props: { client: ApiClient; jurisdictionId: string 
 
         {file && columns.length ? <div className="d21-toolbar">
           <span className="d21-muted">{file.name}</span>
-          <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <span className="admin-actions">
             <ActionButton loading={busy === "saving"} loadingLabel="Saving…" disabled={busy !== null} onClick={() => void save()}>Save mapping</ActionButton>
             <ActionButton loading={busy === "checking"} loadingLabel="Checking…" disabled={busy !== null} onClick={() => void check(file, false)}>Check file</ActionButton>
             <ActionButton kind="primary" loading={busy === "importing"} loadingLabel="Importing…" disabled={busy !== null || !importable}
@@ -160,9 +158,9 @@ export function WebeocImport(props: { client: ApiClient; jurisdictionId: string 
         {notice ? <p role="status">{notice}</p> : null}
         {checked && !current ? <p className="d21-muted">The mapping or time zone changed; check the file again before importing.</p> : null}
 
-        {current ? <section aria-labelledby="webeoc-result-heading" style={{ display: "grid", gap: 8, minWidth: 0 }}>
-          <h3 id="webeoc-result-heading" style={{ margin: 0, fontSize: "1em" }}>{current.dryRun ? "Check result" : "Import result"}</h3>
-          <p style={{ margin: 0 }}>{plural(current.rows, "row")} read: {current.dryRun
+        {current ? <section aria-labelledby="webeoc-result-heading" className="admin-section">
+          <h3 id="webeoc-result-heading">{current.dryRun ? "Check result" : "Import result"}</h3>
+          <p className="eoc-flush">{plural(current.rows, "row")} read: {current.dryRun
             ? `${current.valid} will be created`
             : `${current.created} created`}, {current.skipped} already imported, {current.rejected} rejected.</p>
           <p className="d21-muted">{current.provenance.length
@@ -171,9 +169,9 @@ export function WebeocImport(props: { client: ApiClient; jurisdictionId: string 
               ? "" : "The file has no dataid column, so importing it twice creates its records twice. "}
             {current.dropped.length ? `Not imported: ${current.dropped.join(", ")}.` : ""}</p>
           <div className="d21-toolbar">
-            <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span className="eoc-inline">
               <label htmlFor={`${id}-show`}>Show</label>
-              <select id={`${id}-show`} value={show} style={INPUT_STYLE} onChange={(event) => setShow(event.target.value as typeof show)}>
+              <select id={`${id}-show`} value={show} className={INPUT} onChange={(event) => setShow(event.target.value as typeof show)}>
                 <option value="all">All rows</option>
                 <option value="create">{current.dryRun ? "Will be created" : "Created"}</option>
                 <option value="skip">Already imported</option>
@@ -182,7 +180,7 @@ export function WebeocImport(props: { client: ApiClient; jurisdictionId: string 
             </span>
             {current.rejected ? <ActionButton onClick={() => download(current)}>Download rejection report</ActionButton> : null}
           </div>
-          <div style={{ overflowX: "auto", minWidth: 0 }}>
+          <div className="admin-scroll">
             <table className="eoc-table" aria-label="Row outcomes">
               <thead><tr><th scope="col">Row</th><th scope="col">WebEOC dataid</th><th scope="col">Outcome</th><th scope="col">Reason</th></tr></thead>
               <tbody>{listed.slice(0, SHOWN).map((o) => <tr key={o.row}>

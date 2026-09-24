@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useState } from "react";
 import { StatusBadge, type Status } from "../design/components.js";
 import { Icon, LifelineIcon, lifelineIconByKey, type LifelineKey } from "../design/icons/index.js";
 import {
@@ -18,6 +18,7 @@ import type {
   TileResult,
   WidgetResult,
 } from "@openeoc/shared";
+import "./widgets.css";
 
 /**
  * Dashboard renderer. Everything on screen is a server-computed
@@ -30,14 +31,8 @@ type Drill = (field: string, value: string) => void;
 export function Dashboard(props: { snapshot: DashboardSnapshot; onDrill?: Drill | undefined }) {
   return (
     <section aria-label={props.snapshot.title}>
-      <h2 style={{ margin: "0 0 8px" }}>{props.snapshot.title}</h2>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-          gap: 12,
-        }}
-      >
+      <h2 className="dash-title">{props.snapshot.title}</h2>
+      <div className="dash-grid">
         {props.snapshot.widgets.map((w) => (
           <DashboardWidget key={w.key} widget={w} onDrill={props.onDrill} />
         ))}
@@ -52,28 +47,13 @@ export function DashboardWidget(props: { widget: WidgetResult; onDrill?: Drill |
     <article
       data-testid={`widget-${w.key}`}
       aria-label={w.title}
-      style={{
-        border: "1px solid var(--eoc-border)",
-        borderRadius: "var(--eoc-radius-md)",
-        boxShadow: "var(--eoc-shadow-sm)",
-        padding: 14,
-        background: "var(--eoc-surface)",
-      }}
+      className="dash-widget"
     >
-      <h3
-        style={{
-          margin: "0 0 10px",
-          fontSize: 12,
-          fontWeight: 600,
-          letterSpacing: "0.04em",
-          textTransform: "uppercase",
-          color: "var(--eoc-text-muted)",
-        }}
-      >
+      <h3 className="dash-widget-title">
         {w.title}
       </h3>
       {w.missing ? (
-        <p style={{ margin: 0, color: "var(--eoc-text-muted)" }}>
+        <p className="eoc-flush eoc-muted">
           No matching board in this jurisdiction.
         </p>
       ) : (
@@ -95,23 +75,11 @@ function renderBody(w: WidgetResult, onDrill?: Drill | undefined) {
 /** Record counts per kanban column, in the field's own order. */
 function KanbanSummary(props: { widget: KanbanResult }) {
   return (
-    <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexWrap: "wrap", gap: 8 }}>
+    <ol className="dash-kanban">
       {props.widget.columns.map((column) => (
-        <li
-          key={column.value ?? ""}
-          style={{
-            display: "grid",
-            gap: 2,
-            minWidth: 96,
-            flex: "1 1 96px",
-            border: "1px solid var(--eoc-border)",
-            borderTop: "3px solid var(--eoc-brand-teal)",
-            borderRadius: 6,
-            padding: "6px 10px",
-          }}
-        >
-          <span style={{ fontSize: 12, color: "var(--eoc-text-muted)" }}>{valueLabel(column.value)}</span>
-          <strong style={{ fontSize: 22, fontVariantNumeric: "tabular-nums" }}>{column.count}</strong>
+        <li key={column.value ?? ""}>
+          <span className="dash-meta">{valueLabel(column.value)}</span>
+          <strong>{column.count}</strong>
         </li>
       ))}
     </ol>
@@ -121,16 +89,13 @@ function KanbanSummary(props: { widget: KanbanResult }) {
 /** The next dated records, soonest first, in the viewer's timezone. */
 function Upcoming(props: { widget: CalendarResult }) {
   if (props.widget.items.length === 0) {
-    return <p style={{ margin: 0, color: "var(--eoc-text-muted)" }}>Nothing scheduled from now on.</p>;
+    return <p className="eoc-flush eoc-muted">Nothing scheduled from now on.</p>;
   }
   return (
-    <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
+    <ol className="dash-upcoming">
       {props.widget.items.map((item) => (
-        <li
-          key={item.id}
-          style={{ display: "grid", gap: 2, borderLeft: "3px solid var(--eoc-brand-teal)", paddingLeft: 8 }}
-        >
-          <time dateTime={item.at} style={{ fontSize: 12, color: "var(--eoc-text-muted)" }}>
+        <li key={item.id}>
+          <time dateTime={item.at} className="dash-meta">
             {new Date(item.at).toLocaleString([], {
               weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
             })}
@@ -152,12 +117,12 @@ function Tile(props: { widget: TileResult }) {
   const trend = props.widget.trend ?? 0;
   return (
     <div>
-      <p style={{ margin: 0, fontSize: 32, fontWeight: 600 }}>
+      <p className="dash-tile-value">
         <span data-testid={`tile-${props.widget.key}-value`}>{props.widget.value}</span>{" "}
         <StatusBadge status={TILE_STATUS[props.widget.level]}>{props.widget.level}</StatusBadge>
       </p>
       {trend > 0 ? (
-        <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--eoc-text-muted)" }}>
+        <p className="dash-tile-trend">
           +{trend} last 24h
         </p>
       ) : null}
@@ -189,37 +154,20 @@ function drillOf(widget: ChartResult, onDrill?: Drill | undefined): ((value: str
   return onDrill && widget.field ? (value) => onDrill(widget.field!, value) : null;
 }
 
-const drillButton: CSSProperties = {
-  background: "none",
-  border: "none",
-  font: "inherit",
-  color: "inherit",
-  cursor: "pointer",
-  width: "100%",
-  textAlign: "left",
-  padding: "4px 2px",
-};
-
 function BarChart(props: { widget: ChartResult; onDrill?: Drill | undefined }) {
   const max = Math.max(1, ...props.widget.groups.map((g) => g.count));
   const drill = drillOf(props.widget, props.onDrill);
   return (
-    <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
+    <ul className="dash-bars">
       {props.widget.groups.map((g) => {
         const row = (
-          <span style={{ display: "grid", gridTemplateColumns: "1fr 2fr auto", gap: 8, alignItems: "center" }}>
+          <span className="dash-bar-row">
             <span>{g.value || "(none)"}</span>
             <span
               role="img"
               aria-label={`${g.value}: ${g.count}`}
-              style={{
-                alignSelf: "center",
-                height: 10,
-                width: `${Math.round((g.count / max) * 100)}%`,
-                minWidth: 2,
-                background: "var(--eoc-status-info)",
-                borderRadius: 2,
-              }}
+              className="dash-bar"
+              style={{ width: `${Math.round((g.count / max) * 100)}%` }}
             />
             <span>{g.count}</span>
           </span>
@@ -229,7 +177,7 @@ function BarChart(props: { widget: ChartResult; onDrill?: Drill | undefined }) {
             {drill ? (
               <button
                 type="button"
-                style={drillButton}
+                className="dash-drill"
                 aria-label={`Filter by ${g.value || "(none)"}`}
                 onClick={() => drill(g.value)}
               >
@@ -255,7 +203,7 @@ function Donut(props: { widget: ChartResult; onDrill?: Drill | undefined }) {
   const C = 2 * Math.PI * R;
   let offset = 0;
   return (
-    <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+    <div className="dash-donut">
       <svg
         width="96"
         height="96"
@@ -289,22 +237,17 @@ function Donut(props: { widget: ChartResult; onDrill?: Drill | undefined }) {
           {total}
         </text>
       </svg>
-      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4, minWidth: 0 }}>
+      <ul className="dash-bars is-legend">
         {groups.map((g, i) => {
           const legend = (
-            <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, width: "100%" }}>
+            <span className="dash-legend-row">
               <span
                 aria-hidden="true"
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: 2,
-                  background: DONUT_COLORS[i % DONUT_COLORS.length],
-                  flex: "0 0 auto",
-                }}
+                className="dash-swatch"
+                style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }}
               />
-              <span style={{ flex: 1, minWidth: 0 }}>{g.value || "(none)"}</span>
-              <span style={{ color: "var(--eoc-text-muted)" }}>
+              <span className="dash-legend-label">{g.value || "(none)"}</span>
+              <span className="eoc-muted">
                 {g.count} ({total > 0 ? Math.round((g.count / total) * 100) : 0}%)
               </span>
             </span>
@@ -314,7 +257,7 @@ function Donut(props: { widget: ChartResult; onDrill?: Drill | undefined }) {
               {drill ? (
                 <button
                   type="button"
-                  style={drillButton}
+                  className="dash-drill"
                   aria-label={`Filter by ${g.value || "(none)"}`}
                   onClick={() => drill(g.value)}
                 >
@@ -348,36 +291,20 @@ const CONDITION_COLOR: Record<string, string> = { ...LIFELINE_STATUS_COLOR, ...E
  */
 function StatusGrid(props: { widget: StatusResult }) {
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-        gap: 8,
-      }}
-    >
+    <div className="dash-status-grid">
       {props.widget.groups.map((g) => {
         const color = g.value ? (CONDITION_COLOR[g.value] ?? "gray") : "gray";
         const lifeline = g.group in lifelineIconByKey ? g.group as LifelineKey : null;
         return (
-          <div
-            key={g.group}
-            style={{
-              border: "1px solid var(--eoc-border)",
-              borderRadius: 6,
-              padding: "8px 10px",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <span style={{ color: LIFELINE_DOT[color] ?? LIFELINE_DOT.gray, display: "flex" }}>
+          <div key={g.group} className="dash-status-item">
+            <span className="dash-status-icon" style={{ color: LIFELINE_DOT[color] ?? LIFELINE_DOT.gray }}>
               {lifeline
                 ? <LifelineIcon lifeline={lifeline} decorative size={24} />
                 : <Icon name="lifelines" decorative size={24} />}
             </span>
-            <span style={{ display: "grid", minWidth: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{g.group}</span>
-              <span style={{ fontSize: 12, color: "var(--eoc-text-muted)" }}>
+            <span className="dash-status-text">
+              <span className="dash-status-name">{g.group}</span>
+              <span className="dash-meta">
                 {g.value ?? "unknown"}
               </span>
             </span>

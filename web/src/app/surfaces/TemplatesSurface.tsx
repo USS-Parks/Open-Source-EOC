@@ -222,17 +222,17 @@ function TemplateIndex(props: {
       Create template
     </ActionButton>} />
     <p className="board-template-intro">Published templates are immutable. Open a configured board to publish its next version.</p>
-    <section className="board-template-versions" aria-label="Create a board from a published template" style={{ marginBottom: 14 }}>
+    <section className="board-template-versions is-create" aria-label="Create a board from a published template">
       <h2>Create a board from a published template</h2>
       {templates.error ? <ErrorNote message={templates.error} /> : null}
       {!templates.data && !templates.error ? <Loading label="Loading published templates…" /> : null}
       {templates.data?.length === 0 ? <p>No template is published yet.</p> : null}
-      {chosen ? <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 8 }}>
+      {chosen ? <fieldset disabled={busy} className="board-template-create">
         <EnumSelect label="Published template" values={templates.data!.map((t) => t.key)} value={chosen.key}
           labels={Object.fromEntries(templates.data!.map((t) => [t.key, `${t.title} (version ${t.version})`]))}
           onChange={setTemplateKey} />
         <TextField label="Board title" value={title} onChange={setTitle} />
-        <p className="d21-muted" style={{ margin: 0 }}>Left blank, the board takes the template's title, {chosen.title}.</p>
+        <p className="d21-muted eoc-flush">Left blank, the board takes the template's title, {chosen.title}.</p>
         <div><ActionButton onClick={() => void createBoard()}>Create board</ActionButton></div>
         {error ? <p role="alert">{error}</p> : null}
       </fieldset> : null}

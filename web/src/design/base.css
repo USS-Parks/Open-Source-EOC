@@ -1,10 +1,10 @@
 /*
- * Base stylesheet: the parts of the design system that inline styles cannot
- * express, keyed off the theme's CSS variables. Component sizing and color
- * stay inline (and testable); this adds focus rings, hover and active
- * states, calm scrollbars, and themed map popups. Brand, category and
- * operational colors have separate semantic channels; labels and markers
- * preserve operational meaning without color.
+ * Base stylesheet, keyed off the theme's CSS variables: the kit's own
+ * components, focus rings, hover and active states, calm scrollbars, and
+ * themed map popups. Brand, category and operational colors have separate
+ * semantic channels; labels and markers preserve operational meaning
+ * without color. Kit component selectors are compound, so a screen's
+ * `.panel p` or `.drawer button` rule cannot restyle them.
  */
 
 * {
@@ -25,13 +25,16 @@ textarea {
   border-radius: var(--eoc-radius-sm, 4px);
 }
 
-/* Buttons: quiet motion, clear hover and active. */
-.eoc-btn {
-  transition:
-    background-color 0.12s ease,
-    border-color 0.12s ease,
-    box-shadow 0.12s ease,
-    filter 0.12s ease;
+/* Buttons: quiet motion, clear hover and active. Without a motion
+   preference colors change at once, a theme switch included. */
+@media (prefers-reduced-motion: no-preference) {
+  .eoc-btn {
+    transition:
+      background-color 0.12s ease,
+      border-color 0.12s ease,
+      box-shadow 0.12s ease,
+      filter 0.12s ease;
+  }
 }
 .eoc-btn:not(:disabled):hover {
   filter: brightness(0.97);
@@ -41,13 +44,187 @@ textarea {
 }
 
 /* Selectable rows lift toward the focus color on hover. */
-.eoc-row {
-  transition:
-    background-color 0.12s ease,
-    border-color 0.12s ease;
+@media (prefers-reduced-motion: no-preference) {
+  .eoc-row {
+    transition:
+      background-color 0.12s ease,
+      border-color 0.12s ease;
+  }
 }
 .eoc-row:hover {
   border-color: var(--eoc-focus);
+}
+
+/* The theme root. */
+.eoc-theme {
+  min-height: 100%;
+  color: var(--eoc-text);
+  background: var(--eoc-bg);
+  font-family: var(--eoc-font);
+}
+
+/* Button. The minimum height is the glove and touchscreen target, so field
+   users in PPE can hit it. */
+button.eoc-btn.is-quiet,
+button.eoc-btn.is-primary,
+button.eoc-btn.is-danger {
+  min-height: 44px;
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 1em;
+  color: var(--eoc-text);
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+button.eoc-btn.is-primary {
+  color: var(--eoc-surface);
+  background: var(--eoc-text);
+}
+button.eoc-btn.is-danger {
+  color: var(--eoc-status-critical);
+}
+button.eoc-btn.is-quiet:disabled,
+button.eoc-btn.is-primary:disabled,
+button.eoc-btn.is-danger:disabled {
+  cursor: not-allowed;
+}
+
+/* StatusBadge: colored text with a border, never a filled block. */
+.eoc-status-badge[data-status] {
+  padding: 1px 8px;
+  color: var(--eoc-status-unknown);
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 600;
+}
+.eoc-status-badge[data-status="info"] { color: var(--eoc-status-info); }
+.eoc-status-badge[data-status="warning"] { color: var(--eoc-status-warning); }
+.eoc-status-badge[data-status="critical"] { color: var(--eoc-status-critical); }
+.eoc-status-badge[data-status="success"] { color: var(--eoc-status-success); }
+
+/* TextField and EnumSelect: a label over its control. */
+.eoc-input-field:has(> .eoc-input) {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.eoc-input-field > .eoc-input {
+  min-height: 44px;
+  padding: 6px;
+  font-family: inherit;
+  font-size: 1em;
+  color: var(--eoc-text);
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border);
+  border-radius: 4px;
+}
+
+/* Panel: a titled surface section. */
+.eoc-panel:has(> .eoc-panel-title) {
+  padding: 16px;
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border);
+  border-radius: var(--eoc-radius-md);
+  box-shadow: var(--eoc-shadow-sm);
+}
+.eoc-panel > .eoc-panel-title {
+  margin-top: 0;
+  font-size: 1.05em;
+  letter-spacing: -0.01em;
+}
+
+/* AppFrame: skip link, header, main. */
+.eoc-app-frame {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.eoc-app-frame > .eoc-skip-link {
+  position: absolute;
+  top: 0;
+  left: -9999px;
+}
+.eoc-app-frame > .eoc-skip-link:focus {
+  left: 8px;
+}
+.eoc-app-frame > header {
+  padding: 8px 16px;
+  background: var(--eoc-surface);
+  border-bottom: 1px solid var(--eoc-border);
+}
+.eoc-app-frame > header > h1 {
+  margin: 0;
+  font-size: 1.1em;
+}
+.eoc-app-frame > main {
+  flex: 1;
+  padding: 16px;
+  display: grid;
+  gap: 16px;
+}
+
+/* BoardList: the viewer's navigation list of boards. */
+.eoc-board-list {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  list-style: none;
+}
+.eoc-board-list .eoc-row {
+  width: 100%;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: inherit;
+  font-size: 1em;
+  text-align: left;
+  color: var(--eoc-text);
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border);
+  border-radius: var(--eoc-radius-sm);
+  cursor: pointer;
+}
+
+.eoc-table-caption {
+  padding-bottom: 8px;
+  font-weight: 600;
+  text-align: left;
+}
+
+/* MapPanel: a labeled stand-in for the map region. */
+.eoc-map-stand-in {
+  min-height: 200px;
+  display: grid;
+  place-items: center;
+  color: var(--eoc-text-muted);
+  background: var(--eoc-surface-raised);
+  border: 1px solid var(--eoc-border);
+  border-radius: 6px;
+}
+
+/* NotificationTray. */
+.eoc-tray {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  list-style: none;
+}
+.eoc-tray > li {
+  padding: 6px 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border);
+  border-radius: 4px;
 }
 
 /* Calm scrollbars that read as part of the surface. */
@@ -208,3 +385,25 @@ textarea {
   color: var(--eoc-text-muted);
   border-color: var(--eoc-border);
 }
+
+/* Surface building blocks: loading and error notes, the empty state, the
+   scrolling column and its header. */
+.eoc-note.eoc-note-loading { padding: 16px; color: var(--eoc-text-muted); }
+.eoc-note.eoc-note-error { padding: 16px; color: var(--eoc-status-critical); }
+.eoc-empty { padding: 24px; color: var(--eoc-text-muted); }
+.eoc-empty > .eoc-empty-title { margin: 0; font-weight: 600; }
+.eoc-empty > .eoc-empty-hint { margin: 4px 0 0; }
+.eoc-scroll { flex: 1; min-height: 0; padding: 16px; overflow: auto; }
+.eoc-surface-header { margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.eoc-surface-header > .eoc-surface-title { margin: 0; font-size: 1.15em; }
+
+/* Layout and text helpers that screens built from the kit share. */
+.eoc-stack { display: grid; gap: 12px; }
+.eoc-inline { display: flex; align-items: center; gap: 8px; }
+.eoc-check { display: flex; align-items: center; gap: 8px; min-height: 32px; }
+.eoc-fieldset { margin: 0; padding: 0; border: 0; }
+.eoc-flush { margin: 0; }
+.eoc-space-above { margin-top: 12px; }
+.eoc-muted { color: var(--eoc-text-muted); }
+.eoc-text-critical { color: var(--eoc-status-critical); }
+.eoc-text-success { color: var(--eoc-status-success); }

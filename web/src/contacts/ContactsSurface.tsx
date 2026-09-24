@@ -99,7 +99,7 @@ export function ContactsSurface(props: { client: ApiClient; jurisdictionId: stri
         ) : null}
 
         <Panel title="Directory">
-          <form className="d21-card-actions" style={{ alignItems: "flex-end", justifyContent: "flex-start" }}
+          <form className="d21-card-actions is-start is-bottom"
             onSubmit={(event) => { event.preventDefault(); setQuery(search.trim()); }}>
             <TextField label="Search contacts" value={search} onChange={setSearch} />
             <Button type="submit">Search</Button>
@@ -107,7 +107,7 @@ export function ContactsSurface(props: { client: ApiClient; jurisdictionId: stri
           {directory.error && !directory.data ? <ErrorNote message={directory.error} /> : null}
           {!directory.data && !directory.error ? <Loading label="Loading contacts…" /> : null}
           {directory.data && contacts.length === 0 ? <p className="d21-muted">{query ? "No contacts match." : "No contacts yet."}</p> : null}
-          <ul className="d21-card-grid" style={{ marginTop: 12 }}>
+          <ul className="d21-card-grid is-spaced">
             {contacts.map((contact) => (
               <li key={contact.id} className="d21-card" aria-label={`Contact ${contact.name}`}>
                 <div className="d21-card-header">
@@ -125,7 +125,7 @@ export function ContactsSurface(props: { client: ApiClient; jurisdictionId: stri
                   {contact.notes ? <div className="d21-form-grid-wide"><dt>Notes</dt><dd>{contact.notes}</dd></div> : null}
                 </dl>
                 {isAdmin ? (
-                  <div className="d21-card-actions" style={{ justifyContent: "flex-start" }}>
+                  <div className="d21-card-actions is-start">
                     <Button onClick={() => setEditing(contact)}>Edit</Button>
                     <ConfirmDelete label="Delete" busy={action.busy}
                       question={`Delete ${contact.name}? Past notifications keep what they sent.`}
@@ -151,7 +151,7 @@ export function ContactsSurface(props: { client: ApiClient; jurisdictionId: stri
         <Panel title="Groups">
           {groups.error && !groups.data ? <ErrorNote message={groups.error} /> : null}
           {groups.data?.length === 0 ? <p className="d21-muted">No groups yet.</p> : null}
-          <ul className="d21-readiness-list" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
+          <ul className="d21-readiness-list is-single">
             {(groups.data ?? []).map((group) => (
               <li key={group.id} className="d21-readiness-row" aria-label={`Group ${group.name}`}>
                 <div className="d21-readiness-title">
@@ -161,7 +161,7 @@ export function ContactsSurface(props: { client: ApiClient; jurisdictionId: stri
                   {group.members.map((m) => <li key={m.contactId}>{m.name}{m.active ? "" : " (inactive, skipped)"}</li>)}
                 </ol>
                 {isAdmin ? (
-                  <div className="d21-card-actions" style={{ justifyContent: "flex-start" }}>
+                  <div className="d21-card-actions is-start">
                     <Button onClick={() => setEditingGroup(group)}>Edit group</Button>
                     <ConfirmDelete label="Delete group" busy={action.busy}
                       question={`Delete the group ${group.name}? Its contacts stay in the directory.`}
@@ -225,7 +225,7 @@ function ContactForm(props: {
   const [active, setActive] = useState(c?.active ?? true);
   return (
     <Panel title={c ? `Edit ${c.name}` : "Add a contact"}>
-      <fieldset disabled={props.busy} className="d21-form-grid" style={{ border: 0, padding: 0, margin: 0 }}>
+      <fieldset disabled={props.busy} className="d21-form-grid">
         <TextField label="Name" value={name} onChange={setName} required />
         <TextField label="Organization" value={organization} onChange={setOrganization} />
         <TextField label="Title or role" value={title} onChange={setTitle} />
@@ -282,14 +282,14 @@ function GroupEditor(props: {
     return next;
   });
   return (
-    <section aria-label={props.initial ? `Edit group ${props.initial.name}` : "New group"} className="d21-card" style={{ marginTop: 12 }}>
-      <fieldset disabled={props.busy} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 10 }}>
+    <section aria-label={props.initial ? `Edit group ${props.initial.name}` : "New group"} className="d21-card is-spaced">
+      <fieldset disabled={props.busy} className="contacts-fieldset">
         <TextField label="Group name" value={name} onChange={setName} required />
         <ol className="contacts-order" aria-label="Call-down order">
           {order.map((id, index) => (
             <li key={id}>
               <span>{names.get(id) ?? "Contact"}</span>
-              <span className="d21-card-actions" style={{ justifyContent: "flex-start" }}>
+              <span className="d21-card-actions is-start">
                 <Button disabled={index === 0} onClick={() => move(index, -1)}>Move up</Button>
                 <Button disabled={index === order.length - 1} onClick={() => move(index, 1)}>Move down</Button>
                 <Button onClick={() => setOrder((list) => list.filter((x) => x !== id))}>Remove</Button>
@@ -298,14 +298,14 @@ function GroupEditor(props: {
           ))}
         </ol>
         {available.length ? (
-          <div className="d21-card-actions" style={{ alignItems: "flex-end", justifyContent: "flex-start" }}>
+          <div className="d21-card-actions is-start is-bottom">
             <EnumSelect label="Add a contact" values={available.map((c) => c.id)}
               labels={Object.fromEntries(available.map((c) => [c.id, c.name]))} value={chosen} onChange={setPick} />
             <Button onClick={() => chosen && setOrder((list) => [...list, chosen])}>Add to group</Button>
           </div>
         ) : null}
       </fieldset>
-      <div className="d21-card-actions" style={{ justifyContent: "flex-start" }}>
+      <div className="d21-card-actions is-start">
         <Button onClick={props.onCancel}>Cancel</Button>
         <Button kind="primary" disabled={props.busy || !name.trim()} onClick={() => void props.onSave(name.trim(), order)}>Save group</Button>
       </div>
@@ -336,7 +336,7 @@ function ContactImport(props: { client: ApiClient; jurisdictionId: string; onImp
   });
   return (
     <Panel title="Import from CSV">
-      <fieldset disabled={action.busy} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 10 }}>
+      <fieldset disabled={action.busy} className="contacts-fieldset">
         <label className="contacts-field">CSV file
           <input type="file" accept=".csv,text/csv" onChange={(e) => {
             const file = e.target.files?.[0];

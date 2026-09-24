@@ -1,0 +1,16 @@
+.admin-tab { display: grid; gap: 14px; min-width: 0; }
+.admin-field { display: flex; flex-direction: column; gap: 4px; }
+.admin-input { font: inherit; min-height: 44px; padding: 6px; color: var(--eoc-text); background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: 4px; }
+.admin-input.is-bounded { max-width: 100%; }
+.admin-input.is-fill { width: 100%; min-width: 0; box-sizing: border-box; }
+.admin-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.admin-wrap { min-width: 0; overflow-wrap: anywhere; }
+.admin-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.admin-pair { display: flex; gap: 8px; }
+.admin-end { align-self: end; }
+.admin-wide-fieldset { border: 0; display: grid; gap: 8px; grid-column: 1 / -1; margin: 0; padding: 0; }
+.admin-section { display: grid; gap: 8px; min-width: 0; }
+.admin-section > h3 { margin: 0; font-size: 1em; }
+.admin-scroll { overflow-x: auto; min-width: 0; }
+.admin-label { display: grid; gap: 4px; }
+.admin-stack { display: grid; gap: 12px; min-width: 0; }

@@ -3,6 +3,7 @@ import { Button, EnumSelect, Panel, TextField } from "../design/components.js";
 import type { ApiClient, PositionRef } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import { ErrorNote, Loading } from "../app/screens/parts.js";
+import "./admin.css";
 
 /**
  * Positions and who holds them. Assign adds a holder, reassign replaces every
@@ -31,7 +32,7 @@ export function Positions(props: { client: ApiClient; jurisdictionId: string }) 
   if (positions.error) return <ErrorNote message={positions.error} />;
   if (!positions.data || !holders.data) return <Loading label="Loading positions…" />;
   return (
-    <div style={{ display: "grid", gap: 14, minWidth: 0 }}>
+    <div className="admin-tab">
       {error ? <p className="d21-error" role="alert">{error}</p> : null}
       {notice ? <p role="status">{notice}</p> : null}
       <p className="d21-muted">Assign adds a holder. Reassign replaces the current holders at shift change. Revoke ends one person's assignment; someone already acting in the position keeps it until they sign out of it.</p>
@@ -52,7 +53,7 @@ export function Positions(props: { client: ApiClient; jurisdictionId: string }) 
         ))}
       </ul>
       <Panel title="Add a position">
-        <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 12 }}>
+        <fieldset disabled={busy} className="eoc-fieldset eoc-stack">
           <div className="d21-form-grid">
             <TextField label="Position title" value={title} onChange={setTitle} required />
             <TextField label="Short code" value={key} onChange={setKey} required />
@@ -92,15 +93,15 @@ function PositionCard(props: {
           <span>{props.holders.length === 0 ? "Vacant" : `Held by ${props.holders.map((h) => h.displayName).join(", ")}`}</span>
         </div>
       </div>
-      <fieldset disabled={props.busy} style={{ border: 0, padding: 0, margin: 0, gridColumn: "1 / -1", display: "grid", gap: 8 }}>
-        {options.length > 0 ? <div className="d21-card-actions" style={{ alignItems: "flex-end", justifyContent: "flex-start" }}>
+      <fieldset disabled={props.busy} className="admin-wide-fieldset">
+        {options.length > 0 ? <div className="d21-card-actions is-start is-bottom">
           <EnumSelect label={`Person for ${props.position.title}`} values={options.map((o) => o.personId)}
             labels={Object.fromEntries(options.map((o) => [o.personId, o.displayName]))}
             value={chosen} onChange={setPersonId} />
           <Button onClick={() => props.onAssign(chosen, false)}>Assign</Button>
           {props.holders.length > 0 ? <Button onClick={() => props.onAssign(chosen, true)}>Reassign</Button> : null}
         </div> : null}
-        {props.holders.length > 0 ? <div className="d21-card-actions" style={{ justifyContent: "flex-start" }}>
+        {props.holders.length > 0 ? <div className="d21-card-actions is-start">
           {props.holders.map((h) => (
             <Button key={h.personId} kind="danger" onClick={() => props.onRevoke(h.personId, h.displayName)}>
               Revoke {h.displayName}

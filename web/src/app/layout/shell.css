@@ -254,6 +254,7 @@
 .eoc-shell-drawer:not([data-open]) { display: none; }
 .eoc-shell-drawer > header { min-height: 54px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; background: var(--eoc-surface); border-bottom: 1px solid var(--eoc-border); }
 .eoc-shell-drawer h2 { margin: 0; color: var(--eoc-text-strong); font-size: 16px; }
+.eoc-shell-drawer .eoc-dock-heading, .eoc-dock-heading { margin: 0 0 8px; font-size: 1em; }
 .eoc-shell-drawer > header button { width: 40px; padding: 0; font-size: 22px; }
 .eoc-shell-drawer-content { min-width: 0; min-height: 0; overflow: auto; padding: 12px; display: grid; align-content: start; gap: 16px; }
 .eoc-shell-drawer-context-controls { display: grid; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--eoc-border); }

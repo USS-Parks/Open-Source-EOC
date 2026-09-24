@@ -28,6 +28,20 @@ const WAV = Buffer.concat([Buffer.from("RIFF", "ascii"), Buffer.from([44, 0, 0, 
   Buffer.from([16, 0, 0, 0, 1, 0, 1, 0, 64, 31, 0, 0, 64, 31, 0, 0, 1, 0, 8, 0]), Buffer.from("data", "ascii"),
   Buffer.from([8, 0, 0, 0, 128, 128, 128, 128, 128, 128, 128, 128])]);
 
+/** For each search box, whether its icon lies inside its input, left of where the typed text starts. */
+function searchIconsInInputs(boxes: unknown[]): boolean[] {
+  type Box = { left: number; right: number; top: number; bottom: number };
+  type Found = { getBoundingClientRect(): Box };
+  const view = globalThis as unknown as { getComputedStyle(element: Found): { paddingLeft: string } };
+  return boxes.map((box) => {
+    const scope = box as { querySelector(selector: string): Found };
+    const input = scope.querySelector("input");
+    const [icon, field] = [scope.querySelector("svg").getBoundingClientRect(), input.getBoundingClientRect()];
+    return icon.top >= field.top && icon.bottom <= field.bottom && icon.left >= field.left
+      && icon.right <= field.left + parseFloat(view.getComputedStyle(input).paddingLeft);
+  });
+}
+
 /** Tap the open capture map at fractions of its width and height, waiting for each point to register. */
 async function tapMap(group: Locator, spots: ReadonlyArray<readonly [number, number]>): Promise<void> {
   const canvas = group.locator('[data-testid="cop-map"] canvas');
@@ -125,6 +139,8 @@ describe("field depth in the smart form runner", () => {
     await tapMap(area, [[0.4, 0.35], [0.6, 0.35], [0.5, 0.6]]);
     await area.getByRole("button", { name: "Close polygon" }).click();
     await area.getByText(/4 points placed, polygon closed/).waitFor();
+    // The form's narrow map keeps its search icons inside their inputs.
+    expect(await area.locator(".eoc-cop-filter, .eoc-cop-find").evaluateAll(searchIconsInInputs)).toEqual([true, true]);
     await page.screenshot({ path: join(SHOTS, "field-depth-polygon-light-1440.png"), fullPage: false });
     await area.getByRole("button", { name: "Stop drawing" }).click();
 

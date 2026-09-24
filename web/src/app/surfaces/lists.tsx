@@ -27,13 +27,13 @@ export function BoardsIndex(props: {
               <tr key={b.id}>
                 <td>{b.title}</td>
                 <td>
-                  <code style={{ color: "var(--eoc-text-muted)" }}>{b.templateKey}</code>
+                  <code className="eoc-muted">{b.templateKey}</code>
                 </td>
                 <td>
                   {b.hasGeometry ? (
                     <StatusBadge status="info">layer</StatusBadge>
                   ) : (
-                    <span style={{ color: "var(--eoc-text-muted)" }}>—</span>
+                    <span className="eoc-muted">—</span>
                   )}
                 </td>
                 <td>

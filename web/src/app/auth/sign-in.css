@@ -1,0 +1,7 @@
+/* Sign-in and the two-step sign-in step. */
+.sign-in-frame { display: grid; min-height: 100vh; padding: 16px; place-items: center; }
+.sign-in-box { width: min(380px, 100%); }
+.sign-in-box.is-wide { width: min(420px, 100%); }
+.sign-in-lead { margin-top: 0; }
+.sign-in-code { font-family: var(--eoc-font-mono, monospace); overflow-wrap: anywhere; }
+.sign-in-codes { columns: 2; margin: 0 0 16px; }

@@ -3,6 +3,7 @@ import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../design/com
 import type { ApiClient, BoardListItem, NotificationChannel, NotificationRule, NotificationRuleInput } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import { ErrorNote, Loading } from "../app/screens/parts.js";
+import "./admin.css";
 
 type ChannelKind = NotificationChannel["kind"];
 type Draft = Readonly<Record<string, string>>;
@@ -57,11 +58,6 @@ const CONDITION_LABELS: Readonly<Record<NotificationRuleInput["condition"]["op"]
   eq: "A field equals a value",
   changed_to: "A field changes to a value",
 };
-const INPUT_STYLE = {
-  font: "inherit", minHeight: 44, padding: 6, borderRadius: 4, border: "1px solid var(--eoc-border)",
-  background: "var(--eoc-surface)", color: "var(--eoc-text)",
-} as const;
-
 function wholeNumber(text: string, label: string, min: number, max: number): number {
   const value = Number(text.trim());
   if (!Number.isInteger(value) || value < min || value > max) throw new Error(`${label}: enter a whole number from ${min} to ${max}.`);
@@ -189,14 +185,14 @@ export function Notifications(props: { client: ApiClient; jurisdictionId: string
   };
 
   return (
-    <div style={{ display: "grid", gap: 14, minWidth: 0 }}>
+    <div className="admin-tab">
       <Panel title="Webhook and push allowlist">
         <p className="d21-muted">Webhook and push channels reach only these destinations. Enter one per line: an https origin such as https://hooks.example.org, a host suffix such as *.example.org, or an http loopback origin. With no entries nothing external is reachable, and removing a destination fails what is still queued for it.</p>
         {allowlist.error ? <ErrorNote message={allowlist.error} /> : null}
         {!allowlist.data && !allowlist.error ? <Loading label="Loading the allowlist…" /> : null}
-        {allowlist.data ? <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 12 }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>Allowed destinations
-            <textarea rows={4} value={entries} onChange={(e) => setEntries(e.target.value)} style={INPUT_STYLE} />
+        {allowlist.data ? <fieldset disabled={busy} className="eoc-fieldset eoc-stack">
+          <label className="admin-field">Allowed destinations
+            <textarea rows={4} value={entries} onChange={(e) => setEntries(e.target.value)} className="admin-input" />
           </label>
           <div className="d21-toolbar">
             <span className="d21-muted">{allowlist.data.updatedAt ? `Last changed ${new Date(allowlist.data.updatedAt).toLocaleString()}.` : "Never set."} Each change is recorded in the audit trail.</span>
@@ -209,15 +205,15 @@ export function Notifications(props: { client: ApiClient; jurisdictionId: string
         {rules.error ? <ErrorNote message={rules.error} /> : null}
         {!rules.data && !rules.error ? <Loading label="Loading the rules…" /> : null}
         {rules.data && rules.data.length === 0 ? <p className="d21-muted">No notification rules yet.</p> : null}
-        {rules.data?.length ? <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
+        {rules.data?.length ? <ul className="admin-list">
           {rules.data.map((rule) => {
             const summary = ruleSummary(rule);
             return (
               <li key={rule.id} aria-label={`Rule: ${summary}`} className="d21-toolbar">
-                <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+                <span className="admin-wrap">
                   <StatusBadge status={rule.enabled ? "success" : "unknown"}>{rule.enabled ? "Active" : "Paused"}</StatusBadge> {summary}
                 </span>
-                <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <span className="admin-actions">
                   {removing === rule.id ? <>
                     <Button kind="danger" disabled={busy} onClick={() => void removeRule(rule)}>Confirm removal</Button>
                     <Button onClick={() => setRemoving(null)}>Keep rule</Button>
@@ -234,7 +230,7 @@ export function Notifications(props: { client: ApiClient; jurisdictionId: string
         {feedback("rules")}
       </Panel>
       <Panel title={editing ? "Change a notification rule" : "Add a notification rule"}>
-        <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 12 }}>
+        <fieldset disabled={busy} className="eoc-fieldset eoc-stack">
           <div className="d21-form-grid">
             <EnumSelect label="Board" values={["", ...props.boards.map((b) => b.id)]} value={boardId} onChange={setBoardId}
               labels={{ "": "Any board", ...Object.fromEntries(props.boards.map((b) => [b.id, b.title])) }} />
@@ -277,7 +273,7 @@ export function Notifications(props: { client: ApiClient; jurisdictionId: string
           </fieldset>
           <div className="d21-toolbar">
             <span className="d21-muted">Deliveries past the cap are counted, not sent. Webhook and push destinations must be on the allowlist.</span>
-            <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <span className="admin-actions">
               <Button onClick={() => setChannels((current) => [...current, { kind: "inapp", draft: {} }])}>Add channel</Button>
               {editing ? <Button onClick={() => { setEditing(null); setChannels([{ kind: "inapp", draft: {} }]); }}>Cancel change</Button> : null}
               <Button kind="primary" onClick={() => void saveRule()}>{editing ? "Save rule" : "Create rule"}</Button>
@@ -291,7 +287,7 @@ export function Notifications(props: { client: ApiClient; jurisdictionId: string
         <p className="d21-token" aria-label="Webhook signing secret">{secret}</p>
         <div className="d21-toolbar">
           <span className="d21-muted" role="status">{copied}</span>
-          <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <span className="admin-actions">
             <Button onClick={copy}>Copy secret</Button>
             <Button kind="quiet" onClick={() => setSecret(null)}>I have stored the secret</Button>
           </span>

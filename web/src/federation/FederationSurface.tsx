@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../design/components.js";
 import { Icon } from "../design/icons/index.js";
 import "../datasets/datasets.css";
+import "./federation.css";
 import type { ApiClient, BoardListItem } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import { EmptyState, ErrorNote, Loading, Scroll, SurfaceHeader } from "../app/screens/parts.js";
@@ -69,7 +70,7 @@ function Federation(props: { client: ApiClient; jurisdictionId: string; boards: 
         {notice ? <p role="status">{notice}</p> : null}
 
         <Panel title="Register a partner">
-          <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 12 }}>
+          <fieldset disabled={busy} className="eoc-fieldset eoc-stack">
             <TextField label="Partner name" value={name} onChange={setName} required />
             <div className="d21-toolbar">
               <span className="d21-muted">Registering issues the token the partner presents when it delivers to this instance.</span>
@@ -85,11 +86,11 @@ function Federation(props: { client: ApiClient; jurisdictionId: string; boards: 
             </div>
           </fieldset>
           {issued ? (
-            <section className="d21-token" aria-label="New partner token" style={{ display: "grid", gap: 8, marginTop: 12 }}>
+            <section className="d21-token federation-token" aria-label="New partner token">
               <strong>Token for {issued.name}, shown once</strong>
               <p className="d21-callout">Copy this token now. It cannot be shown again: only its hash is stored. Give it to the {issued.name} administrator, who enters it as the push link token on their instance.</p>
               <code>{issued.token}</code>
-              <div className="d21-card-actions" style={{ justifyContent: "flex-start" }}>
+              <div className="d21-card-actions is-start">
                 <Button onClick={() => copy(issued.token)}>Copy token</Button>
                 <Button kind="primary" onClick={() => { setIssued(null); setCopied(""); }}>I have saved the token</Button>
                 {copied ? <span role="status">{copied}</span> : null}
@@ -102,7 +103,7 @@ function Federation(props: { client: ApiClient; jurisdictionId: string; boards: 
           {status.error && !status.data ? <ErrorNote message={status.error} /> : null}
           {!status.data && !status.error ? <Loading label="Loading partners…" /> : null}
           {status.data?.peers.length === 0 ? <p className="d21-muted">No partners registered yet.</p> : null}
-          <ul className="d21-readiness-list" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
+          <ul className="d21-readiness-list is-single">
             {(status.data?.peers ?? []).map((peer) => (
               <PeerCard key={peer.id} peer={peer} client={props.client} boards={props.boards} busy={busy} run={run} />
             ))}
@@ -111,7 +112,7 @@ function Federation(props: { client: ApiClient; jurisdictionId: string; boards: 
 
         <Panel title="Received from partners">
           {status.data?.received.length === 0 ? <p className="d21-muted">Nothing received yet. Batches a partner pushes to this instance appear here.</p> : null}
-          <ul className="d21-readiness-list" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
+          <ul className="d21-readiness-list is-single">
             {(status.data?.received ?? []).map((batch) => (
               <li key={`${batch.at}-${batch.boardId}`} className="d21-readiness-row" aria-label={`Received from ${batch.peer}`}>
                 <div className="d21-readiness-title">
@@ -124,7 +125,7 @@ function Federation(props: { client: ApiClient; jurisdictionId: string; boards: 
         </Panel>
 
         <Panel title="Resource escalation">
-          <p className="d21-muted" style={{ margin: 0 }}>Resource escalation keeps no stored targets. Whoever escalates a request supplies the higher tier's name, address and peer token with that escalation; it is sent once, directly, and recorded on the request's chronology. It does not use the partner links on this screen.</p>
+          <p className="d21-muted">Resource escalation keeps no stored targets. Whoever escalates a request supplies the higher tier's name, address and peer token with that escalation; it is sent once, directly, and recorded on the request's chronology. It does not use the partner links on this screen.</p>
         </Panel>
       </div>
     </Scroll>
@@ -149,7 +150,7 @@ function PeerCard(props: { peer: PeerStatus; client: ApiClient; boards: readonly
       <div className="d21-readiness-title">
         <div><strong>{peer.name}</strong><span>{linkLabel(peer)}</span></div>
       </div>
-      <span style={{ alignSelf: "start" }}>
+      <span className="d21-readiness-badge">
         <StatusBadge status={!linked ? "unknown" : waiting ? "warning" : "success"}>
           {!linked ? "Not linked" : waiting ? `${waiting} waiting` : "Up to date"}
         </StatusBadge>
@@ -159,13 +160,13 @@ function PeerCard(props: { peer: PeerStatus; client: ApiClient; boards: readonly
         <div><dt>Shared boards</dt><dd>{peer.boards.length}</dd></div>
         <div><dt>Waiting to send</dt><dd>{waiting}</dd></div>
       </dl>
-      <ul className="d21-card-grid" style={{ gridColumn: "1 / -1" }}>
+      <ul className="d21-card-grid federation-wide">
         {peer.boards.map((board) => <SharedBoard key={board.id} board={board} peer={peer.name} linked={linked} />)}
       </ul>
-      <fieldset disabled={props.busy} style={{ border: 0, padding: 0, margin: 0, gridColumn: "1 / -1", display: "grid", gap: 8 }}>
+      <fieldset disabled={props.busy} className="federation-link">
         <details>
           <summary>Set push link</summary>
-          <div className="d21-form-grid" style={{ marginTop: 8 }}>
+          <div className="d21-form-grid federation-fields">
             <TextField label="Partner address" value={endpointUrl} onChange={setEndpointUrl} required />
             <TextField label="Token issued by the partner" type="password" value={token} onChange={setToken} required />
           </div>
@@ -182,7 +183,7 @@ function PeerCard(props: { peer: PeerStatus; client: ApiClient; boards: readonly
         <details>
           <summary>Share a board</summary>
           {options.length === 0 ? <p className="d21-muted">Every board in this jurisdiction is already shared with {peer.name}.</p> : <>
-            <div className="d21-form-grid" style={{ marginTop: 8 }}>
+            <div className="d21-form-grid federation-fields">
               <EnumSelect label="Board" values={options.map((board) => board.id)}
                 labels={Object.fromEntries(options.map((board) => [board.id, board.title]))}
                 value={chosen} onChange={setBoardId} />

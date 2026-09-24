@@ -215,6 +215,14 @@
   overflow-x: auto;
 }
 
+.iap-form-preview .eoc-table th,
+.iap-form-preview .eoc-table td {
+  border: 1px solid var(--eoc-border);
+  padding: 5px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
 .iap-lineage {
   display: grid;
   gap: 7px;

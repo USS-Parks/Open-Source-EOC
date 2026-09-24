@@ -5,6 +5,7 @@ import { Icon } from "../../design/icons/Icon.js";
 import type { ApiClient, BoardListItem } from "../api/client.js";
 import { Loading } from "../screens/parts.js";
 import { BoardSurface } from "./BoardSurface.js";
+import "./field-reports.css";
 
 /** The standard board template that field capture, Smart Forms and offline sync write reports to. */
 const FIELD_REPORTS_TEMPLATE = "field_reports";
@@ -38,12 +39,12 @@ export function FieldReportsSurface(props: {
   }
   return (
     <>
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "end", gap: 12, padding: "16px 16px 0" }}>
-        <p style={{ flex: "1 1 280px", margin: 0, color: "var(--eoc-text-muted)" }}>
+      <div className="field-reports-bar">
+        <p>
           Reports from Smart Forms, field capture and offline sync arrive here. Select a report to open its record.
         </p>
         {candidates.length > 1 ? (
-          <label style={{ display: "grid", gap: 4 }}>
+          <label>
             Field Reports board
             <select value={board.id} onChange={(event) => setChosen(event.target.value)}>
               {candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.title}</option>)}

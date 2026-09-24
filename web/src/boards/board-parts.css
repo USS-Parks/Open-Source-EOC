@@ -1,0 +1,20 @@
+/* The board screen and its record detail. */
+.board-surface { display: grid; gap: 12px; min-width: 0; }
+.board-record { display: grid; gap: 14px; }
+.board-record-heading { font-size: 0.9rem; margin: 0 0 6px; }
+
+/* A record's workflow panel. */
+.board-workflow,
+.board-workflow-transitions { display: grid; gap: 10px; }
+.board-workflow-subtitle { font-size: 0.82rem; margin: 4px 0; }
+.board-workflow-group { display: grid; gap: 6px; }
+.board-workflow-list { display: grid; gap: 8px; margin: 0; padding-left: 18px; }
+.board-workflow-action,
+.board-workflow-due { display: grid; gap: 6px; justify-items: start; }
+.board-workflow-due { gap: 4px; }
+.board-workflow-history { margin: 0; padding-left: 18px; }
+.board-workflow-picker { width: 100%; }
+
+/* A point field typed as longitude and latitude. */
+.board-point-legend { margin-bottom: 4px; }
+.board-point-row { display: flex; gap: 8px; }

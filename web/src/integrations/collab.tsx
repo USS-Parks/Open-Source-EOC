@@ -5,6 +5,7 @@ import { ActionButton } from "../design/controls.js";
 import type { ApiClient, CollabBackendInput, CollabStatus } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import "../datasets/datasets.css";
+import "./integrations.css";
 
 /**
  * Collaboration channels, shown only where the collab integration runs: the
@@ -37,7 +38,7 @@ export function useAction() {
   };
   const feedback = <>
     {error ? <p className="d21-error" role="alert">{error}</p> : null}
-    {notice ? <p role="status" style={{ margin: "8px 0 0" }}>{notice}</p> : null}
+    {notice ? <p role="status" className="integrations-status">{notice}</p> : null}
   </>;
   return { busy, run, feedback };
 }
@@ -93,11 +94,11 @@ function CollabForm(props: { client: ApiClient; jurisdictionId: string; status: 
   };
   return (
     <form onSubmit={save}>
-      <p className="d21-muted" style={{ marginBottom: 12 }}>
+      <p className="d21-muted is-lead">
         <StatusBadge status={inUse(status) ? "success" : "unknown"}>{inUse(status) ? "In use" : "Not in use"}</StatusBadge>{" "}
         {backendLine(status)}
       </p>
-      <fieldset disabled={busy !== null} className="d21-form-grid" style={{ border: 0, margin: 0, padding: 0 }}>
+      <fieldset disabled={busy !== null} className="d21-form-grid">
         <EnumSelect label="Chat backend" values={Object.keys(BACKENDS)} labels={BACKENDS} value={kind} onChange={setKind} />
         <TextField label="Chat server address" value={baseUrl} onChange={setBaseUrl} required />
         {kind === "matrix" ? <TextField label="Matrix homeserver domain" value={homeserver} onChange={setHomeserver} /> : null}
@@ -107,7 +108,7 @@ function CollabForm(props: { client: ApiClient; jurisdictionId: string; status: 
             ? "An access token is stored. It is never shown; leave the field blank to keep it."
             : "No access token is stored."}
         </p>
-        <label className="d21-form-grid-wide" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <label className="d21-form-grid-wide eoc-inline">
           <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
           Use this backend for incident channels
         </label>
@@ -153,7 +154,7 @@ export function IncidentCollaboration(props: {
         There is one channel for the whole incident and one per ICS section, with members drawn from the position holders.
       </p>
       {props.canAdmin ? (
-        <div className="d21-toolbar" style={{ justifyContent: "flex-start" }}>
+        <div className="d21-toolbar is-start">
           {props.closed ? null : <>
             <ActionButton kind="primary" loading={busy === "provision"} loadingLabel="Setting up…" disabled={busy !== null}
               onClick={() => void run("provision", async () => {
@@ -177,8 +178,8 @@ export function IncidentCollaboration(props: {
         </div>
       ) : null}
       {props.canWrite && !props.closed ? (
-        <form onSubmit={announce} style={{ marginTop: 12 }}>
-          <fieldset disabled={busy !== null} className="d21-form-grid" style={{ border: 0, margin: 0, padding: 0 }}>
+        <form onSubmit={announce} className="eoc-space-above">
+          <fieldset disabled={busy !== null} className="d21-form-grid">
             <EnumSelect label="Channel" values={["all", ...ICS_SECTIONS.values]} labels={SECTION_LABELS} value={section} onChange={setSection} />
             <TextField label="Announcement" value={text} onChange={setText} required />
             <div className="d21-form-grid-wide">

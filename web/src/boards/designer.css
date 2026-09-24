@@ -113,6 +113,18 @@
   border-left-color: var(--eoc-status-success);
 }
 
+.board-template-versions.is-create {
+  margin-bottom: 14px;
+}
+
+.board-template-create {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
 .board-template-feedback p,
 .board-template-list h2,
 .board-template-list p {
@@ -236,6 +248,34 @@
 
 .board-designer__detail dd {
   margin: 0.25rem 0 0;
+}
+
+.board-designer__error,
+.board-designer p.board-designer__error {
+  color: var(--eoc-status-critical);
+}
+
+.board-designer__fieldset {
+  border: 1px solid var(--eoc-border);
+  border-radius: 4px;
+  padding: 12px;
+}
+
+.board-designer__narrow {
+  display: grid;
+  gap: 8px;
+  max-width: 420px;
+}
+
+.board-designer__column {
+  display: inline-flex;
+  gap: 4px;
+  margin-right: 12px;
+}
+
+.board-designer__file {
+  min-width: 0;
+  width: 100%;
 }
 
 .board-designer__footer {

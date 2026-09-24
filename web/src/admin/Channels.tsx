@@ -3,6 +3,7 @@ import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../design/com
 import type { ApiClient, NotificationChannelKind, NotificationChannelView } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import { ErrorNote, Loading } from "../app/screens/parts.js";
+import "./admin.css";
 
 /**
  * The jurisdiction's email relay and SMS provider, which notification rules
@@ -16,7 +17,7 @@ export function Channels(props: { client: ApiClient; jurisdictionId: string }) {
   if (email.error || sms.error) return <ErrorNote message={email.error ?? sms.error ?? ""} />;
   if (!email.data || !sms.data) return <Loading label="Loading channels…" />;
   return (
-    <div style={{ display: "grid", gap: 14, minWidth: 0 }}>
+    <div className="admin-tab">
       <EmailPanel client={props.client} jurisdictionId={props.jurisdictionId} view={email.data} onSaved={email.reload} />
       <SmsPanel client={props.client} jurisdictionId={props.jurisdictionId} view={sms.data} onChanged={sms.reload} />
     </div>
@@ -54,7 +55,7 @@ function TestSend(props: {
 }) {
   const [to, setTo] = useState("");
   return (
-    <div className="d21-card-actions" style={{ alignItems: "flex-end", justifyContent: "flex-start" }}>
+    <div className="d21-card-actions is-start is-bottom">
       <TextField label={props.label} value={to} onChange={setTo} />
       <Button onClick={() => void props.run(async () => {
         if (!to.trim()) throw new Error(`Enter a ${props.label.toLowerCase()}.`);
@@ -90,7 +91,7 @@ function EmailPanel(props: { client: ApiClient; jurisdictionId: string; view: No
   });
   return (
     <Panel title="Email (SMTP relay)">
-      <fieldset disabled={action.busy} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 12 }}>
+      <fieldset disabled={action.busy} className="eoc-fieldset eoc-stack">
         <div className="d21-form-grid">
           <TextField label="Relay host" value={host} onChange={setHost} required />
           <TextField label="Relay port" value={port} onChange={setPort} required />
@@ -133,7 +134,7 @@ function SmsPanel(props: { client: ApiClient; jurisdictionId: string; view: Noti
   const recorded = props.view.fixtureMessages ?? [];
   return (
     <Panel title="SMS">
-      <fieldset disabled={action.busy} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 12 }}>
+      <fieldset disabled={action.busy} className="eoc-fieldset eoc-stack">
         <div className="d21-form-grid">
           <EnumSelect label="SMS provider" values={["fixture", "http"]} value={provider} onChange={setProvider}
             labels={{ fixture: "Fixture (records messages, sends nothing)", http: "HTTP provider (form POST with basic auth)" }} />
@@ -163,7 +164,7 @@ function SmsPanel(props: { client: ApiClient; jurisdictionId: string; view: Noti
                   <span>{m.body}</span>
                 </div>
               </div>
-              <span style={{ alignSelf: "start" }}><StatusBadge status="unknown">fixture: not sent</StatusBadge></span>
+              <span className="d21-readiness-badge"><StatusBadge status="unknown">fixture: not sent</StatusBadge></span>
             </li>
           ))}
         </ul> : null}

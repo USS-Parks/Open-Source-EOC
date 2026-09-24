@@ -10,5 +10,7 @@
 .contacts-import-rows { display: grid; gap: 6px; list-style: none; margin: 12px 0 0; padding: 0; }
 .contacts-import-rows li { border-top: 1px solid var(--eoc-border); display: grid; gap: 2px; overflow-wrap: anywhere; padding-top: 6px; }
 .contacts-receipts { display: grid; gap: 10px; list-style: none; margin: 0; padding: 0; }
+.contacts-message { margin: 0; white-space: pre-wrap; }
+.contacts-fieldset { border: 0; display: grid; gap: 10px; margin: 0; padding: 0; }
 .contacts-deliveries { display: grid; gap: 4px; list-style: none; margin: 0; padding: 0; }
 .contacts-deliveries li { align-items: baseline; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: .86rem; overflow-wrap: anywhere; }
