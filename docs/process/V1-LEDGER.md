@@ -2462,3 +2462,44 @@ tagging remain separately gated as section 1 of the roster states.
   which the server already reads.
 - **Rollback:** revert both commits, then drop `webeoc_imported_rows` and
   `webeoc_mappings`.
+
+## V1 W6.5: training kit
+
+- **What changed.** New `docs/guides/training/`: a kit index with ground rules
+  (synthetic data only, gaps recorded as observations, the server enforces
+  roles); eight ICS-position job aids (EOC Director, Planning Section Chief,
+  Situation Unit, Operations, Logistics, Public Information Officer, Liaison
+  and administrator, field user), each with account role and acting position,
+  first 15 minutes, every operational period, screens used, what the product
+  does not do and the guide sections to read; a keyboard tabletop on the
+  synthetic demo incident with a situation manual (four modules, six
+  core-capability objectives, HSEEP-shaped and not certified) and a facilitator
+  guide (staff roles, pre-StartEx checklist, expected actions and evidence per
+  inject, P, S, M, U ratings, hotwash, AAR steps); an instructor outline for
+  half-day and full-day classes with a setup checklist and a reset by restoring
+  a golden copy of the demo profile. `docs/guides/README.md` gains one row. No
+  video, as the roster says.
+- **Defaults and deviations.** The standard position set has no EOC Director
+  or Situation Unit Leader: the director acts as Incident Commander with the
+  admin role, because only an admin approves an IAP or records a new period,
+  and the instructor adds a Situation Unit Leader position. Facilities is not
+  used, since the optional integration is off in the demo profile; shelter play
+  uses the Wildfire Shelters board. Mass notification is in-app only. The
+  half-day class leaves out module four. Gaps are stated as found in the code:
+  no screen field for objectives or the ICS-208 safety message; one current
+  operational period per incident; Tasks cannot add a task; one seeded
+  organization, so no partner play; unsubmitted JIC drafts are not listed; the
+  IAP's ICS-201, ICS-211 and ICS-215 read boards, not Resources requests or
+  Staffing check-ins; no radio communications template, so the ICS-205
+  assembles empty; the JIC drafter's panel does not show a decision recorded in
+  another session.
+- **Schema, contract, dependencies:** none.
+- **Verification.** The writer checked the 13 touched files with a scratch
+  script: 62 relative links resolve, no anchors, no em-dashes, no roster
+  identifiers; claims were checked against the named source files. The
+  integrating session ran `node scripts/check-links.mjs` after staging, ok, 85
+  files, and again after rebasing onto `cef613d`, ok, 86 files.
+- **Evidence level:** document.
+- **Deferred:** video; a separate inject-card file (cards are cut from the
+  situation manual's tables); a launcher note on the admin MFA switch.
+- **Rollback:** revert the commit.
