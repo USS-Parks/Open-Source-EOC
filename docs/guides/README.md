@@ -26,6 +26,7 @@ substitute. Re-select context before acting.
 | Moderate damage reports and prepare declaration support | [Damage assessment](./DAMAGE-ASSESSMENT.md) |
 | Track facility and shelter status, hospital beds and shelter capacity | [Facilities and shelters](./FACILITIES.md) |
 | Build, run, download and schedule reports over boards | [Reports](./REPORTS.md) |
+| Train staff with job aids and a tabletop exercise | [Training kit](./training/README.md) |
 | Create or revise board schemas | [Board designer guide](./DESIGNER.md) |
 | Move records from WebEOC | [WebEOC migration](./MIGRATION.md) |
 | Configure federation | [Federation setup](./FEDERATION-SETUP.md) |
