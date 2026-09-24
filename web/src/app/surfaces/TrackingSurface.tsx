@@ -150,7 +150,7 @@ export function TrackingSurface(props: { client: ApiClient; jurisdictionId: stri
     <SurfaceHeader title="Tracking & Reunification" />
     <section className="eoc-field-workspace" aria-label="Tracking and reunification">
       <section className="eoc-field-hero">
-        <div><span className="eoc-field-eyebrow">Scan-first custody</span><h1>Keep each handoff attached to one tag</h1>
+        <div><span className="eoc-field-eyebrow">Scan-first custody</span><h2>Keep each handoff attached to one tag</h2>
           <p>Registration and every custody change retain the signed-in operator and server time. Restricted details are not shown here.</p></div>
         <div className={`eoc-field-sync ${online ? "eoc-field-sync--synced" : "eoc-field-sync--offline"}`} role="status">
           <Icon name="tracking" decorative size={20} /><div><strong>{online ? "Online" : "Offline"}</strong>

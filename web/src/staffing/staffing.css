@@ -1,7 +1,6 @@
 .eoc-staffing { display: grid; gap: 16px; min-width: 0; padding: 16px; color: var(--eoc-text); }
 .eoc-staffing-header { padding: 4px 2px; border-bottom: 2px solid var(--eoc-brand-teal, var(--eoc-status-info)); }
 .eoc-staffing-eyebrow { margin: 0 0 4px; color: var(--eoc-text-muted); font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-.eoc-staffing-header h1 { margin: 0; color: var(--eoc-text-strong, var(--eoc-text)); font-size: clamp(1.45rem, 2vw, 2rem); }
 .eoc-staffing-header p:not(.eoc-staffing-eyebrow) { margin: 6px 0 0; color: var(--eoc-text-muted); }
 .eoc-staffing-panel { display: grid; gap: 16px; min-width: 0; }
 .eoc-staffing-panel[hidden] { display: none; }

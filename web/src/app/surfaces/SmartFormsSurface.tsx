@@ -193,7 +193,7 @@ export function SmartFormsSurface(props: SmartFormsSurfaceProps) {
     <SurfaceHeader title="Smart Forms" />
     <section className="eoc-field-workspace" aria-label="Field report capture">
       <section className="eoc-field-hero">
-        <div><span className="eoc-field-eyebrow">Touch field capture</span><h1>Record once, synchronize with attribution</h1>
+        <div><span className="eoc-field-eyebrow">Touch field capture</span><h2>Record once, synchronize with attribution</h2>
           <p>Reports are stored for this person, incident and board before the first synchronization attempt.</p></div>
         <div className={`eoc-field-sync eoc-field-sync--${queueState.phase}`} role="status" aria-live="polite">
           <Icon name="fieldReports" decorative size={20} />

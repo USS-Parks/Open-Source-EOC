@@ -123,6 +123,9 @@ textarea {
   color: var(--eoc-brand-teal);
 }
 
+/* Text for assistive technology alone: a section name the page header already shows. */
+.eoc-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
 /* Button. The minimum height is the glove and touchscreen target, so field
    users in PPE can hit it. */
 button.eoc-btn.is-quiet,
@@ -139,8 +142,10 @@ button.eoc-btn.is-danger {
   cursor: pointer;
 }
 button.eoc-btn.is-primary {
-  color: var(--eoc-surface);
-  background: var(--eoc-text);
+  color: var(--eoc-action-text);
+  background: var(--eoc-action);
+  border-color: var(--eoc-action-border);
+  font-weight: 600;
 }
 button.eoc-btn.is-danger {
   color: var(--eoc-status-critical);

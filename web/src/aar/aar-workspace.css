@@ -7,7 +7,6 @@
   color: var(--eoc-text);
 }
 
-.eoc-aar h1,
 .eoc-aar h2,
 .eoc-aar h3,
 .eoc-aar p { margin-block-start: 0; }
@@ -25,7 +24,7 @@
   gap: 12px;
 }
 
-.eoc-aar-heading h1 { margin: 2px 0 4px; color: var(--eoc-text-strong); font-size: clamp(1.45rem, 2vw, 2rem); }
+.eoc-aar-heading h2 { margin: 2px 0 4px; color: var(--eoc-text-strong); font-size: 20px; }
 .eoc-aar-heading p { margin: 0; color: var(--eoc-text-muted); }
 .eoc-aar-heading label { min-width: 230px; }
 .eoc-aar-eyebrow { color: var(--eoc-brand-teal); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }

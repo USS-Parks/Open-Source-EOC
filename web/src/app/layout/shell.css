@@ -328,8 +328,8 @@
 }
 [data-theme="dark"] .eoc-shell-page-actions button,
 [data-theme="dark"] .eoc-page-action { background: transparent; border-color: #5d7f9e; }
-.eoc-page-action.is-primary { color: #fff; background: #0d7f96; border-color: #0d7f96; }
-[data-theme="dark"] .eoc-page-action.is-primary { color: #fff; background: #1e6f94; border-color: #5fb8e0; }
+.eoc-page-action.is-primary,
+[data-theme="dark"] .eoc-page-action.is-primary { color: var(--eoc-action-text); background: var(--eoc-action); border-color: var(--eoc-action-border); }
 .eoc-shell-context-opener { color: var(--eoc-brand-teal) !important; border-color: var(--eoc-brand-teal) !important; }
 
 .eoc-shell-workspace { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }

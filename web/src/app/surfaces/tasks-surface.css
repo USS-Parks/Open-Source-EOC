@@ -1,7 +1,6 @@
 .eoc-tasks-surface { display: grid; gap: 16px; min-width: 0; padding: 16px; color: var(--eoc-text); }
 .eoc-tasks-header { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 360px); gap: 16px; align-items: end; padding: 4px 2px; border-bottom: 2px solid var(--eoc-brand-teal, var(--eoc-status-info)); }
 .eoc-tasks-eyebrow { margin: 0 0 4px; color: var(--eoc-text-muted); font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-.eoc-tasks-header h1 { margin: 0; color: var(--eoc-text-strong, var(--eoc-text)); font-size: clamp(1.45rem, 2vw, 2rem); }
 .eoc-tasks-header p:not(.eoc-tasks-eyebrow) { margin: 6px 0 0; color: var(--eoc-text-muted); }
 .eoc-tasks-template-note { padding: 10px 12px; border-left: 3px solid var(--eoc-brand-teal, var(--eoc-status-info)); background: var(--eoc-surface-raised); font-size: .86rem; line-height: 1.4; }
 .eoc-tasks-counts { display: flex; flex-wrap: wrap; gap: 10px; }

@@ -67,7 +67,7 @@ describe("staffing in a real browser", () => {
     await page.getByLabel("Password").fill("correct-horse-battery");
     await page.getByRole("button", { name: "Sign in" }).click();
     await page.getByRole("button", { name: "Staffing", exact: true }).click();
-    await page.locator(".eoc-staffing").getByRole("heading", { name: "Staffing", level: 1 }).waitFor();
+    await page.locator(".eoc-staffing").getByRole("heading", { name: "Staffing", level: 2 }).waitFor();
     const panel = page.locator(".eoc-staffing-panel:not([hidden])");
 
     // A badge carries the person's name and the position printed on it.

@@ -379,7 +379,7 @@ export function AarWorkspace(props: AarWorkspaceProps) {
   return (
     <section className="eoc-aar" aria-labelledby="eoc-aar-title">
       <header className="eoc-aar-heading"><div><span className="eoc-aar-eyebrow">Learning and accountability</span>
-        <h1 id="eoc-aar-title">After-action review</h1><p>Connect attributed observations to owned, time-bound improvement work.</p></div>
+        <h2 id="eoc-aar-title">After-action review</h2><p>Connect attributed observations to owned, time-bound improvement work.</p></div>
         <label>Operational period<select value={period} onChange={(event) => setPeriod(event.target.value)}>
           <option value="">All periods</option>{revisions.map((revision) => <option key={revision.revision} value={revision.revision}>{periodLabel(revision)}</option>)}</select></label>
       </header>

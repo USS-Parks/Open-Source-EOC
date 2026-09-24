@@ -22,10 +22,10 @@
 }
 
 .eoc-kit-button.is-primary {
-  color: var(--eoc-brand-teal-text);
-  background: var(--eoc-brand-teal);
-  border: 2px solid var(--eoc-text-strong);
-  font-weight: 750;
+  color: var(--eoc-action-text);
+  background: var(--eoc-action);
+  border: 1px solid var(--eoc-action-border);
+  font-weight: 650;
 }
 
 .eoc-kit-button.is-quiet {

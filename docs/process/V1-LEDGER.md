@@ -4436,3 +4436,39 @@ for writing when this was recorded, so this entry carries the requirement.
 - **Evidence level:** unit, real-database and browser.
 - **Rollback:** revert the commit; migration 0133 only adds nullable columns
   and a check.
+
+## Design fidelity DF5: every other screen
+
+- **What changed.** All 32 rail destinations were captured in both themes at
+  the frames' 1586 by 992 viewport on the North Coast scenario and read
+  against the shell and card language of DF1 to DF4. Two breaks ran across
+  screens and were fixed where they are defined:
+  - Primary buttons: the shared `Button` primary was near-black and the
+    design kit's `ActionButton` primary was a bordered teal, neither the
+    frames' teal. New `action`, `actionText` and `actionBorder` tokens
+    (`web/src/design/tokens.ts`) carry the frames' primary (light #0d7f96,
+    dark #1e6f94 with a #5fb8e0 edge, white labels, both above 4.5:1), and
+    both button kinds and the page actions use them, so every screen's
+    primary action matches the overview's.
+  - Second page titles: Tasks, Chronology and Staffing repeated the page
+    header's title as an in-page heading, and those three plus After-action
+    review, Smart Forms and Tracking used a second `h1` under the shell's.
+    The repeats are now visually hidden `h2` section names, the others are
+    `h2` at card-title size, and Chronology and Staffing no longer nest a
+    `main` inside the shell's. A visually hidden utility joins `base.css`.
+- **Defaults and deviations.** Kept: the working screens keep the context
+  dock (boards, notifications, continuity), which the frames do not show;
+  it is a working part of those screens that closes with its button and
+  reopens from Context, and the overview and the lifelines workspace show
+  none, as set in DF1. Screens whose content the frames do not show keep
+  their own layouts inside the shell's page header and card language.
+- **Schema, contract, dependencies.** None.
+- **Verification.** `pnpm check:static`: pass (303 packages, 98 files). Web and
+  shared unit tests: 114 files, 822 tests, including the button contrast
+  checks against the new tokens in both themes. Browser: `d33-review` (the
+  walk) green, with `tasks`, `chronology`, `staffing` (heading level 2 now),
+  `aar-workspace`, `field-workspaces`, `app-e2e`, `load-retry` and
+  `operator-screens`: 9 files, 20 tests. The light captures were retaken
+  after the fixes and show the single header and teal primaries.
+- **Evidence level:** unit and browser.
+- **Rollback:** revert the commit.

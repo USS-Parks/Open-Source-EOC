@@ -22,6 +22,10 @@ export interface ThemeTokens {
   readonly brandNavyText: string;
   readonly brandTeal: string;
   readonly brandTealText: string;
+  /** Primary actions: the teal button of the canonical frames, its label and its edge. */
+  readonly action: string;
+  readonly actionText: string;
+  readonly actionBorder: string;
   readonly brandSignal: string;
   readonly brandTint: string;
   readonly selection: string;
@@ -49,6 +53,9 @@ export const themes: Readonly<Record<ThemeName, ThemeTokens>> = {
     brandNavyText: "#ffffff",
     brandTeal: "#006c6f",
     brandTealText: "#ffffff",
+    action: "#0d7f96",
+    actionText: "#ffffff",
+    actionBorder: "#0d7f96",
     brandSignal: "#63d5cf",
     brandTint: "#d9efef",
     selection: "#d4eeee",
@@ -74,6 +81,9 @@ export const themes: Readonly<Record<ThemeName, ThemeTokens>> = {
     brandNavyText: "#ffffff",
     brandTeal: "#63d5cf",
     brandTealText: "#062b2d",
+    action: "#1e6f94",
+    actionText: "#ffffff",
+    actionBorder: "#5fb8e0",
     brandSignal: "#63d5cf",
     brandTint: "#123e42",
     selection: "#16484b",
@@ -219,6 +229,9 @@ export function toCssVariables(theme: ThemeName, contrast: ContrastPreference = 
     "--eoc-brand-navy-text": t.brandNavyText,
     "--eoc-brand-teal": t.brandTeal,
     "--eoc-brand-teal-text": t.brandTealText,
+    "--eoc-action": t.action,
+    "--eoc-action-text": t.actionText,
+    "--eoc-action-border": t.actionBorder,
     "--eoc-brand-signal": t.brandSignal,
     "--eoc-brand-tint": t.brandTint,
     "--eoc-selection": t.selection,

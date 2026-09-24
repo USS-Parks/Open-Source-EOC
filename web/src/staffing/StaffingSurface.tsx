@@ -287,10 +287,10 @@ export function StaffingSurface(props: {
     </>,
   };
 
-  return <main className="eoc-staffing">
+  return <section className="eoc-staffing" aria-label="Staffing">
     <header className="eoc-staffing-header">
       <p className="eoc-staffing-eyebrow">{props.incidentName ?? "Whole jurisdiction"}</p>
-      <h1>Staffing</h1>
+      <h2 className="eoc-visually-hidden">Staffing</h2>
       <p>Who is checked in to which position, where the gaps are, and who is scheduled next. Times are local, 24-hour.</p>
     </header>
     <Tabs id="staffing-view" label="Staffing view" value={view} onChange={(next) => setView(next as View)} tabs={VIEWS} />
@@ -298,5 +298,5 @@ export function StaffingSurface(props: {
     {error ? <p className="eoc-staffing-notice is-error" role="alert">{error}</p> : null}
     {VIEWS.map(({ id }) => <section key={id} className="eoc-staffing-panel" role="tabpanel" id={`staffing-view-${id}-panel`}
       aria-labelledby={`staffing-view-${id}-tab`} hidden={view !== id}>{view === id ? panels[id]() : null}</section>)}
-  </main>;
+  </section>;
 }

@@ -142,11 +142,11 @@ export function ChronologySurface(props: {
   const status = response.loading && !response.data ? "loading"
     : response.error && !response.data ? "error" : entries.length === 0 ? "empty" : "ready";
 
-  return <main className="eoc-chronology">
+  return <section className="eoc-chronology" aria-label="Chronology">
     <header className="eoc-chronology-header">
       <div>
         <p className="eoc-chronology-eyebrow">{props.incidentName ?? "Whole jurisdiction"}</p>
-        <h1>Chronology</h1>
+        <h2 className="eoc-visually-hidden">Chronology</h2>
         <p>The attributed, append-only record of actions. A correction is added as a new entry; nothing is edited or removed.</p>
       </div>
       {props.isAdmin ? <div className="eoc-chronology-export" role="group" aria-label="Export the audit trail">
@@ -187,5 +187,5 @@ export function ChronologySurface(props: {
       hasPreviousPage={false} hasNextPage={false} selectedIds={selected} onSelectionChange={setSelected}
       {...(loadMore ? { onLoadMore: loadMore } : {})} />
     </div>
-  </main>;
+  </section>;
 }
