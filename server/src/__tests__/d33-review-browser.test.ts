@@ -657,7 +657,8 @@ describe("integrated visual and accessibility review", () => {
 
   it("shows a server refusal, a lost network, an empty list and a slow load plainly", async () => {
     await page.setViewportSize(WIDE);
-    const requests = "**/api/v1/jurisdictions/*/resource-requests?**";
+    // With an incident selected the list comes from the incident's route, otherwise the jurisdiction's.
+    const requests = (url: URL) => /^\/api\/v1\/(jurisdictions|incidents)\/[^/]+\/resource-requests$/.test(url.pathname);
     await page.route(requests, (route) => route.request().method() === "GET"
       ? route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ error: "not permitted to read resource requests" }) })
       : route.continue());

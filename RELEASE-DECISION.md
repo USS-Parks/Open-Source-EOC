@@ -86,13 +86,20 @@ No line carries a written waiver.
 
 | Decision | Default until Basho says otherwise |
 |---|---|
-| Cross-organization resource requests: may a partner request and the owner assign, and may guests read the resource module (R3, F5) | A request belongs to the organization that receives it; resource reads are members only |
+| May guests read the resource module (F5) | Resource reads are the owner's members and the incident's participants; guests do not read it |
 | Incident lockdown (G-INCLIFE) | Off by default; an administrator applies it per incident; it refuses guest reads only |
 | The version on `GET /api/v1/health` | Shown without sign-in, because `upgrade.sh` reads it; the alternative is the metrics route only |
 | Visual review | The current design stands: dark primary buttons with a light fill and dark label; the review's input border rule and dark border token; D33 findings 15 (two primary button styles), 18 ("Unavailable" for an empty optional field), 21 (the board list's Open column at 390), 24 ("required" in the error color before input) and 25 (no product identity on sign-in) |
 | SAML (G-MFA; section 7 item 3) | TOTP for local accounts, OIDC available, no SAML until an identity provider needs it |
 | The product name (section 7 item 8) | "Open Source EOC", short name "OpenEOC", as the README, installer and web app manifest carry |
 | Federation of incident records (F3) | Not federated, stated as a known limit in the changelog |
+
+Decided since: cross-organization sharing (R3, F5). Basho approved
+`docs/process/PARTNER-SHARING-PSPR-2026-09-24.md` on 2026-09-24: every
+organization on an incident reads its resource requests, positions and
+incident-wide threads; a partner requests from the incident's owner, who
+triages and assigns it; costs stay with the owning organization. The ledger
+receipts "Partner sharing PS1" to "Partner sharing PS5" carry it out.
 
 Also in force and unchanged here: single node (item 4); no patient-level data
 in tracking or facilities (item 5); the PA guide edition behind F8's
@@ -109,8 +116,6 @@ categories; archiving the retired rosters (item 11); branch protection
 - The WebEOC importer moves records only: no value translation, coordinates,
   person, reference or attachment fields, incident tagging, updates or
   `prevdataid` links.
-- The owner's record detail shows no position title or organization for a
-  partner's record.
 - A guest socket that joins between a lockdown or revocation and its re-check
   stays open until it rejoins.
 - A desktop profile started while the Backup action holds its PostgreSQL is

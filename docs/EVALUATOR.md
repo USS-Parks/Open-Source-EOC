@@ -125,12 +125,11 @@ project.
 - Live external data is not connected: FEMA flood zones, a statewide shelter
   feed, census population, parcels for other counties and live sensor feeds.
   The partial rows of the parity matrix name each source.
-- With several organizations in one incident, the owner can assign its own
-  resource request to a partner as supplier, but a partner's own request is
-  received by the partner's organization, where the owner cannot see or assign
-  it. A request belongs to the organization that receives it, and changing
-  that waits on a decision (row R3). The owner's record
-  detail shows no position title or organization for a partner's record.
+- With several organizations in one incident, every organization on it reads
+  the incident's resource requests, positions and incident-wide threads. A
+  partner requests from the incident's owner, who triages and assigns it, and
+  the partner a request is assigned to records its delivery. Costs stay with
+  the organization that owns the request.
 
 The [changelog](../CHANGELOG.md) lists the known limits of each build.
 

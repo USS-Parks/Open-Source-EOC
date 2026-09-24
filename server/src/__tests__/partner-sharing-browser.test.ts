@@ -87,6 +87,19 @@ describe("partner sharing on the North Coast Storm exercise", () => {
     await liaison.context().close();
   });
 
+  it("opens the county's generator request from the liaison's linked action", async () => {
+    const liaison = await signIn("a.brooks@cec.example", NORTH_COAST_PASSWORD);
+    await liaison.locator('select[aria-label="Selected incident"] option:checked', { hasText: "North Coast Storm" }).waitFor({ state: "attached" });
+    await rail(liaison, "ESFs & Lifelines");
+    await liaison.getByRole("button", { name: "Open Energy details" }).click();
+    const drawer = liaison.getByRole("complementary", { name: "Energy" });
+    await drawer.getByText("Logistics Section Chief").waitFor();
+    await drawer.getByRole("button", { name: /Generator request/ }).click();
+    await liaison.getByRole("region", { name: "Generator support for Wendy's Shelter: request history" }).waitFor();
+    await liaison.screenshot({ path: join(SHOTS, "liaison-linked-request.png") });
+    await liaison.context().close();
+  });
+
   it("lets the utility liaison post in an incident-wide thread that the county reads", async () => {
     const liaison = await signIn("a.brooks@cec.example", NORTH_COAST_PASSWORD);
     await liaison.locator('select[aria-label="Selected incident"] option:checked', { hasText: "North Coast Storm" }).waitFor({ state: "attached" });

@@ -53,7 +53,7 @@ what the region shows.
 | Counts | Matches | As frame 01. |
 | Common operating picture | Matches | NAIP imagery under the title band, dashed cyan boundary, closure lines and points, open and planned shelters, key facilities, the command post with "ICP", cameras, the helibase, the legend panel, the layer list (Roads, Incidents, Facilities, Shelters, Weather, Terrain; weather off as in the frame), zoom, north arrow and miles scale. The card frames the whole seeded area, a little wider than the frame's view; facilities close together at this zoom give way by rank (command post first), so the frame's spread of symbols near Eureka is not all visible until one zooms in. |
 | Community Lifelines | Matches | Rows with dot, condition and the impact line under it. |
-| Priority work and recent activity | Matches with data differences | As frame 01. The frame's recent message from a Caltrans liaison is posted by the Operations Section in the scenario: incident threads hold only the owner's members, and opening them to partners is an engine decision left for Basho. |
+| Priority work and recent activity | Matches with data differences | As frame 01. The frame's recent message is posted in the scenario as the frame shows it, by R. Martinez of Caltrans District 1 at 08:51 in the incident-wide "Road status" thread, and reads in the incident's activity. It is the third item there, after the 09:28 shelter update and the 09:18 field report: the two overview frames show different recent pairs, so the build shows the two newest. |
 
 ### Frame 03: ESFs & Lifelines with Energy open, light
 
@@ -65,7 +65,7 @@ what the region shows.
 | Filters | Matches | Incident area, current period, condition. The third filter is labelled "Condition" where the frame's label reads "All conditions", because the label stays true once a condition is chosen. |
 | Lifeline cards | Matches | Tinted by condition, pill, impact line, source and assessed time; Energy selected. "Food, Hydration, Shelter" wraps between words at this width (no break inside a word). Source names are the scenario's organizations ("Cal OES" where the frame writes "CA OES – Law Enforcement"). The Hazardous Materials icon is the registry's drawing, not a biohazard mark. |
 | Related ESF coordination | Matches | Function, activation, coordinator and open missions, Energy's function first. The coordinator column names the coordinating organization where the frame names liaison titles. |
-| Drawer | Matches | Icon, condition, "Assessed 09:35 PDT · Utility liaison", the impact, affected components with icons, the stabilization objective, the next update, "Linked actions (2)", "Update assessment" and "View history". The actions' owners are organizations (Cal OES, CA Energy Commission) where the frame shows "Logistics" and "Utility liaison", "Inspect substation" reads "Planned" where the frame shows "Assigned", and neither action carries a chevron: a partner liaison may not assign county positions or link county requests, which row-level security refuses. The drawer also shows the assessment details under a disclosure and the operational relationships below, which the frame does not show. |
+| Drawer | Matches | Icon, condition, "Assessed 09:35 PDT · Utility liaison", the impact, affected components with icons, the stabilization objective, the next update, "Linked actions (2)", "Update assessment" and "View history". The Energy liaison's actions link the county's generator and substation crew requests and name their owners, "Logistics Section Chief" (the frame abbreviates it "Logistics") and "Utility liaison", each with its status and a chevron that opens the linked request. The drawer also shows the assessment details under a disclosure and the operational relationships below, which the frame does not show. |
 
 ## What each control does
 
@@ -89,7 +89,7 @@ Every control drawn in the frames acts on the live engine; none is decorative.
 | Lifelines workspace | New assessment | Records a new assessment for any lifeline, superseding its standing one. |
 | Lifelines workspace | Filters | Narrow the cards by reported geography and condition; the period filter shows the reports that stood in an earlier period. |
 | Lifelines workspace | Cards | Open the lifeline's drawer. |
-| Drawer | Linked actions | Open the linked resource request when one is attached. |
+| Drawer | Linked actions | Open the linked resource request, for any organization on the incident. |
 | Drawer | Update assessment, View history | Record a revised assessment (with objective and next update), or read the history and record a decision on conflicting reports. |
 | Related ESF coordination | Function names | Open that function's ESF workspace. |
 
@@ -106,11 +106,13 @@ fidelity DF6: gate" in `docs/process/V1-LEDGER.md`.
 
 - Review the side-by-side images and this checklist, and name anything that
   still differs.
-- Incident threads open to participating organizations (the dark frame's
-  Caltrans message) is an engine change that needs a decision.
-- A partner liaison linking county requests or assigning county positions
-  from an assessment is refused by row-level security; allowing it is a
-  permissions decision.
+- Decided and carried out: Basho approved the partner sharing plan
+  (`docs/process/PARTNER-SHARING-PSPR-2026-09-24.md`). Every organization on
+  an incident now reads its requests, positions and incident-wide threads; a
+  partner liaison links county requests and names owners from the incident's
+  positions; the Caltrans liaison's message is its own. The receipts are
+  "Partner sharing PS1" to "Partner sharing PS5" in `docs/process/V1-LEDGER.md`,
+  and the frame 03 image is refreshed.
 - GitHub Actions jobs for these commits did not start: the account reports
   failed payments or a spending limit, which needs attention in GitHub
   billing.

@@ -118,7 +118,8 @@ beforeAll(async () => {
   await page.getByLabel("Password").fill("correct-horse-battery");
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.getByRole("button", { name: "ESFs & Lifelines" }).click();
-  await page.getByRole("button", { name: "ESF coordination" }).click();
+  // Exact: the incident's own name contains "ESF Coordination", and its board rows share that text.
+  await page.getByRole("button", { name: "ESF coordination", exact: true }).click();
   await page.getByRole("heading", { name: "Emergency Support Functions" }).waitFor({ state: "visible" });
 }, 120_000);
 

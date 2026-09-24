@@ -404,7 +404,10 @@ export async function seedNorthCoast(
   const operations = positions.positions.find((position) => position.key === "operations_section_chief");
   if (!operations) throw new Error("the severe storm activation has no Operations Section Chief position");
   await api("lee", at("05:33"), "POST", `/api/v1/positions/${operations.id}/assignments`, { personId: people["nguyen"]!.id });
+  const logistics = positions.positions.find((position) => position.key === "logistics_section_chief");
+  if (!logistics) throw new Error("the severe storm activation has no Logistics Section Chief position");
   const order: readonly RequestState[] = ["submitted", "triaged", "sourcing", "assigned", "deployed"];
+  const requestIds: Record<string, string> = {};
   for (const [index, request] of requests.entries()) {
     const when = at(`07:${String(2 + index * 2).padStart(2, "0")}`);
     const who = request.who ?? (index % 2 === 0 ? "lee" : "nguyen");
@@ -414,6 +417,7 @@ export async function seedNorthCoast(
         origin: "eoc", item: request.item, quantity: 1, priority: request.priority,
         neededBy: iso(request.neededBy, request.days ?? 0), notes: request.notes, incidentId,
       });
+      requestIds[request.item] = created.id;
       const move = (toState: string) => api("lee", when, "POST", `/api/v1/resource-requests/${created.id}/transition`, { toState });
       for (const state of order.slice(1, Math.min(reach, 2) + 1)) await move(state);
       if (reach >= 3) {
@@ -465,14 +469,16 @@ export async function seedNorthCoast(
   // Each supersedes that lifeline's previous assessment, so OP 02's reports
   // stand as history under OP 03's.
   const assessments: Record<string, string> = {};
-  const lifeline = (who: string, when: string, input: Record<string, unknown>, days = 0) =>
+  // An input given as a function is read when the step runs, after the requests it links exist.
+  const lifeline = (who: string, when: string, input: Record<string, unknown> | (() => Record<string, unknown>), days = 0) =>
     later(at(when, days), async () => {
-      const key = input.lifeline as string;
+      const body = typeof input === "function" ? input() : input;
+      const key = body.lifeline as string;
       const prior = assessments[key];
       const created = await api<{ id: string }>(who, at(when, days), "POST", `/api/v1/incidents/${incidentId}/lifeline-assessments`, {
         definitionVersion: 1, assessedAt: iso(when, days), operationalPeriod: "OP 03", confidence: "confirmed",
         components: [], evidence: [], responsibleOrganizationIds: [], actions: [],
-        ...(prior ? { supersedesAssessmentId: prior } : {}), ...input,
+        ...(prior ? { supersedesAssessmentId: prior } : {}), ...body,
       });
       assessments[key] = created.id;
     });
@@ -552,7 +558,7 @@ export async function seedNorthCoast(
     nextUpdateAt: iso("11:00"),
     components: [{ key: "radio", label: "Public safety radio", condition: "stabilizing", affectedGeography: "Eureka", dependencies: ["Power at the repeater site"] }],
   });
-  lifeline("brooks", "09:35", {
+  lifeline("brooks", "09:35", () => ({
     lifeline: "energy", condition: "unstable",
     impactStatement: "Two substations offline. Backup generation supports priority facilities.",
     stabilizationObjective: "Restore power to critical facilities.",
@@ -564,12 +570,16 @@ export async function seedNorthCoast(
     ],
     evidence: [{ kind: "reported", description: "Utility outage report", sourceOrganizationId: organizations["cec"], observedAt: iso("09:30") }],
     responsibleOrganizationIds: [organizations["cec"]],
+    // The liaison links the county's requests and names who is expected to act.
     actions: [
-      // The county's requests are not readable by a partner liaison, so the actions name the work without linking it.
-      { key: "generator_request", title: "Generator request", status: "in_progress", responsibleOrganizationId: organizations["cal-oes"] },
-      { key: "inspect_substation", title: "Inspect substation", status: "planned", responsibleOrganizationId: organizations["cec"] },
+      { key: "generator_request", title: "Generator request", status: "in_progress", responsibleOrganizationId: organizations["cal-oes"],
+        linkedResourceRequestId: requestIds["Generator support for Wendy's Shelter"],
+        assignment: { kind: "position", positionId: logistics.id } },
+      { key: "inspect_substation", title: "Inspect substation", status: "planned", responsibleOrganizationId: organizations["cec"],
+        linkedResourceRequestId: requestIds["Substation inspection crew"],
+        assignment: { kind: "incident_participant", incidentId, participantId: participants["brooks"] } },
     ],
-  });
+  }));
 
   // California ESF coordination for utilities and transportation.
   const esf = (who: string, when: string, input: Record<string, unknown>) =>
@@ -593,14 +603,15 @@ export async function seedNorthCoast(
   });
 
   // The morning's coordination traffic, in time order.
-  // The Operations Section relays Caltrans's crew update to the Planning Section.
+  // The Planning Section opens a road status thread for everyone on the
+  // incident, and the Caltrans liaison posts its crew update there.
   let threadId = "";
   later(at("08:40"), async () => {
     threadId = (await api<{ id: string }>("lee", at("08:40"), "POST", `/api/v1/jurisdictions/${jurisdictionId}/threads`, {
-      kind: "group", title: "Road status", incidentId, members: [{ kind: "person", id: people["nguyen"]!.id }],
+      kind: "group", title: "Road status", incidentId, audience: "incident",
     })).id;
   });
-  later(at("08:51"), () => api("nguyen", at("08:51"), "POST", `/api/v1/threads/${threadId}/messages`, {
+  later(at("08:51"), () => api("martinez", at("08:51"), "POST", `/api/v1/threads/${threadId}/messages`, {
     body: "Caltrans mobilizing additional crews to US-101. ETA 2 hours.",
   }));
   later(at("09:28"), () => update("moreno", at("09:28"), "shelters", shelterIds["Arcata Community Center"]!, { occupancy: 187 }));

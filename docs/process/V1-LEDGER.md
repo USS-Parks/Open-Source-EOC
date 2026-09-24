@@ -4680,3 +4680,51 @@ follow here.
   6, including a partner-mode case. `pnpm check:static` passes.
 - **Evidence level:** unit, real-database and browser.
 - **Rollback:** revert the commit.
+- **Commit:** `476b7bb`.
+
+## Partner sharing PS5: scenario, review and gate
+
+- **What changed.** The North Coast seed uses the new access as the frames
+  do: the Energy liaison's two stabilization actions link the county's
+  generator and substation crew requests and name the Logistics Section Chief
+  and the Utility liaison, and the Planning Section opens an incident-wide
+  "Road status" thread in which R. Martinez, the Caltrans liaison, posts the
+  crew update. `DESIGN-FIDELITY-REVIEW.md` drops the differences this closes
+  (frame 03's drawer now shows both owners, statuses and the chevrons that
+  open the requests; frame 02's Caltrans message is the liaison's own) and
+  records the partner sharing decision as carried out; the frame 03 image is
+  refreshed. The parity matrix (F2, F5, R3 and its partial-row summary), the
+  facet register, `RELEASE-DECISION.md` and `docs/EVALUATOR.md` record what
+  the PS1 to PS4 receipts support, with Basho's request ownership decision
+  cited; R3 stays partial for federated batch attribution only.
+- **Defaults and deviations.** Frame 02's recent pair differs from frame 01's,
+  so the overview shows the two newest items; the Caltrans message is the
+  third, reached by "View all".
+- **Gate findings fixed.** The first full run failed `d33-review-browser`:
+  its refusal walk faked a 403 on the jurisdiction request route only, and
+  since PS1 the Resources screen reads the incident route when an incident is
+  selected; the walk now intercepts both. A later run failed
+  `esf-workspace-browser` on its known intermittent wait, and the error named
+  the cause: the test clicked "ESF coordination" by a loose name match, and
+  the incident's own board rows ("P-LIFE-3 ESF Coordination Exercise: ...")
+  matched whenever the sidebar loaded first; the match is now exact. That
+  closes the open-list item for this wait.
+- **Verification, stated plainly.** `pnpm check:gate` ran four times with the
+  `fidb` tag and did not pass clean in a single run. Run 1: 1,599 of 1,600
+  (`d33-review-browser`, fixed as above). Run 2: 1,596 of 1,600, two files
+  lost their test worker to the Windows fast-fail (exit code 3221226505,
+  `0xC0000409`) recorded at earlier gates; both passed 3 of 3 alone. Run 3:
+  one file failed at setup (`esf-workspace-browser`, fixed as above). Run 4:
+  static checks, the advisory gate (no high or critical) and the desktop
+  tests 27 of 27 pass; the serial suite passed 279 of 280 files and 1,579
+  tests in 1,331 s, and `resource.test.ts` lost its worker to the same
+  fast-fail; alone it passed 8 of 8, and the load benchmark, which the
+  crash cut off, passed 4 of 4. Following the earlier gates' practice, the
+  crashed file is counted green on its isolated retry. The crash itself is
+  not explained; finding it at its root is scheduled in the readiness plan's
+  remaining-checks unit. `partner-sharing-browser.test.ts` passes 4 of 4 (the
+  liaison opens the county's generator request from its linked action); the
+  fidelity harness 2 of 2; `incident-overview.test.ts` 3 of 3.
+- **Evidence level:** unit, real-database, browser and the full serial gate
+  as described.
+- **Rollback:** revert the commit.
