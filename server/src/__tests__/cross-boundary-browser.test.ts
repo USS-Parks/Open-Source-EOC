@@ -76,7 +76,7 @@ async function useDarkTheme(page: Page): Promise<void> {
 async function closedRoads(page: Page, incidentId: string): Promise<number> {
   const response = page.waitForResponse((r) => r.url().includes(`/api/v1/dashboards/${dashboardId}/data?`)
     && r.url().includes(`incidentId=${incidentId}`) && r.status() === 200);
-  await rail(page, "Overview");
+  await rail(page, "Dashboards");
   const snapshot = await (await response).json() as { widgets: Array<{ key: string; value: number }> };
   await page.getByText("Closed roads").first().waitFor();
   return snapshot.widgets.find((w) => w.key === "closed_roads")!.value;

@@ -28,6 +28,27 @@ export const LIFELINE_LABELS: Readonly<Record<LifelineKey, string>> = {
   water_systems: "Water Systems",
 };
 
+/** What each lifeline covers, in the words the overview shows under its name. */
+export const LIFELINE_SCOPES: Readonly<Record<LifelineKey, string>> = {
+  safety_security: "Law enforcement, fire, search & rescue",
+  food_hydration_shelter: "Food access, shelters, mass care",
+  health_medical: "Hospitals, EMS, medical care",
+  energy: "Power generation, transmission, fuel",
+  communications: "Voice, data, internet, public alerts",
+  transportation: "Roads, bridges, ports, airports",
+  hazardous_materials: "Facilities, spills, environmental",
+  water_systems: "Drinking water, wastewater, stormwater",
+};
+
+/** The condition as operators say it: an unstable lifeline is disrupted. */
+const CONDITION_LABELS: Readonly<Record<LifelineCondition, string>> = {
+  stable: "Stable", stabilizing: "Stabilizing", unstable: "Disrupted", unknown: "Unknown",
+};
+
+export function conditionLabel(condition: LifelineCondition): string {
+  return CONDITION_LABELS[condition];
+}
+
 const CONDITIONS = new Set(["stable", "stabilizing", "unstable", "unknown"]);
 const CONFIDENCE = new Set(["confirmed", "estimated", "unknown"]);
 

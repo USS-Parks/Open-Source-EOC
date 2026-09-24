@@ -8,6 +8,8 @@ describe("surface hash routing", () => {
   const cases: readonly Surface[] = [
     { kind: "map" },
     { kind: "map", datasetId: "11111111-1111-4111-8111-111111111111", featureId: "road/closure 7" },
+    { kind: "overview" },
+    { kind: "briefing" },
     { kind: "dashboard" },
     { kind: "dashboard", id: "d1" },
     { kind: "dashboard", id: "d1", filterField: "severity", filterEquals: "critical" },
@@ -59,7 +61,9 @@ describe("surface hash routing", () => {
   it("maps detail surfaces to their rail section", () => {
     expect(sectionOf({ kind: "board", id: "b1" })).toBe("boards");
     expect(sectionOf({ kind: "sitrep", id: "s1" })).toBe("sitreps");
-    expect(sectionOf({ kind: "dashboard" })).toBe("overview");
+    expect(sectionOf({ kind: "dashboard" })).toBe("dashboards");
+    expect(sectionOf({ kind: "overview" })).toBe("overview");
+    expect(sectionOf({ kind: "briefing" })).toBe("overview");
     expect(sectionOf({ kind: "board-design", id: "b1" })).toBe("boards");
     expect(sectionOf({ kind: "periods" })).toBe("operationalPeriods");
     expect(sectionOf({ kind: "field-reports" })).toBe("fieldReports");

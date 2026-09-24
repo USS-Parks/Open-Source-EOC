@@ -4169,3 +4169,93 @@ for writing when this was recorded, so this entry carries the requirement.
   of 2, images refreshed.
 - **Evidence level:** unit, browser and real-database.
 - **Rollback:** revert the commit.
+
+## Design fidelity DF2: incident overview
+
+- **What changed.**
+  - New `web/src/app/surfaces/IncidentOverview.tsx` and
+    `incident-overview.css`: the incident overview after frames 1 and 2 as the
+    rail's Overview (`#/overview`). Four counts (open and urgent requests,
+    active shelters and occupants, field reports and unverified reports,
+    tasks due this operational period), each opening the screen that owns it;
+    the common operating picture card (`IncidentCop.tsx`, the COP map in a new
+    `layout="card"` of `CopMap`, framed on the incident area); the Community
+    Lifelines card, each row opening that lifeline and the header opening the
+    workspace; Priority work (open requests and tasks, urgent first, then in
+    progress, then by due time, each row opening its request or the tasks);
+    Recent activity (newest first, "View all" opening the chronology); the
+    subtitle "Incident area · N participating organizations · Updated HH:MM";
+    "Create report", which composes and freezes a SITREP for the incident and
+    period and opens it; and "Briefing view", the same overview full screen
+    and read-only at `#/briefing`, left with Escape or "Exit briefing". Where
+    the two frames differ in structure (lifeline rows, the work table, the
+    activity list, count layout), each theme renders its own frame's form.
+  - Saved and configured dashboards move to a new rail entry, "Dashboards"
+    (`#/dashboard`), with a new `dashboards` icon; nothing about them changes.
+  - Engine additions the overview reads:
+    - `server/migrations/0132_work_numbers.sql`: identity numbers for resource
+      requests (from 1001, shown REQ-1027) and incident tasks (from 201, shown
+      TASK-204).
+    - Request summaries carry `number`, `neededBy`, `notes` and `createdAt`;
+      request intake on Resources gains "Needed by"; rows show the number and
+      the needed-by time.
+    - Tasks carry `number`, and each assignment its organization's name and
+      the participant or the position's current holders. New
+      `POST /api/v1/incidents/:incidentId/tasks` (the owner's administrators,
+      as for task edits, with a `checklist.task.created` audit event) and a
+      "New task" form on the Tasks screen.
+    - New `server/src/incidents/summary.ts`:
+      `GET /api/v1/incidents/:incidentId/summary` (the counts for a period
+      revision or the current period, under the reader's row-level security)
+      and `GET /api/v1/incidents/:incidentId/activity` (board records written,
+      requests submitted and incident messages, newest first, with the
+      author's organization on the incident, the record's current fields or
+      the message text; for the owner's members, as the chronology is). Types
+      in `shared/src/incidents/overview.ts`; routes in the API contract and
+      `docs/API.md`.
+    - Field Reports template version 2 adds `verified` and an "Unverified
+      reports" view; existing boards keep version 1 until upgraded.
+  - The period chip's hours stay display only: `selectedPeriodLabel` is the
+    period's own label again, as SITREPs and IAPs record it, and a new
+    `selectedPeriodDisplay` carries "OP 03 · 0600–1800 PDT".
+  - The scenario seed verifies field reports as the Planning Section works
+    through them (37 of 46 verified by 09:42), adds four tasks through the new
+    route (12 due in OP 03), sources requests before assigning them, gives D.
+    Nguyen the Operations Section Chief position for county work, and relays
+    the Caltrans crew message in an incident thread.
+  - Native date and time fields show the focus ring whenever focus is inside
+    them (`web/src/design/base.css`); Chrome moves focus through their
+    segments and picker button without matching `:focus-visible` on the field.
+- **Defaults and deviations.** Differences left: the map card's cartography
+  (DF3); Priority work shows the three most pressing urgent requests where the
+  frames show one urgent, one in progress and one not started (the scenario
+  has six urgent requests open, which the frames' own counts also show); one
+  request icon and one task icon where the light frame varies them by kind;
+  the dark frame's recent message from a Caltrans liaison (incident threads
+  hold only the owner's members; the scenario's message is posted by the
+  Operations Section, and a thread open to participating organizations is an
+  engine change left for Basho's decision); recent activity shows the two
+  newest items, the shelter update and the field report, where each frame
+  shows a different pair. The D33 walk now lets a native date or time field
+  take up to seven Tab presses before calling it a trap, since each segment
+  is a stop.
+- **Schema, contract, dependencies.** Migration 0132; request, task and
+  overview types in `@openeoc/shared`; three new routes. No new dependencies.
+- **Verification.** `pnpm check:static`: pass (303 packages, 98 files). Web and
+  shared unit tests: 109 files, 786 tests; new
+  `web/src/app/__tests__/incident-overview.test.tsx` (ordering, wording, both
+  themes with axe, Create report, briefing, participant view). New
+  `server/src/__tests__/incident-overview.test.ts` on a real database: the
+  scenario's counts (24/6, 8/312, 46/9, 12, 7), activity order and
+  organizations, the participant refusal, numbers, and task creation with its
+  403 for a member. Server directory with 3 workers: 159 files, 724 tests, 7
+  failures, all fixed and re-run green: the API document (regenerated),
+  `jic-resources-browser` and `sitrep-briefing-browser` (the overview's
+  briefing class collided with the SITREP briefing's; renamed), and
+  `d33-review-browser` (the date field's ring and segments). Browser tests
+  that opened dashboards through Overview now use Dashboards. `pnpm fidelity`:
+  2 of 2, images refreshed. The same flows were exercised by hand in the dev
+  build: the unverified view lists 9, Create report opened a frozen OP 03
+  SITREP, the briefing presented full screen, and New task added TASK-214.
+- **Evidence level:** unit, real-database and browser.
+- **Rollback:** revert the commit; migration 0132 only adds columns.

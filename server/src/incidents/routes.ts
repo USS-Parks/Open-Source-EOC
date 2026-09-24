@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   IncidentAreaUpdateSchema,
   TaskCompletionRequestSchema,
+  TaskCreateSchema,
   TaskListQuerySchema,
   TaskMetadataPatchSchema,
 } from "@openeoc/shared";
@@ -31,9 +32,11 @@ import {
 } from "../collab/service.js";
 import {
   completeIncidentTask,
+  createIncidentTask,
   listIncidentTasks,
   updateIncidentTask,
 } from "./tasks.js";
+import { getIncidentSummary, listIncidentActivity } from "./summary.js";
 
 const ActivateBody = z.object({
   templateKey: z.string().min(1),
@@ -156,6 +159,29 @@ export function incidentRoutes(
     const filters = TaskListQuerySchema.parse(query);
     return withPerson(sql, req.principal.person.id, (tx) =>
       listIncidentTasks(tx, req.principal, incidentId, filters, page));
+  });
+
+  app.get("/api/v1/incidents/:incidentId/summary", { preHandler: authenticate }, async (req) => {
+    const incidentId = IncidentId.parse((req.params as { incidentId: string }).incidentId);
+    const { periodRevision } = z.object({ periodRevision: z.coerce.number().int().positive().optional() }).strict().parse(req.query);
+    return withPerson(sql, req.principal.person.id, (tx) =>
+      getIncidentSummary(tx, req.principal, incidentId, periodRevision ?? null));
+  });
+
+  app.get("/api/v1/incidents/:incidentId/activity", { preHandler: authenticate }, async (req) => {
+    const incidentId = IncidentId.parse((req.params as { incidentId: string }).incidentId);
+    const { limit } = z.object({ limit: z.coerce.number().int().min(1).max(50).optional() }).strict().parse(req.query);
+    const entries = await withPerson(sql, req.principal.person.id, (tx) =>
+      listIncidentActivity(tx, req.principal, incidentId, limit ?? 10));
+    return { entries };
+  });
+
+  app.post("/api/v1/incidents/:incidentId/tasks", { preHandler: authenticate }, async (req, reply) => {
+    const incidentId = IncidentId.parse((req.params as { incidentId: string }).incidentId);
+    const input = TaskCreateSchema.parse(req.body);
+    const task = await withPerson(sql, req.principal.person.id, (tx) =>
+      createIncidentTask(tx, req.principal, incidentId, input));
+    return reply.status(201).send(task);
   });
 
   app.patch(

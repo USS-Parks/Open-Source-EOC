@@ -200,7 +200,7 @@ export async function seedNorthCoast(
   const participants: Record<string, string> = {};
   const grantExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   for (const person of NORTH_COAST_PEOPLE.filter((candidate) => candidate.incidentPositionTitle)) {
-    const grant = await api<{ id: string }>("lee", at("05:45"), "POST", `/api/v1/incidents/${incidentId}/participants`, {
+    const grant = await api<{ participant: { id: string } }>("lee", at("05:45"), "POST", `/api/v1/incidents/${incidentId}/participants`, {
       organizationSlug: person.organization,
       personEmail: person.email,
       incidentPositionTitle: person.incidentPositionTitle,
@@ -208,7 +208,7 @@ export async function seedNorthCoast(
       expiresAt: grantExpiry,
       reason: "North Coast Storm exercise participation",
     });
-    participants[person.key] = grant.id;
+    participants[person.key] = grant.participant.id;
   }
 
   const incidentBoards = await sql`
@@ -321,63 +321,83 @@ export async function seedNorthCoast(
   ];
   const reporters = ["kim", "moreno", "nguyen", "kim"];
   const lastReport = fieldReports.length - 1;
+  // The Planning Section verifies each report about twelve minutes after it
+  // arrives; the latest nine are still unverified at 09:42.
+  const verifiedReports = fieldReports.length - 9;
   for (const [index, [summary, category, lon, lat]] of fieldReports.entries()) {
     const minute = index === lastReport ? "09:18" : `0${6 + Math.floor(index / 16)}:${String(5 + (index % 16) * 3).padStart(2, "0")}`;
     const when = at(minute);
-    later(when, () => record(index === lastReport ? "kim" : reporters[index % reporters.length]!, when, "field_reports", {
-      summary: index === lastReport ? `${summary}. Photos attached.` : summary,
-      category,
-      location: { type: "Point", coordinates: [lon, lat] },
-    }));
+    let reportId = "";
+    later(when, async () => {
+      reportId = (await record(index === lastReport ? "kim" : reporters[index % reporters.length]!, when, "field_reports", {
+        summary: index === lastReport ? `${summary}. Photos attached.` : summary,
+        category,
+        location: { type: "Point", coordinates: [lon, lat] },
+      })).id;
+    });
+    if (index < verifiedReports) {
+      const verifiedAt = new Date(when.getTime() + 12 * 60 * 1000);
+      later(verifiedAt, () => update("lee", verifiedAt, "field_reports", reportId, { verified: true }));
+    }
   }
 
-  // Resource requests: 24 open, six of them immediate.
-  const requests: ReadonlyArray<{ item: string; notes: string; priority: string; state: string; neededBy: string; days?: number; owner?: string; who?: string }> = [
-    { item: "Clear US-101 debris at the Mad River bridge", notes: "Northbound lanes blocked by debris", priority: "immediate", state: "assigned", neededBy: "12:00", owner: "martinez" },
-    { item: "Generator support for Wendy's Shelter", notes: "Shelter lacks backup power", priority: "immediate", state: "sourcing", neededBy: "12:00", owner: "alvarez" },
-    { item: "Increase shelter capacity in Eureka", notes: "Open a second room at the auditorium", priority: "priority", state: "assigned", neededBy: "18:00", owner: "nguyen", who: "moreno" },
-    { item: "Check access on Westhaven Drive (Trinidad)", notes: "Assess for debris and washouts", priority: "priority", state: "assigned", neededBy: "14:00", owner: "nguyen" },
-    { item: "Deliver additional shelter supplies", notes: "Cots, blankets, hygiene kits", priority: "routine", state: "submitted", neededBy: "18:00", owner: "patel", who: "moreno" },
-    { item: "Pump trucks for the King Salmon flooding", notes: "Two trucks with operators", priority: "immediate", state: "sourcing", neededBy: "11:00" },
-    { item: "Sandbags for the Arcata Marsh gate", notes: "2,000 filled bags", priority: "immediate", state: "triaged", neededBy: "10:30" },
-    { item: "Traffic control for the SR-299 closure", notes: "Flaggers and message boards", priority: "immediate", state: "assigned", neededBy: "10:00", owner: "rkim" },
-    { item: "Tree crew for Old Arcata Road", notes: "Chainsaw team with chipper", priority: "immediate", state: "sourcing", neededBy: "11:30" },
+  // Resource requests: 24 open, six of them immediate. A request is sourced
+  // before it is assigned; an owner is a participating organization's
+  // liaison or, for county work, the Operations Section Chief.
+  type RequestState = "submitted" | "triaged" | "sourcing" | "assigned" | "deployed";
+  const requests: ReadonlyArray<{ item: string; notes: string; priority: string; state: RequestState; neededBy: string; days?: number; owner?: string; who?: string }> = [
+    { item: "Clear US-101 debris at the Mad River bridge", notes: "Northbound lanes blocked by debris", priority: "immediate", state: "deployed", neededBy: "12:00", owner: "martinez" },
+    { item: "Generator support for Wendy's Shelter", notes: "Shelter lacks backup power", priority: "immediate", state: "deployed", neededBy: "12:00", owner: "alvarez" },
+    { item: "Increase shelter capacity in Eureka", notes: "Open a second room at the auditorium", priority: "priority", state: "deployed", neededBy: "18:00", owner: "operations", who: "moreno" },
+    { item: "Check access on Westhaven Drive (Trinidad)", notes: "Assess for debris and washouts", priority: "priority", state: "deployed", neededBy: "14:00", owner: "operations" },
+    { item: "Deliver additional shelter supplies", notes: "Cots, blankets, hygiene kits", priority: "routine", state: "assigned", neededBy: "18:00", owner: "patel", who: "moreno" },
+    { item: "Pump trucks for the King Salmon flooding", notes: "Two trucks with operators", priority: "immediate", state: "sourcing", neededBy: "13:00" },
+    { item: "Sandbags for the Arcata Marsh gate", notes: "2,000 filled bags", priority: "immediate", state: "triaged", neededBy: "13:30" },
+    { item: "Traffic control for the SR-299 closure", notes: "Flaggers and message boards", priority: "immediate", state: "assigned", neededBy: "14:30", owner: "rkim" },
+    { item: "Tree crew for Old Arcata Road", notes: "Chainsaw team with chipper", priority: "immediate", state: "sourcing", neededBy: "15:00" },
     { item: "Fuel for field crew trucks", notes: "Diesel delivery to the county yard", priority: "priority", state: "triaged", neededBy: "13:00" },
     { item: "Tarps for roof repairs", notes: "200 heavy tarps", priority: "priority", state: "submitted", neededBy: "16:00" },
     { item: "Portable toilets for Redwood Acres", notes: "Six units with service", priority: "priority", state: "sourcing", neededBy: "15:00" },
     { item: "Cots for the Arcata Community Center", notes: "60 cots", priority: "priority", state: "assigned", neededBy: "12:30", owner: "patel" },
     { item: "Water tender for Blue Lake", notes: "Potable water while treatment runs on backup power", priority: "priority", state: "triaged", neededBy: "14:30" },
     { item: "Light towers for the Fernbridge inspection", notes: "Two towers", priority: "routine", state: "submitted", neededBy: "17:00" },
-    { item: "Medical supplies for shelter first aid", notes: "Basic kits for eight shelters", priority: "routine", state: "triaged", neededBy: "16:30", owner: "singh" },
+    { item: "Medical supplies for shelter first aid", notes: "Basic kits for eight shelters", priority: "routine", state: "assigned", neededBy: "16:30", owner: "singh" },
     { item: "Interpreters for shelter intake", notes: "Spanish and Hmong", priority: "routine", state: "submitted", neededBy: "17:30" },
-    { item: "Backup radio repeater for the Eureka hills", notes: "Replace the failed repeater site", priority: "priority", state: "sourcing", neededBy: "13:30", owner: "okafor" },
-    { item: "Substation inspection crew", notes: "Two substations offline", priority: "priority", state: "assigned", neededBy: "11:00", owner: "brooks" },
-    { item: "Hazardous materials survey of the Eureka waterfront", notes: "Assess drums moved by flooding", priority: "routine", state: "triaged", neededBy: "15:30", owner: "ortiz" },
-    { item: "Boil water test kits for Blue Lake", notes: "Sampling kits and courier", priority: "routine", state: "submitted", neededBy: "12:00", days: 1, owner: "chen" },
-    { item: "Meals for shelter residents", notes: "Three meals for 320 people", priority: "priority", state: "assigned", neededBy: "11:30", owner: "reyes" },
+    { item: "Backup radio repeater for the Eureka hills", notes: "Replace the failed repeater site", priority: "priority", state: "assigned", neededBy: "13:30", owner: "okafor" },
+    { item: "Substation inspection crew", notes: "Two substations offline", priority: "priority", state: "deployed", neededBy: "11:00", owner: "brooks" },
+    { item: "Hazardous materials survey of the Eureka waterfront", notes: "Assess drums moved by flooding", priority: "routine", state: "assigned", neededBy: "15:30", owner: "ortiz" },
+    { item: "Boil water test kits for Blue Lake", notes: "Sampling kits and courier", priority: "routine", state: "assigned", neededBy: "12:00", days: 1, owner: "chen" },
+    { item: "Meals for shelter residents", notes: "Three meals for 320 people", priority: "priority", state: "deployed", neededBy: "11:30", owner: "reyes" },
     { item: "Pet crates for the Arcata shelter", notes: "30 crates", priority: "routine", state: "submitted", neededBy: "18:00" },
     { item: "Damage assessment team for Humboldt Bay north", notes: "Two-person windshield survey teams", priority: "routine", state: "submitted", neededBy: "12:00", days: 1 },
   ];
-  const flow = ["submitted", "triaged", "sourcing", "assigned"];
+  // D. Nguyen holds the Operations Section Chief position for county work.
+  const operations = positions.positions.find((position) => position.key === "operations_section_chief");
+  if (!operations) throw new Error("the severe storm activation has no Operations Section Chief position");
+  await api("lee", at("05:33"), "POST", `/api/v1/positions/${operations.id}/assignments`, { personId: people["nguyen"]!.id });
+  const order: readonly RequestState[] = ["submitted", "triaged", "sourcing", "assigned", "deployed"];
   for (const [index, request] of requests.entries()) {
     const when = at(`07:${String(2 + index * 2).padStart(2, "0")}`);
     const who = request.who ?? (index % 2 === 0 ? "lee" : "nguyen");
+    const reach = order.indexOf(request.state);
     later(when, async () => {
       const created = await api<{ id: string }>(who, when, "POST", `/api/v1/jurisdictions/${jurisdictionId}/resource-requests`, {
         origin: "eoc", item: request.item, quantity: 1, priority: request.priority,
         neededBy: iso(request.neededBy, request.days ?? 0), notes: request.notes, incidentId,
       });
-      for (const state of flow.slice(1, flow.indexOf(request.state) + 1)) {
-        if (state === "assigned") continue;
-        await api("lee", when, "POST", `/api/v1/resource-requests/${created.id}/transition`, { toState: state });
+      const move = (toState: string) => api("lee", when, "POST", `/api/v1/resource-requests/${created.id}/transition`, { toState });
+      for (const state of order.slice(1, Math.min(reach, 2) + 1)) await move(state);
+      if (reach >= 3) {
+        if (request.owner === "operations") {
+          await api("lee", when, "POST", `/api/v1/resource-requests/${created.id}/assign`, { kind: "position", positionId: operations.id });
+        } else if (request.owner) {
+          await api("lee", when, "POST", `/api/v1/resource-requests/${created.id}/assign`,
+            { kind: "incident_participant", incidentId, participantId: participants[request.owner] });
+        } else {
+          await move("assigned");
+        }
       }
-      if (request.owner && participants[request.owner]) {
-        await api("lee", when, "POST", `/api/v1/resource-requests/${created.id}/assign`,
-          { kind: "incident_participant", incidentId, participantId: participants[request.owner] });
-      }
-      if (request.state === "assigned" && !(request.owner && participants[request.owner])) {
-        await api("lee", when, "POST", `/api/v1/resource-requests/${created.id}/transition`, { toState: "assigned" });
-      }
+      if (reach >= 4) await move("deployed");
     });
   }
 
@@ -388,11 +408,29 @@ export async function seedNorthCoast(
     for (const [index, task] of tasks.tasks.entries()) {
       await api("lee", at("06:25"), "PATCH", `/api/v1/incidents/${incidentId}/tasks/${task.id}`, {
         expectedRevision: task.revision,
-        dueAt: iso(`${String(10 + index).padStart(2, "0")}:00`),
+        dueAt: iso(`${String(8 + index).padStart(2, "0")}:30`),
         ...(index % 3 === 0 ? { status: "in_progress" } : {}),
       });
     }
   });
+  // Tasks the Planning Section adds for the period and the next one.
+  const addedTasks = [
+    { item: "Brief the county board on road closures", dueAt: "13:00", owner: "rkim" },
+    { item: "Confirm shelter staffing for the night shift", dueAt: "16:00", owner: "patel" },
+    { item: "Update the situation report for OP 03", dueAt: "17:00", owner: null },
+    { item: "Conduct damage assessment (Humboldt Bay north)", dueAt: "12:00", days: 1, owner: "alvarez" },
+  ];
+  for (const [index, task] of addedTasks.entries()) {
+    const when = at(`06:${String(40 + index).padStart(2, "0")}`);
+    later(when, () => api("lee", when, "POST", `/api/v1/incidents/${incidentId}/tasks`, {
+      item: task.item,
+      category: "planning",
+      dueAt: iso(task.dueAt, task.days ?? 0),
+      assignment: task.owner
+        ? { kind: "incident_participant", incidentId, participantId: participants[task.owner] }
+        : { kind: "position", positionId: planning.id },
+    }));
+  }
 
   // Lifeline assessments, each by the liaison of the reporting organization.
   const lifeline = (who: string, when: string, input: Record<string, unknown>) =>
@@ -471,6 +509,16 @@ export async function seedNorthCoast(
   });
 
   // The morning's coordination traffic, in time order.
+  // The Operations Section relays Caltrans's crew update to the Planning Section.
+  let threadId = "";
+  later(at("08:40"), async () => {
+    threadId = (await api<{ id: string }>("lee", at("08:40"), "POST", `/api/v1/jurisdictions/${jurisdictionId}/threads`, {
+      kind: "group", title: "Road status", incidentId, members: [{ kind: "person", id: people["nguyen"]!.id }],
+    })).id;
+  });
+  later(at("08:51"), () => api("nguyen", at("08:51"), "POST", `/api/v1/threads/${threadId}/messages`, {
+    body: "Caltrans mobilizing additional crews to US-101. ETA 2 hours.",
+  }));
   later(at("09:28"), () => update("moreno", at("09:28"), "shelters", shelterIds["Arcata Community Center"]!, { occupancy: 187 }));
 
   // By 09:40 Jordan Lee has read all but the three newest of their notifications.

@@ -13,6 +13,7 @@ const request: ResourceRequestSummary = {
   receivingOrganization: { id: "33333333-3333-4333-8333-333333333333", name: "Receiving County" },
   supplyingOrganization: null, assignment: null,
   resourceKind: "water_tender", resourceType: 2, costCents: 540005,
+  number: 1027, neededBy: null, notes: null, createdAt: "2026-09-23T12:00:00.000Z",
 };
 const levels = (count: number) => Array.from({ length: count }, (_, index) => ({ type: index + 1, capability: "" }));
 const kinds: ResourceKind[] = [

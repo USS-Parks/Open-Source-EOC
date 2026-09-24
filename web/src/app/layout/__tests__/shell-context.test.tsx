@@ -122,7 +122,7 @@ describe("workspace context", () => {
     render(<Harness api={api} />);
     await waitFor(() => expect(screen.getByTestId("phase").textContent).toBe("current"));
     expect(screen.getByTestId("theme").textContent).toBe("dark");
-    expect(screen.getByTestId("period").textContent).toMatch(/^Day 2 · \d{4}–\d{4}/);
+    expect(screen.getByTestId("period").textContent).toBe("Day 2");
     expect(screen.getByTestId("width").textContent).toBe("388");
     expect(location.hash).toContain("period=2");
 
@@ -132,7 +132,7 @@ describe("workspace context", () => {
     await waitFor(() => expect(save).toHaveBeenCalledWith("incident-1", "workspace_layout", "map", expect.objectContaining({ expectedRevision: 7, payload: expect.objectContaining({ drawerWidth: 412 }) })));
 
     history.back();
-    await waitFor(() => expect(screen.getByTestId("period").textContent).toMatch(/^Day 2 · /));
+    await waitFor(() => expect(screen.getByTestId("period").textContent).toBe("Day 2"));
     fireEvent.click(screen.getByText("period not set"));
     await waitFor(() => expect(location.hash).toContain("period=unset"));
     expect(screen.getByTestId("period").textContent).toBe("Not set");
@@ -151,12 +151,12 @@ describe("workspace context", () => {
     render(<Harness api={api} />);
     await screen.findByRole("option", { name: "Harbor Flood" });
     fireEvent.change(screen.getByLabelText("Selected incident"), { target: { value: "incident-2" } });
-    await waitFor(() => expect(screen.getByTestId("period").textContent).toMatch(/^Flood 1 · /));
+    await waitFor(() => expect(screen.getByTestId("period").textContent).toBe("Flood 1"));
     expect(screen.getByTestId("theme").textContent).toBe("dark");
     slow.resolve(state("incident-1", "workspace_preferences", "shell", 9, { theme: "light", periodRevision: 1 }));
     await Promise.resolve();
     expect(screen.getByTestId("theme").textContent).toBe("dark");
-    expect(screen.getByTestId("period").textContent).toMatch(/^Flood 1 · /);
+    expect(screen.getByTestId("period").textContent).toBe("Flood 1");
   });
 
   it("surfaces revision conflicts and overwrites only after explicit keep-session recovery", async () => {
@@ -203,10 +203,10 @@ describe("workspace context", () => {
     await waitFor(() => expect(screen.getByTestId("phase").textContent).toBe("conflict"));
     fireEvent.click(screen.getByText("keep session"));
     fireEvent.change(screen.getByLabelText("Selected incident"), { target: { value: "incident-2" } });
-    await waitFor(() => expect(screen.getByTestId("period").textContent).toMatch(/^Flood 1 · /));
+    await waitFor(() => expect(screen.getByTestId("period").textContent).toBe("Flood 1"));
     latest.resolve(state("incident-1", "workspace_preferences", "shell", 4, { theme: "light", periodRevision: 2 }));
     await Promise.resolve();
-    expect(screen.getByTestId("period").textContent).toMatch(/^Flood 1 · /);
+    expect(screen.getByTestId("period").textContent).toBe("Flood 1");
     expect(save).toHaveBeenCalledTimes(1);
   });
 

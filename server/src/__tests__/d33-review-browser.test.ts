@@ -237,7 +237,13 @@ async function tabWalk(view: string, reach: readonly string[], options: { start?
     if (!probe) break;
     if (probe.id === previous) {
       repeats += 1;
-      if (repeats >= 2) {
+      // A native date or time field takes one Tab per segment (month, day,
+      // year, hour, minute, day period) before focus leaves it.
+      const segmented = await page.evaluate(`(() => {
+        const active = document.activeElement;
+        return active instanceof HTMLInputElement && ["date", "time", "datetime-local", "month", "week"].includes(active.type);
+      })()`) as boolean;
+      if (repeats >= (segmented ? 7 : 2)) {
         trap = probe.name;
         break;
       }
@@ -315,7 +321,7 @@ const views: readonly View[] = [
     reach: ["Skip to workspace", "Selected incident", "Account menu", "Overview", "Add point"],
   },
   {
-    key: "overview", open: () => rail("Overview"),
+    key: "overview", open: () => rail("Dashboards"),
     ready: () => page.getByText("Closed roads").first().waitFor(),
     reach: ["Create saved view"],
   },

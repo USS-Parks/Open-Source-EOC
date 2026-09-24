@@ -45,6 +45,8 @@ export type Surface =
   | { readonly kind: "jic" }
   | { readonly kind: "templates" }
   | { readonly kind: "chronology" }
+  | { readonly kind: "overview" }
+  | { readonly kind: "briefing" }
   | { readonly kind: "staffing" }
   | { readonly kind: "board-design"; readonly id: string }
   | { readonly kind: "admin" }
@@ -95,6 +97,8 @@ export function sectionOf(surface: Surface): string {
     case "sitrep":
       return "sitreps";
     case "dashboard":
+      return "dashboards";
+    case "briefing":
       return "overview";
     case "incidents":
       return "incidentSetup";
@@ -205,6 +209,10 @@ function parseSurfacePath(clean: string): Surface {
       return { kind: "federation" };
     case "chronology":
       return { kind: "chronology" };
+    case "overview":
+      return { kind: "overview" };
+    case "briefing":
+      return { kind: "briefing" };
     case "staffing":
       return { kind: "staffing" };
     case "field-reports":
@@ -334,6 +342,10 @@ function surfacePath(surface: Surface): string {
       return "#/templates";
     case "chronology":
       return "#/chronology";
+    case "overview":
+      return "#/overview";
+    case "briefing":
+      return "#/briefing";
     case "staffing":
       return "#/staffing";
     case "board-design":

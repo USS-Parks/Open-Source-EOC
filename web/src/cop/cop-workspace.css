@@ -475,3 +475,9 @@
   white-space: pre-line;
   pointer-events: none;
 }
+
+/* A map inside an overview card: the map alone, filling the card. */
+.eoc-cop-container[data-layout="card"] { height: 100%; }
+.eoc-cop-container[data-layout="card"] .eoc-cop-workspace { height: 100%; grid-template-columns: minmax(0, 1fr); }
+.eoc-cop-container[data-layout="card"] .eoc-cop-layers,
+.eoc-cop-container[data-layout="card"] .eoc-cop-readout { display: none; }

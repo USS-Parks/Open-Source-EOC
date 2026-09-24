@@ -125,7 +125,7 @@ describe("screens for existing engines", () => {
     await page.screenshot({ path: join(SHOTS, "standing-lifelines-light-1440.png") });
 
     // A dashboard from a published template, then its template exported.
-    await page.getByRole("button", { name: "Overview", exact: true }).click();
+    await page.getByRole("button", { name: "Dashboards", exact: true }).click();
     await page.getByLabel("Dashboard template key").fill("eoc_status");
     await page.getByRole("button", { name: "Create dashboard" }).click();
     await page.getByText("Dashboard created from template eoc_status.").waitFor();

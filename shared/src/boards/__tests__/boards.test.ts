@@ -10,7 +10,7 @@ import {
 
 describe("standard board library (F1: boards as data)", () => {
   it("ships the full standard set, validated at load", () => {
-    const keys = STANDARD_TEMPLATES.map((t) => t.key);
+    const keys = STANDARD_TEMPLATES.map((t) => `${t.key}${t.version > 1 ? ` v${t.version}` : ""}`);
     expect(keys).toEqual([
       "activity_log",
       "significant_events",
@@ -26,6 +26,7 @@ describe("standard board library (F1: boards as data)", () => {
       "rumor_control",
       "talking_points",
       "field_reports",
+      "field_reports v2",
       "damage_assessment",
       "esf_status",
     ]);

@@ -295,7 +295,7 @@
 .eoc-shell[data-compact-navigation] .eoc-shell-theme-chevron { display: none !important; }
 
 .eoc-shell-main { position: relative; min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; background: var(--eoc-bg); }
-.eoc-shell-page-header { min-height: 84px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 6px 22px 10px; }
+.eoc-shell-page-header { min-height: 76px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 4px 22px 4px; }
 [data-theme="dark"] .eoc-shell-page-header { min-height: 98px; align-items: flex-end; padding: 10px 22px 12px; }
 .eoc-shell-page-title { min-width: 0; }
 .eoc-shell-page-header h1 { margin: 0; color: var(--eoc-text-strong); font-size: 25px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }

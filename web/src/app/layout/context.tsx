@@ -45,7 +45,10 @@ export interface WorkspaceContextValue {
   readonly conflict: boolean;
   readonly periods: readonly OperationalPeriodChoice[];
   readonly selectedPeriodRevision: number | null;
+  /** The period's own label, as records and reports carry it; "Not set" without one. */
   readonly selectedPeriodLabel: string;
+  /** The label with the period's hours, for display: "OP 03 · 0600–1800 PDT". */
+  readonly selectedPeriodDisplay: string;
   readonly theme: ThemeName;
   readonly layout: (arrangement: WorkspaceArrangement) => WorkspaceLayoutState;
   readonly selectPeriod: (revision: number | null) => void;
@@ -361,7 +364,8 @@ export function WorkspaceContextProvider(props: {
   }, [client, enqueue, incidentId, layoutPayload, preferencePayload]);
 
   const selectedPeriod = periods.find((period) => period.revision === selectedPeriodRevision);
-  const selectedPeriodLabel = selectedPeriod ? periodLabel(selectedPeriod) : "Not set";
+  const selectedPeriodLabel = selectedPeriod?.label ?? "Not set";
+  const selectedPeriodDisplay = selectedPeriod ? periodLabel(selectedPeriod) : "Not set";
   const value = useMemo<WorkspaceContextValue>(() => ({
     loadedScope,
     phase,
@@ -370,6 +374,7 @@ export function WorkspaceContextProvider(props: {
     periods,
     selectedPeriodRevision,
     selectedPeriodLabel,
+    selectedPeriodDisplay,
     theme: props.theme,
     layout: (arrangement) => layouts[arrangement],
     selectPeriod,

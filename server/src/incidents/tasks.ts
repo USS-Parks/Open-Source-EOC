@@ -5,6 +5,7 @@ import type {
   TaskDependencyView,
   TaskListQuery,
   TaskListResponse,
+  TaskCreate,
   TaskMetadataPatch,
   TaskStatus,
 } from "@openeoc/shared";
@@ -21,6 +22,7 @@ import {
 
 interface TaskRow extends Record<string, unknown> {
   id: string;
+  number: string | number;
   incident_id: string;
   item: string;
   category: string;
@@ -30,7 +32,11 @@ interface TaskRow extends Record<string, unknown> {
   position_id: string | null;
   position_title: string | null;
   position_organization_id: string | null;
+  position_organization_name: string | null;
+  position_holders: string | null;
   assigned_participant_id: string | null;
+  participant_organization_name: string | null;
+  participant_person_name: string | null;
   participant_person_id: string | null;
   participant_organization_id: string | null;
   participant_title: string | null;
@@ -43,18 +49,27 @@ interface TaskRow extends Record<string, unknown> {
 }
 
 const taskSelect = `
-  select c.id, c.incident_id, c.item, c.category, c.status, c.due_at, c.sort_order, c.revision,
+  select c.id, c.number, c.incident_id, c.item, c.category, c.status, c.due_at, c.sort_order, c.revision,
     c.position_id, pos.title as position_title,
     pos.jurisdiction_id as position_organization_id,
+    position_org.name as position_organization_name,
+    (select string_agg(holder.display_name, ', ' order by holder.display_name)
+      from position_assignments pa join persons holder on holder.id = pa.person_id
+      where pa.position_id = c.position_id and pa.revoked_at is null) as position_holders,
     c.assigned_participant_id, ip.person_id as participant_person_id,
     ip.organization_id as participant_organization_id,
+    participant_org.name as participant_organization_name,
+    participant_person.display_name as participant_person_name,
     ip.incident_position_title as participant_title,
     c.completed_at, c.completed_by, c.completed_by_position,
     c.completed_by_organization_id, c.completed_by_participation_id,
     c.completed_as_title
   from checklist_items c
   left join positions pos on pos.id = c.position_id
-  left join incident_participants ip on ip.id = c.assigned_participant_id`;
+  left join jurisdictions position_org on position_org.id = pos.jurisdiction_id
+  left join incident_participants ip on ip.id = c.assigned_participant_id
+  left join jurisdictions participant_org on participant_org.id = ip.organization_id
+  left join persons participant_person on participant_person.id = ip.person_id`;
 
 function iso(value: string | Date | null): string | null {
   return value === null ? null : new Date(value).toISOString();
@@ -66,16 +81,20 @@ function toTask(row: TaskRow, dependencies: readonly TaskDependencyView[] = []):
         kind: "position" as const,
         id: row.position_id,
         organizationId: row.position_organization_id!,
+        organizationName: row.position_organization_name ?? "",
         title: row.position_title!,
         personId: null,
+        personName: row.position_holders,
       }
     : row.assigned_participant_id
       ? {
           kind: "incident_participant" as const,
           id: row.assigned_participant_id,
           organizationId: row.participant_organization_id!,
+          organizationName: row.participant_organization_name ?? "",
           title: row.participant_title!,
           personId: row.participant_person_id,
+          personName: row.participant_person_name,
         }
       : null;
   const completedBy = row.completed_at
@@ -89,6 +108,7 @@ function toTask(row: TaskRow, dependencies: readonly TaskDependencyView[] = []):
     : null;
   return {
     id: row.id,
+    number: Number(row.number),
     incidentId: row.incident_id,
     item: row.item,
     category: row.category,
@@ -233,6 +253,46 @@ async function loadTaskForUpdate(sql: Sql, incidentId: string, taskId: string): 
 }
 
 /** Owner-admin metadata or current-assignee status update with revision CAS. */
+/** Add a task to an open incident; the owner's administrators manage task metadata, as they do for updates. */
+export async function createIncidentTask(
+  sql: Sql,
+  actor: Principal,
+  incidentId: string,
+  input: TaskCreate,
+): Promise<IncidentTask> {
+  const authority = await lockIncident(sql, actor, incidentId);
+  if (authority.closedAt) throw new AuthError(409, "incident is closed");
+  if (!authority.canManageParticipation) throw new AuthError(403, "adding a task requires incident owner admin");
+  let positionId: string | null = null;
+  let participantId: string | null = null;
+  if (input.assignment) {
+    if (input.assignment.kind === "incident_participant" && input.assignment.incidentId !== incidentId) {
+      throw new AuthError(400, "assignment belongs to another incident");
+    }
+    const assignment = await resolveWorkflowAssignment(sql, actor, authority.jurisdictionId, input.assignment);
+    positionId = assignment.kind === "position" ? assignment.positionId : null;
+    participantId = assignment.kind === "incident_participant" ? assignment.participantId : null;
+  }
+  const [created] = await sql`
+    insert into checklist_items (incident_id, item, category, due_at, position_id, assigned_participant_id, sort_order)
+    values (${incidentId}, ${input.item}, ${input.category}, ${input.dueAt ?? null}::timestamptz,
+      ${positionId}, ${participantId},
+      (select coalesce(max(sort_order), 0) + 1 from checklist_items where incident_id = ${incidentId}))
+    returning id`;
+  const taskId = created!.id as string;
+  const [row] = await sql.unsafe(`${taskSelect} where c.id = $1`, [taskId]);
+  const task = toTask(row as unknown as TaskRow);
+  await recordAudit(sql, actor, {
+    jurisdictionId: authority.jurisdictionId,
+    incidentId,
+    category: "checklist.task.created",
+    subjectTable: "checklist_items",
+    subjectId: taskId,
+    payload: { number: task.number, item: task.item, category: task.category, dueAt: task.dueAt },
+  });
+  return task;
+}
+
 export async function updateIncidentTask(
   sql: Sql,
   actor: Principal,

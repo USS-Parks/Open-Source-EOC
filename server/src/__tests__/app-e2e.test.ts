@@ -340,7 +340,7 @@ describe("the operations console in a real browser, offline", () => {
     await page.screenshot({ path: join(SHOTS, "app-board-light.png"), fullPage: false });
 
     // The dashboard surface renders its widgets.
-    await page.getByRole("button", { name: "Overview" }).click();
+    await page.getByRole("button", { name: "Dashboards" }).click();
     await page.getByText("EOC Status").first().waitFor({ state: "visible", timeout: 20000 });
     await page.getByText("Closed roads").first().waitFor({ state: "visible", timeout: 20000 });
     await page
@@ -559,7 +559,8 @@ describe("the operations console in a real browser, offline", () => {
     // This is the visual sample set; content is proven by the assertions above.
     const TABS: ReadonlyArray<readonly [string, string]> = [
       ["Map", "map"],
-      ["Overview", "dashboard"],
+      ["Overview", "overview"],
+      ["Dashboards", "dashboard"],
       ["Incident Setup", "incidents"],
       ["Boards", "boards"],
       ["SITREP", "sitreps"],

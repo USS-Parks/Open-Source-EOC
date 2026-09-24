@@ -345,7 +345,8 @@ export interface ChronologyEntry {
 }
 
 const requestSelect = `
-  select r.id, r.incident_id, r.item, r.quantity, r.priority, r.state,
+  select r.id, r.number, r.incident_id, r.item, r.quantity, r.priority, r.state,
+    r.needed_by, r.notes, r.created_at,
     receiving.id as receiving_organization_id, receiving.name as receiving_organization_name,
     supplying.id as supplying_organization_id, supplying.name as supplying_organization_name,
     position.id as assigned_position_id, position.key as assigned_position_key,
@@ -407,6 +408,7 @@ function requestSummary(row: Record<string, unknown>): ResourceRequestSummary {
   if (!receivingOrganization) throw new Error("resource request is missing a receiving organization");
   return {
     id: row.id as string,
+    number: Number(row.number),
     incidentId: (row.incident_id as string | null) ?? null,
     item: row.item as string,
     quantity: Number(row.quantity),
@@ -418,6 +420,9 @@ function requestSummary(row: Record<string, unknown>): ResourceRequestSummary {
     resourceKind: (row.resource_kind as string | null) ?? null,
     resourceType: (row.resource_type as number | null) ?? null,
     costCents: Number(row.cost_cents),
+    neededBy: row.needed_by ? new Date(row.needed_by as string).toISOString() : null,
+    notes: (row.notes as string | null) ?? null,
+    createdAt: new Date(row.created_at as string).toISOString(),
   };
 }
 

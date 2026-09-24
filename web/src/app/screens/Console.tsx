@@ -73,6 +73,7 @@ const FederationSurface = onDemand(() => import("../../federation/FederationSurf
 const ContactsSurface = onDemand(() => import("../../contacts/ContactsSurface.js").then((m) => m.ContactsSurface));
 const MassNotificationSurface = onDemand(() => import("../../contacts/MassNotificationSurface.js").then((m) => m.MassNotificationSurface));
 const ReportsSurface = onDemand(() => import("../../reports/ReportsSurface.js").then((m) => m.ReportsSurface));
+const IncidentOverview = onDemand(() => import("../surfaces/IncidentOverview.js").then((m) => m.IncidentOverview));
 
 const NAV: readonly NavGroup[] = [
   { key: "situation", label: "Situation", items: [
@@ -81,6 +82,7 @@ const NAV: readonly NavGroup[] = [
     { key: "lifelines", label: "ESFs & Lifelines", icon: "lifelines" },
     { key: "sitreps", label: "SITREP", icon: "sitrep" },
     { key: "chronology", label: "Chronology", icon: "fieldReports" },
+    { key: "dashboards", label: "Dashboards", icon: "dashboards" },
   ] },
   { key: "operations", label: "Operations", items: [
     { key: "boards", label: "Boards", icon: "boards" },
@@ -324,9 +326,9 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
     : workspace.phase === "conflict" || workspace.phase === "error"
       ? { state: "error", label: workspace.message ?? "Workspace settings unavailable" }
       : notificationSync;
-  const scope = `${incident.selectedIncident?.name ?? "No incident selected"} · ${workspace.selectedPeriodLabel}`;
+  const scope = `${incident.selectedIncident?.name ?? "No incident selected"} · ${workspace.selectedPeriodDisplay}`;
   // The overview and the lifelines workspace keep their context drawer closed and offer no opener.
-  const drawerless = surface.kind === "lifelines" || surface.kind === "lifeline" || surface.kind === "esf" || surface.kind === "dashboard";
+  const drawerless = ["lifelines", "lifeline", "esf", "dashboard", "overview", "briefing"].includes(surface.kind);
   const page = pageFor(surface, scope);
 
   return (
@@ -334,7 +336,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       product="Open Source EOC"
       organization="People · Information · Safer communities"
       context={<IncidentSwitcher />}
-      periodLabel={workspace.selectedPeriodLabel}
+      periodLabel={workspace.selectedPeriodDisplay}
       positionLabel={session.me?.position?.title ?? "No acting position"}
       periodControl={<OperationalPeriodControl />}
       positionControl={<PositionControl />}
@@ -443,6 +445,8 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
 function sectionForNav(key: string): Surface {
   switch (key) {
     case "overview":
+      return { kind: "overview" };
+    case "dashboards":
       return { kind: "dashboard" };
     case "boards":
       return { kind: "boards" };
@@ -581,6 +585,36 @@ function Center(props: {
           focusFeatureId={s.featureId}
           onOpenLifeline={(id) => props.onNavigate({ kind: "lifeline", id })}
           onOpenEsf={(id) => props.onNavigate({ kind: "esf", id })}
+        />
+      );
+    case "overview":
+    case "briefing":
+      return (
+        <IncidentOverview
+          client={props.client}
+          theme={props.theme}
+          jurisdictionId={props.jurisdictionId}
+          incidentId={props.incidentId}
+          incidentName={props.incidentName}
+          periodRevision={props.periodRevision}
+          operationalPeriod={props.operationalPeriod}
+          collections={props.collections}
+          member={props.memberships.some((membership) => membership.jurisdictionId === props.jurisdictionId)}
+          briefing={s.kind === "briefing"}
+          onBriefing={() => props.onNavigate({ kind: "briefing" })}
+          onExitBriefing={() => props.onNavigate({ kind: "overview" })}
+          onOpenSitrep={props.onOpenSitrep}
+          onOpenRequests={(id) => props.onNavigate(id ? { kind: "resources", id } : { kind: "resources" })}
+          onOpenShelters={() => {
+            const shelters = props.boardsInView.find((board) => board.templateKey === "shelters");
+            if (shelters) props.onOpenBoard(shelters.id);
+            else props.onNavigate({ kind: "boards" });
+          }}
+          onOpenFieldReports={() => props.onNavigate({ kind: "field-reports" })}
+          onOpenTasks={() => props.onNavigate({ kind: "tasks" })}
+          onOpenLifeline={(id) => props.onNavigate({ kind: "lifeline", id })}
+          onOpenLifelines={() => props.onNavigate({ kind: "lifelines" })}
+          onOpenChronology={() => props.onNavigate({ kind: "chronology" })}
         />
       );
     case "dashboard": {
@@ -729,7 +763,7 @@ function Center(props: {
     case "facilities":
       return props.facilitiesEnabled === null ? <Loading label="Checking facilities…" />
         : props.facilitiesEnabled ? <FacilitiesSurface client={props.client} jurisdictionId={props.jurisdictionId} theme={props.theme} canWrite={props.canAuthorAlerts} />
-        : <NotFoundState onMap={() => props.onNavigate({ kind: "map" })} onOverview={() => props.onNavigate({ kind: "dashboard" })} />;
+        : <NotFoundState onMap={() => props.onNavigate({ kind: "map" })} onOverview={() => props.onNavigate({ kind: "overview" })} />;
     case "incidents":
       return (
         <IncidentsSurface
@@ -834,7 +868,7 @@ function Center(props: {
         incidentId={props.incidentId} incidentName={props.incidentName} incidentBoardIds={props.incidentBoardIds}
         canBuild={props.canAuthorAlerts} />;
     case "not-found":
-      return <NotFoundState onMap={() => props.onNavigate({ kind: "map" })} onOverview={() => props.onNavigate({ kind: "dashboard" })} />;
+      return <NotFoundState onMap={() => props.onNavigate({ kind: "map" })} onOverview={() => props.onNavigate({ kind: "overview" })} />;
   }
 }
 
@@ -843,7 +877,9 @@ function pageFor(surface: Surface, scope: string): { readonly page: ShellPage; r
   const lifelines = "Essential service conditions and coordinated response";
   switch (surface.kind) {
     case "map": return result("Situation", "Map", "map");
-    case "dashboard": return result("Situation", "Incident overview", "map");
+    case "overview": return result("Situation", "Incident overview", "map");
+    case "briefing": return result("Situation", "Incident overview", "map");
+    case "dashboard": return result("Situation", "Dashboards", "map");
     case "lifelines": return result("Situation", "ESFs & Lifelines", "map", lifelines);
     case "lifeline": return result("Situation", "ESFs & Lifelines", "map", lifelines);
     case "esf": return result("Situation", "ESFs & Lifelines", "map", lifelines);

@@ -66,6 +66,11 @@ function taskDraft(task: IncidentTask): TaskDraft {
     dependencyIds: task.dependencies.map((dependency) => dependency.id),
   };
 }
+/** The editor's marker for a task not yet created. */
+const NEW_TASK = "new";
+function newTaskDraft(): TaskDraft {
+  return { taskId: NEW_TASK, expectedRevision: 0, item: "", category: "general", dueAt: "", assignment: "", dependencyIds: [] };
+}
 function localDateTime(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "" : new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
@@ -140,6 +145,7 @@ export function TasksSurface(props: {
 
   const data = response.data ?? EMPTY_RESPONSE;
   const categories = ["all", ...Object.keys(data.analytics.byCategory).sort()];
+  const creating = editingTaskId === NEW_TASK;
   const editing = (allTasks.data ?? data.tasks).find((task) => task.id === editingTaskId) ?? null;
   const refresh = () => { response.reload(); allTasks.reload(); };
   useEffect(() => {
@@ -170,15 +176,28 @@ export function TasksSurface(props: {
     } finally { setBusyTaskId(null); }
   };
   const saveDraft = async () => {
-    if (!editing || !draft || !props.incidentId) return;
-    setBusyTaskId(editing.id); setActionError(null); setNotice(null);
+    if ((!editing && !creating) || !draft || !props.incidentId) return;
+    setBusyTaskId(draft.taskId); setActionError(null); setNotice(null);
     const assignment = draft.assignment === ""
       ? null
       : draft.assignment.startsWith("position:")
         ? { kind: "position" as const, positionId: draft.assignment.slice("position:".length) }
         : { kind: "incident_participant" as const, incidentId: props.incidentId, participantId: draft.assignment.slice("participant:".length) };
     try {
-      await props.client.updateIncidentTask(props.incidentId, editing.id, {
+      if (creating) {
+        const created = await props.client.createIncidentTask(props.incidentId, {
+          item: draft.item,
+          category: draft.category,
+          dueAt: draft.dueAt ? new Date(draft.dueAt).toISOString() : null,
+          assignment,
+        });
+        if (draft.dependencyIds.length) {
+          await props.client.updateIncidentTask(props.incidentId, created.id, { expectedRevision: created.revision, dependencyIds: [...draft.dependencyIds] });
+        }
+        setEditingTaskId(null); setDraft(null); setNotice(`Added TASK-${created.number}: ${created.item}.`); refresh();
+        return;
+      }
+      await props.client.updateIncidentTask(props.incidentId, editing!.id, {
         expectedRevision: draft.expectedRevision,
         item: draft.item,
         category: draft.category,
@@ -194,7 +213,7 @@ export function TasksSurface(props: {
   const taskActionsEnabled = view === "mine" && !props.closed;
   const taskEditingEnabled = props.canManage && !props.closed;
   const columns = useMemo<readonly OperationalTableColumn<IncidentTask>[]>(() => [
-    { id: "task", header: "Task", value: (task) => task.item, sortable: true, filterable: true, width: 270, render: (task) => <strong>{task.item}</strong> },
+    { id: "task", header: "Task", value: (task) => `TASK-${task.number} ${task.item}`, sortable: true, filterable: true, width: 270, render: (task) => <><span className="eoc-tasks-number">TASK-{task.number}</span> <strong>{task.item}</strong></> },
     { id: "status", header: "Status", value: (task) => statusLabel(task.status), sortable: true, filterable: true, width: 145, render: (task) => <StatusBadge status={statusTone(task.status)}>{statusLabel(task.status)}</StatusBadge> },
     { id: "category", header: "Category", value: (task) => task.category, sortable: true, filterable: true, width: 150 },
     { id: "due", header: "Due", value: (task) => task.dueAt ?? "", sortable: true, width: 185, missingLabel: "No due date", render: (task) => <span data-overdue={task.dueAt && new Date(task.dueAt).getTime() < Date.now() ? true : undefined}>{dueLabel(task.dueAt)}</span> },
@@ -213,12 +232,12 @@ export function TasksSurface(props: {
   if (!props.incidentId) return <EmptyState title="No incident selected" description="Choose an incident to see its authorized task assignments and completion evidence." />;
 
   return <main className="eoc-tasks-surface">
-    <header className="eoc-tasks-header"><div><p className="eoc-tasks-eyebrow">Incident task coordination</p><h1>Tasks</h1><p>Assigned work, due actions, and authoritative completion receipts for the active incident.</p></div><div className="eoc-tasks-template-note"><strong>Incident templates</strong><p>Activate a template to create its assigned checklist work.</p><Button onClick={props.onOpenTemplates}>Open incident templates</Button></div></header>
+    <header className="eoc-tasks-header"><div><p className="eoc-tasks-eyebrow">Incident task coordination</p><h1>Tasks</h1><p>Assigned work, due actions, and authoritative completion receipts for the active incident.</p></div><div className="eoc-tasks-template-note"><strong>Incident templates</strong><p>Activate a template to create its assigned checklist work.</p><Button onClick={props.onOpenTemplates}>Open incident templates</Button>{taskEditingEnabled ? <Button kind="primary" onClick={() => { setEditingTaskId(NEW_TASK); setDraft(newTaskDraft()); }}>New task</Button> : null}</div></header>
     <section className="eoc-tasks-summary" aria-label="Task analytics"><Panel title="Current view">{response.data ? <div className="eoc-tasks-counts"><TaskMetric label="Tasks" value={data.analytics.total} /><TaskMetric label="Overdue" value={data.analytics.overdue} /><TaskMetric label="Due next 24 hours" value={data.analytics.dueNext24Hours} /><TaskMetric label="Without due date" value={data.analytics.withoutDue} /></div> : <p className="eoc-tasks-analytics-state" role={response.error ? "alert" : "status"}>{response.error ? "Task analytics are unavailable." : "Loading task analytics…"}</p>}</Panel></section>
     <section className="eoc-tasks-controls" aria-label="Task views and filters"><Tabs id="task-view" label="Task view" value={view} onChange={(next) => { setView(next as TaskView); setSelected(new Set()); }} tabs={[{ id: "mine", label: "My Tasks" }, { id: "team", label: "Team Tasks" }]} /><div className="eoc-tasks-filters"><EnumSelect label="Status" values={STATUS_VALUES} value={status} onChange={(value) => setStatus(value as typeof status)} labels={{ all: "All statuses", in_progress: "In progress" }} /><EnumSelect label="Due" values={DUE_VALUES} value={due} onChange={(value) => setDue(value as typeof due)} labels={{ all: "All due dates", next_24_hours: "Next 24 hours", none: "No due date" }} /><EnumSelect label="Category" values={categories} value={categories.includes(category) ? category : "all"} onChange={setCategory} labels={{ all: "All categories" }} /></div></section>
     {continuity.pendingCount ? <p className="eoc-tasks-notice" role="status">{continuity.pendingCount} completion{continuity.pendingCount === 1 ? "" : "s"} queued locally. <button type="button" onClick={() => void continuity.reconcile()}>Reconcile queued work</button></p> : null}
     {notice ? <p className="eoc-tasks-notice" role="status">{notice}</p> : null}{actionError || continuity.error ? <p className="eoc-tasks-notice is-error" role="alert">{actionError ?? continuity.error}</p> : null}
-    {editing && draft ? <Panel title="Task details"><form className="eoc-tasks-editor" onSubmit={(event) => { event.preventDefault(); void saveDraft(); }}><label>Task name<input required maxLength={500} value={draft.item} onChange={(event) => setDraft({ ...draft, item: event.target.value })} /></label><label>Category<input required pattern="[a-z][a-z0-9_]*" maxLength={80} value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} /></label><label>Due date<input type="datetime-local" value={draft.dueAt} onChange={(event) => setDraft({ ...draft, dueAt: event.target.value })} /></label><label>Assigned to<select value={draft.assignment} onChange={(event) => setDraft({ ...draft, assignment: event.target.value })}><option value="">Unassigned</option><optgroup label="Positions">{(positions.data ?? []).map((position) => <option key={position.id} value={`position:${position.id}`}>{position.title}</option>)}</optgroup><optgroup label="Incident participants">{(participants.data ?? []).filter((participant) => !participant.revokedAt).map((participant) => <option key={participant.id} value={`participant:${participant.id}`}>{participant.personName} · {participant.incidentPositionTitle}</option>)}</optgroup></select></label><label>Prerequisites<select multiple value={draft.dependencyIds as string[]} onChange={(event) => setDraft({ ...draft, dependencyIds: [...event.currentTarget.selectedOptions].map((option) => option.value) })}>{(allTasks.data ?? data.tasks).filter((candidate) => candidate.id !== editing.id).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.status === "completed" ? "Complete" : "Open"} · {candidate.item}</option>)}</select><small>Completion stays blocked until every selected prerequisite has an authoritative receipt.</small></label><div className="eoc-tasks-editor-actions"><Button type="submit" kind="primary" disabled={busyTaskId === editing.id}>{busyTaskId === editing.id ? "Saving…" : "Save task details"}</Button><Button disabled={busyTaskId === editing.id} onClick={() => { setEditingTaskId(null); setDraft(null); }}>Cancel</Button></div></form></Panel> : null}
+    {(editing || creating) && draft ? <Panel title={creating ? "New task" : "Task details"}><form className="eoc-tasks-editor" onSubmit={(event) => { event.preventDefault(); void saveDraft(); }}><label>Task name<input required maxLength={500} value={draft.item} onChange={(event) => setDraft({ ...draft, item: event.target.value })} /></label><label>Category<input required pattern="[a-z][a-z0-9_]*" maxLength={80} value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} /></label><label>Due date<input type="datetime-local" value={draft.dueAt} onChange={(event) => setDraft({ ...draft, dueAt: event.target.value })} /></label><label>Assigned to<select value={draft.assignment} onChange={(event) => setDraft({ ...draft, assignment: event.target.value })}><option value="">Unassigned</option><optgroup label="Positions">{(positions.data ?? []).map((position) => <option key={position.id} value={`position:${position.id}`}>{position.title}</option>)}</optgroup><optgroup label="Incident participants">{(participants.data ?? []).filter((participant) => !participant.revokedAt).map((participant) => <option key={participant.id} value={`participant:${participant.id}`}>{participant.personName} · {participant.incidentPositionTitle}</option>)}</optgroup></select></label><label>Prerequisites<select multiple value={draft.dependencyIds as string[]} onChange={(event) => setDraft({ ...draft, dependencyIds: [...event.currentTarget.selectedOptions].map((option) => option.value) })}>{(allTasks.data ?? data.tasks).filter((candidate) => candidate.id !== editing?.id).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.status === "completed" ? "Complete" : "Open"} · {candidate.item}</option>)}</select><small>Completion stays blocked until every selected prerequisite has an authoritative receipt.</small></label><div className="eoc-tasks-editor-actions"><Button type="submit" kind="primary" disabled={busyTaskId === draft.taskId}>{busyTaskId === draft.taskId ? "Saving…" : creating ? "Add task" : "Save task details"}</Button><Button disabled={busyTaskId === draft.taskId} onClick={() => { setEditingTaskId(null); setDraft(null); }}>Cancel</Button></div></form></Panel> : null}
     <div role="tabpanel" id={`task-view-${view}-panel`} aria-labelledby={`task-view-${view}-tab`} className="eoc-tasks-panel"><OperationalTable tableId="incident-tasks" caption={view === "mine" ? "My incident tasks" : "Incident team tasks"} columns={columns} rows={loaded?.tasks ?? data.tasks} rowId={(task) => task.id} datasetKey={`${props.incidentId}:${JSON.stringify(query)}`} status={tableStatus} errorMessage={response.error ?? "Tasks could not be loaded."} onRetry={response.reload} emptyTitle={view === "mine" ? "No assigned tasks match these filters" : "No team tasks match these filters"} emptyDescription="Adjust a filter or confirm the selected incident template includes checklist tasks." viewState={tableState} onViewStateChange={setTableState} totalRows={data.analytics.total} hasPreviousPage={false} hasNextPage={false} selectedIds={selected} onSelectionChange={setSelected} toolbar={<span className="eoc-tasks-table-scope">{view === "mine" ? "Current position and participant assignments" : "Authorized incident task list"}</span>} {...(loadMore ? { onLoadMore: loadMore } : {})} /></div>
   </main>;
 }

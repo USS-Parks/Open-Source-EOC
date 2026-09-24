@@ -28,7 +28,10 @@ import type {
   TaskListQuery,
   TaskListResponse,
   TaskMetadataPatch,
+  TaskCreate,
   TaskCompletionReceipt,
+  IncidentOverviewSummary,
+  IncidentActivityEntry,
   CreateLifelineAssessment,
   LifelineAssessmentReport,
   AssessmentDecisionInput,
@@ -1185,6 +1188,20 @@ export class ApiClient {
     }
     return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/tasks?${query}`);
   }
+  createIncidentTask(incidentId: string, input: TaskCreate): Promise<IncidentTask> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/tasks`, { ...input });
+  }
+  /** The overview's counts for one operational period; without a revision, the current one. */
+  getIncidentSummary(incidentId: string, periodRevision: number | null): Promise<IncidentOverviewSummary> {
+    const query = periodRevision === null ? "" : `?periodRevision=${periodRevision}`;
+    return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/summary${query}`);
+  }
+  /** The incident's recent operational activity, newest first. */
+  async listIncidentActivity(incidentId: string, limit = 10): Promise<readonly IncidentActivityEntry[]> {
+    const result = await this.request<{ entries: readonly IncidentActivityEntry[] }>(
+      "GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/activity?limit=${limit}`);
+    return result.entries;
+  }
   updateIncidentTask(incidentId: string, taskId: string, input: TaskMetadataPatch): Promise<IncidentTask> {
     return this.request("PATCH", `/api/v1/incidents/${encodeURIComponent(incidentId)}/tasks/${encodeURIComponent(taskId)}`, { ...input });
   }
@@ -1224,6 +1241,7 @@ export class ApiClient {
       item: string;
       quantity?: number;
       priority?: string;
+      neededBy?: string;
       notes?: string;
       incidentId?: string;
       resourceKind?: string;

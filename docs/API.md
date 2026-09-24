@@ -24,6 +24,10 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 - `GET /api/v1/jurisdictions/:jurisdictionId/corrective-actions`: Read jurisdictions corrective actions (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/corrective-actions`: Run jurisdictions corrective actions (auth: bearer; audience: operator)
 
+### activity
+
+- `GET /api/v1/incidents/:incidentId/activity`: Read incidents activity (auth: bearer; audience: operator)
+
 ### audit
 
 - `POST /api/v1/audit/:eventId/corrections`: Run audit corrections (auth: bearer; audience: operator)
@@ -478,6 +482,10 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 
 - `GET /api/v1/jurisdictions/:jurisdictionId/staffing`: Read jurisdictions staffing (auth: bearer; audience: operator)
 
+### summary
+
+- `GET /api/v1/incidents/:incidentId/summary`: Read incidents summary (auth: bearer; audience: operator)
+
 ### sync
 
 - `GET /api/v1/sync/boards/:boardId`: Read sync boards (auth: bearer; audience: operator)
@@ -485,6 +493,7 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 ### tasks
 
 - `GET /api/v1/incidents/:incidentId/tasks`: Read incidents tasks (auth: bearer; audience: operator)
+- `POST /api/v1/incidents/:incidentId/tasks`: Run incidents tasks (auth: bearer; audience: operator)
 - `PATCH /api/v1/incidents/:incidentId/tasks/:taskId`: Update incidents tasks (auth: bearer; audience: operator)
 - `POST /api/v1/incidents/:incidentId/tasks/:taskId/complete`: Run incidents tasks complete (auth: bearer; audience: operator)
 

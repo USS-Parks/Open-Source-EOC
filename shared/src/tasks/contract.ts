@@ -62,6 +62,14 @@ export const TaskMetadataPatchSchema = z.object({
   }
 });
 
+/** A task added to an incident by its owner's administrators, beside the activation checklists. */
+export const TaskCreateSchema = z.object({
+  item: TitleSchema,
+  category: KeySchema.default("general"),
+  dueAt: TimestampSchema.nullable().optional(),
+  assignment: WorkflowAssignmentRequestSchema.nullable().optional(),
+}).strict();
+
 export const TaskCompletionRequestSchema = z.object({
   operationId: z.string().uuid(),
 }).strict();
@@ -90,6 +98,7 @@ export type TaskAssignmentFilter = z.infer<typeof TaskAssignmentFilterSchema>;
 export type TaskTemplateItem = z.infer<typeof TaskTemplateItemSchema>;
 export type TaskListQuery = z.infer<typeof TaskListQuerySchema>;
 export type TaskMetadataPatch = z.infer<typeof TaskMetadataPatchSchema>;
+export type TaskCreate = z.infer<typeof TaskCreateSchema>;
 export type TaskCompletionRequest = z.infer<typeof TaskCompletionRequestSchema>;
 export type TaskCompletionReceipt = z.infer<typeof TaskCompletionReceiptSchema>;
 
@@ -97,8 +106,11 @@ export interface TaskAssignmentView {
   readonly kind: "position" | "incident_participant";
   readonly id: string;
   readonly organizationId: string;
+  readonly organizationName: string;
   readonly title: string;
   readonly personId: string | null;
+  /** The participant, or the position's current holders joined by commas; null when a position is vacant. */
+  readonly personName: string | null;
 }
 
 export interface TaskDependencyView {
@@ -109,6 +121,8 @@ export interface TaskDependencyView {
 
 export interface IncidentTask {
   readonly id: string;
+  /** The task's short number, shown as TASK-204. */
+  readonly number: number;
   readonly incidentId: string;
   readonly item: string;
   readonly category: string;

@@ -222,6 +222,24 @@ export const STANDARD_TEMPLATES: readonly BoardTemplate[] = [
     ],
     views: [{ key: "all", title: "All reports", columns: ["summary", "category"] }],
   }),
+  // Version 2 adds verification: the EOC marks a report verified once it is confirmed.
+  t({
+    key: "field_reports",
+    version: 2,
+    title: "Field Reports",
+    description: "Geotagged field observations with a photo (field capture), verified by the EOC.",
+    fields: [
+      { key: "summary", label: "Summary", type: "text", required: true, maxLength: 500 },
+      { key: "category", label: "Category", type: "enum", values: ["hazard", "damage", "resource", "other"], required: true },
+      { key: "photo", label: "Photo", type: "attachment" },
+      { key: "location", label: "Location", type: "geometry", geometryKind: "point" },
+      { key: "verified", label: "Verified", type: "boolean" },
+    ],
+    views: [
+      { key: "all", title: "All reports", columns: ["summary", "category", "verified"] },
+      { key: "unverified", title: "Unverified reports", columns: ["summary", "category"], where: [{ field: "verified", op: "neq", value: true }] },
+    ],
+  }),
   t({
     key: "damage_assessment",
     version: 1,

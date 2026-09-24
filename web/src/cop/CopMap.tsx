@@ -218,6 +218,8 @@ export interface CopMapProps {
   readonly onMap?: ((map: maplibregl.Map) => void) | undefined;
   /** Stored incident context printed outside the map frame in PNG exports. */
   readonly exportContext?: MapExportContext | undefined;
+  /** "card" shows the map alone, for a map inside an overview card; the layer panel stays on the Map screen. */
+  readonly layout?: "workspace" | "card" | undefined;
 }
 
 let pmtilesRegistered = false;
@@ -1225,7 +1227,7 @@ export function CopMap(props: CopMapProps) {
     && !(terrain && layerMatches("Hillshade"));
 
   return (
-    <div className="eoc-cop-container">
+    <div className="eoc-cop-container" data-layout={props.layout ?? "workspace"}>
     <div className="eoc-cop-workspace" data-inspecting={selection ? true : undefined} data-testid="cop-workspace">
       <nav aria-label="Map layers" className="eoc-cop-layers">
         <header>

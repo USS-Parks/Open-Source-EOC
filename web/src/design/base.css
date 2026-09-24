@@ -26,6 +26,16 @@ textarea {
   border-radius: var(--eoc-radius-sm, 4px);
 }
 
+/* A native date or time field moves focus between its segments inside the
+   control, where Chrome does not match :focus-visible on the field itself and,
+   on the picker button, not even :focus, so the field shows the ring whenever
+   focus is anywhere inside it. */
+:where(input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], input[type="week"]):is(:focus, :focus-within) {
+  outline: 2px solid var(--eoc-focus);
+  outline-width: var(--eoc-focus-width, 2px);
+  outline-offset: 2px;
+}
+
 /* Text fields and selects keep a 3:1 boundary so they can be found (WCAG
    1.4.11). Screen stylesheets draw their controls with the lighter divider
    border, so this rule outranks them; the navy command bar and a field
@@ -57,6 +67,7 @@ textarea {
    stay visible without the theme's fills. */
 @media (forced-colors: active) {
   :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible,
+  :where(input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], input[type="week"]):focus-within,
   /* MapLibre draws its controls' focus as a shadow, which forced colors remove. */
   .maplibregl-ctrl-group button:focus-visible,
   .maplibregl-ctrl-attrib-button:focus-visible {

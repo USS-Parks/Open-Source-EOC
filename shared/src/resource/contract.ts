@@ -34,6 +34,8 @@ export type ResourceAssignmentView = z.infer<typeof ResourceAssignmentViewSchema
 
 export const ResourceRequestSummarySchema = z.object({
   id: z.uuid(),
+  /** The request's short number, shown as REQ-1027. */
+  number: z.number().int().positive(),
   incidentId: z.uuid().nullable(),
   item: z.string().min(1),
   quantity: z.number().int().positive(),
@@ -47,6 +49,9 @@ export const ResourceRequestSummarySchema = z.object({
   resourceType: z.number().int().nullable(),
   /** Every cost recorded on the request, in cents. */
   costCents: z.number().int().nonnegative(),
+  neededBy: z.iso.datetime({ offset: true }).nullable(),
+  notes: z.string().nullable(),
+  createdAt: z.iso.datetime({ offset: true }),
 });
 export type ResourceRequestSummary = z.infer<typeof ResourceRequestSummarySchema>;
 

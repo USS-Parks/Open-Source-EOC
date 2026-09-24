@@ -109,6 +109,13 @@ export const iconRegistry = {
     { element: "line", x1: 8, y1: 9, x2: 16, y2: 9 },
     { element: "line", x1: 8, y1: 13, x2: 13, y2: 13 },
   ]),
+  dashboards: icon("Dashboards", "navigation", "Dashboard tiles with a bar chart", NAV_SIZES, [
+    { element: "rect", x: 3, y: 3.5, width: 18, height: 17, rx: 2 },
+    { element: "line", x1: 3, y1: 9, x2: 21, y2: 9 },
+    { element: "line", x1: 8, y1: 17, x2: 8, y2: 13 },
+    { element: "line", x1: 12, y1: 17, x2: 12, y2: 11.5 },
+    { element: "line", x1: 16, y1: 17, x2: 16, y2: 14.5 },
+  ]),
   settings: icon("Settings", "navigation", "Eight-tooth settings gear", NAV_SIZES, [
     { element: "circle", cx: 12, cy: 12, r: 3 },
     { element: "path", d: "M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1" },
@@ -224,6 +231,11 @@ export const iconRegistry = {
     { element: "circle", cx: 12, cy: 12, r: 4 },
     { element: "path", d: "M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M18.7 5.3l-1.8 1.8M7.1 16.9l-1.8 1.8" },
   ]),
+  alertCircle: icon("Needs attention", "action", "Exclamation mark in a circle", ACTION_SIZES, [
+    { element: "circle", cx: 12, cy: 12, r: 9 },
+    { element: "line", x1: 12, y1: 7, x2: 12, y2: 13 },
+    { element: "circle", cx: 12, cy: 16.6, r: 0.9, fill: "currentColor" },
+  ]),
   incident: icon("Incident", "action", "Incident folder with a check", ACTION_SIZES, [
     { element: "path", d: "M3.5 7.5h17V20h-17Z" },
     { element: "path", d: "M8 7.5V4.5h8v3" },
@@ -331,6 +343,7 @@ export const destinationIconByKey = {
   templates: "templates",
   settings: "settings",
   boardCustomization: "boardCustomization",
+  dashboards: "dashboards",
 } as const satisfies Readonly<Record<string, IconName>>;
 
 export type DestinationIconKey = keyof typeof destinationIconByKey;
