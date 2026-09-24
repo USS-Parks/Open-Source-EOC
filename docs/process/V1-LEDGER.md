@@ -2840,3 +2840,67 @@ tagging remain separately gated as section 1 of the roster states.
   `resource_requests(incident_id)`.
 - **Rollback:** revert both commits; a database that ran `0128` needs a
   forward migration restoring the earlier `has_guest_scope` body.
+
+## V1 W6.0: one-command server install
+
+- **What changed.** `deploy/install.sh` takes a Linux host with Docker to a
+  working sign-in page over HTTPS in one command. It checks Docker, the
+  compose plugin, the daemon, `curl` and `sha256sum`; generates secrets into
+  `deploy/.env` on the first run and never prints them; records
+  `OPENEOC_DOMAIN` and the certificate choice (an ACME email, or a supplied
+  pair copied to `deploy/tls/`); fetches the archives listed in `SHA256SUMS`
+  from `OPENEOC_BASEMAP_URL` and checks every listed file on every run,
+  refusing a mismatch or a name with a path; writes `runtime-config.js`
+  naming only the archives that passed; starts the database and sets the
+  runtime role's password; runs `bootstrap` only when no instance admin
+  exists, with a generated password kept in `deploy/admin-password.txt`
+  (mode 600) once the admin is created; starts the stack and waits for the
+  page and a 401 from the API over HTTPS. A re-run keeps the secrets and does
+  not bootstrap again.
+  - The compose stack gains `web`: Caddy (`caddy:2.10.0-alpine`), built from a
+    new `web` target of `deploy/Dockerfile`, terminates TLS, redirects HTTP,
+    proxies `/api/` with its WebSocket streams, and serves the bundle and the
+    archives. Its cache rules match the Windows static host: hashed `/assets/`
+    immutable for a year, other static files `no-cache` with ETag and
+    Last-Modified, the page and runtime config `no-store`; byte ranges and
+    If-Range come from `file_server`, and nothing is compressed. All three
+    services keep the observability unit's log rotation. This carries the
+    compose half of W5.2.
+  - New `deploy/Caddyfile`, `deploy/Dockerfile.dockerignore` (keeps `.env`,
+    host `node_modules` and archives out of the build context, which the old
+    `COPY . /app` would have included) and `deploy/.gitignore`.
+    `deploy/README.md` rewrites the install section and adds Certificates, Map
+    archives, Caching, the offline boundary and configuration rows. The root
+    `README.md` status bullet that said the Docker path had no web service,
+    TLS or bootstrap now states the offline-only validation.
+- **Defaults and deviations.** One Caddy service serves the static files and
+  the proxy, where the roster names a web service and a proxy. The API port is
+  published on loopback only. `OPENEOC_TRUST_PROXY` defaults to `uniquelocal`.
+  Compose refuses to run without `OPENEOC_DOMAIN` and `OPENEOC_TLS`, so an
+  older install re-runs `install.sh` once. The admin password is generated,
+  not supplied. No default archive URL exists because no release is
+  published; a `SHA256SUMS` fetched from the release guards against
+  corruption, not substitution, and a trusted local copy is used when present.
+  `OPENEOC_GAZETTEER_PATH` defaults to `/basemap/gazetteer.tsv` in compose.
+- **Schema, contract, dependencies.** No schema or contract change. Adds the
+  `caddy:2.10.0-alpine` image, Apache-2.0.
+- **Verification.** In the lane, tag `a`: `pnpm -r exec tsc --noEmit` exit 0;
+  `pnpm exec eslint .` exit 0; `pnpm exec vitest run deploy/install.test.mjs`,
+  1 file and 5 tests passed, covering the first run and a re-run with stand-in
+  `docker` and `curl`, no secret in the output, a checksum mismatch that
+  leaves no file, refusals without a host name, with a bad host name, without
+  a certificate choice and with a path in `SHA256SUMS`, a supplied pair with
+  the bundled basemap fallback, and the Caddyfile cache rules; `bash -n`
+  clean; `docker compose config` exit 0 with the variables set and exit 1
+  with the named message without them. The integrating session rebased onto
+  `79ecd8c` and re-ran the install test (5 passed) and the link checker (ok,
+  86 files).
+- **Evidence level:** unit and document. No image was built or pulled, Caddy
+  has not parsed the Caddyfile (no binary on this machine), and no
+  certificate was issued: those are outbound actions. The first real run on a
+  Linux host is Basho's external action; the supplied-pair expansion of
+  `tls {$OPENEOC_TLS}` is the first thing to watch on it.
+- **Deferred:** the Overture release sidecar on the Docker path; resuming an
+  interrupted download; the HTTP/3 port; the first real run.
+- **Rollback:** revert both commits; the database and blob volumes are
+  unchanged, and the `caddy-data` and `caddy-config` volumes can be removed.
