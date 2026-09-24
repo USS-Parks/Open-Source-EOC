@@ -3736,3 +3736,80 @@ tagging remain separately gated as section 1 of the roster states.
   partial until then.
 - **Evidence level:** document.
 - **Rollback:** none needed; documents only.
+
+## V1 W2.12: network calls out of every write path
+
+- **Why.** Added during execution, as W2.11 was: a read-only audit for the
+  reconciliation found gate line 4 ("No network call awaited inside any write
+  path") not met, and INV-2 not met for notification rule creation.
+- **What changed.** No write path awaits the network inside a database
+  transaction.
+  - IPAWS send confirmation: one transaction checks the request, claims it as
+    confirmed, audits the confirmation and loads the endpoint, credential and
+    CAP XML; IPAWS-OPEN is called with no transaction open; a second
+    transaction records the submission, its audit and the submission id. A
+    confirmed request is never sent again, so a send that fails in transit is
+    recorded as rejected with "IPAWS-OPEN did not answer" and the reason. If
+    the process stops between the call and the record, the request stays
+    confirmed with no submission and a new send must be requested;
+    `docs/IPAWS-ENABLEMENT.md` says so.
+  - Resource request escalation: one transaction checks the request and claims
+    it through the new `escalation_claimed_at` column, refusing a second
+    escalation with 409 while the claim is under a minute old; delivery to the
+    peer runs with no transaction open; a second transaction records the
+    chronology event and `rr.escalated` and releases the claim. A failed
+    delivery releases the claim, records nothing and answers 502 as before.
+  - Collaboration: provision, sync, announce and archive read in one
+    transaction, call the backend with none open, and write in another; the
+    backend calls are idempotent. Incident activation provisions after it
+    commits, close archives after it commits, assignment sync runs after the
+    assignment commits, and a published JIC release announces in its
+    incident's channels after publication commits.
+  - Feed polls, a fourth path the audit's sweep found: a poll from the route or
+    the scheduler fetches outside any transaction and writes its items or its
+    failure in a second transaction.
+  - Creating a notification rule writes `notification.rule_created` with the
+    rule body (INV-2); `docs/guides/ADMIN.md` says so.
+- **Checked and clean:** the delivery outbox (claim, send and settle each on
+  their own), federation push through the outbox, the reports scheduled email
+  sent after commit, the notification channel test send, syslog forwarding,
+  and the OIDC callback, whose token exchange precedes any database write.
+  `postAlert`, the recorded-fixture single-admin path, runs inside its caller's
+  transaction but refuses the HTTP transport and no route reaches it.
+- **Gate line 5.** `GET /api/v1/templates` stays unpaged, with the reason: one
+  row per template key, registered or imported only by an instance admin,
+  bounded like the versions list.
+- **Defaults and deviations.** The escalation guard is a claim column rather
+  than a state check, since escalating does not change the request row and a
+  state check could not stop a duplicate delivery. The
+  `jic.release_published` payload no longer lists "collab"; the announcement
+  has its own `collab.announced` or `collab.degraded` event and publication
+  row, and the response still lists the channel. Ownership deviations:
+  `server/src/app.ts` (the assignment sync call site), `server/src/jic/**`,
+  `server/src/feeds/**` and `feeds.test.ts`, the migration, and two guide
+  passages.
+- **Schema, contract, dependencies.** Migration `0130_escalation_claim.sql`
+  adds the nullable column. No route changed. No dependency.
+- **Verification.** In the lane, tag `a`, on `9b9c110`: the new
+  `write-path-network.test.ts`, whose network stand-in counts this test
+  database's backends idle in an open transaction while each call is awaited,
+  failed 11 of 11 before the fix (10 saw an open transaction; the concurrent
+  escalation got 200 where 409 was expected) and passes 11 of 11 after;
+  `notification-rule-management.test.ts` failed before the fix on the missing
+  creation event; a focused batch of 16 files (write-path-network,
+  notification-rule-management, notify, notify-channels, collab, resource,
+  resource-typing, feeds, scheduler, ipaws, jic, incidents, incident-lifecycle,
+  security, api-docs, route-coverage), 122 of 122 passed; the integrations,
+  JIC and resources, and IPAWS send browser walks, 6 of 6. The lane's tsc
+  reported one error that came with its base: the cross-boundary walk passed
+  Playwright's `intervals` to vitest's `expect.poll`; the integrating session
+  fixed it on `main` in `c9c4e6a`. After rebasing onto `c9c4e6a`: tsc and
+  eslint exit 0; `pnpm exec vitest run` over write-path-network,
+  notification-rule-management, ipaws and api-docs, 4 files and 36 tests
+  passed; link checker ok, 94 files.
+- **Evidence level:** unit, real-database integration and browser.
+- **Deferred:** the peer's receive lane does not refuse a duplicate
+  `originRequestId`; a claim left by a stopped process lapses after one
+  minute.
+- **Rollback:** revert both commits; the `0130` column is nullable and the
+  earlier code runs with it in place.
