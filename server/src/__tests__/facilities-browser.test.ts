@@ -172,20 +172,24 @@ describe("facilities surface", () => {
     await page.getByText("2 facilities are on the map. Hospitals and shelters show their NAPSG symbol.").waitFor();
     const find = page.getByLabel("Find on map");
     const inspect = async (name: string, type: string, status: string) => {
-      // The map reads its layer on a poll, so the search repeats until it catches up.
+      const hit = page.getByRole("button", { name: new RegExp(`^${name}`) });
+      const inspector = page.getByTestId("cop-feature-inspector");
+      const close = inspector.getByRole("button", { name: "Close selected map feature" });
+      // The map reads its layer on a poll, so the search repeats until the
+      // layer carries the latest status report, not just the facility.
       await expect.poll(async () => {
+        if (await close.count()) await close.click();
         await find.fill(name);
         await find.press("Enter");
-        return page.getByRole("button", { name: new RegExp(`^${name}`) }).count();
-      }, { timeout: 15_000 }).toBe(1);
-      await page.getByRole("button", { name: new RegExp(`^${name}`) }).click();
-      const inspector = page.getByTestId("cop-feature-inspector");
-      await inspector.getByRole("heading", { name }).waitFor();
+        if (await hit.count() !== 1) return "";
+        await hit.click();
+        await inspector.getByRole("heading", { name }).waitFor();
+        return (await inspector.textContent()) ?? "";
+      }, { timeout: 60_000 }).toContain(`Operational status${status}`);
       const text = await inspector.textContent();
       expect(text).toContain("Operational facility");
       expect(text).toContain(`Facility type${type}`);
-      expect(text).toContain(`Operational status${status}`);
-      await inspector.getByRole("button", { name: "Close selected map feature" }).click();
+      await close.click();
     };
     await inspect("Klamath General", "Hospital", "Warning");
     await inspect("Weitchpec Gym", "Shelter", "Normal");

@@ -2634,3 +2634,71 @@ tagging remain separately gated as section 1 of the roster states.
   type; guest read of the resource module.
 - **Rollback:** revert both commits; migration `0127` adds only new tables and
   two nullable columns.
+
+## V1 CI stability: the deep-link race and the recurring red runs
+
+- **Why.** Basho, 2026-09-23: the pushes to `main` showed red CI runs nearly
+  every time. Forty failed runs were tallied by failing line. Every failure
+  was one of six places: `app-e2e.test.ts:783` (13 runs),
+  `facilities-browser.test.ts:187` (12), `load.test.ts:286` (8),
+  `boards-workspace-browser.test.ts:191` and `192` (8),
+  `esf-workspace-browser.test.ts:121` (3) and
+  `authorized-viewing-browser.test.ts:167` (2). A plan to leave the Chromium
+  walks and the load benchmark out of hosted CI was refused by the session's
+  safety check as a CI bypass and reverted; this unit fixes the causes
+  instead, and no test was removed or skipped.
+- **What changed.**
+  - A product defect, `web/src/app/layout/context.tsx`: the workspace settings
+    loader read the route when it started loading and, when the load finished,
+    wrote that stale route back into the address. A deep link that arrived
+    meanwhile lost its record, filter and operational period. On a slow
+    machine the loader lost the race often, which is the `app-e2e` failure
+    (the record parameter vanished, so "Record unavailable in this view" never
+    rendered) and a likely cause of the `boards-workspace` filter wait. The
+    loader now reads the route when the load finishes.
+  - `facilities-browser.test.ts` polled only until the facility appeared on
+    the map, then read the inspector while the map's polled layer could still
+    carry the status before the report; it now polls until the reported
+    status shows.
+  - `boards-workspace-browser.test.ts` counted a filtered-out row before the
+    filter applied ("Support staging" is on the unfiltered list too); it now
+    waits for the row to leave.
+  - `authorized-viewing-browser.test.ts` counted the previous dashboard's text
+    in the same tick as the refusal rendered; it now waits for it to unmount.
+  - `load.test.ts` stopped after 40 rounds of 32 KiB updates, about 1.7 MB,
+    which Linux loopback's socket buffers can absorb before the server queues
+    anything, so the stalled reader was sometimes never shed there. The rounds
+    now run until the reader is shed, up to 200. The latency bound is
+    unchanged.
+  - Earlier in the session, `fa94a75`: the CI secret scan could not list a
+    pull request's commits (403 "Resource not accessible by integration") and
+    failed on every pull request; the job now has read access to pull
+    requests, and a newer push to a branch cancels its run in progress.
+- **Defaults and deviations.** The `esf-workspace-browser` beforeAll wait was
+  not reproduced and is left as it is; if it recurs, its failure names the
+  missing "ESF coordination" button. Ownership: `web/src/app/layout/context.tsx`
+  sits in the address search unit's territory, which had landed.
+- **Also found.** Since `12d430e` GitHub starts no CI job on this repository:
+  "The job was not started because recent account payments have failed or
+  your spending limit needs to be increased." The repository is private, so
+  Actions minutes are billed; each run of the check job takes about 22 minutes
+  and forty runs were recorded in a day. Restoring billing is Basho's account
+  action. From here the integrating session pushes landings in batches rather
+  than one push per commit.
+- **Schema, contract, dependencies:** none.
+- **Verification.** Tag `main`, with three lanes running tests on the same
+  machine: before the fix, `pnpm exec vitest run
+  server/src/__tests__/app-e2e.test.ts` failed at line 783 as CI did, and a
+  state dump showed the address without its `record` parameter; a new jsdom
+  test, "keeps a deep link that arrives while the workspace settings are still
+  loading", ended with `period=1` and no record or filter before the fix.
+  After it: `pnpm exec vitest run` over app-e2e, facilities-browser,
+  boards-workspace-browser, authorized-viewing-browser and shell-context with
+  `--maxWorkers=1`, 5 files and 15 tests passed, 0 failed;
+  `pnpm exec vitest run server/src/__tests__/load.test.ts --maxWorkers=1`, 1
+  file and 4 tests passed; `pnpm -r exec tsc --noEmit` exit 0; `pnpm exec
+  eslint .` exit 0. Hosted CI could not confirm, for the billing reason above.
+- **Evidence level:** unit, browser and real-database.
+- **Deferred:** the `esf-workspace-browser` wait; confirmation on hosted CI
+  once billing is restored.
+- **Rollback:** revert the commit.

@@ -164,7 +164,8 @@ describe("authorized viewing in a real browser", () => {
       (globalThis as unknown as { location: { hash: string } }).location.hash = `#/dashboard/${id}`;
     }, dashboardB);
     await page.getByRole("alert").filter({ hasText: "dashboard not found" }).waitFor({ timeout: 5000 });
-    expect(await page.getByText("EOC Status").count()).toBe(0);
+    // The previous dashboard unmounts after the refusal renders.
+    await expect.poll(() => page.getByText("EOC Status").count(), { timeout: 5000 }).toBe(0);
     await page.evaluate((id) => {
       (globalThis as unknown as { location: { hash: string } }).location.hash = `#/dashboard/${id}`;
     }, dashboardA);

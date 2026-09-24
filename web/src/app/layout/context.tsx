@@ -219,7 +219,6 @@ export function WorkspaceContextProvider(props: {
       return;
     }
     setPhase("loading");
-    const route = parseRouteHash(location.hash);
     void Promise.all([
       client.getIncidentArea(incidentId),
       client.incidentAreaHistory(incidentId),
@@ -228,6 +227,9 @@ export function WorkspaceContextProvider(props: {
         optionalState(client.getWorkspaceState(incidentId, "workspace_layout", arrangement))),
     ]).then(([current, history, preferenceState, mapState, boardsState, planningState]) => {
       if (capturedGeneration !== generation.current) return;
+      // Read the route now, not when loading began: a deep link that arrived
+      // meanwhile carries its own record, filter and period.
+      const route = parseRouteHash(location.hash);
       const allPeriods = periodChoices(incidentId, [current, ...history]);
       const preference = preferenceState ? parsePreferences(preferenceState.payload) : { theme: null, periodRevision: null };
       const requestedPeriod = route.context.incidentId === incidentId ? route.context.periodRevision : undefined;

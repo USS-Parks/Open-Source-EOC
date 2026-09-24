@@ -188,7 +188,8 @@ describe("operational board workspace", () => {
     const filter = page.getByPlaceholder("Filter Summary");
     await filter.fill("Support");
     await page.getByRole("main").getByText("Support staging", { exact: true }).waitFor({ state: "visible" });
-    expect(await page.getByRole("main").getByText("Bridge inspection complete", { exact: true }).count()).toBe(0);
+    // "Support staging" is on the unfiltered list too; wait for the filter to drop the other row.
+    await page.getByRole("main").getByText("Bridge inspection complete", { exact: true }).waitFor({ state: "detached" });
     await page.waitForFunction("location.hash.includes('filter=')");
     expect(page.url()).toContain("filter=");
     await page.reload();

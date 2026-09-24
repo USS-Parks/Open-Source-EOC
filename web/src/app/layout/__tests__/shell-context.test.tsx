@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiClient, ApiError, type Me } from "../../api/client.js";
 import { SessionProvider } from "../../auth/session.js";
 import { IncidentProvider, IncidentSwitcher } from "../../incident/context.js";
-import { useSurface } from "../../router.js";
+import { parseRouteHash, surfaceHash, useSurface } from "../../router.js";
 import { WorkspaceContextProvider, useWorkspaceContext } from "../context.js";
 
 const person: Me = {
@@ -241,5 +241,30 @@ describe("workspace context", () => {
     await waitFor(() => expect(screen.getByTestId("phase").textContent).toBe("current"));
     expect(screen.getByTestId("surface").textContent).toBe("not-found");
     expect(location.hash).toContain("#/unknown-workspace?");
+  });
+
+  it("keeps a deep link that arrives while the workspace settings are still loading", async () => {
+    const preference = deferred<SavedStateRecord>();
+    const api = client({
+      getWorkspaceState: vi.fn((incidentId: string, kind: string, _key: string) => {
+        if (kind === "workspace_preferences") return preference.promise;
+        return missing();
+      }),
+    });
+    localStorage.setItem("openeoc.tokens", JSON.stringify({ accessToken: "A", resumeToken: "R" }));
+    render(<Harness api={api} />);
+    await screen.findByRole("option", { name: "Harbor Flood" });
+    await waitFor(() => expect(api.getWorkspaceState).toHaveBeenCalled());
+    expect(screen.getByTestId("phase").textContent).toBe("loading");
+    location.hash = surfaceHash({ kind: "board", id: "board-1" }, { incidentId: "incident-1", periodRevision: 2, recordId: "record-9", filter: "Support" });
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await waitFor(() => expect(screen.getByTestId("surface").textContent).toBe("board"));
+
+    preference.resolve(state("incident-1", "workspace_preferences", "shell", 3, { theme: "dark", periodRevision: 1 }));
+    await waitFor(() => expect(screen.getByTestId("phase").textContent).toBe("current"));
+    const context = parseRouteHash(location.hash).context;
+    expect(context.recordId).toBe("record-9");
+    expect(context.filter).toBe("Support");
+    expect(context.periodRevision).toBe(2);
   });
 });

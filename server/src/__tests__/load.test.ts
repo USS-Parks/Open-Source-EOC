@@ -274,11 +274,13 @@ describe("150 WebSocket subscribers with one stalled reader", () => {
 
       // Ordinary edits of a few hundred bytes, interleaved with 32 KiB bulk
       // updates that back the stalled reader's queue up past the ceiling. The
-      // kernel's socket buffers absorb the first few hundred KiB.
+      // kernel's socket buffers absorb the first part: a few hundred KiB on
+      // Windows, one to two MiB on Linux loopback, so the rounds run until
+      // the reader is shed rather than for a count tuned to one platform.
       const edits: number[] = [];
       const bulk: number[] = [];
       let shed = false;
-      for (let round = 0; round < 40 && !shed; round += 1) {
+      for (let round = 0; round < 200 && !shed; round += 1) {
         bulk.push(...(await send(yUpdate(32 * 1024))));
         edits.push(...(await send(yUpdate(256))));
         shed = [...wsApp.websocketServer.clients].some((socket) => socket.readyState === WebSocket.CLOSING);
