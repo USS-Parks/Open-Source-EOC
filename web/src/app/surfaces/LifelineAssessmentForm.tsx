@@ -229,10 +229,15 @@ export function LifelineAssessmentForm(props: LifelineAssessmentFormProps) {
       props.client.listPositions(hostJurisdictionId),
       props.client.listIncidentParticipants(props.incidentId),
       props.client.listResourceRequests(hostJurisdictionId, props.incidentId),
-    ]).then(([positions, participants, resources]) => {
+      // The incident's positions, which every organization on it may name as an action's owner.
+      typeof props.client.getIncident === "function" ? props.client.getIncident(props.incidentId) : Promise.reject(new Error("no incident")),
+    ]).then(([positions, participants, resources, incident]) => {
       if (!active) return;
+      const named = new Map<string, PositionRef>();
+      for (const position of incident.status === "fulfilled" ? incident.value.positions : []) named.set(position.id, position);
+      for (const position of positions.status === "fulfilled" ? positions.value : []) named.set(position.id, position);
       setReferences({
-        positions: positions.status === "fulfilled" ? positions.value : [],
+        positions: [...named.values()],
         participants: participants.status === "fulfilled"
           ? participants.value.filter((item) => !item.revokedAt && Date.parse(item.expiresAt) > Date.now())
           : [],

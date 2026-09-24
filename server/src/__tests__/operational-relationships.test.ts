@@ -125,6 +125,11 @@ describe("operational relationships", () => {
     const contributed = await apiAs(contributorToken, "POST", `/api/v1/incidents/${incidentId}/operational-relationships`, { source, target: { kind: "task", taskId: participantTaskId } });
     expect(contributed.statusCode, contributed.body).toBe(201);
     expect(contributed.json().attribution).toMatchObject({ organizationId: partnerId, participationId: activeParticipantId });
+    const [ownerRequest] = await admin`insert into resource_requests (jurisdiction_id, incident_id, origin, item, requested_by) values (${jurisdictionId}, ${incidentId}, 'eoc', 'Pump', ${adminId}) returning id`;
+    const ownersRequest = await apiAs(contributorToken, "POST", `/api/v1/incidents/${incidentId}/operational-relationships`, { source, target: { kind: "resource_request", resourceRequestId: ownerRequest!.id as string } });
+    expect(ownersRequest.statusCode, ownersRequest.body).toBe(201);
+    const again = await apiAs(contributorToken, "POST", `/api/v1/incidents/${incidentId}/operational-relationships`, { source, target: { kind: "resource_request", resourceRequestId: resourceId } });
+    expect(again.statusCode).toBe(409);
     const participantList = await apiAs(contributorToken, "GET", `/api/v1/incidents/${incidentId}/operational-relationships`);
     expect(participantList.statusCode, participantList.body).toBe(200);
     expect(participantList.json().relationships).not.toContainEqual(expect.objectContaining({ target: expect.objectContaining({ kind: "iap_objective", iapId }) }));

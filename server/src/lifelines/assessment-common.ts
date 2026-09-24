@@ -2,6 +2,7 @@ import type {
   AssessmentAttribution,
   AssessmentDecisionInput,
   StabilizationActionInput,
+  WorkflowAssignmentRequest,
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
@@ -116,11 +117,69 @@ export async function resolveAssessmentActions(
       if (!record) throw new AuthError(400, "linked board record is not attached to this incident");
     }
     const assignment = action.assignment
-      ? await resolveWorkflowAssignment(sql, actor, sourceJurisdictionId, action.assignment)
+      ? await resolveActionOwner(sql, actor, incidentId, sourceJurisdictionId, action.assignment)
       : null;
     resolved.push({ ...action, assignment, assignmentRequest: action.assignment ?? null });
   }
   return resolved;
+}
+
+/**
+ * The owner a stabilization action names. Where the writer holds assignment
+ * authority the workflow rule resolves it, as for any assignment. Otherwise
+ * the owner is named: naming records who is expected to act and creates no
+ * task or obligation, so any writer of the assessment may name one of the
+ * incident's positions or any active participant on the incident with
+ * contributor or coordinator standing.
+ */
+async function resolveActionOwner(
+  sql: Sql,
+  actor: Principal,
+  incidentId: string,
+  sourceJurisdictionId: string,
+  request: WorkflowAssignmentRequest,
+): Promise<Record<string, unknown>> {
+  try {
+    return await resolveWorkflowAssignment(sql, actor, sourceJurisdictionId, request);
+  } catch (refused) {
+    if (!(refused instanceof AuthError)) throw refused;
+    return nameActionOwner(sql, incidentId, request, refused);
+  }
+}
+
+async function nameActionOwner(
+  sql: Sql,
+  incidentId: string,
+  request: WorkflowAssignmentRequest,
+  refused: AuthError,
+): Promise<Record<string, unknown>> {
+  if (request.kind === "position") {
+    const [position] = await sql`
+      select p.id, p.key, p.title, p.jurisdiction_id from incident_positions ip
+      join positions p on p.id = ip.position_id
+      where ip.incident_id = ${incidentId} and p.id = ${request.positionId}`;
+    if (!position) throw refused;
+    return {
+      kind: "position", positionId: position.id as string, positionKey: position.key as string,
+      positionTitle: position.title as string, organizationId: position.jurisdiction_id as string,
+      authority: "incident_named",
+    };
+  }
+  if (request.incidentId !== incidentId) throw new AuthError(400, "action assignment belongs to another incident");
+  const [participant] = await sql`
+    select ip.id, ip.organization_id, ip.person_id, ip.incident_position_title, ip.role
+    from incident_participants ip
+    where ip.id = ${request.participantId} and ip.incident_id = ${incidentId}
+      and ip.revoked_at is null and ip.expires_at > now()
+      and ip.role in ('contributor', 'coordinator')
+      and eligible_incident_person(ip.person_id, ip.organization_id)`;
+  if (!participant) throw new AuthError(404, "active incident participant not found");
+  return {
+    kind: "incident_participant", participantId: participant.id as string, incidentId,
+    organizationId: participant.organization_id as string, personId: participant.person_id as string,
+    incidentPositionTitle: participant.incident_position_title as string,
+    participantRole: participant.role as string, authority: "incident_named", actorParticipationId: null,
+  };
 }
 
 export async function validateSupersedes(

@@ -4599,3 +4599,34 @@ follow here.
   tests pass 89 files and 659 tests.
 - **Evidence level:** unit and real-database.
 - **Rollback:** revert the commit.
+- **Commit:** `a4a2363`.
+
+## Partner sharing PS3: linked actions across organizations
+
+- **What changed.** A stabilization action written by a partner links any
+  request or incident board record the partner can now read (PS1 and PS2
+  made the owner's readable), and names its owner: where the writer holds
+  assignment authority the workflow rule resolves it as before; otherwise the
+  owner is named from the incident's positions or its active contributors
+  and coordinators, recorded with `authority: "incident_named"`, creating no
+  task or obligation (decision 5). The assessment form offers the incident's
+  positions alongside the writer's own. The operational relationships
+  service follows the same rule for links, and a duplicate relationship is
+  now a 409 instead of a server error. The lifeline drawer already shows the
+  owner and opens the linked request; a partner's request detail now loads.
+- **Defaults and deviations.** Decision 5 as written. A position that is on
+  the owner's roster but not on the incident is refused as not found to the
+  partner, who cannot read it. A link to another incident's request is still
+  refused.
+- **Schema, contract, dependencies.** None.
+- **Verification.** New test in `operational-assessments.test.ts`: a partner
+  coordinator links the owner's request and names the Operations Section
+  Chief (`incident_named`, the owner's organization), an unattached Finance
+  Clerk is refused, a foreign request link is refused; the same-organization
+  owner case now expects `incident_named`. `operational-relationships.test.ts`
+  adds a partner link to the owner's request and the 409 on a duplicate. With
+  `esf-assignment.test.ts` and `partner-sharing-browser.test.ts`: 4 files, 19
+  tests pass. `pnpm check:static` passes; the web unit tests pass 89 files
+  and 659 tests.
+- **Evidence level:** unit, real-database and browser.
+- **Rollback:** revert the commit.

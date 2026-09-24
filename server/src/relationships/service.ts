@@ -123,7 +123,11 @@ export async function createOperationalRelationship(sql: Sql, actor: Principal, 
   const targetId = input.target.kind === "task" ? input.target.taskId : input.target.kind === "resource_request" ? input.target.resourceRequestId : input.target.kind === "board_record" ? input.target.boardRecordId : null;
   const [created] = await sql`insert into operational_relationships (incident_id, source_domain, source_framework, source_definition_key, target_kind, target_id, target_dataset_id, target_feature_id, target_iap_id, target_iap_content_revision, target_objective_index, target_iap_objective_label, target_iap_operational_period, created_by, organization_id, position_id, position_title, participation_id)
     values (${incidentId}, ${input.source.domain}, ${input.source.framework}, ${input.source.definitionKey}, ${input.target.kind}, ${targetId}, ${input.target.kind === "map_feature" ? input.target.datasetId : null}, ${input.target.kind === "map_feature" ? input.target.featureId : null}, ${resolvedTarget.kind === "iap_objective" ? resolvedTarget.iapId : null}, ${resolvedTarget.kind === "iap_objective" ? resolvedTarget.contentRevision : null}, ${resolvedTarget.kind === "iap_objective" ? resolvedTarget.objectiveIndex : null}, ${resolvedTarget.kind === "iap_objective" ? resolvedTarget.objectiveLabel : null}, ${resolvedTarget.kind === "iap_objective" ? resolvedTarget.operationalPeriod : null}, ${actor.person.id}, ${context.homeOrganizationId}, ${context.positionId}, ${context.positionTitle}, ${context.participationId})
-    returning id`;
+    returning id`.catch((error: unknown) => {
+    if (error && typeof error === "object" && "code" in error && error.code === "23505")
+      throw new AuthError(409, "this relationship is already recorded");
+    throw error;
+  });
   const [row] = await sql`select r.*, p.display_name as person_name, j.name as organization_name,
     i.id as target_iap_visible_id, i.content_revision as current_iap_content_revision, br.board_id as target_board_id,
     br.data as target_board_data from operational_relationships r

@@ -532,12 +532,14 @@ describe("operational assessments", () => {
     expect(outsideIncident.statusCode).toBe(404);
     expect(outsideIncident.json().error).toContain("active incident participant");
 
+    // A same-organization owner is not an assignment the workflow rule allows,
+    // but naming who is expected to act is: it creates no task or obligation.
     const sameOrganization = await app.inject({
       method: "POST", url: lifelineUrl(), headers: auth(partnerToken),
       payload: lifelinePayload("stabilizing", {
         actions: [{
-          key: "same_organization_target",
-          title: "Invalid same-organization target",
+          key: "same_organization_owner",
+          title: "Named same-organization owner",
           status: "planned",
           assignment: {
             kind: "incident_participant", incidentId, participantId,
@@ -545,8 +547,10 @@ describe("operational assessments", () => {
         }],
       }),
     });
-    expect(sameOrganization.statusCode).toBe(400);
-    expect(sameOrganization.json().error).toContain("another organization");
+    expect(sameOrganization.statusCode, sameOrganization.body).toBe(201);
+    expect(sameOrganization.json().payload.actions[0].assignment).toMatchObject({
+      kind: "incident_participant", participantId, organizationId: partnerId, authority: "incident_named",
+    });
   });
 
   it("applies legacy board field-read masks without discarding preserved history", async () => {
@@ -591,6 +595,60 @@ describe("operational assessments", () => {
 
     const adminView = await app.inject({ method: "GET", url: lifelineUrl(), headers: auth(adminToken) });
     expect(JSON.stringify(adminView.json())).toContain("Legacy utility report");
+  });
+
+  it("lets a partner link the owner's request and name one of the incident's positions as the action owner", async () => {
+    const request = await app.inject({
+      method: "POST", url: `/api/v1/jurisdictions/${ownerId}/resource-requests`, headers: auth(adminToken),
+      payload: { origin: "eoc", item: "Substation generator", incidentId },
+    });
+    expect(request.statusCode, request.body).toBe(201);
+    const [operations] = await admin`
+      select p.id, p.title from incident_positions ip join positions p on p.id = ip.position_id
+      where ip.incident_id = ${incidentId} and p.key = 'operations_section_chief'`;
+    const linked = await app.inject({
+      method: "POST", url: lifelineUrl(), headers: auth(partnerToken),
+      payload: lifelinePayload("unstable", {
+        actions: [{
+          key: "stage_generator", title: "Stage the substation generator", status: "planned",
+          linkedResourceRequestId: request.json().id as string,
+          assignment: { kind: "position", positionId: operations!.id as string },
+        }],
+      }),
+    });
+    expect(linked.statusCode, linked.body).toBe(201);
+    expect(linked.json().payload.actions[0]).toMatchObject({
+      linkedResourceRequestId: request.json().id,
+      assignment: { kind: "position", positionTitle: operations!.title, organizationId: ownerId, authority: "incident_named" },
+    });
+
+    // A position on the owner's roster but not on this incident cannot be named.
+    const roster = await app.inject({
+      method: "POST", url: `/api/v1/jurisdictions/${ownerId}/positions`, headers: auth(adminToken),
+      payload: { key: "finance_clerk", title: "Finance Clerk" },
+    });
+    expect(roster.statusCode, roster.body).toBeLessThan(300);
+    const [clerk] = await admin`select id from positions where jurisdiction_id = ${ownerId} and key = 'finance_clerk'`;
+    const unattached = await app.inject({
+      method: "POST", url: lifelineUrl(), headers: auth(partnerToken),
+      payload: lifelinePayload("unstable", {
+        actions: [{
+          key: "unattached_owner", title: "Unattached owner", status: "planned",
+          assignment: { kind: "position", positionId: clerk!.id as string },
+        }],
+      }),
+    });
+    expect(unattached.statusCode).toBe(404);
+    const foreignLink = await app.inject({
+      method: "POST", url: lifelineUrl(), headers: auth(partnerToken),
+      payload: lifelinePayload("unstable", {
+        actions: [{
+          key: "foreign_link", title: "Foreign link", status: "planned",
+          linkedResourceRequestId: otherResourceId,
+        }],
+      }),
+    });
+    expect(foreignLink.statusCode).toBe(400);
   });
 
   it("rejects unrelated, closed, revoked, and cross-incident writes", async () => {
