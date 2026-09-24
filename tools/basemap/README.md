@@ -11,6 +11,10 @@ with no third-party tile provider:
    `build-bundled-basemap.sh` (needs tippecanoe and the `fontnik` npm package);
    the output lands in `web/public/basemap/basemap.pmtiles` and
    `web/public/fonts`. The style is `web/src/cop/bundledbasemap.ts`.
+   The map's find box looks up county names in `web/src/cop/county-bounds.ts`,
+   generated from `web/public/basemap/ca_counties.geojson`. After changing
+   that file, run `node tools/basemap/build-county-bounds.mjs` (Node only);
+   a unit test fails until the two match.
 2. **Self-hosted street basemap (deploy-time).** Full OpenStreetMap street-level
    detail for California, hosted by the deployment. This is the ArcGIS-grade
    basemap: streets, buildings, terrain context, place and road labels, under

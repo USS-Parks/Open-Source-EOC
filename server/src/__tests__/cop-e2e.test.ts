@@ -203,6 +203,24 @@ describe("the COP in a real browser, offline", () => {
     expect(latency).toBeLessThanOrEqual(LATENCY_BUDGET_MS);
     await page.screenshot({ path: join(SHOTS, "pcop-workspace-light.png"), fullPage: false });
 
+    // A county name resolves from the bounds bundled with the app, with no
+    // basemap mounted and no request for the county outline file.
+    const countyFileRequests: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("ca_counties.geojson")) countyFileRequests.push(request.url());
+    });
+    await find.fill("Sacramento");
+    await find.press("Enter");
+    await page.getByRole("button", { name: /Sacramento/ }).click();
+    await page.waitForFunction(() => {
+      const map = (globalThis as {__map?: { isMoving(): boolean; getCenter(): { lng: number; lat: number } }}).__map;
+      if (!map || map.isMoving()) return false;
+      const { lng, lat } = map.getCenter();
+      return lng > -121.8623 && lng < -121.0259 && lat > 38.0184 && lat < 38.7358;
+    });
+    await page.screenshot({ path: join(SHOTS, "county-find-light-1440.png") });
+    expect(countyFileRequests).toEqual([]);
+
     const darkPage = await browser.newPage({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
     const darkErrors: string[] = [];
     darkPage.on("pageerror", (error) => darkErrors.push(String(error)));

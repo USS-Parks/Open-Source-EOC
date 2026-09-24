@@ -74,6 +74,7 @@ import {
   searchFeatures,
   totalMiles,
 } from "./tools.js";
+import { COUNTY_BOUNDS } from "./county-bounds.js";
 import {
   CopFeatureInspector,
   EmptyLayerSearch,
@@ -372,7 +373,6 @@ export function CopMap(props: CopMapProps) {
   const dataRef = useRef<Record<string, CopFeatureCollection>>({});
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<FindResult[]>([]);
-  const countiesRef = useRef<Record<string, Bounds> | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const requestedFeatureRef = useRef(props.requestedFeature);
@@ -1042,29 +1042,7 @@ export function CopMap(props: CopMapProps) {
     }));
   };
 
-  /** County bounds for the find box, read once from the bundled boundaries. */
-  const loadCounties = async (): Promise<Record<string, Bounds>> => {
-    if (countiesRef.current) return countiesRef.current;
-    const out: Record<string, Bounds> = {};
-    if (assetBase) {
-      try {
-        const res = await fetch(`${assetBase}basemap/ca_counties.geojson`);
-        const fc = (await res.json()) as {
-          features?: Array<{ properties?: { name?: string }; geometry?: unknown }>;
-        };
-        for (const f of fc.features ?? []) {
-          const b = geometryBounds(f.geometry);
-          if (f.properties?.name && b) out[f.properties.name] = b;
-        }
-      } catch {
-        // Without the boundaries the find box still covers records and coordinates.
-      }
-    }
-    countiesRef.current = out;
-    return out;
-  };
-
-  const find = async (e: FormEvent) => {
+  const find = (e: FormEvent) => {
     e.preventDefault();
     const q = query.trim();
     if (!q) {
@@ -1094,9 +1072,8 @@ export function CopMap(props: CopMapProps) {
         properties: h.properties,
       });
     }
-    const counties = await loadCounties();
     const ql = q.toLowerCase();
-    for (const [name, bounds] of Object.entries(counties)) {
+    for (const [name, bounds] of Object.entries(COUNTY_BOUNDS)) {
       if (out.length >= 12) break;
       if (name.toLowerCase().includes(ql)) {
         out.push({ key: `county/${name}`, kind: "county", title: name, detail: "county", bounds });
