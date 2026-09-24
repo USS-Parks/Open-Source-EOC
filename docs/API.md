@@ -6,6 +6,8 @@ Routes marked with an integration are unregistered unless that name is
 present in the comma-separated OPENEOC_INTEGRATIONS setting.
 Routes with auth metrics-token answer 404 unless OPENEOC_METRICS_TOKEN is
 set, and then require that value as a bearer token.
+The OIDC sign-in routes, GET /api/v1/auth/oidc/start and
+GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 
 ## REST
 

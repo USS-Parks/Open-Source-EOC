@@ -208,6 +208,36 @@ foreach ($forbidden in @('data', 'test-password.txt', 'postgres.log')) {
   }
 }
 
+# The runtimes' own license texts go to app/licenses. The official Node zip, the EDB
+# PostgreSQL zip and the PostGIS bundle carry each one at these paths; an input
+# without one stops the stage before anything is copied.
+$runtimeLicenses = [ordered]@{
+  'node-LICENSE.txt' = Join-Path $NodeRuntime 'LICENSE'
+  'postgresql-server_license.txt' = Join-Path $PostgresRuntime 'server_license.txt'
+  'postgresql-commandlinetools_3rd_party_licenses.txt' = Join-Path $PostgresRuntime 'commandlinetools_3rd_party_licenses.txt'
+  'postgresql-StackBuilder_3rd_party_licenses.txt' = Join-Path $PostgresRuntime 'StackBuilder_3rd_party_licenses.txt'
+  'postgis-bundle-COPYING-GPL-2.0.txt' = Join-Path $PostgresRuntime 'bin/COPYING'
+  'postgis-bundle-LICENSE-Apache-2.0.txt' = Join-Path $PostgresRuntime 'LICENSE'
+  'pg_sphere-COPYRIGHT.txt' = Join-Path $PostgresRuntime 'COPYRIGHT.pg_sphere'
+  'ogr_fdw-LICENSE.md' = Join-Path $PostgresRuntime 'ogrfdw_LICENSE.md'
+  'pointcloud-COPYRIGHT.txt' = Join-Path $PostgresRuntime 'pgpointcloud_COPYRIGHT'
+  'gdal-LICENSE.txt' = Join-Path $PostgresRuntime 'gdal-data/LICENSE.TXT'
+}
+foreach ($license in $runtimeLicenses.GetEnumerator()) {
+  if (-not (Test-Path -LiteralPath $license.Value -PathType Leaf)) {
+    throw "Runtime license text is missing: $($license.Value). Stage from runtime inputs that carry their license files; see deploy/windows/installer/README.md."
+  }
+}
+# The notices carry the written source offer for PostGIS, which must name the version shipped.
+$thirdPartyNotices = Join-Path $windowsRoot 'installer/THIRD-PARTY-NOTICES.txt'
+Require-File $thirdPartyNotices 'Third-party notices'
+$postgisControl = Get-Content -LiteralPath (Join-Path $PostgresRuntime 'share/extension/postgis.control') -Raw
+if ($postgisControl -notmatch "default_version\s*=\s*'([^']+)'") { throw 'The PostGIS version could not be read from postgis.control.' }
+$postgisVersion = $Matches[1]
+if ((Get-Content -LiteralPath $thirdPartyNotices -Raw) -notmatch "PostGIS $([regex]::Escape($postgisVersion))\b(?!\.\d)") {
+  throw "THIRD-PARTY-NOTICES.txt does not name the shipped PostGIS $postgisVersion. Update its source offer before staging."
+}
+
 Require-File (Join-Path $RepoRoot 'node_modules/typescript/lib/typescript.js') 'TypeScript runtime loader dependency'
 $buildProvenance = Require-FreshDesktopBuild $RepoRoot $DesktopBuildRoot $NodeRuntime
 
@@ -226,6 +256,10 @@ try {
 
   foreach ($file in @('package.json', 'LICENSE', 'NOTICE')) {
     Copy-File (Join-Path $RepoRoot $file) (Join-Path $appRoot $file)
+  }
+  Copy-File (Join-Path $windowsRoot 'installer/THIRD-PARTY-NOTICES.txt') (Join-Path $appRoot 'THIRD-PARTY-NOTICES.txt')
+  foreach ($license in $runtimeLicenses.GetEnumerator()) {
+    Copy-File $license.Value (Join-Path $appRoot "licenses/$($license.Key)")
   }
   foreach ($file in @('desktop.mjs', 'ts-loader.mjs', 'Open-Source-EOC.ps1', 'Open Source EOC.cmd')) {
     Copy-File (Join-Path $windowsRoot $file) (Join-Path $appRoot "deploy/windows/$file")

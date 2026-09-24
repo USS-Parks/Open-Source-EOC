@@ -7,3 +7,5 @@ Open Source EOC Demo creates clearly labeled synthetic exercise data. Do not use
 Application data, PostgreSQL data, secrets, logs, attachments, and browser state live in %LOCALAPPDATA%\Open Source EOC. Uninstall removes the application files and leaves that data intact for a later reinstall, backup, or deliberate administrator-managed removal.
 
 The installer includes the portable Node and PostgreSQL/PostGIS runtime and its selected local map assets. It does not install a Windows service or contact external network services while running.
+
+Their licenses, the OpenStreetMap attribution for the map data, and a written offer for the source code of the GPL-licensed PostGIS components are in THIRD-PARTY-NOTICES.txt and the licenses folder of the installed app.

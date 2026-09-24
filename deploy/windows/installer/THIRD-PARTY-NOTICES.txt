@@ -1,0 +1,147 @@
+Open Source EOC third-party notices
+===================================
+
+Open Source EOC is licensed under the Apache License 2.0; see LICENSE and
+NOTICE beside this file. That license does not cover the third-party
+software and data listed here, which keep their own terms. Paths are
+relative to the folder that holds this file, the app folder of the
+installation (by default %LOCALAPPDATA%\Programs\Open Source EOC\app).
+Items marked "when included" ship only in a setup staged with the optional
+map archives.
+
+
+Runtimes
+--------
+
+Node.js
+  runtime/node. MIT License, with the notices of the components Node.js
+  bundles: licenses/node-LICENSE.txt. npm and Corepack keep their own
+  license files under runtime/node/node_modules.
+
+PostgreSQL
+  runtime/pgsql, the PostgreSQL Windows x64 binaries published by EDB,
+  under the PostgreSQL License: licenses/postgresql-server_license.txt.
+  The libraries EDB ships with them (zstd, gettext, libiconv, pthreads,
+  OpenSSL, ICU, lz4, libpq, libxml2, libxslt and zlib) are under the
+  licenses in licenses/postgresql-commandlinetools_3rd_party_licenses.txt.
+  Stack Builder, runtime/pgsql/bin/stackbuilder.exe, comes with the curl
+  license in licenses/postgresql-StackBuilder_3rd_party_licenses.txt.
+
+PostGIS and the PostGIS Windows bundle
+  runtime/pgsql also holds the PostGIS Windows bundle for PostgreSQL 16,
+  postgis-bundle-pg16-3.6.2x64, which contains:
+  - PostGIS 3.6.2, which the PostGIS project licenses under the GNU General
+    Public License version 2 or later; pgRouting, under the GNU GPL version
+    2 or later; and osm2pgrouting, under the GNU GPL version 2. The bundle
+    ships the GPL version 2 text with osm2pgrouting:
+    licenses/postgis-bundle-COPYING-GPL-2.0.txt. See the written offer
+    below.
+  - h3-pg, under the Apache License 2.0:
+    licenses/postgis-bundle-LICENSE-Apache-2.0.txt.
+  - pgSphere: licenses/pg_sphere-COPYRIGHT.txt.
+  - ogr_fdw, under the MIT License: licenses/ogr_fdw-LICENSE.md.
+  - pgPointcloud: licenses/pointcloud-COPYRIGHT.txt.
+  - GDAL, with the notices of the code it includes:
+    licenses/gdal-LICENSE.txt.
+  The bundle also contains GEOS, PROJ, SFCGAL, CGAL, Boost, GMP, MPFR, GSL,
+  GNU Readline, MobilityDB and other libraries in runtime/pgsql/bin and
+  runtime/pgsql/lib, each under its own project's license. The bundle does
+  not include their license texts.
+
+TypeScript
+  node_modules/typescript, which runs the server's TypeScript sources.
+  Apache License 2.0: node_modules/typescript/LICENSE.txt.
+
+Server npm packages
+  server/node_modules holds the server's production dependencies. Each
+  package keeps its package.json, which declares its license, and nearly
+  all keep their own license file beside it. When this file was written,
+  three did not: postgres, under the Unlicense, a public-domain dedication;
+  and abstract-logging and @nodable/entities, under the MIT License as
+  their package.json and README state.
+
+Web application
+  web/dist is compiled from the web workspace's npm packages, under the
+  licenses each package declares. The MapLibre GL JS worker file keeps its
+  BSD-3-Clause license header. In the source repository,
+  scripts/license-scan.mjs checks every installed package's declared
+  license against the licenses the project refuses.
+
+
+Map data
+--------
+
+OpenStreetMap (when included)
+  These files are databases derived from OpenStreetMap:
+  - web/public/basemap/california.pmtiles, the street basemap;
+  - web/public/basemap/buildings.pmtiles, building footprints;
+  - tools/basemap/out/gazetteer.tsv, the address search gazetteer.
+
+  © OpenStreetMap contributors. The data is available under the Open
+  Database License 1.0 (ODbL): https://opendatacommons.org/licenses/odbl/1-0/
+  See also https://www.openstreetmap.org/copyright. The map shows this
+  attribution while the street or building archive is in use.
+
+  Each file above is a whole derived database, conveyed under the ODbL. It
+  was made from the Geofabrik extract of California,
+  https://download.geofabrik.de/north-america/us/california.html, with the
+  build tools in the Open Source EOC source repository:
+  tools/basemap/generate-california.sh builds the street and building
+  archives with Planetiler, tools/basemap/build-overture-buildings.ps1 adds
+  the Overture values below to the building archive, and
+  tools/basemap/build-gazetteer.mjs builds the gazetteer from the street
+  archive. tools/basemap/README.md in that repository describes each step.
+
+Overture Maps buildings (when included)
+  web/public/basemap/buildings.pmtiles carries building use and subtype
+  values from the Overture Maps Foundation buildings release named in
+  web/public/basemap/buildings-overture.json, matched to OpenStreetMap
+  ways. © Overture Maps Foundation. Open Database License 1.0, as above.
+
+California road jurisdiction and public land overlays (when included)
+  web/public/basemap/overlays.pmtiles is compiled from public agency map
+  services: the Caltrans State Highway Network; USDA Forest Service roads;
+  Bureau of Land Management public motorized roads; National Park Service
+  public roads; CAL FIRE public land ownership, compiled from the
+  California Protected Areas Database and US Fish and Wildlife Service,
+  Department of Defense and Bureau of Indian Affairs data; and Humboldt
+  County GIS roads. web/public/basemap/overlays-manifest.json records each
+  source's address and attribution. The source services declare no reuse
+  license, and the terms for redistributing this compilation are under
+  review.
+
+Bundled basemap
+  web/public/basemap/basemap.pmtiles and ca_counties.geojson come from
+  Natural Earth and US Census boundaries, both in the public domain.
+
+Liberation Sans
+  web/public/fonts holds map label glyphs built from Liberation Sans, under
+  the SIL Open Font License 1.1: https://openfontlicense.org
+
+NAPSG Foundation symbols
+  web/public/napsg holds facility symbols from the NAPSG Foundation, under
+  the Creative Commons Attribution 4.0 International License:
+  web/public/napsg/CC-BY-4.0.txt. acquisition-manifest.json in the same
+  folder records each symbol's source.
+
+
+WRITTEN OFFER FOR SOURCE CODE
+-----------------------------
+
+runtime/pgsql contains binaries of PostGIS 3.6.2 and of other components
+licensed under the GNU General Public License or the GNU Lesser General
+Public License, among them pgRouting, osm2pgrouting, GEOS and SFCGAL, all
+from the PostGIS Windows bundle postgis-bundle-pg16-3.6.2x64.
+
+For at least three years from the date this setup was released, the Open
+Source EOC maintainers will give any third party, for a charge no more than
+the cost of physically performing the distribution, a complete
+machine-readable copy of the corresponding source code of each of those
+components, on a medium customarily used for software interchange, under
+the terms of that component's license. To ask for it, open an issue titled
+"Source request" on the project's GitHub repository,
+https://github.com/USS-Parks/Open-Source-EOC, and name the setup version.
+
+The PostGIS project also publishes the source of each release. The source
+of PostGIS 3.6.2 is postgis-3.6.2.tar.gz at
+https://download.osgeo.org/postgis/source/

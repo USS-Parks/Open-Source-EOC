@@ -104,6 +104,42 @@ test("stage carries the install icons and, with the archives, the address search
   assert.match(desktop, /process\.env\.OPENEOC_GAZETTEER_PATH = gazetteer/);
 });
 
+test("stage carries each runtime license text and the third-party notices that name them", () => {
+  const stager = read("Stage-Installer.ps1");
+  const notices = read("THIRD-PARTY-NOTICES.txt");
+  const expected = {
+    "node-LICENSE.txt": "NodeRuntime 'LICENSE'",
+    "postgresql-server_license.txt": "PostgresRuntime 'server_license.txt'",
+    "postgresql-commandlinetools_3rd_party_licenses.txt": "PostgresRuntime 'commandlinetools_3rd_party_licenses.txt'",
+    "postgresql-StackBuilder_3rd_party_licenses.txt": "PostgresRuntime 'StackBuilder_3rd_party_licenses.txt'",
+    "postgis-bundle-COPYING-GPL-2.0.txt": "PostgresRuntime 'bin/COPYING'",
+    "postgis-bundle-LICENSE-Apache-2.0.txt": "PostgresRuntime 'LICENSE'",
+    "pg_sphere-COPYRIGHT.txt": "PostgresRuntime 'COPYRIGHT.pg_sphere'",
+    "ogr_fdw-LICENSE.md": "PostgresRuntime 'ogrfdw_LICENSE.md'",
+    "pointcloud-COPYRIGHT.txt": "PostgresRuntime 'pgpointcloud_COPYRIGHT'",
+    "gdal-LICENSE.txt": "PostgresRuntime 'gdal-data/LICENSE.TXT'",
+  };
+  const staged = Object.fromEntries(
+    [...stager.matchAll(/^ {2}'([^']+)' = Join-Path \$(\w+ '[^']+')$/gm)].map((m) => [m[1], m[2]]),
+  );
+  assert.deepEqual(staged, expected);
+  assert.match(stager, /throw "Runtime license text is missing: /);
+  assert.match(stager, /Copy-File \$license\.Value \(Join-Path \$appRoot "licenses\/\$\(\$license\.Key\)"\)/);
+  assert.match(stager, /'installer\/THIRD-PARTY-NOTICES\.txt'\) \(Join-Path \$appRoot 'THIRD-PARTY-NOTICES\.txt'\)/);
+  assert.match(stager, /default_version\\s\*=/);
+  assert.match(stager, /does not name the shipped PostGIS/);
+  // The notices name exactly the files the stage writes, so neither can drift from the other.
+  const named = [...new Set([...notices.matchAll(/(?<![\w/])licenses\/([\w.+-]+)/g)].map((m) => m[1].replace(/\.$/, "")))];
+  assert.deepEqual(named.sort(), Object.keys(expected).sort());
+  assert.match(notices, /© OpenStreetMap contributors/);
+  assert.match(notices, /https:\/\/opendatacommons\.org\/licenses\/odbl\/1-0\//);
+  assert.match(notices, /WRITTEN OFFER FOR SOURCE CODE/);
+  assert.match(notices, /PostGIS \d+\.\d+\.\d+\b/);
+  assert.match(notices, /web\/public\/napsg\/CC-BY-4\.0\.txt/);
+  assert.match(notices, /overlays\.pmtiles/);
+  assert.ok(!notices.includes(String.fromCharCode(0x2014)), "the notices use no em dash");
+});
+
 test("installer ships only operator-facing production and demo profiles", () => {
   const source = read("Open-Source-EOC.iss");
   for (const profile of ["production", "demo"])

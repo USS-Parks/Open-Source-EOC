@@ -37,9 +37,12 @@ data directory is an explicit administrator action outside this installer.
 `Stage-Installer.ps1` does not download software. It requires these local,
 reviewed inputs:
 
-1. A portable Node distribution directory containing `node.exe`.
+1. A portable Node distribution directory containing `node.exe` and the
+   Node.js `LICENSE`. The official Node Windows zip carries it; the directory
+   the Node MSI installs, `C:/Program Files/nodejs`, does not.
 2. A PostgreSQL distribution directory named `pgsql`, including the PostGIS
-   extension. The approved local source may be
+   extension and the license files listed under
+   [License notices](#license-notices). The approved local source may be
    `deploy/test-runtime/out/pgsql`; pass that directory itself, never its
    parent. The script refuses a runtime that contains test cluster data,
    passwords, or logs.
@@ -74,6 +77,42 @@ The version defaults to the root `package.json` version in both scripts, and
 the compiler refuses a stage made for a different version. Pass `-Version` to
 both only when a release deliberately names another.
 
+## License notices
+
+The stage writes `THIRD-PARTY-NOTICES.txt` beside `LICENSE` and `NOTICE` at
+the root of the installed application, `%LOCALAPPDATA%\Programs\Open Source
+EOC\app`, and the runtimes' own license texts to its `licenses` folder. The
+setup's wildcard `[Files]` entry installs both. The notices, kept in this
+directory as `THIRD-PARTY-NOTICES.txt`, list each shipped component with its
+license and where its text is, carry the OpenStreetMap attribution and ODbL
+notice for the map archives and the gazetteer, and hold the written offer for
+the source of PostGIS and the other GPL- or LGPL-licensed components of the
+PostGIS bundle.
+
+The stage stops before copying anything unless the runtime inputs carry these
+files:
+
+| Input file | Staged as `licenses/...` | Source |
+|---|---|---|
+| `<node>/LICENSE` | `node-LICENSE.txt` | Official Node Windows zip |
+| `<pgsql>/server_license.txt` | `postgresql-server_license.txt` | EDB PostgreSQL zip, `pgsql/` |
+| `<pgsql>/commandlinetools_3rd_party_licenses.txt` | `postgresql-commandlinetools_3rd_party_licenses.txt` | EDB PostgreSQL zip, `pgsql/` |
+| `<pgsql>/StackBuilder_3rd_party_licenses.txt` | `postgresql-StackBuilder_3rd_party_licenses.txt` | EDB PostgreSQL zip, `pgsql/` |
+| `<pgsql>/bin/COPYING` | `postgis-bundle-COPYING-GPL-2.0.txt` | PostGIS bundle |
+| `<pgsql>/LICENSE` | `postgis-bundle-LICENSE-Apache-2.0.txt` | PostGIS bundle root |
+| `<pgsql>/COPYRIGHT.pg_sphere` | `pg_sphere-COPYRIGHT.txt` | PostGIS bundle root |
+| `<pgsql>/ogrfdw_LICENSE.md` | `ogr_fdw-LICENSE.md` | PostGIS bundle root |
+| `<pgsql>/pgpointcloud_COPYRIGHT` | `pointcloud-COPYRIGHT.txt` | PostGIS bundle root |
+| `<pgsql>/gdal-data/LICENSE.TXT` | `gdal-LICENSE.txt` | PostGIS bundle |
+
+The bundle's files land at those paths when the bundle is copied over the
+PostgreSQL directory, as its `README.txt` directs. The stage also reads the
+PostGIS version from `share/extension/postgis.control` and stops if the
+notices' source offer names another version. Of these files, the unpacked
+runtime in `deploy/test-runtime/out/pgsql` holds only `bin/COPYING`, and the
+MSI-installed Node directory holds no `LICENSE`, so a release stage needs
+inputs prepared from the official archives.
+
 ## Stage and compile
 
 Run from the repository root after the desktop build and runtime inputs are
@@ -82,7 +121,8 @@ reproducible from a release workspace.
 
 ```powershell
 $repo = 'C:/Users/17076/Documents/Open Source EOC'
-$nodeRuntime = 'C:/Program Files/nodejs'
+# Both runtimes must carry the license files listed under License notices.
+$nodeRuntime = 'C:/runtimes/node-win-x64' # the official Node Windows zip, unpacked
 $postgresRuntime = "$repo/deploy/test-runtime/out/pgsql"
 & pwsh.exe -NoLogo -NoProfile -File "$repo/deploy/windows/installer/Stage-Installer.ps1" `
   -RepoRoot $repo `

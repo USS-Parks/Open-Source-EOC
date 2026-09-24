@@ -68,18 +68,61 @@ stack. The repository does not redistribute them.
 
 ## License work open before a setup is published
 
-- The Windows setup carries no license text for Node.js or PostgreSQL, only
-  one of the PostGIS bundle's notices, and no ODbL text or attribution file
-  for the street, buildings and overlays archives or the gazetteer. Copy
-  the runtimes' license files and an ODbL notice with attribution into the
-  stage before the setup is rebuilt for release.
-- PostGIS and other GPL-licensed components of the bundle oblige a
-  distributor of their binaries to provide the corresponding source or a
-  written offer. The setup does neither yet.
-- The overlays archive's redistribution rights have not been reviewed
-  against CAL FIRE's conditions of use and each source. Until they are, the
-  setup can be built without it only by changing the stage script, which
-  requires every archive when `-IncludeOptionalBasemaps` is given.
+Done in `deploy/windows/installer/Stage-Installer.ps1`, for the next setup
+built:
+
+- The stage copies the runtimes' license texts into `app/licenses`:
+  Node.js's `LICENSE`; the EDB files `server_license.txt`,
+  `commandlinetools_3rd_party_licenses.txt` and
+  `StackBuilder_3rd_party_licenses.txt`; and the PostGIS bundle's GPL-2.0
+  `bin/COPYING`, its root Apache-2.0 `LICENSE` (h3-pg),
+  `COPYRIGHT.pg_sphere`, `ogrfdw_LICENSE.md`, `pgpointcloud_COPYRIGHT` and
+  `gdal-data/LICENSE.TXT`. A runtime input without one of them stops the
+  stage, and an installer test fails if the stage stops copying any of them.
+- It writes `THIRD-PARTY-NOTICES.txt` at the application root, from
+  `deploy/windows/installer/THIRD-PARTY-NOTICES.txt`. The notices list each
+  shipped component with its license and where its text is. For the street
+  and buildings archives and the gazetteer they give the
+  `© OpenStreetMap contributors` attribution, the ODbL 1.0 URL and the
+  extract and build tools the derived databases come from. They cover the
+  Overture enrichment, the NAPSG symbols and the Liberation Sans glyphs, and
+  hold a written offer, valid at least three years, for the source of
+  PostGIS and the other GPL- and LGPL-licensed bundle components, asked for
+  through the project's GitHub issues. The stage stops if the offer does not
+  name the PostGIS version in `postgis.control`.
+
+Still open:
+
+- **Runtime inputs.** The build machine's inputs do not carry these license
+  files, so the stage now stops on them: the MSI-installed
+  `C:/Program Files/nodejs` has no `LICENSE`, and the unpacked
+  `deploy/test-runtime/out/pgsql` has only `bin/COPYING`. A release stage
+  needs the official Node Windows zip and a `pgsql` directory holding the
+  EDB zip's three license files and the PostGIS bundle's root files, as the
+  [installer README](../deploy/windows/installer/README.md#license-notices)
+  lists. The existing `0.9.0` setup predates this work and carries none of
+  it; the setup rebuilt at release from such inputs does.
+- **Overlays rights review, for Basho.** The overlays archive's
+  redistribution rights have not been reviewed against CAL FIRE's conditions
+  of use and each source. No basis is recorded here and none was assumed.
+  The stage still ships the archive with `-IncludeOptionalBasemaps`, and the
+  notices describe the overlays and say their reuse terms are under review.
+  Before a setup is published, either record a basis here or take
+  `overlays.pmtiles` and `overlays-manifest.json` out of the stage's archive
+  list.
+- **License texts neither input carries.** Found while writing the notices:
+  the PostGIS bundle ships libraries without their license texts, among them
+  GEOS, PROJ, SFCGAL, CGAL, Boost, GMP, MPFR, GSL and GNU Readline, several
+  under the GNU GPL or LGPL; `web/dist` keeps MapLibre's license header but
+  not the texts of the other npm packages compiled into it; the Liberation
+  Sans OFL text is absent; and three server packages carry no license file
+  (`postgres`, Unlicense; `abstract-logging` and `@nodable/entities`, MIT).
+  Closing these needs the texts collected per library and per package.
+- **Keeping the offered source.** The written offer binds the maintainers
+  for three years from a setup's release. Keeping it means holding the
+  corresponding source of PostGIS 3.6.2 and the other GPL- and
+  LGPL-licensed bundle components, fetched from their upstream releases at
+  the release act.
 - `scripts/license-scan.mjs` checks the licenses of npm packages only.
   Images, runtimes, map data, fonts and icons are covered by this document by
   hand.

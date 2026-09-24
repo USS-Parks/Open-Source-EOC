@@ -55,7 +55,7 @@ No line carries a written waiver.
 | 12 | Board CSV and Excel import and export; WebEOC importer with a guide | Green | "V1 W4.1 part one: board engine depth"; "V1 W4.1 part two: board screen controls"; "V1 W4.4: WebEOC migration" |
 | 13 | Layers render past the feature cap | Green | "V1 W4.5: operational vector tiles" |
 | 14 | First-load JavaScript under 300 KB gzipped | Green | 159.8 kB in "V1 W5.0: code splitting", 161.0 kB in "V1 W5.3: remaining interface findings". The budget script is not part of `pnpm check` |
-| 15 | README, ROADMAP, register, matrix and API document agree | Green on this reconciliation | `docs/API.md` matches the contract route for route (the api-docs test). Residual: its generated header does not say the OIDC routes register only when `OPENEOC_OIDC_ISSUER` is set |
+| 15 | README, ROADMAP, register, matrix and API document agree | Green on this reconciliation | `docs/API.md` matches the contract route for route (the api-docs test), and its generated header says the OIDC sign-in routes register only when `OPENEOC_OIDC_ISSUER` is set |
 | 16 | 79D+D33 and M5 green; A11Y-T1 done; D34 done or absence recorded; 86+D35 presented | External | The exercise, review, M5 and the D34 absence are receipted, and this document presents 86+D35. Missing: the NVDA and VoiceOver pass |
 | 17 | SECURITY.md, CHANGELOG.md, versioned packages; second maintainer or waiver | External | "V1 W6.3: project hygiene for adoption"; "V1 W6.1: versioning and upgrade". Missing: a second maintainer or Basho's written INV-10 waiver |
 | 18 | Basho's aesthetic and functional acceptance of the release candidate | External | Not recorded |
@@ -120,10 +120,14 @@ categories; archiving the retired rosters (item 11); branch protection
 
 ### Open engineering work
 
-- **Before any setup is published:** license texts for the Node.js,
-  PostgreSQL and PostGIS runtimes and an ODbL notice for the archives and
-  gazetteer inside the setup; a source offer for the GPL components; a rights
-  review of the overlays archive. See
+- **Before any setup is published:** the stage now carries the runtimes'
+  license texts, an ODbL notice with attribution for the archives and
+  gazetteer, and a written source offer for the GPL components. Still open:
+  runtime inputs that carry those license files (the official Node zip; the
+  EDB and PostGIS bundle license files in `pgsql`), without which the stage
+  stops; Basho's rights review of the overlays archive; the license texts
+  of the bundle's other libraries, the web bundle's npm packages and the
+  Liberation Sans glyphs; and the offered source kept for three years. See
   [the asset inventory](docs/ASSET-LICENSES.md#license-work-open-before-a-setup-is-published).
 - **Checks and documents:** the API document's header naming the OIDC routes
   as conditional (a one-line generator change); a coverage measurement for
