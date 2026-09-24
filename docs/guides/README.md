@@ -27,6 +27,7 @@ substitute. Re-select context before acting.
 | Track facility and shelter status, hospital beds and shelter capacity | [Facilities and shelters](./FACILITIES.md) |
 | Build, run, download and schedule reports over boards | [Reports](./REPORTS.md) |
 | Create or revise board schemas | [Board designer guide](./DESIGNER.md) |
+| Move records from WebEOC | [WebEOC migration](./MIGRATION.md) |
 | Configure federation | [Federation setup](./FEDERATION-SETUP.md) |
 
 The [synthetic incident demonstration](../DEMO-SCENARIO.md) provides a guided

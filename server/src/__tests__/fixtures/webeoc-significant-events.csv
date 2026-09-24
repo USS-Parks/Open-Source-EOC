@@ -1,0 +1,10 @@
+dataid,prevdataid,entrydate,username,positionname,subscribername,Summary,Details,occurred,severity,remarks_extra
+101,0,2026-09-20 08:15:00.000,jsmith,Planning Chief,County EOC,Levee seep reported,"Station 4 crew on scene, sandbagging",2026-09-20 08:10:00,Warning,note
+102,0,2026-09-20 09:31:00.000,akim,Operations,County EOC,Road washed out on Route 96,,9/20/2026 9:30 AM,critical,
+103,0,2026-09-20 10:00:00.000,akim,Operations,County EOC,,Details only,2026-09-20 10:00:00,normal,
+104,0,2026-09-20 11:00:00.000,jsmith,Planning Chief,County EOC,Power outage,,2026-09-20 11:00:00,High,
+105,0,2026-09-20 11:30:00.000,jsmith,Planning Chief,County EOC,Shelter opened,,13/45/2026,normal,
+106,0,2026-09-20 12:00:00.000,jsmith,Planning Chief,County EOC,xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,,2026-09-20 12:00:00,normal,
+101,0,2026-09-20 13:00:00.000,jsmith,Planning Chief,County EOC,Levee seep update,,2026-09-20 13:00:00,warning,
+,,,,,,,,,,
+,,,,,,Untracked note,,2026-09-20T14:00:00-07:00,unknown,

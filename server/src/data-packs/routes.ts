@@ -3,6 +3,17 @@ import { z } from "zod";
 import { DataPackSchema } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
+import { AuthError } from "../auth/service.js";
+import { MAX_IMPORT_BYTES, readUploadedTable } from "../boards/transfer.js";
+import { publishBoardEvent } from "../events/bus.js";
+import {
+  getWebeocMapping,
+  importWebeocRecords,
+  saveWebeocMapping,
+  TimeZoneSchema,
+  WebeocMappingSchema,
+  type WebeocMapping,
+} from "./webeoc.js";
 import {
   listCatalogForIncident,
   listDatasetItems,
@@ -35,6 +46,8 @@ const LoadBody = z.union([
   z.object({ records: z.array(z.unknown()).max(10000) }).strict(),
   z.object({ error: z.string().trim().min(1).max(1000) }).strict(),
 ]);
+const BoardParams = z.object({ boardId: z.string().uuid() });
+const SaveMappingBody = z.object({ mapping: WebeocMappingSchema, timeZone: TimeZoneSchema.nullable().default(null) }).strict();
 
 export function dataPackRoutes(
   app: FastifyInstance,
@@ -104,4 +117,67 @@ export function dataPackRoutes(
       return reply.status(201).send({ pack });
     },
   );
+
+  app.get("/api/v1/boards/:boardId/webeoc-mapping", { preHandler: authenticate }, async (req) => {
+    const { boardId } = BoardParams.parse(req.params);
+    return withPerson(sql, req.principal.person.id, (tx) => getWebeocMapping(tx, req.principal, boardId));
+  });
+
+  app.put("/api/v1/boards/:boardId/webeoc-mapping", { preHandler: authenticate }, async (req) => {
+    const { boardId } = BoardParams.parse(req.params);
+    const body = SaveMappingBody.parse(req.body);
+    return withPerson(sql, req.principal.person.id, (tx) => saveWebeocMapping(tx, req.principal, boardId, body));
+  });
+
+  /**
+   * A WebEOC board export in: multipart with optional `mapping` (JSON, board
+   * field to column) and `timeZone` fields before one CSV file part.
+   * `dryRun=true` reports every row and writes nothing; otherwise the valid
+   * rows are written in one transaction and the rejected rows reported.
+   */
+  app.post("/api/v1/boards/:boardId/webeoc-import", { preHandler: authenticate }, async (req, reply) => {
+    const { boardId } = BoardParams.parse(req.params);
+    const query = z.object({ dryRun: z.enum(["true", "false"]).default("false") }).strict().parse(req.query);
+    if (!req.isMultipart()) throw new AuthError(415, "import must be multipart/form-data");
+    const part = await req
+      .file({ limits: { fileSize: MAX_IMPORT_BYTES, files: 1, fields: 2, fieldSize: 64 * 1024, parts: 3 } })
+      .catch((err: unknown) => {
+        const status = (err as { statusCode?: unknown }).statusCode;
+        const code = typeof status === "number" && status >= 400 && status < 500 ? status : 400;
+        throw new AuthError(code, err instanceof Error ? err.message : "malformed upload");
+      });
+    if (!part) throw new AuthError(400, "a file part is required");
+    const buffer = await part.toBuffer().catch((err: unknown) => {
+      const status = (err as { statusCode?: unknown }).statusCode;
+      throw new AuthError(typeof status === "number" ? status : 400, "import file exceeds the size limit");
+    });
+    const text = (name: string) => {
+      const field = part.fields[name];
+      return field && !Array.isArray(field) && field.type === "field" ? String(field.value) : undefined;
+    };
+    let mapping: WebeocMapping | undefined;
+    const mappingText = text("mapping");
+    if (mappingText !== undefined) {
+      try {
+        mapping = WebeocMappingSchema.parse(JSON.parse(mappingText));
+      } catch {
+        throw new AuthError(400, "mapping must be a JSON object of board field to column");
+      }
+    }
+    const zone = text("timeZone");
+    const timeZone = zone === undefined || zone === "" ? undefined : TimeZoneSchema.safeParse(zone).data;
+    if (zone && !timeZone) throw new AuthError(400, "unknown time zone");
+    const table = readUploadedTable(buffer);
+    const outcome = await withPerson(sql, req.principal.person.id, (tx) =>
+      importWebeocRecords(tx, req.principal, boardId, table, { dryRun: query.dryRun === "true", mapping, timeZone }));
+    // Imported records reach live views and dashboards; a bulk load sends no
+    // per-record notifications.
+    for (const record of outcome.created) {
+      publishBoardEvent({
+        jurisdictionId: outcome.jurisdictionId, boardId, boardKey: outcome.boardKey,
+        recordId: record.id, event: "record.created", record: record.data,
+      });
+    }
+    return reply.status(outcome.report.created > 0 ? 201 : 200).send(outcome.report);
+  });
 }

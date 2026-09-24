@@ -374,6 +374,8 @@ export async function insertRecord(
   parsed: Record<string, unknown>,
   incidentId?: string,
   via?: "import",
+  /** Where an imported record came from, kept on its creation event. */
+  source?: Readonly<Record<string, string>>,
 ): Promise<string> {
   const id = randomUUID();
   await sql`
@@ -388,7 +390,7 @@ export async function insertRecord(
     category: "board.record.created",
     subjectTable: "board_records",
     subjectId: id,
-    payload: { board: board.template.key, data: parsed, ...(via ? { via } : {}) },
+    payload: { board: board.template.key, data: parsed, ...(via ? { via } : {}), ...(source ? { source } : {}) },
   });
   await appendRecordWrite(sql, board.id, id, incidentId ?? null, parsed, incidentFields(board));
   return id;

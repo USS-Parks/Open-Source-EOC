@@ -4,11 +4,13 @@ import type { ApiClient, SignedAuditPage } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import { ErrorNote, Loading } from "../app/screens/parts.js";
 import { DATA_CLASS_LABELS, saveFile } from "./labels.js";
+import { WebeocImport } from "./WebeocImport.js";
 
 /**
  * Records retention per data class, the audit trail export and the
- * jurisdiction export. Nothing is purged until a period is set; the audit
- * trail itself is never purged and leaves only by export.
+ * jurisdiction export, and board records brought in from WebEOC. Nothing is
+ * purged until a period is set; the audit trail itself is never purged and
+ * leaves only by export.
  */
 export function Records(props: { client: ApiClient; jurisdictionId: string }) {
   const policies = useAsync(() => props.client.getRetention(props.jurisdictionId), [props.jurisdictionId]);
@@ -115,6 +117,7 @@ export function Records(props: { client: ApiClient; jurisdictionId: string }) {
           <Button disabled={busy} onClick={() => void exportJurisdiction()}>Export jurisdiction</Button>
         </div>
       </Panel>
+      <WebeocImport client={props.client} jurisdictionId={props.jurisdictionId} />
     </div>
   );
 }

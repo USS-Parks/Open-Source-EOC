@@ -295,7 +295,7 @@ export async function importBoardRecords(
 }
 
 /** A cell's text as a field value; the record schema checks everything else. */
-function coerceCell(field: FieldDef, raw: string): unknown {
+export function coerceCell(field: FieldDef, raw: string): unknown {
   const text = raw.trim();
   switch (field.type) {
     case "number": {

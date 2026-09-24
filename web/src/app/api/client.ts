@@ -1971,6 +1971,25 @@ export class ApiClient {
     if (options.incidentId) params.set("incidentId", options.incidentId);
     return this.request("POST", `/api/v1/boards/${encodeURIComponent(boardId)}/import?${params}`, form);
   }
+  /** The board's saved WebEOC column mapping and source time zone; writers only. */
+  webeocMapping(boardId: string): Promise<WebeocSavedMapping> {
+    return this.request("GET", `/api/v1/boards/${encodeURIComponent(boardId)}/webeoc-mapping`);
+  }
+  saveWebeocMapping(boardId: string, input: { mapping: Readonly<Record<string, string>>; timeZone: string | null }): Promise<WebeocSavedMapping> {
+    return this.request("PUT", `/api/v1/boards/${encodeURIComponent(boardId)}/webeoc-mapping`, { ...input });
+  }
+  /** Dry-run or commit a WebEOC board CSV export; a commit writes the valid rows and reports the rest. */
+  importWebeocRecords(
+    boardId: string,
+    file: Blob,
+    options: { dryRun: boolean; mapping?: Readonly<Record<string, string>>; timeZone?: string },
+  ): Promise<WebeocImportReport> {
+    const form = new FormData();
+    if (options.mapping) form.append("mapping", JSON.stringify(options.mapping));
+    if (options.timeZone) form.append("timeZone", options.timeZone);
+    form.append("file", file, "webeoc.csv");
+    return this.request("POST", `/api/v1/boards/${encodeURIComponent(boardId)}/webeoc-import?dryRun=${String(options.dryRun)}`, form);
+  }
   /** One page of a record's change history, oldest first. */
   boardRecordHistory(boardId: string, recordId: string, incidentId?: string | null, page: PageOptions = {}): Promise<{ entries: BoardRecordChange[]; nextCursor: string | null }> {
     const params = pageParams(page, new URLSearchParams(incidentId ? { incidentId } : {}));
@@ -2249,6 +2268,32 @@ export interface BoardImportResult {
   readonly ignored: readonly string[];
   readonly errorCount: number;
   readonly errors: ReadonlyArray<{ readonly row: number; readonly field?: string; readonly message: string }>;
+}
+export interface WebeocSavedMapping {
+  readonly mapping: Readonly<Record<string, string>> | null;
+  readonly timeZone: string | null;
+  readonly updatedAt: string | null;
+}
+export interface WebeocRowOutcome {
+  readonly row: number;
+  readonly dataid: string | null;
+  readonly outcome: "create" | "skip" | "reject";
+  readonly reasons: readonly string[];
+  readonly recordId?: string;
+}
+export interface WebeocImportReport {
+  readonly dryRun: boolean;
+  readonly columns: readonly string[];
+  readonly mapping: Readonly<Record<string, string>>;
+  readonly provenance: readonly string[];
+  readonly dropped: readonly string[];
+  readonly rows: number;
+  readonly valid: number;
+  readonly created: number;
+  readonly skipped: number;
+  readonly rejected: number;
+  readonly outcomes: readonly WebeocRowOutcome[];
+  readonly rejectionCsv: string;
 }
 
 

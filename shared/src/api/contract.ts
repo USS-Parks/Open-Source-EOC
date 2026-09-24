@@ -56,6 +56,7 @@ GET /api/v1/boards/:boardId/records/:recordId/history
 GET /api/v1/boards/:boardId/records/:recordId/workflow
 GET /api/v1/boards/:boardId/views/:viewKey
 GET /api/v1/boards/:boardId/views/:viewKey/export
+GET /api/v1/boards/:boardId/webeoc-mapping
 GET /api/v1/cap/alerts/:id
 GET /api/v1/corrective-actions/:id
 GET /api/v1/dashboard-templates/:key/:version/export
@@ -190,6 +191,7 @@ POST /api/v1/boards/:boardId/records/:recordId/workflow/approvals
 POST /api/v1/boards/:boardId/records/:recordId/workflow/escalations
 POST /api/v1/boards/:boardId/records/:recordId/workflow/transitions
 POST /api/v1/boards/:boardId/upgrade
+POST /api/v1/boards/:boardId/webeoc-import
 POST /api/v1/cap/alerts/:id/review
 POST /api/v1/checkins/:id/checkout
 POST /api/v1/checklist-items/:itemId/complete
@@ -306,6 +308,7 @@ POST /api/v1/resource-requests/report
 POST /api/v1/templates
 POST /api/v1/templates/import
 POST /api/v1/threads/:threadId/messages
+PUT /api/v1/boards/:boardId/webeoc-mapping
 PUT /api/v1/contact-groups/:groupId
 PUT /api/v1/contacts/:contactId
 PUT /api/v1/damage/pa-items/:id
