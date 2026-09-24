@@ -45,7 +45,8 @@ export function RecordHistory(props: { readonly load: HistoryPageLoader; readonl
       {entries.map((entry) => <li key={entry.id}>
         <strong>{ACTIONS[entry.category] ?? entry.category.replaceAll(".", " ")}{entry.corrects ? " (correction)" : ""}</strong>
         {" · "}{new Date(entry.at).toLocaleString()}
-        {" · "}{entry.actor.displayName}{entry.actor.positionTitle ? ` (${entry.actor.positionTitle})` : ""}
+        {" · "}{entry.actor.displayName}{entry.actor.positionTitle || entry.actor.organizationName
+          ? ` (${[entry.actor.positionTitle, entry.actor.organizationName].filter(Boolean).join(" · ")})` : ""}
         {entry.changes.length ? <dl>{entry.changes.map((change) => <div key={change.field}>
           <dt>{labels.get(change.field) ?? change.field}</dt>
           <dd>{historyValue(change.before)} → {historyValue(change.after)}</dd>

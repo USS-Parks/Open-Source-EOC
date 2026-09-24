@@ -4567,3 +4567,35 @@ follow here.
   web unit tests pass 89 files and 659 tests.
 - **Evidence level:** unit, real-database and browser.
 - **Rollback:** revert the commit.
+- **Commit:** `deb7fc4`.
+
+## Partner sharing PS2: incident positions and partner authors
+
+- **What changed.** Migration `0135_incident_position_sharing.sql`: everyone
+  who can read an incident reads the owner's positions attached to it and the
+  people who hold them now; the rest of the roster and past holders stay with
+  the owner's members, and only the incident owner's own positions are shared
+  this way. A holder's own assignment is still read through membership, so a
+  position assigned outside the owning organization does not become one its
+  holder can sign into. An index on `incident_positions (position_id,
+  incident_id)` serves both policies. Record details and history name a
+  partner author by the incident grant in effect when it wrote (title and
+  organization), kept after revocation; the Board record drawer and the
+  history list show "position · organization".
+- **Defaults and deviations.** Decision 7: visibility lasts while the grant
+  does, after close included, and shows the positions' current holders.
+- **Independent review.** Nothing blocking. Applied: the index, the grant in
+  effect at writing rather than the latest grant, the owner-jurisdiction
+  guard in both policies, the corrected migration comment, and the holder's
+  own assignment kept membership-only.
+- **Schema, contract, dependencies.** Migration 0135; the record actor gains
+  an optional `organizationName`. No dependencies.
+- **Verification.** `incident-position-sharing.test.ts` passes 4 of 4
+  (a partner viewer sees the incident's positions and holders but not the
+  Finance Clerk; a position owner's title and holder on the partner's task
+  list; the partner author's "Utility liaison" and organization on the
+  owner's record detail and history; revocation ends it) within the 8-file,
+  42-test run recorded for PS1. `pnpm check:static` passes; the web unit
+  tests pass 89 files and 659 tests.
+- **Evidence level:** unit and real-database.
+- **Rollback:** revert the commit.

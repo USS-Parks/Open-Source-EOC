@@ -800,7 +800,8 @@ function knownPeople(
 }
 
 function actorLabel(actor: BoardRecordDetailResponse["createdBy"]): string {
-  return actor.positionTitle ? `${actor.displayName} (${actor.positionTitle})` : actor.displayName;
+  const role = [actor.positionTitle, actor.organizationName].filter(Boolean).join(" · ");
+  return role ? `${actor.displayName} (${role})` : actor.displayName;
 }
 
 function formatDate(value: string): string {

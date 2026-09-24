@@ -512,13 +512,22 @@ export async function getBoardRecordDetail(
   const shape = await getBoardReadShape(sql, actor, boardId, incidentId);
   const board = shape.board;
   const [row] = await sql`
-    select r.*, creator.display_name as creator_name, creator_pos.title as creator_position,
+    select r.*, creator.display_name as creator_name,
+           coalesce(creator_pos.title, creator_grant.incident_position_title) as creator_position,
+           case when creator_pos.id is null then creator_grant.organization_name end as creator_organization,
            updater.display_name as updater_name,
            public.board_record_permitted(r.board_id, r.incident_id, r.created_by,
              r.created_by_position, r.id, 'edit') as can_edit
     from board_records r
     join persons creator on creator.id = r.created_by
     left join positions creator_pos on creator_pos.id = r.created_by_position
+    -- A partner author is named by the incident grant it wrote under (the
+    -- latest one granted before it wrote), kept after revocation.
+    left join lateral (
+      select ip.incident_position_title, org.name as organization_name
+      from incident_participants ip join jurisdictions org on org.id = ip.organization_id
+      where ip.incident_id = r.incident_id and ip.person_id = r.created_by
+      order by ip.created_at <= r.created_at desc, ip.created_at desc, ip.id desc limit 1) creator_grant on true
     left join persons updater on updater.id = r.updated_by
     where r.id = ${recordId} and r.board_id = ${boardId}
       and (${incidentId ?? null}::uuid is null or r.incident_id = ${incidentId ?? null})`;
@@ -528,10 +537,16 @@ export async function getBoardRecordDetail(
   const data = Object.fromEntries(Object.entries(values).filter(([key]) => readable.has(key)));
   const events = await sql`
     select e.id, e.created_at, e.category, e.payload, e.corrects, e.person_id,
-           e.position_id, p.display_name, pos.title as position_title
+           e.position_id, p.display_name, coalesce(pos.title, actor_grant.incident_position_title) as position_title,
+           case when pos.id is null then actor_grant.organization_name end as organization_name
     from audit_events e
     join persons p on p.id = e.person_id
     left join positions pos on pos.id = e.position_id
+    left join lateral (
+      select ip.incident_position_title, org.name as organization_name
+      from incident_participants ip join jurisdictions org on org.id = ip.organization_id
+      where ip.incident_id = ${row.incident_id as string | null} and ip.person_id = e.person_id
+      order by ip.created_at <= e.created_at desc, ip.created_at desc, ip.id desc limit 1) actor_grant on true
     where (e.subject_table = 'board_records' and e.subject_id = ${recordId})
        or e.corrects in (select original.id from audit_events original
           where original.subject_table = 'board_records' and original.subject_id = ${recordId})
@@ -545,7 +560,8 @@ export async function getBoardRecordDetail(
       id: event.id as string, at: new Date(event.created_at as string).toISOString(),
       category: event.category as string, corrects: event.corrects as string | null,
       actor: { personId: event.person_id as string, displayName: event.display_name as string,
-        positionId: event.position_id as string | null, positionTitle: event.position_title as string | null },
+        positionId: event.position_id as string | null, positionTitle: event.position_title as string | null,
+        organizationName: (event.organization_name as string | null) ?? null },
       payload: { fields },
     };
   });
@@ -556,10 +572,12 @@ export async function getBoardRecordDetail(
     data: { ...data, id: row.id as string },
     createdAt: new Date(row.created_at as string).toISOString(),
     createdBy: { personId: row.created_by as string, displayName: row.creator_name as string,
-      positionId: row.created_by_position as string | null, positionTitle: row.creator_position as string | null },
+      positionId: row.created_by_position as string | null, positionTitle: row.creator_position as string | null,
+      organizationName: (row.creator_organization as string | null) ?? null },
     updatedAt: new Date((row.updated_at ?? row.created_at) as string).toISOString(),
     updatedBy: row.updated_by ? { personId: row.updated_by as string, displayName: row.updater_name as string,
-      positionId: latestUpdate?.actor.positionId ?? null, positionTitle: latestUpdate?.actor.positionTitle ?? null } : null,
+      positionId: latestUpdate?.actor.positionId ?? null, positionTitle: latestUpdate?.actor.positionTitle ?? null,
+      organizationName: latestUpdate?.actor.organizationName ?? null } : null,
     archivedAt: row.archived_at ? new Date(row.archived_at as string).toISOString() : null,
     canEdit: shape.canContribute && Boolean(row.can_edit),
     history,
@@ -671,6 +689,7 @@ export interface RecordHistoryEntry {
   readonly actor: {
     readonly personId: string; readonly displayName: string;
     readonly positionId: string | null; readonly positionTitle: string | null;
+    readonly organizationName: string | null;
   };
   /** Fields this entry changed, each with its value before and after. */
   readonly changes: ReadonlyArray<{ readonly field: string; readonly before: unknown; readonly after: unknown }>;
@@ -698,10 +717,16 @@ export async function listRecordHistory(
   const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
   const rows = await sql`
     select e.seq, e.id, e.created_at, e.category, e.payload, e.corrects, e.person_id,
-           e.position_id, p.display_name, pos.title as position_title
+           e.position_id, p.display_name, coalesce(pos.title, actor_grant.incident_position_title) as position_title,
+           case when pos.id is null then actor_grant.organization_name end as organization_name
     from audit_events e
     join persons p on p.id = e.person_id
     left join positions pos on pos.id = e.position_id
+    left join lateral (
+      select ip.incident_position_title, org.name as organization_name
+      from incident_participants ip join jurisdictions org on org.id = ip.organization_id
+      where ip.incident_id = e.incident_id and ip.person_id = e.person_id
+      order by ip.created_at <= e.created_at desc, ip.created_at desc, ip.id desc limit 1) actor_grant on true
     where ((e.subject_table = 'board_records' and e.subject_id = ${recordId})
        or e.corrects in (select original.id from audit_events original
           where original.subject_table = 'board_records' and original.subject_id = ${recordId}))
@@ -722,6 +747,7 @@ export async function listRecordHistory(
       actor: {
         personId: row.person_id as string, displayName: row.display_name as string,
         positionId: row.position_id as string | null, positionTitle: row.position_title as string | null,
+        organizationName: (row.organization_name as string | null) ?? null,
       },
       changes: historyChanges(row.payload as Record<string, unknown>).filter((change) => readable.has(change.field)),
     })),
