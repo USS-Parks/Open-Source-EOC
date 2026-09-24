@@ -2765,3 +2765,78 @@ tagging remain separately gated as section 1 of the roster states.
   and board-views-browser with `--maxWorkers=2`, 4 files and 10 tests passed.
 - **Evidence level:** unit and browser.
 - **Rollback:** revert the commit.
+
+## V1 W4.9: incident lifecycle
+
+- **What changed.** Incident archival, a jurisdiction master view and an
+  opt-in per-incident lockdown, in `server/src/incidents/**` and
+  `IncidentsSurface.tsx`, with migration `0128_incident_lifecycle.sql`.
+  - An administrator of the owning jurisdiction archives a closed incident
+    and unarchives it. An archived incident leaves the default incident list
+    and so the command bar's incident choices; the list and the master view
+    take `archived=exclude|include|only`. Nothing is deleted: an archived
+    incident stays readable to those who could read it, and closure keeps it
+    read-only. Archive and unarchive are audited.
+  - The master view, `GET /api/v1/jurisdictions/:id/incidents/overview`, is
+    for members (admin, member, viewer). It lists every incident the
+    jurisdiction owns, newest first and keyset-paged, each with status, kind,
+    opened and closed times, the current operational period, open resource
+    requests, open tasks, board records, participating organizations and the
+    lockdown state, from one SQL statement under the reader's row-level
+    security. Incident Setup shows it as a kit table with archive, unarchive,
+    lock and lift actions for administrators.
+  - Lockdown carries forward the per-incident scope the historical receipt
+    "VEOC-66: Incident lockdown (guest/public read suspended)" deferred, under
+    the FOUO access model: off by default, never automatic, applied and lifted
+    only by an administrator, and audited. `has_guest_scope` keeps its body and
+    also refuses a board scope while any incident that board is attached to is
+    locked, so every guest read of the incident's boards, records, record
+    workflows and rules is refused at the row-level security wall. Members and
+    participating organizations do not pass through that helper, so their
+    access does not change. The list, the master view and the incident's setup
+    panel show the lockdown.
+  - `docs/guides/ADMIN.md` gains "Archive and lock down an incident";
+    `OPERATOR-QUICKSTART.md` gains one bullet.
+- **Defaults and deviations.** Only a closed incident is archived; a repeated
+  change answers 409, as close does. Lockdown works per board and fails closed
+  for a board shared with an unlocked incident; any incident state may be
+  locked. Rollups: finished requests are the dictionary's terminal states, so
+  drafts count as open; records are non-deleted records on the incident's
+  boards; organizations are distinct active participant organizations, the
+  owner not counted; the period is the latest area revision's. The Incidents
+  surface is now always 1320 wide so the table fits. Ownership deviation,
+  additive: `web/src/app/__tests__/incidents-surface.test.tsx` gains the
+  overview mock and a master view case. The integrator's lockdown default
+  (guest read only, opt-in) was set in the brief because the FOUO decision
+  gives authorized guests full access by default; Basho may override it.
+- **Schema, contract, dependencies.** Migration `0128`: `archived_at`,
+  `archived_by`, `locked_at`, `locked_by` on `incidents`, three check
+  constraints, a paging index and a partial index on locked incidents, and
+  the replaced `has_guest_scope` with a pinned search path and qualified
+  names. Five routes added to the contract and `docs/API.md`; the list route
+  gains the `archived` filter. No dependency.
+- **Verification.** In the lane, tag `b`, on `cef613d`: tsc and eslint exit 0;
+  `pnpm exec vitest run` over 21 files (the new lifecycle and lifecycle-browser
+  tests; incidents, incident-area, participation, board, dashboard and resource
+  scope; activation, workspace and operator-screens walks; app-e2e;
+  authorized-viewing; authz; tasks; api-docs; the shared contract test;
+  incidents-surface; client; incident-context; route-coverage): 19 files
+  passed; incident-area lost its worker to exit 3221226505 and passed 7 of 7
+  alone; app-e2e failed at line 783, which led to the two CI stability fixes
+  above. The integrating session rebased onto `aaa7a65` and ran tsc and
+  eslint exit 0, and `pnpm exec vitest run` over app-e2e, incident-lifecycle,
+  incident-lifecycle-browser, api-docs and route-coverage, 5 files and 16
+  tests passed; link checker ok, 86 files. The real-database tests cover
+  authority by admin, member, viewer, guest, outsider and partner; the archive
+  rules; master view counts on a seeded incident and paging with a forged
+  cursor refused; and the row-level security proof that a guest reads an
+  incident's board and records unlocked and none locked, while a member reads
+  both and a participant is unaffected. The browser walk closes, archives,
+  filters and locks, with light and dark 1440 and dark 390 screenshots.
+- **Evidence level:** unit, integration, real-database, browser and document.
+- **Deferred:** a guest's live board socket opened before a lock keeps
+  receiving pushes until reload, as with a revoked grant today (the sync hub
+  checks access at join); no console-wide lockdown banner; no index on
+  `resource_requests(incident_id)`.
+- **Rollback:** revert both commits; a database that ran `0128` needs a
+  forward migration restoring the earlier `has_guest_scope` body.
