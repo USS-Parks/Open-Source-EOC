@@ -3009,3 +3009,75 @@ tagging remain separately gated as section 1 of the roster states.
   background loading reaches it, left to the installable web app unit's
   precache.
 - **Rollback:** revert both commits.
+
+## V1 W6.1: versioning and upgrade
+
+- **What changed.**
+  - Every package carries version `0.9.0`, and `GET /api/v1/health` reports
+    the server package's version.
+  - `CHANGELOG.md` at the root records the `0.9.0` evaluation build from the
+    receipts, in Keep a Changelog shape (Added, Changed, Security, Known
+    limits), with no unit IDs.
+  - New `deploy/upgrade.sh` checks the install, prints the running version and
+    runs `backup.sh`; it changes nothing unless the dump ends with pg_dump's
+    completion line and the file archive passes `gzip -t`. It then builds,
+    brings the stack up, waits up to five minutes for `/api/v1/ready`, and
+    prints the old and new versions and the backup. No switch skips the
+    backup.
+  - `backup.sh` writes private files (`umask 077`) under `.part` names until
+    each succeeds. `restore.sh` refuses an incomplete dump before dropping
+    anything, then replays it in one `psql --single-transaction` with
+    `ON_ERROR_STOP=1`; before, a failed restore still printed "restore
+    complete".
+  - The Windows launcher dumps an existing profile database to
+    `backups/pre-upgrade-<UTC>.sql` before a newer build migrates it, and does
+    not migrate if the dump fails or is empty
+    (`deploy/windows/lib/pre-upgrade-backup.mjs`).
+  - New `docs/guides/UPGRADE.md`, indexed from the guides README and pointed
+    to from `ADMIN.md` and the deploy README: what upgrades in place, the
+    pre-release baseline boundary in operator language (a database created
+    before the baseline is refused by the migration guard and must be
+    exported and re-imported into a fresh install), what is not supported
+    (downgrade, skipping the backup, two API processes on one database), and
+    upgrade and rollback steps for both paths with the drill's numbers.
+- **Defaults and deviations.** One version everywhere, `0.9.0`; `1.0.0` and
+  the tag are Basho's release act. The backup has no override. The `backup.sh`
+  and `restore.sh` fixes and the plain-SQL desktop dump go beyond the roster
+  wording, so a failed backup or restore cannot pass for a good one and one
+  restore command serves both paths. The upgrade statement is its own guide.
+  The version is visible on the unauthenticated health route, because the
+  upgrade script reads it to confirm the upgrade; Basho may prefer it only on
+  the metrics route. Ownership deviations: `server/src/app.ts` (the health
+  version) and `server/src/__tests__/security-headers.test.ts`, which asserted
+  the old health body and failed before the server change.
+- **Schema, contract, dependencies.** No migration. The contract is
+  unchanged; the health response gains `version`. No dependency.
+- **Verification.** In the lane, tag `a`, on `bc64e68`: tsc and eslint exit 0;
+  `pnpm exec vitest run` over restore-drill, security-headers, observability,
+  cors, upgrade, migrate-baseline, `deploy/upgrade.test.mjs` and
+  `deploy/install.test.mjs`, 8 files and 37 tests passed, 0 failed;
+  `pnpm test:desktop` 21 passed. The upgrade tests cover the backup running
+  before any build or restart, refusal on a failed or empty backup, the backup
+  path printed when the API does not come up, refusal of an `.env` from
+  before the HTTPS install, and a restore. Restore drill on the PostgreSQL
+  16.15 test cluster through `freshDb` twice: 112 tables and 13,831 rows
+  (5,003 board records) restored row for row with sequences, from standard
+  input (the Docker form) and from a file (the desktop form); `pg_dump` 425
+  ms, 1.9 MB plain and 0.2 MB gzipped; restore 2,982 ms and 2,889 ms; migrate
+  on the restored database applied nothing; a member read the restored board
+  through the app. The integrating session rebased onto `f53effd` and ran tsc
+  and eslint exit 0, the link checker after staging (ok, 89 files), `node
+  --test` on the desktop and installer tests (21 passed), and `pnpm exec
+  vitest run` over security-headers, both deploy tests and restore-drill, 4
+  files and 20 tests passed. The drill needs the PostgreSQL client tools: it
+  uses `OPENEOC_PG_DIST` or `deploy/test-runtime/out/pgsql`, else `PATH`; a
+  lane worktree has neither, so `OPENEOC_PG_DIST` was pointed at the
+  canonical checkout's runtime.
+- **Evidence level:** unit, real-database and document. No Docker upgrade on a
+  Linux host and no real desktop profile upgrade were run.
+- **Deferred:** the installer's version defaults (`0.0.0` in
+  `Stage-Installer.ps1`, `Build-Installer.ps1`, the `.iss` file and the
+  installer README), set with `-Version` at release by the installer rebuild
+  unit; the setup program does not stop running profiles before replacing
+  files, documented as a manual step; a first real upgrade on each path.
+- **Rollback:** revert both commits; no schema to unwind.
