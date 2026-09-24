@@ -2503,3 +2503,65 @@ tagging remain separately gated as section 1 of the roster states.
 - **Deferred:** video; a separate inject-card file (cards are cut from the
   situation manual's tables); a launcher note on the admin MFA switch.
 - **Rollback:** revert the commit.
+
+## V1 W4.6: offline address search
+
+- **What changed.**
+  - `tools/basemap/build-gazetteer.mjs` builds a gazetteer from the
+    OpenMapTiles street archive with the Node standard library only (a PMTiles
+    v3 reader and a vector tile decoder): places, named streets with their OSM
+    house numbers, and points of interest. It merges county address points from
+    CSV or GeoJSON, a county number replacing the OSM number for the same house.
+  - The server loads the file named by `OPENEOC_GAZETTEER_PATH` once at start
+    into a word index (`server/src/geocode/**`) and answers
+    `GET /api/v1/geocode/search` (query 1 to 200 characters, limit 1 to 20,
+    optional `near`) for any signed-in person. A missing, null or corrupt file
+    answers `available: false`; the server keeps serving.
+  - The command bar gains a "Search addresses and places" combobox
+    (`web/src/app/layout/PlaceSearch.tsx`, `map-focus.ts`). Choosing a result
+    opens the map from any screen, centres it and marks the place.
+  - `tools/basemap/README.md` gains "Offline address search gazetteer",
+    `docs/guides/OPERATOR-QUICKSTART.md` an address search section, and
+    `deploy/README.md` a row for `OPENEOC_GAZETTEER_PATH`.
+- **Defaults and deviations.** Built from the OSM-derived `california.pmtiles`,
+  because the raw California extract is not on disk. Ranking: an exact house
+  number on a matching street first; then closeness of the name, with places
+  before streets before points of interest among equal matches; then larger
+  places, then nearness to the map centre; last, the street itself when a typed
+  house number is not in the data. The builder test runs under vitest, not
+  `node --test`, so it runs with the workspace suite without a configuration
+  change. Ownership deviations: `Console.tsx` (+6) mounts the box;
+  `MapSurface.tsx` (+3) passes the focus hook to CopMap's existing `onMap`.
+  The unit was started by an earlier session's lane and finished in this one,
+  after its uncommitted work was rebased onto `888750a`.
+- **Schema, contract, dependencies.** No migration; block `0126` unused. One
+  route added to the contract and `docs/API.md` (+4, a geocode section). New
+  configuration `OPENEOC_GAZETTEER_PATH`. No dependency.
+- **Verification.** In the lane, tag `a`: `pnpm -r exec tsc --noEmit` exit 0;
+  `pnpm exec eslint .` exit 0; `pnpm exec vitest run` over the builder test,
+  geocode-routes (real PostgreSQL: 401 anonymous and bad token, address first,
+  limit 50 is 400, missing and null paths unavailable), place-search-browser,
+  the layout tests, map-surface, route-coverage, the contract test and
+  api-docs, 10 files and 64 tests passed, 0 failed. The integrating session
+  rebased onto `492f1f1`, which carries the WebEOC importer's routes, and ran
+  tsc and eslint exit 0, `pnpm exec vitest run` over api-docs, route-coverage,
+  the contract test and geocode-routes, 4 files and 19 tests passed, and
+  `node scripts/check-links.mjs` ok, 86 files. The browser walk searches
+  "816 3rd street eureka" from Boards and lands on the map at the address,
+  ranks the city Eureka above Eureka Way, keeps the place through a theme
+  change, and at 390 wide keeps the result list inside the viewport, with no
+  page errors or external requests; light and dark screenshots. The walk found
+  the result list running off a 390-wide screen; fixed. Real data: a
+  California build read 212,094 z14 tiles in 36.4 s and wrote 144,343,915
+  bytes (7,636 places, 511,673 streets, 308,390 points of interest, 3,230,662
+  house numbers, 41,646 dropped with no named street near). Loading it takes
+  2.6 s and adds about 233 MB (heap 64, external 169); median search 0.44 ms,
+  maximum 12.7 ms over ten queries.
+- **Evidence level:** unit, integration, real-database, browser, document and
+  a measured build on real data.
+- **Deferred:** reverse lookup; the county address point merge against real
+  county data, which is not on disk; house numbers attached by containment
+  rather than to the nearest named street in the tile; the containing city
+  rather than the nearest settlement; "St" as "Saint".
+- **Rollback:** revert both commits; unsetting `OPENEOC_GAZETTEER_PATH` alone
+  turns search off.
