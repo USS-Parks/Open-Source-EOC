@@ -122,8 +122,9 @@ describe("installable web app", () => {
     await page.context().setOffline(true);
     const shell = await page.reload({ waitUntil: "load" });
     expect(shell?.fromServiceWorker()).toBe(true);
-    // The saved session needs the API to resume, so an offline start lands on sign-in.
-    await page.getByText("Sign in to the operations console.").waitFor();
+    // The saved session needs the API to resume, so an offline start keeps it and waits.
+    await page.getByText("No connection to the server. Your session is kept and resumes when the connection returns.").waitFor();
+    expect(await page.evaluate("localStorage.getItem('openeoc.tokens') !== null")).toBe(true);
     const offline = await page.evaluate(`(async () => {
       const files = ${JSON.stringify(precache.files)};
       const statuses = await Promise.all(files.map((file) => fetch(file).then((r) => r.status, () => "failed")));
@@ -157,8 +158,9 @@ describe("installable web app", () => {
   }, 60_000);
 
   it("shows the update notice for a newly published build and switches to it on Reload", async () => {
+    // Back online, the session kept through the offline start resumes without signing in again.
     await page.reload({ waitUntil: "load" });
-    await signIn();
+    await page.getByRole("region", { name: "Offline continuity" }).waitFor();
     const next = `${precache.version}a`;
     writeFileSync(join(DIST, "sw.js"), readFileSync(join(DIST, "sw.js"), "utf8").replace(`"version":"${precache.version}"`, `"version":"${next}"`));
     await page.evaluate("navigator.serviceWorker.getRegistration().then((registration) => registration.update())");

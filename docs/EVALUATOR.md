@@ -39,8 +39,9 @@ and no release has been tagged.
 - **Not a native mobile app.** Phones and tablets use the web app in the
   browser. The field screens keep working offline and send queued work when
   the connection returns; see the [field user guide](guides/FIELD-USER.md).
-  Installing the web app to a phone's home screen is 1.0 work that is not yet
-  proven.
+  The web app installs to a home screen and starts without a connection
+  ("V1 W4.10: progressive web app"); it was proven in desktop Chrome, not yet
+  on a phone.
 - **Not certified or accredited.** The jurisdiction that runs it is
   responsible for its own authority to operate. See
   [Releases and support](../GOVERNANCE.md#releases-and-support).
