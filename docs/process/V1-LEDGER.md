@@ -2702,3 +2702,38 @@ tagging remain separately gated as section 1 of the roster states.
 - **Deferred:** the `esf-workspace-browser` wait; confirmation on hosted CI
   once billing is restored.
 - **Rollback:** revert the commit.
+
+## V1 W5.2 part two: county bounds from the bundle
+
+- **What changed.** The map's find box looks up county names in
+  `web/src/cop/county-bounds.ts`, a generated table of the 58 California
+  county boxes (west, south, east, north; four decimals, rounded outward so
+  each box contains its county), instead of fetching
+  `basemap/ca_counties.geojson` at run time. `tools/basemap/build-county-bounds.mjs`
+  (Node standard library only) regenerates it from the tracked GeoJSON, and
+  `tools/basemap/README.md` names the command.
+- **Defaults and deviations.** The row's "county outline served from the
+  bundle" is read as the find box's county data; the county outline layer in
+  the map style is unchanged. Behavior change: county search no longer needs a
+  bundled basemap to be mounted, so it also works under an external style.
+  Ownership deviation: an additive county assertion in
+  `server/src/__tests__/cop-e2e.test.ts`, since no walk searched for a county.
+- **Schema, contract, dependencies:** none.
+- **Verification.** In the lane, tag `c`: `pnpm -r exec tsc --noEmit` exit 0;
+  `pnpm exec eslint .` exit 0; `pnpm exec vitest run web/src/cop/__tests__
+  server/src/__tests__/cop-e2e.test.ts --maxWorkers=2`, 14 files and 91 tests
+  passed, 0 failed; link checker ok, 86 files. `county-bounds.test.ts` pins
+  the table to the GeoJSON: the same county set, and every edge outside the
+  true bounds by less than 0.0001 degree. The COP walk searches "Sacramento"
+  with no basemap mounted, opens the county result, waits for the map centre
+  inside the Sacramento box and asserts no request for the county file; the
+  old code returned no county there, because the table was empty without a
+  mounted basemap. The integrating session rebased onto `d0fc85b` and re-ran
+  the county-bounds test (1 passed) and the link checker (ok, 86 files).
+- **Evidence level:** unit and browser.
+- **Deferred:** the find-box and layer-filter icons are anchored to the bottom
+  of their form in `web/src/cop/cop-workspace.css`, so they drop over an open
+  results list; carried to W5.1 with the defect the field depth receipt
+  recorded.
+- **Rollback:** revert the commit; the county file is still served, so the
+  runtime fetch returns unchanged.
