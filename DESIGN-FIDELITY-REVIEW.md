@@ -1,0 +1,118 @@
+# Design fidelity review
+
+The design fidelity plan (`docs/process/DESIGN-FIDELITY-PSPR-2026-09-24.md`)
+is built through DF5. This document is the DF6 gate: the side-by-side images,
+a region checklist per canonical frame with every remaining difference and its
+reason, what each control in the frames does, and the full serial suite. It
+waits on Basho's review; anything Basho names as still different goes back
+into DF1 to DF4.
+
+## Side-by-side images
+
+Each image puts the canonical frame on the left and the build's capture of the
+same screen on the right, at the frame's 1280 by 800 size (captured at 1586 by
+992 and scaled). They come from `pnpm fidelity` on the North Coast Storm
+reference scenario at 09:42 local, with the offline street, imagery and
+elevation archives configured.
+
+| Frame | Image |
+|---|---|
+| 01 Incident overview, light | `docs/design/fidelity/overview-light-side-by-side.jpg` |
+| 02 Incident overview, dark | `docs/design/fidelity/overview-dark-side-by-side.jpg` |
+| 03 ESFs & Lifelines with Energy open, light | `docs/design/fidelity/lifelines-light-side-by-side.jpg` |
+
+## Region checklist
+
+"Matches" means the region has the frame's structure, content kind, controls
+and visual language on the scenario's data. Differences that come from the
+scenario's own data (names, times, counts) are listed only where they change
+what the region shows.
+
+### Frame 01: incident overview, light
+
+| Region | Result | Remaining difference and reason |
+|---|---|---|
+| Brand block | Matches | The build's mark is its own ring and core, as the frame draws it. |
+| Command bar | Matches | Incident, period, position, "Synced HH:MM", bell with 3 and the account chip are live controls. The avatar shows initials, not a photograph (no photographs are stored); the name is the scenario's Jordan Lee, not "J. Carter"; the position chip names the held position, "Planning Section Chief", where the frame abbreviates. |
+| Rail | Matches | Every destination stays, in the frames' groups and item style (decision 3), so the rail is longer and scrolls; Settings, Help and the theme menu sit at its foot. |
+| Page header | Matches | Title, "Incident area · 7 participating organizations · Updated HH:MM", "Create report" and "Briefing view". |
+| Counts | Matches | Open requests 24 with 6 urgent, active shelters 8 with 312 occupants, field reports 46 with 9 unverified, tasks due 12. |
+| Common operating picture | Matches | Checklist with More layers, place search, locate, layers, full screen, legend strip, north arrow, miles and kilometres scale, the incident callout and the shaded terrain basemap. The seeded incident area is the operational area near the coast, where the frame's illustrated extent reaches far over the ocean; symbols sit at real locations, so some cover place names the frame shows clear; the basemap is the OpenStreetMap street style under green relief, not a painted terrain map; the attribution button stays in the corner for the map's licences. |
+| Community Lifelines | Matches | Eight rows with scope lines and conditions ("Disrupted" for unstable), each opening its lifeline. |
+| Priority work | Matches with a data difference | The three most pressing items are all urgent requests in the scenario, where the frame shows one urgent, one in progress and one not started; one icon per kind where the frame varies them. |
+| Recent activity | Matches with a data difference | The two newest items (the shelter update and the field report) where the frame shows a shelter update and a road closure. |
+| Frame annotations | Not shipped | "DESIGN PREVIEW · SYNTHETIC DATA" and "Concept from Design PSPR" are notes on the frame (decision 4); FOUO stays in the footer. |
+
+### Frame 02: incident overview, dark
+
+| Region | Result | Remaining difference and reason |
+|---|---|---|
+| Brand block | Differs | The frame draws a compass star; the build uses the light frame's ring in both themes, since the two frames disagree. |
+| Command bar and rail | Matches | As frame 01, in the dark frame's colors and larger type; rail icons are outlined where the dark frame fills them. |
+| Page header and FOUO | Matches | FOUO sits above the actions, as the dark frame places it. |
+| Counts | Matches | As frame 01. |
+| Common operating picture | Matches | NAIP imagery under the title band, dashed cyan boundary, closure lines and points, open and planned shelters, key facilities, the command post with "ICP", cameras, the helibase, the legend panel, the layer list (Roads, Incidents, Facilities, Shelters, Weather, Terrain; weather off as in the frame), zoom, north arrow and miles scale. The card frames the whole seeded area, a little wider than the frame's view; facilities close together at this zoom give way by rank (command post first), so the frame's spread of symbols near Eureka is not all visible until one zooms in. |
+| Community Lifelines | Matches | Rows with dot, condition and the impact line under it. |
+| Priority work and recent activity | Matches with data differences | As frame 01. The frame's recent message from a Caltrans liaison is posted by the Operations Section in the scenario: incident threads hold only the owner's members, and opening them to partners is an engine decision left for Basho. |
+
+### Frame 03: ESFs & Lifelines with Energy open, light
+
+| Region | Result | Remaining difference and reason |
+|---|---|---|
+| Shell | Matches | The rail follows the overview frames' width and type, where this frame's rail is narrower. |
+| Header actions | Matches | "Compare periods" and "New assessment". |
+| Tabs | Matches | Community Lifelines, ESF coordination, Dependencies, Assessment history, each its own route. |
+| Filters | Matches | Incident area, current period, condition. The third filter is labelled "Condition" where the frame's label reads "All conditions", because the label stays true once a condition is chosen. |
+| Lifeline cards | Matches | Tinted by condition, pill, impact line, source and assessed time; Energy selected. "Food, Hydration, Shelter" wraps between words at this width (no break inside a word). Source names are the scenario's organizations ("Cal OES" where the frame writes "CA OES – Law Enforcement"). The Hazardous Materials icon is the registry's drawing, not a biohazard mark. |
+| Related ESF coordination | Matches | Function, activation, coordinator and open missions, Energy's function first. The coordinator column names the coordinating organization where the frame names liaison titles. |
+| Drawer | Matches | Icon, condition, "Assessed 09:35 PDT · Utility liaison", the impact, affected components with icons, the stabilization objective, the next update, "Linked actions (2)", "Update assessment" and "View history". The actions' owners are organizations (Cal OES, CA Energy Commission) where the frame shows "Logistics" and "Utility liaison", "Inspect substation" reads "Planned" where the frame shows "Assigned", and neither action carries a chevron: a partner liaison may not assign county positions or link county requests, which row-level security refuses. The drawer also shows the assessment details under a disclosure and the operational relationships below, which the frame does not show. |
+
+## What each control does
+
+Every control drawn in the frames acts on the live engine; none is decorative.
+
+| Where | Control | What it does |
+|---|---|---|
+| Command bar | Incident, period, position chips | Select the incident, the operational period and the acting position for the whole console. |
+| Command bar | Bell | Opens the notifications; the count is the unread assigned items. |
+| Command bar | Account chip | Theme, session and sign-out. |
+| Rail foot | Settings, Help, theme | Settings dialog (theme, compact navigation, Administration), the guides, and the theme menu. |
+| Overview | Count cards | Open Resources, the Shelters board, Field Reports and Tasks. |
+| Overview | Create report | Composes and freezes a SITREP for the incident and period, then opens it. |
+| Overview | Briefing view | The same overview, read-only and full screen, left with Escape. |
+| Map card, dark | Legend, layer list, zoom, north arrow | Layer checkboxes show and hide the closures, the incident boundary, facilities, shelters, weather stations and the shaded terrain; the layers button folds the list; zoom and north act on the map. |
+| Map card, light | Checklist, More layers, search, locate, layers, full screen | The checklist and More layers switch the same layers plus imagery and every other map board; search flies to a gazetteer place; locate flies to the device's position; layers folds the checklist; full screen takes the card full screen. |
+| Map card | Records | A click opens the record's details in a popup. |
+| Lifelines (overview) | Rows and "Open workspace" | Open that lifeline in the workspace, or the workspace. |
+| Priority work and recent activity | Rows and "View all" | Open the request, the tasks or the chronology. |
+| Lifelines workspace | Compare periods | Adds each lifeline's condition in the previous period and whether it worsened or improved. |
+| Lifelines workspace | New assessment | Records a new assessment for any lifeline, superseding its standing one. |
+| Lifelines workspace | Filters | Narrow the cards by reported geography and condition; the period filter shows the reports that stood in an earlier period. |
+| Lifelines workspace | Cards | Open the lifeline's drawer. |
+| Drawer | Linked actions | Open the linked resource request when one is attached. |
+| Drawer | Update assessment, View history | Record a revised assessment (with objective and next update), or read the history and record a decision on conflicting reports. |
+| Related ESF coordination | Function names | Open that function's ESF workspace. |
+
+## Gate
+
+`pnpm check:gate` passed on 2026-09-24 at commit `023beaa`: static checks
+(tsc, eslint, the license scan over 303 packages, the link check), the
+advisory gate (no high or critical advisories), the desktop tests (27), and
+the serial Vitest run with one worker (278 files and 1,577 tests, then the
+load test, 1 file and 4 tests), with nothing skipped. The receipt is "Design
+fidelity DF6: gate" in `docs/process/V1-LEDGER.md`.
+
+## Open for Basho
+
+- Review the side-by-side images and this checklist, and name anything that
+  still differs.
+- Incident threads open to participating organizations (the dark frame's
+  Caltrans message) is an engine change that needs a decision.
+- A partner liaison linking county requests or assigning county positions
+  from an assessment is refused by row-level security; allowing it is a
+  permissions decision.
+- GitHub Actions jobs for these commits did not start: the account reports
+  failed payments or a spending limit, which needs attention in GitHub
+  billing.
+- The plan file was held open by Word during execution, so the function
+  requirement was recorded in the ledger instead of the plan.
