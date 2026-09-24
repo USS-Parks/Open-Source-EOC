@@ -3261,3 +3261,72 @@ tagging remain separately gated as section 1 of the roster states.
   its PostgreSQL is stopped with it, which the code notes.
 - **Rollback:** revert both commits, then disable and delete the systemd units
   and unregister the Windows task; backups already written stay.
+
+## V1 W4.10: progressive web app
+
+- **What changed.**
+  - The web app installs. `web/public/manifest.webmanifest` uses relative
+    start and scope URLs and names three icons that now exist
+    (`web/public/icons/`), drawn once from the shell's compass mark with the
+    installed Chrome.
+  - A build plugin, `web/src/offline/precache-plugin.ts`, links the manifest
+    from the page and writes `sw.js` into the bundle with a precache list and
+    a version digested from every listed file and the worker source: the
+    shell, every code-split chunk, the manifest, icons, glyphs, NAPSG symbols
+    and the bundled basemap, 123 files and 5.89 MB.
+  - The worker serves the precache first; navigations go to the network with
+    the cached shell as the offline answer; the API and WebSocket streams are
+    never cached; byte-range requests pass through, except that the bundled
+    basemap's ranges are answered from the cache when the network fails.
+    Other same-origin files are cached at runtime within 50 MB, oldest out
+    first, and nothing new is cached past 90 percent of the storage quota or
+    when the host marks it no-store.
+  - `register.ts` registers the worker after load in built bundles, requests
+    persistent storage and checks for a new build hourly. `UpdateNotice`
+    shows "A new version is ready." with Later and Reload; Reload switches to
+    the new build.
+  - The integrating session fixed what the implementer found: an offline
+    start deleted the saved session, because the session restore treated any
+    failure of its first `/me` read as a refusal. Now only a 401, a 403 or an
+    expired session clears the tokens; any other failure keeps them, shows "No
+    connection to the server. Your session is kept and resumes when the
+    connection returns.", and tries again on the `online` event and every 15
+    seconds (`web/src/app/auth/session.tsx`, `App.tsx`).
+  - `docs/guides/FIELD-USER.md` gains installing and offline use;
+    `deploy/README.md` a paragraph; `docs/EVALUATOR.md` now states the install
+    as proven in desktop Chrome, not yet on a phone.
+- **Defaults and deviations.** The bundled basemap is the one range-request
+  exception. The precache list is written into `sw.js`, since browsers compare
+  the worker script's bytes to find an update. Registration is skipped only on
+  the dev server. The portrait lock is removed from the manifest. Ownership
+  deviations, each additive: `App.tsx` mounts the notice inside the theme, and
+  the browser harness fingerprints `sw.js`, the manifest and the icons so a
+  change to them rebuilds. The static hosts needed no change: both already
+  serve `sw.js` and the manifest `no-cache`, and the CSP allows
+  `worker-src 'self'`.
+- **Schema, contract, dependencies:** none.
+- **Verification.** In the lane, tag `c`, on `f53effd`: tsc and eslint exit 0;
+  `pnpm exec vitest run` over the offline unit tests, pwa-browser,
+  continuity-console-browser, field-offline, app-e2e and route-coverage, 10
+  files and 48 tests passed; bundle budget 160.4 kB. The integrating session:
+  a new session test, "keeps a saved session through a lost connection and
+  resumes when it returns", failed on the old restore and passes with the
+  change (session and offline tests, 6 files and 40 tests passed); the walk's
+  offline start now asserts the kept session and its next online reload
+  resumes without signing in (pwa-browser 4 of 4). After rebasing onto
+  `c7bc995`: tsc and eslint exit 0; bundle budget 160.7 kB; link checker ok,
+  92 files; `pnpm exec vitest run` over app-e2e, continuity-console-browser,
+  webeoc-side-by-side-browser, the session and offline tests and
+  route-coverage passed, and pwa-browser passed on its re-run after the walk
+  change. The walk covers install and control, manifest and installability
+  checks, an offline reload with every precached file served from the cache
+  and nothing else reachable, exact byte ranges online and offline, and a
+  published build waiting behind the notice until Reload, with light 1440,
+  light 390 and dark 1440 screenshots.
+- **Evidence level:** unit, browser and build.
+- **Deferred:** opening the console itself without a connection after a
+  restart (the session is kept, but the console waits for the server);
+  installing on a phone; the delay switching builds while the old worker is
+  busy, seen only under the DevTools harness.
+- **Rollback:** revert the three commits; browsers that installed the worker
+  keep it until the next deploy's `sw.js` replaces it.
