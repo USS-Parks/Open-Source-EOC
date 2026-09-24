@@ -28,9 +28,10 @@ credentials before real operations.
 Every administrative task below is done on the **Administration** screen, which
 needs an administrator to sign in. The first one is created once, outside the
 application: the Windows desktop setup asks for the first administrator and
-jurisdiction and creates both, and the server path does it as described under
-"First incident" in [the deployment guide](../../deploy/README.md). After that,
-no administrative task needs `psql` or `curl`.
+jurisdiction and creates both, and on the server path `install.sh` creates
+both on the first install, as described under "First jurisdiction and admin"
+in [the deployment guide](../../deploy/README.md#first-jurisdiction-and-admin).
+After that, no administrative task needs `psql` or `curl`.
 
 ## The Administration screen
 
@@ -44,8 +45,8 @@ screen shows. The screen acts on the jurisdiction selected in the console.
 | People | Create accounts, add existing accounts, change roles, disable sign-in, reset two-step sign-in, remove people from the jurisdiction |
 | Positions | Add positions; assign, reassign and revoke their holders |
 | Guest access | Grant and revoke time-boxed read access for mutual-aid accounts |
-| Notifications | Set the webhook and push allowlist; add notification rules and copy a webhook rule's signing secret, shown once |
-| Records | Set retention periods; download the audit trail; export the jurisdiction |
+| Notifications | Set the webhook and push allowlist; add notification rules and copy a webhook rule's signing secret, shown once; list, pause, change and remove rules |
+| Records | Set retention periods; download the audit trail; export the jurisdiction; move records from a WebEOC board export in the WebEOC migration panel |
 | Channels | Configure the email relay and SMS provider notification rules send through; send a test message |
 | Deployment | Show which optional integrations are enabled; configure collaboration channels and the meeting bridge where they are enabled; provision a jurisdiction (instance administrators) |
 

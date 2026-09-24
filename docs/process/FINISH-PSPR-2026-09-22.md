@@ -2,8 +2,10 @@
 
 **Created:** 2026-09-22
 **Author:** Basho Parks
-**Status:** DRAFT, AWAITING BASHO'S APPROVAL. No unit executes until Basho
-says so. Drafting this document is not approval to run it.
+**Status:** APPROVED by Basho on 2026-09-23 for full STS execution, as the
+ledger's "Grant: full STS for the Finish PSPR" records. Execution reached the
+release decision presented in `RELEASE-DECISION.md`; tagging and publishing
+remain Basho's act.
 **Baseline:** `main` at `7b69b67` with the `W1.8` landing uncommitted in the
 working tree. Audit of record: `STATUS-AUDIT-2026-09-22.md`.
 
@@ -34,8 +36,9 @@ number in their wave. Nothing is renumbered.
 
 ## 1. Approval state and authority
 
-- **This plan is not approved.** Sections 2 through 10 describe work to be
-  authorized, not work in progress.
+- **Approved by Basho on 2026-09-23** for full STS execution, recorded in the
+  ledger as "Grant: full STS for the Finish PSPR". Execution has reached the
+  release decision presented in `RELEASE-DECISION.md`.
 - On approval, the authority register carried by the Master PSPR and the V1
   PSPR carries forward unchanged: the standing fan-out and zipper grant, the
   FOUO access model, the canonical style bible in

@@ -21,6 +21,10 @@ not operational data or evidence of a live deployment.
 ## Install and operate
 
 - [Windows desktop setup](WINDOWS-DESKTOP.md)
+- [Docker server install and operation](../deploy/README.md)
+- [Upgrade](guides/UPGRADE.md)
+- [Disaster recovery runbook](guides/DISASTER-RECOVERY.md)
+- [Accessibility](guides/ACCESSIBILITY.md)
 - [API contract](API.md)
 - [IPAWS enablement boundary](IPAWS-ENABLEMENT.md)
 - [Security continuity](SECURITY-CONTINUITY.md)
@@ -34,6 +38,8 @@ not operational data or evidence of a live deployment.
 - [Parity matrix](VEOC-PARITY-MATRIX.md)
 - [WebEOC side-by-side evaluation](WEBEOC-SIDE-BY-SIDE.md)
 - [Canonical visual references](design/canonical-references/README.md)
+- [Final reference captures](design/final-captures/README.md)
+- [Release decision](../RELEASE-DECISION.md)
 
 ## Plans, receipts, handoffs, and design process
 

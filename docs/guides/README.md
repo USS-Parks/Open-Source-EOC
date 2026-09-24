@@ -33,6 +33,7 @@ substitute. Re-select context before acting.
 | Create or revise board schemas | [Board designer guide](./DESIGNER.md) |
 | Move records from WebEOC | [WebEOC migration](./MIGRATION.md) |
 | Configure federation | [Federation setup](./FEDERATION-SETUP.md) |
+| Exchange CAP, EDXL, CoT, HAVE and GeoJSON with other systems | [Standards interoperability](./STANDARDS-INTEROP.md) |
 
 The [synthetic incident demonstration](../DEMO-SCENARIO.md) provides a guided
 exercise with current, stale, unknown, missing, and partially complete data. It

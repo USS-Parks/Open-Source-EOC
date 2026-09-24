@@ -83,6 +83,8 @@ project.
 | Docker install | The install script tested against stand-ins for Docker and the download tool. No image built, no certificate issued, no run on a Linux host | unit, document | "V1 W6.0: one-command server install" |
 | Windows desktop | Cold setup, the local map, row-level security at runtime, offline work recovery and restart, on the one prepared machine where it was built | a prepared-machine run | Parity matrix row AR7 |
 | Field forms | Offline forms with line and polygon capture, photo, audio and barcode questions, cascading selects and repeats | unit, integration, real-database, browser, document | "V1 W4.7: field depth" |
+| Several organizations in one incident | An owner and a mutual-aid partner share one incident: the same map and impact counts, a partner field report queued offline and still attributed after the partner is revoked, resource requests across the two organizations, a record sent to a second instance, the plan and closeout. A second incident sees none of it | unit, real-database with two instances, browser | "V1 79D+D33 part one: the integrated cross-boundary exercise" |
+| Accessibility | Sign-in and twelve screens reviewed in both themes, at phone width and at 200 percent zoom: no serious or critical automated finding, a visible keyboard focus everywhere, 14 findings fixed; reduced motion and higher contrast honored. The manual screen-reader pass has not been run | unit, real-database, browser, document | "V1 79D+D33 part two: the integrated visual and accessibility review" and "V1 A11Y-T1: reduced motion, higher contrast and the screen-reader script" |
 
 ## What remains open
 
@@ -123,8 +125,12 @@ project.
 - Live external data is not connected: FEMA flood zones, a statewide shelter
   feed, census population, parcels for other counties and live sensor feeds.
   The partial rows of the parity matrix name each source.
-- The integrated exercise with several organizations in one incident has not
-  been run (row R3).
+- With several organizations in one incident, the owner can assign its own
+  resource request to a partner as supplier, but a partner's own request is
+  received by the partner's organization, where the owner cannot see or assign
+  it. A request belongs to the organization that receives it, and changing
+  that waits on a decision (row R3). The owner's record
+  detail shows no position title or organization for a partner's record.
 
 The [changelog](../CHANGELOG.md) lists the known limits of each build.
 

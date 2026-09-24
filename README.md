@@ -6,22 +6,32 @@ and native CAP, EDXL, CoT, HAVE and GeoJSON interchange.
 
 ## Status
 
-Pre-1.0 development. The Master PSPR is technically complete through its M4
-gate. A prepared Windows host can run the packaged desktop path, and the Docker
-path can run the API and PostGIS services. Neither path is yet a turnkey county
-deployment:
+Version `0.9.0`, an evaluation build. No release has been tagged. The Finish
+PSPR's waves W1 to W7 have been executed as far as they can go without
+Basho's inputs: every engineering unit has landed with a receipt in the
+[V1 ledger](./docs/process/V1-LEDGER.md), and the remaining blockers and the
+release decision are in [RELEASE-DECISION.md](./RELEASE-DECISION.md).
 
-- the Windows proof used a prepared host and local map archives; independent
-  media transfer and second-machine setup have not been proven;
-- the Docker path's one-command HTTPS install (`deploy/install.sh`) is
-  validated offline only; its first run on a Linux host has not been made;
+Proven on the project's own machines with synthetic data: boards, notifications
+and reports run through the WebEOC side-by-side script; an incident shared by
+two organizations across two instances; two-step sign-in, the two-person IPAWS
+send against a local stand-in, administration without the command line, and
+a 150-connection two-hour run on a development workstation. The
+[evaluator's page](./docs/EVALUATOR.md) states each claim with its evidence
+level.
+
+Still open, and not in the project's hands:
+
+- the Windows setup is built with the map archives but has not been installed
+  from media on a second, disconnected computer;
+- the Docker path's one-command HTTPS install (`deploy/install.sh`) is tested
+  against stand-ins only; its first run on a Linux host has not been made;
 - live IPAWS, real-hardware 150-user load, representative-operator comparison,
-  manual screen-reader evidence and a pilot remain open;
-- observability, scheduled work, durable outbound delivery, MFA, retention,
-  route-to-screen coverage and release operations are owned by the V1 PSPR.
+  the manual screen-reader pass, a second maintainer and a pilot jurisdiction.
 
 This is an installable evaluation build, not a version 1.0 release and not a
-commercial-parity certification.
+commercial-parity certification. The known limits of the build are in
+[CHANGELOG.md](./CHANGELOG.md).
 
 ## Governance and current truth
 
@@ -33,7 +43,10 @@ commercial-parity certification.
   current roster. `docs/process/VEOC-EXECUTION-LEDGER.md` is frozen and holds
   the receipts that preceded it.
 - `docs/VEOC-PARITY-MATRIX.md` and `docs/FACET-STATUS.md` contain current
-  capability status and explicit remaining boundaries.
+  capability status and explicit remaining boundaries, reconciled to the
+  receipts on 2026-09-24.
+- `RELEASE-DECISION.md` gives the state of each gate in the Finish PSPR's
+  section 6, the remaining blockers and the one release decision for Basho.
 - `docs/design/canonical-references/` is the visual authority.
 - `docs/EVALUATOR.md` states scope, limits and evidence for a pilot decision.
 
@@ -55,6 +68,13 @@ Four modules register no routes and show no screens unless the server's
 `tracking` and `facilities` are not reviewed for patient-level data in this
 release. See [ADR-0009](./docs/adr/ADR-0009-optional-integrations.md).
 
+OIDC sign-in is optional too. Its two routes, `GET /api/v1/auth/oidc/start`
+and `GET /api/v1/auth/oidc/callback`, register only when
+`OPENEOC_OIDC_ISSUER` is set; `OPENEOC_OIDC_CLIENT_ID`,
+`OPENEOC_OIDC_CLIENT_SECRET` and `OPENEOC_OIDC_REDIRECT_URI` name the client.
+The identity provider owns the second factor for those accounts; see
+[two-step sign-in](./docs/guides/ADMIN.md#two-step-sign-in-mfa).
+
 ## Workspace layout
 
 - `server/` - Node and Fastify backend in TypeScript.
@@ -62,6 +82,9 @@ release. See [ADR-0009](./docs/adr/ADR-0009-optional-integrations.md).
 - `shared/` - contracts and types shared by server and web.
 - `deploy/` - Docker, Windows desktop and local-data deployment tooling.
 - `docs/` - operator guides, architecture, evidence and governed plans.
+- `tools/` - map archive, gazetteer and map symbol build tools.
+- `scripts/` - repository checks: links, licenses, advisories, the bundle
+  budget, the pre-commit gate and the load harnesses.
 
 ## Development
 

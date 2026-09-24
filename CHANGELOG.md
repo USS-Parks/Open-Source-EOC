@@ -8,6 +8,88 @@ upgrade in place, is in the [upgrade guide](docs/guides/UPGRADE.md).
 
 ## Unreleased
 
+Changes on `main` after the 0.9.0 entry was written. The packages still carry
+`0.9.0`. The Windows setup `Open-Source-EOC-Setup-0.9.0.exe` (SHA-256
+`dafddeb50fcdfdf9a85519d24a88e21ae1c87420357ad22d86927802b112a153`) was
+staged from `5875c2f`. It includes the side-by-side gap closures, the
+installable web app, the style consolidation, the security policy, the
+disaster recovery runbook and the installer fixes below. It predates the
+fixes from the integrated exercise, the visual and accessibility review,
+reduced motion and higher contrast, the write path change and the remaining
+interface findings. The setup is rebuilt from the release commit when the
+release is made.
+
+### Added
+
+- A board can be created from an already published template on the Templates
+  screen, and a new board appears in Boards and in the rule and report pickers
+  without a reload.
+- Notification rules are listed, paused, changed and removed on the
+  Notifications tab.
+- The web app installs from the browser and opens without a connection after
+  one visit: a service worker keeps the shell, every screen's code and the
+  bundled basemap, and a notice offers a new version with Reload. A saved
+  session is kept through a lost connection.
+- A disaster recovery runbook with recovery targets, a daily scheduled backup
+  with retention on both deployment paths (a systemd timer on the Docker host,
+  `-Action Backup` in the Windows launcher), and guidance for copies kept off
+  the host.
+- Reduced motion and higher contrast: animations and transitions stop under
+  the reduced-motion preference and the map jumps instead of flying; stronger
+  text, border and focus colors under the higher-contrast preference; focus
+  stays visible under forced colors. The accessibility guide carries a
+  screen-reader test script.
+- A security policy, a release and support statement, the second-maintainer
+  requirement and an evaluator's page.
+- A screen whose code fails to load shows an error with "Reload page" and
+  leaves the rest of the console working.
+
+### Changed
+
+- Rule emails, texts and in-app notices use the board title, the record's
+  first text field, and field and value labels.
+- Stored choice values show as labels in board lists, group counts and
+  reports on screen, in PDF and in Excel. Exports keep the stored codes.
+- Activating an incident titles each board with the incident name and the
+  template title. Boards activated earlier keep their titles.
+- Resources shows labels for request state, priority and next action.
+- Inline styles moved into the design kit's classes. Polling keeps data on
+  screen during a refresh, pauses while the page is hidden and backs off
+  after failures.
+- The Windows installer takes its version from the root package, stops when
+  an archive it was asked to include is missing, ships the icons the service
+  worker needs and the address search gazetteer, and leaves test sources out.
+- Focus rings on the command bar and rail, input and select borders and the
+  dark theme's strong border color now hold 3:1 contrast.
+- On a phone or tablet the context drawer is a modal dialog, and opening or
+  closing it there no longer changes the saved desktop layout. Loading notes
+  are announced to screen readers.
+
+### Fixed
+
+- A mutual-aid partner could not post a field impact from the map.
+- Another incident's boards appeared in the dock, the board list and the map
+  layers; the incident selector did not follow a new activation; the map's
+  record panel stayed blank when its form failed to load.
+- The board designer showed the old version after publish and apply.
+- Plain buttons showed half faded after a theme switch in the dark theme;
+  report tables cut their last heading on a phone; the map's search icons
+  dropped over the results list.
+- The automated walk of the two-organization exercise waited on a map zoom
+  that could frame too little, and passed an option vitest does not accept.
+
+### Security
+
+- IPAWS send confirmation, resource request escalation, collaboration calls
+  and feed polls no longer wait on the network inside a database
+  transaction. A confirmed IPAWS request is never sent twice; one that fails
+  in transit is recorded as rejected, and a new send must be requested. A
+  second escalation of the same request within a minute is refused.
+- Creating, changing and removing a notification rule is recorded in the
+  audit trail.
+- A live guest board connection is closed when the guest's grant is revoked
+  or the incident is locked.
+
 ## 0.9.0 - 2026-09-23
 
 The evaluation build. It is not tagged; `1.0.0` is set when the first release

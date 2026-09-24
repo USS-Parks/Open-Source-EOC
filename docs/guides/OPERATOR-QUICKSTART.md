@@ -396,7 +396,8 @@ and inquiry, and **Chronology** under **All events** records them.
 The current disconnected presentation supports two bounded operational paths:
 
 1. A loaded Smart Form can queue report fields in a person-, incident-, and
-   board-scoped durable queue. Attachments and map capture require a connection.
+   board-scoped durable queue. Photos and audio queue with the report and
+   upload after it synchronizes. Map record capture requires a connection.
 2. An assigned task completion can queue locally. Task creation, assignment,
    metadata edits, and team-task administration require the server.
 

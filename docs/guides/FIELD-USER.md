@@ -17,7 +17,9 @@ interruption, while distinguishing local queue state from server receipt.
 
 The console installs as an app. In Chrome or Edge, choose **Install** in the
 address bar or the browser menu; on an iPhone or iPad, choose **Share**, then
-**Add to Home Screen**. The app opens in its own window.
+**Add to Home Screen**. The app opens in its own window. Installing has been
+tested in desktop Chrome only; it has not yet been tested on a phone or
+tablet.
 
 After one visit with a connection, the device keeps a copy of the app: the code
 for every screen, the bundled California basemap, the map labels and the
