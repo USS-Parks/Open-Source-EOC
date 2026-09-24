@@ -559,6 +559,10 @@ async function serveProfile(args) {
   delete process.env.OPENEOC_DESKTOP_TOKEN;
   if (!token) throw new Error("Desktop ownership token is missing");
   process.env.OPENEOC_DATA_DIR = paths.blobs;
+  // Offline address search: the gazetteer at the builder's output path, in a
+  // checkout and in an install alike. Absent, search reports unavailable.
+  const gazetteer = resolve(repoRoot, "tools/basemap/out/gazetteer.tsv");
+  if (!process.env.OPENEOC_GAZETTEER_PATH && existsSync(gazetteer)) process.env.OPENEOC_GAZETTEER_PATH = gazetteer;
   // Credentials at rest (MFA secrets, connector credentials) are encrypted
   // with this profile's own key. Profiles created before the key existed get
   // one here.

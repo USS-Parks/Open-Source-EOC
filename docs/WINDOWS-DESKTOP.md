@@ -155,12 +155,14 @@ The small bundled PMTiles map and bundled fonts are required. If these approved 
 - `buildings.pmtiles` for building footprints;
 - `overlays.pmtiles` and `overlays-manifest.json` for jurisdiction overlays.
 
-Their absence leaves the bundled map available and does not trigger a download.
+If `tools/basemap/out/gazetteer.tsv` exists (see [the gazetteer build](../tools/basemap/README.md#10-offline-address-search-gazetteer)), the launcher sets `OPENEOC_GAZETTEER_PATH` to it for every profile, and address search works offline. An `OPENEOC_GAZETTEER_PATH` already set wins.
+
+Their absence leaves the bundled map available, reports address search unavailable, and does not trigger a download.
 
 ## Evidence boundary
 
 This launcher supports cold setup from the dependencies and assets on this computer, persistent profile restart, and an RLS-backed local runtime. The combined `85-PROOF` unit must still exercise the finished interface against a real isolated profile.
 
-This is not an independent transfer bundle. The local pnpm store, PostgreSQL and PostGIS binaries, Node.js, a browser, and ignored map assets remain machine prerequisites. AR7 stays open until a separately transferred, disconnected package proves provisioning on another prepared machine without relying on this checkout's ignored tools or assets.
+A source checkout is not a transfer bundle: the local pnpm store, PostgreSQL and PostGIS binaries, Node.js, a browser, and ignored map assets remain machine prerequisites. The [Windows installer](../deploy/windows/installer/README.md) is the transfer bundle. It carries Node.js, PostgreSQL with PostGIS, the built interface, the California street, building and overlay archives and the address search gazetteer. AR7 stays partial until that setup, carried on removable media, provisions a computer with no network by the installer README's second-machine transfer check.
 
 Copyright Basho Parks - 2026

@@ -1,5 +1,5 @@
 #ifndef AppVersion
-#define AppVersion "0.0.0"
+#error AppVersion must be passed by Build-Installer.ps1, which checks it against the stage.
 #endif
 #ifndef StagedAppRoot
 #error StagedAppRoot must name the generated installer-stage app directory.

@@ -63,7 +63,7 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 | AR4 | No in-place-upgrade dead ends | INV-5 | verified | - |
 | AR5 | No proprietary-only interchange, substrate lock-in, or unbundling | INV-4, INV-9 | verified | - |
 | AR6 | No session timeouts mid-incident, free-text drift, join-poor dashboards | INV-8 | verified | - |
-| AR7 | Full function disconnected, including provisioning | INV-3; `3741100`, `7a52438` | partial | Independent media transfer and second-machine proof: W6.4 |
+| AR7 | Full function disconnected, including provisioning | INV-3; `3741100`, `7a52438`; "V1 W6.4: installer rebuild" (setup `0.9.0`, SHA-256 `dafddeb50fcdfdf9a85519d24a88e21ae1c87420357ad22d86927802b112a153`, with the map archives and gazetteer) | partial | Install from media on a disconnected second computer, by the installer README's second-machine transfer check: Basho |
 
 ## Invariants (PSPR section 3)
 
@@ -71,7 +71,7 @@ Created by VEOC-00 at baseline `2743fe6f8ac29bedbc4d00175a47d8491777bce4`.
 |---|---|---|---|
 | INV-1 | Viewers are structurally free | verified | Structural model; no seat metering |
 | INV-2 | Attribution is total | verified | Append-only audit and incident/position attribution |
-| INV-3 | Disconnection is the normal case | partial | Prepared-host workflow proven; independent transfer remains W6.4 |
+| INV-3 | Disconnection is the normal case | partial | Prepared-host workflow proven; "V1 W6.4: installer rebuild" builds the offline setup with the map archives; the disconnected second-machine install remains: Basho |
 | INV-4 | Standards are native | verified | CAP, EDXL, CoT, HAVE and GeoJSON contracts |
 | INV-5 | Boards are versioned schemas | verified | Immutable versions and safe upgrade preflight/application |
 | INV-6 | No-code is real | verified | Structured designer and runtime presentation `75464fc` |

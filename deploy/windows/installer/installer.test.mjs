@@ -51,6 +51,7 @@ test("staging requires real local runtimes and excludes test cluster state", () 
   assert.match(source, /PostGIS extension control file/);
   assert.match(source, /must name the pgsql distribution directory/);
   assert.match(source, /forbidden test state/);
+  assert.match(source, /-Directory -Recurse -Filter '__tests__' \| Remove-Item -Recurse -Force/);
   assert.match(source, /^#requires -Version 7\.0$/m);
   assert.match(source, /function Resolve-ReparsePoint/);
   assert.match(source, /function Assert-NoReparsePoints/);
@@ -81,6 +82,26 @@ test("compiler binds its explicit stage and refuses a mislabeled release", () =>
   assert.match(source, /Installer stage file changed/);
   assert.match(source, /Get-FileHash/);
   assert.match(source, /"\/DStagedAppRoot=\$app"/);
+});
+
+test("installer version comes from the root package, with no stale default anywhere", () => {
+  const packageVersion = JSON.parse(read("../../../package.json")).version;
+  for (const script of ["Stage-Installer.ps1", "Build-Installer.ps1"])
+    assert.match(read(script), /\[string\]\$Version = \(Get-Content -LiteralPath \(Join-Path .+package\.json'\) -Raw \| ConvertFrom-Json\)\.version/);
+  assert.match(read("Open-Source-EOC.iss"), /#ifndef AppVersion\r?\n#error /);
+  const readme = read("README.md");
+  assert.doesNotMatch(readme, /0\.0\.0/);
+  assert.ok(readme.includes(`Open-Source-EOC-Setup-${packageVersion}.exe`));
+});
+
+test("stage carries the install icons and, with the archives, the address search gazetteer", () => {
+  const stager = read("Stage-Installer.ps1");
+  const desktop = read("../desktop.mjs");
+  assert.match(stager, /@\('fonts', 'napsg', 'icons'\)/);
+  assert.match(stager, /Copy-File \(Join-Path \$OptionalBasemapRoot \$file\)/);
+  assert.match(stager, /'tools\/basemap\/out\/gazetteer\.tsv'\) \(Join-Path \$appRoot 'tools\/basemap\/out\/gazetteer\.tsv'\)/);
+  assert.match(desktop, /resolve\(repoRoot, "tools\/basemap\/out\/gazetteer\.tsv"\)/);
+  assert.match(desktop, /process\.env\.OPENEOC_GAZETTEER_PATH = gazetteer/);
 });
 
 test("installer ships only operator-facing production and demo profiles", () => {

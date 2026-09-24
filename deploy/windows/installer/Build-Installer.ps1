@@ -2,13 +2,14 @@
 [CmdletBinding()]
 param(
   [string]$StageRoot = (Join-Path $PSScriptRoot '../out/installer-stage'),
-  [ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?$')]
-  [string]$Version = '0.0.0',
+  # The stage must carry this version; by default the root package version.
+  [string]$Version = (Get-Content -LiteralPath (Join-Path $PSScriptRoot '../../../package.json') -Raw | ConvertFrom-Json).version,
   [string]$Iscc
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+if ($Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?$') { throw "Installer version is invalid: $Version" }
 
 function RelativeFiles([string]$Root) {
   $rootPath = (Resolve-Path -LiteralPath $Root).Path

@@ -92,7 +92,7 @@ accordingly, so parity against "WebEOC" is not overstated.
 | AR4 | No in-place-upgrade dead ends | INV-5 | Versioned schema upgrades preserve records | verified | - |
 | AR5 | No proprietary-only interchange or substrate lock-in | INV-4, INV-9 | Native standards + jurisdiction export; Apache-2.0 | verified | - |
 | AR6 | No session timeouts mid-incident, free-text drift, join-poor dashboards | INV-8 | Session continuity, controlled fields, server-computed dashboards | verified | - |
-| AR7 | Full function disconnected, including provisioning | INV-3 | Native Windows cold setup, local map, runtime RLS, profile isolation, durable work recovery and persistent restart are proven on this prepared machine (`3741100`, `7a52438`). Independent media transfer and second-machine provisioning remain absent | partial | W6.4 |
+| AR7 | Full function disconnected, including provisioning | INV-3 | Native Windows cold setup, local map, runtime RLS, profile isolation, durable work recovery and persistent restart are proven on this prepared machine (`3741100`, `7a52438`). "V1 W6.4: installer rebuild" builds the offline `0.9.0` setup (1,351,643,919 bytes, SHA-256 `dafddeb50fcdfdf9a85519d24a88e21ae1c87420357ad22d86927802b112a153`) carrying Node.js, PostgreSQL with PostGIS, the California street, Overture building and overlay archives and the address search gazetteer, and writes the second-machine transfer check. That setup has not yet been carried on media to a disconnected second computer | partial | Basho: second-machine transfer check |
 
 ## Assessed gaps beyond the canonical set (audit and amendment)
 
@@ -131,3 +131,7 @@ accordingly, so parity against "WebEOC" is not overstated.
 - Live readiness (R1 real hardware, R2 live IPAWS, AR7 independent transfer,
   named external datasets and the pilot) remains in the V1 roster and is not
   converted into proof by this documentation reconciliation.
+- AR7 stays `partial` after "V1 W6.4: installer rebuild": the setup exists and
+  its contents match its stage manifest, but it has not been installed from
+  media on a disconnected second computer. That check is Basho's external
+  action, written in the installer README; the row moves on its record.

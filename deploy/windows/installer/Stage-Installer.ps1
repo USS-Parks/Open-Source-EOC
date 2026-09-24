@@ -9,14 +9,17 @@ param(
   [string]$PostgresRuntime,
   [string]$DesktopBuildRoot = (Join-Path $RepoRoot 'deploy/windows/out/build/app-dist'),
   [string]$Pnpm = 'pnpm.cmd',
-  [ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?$')]
-  [string]$Version = '0.0.0',
+  # The release version is the root package version unless a release names another.
+  [string]$Version = (Get-Content -LiteralPath (Join-Path $RepoRoot 'package.json') -Raw | ConvertFrom-Json).version,
   [switch]$IncludeOptionalBasemaps,
+  # The large archives are ignored files; a release workspace may keep them outside the checkout.
+  [string]$OptionalBasemapRoot = (Join-Path $RepoRoot 'web/public/basemap'),
   [switch]$Clean
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+if ($Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?$') { throw "Installer version is invalid: $Version" }
 $script:SeenReparseTargets = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 
 function AbsolutePath([string]$Path) {
@@ -177,6 +180,7 @@ $StageRoot = AbsolutePath $StageRoot
 $NodeRuntime = AbsolutePath $NodeRuntime
 $PostgresRuntime = AbsolutePath $PostgresRuntime
 $DesktopBuildRoot = AbsolutePath $DesktopBuildRoot
+$OptionalBasemapRoot = AbsolutePath $OptionalBasemapRoot
 $Pnpm = (Get-Command $Pnpm -CommandType Application -ErrorAction Stop | Select-Object -First 1).Path
 $windowsRoot = AbsolutePath (Join-Path $RepoRoot 'deploy/windows')
 $allowedStageRoot = AbsolutePath (Join-Path $windowsRoot 'out')
@@ -230,6 +234,8 @@ try {
 
   Copy-File (Join-Path $RepoRoot 'server/package.json') (Join-Path $appRoot 'server/package.json')
   Copy-Tree (Join-Path $RepoRoot 'server/src') (Join-Path $appRoot 'server/src')
+  # Test sources carry synthetic fixture accounts; the installed app keeps only the demo's.
+  Get-ChildItem -LiteralPath (Join-Path $appRoot 'server/src') -Directory -Recurse -Filter '__tests__' | Remove-Item -Recurse -Force
   Copy-Tree (Join-Path $RepoRoot 'server/migrations') (Join-Path $appRoot 'server/migrations')
   # pnpm resolves the complete production graph, including a package's virtual
   # store siblings. Hoisted linking makes that closure portable before this
@@ -254,7 +260,7 @@ try {
   foreach ($file in @(Get-ChildItem -LiteralPath $publicRoot -File -ErrorAction SilentlyContinue)) {
     Copy-File $file.FullName (Join-Path $appRoot "web/public/$($file.Name)")
   }
-  foreach ($directory in @('fonts', 'napsg')) {
+  foreach ($directory in @('fonts', 'napsg', 'icons')) {
     $source = Join-Path $publicRoot $directory
     if (Test-Path -LiteralPath $source -PathType Container) {
       Copy-Tree $source (Join-Path $appRoot "web/public/$directory")
@@ -267,12 +273,13 @@ try {
     }
   }
   if ($IncludeOptionalBasemaps) {
+    # A release that asks for the archives gets every one or fails; Copy-File refuses a missing input.
     foreach ($file in @('california.pmtiles', 'buildings.pmtiles', 'buildings-overture.json', 'overlays.pmtiles', 'overlays-manifest.json')) {
-      $source = Join-Path $publicRoot "basemap/$file"
-      if (Test-Path -LiteralPath $source -PathType Leaf) {
-        Copy-File $source (Join-Path $appRoot "web/public/basemap/$file")
-      }
+      Copy-File (Join-Path $OptionalBasemapRoot $file) (Join-Path $appRoot "web/public/basemap/$file")
     }
+    # Address search reads the gazetteer built from california.pmtiles. It keeps the
+    # builder's output path, outside web/public, so the static host never serves it.
+    Copy-File (Join-Path $RepoRoot 'tools/basemap/out/gazetteer.tsv') (Join-Path $appRoot 'tools/basemap/out/gazetteer.tsv')
   }
 
   Copy-Tree $NodeRuntime (Join-Path $appRoot 'runtime/node')
