@@ -89,9 +89,7 @@ describe("a simulated weather feed (CAP over poll)", () => {
       return new Response(CAP_ALERT, { status: 200 });
     }) as never;
 
-    await expect(withPerson(runtime, seed.memberId, (tx) =>
-      pollFeed(tx, member, id, countedFetch),
-    )).rejects.toMatchObject({ status: 403 });
+    await expect(pollFeed(runtime, member, id, countedFetch)).rejects.toMatchObject({ status: 403 });
     expect(fetchCalls).toBe(0);
   });
 
@@ -102,9 +100,7 @@ describe("a simulated weather feed (CAP over poll)", () => {
       url: "https://alerts.example.test/cap.xml",
       staleAfterSeconds: 600,
     });
-    const result = await withPerson(runtime, seed.adminId, (tx) =>
-      pollFeed(tx, adminPrincipal, id, fetchOk(CAP_ALERT)),
-    );
+    const result = await pollFeed(runtime, adminPrincipal, id, fetchOk(CAP_ALERT));
     expect(result).toEqual({ ok: true, items: 1 });
 
     const layer = await withPerson(runtime, seed.adminId, (tx) =>
@@ -130,9 +126,7 @@ describe("a simulated weather feed (CAP over poll)", () => {
       staleAfterSeconds: 60,
     });
     const polledAt = new Date(Date.now() - 3600 * 1000); // an hour ago
-    await withPerson(runtime, seed.adminId, (tx) =>
-      pollFeed(tx, adminPrincipal, id, fetchOk(CAP_ALERT), polledAt),
-    );
+    await pollFeed(runtime, adminPrincipal, id, fetchOk(CAP_ALERT), polledAt);
     const layer = await withPerson(runtime, seed.adminId, (tx) =>
       feedItems(tx, adminPrincipal, id),
     );
@@ -267,9 +261,7 @@ describe("ingestion failures alarm and never silently stop", () => {
     });
     const failing: typeof fetch = (async () =>
       new Response("boom", { status: 500 })) as never;
-    const result = await withPerson(runtime, seed.adminId, (tx) =>
-      pollFeed(tx, adminPrincipal, id, failing),
-    );
+    const result = await pollFeed(runtime, adminPrincipal, id, failing);
     expect(result.ok).toBe(false);
     expect(result.error).toContain("500");
 
@@ -303,9 +295,7 @@ describe("ingestion failures alarm and never silently stop", () => {
         },
       ],
     });
-    const recovered = await withPerson(runtime, seed.adminId, (tx) =>
-      pollFeed(tx, adminPrincipal, id, fetchOk(fc, "application/json")),
-    );
+    const recovered = await pollFeed(runtime, adminPrincipal, id, fetchOk(fc, "application/json"));
     expect(recovered).toEqual({ ok: true, items: 1 });
     const after = await withPerson(runtime, seed.adminId, (tx) =>
       listFeeds(tx, adminPrincipal, seed.jurisdictionId),
@@ -322,9 +312,7 @@ describe("ingestion failures alarm and never silently stop", () => {
       kind: "cap",
       url: "https://garbage.example.test/x",
     });
-    const result = await withPerson(runtime, seed.adminId, (tx) =>
-      pollFeed(tx, adminPrincipal, id, fetchOk("<html>maintenance page</html>", "text/html")),
-    );
+    const result = await pollFeed(runtime, adminPrincipal, id, fetchOk("<html>maintenance page</html>", "text/html"));
     expect(result.ok).toBe(false);
     expect(result.error).toContain("CAP");
   });

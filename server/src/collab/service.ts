@@ -8,6 +8,7 @@ import {
   type Principal,
 } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
+import { withPerson } from "../db/context.js";
 import { decryptSecret, encryptSecret, hasSecretKey } from "../secrets/envelope.js";
 import {
   adapterFor,
@@ -23,7 +24,11 @@ import {
  * platform; deactivation archives the space. The backend is optional: with
  * none configured the platform still runs and these operations degrade to
  * in-app notifications (INV-3). The adapter is reached across a process
- * boundary; the transport is injectable for tests.
+ * boundary; the transport is injectable for tests. The operations that call
+ * the backend take the pool, not a transaction: they read in one
+ * transaction, call the backend with none open, and write in another. The
+ * backend calls are idempotent, so a failure part way leaves nothing to undo
+ * and the operation can run again.
  */
 
 export interface BackendStatus {
@@ -185,44 +190,50 @@ export async function provisionForIncident(
   incidentId: string,
   transport: HttpTransport = httpTransport,
 ): Promise<ProvisionResult> {
-  const ctx = await loadIncidentContext(sql, incidentId);
-  requireAdmin(actor, ctx.jurisdictionId);
-  const live = await loadLiveBackend(sql, ctx.jurisdictionId, transport);
-  if (!live) {
-    await degrade(sql, actor, ctx, `Collaboration space requested for ${ctx.name}`);
-    return { degraded: true, backend: null, channels: ctx.plan.channels.length };
-  }
+  const { ctx, live } = await withPerson(sql, actor.person.id, async (tx) => {
+    const ctx = await loadIncidentContext(tx, incidentId);
+    requireAdmin(actor, ctx.jurisdictionId);
+    const live = await loadLiveBackend(tx, ctx.jurisdictionId, transport);
+    if (!live) await degrade(tx, actor, ctx, `Collaboration space requested for ${ctx.name}`);
+    return { ctx, live };
+  });
+  if (!live) return { degraded: true, backend: null, channels: ctx.plan.channels.length };
 
   const remoteSpaceId = await live.adapter.ensureSpace(ctx.plan.spaceName, ctx.plan.spaceDisplayName);
-  const [space] = await sql`
-    insert into collab_spaces (incident_id, backend_kind, remote_space_id, status, created_by)
-    values (${incidentId}, ${live.adapter.kind}, ${remoteSpaceId}, 'active', ${actor.person.id})
-    on conflict (incident_id) do update set
-      backend_kind = excluded.backend_kind,
-      remote_space_id = excluded.remote_space_id,
-      status = 'active', archived_at = null
-    returning id`;
-  const spaceId = space!.id as string;
-
+  const remoteChannelIds: string[] = [];
   for (const ch of ctx.plan.channels) {
     const remoteChannelId = await live.adapter.ensureChannel(remoteSpaceId, ch.name, ch.displayName);
-    const [channel] = await sql`
-      insert into collab_channels (space_id, section, name, remote_channel_id)
-      values (${spaceId}, ${ch.section}, ${ch.name}, ${remoteChannelId})
-      on conflict (space_id, section) do update set
-        name = excluded.name, remote_channel_id = excluded.remote_channel_id
-      returning id`;
     await live.adapter.setMembers(remoteChannelId, ch.memberEmails);
-    await mirrorMembers(sql, channel!.id as string, ch.memberPersonIds);
+    remoteChannelIds.push(remoteChannelId);
   }
 
-  await recordAudit(sql, actor, {
-    jurisdictionId: ctx.jurisdictionId,
-    incidentId,
-    category: "collab.provisioned",
-    subjectTable: "collab_spaces",
-    subjectId: spaceId,
-    payload: { backend: live.adapter.kind, channels: ctx.plan.channels.length },
+  await withPerson(sql, actor.person.id, async (tx) => {
+    const [space] = await tx`
+      insert into collab_spaces (incident_id, backend_kind, remote_space_id, status, created_by)
+      values (${incidentId}, ${live.adapter.kind}, ${remoteSpaceId}, 'active', ${actor.person.id})
+      on conflict (incident_id) do update set
+        backend_kind = excluded.backend_kind,
+        remote_space_id = excluded.remote_space_id,
+        status = 'active', archived_at = null
+      returning id`;
+    const spaceId = space!.id as string;
+    for (const [i, ch] of ctx.plan.channels.entries()) {
+      const [channel] = await tx`
+        insert into collab_channels (space_id, section, name, remote_channel_id)
+        values (${spaceId}, ${ch.section}, ${ch.name}, ${remoteChannelIds[i]!})
+        on conflict (space_id, section) do update set
+          name = excluded.name, remote_channel_id = excluded.remote_channel_id
+        returning id`;
+      await mirrorMembers(tx, channel!.id as string, ch.memberPersonIds);
+    }
+    await recordAudit(tx, actor, {
+      jurisdictionId: ctx.jurisdictionId,
+      incidentId,
+      category: "collab.provisioned",
+      subjectTable: "collab_spaces",
+      subjectId: spaceId,
+      payload: { backend: live.adapter.kind, channels: ctx.plan.channels.length },
+    });
   });
   return { degraded: false, backend: live.adapter.kind, channels: ctx.plan.channels.length };
 }
@@ -244,11 +255,16 @@ export async function syncIncidentMembership(
   incidentId: string,
   transport: HttpTransport = httpTransport,
 ): Promise<SyncResult> {
-  const ctx = await loadIncidentContext(sql, incidentId);
-  requireAdmin(actor, ctx.jurisdictionId);
-  const [space] = await sql`
-    select id, remote_space_id, status from collab_spaces where incident_id = ${incidentId}`;
-  const live = await loadLiveBackend(sql, ctx.jurisdictionId, transport);
+  const { ctx, space, live, channels } = await withPerson(sql, actor.person.id, async (tx) => {
+    const ctx = await loadIncidentContext(tx, incidentId);
+    requireAdmin(actor, ctx.jurisdictionId);
+    const [space] = await tx`
+      select id, remote_space_id, status from collab_spaces where incident_id = ${incidentId}`;
+    const live = await loadLiveBackend(tx, ctx.jurisdictionId, transport);
+    const channels = space ? await tx`
+      select id, section, remote_channel_id from collab_channels where space_id = ${space.id as string}` : [];
+    return { ctx, space, live, channels };
+  });
   if (!live || !space || (space.status as string) !== "active") {
     if (live && !space) {
       await provisionForIncident(sql, actor, incidentId, transport);
@@ -259,8 +275,7 @@ export async function syncIncidentMembership(
 
   let added = 0;
   let removed = 0;
-  const channels = await sql`
-    select id, section, remote_channel_id from collab_channels where space_id = ${space.id as string}`;
+  const mirrored: Array<{ channelId: string; personIds: readonly string[] }> = [];
   const planBySection = new Map(ctx.plan.channels.map((c) => [c.section, c]));
   for (const row of channels) {
     const planned = planBySection.get(row.section as string);
@@ -271,15 +286,18 @@ export async function syncIncidentMembership(
     );
     added += result.added.length;
     removed += result.removed.length;
-    await mirrorMembers(sql, row.id as string, planned.memberPersonIds);
+    mirrored.push({ channelId: row.id as string, personIds: planned.memberPersonIds });
   }
-  await recordAudit(sql, actor, {
-    jurisdictionId: ctx.jurisdictionId,
-    incidentId,
-    category: "collab.membership_synced",
-    subjectTable: "collab_spaces",
-    subjectId: space.id as string,
-    payload: { added, removed },
+  await withPerson(sql, actor.person.id, async (tx) => {
+    for (const m of mirrored) await mirrorMembers(tx, m.channelId, m.personIds);
+    await recordAudit(tx, actor, {
+      jurisdictionId: ctx.jurisdictionId,
+      incidentId,
+      category: "collab.membership_synced",
+      subjectTable: "collab_spaces",
+      subjectId: space.id as string,
+      payload: { added, removed },
+    });
   });
   return { degraded: false, added, removed };
 }
@@ -292,29 +310,35 @@ export async function postAnnouncement(
   text: string,
   transport: HttpTransport = httpTransport,
 ): Promise<{ degraded: boolean }> {
-  const ctx = await loadIncidentContext(sql, incidentId);
-  requireWriter(actor, ctx.jurisdictionId);
-  const [space] = await sql`
-    select id, status from collab_spaces where incident_id = ${incidentId}`;
-  const live = await loadLiveBackend(sql, ctx.jurisdictionId, transport);
-  if (!live || !space || (space.status as string) !== "active") {
-    await degrade(sql, actor, ctx, `${ctx.name}: ${text}`);
-    return { degraded: true };
-  }
   const target = section ?? "all";
-  const [channel] = await sql`
-    select remote_channel_id from collab_channels
-    where space_id = ${space.id as string} and section = ${target}`;
-  if (!channel) throw new AuthError(404, "no such section channel");
-  await live.adapter.postAnnouncement(channel.remote_channel_id as string, text);
-  await recordAudit(sql, actor, {
-    jurisdictionId: ctx.jurisdictionId,
-    incidentId,
-    category: "collab.announced",
-    subjectTable: "collab_spaces",
-    subjectId: space.id as string,
-    payload: { section: target },
+  const planned = await withPerson(sql, actor.person.id, async (tx) => {
+    const ctx = await loadIncidentContext(tx, incidentId);
+    requireWriter(actor, ctx.jurisdictionId);
+    const [space] = await tx`
+      select id, status from collab_spaces where incident_id = ${incidentId}`;
+    const live = await loadLiveBackend(tx, ctx.jurisdictionId, transport);
+    if (!live || !space || (space.status as string) !== "active") {
+      await degrade(tx, actor, ctx, `${ctx.name}: ${text}`);
+      return null;
+    }
+    const [channel] = await tx`
+      select remote_channel_id from collab_channels
+      where space_id = ${space.id as string} and section = ${target}`;
+    if (!channel) throw new AuthError(404, "no such section channel");
+    return { ctx, live, spaceId: space.id as string, remoteChannelId: channel.remote_channel_id as string };
   });
+  if (!planned) return { degraded: true };
+  await planned.live.adapter.postAnnouncement(planned.remoteChannelId, text);
+  await withPerson(sql, actor.person.id, (tx) =>
+    recordAudit(tx, actor, {
+      jurisdictionId: planned.ctx.jurisdictionId,
+      incidentId,
+      category: "collab.announced",
+      subjectTable: "collab_spaces",
+      subjectId: planned.spaceId,
+      payload: { section: target },
+    }),
+  );
   return { degraded: false };
 }
 
@@ -324,22 +348,28 @@ export async function archiveForIncident(
   incidentId: string,
   transport: HttpTransport = httpTransport,
 ): Promise<{ archived: boolean }> {
-  const ctx = await loadIncidentContext(sql, incidentId);
-  requireAdmin(actor, ctx.jurisdictionId);
-  const [space] = await sql`
-    select id, remote_space_id, status from collab_spaces where incident_id = ${incidentId}`;
-  if (!space || (space.status as string) === "archived") return { archived: false };
-  const live = await loadLiveBackend(sql, ctx.jurisdictionId, transport);
-  if (live) await live.adapter.archiveSpace(space.remote_space_id as string);
-  await sql`
-    update collab_spaces set status = 'archived', archived_at = now()
-    where id = ${space.id as string}`;
-  await recordAudit(sql, actor, {
-    jurisdictionId: ctx.jurisdictionId,
-    incidentId,
-    category: "collab.archived",
-    subjectTable: "collab_spaces",
-    subjectId: space.id as string,
+  const found = await withPerson(sql, actor.person.id, async (tx) => {
+    const ctx = await loadIncidentContext(tx, incidentId);
+    requireAdmin(actor, ctx.jurisdictionId);
+    const [space] = await tx`
+      select id, remote_space_id, status from collab_spaces where incident_id = ${incidentId}`;
+    if (!space || (space.status as string) === "archived") return null;
+    const live = await loadLiveBackend(tx, ctx.jurisdictionId, transport);
+    return { ctx, live, spaceId: space.id as string, remoteSpaceId: space.remote_space_id as string };
+  });
+  if (!found) return { archived: false };
+  if (found.live) await found.live.adapter.archiveSpace(found.remoteSpaceId);
+  await withPerson(sql, actor.person.id, async (tx) => {
+    await tx`
+      update collab_spaces set status = 'archived', archived_at = now()
+      where id = ${found.spaceId}`;
+    await recordAudit(tx, actor, {
+      jurisdictionId: found.ctx.jurisdictionId,
+      incidentId,
+      category: "collab.archived",
+      subjectTable: "collab_spaces",
+      subjectId: found.spaceId,
+    });
   });
   return { archived: true };
 }
@@ -358,10 +388,10 @@ export async function syncPositionIncidents(
   positionId: string,
   transport: HttpTransport = httpTransport,
 ): Promise<void> {
-  const rows = await sql`
+  const rows = await withPerson(sql, actor.person.id, (tx) => tx`
     select distinct i.id from incident_positions ip
     join incidents i on i.id = ip.incident_id
-    where ip.position_id = ${positionId} and i.closed_at is null`;
+    where ip.position_id = ${positionId} and i.closed_at is null`);
   for (const r of rows) {
     try {
       await syncIncidentMembership(sql, actor, r.id as string, transport);

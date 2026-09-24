@@ -166,14 +166,13 @@ export function resourceRoutes(
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(15_000),
       }).catch(() => {
-        // Unreachable, or silent past the timeout; the transaction rolls back.
+        // Unreachable, or silent past the timeout; nothing is recorded.
         throw new AuthError(502, "escalation delivery failed");
       });
       if (!res.ok) throw new AuthError(502, "escalation delivery failed");
     };
-    await withPerson(sql, req.principal.person.id, (tx) =>
-      escalate(tx, req.principal, id, body.peerName, deliver),
-    );
+    // Delivers between its own transactions, never inside one.
+    await escalate(sql, req.principal, id, body.peerName, deliver);
     return reply.send({ ok: true });
   });
 

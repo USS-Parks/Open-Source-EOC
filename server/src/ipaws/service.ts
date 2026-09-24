@@ -1,6 +1,7 @@
 import type { Sql } from "../db/client.js";
 import { AuthError, requireAdmin, requireMember, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
+import { withPerson } from "../db/context.js";
 import { decryptSecret, encryptSecret, fingerprint, hasSecretKey } from "../secrets/envelope.js";
 import { httpTransport, postCap, type IpawsResult, type IpawsTransport } from "./connector.js";
 
@@ -246,26 +247,18 @@ async function sendable(
 }
 
 /**
- * Send a stored, IPAWS-eligible CAP alert. Every attempt, accepted or
- * rejected, is logged with its outcome in ipaws_submissions and the audit.
+ * Log one send attempt, accepted or rejected, with its outcome in
+ * ipaws_submissions and the audit.
  */
-async function transmit(
+async function recordSubmission(
   sql: Sql,
   actor: Principal,
   jurisdictionId: string,
   capAlertId: string,
-  kind: SendKind,
-  transport: IpawsTransport,
+  send: Sendable,
+  result: IpawsResult,
   attribution: Record<string, unknown>,
 ): Promise<SubmitResult> {
-  const send = await sendable(sql, jurisdictionId, capAlertId, kind);
-  const result = await postCap(
-    send.endpointUrl,
-    { cogId: send.cogId, secret: decryptSecret(send.credentialEnvelope) },
-    send.xml,
-    transport,
-  );
-
   const [sub] = await sql`
     insert into ipaws_submissions
       (jurisdiction_id, cap_alert_id, environment, cog_id, accepted, detail, submitted_by)
@@ -291,8 +284,10 @@ async function transmit(
 
 /**
  * Send single-handed through an injected transport: the recorded-fixture
- * path. Refused while disabled. Anything bound for the real IPAWS-OPEN
- * endpoint goes through requestSend and a second admin's confirmSend.
+ * path. Refused while disabled. It runs inside the caller's transaction
+ * because it refuses the HTTP transport, so nothing it awaits leaves the
+ * process. Anything bound for the real IPAWS-OPEN endpoint goes through
+ * requestSend and a second admin's confirmSend.
  */
 export async function postAlert(
   sql: Sql,
@@ -304,7 +299,14 @@ export async function postAlert(
   requireAdmin(actor, jurisdictionId);
   if (transport === httpTransport)
     throw new AuthError(409, "an IPAWS send needs a second admin's confirmation");
-  return transmit(sql, actor, jurisdictionId, capAlertId, "live", transport, {});
+  const send = await sendable(sql, jurisdictionId, capAlertId, "live");
+  const result = await postCap(
+    send.endpointUrl,
+    { cogId: send.cogId, secret: decryptSecret(send.credentialEnvelope) },
+    send.xml,
+    transport,
+  );
+  return recordSubmission(sql, actor, jurisdictionId, capAlertId, send, result, {});
 }
 
 function toSendRequest(row: Record<string, unknown>): SendRequest {
@@ -376,8 +378,15 @@ export async function requestSend(
 
 /**
  * Second half: a different admin confirms, and the send runs under the
- * confirming admin with both identities in the audit. The transport is
- * injectable for tests; production uses a real HTTP POST.
+ * confirming admin with both identities in the audit. `sql` is the pool, not
+ * a transaction: the confirmation is checked, claimed and audited in one
+ * transaction, IPAWS-OPEN is called with none open, and the submission is
+ * recorded in a second. A confirmed request is never sent again, so a send
+ * that fails in transit is recorded as not accepted. If the process stops
+ * between the call and the record, the request stays confirmed with no
+ * submission in the send list; it cannot be resent, and a new send must be
+ * requested. The transport is injectable for tests; production uses a real
+ * HTTP POST.
  */
 export async function confirmSend(
   sql: Sql,
@@ -387,39 +396,54 @@ export async function confirmSend(
   transport: IpawsTransport = httpTransport,
 ): Promise<SubmitResult & { readonly request: SendRequest }> {
   requireAdmin(actor, jurisdictionId);
-  const [pending] = await sql`
-    select cap_alert_id, kind, requested_by, status, expires_at <= now() as expired
-    from ipaws_send_requests
-    where jurisdiction_id = ${jurisdictionId} and id = ${requestId}
-    for update`;
-  if (!pending) throw new AuthError(404, "send request not found");
-  if (pending.status !== "pending")
-    throw new AuthError(409, `send request is already ${pending.status as string}`);
-  if (pending.expired) throw new AuthError(409, "send request expired; request the send again");
-  if (pending.requested_by === actor.person.id)
-    throw new AuthError(403, "a different admin must confirm this send");
+  const claim = await withPerson(sql, actor.person.id, async (tx) => {
+    const [pending] = await tx`
+      select cap_alert_id, kind, requested_by, status, expires_at <= now() as expired
+      from ipaws_send_requests
+      where jurisdiction_id = ${jurisdictionId} and id = ${requestId}
+      for update`;
+    if (!pending) throw new AuthError(404, "send request not found");
+    if (pending.status !== "pending")
+      throw new AuthError(409, `send request is already ${pending.status as string}`);
+    if (pending.expired) throw new AuthError(409, "send request expired; request the send again");
+    if (pending.requested_by === actor.person.id)
+      throw new AuthError(403, "a different admin must confirm this send");
 
-  const capAlertId = pending.cap_alert_id as string;
-  const kind = pending.kind as SendKind;
-  const requestedBy = pending.requested_by as string;
-  await sql`
-    update ipaws_send_requests
-    set status = 'confirmed', decided_by = ${actor.person.id}, decided_at = now()
-    where id = ${requestId}`;
-  await recordAudit(sql, actor, {
-    jurisdictionId,
-    category: "ipaws.send.confirmed",
-    subjectTable: "ipaws_send_requests",
-    subjectId: requestId,
-    payload: { capAlertId, kind, requestedBy, confirmedBy: actor.person.id },
+    const capAlertId = pending.cap_alert_id as string;
+    const kind = pending.kind as SendKind;
+    const requestedBy = pending.requested_by as string;
+    const send = await sendable(tx, jurisdictionId, capAlertId, kind);
+    await tx`
+      update ipaws_send_requests
+      set status = 'confirmed', decided_by = ${actor.person.id}, decided_at = now()
+      where id = ${requestId}`;
+    await recordAudit(tx, actor, {
+      jurisdictionId,
+      category: "ipaws.send.confirmed",
+      subjectTable: "ipaws_send_requests",
+      subjectId: requestId,
+      payload: { capAlertId, kind, requestedBy, confirmedBy: actor.person.id },
+    });
+    return { capAlertId, requestedBy, send, secret: decryptSecret(send.credentialEnvelope) };
   });
-  const result = await transmit(sql, actor, jurisdictionId, capAlertId, kind, transport, {
-    requestId,
-    requestedBy,
+
+  const { capAlertId, requestedBy, send } = claim;
+  const result = await postCap(send.endpointUrl, { cogId: send.cogId, secret: claim.secret }, send.xml, transport)
+    .catch((err: unknown): IpawsResult => ({
+      accepted: false,
+      detail: `IPAWS-OPEN did not answer: ${err instanceof Error ? err.message : String(err)}`,
+      httpStatus: 0,
+    }));
+
+  return withPerson(sql, actor.person.id, async (tx) => {
+    const submitted = await recordSubmission(tx, actor, jurisdictionId, capAlertId, send, result, {
+      requestId,
+      requestedBy,
+    });
+    await tx`update ipaws_send_requests set submission_id = ${submitted.submissionId} where id = ${requestId}`;
+    const [request] = await sendRequests(tx, jurisdictionId, requestId);
+    return { ...submitted, request: request! };
   });
-  await sql`update ipaws_send_requests set submission_id = ${result.submissionId} where id = ${requestId}`;
-  const [request] = await sendRequests(sql, jurisdictionId, requestId);
-  return { ...result, request: request! };
 }
 
 /** Withdraw a pending send. Any admin of the jurisdiction may. */

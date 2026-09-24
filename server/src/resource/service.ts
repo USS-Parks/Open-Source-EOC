@@ -163,8 +163,12 @@ export type EscalationDeliver = (payload: EscalationPayload) => Promise<void>;
 
 /**
  * Escalate a request to a higher tier over a federation peer. The delivery
- * is injected (the transport that carries it to the peer's receive lane);
- * the escalation is recorded on this instance's chronology.
+ * is injected (the transport that carries it to the peer's receive lane) and
+ * runs outside any transaction; `sql` is the pool. One transaction checks the
+ * request and claims it, so a second escalation of it is refused while this
+ * one is in flight; a second records the escalation on this instance's
+ * chronology and releases the claim, only once the peer has taken it. A
+ * failed delivery releases the claim and records nothing.
  */
 export async function escalate(
   sql: Sql,
@@ -173,36 +177,48 @@ export async function escalate(
   peerName: string,
   deliver: EscalationDeliver,
 ): Promise<void> {
-  const [full] = await sql`
-    select jurisdiction_id, incident_id, state, item, quantity, priority, notes from resource_requests
-    where id = ${requestId}`;
-  if (!full) throw new AuthError(404, "resource request not found");
-  requireWriter(actor, full.jurisdiction_id as string);
-  if (full.incident_id) {
-    await requireOpenIncidentScope(sql, actor, full.incident_id as string, full.jurisdiction_id as string);
-  }
-  await deliver({
-    originRequestId: requestId,
-    item: full.item as string,
-    quantity: full.quantity as number,
-    priority: full.priority as string,
-    notes: (full.notes as string | null) ?? null,
+  const payload = await withPerson(sql, actor.person.id, async (tx): Promise<EscalationPayload> => {
+    const [full] = await tx`
+      select jurisdiction_id, incident_id, item, quantity, priority, notes from resource_requests
+      where id = ${requestId}`;
+    if (!full) throw new AuthError(404, "resource request not found");
+    requireWriter(actor, full.jurisdiction_id as string);
+    if (full.incident_id) {
+      await requireOpenIncidentScope(tx, actor, full.incident_id as string, full.jurisdiction_id as string);
+    }
+    const [claimed] = await tx`
+      update resource_requests set escalation_claimed_at = now()
+      where id = ${requestId}
+        and (escalation_claimed_at is null or escalation_claimed_at < now() - interval '1 minute')
+      returning id`;
+    if (!claimed) throw new AuthError(409, "this request is already being escalated");
+    return {
+      originRequestId: requestId,
+      item: full.item as string,
+      quantity: full.quantity as number,
+      priority: full.priority as string,
+      notes: (full.notes as string | null) ?? null,
+    };
   });
-  await appendEvent(
-    sql,
-    requestId,
-    full.state as string,
-    full.state as string,
-    `escalated to ${peerName}`,
-    actor.person.id,
-    null,
-  );
-  await recordAudit(sql, actor, {
-    jurisdictionId: full.jurisdiction_id as string,
-    category: "rr.escalated",
-    subjectTable: "resource_requests",
-    subjectId: requestId,
-    payload: { peer: peerName },
+  const release = (tx: Sql) => tx`
+    update resource_requests set escalation_claimed_at = null where id = ${requestId}
+    returning jurisdiction_id, state`;
+  try {
+    await deliver(payload);
+  } catch (err) {
+    await withPerson(sql, actor.person.id, release);
+    throw err;
+  }
+  await withPerson(sql, actor.person.id, async (tx) => {
+    const [row] = await release(tx);
+    await appendEvent(tx, requestId, row!.state as string, row!.state as string, `escalated to ${peerName}`, actor.person.id, null);
+    await recordAudit(tx, actor, {
+      jurisdictionId: row!.jurisdiction_id as string,
+      category: "rr.escalated",
+      subjectTable: "resource_requests",
+      subjectId: requestId,
+      payload: { peer: peerName },
+    });
   });
 }
 

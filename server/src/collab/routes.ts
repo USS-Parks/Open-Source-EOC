@@ -15,8 +15,9 @@ import {
  * Collaboration adapter and incident-space routes (F15). Reading
  * backend status is open to members; configuring is an admin act. Provision,
  * sync, announce, and archive run under the caller's person context so RLS
- * and the audit trail apply. The default transport is a real HTTP call; the
- * adapters live behind a process boundary.
+ * and the audit trail apply; each opens its own transactions around the
+ * backend calls, never across them. The default transport is a real HTTP
+ * call; the adapters live behind a process boundary.
  */
 
 const BackendBody = z.object({
@@ -72,10 +73,7 @@ export function collabRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { incidentId } = req.params as { incidentId: string };
-      const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        provisionForIncident(tx, req.principal, incidentId),
-      );
-      return reply.send(result);
+      return reply.send(await provisionForIncident(sql, req.principal, incidentId));
     },
   );
 
@@ -84,10 +82,7 @@ export function collabRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { incidentId } = req.params as { incidentId: string };
-      const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        syncIncidentMembership(tx, req.principal, incidentId),
-      );
-      return reply.send(result);
+      return reply.send(await syncIncidentMembership(sql, req.principal, incidentId));
     },
   );
 
@@ -97,10 +92,7 @@ export function collabRoutes(
     async (req, reply) => {
       const { incidentId } = req.params as { incidentId: string };
       const body = AnnounceBody.parse(req.body);
-      const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        postAnnouncement(tx, req.principal, incidentId, body.section ?? null, body.text),
-      );
-      return reply.send(result);
+      return reply.send(await postAnnouncement(sql, req.principal, incidentId, body.section ?? null, body.text));
     },
   );
 
@@ -109,10 +101,7 @@ export function collabRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { incidentId } = req.params as { incidentId: string };
-      const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        archiveForIncident(tx, req.principal, incidentId),
-      );
-      return reply.send(result);
+      return reply.send(await archiveForIncident(sql, req.principal, incidentId));
     },
   );
 }

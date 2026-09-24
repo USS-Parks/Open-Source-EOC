@@ -98,6 +98,12 @@ each naming the admin who acted; the confirmation and the submission also
 name the requester. A jurisdiction therefore needs at least two admins to
 transmit.
 
+A confirmed request is sent once. The confirmation is recorded before
+IPAWS-OPEN is called and the outcome after it, so an endpoint that does not
+answer is recorded as rejected with the reason. If the server stops between
+the call and the record, the request stays confirmed with no submission; it
+cannot be sent again, and a new send must be requested.
+
 The recorded-fixture path in the test suite injects a transport in place of
 the HTTP one and sends single-handed; the server refuses a single-handed send
 through the HTTP transport.

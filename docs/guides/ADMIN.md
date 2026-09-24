@@ -302,8 +302,9 @@ and leaves the list, and what it already sent stays in the notification log.
 Only an administrator of the jurisdiction lists, changes or removes rules,
 with `GET /api/v1/jurisdictions/:jurisdictionId/notification-rules`, `PATCH
 /api/v1/notification-rules/:ruleId` and `DELETE
-/api/v1/notification-rules/:ruleId`. Each change and removal is recorded in
-the audit trail as `notification.rule_changed` or `notification.rule_removed`.
+/api/v1/notification-rules/:ruleId`. Each creation, change and removal is
+recorded in the audit trail as `notification.rule_created`,
+`notification.rule_changed` or `notification.rule_removed`.
 
 An email, SMS or push message names the board by its title and the record by
 its first text field, as in "Shelter status record updated: McKinleyville

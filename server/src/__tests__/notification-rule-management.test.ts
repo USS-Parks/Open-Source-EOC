@@ -142,10 +142,14 @@ describe("managing notification rules", () => {
     const audits = await admin`
       select category, payload from audit_events where subject_id = ${ruleId} order by seq`;
     expect(audits.map((a) => a.category)).toEqual([
+      "notification.rule_created",
       "notification.rule_changed", "notification.rule_changed", "notification.rule_changed",
       "notification.rule_changed", "notification.rule_removed",
     ]);
-    expect(audits[0]!.payload).toEqual({ enabled: false });
+    expect(audits[0]!.payload).toMatchObject({
+      boardId, event: "record.updated", channels: [{ kind: "ntfy", url: "http://127.0.0.1:9", topic: "shelters" }],
+    });
+    expect(audits[1]!.payload).toEqual({ enabled: false });
   });
 });
 

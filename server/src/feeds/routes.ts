@@ -44,10 +44,8 @@ export function feedRoutes(
 
   app.post("/api/v1/feeds/:feedId/poll", { preHandler: authenticate }, async (req, reply) => {
     const { feedId } = req.params as { feedId: string };
-    const result = await withPerson(sql, req.principal.person.id, (tx) =>
-      pollFeed(tx, req.principal, feedId),
-    );
-    return reply.send(result);
+    // Fetches between its own transactions, never inside one.
+    return reply.send(await pollFeed(sql, req.principal, feedId));
   });
 
   app.get("/api/v1/feeds/:feedId/items", { preHandler: authenticate }, async (req, reply) => {

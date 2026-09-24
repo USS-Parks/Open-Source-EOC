@@ -127,9 +127,11 @@ function healthOf(r: Record<string, unknown>, now: Date): FeedHealth {
 }
 
 /**
- * One poll: fetch, parse, land items, record health. Failure marks the
- * feed, alarms (notification + audit), and leaves it enabled for the next
- * round. Returns the outcome; only feed-not-found throws.
+ * One poll: fetch, parse, land items, record health. `sql` is the pool: the
+ * feed is read in one transaction, fetched with none open, and its items or
+ * its failure written in another. Failure marks the feed, alarms
+ * (notification + audit), and leaves it enabled for the next round. Returns
+ * the outcome; only feed-not-found throws.
  */
 export async function pollFeed(
   sql: Sql,
@@ -138,32 +140,39 @@ export async function pollFeed(
   fetchImpl: typeof fetch = fetch,
   now = new Date(),
 ): Promise<{ ok: boolean; items?: number; error?: string }> {
-  const [feed] = await sql`
-    select id, jurisdiction_id, name, kind, url from feeds
-    where id = ${feedId} and url is not null`;
-  if (!feed) throw new AuthError(404, "feed not found");
-  requireAdmin(actor, feed.jurisdiction_id as string);
+  const feed = await withPerson(sql, actor.person.id, async (tx) => {
+    const [row] = await tx`
+      select id, jurisdiction_id, name, kind, url from feeds
+      where id = ${feedId} and url is not null`;
+    if (!row) throw new AuthError(404, "feed not found");
+    requireAdmin(actor, row.jurisdiction_id as string);
+    return row;
+  });
   try {
     const res = await fetchImpl(feed.url as string, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`feed responded ${res.status}`);
     const items = parseFeed(feed.kind as string, await res.text());
-    await landItems(sql, feedId, items, now);
-    await sql`
-      update feeds
-      set last_polled_at = ${now}, last_success_at = ${now}, last_error = null,
-          consecutive_failures = 0
-      where id = ${feedId}`;
+    await withPerson(sql, actor.person.id, async (tx) => {
+      await landItems(tx, feedId, items, now);
+      await tx`
+        update feeds
+        set last_polled_at = ${now}, last_success_at = ${now}, last_error = null,
+            consecutive_failures = 0
+        where id = ${feedId}`;
+    });
     return { ok: true, items: items.length };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await sql`
-      update feeds
-      set last_polled_at = ${now}, last_error = ${message},
-          consecutive_failures = consecutive_failures + 1
-      where id = ${feedId}`;
-    await alarm(sql, actor, feed.jurisdiction_id as string, feedId, feed.name as string, message);
+    await withPerson(sql, actor.person.id, async (tx) => {
+      await tx`
+        update feeds
+        set last_polled_at = ${now}, last_error = ${message},
+            consecutive_failures = consecutive_failures + 1
+        where id = ${feedId}`;
+      await alarm(tx, actor, feed.jurisdiction_id as string, feedId, feed.name as string, message);
+    });
     return { ok: false, error: message };
   }
 }
@@ -238,9 +247,7 @@ export async function runDueFeeds(
       if (reason instanceof AuthError && (reason.status === 401 || reason.status === 403)) continue;
       throw reason;
     }
-    await withPerson(sql, creator.person.id, (tx) =>
-      pollFeed(tx, creator, feed.id as string, fetchImpl, now),
-    );
+    await pollFeed(sql, creator, feed.id as string, fetchImpl, now);
     ran += 1;
   }
   return ran;

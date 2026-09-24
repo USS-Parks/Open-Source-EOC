@@ -4,6 +4,7 @@ import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import { pageQuery } from "../db/cursor.js";
 import {
+  announceRelease,
   answerInquiry,
   assignInquiry,
   decideLocal,
@@ -139,10 +140,11 @@ export function jicRoutes(
       const result = await withPerson(sql, req.principal.person.id, (tx) =>
         publishRelease(tx, req.principal, releaseId, {
           ...(body.toPublicFeed !== undefined ? { toPublicFeed: body.toPublicFeed } : {}),
-          ...(body.toCollab !== undefined ? { toCollab: body.toCollab } : {}),
           ...(body.capDraft !== undefined ? { capDraft: body.capDraft } : {}),
         }),
       );
+      // The collaboration outlet posts after publication commits, outside any transaction.
+      if (body.toCollab && await announceRelease(sql, req.principal, releaseId)) result.channels.push("collab");
       return reply.send(result);
     },
   );

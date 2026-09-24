@@ -123,9 +123,8 @@ export function ipawsRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { jurisdictionId, sendId } = SendParams.parse(req.params);
-      const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        confirmSend(tx, req.principal, jurisdictionId, sendId),
-      );
+      // Opens its own transactions around the IPAWS-OPEN call, never across it.
+      const result = await confirmSend(sql, req.principal, jurisdictionId, sendId);
       return reply.send(result);
     },
   );

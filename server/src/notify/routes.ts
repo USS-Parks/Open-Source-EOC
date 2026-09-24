@@ -111,9 +111,9 @@ export function notifyRoutes(
       const body = RuleBody.parse(req.body);
       const needsSecret = body.channels.some((c) => c.kind === "webhook");
       const secret = needsSecret ? randomBytes(24).toString("hex") : null;
-      const [row] = await withPerson(sql, req.principal.person.id, async (tx) => {
+      const id = await withPerson(sql, req.principal.person.id, async (tx) => {
         await checkChannels(tx, jurisdictionId, body.channels);
-        return tx`
+        const [row] = await tx`
           insert into notification_rules
             (jurisdiction_id, board_id, event, condition, channels, webhook_secret,
              schedule_interval_minutes, rate_limit_max, rate_limit_window_minutes, created_by)
@@ -123,9 +123,17 @@ export function notifyRoutes(
              ${secret}, ${body.scheduleIntervalMinutes ?? null}, ${body.rateLimit.max},
              ${body.rateLimit.windowMinutes}, ${req.principal.person.id})
           returning id`;
+        await recordAudit(tx, req.principal, {
+          jurisdictionId,
+          category: "notification.rule_created",
+          subjectTable: "notification_rules",
+          subjectId: row!.id as string,
+          payload: body,
+        });
+        return row!.id as string;
       });
       // The webhook secret is returned exactly once, at creation.
-      return reply.status(201).send({ id: row!.id as string, webhookSecret: secret });
+      return reply.status(201).send({ id, webhookSecret: secret });
     },
   );
 

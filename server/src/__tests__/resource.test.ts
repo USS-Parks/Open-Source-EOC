@@ -2,7 +2,6 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../app.js";
 import { addMembership, createJurisdiction, createPerson, principalForPerson, type Principal } from "../auth/service.js";
-import { withPerson } from "../db/context.js";
 import { escalate, type EscalationPayload } from "../resource/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
@@ -283,9 +282,7 @@ describe("cross-tier escalation, field to state and back", () => {
       expect(res.statusCode).toBe(201);
       stateReqId = res.json().id as string;
     };
-    await withPerson(county.runtime, county.adminId, (tx) =>
-      escalate(tx, county.principal, countyReqId, "state", deliver),
-    );
+    await escalate(county.runtime, county.principal, countyReqId, "state", deliver);
     expect(stateReqId).not.toBe("");
 
     // The state tier works the escalated request.

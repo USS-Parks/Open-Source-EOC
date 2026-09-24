@@ -282,9 +282,7 @@ async function configure(kind: "mattermost" | "matrix", baseUrl: string, homeser
 
 describe("no backend configured", () => {
   it("degrades provisioning to in-app notifications for the holders", async () => {
-    const result = await withPerson(runtime, adminId, (tx) =>
-      provisionForIncident(tx, adminPrincipal, incidentId, async () => ({ status: 500, body: "{}" })),
-    );
+    const result = await provisionForIncident(runtime, adminPrincipal, incidentId, async () => ({ status: 500, body: "{}" }));
     expect(result.degraded).toBe(true);
     const rows = await admin`
       select count(*)::int as n from notifications
@@ -303,9 +301,7 @@ describe("Mattermost adapter", () => {
     for (const e of ["ic@example.org", "ops1@example.org", "ops2@example.org", "plan@example.org"])
       mm.user(e);
     await configure("mattermost", "https://mm.example.org");
-    const result = await withPerson(runtime, adminId, (tx) =>
-      provisionForIncident(tx, adminPrincipal, incidentId, mm.transport),
-    );
+    const result = await provisionForIncident(runtime, adminPrincipal, incidentId, mm.transport);
     expect(result.degraded).toBe(false);
     expect(result.backend).toBe("mattermost");
     // all + command + operations + planning + logistics + finance_admin.
@@ -330,9 +326,7 @@ describe("Mattermost adapter", () => {
     await withPerson(runtime, adminId, (tx) =>
       reassignPosition(tx, adminPrincipal, positionIdByKey.get("operations_section_chief")!, persons.get("ops2@example.org")!),
     );
-    const sync = await withPerson(runtime, adminId, (tx) =>
-      syncIncidentMembership(tx, adminPrincipal, incidentId, mm.transport),
-    );
+    const sync = await syncIncidentMembership(runtime, adminPrincipal, incidentId, mm.transport);
     expect(sync.added).toBeGreaterThanOrEqual(1);
     expect(sync.removed).toBeGreaterThanOrEqual(1);
     const ops = mm.channelByName("klamath-flood-operations")!;
@@ -343,9 +337,7 @@ describe("Mattermost adapter", () => {
   });
 
   it("posts a platform announcement into a section channel", async () => {
-    const res = await withPerson(runtime, adminId, (tx) =>
-      postAnnouncement(tx, adminPrincipal, incidentId, "operations", "Levee overtopping reported", mm.transport),
-    );
+    const res = await postAnnouncement(runtime, adminPrincipal, incidentId, "operations", "Levee overtopping reported", mm.transport);
     expect(res.degraded).toBe(false);
     const ops = mm.channelByName("klamath-flood-operations")!;
     const opsChannelId = [...mm.channels.entries()].find(([, c]) => c === ops)![0];
@@ -358,9 +350,7 @@ describe("Matrix adapter", () => {
 
   it("provisions rooms under a space with invited members", async () => {
     await configure("matrix", "https://matrix.example.org", "example.org");
-    const result = await withPerson(runtime, adminId, (tx) =>
-      provisionForIncident(tx, adminPrincipal, incidentId, mx.transport),
-    );
+    const result = await provisionForIncident(runtime, adminPrincipal, incidentId, mx.transport);
     expect(result.backend).toBe("matrix");
     const all = mx.roomByAlias("klamath-flood-all")!;
     expect(new Set(all.members.keys())).toEqual(
@@ -371,7 +361,7 @@ describe("Matrix adapter", () => {
   });
 
   it("archives the space on deactivation", async () => {
-    await withPerson(runtime, adminId, (tx) => archiveForIncident(tx, adminPrincipal, incidentId, mx.transport));
+    await archiveForIncident(runtime, adminPrincipal, incidentId, mx.transport);
     const [space] = await admin`select status from collab_spaces where incident_id = ${incidentId}`;
     expect(space!.status).toBe("archived");
   });

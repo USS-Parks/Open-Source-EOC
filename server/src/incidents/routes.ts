@@ -67,13 +67,12 @@ export function incidentRoutes(
       const result = await withPerson(sql, req.principal.person.id, (tx) =>
         activateIncident(tx, req.principal, jurisdictionId, body),
       );
-      // Provision the collaboration space when a backend is enabled. Runs in
-      // its own transaction, best-effort, so activation never depends on it.
+      // Provision the collaboration space when a backend is enabled, once the
+      // activation has committed and outside any transaction; best-effort, so
+      // activation never depends on it.
       try {
-        await withPerson(sql, req.principal.person.id, async (tx) => {
-          if (await isBackendEnabled(tx, jurisdictionId))
-            await provisionForIncident(tx, req.principal, result.incidentId);
-        });
+        if (await withPerson(sql, req.principal.person.id, (tx) => isBackendEnabled(tx, jurisdictionId)))
+          await provisionForIncident(sql, req.principal, result.incidentId);
       } catch {
         // The incident is already activated; the space can be provisioned later.
       }
@@ -209,9 +208,7 @@ export function incidentRoutes(
       );
       // Deactivation archives the collaboration space (no-op if none exists).
       try {
-        await withPerson(sql, req.principal.person.id, (tx) =>
-          archiveForIncident(tx, req.principal, incidentId),
-        );
+        await archiveForIncident(sql, req.principal, incidentId);
       } catch {
         // The incident is closed; archiving can be retried.
       }

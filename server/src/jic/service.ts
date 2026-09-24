@@ -148,7 +148,6 @@ export async function receivePeerDecision(
 
 export interface PublishOptions {
   readonly toPublicFeed?: boolean;
-  readonly toCollab?: boolean;
   readonly capDraft?: unknown;
 }
 
@@ -185,16 +184,6 @@ export async function publishRelease(
     channels.push("cap");
   }
 
-  if (options.toCollab && rel.incident_id) {
-    try {
-      await postAnnouncement(sql, actor, rel.incident_id, null, `${rel.title}\n\n${rel.body}`);
-      await recordPublication(sql, releaseId, "collab", null);
-      channels.push("collab");
-    } catch {
-      // Collaboration is a best-effort outlet; publication does not fail on it.
-    }
-  }
-
   await sql`update press_releases set status = 'published', published_at = now() where id = ${releaseId}`;
   await recordAudit(sql, actor, {
     jurisdictionId: rel.jurisdiction_id,
@@ -205,6 +194,24 @@ export async function publishRelease(
     payload: { channels },
   });
   return { status: "published", channels };
+}
+
+/**
+ * Announce a published release in its incident's collaboration channels,
+ * after publication has committed. `sql` is the pool: the backend is called
+ * with no transaction open. Collaboration is a best-effort outlet, so a
+ * failure answers false and publication stands.
+ */
+export async function announceRelease(sql: Sql, actor: Principal, releaseId: string): Promise<boolean> {
+  try {
+    const rel = await withPerson(sql, actor.person.id, (tx) => loadRelease(tx, releaseId));
+    if (rel.status !== "published" || !rel.incident_id) return false;
+    await postAnnouncement(sql, actor, rel.incident_id, null, `${rel.title}\n\n${rel.body}`);
+    await withPerson(sql, actor.person.id, (tx) => recordPublication(tx, releaseId, "collab", null));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function logInquiry(

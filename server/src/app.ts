@@ -256,15 +256,14 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
 
   /**
    * Best-effort collaboration membership sync after an assignment change.
-   * Runs in its own transaction so a backend hiccup never fails the
-   * assignment, and no-ops when no collaboration backend is configured.
+   * Runs after the assignment commits, with the backend called outside any
+   * transaction, so a backend hiccup never fails the assignment; no-ops when
+   * no collaboration backend is configured.
    */
   async function syncCollabForPosition(principal: Principal, positionId: string): Promise<void> {
     if (!integrations.has("collab")) return;
     try {
-      await withPerson(sql, principal.person.id, (tx) =>
-        syncPositionIncidents(tx, principal, positionId),
-      );
+      await syncPositionIncidents(sql, principal, positionId);
     } catch {
       // Membership sync is advisory; the assignment itself already committed.
     }
