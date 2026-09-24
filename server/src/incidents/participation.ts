@@ -20,7 +20,8 @@ export interface IncidentAuthority {
 
 /** Serialize incident-scoped mutations that span tables without widening RLS. */
 export async function lockIncidentMutation(sql: Sql, incidentId: string): Promise<void> {
-  await sql`select pg_advisory_xact_lock(hashtextextended(${incidentId}, 82::bigint))`;
+  // The canonical text of the id, so every spelling of one incident takes one lock.
+  await sql`select pg_advisory_xact_lock(hashtextextended(${incidentId}::uuid::text, 82::bigint))`;
 }
 
 /** The database evaluates membership, revocation and expiry on every request. */

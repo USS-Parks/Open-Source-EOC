@@ -42,3 +42,17 @@ export const RESOURCE_REQUEST_TRANSITIONS: Readonly<Record<string, readonly RRSt
   closed: [],
   cancelled: [],
 };
+
+/**
+ * The delivery steps the participant a request is assigned to records on an
+ * incident: the next state from each state after assignment.
+ */
+export const RESOURCE_REQUEST_DELIVERY_STEPS: Readonly<Partial<Record<RRState, RRState>>> = {
+  assigned: "deployed",
+  deployed: "demobilizing",
+  demobilizing: "closed",
+};
+
+export function isDeliveryStep(from: string, to: string): boolean {
+  return RESOURCE_REQUEST_DELIVERY_STEPS[from as RRState] === to;
+}

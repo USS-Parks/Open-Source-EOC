@@ -34,7 +34,7 @@ const detail: ResourceRequestDetail = {
 };
 
 function setup(
-  options: { canMutate?: boolean; closed?: boolean } = {},
+  options: { canMutate?: boolean; closed?: boolean; jurisdictionId?: string; incidentOwnerId?: string; personId?: string } = {},
   requests: readonly ResourceRequestSummary[] = [request],
   canManage = false,
 ) {
@@ -56,7 +56,8 @@ function setup(
     exportResourceRequestCosts: vi.fn().mockResolvedValue(new Blob(["Request,Item\n"], { type: "text/csv" })),
     escalateResourceRequest: vi.fn().mockResolvedValue({ ok: true }),
   };
-  render(<ResourcesSurface client={client as unknown as ApiClient} jurisdictionId="33333333-3333-4333-8333-333333333333" incidentId={request.incidentId} {...options} />);
+  render(<ResourcesSurface client={client as unknown as ApiClient} incidentId={request.incidentId} {...options}
+    jurisdictionId={options.jurisdictionId ?? "33333333-3333-4333-8333-333333333333"} />);
   return client;
 }
 
@@ -69,6 +70,37 @@ it("shows receiving ownership and assigns a sourcing request to a named incident
   await waitFor(() => expect(client.assignResourceRequest).toHaveBeenCalledWith(request.id, {
     kind: "incident_participant", incidentId: request.incidentId, participantId: "55555555-5555-4555-8555-555555555555",
   }));
+});
+
+it("lets a partner request from the incident's owner and record delivery only on the request assigned to it", async () => {
+  const partnerOrg = "77777777-7777-4777-8777-777777777777";
+  const assignedToMe: ResourceRequestSummary = {
+    ...request, id: "12121212-1212-4121-8121-121212121212", item: "Generator", state: "assigned", costCents: null,
+    assignment: {
+      kind: "incident_participant", participantId: "55555555-5555-4555-8555-555555555555", incidentId: request.incidentId!,
+      personId: "99999999-0000-4000-8000-000000000001", personName: "Morgan Lee", incidentPositionTitle: "Utility liaison",
+      participantRole: "contributor", organization: { id: partnerOrg, name: "Partner Utility" },
+    },
+  };
+  const ownersOwn: ResourceRequestSummary = { ...request, id: "13131313-1313-4131-8131-131313131313", item: "Sandbags", state: "submitted", costCents: null };
+  const client = setup({ jurisdictionId: partnerOrg, incidentOwnerId: request.receivingOrganization.id, personId: "99999999-0000-4000-8000-000000000001" },
+    [assignedToMe, ownersOwn]);
+
+  const next = await screen.findByLabelText("Next state for Generator");
+  expect([...(next as HTMLSelectElement).options].map((option) => option.value)).toEqual(["deployed"]);
+  expect(screen.queryByLabelText("Assignment for Generator")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Advance" }));
+  await waitFor(() => expect(client.transitionResourceRequest).toHaveBeenCalledWith(assignedToMe.id, "deployed", ""));
+  expect(screen.queryByLabelText("Next state for Sandbags")).toBeNull();
+  expect(screen.getByText("Read-only request")).toBeTruthy();
+
+  fireEvent.change(screen.getByLabelText("Request from"), { target: { value: "owner" } });
+  expect(screen.getByRole("option", { name: "Receiving County (incident owner)" })).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("Requested item"), { target: { value: "Fuel delivery" } });
+  fireEvent.click(screen.getByRole("button", { name: "Submit request" }));
+  await waitFor(() => expect(client.submitResourceRequest).toHaveBeenCalledWith(request.receivingOrganization.id,
+    expect.objectContaining({ item: "Fuel delivery", incidentId: request.incidentId })));
+  expect(client.submitResourceRequest.mock.calls[0]![1]).not.toHaveProperty("resourceKind");
 });
 
 it("keeps intake and immutable request history in the same coordination workspace", async () => {

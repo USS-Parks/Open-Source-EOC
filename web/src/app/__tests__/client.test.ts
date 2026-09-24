@@ -349,7 +349,7 @@ describe("ApiClient", () => {
       const u = String(url);
       if (u.endsWith("/auth/login"))
         return res(200, { accessToken: "A", resumeToken: "R", sessionId: "S" });
-      asked.push(u.split("?")[1] ?? "");
+      asked.push(u);
       return u.includes("cursor=c1")
         ? res(200, { requests: [{ id: "r2", item: "Tarps" }], nextCursor: null })
         : res(200, { requests: [{ id: "r1", item: "Cots" }], nextCursor: "c1" });
@@ -357,8 +357,12 @@ describe("ApiClient", () => {
 
     const client = new ApiClient({ fetchImpl });
     await client.login("e@x.org", "pw");
+    // With an incident, every organization's requests on it; without one, the jurisdiction's own.
     expect((await client.listResourceRequests("j", "i1")).map((request) => request.id)).toEqual(["r1", "r2"]);
-    expect(asked).toEqual(["incidentId=i1&limit=500", "incidentId=i1&cursor=c1&limit=500"]);
+    expect(asked).toEqual(["/api/v1/incidents/i1/resource-requests?limit=500", "/api/v1/incidents/i1/resource-requests?cursor=c1&limit=500"]);
+    asked.length = 0;
+    await client.listResourceRequests("j");
+    expect(asked[0]).toBe("/api/v1/jurisdictions/j/resource-requests?limit=500");
   });
 
   it("records observations, composes an AAR, and downloads its PDF", async () => {

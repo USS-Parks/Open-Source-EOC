@@ -47,8 +47,8 @@ export const ResourceRequestSummarySchema = z.object({
   /** The catalog kind requested, and the least capable type that fills it; null takes any type. */
   resourceKind: z.string().nullable(),
   resourceType: z.number().int().nullable(),
-  /** Every cost recorded on the request, in cents. */
-  costCents: z.number().int().nonnegative(),
+  /** Every cost recorded on the request, in cents; null to a reader outside the owning organization. */
+  costCents: z.number().int().nonnegative().nullable(),
   neededBy: z.iso.datetime({ offset: true }).nullable(),
   notes: z.string().nullable(),
   createdAt: z.iso.datetime({ offset: true }),

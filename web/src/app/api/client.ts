@@ -297,6 +297,8 @@ export interface RecordReferenceOption { readonly id: string; readonly label: st
 export interface BoardRecordActor {
   readonly personId: string; readonly displayName: string;
   readonly positionId: string | null; readonly positionTitle: string | null;
+  /** A partner author's organization, from the incident grant the record was written under. */
+  readonly organizationName?: string | null;
 }
 export interface BoardRecordHistoryEntry {
   readonly id: string; readonly at: string; readonly category: string;
@@ -1222,17 +1224,21 @@ export class ApiClient {
   createOperationalRelationship(incidentId: string, input: OperationalRelationshipCreate): Promise<OperationalRelationship> {
     return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/operational-relationships`, input);
   }
-  /** Every request in scope, read page by page: the request pickers and the 213RR board need all of them. */
+  /**
+   * Every request in scope, read page by page: the request pickers and the
+   * 213RR board need all of them. With an incident, every organization's
+   * requests on that incident; without one, the jurisdiction's own.
+   */
   listResourceRequests(
     jurisdictionId: string,
     incidentId?: string | null,
   ): Promise<ResourceRequestSummaryContract[]> {
     return readAllPages(async (page) => {
-      const query = pageParams(page, new URLSearchParams(incidentId ? { incidentId } : {}));
-      const r = await this.request<{ requests: ResourceRequestSummaryContract[]; nextCursor: string | null }>(
-        "GET",
-        `/api/v1/jurisdictions/${jurisdictionId}/resource-requests?${query}`,
-      );
+      const query = pageParams(page, new URLSearchParams());
+      const path = incidentId
+        ? `/api/v1/incidents/${encodeURIComponent(incidentId)}/resource-requests?${query}`
+        : `/api/v1/jurisdictions/${jurisdictionId}/resource-requests?${query}`;
+      const r = await this.request<{ requests: ResourceRequestSummaryContract[]; nextCursor: string | null }>("GET", path);
       return { items: r.requests, nextCursor: r.nextCursor };
     });
   }

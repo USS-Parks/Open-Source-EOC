@@ -3,6 +3,7 @@ import {
   choiceLabel,
   DEMOBILIZATION_CHECK_LABELS,
   DEMOBILIZATION_CHECKS,
+  RESOURCE_REQUEST_DELIVERY_STEPS,
   RESOURCE_REQUEST_TRANSITIONS,
   RESOURCE_RETURN_CONDITIONS,
   RESOURCE_STATUS_TRANSITIONS,
@@ -43,18 +44,21 @@ function RequestRow(props: {
   participants: readonly { id: string; personName: string; incidentPositionTitle: string; organizationName: string }[];
   incidentId: string | null;
   canMutate: boolean;
+  /** The viewer holds the incident grant the request is assigned to, outside its owner: delivery steps only. */
+  assignee?: boolean;
   busy: boolean;
   onAdvance: (id: string, toState: string, note: string) => void;
   onAssign: (id: string, assignment: ResourceRequestAssignment) => void;
   onHistory: (id: string) => void;
 }) {
-  const nexts = RESOURCE_REQUEST_TRANSITIONS[props.req.state] ?? [];
+  const delivery = RESOURCE_REQUEST_DELIVERY_STEPS[props.req.state as keyof typeof RESOURCE_REQUEST_DELIVERY_STEPS];
+  const nexts = props.assignee ? (delivery ? [delivery] : []) : RESOURCE_REQUEST_TRANSITIONS[props.req.state] ?? [];
   const [to, setTo] = useState<string>(nexts[0] ?? "");
   const [note, setNote] = useState("");
   const [target, setTarget] = useState("");
   const needsAssignment = props.req.state === "sourcing";
   const transitions = needsAssignment ? nexts.filter((state) => state !== "assigned") : nexts;
-  useEffect(() => setTo((RESOURCE_REQUEST_TRANSITIONS[props.req.state] ?? [])[0] ?? ""), [props.req.state]);
+  useEffect(() => setTo(nexts[0] ?? ""), [props.req.state]);
   const assign = () => {
     const [kind, id] = target.split(":", 2);
     if (kind === "position" && id) props.onAssign(props.req.id, { kind, positionId: id });
@@ -67,8 +71,8 @@ function RequestRow(props: {
       <div className="resources-request-body">
         <div className="resources-row"><StatusBadge status={stateStatus(props.req.state)}>{choiceLabel(props.req.state)}</StatusBadge><span className="eoc-muted">REQ-{props.req.number}</span><strong>{props.req.item}</strong><span className="eoc-muted">×{props.req.quantity}</span><span className="eoc-muted">Priority: {choiceLabel(props.req.priority)}</span>{props.req.neededBy ? <span className="eoc-muted">Needed by {new Date(props.req.neededBy).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}</span> : null}</div>
         <div className="resources-request-facts"><span>Receiving: {props.req.receivingOrganization.name}</span><span>Supplying: {props.req.supplyingOrganization?.name ?? "Not identified"}</span><span>Owner: {assignmentLabel(props.req)}</span>{props.kindText ? <span>Kind: {props.kindText}</span> : null}</div>
-        {props.canMutate && needsAssignment ? <div className="resources-assign"><div className="resources-assign-form"><label className="resources-label">Assign to named authority<select aria-label={`Assignment for ${props.req.item}`} value={target} onChange={(event) => setTarget(event.target.value)} className="resources-select"><option value="">Choose a position or incident participant</option>{props.positions.length ? <optgroup label="Positions">{props.positions.map((position) => <option key={position.id} value={`position:${position.id}`}>{position.title}</option>)}</optgroup> : null}{props.participants.length ? <optgroup label="Incident participants">{props.participants.map((participant) => <option key={participant.id} value={`participant:${participant.id}`}>{participant.personName} · {participant.incidentPositionTitle} · {participant.organizationName}</option>)}</optgroup> : null}</select></label><Button kind="primary" onClick={assign} disabled={props.busy || !target}>Assign and advance</Button></div>{props.positions.length === 0 && props.participants.length === 0 ? <span role="status" className="eoc-muted">No eligible position or active incident participant is available for assignment.</span> : null}</div> : null}
-        {props.canMutate && transitions.length ? <div className="resources-assign-form"><label className="resources-label">Next action<select aria-label={`Next state for ${props.req.item}`} value={to} onChange={(event) => setTo(event.target.value)} className="resources-select">{transitions.map((state) => <option key={state} value={state}>{choiceLabel(state)}</option>)}</select></label><div className="resources-cell"><TextField label="Transition note" value={note} onChange={setNote} /></div><Button onClick={() => props.onAdvance(props.req.id, to, note)} disabled={props.busy || !to}>Advance</Button></div> : !needsAssignment ? <span className="eoc-muted">{props.canMutate ? "Lifecycle complete" : "Read-only request"}</span> : !props.canMutate ? <span className="eoc-muted">Read-only request</span> : null}
+        {props.canMutate && !props.assignee && needsAssignment ? <div className="resources-assign"><div className="resources-assign-form"><label className="resources-label">Assign to named authority<select aria-label={`Assignment for ${props.req.item}`} value={target} onChange={(event) => setTarget(event.target.value)} className="resources-select"><option value="">Choose a position or incident participant</option>{props.positions.length ? <optgroup label="Positions">{props.positions.map((position) => <option key={position.id} value={`position:${position.id}`}>{position.title}</option>)}</optgroup> : null}{props.participants.length ? <optgroup label="Incident participants">{props.participants.map((participant) => <option key={participant.id} value={`participant:${participant.id}`}>{participant.personName} · {participant.incidentPositionTitle} · {participant.organizationName}</option>)}</optgroup> : null}</select></label><Button kind="primary" onClick={assign} disabled={props.busy || !target}>Assign and advance</Button></div>{props.positions.length === 0 && props.participants.length === 0 ? <span role="status" className="eoc-muted">No eligible position or active incident participant is available for assignment.</span> : null}</div> : null}
+        {(props.canMutate || props.assignee) && transitions.length ? <div className="resources-assign-form"><label className="resources-label">Next action<select aria-label={`Next state for ${props.req.item}`} value={to} onChange={(event) => setTo(event.target.value)} className="resources-select">{transitions.map((state) => <option key={state} value={state}>{choiceLabel(state)}</option>)}</select></label><div className="resources-cell"><TextField label="Transition note" value={note} onChange={setNote} /></div><Button onClick={() => props.onAdvance(props.req.id, to, note)} disabled={props.busy || !to}>Advance</Button></div> : !needsAssignment ? <span className="eoc-muted">{props.canMutate ? "Lifecycle complete" : "Read-only request"}</span> : !props.canMutate ? <span className="eoc-muted">Read-only request</span> : null}
       </div>
       <Button onClick={() => props.onHistory(props.req.id)} disabled={props.busy}>History</Button>
     </li>
@@ -339,7 +343,8 @@ function CostRollup(props: {
   requests: readonly ResourceRequestSummary[];
   incidentScoped: boolean;
 }) {
-  const costed = props.requests.filter((request) => request.costCents > 0);
+  // Costs are the owning organization's; another organization's requests carry none here.
+  const costed = props.requests.filter((request): request is typeof request & { costCents: number } => (request.costCents ?? 0) > 0);
   const label = (request: ResourceRequestSummary) => kindText(props.kinds, request.resourceKind, null) || "Not typed";
   const byKind = new Map<string, number>();
   for (const request of costed) byKind.set(label(request), (byKind.get(label(request)) ?? 0) + request.costCents);
@@ -468,6 +473,10 @@ export function ResourcesSurface(props: {
   client: ApiClient;
   jurisdictionId: string;
   incidentId: string | null;
+  /** The organization that owns the incident, which a partner may request from. */
+  incidentOwnerId?: string | null;
+  /** The signed-in person, to find the requests assigned to them. */
+  personId?: string | null;
   selectedRequestId?: string | null;
   onSelectRequest?: (id: string | null) => void;
   canMutate?: boolean;
@@ -491,6 +500,10 @@ export function ResourcesSurface(props: {
   const [neededBy, setNeededBy] = useState("");
   const [requestKind, setRequestKind] = useState("");
   const [requestType, setRequestType] = useState("");
+  // A partner on the incident requests from its own organization or from the incident's owner.
+  const partner = Boolean(props.incidentId && props.incidentOwnerId && props.incidentOwnerId !== props.jurisdictionId);
+  const [requestFrom, setRequestFrom] = useState<"own" | "owner">("own");
+  const fromOwner = partner && requestFrom === "owner";
   const [selectedRequest, setSelectedRequest] = useState<string | null>(props.selectedRequestId ?? null);
   useEffect(() => {
     if (props.selectedRequestId !== undefined) setSelectedRequest(props.selectedRequestId);
@@ -523,7 +536,7 @@ export function ResourcesSurface(props: {
   const submit = () =>
     run(async () => {
       if (!item.trim()) throw new Error("Enter a requested item.");
-      await props.client.submitResourceRequest(props.jurisdictionId, {
+      await props.client.submitResourceRequest(fromOwner ? props.incidentOwnerId! : props.jurisdictionId, {
         origin: "eoc",
         item: item.trim(),
         quantity: Number(quantity) || 1,
@@ -533,8 +546,9 @@ export function ResourcesSurface(props: {
         // Tag the request to the working incident so it lists in that context;
         // with no incident selected it stays a jurisdiction-wide request (79B2).
         ...(props.incidentId ? { incidentId: props.incidentId } : {}),
-        ...(requestKind ? { resourceKind: requestKind } : {}),
-        ...(requestType ? { resourceType: Number(requestType) } : {}),
+        // The owner types a request made to it from its own catalog.
+        ...(requestKind && !fromOwner ? { resourceKind: requestKind } : {}),
+        ...(requestType && !fromOwner ? { resourceType: Number(requestType) } : {}),
       });
       setItem("");
       setQuantity("1");
@@ -546,6 +560,12 @@ export function ResourcesSurface(props: {
 
   const list = requests.data ?? [];
   const canMutate = (props.canMutate ?? true) && !props.closed;
+  const ownerName = list.find((request) => request.receivingOrganization.id === props.incidentOwnerId)?.receivingOrganization.name
+    ?? "The incident's owner";
+  // Every organization's requests on the incident are listed; each is worked by its owner.
+  const owns = (request: ResourceRequestSummary) => request.receivingOrganization.id === props.jurisdictionId;
+  const assignedToMe = (request: ResourceRequestSummary) => !owns(request) && !props.closed
+    && request.assignment?.kind === "incident_participant" && request.assignment.personId === props.personId;
   const activeParticipants = (participants.data ?? []).filter((participant) =>
     !participant.revokedAt
     && new Date(participant.expiresAt).getTime() > Date.now()
@@ -561,12 +581,13 @@ export function ResourcesSurface(props: {
           <p className="resources-first eoc-muted">The receiving organization owns the request. A supplier is named only when an authorized position or incident participant accepts the assignment.</p>
           {props.incidentId ? <p className="resources-first eoc-muted">This intake is linked to the selected incident; the request history retains every lifecycle action.</p> : null}
           {canMutate ? <><div className="resources-intake">
+            {partner ? <div className="resources-cell"><label className="resources-label">Request from<select className="resources-select" value={requestFrom} onChange={(event) => setRequestFrom(event.target.value as "own" | "owner")}><option value="own">My organization</option><option value="owner">{ownerName} (incident owner)</option></select></label></div> : null}
             <div className="resources-cell"><TextField label="Requested item" value={item} onChange={setItem} /></div>
             <div className="resources-cell"><TextField label="Quantity" value={quantity} onChange={setQuantity} /></div>
             <div className="resources-cell"><EnumSelect label="Priority" values={PRIORITIES} labels={PRIORITY_LABELS} value={priority} onChange={setPriority} /></div>
             <div className="resources-cell"><label className="resources-label">Needed by<input type="datetime-local" className="resources-select" value={neededBy} onChange={(event) => setNeededBy(event.target.value)} /></label></div>
             <div className="resources-cell"><TextField label="Request notes" value={notes} onChange={setNotes} /></div>
-            <KindTypeFields kinds={kinds} kind={requestKind} type={requestType} onKind={setRequestKind} onType={setRequestType} forRequest />
+            {fromOwner ? null : <KindTypeFields kinds={kinds} kind={requestKind} type={requestType} onKind={setRequestKind} onType={setRequestType} forRequest />}
           </div><div className="eoc-space-above"><Button kind="primary" onClick={submit} disabled={busy}>Submit request</Button></div></> : <p role="status" className="resources-last eoc-muted">{props.closed ? "This incident is closed. Request history remains available." : "Your access is read-only. Request history remains available."}</p>}
         </Panel>
 
@@ -586,7 +607,8 @@ export function ResourcesSurface(props: {
                   positions={positions.data ?? []}
                   participants={activeParticipants}
                   incidentId={props.incidentId}
-                  canMutate={canMutate}
+                  canMutate={canMutate && owns(r)}
+                  assignee={assignedToMe(r)}
                   busy={busy}
                   onHistory={selectRequest}
                   onAdvance={(id, toState, note) => run(() => props.client.transitionResourceRequest(id, toState, note))}
@@ -605,7 +627,7 @@ export function ResourcesSurface(props: {
             key={detail.data.id}
             client={props.client}
             request={detail.data}
-            canMutate={canMutate}
+            canMutate={canMutate && owns(detail.data)}
             onEscalated={detail.reload}
             onCostRecorded={requests.reload}
           />

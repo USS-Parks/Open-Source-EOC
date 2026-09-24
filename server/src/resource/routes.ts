@@ -17,6 +17,7 @@ import {
   escalate,
   exportCosts,
   getRequest,
+  listIncidentRequests,
   listRequests,
   listResources,
   receiveEscalation,
@@ -133,6 +134,20 @@ export function resourceRoutes(
       const { incidentId, ...page } = z.object({ incidentId: z.string().uuid().optional(), ...pageQuery }).parse(req.query);
       const { items, nextCursor } = await withPerson(sql, req.principal.person.id, (tx) =>
         listRequests(tx, req.principal, jurisdictionId, incidentId, page),
+      );
+      return reply.send({ requests: items, nextCursor });
+    },
+  );
+
+  // Every organization's requests on an incident, for anyone who can read the incident.
+  app.get(
+    "/api/v1/incidents/:incidentId/resource-requests",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { incidentId } = z.object({ incidentId: z.uuid() }).parse(req.params);
+      const page = z.object(pageQuery).parse(req.query);
+      const { items, nextCursor } = await withPerson(sql, req.principal.person.id, (tx) =>
+        listIncidentRequests(tx, req.principal, incidentId, page),
       );
       return reply.send({ requests: items, nextCursor });
     },

@@ -724,6 +724,8 @@ function Center(props: {
           client={props.client}
           jurisdictionId={props.resourceJurisdictionId}
           incidentId={props.incidentId}
+          incidentOwnerId={props.incidentJurisdictionId}
+          personId={props.personId}
           selectedRequestId={s.id ?? null}
           onSelectRequest={(id) => props.onNavigate(id ? { kind: "resources", id } : { kind: "resources" })}
           canMutate={props.canWriteResources}

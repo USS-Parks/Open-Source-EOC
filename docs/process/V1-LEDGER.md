@@ -4516,3 +4516,54 @@ approval takes every default in the plan's section 2 and is the recorded
 approval of widening FOUO reads to the incident's participating
 organizations, as VEOC-80 was for the partner map. Receipts for its units
 follow here.
+
+## Partner sharing PS1: shared incident requests
+
+- **What changed.** Migration `0134_incident_request_sharing.sql`: everyone
+  who can read an incident (the owner's members and each active participant,
+  viewers included) reads every resource request attached to it and its
+  chronology, whichever organization owns it; costs stay with the owner
+  (`costCents` is null outside the owning organization). A partner writes to
+  another organization's request by two SECURITY DEFINER functions only, each
+  locking what it changes and setting every server-owned value itself:
+  `record_request_delivery` lets the participant a request is assigned to
+  record assigned to deployed, deployed to demobilizing and demobilizing to
+  closed; `submit_participant_request` lets a contributor or coordinator
+  request from the incident's owner, who triages, types and assigns it. A
+  trigger now refuses tagging a request to an incident unless the person
+  works in that incident for the request's organization. New route
+  `GET /api/v1/incidents/:incidentId/resource-requests`; the web client uses
+  it whenever an incident is in scope. The Resources screen shows a partner
+  the whole incident list, offers "Request from" the incident owner, limits
+  an assignee to the delivery steps and keeps other organizations' costs
+  read-only. The member state change is now guarded on the state it read, and
+  the incident lock hashes the canonical id.
+- **Defaults and deviations.** Plan decisions 1, 2, 6, 7 and 8 as written. A
+  partner's request carries no kind or type (the owner types it), a priority
+  of routine, priority or immediate, an item of at most 200 characters and
+  notes of at most 4000. A refused incident on the partner's own request is
+  a 404, not a 403, since the partner cannot read that incident.
+- **Independent review.** The first review found a fail-open assignee guard,
+  caller-set server columns in the partner insert policies, a sequence
+  exhaustion path through `number`, and no incident check on the member write
+  policies. The definer functions and the scope trigger replace them. The
+  second review found nothing blocking; its five follow-ups are applied: the
+  scope check tied to the request's organization and moved to a trigger so an
+  escalation release after a lapsed grant is not refused, null-safe guards in
+  both functions, the casing-proof lock key, and bounded partner input.
+- **Schema, contract, dependencies.** Migration 0134; the contract adds the
+  incident request route and makes `costCents` nullable; `docs/API.md`
+  regenerated. No dependencies. `web/src/app/api/client.ts` also carries
+  PS2's optional `organizationName` on the record actor type.
+- **Verification.** `incident-request-sharing.test.ts` (6 tests: shared reads
+  without others' costs; outsider and other-incident refusals; the assignee's
+  delivery steps, a direct update changing nothing and a skipped step
+  refused; partner requests to the owner, forged origin refused, server
+  values set, viewer refused; tagging only for the grant's organization;
+  revocation, expiry and close) with the resource, typing, cross-boundary,
+  lifecycle and position suites: 8 files, 42 tests pass.
+  `partner-sharing-browser.test.ts` passes 2 of 2 with the assessment and
+  relationship suites (4 files, 19 tests). `pnpm check:static` passes; the
+  web unit tests pass 89 files and 659 tests.
+- **Evidence level:** unit, real-database and browser.
+- **Rollback:** revert the commit.

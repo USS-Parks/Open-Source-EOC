@@ -438,6 +438,7 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 
 ### resources
 
+- `GET /api/v1/incidents/:incidentId/resource-requests`: Read incidents resource requests (auth: bearer; audience: operator)
 - `GET /api/v1/jurisdictions/:jurisdictionId/resource-requests`: Read jurisdictions resource requests (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/resource-requests`: Run jurisdictions resource requests (auth: bearer; audience: operator)
 - `GET /api/v1/jurisdictions/:jurisdictionId/resources`: Read jurisdictions resources (auth: bearer; audience: operator)

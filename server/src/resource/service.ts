@@ -1,6 +1,7 @@
 import {
   RESOURCE_STATUS_TRANSITIONS,
   canTransition,
+  isDeliveryStep,
   formatCostExport,
   typeSatisfies,
   type CostRow,
@@ -54,6 +55,11 @@ export async function submitRequest(
   jurisdictionId: string,
   input: SubmitInput,
 ): Promise<{ id: string }> {
+  const writer = actor.memberships.some((m) => m.jurisdictionId === jurisdictionId && (m.role === "admin" || m.role === "member"));
+  if (!writer && input.incidentId) {
+    // The partner requests and the owner assigns: a contributor asks the incident's owner.
+    return requestFromIncidentOwner(sql, actor, input.incidentId, jurisdictionId, input);
+  }
   requireWriter(actor, jurisdictionId);
   if (input.incidentId) await requireOpenIncidentScope(sql, actor, input.incidentId, jurisdictionId);
   if (input.resourceType !== undefined && !input.resourceKind) throw new AuthError(400, "a type needs a resource kind");
@@ -109,11 +115,24 @@ export async function transition(
   note?: string,
 ): Promise<{ state: string }> {
   const req = await loadRequest(sql, requestId);
+  if (await isAssigneeOutsideOwner(sql, actor, requestId, req)) {
+    // The participant the request is assigned to records its delivery, and nothing else.
+    await lockIncidentMutation(sql, req.incident_id!);
+    await requireOpenIncident(sql, req.incident_id!);
+    if (!isDeliveryStep(req.state, toState))
+      throw new AuthError(403, "an assigned participant records only the delivery steps");
+    const [recorded] = await sql`select public.record_request_delivery(${requestId}, ${toState}, ${note ?? null}) as state`;
+    if (!recorded?.state) throw new AuthError(409, "the request changed; reload and try again");
+    return { state: toState };
+  }
   requireWriter(actor, req.jurisdiction_id);
   if (req.incident_id) await requireOpenIncidentScope(sql, actor, req.incident_id, req.jurisdiction_id);
   if (!canTransition(req.state, toState))
     throw new AuthError(409, `cannot move a request from ${req.state} to ${toState}`);
-  await sql`update resource_requests set state = ${toState}, updated_at = now() where id = ${requestId}`;
+  const [moved] = await sql`
+    update resource_requests set state = ${toState}, updated_at = now()
+    where id = ${requestId} and state = ${req.state} returning id`;
+  if (!moved) throw new AuthError(409, "the request changed; reload and try again");
   await appendEvent(sql, requestId, req.state, toState, note ?? null, actor.person.id, null);
   await notify(sql, req.jurisdiction_id, req.requested_by, `${req.item}: ${req.state} → ${toState}`);
   await recordAudit(sql, actor, {
@@ -319,6 +338,13 @@ export async function addCost(
   return { id: row!.id as string };
 }
 
+/** The actor holds the incident grant the request is assigned to and is not in the owning organization. */
+async function isAssigneeOutsideOwner(sql: Sql, actor: Principal, requestId: string, req: RequestRow): Promise<boolean> {
+  if (!req.incident_id || actor.memberships.some((m) => m.jurisdictionId === req.jurisdiction_id)) return false;
+  const [row] = await sql`select public.is_request_assignee(${requestId}) as assignee`;
+  return row?.assignee === true;
+}
+
 export async function exportCosts(sql: Sql, actor: Principal, requestId: string): Promise<string> {
   const req = await loadRequest(sql, requestId);
   requireMember(actor, req.jurisdiction_id);
@@ -360,7 +386,10 @@ const requestSelect = `
     participant_org.id as assigned_participant_organization_id,
     participant_org.name as assigned_participant_organization_name,
     r.resource_kind, r.resource_type,
-    (select coalesce(sum(c.amount_cents), 0) from rr_costs c where c.request_id = r.id)::bigint as cost_cents
+    -- Costs stay with the owning organization; another reader sees none.
+    case when public.is_member_of(r.jurisdiction_id)
+      then (select coalesce(sum(c.amount_cents), 0) from rr_costs c where c.request_id = r.id)::bigint
+    end as cost_cents
   from resource_requests r
   join jurisdictions receiving on receiving.id = coalesce(r.receiving_organization_id, r.jurisdiction_id)
   left join jurisdictions supplying on supplying.id = r.supplying_organization_id
@@ -419,7 +448,7 @@ function requestSummary(row: Record<string, unknown>): ResourceRequestSummary {
     assignment: assignmentView(row),
     resourceKind: (row.resource_kind as string | null) ?? null,
     resourceType: (row.resource_type as number | null) ?? null,
-    costCents: Number(row.cost_cents),
+    costCents: row.cost_cents === null || row.cost_cents === undefined ? null : Number(row.cost_cents),
     neededBy: row.needed_by ? new Date(row.needed_by as string).toISOString() : null,
     notes: (row.notes as string | null) ?? null,
     createdAt: new Date(row.created_at as string).toISOString(),
@@ -452,13 +481,43 @@ export async function listRequests(
   return { items: items.map(requestSummary), nextCursor };
 }
 
+/**
+ * Every resource request attached to an incident, from every organization,
+ * for anyone who can read the incident: its owner's members and each active
+ * participant. Row-level security stays the wall.
+ */
+export async function listIncidentRequests(
+  sql: Sql,
+  actor: Principal,
+  incidentId: string,
+  page: PageRequest,
+): Promise<Page<ResourceRequestSummary>> {
+  const [access] = await sql`select public.can_read_incident(${incidentId}) as readable`;
+  if (access?.readable !== true) throw new AuthError(404, "incident not found");
+  const after = decodeCursor(page.cursor, ["key", "id"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
+  const rows = await sql.unsafe(`${requestSelect}
+    where r.incident_id = $1 and ($2::text is null or (r.item, r.id) > ($2::text, $3::uuid))
+    order by r.item, r.id limit $4`,
+  [incidentId, after?.[0] ?? null, after?.[1] ?? null, limit + 1]);
+  const { items, nextCursor } = cutPage(rows as unknown as Record<string, unknown>[], limit,
+    (row) => [row.item as string, row.id as string]);
+  return { items: items.map(requestSummary), nextCursor };
+}
+
 export async function getRequest(
   sql: Sql,
   actor: Principal,
   requestId: string,
 ): Promise<ResourceRequestDetail> {
   const req = await loadRequest(sql, requestId);
-  requireMember(actor, req.jurisdiction_id);
+  if (req.incident_id) {
+    const [access] = await sql`
+      select public.is_member_of(${req.jurisdiction_id}) or public.can_read_incident(${req.incident_id}) as readable`;
+    if (access?.readable !== true) throw new AuthError(404, "resource request not found");
+  } else {
+    requireMember(actor, req.jurisdiction_id);
+  }
   const [request] = await sql.unsafe(`${requestSelect} where r.id = $1`, [requestId]);
   if (!request) throw new AuthError(404, "resource request not found");
   const events = await sql`
@@ -630,6 +689,44 @@ async function notify(
   await sql`
     insert into notifications (jurisdiction_id, person_id, channel, title, body, status)
     values (${jurisdictionId}, ${personId}, 'resource', ${"Resource request"}, ${message}, 'delivered')`;
+}
+
+/**
+ * A partner contributor requests from the incident's owner, on an open
+ * incident. The database function sets every server-owned value; the owner
+ * receives the request and types it.
+ */
+async function requestFromIncidentOwner(
+  sql: Sql,
+  actor: Principal,
+  incidentId: string,
+  jurisdictionId: string,
+  input: SubmitInput,
+): Promise<{ id: string }> {
+  await lockIncidentMutation(sql, incidentId);
+  const authority = await getIncidentAuthority(sql, actor, incidentId);
+  if (!authority.canContribute || !authority.participation)
+    throw new AuthError(403, "requires current incident contributor authority");
+  if (authority.jurisdictionId !== jurisdictionId)
+    throw new AuthError(403, "a partner requests only from the incident's owner");
+  if (input.resourceKind || input.resourceType !== undefined)
+    throw new AuthError(400, "the incident's owner types a partner's request");
+  if (input.priority !== undefined && !["routine", "priority", "immediate"].includes(input.priority))
+    throw new AuthError(400, "priority is routine, priority or immediate");
+  if (input.item.length > 200 || (input.notes?.length ?? 0) > 4000)
+    throw new AuthError(400, "a request names its item in at most 200 characters, with notes of at most 4000");
+  await requireOpenIncident(sql, incidentId);
+  const [row] = await sql`
+    select public.submit_participant_request(${incidentId}, ${input.item}, ${input.quantity ?? 1},
+      ${input.priority ?? "routine"}, ${input.notes ?? null}, ${input.neededBy ?? null}, ${input.origin}) as id`;
+  if (!row?.id) throw new AuthError(403, "requires current incident contributor authority");
+  return { id: row.id as string };
+}
+
+async function requireOpenIncident(sql: Sql, incidentId: string): Promise<void> {
+  const [incident] = await sql`select closed_at from incidents where id = ${incidentId}`;
+  if (!incident) throw new AuthError(404, "incident not found");
+  if (incident.closed_at) throw new AuthError(409, "incident is closed");
 }
 
 /**

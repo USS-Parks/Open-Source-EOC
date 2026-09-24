@@ -101,6 +101,7 @@ GET /api/v1/incidents/:incidentId/operational-area
 GET /api/v1/incidents/:incidentId/operational-area/history
 GET /api/v1/incidents/:incidentId/operational-relationships
 GET /api/v1/incidents/:incidentId/participants
+GET /api/v1/incidents/:incidentId/resource-requests
 GET /api/v1/incidents/:incidentId/saved-state
 GET /api/v1/incidents/:incidentId/saved-state/:kind/:key
 GET /api/v1/incidents/:incidentId/summary
