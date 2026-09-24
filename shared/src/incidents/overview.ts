@@ -12,7 +12,7 @@ export interface IncidentOverviewSummary {
   readonly openRequests: number;
   /** Open requests at immediate priority. */
   readonly urgentRequests: number;
-  /** Shelter records neither closed nor planned. */
+  /** Shelter records neither closed nor marked planned. */
   readonly activeShelters: number;
   readonly shelterOccupants: number;
   readonly fieldReports: number;

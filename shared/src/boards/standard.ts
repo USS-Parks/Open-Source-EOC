@@ -75,6 +75,48 @@ export const STANDARD_TEMPLATES: readonly BoardTemplate[] = [
       { key: "all", title: "All shelters", columns: ["name", "status", "occupancy"] },
     ],
   }),
+  // Version 2 puts shelters on the map and marks a site that is planned but not yet open.
+  t({
+    key: "shelters",
+    version: 2,
+    title: "Shelters",
+    description: "Shelter sites, status and occupancy, including sites planned but not yet open.",
+    fields: [
+      { key: "name", label: "Shelter", type: "text", required: true },
+      { key: "status", label: "Status", type: "enum", enumId: "have.facility_operating_status", required: true },
+      { key: "capacity", label: "Capacity", type: "number", required: true },
+      { key: "occupancy", label: "Occupancy", type: "number", required: true },
+      { key: "pets_accepted", label: "Pets accepted", type: "boolean" },
+      { key: "planned", label: "Planned, not yet open", type: "boolean" },
+      { key: "location", label: "Location", type: "geometry", geometryKind: "point" },
+    ],
+    views: [
+      { key: "open", title: "Operating shelters", columns: ["name", "status", "capacity", "occupancy"], filter: [{ field: "status", op: "neq", value: "closed" }], where: [{ field: "planned", op: "neq", value: true }] },
+      { key: "planned", title: "Planned shelters", columns: ["name", "capacity"], filter: [{ field: "planned", op: "eq", value: true }] },
+      { key: "all", title: "All shelters", columns: ["name", "status", "occupancy", "planned"] },
+    ],
+  }),
+  t({
+    key: "incident_facilities",
+    version: 1,
+    title: "Incident Facilities",
+    description: "The incident's command post, air operations sites and key facilities, with the cameras and weather stations it watches.",
+    fields: [
+      { key: "name", label: "Facility", type: "text", required: true },
+      {
+        key: "kind", label: "Kind", type: "enum", required: true,
+        values: ["incident_command_post", "helibase", "helispot", "staging_area", "base", "camp", "hospital", "key_facility", "camera", "weather_station"],
+      },
+      { key: "status", label: "Status", type: "enum", enumId: "have.facility_operating_status" },
+      { key: "location", label: "Location", type: "geometry", geometryKind: "point", required: true },
+      { key: "stream_url", label: "Stream address", type: "text", maxLength: 500 },
+      { key: "notes", label: "Notes", type: "text", maxLength: 500 },
+    ],
+    views: [
+      { key: "all", title: "All facilities", columns: ["name", "kind", "status"] },
+      { key: "sensors", title: "Cameras and weather stations", columns: ["name", "kind", "stream_url"], filter: [{ field: "kind", op: "in", value: ["camera", "weather_station"] }] },
+    ],
+  }),
   t({
     key: "road_closures",
     version: 1,

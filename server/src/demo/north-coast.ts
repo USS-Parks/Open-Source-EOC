@@ -229,15 +229,18 @@ export async function seedNorthCoast(
   const later = (when: Date, run: () => Promise<unknown>) => { plan.push({ when, run }); };
 
   // Shelters: eight open with 312 occupants in all.
+  // Two more sites are planned but not yet open.
   const shelters = [
-    { name: "Arcata Community Center", capacity: 240, occupancy: 150, pets: true },
-    { name: "Eureka Municipal Auditorium", capacity: 180, occupancy: 41, pets: false },
-    { name: "Redwood Acres Fairgrounds", capacity: 300, occupancy: 28, pets: true },
-    { name: "Fortuna Veterans Memorial Building", capacity: 120, occupancy: 19, pets: false },
-    { name: "McKinleyville Middle School", capacity: 150, occupancy: 14, pets: false },
-    { name: "Wendy's Shelter", capacity: 60, occupancy: 12, pets: false },
-    { name: "Blue Lake Rancheria Community Center", capacity: 90, occupancy: 7, pets: true },
-    { name: "Ferndale Community Church", capacity: 50, occupancy: 4, pets: false },
+    { name: "Arcata Community Center", capacity: 240, occupancy: 150, pets: true, at: [-124.0827, 40.8658] },
+    { name: "Eureka Municipal Auditorium", capacity: 180, occupancy: 41, pets: false, at: [-124.1648, 40.7985] },
+    { name: "Redwood Acres Fairgrounds", capacity: 300, occupancy: 28, pets: true, at: [-124.1261, 40.7802] },
+    { name: "Fortuna Veterans Memorial Building", capacity: 120, occupancy: 19, pets: false, at: [-124.1545, 40.5982] },
+    { name: "McKinleyville Middle School", capacity: 150, occupancy: 14, pets: false, at: [-124.1002, 40.9468] },
+    { name: "Wendy's Shelter", capacity: 60, occupancy: 12, pets: false, at: [-124.1482, 40.7887] },
+    { name: "Blue Lake Rancheria Community Center", capacity: 90, occupancy: 7, pets: true, at: [-123.992, 40.8838] },
+    { name: "Ferndale Community Church", capacity: 50, occupancy: 4, pets: false, at: [-124.2627, 40.576] },
+    { name: "Trinidad School", capacity: 80, occupancy: 0, pets: false, at: [-124.1418, 41.0585], planned: true },
+    { name: "Loleta Community Center", capacity: 70, occupancy: 0, pets: true, at: [-124.2244, 40.6424], planned: true },
   ];
   const shelterIds: Record<string, string> = {};
   for (const [index, shelter] of shelters.entries()) {
@@ -245,10 +248,36 @@ export async function seedNorthCoast(
     later(when, async () => {
       const created = await record("moreno", when, "shelters", {
         name: shelter.name, status: "normal", capacity: shelter.capacity, occupancy: shelter.occupancy,
-        pets_accepted: shelter.pets,
+        pets_accepted: shelter.pets, planned: shelter.planned ?? false,
+        location: { type: "Point", coordinates: shelter.at },
       });
       shelterIds[shelter.name] = created.id;
     });
+  }
+
+  // The incident's facilities: its command post and helibase, the hospitals
+  // and key sites, and the cameras and weather stations it watches.
+  const facilities: ReadonlyArray<{ name: string; kind: string; at: [number, number]; stream?: string }> = [
+    { name: "Incident Command Post, Humboldt County EOC", kind: "incident_command_post", at: [-124.1664, 40.8021] },
+    { name: "Murray Field helibase", kind: "helibase", at: [-124.1129, 40.8037] },
+    { name: "St. Joseph Hospital", kind: "hospital", at: [-124.1427, 40.7836] },
+    { name: "Mad River Community Hospital", kind: "hospital", at: [-124.0918, 40.8993] },
+    { name: "Redwood Memorial Hospital", kind: "hospital", at: [-124.1432, 40.5855] },
+    { name: "Humboldt Bay Generating Station", kind: "key_facility", at: [-124.2103, 40.7408] },
+    { name: "US-101 at the Mad River bridge camera", kind: "camera", at: [-124.0934, 40.9195], stream: "rtsp://cameras.exercise.invalid/us101-mad-river" },
+    { name: "US-101 at Broadway camera", kind: "camera", at: [-124.1846, 40.7835], stream: "rtsp://cameras.exercise.invalid/us101-broadway" },
+    { name: "Samoa Bridge camera", kind: "camera", at: [-124.17, 40.805], stream: "rtsp://cameras.exercise.invalid/sr255-samoa-bridge" },
+    { name: "Arcata-Eureka Airport weather station", kind: "weather_station", at: [-124.1086, 40.9781] },
+    { name: "Woodley Island weather station", kind: "weather_station", at: [-124.16, 40.81] },
+    { name: "Kneeland weather station", kind: "weather_station", at: [-123.929, 40.719] },
+  ];
+  for (const [index, facility] of facilities.entries()) {
+    const when = at(`05:${40 + index}`);
+    later(when, () => record("lee", when, "incident_facilities", {
+      name: facility.name, kind: facility.kind, status: "normal",
+      location: { type: "Point", coordinates: facility.at },
+      ...(facility.stream ? { stream_url: facility.stream } : {}),
+    }));
   }
 
   // Road closures on the incident area's routes.

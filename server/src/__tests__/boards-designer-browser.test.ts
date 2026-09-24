@@ -30,6 +30,7 @@ beforeAll(async () => {
   app = buildApp(runtime, { oidc: null });
   serveStatic(app, "/app", DIST);
   const token = await login(app);
+  // The standard library ships Shelters version 2, so the designer publishes version 3.
   boardId = (await post(app, token, `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`, { templateKey: "shelters" })).id as string;
 
   baseUrl = await listen(app);
@@ -111,13 +112,13 @@ describe("no-code board authoring", () => {
       && response.url().endsWith("/api/v1/templates") && response.status() === 201);
     const upgraded = page.waitForResponse((response) => response.request().method() === "POST"
       && response.url().endsWith(`/api/v1/boards/${boardId}/upgrade`) && response.status() === 200);
-    await page.getByRole("button", { name: "Publish and apply version 2" }).click();
+    await page.getByRole("button", { name: "Publish and apply version 3" }).click();
     await published;
     await upgraded;
     await page.waitForURL((url) => url.hash.startsWith(`#/board/${boardId}`) && !url.hash.includes("/design"));
     await page.evaluate(`location.hash = ${JSON.stringify(`#/board/${boardId}/design`)}`);
     await page.getByRole("heading", { name: "Customize Shelters" }).waitFor();
-    await page.getByText("Version 2", { exact: true }).waitFor();
+    await page.getByText("Version 3", { exact: true }).waitFor();
 
     expect(pageErrors).toEqual([]);
     expect(externalRequests).toEqual([]);

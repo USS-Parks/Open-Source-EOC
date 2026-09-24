@@ -54,9 +54,11 @@ export async function getIncidentSummary(
         where incident_id = ${incidentId} and state <> 'draft' and priority = 'immediate'
           and state <> all(${FINISHED_REQUEST_STATES as string[]})) as urgent_requests,
       (select count(*)::int from records
-        where template_key = 'shelters' and coalesce(data->>'status', '') not in ('closed', 'planned')) as active_shelters,
+        where template_key = 'shelters' and coalesce(data->>'status', '') <> 'closed'
+          and coalesce(data->>'planned', 'false') <> 'true') as active_shelters,
       (select coalesce(sum((data->>'occupancy')::numeric), 0)::int from records
-        where template_key = 'shelters' and coalesce(data->>'status', '') not in ('closed', 'planned')
+        where template_key = 'shelters' and coalesce(data->>'status', '') <> 'closed'
+          and coalesce(data->>'planned', 'false') <> 'true'
           and jsonb_typeof(data->'occupancy') = 'number') as shelter_occupants,
       (select count(*)::int from records where template_key = 'field_reports') as field_reports,
       (select count(*)::int from records

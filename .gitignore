@@ -24,6 +24,8 @@ web/public/basemap/california.pmtiles
 web/public/basemap/buildings.pmtiles
 web/public/basemap/overlays.pmtiles
 web/public/basemap/overlays-manifest.json
+web/public/basemap/north-coast-imagery.pmtiles
+web/public/basemap/north-coast-terrain.pmtiles
 .DS_Store
 # Local agent and test-runner state.
 .claude/

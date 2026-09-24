@@ -115,6 +115,7 @@ export const STANDARD_INCIDENT_TEMPLATES: readonly IncidentTemplate[] = [
       "shelters",
       "road_closures",
       "field_reports",
+      "incident_facilities",
       "sign_in_out",
     ],
     checklists: [

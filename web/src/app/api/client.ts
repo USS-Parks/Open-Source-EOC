@@ -212,6 +212,8 @@ function dashboardQuery(options: DashboardDataOptions): URLSearchParams {
 export interface CollectionRef {
   readonly id: string;
   readonly title: string;
+  /** The board's template, joined from the board list by the console. */
+  readonly templateKey?: string | undefined;
 }
 export interface SitrepListItem {
   readonly id: string;

@@ -3,6 +3,7 @@ import { BUNDLED_FONT_STACK } from "./bundledbasemap.js";
 import { STREET_FACILITY_TYPES, streetFacilityIconExpression } from "./facilities.js";
 import {
   buildingSpecs,
+  IMAGERY_WATER_LAYER_ID,
   rasterBasemapSpecs,
   terrainSpecs,
   withBasemapGroups,
@@ -38,6 +39,13 @@ export interface StreetBasemapConfig {
 }
 
 export const OSM_ATTRIBUTION = "© OpenStreetMap contributors (ODbL)";
+
+/** Road colors while an imagery basemap shows: light lines over a dark casing, as on a hybrid map. */
+export const IMAGERY_ROAD_INK: Readonly<Record<string, string>> = {
+  "road-casing": "rgba(15, 20, 26, 0.45)",
+  "road-minor": "rgba(226, 232, 238, 0.4)",
+  "road-major": "rgba(238, 242, 246, 0.75)",
+};
 
 /** The font stack the street style's labels request. */
 export function streetFontStack(config: Pick<StreetBasemapConfig, "fontStack">): string {
@@ -158,6 +166,7 @@ export function buildStreetStyle(
   const built = buildingSpecs(buildings, theme);
   // Hillshade sits over the land fills and under water, roads, and labels.
   const relief = terrainSpecs(terrain, theme);
+  const raster = rasterBasemapSpecs(rasters);
   const layers: unknown[] = [
     { id: "background", type: "background", paint: { "background-color": p.background } },
     // Landcover and landuse first: the wildland-urban context an EOC reads
@@ -267,6 +276,17 @@ export function buildStreetStyle(
       paint: { "fill-color": p.building, "fill-opacity": 0.7 },
     },
     ...built.layers,
+    ...raster.layers,
+    ...(raster.layers.length > 0
+      ? [{
+          id: IMAGERY_WATER_LAYER_ID,
+          type: "fill",
+          source: src,
+          "source-layer": "water",
+          layout: { visibility: "none" },
+          paint: { "fill-color": p.water, "fill-opacity": 0.82 },
+        }]
+      : []),
     {
       id: "rail",
       type: "line",
@@ -434,10 +454,9 @@ export function buildStreetStyle(
     );
   }
 
-  // Gallery rasters: hidden until chosen; above the street map, below the
+  // Raster overlays: hidden until chosen; above the street map, below the
   // runtime operational layers.
-  const raster = rasterBasemapSpecs(rasters);
-  layers.push(...raster.layers);
+  layers.push(...raster.overlays);
   const style: Record<string, unknown> = {
     version: 8,
     glyphs: config.glyphsUrl,

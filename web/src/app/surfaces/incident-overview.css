@@ -115,6 +115,18 @@
 
 /* Common operating picture. */
 .eoc-overview-card.is-cop > header { border-bottom: 1px solid var(--ov-line); }
+/* Dark: the imagery runs to the card's top edge under a title band that fades out to the right. */
+[data-theme="dark"] .eoc-overview-card.is-cop { position: relative; }
+[data-theme="dark"] .eoc-overview-card.is-cop > header {
+  position: absolute;
+  z-index: 2;
+  inset: 0 0 auto 0;
+  height: 42px;
+  border-bottom: 0;
+  background: linear-gradient(90deg, rgba(15, 29, 44, 0.96) 0%, rgba(15, 29, 44, 0.9) 30%, rgba(15, 29, 44, 0) 56%);
+  pointer-events: none;
+}
+[data-theme="dark"] .eoc-overview-card.is-cop > header::after { content: ""; position: absolute; left: 0; bottom: 0; width: 55%; height: 1px; background: linear-gradient(90deg, #2a3b50, transparent); }
 .eoc-overview-map { position: relative; min-height: 0; flex: 1; }
 .eoc-overview-map .eoc-cop-container,
 .eoc-overview-map .eoc-cop-map { height: 100%; }

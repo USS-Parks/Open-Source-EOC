@@ -35,6 +35,13 @@ writes the images here. The run:
    workspace with Energy selected in both themes, and writes each light and
    dark capture that has a frame beside it.
 
+The map card uses whichever offline archives are present in
+`web/public/basemap/`, configured as the desktop launcher configures them:
+the California street archive, and the North Coast imagery and elevation
+archives from `tools/basemap/build-north-coast-rasters.mjs`. A checkout
+without them captures the map over the bundled basemap. The overview capture
+waits until the map has drawn every tile it asked for.
+
 The scenario is a synthetic exercise. Its organizations, people, requests,
 reports and assessments are invented for the exercise; its places, roads and
 the incident area are real geography around Humboldt Bay.

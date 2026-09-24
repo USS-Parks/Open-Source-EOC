@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import type { Browser, BrowserContext, Page } from "playwright-core";
@@ -29,6 +29,26 @@ const SHOTS = shotDir("fidelity");
 const OUT = process.env["OPENEOC_FIDELITY_DIR"] ?? SHOTS;
 const FRAMES = join(process.cwd(), "docs", "design", "canonical-references");
 const VIEWPORT = { width: 1586, height: 992 };
+
+/**
+ * The offline archives present in this checkout, configured as a desktop
+ * install configures them: the street basemap, NAIP imagery and 3DEP
+ * elevation. A checkout without them captures over the bundled basemap.
+ */
+function runtimeConfig(): Record<string, string> {
+  const has = (name: string) => existsSync(join(process.cwd(), "web", "public", "basemap", name));
+  return {
+    ...(has("california.pmtiles") ? { OPENEOC_BASEMAP_PMTILES_URL: "/app/basemap/california.pmtiles" } : {}),
+    ...(has("north-coast-imagery.pmtiles") ? {
+      OPENEOC_IMAGERY_TILE_URL: "pmtiles:///app/basemap/north-coast-imagery.pmtiles",
+      OPENEOC_IMAGERY_ATTRIBUTION: "Imagery: USDA NAIP via USGS The National Map",
+    } : {}),
+    ...(has("north-coast-terrain.pmtiles") ? {
+      OPENEOC_TERRAIN_TILE_URL: "pmtiles:///app/basemap/north-coast-terrain.pmtiles",
+      OPENEOC_TERRAIN_ATTRIBUTION: "Elevation: USGS 3DEP",
+    } : {}),
+  };
+}
 
 type Theme = "light" | "dark";
 interface Capture { readonly name: string; readonly theme: Theme; readonly frame: string | null }
@@ -101,6 +121,7 @@ beforeAll(async () => {
 
   browser = await launchBrowser();
   context = await browser.newContext({ viewport: VIEWPORT, timezoneId: NORTH_COAST_TIME_ZONE, locale: "en-US" });
+  await context.addInitScript(`globalThis.OPENEOC = ${JSON.stringify(runtimeConfig())};`);
   page = await context.newPage();
   await page.clock.setFixedTime(scenario.clock);
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -140,6 +161,7 @@ describe("design fidelity captures of the North Coast Storm scenario", () => {
       if (capture.name.startsWith("overview")) await openOverview();
       else await openEnergy();
       await page.waitForLoadState("networkidle");
+      if (capture.name.startsWith("overview")) await page.locator('[data-testid="cop-map"][data-map-idle]').waitFor();
       const image = await page.screenshot();
       writeFileSync(join(SHOTS, `${capture.name}.png`), image);
       await sideBySide(capture, image);

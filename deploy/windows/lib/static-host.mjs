@@ -175,6 +175,16 @@ export async function desktopRuntimeConfig(publicRoot, { diagnostic = (message) 
   ];
   for (const [key, relativePath] of optional)
     if (existsSync(resolve(publicRoot, relativePath))) config[key] = `/${relativePath.replaceAll("\\", "/")}`;
+  // Offline raster archives: the map reads their zoom range and bounds from each archive's header.
+  const rasters = [
+    ["OPENEOC_IMAGERY", "basemap/north-coast-imagery.pmtiles", "Imagery: USDA NAIP via USGS The National Map"],
+    ["OPENEOC_TERRAIN", "basemap/north-coast-terrain.pmtiles", "Elevation: USGS 3DEP"],
+  ];
+  for (const [prefix, relativePath, attribution] of rasters) {
+    if (!existsSync(resolve(publicRoot, relativePath))) continue;
+    config[`${prefix}_TILE_URL`] = `pmtiles:///${relativePath}`;
+    config[`${prefix}_ATTRIBUTION`] = attribution;
+  }
   const buildings = resolve(publicRoot, "basemap/buildings.pmtiles");
   if (existsSync(buildings)) {
     const release = await verifiedBuildingsRelease(

@@ -244,36 +244,49 @@ export type BasemapConfig = { readonly kind: "natural-earth"; readonly assetBase
 export interface RasterBasemap {
   readonly id: string;
   readonly title: string;
-  /** XYZ tile template. */
+  /** An XYZ tile template, or a pmtiles:// archive URL whose header supplies the zoom range and bounds. */
   readonly tiles: string;
   readonly attribution?: string | undefined;
   /** Overlays draw over the chosen basemap and toggle independently. */
   readonly overlay?: boolean | undefined;
 }
 
+/** Open water drawn over an imagery basemap, so the sea reads as one surface rather than mixed tiles. */
+export const IMAGERY_WATER_LAYER_ID = "imagery-water";
+
 export function rasterLayerId(id: string): string {
   return `raster-${id}`;
 }
 
-/** Hidden raster sources and layers for the gallery, in gallery order. */
+/** A tile template as a source's tiles; an archive URL as its TileJSON url. */
+function tileSource(tiles: string): Record<string, unknown> {
+  return tiles.includes("{z}") ? { tiles: [tiles] } : { url: tiles };
+}
+
+/**
+ * Hidden raster sources and layers for the gallery, in gallery order: the
+ * basemaps, which a style places under its roads and labels so an imagery
+ * basemap keeps its place names, and the overlays, which go on top.
+ */
 export function rasterBasemapSpecs(rasters: readonly RasterBasemap[]): {
   sources: Record<string, unknown>;
   layers: unknown[];
+  overlays: unknown[];
 } {
   const sources: Record<string, unknown> = {};
   const layers: unknown[] = [];
-  // Basemaps first, then overlays, so an overlay always draws over the basemap.
-  for (const r of [...rasters].sort((a, b) => Number(!!a.overlay) - Number(!!b.overlay))) {
+  const overlays: unknown[] = [];
+  for (const r of rasters) {
     const id = rasterLayerId(r.id);
     sources[id] = {
       type: "raster",
-      tiles: [r.tiles],
+      ...tileSource(r.tiles),
       tileSize: 256,
       ...(r.attribution ? { attribution: r.attribution } : {}),
     };
-    layers.push({ id, type: "raster", source: id, layout: { visibility: "none" }, paint: {} });
+    (r.overlay ? overlays : layers).push({ id, type: "raster", source: id, layout: { visibility: "none" }, paint: {} });
   }
-  return { sources, layers };
+  return { sources, layers, overlays };
 }
 
 /**
@@ -306,10 +319,10 @@ export function terrainSpecs(
     sources: {
       [DEM_SOURCE_ID]: {
         type: "raster-dem",
-        tiles: [terrain.tiles],
+        ...tileSource(terrain.tiles),
         encoding: terrain.encoding,
         tileSize: 256,
-        maxzoom: terrain.maxzoom ?? 15,
+        ...(terrain.tiles.includes("{z}") ? { maxzoom: terrain.maxzoom ?? 15 } : {}),
         ...(terrain.attribution ? { attribution: terrain.attribution } : {}),
       },
     },
@@ -320,10 +333,11 @@ export function terrainSpecs(
         source: DEM_SOURCE_ID,
         layout: { visibility: "none" },
         paint: {
-          "hillshade-exaggeration": dark ? 0.5 : 0.35,
-          "hillshade-shadow-color": dark ? "#000000" : "#4b5563",
-          "hillshade-highlight-color": dark ? "#6b7280" : "#ffffff",
-          "hillshade-accent-color": dark ? "#000000" : "#4b5563",
+          // Light shades in a muted green so relief reads as forested terrain.
+          "hillshade-exaggeration": dark ? 0.5 : 0.45,
+          "hillshade-shadow-color": dark ? "#000000" : "#4d6b52",
+          "hillshade-highlight-color": dark ? "#6b7280" : "#f4f7ef",
+          "hillshade-accent-color": dark ? "#000000" : "#5b7a5f",
         },
       },
     ],
@@ -644,6 +658,6 @@ export function buildCopStyle(
   layers.push(...relief.layers);
   const raster = rasterBasemapSpecs(rasters);
   Object.assign(sources, raster.sources);
-  layers.push(...raster.layers);
+  layers.push(...raster.layers, ...raster.overlays);
   return { version: 8, ...(glyphs ? { glyphs } : {}), sources, layers: withBasemapGroups(layers) };
 }

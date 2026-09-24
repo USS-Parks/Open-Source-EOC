@@ -58,11 +58,11 @@ describe("icon registry", () => {
   });
 
   it("maps every current and planned destination to a stable icon", () => {
-    expect(Object.keys(destinationIconByKey)).toHaveLength(25);
+    expect(Object.keys(destinationIconByKey)).toHaveLength(26);
     for (const name of Object.values(destinationIconByKey)) {
       expect(iconRegistry[name]).toBeDefined();
     }
-    expect(new Set(Object.values(destinationIconByKey)).size).toBe(25);
+    expect(new Set(Object.values(destinationIconByKey)).size).toBe(26);
     expect(destinationIconByKey.smartForms).toBe("smartForms");
     expect(destinationIconByKey.boardCustomization).toBe("boardCustomization");
   });

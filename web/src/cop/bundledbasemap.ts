@@ -102,8 +102,8 @@ export function buildBundledVectorStyle(
       attribution: BUNDLED_BASEMAP_ATTRIBUTION,
     },
   };
-  // Gallery rasters: hidden until chosen; above the vector basemap, below the
-  // runtime operational layers.
+  // Gallery rasters: hidden until chosen. A basemap raster sits over the land
+  // and water, under roads and labels; an overlay sits on top.
   const raster = rasterBasemapSpecs(rasters);
   Object.assign(sources, raster.sources);
   // Hillshade sits over the land fills and under water, roads, and labels.
@@ -135,6 +135,7 @@ export function buildBundledVectorStyle(
         "source-layer": "rivers",
         paint: { "line-color": p.river, "line-width": zoomWidth([[5, 0.4], [10, 1.6]]) },
       },
+      ...raster.layers,
       {
         id: "counties",
         type: "line",
@@ -218,7 +219,7 @@ export function buildBundledVectorStyle(
         },
         paint: { "text-color": p.label, "text-halo-color": p.labelHalo, "text-halo-width": 1.5 },
       },
-      ...raster.layers,
+      ...raster.overlays,
     ]),
   };
 }

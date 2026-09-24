@@ -227,6 +227,22 @@ export const iconRegistry = {
   chevronDown: icon("Choose", "action", "Downward chevron", ACTION_SIZES, [
     { element: "polyline", points: "5 9 12 16 19 9" },
   ]),
+  layers: icon("Map layers", "action", "Two stacked map sheets", ACTION_SIZES, [
+    { element: "path", d: "M12 3.5 21 8.5 12 13.5 3 8.5Z" },
+    { element: "polyline", points: "3 12.5 12 17.5 21 12.5" },
+    { element: "polyline", points: "3 16.5 12 21.5 21 16.5" },
+  ]),
+  locate: icon("Show my location", "action", "Crosshair around a dot", ACTION_SIZES, [
+    { element: "circle", cx: 12, cy: 12, r: 6.5 },
+    { element: "circle", cx: 12, cy: 12, r: 2, fill: "currentColor" },
+    { element: "path", d: "M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3" },
+  ]),
+  fullscreen: icon("Full screen", "action", "Four outward corners", ACTION_SIZES, [
+    { element: "path", d: "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" },
+  ]),
+  minus: icon("Zoom out", "action", "Horizontal bar", ACTION_SIZES, [
+    { element: "line", x1: 5, y1: 12, x2: 19, y2: 12 },
+  ]),
   sun: icon("Light theme", "action", "Sun with eight rays", ACTION_SIZES, [
     { element: "circle", cx: 12, cy: 12, r: 4 },
     { element: "path", d: "M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M18.7 5.3l-1.8 1.8M7.1 16.9l-1.8 1.8" },

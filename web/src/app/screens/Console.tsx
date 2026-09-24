@@ -398,7 +398,8 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
           boardsInView={scopedBoards}
           onIncidentActivated={incident.selectWhenListed}
           boardsLoading={boards.loading && !boards.data}
-          collections={(collections.data ?? []).filter((collection) => !outOfScope.has(collection.id))}
+          collections={(collections.data ?? []).filter((collection) => !outOfScope.has(collection.id))
+            .map((collection) => ({ ...collection, templateKey: boardItems.find((board) => board.id === collection.id)?.templateKey }))}
           feeds={feeds.data ?? []}
           isAdmin={viewingMembership?.role === "admin"}
           facilitiesEnabled={facilitiesEnabled}

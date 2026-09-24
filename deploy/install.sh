@@ -131,6 +131,8 @@ if [ -f "$sums" ]; then
       buildings.pmtiles) config+="\"OPENEOC_BUILDINGS_PMTILES_URL\":\"/basemap/$name\"," ;;
       overlays.pmtiles) config+="\"OPENEOC_OVERLAYS_PMTILES_URL\":\"/basemap/$name\"," ;;
       overlays-manifest.json) config+="\"OPENEOC_OVERLAYS_MANIFEST_URL\":\"/basemap/$name\"," ;;
+      north-coast-imagery.pmtiles) config+="\"OPENEOC_IMAGERY_TILE_URL\":\"pmtiles:///basemap/$name\",\"OPENEOC_IMAGERY_ATTRIBUTION\":\"Imagery: USDA NAIP via USGS The National Map\"," ;;
+      north-coast-terrain.pmtiles) config+="\"OPENEOC_TERRAIN_TILE_URL\":\"pmtiles:///basemap/$name\",\"OPENEOC_TERRAIN_ATTRIBUTION\":\"Elevation: USGS 3DEP\"," ;;
     esac
   done < "$sums"
   say "Map archives match basemap/SHA256SUMS"

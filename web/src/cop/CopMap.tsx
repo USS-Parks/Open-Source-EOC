@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import * as maplibregl from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -19,6 +19,7 @@ import {
   BUILDINGS_SOURCE_ID,
   DEM_SOURCE_ID,
   HILLSHADE_LAYER_ID,
+  IMAGERY_WATER_LAYER_ID,
   opacityPaint,
   rasterLayerId,
   sourceId,
@@ -40,6 +41,7 @@ import {
 } from "./bundledbasemap.js";
 import {
   buildStreetStyle,
+  IMAGERY_ROAD_INK,
   OSM_ATTRIBUTION,
   streetFontStack,
   type StreetBasemapConfig,
@@ -78,6 +80,16 @@ import {
 } from "./tools.js";
 import { COUNTY_BOUNDS } from "./county-bounds.js";
 import {
+  CARTOGRAPHY_TEMPLATES,
+  cartographyLayerSpecs,
+  ensureCartographyImages,
+  INCIDENT_AREA_LAYERS,
+  INCIDENT_AREA_SOURCE,
+  incidentAreaSpecs,
+  WEATHER_LAYER_SUFFIX,
+} from "./cartography.js";
+import { CardOverlays, type CardToggle } from "./CardOverlays.js";
+import {
   CopFeatureInspector,
   EmptyLayerSearch,
   WorkspaceSection,
@@ -96,6 +108,15 @@ export interface CopBoard {
   readonly kind?: "standard" | "fema-flood" | undefined;
   readonly coverage?: string | undefined;
   readonly attribution?: string | undefined;
+  /** The board's template; road closures, shelters and incident facilities draw as incident map symbols. */
+  readonly templateKey?: string | undefined;
+}
+
+/** The incident area drawn as the dashed boundary, with the light card's callout text. */
+export interface CopIncidentArea {
+  readonly geometry: unknown;
+  readonly title?: string | undefined;
+  readonly detail?: readonly string[] | undefined;
 }
 
 export type FeedItemsData = CopFeatureCollection & { readonly feed: FeedLayerHealth };
@@ -220,6 +241,9 @@ export interface CopMapProps {
   readonly exportContext?: MapExportContext | undefined;
   /** "card" shows the map alone, for a map inside an overview card; the layer panel stays on the Map screen. */
   readonly layout?: "workspace" | "card" | undefined;
+  readonly incidentArea?: CopIncidentArea | null | undefined;
+  /** The place search shown among the light card's map tools. */
+  readonly cardSearch?: ReactNode;
 }
 
 let pmtilesRegistered = false;
@@ -255,6 +279,13 @@ interface FindResult {
 /** A rendered operational or jurisdiction feature (inspectable). */
 function isCopLayerId(id: string): boolean {
   return id === "facility-label" || id === BUILDING_USE_LAYER_ID || id.startsWith(sourceId("")) || id.startsWith(feedSourceId("")) || id.startsWith("overlay-");
+}
+
+/** The id of the layer drawn just above the given one, if any. */
+function nextLayerId(map: maplibregl.Map, id: string): string | null {
+  const ids = map.getStyle().layers.map((layer) => layer.id);
+  const index = ids.indexOf(id);
+  return index >= 0 ? ids[index + 1] ?? null : null;
 }
 
 function visibleInspectionRows(properties: Record<string, unknown>) {
@@ -330,9 +361,12 @@ export function CopMap(props: CopMapProps) {
   onPickRef.current = props.onPickPoint;
   const onBoundsChangeRef = useRef<CopMapProps["onBoundsChange"]>(props.onBoundsChange);
   onBoundsChangeRef.current = props.onBoundsChange;
-  const [visible, setVisible] = useState<Record<string, boolean>>(
-    Object.fromEntries(props.boards.map((b) => [b.id, true])),
-  );
+  const card = props.layout === "card";
+  // The card opens on the incident picture: boundary, closures, shelters and
+  // facilities; the other boards wait under More layers. A board's template
+  // can arrive after the map mounts, so the default is read, never stored.
+  const boardDefault = (board: CopBoard) => !card || CARTOGRAPHY_TEMPLATES.has(board.templateKey ?? "");
+  const [visible, setVisible] = useState<Record<string, boolean>>({});
   const [feedVisible, setFeedVisible] = useState<Record<string, boolean>>(
     Object.fromEntries((props.feeds ?? []).map((f) => [f.id, true])),
   );
@@ -341,7 +375,10 @@ export function CopMap(props: CopMapProps) {
   const rasters = props.basemapStyleUrl ? [] : (props.rasterBasemaps ?? []);
   const rasterBases = rasters.filter((r) => !r.overlay);
   const overlays = rasters.filter((r) => r.overlay);
-  const [basemapMode, setBasemapMode] = useState("vector");
+  // Imagery is the dark theme's basemap when the deployment has it; light keeps the map with shaded terrain.
+  const [basemapMode, setBasemapMode] = useState(
+    props.theme === "dark" && rasterBases.some((r) => r.id === "imagery") ? "imagery" : "vector",
+  );
   const [overlayOn, setOverlayOn] = useState<Record<string, boolean>>({});
   const terrain = props.basemapStyleUrl ? undefined : props.terrain;
   const buildings = props.basemapStyleUrl ? undefined : props.buildings;
@@ -362,7 +399,22 @@ export function CopMap(props: CopMapProps) {
     }).catch(() => { /* Unknown coverage remains explicit. */ });
     return () => abort.abort();
   }, [vectors?.manifestUrl]);
-  const [hillshade, setHillshade] = useState(false);
+  const [hillshade, setHillshade] = useState(!!terrain);
+  const [areaOn, setAreaOn] = useState(true);
+  const [weatherOn, setWeatherOn] = useState(!card);
+  const weatherRef = useRef(weatherOn);
+  weatherRef.current = weatherOn;
+  const [liveMap, setLiveMap] = useState<maplibregl.Map | null>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const areaOnRef = useRef(areaOn);
+  areaOnRef.current = areaOn;
+  // The layer the hillshade sits under in the vector style, so it can go back there.
+  const reliefAnchorRef = useRef<string | null | undefined>(undefined);
+  // The street style's own road colors, restored when the map returns from imagery.
+  const roadInkRef = useRef<Record<string, unknown>>({});
+  /** A board layer shows with its board; weather stations also follow their own toggle. */
+  const layerShown = (layerId: string, boardOn: boolean) =>
+    boardOn && (!layerId.endsWith(WEATHER_LAYER_SUFFIX) || weatherRef.current);
   // Basemap layer groups present in the active style (discovered on load),
   // each switchable like an operational layer.
   const [groups, setGroups] = useState<readonly (typeof BASEMAP_GROUPS)[number][]>([]);
@@ -605,7 +657,10 @@ export function CopMap(props: CopMapProps) {
       for (const layer of additions.layers as maplibregl.LayerSpecification[]) map.addLayer(layer);
     });
     props.onMap?.(map);
+    setLiveMap(map);
 
+    // The card draws its own controls over the map (CardOverlays).
+    if (!card) {
     map.addControl(
       new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }),
       "top-right",
@@ -618,14 +673,15 @@ export function CopMap(props: CopMapProps) {
       }),
       "top-right",
     );
-    if (terrain) {
+    }
+    if (terrain && !card) {
       // MapLibre's own 3D terrain toggle, over the same DEM as the hillshade.
       map.addControl(
         new maplibregl.TerrainControl({ source: DEM_SOURCE_ID, exaggeration: 1.3 }),
         "top-right",
       );
     }
-    map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-left");
+    if (!card) map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-left");
     const basemapAttribution = props.basemapStyleUrl
       ? ""
       : props.streetBasemap
@@ -757,8 +813,10 @@ export function CopMap(props: CopMapProps) {
       tiles: string | undefined,
       stale: boolean,
       shown: boolean,
+      // A board whose template arrives later is redrawn with its template's layers.
+      variant = "",
     ) => {
-      const mode = tiles ? `tiles:${stale}` : "geojson";
+      const mode = `${tiles ? `tiles:${stale}` : "geojson"}:${variant}`;
       const current = mountedRef.current[key];
       if (current?.mode === mode) {
         if (tiles) map.refreshTiles(key);
@@ -778,11 +836,11 @@ export function CopMap(props: CopMapProps) {
       const layers = tiles ? tileLayerSpecs(specs, key, props.theme, labelFont, stale) : specs;
       mountedRef.current[key] = { mode, specs: layers };
       for (const spec of layers) {
-        const s = spec as { paint?: Record<string, unknown>; layout?: Record<string, unknown> };
+        const s = spec as { id: string; paint?: Record<string, unknown>; layout?: Record<string, unknown> };
         map.addLayer({
           ...s,
           paint: { ...s.paint, ...opacityPaint(spec, opacityRef.current[key] ?? 1) },
-          layout: { ...s.layout, visibility: shown ? "visible" : "none" },
+          layout: { ...s.layout, visibility: layerShown(s.id, shown) ? "visible" : "none" },
         } as never);
       }
     };
@@ -793,15 +851,17 @@ export function CopMap(props: CopMapProps) {
       if (!styleReady) return;
       let reads = 0;
       let failed = 0;
-      for (const board of props.boards) {
+      for (const board of boardsRef.current) {
         reads += 1;
         try {
           const raw = await props.fetchItems(board.id);
           const fc = tagFeatures(raw);
           dataRef.current[sourceId(board.id)] = fc;
           const pastPage = raw.links?.some((link) => link.rel === "next") ?? false;
-          mount(sourceId(board.id), fc, boardLayerSpecs(board.id, props.theme, labelFont),
-            pastPage ? tileTemplate("board", board.id) : undefined, false, visibleRef.current[board.id] ?? true);
+          mount(sourceId(board.id), fc,
+            cartographyLayerSpecs(board.id, board.templateKey, props.theme, labelFont) ?? boardLayerSpecs(board.id, props.theme, labelFont),
+            pastPage ? tileTemplate("board", board.id) : undefined, false, visibleRef.current[board.id] ?? boardDefault(board),
+            board.templateKey);
         } catch {
           // A failed refresh keeps the last good picture; never blank the COP.
           failed += 1;
@@ -844,12 +904,26 @@ export function CopMap(props: CopMapProps) {
     map.on("load", async () => {
       ensureHazardPatterns(map, props.theme);
       try {
-        await ensureFacilityImages(map, facilityAssetBase);
+        await Promise.all([ensureFacilityImages(map, facilityAssetBase), ensureCartographyImages(map, props.theme)]);
       } catch {
         // A missing packaged icon must not prevent operational records loading.
       }
       if (!active) return;
       styleReady = true;
+      // The card keeps its credits behind the attribution button rather than across its legend and scale.
+      if (card) {
+        for (const credits of container.current?.querySelectorAll(".maplibregl-ctrl-attrib") ?? []) {
+          credits.classList.remove("maplibregl-compact-show");
+          credits.removeAttribute("open");
+        }
+      }
+      if (props.incidentArea && !map.getSource(INCIDENT_AREA_SOURCE)) {
+        const area = incidentAreaSpecs(props.incidentArea.geometry, props.theme);
+        map.addSource(INCIDENT_AREA_SOURCE, area.source as never);
+        for (const layer of area.layers as maplibregl.LayerSpecification[]) {
+          map.addLayer({ ...layer, layout: { ...layer.layout, visibility: areaOnRef.current ? "visible" : "none" } } as never);
+        }
+      }
       // The measure tool's own source and layers (a neutral color, not a
       // status color, so it never reads as an operational condition, INV-8).
       if (!map.getSource("measure")) {
@@ -890,6 +964,9 @@ export function CopMap(props: CopMapProps) {
     });
     // Newly rendered footprints become hit-testable once the map is idle.
     map.on("idle", joinBuildings);
+    // Marks a settled picture (every requested tile drawn) for captures and tests.
+    map.on("idle", () => container.current?.setAttribute("data-map-idle", "true"));
+    map.on("dataloading", () => container.current?.removeAttribute("data-map-idle"));
     const stopPolling = pollWhileVisible(refresh, props.pollMs ?? 2000);
     return () => {
       active = false;
@@ -915,12 +992,20 @@ export function CopMap(props: CopMapProps) {
           map.setLayoutProperty(
             layerId,
             "visibility",
-            (visible[board.id] ?? true) ? "visible" : "none",
+            layerShown(layerId, visible[board.id] ?? boardDefault(board)) ? "visible" : "none",
           );
         }
       }
     }
-  }, [visible, props.boards]);
+  }, [visible, weatherOn, props.boards]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    for (const id of INCIDENT_AREA_LAYERS) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", areaOn ? "visible" : "none");
+    }
+  }, [areaOn]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -971,7 +1056,7 @@ export function CopMap(props: CopMapProps) {
         any = true;
       }
     };
-    for (const b of props.boards) consider(sourceId(b.id), visible[b.id] ?? true);
+    for (const b of props.boards) consider(sourceId(b.id), visible[b.id] ?? boardDefault(b));
     for (const f of props.feeds ?? []) consider(feedSourceId(f.id), feedVisible[f.id] ?? true);
     if (any) map.fitBounds(bounds, { padding: 64, maxZoom: 14, duration: 500 });
   };
@@ -986,7 +1071,7 @@ export function CopMap(props: CopMapProps) {
     const map = mapRef.current;
     if (!map) return;
     const operationalLayers: MapExportLayer[] = [
-      ...props.boards.filter((board) => visible[board.id] ?? true)
+      ...props.boards.filter((board) => visible[board.id] ?? boardDefault(board))
         .map((board) => ({ title: board.title, detail: "Open Source EOC board records" })),
       ...(props.feeds ?? []).filter((feed) => feedVisible[feed.id] ?? true).map((feed) => {
         const health = feedHealth[feed.id];
@@ -1022,7 +1107,7 @@ export function CopMap(props: CopMapProps) {
       ? `Buildings: © OpenStreetMap contributors (ODbL); enrichment: © Overture Maps Foundation (ODbL, ${buildings.overtureRelease})`
       : "Buildings: © OpenStreetMap contributors (ODbL)");
 
-    for (const board of props.boards.filter((candidate) => visible[candidate.id] ?? true))
+    for (const board of props.boards.filter((candidate) => visible[candidate.id] ?? boardDefault(candidate)))
       references.push(`${board.title}: Open Source EOC board records`);
     for (const feed of (props.feeds ?? []).filter((candidate) => feedVisible[candidate.id] ?? true)) {
       const health = feedHealth[feed.id];
@@ -1030,7 +1115,7 @@ export function CopMap(props: CopMapProps) {
     }
 
     const activeSourceKeys = [
-      ...props.boards.filter((board) => visible[board.id] ?? true).map((board) => sourceId(board.id)),
+      ...props.boards.filter((board) => visible[board.id] ?? boardDefault(board)).map((board) => sourceId(board.id)),
       ...(props.feeds ?? []).filter((feed) => feedVisible[feed.id] ?? true).map((feed) => feedSourceId(feed.id)),
     ];
     const hasFacilities = activeSourceKeys.some((key) => dataRef.current[key]?.features.some(
@@ -1153,6 +1238,19 @@ export function CopMap(props: CopMapProps) {
         const on = r.overlay ? !!overlayOn[r.id] : basemapMode === r.id;
         map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
       }
+      if (map.getLayer(IMAGERY_WATER_LAYER_ID)) {
+        map.setLayoutProperty(IMAGERY_WATER_LAYER_ID, "visibility", basemapMode === "vector" ? "none" : "visible");
+      }
+      for (const [id, ink] of Object.entries(IMAGERY_ROAD_INK)) {
+        if (!map.getLayer(id)) continue;
+        roadInkRef.current[id] ??= map.getPaintProperty(id, "line-color");
+        map.setPaintProperty(id, "line-color", (basemapMode === "vector" ? roadInkRef.current[id] : ink) as string);
+      }
+      // Relief shades the imagery from just above it, and the map from under its water and roads.
+      if (!map.getLayer(HILLSHADE_LAYER_ID)) return;
+      if (reliefAnchorRef.current === undefined) reliefAnchorRef.current = nextLayerId(map, HILLSHADE_LAYER_ID);
+      const before = basemapMode === "vector" ? reliefAnchorRef.current : nextLayerId(map, rasterLayerId(basemapMode));
+      if (before && before !== HILLSHADE_LAYER_ID) map.moveLayer(HILLSHADE_LAYER_ID, before);
     };
     if (map.isStyleLoaded()) apply();
     else map.once("load", apply);
@@ -1212,6 +1310,67 @@ export function CopMap(props: CopMapProps) {
     }
   }, [feedVisible, props.feeds]);
 
+  // The light card's callout names the incident beside its boundary.
+  useEffect(() => {
+    const area = props.incidentArea;
+    const bounds = area ? geometryBounds(area.geometry) : null;
+    if (!liveMap || !card || props.theme !== "light" || !area?.title || !bounds || !areaOn) return;
+    const callout = document.createElement("div");
+    callout.className = "eoc-cop-area-callout";
+    const key = document.createElement("span");
+    key.className = "eoc-cop-card-key is-boundary";
+    const text = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = area.title;
+    text.append(title, ...(area.detail ?? []).map((line) => Object.assign(document.createElement("span"), { textContent: line })));
+    callout.append(key, text);
+    const marker = new maplibregl.Marker({ element: callout, anchor: "right", offset: [-10, 0] })
+      .setLngLat([bounds[0], (bounds[1] + bounds[3]) / 2])
+      .addTo(liveMap);
+    return () => { marker.remove(); };
+  }, [liveMap, props.theme, areaOn]);
+
+  const templateBoards = (template: string) => props.boards.filter((board) => board.templateKey === template);
+  const boardsToggle = (id: string, label: string, boards: readonly CopBoard[]): CardToggle[] => {
+    if (boards.length === 0) return [];
+    const on = boards.every((board) => visible[board.id] ?? boardDefault(board));
+    return [{ id, label, checked: on, onChange: () => setVisible((current) => ({ ...current, ...Object.fromEntries(boards.map((board) => [board.id, !on])) })) }];
+  };
+  const areaToggle = (label: string): CardToggle[] => props.incidentArea
+    ? [{ id: "area", label, checked: areaOn, onChange: () => setAreaOn((on) => !on) }]
+    : [];
+  const facilityBoards = templateBoards("incident_facilities");
+  const weatherToggle = (label: string): CardToggle[] => facilityBoards.length > 0
+    ? [{ id: "weather", label, checked: weatherOn, onChange: () => setWeatherOn((on) => !on) }]
+    : [];
+  const terrainToggle = (label: string): CardToggle[] => terrain
+    ? [{ id: "terrain", label, checked: hillshade, onChange: () => setHillshade((on) => !on) }]
+    : [];
+  const cardToggles: CardToggle[] = props.theme === "dark"
+    ? [
+        ...boardsToggle("roads", "Roads", templateBoards("road_closures")),
+        ...areaToggle("Incidents"),
+        ...boardsToggle("facilities", "Facilities", facilityBoards),
+        ...boardsToggle("shelters", "Shelters", templateBoards("shelters")),
+        ...weatherToggle("Weather"),
+        ...terrainToggle("Terrain"),
+      ]
+    : [
+        ...areaToggle("Incident extent"),
+        ...boardsToggle("closures", "Closures", templateBoards("road_closures")),
+        ...boardsToggle("shelters", "Shelters", templateBoards("shelters")),
+        ...boardsToggle("facilities", "Critical facilities", facilityBoards),
+      ];
+  const imagery = rasterBases.find((raster) => raster.id === "imagery");
+  const moreToggles: CardToggle[] = [
+    ...weatherToggle("Weather stations"),
+    ...terrainToggle("Terrain"),
+    ...(imagery ? [{ id: "imagery", label: imagery.title, checked: basemapMode === imagery.id,
+      onChange: () => setBasemapMode((mode) => (mode === imagery.id ? "vector" : imagery.id)) }] : []),
+    ...props.boards.filter((board) => !CARTOGRAPHY_TEMPLATES.has(board.templateKey ?? ""))
+      .flatMap((board) => boardsToggle(board.id, board.title, [board])),
+  ];
+
   const layerNeedle = layerQuery.trim().toLowerCase();
   const layerMatches = (label: string) => !layerNeedle || label.toLowerCase().includes(layerNeedle);
   const shownBoards = props.boards.filter((board) => layerMatches(board.title));
@@ -1227,7 +1386,7 @@ export function CopMap(props: CopMapProps) {
     && !(terrain && layerMatches("Hillshade"));
 
   return (
-    <div className="eoc-cop-container" data-layout={props.layout ?? "workspace"}>
+    <div ref={frameRef} className="eoc-cop-container" data-layout={props.layout ?? "workspace"}>
     <div className="eoc-cop-workspace" data-inspecting={selection ? true : undefined} data-testid="cop-workspace">
       <nav aria-label="Map layers" className="eoc-cop-layers">
         <header>
@@ -1403,14 +1562,22 @@ export function CopMap(props: CopMapProps) {
         >
         <h3 className="eoc-cop-heading">Layers</h3>
         <ul className="eoc-cop-options">
+          {props.incidentArea && layerMatches("Incident area") ? (
+            <li>
+              <label className="eoc-cop-check">
+                <input type="checkbox" checked={areaOn} onChange={() => setAreaOn((on) => !on)} />
+                Incident area
+              </label>
+            </li>
+          ) : null}
           {shownBoards.map((b) => (
             <li key={b.id}>
               <label className="eoc-cop-check">
                 <input
                   type="checkbox"
-                  checked={visible[b.id] ?? true}
+                  checked={visible[b.id] ?? boardDefault(b)}
                   onChange={() =>
-                    setVisible((v) => ({ ...v, [b.id]: !(v[b.id] ?? true) }))
+                    setVisible((v) => ({ ...v, [b.id]: !(v[b.id] ?? boardDefault(b)) }))
                   }
                 />
                 {b.title}
@@ -1595,6 +1762,9 @@ export function CopMap(props: CopMapProps) {
           className="eoc-cop-map"
         />
         <div ref={readoutRef} data-testid="cop-readout" className="eoc-cop-readout" />
+        {card ? (
+          <CardOverlays theme={props.theme} map={liveMap} frame={frameRef} toggles={cardToggles} more={moreToggles} search={props.cardSearch} />
+        ) : null}
       </div>
       {selection ? <CopFeatureInspector selection={selection} onClose={closeInspection} /> : null}
     </div>

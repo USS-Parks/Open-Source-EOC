@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, cpSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { join, relative, resolve } from "node:path";
 import type { FastifyInstance } from "fastify";
@@ -138,18 +138,21 @@ export function serveStatic(app: FastifyInstance, prefix: string, dist: string, 
     let path = join(dist, safe);
     if (!existsSync(path)) path = join(publicDir, safe);
     if (!existsSync(path)) return reply.status(404).send("missing");
-    const body = readFileSync(path);
     const type = TYPES[path.slice(path.lastIndexOf("."))] ?? "application/octet-stream";
     const range = request.headers.range;
     const match = range ? /^bytes=(\d+)-(\d*)$/.exec(range) : null;
     if (match) {
+      // Read only the requested bytes: basemap archives run to hundreds of megabytes.
+      const size = statSync(path).size;
       const start = Number(match[1]);
-      const end = match[2] ? Number(match[2]) : body.length - 1;
-      const slice = body.subarray(start, Math.min(end, body.length - 1) + 1);
+      const end = Math.min(match[2] ? Number(match[2]) : size - 1, size - 1);
+      const slice = Buffer.alloc(Math.max(0, end - start + 1));
+      const fd = openSync(path, "r");
+      try { readSync(fd, slice, 0, slice.length, start); } finally { closeSync(fd); }
       return reply.status(206).header("content-type", type).header("accept-ranges", "bytes")
-        .header("content-range", `bytes ${start}-${start + slice.length - 1}/${body.length}`).send(slice);
+        .header("content-range", `bytes ${start}-${start + slice.length - 1}/${size}`).send(slice);
     }
-    return reply.header("content-type", type).header("accept-ranges", "bytes").send(body);
+    return reply.header("content-type", type).header("accept-ranges", "bytes").send(readFileSync(path));
   });
 }
 

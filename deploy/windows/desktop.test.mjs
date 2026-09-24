@@ -96,6 +96,19 @@ test("hashed bundle files cache for a year and archives revalidate against a str
   assert.equal(staticCaching({ relativePath: "assets/logo.svg", fromDist: false, size: 3, mtimeMs: 1 }).cacheControl, "no-cache");
 });
 
+test("desktop configures the offline imagery and elevation archives it finds", async () => {
+  const files = fixture();
+  try {
+    writeFileSync(resolve(files.publicRoot, "basemap/north-coast-imagery.pmtiles"), "imagery");
+    const config = await desktopRuntimeConfig(files.publicRoot);
+    assert.equal(config.OPENEOC_IMAGERY_TILE_URL, "pmtiles:///basemap/north-coast-imagery.pmtiles");
+    assert.match(config.OPENEOC_IMAGERY_ATTRIBUTION, /NAIP/);
+    assert.equal(config.OPENEOC_TERRAIN_TILE_URL, undefined);
+  } finally {
+    rmSync(files.root, { recursive: true, force: true });
+  }
+});
+
 test("desktop building attribution requires metadata matching the installed archive", async (t) => {
   await t.test("matching metadata exposes the verified Overture release", async () => {
     const files = fixture();

@@ -67,13 +67,14 @@ export function useIncident(): IncidentValue {
   return value;
 }
 
-const KIND_SUFFIX: Readonly<Record<string, string>> = {
+/** How an incident that is not a real-world incident is named. */
+export const INCIDENT_KIND_LABEL: Readonly<Record<string, string>> = {
   exercise: "Exercise", planned_event: "Planned event", daily_ops: "Daily operations",
 };
 
 /** The incident's name, its kind when it is not a real-world incident, and closure. */
 export function incidentLabel(i: IncidentSummary): string {
-  const kind = KIND_SUFFIX[i.kind];
+  const kind = INCIDENT_KIND_LABEL[i.kind];
   return `${i.name}${kind ? ` · ${kind}` : ""}${i.closedAt ? " (closed)" : ""}`;
 }
 

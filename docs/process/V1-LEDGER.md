@@ -4259,3 +4259,97 @@ for writing when this was recorded, so this entry carries the requirement.
   SITREP, the briefing presented full screen, and New task added TASK-214.
 - **Evidence level:** unit, real-database and browser.
 - **Rollback:** revert the commit; migration 0132 only adds columns.
+
+## Design fidelity DF3: COP cartography
+
+- **What changed.**
+  - Incident cartography (`web/src/cop/cartography.ts`): road closures draw as
+    status-colored lines with a closure point at the middle of each closed
+    road; shelters as open or planned shelter symbols; incident facilities by
+    kind (command post with its "ICP" label, helibase, hospital, key or
+    critical facility, camera); weather stations on their own layer. Symbols
+    are original SVGs registered as map images, and the legends show the same
+    drawings. Facilities that crowd each other at a wide zoom yield by rank:
+    command post, air base, hospital, the rest. The incident area draws as a
+    dashed boundary, cyan and unfilled on imagery, blue with a faint fill on
+    the map. Boards without a map meaning of their own keep the status
+    markers.
+  - The overview's map card carries its own controls
+    (`web/src/cop/CardOverlays.tsx`), each acting on the live map. Dark: the
+    legend panel; a layer list (Roads, Incidents, Facilities, Shelters,
+    Weather, Terrain) that the layers button folds away; zoom buttons; a
+    north arrow that resets the bearing; a miles scale. Light: a layer
+    checklist (Incident extent, Closures, Shelters, Critical facilities) with
+    More layers (weather stations, terrain, imagery and every other map
+    board); the place search; locate, which flies to the device's position;
+    the layers button; full screen; the legend strip; the north arrow; a
+    miles and kilometres scale; and the callout naming the incident beside
+    its boundary with the end of the area's operational period. The dark card
+    runs the imagery under its title band, as the frame does. Clicking a
+    record on the card opens its details in a popup.
+  - The Map screen draws the same cartography, has an "Incident area" layer,
+    and opens framed on the incident area when there is one.
+  - Basemap per decision 1: with imagery configured, the dark theme opens on
+    it; both themes open with the terrain shaded. Over imagery, open water
+    gets a calm veil, roads draw light, and the relief shades the imagery;
+    light relief is a muted green.
+  - Offline rasters: `tools/basemap/build-north-coast-rasters.mjs` builds
+    `north-coast-imagery.pmtiles` (USDA NAIP through the USGS National Map;
+    z8 to z14 over the region, z15 over the Humboldt Bay area; 184 MB) and
+    `north-coast-terrain.pmtiles` (USGS 3DEP as Terrarium tiles, z8 to z13;
+    144 MB), both public domain, with a dependency-free PMTiles writer
+    (`tools/basemap/pmtiles-writer.mjs`). The archives are not tracked. A
+    raster or elevation setting may now name a `pmtiles://` archive, whose
+    header supplies the zoom range and bounds. The Windows launcher and
+    `deploy/install.sh` configure the archives when present; the fidelity
+    harness and the asset record, basemap README and fidelity README say so.
+  - Templates: Shelters version 2 adds `planned` and `location`, with open
+    and planned views; a new Incident Facilities template (name, kind,
+    EDXL-HAVE status, location, stream address, notes) joins the severe
+    storm incident's boards. Active shelter counts leave out planned sites.
+    The North Coast seed places every shelter, adds two planned shelters
+    (Trinidad School, Loleta Community Center) and twelve facilities at their
+    real locations: the command post at the Humboldt County EOC, the Murray
+    Field helibase, three hospitals, the Humboldt Bay Generating Station,
+    three Caltrans cameras and three weather stations.
+  - A board's template can arrive after the map mounts; the map applies it on
+    its next refresh instead of remounting.
+  - Test support: the browser harness serves byte ranges from disk rather
+    than reading a whole archive per request, and the map marks itself idle
+    once every requested tile is drawn.
+- **Defaults and deviations.** Differences left: the frames' incident area
+  is an illustration and ours is the seeded operational area, so the dark
+  card frames a little wider than frame 2 and the light boundary stays near
+  the coast where frame 1 reaches over the ocean; symbols sit at real
+  coordinates, so some cover place names the frames show clear; the light
+  basemap is the OpenStreetMap street style under green relief where frame 1
+  shows a painted terrain map; the attribution button stays in the card's
+  corner (licence credit), which the frames omit; the callout's day follows
+  the scenario day. The weather layer starts off on the card, as the dark
+  frame's checklist shows. The viewport KPI test now expects shelters to be
+  counted inside a viewport, since they carry a location; the designer test
+  publishes Shelters version 3. The icon registry test counted 25
+  destinations after DF2 added Dashboards; it now counts 26.
+- **Schema, contract, dependencies.** Template versions only (Shelters 2,
+  Incident Facilities 1); no migration, route or dependency.
+- **Verification.** `pnpm check:static`: pass (303 packages, 98 files). Web and
+  shared unit tests: 113 files, 821 passing and 9 skipped, with the new
+  `web/src/cop/__tests__/cartography.test.ts` (layer specs per template and
+  theme, legend coverage, scale bar, archive sources); `tools/basemap`: 2
+  files, 12 tests (the writer reads back through the app's PMTiles reader);
+  `deploy/windows/desktop.test.mjs`: 18 of 18. Real-database server files
+  touching templates, the seed and summaries: 20 files, 97 tests, one
+  failure (viewport shelters, expectation updated) re-run green. Browser:
+  `cop-kpi`, `d33-review`, `facility-symbols`, `field-depth`,
+  `field-reports`, `hazards`, `incident-workspace`,
+  `operational-relationships`, `place-search`, `vector-tiles`,
+  `cross-boundary`, `webeoc-side-by-side`, `boards-designer`, `facilities`
+  and `export-import`: all pass after two fixes (the remount above, which
+  had reset an open map panel, and the designer's version). `pnpm fidelity`:
+  2 of 2, images refreshed over the offline archives. In the dev build the
+  card's toggles, More layers and the weather layer were exercised against
+  the seeded scenario, and the Map screen opened on the incident area with
+  the same symbols.
+- **Evidence level:** unit, real-database and browser.
+- **Rollback:** revert the commit; the template versions are additive and
+  existing boards keep their versions until upgraded.

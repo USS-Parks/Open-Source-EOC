@@ -170,6 +170,46 @@ into a PMTiles raster archive (the `pmtiles` CLI converts a tile directory or
 MBTiles) and serve it the same way as the street tiles; set the encoding to
 match the source (`terrarium` or `mapbox`).
 
+### North Coast imagery and elevation archives
+
+`build-north-coast-rasters.mjs` builds the two offline raster archives the
+North Coast reference scenario uses, with no tile server:
+
+| Archive | Source | Tiles |
+|---|---|---|
+| `north-coast-imagery.pmtiles` | USDA NAIP imagery through the USGS National Map `USGSImageryOnly` tile service, public domain | JPEG, z8 to z14 over the region, z15 over the Humboldt Bay area |
+| `north-coast-terrain.pmtiles` | USGS 3DEP elevation through the `3DEPElevation` image service, public domain | Terrarium PNG, z8 to z13 over the region |
+
+The Humboldt Bay area runs from Trinidad to Fortuna
+(`-124.42, 40.48, -123.78, 41.16`); the region around it
+(`-124.75, 40.3, -123.3, 41.3`) covers what a map framed on that area shows.
+Tiles are cached under `tools/basemap/out/north-coast-cache`, so a rerun only
+fetches what is missing; the imagery service has no tiles over open ocean,
+and those are skipped.
+
+```bash
+node tools/basemap/build-north-coast-rasters.mjs
+```
+
+The archives are written to `web/public/basemap/` and are not tracked. Point
+the runtime settings at them with a `pmtiles://` URL and no tile template, so
+the map reads each archive's zoom range and bounds from its header:
+
+```html
+<script>
+  window.OPENEOC = {
+    OPENEOC_IMAGERY_TILE_URL: "pmtiles:///basemap/north-coast-imagery.pmtiles",
+    OPENEOC_IMAGERY_ATTRIBUTION: "Imagery: USDA NAIP via USGS The National Map",
+    OPENEOC_TERRAIN_TILE_URL: "pmtiles:///basemap/north-coast-terrain.pmtiles",
+    OPENEOC_TERRAIN_ATTRIBUTION: "Elevation: USGS 3DEP"
+  };
+</script>
+```
+
+The Windows launcher and `deploy/install.sh` set these whenever the archives
+are present. With imagery configured, the dark theme opens the map on it; both
+themes open with the terrain shaded.
+
 ## 8. Buildings by use and status
 
 `generate-california.sh` also writes `buildings.pmtiles` from

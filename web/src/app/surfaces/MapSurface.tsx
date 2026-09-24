@@ -407,7 +407,8 @@ export function MapSurface(props: {
         <CopMap
           key={JSON.stringify([props.jurisdictionId, props.incidentId ?? null, props.theme, areaBbox, geoBoards.map((b) => b.id), feedAndDatasetLayers.map((f) => f.id), props.focusDatasetId ?? null, props.focusFeatureId ?? null])}
           theme={props.theme}
-          boards={geoBoards.map((c) => ({ id: c.id, title: c.title }))}
+          boards={geoBoards.map((c) => ({ id: c.id, title: c.title, templateKey: c.templateKey }))}
+          incidentArea={incidentArea.data?.geometry ? { geometry: incidentArea.data.geometry } : null}
           fetchItems={(id) => props.client.collectionItems(id)}
           tileUrl={(kind, id) => kind === "board"
             ? `/api/v1/tiles/boards/${id}/{z}/{x}/{y}.mvt`
@@ -440,7 +441,7 @@ export function MapSurface(props: {
           terrain={terrainSource()}
           buildings={buildingsSource()}
           jurisdictionOverlays={jurisdictionOverlays()}
-          initialBounds={jurisdictionMapBounds()}
+          initialBounds={areaBbox ?? jurisdictionMapBounds()}
           inspectionMode="workspace"
           requestedFeature={props.focusDatasetId && props.focusFeatureId
             ? { datasetId: props.focusDatasetId, featureId: props.focusFeatureId }

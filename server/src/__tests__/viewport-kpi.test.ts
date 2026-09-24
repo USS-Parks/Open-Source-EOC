@@ -215,9 +215,11 @@ describe("H12-E viewport KPI queries", () => {
     expect(viewport.json().scope).toEqual({ kind: "viewport", bbox: [0, 0, 5, 5] });
     expect(widget(viewport.json(), "closed_roads").value).toBe(1001);
     expect((widget(viewport.json(), "active_closures").records as unknown[])).toHaveLength(10);
-    expect(widget(viewport.json(), "shelters_by_status")).toMatchObject({
-      missing: true, groups: [],
-    });
+    // Shelters carry a location, so the viewport counts the two inside it and not the one outside.
+    const shelters = widget(viewport.json(), "shelters_by_status");
+    expect(shelters.missing).toBeFalsy();
+    expect(shelters.groups).toEqual(expect.arrayContaining([{ value: "closed", count: 1 }, { value: "normal", count: 1 }]));
+    expect(shelters.groups).toHaveLength(2);
 
     const filtered = await app.inject({
       method: "GET",

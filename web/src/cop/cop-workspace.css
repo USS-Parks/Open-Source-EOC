@@ -481,3 +481,73 @@
 .eoc-cop-container[data-layout="card"] .eoc-cop-workspace { height: 100%; grid-template-columns: minmax(0, 1fr); }
 .eoc-cop-container[data-layout="card"] .eoc-cop-layers,
 .eoc-cop-container[data-layout="card"] .eoc-cop-readout { display: none; }
+
+/* The overview card's own map controls (CardOverlays). */
+.eoc-cop-card-overlays { position: absolute; inset: 0; pointer-events: none; font-size: 13px; }
+.eoc-cop-card-overlays > *, .eoc-cop-area-callout { pointer-events: auto; }
+.eoc-cop-card-overlays button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font: inherit; color: inherit; cursor: pointer; }
+.eoc-cop-card-overlays ul { margin: 0; padding: 0; list-style: none; }
+.eoc-cop-card-overlays label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.eoc-cop-card-overlays input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var(--eoc-cop-card-accent); }
+.eoc-cop-card-legend { display: grid; gap: 4px; }
+.eoc-cop-card-legend li { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+.eoc-cop-card-legend img { flex: none; }
+.eoc-cop-card-key { display: inline-block; flex: none; }
+.eoc-cop-card-key.is-boundary { width: 22px; height: 14px; border: 2px dashed; border-radius: 3px; }
+.eoc-cop-card-key.is-closure { width: 22px; height: 4px; border-radius: 2px; }
+.eoc-cop-card-north { position: absolute; border: 0; background: none; padding: 2px; }
+.eoc-cop-card-scale { position: absolute; left: 16px; bottom: 16px; display: grid; gap: 4px; pointer-events: none; font-size: 11px; }
+.eoc-cop-card-scale-row { display: flex; align-items: flex-end; gap: 8px; }
+.eoc-cop-card-scale-bar { position: relative; height: 18px; border-bottom: 2px solid currentColor; }
+.eoc-cop-card-scale-bar span { position: absolute; top: 0; transform: translateX(-50%); line-height: 1; }
+.eoc-cop-card-scale-bar span::after { content: ""; position: absolute; left: 50%; top: 11px; height: 7px; border-left: 1.5px solid currentColor; }
+.eoc-cop-card-scale-unit { line-height: 1; padding-bottom: 1px; }
+.eoc-cop-card-notice { position: absolute; top: 56px; right: 8px; margin: 0; padding: 6px 10px; border-radius: 6px; background: var(--eoc-surface); color: var(--eoc-text); border: 1px solid var(--eoc-border); }
+
+/* Dark: legend panel, layer list and zoom on the imagery. */
+.eoc-cop-card-overlays[data-card-theme="dark"] { color: #e6edf5; --eoc-cop-card-accent: #38bdf8; }
+[data-card-theme="dark"] .eoc-cop-card-legend,
+[data-card-theme="dark"] .eoc-cop-card-layers,
+[data-card-theme="dark"] .eoc-cop-card-zoom { position: absolute; background: rgba(9, 18, 30, 0.9); border: 1px solid #2a3b50; border-radius: 6px; }
+/* The dark overview card lays its title band over the map's top 42 px. */
+[data-card-theme="dark"] .eoc-cop-card-legend { top: 55px; left: 10px; padding: 10px 12px; gap: 5px; font-size: 11.5px; }
+[data-card-theme="dark"] .eoc-cop-card-legend img { width: 18px; height: 18px; }
+[data-card-theme="dark"] .eoc-cop-card-north { z-index: 3; top: 6px; right: 18px; color: #f1f5f9; }
+[data-card-theme="dark"] .eoc-cop-card-layers { top: 95px; right: 16px; padding: 6px 8px 8px; display: grid; gap: 6px; font-size: 12px; }
+[data-card-theme="dark"] .eoc-cop-card-layers > button { border: 0; border-bottom: 1px solid #2a3b50; background: none; padding: 4px 0 8px; }
+[data-card-theme="dark"] .eoc-cop-card-layers ul { display: grid; gap: 7px; }
+[data-card-theme="dark"] .eoc-cop-card-zoom { right: 22px; bottom: 46px; display: grid; }
+[data-card-theme="dark"] .eoc-cop-card-zoom button { width: 32px; height: 34px; border: 0; background: none; }
+[data-card-theme="dark"] .eoc-cop-card-zoom button + button { border-top: 1px solid #2a3b50; }
+[data-card-theme="dark"] .eoc-cop-card-scale { color: #f1f5f9; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); }
+
+/* Light: layer checklist, map tools, legend strip. */
+.eoc-cop-card-overlays[data-card-theme="light"] { color: #1f2d3d; --eoc-cop-card-accent: #1a6fc4; }
+[data-card-theme="light"] .eoc-cop-card-checks,
+[data-card-theme="light"] .eoc-cop-card-tools > button,
+[data-card-theme="light"] .eoc-cop-card-legend { background: #ffffff; border: 1px solid #d9dee5; border-radius: 8px; box-shadow: 0 1px 3px rgba(15, 34, 51, 0.12); }
+[data-card-theme="light"] .eoc-cop-card-checks { position: absolute; top: 12px; left: 12px; min-width: 150px; max-height: calc(100% - 110px); overflow: auto; }
+[data-card-theme="light"] .eoc-cop-card-checks > li { border-top: 1px solid #e6eaef; }
+[data-card-theme="light"] .eoc-cop-card-checks > li:first-child { border-top: 0; }
+[data-card-theme="light"] .eoc-cop-card-checks label { padding: 7px 12px; }
+[data-card-theme="light"] .eoc-cop-card-more > button { width: 100%; justify-content: flex-start; padding: 7px 12px; border: 0; background: none; }
+[data-card-theme="light"] .eoc-cop-card-more > button[aria-expanded="true"] svg { transform: rotate(180deg); }
+[data-card-theme="light"] .eoc-cop-card-more ul { border-top: 1px solid #e6eaef; padding: 2px 0; }
+[data-card-theme="light"] .eoc-cop-card-more ul label { padding: 5px 12px; }
+[data-card-theme="light"] .eoc-cop-card-tools { position: absolute; top: 8px; right: 8px; display: flex; gap: 8px; align-items: flex-start; }
+[data-card-theme="light"] .eoc-cop-card-tools > button { width: 38px; height: 38px; padding: 0; }
+[data-card-theme="light"] .eoc-cop-card-tools > button[aria-pressed="true"] { border-color: #1a6fc4; }
+[data-card-theme="light"] .eoc-cop-card-legend.is-strip { position: absolute; right: 30px; bottom: 8px; display: flex; gap: 14px; padding: 8px 12px; font-size: 11px; }
+[data-card-theme="light"] .eoc-cop-card-legend.is-strip li { gap: 6px; }
+[data-card-theme="light"] .eoc-cop-card-legend.is-strip img { width: 18px; height: 18px; }
+[data-card-theme="light"] .eoc-cop-card-north { right: 10px; bottom: 72px; color: #1f2d3d; }
+[data-card-theme="light"] .eoc-cop-card-scale { color: #1f2d3d; }
+
+/* The light card's place search sits in the tool row. */
+.eoc-cop-card-tools .eoc-shell-search { position: relative; width: 150px; }
+
+/* The light card's incident callout beside the boundary. */
+.eoc-cop-area-callout { display: flex; gap: 10px; align-items: flex-start; padding: 8px 12px; max-width: 220px; border: 1.5px dashed #3f55d4; border-radius: 6px; background: rgba(229, 236, 255, 0.92); color: #1f2d3d; font-size: 11.5px; line-height: 1.35; pointer-events: none; }
+.eoc-cop-area-callout .eoc-cop-card-key.is-boundary { margin-top: 2px; border-color: #3f55d4; background: #6f8cf255; }
+.eoc-cop-area-callout strong { display: block; font-size: 12px; }
+.eoc-cop-area-callout span:not(.eoc-cop-card-key) { display: block; }
