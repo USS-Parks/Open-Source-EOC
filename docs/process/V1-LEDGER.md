@@ -3390,3 +3390,48 @@ tagging remain separately gated as section 1 of the roster states.
 - **Evidence level:** unit, browser, pixel comparison and document.
 - **Deferred:** Basho's visual review of the dark primary buttons.
 - **Rollback:** revert the two commits.
+
+## V1 W4 milestone gate
+
+- **Command:** `pnpm check:gate` with `OPENEOC_TEST_DB_TAG=gate` on `main` at
+  `5b24d84`, the point where every W4 unit had landed, with the style
+  consolidation lane running tests on the same host.
+- **Static gates:** TypeScript, ESLint, license scan (303 packages), link
+  checker (92 files), advisory gate (0 high or critical, 0 exceptions) and
+  the desktop and installer tests (23 passed) all green.
+- **Serial suite:** 260 of 262 files and 1,458 of 1,460 tests passed in 1,502
+  seconds. Two did not:
+  - `boards-designer-browser` "configures, previews, publishes and reapplies a
+    board version": a real defect. After "Publish and apply version 2" the
+    designer, returned to without a remount, still showed version 1 and its
+    history, because it never read the board or its versions again after an
+    upgrade. Code splitting changed the render timing that had hidden it. The
+    style consolidation lane found it failing on its untouched base too.
+  - `incident-activation-browser` "activates, scopes area and records...":
+    a 30-second wait for the participants region under load.
+  - Stated plainly: while the suite ran, the integrating session briefly
+    edited `boards-designer-browser.test.ts` in this checkout to dump the
+    page at the failing line, and fast-forwarded the style consolidation unit
+    into it within a minute of the suite ending. The designer file failed the
+    same way before and after that edit, and every other file had run by
+    then; neither changes the result below, but the run was not on a still
+    tree.
+  - The load benchmark did not run in the chain, since the serial suite
+    stopped it.
+- **The fix.** `TemplatesSurface.tsx` now reads the board, its version history
+  and the console's board list again after a successful publish-and-apply or
+  retry, whether or not the screen remounts, and the console passes the board
+  list reload to the board-design route as it already did to Templates.
+- **Re-runs, alone and serial per HZ-C, on `4b96bfc` with the fix:**
+  `pnpm exec vitest run` over boards-designer-browser,
+  incident-activation-browser and templates-surface with `--maxWorkers=1`, 3
+  files and 9 tests passed. `pnpm exec vitest run
+  server/src/__tests__/load.test.ts --maxWorkers=1`: the first run lost its
+  worker to exit 3221226505 at start, the known host failure; the re-run
+  passed 4 of 4. The web package's tsc and eslint on the two files exit 0.
+- **Roster gate text.** Parity rows F1, F4, F7, F8, F13 and G-TILES are
+  verified with receipts ("V1 W4 gate: parity reconciliation and the WebEOC
+  side-by-side"), and the side-by-side evaluation script is written and was
+  run internally.
+- **Result:** wave W4 is complete: W4.0 through W4.13 are receipted, and the
+  gate is green after the recorded fix.

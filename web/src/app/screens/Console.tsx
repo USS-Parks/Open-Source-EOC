@@ -805,6 +805,7 @@ function Center(props: {
     case "board-design":
       return <TemplatesSurface client={props.client} jurisdictionId={props.jurisdictionId} boards={props.boards} boardId={s.id}
         isInstanceAdmin={props.isInstanceAdmin} isJurisdictionAdmin={props.isAdmin}
+        onBoardsChanged={props.onBoardsChanged}
         onOpenBoard={props.onOpenBoard} onDesignBoard={(id) => props.onNavigate({ kind: "board-design", id })} />;
     case "admin":
       return <AdminSurface client={props.client} jurisdictionId={props.jurisdictionId} personId={props.personId}

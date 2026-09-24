@@ -59,6 +59,13 @@ export function TemplatesSurface(props: TemplatesSurfaceProps) {
     [board.data?.templateKey],
   );
   const positions = useAsync(() => props.client.listPositions(props.jurisdictionId), [props.jurisdictionId]);
+  // The board now runs the new version: read it, its version history and the
+  // console's board list again, whether or not this screen is remounted.
+  const boardUpgraded = () => {
+    board.reload();
+    versions.reload();
+    props.onBoardsChanged?.();
+  };
 
   if (!props.isInstanceAdmin || !props.isJurisdictionAdmin) {
     return <EmptyState label="Board customization is unavailable for this account."
@@ -117,6 +124,7 @@ export function TemplatesSurface(props: TemplatesSurfaceProps) {
         detail: result.dropped.length
           ? `Local fields replaced by the template: ${result.dropped.join(", ")}.`
           : "Existing records and local customizations passed migration checks." });
+      boardUpgraded();
       props.onOpenBoard(props.boardId);
     } catch (error) {
       if (scopeRef.current !== activeScope) return;
@@ -151,6 +159,7 @@ export function TemplatesSurface(props: TemplatesSurfaceProps) {
     try {
       await props.client.upgradeBoard(props.boardId, action.version);
       if (scopeRef.current !== activeScope) return;
+      boardUpgraded();
       props.onOpenBoard(props.boardId);
     } catch (error) {
       if (scopeRef.current !== activeScope) return;
