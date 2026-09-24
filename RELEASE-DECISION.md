@@ -129,9 +129,8 @@ categories; archiving the retired rosters (item 11); branch protection
   of the bundle's other libraries, the web bundle's npm packages and the
   Liberation Sans glyphs; and the offered source kept for three years. See
   [the asset inventory](docs/ASSET-LICENSES.md#license-work-open-before-a-setup-is-published).
-- **Checks and documents:** the API document's header naming the OIDC routes
-  as conditional (a one-line generator change); a coverage measurement for
-  gate 20; a desktop profile run of the scheduler.
+- **Checks:** a coverage measurement for gate 20; a desktop profile run of
+  the scheduler.
 - **Screens:** choice labels in change history, record detail, kanban cards
   and the calendar; `.xlsx` on the WebEOC migration screen; creating from a
   published template for a jurisdiction admin who is not an instance admin;

@@ -3959,3 +3959,68 @@ tagging remain separately gated as section 1 of the roster states.
   ok, 96 files.
 - **Evidence level:** document.
 - **Rollback:** revert the commit.
+
+## V1 W6.7: license notices in the setup
+
+- **Why.** Added during execution: the reconciliation found that the Windows
+  setup ships its runtimes and map data without their license notices or a
+  source offer for its GPL components, and that the API document's header
+  did not say the OIDC routes are conditional.
+- **What changed.**
+  - `Stage-Installer.ps1` requires ten runtime license files and copies them to
+    `app/licenses`: Node's `LICENSE`; EDB's `server_license.txt`,
+    `commandlinetools_3rd_party_licenses.txt` and
+    `StackBuilder_3rd_party_licenses.txt`; the PostGIS bundle's `bin/COPYING`
+    (GPL-2.0), root `LICENSE` (h3-pg, Apache-2.0), `COPYRIGHT.pg_sphere`,
+    `ogrfdw_LICENSE.md`, `pgpointcloud_COPYRIGHT` and `gdal-data/LICENSE.TXT`.
+    A missing file stops the stage before anything is copied.
+  - The stage writes `THIRD-PARTY-NOTICES.txt` at the app root from the new
+    `deploy/windows/installer/THIRD-PARTY-NOTICES.txt`: Node.js, PostgreSQL,
+    PostGIS and its bundle components; TypeScript and the server package tree,
+    84 of whose 87 packages carry their own license file; the web bundle; the
+    ODbL notice with "© OpenStreetMap contributors", the ODbL 1.0 text's
+    address and the extract and build tools the derived archives and
+    gazetteer come from; Overture buildings (ODbL); NAPSG symbols (CC BY 4.0);
+    Liberation Sans (OFL); and a written offer for the PostGIS 3.6.2 source
+    (`postgis-3.6.2.tar.gz` at download.osgeo.org, requested through the
+    project's GitHub issues, no invented address). The stage stops if the
+    offer names another PostGIS version than `postgis.control`.
+  - The installer README gains "License notices"; the setup's pre-install page
+    points to the notices. The `.iss` needed no change: its wildcard entry
+    installs both.
+  - The `generateApiDocs` header names the OIDC routes and
+    `OPENEOC_OIDC_ISSUER`; `docs/API.md` is regenerated with the header only.
+  - `docs/ASSET-LICENSES.md`'s open-work section and `RELEASE-DECISION.md`'s
+    gate line 15 row and pre-publish bullet state what is done and what
+    remains; the integrating session removed the release decision's stale
+    open item for the API header.
+- **Defaults and deviations.** The overlays archive still ships; no basis for
+  its reuse terms is recorded, so the notices say they are under review and
+  the rights review is Basho's. License file names follow what the EDB and
+  PostGIS distributions carry, not the brief's guesses (the Node MSI directory
+  has no `LICENSE`; EDB ships `server_license.txt`; PostGIS's own COPYING is
+  not in the bundle, and the GPL-2.0 text arrives as `bin/COPYING`).
+- **Schema, contract, dependencies:** none; the routes are unchanged.
+- **Verification.** In the lane, tag `a`, on `eb00c7f`: tsc and eslint exit 0;
+  `pnpm test:desktop` 26 of 26; `pnpm exec vitest run` over api-docs and the
+  shared contract test, 2 files and 11 tests; link checker ok, 96 files. The
+  new installer test fails against the base stager and with any one license
+  line removed. A dry run of the stager's license statements passed on
+  distribution-shaped inputs (license files from `postgresql-16.15-4.zip` and
+  `postgis-3.6.2.zip`, a stand-in Node `LICENSE`): 10 files under `licenses/`
+  and the notices written; it stopped on this machine's current inputs
+  ("Runtime license text is missing: C:\Program Files\nodejs\LICENSE") and on
+  an edited PostGIS version. The integrating session rebased onto `336ef97`
+  and re-ran the desktop and installer tests (26 of 26), api-docs (passed)
+  and the link checker (ok, 96 files).
+- **Evidence level:** unit and a dry run of the copy steps; the setup was not
+  rebuilt.
+- **Deferred:** staging the release from runtime inputs that carry their
+  license files (the official Node Windows zip; a `pgsql` directory with the
+  EDB license files and the PostGIS bundle's root files), then rebuilding the
+  setup at release; the overlays rights review (Basho); license texts no input
+  carries (the PostGIS bundle's libraries such as GEOS, PROJ, SFCGAL, CGAL,
+  Boost, GMP, MPFR, GSL and Readline; the packages compiled into the web
+  bundle; the Liberation Sans OFL text; three server packages without a
+  license file); keeping the offered source for three years.
+- **Rollback:** revert both commits; the existing 0.9.0 setup is unaffected.
