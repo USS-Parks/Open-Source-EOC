@@ -94,6 +94,22 @@ describe("no-code designer (INV-6)", () => {
     expect(saved.fields.map((f) => f.key)).toContain("generator");
   });
 
+  it("gives the configuration and preview tabs the panel each one names", () => {
+    render(<Designer base={STANDARD_TEMPLATES.find((t) => t.key === "shelters")!} onSave={() => undefined} />);
+    const expectPanel = (name: string) => {
+      const tab = screen.getByRole("tab", { name });
+      const panel = document.getElementById(tab.getAttribute("aria-controls")!);
+      expect(panel?.getAttribute("role")).toBe("tabpanel");
+      expect(panel?.getAttribute("aria-labelledby")).toBe(tab.id);
+    };
+    expectPanel("Fields");
+    fireEvent.click(screen.getByRole("tab", { name: "Review & preview" }));
+    expectPanel("Review & preview");
+    expectPanel("Input");
+    fireEvent.click(screen.getByRole("tab", { name: "Detail" }));
+    expectPanel("Detail");
+  });
+
   it("edits fields and configures layouts, position approvals, due rules, and escalations", () => {
     const base = STANDARD_TEMPLATES.find((template) => template.key === "shelters")!;
     const onSave = vi.fn();

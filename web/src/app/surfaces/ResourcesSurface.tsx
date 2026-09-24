@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  choiceLabel,
   DEMOBILIZATION_CHECK_LABELS,
   DEMOBILIZATION_CHECKS,
   RESOURCE_REQUEST_TRANSITIONS,
@@ -19,6 +20,7 @@ import { ErrorNote, Loading, Scroll, SurfaceHeader } from "../screens/parts.js";
 import "../../resources/resources.css";
 
 const PRIORITIES = ["routine", "priority", "immediate"];
+const PRIORITY_LABELS = Object.fromEntries(PRIORITIES.map((value) => [value, choiceLabel(value)]));
 
 type BadgeStatus = "info" | "warning" | "success" | "unknown";
 function stateStatus(state: string): BadgeStatus {
@@ -63,10 +65,10 @@ function RequestRow(props: {
   return (
     <li className="resources-request">
       <div className="resources-request-body">
-        <div className="resources-row"><StatusBadge status={stateStatus(props.req.state)}>{props.req.state}</StatusBadge><strong>{props.req.item}</strong><span className="eoc-muted">×{props.req.quantity}</span><span className="eoc-muted">{props.req.priority} priority</span></div>
+        <div className="resources-row"><StatusBadge status={stateStatus(props.req.state)}>{choiceLabel(props.req.state)}</StatusBadge><strong>{props.req.item}</strong><span className="eoc-muted">×{props.req.quantity}</span><span className="eoc-muted">Priority: {choiceLabel(props.req.priority)}</span></div>
         <div className="resources-request-facts"><span>Receiving: {props.req.receivingOrganization.name}</span><span>Supplying: {props.req.supplyingOrganization?.name ?? "Not identified"}</span><span>Owner: {assignmentLabel(props.req)}</span>{props.kindText ? <span>Kind: {props.kindText}</span> : null}</div>
         {props.canMutate && needsAssignment ? <div className="resources-assign"><div className="resources-assign-form"><label className="resources-label">Assign to named authority<select aria-label={`Assignment for ${props.req.item}`} value={target} onChange={(event) => setTarget(event.target.value)} className="resources-select"><option value="">Choose a position or incident participant</option>{props.positions.length ? <optgroup label="Positions">{props.positions.map((position) => <option key={position.id} value={`position:${position.id}`}>{position.title}</option>)}</optgroup> : null}{props.participants.length ? <optgroup label="Incident participants">{props.participants.map((participant) => <option key={participant.id} value={`participant:${participant.id}`}>{participant.personName} · {participant.incidentPositionTitle} · {participant.organizationName}</option>)}</optgroup> : null}</select></label><Button kind="primary" onClick={assign} disabled={props.busy || !target}>Assign and advance</Button></div>{props.positions.length === 0 && props.participants.length === 0 ? <span role="status" className="eoc-muted">No eligible position or active incident participant is available for assignment.</span> : null}</div> : null}
-        {props.canMutate && transitions.length ? <div className="resources-assign-form"><label className="resources-label">Next action<select aria-label={`Next state for ${props.req.item}`} value={to} onChange={(event) => setTo(event.target.value)} className="resources-select">{transitions.map((state) => <option key={state} value={state}>{state}</option>)}</select></label><div className="resources-cell"><TextField label="Transition note" value={note} onChange={setNote} /></div><Button onClick={() => props.onAdvance(props.req.id, to, note)} disabled={props.busy || !to}>Advance</Button></div> : !needsAssignment ? <span className="eoc-muted">{props.canMutate ? "Lifecycle complete" : "Read-only request"}</span> : !props.canMutate ? <span className="eoc-muted">Read-only request</span> : null}
+        {props.canMutate && transitions.length ? <div className="resources-assign-form"><label className="resources-label">Next action<select aria-label={`Next state for ${props.req.item}`} value={to} onChange={(event) => setTo(event.target.value)} className="resources-select">{transitions.map((state) => <option key={state} value={state}>{choiceLabel(state)}</option>)}</select></label><div className="resources-cell"><TextField label="Transition note" value={note} onChange={setNote} /></div><Button onClick={() => props.onAdvance(props.req.id, to, note)} disabled={props.busy || !to}>Advance</Button></div> : !needsAssignment ? <span className="eoc-muted">{props.canMutate ? "Lifecycle complete" : "Read-only request"}</span> : !props.canMutate ? <span className="eoc-muted">Read-only request</span> : null}
       </div>
       <Button onClick={() => props.onHistory(props.req.id)} disabled={props.busy}>History</Button>
     </li>
@@ -558,7 +560,7 @@ export function ResourcesSurface(props: {
           {canMutate ? <><div className="resources-intake">
             <div className="resources-cell"><TextField label="Requested item" value={item} onChange={setItem} /></div>
             <div className="resources-cell"><TextField label="Quantity" value={quantity} onChange={setQuantity} /></div>
-            <div className="resources-cell"><EnumSelect label="Priority" values={PRIORITIES} value={priority} onChange={setPriority} /></div>
+            <div className="resources-cell"><EnumSelect label="Priority" values={PRIORITIES} labels={PRIORITY_LABELS} value={priority} onChange={setPriority} /></div>
             <div className="resources-cell"><TextField label="Request notes" value={notes} onChange={setNotes} /></div>
             <KindTypeFields kinds={kinds} kind={requestKind} type={requestType} onKind={setRequestKind} onType={setRequestType} forRequest />
           </div><div className="eoc-space-above"><Button kind="primary" onClick={submit} disabled={busy}>Submit request</Button></div></> : <p role="status" className="resources-last eoc-muted">{props.closed ? "This incident is closed. Request history remains available." : "Your access is read-only. Request history remains available."}</p>}

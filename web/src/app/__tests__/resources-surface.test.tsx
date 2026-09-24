@@ -138,6 +138,18 @@ it("keeps request history visible while an incident is closed or access is read-
   expect(screen.queryByRole("region", { name: "Escalate to another tier" })).toBeNull();
 });
 
+it("shows request state, priority and next action as labels, not stored keys", async () => {
+  const nextRequest: ResourceRequestSummary = { ...request, id: "77777777-7777-4777-8777-777777777777", item: "Medical oxygen", priority: "routine", state: "submitted", costCents: 0 };
+  setup({}, [request, nextRequest]);
+  const row = (await screen.findByText("Medical oxygen")).closest("li")!;
+  expect(within(row).getByText("Submitted", { exact: true })).toBeTruthy();
+  expect(within(row).getByText("Priority: Routine")).toBeTruthy();
+  const next = within(row).getByLabelText("Next state for Medical oxygen") as HTMLSelectElement;
+  expect([...next.options].map((option) => [option.value, option.text])).toEqual([["triaged", "Triaged"], ["cancelled", "Cancelled"]]);
+  const priority = screen.getByLabelText("Priority") as HTMLSelectElement;
+  expect([...priority.options].map((option) => option.text)).toEqual(["Routine", "Priority", "Immediate"]);
+});
+
 it("refreshes request data without discarding another row's selected assignee", async () => {
   const nextRequest: ResourceRequestSummary = { ...request, id: "77777777-7777-4777-8777-777777777777", item: "Medical oxygen", state: "submitted", costCents: 0 };
   const client = setup({}, [request, nextRequest]);

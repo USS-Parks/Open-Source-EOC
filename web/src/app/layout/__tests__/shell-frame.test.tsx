@@ -200,6 +200,27 @@ describe("responsive shell frame", () => {
     expect(view.getByRole("dialog", { name: "Context" })).not.toBeNull();
   });
 
+  it("makes the phone drawer an element the dialog role is allowed on", async () => {
+    atWidth(390);
+    const view = frame();
+    fireEvent.click(view.getByRole("button", { name: "Open context" }));
+    const dialog = await view.findByRole("dialog", { name: "Context" });
+    const result = await axe.run(dialog, { rules: { "color-contrast": { enabled: false } } });
+    const summary = result.violations.map((item) => `${item.id}: ${item.nodes.length}`).join("; ");
+    expect(result.violations, summary).toHaveLength(0);
+  }, 30000);
+
+  it("does not save a phone drawer's open or closed state as the desktop preference", async () => {
+    atWidth(390);
+    const onLayoutChange = vi.fn();
+    const view = frame({ layout: { compactNavigation: false, drawerOpen: true, drawerWidth: 340 }, onLayoutChange });
+    fireEvent.click(view.getByRole("button", { name: "Open context" }));
+    const dialog = await view.findByRole("dialog", { name: "Context" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close context drawer" }));
+    await waitFor(() => expect(view.queryByRole("dialog", { name: "Context" })).toBeNull());
+    expect(onLayoutChange).not.toHaveBeenCalled();
+  });
+
   it("removes pointer resize listeners when touch resize is cancelled", () => {
     const view = frame();
     const separator = view.getByRole("separator", { name: "Resize context drawer" });

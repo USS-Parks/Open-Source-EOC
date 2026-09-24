@@ -41,7 +41,7 @@ beforeAll(async () => {
   stormId = (await post(app, token, incidents, { templateKey: "wildfire", name: "Coastal Storm" })).incidentId as string;
   leveeId = (await post(app, token, incidents, { templateKey: "daily_ops", name: "Levee Watch" })).incidentId as string;
   const detail = await app.inject({ method: "GET", url: `/api/v1/incidents/${stormId}`, headers: auth(token) });
-  const board = (detail.json().boards as Array<{ id: string; title: string }>).find((b) => b.title === "Coastal Storm: activity_log")!;
+  const board = (detail.json().boards as Array<{ id: string; title: string }>).find((b) => b.title === "Coastal Storm: Activity Log")!;
   await post(app, token, `/api/v1/boards/${board.id}/records?incidentId=${stormId}`, { entry: "Surge warning issued" });
   const area = await app.inject({ method: "PUT", url: `/api/v1/incidents/${stormId}/operational-area`, headers: auth(token), payload: {
     expectedRevision: 0, geometry: null, reason: "Night shift",

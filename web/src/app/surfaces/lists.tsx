@@ -31,7 +31,7 @@ export function BoardsIndex(props: {
                 </td>
                 <td>
                   {b.hasGeometry ? (
-                    <StatusBadge status="info">layer</StatusBadge>
+                    <StatusBadge status="info">Layer</StatusBadge>
                   ) : (
                     <span className="eoc-muted">—</span>
                   )}

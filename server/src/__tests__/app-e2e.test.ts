@@ -333,7 +333,8 @@ describe("the operations console in a real browser, offline", () => {
     await page.screenshot({ path: join(SHOTS, "app-map-light.png"), fullPage: false });
 
     // Open a board from the dock: its live view renders as a data table.
-    await page.getByRole("button", { name: "Road Closures" }).first().click();
+    // The jurisdiction's board; the incident's own reads "Bald Hills Fire: Road Closures".
+    await page.getByRole("button", { name: "Road Closures", exact: true }).first().click();
     await page.getByText("SR-169 at Pecwan").first().waitFor({ state: "visible", timeout: 20000 });
     await page.waitForTimeout(300);
     await page.screenshot({ path: join(SHOTS, "app-board-light.png"), fullPage: false });
@@ -483,8 +484,8 @@ describe("the operations console in a real browser, offline", () => {
     await page.getByText("Sandbags, 500 ct").first().waitFor({ state: "visible", timeout: 20000 });
     await page.getByLabel("Next state for Sandbags, 500 ct").selectOption("triaged");
     await page.getByRole("button", { name: "Advance" }).first().click();
-    // The row's state badge flips to "triaged" (the first allowed transition).
-    await page.getByText("triaged", { exact: true }).first().waitFor({ state: "visible", timeout: 20000 });
+    // The row's state badge flips to "Triaged" (the first allowed transition).
+    await page.getByText("Triaged", { exact: true }).first().waitFor({ state: "visible", timeout: 20000 });
 
     // After-action review: record an observation against a Core Capability.
     await page.getByRole("button", { name: "AAR" }).click();

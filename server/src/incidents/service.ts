@@ -181,8 +181,11 @@ export async function activateIncident(
 
   let boardCount = 0;
   for (const boardKey of template.boards) {
+    // Titled for people: the incident's name and the board template's title, not its key.
+    const [boardTemplate] = await sql`
+      select title from board_templates where key = ${boardKey} order by version desc limit 1`;
     const boardId = await createBoard(sql, actor, jurisdictionId, boardKey, undefined,
-      `${input.name}: ${boardKey}`);
+      `${input.name}: ${(boardTemplate?.title as string | undefined) ?? boardKey}`);
     await sql`
       insert into incident_boards (incident_id, board_id) values (${incidentId}, ${boardId})`;
     boardCount += 1;

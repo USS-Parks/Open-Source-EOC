@@ -120,7 +120,7 @@ beforeAll(async () => {
   incidentB = await activate("IAP Bravo Incident");
   const detail = (await api(adminToken, "GET", `/api/v1/incidents/${incidentA}`)).json();
   const activityBoard = detail.boards.find((board: { title: string }) =>
-    board.title.endsWith("activity_log")).id as string;
+    board.title.endsWith("Activity Log")).id as string;
   expect((await api(adminToken, "POST", `/api/v1/boards/${activityBoard}/records`, {
     entry: "Command-only IAP objective",
   })).statusCode).toBe(201);

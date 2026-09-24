@@ -16,7 +16,7 @@ import {
 import { OperationalPeriodControl, PositionControl, useWorkspaceContext } from "../layout/context.js";
 import { PlaceSearch } from "../layout/PlaceSearch.js";
 import { parseRouteHash, sectionOf, surfaceHash, useSurface, type RouteContext, type Surface } from "../router.js";
-import { EmptyState, ErrorNote, Loading, NotFoundState } from "./parts.js";
+import { EmptyState, ErrorNote, LoadBoundary, Loading, NotFoundState } from "./parts.js";
 import type { DashboardSurfaceProps, DashboardViewState } from "../surfaces/DashboardSurface.js";
 import type { BoardRecordContext } from "../surfaces/BoardSurface.js";
 import { BoardsIndex } from "../surfaces/lists.js";
@@ -26,7 +26,8 @@ import { NotificationTray } from "../../notifications/NotificationTray.js";
  * Every surface, the map with MapLibre and PMTiles, and the Yjs offline tree
  * load on first use, so first paint carries only the shell and the boards
  * list. Once the console is up it fetches the rest in the background, so a
- * screen not yet opened still opens after the network drops.
+ * screen not yet opened still opens after the network drops. A screen that
+ * still fails to load shows an error and a reload instead of a blank console.
  */
 const onDemandModules: Array<() => Promise<unknown>> = [];
 function onDemand<P extends object>(load: () => Promise<ComponentType<P>>) {
@@ -261,7 +262,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
           {recordContext?.status === "missing" ? <p role="status">Record unavailable in this view</p> : null}
           {recordContext?.status === "ready" ? (
             <>
-              <Suspense fallback={null}><BoardRecordDetailPane context={recordContext} /></Suspense>
+              <LoadBoundary name="Record detail"><Suspense fallback={null}><BoardRecordDetailPane context={recordContext} /></Suspense></LoadBoundary>
               <Button
                 kind="quiet"
                 onClick={() => navigate(
@@ -287,7 +288,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
           </Button>
         </section>
       ) : null}
-      <Suspense fallback={null}>
+      <LoadBoundary name="Offline continuity"><Suspense fallback={null}>
         <ContinuityPanel
           client={client}
           personId={session.me?.person.id ?? null}
@@ -295,7 +296,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
           onRecoverSession={session.recoverSession}
           onOpenBoards={() => navigateInContext({ kind: "boards" })}
         />
-      </Suspense>
+      </Suspense></LoadBoundary>
       <section aria-label="Boards">
         <h2 className="eoc-dock-heading">Boards</h2>
         {scopedBoards.length === 0 ? (
@@ -365,7 +366,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       onLayoutChange={(next) => workspace.updateLayout(page.arrangement, next)}
       rightDock={dock}
     >
-      <Suspense fallback={<Loading />}>
+      <LoadBoundary name={page.page.title}><Suspense fallback={<Loading />}>
         <Center
           // Remount the whole center when the incident changes, so no records,
           // cached responses or polling timers from the previous incident
@@ -437,7 +438,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
             )
           }
         />
-      </Suspense>
+      </Suspense></LoadBoundary>
     </AppShell>
   );
 }

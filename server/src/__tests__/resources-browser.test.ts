@@ -90,10 +90,10 @@ describe("real-browser resource coordination", () => {
       && response.url().endsWith(`/jurisdictions/${jurisdictionId}/resource-requests`));
     await page.getByRole("button", { name: "Submit request" }).click();
     expect((await submitted).status()).toBe(201);
-    await page.getByText("submitted", { exact: true }).waitFor();
+    await page.getByText("Submitted", { exact: true }).waitFor();
     await page.getByLabel("Next state for Portable water tender").selectOption("triaged");
     await page.getByRole("button", { name: "Advance", exact: true }).click();
-    await page.getByText("triaged", { exact: true }).waitFor();
+    await page.getByText("Triaged", { exact: true }).waitFor();
     await page.getByLabel("Next state for Portable water tender").selectOption("sourcing");
     await page.getByRole("button", { name: "Advance", exact: true }).click();
     await page.getByRole("button", { name: "Assign and advance", exact: true }).waitFor();
@@ -102,7 +102,7 @@ describe("real-browser resource coordination", () => {
       && response.url().endsWith("/assign"));
     await page.getByRole("button", { name: "Assign and advance", exact: true }).click();
     expect((await assigned).status()).toBe(200);
-    await page.getByText("assigned", { exact: true }).waitFor();
+    await page.getByText("Assigned", { exact: true }).waitFor();
     await page.getByText("Supplying: D22 Mutual Aid").waitFor();
     await page.getByText("Owner: D22 Resource Partner · Resource Support · D22 Mutual Aid").waitFor();
     const history = page.getByRole("button", { name: "History", exact: true });

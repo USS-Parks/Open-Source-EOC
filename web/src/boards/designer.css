@@ -5,6 +5,10 @@
   color: var(--eoc-text);
 }
 
+.board-designer__panel {
+  min-width: 0;
+}
+
 .board-designer h3,
 .board-designer h4 {
   margin: 0;

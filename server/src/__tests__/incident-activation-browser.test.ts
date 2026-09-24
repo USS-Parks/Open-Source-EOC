@@ -104,7 +104,7 @@ describe("real-browser incident activation and participation", () => {
 
     const detail = await app.inject({ method: "GET", url: `/api/v1/incidents/${incidentId}`, headers: { authorization: `Bearer ${token}` } });
     expect(detail.statusCode, detail.body).toBe(200);
-    const boardId = detail.json().boards.find((board: { title: string }) => board.title === "D20 California Exercise: activity_log")?.id as string | undefined;
+    const boardId = detail.json().boards.find((board: { title: string }) => board.title === "D20 California Exercise: Activity Log")?.id as string | undefined;
     expect(boardId).toBeTruthy();
     const record = await app.inject({ method: "POST", url: `/api/v1/boards/${boardId}/records?incidentId=${incidentId}`,
       headers: { authorization: `Bearer ${token}` }, payload: { entry: "D20 incident-scoped activity", notable: true } });

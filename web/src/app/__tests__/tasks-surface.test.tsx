@@ -41,6 +41,17 @@ describe("tasks surface", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Team Tasks" }));
     await waitFor(() => expect(listIncidentTasks).toHaveBeenLastCalledWith(incidentId, {}));
   });
+  it("makes the task table the panel the selected view tab names", async () => {
+    renderSurface();
+    await screen.findByText("Establish command");
+    for (const name of ["My Tasks", "Team Tasks"]) {
+      const tab = screen.getByRole("tab", { name });
+      fireEvent.click(tab);
+      const panel = document.getElementById(tab.getAttribute("aria-controls")!);
+      expect(panel?.getAttribute("role")).toBe("tabpanel");
+      expect(panel?.getAttribute("aria-labelledby")).toBe(tab.id);
+    }
+  });
   it("uses one operation id for a completion attempt and reports the authoritative receipt", async () => {
     const { client, operationIds } = renderSurface();
     await screen.findByText("Establish command");

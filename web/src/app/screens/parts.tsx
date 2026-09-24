@@ -1,9 +1,10 @@
-import type { ReactNode } from "react";
+import { Component, type ReactNode } from "react";
 
 /** Small shared building blocks for the console's center surfaces. */
 
+/** A polite status, so a screen reader announces what is loading. */
 export function Loading(props: { label?: string }) {
-  return <p className="eoc-note eoc-note-loading">{props.label ?? "Loading…"}</p>;
+  return <p role="status" className="eoc-note eoc-note-loading">{props.label ?? "Loading…"}</p>;
 }
 
 export function ErrorNote(props: { message: string }) {
@@ -48,4 +49,33 @@ export function NotFoundState(props: { readonly onMap: () => void; readonly onOv
       </div>
     </section>
   );
+}
+
+/**
+ * Shows a screen whose module failed to load, such as one the network dropped
+ * before the console fetched it, instead of a blank console, and leaves the
+ * rest of the console usable. The browser keeps a failed module import, so
+ * only a page load fetches it again; the session and the route survive it.
+ */
+export class LoadBoundary extends Component<{ readonly name: string; readonly children: ReactNode }, { readonly failed: boolean }> {
+  override state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  override componentDidUpdate(previous: { readonly name: string }) {
+    // Opening another screen tries that one.
+    if (previous.name !== this.props.name && this.state.failed) this.setState({ failed: false });
+  }
+
+  override render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <section className="eoc-surface-state" aria-label={`${this.props.name} did not load`}>
+        <ErrorNote message={`${this.props.name} could not be loaded. Check the network connection, then reload the page.`} />
+        <div><button type="button" className="eoc-btn" onClick={() => location.reload()}>Reload page</button></div>
+      </section>
+    );
+  }
 }

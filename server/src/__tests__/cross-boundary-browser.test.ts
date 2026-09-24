@@ -186,7 +186,7 @@ describe("cross-boundary incident exercise in a real browser", () => {
 
     // The partner posts a field impact on the map.
     await partner.getByRole("button", { name: "Add point" }).click();
-    await partner.getByLabel("Map record board").selectOption({ label: "Valley Complex Fire: road_closures" });
+    await partner.getByLabel("Map record board").selectOption({ label: "Valley Complex Fire: Road Closures" });
     await partner.getByLabel("Longitude").fill("-124.05");
     await partner.getByLabel("Latitude").fill("40.85");
     await partner.getByRole("button", { name: "Use coordinates" }).click();
@@ -221,11 +221,11 @@ describe("cross-boundary incident exercise in a real browser", () => {
     await owner.getByLabel("Requested item").fill("Engine strike team");
     await owner.getByLabel("Priority").selectOption("immediate");
     await owner.getByRole("button", { name: "Submit request" }).click();
-    await owner.getByText("submitted", { exact: true }).waitFor();
-    for (const state of ["triaged", "sourcing"]) {
+    await owner.getByText("Submitted", { exact: true }).waitFor();
+    for (const [state, label] of [["triaged", "Triaged"], ["sourcing", "Sourcing"]] as const) {
       await owner.getByLabel("Next state for Engine strike team").selectOption(state);
       await owner.getByRole("button", { name: "Advance", exact: true }).click();
-      await owner.getByText(state, { exact: true }).first().waitFor();
+      await owner.getByText(label, { exact: true }).first().waitFor();
     }
     await owner.getByLabel("Assignment for Engine strike team").selectOption(`participant:${participantId}`);
     await owner.getByRole("button", { name: "Assign and advance", exact: true }).click();

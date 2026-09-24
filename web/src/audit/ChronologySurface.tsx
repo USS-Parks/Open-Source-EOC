@@ -177,6 +177,7 @@ export function ChronologySurface(props: {
         </div>
       </form>
     </Panel> : null}
+    <div role="tabpanel" id={`chronology-view-${view}-panel`} aria-labelledby={`chronology-view-${view}-tab`} className="eoc-chronology-panel">
     <OperationalTable tableId="audit-chronology" caption={view === "significant" ? "Significant events" : "All events"}
       columns={columns} rows={entries} rowId={(entry) => entry.id}
       datasetKey={JSON.stringify([props.jurisdictionId, filters])} status={status}
@@ -185,5 +186,6 @@ export function ChronologySurface(props: {
       viewState={tableState} onViewStateChange={setTableState} totalRows={null}
       hasPreviousPage={false} hasNextPage={false} selectedIds={selected} onSelectionChange={setSelected}
       {...(loadMore ? { onLoadMore: loadMore } : {})} />
+    </div>
   </main>;
 }

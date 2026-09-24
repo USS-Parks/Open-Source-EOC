@@ -70,6 +70,11 @@ describe("one-action activation (F12, F13)", () => {
     const body = detail.json();
     expect(body.positions.map((p: { key: string }) => p.key)).toContain("incident_commander");
     expect(body.boards).toHaveLength(6);
+    // Each board reads as the incident's name and the board's title, never a template key.
+    expect(body.boards.map((b: { title: string }) => b.title).sort()).toEqual([
+      "Bald Hills Fire: Activity Log", "Bald Hills Fire: Resource Requests", "Bald Hills Fire: Road Closures",
+      "Bald Hills Fire: Shelters", "Bald Hills Fire: Sign In/Out", "Bald Hills Fire: Significant Events",
+    ]);
     expect(body.libraries[0].title).toBe("Wildfire pre-plan");
     expect(body.kind).toBe("incident");
 

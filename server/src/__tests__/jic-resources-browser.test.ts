@@ -289,7 +289,7 @@ describe("real-browser JIC and resource follow-through", () => {
     await page.reload({ waitUntil: "load" });
     await page.getByText("state reported deployed: State swiftwater team 4 on scene").waitFor();
     await page.getByText("state reported assigned: State swiftwater team 4 assigned").waitFor();
-    await page.getByRole("listitem").filter({ hasText: "Swiftwater rescue team" }).getByText("deployed", { exact: true }).waitFor();
+    await page.getByRole("listitem").filter({ hasText: "Swiftwater rescue team" }).getByText("Deployed", { exact: true }).waitFor();
     await page.getByRole("region", { name: "Swiftwater rescue team: request history" }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: join(SHOTS, "resources-light-1440.png"), fullPage: false });
 

@@ -64,7 +64,7 @@ beforeAll(async () => {
   await api("POST", `/api/v1/positions/${posId("operations_section_chief")}/assignments`, { personId: memberId });
 
   // Log two activity-log entries so the 214 has something to derive from.
-  const logBoard = detail.boards.find((b: { id: string; title: string }) => b.title.endsWith("activity_log")).id;
+  const logBoard = detail.boards.find((b: { id: string; title: string }) => b.title.endsWith("Activity Log")).id;
   await api("POST", `/api/v1/boards/${logBoard}/records`, { entry: "Assumed command" });
   await api("POST", `/api/v1/boards/${logBoard}/records`, { entry: "Set initial objectives" });
 }, 60000);

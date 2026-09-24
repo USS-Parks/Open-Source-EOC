@@ -30,7 +30,7 @@ async function activate(templateKey: string, name: string): Promise<{ id: string
   const id = res.json().incidentId as string;
   const detail = await call("GET", `/api/v1/incidents/${id}`, "admin");
   const board = (detail.json().boards as Array<{ id: string; title: string }>)
-    .find((b) => b.title === `${name}: activity_log`);
+    .find((b) => b.title === `${name}: Activity Log`);
   return { id, boardId: board!.id };
 }
 

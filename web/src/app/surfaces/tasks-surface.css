@@ -10,6 +10,7 @@
 .eoc-tasks-controls { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--eoc-border); border-radius: var(--eoc-radius-md); background: var(--eoc-surface); }
 .eoc-tasks-filters { display: grid; grid-template-columns: repeat(3, minmax(150px, 220px)); gap: 10px; }
 .eoc-tasks-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.eoc-tasks-panel { min-width: 0; }
 .eoc-tasks-actions .eoc-btn { min-height: 36px; padding: 4px 8px; font-size: .85rem; }
 .eoc-tasks-complete { color: var(--eoc-status-success); font-weight: 700; }
 .eoc-tasks-notice { margin: 0; padding: 10px 12px; border: 1px solid var(--eoc-status-success); border-radius: 4px; color: var(--eoc-status-success); background: var(--eoc-surface); }

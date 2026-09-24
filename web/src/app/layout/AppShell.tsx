@@ -141,7 +141,7 @@ export function AppShell(props: AppShellProps) {
   const navFocusTarget = useRef<"opener" | "workspace" | null>(null);
   const drawerInvoker = useRef<HTMLElement | null>(null);
   const drawerOpener = useRef<HTMLButtonElement>(null);
-  const drawerRef = useRef<HTMLElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
   const drawerHeading = useRef<HTMLHeadingElement>(null);
   const focusDrawer = useRef(false);
   const restoreDrawerFocus = useRef(false);
@@ -215,13 +215,13 @@ export function AppShell(props: AppShellProps) {
     drawerInvoker.current = invoker;
     focusDrawer.current = true;
     setDrawerOpen(true);
-    publishLayout({ drawerOpen: true });
+    if (viewport === "dock") publishLayout({ drawerOpen: true });
   }
 
   function closeDrawer() {
     restoreDrawerFocus.current = true;
     setDrawerOpen(false);
-    publishLayout({ drawerOpen: false });
+    if (viewport === "dock") publishLayout({ drawerOpen: false });
   }
 
   function closeNavigation(target: "opener" | "workspace" | null) {
@@ -291,7 +291,8 @@ export function AppShell(props: AppShellProps) {
   function publishLayout(change: Partial<ShellLayoutState>) {
     props.onLayoutChange?.({
       compactNavigation: change.compactNavigation ?? compactNav,
-      drawerOpen: change.drawerOpen ?? drawerOpen,
+      // The saved drawer state is the docked desktop preference; a phone or overlay drawer leaves it alone.
+      drawerOpen: viewport === "dock" ? change.drawerOpen ?? drawerOpen : props.layout?.drawerOpen ?? true,
       drawerWidth: change.drawerWidth ?? drawerWidthRef.current,
     });
   }
@@ -366,14 +367,15 @@ export function AppShell(props: AppShellProps) {
         </main>
 
         {drawerModal ? <div className="eoc-shell-drawer-overlay" aria-hidden="true" onPointerDown={closeDrawer} /> : null}
-        <aside ref={drawerRef} className="eoc-shell-drawer" data-open={drawerOpen || undefined} role={drawerModal ? "dialog" : "complementary"} aria-modal={drawerModal || undefined} aria-labelledby="eoc-shell-context-title" onKeyDown={onDrawerKeyDown}>
+        {/* A div, not an aside: a phone or overlay drawer is a modal dialog, which an aside may not be. */}
+        <div ref={drawerRef} className="eoc-shell-drawer" data-open={drawerOpen || undefined} role={drawerModal ? "dialog" : "complementary"} aria-modal={drawerModal || undefined} aria-labelledby="eoc-shell-context-title" onKeyDown={onDrawerKeyDown}>
           <div className="eoc-shell-resizer" role="separator" aria-label="Resize context drawer" aria-orientation="vertical" aria-valuemin={MIN_DRAWER} aria-valuemax={MAX_DRAWER} aria-valuenow={drawerWidth} aria-hidden={viewport === "narrow" || undefined} tabIndex={viewport === "narrow" ? -1 : 0} onPointerDown={resizeFromPointer} onKeyDown={resizeFromKeyboard} />
-          <header><h2 ref={drawerHeading} id="eoc-shell-context-title" tabIndex={-1}>Context</h2><button type="button" aria-label="Close context drawer" onClick={closeDrawer}>×</button></header>
+          <div className="eoc-shell-drawer-header"><h2 ref={drawerHeading} id="eoc-shell-context-title" tabIndex={-1}>Context</h2><button type="button" aria-label="Close context drawer" onClick={closeDrawer}>×</button></div>
           <div className="eoc-shell-drawer-content">
             {viewport !== "dock" ? <section className="eoc-shell-drawer-context-controls" aria-label="Operational context">{props.periodControl}{props.positionControl}</section> : null}
             {props.rightDock}
           </div>
-        </aside>
+        </div>
       </div>
     </div>
   );

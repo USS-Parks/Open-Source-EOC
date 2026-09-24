@@ -121,6 +121,7 @@ export function Designer(props: {
           ...(localBoard ? [{ id: "local", label: "Local fields" }] : []),
           ...(importer ? [{ id: "import", label: "Import" }] : [])]} />
 
+      <div role="tabpanel" id={`board-designer-${tab}-panel`} aria-labelledby={`board-designer-${tab}-tab`} className="board-designer__panel">
       {tab === "fields" ? <Panel title="Fields">
         <ul className="board-designer__field-list">
           {fields.map((f, i) => (
@@ -164,6 +165,7 @@ export function Designer(props: {
       {tab === "local" && localBoard ? <LocalFields {...localBoard} /> : null}
 
       {tab === "import" && importer ? <DefinitionImport {...importer} /> : null}
+      </div>
 
       {error ? (
         <p role="alert" className="board-designer__error">
@@ -691,7 +693,7 @@ function DesignerPreview(props: {
       <p>Preview data is synthetic and never saved.</p>
       <Tabs id="board-preview" label="Preview mode" value={mode} onChange={setMode}
         tabs={[{ id: "input", label: "Input" }, { id: "list", label: "List" }, { id: "detail", label: "Detail" }]} />
-      <div className="board-designer__preview">
+      <div className="board-designer__preview" role="tabpanel" id={`board-preview-${mode}-panel`} aria-labelledby={`board-preview-${mode}-tab`}>
         {mode === "input" ? <RecordForm fields={template.fields}
           {...(template.inputLayout ? { layout: template.inputLayout } : {})}
           submitLabel="Validate preview" onSubmit={async () => setMessage("Preview values are valid. Nothing was saved.")} /> : null}

@@ -92,7 +92,7 @@ beforeAll(async () => {
   expect(activated.statusCode, activated.body).toBe(201);
   fireId = activated.json().incidentId as string;
   const detail = await app.inject({ method: "GET", url: `/api/v1/incidents/${fireId}`, headers: auth(tokens.admin) });
-  boardId = (detail.json().boards as Array<{ id: string; title: string }>).find((b) => b.title === "Guest Fire: activity_log")!.id;
+  boardId = (detail.json().boards as Array<{ id: string; title: string }>).find((b) => b.title === "Guest Fire: Activity Log")!.id;
 }, 120_000);
 
 afterAll(async () => {
