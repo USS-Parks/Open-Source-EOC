@@ -92,6 +92,9 @@ declare module "fastify" {
   }
 }
 
+/** The server package's version, reported by the liveness probe. */
+const SERVER_VERSION = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
+
 const LoginBody = z.object({ email: z.string().email(), password: z.string().min(1) });
 const ResumeBody = z.object({ resumeToken: z.string().min(1) });
 const MfaTokenBody = z.object({ mfaToken: z.string().min(1) });
@@ -219,7 +222,8 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
 
   // Liveness (no dependencies) and readiness (database reachable), for load
   // balancers and orchestration. No auth, and exempt from the flood limiter.
-  app.get("/api/v1/health", async () => ({ status: "ok" }));
+  // Liveness names the running version so an upgrade can confirm it took.
+  app.get("/api/v1/health", async () => ({ status: "ok", version: SERVER_VERSION }));
   app.get("/api/v1/ready", async (_req, reply) => {
     try {
       await sql`select 1`;

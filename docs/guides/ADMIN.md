@@ -11,6 +11,11 @@ the `app_runtime` database role so Row-Level Security remains active. Protect
 the deployment environment, database password, and credential-envelope secret,
 and schedule tested backups before an activation.
 
+Upgrade with `deploy/upgrade.sh`, which backs up first and refuses to continue
+without a complete backup, or with the newer Windows setup program. The
+[upgrade guide](./UPGRADE.md) states which databases upgrade in place, the
+migration baseline boundary, and how to go back to the previous version.
+
 Demo accounts and data are for exercises only. Remove or rotate the seeded
 credentials before real operations.
 

@@ -18,12 +18,18 @@ confirm="${2:-}"
   exit 2
 }
 
-echo "[openeoc] dropping and recreating the public schema"
-docker compose exec -T db psql -U openeoc_owner -d openeoc \
-  -c "drop schema public cascade; create schema public;"
+# Read the whole dump before anything is dropped: a damaged or cut-short file
+# must not cost the current database.
+gunzip -c "$file" | tail -n 20 | grep '^-- PostgreSQL database dump complete' >/dev/null || {
+  echo "refusing: $file is not a complete database dump; the current database was not changed" >&2
+  exit 2
+}
 
-echo "[openeoc] restoring database from $file"
-gunzip -c "$file" | docker compose exec -T db psql -U openeoc_owner -d openeoc
+# One transaction: the schema is dropped and the dump replayed together, and
+# the first error rolls both back, leaving the current database as it was.
+echo "[openeoc] replacing the database with $file"
+{ echo "drop schema public cascade; create schema public;"; gunzip -c "$file"; } \
+  | docker compose exec -T db psql -v ON_ERROR_STOP=1 --single-transaction -q -U openeoc_owner -d openeoc
 
 # The blob archive shares the timestamp: openeoc-<stamp>.sql.gz pairs with
 # openeoc-<stamp>.blobs.tar.gz. Restore it when present.

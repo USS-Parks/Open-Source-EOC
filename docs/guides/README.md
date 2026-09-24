@@ -22,6 +22,7 @@ substitute. Re-select context before acting.
 | Read the current authorized picture | [Viewer quickstart](./VIEWER-QUICKSTART.md) |
 | Coordinate incident work | [Operator quickstart](./OPERATOR-QUICKSTART.md) |
 | Configure people, incidents, and integrations | [Administrator guide](./ADMIN.md) |
+| Upgrade the server or desktop, and go back | [Upgrade guide](./UPGRADE.md) |
 | Capture field reports and assigned completions | [Field user guide](./FIELD-USER.md) |
 | Moderate damage reports and prepare declaration support | [Damage assessment](./DAMAGE-ASSESSMENT.md) |
 | Track facility and shelter status, hospital beds and shelter capacity | [Facilities and shelters](./FACILITIES.md) |

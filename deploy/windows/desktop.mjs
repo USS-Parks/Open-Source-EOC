@@ -27,6 +27,7 @@ import {
 import { desktopRuntimeConfig, registerStaticHost } from "./lib/static-host.mjs";
 import { desktopBuildSourceFingerprint } from "./lib/build-fingerprint.mjs";
 import { rotateIfLarger, rotatingLog } from "./lib/rotating-log.mjs";
+import { backupBeforeMigrate } from "./lib/pre-upgrade-backup.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = resolve(process.env.OPENEOC_DESKTOP_APP_ROOT ?? resolve(dirname(scriptPath), "../.."));
@@ -272,9 +273,23 @@ async function prepareDatabase(paths, config, { bootstrap = false, bootstrapInpu
     importServer("server/src/incidents/service.ts"),
     importServer("server/src/dashboards/service.ts"),
   ]);
+  const migrations = resolve(repoRoot, "server/migrations");
   const owner = connect({ url: databaseUrl("postgres", ownerPassword, config) });
   try {
-    await migrate(owner, resolve(repoRoot, "server/migrations"));
+    // A newer build migrates an existing database only after dumping it as it was.
+    const [{ tracked }] = await owner`select to_regclass('public.schema_migrations') is not null as tracked`;
+    const backup = backupBeforeMigrate({
+      applied: tracked ? (await owner`select name from public.schema_migrations`).map((row) => row.name) : [],
+      files: readdirSync(migrations).filter((file) => file.endsWith(".sql")),
+      backupsDir: resolve(paths.root, "backups"),
+      dump: (file) => execFileSync(pgExecutable("pg_dump"), ["--no-owner", "-f", file, "-d", config.database], {
+        env: pgEnvironment(ownerPassword, config),
+        stdio: ["ignore", "ignore", "pipe"],
+        windowsHide: true,
+      }),
+    });
+    if (backup) console.log(`PRE_UPGRADE_BACKUP path=${backup}`);
+    await migrate(owner, migrations);
     if (setRuntimePassword)
       await owner.unsafe(`alter role app_runtime login password '${runtimePassword.replaceAll("'", "''")}'`);
     await boards.ensureStandardTemplates(owner);

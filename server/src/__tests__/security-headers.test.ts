@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
@@ -59,10 +60,12 @@ describe("hot-path latency", () => {
 });
 
 describe("health and readiness", () => {
-  it("health is ok with no dependencies", async () => {
+  it("health is ok with no dependencies and reports the server package version", async () => {
     const res = await app.inject({ method: "GET", url: "/api/v1/health" });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ status: "ok" });
+    const { version } = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string };
+    expect(version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(res.json()).toEqual({ status: "ok", version });
   });
 
   it("ready reports ready when the database is reachable", async () => {

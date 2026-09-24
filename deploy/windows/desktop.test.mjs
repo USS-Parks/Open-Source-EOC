@@ -26,6 +26,7 @@ import {
   staticCaching,
 } from "./lib/static-host.mjs";
 import { rotateIfLarger, rotatingLog } from "./lib/rotating-log.mjs";
+import { backupBeforeMigrate } from "./lib/pre-upgrade-backup.mjs";
 
 function fixture() {
   const root = mkdtempSync(resolve(tmpdir(), "openeoc-windows-"));
@@ -238,6 +239,32 @@ test("stopping an unconfigured profile is an idempotent launcher operation", { s
     assert.match(result.stdout, /PROFILE_STOPPED configured=false profile=acceptance app=false postgres=false browser=false/);
   } finally {
     rmSync(dataRoot, { recursive: true, force: true });
+  }
+});
+
+test("a newer build backs up an existing profile database before migrating it, and a failed or empty backup stops it", () => {
+  const backupsDir = mkdtempSync(resolve(tmpdir(), "openeoc-pre-upgrade-"));
+  try {
+    const files = ["0001_baseline.sql", "0102_sync_snapshots.sql"];
+    const dumped = [];
+    const dump = (path) => {
+      dumped.push(path);
+      writeFileSync(path, "PGDMP");
+    };
+    const now = new Date("2026-09-23T18:04:05.678Z");
+    assert.equal(backupBeforeMigrate({ applied: [], files, backupsDir, dump, now }), null);
+    assert.equal(backupBeforeMigrate({ applied: files, files, backupsDir, dump, now }), null);
+    assert.deepEqual(dumped, []);
+
+    const path = backupBeforeMigrate({ applied: ["0001_baseline.sql"], files, backupsDir, dump, now });
+    assert.equal(path, resolve(backupsDir, "pre-upgrade-20260923T180405Z.sql"));
+    assert.deepEqual(dumped, [path]);
+
+    const pending = { applied: ["0001_baseline.sql"], files, backupsDir, now: new Date("2026-09-24T00:00:00Z") };
+    assert.throws(() => backupBeforeMigrate({ ...pending, dump: () => { throw new Error("pg_dump exited with 1"); } }), /pg_dump exited with 1/);
+    assert.throws(() => backupBeforeMigrate({ ...pending, dump: (file) => writeFileSync(file, "") }), /missing or empty; the database was not migrated/);
+  } finally {
+    rmSync(backupsDir, { recursive: true, force: true });
   }
 });
 

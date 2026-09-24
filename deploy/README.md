@@ -126,7 +126,9 @@ archives work.
 
 `deploy/install.test.mjs` runs `install.sh` against stand-ins for `docker` and
 `curl`: the first run, a re-run, a checksum mismatch, the refusals and a
-supplied pair. `docker compose config` accepts the compose file. No image has
+supplied pair. `deploy/upgrade.test.mjs` runs `upgrade.sh`, `backup.sh` and
+`restore.sh` against the same kind of stand-ins. `docker compose config`
+accepts the compose file. No image has
 been built or pulled, Caddy has not loaded the Caddyfile, and no certificate
 has been issued. The first real run on a Linux host is still to be done.
 
@@ -318,6 +320,12 @@ Restore is destructive to the database and refuses to run without the explicit
 confirmation flag. If the matching blob archive is absent, restore warns and
 file downloads remain unavailable until those bytes are recovered.
 
+Both files are written readable only by the account that ran the script, each
+under a `.part` name until its command succeeds, so a failed run leaves no file
+that looks like a backup. Restore reads the whole dump first and refuses one
+that did not run to the end; it then drops the schema and replays the dump in
+one transaction, so an error leaves the database as it was.
+
 ## Scheduler
 
 Every API process runs one scheduler, in both the Docker and the Windows
@@ -410,16 +418,24 @@ the database and use the source version that created it; the supported V1
 upgrade path begins with a database whose first receipt is
 `0001_baseline.sql`. New migrations continue at 0102.
 
-1. Back up first (`./backup.sh`).
-2. Pull the new code and `docker compose up -d --build`. The API runs the
+1. Put the new release in the repository checkout.
+2. Run `./upgrade.sh`. It takes a backup with `backup.sh` first and stops,
+   changing nothing, unless the dump is complete and the file archive
+   readable; no switch skips it. It then builds the images, runs
+   `docker compose up -d`, waits for the API to report ready, and prints the
+   old and new versions and the backup to go back to. The API runs the
    forward-only migrations on boot; re-running them is a clean no-op. An
    install made before the HTTPS front end has no `OPENEOC_DOMAIN` or
    `OPENEOC_TLS` in `deploy/.env`, and compose refuses every command until
    they are there: run `./install.sh` once with a host name and a
-   certificate choice instead.
+   certificate choice first.
 3. Customized boards keep their local `x_` fields and all records; a board
    template version upgrade re-converges to the new template while keeping
    local fields and data.
+
+The [upgrade guide](../docs/guides/UPGRADE.md) states what upgrades in place
+and what does not, how to go back to the previous version, and the recorded
+restore drill.
 
 ## Configuration reference
 
