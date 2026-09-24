@@ -3159,3 +3159,47 @@ tagging remain separately gated as section 1 of the roster states.
   join is refused.
 - **Rollback:** revert both commits; a database that ran `0129` keeps an unused
   nullable column and its check.
+
+## V1 W6.3: project hygiene for adoption
+
+- **What changed.**
+  - New `SECURITY.md`: private reporting through GitHub's "Report a
+    vulnerability", with a detail-free issue asking for a private contact as
+    the fallback until it is enabled; what to include, synthetic data only;
+    scope (the server, shared contracts, web client and deploy scripts in;
+    third-party services and the published synthetic demo and acceptance
+    credentials out); acknowledgement within 7 days and assessment within 30
+    as goals; 90-day coordinated disclosure; the latest 0.9.x supported until
+    1.0; no bug bounty.
+  - `GOVERNANCE.md` gains "Releases and support" (evaluation builds as needed;
+    after 1.0, security fixes for the latest minor only, no long-term support;
+    community support through GitHub issues, no paid support; not certified or
+    accredited, and a jurisdiction owns its authority to operate) and "Second
+    maintainer" (the requirement is not met; Basho Parks is the only
+    maintainer; what a second maintainer needs; 1.0 proceeds only with one
+    named or Basho's written waiver recorded in this ledger).
+  - New `docs/EVALUATOR.md` for an EOC director or IT lead deciding whether to
+    pilot: what the product is and is not, twelve proven areas each with its
+    evidence level and receipt heading or matrix row, the external inputs
+    still open, the product's limits, how to try it and how to report
+    problems. Indexed from `docs/README.md` and the root README's document
+    list; `CONTRIBUTING.md` points to the security policy.
+- **Defaults and deviations.** The integrator set the defaults: GitHub private
+  vulnerability reporting as the channel; no contact address invented, since
+  the tree publishes none; the support statement as a `GOVERNANCE.md` section
+  rather than `SUPPORT.md`; no second maintainer invented. The integrating
+  session updated the evaluator page's summary of the side-by-side gaps after
+  the gap-closure unit landed: five closed, three open.
+- **Schema, contract, dependencies:** none.
+- **Verification.** The writer's check over the six touched files: 62
+  relative links and all anchors resolve, no em-dash, no unit ID outside
+  quoted receipt headings. The integrating session ran
+  `node scripts/check-links.mjs` after staging and rebasing onto `82bb97f`:
+  ok, 91 files.
+- **Evidence level:** document.
+- **Deferred:** enabling private vulnerability reporting in the repository
+  settings (Basho's external action); a second maintainer or the recorded
+  INV-10 waiver (Basho), so gate line 17 stays open until one exists; the
+  evaluator page's sentence on installing to a phone's home screen, updated
+  when the installable web app unit lands.
+- **Rollback:** revert both commits.
