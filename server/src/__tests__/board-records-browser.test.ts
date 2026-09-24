@@ -194,7 +194,7 @@ describe("board records in depth", () => {
     await refined;
     const counts = page.getByRole("region", { name: "Group counts" });
     await counts.waitFor();
-    expect(await counts.getByRole("listitem").allTextContents()).toEqual(["closed 1", "open 3"]);
+    expect(await counts.getByRole("listitem").allTextContents()).toEqual(["Closed 1", "Open 3"]);
     await expect.poll(() => rowSummaries(page))
       .toEqual(["Debris removal", "Sandbag delivery", "Bridge inspection", "Culvert survey"]);
     await page.screenshot({ path: join(SHOTS, "board-records-refined-view.png"), fullPage: false });

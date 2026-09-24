@@ -251,14 +251,18 @@ describe("running a report", () => {
     expect(xlsx.statusCode).toBe(200);
     expect(xlsx.headers["content-disposition"]).toMatch(/^attachment; filename="Supplies-by-priority-\d{8}-\d{4}\.xlsx"$/);
     const sheet = readFirstWorksheet(xlsx.rawPayload);
+    // People read the workbook and the PDF, so enum values show as labels; CSV keeps the stored codes.
     expect(sheet.slice(0, 4)).toEqual([
-      { Priority: "routine", Site: "north", Item: "Sandbags", Quantity: "100" },
-      { Priority: "routine", Site: "south", Item: "Water", Quantity: "200" },
-      { Priority: "urgent", Site: "north", Item: "Cots", Quantity: "50" },
-      { Priority: "urgent", Site: "north", Item: "Generators", Quantity: "3" },
+      { Priority: "Routine", Site: "North", Item: "Sandbags", Quantity: "100" },
+      { Priority: "Routine", Site: "South", Item: "Water", Quantity: "200" },
+      { Priority: "Urgent", Site: "North", Item: "Cots", Quantity: "50" },
+      { Priority: "Urgent", Site: "North", Item: "Generators", Quantity: "3" },
     ]);
     expect(sheet.at(-1)).toEqual({ Priority: "All records", Site: "4", Item: "353", Quantity: "88.25" });
-    expect(sheet).toContainEqual({ Priority: "urgent / north", Site: "2", Item: "53", Quantity: "26.5" });
+    expect(sheet).toContainEqual({ Priority: "Urgent / North", Site: "2", Item: "53", Quantity: "26.5" });
+    const csv = (await request("GET", `/api/v1/reports/${reportId}/output?format=csv`, authorToken)).body.split("\r\n");
+    expect(csv).toContain("routine,north,Sandbags,100");
+    expect(csv.some((line) => line.startsWith("urgent / north,2,53,26.5,"))).toBe(true);
 
     const admins = await request("GET", `/api/v1/reports/${adminReportId}/output?format=csv`, adminToken);
     expect(admins.headers["content-type"]).toBe("text/csv; charset=utf-8");
@@ -271,12 +275,12 @@ describe("running a report", () => {
     const text = pdfText(pdf.rawPayload);
     expect(text[0]).toBe("Supplies by priority");
     expect(text).toEqual(expect.arrayContaining([
-      "Item", "Quantity", "Priority: routine (2 records)", "Site: north (1 record)", "Sandbags",
-      "Total for routine: 2 records; Quantity sum 300; Quantity average 150; Quantity minimum 100; Quantity maximum 200",
+      "Item", "Quantity", "Priority: Routine (2 records)", "Site: North (1 record)", "Sandbags",
+      "Total for Routine: 2 records; Quantity sum 300; Quantity average 150; Quantity minimum 100; Quantity maximum 200",
       "All records: 4 records; Quantity sum 353; Quantity average 88.25; Quantity minimum 3; Quantity maximum 200",
     ]));
-    expect(text.indexOf("Total for north: 1 record; Quantity sum 100; Quantity average 100; Quantity minimum 100; Quantity maximum 100"))
-      .toBeLessThan(text.indexOf("Total for routine: 2 records; Quantity sum 300; Quantity average 150; Quantity minimum 100; Quantity maximum 200"));
+    expect(text.indexOf("Total for North: 1 record; Quantity sum 100; Quantity average 100; Quantity minimum 100; Quantity maximum 100"))
+      .toBeLessThan(text.indexOf("Total for Routine: 2 records; Quantity sum 300; Quantity average 150; Quantity minimum 100; Quantity maximum 200"));
   });
 
   it("breaks a long table across pages with the headings on every page", () => {

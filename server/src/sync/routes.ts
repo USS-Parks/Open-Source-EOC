@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { WebSocket } from "ws";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
+import { withPerson } from "../db/context.js";
 import { AuthError, principalFromToken, type Principal } from "../auth/service.js";
 import { RestrictedBoardError, type BoardSyncHub } from "./hub.js";
 import { MAX_PAYLOAD_BYTES } from "./sockets.js";
@@ -22,6 +23,31 @@ const UpdateMessage = z.union([
   }).strict(),
   z.object({ type: z.literal("update"), update: Update }).strict(),
 ]);
+
+/** A live board socket whose reader holds a guest grant for the board. */
+interface GuestSocket {
+  readonly sql: Sql;
+  readonly personId: string;
+  readonly boardId: string;
+  readonly end: () => void;
+}
+
+const guestSockets = new Set<GuestSocket>();
+
+/**
+ * Close every live board socket whose guest reader the row-level security
+ * wall no longer admits to its board, as after a revoked grant or a locked
+ * incident. Access is checked once at join, so a route that narrows guest
+ * access calls this after its transaction commits. A check that cannot run
+ * closes the socket.
+ */
+export async function closeWithdrawnGuestSockets(): Promise<void> {
+  for (const socket of [...guestSockets]) {
+    const admitted = await withPerson(socket.sql, socket.personId, (tx) =>
+      tx`select 1 from boards where id = ${socket.boardId}`).then((rows) => rows.length > 0, () => false);
+    if (!admitted) socket.end();
+  }
+}
 
 /**
  * WebSocket sync endpoint. Protocol, all JSON text frames:
@@ -80,11 +106,20 @@ export function registerSyncRoutes(app: FastifyInstance, sql: Sql, hub: BoardSyn
             if (!auth.success) return fail("authenticate first");
             principal = await principalFromToken(sql, auth.data.token);
             const { state } = await hub.open(principal, boardId, incidentId);
-            unsubscribe = hub.subscribe(boardId, incidentId, (update, origin) => {
+            const release = hub.subscribe(boardId, incidentId, (update, origin) => {
               if (origin !== sessionId && socket.readyState === socket.OPEN) {
                 socket.send(updateFrame(update), { binary: false });
               }
             });
+            const personId = principal.person.id;
+            const guest = principal.guests.some((g) => g.scopes.includes(`board:${boardId}:read`))
+              ? { sql, personId, boardId, end: () => fail("access to this board has ended", "auth_required") }
+              : null;
+            if (guest) guestSockets.add(guest);
+            unsubscribe = () => {
+              if (guest) guestSockets.delete(guest);
+              release();
+            };
             socket.send(
               JSON.stringify({ type: "state", update: Buffer.from(state).toString("base64") }),
             );

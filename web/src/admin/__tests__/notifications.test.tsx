@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ApiError, type ApiClient } from "../../app/api/client.js";
 import { Notifications } from "../Notifications.js";
@@ -15,6 +15,9 @@ function setup(overrides: Record<string, unknown> = {}) {
       .mockResolvedValue({ entries: ["http://127.0.0.1:9000", "*.example.org"], updatedAt: "2026-09-23T10:00:00Z" }),
     setNotificationAllowlist: vi.fn().mockResolvedValue({ entries: ["http://127.0.0.1:9000", "*.example.org"] }),
     createNotificationRule: vi.fn().mockResolvedValue({ id: "r1", webhookSecret: "s3cret" }),
+    listNotificationRules: vi.fn().mockResolvedValue([]),
+    updateNotificationRule: vi.fn(),
+    removeNotificationRule: vi.fn(),
     ...overrides,
   };
   render(<Notifications client={client as unknown as ApiClient} jurisdictionId="j1" boards={boards} />);
@@ -93,4 +96,41 @@ it("sends a schedule interval only for scheduled rules and checks the rate cap b
     event: "scheduled", scheduleIntervalMinutes: 15, channels: [{ kind: "inapp", target: "requesting_position" }],
   }));
   expect(screen.queryByLabelText("Webhook signing secret")).toBeNull();
+});
+
+it("lists the rules and pauses, changes and removes one", async () => {
+  const rule = {
+    id: "r1", boardId: "b1", boardTitle: "Activity log", event: "record.updated",
+    condition: { op: "changed_to", field: "status", value: "closed" },
+    channels: [{ kind: "email", to: ["desk@example.org"] }], scheduleIntervalMinutes: null,
+    rateLimit: { max: 60, windowMinutes: 10 }, enabled: true, createdAt: "2026-09-23T10:00:00Z",
+  };
+  const client = setup({
+    listNotificationRules: vi.fn().mockResolvedValueOnce([rule]).mockResolvedValue([{ ...rule, enabled: false }]),
+    updateNotificationRule: vi.fn().mockResolvedValue({ id: "r1", webhookSecret: null }),
+    removeNotificationRule: vi.fn().mockResolvedValue(undefined),
+  });
+  const name = "Rule: Activity log · A record is updated, when status changes to closed · Email to desk@example.org";
+  fireEvent.click(within(await screen.findByRole("listitem", { name })).getByRole("button", { name: "Pause" }));
+  await screen.findByText("Rule paused. It sends nothing until it is resumed.");
+  expect(client.updateNotificationRule).toHaveBeenCalledWith("r1", { enabled: false });
+  await within(screen.getByRole("listitem", { name })).findByRole("button", { name: "Resume" });
+
+  fireEvent.click(screen.getByRole("button", { name: "Change" }));
+  screen.getByRole("region", { name: "Change a notification rule" });
+  expect((screen.getByLabelText("Email addresses, separated by commas") as HTMLInputElement).value).toBe("desk@example.org");
+  fireEvent.change(screen.getByLabelText("Value"), { target: { value: "evacuating" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save rule" }));
+  await screen.findByText("Notification rule saved.");
+  expect(client.updateNotificationRule).toHaveBeenLastCalledWith("r1", {
+    boardId: "b1", event: "record.updated", condition: { op: "changed_to", field: "status", value: "evacuating" },
+    channels: [{ kind: "email", to: ["desk@example.org"] }], scheduleIntervalMinutes: null,
+    rateLimit: { max: 60, windowMinutes: 10 },
+  });
+  screen.getByRole("region", { name: "Add a notification rule" });
+
+  fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+  fireEvent.click(screen.getByRole("button", { name: "Confirm removal" }));
+  await screen.findByText("Rule removed. What it already sent stays in the notification log.");
+  expect(client.removeNotificationRule).toHaveBeenCalledWith("r1");
 });

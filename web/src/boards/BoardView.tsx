@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { applyView, type ViewRecord } from "@openeoc/shared";
+import { applyView, choiceLabel, type FieldDef, type ViewRecord } from "@openeoc/shared";
 import type { BoardTemplate } from "@openeoc/shared";
 import {
   OperationalTable,
@@ -41,8 +41,8 @@ function ResolvedBoardView(props: Parameters<typeof BoardView>[0] & {
   const columns = useMemo<readonly OperationalTableColumn<ViewRecord>[]>(() => props.view.columns.map((key, index) => ({
     id: key,
     header: fields.get(key)?.label ?? key,
-    value: (record) => formatCell(record[key]),
-    render: (record) => <span title={formatCell(record[key])}>{formatCell(record[key])}
+    value: (record) => formatCell(record[key], fields.get(key)?.type),
+    render: (record) => <span title={formatCell(record[key], fields.get(key)?.type)}>{formatCell(record[key], fields.get(key)?.type)}
       {index === 0 && record.archivedAt ? <span className="board-archived-tag">Archived</span> : null}</span>,
     sortable: true,
     filterable: true,
@@ -113,9 +113,9 @@ function ResolvedBoardView(props: Parameters<typeof BoardView>[0] & {
   );
 }
 
-function formatCell(value: unknown): string {
+function formatCell(value: unknown, type?: FieldDef["type"]): string {
   if (value === undefined || value === null || value === "") return "Unavailable";
   if (typeof value === "boolean") return value ? "yes" : "no";
   if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
+  return type === "enum" ? choiceLabel(String(value)) : String(value);
 }

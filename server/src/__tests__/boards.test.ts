@@ -542,5 +542,19 @@ describe("signed package import", () => {
       payload: tampered,
     });
     expect(bad.statusCode).toBe(400);
+
+    // An imported template creates no board; the catalogue lists it at its
+    // latest version, and a board is then created from it.
+    expect((await app.inject({ method: "GET", url: "/api/v1/templates" })).statusCode).toBe(401);
+    const catalogue = await app.inject({ method: "GET", url: "/api/v1/templates", headers: auth(adminToken) });
+    expect(catalogue.statusCode).toBe(200);
+    const templates = catalogue.json().templates as Array<{ key: string; version: number; title: string }>;
+    expect(templates).toContainEqual({ key: "regional_shelters", version: 1, title: custom.title });
+    expect(templates.filter((t) => t.key === "shelters")).toHaveLength(1);
+    const board = await app.inject({
+      method: "POST", url: `/api/v1/jurisdictions/${seed.jurisdictionId}/boards`, headers: auth(adminToken),
+      payload: { templateKey: "regional_shelters", version: 1, title: "Regional shelters" },
+    });
+    expect(board.statusCode, board.body).toBe(201);
   });
 });

@@ -184,6 +184,10 @@ instance administrator who also administers the selected jurisdiction.
   holds are skipped. The server trusts the public keys in the PEM file that
   `OPENEOC_TRUSTED_TEMPLATE_KEYS` names; with it unset, every signed package
   is refused.
+  Importing creates no board. On **Templates**, **Create a board from a
+  published template** takes any published template at its latest version,
+  standard or imported, and an optional **Board title**, and **Create board**
+  opens the new board.
 - **Form file**: an XLSForm workbook (`.xlsx`) or form definition JSON. A
   workbook is stored under a key made from its file name, in lower case with
   every other character turned into an underscore, as version 1:

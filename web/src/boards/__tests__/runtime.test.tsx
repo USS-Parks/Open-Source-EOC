@@ -93,6 +93,9 @@ describe("BoardView (display view)", () => {
     expect(screen.getByText("Hoopa High Gym")).toBeTruthy();
     expect(screen.queryByText("Closed Hall")).toBeNull();
     expect(screen.getByText("Shelter")).toBeTruthy();
+    // An enum value shows as its label; the stored code stays in the record.
+    expect(screen.getByText("Normal")).toBeTruthy();
+    expect(screen.queryByText("normal")).toBeNull();
   });
 
   it("re-renders when records change (the live loop's rendering half)", () => {

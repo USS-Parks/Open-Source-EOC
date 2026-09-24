@@ -77,8 +77,11 @@ that surprised you.
 - **Expected result.** The board opens with its New record button, built from
   version 1 of the template, with no code written.
 - **Internal run.** Passed. The board opened at once and the database holds it
-  at template version 1. The Boards list did not show the new board until the
-  page was reloaded (gap 1). The incident path is proven by
+  at template version 1. The Boards list showed it without a reload. A second
+  board, South county shelters, was then created from the published template
+  under Create a board from a published template on the Templates screen,
+  without the designer. Screenshots `side-by-side-templates-light-1440.png`
+  and `side-by-side-templates-dark-1440.png`. The incident path is proven by
   [incident-activation-browser.test.ts](../server/src/__tests__/incident-activation-browser.test.ts),
   not re-run here.
 
@@ -118,7 +121,7 @@ that surprised you.
   Apply. Clear returns the full view.
 - **Expected result.** The server applies the refinement, the Group counts
   panel shows the count per status, and the table follows the sort.
-- **Internal run.** Passed. Group counts read "compromised 1" and "normal 2";
+- **Internal run.** Passed. Group counts read "Compromised 1" and "Normal 2";
   the rows read Fortuna Veterans Hall, Eureka High School, Arcata Community
   Center. More operators, archived records and paging with the refinement are
   proven by
@@ -157,7 +160,8 @@ that surprised you.
   file checks clean, then writes every row.
 - **Internal run.** Passed for export: the CSV header read
   `id,name,status,capacity,occupied` over 4 records and the workbook held 4
-  rows. Import with the mapping step, the per-row error list and the
+  rows. The export keeps the stored status codes, such as `normal`, so it
+  imports back unchanged, while the list shows their labels. Import with the mapping step, the per-row error list and the
   all-or-nothing commit is proven by
   [board-records-browser.test.ts](../server/src/__tests__/board-records-browser.test.ts),
   not re-run here.
@@ -252,11 +256,14 @@ that surprised you.
 - **Expected result.** The change queues one email and one SMS, which the
   delivery worker sends.
 - **Internal run.** Passed. Closing McKinleyville Library queued two
-  deliveries and the worker delivered both. The email's subject read
-  "shelter_status: record.updated" and the SMS read "shelter_status updated:
-  McKinleyville Library"; the SMS is listed under Channels as a fixture
-  message. Gaps 3 and 4 come from this task. A signed webhook rule, and a URL
-  refused by the allowlist, are proven by
+  deliveries and the worker delivered both. The email's subject read "Shelter
+  status record updated: McKinleyville Library", and the email and the SMS
+  read that line and "Status: Closed (was Normal)"; the SMS is listed under
+  Channels as a fixture message. The rule was then listed under Notification
+  rules, paused, resumed, opened for a change and removed. Screenshots
+  `side-by-side-notification-rules-light-1440.png` and
+  `side-by-side-notification-rules-dark-1440.png`. A signed webhook rule, and
+  a URL refused by the allowlist, are proven by
   [notification-rules-browser.test.ts](../server/src/__tests__/notification-rules-browser.test.ts).
 
 ### 12. Contacts and a group
@@ -322,8 +329,8 @@ that surprised you.
   report and Run.
 - **Expected result.** A count and sums per group and overall, over every
   record the person running it may read.
-- **Internal run.** Passed. The totals read: closed 1, 50, 0; compromised 1,
-  80, 75; normal 3, 410, 192; All records 5, 540, 267.
+- **Internal run.** Passed. The totals read: Closed 1, 50, 0; Compromised 1,
+  80, 75; Normal 3, 410, 192; All records 5, 540, 267.
 
 ### 16. PDF and Excel output
 
@@ -334,9 +341,9 @@ that surprised you.
   Download CSV is also offered.
 - **Expected result.** A paged PDF with the groups and totals, and a workbook
   with the rows and totals.
-- **Internal run.** Passed. The PDF is PDF 1.4 and carries "All records: 5
-  records; Capacity sum 540; Occupied sum 267"; the workbook holds the records
-  and the All records row.
+- **Internal run.** Passed. The PDF is PDF 1.4 and carries "Status: Normal (3
+  records)" and "All records: 5 records; Capacity sum 540; Occupied sum 267";
+  the workbook holds the records, the Normal group and the All records row.
 
 ### 17. A schedule
 
@@ -374,21 +381,40 @@ receipts are named in each task.
 
 ## Gaps the run found
 
-1. A board created on the Templates screen opens at once, but the Boards list
-   read "No boards in this jurisdiction yet." until the page was reloaded. The
-   rule and report board pickers read the same list.
-2. Outside incident activation, no screen creates a board from a template that
-   is already published, whether a standard one or one brought in on the
-   designer's Import tab, which adds a version and creates no board. No route
-   lists the published board templates.
-3. A notification rule cannot be listed, changed, paused or removed once
-   created: the Notifications tab shows no rules, and the only rule route
-   creates one.
-4. A rule's messages read as system text: the email subject was
+1. Fixed. A board created on the Templates screen opens at once, but the
+   Boards list read "No boards in this jurisdiction yet." until the page was
+   reloaded. The rule and report board pickers read the same list. The console
+   now reads its board list again when a board is created there. Tests: the
+   walk above, and "has the board lists read again after publishing a new
+   template creates its board" in
+   [templates-surface.test.tsx](../web/src/app/__tests__/templates-surface.test.tsx).
+2. Fixed. Outside incident activation, no screen creates a board from a
+   template that is already published, whether a standard one or one brought
+   in on the designer's Import tab, which adds a version and creates no board.
+   No route lists the published board templates. The Templates screen now has
+   Create a board from a published template, over the new route
+   `GET /api/v1/templates`. Tests: the walk above; "creates a board from a
+   template already published and has the board lists read again" in
+   [templates-surface.test.tsx](../web/src/app/__tests__/templates-surface.test.tsx);
+   and "imports a trusted package and refuses a tampered one" in
+   [boards.test.ts](../server/src/__tests__/boards.test.ts).
+3. Fixed. A notification rule cannot be listed, changed, paused or removed
+   once created: the Notifications tab shows no rules, and the only rule route
+   creates one. The tab now lists the rules with Pause, Change and Remove.
+   Tests: the walk above; "lists, changes, pauses and removes a rule for an
+   administrator only, and audits each change" in
+   [notification-rule-management.test.ts](../server/src/__tests__/notification-rule-management.test.ts);
+   and "lists the rules and pauses, changes and removes one" in
+   [notifications.test.tsx](../web/src/admin/__tests__/notifications.test.tsx).
+4. Fixed. A rule's messages read as system text: the email subject was
    "shelter_status: record.updated" and the SMS "shelter_status updated:
    McKinleyville Library", naming the template key and the event rather than
    the board title and what changed. The notification panel shows the same
-   title.
+   title. Messages now name the board by its title and each changed field by
+   its label and value labels; the webhook body is unchanged. Tests: the walk
+   above, and "names the board, the record and what changed in labels, and
+   keeps the webhook body in stored values" in
+   [notification-rule-management.test.ts](../server/src/__tests__/notification-rule-management.test.ts).
 5. Of the channels the sources list for WebEOC, voice has no OpenEOC channel,
    and Teams and Slack are reachable only as a generic webhook whose body is
    not a chat message; that path was not exercised.
@@ -399,8 +425,19 @@ receipts are named in each task.
 7. At 390 wide, the report's row table cuts its last column heading at the
    panel edge ("Occupied" reads "OCCUPIE"); the page itself does not scroll
    sideways.
-8. Status values show as stored ("normal", "compromised") in the list, the
-   group counts and the report, where the kanban uses readable labels.
+8. Fixed. Status values show as stored ("normal", "compromised") in the list,
+   the group counts and the report, where the kanban uses readable labels.
+   They now show as labels in the list, the group counts and the report on
+   screen, in PDF and in Excel. The board's CSV and Excel exports and a
+   report's CSV and JSON output keep the stored codes, so an export imports
+   back unchanged. Tests: the walk above; "applies the view filter and renders
+   labels, not keys" in
+   [runtime.test.tsx](../web/src/boards/__tests__/runtime.test.tsx); "shows the
+   record count of each group" in
+   [board-tools.test.tsx](../web/src/boards/__tests__/board-tools.test.tsx);
+   and "writes Excel that reads back, CSV with the formula guard, and a valid
+   PDF with the totals" in
+   [reports.test.ts](../server/src/__tests__/reports.test.ts).
 
 ## Boundaries carried from the receipts
 

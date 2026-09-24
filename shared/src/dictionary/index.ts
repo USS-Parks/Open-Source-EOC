@@ -14,6 +14,16 @@ export * from "./tracking.js";
 export * from "./symbology.js";
 
 /**
+ * A stored enumeration value as people read it: "shelter_open" reads "Shelter
+ * open". Human outputs show this; stored codes stay in exports meant for
+ * import and in machine payloads.
+ */
+export function choiceLabel(value: string): string {
+  const words = value.replaceAll("_", " ");
+  return words.charAt(0).toLocaleUpperCase() + words.slice(1);
+}
+
+/**
  * Export every registered enumeration as JSON Schema, keyed by dictionary id.
  * Consumers outside the TypeScript world (form runners, validators, other
  * languages) build from this, not from the TS source.

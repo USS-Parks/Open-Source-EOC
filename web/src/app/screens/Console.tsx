@@ -376,6 +376,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
           personId={session.me?.person.id ?? null}
           positionKey={session.me?.position?.key ?? null}
           onDashboardsChanged={dashboards.reload}
+          onBoardsChanged={boards.reload}
           jurisdictionId={viewingJurisdictionId ?? jurisdictionId}
           resourceJurisdictionId={resourceJurisdictionId ?? jurisdictionId}
           discoveryJurisdictionId={jurisdictionId}
@@ -512,6 +513,7 @@ function Center(props: {
   personId: string | null;
   positionKey: string | null;
   onDashboardsChanged: () => void;
+  onBoardsChanged: () => void;
   jurisdictionId: string;
   discoveryJurisdictionId: string;
   canActivateIncident: boolean;
@@ -798,6 +800,7 @@ function Center(props: {
     case "templates":
       return <TemplatesSurface client={props.client} jurisdictionId={props.jurisdictionId} boards={props.boards}
         isInstanceAdmin={props.isInstanceAdmin} isJurisdictionAdmin={props.isAdmin}
+        onBoardsChanged={props.onBoardsChanged}
         onOpenBoard={props.onOpenBoard} onDesignBoard={(id) => props.onNavigate({ kind: "board-design", id })} />;
     case "board-design":
       return <TemplatesSurface client={props.client} jurisdictionId={props.jurisdictionId} boards={props.boards} boardId={s.id}

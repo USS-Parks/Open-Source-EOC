@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Button, EnumSelect, Panel, TextField } from "../design/components.js";
-import type { ApiClient, BoardListItem, NotificationChannel, NotificationRuleInput } from "../app/api/client.js";
+import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../design/components.js";
+import type { ApiClient, BoardListItem, NotificationChannel, NotificationRule, NotificationRuleInput } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import { ErrorNote, Loading } from "../app/screens/parts.js";
 
@@ -68,10 +68,25 @@ function wholeNumber(text: string, label: string, min: number, max: number): num
   return value;
 }
 
+/** A channel's destination fields as the form holds them, the inverse of its build. */
+const draftOf = (channel: NotificationChannel): Draft => Object.fromEntries(Object.entries(channel)
+  .filter(([key]) => key !== "kind").map(([key, value]) => [key, Array.isArray(value) ? value.join(", ") : String(value)]));
+
+/** One line saying what a rule watches and where it sends. */
+function ruleSummary(rule: NotificationRule): string {
+  const when = rule.event === "scheduled" ? `Every ${rule.scheduleIntervalMinutes ?? "?"} minutes` : EVENT_LABELS[rule.event];
+  const condition = rule.condition.op === "any" || !rule.condition.field ? ""
+    : `, when ${rule.condition.field} ${rule.condition.op === "eq" ? "equals" : "changes to"} ${String(rule.condition.value ?? "")}`;
+  const channels = rule.channels.map((c) => c.kind === "email" || c.kind === "sms" ? `${CHANNEL_KINDS[c.kind].label} to ${c.to.join(", ")}`
+    : c.kind === "webhook" ? `Webhook to ${c.url}` : c.kind === "ntfy" ? `Push to ${c.topic}` : CHANNEL_KINDS[c.kind].label);
+  return `${rule.boardTitle ?? "Any board"} · ${when}${condition} · ${channels.join("; ")}`;
+}
+
 /**
  * Notification rules for the jurisdiction's boards and the allowlist of
- * destinations webhook and push channels may reach. A rule with a webhook
- * channel returns its signing secret once, at creation; it is shown here once.
+ * destinations webhook and push channels may reach. Rules are listed with
+ * pause, change and remove. A rule with a webhook channel returns its signing
+ * secret once, when the webhook is first added; it is shown here once.
  */
 export function Notifications(props: { client: ApiClient; jurisdictionId: string; boards: readonly BoardListItem[] }) {
   const allowlist = useAsync(() => props.client.getNotificationAllowlist(props.jurisdictionId), [props.jurisdictionId]);
@@ -91,16 +106,21 @@ export function Notifications(props: { client: ApiClient; jurisdictionId: string
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
+  const rules = useAsync(() => props.client.listNotificationRules(props.jurisdictionId), [props.jurisdictionId]);
+  // The rule the form is changing, and the rule awaiting a confirmed removal.
+  const [editing, setEditing] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
   // Feedback shows in the panel whose action produced it.
-  const [where, setWhere] = useState<"allowlist" | "rule">("rule");
+  type Place = "allowlist" | "rule" | "rules";
+  const [where, setWhere] = useState<Place>("rule");
 
-  const run = async (at: "allowlist" | "rule", operation: () => Promise<string>) => {
+  const run = async (at: Place, operation: () => Promise<string>) => {
     setBusy(true); setError(null); setNotice(""); setWhere(at);
     try { setNotice(await operation()); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "The change could not be saved."); }
     finally { setBusy(false); }
   };
-  const feedback = (at: "allowlist" | "rule") => where !== at ? null : <>
+  const feedback = (at: Place) => where !== at ? null : <>
     {error ? <p className="d21-error" role="alert">{error}</p> : null}
     {notice ? <p role="status">{notice}</p> : null}
   </>;
@@ -116,7 +136,7 @@ export function Notifications(props: { client: ApiClient; jurisdictionId: string
     return saved.entries.length ? `Allowlist saved with ${saved.entries.length} ${saved.entries.length === 1 ? "destination" : "destinations"}.`
       : "Allowlist saved empty. No external destination is reachable.";
   });
-  const createRule = () => run("rule", async () => {
+  const saveRule = () => run("rule", async () => {
     if (op !== "any" && !field.trim()) throw new Error("Enter the field key the condition checks.");
     const rule: NotificationRuleInput = {
       boardId: boardId || null,
@@ -129,11 +149,36 @@ export function Notifications(props: { client: ApiClient; jurisdictionId: string
         windowMinutes: wholeNumber(rateWindow, "Window", 1, 1440),
       },
     };
-    const created = await props.client.createNotificationRule(props.jurisdictionId, rule);
-    setSecret(created.webhookSecret);
+    const saved = editing
+      ? await props.client.updateNotificationRule(editing, { ...rule, scheduleIntervalMinutes: rule.scheduleIntervalMinutes ?? null })
+      : await props.client.createNotificationRule(props.jurisdictionId, rule);
+    setSecret(saved.webhookSecret);
     setCopied("");
     setChannels([{ kind: "inapp", draft: {} }]);
-    return "Notification rule created.";
+    setEditing(null);
+    rules.reload();
+    return editing ? "Notification rule saved." : "Notification rule created.";
+  });
+  const startEdit = (rule: NotificationRule) => {
+    setEditing(rule.id); setRemoving(null); setError(null); setNotice(""); setWhere("rule");
+    setBoardId(rule.boardId ?? ""); setEvent(rule.event);
+    setOp(rule.condition.op); setField(rule.condition.field ?? "");
+    setValue(rule.condition.value === undefined ? "" : String(rule.condition.value));
+    setEvery(String(rule.scheduleIntervalMinutes ?? 60));
+    setChannels(rule.channels.map((channel) => ({ kind: channel.kind, draft: draftOf(channel) })));
+    setRateMax(String(rule.rateLimit.max)); setRateWindow(String(rule.rateLimit.windowMinutes));
+  };
+  const toggleRule = (rule: NotificationRule) => run("rules", async () => {
+    await props.client.updateNotificationRule(rule.id, { enabled: !rule.enabled });
+    rules.reload();
+    return rule.enabled ? "Rule paused. It sends nothing until it is resumed." : "Rule resumed.";
+  });
+  const removeRule = (rule: NotificationRule) => run("rules", async () => {
+    await props.client.removeNotificationRule(rule.id);
+    setRemoving(null);
+    if (editing === rule.id) { setEditing(null); setChannels([{ kind: "inapp", draft: {} }]); }
+    rules.reload();
+    return "Rule removed. What it already sent stays in the notification log.";
   });
   const copy = () => {
     if (!secret) return;
@@ -160,7 +205,35 @@ export function Notifications(props: { client: ApiClient; jurisdictionId: string
         </fieldset> : null}
         {feedback("allowlist")}
       </Panel>
-      <Panel title="Add a notification rule">
+      <Panel title="Notification rules">
+        {rules.error ? <ErrorNote message={rules.error} /> : null}
+        {!rules.data && !rules.error ? <Loading label="Loading the rules…" /> : null}
+        {rules.data && rules.data.length === 0 ? <p className="d21-muted">No notification rules yet.</p> : null}
+        {rules.data?.length ? <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
+          {rules.data.map((rule) => {
+            const summary = ruleSummary(rule);
+            return (
+              <li key={rule.id} aria-label={`Rule: ${summary}`} className="d21-toolbar">
+                <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+                  <StatusBadge status={rule.enabled ? "success" : "unknown"}>{rule.enabled ? "Active" : "Paused"}</StatusBadge> {summary}
+                </span>
+                <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {removing === rule.id ? <>
+                    <Button kind="danger" disabled={busy} onClick={() => void removeRule(rule)}>Confirm removal</Button>
+                    <Button onClick={() => setRemoving(null)}>Keep rule</Button>
+                  </> : <>
+                    <Button disabled={busy} onClick={() => void toggleRule(rule)}>{rule.enabled ? "Pause" : "Resume"}</Button>
+                    <Button disabled={busy} onClick={() => startEdit(rule)}>Change</Button>
+                    <Button kind="danger" disabled={busy} onClick={() => setRemoving(rule.id)}>Remove</Button>
+                  </>}
+                </span>
+              </li>
+            );
+          })}
+        </ul> : null}
+        {feedback("rules")}
+      </Panel>
+      <Panel title={editing ? "Change a notification rule" : "Add a notification rule"}>
         <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 12 }}>
           <div className="d21-form-grid">
             <EnumSelect label="Board" values={["", ...props.boards.map((b) => b.id)]} value={boardId} onChange={setBoardId}
@@ -206,7 +279,8 @@ export function Notifications(props: { client: ApiClient; jurisdictionId: string
             <span className="d21-muted">Deliveries past the cap are counted, not sent. Webhook and push destinations must be on the allowlist.</span>
             <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <Button onClick={() => setChannels((current) => [...current, { kind: "inapp", draft: {} }])}>Add channel</Button>
-              <Button kind="primary" onClick={() => void createRule()}>Create rule</Button>
+              {editing ? <Button onClick={() => { setEditing(null); setChannels([{ kind: "inapp", draft: {} }]); }}>Cancel change</Button> : null}
+              <Button kind="primary" onClick={() => void saveRule()}>{editing ? "Save rule" : "Create rule"}</Button>
             </span>
           </div>
         </fieldset>

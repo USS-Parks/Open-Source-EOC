@@ -1,5 +1,6 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { z } from "zod";
+import { BoardTemplateSchema, choiceLabel, effectiveFields, type FieldDef } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import type { Principal } from "../auth/service.js";
@@ -74,39 +75,85 @@ export async function notifyBoardEvent(
       and event = ${event.event}
       and (board_id is null or board_id = ${event.boardId})
     order by id`;
+  void actor;
+  let message: Message | null = null;
   for (const rule of rules) {
     const condition = ConditionSchema.parse(rule.condition ?? {});
     if (!matches(condition, event)) continue;
     const channels = z.array(ChannelSchema).parse(rule.channels);
+    message ??= await describe(tx, event);
     for (const channel of channels) {
-      await enqueue(tx, actor, rule.id as string, rule.webhook_secret as string | null, channel, event);
+      await enqueue(tx, rule.id as string, rule.webhook_secret as string | null, channel, event, message);
     }
   }
 }
 
+/** What people read: the subject or notification title, and the message text. */
+interface Message {
+  readonly title: string;
+  readonly body: string;
+}
+
+/**
+ * A board event in people's words: the board's title, the record's name, and
+ * each field by its label, an enum value by its label. A message leaves the
+ * system, so it spells out only fields every reader of the board may see. A
+ * board this transaction cannot read is named by its key.
+ */
+async function describe(tx: Sql, event: BoardEvent): Promise<Message> {
+  const [board] = await tx`
+    select b.title, b.local_fields, t.definition from boards b
+    join board_templates t on t.key = b.template_key and t.version = b.template_version
+    where b.id = ${event.boardId}`;
+  const fields = board
+    ? effectiveFields(BoardTemplateSchema.parse(board.definition), (board.local_fields as FieldDef[] | null) ?? [])
+        .fields.filter((field) => field.read === "any")
+    : [];
+  const text = (field: FieldDef, value: unknown): string | null => {
+    if (typeof value === "boolean") return value ? "Yes" : "No";
+    if (typeof value === "number") return String(value);
+    // References, files and shapes are ids or geometry, not words.
+    if (typeof value !== "string" || value === "" || !["text", "enum", "datetime"].includes(field.type)) return null;
+    return field.type === "enum" ? choiceLabel(value) : value;
+  };
+  const title = (board?.title as string | undefined) ?? event.boardKey;
+  const name = fields.filter((field) => field.type === "text")
+    .map((field) => text(field, event.record[field.key])).find(Boolean) ?? "a record";
+  const heading = event.event === "record.created" ? `New ${title} record: ${name}` : `${title} record updated: ${name}`;
+  const lines = fields.flatMap((field) => {
+    const now = text(field, event.record[field.key]);
+    if (event.event === "record.created") return now === null ? [] : [`${field.label}: ${now}`];
+    const before = text(field, event.previous?.[field.key]);
+    if (now === before) return [];
+    return [`${field.label}: ${now ?? "No value"}${before === null ? "" : ` (was ${before})`}`];
+  });
+  return { title: heading, body: [heading, ...lines].join("\n") };
+}
+
+const SCHEDULED: Message = { title: "Scheduled notification", body: "Scheduled notification" };
+
 async function enqueue(
   tx: Sql,
-  actor: Principal,
   ruleId: string,
   webhookSecret: string | null,
   channel: Channel,
   event: BoardEvent,
+  message: Message,
 ): Promise<void> {
-  void actor;
-  const title = `${event.boardKey}: ${event.event}`;
+  const { title, body: text } = message;
   if (channel.kind === "inapp") {
     const [row] = event.boardKey === "scheduled"
       ? [undefined]
       : await tx`select created_by_position from board_records where id = ${event.recordId}`;
     const positionId = (row?.created_by_position as string | null | undefined) ?? null;
-    await log(tx, event, ruleId, "inapp", "delivered", { title, positionId });
+    await log(tx, event, ruleId, "inapp", "delivered", text, { title, positionId });
     return;
   }
   if (channel.kind === "email" || channel.kind === "sms") {
     // One delivery per recipient, so each is capped, retried and receipted on its own.
     const headers = channel.kind === "email" ? { subject: title } : {};
     for (const to of channel.to) {
-      await queue(tx, event, ruleId, channel.kind, to, headers, summarize(event), { to, title });
+      await queue(tx, event, ruleId, channel.kind, to, headers, text, { to, title }, text);
     }
     return;
   }
@@ -131,16 +178,18 @@ async function enqueue(
   } else {
     // ntfy-pattern self-hosted push: plain POST to the topic URL.
     target = `${channel.url.replace(/\/$/, "")}/${channel.topic}`;
-    headers = { title };
-    body = summarize(event);
+    // A header carries plain ASCII safely; ntfy decodes an RFC 2047 encoded title.
+    headers = { title: /^[\x20-\x7e]*$/.test(title) ? title : `=?UTF-8?B?${Buffer.from(title).toString("base64")}?=` };
+    body = text;
     detail = { topic: channel.topic, title };
   }
-  await queue(tx, event, ruleId, channel.kind, target, headers, body, detail);
+  await queue(tx, event, ruleId, channel.kind, target, headers, body, detail, text);
 }
 
 /**
- * Queue one external delivery with its pending notification. Over the rule's
- * cap, nothing is queued and the database counts the suppressed delivery.
+ * Queue one external delivery with its pending notification, whose text is
+ * `note`. Over the rule's cap, nothing is queued and the database counts the
+ * suppressed delivery.
  */
 async function queue(
   tx: Sql,
@@ -151,10 +200,11 @@ async function queue(
   headers: Record<string, string>,
   body: string,
   detail: Record<string, unknown>,
+  note: string,
 ): Promise<void> {
   const [admitted] = await tx`select admit_rule_delivery(${ruleId}) as ok`;
   if (!admitted!.ok) return;
-  const notificationId = await log(tx, event, ruleId, kind, "pending", detail);
+  const notificationId = await log(tx, event, ruleId, kind, "pending", note, detail);
   await tx`
     insert into delivery_outbox (jurisdiction_id, rule_id, notification_id, kind, target, headers, body)
     values (${event.jurisdictionId}, ${ruleId}, ${notificationId}, ${kind}, ${target},
@@ -167,6 +217,7 @@ async function log(
   ruleId: string,
   channel: string,
   status: "pending" | "delivered",
+  body: string,
   detail: Record<string, unknown>,
 ): Promise<string> {
   const positionId = detail.positionId as string | null | undefined;
@@ -178,14 +229,9 @@ async function log(
       (id, jurisdiction_id, rule_id, position_id, channel, title, body, status, detail)
     values
       (${id}, ${event.jurisdictionId}, ${ruleId}, ${positionId ?? null}, ${channel},
-       ${(detail.title as string) ?? event.event}, ${summarize(event)}, ${status},
+       ${(detail.title as string) ?? event.event}, ${body}, ${status},
        ${tx.json(detail as never)})`;
   return id;
-}
-
-function summarize(event: BoardEvent): string {
-  const summary = event.record.summary ?? event.record.item ?? event.record.name ?? "";
-  return `${event.boardKey} ${event.event.replace("record.", "")}: ${String(summary)}`.trim();
 }
 
 /**
@@ -221,7 +267,7 @@ export async function runScheduledRules(
         record: { summary: "scheduled notification" },
       };
       for (const channel of channels) {
-        await enqueue(tx, actor, rule.id as string, rule.webhook_secret as string | null, channel, event);
+        await enqueue(tx, rule.id as string, rule.webhook_secret as string | null, channel, event, SCHEDULED);
       }
     }
     return due.length;

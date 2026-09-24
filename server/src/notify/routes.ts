@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import { CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, decodeCursor, encodeCursor, pageQuery } from "../db/cursor.js";
-import { AuthError, requireAdmin } from "../auth/service.js";
+import { AuthError, requireAdmin, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 import { encryptSecret, fingerprint, hasSecretKey } from "../secrets/envelope.js";
 import { admittedBy, normalizeEntry } from "./allowlist.js";
@@ -17,22 +17,58 @@ import {
   sendMessage,
   type MessageKind,
 } from "./channels.js";
-import { ChannelSchema, ConditionSchema, runScheduledRules } from "./engine.js";
+import { ChannelSchema, ConditionSchema, runScheduledRules, type Channel } from "./engine.js";
 
+const RuleEvent = z.enum(["record.created", "record.updated", "scheduled"]);
+// External deliveries a rule may queue per window; the rest are suppressed.
+const RateLimit = z.object({
+  max: z.number().int().min(1).max(600),
+  windowMinutes: z.number().int().min(1).max(1440),
+});
 const RuleBody = z.object({
   boardId: z.string().uuid().nullable().default(null),
-  event: z.enum(["record.created", "record.updated", "scheduled"]),
+  event: RuleEvent,
   condition: ConditionSchema.default({ op: "any" }),
   channels: z.array(ChannelSchema).min(1),
   scheduleIntervalMinutes: z.number().int().positive().optional(),
-  // External deliveries this rule may queue per window; the rest are suppressed.
-  rateLimit: z
-    .object({
-      max: z.number().int().min(1).max(600),
-      windowMinutes: z.number().int().min(1).max(1440),
-    })
-    .default({ max: 60, windowMinutes: 10 }),
+  rateLimit: RateLimit.default({ max: 60, windowMinutes: 10 }),
 });
+/** A change to a rule: any of its fields, and whether it is paused. */
+const RulePatch = z.object({
+  enabled: z.boolean(),
+  boardId: z.string().uuid().nullable(),
+  event: RuleEvent,
+  condition: ConditionSchema,
+  channels: z.array(ChannelSchema).min(1),
+  scheduleIntervalMinutes: z.number().int().positive().nullable(),
+  rateLimit: RateLimit,
+}).partial().strict();
+const RuleParams = z.object({ ruleId: z.string().uuid() });
+
+/**
+ * Refuse a channel whose destination is off the jurisdiction's allowlist, or
+ * an email or SMS channel the jurisdiction has not configured.
+ */
+async function checkChannels(tx: Sql, jurisdictionId: string, channels: readonly Channel[]): Promise<void> {
+  const [list] = await tx`
+    select entries from notification_allowlists where jurisdiction_id = ${jurisdictionId}`;
+  const configured = await tx`
+    select kind from notification_channels where jurisdiction_id = ${jurisdictionId}`;
+  for (const channel of channels) {
+    if ((channel.kind === "webhook" || channel.kind === "ntfy") && !admittedBy((list?.entries as string[]) ?? [], channel.url))
+      throw new AuthError(422, `${channel.url} is not on this jurisdiction's notification allowlist`);
+    if ((channel.kind === "email" || channel.kind === "sms") && !configured.some((c) => c.kind === channel.kind))
+      throw new AuthError(422, `configure the ${channel.kind === "email" ? "email" : "SMS"} channel before adding a rule that uses it`);
+  }
+}
+
+/** A live rule the caller administers, under row-level security; anything else is not found. */
+async function administeredRule(tx: Sql, actor: Principal, ruleId: string): Promise<Record<string, unknown>> {
+  const [rule] = await tx`select * from notification_rules where id = ${ruleId} and removed_at is null`;
+  if (!rule) throw new AuthError(404, "notification rule not found");
+  requireAdmin(actor, rule.jurisdiction_id as string);
+  return rule;
+}
 
 const AllowlistBody = z.object({ entries: z.array(z.string().min(1).max(300)).max(100) });
 
@@ -76,16 +112,7 @@ export function notifyRoutes(
       const needsSecret = body.channels.some((c) => c.kind === "webhook");
       const secret = needsSecret ? randomBytes(24).toString("hex") : null;
       const [row] = await withPerson(sql, req.principal.person.id, async (tx) => {
-        const [list] = await tx`
-          select entries from notification_allowlists where jurisdiction_id = ${jurisdictionId}`;
-        const configured = await tx`
-          select kind from notification_channels where jurisdiction_id = ${jurisdictionId}`;
-        for (const channel of body.channels) {
-          if ((channel.kind === "webhook" || channel.kind === "ntfy") && !admittedBy((list?.entries as string[]) ?? [], channel.url))
-            throw new AuthError(422, `${channel.url} is not on this jurisdiction's notification allowlist`);
-          if ((channel.kind === "email" || channel.kind === "sms") && !configured.some((c) => c.kind === channel.kind))
-            throw new AuthError(422, `configure the ${channel.kind === "email" ? "email" : "SMS"} channel before adding a rule that uses it`);
-        }
+        await checkChannels(tx, jurisdictionId, body.channels);
         return tx`
           insert into notification_rules
             (jurisdiction_id, board_id, event, condition, channels, webhook_secret,
@@ -101,6 +128,101 @@ export function notifyRoutes(
       return reply.status(201).send({ id: row!.id as string, webhookSecret: secret });
     },
   );
+
+  /** The jurisdiction's rules, oldest first, without their signing secrets. Administrators only, as creation is. */
+  app.get(
+    "/api/v1/jurisdictions/:jurisdictionId/notification-rules",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId } = req.params as { jurisdictionId: string };
+      requireAdmin(req.principal, jurisdictionId);
+      const page = z.object(pageQuery).parse(req.query);
+      const after = decodeCursor(page.cursor, ["at", "id"]);
+      const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
+      const rows = await withPerson(sql, req.principal.person.id, (tx) => tx`
+        select r.id, r.board_id, b.title as board_title, r.event, r.condition, r.channels,
+          r.schedule_interval_minutes, r.rate_limit_max, r.rate_limit_window_minutes, r.enabled, r.created_at,
+          to_char(r.created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
+        from notification_rules r left join boards b on b.id = r.board_id
+        where r.jurisdiction_id = ${jurisdictionId} and r.removed_at is null
+          ${after ? tx`and (r.created_at, r.id) > (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : tx``}
+        order by r.created_at, r.id limit ${limit + 1}`);
+      const last = rows.length > limit ? rows[limit - 1]! : null;
+      return reply.send({
+        rules: rows.slice(0, limit).map((row) => ({
+          id: row.id as string,
+          boardId: (row.board_id as string | null) ?? null,
+          boardTitle: (row.board_title as string | null) ?? null,
+          event: row.event as string,
+          condition: row.condition as unknown,
+          channels: row.channels as unknown,
+          scheduleIntervalMinutes: (row.schedule_interval_minutes as number | null) ?? null,
+          rateLimit: { max: row.rate_limit_max as number, windowMinutes: row.rate_limit_window_minutes as number },
+          enabled: row.enabled as boolean,
+          createdAt: (row.created_at as Date).toISOString(),
+        })),
+        nextCursor: last ? encodeCursor([last.page_at as string, last.id as string]) : null,
+      });
+    },
+  );
+
+  /**
+   * Change a rule: pause or resume it, or replace any field the create form
+   * sets. New channels are checked as at creation; a pause alone is not, so a
+   * rule whose destination has left the allowlist can still be paused. A rule
+   * that gains its first webhook gets a signing secret, returned once here.
+   */
+  app.patch("/api/v1/notification-rules/:ruleId", { preHandler: authenticate }, async (req, reply) => {
+    const { ruleId } = RuleParams.parse(req.params);
+    const body = RulePatch.parse(req.body);
+    const secret = await withPerson(sql, req.principal.person.id, async (tx) => {
+      const rule = await administeredRule(tx, req.principal, ruleId);
+      const jurisdictionId = rule.jurisdiction_id as string;
+      if (body.channels) await checkChannels(tx, jurisdictionId, body.channels);
+      const fresh = !rule.webhook_secret && body.channels?.some((c) => c.kind === "webhook")
+        ? randomBytes(24).toString("hex")
+        : null;
+      const rateLimit = body.rateLimit ?? { max: rule.rate_limit_max as number, windowMinutes: rule.rate_limit_window_minutes as number };
+      await tx`
+        update notification_rules set
+          enabled = ${body.enabled ?? (rule.enabled as boolean)},
+          board_id = ${body.boardId === undefined ? (rule.board_id as string | null) : body.boardId},
+          event = ${body.event ?? (rule.event as string)},
+          condition = ${tx.json((body.condition ?? rule.condition) as never)},
+          channels = ${tx.json((body.channels ?? rule.channels) as never)},
+          schedule_interval_minutes = ${body.scheduleIntervalMinutes === undefined
+            ? (rule.schedule_interval_minutes as number | null) : body.scheduleIntervalMinutes},
+          rate_limit_max = ${rateLimit.max}, rate_limit_window_minutes = ${rateLimit.windowMinutes},
+          webhook_secret = ${fresh ?? (rule.webhook_secret as string | null)}
+        where id = ${ruleId}`;
+      await recordAudit(tx, req.principal, {
+        jurisdictionId,
+        category: "notification.rule_changed",
+        subjectTable: "notification_rules",
+        subjectId: ruleId,
+        payload: body,
+      });
+      return fresh;
+    });
+    return reply.send({ id: ruleId, webhookSecret: secret });
+  });
+
+  /** Remove a rule. It stops firing and leaves the list; what it already sent stays logged. */
+  app.delete("/api/v1/notification-rules/:ruleId", { preHandler: authenticate }, async (req, reply) => {
+    const { ruleId } = RuleParams.parse(req.params);
+    await withPerson(sql, req.principal.person.id, async (tx) => {
+      const rule = await administeredRule(tx, req.principal, ruleId);
+      await tx`update notification_rules set enabled = false, removed_at = now() where id = ${ruleId}`;
+      await recordAudit(tx, req.principal, {
+        jurisdictionId: rule.jurisdiction_id as string,
+        category: "notification.rule_removed",
+        subjectTable: "notification_rules",
+        subjectId: ruleId,
+        payload: {},
+      });
+    });
+    return reply.send({ ok: true });
+  });
 
   app.get(
     "/api/v1/jurisdictions/:jurisdictionId/notification-allowlist",

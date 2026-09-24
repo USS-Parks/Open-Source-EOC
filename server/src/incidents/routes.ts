@@ -9,6 +9,7 @@ import {
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import { splitPageQuery } from "../db/cursor.js";
+import { closeWithdrawnGuestSockets } from "../sync/routes.js";
 import { getIncidentArea, listIncidentAreaHistory, reviseIncidentArea } from "./area.js";
 import { incidentParticipationRoutes } from "./participation-routes.js";
 import {
@@ -111,6 +112,7 @@ export function incidentRoutes(
     const incidentId = IncidentId.parse((req.params as { incidentId: string }).incidentId);
     await withPerson(sql, req.principal.person.id, (tx) =>
       changeIncidentLifecycle(tx, req.principal, incidentId, change));
+    if (change === "lock") await closeWithdrawnGuestSockets();
     return { ok: true };
   };
   app.post("/api/v1/incidents/:incidentId/archive", { preHandler: authenticate }, lifecycle("archive"));

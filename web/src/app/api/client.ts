@@ -734,6 +734,11 @@ export class ApiClient {
     );
     return result.versions;
   }
+  /** Every published board template at its latest version. */
+  async listTemplates(): Promise<TemplateVersionSummary[]> {
+    const result = await this.request<{ templates: TemplateVersionSummary[] }>("GET", "/api/v1/templates");
+    return result.templates;
+  }
   getTemplateVersion(key: string, version: number): Promise<BoardTemplate> {
     return this.request(
       "GET", `/api/v1/templates/${encodeURIComponent(key)}/versions/${version}`,
@@ -2157,6 +2162,22 @@ export class ApiClient {
     return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/notification-rules`,
       rule as unknown as Record<string, unknown>);
   }
+  /** Every live rule of the jurisdiction, oldest first, read page by page. */
+  listNotificationRules(jurisdictionId: string): Promise<NotificationRule[]> {
+    return readAllPages(async (page) => {
+      const result = await this.request<{ rules: NotificationRule[]; nextCursor: string | null }>(
+        "GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/notification-rules?${pageParams(page)}`);
+      return { items: result.rules, nextCursor: result.nextCursor };
+    });
+  }
+  /** Pause, resume or change a rule; a rule's first webhook brings a signing secret, returned only here. */
+  updateNotificationRule(ruleId: string, change: NotificationRuleChange): Promise<{ id: string; webhookSecret: string | null }> {
+    return this.request("PATCH", `/api/v1/notification-rules/${encodeURIComponent(ruleId)}`,
+      change as unknown as Record<string, unknown>);
+  }
+  async removeNotificationRule(ruleId: string): Promise<void> {
+    await this.request("DELETE", `/api/v1/notification-rules/${encodeURIComponent(ruleId)}`);
+  }
   getNotificationAllowlist(jurisdictionId: string): Promise<{ entries: string[]; updatedAt: string | null }> {
     return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/notification-allowlist`);
   }
@@ -2401,6 +2422,17 @@ export interface NotificationRuleInput {
   readonly scheduleIntervalMinutes?: number;
   readonly rateLimit: { readonly max: number; readonly windowMinutes: number };
 }
+export interface NotificationRule extends Omit<NotificationRuleInput, "scheduleIntervalMinutes"> {
+  readonly id: string;
+  readonly boardTitle: string | null;
+  readonly scheduleIntervalMinutes: number | null;
+  readonly enabled: boolean;
+  readonly createdAt: string;
+}
+export type NotificationRuleChange = Partial<Omit<NotificationRuleInput, "scheduleIntervalMinutes">> & {
+  readonly enabled?: boolean;
+  readonly scheduleIntervalMinutes?: number | null;
+};
 export type LibraryKind = "scenario" | "plan" | "reference";
 export interface DatasetLoadResult {
   readonly key: string;

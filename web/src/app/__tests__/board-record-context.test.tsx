@@ -97,7 +97,7 @@ describe("BoardSurface record context seam", () => {
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     const refinement = { sorts: [{ field: "capacity", dir: "desc" }], groupBy: "status" };
     await waitFor(() => expect(boardViewPage).toHaveBeenLastCalledWith("board-1", "open", refinement));
-    expect((await screen.findByRole("region", { name: "Group counts" })).textContent).toContain("normal 2");
+    expect((await screen.findByRole("region", { name: "Group counts" })).textContent).toContain("Normal 2");
     fireEvent.click(await screen.findByRole("button", { name: "Load more records" }));
     await screen.findByText("Weitchpec Hall");
     expect(boardViewPage).toHaveBeenLastCalledWith("board-1", "open", refinement, { cursor: "page-2" });

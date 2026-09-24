@@ -176,10 +176,22 @@ describe("WebEOC side-by-side evaluation, internal run", () => {
     const [board] = await admin`select id, template_key, template_version from boards where title = 'Shelter status'`;
     expect(board).toMatchObject({ template_key: "shelter_status", template_version: 1 });
     const boardId = board!.id as string;
-    // The console loads its board list once, so the new board is listed after a reload.
+    // The Boards list holds the new board at once, without a reload.
     await page.getByRole("button", { name: "Boards", exact: true }).click();
-    await page.reload({ waitUntil: "load" });
     await page.getByRole("main").getByText("Shelter status").first().waitFor();
+
+    // A second board from the template already published, without the designer.
+    await page.getByRole("button", { name: "Templates", exact: true }).click();
+    const fromPublished = page.getByRole("region", { name: "Create a board from a published template" });
+    await fromPublished.getByLabel("Published template").selectOption("shelter_status");
+    await fromPublished.getByLabel("Board title").fill("South county shelters");
+    await boundary("templates");
+    await fromPublished.getByRole("button", { name: "Create board" }).click();
+    await page.getByRole("button", { name: "New record", exact: true }).waitFor();
+    expect(await admin`select template_key, template_version from boards where title = 'South county shelters'`)
+      .toEqual([{ template_key: "shelter_status", template_version: 1 }]);
+    await page.getByRole("button", { name: "Boards", exact: true }).click();
+    await page.getByRole("main").getByText("South county shelters").waitFor();
     await page.goto(`${baseUrl}/app/index.html#/board/${boardId}?view=all`);
 
     // Task 2: enter records through the board's input form.
@@ -224,7 +236,7 @@ describe("WebEOC side-by-side evaluation, internal run", () => {
     await refined;
     const counts = page.getByRole("region", { name: "Group counts" });
     await counts.waitFor();
-    expect(await counts.getByRole("listitem").allTextContents()).toEqual(["compromised 1", "normal 2"]);
+    expect(await counts.getByRole("listitem").allTextContents()).toEqual(["Compromised 1", "Normal 2"]);
     await expect.poll(() => rowNames()).toEqual(["Fortuna Veterans Hall", "Eureka High School", "Arcata Community Center"]);
     await page.getByRole("button", { name: "Clear" }).click();
     await expect.poll(async () => (await rowNames()).length).toBe(4);
@@ -243,6 +255,9 @@ describe("WebEOC side-by-side evaluation, internal run", () => {
     const lines = csv.bytes.toString("utf8").trim().split(/\r?\n/);
     expect(lines[0]).toBe("id,name,status,capacity,occupied");
     expect(lines).toHaveLength(5);
+    // The export keeps stored codes, so it imports back unchanged; the list shows labels.
+    expect(lines.filter((line) => line.includes(",normal,"))).toHaveLength(3);
+    expect(await page.getByRole("main").locator("tbody").getByText("Normal", { exact: true }).count()).toBe(3);
     const excel = await download(page, "Export Excel");
     expect(excel.name).toBe("all.xlsx");
     expect(readFirstWorksheet(excel.bytes)).toHaveLength(4);
@@ -310,6 +325,10 @@ describe("WebEOC side-by-side evaluation, internal run", () => {
     await rule.getByLabel("Phone numbers in E.164 form, separated by commas, channel 2", { exact: true }).fill("+17075550199");
     await rule.getByRole("button", { name: "Create rule" }).click();
     await rule.getByText("Notification rule created.").waitFor();
+    const listed = page.getByRole("region", { name: "Notification rules" }).getByRole("listitem", {
+      name: "Rule: Shelter status · A record is updated, when status changes to closed · Email to shelter-desk@example.org; SMS to +17075550199",
+    });
+    await listed.getByText("Active").waitFor();
 
     // The shelter closes on the board; the worker sends what the rule queued.
     await page.goto(`${baseUrl}/app/index.html#/board/${boardId}?view=all`);
@@ -317,14 +336,31 @@ describe("WebEOC side-by-side evaluation, internal run", () => {
     await editRecord(await recordId("McKinleyville Library"), /^Status/, (control) => control.selectOption("closed").then(() => undefined));
     expect((await new DeliveryWorker(runtime, { timeoutMs: 3000 }).drain()).delivered).toBe(2);
     const alert = sessions.find((s) => s.commands.includes("RCPT TO:<shelter-desk@example.org>"))!;
-    expect(alert.data).toContain("Subject: shelter_status: record.updated");
-    expect(bodyOf(alert.data)).toContain("shelter_status updated: McKinleyville Library");
+    expect(alert.data).toContain("Subject: Shelter status record updated: McKinleyville Library");
+    expect(bodyOf(alert.data)).toContain("Status: Closed (was Normal)");
     expect(fixtureMessages(jurisdictionId).find((m) => m.to === "+17075550199")?.body)
-      .toBe("shelter_status updated: McKinleyville Library");
+      .toBe("Shelter status record updated: McKinleyville Library\nStatus: Closed (was Normal)");
     await page.getByRole("button", { name: "Administration", exact: true }).click();
     await page.getByRole("tab", { name: "Channels" }).click();
     await page.getByRole("listitem", { name: "Fixture message to +17075550199" })
       .getByText("McKinleyville Library", { exact: false }).waitFor();
+
+    // The rule is listed, paused, resumed, opened for a change and removed.
+    await page.getByRole("tab", { name: "Notifications" }).click();
+    await listed.getByRole("button", { name: "Pause" }).click();
+    await listed.getByText("Paused").waitFor();
+    await boundary("notification-rules");
+    await listed.getByRole("button", { name: "Resume" }).click();
+    await listed.getByText("Active").waitFor();
+    await listed.getByRole("button", { name: "Change" }).click();
+    const change = page.getByRole("region", { name: "Change a notification rule" });
+    expect(await change.getByLabel("Value", { exact: true }).inputValue()).toBe("closed");
+    await change.getByRole("button", { name: "Cancel change" }).click();
+    await listed.getByRole("button", { name: "Remove" }).click();
+    await listed.getByRole("button", { name: "Confirm removal" }).click();
+    await page.getByText("No notification rules yet.").waitFor();
+    expect(await admin`select enabled, removed_at is not null as removed from notification_rules`)
+      .toEqual([{ enabled: false, removed: true }]);
 
     // Task 12: contacts and a group in call-down order.
     await page.getByRole("button", { name: "Contacts", exact: true }).click();
@@ -375,9 +411,9 @@ describe("WebEOC side-by-side evaluation, internal run", () => {
     await builder.getByLabel("Total 2 field").selectOption("occupied");
     const totals = builder.getByRole("table", { name: "Preview totals" });
     await totals.getByRole("row", { name: "All records 5 540 267" }).waitFor();
-    await totals.getByRole("row", { name: "normal 3 410 192" }).waitFor();
-    await totals.getByRole("row", { name: "compromised 1 80 75" }).waitFor();
-    await totals.getByRole("row", { name: "closed 1 50 0" }).waitFor();
+    await totals.getByRole("row", { name: "Normal 3 410 192" }).waitFor();
+    await totals.getByRole("row", { name: "Compromised 1 80 75" }).waitFor();
+    await totals.getByRole("row", { name: "Closed 1 50 0" }).waitFor();
     await builder.getByRole("button", { name: "Save report" }).click();
     const report = page.getByRole("region", { name: "Report: Shelter capacity by status" });
     await report.getByRole("button", { name: "Run", exact: true }).click();
@@ -387,9 +423,11 @@ describe("WebEOC side-by-side evaluation, internal run", () => {
     const pdf = await download(report, "Download PDF");
     expect(pdf.bytes.subarray(0, 8).toString("latin1")).toBe("%PDF-1.4");
     expect(pdf.bytes.toString("latin1")).toContain("(All records: 5 records; Capacity sum 540; Occupied sum 267) Tj");
+    expect(pdf.bytes.toString("latin1")).toContain("(Status: Normal \\(3 records\\)) Tj");
     const sheet = readFirstWorksheet((await download(report, "Download Excel")).bytes);
     expect(sheet.some((row) => Object.values(row).includes("Rio Dell Fire Hall"))).toBe(true);
     expect(sheet.some((row) => Object.values(row).includes("All records"))).toBe(true);
+    expect(sheet.some((row) => Object.values(row).includes("Normal"))).toBe(true);
 
     // Task 17: a daily schedule that emails the PDF.
     await report.getByLabel("Runs", { exact: true }).selectOption("daily");

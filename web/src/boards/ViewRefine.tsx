@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  choiceLabel,
   conditionFitsField,
   dictionaryValues,
   ViewConditionSchema,
@@ -306,13 +307,14 @@ export function GroupCounts(props: {
   return <section className="board-refine__counts" aria-label="Group counts">
     <strong>Grouped by {label}</strong>
     <ul>{props.groups.map((group) => <li key={JSON.stringify(group.value)}>
-      <span>{groupLabel(group.value)}</span> <strong>{group.count}</strong>
+      <span>{groupLabel(group.value, props.field?.type)}</span> <strong>{group.count}</strong>
     </li>)}</ul>
   </section>;
 }
 
-function groupLabel(value: unknown): string {
+function groupLabel(value: unknown, type: FieldDef["type"] | undefined): string {
   if (value === null || value === undefined || value === "") return "No value";
   if (typeof value === "boolean") return value ? "Yes" : "No";
-  return typeof value === "object" ? JSON.stringify(value) : String(value);
+  if (typeof value === "object") return JSON.stringify(value);
+  return type === "enum" ? choiceLabel(String(value)) : String(value);
 }

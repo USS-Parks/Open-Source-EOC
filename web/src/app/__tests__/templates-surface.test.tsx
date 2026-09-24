@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { STANDARD_TEMPLATES } from "@openeoc/shared";
 import { ApiError, type ApiClient, type BoardListItem } from "../api/client.js";
@@ -35,6 +35,10 @@ function client(overrides: Partial<Record<keyof ApiClient, unknown>> = {}) {
     publishTemplate: vi.fn().mockResolvedValue({ key: template.key, version: 2 }),
     createBoard: vi.fn().mockResolvedValue({ id: "created-board" }),
     upgradeBoard: vi.fn().mockResolvedValue({ dropped: [] }),
+    listTemplates: vi.fn().mockResolvedValue([
+      { key: "activity_log", version: 1, title: "Activity Log" },
+      { key: template.key, version: template.version, title: template.title },
+    ]),
     ...overrides,
   } as unknown as ApiClient;
 }
@@ -95,6 +99,47 @@ describe("board template lifecycle surface", () => {
     expect(onDesignBoard).toHaveBeenCalledWith(board.id);
     fireEvent.click(screen.getByRole("button", { name: "Create template" }));
     expect(await screen.findByRole("heading", { name: "Create board template" })).toBeTruthy();
+  });
+
+  it("creates a board from a template already published and has the board lists read again", async () => {
+    const api = client();
+    const onOpenBoard = vi.fn();
+    const onBoardsChanged = vi.fn();
+    render(<TemplatesSurface client={api} jurisdictionId="jurisdiction-1" boards={[board]}
+      isInstanceAdmin isJurisdictionAdmin onOpenBoard={onOpenBoard} onBoardsChanged={onBoardsChanged}
+      onDesignBoard={() => undefined} />);
+    const section = await screen.findByRole("region", { name: "Create a board from a published template" });
+    fireEvent.change(await within(section).findByLabelText("Published template"), { target: { value: template.key } });
+    fireEvent.change(within(section).getByLabelText("Board title"), { target: { value: "South county shelters" } });
+    fireEvent.click(within(section).getByRole("button", { name: "Create board" }));
+    await waitFor(() => expect(onOpenBoard).toHaveBeenCalledWith("created-board"));
+    expect(api.createBoard).toHaveBeenCalledWith("jurisdiction-1",
+      { templateKey: template.key, version: template.version, title: "South county shelters" });
+    expect(onBoardsChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("has the board lists read again after publishing a new template creates its board", async () => {
+    const api = client({ publishTemplate: vi.fn().mockResolvedValue({ key: "roads", version: 1 }) });
+    const onBoardsChanged = vi.fn();
+    const onOpenBoard = vi.fn();
+    render(<TemplatesSurface client={api} jurisdictionId="jurisdiction-1" boards={[]}
+      isInstanceAdmin isJurisdictionAdmin onOpenBoard={onOpenBoard} onBoardsChanged={onBoardsChanged}
+      onDesignBoard={() => undefined} />);
+    fireEvent.click(screen.getByRole("button", { name: "Create template" }));
+    await screen.findByRole("heading", { name: "Create board template" });
+    fireEvent.change(screen.getByLabelText("Board key"), { target: { value: "roads" } });
+    fireEvent.change(screen.getByLabelText("Board title"), { target: { value: "Roads" } });
+    fireEvent.change(screen.getByLabelText("Field key"), { target: { value: "road" } });
+    fireEvent.change(screen.getByLabelText("Field label"), { target: { value: "Road" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add field" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Views" }));
+    fireEvent.change(screen.getByLabelText("View key"), { target: { value: "all" } });
+    fireEvent.change(screen.getByLabelText("View title"), { target: { value: "All roads" } });
+    fireEvent.click(within(screen.getByRole("group", { name: "View columns" })).getByRole("checkbox", { name: "road" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add view" }));
+    fireEvent.click(screen.getByRole("button", { name: "Publish and create board" }));
+    await waitFor(() => expect(onOpenBoard).toHaveBeenCalledWith("created-board"));
+    expect(onBoardsChanged).toHaveBeenCalledTimes(1);
   });
 
   it("does not apply a completed publication to a board selected afterward", async () => {

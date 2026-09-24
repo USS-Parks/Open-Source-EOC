@@ -44,6 +44,7 @@ DELETE /api/v1/incidents/:incidentId/dashboard-configs/:key
 DELETE /api/v1/incidents/:incidentId/lockdown
 DELETE /api/v1/incidents/:incidentId/saved-state/:kind/:key
 DELETE /api/v1/jurisdictions/:jurisdictionId/members/:personId
+DELETE /api/v1/notification-rules/:ruleId
 DELETE /api/v1/positions/:positionId/assignments/:personId
 DELETE /api/v1/reports/:reportId
 GET /api/v1/aar/:aarId/pdf
@@ -136,6 +137,7 @@ GET /api/v1/jurisdictions/:jurisdictionId/meetings/config
 GET /api/v1/jurisdictions/:jurisdictionId/members
 GET /api/v1/jurisdictions/:jurisdictionId/notification-allowlist
 GET /api/v1/jurisdictions/:jurisdictionId/notification-channels/:kind
+GET /api/v1/jurisdictions/:jurisdictionId/notification-rules
 GET /api/v1/jurisdictions/:jurisdictionId/position-assignments
 GET /api/v1/jurisdictions/:jurisdictionId/positions
 GET /api/v1/jurisdictions/:jurisdictionId/reports
@@ -167,6 +169,7 @@ GET /api/v1/resource-requests/:id/costs/export
 GET /api/v1/sitreps/:sitrepId
 GET /api/v1/status-queries/:id
 GET /api/v1/sync/boards/:boardId
+GET /api/v1/templates
 GET /api/v1/templates/:key/versions
 GET /api/v1/templates/:key/versions/:version
 GET /api/v1/threads/:threadId/export
@@ -177,6 +180,7 @@ GET /api/v1/tracked-objects/:id
 PATCH /api/v1/boards/:boardId/records/:recordId
 PATCH /api/v1/corrective-actions/:id
 PATCH /api/v1/incidents/:incidentId/tasks/:taskId
+PATCH /api/v1/notification-rules/:ruleId
 POST /api/v1/ack/:token
 POST /api/v1/audit/:eventId/corrections
 POST /api/v1/auth/login

@@ -62,7 +62,7 @@ import { reportRoutes } from "./reports/routes.js";
 import { resourceRoutes } from "./resource/routes.js";
 import { BoardSyncHub } from "./sync/hub.js";
 import { notificationStreamRoutes } from "./sync/notifications.js";
-import { registerSyncRoutes } from "./sync/routes.js";
+import { closeWithdrawnGuestSockets, registerSyncRoutes } from "./sync/routes.js";
 import { DEFAULT_SOCKET_LIMITS, disciplineSockets, MAX_PAYLOAD_BYTES, type SocketLimits } from "./sync/sockets.js";
 import { withPerson } from "./db/context.js";
 import { applySecurityHeaders } from "./security/headers.js";
@@ -395,6 +395,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
         revokeGuestGrant(tx, req.principal, grantId),
       );
       forgetPerson(guestId);
+      await closeWithdrawnGuestSockets();
       return reply.send({ ok: true });
     },
   );

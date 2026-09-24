@@ -202,7 +202,8 @@ describe("the 213RR notification lane (F4 acceptance)", () => {
     expect(signWebhookBody(webhookSecret, hook.body + "x")).not.toBe(hook.signature.slice(7));
 
     const push = received.find((r) => r.path === "/eoc-ops")!;
-    expect(push.body).toContain("resource_request");
+    expect(push.title).toBe("Resource Requests record updated: Potable water");
+    expect(push.body).toContain("State: Assigned (was Triaged)");
 
     // The requesting position (ops chief, the record creator) has a tray entry.
     const tray = await app.inject({

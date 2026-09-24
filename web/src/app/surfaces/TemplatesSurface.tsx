@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { BoardTemplate } from "@openeoc/shared";
+import { EnumSelect, TextField } from "../../design/components.js";
 import { ActionButton } from "../../design/controls.js";
 import type { ApiClient, BoardListItem } from "../api/client.js";
 import { ApiError } from "../api/client.js";
@@ -16,6 +17,8 @@ export interface TemplatesSurfaceProps {
   readonly boardId?: string;
   readonly onOpenBoard: (boardId: string) => void;
   readonly onDesignBoard: (boardId: string) => void;
+  /** Called once a board is created, so the lists that hold the boards read them again. */
+  readonly onBoardsChanged?: () => void;
 }
 
 type Feedback = { readonly status: "success" | "warning"; readonly title: string; readonly detail: string };
@@ -62,11 +65,16 @@ export function TemplatesSurface(props: TemplatesSurfaceProps) {
       hint="Publishing templates requires an instance administrator who also administers the selected jurisdiction." />;
   }
 
+  const boardCreated = (id: string) => {
+    props.onBoardsChanged?.();
+    props.onOpenBoard(id);
+  };
+
   if (!props.boardId && !creating) {
-    return <TemplateIndex boards={props.boards} onCreate={() => {
+    return <TemplateIndex client={props.client} jurisdictionId={props.jurisdictionId} boards={props.boards} onCreate={() => {
       setFeedback(null);
       setCreating(true);
-    }} onDesign={props.onDesignBoard} />;
+    }} onDesign={props.onDesignBoard} onBoardCreated={boardCreated} />;
   }
 
   if (props.boardId && board.loading && !board.data) return <Loading label="Loading board configuration…" />;
@@ -93,7 +101,7 @@ export function TemplatesSurface(props: TemplatesSurfaceProps) {
         if (scopeRef.current !== activeScope) return;
         setFeedback({ status: "success", title: `Version ${published.version} published`,
           detail: "A board was created from this version." });
-        props.onOpenBoard(created.id);
+        boardCreated(created.id);
       } catch (error) {
         if (scopeRef.current !== activeScope) return;
         setPending({ kind: "create", key: published.key, version: published.version, title: next.title });
@@ -130,7 +138,7 @@ export function TemplatesSurface(props: TemplatesSurfaceProps) {
           templateKey: action.key, version: action.version, title: action.title,
         });
         if (scopeRef.current !== activeScope) return;
-        props.onOpenBoard(created.id);
+        boardCreated(created.id);
       } catch (error) {
         if (scopeRef.current !== activeScope) return;
         setPending(action);
@@ -182,15 +190,53 @@ export function TemplatesSurface(props: TemplatesSurfaceProps) {
 }
 
 function TemplateIndex(props: {
+  client: ApiClient;
+  jurisdictionId: string;
   boards: readonly BoardListItem[];
   onCreate: () => void;
   onDesign: (boardId: string) => void;
+  onBoardCreated: (boardId: string) => void;
 }) {
+  const templates = useAsync(() => props.client.listTemplates(), [props.client]);
+  const [templateKey, setTemplateKey] = useState("");
+  const [title, setTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const chosen = templates.data?.find((t) => t.key === templateKey) ?? templates.data?.[0];
+  const createBoard = async () => {
+    if (!chosen) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const created = await props.client.createBoard(props.jurisdictionId, {
+        templateKey: chosen.key, version: chosen.version, ...(title.trim() ? { title: title.trim() } : {}),
+      });
+      props.onBoardCreated(created.id);
+    } catch (cause) {
+      setError(`The board was not created. ${messageFor(cause)}`);
+      setBusy(false);
+    }
+  };
   return <Scroll>
     <SurfaceHeader title="Templates" actions={<ActionButton kind="primary" onClick={props.onCreate}>
       Create template
     </ActionButton>} />
     <p className="board-template-intro">Published templates are immutable. Open a configured board to publish its next version.</p>
+    <section className="board-template-versions" aria-label="Create a board from a published template" style={{ marginBottom: 14 }}>
+      <h2>Create a board from a published template</h2>
+      {templates.error ? <ErrorNote message={templates.error} /> : null}
+      {!templates.data && !templates.error ? <Loading label="Loading published templates…" /> : null}
+      {templates.data?.length === 0 ? <p>No template is published yet.</p> : null}
+      {chosen ? <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 8 }}>
+        <EnumSelect label="Published template" values={templates.data!.map((t) => t.key)} value={chosen.key}
+          labels={Object.fromEntries(templates.data!.map((t) => [t.key, `${t.title} (version ${t.version})`]))}
+          onChange={setTemplateKey} />
+        <TextField label="Board title" value={title} onChange={setTitle} />
+        <p className="d21-muted" style={{ margin: 0 }}>Left blank, the board takes the template's title, {chosen.title}.</p>
+        <div><ActionButton onClick={() => void createBoard()}>Create board</ActionButton></div>
+        {error ? <p role="alert">{error}</p> : null}
+      </fieldset> : null}
+    </section>
     {props.boards.length === 0 ? <EmptyState label="No configured boards."
       hint="Create a template to provision the first board." /> : <div className="board-template-list">
       {props.boards.map((board) => <article key={board.id}>

@@ -103,6 +103,7 @@ On the **Guest access** tab, enter the guest's account email, choose what they
 may read (positions, or individual boards) and when access ends, and select
 **Grant access**. The guest signs in with their own account. **Revoke access**
 ends a grant before it expires. Ended grants stay listed with their state.
+A board the guest has open live under a revoked grant is closed at once.
 
 ## Two-step sign-in (MFA)
 
@@ -283,7 +284,30 @@ under **Signing secret for the new rule** with **Copy secret**; it cannot be
 read again. The receiver checks the `x-openeoc-signature` header, `sha256=`
 followed by the HMAC-SHA256 of the request body with that secret. A
 destination off the allowlist is refused with the server's reason, and the
-draft is kept. The screen has no list of existing rules yet.
+draft is kept.
+
+**Notification rules** on the same tab lists the jurisdiction's rules, each
+with its board, when it fires, its condition and where it sends, and whether
+it is active or paused. **Pause** stops a rule sending until **Resume**.
+**Change** opens the rule in the form, which becomes **Change a notification
+rule**; **Save rule** replaces its board, trigger, condition, channels and
+rate cap, and new channels are checked against the allowlist as at creation.
+A rule that gains its first webhook shows its signing secret once, as a new
+one does. **Remove** asks for **Confirm removal**; a removed rule stops firing
+and leaves the list, and what it already sent stays in the notification log.
+Only an administrator of the jurisdiction lists, changes or removes rules,
+with `GET /api/v1/jurisdictions/:jurisdictionId/notification-rules`, `PATCH
+/api/v1/notification-rules/:ruleId` and `DELETE
+/api/v1/notification-rules/:ruleId`. Each change and removal is recorded in
+the audit trail as `notification.rule_changed` or `notification.rule_removed`.
+
+An email, SMS or push message names the board by its title and the record by
+its first text field, as in "Shelter status record updated: McKinleyville
+Library", followed by each changed field with its label, as in "Status:
+Closed (was Normal)", or for a new record each field with a value. A value
+from a list of choices shows as its label. Only fields every reader of the
+board may see are spelled out. A webhook body keeps the stored keys and
+values for the program that receives it.
 
 Scheduled notification rules, due briefings and feed polls run on their own
 through the server's scheduler; no one has to trigger them. A scheduled rule
@@ -417,8 +441,8 @@ dates. Members read it; the **Action** column is for administrators.
   incidents** to find it, and **Unarchive** to return it to the lists.
 - **Lock guest access** withholds one incident's boards and their records from
   guest grants. The database enforces it, so every later guest read from a
-  screen, search or export is refused. A board a guest already has open keeps
-  receiving live changes until it is closed or reloaded. Members of the
+  screen, search or export is refused. A board a guest already has open live
+  is closed at once and hears no further changes. Members of the
   jurisdiction and participating organizations keep their access. A lockdown
   is off by default and never applied automatically. **Lift lockdown**
   restores guest read. The incident list and the incident's setup show when

@@ -1,3 +1,4 @@
+import { choiceLabel } from "@openeoc/shared";
 import { tableCsv, tableXlsx, type BoardTable } from "../boards/transfer.js";
 import { tablePdf, type PdfLine } from "./pdf.js";
 import type { Aggregates, ReportFormat, ReportGroup, ReportResult } from "./service.js";
@@ -91,12 +92,32 @@ export function reportPdf(result: ReportResult, meta: ReportMeta): Uint8Array {
   });
 }
 
+/**
+ * The result as people read it, enum values as their labels. PDF and Excel
+ * are read by people and show labels; CSV and the JSON output keep the stored
+ * codes, so a program reading them sees the values the board holds.
+ */
+function labelled(result: ReportResult): ReportResult {
+  const enums = new Set([...result.groupBy, ...result.columns].filter((c) => c.type === "enum").map((c) => c.key));
+  if (enums.size === 0) return result;
+  const label = (key: string | undefined, value: unknown) =>
+    key && enums.has(key) && typeof value === "string" ? choiceLabel(value) : value;
+  return {
+    ...result,
+    rows: result.rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, label(key, value)]))),
+    groups: result.groups.map((group) => ({
+      ...group,
+      values: group.values.map((value, i) => label(result.groupBy[i]?.key, value)),
+    })),
+  };
+}
+
 export function renderReport(result: ReportResult, format: ReportFormat, meta: ReportMeta): ReportFile {
   const stamp = result.generatedAt.slice(0, 16).replace(/[-:]/g, "").replace("T", "-");
   const base = meta.name.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "report";
   const filename = `${base}-${stamp}.${format}`;
-  if (format === "pdf") return { filename, contentType: "application/pdf", content: reportPdf(result, meta) };
-  const table = reportTable(result);
+  if (format === "pdf") return { filename, contentType: "application/pdf", content: reportPdf(labelled(result), meta) };
+  const table = reportTable(format === "xlsx" ? labelled(result) : result);
   if (format === "xlsx") return { filename, contentType: XLSX_TYPE, content: tableXlsx(table) };
   return { filename, contentType: "text/csv", content: Buffer.from(tableCsv(table), "utf8") };
 }

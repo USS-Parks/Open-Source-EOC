@@ -123,8 +123,8 @@ describe("reports screen", () => {
     await builder.getByRole("button", { name: "Add total" }).click();
     const totals = builder.getByRole("table", { name: "Preview totals" });
     await totals.getByRole("row", { name: "All records 5 393" }).waitFor();
-    await totals.getByRole("row", { name: "routine 3 340" }).waitFor();
-    await totals.getByRole("row", { name: "urgent / south 1 3" }).waitFor();
+    await totals.getByRole("row", { name: "Routine 3 340" }).waitFor();
+    await totals.getByRole("row", { name: "Urgent / South 1 3" }).waitFor();
     expect(await builder.getByRole("table", { name: "Preview rows" }).locator("thead th").allTextContents())
       .toEqual(["Priority", "Site", "Item", "Quantity"]);
     await page.screenshot({ path: join(SHOTS, "report-builder-light-1440.png"), fullPage: false });
@@ -139,10 +139,10 @@ describe("reports screen", () => {
     const pdf = await download("Download PDF");
     expect(pdf.subarray(0, 8).toString("latin1")).toBe("%PDF-1.4");
     const text = pdf.toString("latin1");
-    expect(text).toContain("(Priority: routine \\(3 records\\)) Tj");
+    expect(text).toContain("(Priority: Routine \\(3 records\\)) Tj");
     expect(text).toContain("(All records: 5 records; Quantity sum 393) Tj");
     const sheet = readFirstWorksheet(await download("Download Excel"));
-    expect(sheet[0]).toEqual({ Priority: "routine", Site: "north", Item: "Tarps", Quantity: "40" });
+    expect(sheet[0]).toEqual({ Priority: "Routine", Site: "North", Item: "Tarps", Quantity: "40" });
     expect(sheet.at(-1)).toEqual({ Priority: "All records", Site: "5", Item: "393" });
 
     // A daily schedule, emailed as a PDF.

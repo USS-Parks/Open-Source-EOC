@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { FieldDef } from "@openeoc/shared";
+import { choiceLabel, type FieldDef } from "@openeoc/shared";
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../design/components.js";
 import { Icon } from "../design/icons/index.js";
 import "../datasets/datasets.css";
@@ -123,11 +123,12 @@ function scheduleText(schedule: ReportSchedule | null): string {
   return `${FORMAT_LABELS[schedule.format]} ${when}`;
 }
 
-function valueText(value: unknown): string {
+function valueText(value: unknown, type?: string): string {
   if (value === undefined || value === null || value === "") return "";
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "number") return Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100);
-  return typeof value === "object" ? JSON.stringify(value) : String(value);
+  if (typeof value === "object") return JSON.stringify(value);
+  return type === "enum" ? choiceLabel(String(value)) : String(value);
 }
 
 /** A run on screen: its rows, then the counts and totals per group and for all records. */
@@ -145,7 +146,7 @@ function ResultView(props: { result: ReportResult; label: string }) {
         <table className="eoc-table" aria-label={`${props.label} rows`}>
           <thead><tr>{shown.map((c) => <th key={c.key}>{c.label}</th>)}</tr></thead>
           <tbody>
-            {rows.map((row, i) => <tr key={i}>{shown.map((c) => <td key={c.key}>{valueText(row[c.key])}</td>)}</tr>)}
+            {rows.map((row, i) => <tr key={i}>{shown.map((c) => <td key={c.key}>{valueText(row[c.key], c.type)}</td>)}</tr>)}
           </tbody>
         </table>
       </div>
@@ -159,7 +160,7 @@ function ResultView(props: { result: ReportResult; label: string }) {
             <tbody>
               {r.groups.map((g) => (
                 <tr key={`${g.first}-${g.level}`} className={g.level === 1 ? "reports-group" : undefined}>
-                  <td>{g.values.map((v) => (v === null ? "(no value)" : valueText(v))).join(" / ")}</td><td>{g.count}</td>
+                  <td>{g.values.map((v, k) => (v === null ? "(no value)" : valueText(v, r.groupBy[k]?.type))).join(" / ")}</td><td>{g.count}</td>
                   {aggregates(g.totals)}
                 </tr>
               ))}

@@ -90,6 +90,7 @@ set, and then require that value as a bearer token.
 - `PUT /api/v1/boards/:boardId/webeoc-mapping`: Set boards webeoc mapping (auth: bearer; audience: operator)
 - `GET /api/v1/jurisdictions/:jurisdictionId/boards`: Read jurisdictions boards (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/boards`: Run jurisdictions boards (auth: bearer; audience: operator)
+- `GET /api/v1/templates`: Read templates (auth: bearer; audience: operator)
 - `POST /api/v1/templates`: Run templates (auth: bearer; audience: operator)
 - `GET /api/v1/templates/:key/versions`: Read templates versions (auth: bearer; audience: operator)
 - `GET /api/v1/templates/:key/versions/:version`: Read templates versions (auth: bearer; audience: operator)
@@ -381,7 +382,10 @@ set, and then require that value as a bearer token.
 
 ### notification-rules
 
+- `GET /api/v1/jurisdictions/:jurisdictionId/notification-rules`: Read jurisdictions notification rules (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/notification-rules`: Run jurisdictions notification rules (auth: bearer; audience: operator)
+- `DELETE /api/v1/notification-rules/:ruleId`: Delete notification rules (auth: bearer; audience: operator)
+- `PATCH /api/v1/notification-rules/:ruleId`: Update notification rules (auth: bearer; audience: operator)
 
 ### notifications
 

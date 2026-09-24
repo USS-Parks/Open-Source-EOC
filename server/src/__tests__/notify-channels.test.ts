@@ -179,9 +179,9 @@ describe("email", () => {
       const verbs = session.commands.map((c) => c.split(/[ :]/)[0]);
       expect(verbs).toEqual(["EHLO", "STARTTLS", "EHLO", "AUTH", "MAIL", "RCPT", "DATA", "QUIT"]);
       expect(session.commands).toContain("MAIL FROM:<eoc@example.org>");
-      expect(session.data).toContain("Subject: activity_log: record.created");
+      expect(session.data).toContain("Subject: New Activity Log record: Road 169 closed at the bridge");
       expect(session.data).toContain("From: eoc@example.org");
-      expect(bodyOf(session.data)).toContain("activity_log created");
+      expect(bodyOf(session.data)).toContain("Entry: Road 169 closed at the bridge");
     }
     expect(relay.sessions.flatMap((s) => s.commands.filter((c) => c.startsWith("RCPT"))).sort()).toEqual([
       "RCPT TO:<chief@example.org>",
@@ -285,7 +285,7 @@ describe("SMS", () => {
     expect(await worker.drain()).toMatchObject({ delivered: 2 });
     const recorded = fixtureMessages(jurisdictionId);
     expect(recorded.map((m) => m.to).sort()).toEqual(["+17075550100", "+17075550101"]);
-    expect(recorded[0]!.body).toContain("activity_log created");
+    expect(recorded[0]!.body).toBe("New Activity Log record: Levee breach reported\nEntry: Levee breach reported");
     const rows = await admin`select receipt from delivery_outbox where kind = 'sms'`;
     for (const row of rows) expect(row.receipt).toMatchObject({ provider: "fixture", sent: false });
     const read = await app.inject({
@@ -321,7 +321,7 @@ describe("SMS", () => {
     expect(smsPosts).toHaveLength(1);
     expect(smsPosts[0]!.authorization).toBe(`Basic ${Buffer.from("AC-test-account:provider-token").toString("base64")}`);
     expect(smsPosts[0]!.form).toMatchObject({ To: "+17075550100", From: "+17075550199" });
-    expect(smsPosts[0]!.form.Body).toContain("activity_log created");
+    expect(smsPosts[0]!.form.Body).toContain("New Activity Log record: Water main break");
     const [row] = await admin`select receipt from delivery_outbox where kind = 'sms'`;
     expect(row!.receipt).toMatchObject({ provider: "http", messageId: "SM1", status: "queued" });
 

@@ -105,7 +105,7 @@ describe("board view refinement", () => {
       groups={[{ value: "closed", count: 3 }, { value: null, count: 1 }]} />);
     const counts = screen.getByRole("region", { name: "Group counts" });
     expect(counts.textContent).toContain("Grouped by Status");
-    expect(within(counts).getAllByRole("listitem").map((item) => item.textContent)).toEqual(["closed 3", "No value 1"]);
+    expect(within(counts).getAllByRole("listitem").map((item) => item.textContent)).toEqual(["Closed 3", "No value 1"]);
   });
 });
 

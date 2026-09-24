@@ -130,6 +130,16 @@ export function boardRoutes(
     return reply.status(201).send({ imported });
   });
 
+  /** Every published board template at its latest version, by title, to create a board from. */
+  app.get("/api/v1/templates", { preHandler: authenticate }, async (req, reply) => {
+    const rows = await withPerson(sql, req.principal.person.id, (tx) => tx`
+      select * from (select distinct on (key) key, version, title from board_templates order by key, version desc) latest
+      order by title, key`);
+    return reply.send({
+      templates: rows.map((row) => ({ key: row.key as string, version: row.version as number, title: row.title as string })),
+    });
+  });
+
   app.get("/api/v1/templates/:key/versions", { preHandler: authenticate }, async (req, reply) => {
     const { key } = req.params as { key: string };
     const versions = await withPerson(sql, req.principal.person.id, (tx) =>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { BoardWorkflow, FieldDef, ViewRecord } from "@openeoc/shared";
+import { choiceLabel, type BoardWorkflow, type FieldDef, type ViewRecord } from "@openeoc/shared";
 import type { BoardViewQuery } from "../app/api/client.js";
 import { ActionButton } from "../design/controls.js";
 import { enumValues } from "./ViewRefine.js";
@@ -162,9 +162,7 @@ const valueKey = (value: unknown): string | null => value === undefined || value
 export function valueLabel(value: string | null, type: FieldDef["type"] = "enum"): string {
   if (value === null) return "No value";
   if (type === "boolean") return value === "true" ? "Yes" : value === "false" ? "No" : value;
-  if (type !== "enum") return value;
-  const words = value.replaceAll("_", " ");
-  return words.charAt(0).toLocaleUpperCase() + words.slice(1);
+  return type === "enum" ? choiceLabel(value) : value;
 }
 
 /**
