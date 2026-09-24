@@ -3687,3 +3687,52 @@ tagging remain separately gated as section 1 of the roster states.
 - **Result:** `M5` is green after the recorded walk fix. Hosted CI still
   starts no job (the billing notice recorded in "V1 CI stability: the
   deep-link race and the recurring red runs").
+
+## V1 D34: operator workflow comparison (absence recorded)
+
+- **Roster wording:** "Operator workflow comparison against the D01 baseline
+  with representative operators, or its recorded absence. Closes the F14, F17
+  and INV-8 operator boundaries." D34's acceptance in the archived design
+  roster: "Claim '2x faster' only where the measured completion time is at
+  most half the comparable baseline without a worse error outcome. Missing
+  vendor access prevents that comparative claim, not fabrication of a
+  result."
+- **Recorded absence.** No representative operators took part: section 7 item
+  7 names them as an external input, and none was supplied to this session.
+  No licensed WebEOC, Esri, COBRA or Teams comparison environment was
+  supplied either, so every vendor baseline stays unavailable, as the D01
+  baseline (`docs/process/design/D01-OPERATOR-JOURNEYS-AND-BASELINE.md`)
+  already records. No task time, error rate or relative-speed claim is made.
+- **What exists for the comparison when operators are available:** the D01
+  baseline's six fixed journeys with their data, permissions, ready states and
+  stopping conditions, and scripted timings for four of them
+  (`docs/process/design/D01-baseline.metrics.json`); the WebEOC side-by-side
+  script (`docs/WEBEOC-SIDE-BY-SIDE.md`) for an evaluator to run both systems;
+  the training kit's tabletop (`docs/guides/training/`) as the setting.
+- **Boundary.** F14 and F17 in the parity matrix and INV-8 in the facet
+  register keep their operator boundary open until operators run the
+  comparison; the reconciliation unit states it on each row.
+- **Evidence level:** document.
+- **Rollback:** none needed; documents only.
+
+## V1 R1-REAL: the real-hardware 150-user run (boundary recorded)
+
+- **Roster wording:** "The real-hardware 150-user socketed run, recorded with
+  numbers, on the release candidate. Closes R1."
+- **Recorded boundary.** No deployment hardware was supplied (section 7 item
+  7). What is on record, all on the development workstation: "V1 W2 milestone
+  gate", a two-hour synthetic activation with 150 member sockets, 71,106 edits
+  acknowledged with 0 errors, heap flat (median 89.2 MB early, 87.6 MB late),
+  and a worst per-minute p95 edit round trip of 103 ms; "V1 W2.4: WebSocket
+  discipline", every update to 149 live readers under 100 ms beside a stalled
+  reader; and the serial `load.test.ts` passing in "V1 W4 milestone gate" and
+  "V1 M5 milestone gate". The release candidate is the 0.9.0 build of "V1
+  W6.4: installer rebuild" and the Docker install of "V1 W6.0: one-command
+  server install".
+- **To close R1:** run `scripts/soak.mjs` as the W2 milestone gate did, with
+  150 sockets for two hours, against the release candidate on the hardware a
+  county would deploy, and record the same figures in a receipt headed "V1
+  R1-REAL: real-hardware run". R1 in the parity matrix and facet register stays
+  partial until then.
+- **Evidence level:** document.
+- **Rollback:** none needed; documents only.
