@@ -3813,3 +3813,56 @@ tagging remain separately gated as section 1 of the roster states.
   minute.
 - **Rollback:** revert both commits; the `0130` column is nullable and the
   earlier code runs with it in place.
+
+## V1 W5.3: remaining interface findings
+
+- **Why.** Added during execution: the D33 review assigned six findings to the
+  reconciliation, which changes only documents, and code splitting left no
+  error screen for a screen whose code fails to load ("V1 W5.0: code
+  splitting", Deferred).
+- **What changed.**
+  - `LoadBoundary` in `web/src/app/screens/parts.tsx` wraps the center, the
+    record detail pane and the continuity panel: a screen whose code fails to
+    load shows the kit's error note naming it, with "Reload page", resets when
+    another screen opens, and leaves the rest of the console working.
+  - D33 findings 16, 17, 19, 20, 22 and 23 in `docs/design/D33-REVIEW.md` (the
+    brief called them 20 to 25; the review numbers them as here): activation
+    titles incident boards "<incident name>: <template title>" rather than the
+    template key (`server/src/incidents/service.ts`, the board loop of
+    `activateIncident`); Resources shows dictionary labels for request state,
+    priority and next action, and the board list shows "Layer"; Chronology,
+    Tasks and both designer tab sets have a panel for each selected tab; the
+    context drawer is a modal dialog on phone and tablet widths and a
+    complementary landmark when docked, its title row no longer a banner;
+    only the docked drawer's state is saved as the layout preference; the
+    shared loading note is a polite status.
+- **Defaults and deviations.** The recovery is a page reload, not a retry in
+  place: Chrome caches a failed dynamic import, and the new walk counts one
+  request across two opens; the session and route survive the reload. Boards
+  activated before this change keep their stored titles; no rename migration.
+  The pool status badges keep their existing lowercase wording. Ownership
+  deviations: `server/src/incidents/service.ts` and `incidents.test.ts`; ten
+  server tests that asserted key titles or raw request states; the new
+  `load-retry-browser.test.ts`; and the same `interval` typecheck fix to
+  `cross-boundary-browser.test.ts` that `main` had in `c9c4e6a`, which the
+  rebase took as one.
+- **Schema, contract, dependencies:** none.
+- **Verification.** In the lane, tag `c`, on `9b9c110`: tsc and eslint exit 0;
+  `pnpm exec vitest run web/`, 91 files and 669 tests passed; 17 walk and
+  real-database files (the D33 review, resources, chronology, tasks,
+  boards-designer, app-e2e, load-retry, cross-boundary, incident-activation,
+  incident-lifecycle and jic-resources walks; incidents, incident-lifecycle,
+  iap, iap-workspace, sync-guest-withdrawal; route-coverage), 16 passed and
+  `jic-resources-browser`, after the host's worker crash 3221226505, 3 of 3
+  alone; bundle budget 161.0 kB; link checker ok, 94 files. Failing first:
+  with the fixes reverted, the 8 new or changed unit and database tests
+  failed and nothing else did; the load walk failed without the center
+  boundary. The integrating session rebased onto `a4da582`, which carries the
+  network out of write paths unit, and ran tsc and eslint exit 0 and `pnpm
+  exec vitest run` over write-path-network, collab, integrations-browser,
+  incidents and cross-boundary-browser, 5 files and 27 tests passed.
+- **Evidence level:** unit, real-database, browser and document.
+- **Deferred:** a rename migration for boards activated earlier; the pool
+  status badges' case; a reload while offline before the installed app has
+  cached its files shows the browser's offline page.
+- **Rollback:** revert both commits; no schema to unwind.
