@@ -8469,3 +8469,18 @@ this receipt, after IC2.
 - **Evidence level:** the phase gate, with each red named and each rerun
   alone, and `pnpm check` after the rebase.
 - **Rollback:** revert the commit.
+
+## Veoci and air gap: the plan moves to a local session
+
+Basho, 2026-09-25: "I want to stop that session and recommence the PSPR it's
+working on from here, not a cloud." The cloud session that landed VA1 to
+VA12, VA37, VA38 and the VA11 follow-up through
+`claude/veoci-research-integration-n1kd0p` was told to stop and went idle
+with nothing further pushed; `main` stood at `169e6cf`. It had been starting
+CI by hand on that branch for commits that `main`'s own push already ran
+(runs 310, 312, 316 and 318; 318 was cancelled). A local session in the
+canonical checkout now runs the plan from VA13, under the same grant. The
+plan's decisions 17 to 19 now read for that session: units commit on `main`
+and push with no hand-started workflow, the Windows setup is built on this
+machine at phase ends, and the test bed is a throwaway PostgreSQL 16.15 and
+PostGIS 3.6.2 cluster from the release runtime on 127.0.0.1:55440.
