@@ -6485,3 +6485,39 @@ approved by Basho on 2026-09-25 for STS with express permissions throughout.
   the full run and passed 10 of 10 alone. The load test passed 4 of 4.
 - **Evidence level:** the full suite plus an isolated rerun.
 - **Rollback:** revert the commit.
+
+## Exercise scenarios XS3: imagery and elevation to the Oregon line
+
+- **Authorization.** Basho authorized the download of public-domain USGS
+  imagery and elevation for Del Norte on 2026-09-25 (the plan's approval
+  state). No account or key was used.
+- **What changed.** `tools/basemap/build-north-coast-rasters.mjs` extends its
+  region north from 41.3 to 42.05, so it runs through Del Norte County to
+  the Oregon line and still covers SR-299 to Willow Creek and Weitchpec; the
+  archive descriptions and `tools/basemap/README.md` say so. The Humboldt Bay
+  z15 area is unchanged.
+- **The archives.** Rebuilt from the existing tile cache plus the new
+  tiles: `north-coast-imagery.pmtiles` 258,260,725 bytes, 14,042 tiles,
+  SHA-256 `1f99d3d721a97b09de4b96154364fc66148f4a124015e2f4b2e986a4ea49267b`
+  (was 184 MB); `north-coast-terrain.pmtiles` 255,313,640 bytes, 2,536
+  tiles, SHA-256 `124e5a91cb82a835813827546c5f10a8ab3092a1b7f175f01013a0ae1656ca28`
+  (was 144 MB). Both headers read bounds -124.75, 40.3 to -123.3, 42.05;
+  imagery z8 to z15, elevation z8 to z13. The archives are build output, not
+  tracked; XS7 puts them in the setup, which grows by about 175 MB.
+- **Verification.** Tiles read straight from the archives: imagery at z14
+  and elevation at z13 are present at Crescent City, Smith River, Deerhorn
+  and Willow Creek. In a browser against the Deerhorn seed with the archives
+  configured, the map moved to Crescent City at z13 and drew hillshade from
+  the new elevation archive with no request leaving the host. The imagery
+  basemap did not draw in that harness even with its button pressed; the
+  archive's imagery tiles are proven by the direct reads, and the on-screen
+  imagery is checked again in the installed demo (XS7) and the review
+  package (XS8). `pmtiles-writer.test.mjs`, `cartography.test.ts` and
+  `map-export.test.ts` 12 of 12; eslint on `tools/basemap` and the link
+  check pass.
+- **Not run:** `test:ci`, because the script is imported only by
+  `pmtiles-writer.test.mjs`; the next unit's suite runs on a tree containing
+  this change.
+- **Evidence level:** archive headers and tile reads, one browser capture,
+  focused tests.
+- **Rollback:** revert the commit and rebuild the archives.

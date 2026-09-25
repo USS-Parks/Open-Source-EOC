@@ -173,7 +173,7 @@ match the source (`terrarium` or `mapbox`).
 ### North Coast imagery and elevation archives
 
 `build-north-coast-rasters.mjs` builds the two offline raster archives the
-North Coast reference scenario uses, with no tile server:
+North Coast exercise scenarios use, with no tile server:
 
 | Archive | Source | Tiles |
 |---|---|---|
@@ -182,7 +182,11 @@ North Coast reference scenario uses, with no tile server:
 
 The Humboldt Bay area runs from Trinidad to Fortuna
 (`-124.42, 40.48, -123.78, 41.16`); the region around it
-(`-124.75, 40.3, -123.3, 41.3`) covers what a map framed on that area shows.
+(`-124.75, 40.3, -123.3, 42.05`) covers what a map framed on that area shows
+and reaches north through Del Norte County to the Oregon line and east past
+Willow Creek and Weitchpec, for the Del Norte and Deerhorn exercises. Built
+over that region the imagery archive is about 246 MB and the elevation
+archive about 244 MB.
 Tiles are cached under `tools/basemap/out/north-coast-cache`, so a rerun only
 fetches what is missing; the imagery service has no tiles over open ocean,
 and those are skipped.

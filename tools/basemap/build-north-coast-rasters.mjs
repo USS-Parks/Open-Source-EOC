@@ -6,7 +6,9 @@
 //                                service), Terrarium-encoded PNG, z8 to z13
 // Both sources are public domain. The Humboldt Bay area runs from Trinidad to
 // Fortuna; the region around it covers whatever an incident map framed on that
-// area shows. Tiles are fetched once and cached under
+// area shows, and reaches north through Del Norte County to the Oregon line and
+// east past Willow Creek and Weitchpec for the exercise scenarios there. Tiles
+// are fetched once and cached under
 // tools/basemap/out/north-coast-cache, so a rerun resumes.
 //
 //   node tools/basemap/build-north-coast-rasters.mjs [--out web/public/basemap]
@@ -18,7 +20,7 @@ import { TILE_TYPE, writePmtiles } from "./pmtiles-writer.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const NORTH_COAST_BOUNDS = [-124.42, 40.48, -123.78, 41.16];
-export const NORTH_COAST_REGION = [-124.75, 40.3, -123.3, 41.3];
+export const NORTH_COAST_REGION = [-124.75, 40.3, -123.3, 42.05];
 const IMAGERY = "https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}";
 const ELEVATION = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage";
 const HALF = 20037508.342789244;
@@ -175,7 +177,7 @@ async function main() {
     bounds: NORTH_COAST_REGION,
     metadata: {
       name: "North Coast imagery",
-      description: "USDA NAIP imagery of the Humboldt Bay area through the USGS National Map (USGSImageryOnly).",
+      description: "USDA NAIP imagery of the North Coast, Cape Mendocino to the Oregon line, through the USGS National Map (USGSImageryOnly).",
       attribution: "Imagery: USDA NAIP via USGS The National Map",
       type: "baselayer",
       format: "jpg",
@@ -198,7 +200,7 @@ async function main() {
     bounds: NORTH_COAST_REGION,
     metadata: {
       name: "North Coast terrain",
-      description: "USGS 3DEP elevation of the Humboldt Bay area, Terrarium-encoded for hillshade.",
+      description: "USGS 3DEP elevation of the North Coast, Cape Mendocino to the Oregon line, Terrarium-encoded for hillshade.",
       attribution: "Elevation: USGS 3DEP",
       type: "overlay",
       format: "png",
