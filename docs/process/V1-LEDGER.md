@@ -6454,3 +6454,34 @@ approved by Basho on 2026-09-25 for STS with express permissions throughout.
 - **Evidence level:** the full suite plus isolated reruns of the four files.
 - **Rollback:** revert the commit; North Coast Storm returns to its inline
   machinery.
+
+## Exercise scenarios XS2: scenario templates
+
+- **What changed.** `server/src/demo/scenario-templates.ts` holds three
+  activation templates, each with the command and general staff positions
+  and per-position checklists: `wildfire_complex` (Wildfire Complex:
+  Significant Events, Activity Log, Resource Requests, Shelters, Road
+  Closures, Field Reports, Incident Facilities, Sign In/Out), `flood` and
+  `earthquake_tsunami` (the same boards plus Damage Assessment). The
+  scenario kit inserts them beside the standard library, leaving any stored
+  copy alone, so every scenario database can activate from them.
+- **Deviations from decision 6.** The plan put two new templates in the
+  standard library and added Field Reports and Incident Facilities to
+  `wildfire`. Two facts changed that. The Veoci roster, approved the same day,
+  owns `server/src/incidents/**` for its VA6 (templates as data), so this
+  plan does not edit `incidents/service.ts`; and 41 test files activate
+  `wildfire` as a fixture, several adding their own Field Reports board, so a
+  changed `wildfire` would ripple through them. The templates therefore live
+  with the demo and `wildfire` is unchanged; the Deerhorn exercise activates
+  from `wildfire_complex`. The activation picker lists the standard library
+  only, so an operator does not see the three scenario templates there; VA6
+  is the path to offering them.
+- **Verification.** `pnpm check:static` exit 0.
+  `scenario-templates.test.ts` (new): each template activates with 8
+  positions, its boards and its checklist count, and a second run leaves a
+  stored copy alone, 4 of 4; with `incident-overview.test.ts`, 7 of 7. The
+  suite (`--maxWorkers=4`): 294 of 295 files and 1,668 of 1,670 tests;
+  `retention.test.ts` timed out twice on its UDP and TCP syslog forwarding in
+  the full run and passed 10 of 10 alone. The load test passed 4 of 4.
+- **Evidence level:** the full suite plus an isolated rerun.
+- **Rollback:** revert the commit.

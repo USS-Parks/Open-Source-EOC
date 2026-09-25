@@ -4,6 +4,7 @@ import { addMembership, createJurisdiction, createPerson } from "../auth/service
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardDashboards } from "../dashboards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import { ensureScenarioTemplates } from "./scenario-templates.js";
 
 /**
  * The machinery every exercise scenario seeds with. A scenario writes
@@ -100,6 +101,7 @@ export async function startScenario(app: FastifyInstance, sql: Sql, clock: Date,
 
   await ensureStandardTemplates(sql);
   await ensureStandardIncidentTemplates(sql);
+  await ensureScenarioTemplates(sql);
   await ensureStandardDashboards(sql);
 
   const organizations: Record<string, string> = {};
