@@ -24,7 +24,9 @@ export default defineConfig({
     teardownTimeout: 120_000,
     // Suites sign in as a seeded admin with a password alone. Admin MFA is
     // on by default in a deployment; the MFA suites turn it on explicitly.
-    env: { OPENEOC_REQUIRE_ADMIN_MFA: "0" },
+    // The suites read days and times on the North Coast Storm's Pacific clock;
+    // a machine in another zone (a hosted runner on UTC) reads them the same way.
+    env: { OPENEOC_REQUIRE_ADMIN_MFA: "0", TZ: "America/Los_Angeles" },
     // A worker that dies on a Node or V8 fatal error writes a diagnostic
     // report here, naming the error and its stacks. A worker crash on
     // Windows (exit 0xC0000409) prints nothing, so this is where its cause
