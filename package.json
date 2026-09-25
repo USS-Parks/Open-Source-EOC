@@ -1,6 +1,6 @@
 {
   "name": "@openeoc/root",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "private": true,
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.33.0",
@@ -16,10 +16,12 @@
     "fidelity": "node scripts/fidelity.mjs",
     "test": "vitest run",
     "test:ci": "vitest run --exclude server/src/__tests__/load.test.ts && vitest run server/src/__tests__/load.test.ts --maxWorkers=1",
+    "test:coverage": "vitest run --coverage --exclude server/src/__tests__/load.test.ts",
     "test:ci:serial": "vitest run --exclude server/src/__tests__/load.test.ts --maxWorkers=1 && vitest run server/src/__tests__/load.test.ts --maxWorkers=1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@vitest/coverage-v8": "5.0.1",
     "eslint": "^10.10.0",
     "typescript": "^5.5.0",
     "typescript-eslint": "^8.70.0",

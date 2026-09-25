@@ -162,7 +162,7 @@ node --test "$repo/deploy/windows/installer/installer.test.mjs"
 ```
 
 The result is
-`deploy/windows/out/installer/Open-Source-EOC-Setup-0.9.1.exe`. The stage is
+`deploy/windows/out/installer/Open-Source-EOC-Setup-0.9.2.exe`. The stage is
 an ignored generated artifact. Inspect its `package-manifest.json` before
 publishing a release. It records source and desktop-build provenance, each
 staged file's byte count and SHA-256, and whether optional map archives were
@@ -177,7 +177,7 @@ They are not a substitute for the application gate.
 
 ```powershell
 $repo = 'C:/Users/17076/Documents/Open Source EOC'
-$setup = "$repo/deploy/windows/out/installer/Open-Source-EOC-Setup-0.9.1.exe"
+$setup = "$repo/deploy/windows/out/installer/Open-Source-EOC-Setup-0.9.2.exe"
 Test-Path "$repo/deploy/windows/out/installer-stage/package-manifest.json"
 Test-Path $setup
 Start-Process -FilePath $setup -Wait
@@ -207,7 +207,7 @@ On the build computer:
 1. Write the setup's hash beside it, then copy both files to removable media:
 
    ```powershell
-   $setup = 'deploy/windows/out/installer/Open-Source-EOC-Setup-0.9.1.exe'
+   $setup = 'deploy/windows/out/installer/Open-Source-EOC-Setup-0.9.2.exe'
    (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content "$setup.sha256"
    ```
 
@@ -220,7 +220,7 @@ On the target computer:
    for this build:
 
    ```powershell
-   $setup = "$env:USERPROFILE\Downloads\Open-Source-EOC-Setup-0.9.1.exe"
+   $setup = "$env:USERPROFILE\Downloads\Open-Source-EOC-Setup-0.9.2.exe"
    (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant() -ceq (Get-Content "$setup.sha256").Trim()
    ```
 

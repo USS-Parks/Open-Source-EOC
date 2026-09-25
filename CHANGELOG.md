@@ -8,7 +8,22 @@ upgrade in place, is in the [upgrade guide](docs/guides/UPGRADE.md).
 
 ## Unreleased
 
-Nothing on `main` since 0.9.1 yet.
+Nothing on `main` since 0.9.2 yet.
+
+## 0.9.2 - 2026-09-25
+
+An evaluation build, not tagged. The Windows setup
+`Open-Source-EOC-Setup-0.9.2.exe` is built from the commit that sets this
+version and stands beside the `0.9.1` and `0.9.0` setups. Since 0.9.1 the
+Operator Trust PSPR's units landed on `main` (request receipt and
+acceptance, my work, shift handoff, durable drafts, information state,
+partner invitations and preview, incident close and reopen, upgrade
+reports, map to record, connecting to a host, and the open engineering
+list), with the reads that slowed under load made flat (ledger receipt
+"Readiness RD4 follow-up: reads that slowed as the incident filled"). The
+build also carries the Veoci roster's first units and the exercise scenario
+kit landed on `main` by 2026-09-25. The setup's SHA-256 is in the receipt
+"Version 0.9.2: the Windows setup".
 
 ## 0.9.1 - 2026-09-25
 

@@ -36,6 +36,14 @@ export default defineConfig({
     // creates per file (it never drops them), so the local cluster does not
     // accumulate dead databases and slow Postgres startup and recovery fsync.
     globalSetup: ["./server/src/__tests__/globalSetup.ts"],
+    // `pnpm test:coverage` measures how much of the server code the suite runs.
+    coverage: {
+      provider: "v8",
+      include: ["server/src/**/*.ts"],
+      exclude: ["server/src/**/__tests__/**"],
+      reporter: ["text-summary", "json-summary"],
+      reportsDirectory: "deploy/test-runtime/out/coverage",
+    },
     // No retries anywhere: the browser walks sign in inside the test body,
     // so a retried walk meets an already signed-in page and cannot recover,
     // and a retried database test would hide a real flake.

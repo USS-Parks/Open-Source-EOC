@@ -10,7 +10,7 @@ marks, and the status of each capability is in the
 [parity matrix](VEOC-PARITY-MATRIX.md). Where this page and those documents
 differ, they are right and this page is out of date.
 
-The current version is `0.9.1`, an evaluation build. It is not version 1.0,
+The current version is `0.9.2`, an evaluation build. It is not version 1.0,
 and no release has been tagged.
 
 ## What OpenEOC is
