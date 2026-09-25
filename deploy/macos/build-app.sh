@@ -19,9 +19,7 @@ pg_app_url="https://github.com/PostgresApp/PostgresApp/releases/download/v2.9.6/
 pg_app_sha256="2689dc64d6a02e0a66e4585616919060d8fbf5bb06886fccc05b7f87638bf081"
 pg_prefix="/Applications/Postgres.app/Contents/Versions/16"
 
-# mktemp's folder sits under /var, a link to /private/var; pnpm's relative
-# store paths need the one real spelling or they land at /Users/var.
-work="$(cd "$(mktemp -d)" && pwd -P)"
+work="$(mktemp -d)"
 app="$out/Open Source EOC.app"
 res="$app/Contents/Resources/app"
 rm -rf "$app"
@@ -109,8 +107,14 @@ cp -R server/src "$res/server/src"
 # Test sources carry synthetic fixture accounts; the app keeps only the demo's.
 find "$res/server/src" -type d -name __tests__ -prune -exec rm -rf {} +
 cp -R server/migrations "$res/server/migrations"
-pnpm --filter=@openeoc/server deploy --prod --legacy --node-linker=hoisted "$work/resolved-server"
-cp -R "$work/resolved-server/node_modules" "$res/server/node_modules"
+# pnpm writes the deploy's store path relative to the workspace and reads it
+# back from server/, one folder deeper, so a target outside the repository
+# lands at /Users/var. The Windows staging deploys inside the repository too.
+resolved="$PWD/deploy/macos/out/resolved-server.$$"
+rm -rf "$resolved"
+pnpm --filter=@openeoc/server deploy --prod --legacy --node-linker=hoisted "$resolved"
+cp -R "$resolved/node_modules" "$res/server/node_modules"
+rm -rf "$resolved"
 mkdir -p "$res/node_modules"
 cp -RL node_modules/typescript "$res/node_modules/typescript"
 mkdir -p "$res/web"
