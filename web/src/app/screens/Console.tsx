@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type Compone
 import { BoardList } from "../../design/layout.js";
 import { Button } from "../../design/components.js";
 import type { ThemeName } from "../../design/tokens.js";
-import type { ApiClient, BoardListItem, DashboardListItem, CollectionRef, FeedHealth, Membership } from "../api/client.js";
+import type { ApiClient, BoardListItem, DashboardListItem, CollectionRef, FeedHealth, Me, Membership } from "../api/client.js";
 import { useSession } from "../auth/session.js";
 import { boardsInScope, IncidentSwitcher, useIncident } from "../incident/context.js";
 import { useAsync, useNotifications } from "../data/hooks.js";
@@ -420,6 +420,8 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
           client={client}
           personId={session.me?.person.id ?? null}
           positionKey={session.me?.position?.key ?? null}
+          me={session.me ?? null}
+          onActAs={session.switchPosition}
           onDashboardsChanged={dashboards.reload}
           onBoardsChanged={boards.reload}
           jurisdictionId={viewingJurisdictionId ?? jurisdictionId}
@@ -564,6 +566,8 @@ function Center(props: {
   client: ApiClient;
   personId: string | null;
   positionKey: string | null;
+  me: Me | null;
+  onActAs: (positionId: string) => Promise<void>;
   onDashboardsChanged: () => void;
   onBoardsChanged: () => void;
   jurisdictionId: string;
@@ -880,7 +884,8 @@ function Center(props: {
     case "tasks":
       return <TasksSurface client={props.client} incidentId={props.incidentId}
         personId={props.personId} jurisdictionId={props.jurisdictionId}
-        canManage={props.isAdmin} closed={props.incidentClosed}
+        canManage={props.isAdmin} closed={props.incidentClosed} me={props.me}
+        onOpenRequest={(id) => props.onNavigate({ kind: "resources", id })} onActAs={props.onActAs}
         onOpenTemplates={() => props.onNavigate({ kind: "incidents" })} />;
     case "periods":
       return props.incidentId ? <IncidentAreaEditor client={props.client} incidentId={props.incidentId}

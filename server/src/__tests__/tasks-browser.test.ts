@@ -85,10 +85,10 @@ describe("task workspace in a real browser", () => {
     await positionRefresh;
     await page.getByRole("button", { name: "Tasks", exact: true }).click();
     await page.locator(".eoc-tasks-surface").getByRole("heading", { name: "Tasks" }).waitFor({ timeout: 10000 });
-    await page.getByText("Confirm evacuation routes").waitFor({ timeout: 10000 });
+    await page.locator(".eoc-operational-table").getByText("Confirm evacuation routes").waitFor({ timeout: 10000 });
     await page.getByRole("tab", { name: "Team Tasks" }).click();
-    await page.getByLabel("Due").selectOption("next_24_hours");
-    await page.getByText("Confirm evacuation routes").waitFor({ timeout: 10000 });
+    await page.getByLabel("Due", { exact: true }).selectOption("next_24_hours");
+    await page.locator(".eoc-operational-table").getByText("Confirm evacuation routes").waitFor({ timeout: 10000 });
     await page.getByRole("tab", { name: "My Tasks" }).click();
     await page.getByText("My incident tasks", { exact: true }).waitFor({ timeout: 10000 });
     await page.locator("[data-table-id='incident-tasks'] table").waitFor({ state: "visible" });

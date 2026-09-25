@@ -33,3 +33,23 @@
 }
 .eoc-tasks-number { color: var(--eoc-text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .eoc-tasks-template-note > .eoc-btn + .eoc-btn { margin-left: 8px; }
+
+/* My work: the acting person's tasks and requests, above the task table. */
+.eoc-mywork { display: grid; gap: 12px; margin-bottom: 16px; min-width: 0; }
+.eoc-mywork-summary { margin: 0; font-weight: 600; }
+.eoc-mywork-act { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 10px 12px; border: 1px solid var(--eoc-brand-teal); border-radius: 4px; }
+.eoc-mywork-error { color: var(--eoc-status-critical); margin: 0; }
+.eoc-mywork-group { display: grid; gap: 8px; min-width: 0; }
+.eoc-mywork-group h3 { align-items: center; display: flex; font-size: 1em; gap: 8px; margin: 0; }
+.eoc-mywork-count { background: var(--eoc-surface-raised); border-radius: 10px; font-size: 0.85em; padding: 0 8px; }
+.eoc-mywork-empty { color: var(--eoc-text-muted); margin: 0; }
+.eoc-mywork-list { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.eoc-mywork-list > li { align-items: center; border: 1px solid var(--eoc-border); border-radius: 4px; display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) auto; min-width: 0; padding: 10px 12px; }
+.eoc-mywork-list > li[data-overdue] { border-left: 4px solid var(--eoc-status-critical); }
+.eoc-mywork-main { display: grid; gap: 4px; min-width: 0; }
+.eoc-mywork-title { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.eoc-mywork-overdue { color: var(--eoc-status-critical); font-weight: 600; }
+.eoc-mywork-facts { color: var(--eoc-text-muted); display: flex; flex-wrap: wrap; font-size: 0.92em; gap: 4px 16px; }
+.eoc-mywork-actions { align-items: end; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.eoc-mywork-actions .eoc-input-field { margin: 0; max-width: 200px; }
+@media (max-width: 900px) { .eoc-mywork-list > li { grid-template-columns: 1fr; } .eoc-mywork-actions { justify-content: flex-start; } }

@@ -5371,3 +5371,43 @@ Operator Trust PSPR unit TP1 (research W2, W4, V1; decisions 3, 4 and 6).
 - **Evidence level:** unit, real-database and browser tests.
 - **Rollback:** revert the commit and restore the pre-upgrade backup to
   undo the migration's state change; the added columns alone are harmless.
+
+## Operator trust TP2: my work
+
+Operator Trust PSPR unit TP2 (research W3, V1; decision 6).
+
+- **What changed.**
+  - **My work, on the Tasks screen.** Above the task table, "My work" lists
+    the acting person's work across tasks and resource requests together,
+    most pressing first (overdue, then by due time): "Assigned to you" holds
+    what is assigned to the person or the position they act as, and the
+    requests they accepted and have not yet handed on; "Waiting for an
+    owner" holds what the organization received and nobody owns, and tasks
+    with no assignment. A line above says how many of each and how many are
+    overdue. Each row shows its number, stage, due time, owner and next
+    action.
+  - **Quick steps with a note.** Start and Complete a task, and Accept,
+    Start sourcing, Mark deployed, Mark fulfilled, Start demobilizing or
+    Close a request, take one click with an optional note, without opening
+    the record; a participant assigned a request sees only its delivery
+    steps. Decline, cancel and assignment stay on the Resources screen,
+    which asks for the reason or the assignee (decision 6).
+  - **Acting as a held position.** When the person holds positions but acts
+    as none, My work names them with "Act as" buttons, since position work
+    shows only while acting as the position.
+  - **The team view.** On Team Tasks, a section chief or command staff sees
+    the open work held by the section's other positions.
+  - The dense, detachable task table stays below for EOC staff.
+- **Defaults and deviations.** The queue reads the tasks and the open
+  requests of the selected incident; requests of other incidents stay on
+  the Resources screen. A task whose dependencies are unfinished offers no
+  Complete step.
+- **Gate.** Acceptance scenario 1, `scenario-occasional-operator-browser.test.ts`,
+  on the North Coast Storm exercise at 1586 by 992 and 1534 by 790:
+  D. Nguyen signs in, sees which incident is open, opens Tasks, acts as the
+  Operations Section Chief from the prompt there, finds the requests the
+  position owns, and marks one fulfilled with a note in one click; the
+  stored request records the step, the note and the person.
+- **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
+- **Evidence level:** unit, real-database and browser tests.
+- **Rollback:** revert the commit; no schema or data change.
