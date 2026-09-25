@@ -175,3 +175,33 @@ Native, from day one: CAP v1.2 in/out; EDXL-DE envelope, EDXL-RM resource messag
 ## 8. Primary sources
 
 Consolidated from the four research passes (full URL lists preserved in session research records): doc.arcgis.com solution and release-note pages; esri.com industry blog; Esri Community threads on upgrade and refresh-interval defects; G2/AWS Marketplace review excerpts; juvare.com, docs.juvare.com and confluence.juvare.com board and API documentation; Louisiana GOHSEP, Washington MIL, Colorado DHSEM, Utah DEM state WebEOC programs; Bay Area UASI standardization project records; DHS/CBP WebEOC Privacy Impact Assessment; county procurement records (Doña Ana NM, Escambia FL, North Port FL); cobrasoftware.com and dynamiseurope.eu excerpts; GovConWire/HSToday Dynamis-DGI acquisition coverage; DHS SAVER Incident Management Software Market Survey (Jan 2022); github.com/OfficeDev/microsoft-teams-emergency-operations-center repo, wiki, and releases; sahanafoundation.org; github.com/ushahidi, CrisisCleanup, TAK-Product-Center, FreeTAKTeam, brian7704/OpenTAKServer, open-ews, maplibre, gristlabs, baserow, formio, nocodb, Budibase, caronc/apprise, binwiederhier/ntfy, element-hq, mattermost, jitsi, livekit, nextcloud; fema.gov IPAWS developer pages; napsgfoundation.org symbology library.
+
+## 9. Corrections, September 24, 2026
+
+Added under the Operator Trust PSPR, unit TP0. The sections above stand as
+written on September 17; this section qualifies five of their claims, from
+the later research in `docs/process/EOC-USER-EXPERIENCE-RESEARCH-2026-09-24.md`
+(section 8 there, with its sources E05, E08 to E10 and W09). Reuse a claim
+below only with its qualification.
+
+- **Esri upgrades (section 1.1, "No in-place upgrades").** Official ArcGIS
+  Solutions guidance documents deploying updated items beside existing ones,
+  reapplying configuration and, where needed, migrating data. It does not say
+  every customization is destroyed or orphaned. The maintenance burden is
+  real; "orphans customizations" as a general description is not supported.
+- **Esri missing widgets (section 1.1, app-framework churn).** The Emergency
+  Response Guide gained a web tool in June 2025 and Threat Analysis one in
+  June 2026, first for ArcGIS Online. Assess their access and deployment
+  requirements for a named role instead of repeating that the functions are
+  missing.
+- **WebEOC hosting (section 1.2, "SaaS-only").** Current Juvare documentation
+  covers both client-installed and Juvare-hosted instances. Verify the edition
+  and contract in question before calling any deployment SaaS-only.
+- **Performance ratios and framework dates (section 1.1).** The later
+  research did not substantiate the 25x to 50x Arcade join comparison or the
+  stated Web AppBuilder and Experience Builder dates. Do not use them as
+  established design evidence.
+- **Standards absence (sections 1.1 and 1.2).** Absence from a documentation
+  search cannot confirm that a product lacks CAP, EDXL, NIEM or another
+  integration. Mark such support unverified unless a current authoritative
+  capability statement or a scoped evaluation settles it.

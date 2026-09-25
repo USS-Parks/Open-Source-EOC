@@ -5283,3 +5283,26 @@ Operator Trust PSPR unit RD5 (Readiness decision 8).
 - **Evidence level:** the recorded run and the static scan; browser tests
   for the offline start.
 - **Rollback:** revert the commit.
+
+## Operator trust TP0: corrections to the platform research
+
+Operator Trust PSPR unit TP0 (research Appendix A, section 8).
+
+- **What changed.** `docs/process/VIRTUAL-EOC-PLATFORM-RESEARCH-2026-09-17.md`
+  gains section 9, "Corrections, September 24, 2026": five dated
+  qualifications, appended, with the September 17 text left as written.
+  Esri upgrades are documented as parallel deployment with reapplied
+  configuration, not as orphaning every customization; the Emergency
+  Response Guide and Threat Analysis now have web tools, whose access and
+  deployment are to be assessed rather than called missing; WebEOC is
+  documented as both client-installed and Juvare-hosted, so no deployment is
+  to be called SaaS-only without checking its edition; the 25x to 50x
+  comparison and the framework dates were not substantiated; and absence
+  from a documentation search does not establish that a product lacks a
+  standard. Each names the section it qualifies and the later research's
+  sources.
+- **Gate.** Link check; review by Basho.
+- **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
+- **Evidence level:** documentation; the qualifications rest on the sources
+  cited in the September 24 research.
+- **Rollback:** revert the commit.
