@@ -8213,3 +8213,23 @@ package.
 - **Rollback:** revert the commit; no migration. A template saved with the
   new parts still loads after a revert: the older schema drops the parts it
   does not know, and activation opens positions, boards and checklists only.
+
+## Veoci and air gap VA11 follow-up: the imported packages on screen
+
+- **What was wrong.** VA11 added `GET /api/v1/solution-packages`, the
+  instance's record of imported packages, with no screen calling it. The
+  route coverage test, which holds every operator route to a caller, failed
+  on it in the full suite run for VA12; VA11 was already on main (169a31c),
+  so main's next run would fail it too.
+- **What changed.** The designer's **Import** tab lists **Signed packages on
+  this instance**, newest first: name, version, publisher, the signing key's
+  fingerprint, when and by whom, read again after each package import. Only
+  instance administrators read the record; for anyone else the list does not
+  appear.
+- **Tests.** `designer.test.tsx` reads the list when the tab opens and again
+  after a package import, and shows it; `solution-package-browser.test.ts`
+  sees the import in the list against the real server, and two entries after
+  the second import; the route coverage test passes.
+- **Verification.** On the Linux test bed: the designer and route coverage
+  tests 19 of 19; the package browser file 2 of 2.
+- **Rollback:** revert the commit; the route coverage test fails again.

@@ -742,6 +742,8 @@ function DefinitionImport(props: { client: ApiClient; jurisdictionId: string }) 
   const [imported, setImported] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The instance's record of signed packages; read by instance administrators, so anyone else sees none.
+  const packages = useAsync(() => props.client.listSolutionPackages(), [props.client]);
 
   async function pick(kind: ImportKind, input: HTMLInputElement) {
     const file = input.files?.[0];
@@ -753,6 +755,7 @@ function DefinitionImport(props: { client: ApiClient; jurisdictionId: string }) 
     try {
       const line = await importDefinition(props.client, props.jurisdictionId, kind, file);
       setImported((list) => [...list, line]);
+      if (line.startsWith("Package ")) packages.reload();
     } catch (reason) {
       setError(`${file.name}: ${reason instanceof Error ? reason.message : "the import failed."}`);
     } finally {
@@ -786,6 +789,15 @@ function DefinitionImport(props: { client: ApiClient; jurisdictionId: string }) 
         <h4>Imported</h4>
         <ul aria-label="Imported definitions">
           {imported.map((line, index) => <li key={index}>{line}</li>)}
+        </ul>
+      </section> : null}
+      {packages.data?.length ? <section>
+        <h4>Signed packages on this instance</h4>
+        <ul aria-label="Signed packages on this instance">
+          {packages.data.map((pkg) => <li key={pkg.id}>
+            {pkg.name} {pkg.version} from {pkg.publisher}, key {pkg.keyFingerprint.slice(0, 16)}: imported
+            {" "}<time dateTime={pkg.importedAt}>{new Date(pkg.importedAt).toLocaleString()}</time> by {pkg.importedBy}
+          </li>)}
         </ul>
       </section> : null}
     </div>

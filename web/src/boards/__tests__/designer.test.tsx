@@ -318,6 +318,7 @@ describe("definition import from the designer", () => {
       importForm: vi.fn().mockResolvedValue({ key: "damage_intake", version: 1 }),
       importXlsForm: vi.fn().mockResolvedValue({ key: "road_closure_2", version: 1 }),
       importDashboardTemplate: vi.fn().mockResolvedValue({ key: "ops_overview", version: 1 }),
+      listSolutionPackages: vi.fn().mockResolvedValue([]),
       ...overrides,
     } as unknown as ApiClient;
   }
@@ -390,7 +391,13 @@ describe("definition import from the designer", () => {
         ruleTemplates: empty,
       },
     });
-    const client = importClient({ importSolutionPackage });
+    // The instance's record of signed packages is read when the tab opens and again after each package.
+    const listSolutionPackages = vi.fn().mockResolvedValueOnce([]).mockResolvedValue([{
+      id: "p-1", publisher: "Klamath River Region", name: "Tribal EOC starter", version: "2026.1", publishedAt: "2026-09-25T20:00:00.000Z",
+      keyFingerprint: "ab".repeat(32), importedAt: "2026-09-25T21:00:00.000Z", importedBy: "Admin",
+      parts: {},
+    }]);
+    const client = importClient({ importSolutionPackage, listSolutionPackages });
     openImport(client);
     const pkg = { format: "openeoc-package-v2", publisher: "Klamath River Region", contents: {}, signature: "s" };
     choose("Signed solution package", json("starter.json", pkg));
@@ -399,6 +406,8 @@ describe("definition import from the designer", () => {
       + "Created board templates tribal_shelter_log version 1; report templates shelter_daily version 1. "
       + "1 item was already here. Kept this instance's own incident template tribal_flood; edit it to take the package's.");
     expect(importSolutionPackage).toHaveBeenCalledWith("j-1", pkg);
+    const onInstance = await screen.findByRole("list", { name: "Signed packages on this instance" });
+    expect(onInstance.textContent).toMatch(new RegExp(`^Tribal EOC starter 2026\\.1 from Klamath River Region, key ${"ab".repeat(8)}: imported .+ by Admin$`));
 
     // A package dropped on the board template picker goes the same way; any other file is refused here.
     choose("Board template file", json("starter-again.json", pkg));

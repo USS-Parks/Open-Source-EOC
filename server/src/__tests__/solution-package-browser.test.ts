@@ -113,6 +113,9 @@ describe("signed solution package import", () => {
       (await admin`select key_fingerprint from solution_packages`)[0]!.key_fingerprint.slice(0, 16)}. Created board templates `
       + "tribal_shelter_log version 1; incident templates tribal_flood; forms shelter_count version 1; dashboard templates "
       + "tribal_overview version 1; report templates shelter_daily version 1; rule templates new_shelter_notice version 1.");
+    // The instance's record of the import, as every later visit to the tab shows it.
+    await page.getByRole("list", { name: "Signed packages on this instance" })
+      .getByText(/^Tribal EOC starter 2026\.1 from Klamath River Test Region, key [0-9a-f]{16}: imported .+ by Admin$/).waitFor();
     await page.screenshot({ path: join(SHOTS, "solution-package-imported-1586.png"), fullPage: false });
 
     const tampered = structuredClone(signed);
@@ -133,6 +136,7 @@ describe("signed solution package import", () => {
     await page.getByLabel("Signed solution package").setInputFiles(file("tribal-starter.json", signed));
     await page.getByRole("list", { name: "Imported definitions" })
       .getByText(/Nothing new\. 6 items were already here\.$/).waitFor();
+    await expect.poll(() => page.getByRole("list", { name: "Signed packages on this instance" }).getByRole("listitem").count()).toBe(2);
     await page.screenshot({ path: join(SHOTS, "solution-package-again-1534.png"), fullPage: false });
     expect(errors).toEqual([]);
     expect(external).toEqual([]);

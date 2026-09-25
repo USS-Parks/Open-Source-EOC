@@ -2338,6 +2338,10 @@ export class ApiClient {
   importSolutionPackage(jurisdictionId: string, pkg: Record<string, unknown>): Promise<SolutionImportSummary> {
     return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/solution-packages`, pkg);
   }
+  /** Every signed solution package imported on this instance, newest first; instance administrators only. */
+  async listSolutionPackages(): Promise<readonly ImportedSolutionPackage[]> {
+    return (await this.request<{ packages: ImportedSolutionPackage[] }>("GET", "/api/v1/solution-packages")).packages;
+  }
 
   // ---- Notification channels (Administration) ----
   getNotificationChannel(jurisdictionId: string, kind: NotificationChannelKind): Promise<NotificationChannelView> {
@@ -2686,6 +2690,12 @@ export interface SolutionImportSummary {
   readonly publishedAt: string;
   readonly keyFingerprint: string;
   readonly parts: Readonly<Record<SolutionPart, { readonly created: readonly string[]; readonly held: readonly string[]; readonly kept: readonly string[] }>>;
+}
+
+/** A solution package import as the instance recorded it: the summary, when and by whom. */
+export interface ImportedSolutionPackage extends SolutionImportSummary {
+  readonly importedAt: string;
+  readonly importedBy: string;
 }
 
 export type NotificationChannelKind = "email" | "sms";
