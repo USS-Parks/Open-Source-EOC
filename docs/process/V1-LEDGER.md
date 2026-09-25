@@ -7656,3 +7656,47 @@ Veoci Integration and Air Gap PSPR unit VA8 (VC-03).
 - **Evidence level:** real-database and browser tests.
 - **Rollback:** revert the commit; migration `0152` adds two columns and two
   functions and restates `acknowledge_mass_token` with its answer.
+
+## Version 0.9.2: the macOS disk image, built on Windows
+
+At Basho's instruction of 2026-09-25 to build the disk image on this machine,
+with GitHub Actions stopped by its spending limit.
+
+- **The image.** `deploy/Open-Source-EOC-0.9.2-macOS.dmg`, 308,955,136
+  bytes, SHA-256
+  `39a03370f66ad335869c316ef3ae8721527a7a1819d3f43f66bc0cebbfe8ee14` (also
+  in the `.sha256` file beside it), 4,884 files in 639 folders. It holds
+  `Open Source EOC.app`, an Applications link and `READ-ME-FIRST.txt`. The
+  app is the `0.9.2` Windows setup's stage (`eb1277d`): the same server, web
+  build and public files, with the launcher from this checkout
+  (`c0c85e4`, `18bf75a`) and Node `v24.15.0` for Apple silicon and Intel
+  from nodejs.org, each tarball matched against Node's published SHA-256.
+  The maps and layers are the map data packet beside it ("Version 0.9.2:
+  the macOS build and its map data packet").
+- **How.** `deploy/macos/build-dmg-windows.mjs` builds it;
+  `deploy/macos/lib/iso9660.mjs` writes the image as ISO 9660 with Rock
+  Ridge, which macOS mounts and which carries each file's name, POSIX
+  permissions and symbolic links.
+- **One difference from the image a Mac builds.** PostgreSQL with PostGIS
+  is not inside it: Postgres.app ships only as a disk image, and making its
+  programs run from inside another app needs Mac tools. The launcher uses
+  the app's own PostgreSQL when it has one (the image
+  `deploy/macos/build-app.sh` makes on a Mac), otherwise Postgres.app's in
+  Applications (PostgreSQL 16, or 17 or 18 with PostGIS), and when neither
+  is there it names Postgres.app and opens its download page. The READ-ME
+  says so. Postgres.app need not be running.
+- **Verification.** `iso9660.test.mjs` (new, in `pnpm test:desktop`, 41 of
+  41 passing): an image with an executable launcher, an Applications link,
+  a 300-file folder, a 200-character name, a 5 MB file and an empty file
+  reads back with every name, permission, link and byte. The built image,
+  read back the same way: the launcher `#!/bin/bash` with mode 755, both
+  Node binaries mode 755 and 64-bit Mach-O, `Info.plist` at `0.9.2`, the
+  Mac launcher and map data code present, the base map present, the
+  packet's maps and every Windows runtime and script left out, the
+  Applications link to `/Applications`. Windows mounted the image as a
+  valid disk image (volume `OPEN_SOURCE_EOC_0_9_2`, 4,885 entries).
+- **Not run.** Nothing on a Mac: opening the image, Gatekeeper's first-open
+  prompt, and the demo starting with Postgres.app are Basho's first Mac run.
+- **Evidence level:** unit test and a read back of the built image; no Mac
+  run.
+- **Rollback:** revert the commit; remove the image from `deploy/`.

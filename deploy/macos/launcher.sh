@@ -17,13 +17,39 @@ export OPENEOC_DESKTOP_PREBUILT=1
 export OPENEOC_DESKTOP_DATA_ROOT="$data"
 export OPENEOC_DESKTOP_DIST_ROOT="$app/web/dist"
 export OPENEOC_DESKTOP_PUBLIC_ROOT="$app/web/public"
-export OPENEOC_PG_DIST="$app/runtime/pgsql"
 cd "$app" || exit 1
 
 notify() { osascript -e "display notification \"$1\" with title \"Open Source EOC\"" >/dev/null 2>&1 || true; }
 
 action="${1:-launch}"
 shift || true
+
+# PostgreSQL with PostGIS: the app's own when it carries one, otherwise
+# Postgres.app's in Applications (PostgreSQL 16, or a later version it
+# holds). Postgres.app need not be running; the demo runs its own server.
+pg=""
+if [ -x "$app/runtime/pgsql/bin/pg_ctl" ]; then
+  pg="$app/runtime/pgsql"
+else
+  for version in 16 17 18; do
+    candidate="/Applications/Postgres.app/Contents/Versions/$version"
+    if [ -x "$candidate/bin/pg_ctl" ] && { [ -f "$candidate/share/postgresql/extension/postgis.control" ] || [ -f "$candidate/share/extension/postgis.control" ]; }; then
+      pg="$candidate"
+      break
+    fi
+  done
+fi
+case "$action" in
+  launch|setup|start|backup)
+    if [ -z "$pg" ]; then
+      osascript -e 'display alert "Open Source EOC needs Postgres.app" message "Install Postgres.app with PostgreSQL 16 from postgresapp.com into Applications, then open Open Source EOC again. Postgres.app does not need to be running."' >/dev/null 2>&1 || true
+      open "https://postgresapp.com/downloads.html" >/dev/null 2>&1 || true
+      echo "Postgres.app with PostgreSQL 16 was not found in Applications" >&2
+      exit 1
+    fi
+    ;;
+esac
+[ -n "$pg" ] && export OPENEOC_PG_DIST="$pg"
 
 # The maps and layers come as a separate download, the map data packet. On an
 # open without it installed, the newest packet in Downloads or on the Desktop,
