@@ -1,9 +1,10 @@
 import { useState } from "react";
-import type { IncidentParticipantRole } from "@openeoc/shared";
+import { INCIDENT_PARTICIPANT_ROLE_SCOPE, type IncidentParticipantRole } from "@openeoc/shared";
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../../design/components.js";
 import type { ApiClient } from "../api/client.js";
 import { useAsync } from "../data/hooks.js";
 import { ErrorNote, Loading } from "../screens/parts.js";
+import { GrantPreviewPanel } from "./GrantPreview.js";
 import "./incidents.css";
 
 export function IncidentParticipants(props: {
@@ -18,6 +19,7 @@ export function IncidentParticipants(props: {
   const [reason, setReason] = useState("");
   const [revokeId, setRevokeId] = useState<string | null>(null);
   const [revokeReason, setRevokeReason] = useState("");
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
@@ -33,7 +35,8 @@ export function IncidentParticipants(props: {
     await props.client.addIncidentParticipant(props.incidentId, { organizationSlug: organizationSlug.trim(),
       personEmail: personEmail.trim(), incidentPositionTitle: positionTitle.trim(), role,
       expiresAt: new Date(expires).toISOString(), reason: reason.trim() });
-    setPersonEmail(""); setPositionTitle(""); setReason(""); setNotice("Participant added to this incident.");
+    setPersonEmail(""); setPositionTitle(""); setReason("");
+    setNotice("Participant added. Their notifications hold an invitation that names this incident, your organization and the access granted.");
   });
   const revoke = () => run(async () => {
     if (!revokeId || !revokeReason.trim()) throw new Error("Enter a reason for ending participation.");
@@ -70,9 +73,16 @@ export function IncidentParticipants(props: {
               <StatusBadge status={ended ? "unknown" : "info"}>{participant.revokedAt ? "revoked" : ended ? "expired" : "active"}</StatusBadge>
             </div>
             <p>Participant grant: {participant.role} · Incident position: {participant.incidentPositionTitle} · Expires {new Date(participant.expiresAt).toLocaleString()}</p>
+            <p className="eoc-flush">Can {INCIDENT_PARTICIPANT_ROLE_SCOPE[participant.role]}.</p>
+            {participant.invitation ? <p className="eoc-flush">Invitation delivered {new Date(participant.invitation.deliveredAt).toLocaleString()}; {participant.invitation.readAt ? `read ${new Date(participant.invitation.readAt).toLocaleString()}` : "not read yet"}.</p>
+              : props.canManage ? <p className="eoc-flush eoc-muted">No invitation on record; this grant predates invitations.</p> : null}
             <p className="eoc-flush eoc-muted">The incident position is an assignment for this participant. It does not itself establish command authority.</p>
+            {props.canManage ? <Button onClick={() => setPreviewId(previewId === participant.id ? null : participant.id)} disabled={busy}>
+              {previewId === participant.id ? "Hide preview" : `Preview what ${participant.personName} can read`}</Button> : null}
+            {previewId === participant.id ? <GrantPreviewPanel client={props.client} incidentId={props.incidentId} participantId={participant.id} onClose={() => setPreviewId(null)} /> : null}
             {props.canManage && !participant.revokedAt ? <Button onClick={() => { setRevokeId(participant.id); setRevokeReason(""); }} disabled={busy}>End participation for {participant.personName}</Button> : null}
             {revokeId === participant.id ? <div className="incidents-revoke">
+              <p className="eoc-flush">Ending participation stops {participant.personName}'s access from now on. It does not recall what was already delivered: exports, printed forms and notifications stay with whoever received them.</p>
               <TextField label="Reason for ending participation" value={revokeReason} onChange={setRevokeReason} />
               <div className="incidents-pair">
                 <Button kind="danger" onClick={() => void revoke()} disabled={busy || !revokeReason.trim()}>End participation</Button>

@@ -1,5 +1,6 @@
-import type {
-  IncidentParticipantGrant, IncidentParticipantGrantInput, IncidentParticipantRole,
+import {
+  INCIDENT_PARTICIPANT_ROLE_SCOPE,
+  type IncidentParticipantGrant, type IncidentParticipantGrantInput, type IncidentParticipantRole,
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
@@ -65,10 +66,16 @@ const grantSelect = `
   select ip.id, ip.incident_id, ip.organization_id, j.slug as organization_slug,
     j.name as organization_name, ip.person_id, p.email as person_email,
     p.display_name as person_name, ip.incident_position_title, ip.role,
-    ip.expires_at, ip.revoked_at, ip.created_at
+    ip.expires_at, ip.revoked_at, ip.created_at,
+    invitation.created_at as invited_at, invitation.read_at as invitation_read_at
   from incident_participants ip
   join jurisdictions j on j.id = ip.organization_id
-  join persons p on p.id = ip.person_id`;
+  join persons p on p.id = ip.person_id
+  left join lateral (
+    select n.created_at, n.read_at from notifications n
+    where n.channel = 'invitation' and n.detail ->> 'participantId' = ip.id::text
+    order by n.created_at desc limit 1
+  ) invitation on true`;
 
 function toGrant(row: Record<string, unknown>): IncidentParticipantGrant {
   return {
@@ -85,6 +92,10 @@ function toGrant(row: Record<string, unknown>): IncidentParticipantGrant {
     expiresAt: new Date(row.expires_at as string).toISOString(),
     revokedAt: row.revoked_at ? new Date(row.revoked_at as string).toISOString() : null,
     createdAt: new Date(row.created_at as string).toISOString(),
+    invitation: row.invited_at ? {
+      deliveredAt: new Date(row.invited_at as string).toISOString(),
+      readAt: row.invitation_read_at ? new Date(row.invitation_read_at as string).toISOString() : null,
+    } : null,
   };
 }
 
@@ -147,6 +158,19 @@ export async function grantIncidentParticipant(
       expiresAt: expiresAt.toISOString(), reason: input.reason,
     },
   });
+  // The invitation names the organization, the incident and the access granted, and opens the incident.
+  const [names] = await sql`
+    select i.name as incident, owner.name as owner, partner.name as partner
+    from incidents i join jurisdictions owner on owner.id = i.jurisdiction_id, jurisdictions partner
+    where i.id = ${incidentId} and partner.id = ${target.organization_id as string}`;
+  await sql`
+    insert into notifications (jurisdiction_id, person_id, incident_id, channel, title, body, status, detail)
+    values (${authority.jurisdictionId}, ${target.person_id as string}, ${incidentId}, 'invitation',
+      ${`${names!.owner as string} invites you to ${names!.incident as string}`},
+      ${`${names!.owner as string} added you to the ${names!.incident as string} incident for ${names!.partner as string}, as ${input.incidentPositionTitle}. `
+        + `You can ${INCIDENT_PARTICIPANT_ROLE_SCOPE[input.role]}, until ${expiresAt.toISOString().slice(0, 16).replace("T", " ")} UTC. `
+        + `Reason: ${input.reason} Choose ${names!.incident as string} in the incident list to open it.`},
+      'delivered', ${sql.json({ participantId: id, route: `#/overview?incident=${incidentId}` } as never)})`;
   const [row] = await sql.unsafe(`${grantSelect} where ip.id = $1`, [id]);
   return toGrant(row!);
 }

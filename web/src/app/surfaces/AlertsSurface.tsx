@@ -87,6 +87,7 @@ function channelLabel(channel: string): string {
     collab: "Collaboration service",
     feed: "Data feed",
     resource: "Resource coordination",
+    invitation: "Incident invitation",
     briefing: "Briefing schedule",
     webhook: "Webhook delivery",
     ntfy: "Push delivery",

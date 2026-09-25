@@ -8,6 +8,7 @@ import { withPerson } from "../db/context.js";
 import {
   grantIncidentParticipant, listIncidentParticipants, revokeIncidentParticipant,
 } from "./participation.js";
+import { previewParticipantGrant } from "./preview.js";
 
 const IncidentId = z.string().uuid();
 
@@ -45,5 +46,13 @@ export function incidentParticipationRoutes(
     const participant = await withPerson(sql, req.principal.person.id, (tx) =>
       revokeIncidentParticipant(tx, req.principal, incidentId, participantId, reason));
     return { participant };
+  });
+
+  // What a grant lets its person read, read as that person; the incident's administrators only.
+  app.get("/api/v1/incidents/:incidentId/participants/:participantId/preview", {
+    preHandler: authenticate,
+  }, async (req) => {
+    const params = req.params as { incidentId: string; participantId: string };
+    return previewParticipantGrant(sql, req.principal, IncidentId.parse(params.incidentId), IncidentId.parse(params.participantId));
   });
 }

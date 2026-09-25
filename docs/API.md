@@ -417,6 +417,7 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 
 - `GET /api/v1/incidents/:incidentId/participants`: Read incidents participants (auth: bearer; audience: operator)
 - `POST /api/v1/incidents/:incidentId/participants`: Run incidents participants (auth: bearer; audience: operator)
+- `GET /api/v1/incidents/:incidentId/participants/:participantId/preview`: Read incidents participants preview (auth: bearer; audience: operator)
 - `POST /api/v1/incidents/:incidentId/participants/:participantId/revoke`: Run incidents participants revoke (auth: bearer; audience: operator)
 
 ### peers

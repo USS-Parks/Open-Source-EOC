@@ -98,6 +98,7 @@ const participant: IncidentParticipantGrant = {
   expiresAt: "2099-09-21T20:00:00.000Z",
   revokedAt: null,
   createdAt: "2026-09-21T08:00:00.000Z",
+  invitation: null,
 };
 
 it("builds a draft assignment with named participant authority", async () => {

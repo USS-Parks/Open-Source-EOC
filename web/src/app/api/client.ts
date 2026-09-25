@@ -18,6 +18,7 @@ import type {
   IncidentAreaUpdate,
   IncidentParticipantGrant,
   IncidentParticipantGrantInput,
+  GrantPreview,
   DatasetStatus,
   DataPack,
   CatalogEntryStatus,
@@ -1113,6 +1114,10 @@ export class ApiClient {
   }
   revokeIncidentParticipant(incidentId: string, participantId: string, reason: string): Promise<{ participant: IncidentParticipantGrant }> {
     return this.request("POST", `/api/v1/incidents/${incidentId}/participants/${participantId}/revoke`, { reason });
+  }
+  /** What a participant's grant lets them read on the incident, read as that person. */
+  previewIncidentParticipant(incidentId: string, participantId: string): Promise<GrantPreview> {
+    return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/participants/${encodeURIComponent(participantId)}/preview`);
   }
   async listIncidentDatasets(incidentId: string): Promise<DatasetStatus[]> {
     const result = await this.request<{ datasets: DatasetStatus[] }>(

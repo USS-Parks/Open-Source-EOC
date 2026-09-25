@@ -10,6 +10,9 @@ import {
 } from "react";
 import type { IncidentBoardRef, IncidentSummary } from "../api/client.js";
 import { useSession } from "../auth/session.js";
+
+/** A link to an incident the reader may not open: why, and whom to ask, without saying what it holds. */
+const LINK_REFUSED = "The linked incident is not open to your account. If a link brought you here, ask whoever sent it, or an administrator of the organization running the incident, for access.";
 import { useAsync, usePolled } from "../data/hooks.js";
 import { parseRouteHash, replaceRouteContext, surfaceHash, type Surface } from "../router.js";
 import { Icon } from "../../design/icons/index.js";
@@ -115,7 +118,7 @@ export function IncidentProvider(props: { children: ReactNode }) {
       replaceRouteContext({ incidentId: fallback });
       noticeIncident.current = fallback;
       setSelectedId(fallback);
-      setSelectionNotice("The linked incident is not available to this session.");
+      setSelectionNotice(LINK_REFUSED);
       return;
     }
     if (selectedId && list.some((incident) => incident.id === selectedId)) return;
@@ -136,7 +139,7 @@ export function IncidentProvider(props: { children: ReactNode }) {
         if (noticeIncident.current !== requested) setSelectionNotice(null);
         setSelectedId(requested);
       } else if (list.length > 0) {
-        setSelectionNotice("The linked incident is not available to this session.");
+        setSelectionNotice(LINK_REFUSED);
       }
     };
     window.addEventListener("hashchange", onHashChange);

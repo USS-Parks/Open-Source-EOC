@@ -31,4 +31,34 @@ export interface IncidentParticipantGrant {
   readonly expiresAt: string;
   readonly revokedAt: string | null;
   readonly createdAt: string;
+  /** The invitation the person was sent, as its administrators read it; null to other readers. */
+  readonly invitation: { readonly deliveredAt: string; readonly readAt: string | null } | null;
+}
+
+/** What a grant's role lets its person do on the incident, in the invitation's words. */
+export const INCIDENT_PARTICIPANT_ROLE_SCOPE: Readonly<Record<IncidentParticipantRole, string>> = {
+  viewer: "read what the incident shares with its participants",
+  contributor: "read what the incident shares and add records, requests and messages",
+  coordinator: "read and add to the incident, and revise its operational area where the incident allows",
+};
+
+/** One kind of thing an incident holds, and which of it a grant's person reads. */
+export interface PreviewSection {
+  readonly key: "boards" | "records" | "requests" | "threads" | "datasets";
+  readonly label: string;
+  /** What the person reads, by name. */
+  readonly readable: readonly string[];
+  /** What the reviewing administrator reads and the person does not, by name. */
+  readonly restricted: readonly string[];
+}
+
+/** What a participant grant lets its person read on the incident. */
+export interface GrantPreview {
+  readonly person: string;
+  readonly organization: string;
+  readonly role: string;
+  readonly expiresAt: string;
+  /** False once the grant is revoked or has expired: the person then reads nothing on the incident. */
+  readonly active: boolean;
+  readonly sections: readonly PreviewSection[];
 }

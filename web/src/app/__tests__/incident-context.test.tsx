@@ -115,7 +115,7 @@ describe("IncidentProvider", () => {
     mount();
     await waitFor(() => expect(screen.getByTestId("selected").textContent).toBe("open-1"));
     expect(location.hash).toBe("#/boards?incident=open-1");
-    expect(screen.getByRole("alert").textContent).toMatch(/linked incident is not available/i);
+    expect(screen.getByRole("alert").textContent).toMatch(/linked incident is not open to your account/i);
   });
 
   it("switches to a just-activated incident once the server lists it, and never to one it does not list", async () => {

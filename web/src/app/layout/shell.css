@@ -155,7 +155,7 @@
 .eoc-shell-select.is-plain select { padding-right: 28px; }
 .eoc-shell-select.is-plain > .eoc-shell-select-chevron { right: 2px; }
 .eoc-shell-select.is-period select { padding-right: 6px; }
-.eoc-shell-select small { position: absolute; top: 100%; left: 0; color: #fecaca; font-size: 10px; white-space: nowrap; }
+.eoc-shell-select small { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; width: min(420px, 80vw); padding: 6px 8px; border: 1px solid var(--eoc-status-critical); border-radius: 4px; background: var(--eoc-surface); color: var(--eoc-text); font-size: 12px; line-height: 1.35; white-space: normal; }
 [data-theme="dark"] .eoc-shell-chip.is-period .eoc-shell-select-icon { display: none !important; }
 .eoc-shell-context > span { color: #d7e6f2; font-size: 13px; }
 

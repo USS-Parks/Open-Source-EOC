@@ -667,7 +667,7 @@ describe("the operations console in a real browser, offline", () => {
       await participants.getByLabel("Participation expires").fill("2099-09-20T20:00");
       await participants.getByLabel("Participation reason").fill("Mutual aid coordination requested");
       await participants.getByRole("button", { name: "Add participant", exact: true }).click();
-      await participants.getByText("Participant added to this incident.", { exact: true }).waitFor();
+      await participants.getByText(/^Participant added\. Their notifications hold an invitation/).waitFor();
       await participants.getByText("Partner Operator", { exact: true }).waitFor();
       const partnerToken = await login(app, "area-partner@example.org", "partner-proof-password");
       const partnerRead = (id: string) => app.inject({ method: "GET", url: "/api/v1/incidents/" + id + "/operational-area", headers: { authorization: "Bearer " + partnerToken } });

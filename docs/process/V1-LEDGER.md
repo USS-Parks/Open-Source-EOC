@@ -5562,3 +5562,58 @@ Operator Trust PSPR unit TP5 (research W5, E6, E7; section 5 rows 4 and 9).
 - **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
 - **Evidence level:** unit and browser tests.
 - **Rollback:** revert the commit; no schema or data change.
+
+## Operator trust TP6: partner invitations and recipient preview
+
+Operator Trust PSPR unit TP6 (research V3, E3, W4; decision 7).
+
+- **What changed.**
+  - **An invitation with every grant.** Adding a participant now sends them
+    an in-app notification, "Humboldt County OES invites you to North Coast
+    Storm": the owning organization, the incident, the partner organization,
+    the incident position, what the role can do, the expiry in UTC, the
+    reason, and how to open it. It is addressed to the person and kept in
+    the owning organization's notifications, so the grant's administrators
+    see its state: each grant in the participants list shows "Invitation
+    delivered ...; read ..." or "not read yet". Grants made before this
+    change say they predate invitations.
+  - **What the role can do,** stated on each grant: read what the incident
+    shares; also add records, requests and messages; also revise the
+    operational area where the incident allows.
+  - **Preview what a grant reads** (decision 7). An administrator of the
+    incident opens "Preview what E. Park can read" on any grant: the same
+    reads run twice under row-level security, as the administrator and as
+    the grant's person, so the preview is the wall itself, not a model of
+    it. It lists boards, records per board, resource requests, message
+    threads and map datasets the person reads, and names each one the
+    administrator reads and the person does not. Route:
+    `GET /api/v1/incidents/:incidentId/participants/:participantId/preview`.
+  - **Ending a grant says what it does not do:** it stops access from now
+    on and does not recall what was already delivered (exports, printed
+    forms, notifications).
+  - **A link that leads to sign-in lands where it pointed.** Signing in keeps
+    the link's route, so a partner following a link to a request lands on
+    it (now proven by the scenario).
+  - **A refused incident link says so, and whom to ask.** A link to an
+    incident not open to the account now says "The linked incident is not
+    open to your account. If a link brought you here, ask whoever sent it,
+    or an administrator of the organization running the incident, for
+    access." The notice was set before but printed in 10-pixel text on one
+    line under the incident list, running off the bar; it now wraps in a
+    readable box.
+- **Defaults and deviations.** Invitations are in-app only: outbound email
+  is not sent without Basho's separate authorization, and the recipient
+  already has an account (grants name an existing account). Refusals of
+  other items use TP5's wording.
+- **Gate.** Acceptance scenario 5, `scenario-partner-link-browser.test.ts`,
+  on the North Coast Storm exercise at 1586 by 992 and 1534 by 790: Jordan
+  Lee adds a Red Cross shelter lead as a contributor; the grant shows the
+  role's scope and an unread invitation; the preview lists what the grant
+  reads; ending it shows what it does not recall. The shelter lead opens a
+  link to a county request while signed out, signs in and lands on it,
+  reads the invitation, which then shows as read on the county's list, and
+  a link to an incident not open to them names the cause and whom to ask.
+- **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
+- **Evidence level:** real-database and browser tests.
+- **Rollback:** revert the commit; invitations already sent stay in the
+  notification log.
