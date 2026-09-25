@@ -217,7 +217,10 @@ describe("connector timeouts", () => {
   it("abandons an IPAWS endpoint that never answers", async () => {
     const started = Date.now();
     await expect(
-      ipawsTransport({ method: "POST", url, headers: { "content-type": "text/xml" }, body: "<alert/>" }, 200),
+      ipawsTransport(
+        { method: "POST", url, headers: { "content-type": "text/xml" }, body: "<alert/>", signedAlert: "<alert/>" },
+        200,
+      ),
     ).rejects.toThrow(/timeout/i);
     expect(Date.now() - started).toBeLessThan(5_000);
   });

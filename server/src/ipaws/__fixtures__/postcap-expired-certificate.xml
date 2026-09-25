@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Shaped after the "Expired Certificate" example in the IPAWS-OPEN
+     Interface Design Guide v4.02.06 (section 8.2.1): a SOAP Fault. Not
+     recorded from IPAWS-OPEN. -->
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <soap:Fault>
+      <faultcode xmlns:env="http://www.w3.org/2003/05/soap-envelope">env:Receiver</faultcode>
+      <faultstring>SOAPMessage signed with invalid certificate. Check validity date range of certificate.</faultstring>
+    </soap:Fault>
+  </soap:Body>
+</soap:Envelope>

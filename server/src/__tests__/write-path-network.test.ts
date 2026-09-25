@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../app.js";
@@ -9,6 +6,7 @@ import { ensureStandardTemplates } from "../boards/service.js";
 import { runDueFeeds } from "../feeds/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
 import { auth, freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
+import { capTimeFromNow, cogCertificate, eligibleAlert, ipawsFixture } from "./ipaws-support.js";
 
 /**
  * No write path awaits the network inside a database transaction. Every
@@ -25,10 +23,7 @@ const IPAWS = "https://ipaws.invalid/IPAWS";
 const PEER = "https://state.invalid";
 const MATRIX = "https://matrix.invalid";
 const FEEDS = "https://feeds.invalid";
-const accepted = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "..", "ipaws", "__fixtures__", "postcap-accepted.xml"),
-  "utf8",
-);
+const accepted = ipawsFixture("accepted");
 const gauges = JSON.stringify({
   type: "FeatureCollection",
   features: [{ type: "Feature", id: "g1", geometry: { type: "Point", coordinates: [-123.5, 41.2] }, properties: { name: "Gauge" } }],
@@ -124,9 +119,10 @@ afterAll(async () => {
 
 describe("the IPAWS send confirmation", () => {
   async function requestHandshake(identifier: string): Promise<string> {
+    const cap = { ...eligibleAlert(), identifier, sent: capTimeFromNow(0) };
     const [alert] = await admin`
       insert into cap_alerts (jurisdiction_id, identifier, origin, status, msg_type, scope, ipaws_eligible, alert, xml, created_by)
-      select ${jurisdictionId}, ${identifier}, 'authored', 'Actual', 'Alert', 'Public', true, '{}'::jsonb,
+      select ${jurisdictionId}, ${identifier}, 'authored', 'Actual', 'Alert', 'Public', true, ${admin.json(cap)},
         '<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2"/>', id
       from persons where email = 'admin@example.org' returning id`;
     const requested = await call("POST", `/api/v1/jurisdictions/${jurisdictionId}/ipaws/test`, { alertId: alert!.id as string });
@@ -136,7 +132,7 @@ describe("the IPAWS send confirmation", () => {
 
   beforeAll(async () => {
     const configured = await call("PUT", `/api/v1/jurisdictions/${jurisdictionId}/ipaws/config`, {
-      environment: "test", cogId: "123456", endpointUrl: IPAWS, credential: "pin-secret",
+      environment: "test", cogId: "123456", endpointUrl: IPAWS, credential: cogCertificate("123456").bundle,
     });
     expect(configured.statusCode, configured.body).toBe(200);
   });

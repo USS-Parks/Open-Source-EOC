@@ -8,9 +8,17 @@ import { createSecureContext, createServer as createTlsServer, TLSSocket } from 
  * the network beyond 127.0.0.1.
  */
 
-/** A self-signed certificate for 127.0.0.1, built with node:crypto alone. */
-export function selfSigned(): { key: string; cert: string } {
-  const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+/**
+ * A self-signed certificate for 127.0.0.1, built with node:crypto alone. By
+ * default an EC key with CN localhost; the IPAWS tests ask for an RSA key, a
+ * COG's CN and, for the expiry checks, a lapsed notAfter (UTCTime).
+ */
+export function selfSigned(
+  options: { rsa?: boolean; commonName?: string; notAfter?: string } = {},
+): { key: string; cert: string } {
+  const { privateKey, publicKey } = options.rsa
+    ? generateKeyPairSync("rsa", { modulusLength: 2048 })
+    : generateKeyPairSync("ec", { namedCurve: "prime256v1" });
   const length = (n: number) =>
     n < 128 ? Buffer.from([n]) : n < 256 ? Buffer.from([0x81, n]) : Buffer.from([0x82, n >> 8, n & 255]);
   const tlv = (tag: number, ...parts: Buffer[]) => {
@@ -19,14 +27,16 @@ export function selfSigned(): { key: string; cert: string } {
   };
   const seq = (...parts: Buffer[]) => tlv(0x30, ...parts);
   const oid = (hex: string) => tlv(0x06, Buffer.from(hex, "hex"));
-  const algorithm = seq(oid("2a8648ce3d040302")); // ecdsa-with-SHA256
-  const name = seq(tlv(0x31, seq(oid("550403"), tlv(0x0c, Buffer.from("localhost")))));
+  const algorithm = options.rsa
+    ? seq(oid("2a864886f70d01010b"), tlv(0x05)) // sha256WithRSAEncryption
+    : seq(oid("2a8648ce3d040302")); // ecdsa-with-SHA256
+  const name = seq(tlv(0x31, seq(oid("550403"), tlv(0x0c, Buffer.from(options.commonName ?? "localhost")))));
   const tbs = seq(
     tlv(0xa0, tlv(0x02, Buffer.from([2]))),
     tlv(0x02, Buffer.from([1])),
     algorithm,
     name,
-    seq(tlv(0x17, Buffer.from("250101000000Z")), tlv(0x17, Buffer.from("491231235959Z"))),
+    seq(tlv(0x17, Buffer.from("250101000000Z")), tlv(0x17, Buffer.from(options.notAfter ?? "491231235959Z"))),
     name,
     publicKey.export({ type: "spki", format: "der" }),
     tlv(

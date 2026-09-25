@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Shaped after the "SOAP Message Improperly Signed" example in the
+     IPAWS-OPEN Interface Design Guide v4.02.06 (section 8.2.1): HTTP 200,
+     the alert's signature refused (208) and the message invalid for CAP
+     exchange (221), so no channel is processed. Not recorded from
+     IPAWS-OPEN. -->
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <ns2:postCAPResponseTypeDef xmlns="http://gov.fema.ipaws.services/caprequest" xmlns:ns2="http://gov.fema.ipaws.services/IPAWS_CAPService/" xmlns:ns3="urn:oasis:names:tc:emergency:cap:1.2" xmlns:ns4="http://gov.fema.ipaws.services/capresponse">
+      <ns4:parameterListItem>
+        <ns4:parameterName>identifier</ns4:parameterName>
+        <ns4:parameterValue>OPENEOC-FIXTURE-SIGNATURE-INVALID</ns4:parameterValue>
+      </ns4:parameterListItem>
+      <ns4:parameterListItem>
+        <ns4:subParaListItem><ns4:subParameterName>CHANNELNAME</ns4:subParameterName><ns4:subParameterValue>CAPEXCH</ns4:subParameterValue></ns4:subParaListItem>
+        <ns4:subParaListItem><ns4:subParameterName>STATUSITEMID</ns4:subParameterName><ns4:subParameterValue>208</ns4:subParameterValue></ns4:subParaListItem>
+        <ns4:subParaListItem><ns4:subParameterName>ERROR</ns4:subParameterName><ns4:subParameterValue>Y</ns4:subParameterValue></ns4:subParaListItem>
+        <ns4:subParaListItem><ns4:subParameterName>STATUS</ns4:subParameterName><ns4:subParameterValue>alert-signature-not-valid</ns4:subParameterValue></ns4:subParaListItem>
+        <ns4:subParaListItem><ns4:subParameterName>CHANNELNAME</ns4:subParameterName><ns4:subParameterValue>CAPEXCH</ns4:subParameterValue></ns4:subParaListItem>
+        <ns4:subParaListItem><ns4:subParameterName>STATUSITEMID</ns4:subParameterName><ns4:subParameterValue>221</ns4:subParameterValue></ns4:subParaListItem>
+        <ns4:subParaListItem><ns4:subParameterName>ERROR</ns4:subParameterName><ns4:subParameterValue>Y</ns4:subParameterValue></ns4:subParaListItem>
+        <ns4:subParaListItem><ns4:subParameterName>STATUS</ns4:subParameterName><ns4:subParameterValue>invalid-CAPEXCHANGE-message</ns4:subParameterValue></ns4:subParaListItem>
+      </ns4:parameterListItem>
+    </ns2:postCAPResponseTypeDef>
+  </soap:Body>
+</soap:Envelope>

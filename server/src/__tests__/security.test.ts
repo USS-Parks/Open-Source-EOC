@@ -4,6 +4,7 @@ import { buildApp } from "../app.js";
 import { addMembership, createJurisdiction, createPerson } from "../auth/service.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { cogCertificate } from "./ipaws-support.js";
 
 /**
  * Seeded adversarial suite (INV-7). It holds the platform to its
@@ -159,15 +160,19 @@ describe("the audit log is append-only", () => {
 
 describe("secrets are never echoed", () => {
   it("returns fingerprints, never the raw credential", async () => {
+    const { bundle, key } = cogCertificate("123456");
     const ipaws = await inject("PUT", `/api/v1/jurisdictions/${jurA}/ipaws/config`, adminAToken, {
       environment: "test",
       cogId: "123456",
       endpointUrl: "https://tdl.example.org/IPAWS",
-      credential: "super-secret-pin",
+      credential: bundle,
     });
     expect(ipaws.statusCode).toBe(200);
     const status = await inject("GET", `/api/v1/jurisdictions/${jurA}/ipaws`, adminAToken);
-    expect(status.body).not.toContain("super-secret-pin");
+    const keyBody = key.split("\n")[1]!;
+    expect(ipaws.body).not.toContain(keyBody);
+    expect(status.body).not.toContain(keyBody);
+    expect(status.body).not.toContain("PRIVATE KEY");
 
     const collab = await inject("PUT", `/api/v1/jurisdictions/${jurA}/collab/backend`, adminAToken, {
       kind: "mattermost",

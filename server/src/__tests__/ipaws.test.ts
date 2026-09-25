@@ -1,71 +1,70 @@
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { SignedXml } from "xml-crypto";
 import { API_CONTRACT, generateApiDocs } from "@openeoc/shared";
 import { buildApp } from "../app.js";
 import { addMembership, createPerson, principalForPerson, type Principal } from "../auth/service.js";
 import { withPerson } from "../db/context.js";
 import { configure, postAlert } from "../ipaws/service.js";
 import {
+  IPAWS_CAP_SERVICE_NS,
+  IpawsCredentialError,
   buildPostCapRequest,
   httpTransport,
   parseIpawsResponse,
+  postCap,
   type IpawsRequest,
   type IpawsTransport,
 } from "../ipaws/connector.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { capTimeFromNow, cogCertificate, eligibleAlert, ipawsFixture } from "./ipaws-support.js";
 
 /**
- * IPAWS-OPEN enable-at-will (R2). The connector interprets
- * recorded IPAWS-OPEN responses; the frozen contract matches the running
- * app; and enablement is gated on explicit configuration plus a documented
- * MOA, disabled by default, with a single toggle taking it live.
+ * IPAWS-OPEN enable-at-will (R2), built to FEMA's IPAWS-OPEN Interface
+ * Design Guide v4.02. The connector signs what the IDG requires and reads
+ * its responses failing closed; the frozen contract matches the running
+ * app; and enablement is gated on a checked COG certificate plus a
+ * documented MOA, disabled by default, with a single toggle taking it live.
  */
 
-const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "ipaws", "__fixtures__");
-const accepted = readFileSync(join(FIXTURES, "postcap-accepted.xml"), "utf8");
-const rejected = readFileSync(join(FIXTURES, "postcap-rejected.xml"), "utf8");
+const accepted = ipawsFixture("accepted");
+const cmasRejected = ipawsFixture("cmas-rejected");
+const signatureInvalid = ipawsFixture("signature-invalid");
+const expiredCertificate = ipawsFixture("expired-certificate");
 
-const eligibleDraft = {
-  sender: "oes@yuroktribe.example",
-  status: "Actual",
-  msgType: "Alert",
-  scope: "Public",
-  code: ["IPAWSv1.0"],
-  info: [
-    {
-      language: "en-US",
-      category: ["Met"],
-      event: "Flood Warning",
-      responseType: ["Prepare"],
-      urgency: "Expected",
-      severity: "Severe",
-      certainty: "Likely",
-      eventCode: [{ valueName: "SAME", value: "FLW" }],
-      effective: "2026-09-18T12:00:00-07:00",
-      onset: "2026-09-18T13:00:00-07:00",
-      expires: "2026-09-18T18:00:00-07:00",
-      senderName: "Yurok Tribe OES",
-      headline: "Flood Warning for the Lower Klamath",
-      description: "Rising water along the Lower Klamath River through the evening.",
-      instruction: "Move to higher ground.",
-      area: [
-        {
-          areaDesc: "Lower Klamath River corridor",
-          geocode: [{ valueName: "SAME", value: "006015" }],
-        },
-      ],
-    },
-  ],
-};
+const COG = "123456";
+const certificate = cogCertificate(COG);
+const ENDPOINT = "https://tdl.integration.aws.fema.gov/IPAWS_CAPService/IPAWS";
+const creds = { cogId: COG, logonUser: "admin@example.org", certificate: certificate.bundle };
+
+const eligibleDraft = eligibleAlert();
 
 // A valid CAP alert that is deliberately not IPAWS-profile complete.
 const ineligibleDraft = { ...eligibleDraft, code: [] as string[] };
+
+const CAP_XML =
+  '<?xml version="1.0" encoding="UTF-8"?>\n' +
+  '<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2">\n  <identifier>X-1</identifier>\n' +
+  "  <headline>Flood Warning</headline>\n</alert>";
+
+/** The ds:Signature element that directly follows `after` in `xml`. */
+function signatureAfter(xml: string, after: RegExp): string {
+  const start = xml.slice(xml.search(after));
+  return /<(\w+:)?Signature [\s\S]*?<\/\1?Signature>/.exec(start)![0];
+}
+
+function verifies(xml: string, signature: string, idMode?: "wssecurity"): boolean {
+  const sig = new SignedXml({ publicCert: certificate.cert, getCertFromKeyInfo: () => null, ...(idMode ? { idMode } : {}) });
+  sig.loadSignature(signature);
+  try {
+    return sig.checkSignature(xml);
+  } catch {
+    return false;
+  }
+}
 
 let admin: Sql;
 let runtime: Sql;
@@ -131,32 +130,148 @@ afterAll(async () => {
   else process.env.OPENEOC_SECRET_KEY = priorKey;
 });
 
-describe("IPAWS-OPEN connector against recorded fixtures", () => {
-  it("builds a postCAP request that carries the alert and COG", () => {
-    const req = buildPostCapRequest(
-      "https://tdl.integratedpublicalertsystem.gov/IPAWS_CAPService/IPAWS",
-      { cogId: "123456", secret: "pin-secret" },
-      '<?xml version="1.0"?><alert xmlns="urn:oasis:names:tc:emergency:cap:1.2"><identifier>X-1</identifier></alert>',
-    );
+describe("IPAWS-OPEN connector, to the Interface Design Guide", () => {
+  it("builds the postCAP request the IDG describes", () => {
+    const req = buildPostCapRequest(ENDPOINT, creds, CAP_XML);
     expect(req.method).toBe("POST");
-    expect(req.headers.soapaction).toContain("postCAP");
-    expect(req.headers["x-ipaws-cog"]).toBe("123456");
-    expect(req.body).toContain("<cogId>123456</cogId>");
+    expect(req.url).toBe(ENDPOINT);
+    expect(req.headers).toEqual({
+      "content-type": "text/xml; charset=utf-8",
+      soapaction: `"${IPAWS_CAP_SERVICE_NS}postCAP"`,
+    });
+    expect(req.body).toContain(`xmlns:ipaws="${IPAWS_CAP_SERVICE_NS}"`);
+    expect(req.body).toContain(
+      "<ipaws:CAPHeaderTypeDef><ipaws:logonUser>admin@example.org</ipaws:logonUser>" +
+        "<ipaws:logonCogId>123456</ipaws:logonCogId></ipaws:CAPHeaderTypeDef>",
+    );
+    expect(req.body).toMatch(/<wsse:Security [^>]*soap:mustUnderstand="1"/);
+    const token = /<wsse:BinarySecurityToken [^>]*>([^<]+)</.exec(req.body)![1];
+    expect(token).toBe(certificate.cert.replace(/-----[A-Z ]+-----|\s/g, ""));
+    expect(req.body).toMatch(/<ipaws:postCAPRequestTypeDef><alert xmlns="urn:oasis:names:tc:emergency:cap:1\.2">/);
     expect(req.body).toContain("<identifier>X-1</identifier>");
-    // The embedded CAP must not carry its own XML declaration.
+    // No PIN or secret travels anywhere, and the embedded CAP has no declaration of its own.
+    expect(req.body).not.toMatch(/PRIVATE KEY|pin/i);
     expect(req.body.match(/<\?xml/g)?.length).toBe(1);
   });
 
-  it("reads an acceptance", () => {
-    const result = parseIpawsResponse({ status: 200, body: accepted });
-    expect(result.accepted).toBe(true);
-    expect(result.detail).toContain("IPAWS-OPEN-TEST-ACK-2026-0918-001");
+  it("signs the SOAP Body and the alert so both verify against the COG certificate", () => {
+    const req = buildPostCapRequest(ENDPOINT, creds, CAP_XML);
+    const soapSignature = signatureAfter(req.body, /<wsse:Security /).replace(
+      "<ds:Signature ",
+      '<ds:Signature xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd" ',
+    );
+    expect(soapSignature).toContain('<ds:Reference URI="#id-body">');
+    expect(soapSignature).toContain('Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"');
+    expect(soapSignature).toContain('Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"');
+    expect(soapSignature).toContain('<wsse:Reference URI="#x509-token"');
+    expect(req.body).toContain('<soap:Body wsu:Id="id-body">');
+    expect(verifies(req.body, soapSignature, "wssecurity")).toBe(true);
+
+    // The alert as IPAWS-OPEN will read it out of the Body, signature and all.
+    const alert = /<alert [\s\S]*<\/alert>/.exec(req.body)![0];
+    expect(alert).toBe(req.signedAlert);
+    const capSignature = signatureAfter(alert, /<alert /);
+    expect(capSignature).toContain('<Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>');
+    expect(verifies(alert, capSignature)).toBe(true);
+    expect(verifies(alert.replace("Flood Warning", "Flood Watch"), capSignature)).toBe(false);
+    expect(verifies(req.body.replace("<identifier>X-1<", "<identifier>X-2<"), soapSignature, "wssecurity"))
+      .toBe(false);
   });
 
-  it("reads a SOAP-fault rejection", () => {
-    const result = parseIpawsResponse({ status: 500, body: rejected });
+  it("refuses, before signing, any certificate IPAWS-OPEN would refuse", () => {
+    const refused = (certificate: string, message: RegExp) =>
+      expect(() => buildPostCapRequest(ENDPOINT, { ...creds, certificate }, CAP_XML)).toThrow(message);
+    refused(cogCertificate("999999").bundle, /CN \(IPAWSOPEN_999999\) does not contain COG id 123456/);
+    refused(cogCertificate(COG, { notAfter: "250601000000Z" }).bundle, /certificate expired on 2025-06-01/);
+    refused(`${certificate.cert}${cogCertificate(COG).key}`, /does not belong to the certificate/);
+    refused(cogCertificate(COG, { rsa: false }).bundle, /not an RSA key/);
+    refused(certificate.cert, /no PEM private key/);
+    refused("pin-secret", /no PEM certificate/);
+    refused(`${certificate.cert}-----BEGIN ENCRYPTED PRIVATE KEY-----\nAAAA\n-----END ENCRYPTED PRIVATE KEY-----\n`, /encrypted/);
+    // A paste that lost or changed its line breaks still reads.
+    const flattened = certificate.bundle.replace(/\n/g, "");
+    expect(buildPostCapRequest(ENDPOINT, { ...creds, certificate: flattened }, CAP_XML).body).toContain("postCAP");
+    expect(buildPostCapRequest(ENDPOINT, { ...creds, certificate: certificate.bundle.replace(/\n/g, "\r\n") }, CAP_XML))
+      .toHaveProperty("signedAlert");
+    expect(() => buildPostCapRequest(ENDPOINT, { ...creds, certificate: "pin-secret" }, CAP_XML))
+      .toThrow(IpawsCredentialError);
+  });
+
+  it("reports a refused certificate as not sent, without calling the transport", async () => {
+    let calls = 0;
+    const result = await postCap(ENDPOINT, { ...creds, cogId: "654321" }, CAP_XML, async () => {
+      calls += 1;
+      return { status: 200, body: accepted };
+    });
+    expect(calls).toBe(0);
+    expect(result).toMatchObject({ accepted: false, httpStatus: 0, channels: [], transmittedXml: null });
+    expect(result.detail).toMatch(/^not sent: .*does not contain COG id 654321/);
+  });
+
+  it("reports a transport that throws as unanswered, keeping the alert it may have delivered", async () => {
+    const result = await postCap(ENDPOINT, creds, CAP_XML, async () => {
+      throw new TypeError("fetch failed");
+    });
+    expect(result).toMatchObject({ accepted: false, detail: "IPAWS-OPEN did not answer: fetch failed" });
+    expect(result.transmittedXml).toContain("<identifier>X-1</identifier>");
+  });
+
+  it("reads an acceptance with the status of each channel", () => {
+    const result = parseIpawsResponse({ status: 200, body: accepted });
+    expect(result.accepted).toBe(true);
+    expect(result.channels).toContainEqual({ channel: "EAS", code: "500", error: false, status: "Ack" });
+    expect(result.channels).toContainEqual({ channel: "IPAWS", code: null, error: false, status: "Ack" });
+    expect(result.channels).toHaveLength(7);
+    expect(result.detail).toMatch(/^accepted: CAPEXCH 200 Ack; .*PUBLIC 800 Ack$/);
+  });
+
+  it("reads HTTP 200 with a channel flagged ERROR as a rejection that names what went out", () => {
+    // The old connector read this response as accepted.
+    const result = parseIpawsResponse({ status: 200, body: cmasRejected });
     expect(result.accepted).toBe(false);
-    expect(result.detail).toContain("not authorized");
+    expect(result.detail).toBe(
+      "rejected on CMAS, though acknowledged on EAS, PUBLIC: CMAS 615 signer-not-authorized-for-event-code-CMAS",
+    );
+    expect(result.channels.filter((c) => c.error)).toEqual([
+      { channel: "CMAS", code: "615", error: true, status: "signer-not-authorized-for-event-code-CMAS" },
+    ]);
+  });
+
+  it("reads an invalid alert signature as a rejection", () => {
+    const result = parseIpawsResponse({ status: 200, body: signatureInvalid });
+    expect(result.accepted).toBe(false);
+    expect(result.detail).toBe(
+      "rejected on CAPEXCH: CAPEXCH 208 alert-signature-not-valid; CAPEXCH 221 invalid-CAPEXCHANGE-message",
+    );
+  });
+
+  it("reads a SOAP Fault as a rejection", () => {
+    const result = parseIpawsResponse({ status: 500, body: expiredCertificate });
+    expect(result).toMatchObject({ accepted: false, httpStatus: 500, channels: [] });
+    expect(result.detail).toContain("signed with invalid certificate");
+  });
+
+  it("fails closed on anything it does not recognize", () => {
+    const rejectedWith = (status: number, body: string) => {
+      const result = parseIpawsResponse({ status, body });
+      expect(result.accepted).toBe(false);
+      return result.detail;
+    };
+    // The shape the old connector's fixture had: no postCAPResponseTypeDef.
+    expect(rejectedWith(200,
+      '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><postCAPResponse>' +
+        "<return><errorCount>0</errorCount></return></postCAPResponse></soap:Body></soap:Envelope>",
+    )).toBe("unrecognized IPAWS-OPEN response");
+    expect(rejectedWith(200,
+      '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body>' +
+        '<ns2:postCAPResponseTypeDef xmlns:ns2="http://gov.fema.ipaws.services/IPAWS_CAPService/"/>' +
+        "</soap:Body></soap:Envelope>",
+    )).toBe("unrecognized IPAWS-OPEN response");
+    expect(rejectedWith(200, accepted.replace(/<ns4:subParaListItem>[\s\S]*<\/ns4:subParaListItem>/, "")))
+      .toBe("IPAWS-OPEN returned no channel status");
+    expect(rejectedWith(502, "<html>Bad Gateway</html>")).toBe("IPAWS-OPEN HTTP 502");
+    expect(rejectedWith(200, "not xml <<<")).toMatch(/unparseable|unrecognized/);
+    expect(rejectedWith(302, accepted)).toBe("IPAWS-OPEN HTTP 302");
   });
 });
 
@@ -239,14 +354,27 @@ describe("enablement is gated and disabled by default", () => {
       method: "PUT",
       url: `/api/v1/jurisdictions/${jurisdictionId}/ipaws/config`,
       headers: { authorization: `Bearer ${memberToken}` },
-      payload: {
-        environment: "test",
-        cogId: "123456",
-        endpointUrl: "https://tdl.integratedpublicalertsystem.gov/IPAWS_CAPService/IPAWS",
-        credential: "pin-secret",
-      },
+      payload: { environment: "test", cogId: COG, endpointUrl: ENDPOINT, credential: certificate.bundle },
     });
     expect(res.statusCode).toBe(403);
+  });
+
+  it("refuses a certificate IPAWS-OPEN would refuse, naming the problem", async () => {
+    const put = (payload: object) =>
+      app.inject({
+        method: "PUT",
+        url: `/api/v1/jurisdictions/${jurisdictionId}/ipaws/config`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: { environment: "test", endpointUrl: ENDPOINT, ...payload },
+      });
+    const pin = await put({ cogId: COG, credential: "pin-secret" });
+    expect(pin.statusCode).toBe(422);
+    expect(pin.json().error).toBe("COG certificate refused: the credential holds no PEM certificate");
+    const otherCog = await put({ cogId: "654321", credential: certificate.bundle });
+    expect(otherCog.statusCode).toBe(422);
+    expect(otherCog.json().error).toContain("does not contain COG id 654321");
+    const [row] = await admin`select count(*)::int as n from ipaws_config where jurisdiction_id = ${jurisdictionId}`;
+    expect(row!.n).toBe(0);
   });
 
   it("configures, still refuses to enable without the MOA, then enables after it", async () => {
@@ -254,18 +382,23 @@ describe("enablement is gated and disabled by default", () => {
       method: "PUT",
       url: `/api/v1/jurisdictions/${jurisdictionId}/ipaws/config`,
       headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
-        environment: "test",
-        cogId: "123456",
-        endpointUrl: "https://tdl.integratedpublicalertsystem.gov/IPAWS_CAPService/IPAWS",
-        credential: "pin-secret",
-      },
+      payload: { environment: "test", cogId: COG, endpointUrl: ENDPOINT, credential: certificate.bundle },
     });
     expect(cfg.statusCode).toBe(200);
     expect(cfg.json().configured).toBe(true);
-    // The raw credential is never echoed; only a fingerprint is shown.
-    expect(cfg.body).not.toContain("pin-secret");
+    expect(cfg.json().certificateExpiresAt).toBe("2049-12-31T23:59:59.000Z");
+    // The key is never echoed; only a fingerprint is shown.
+    expect(cfg.body).not.toContain("PRIVATE KEY");
     expect(cfg.json().credentialFingerprint).toMatch(/^[0-9a-f]{12}$/);
+
+    // The stored certificate is checked again when the COG id changes without it.
+    const renamed = await app.inject({
+      method: "PUT",
+      url: `/api/v1/jurisdictions/${jurisdictionId}/ipaws/config`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { environment: "test", cogId: "654321", endpointUrl: ENDPOINT },
+    });
+    expect(renamed.statusCode).toBe(422);
 
     const denied = await app.inject({
       method: "POST",
@@ -307,8 +440,8 @@ describe("transmission requires enablement and eligibility", () => {
         configure(tx, otherPrincipal, seed.jurisdictionId, {
           environment: "test",
           cogId: "654321",
-          endpointUrl: "https://tdl.integratedpublicalertsystem.gov/IPAWS_CAPService/IPAWS",
-          credential: "pin-secret",
+          endpointUrl: ENDPOINT,
+          credential: cogCertificate("654321").bundle,
         }),
       );
       await expect(
@@ -330,17 +463,27 @@ describe("transmission requires enablement and eligibility", () => {
       sent = req;
       return { status: 200, body: accepted };
     };
+    const before = Date.now();
     const result = await withPerson(runtime, adminId, (tx) =>
       postAlert(tx, adminPrincipal, jurisdictionId, id, transport),
     );
     expect(result.accepted).toBe(true);
-    expect(sent).not.toBeNull();
-    expect(sent!.body).toContain("Flood Warning");
+    expect(result.channels).toHaveLength(7);
+    const req = sent as IpawsRequest | null;
+    expect(req!.body).toContain("Flood Warning");
+    expect(req!.body).toContain("<ipaws:logonUser>admin@example.org</ipaws:logonUser>");
+    // Stamped as it goes, in CAP form, so IPAWS-OPEN's five-minute check (code 303) passes.
+    const stamped = /<sent>([^<]+)<\/sent>/.exec(req!.signedAlert)![1]!;
+    expect(stamped).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d-00:00$/);
+    expect(Date.parse(stamped)).toBeGreaterThanOrEqual(Math.floor(before / 1000) * 1000);
+    expect(Date.parse(stamped)).toBeLessThanOrEqual(Date.now());
 
     const [row] = await admin`
-      select accepted, cog_id from ipaws_submissions where cap_alert_id = ${id}`;
+      select accepted, cog_id, channels, transmitted_xml from ipaws_submissions where cap_alert_id = ${id}`;
     expect(row!.accepted).toBe(true);
-    expect(row!.cog_id).toBe("123456");
+    expect(row!.cog_id).toBe(COG);
+    expect(row!.transmitted_xml).toBe(req!.signedAlert);
+    expect(row!.channels).toContainEqual({ channel: "CMAS", code: "600", error: false, status: "Ack" });
     const [audit] = await admin`
       select payload ->> 'accepted' as accepted from audit_events where category = 'ipaws.submitted'`;
     expect(audit!.accepted).toBe("true");
@@ -348,12 +491,34 @@ describe("transmission requires enablement and eligibility", () => {
 
   it("records a rejection when IPAWS-OPEN faults", async () => {
     const { id } = await authorAlert(eligibleDraft);
-    const transport: IpawsTransport = async () => ({ status: 500, body: rejected });
+    const transport: IpawsTransport = async () => ({ status: 500, body: expiredCertificate });
     const result = await withPerson(runtime, adminId, (tx) =>
       postAlert(tx, adminPrincipal, jurisdictionId, id, transport),
     );
     expect(result.accepted).toBe(false);
-    expect(result.detail).toContain("not authorized");
+    expect(result.detail).toContain("signed with invalid certificate");
+  });
+
+  it("records a channel's refusal as a rejection, with the channels that went out", async () => {
+    const { id } = await authorAlert(eligibleDraft);
+    const result = await withPerson(runtime, adminId, (tx) =>
+      postAlert(tx, adminPrincipal, jurisdictionId, id, async () => ({ status: 200, body: cmasRejected })),
+    );
+    expect(result.accepted).toBe(false);
+    expect(result.detail).toMatch(/^rejected on CMAS, though acknowledged on EAS, PUBLIC/);
+    const [row] = await admin`
+      select accepted, channels from ipaws_submissions where id = ${result.submissionId}`;
+    expect(row!.accepted).toBe(false);
+    expect(row!.channels).toContainEqual({
+      channel: "CMAS", code: "615", error: true, status: "signer-not-authorized-for-event-code-CMAS",
+    });
+  });
+
+  it("refuses an alert that has expired by the time it would go", async () => {
+    const { id } = await authorAlert(eligibleAlert({ expires: capTimeFromNow(-1) }));
+    await expect(
+      withPerson(runtime, adminId, (tx) => postAlert(tx, adminPrincipal, jurisdictionId, id, okTransport())),
+    ).rejects.toThrow(/the alert expired at .*; author a new one/);
   });
 
   it("refuses a CAP alert that is not IPAWS-eligible", async () => {

@@ -1,9 +1,19 @@
+import { CapAlertSchema, capToXml } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { AuthError, requireAdmin, requireMember, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 import { withPerson } from "../db/context.js";
 import { decryptSecret, encryptSecret, fingerprint, hasSecretKey } from "../secrets/envelope.js";
-import { httpTransport, postCap, type IpawsResult, type IpawsTransport } from "./connector.js";
+import {
+  httpTransport,
+  IpawsCredentialError,
+  postCap,
+  readCertificate,
+  type IpawsCredentials,
+  type IpawsResult,
+  type IpawsSend,
+  type IpawsTransport,
+} from "./connector.js";
 
 /**
  * IPAWS-OPEN enablement and transmission (R2). The connector is
@@ -23,6 +33,8 @@ export interface IpawsStatus {
   readonly cogId: string | null;
   readonly endpointUrl: string | null;
   readonly credentialFingerprint: string | null;
+  /** When the stored COG certificate expires; null until one is configured. */
+  readonly certificateExpiresAt: string | null;
   readonly moaAcknowledged: boolean;
   readonly moaReference: string | null;
   readonly moaAcknowledgedAt: string | null;
@@ -36,6 +48,7 @@ interface ConfigRow {
   endpoint_url: string | null;
   credential_envelope: string | null;
   credential_fingerprint: string | null;
+  certificate_expires_at: Date | null;
   moa_acknowledged: boolean;
   moa_reference: string | null;
   moa_acknowledged_at: Date | null;
@@ -44,7 +57,8 @@ interface ConfigRow {
 async function loadConfig(sql: Sql, jurisdictionId: string): Promise<ConfigRow | null> {
   const [row] = await sql`
     select enabled, environment, cog_id, endpoint_url, credential_envelope,
-           credential_fingerprint, moa_acknowledged, moa_reference, moa_acknowledged_at
+           credential_fingerprint, certificate_expires_at, moa_acknowledged, moa_reference,
+           moa_acknowledged_at
     from ipaws_config where jurisdiction_id = ${jurisdictionId}`;
   return (row as ConfigRow | undefined) ?? null;
 }
@@ -53,10 +67,11 @@ function toStatus(row: ConfigRow | null): IpawsStatus {
   return {
     enabled: row?.enabled ?? false,
     environment: row?.environment ?? "test",
-    configured: Boolean(row?.cog_id && row?.credential_envelope),
+    configured: Boolean(row?.cog_id && row?.credential_envelope && row?.certificate_expires_at),
     cogId: row?.cog_id ?? null,
     endpointUrl: row?.endpoint_url ?? null,
     credentialFingerprint: row?.credential_fingerprint ?? null,
+    certificateExpiresAt: row?.certificate_expires_at ? row.certificate_expires_at.toISOString() : null,
     moaAcknowledged: row?.moa_acknowledged ?? false,
     moaReference: row?.moa_reference ?? null,
     moaAcknowledgedAt: row?.moa_acknowledged_at ? row.moa_acknowledged_at.toISOString() : null,
@@ -77,11 +92,18 @@ export interface ConfigureInput {
   readonly environment: "test" | "production";
   readonly cogId: string;
   readonly endpointUrl: string;
-  /** The COG credential; omit to update other fields without resending it. */
+  /**
+   * The COG's FEMA-issued certificate and RSA private key as one PEM bundle;
+   * omit to update other fields without resending it.
+   */
   readonly credential?: string;
 }
 
-/** Configure (or reconfigure) a jurisdiction's IPAWS-OPEN COG. Admin only. */
+/**
+ * Configure (or reconfigure) a jurisdiction's IPAWS-OPEN COG. Admin only.
+ * The certificate bundle, new or stored, is checked against the COG id as
+ * IPAWS-OPEN will check it, and refused with 422 naming the problem.
+ */
 export async function configure(
   sql: Sql,
   actor: Principal,
@@ -91,15 +113,26 @@ export async function configure(
   requireAdmin(actor, jurisdictionId);
   if (input.credential !== undefined && !hasSecretKey())
     throw new AuthError(409, "server not provisioned for secret storage (OPENEOC_SECRET_KEY unset)");
+  const stored = input.credential === undefined ? (await loadConfig(sql, jurisdictionId))?.credential_envelope : null;
+  const bundle = input.credential ?? (stored && hasSecretKey() ? decryptSecret(stored) : null);
+  let expiresAt: Date | null = null;
+  if (bundle !== null) {
+    try {
+      expiresAt = readCertificate(bundle, input.cogId).expiresAt;
+    } catch (err) {
+      if (err instanceof IpawsCredentialError) throw new AuthError(422, `COG certificate refused: ${err.message}`);
+      throw err;
+    }
+  }
   const envelope = input.credential !== undefined ? encryptSecret(input.credential) : null;
   const fp = input.credential !== undefined ? fingerprint(input.credential) : null;
   await sql`
     insert into ipaws_config
       (jurisdiction_id, environment, cog_id, endpoint_url, credential_envelope,
-       credential_fingerprint, updated_by, updated_at)
+       credential_fingerprint, certificate_expires_at, updated_by, updated_at)
     values
       (${jurisdictionId}, ${input.environment}, ${input.cogId}, ${input.endpointUrl},
-       ${envelope}, ${fp}, ${actor.person.id}, now())
+       ${envelope}, ${fp}, ${expiresAt}, ${actor.person.id}, now())
     on conflict (jurisdiction_id) do update set
       environment = excluded.environment,
       cog_id = excluded.cog_id,
@@ -107,6 +140,7 @@ export async function configure(
       credential_envelope = coalesce(excluded.credential_envelope, ipaws_config.credential_envelope),
       credential_fingerprint =
         coalesce(excluded.credential_fingerprint, ipaws_config.credential_fingerprint),
+      certificate_expires_at = excluded.certificate_expires_at,
       updated_by = excluded.updated_by,
       updated_at = now()`;
   await recordAudit(sql, actor, {
@@ -114,7 +148,12 @@ export async function configure(
     category: "ipaws.configured",
     subjectTable: "ipaws_config",
     subjectId: jurisdictionId,
-    payload: { environment: input.environment, cogId: input.cogId, credentialSet: envelope !== null },
+    payload: {
+      environment: input.environment,
+      cogId: input.cogId,
+      credentialSet: envelope !== null,
+      certificateExpiresAt: expiresAt?.toISOString() ?? null,
+    },
   });
   return toStatus(await loadConfig(sql, jurisdictionId));
 }
@@ -161,8 +200,8 @@ export async function setEnabled(
   if (enabled) {
     if (!row?.cog_id || !row?.endpoint_url)
       throw new AuthError(409, "configure a COG and endpoint before enabling IPAWS");
-    if (!row.credential_envelope)
-      throw new AuthError(409, "configure COG credentials before enabling IPAWS");
+    if (!row.credential_envelope || !row.certificate_expires_at)
+      throw new AuthError(409, "configure the COG certificate and key before enabling IPAWS");
     if (!row.moa_acknowledged)
       throw new AuthError(409, "acknowledge the documented MOA before enabling IPAWS");
     if (!hasSecretKey())
@@ -215,7 +254,18 @@ interface Sendable {
   readonly xml: string;
 }
 
-/** The configuration and alert XML for a send, or the reason it cannot go. */
+/** A time in CAP 1.2 form: whole seconds and a numeric zone, never "Z". */
+function capTime(at: Date): string {
+  return at.toISOString().replace(/\.\d{3}Z$/, "-00:00");
+}
+
+/**
+ * The configuration and alert XML for a send, or the reason it cannot go.
+ * IPAWS-OPEN refuses an alert whose sent time is more than 5 minutes old
+ * (IDG code 303), and a second admin has SEND_REQUEST_MINUTES to confirm, so
+ * the stored alert is serialized afresh with sent set to now. An alert that
+ * has expired by then is refused.
+ */
 async function sendable(
   sql: Sql,
   jurisdictionId: string,
@@ -229,26 +279,36 @@ async function sendable(
     throw new AuthError(409, "a test handshake is only allowed against the IPAWS test environment");
   if (!row.cog_id || !row.endpoint_url || !row.credential_envelope)
     throw new AuthError(409, "IPAWS configuration is incomplete");
+  if (!row.certificate_expires_at)
+    throw new AuthError(409, "reconfigure IPAWS with the COG certificate and key");
+  const now = new Date();
+  if (row.certificate_expires_at.getTime() <= now.getTime())
+    throw new AuthError(409, `the COG certificate expired on ${row.certificate_expires_at.toISOString()}`);
 
   const [alert] = await sql`
-    select jurisdiction_id, xml, ipaws_eligible from cap_alerts where id = ${capAlertId}`;
+    select jurisdiction_id, alert, ipaws_eligible from cap_alerts where id = ${capAlertId}`;
   if (!alert) throw new AuthError(404, "alert not found");
   if ((alert.jurisdiction_id as string) !== jurisdictionId)
     throw new AuthError(403, "alert belongs to another jurisdiction");
   if (!(alert.ipaws_eligible as boolean))
     throw new AuthError(422, "alert is not IPAWS-eligible");
+  const cap = CapAlertSchema.safeParse(alert.alert);
+  if (!cap.success) throw new AuthError(422, "the stored alert cannot be read for transmission");
+  const lapsed = cap.data.info.find((info) => !(Date.parse(info.expires ?? "") > now.getTime()));
+  if (lapsed) throw new AuthError(409, `the alert expired at ${lapsed.expires ?? "an unset time"}; author a new one`);
   return {
     environment: row.environment,
     cogId: row.cog_id,
     endpointUrl: row.endpoint_url,
     credentialEnvelope: row.credential_envelope,
-    xml: alert.xml as string,
+    xml: capToXml({ ...cap.data, sent: capTime(now) }),
   };
 }
 
 /**
  * Log one send attempt, accepted or rejected, with its outcome in
- * ipaws_submissions and the audit.
+ * ipaws_submissions and the audit: the status of each channel, and the
+ * signed alert as transmitted.
  */
 async function recordSubmission(
   sql: Sql,
@@ -256,15 +316,17 @@ async function recordSubmission(
   jurisdictionId: string,
   capAlertId: string,
   send: Sendable,
-  result: IpawsResult,
+  result: IpawsSend,
   attribution: Record<string, unknown>,
 ): Promise<SubmitResult> {
   const [sub] = await sql`
     insert into ipaws_submissions
-      (jurisdiction_id, cap_alert_id, environment, cog_id, accepted, detail, submitted_by)
+      (jurisdiction_id, cap_alert_id, environment, cog_id, accepted, detail, channels,
+       transmitted_xml, submitted_by)
     values
       (${jurisdictionId}, ${capAlertId}, ${send.environment}, ${send.cogId}, ${result.accepted},
-       ${result.detail}, ${actor.person.id})
+       ${result.detail}, ${sql.json(result.channels as never)}, ${result.transmittedXml},
+       ${actor.person.id})
     returning id`;
   await recordAudit(sql, actor, {
     jurisdictionId,
@@ -276,10 +338,22 @@ async function recordSubmission(
       environment: send.environment,
       cogId: send.cogId,
       detail: result.detail,
+      channels: result.channels,
       ...attribution,
     },
   });
-  return { ...result, submissionId: sub!.id as string };
+  return {
+    accepted: result.accepted,
+    detail: result.detail,
+    httpStatus: result.httpStatus,
+    channels: result.channels,
+    submissionId: sub!.id as string,
+  };
+}
+
+/** The connector's credentials: the COG's certificate, sent as the acting admin. */
+function credentials(send: Sendable, actor: Principal, certificate: string): IpawsCredentials {
+  return { cogId: send.cogId, logonUser: actor.person.email, certificate };
 }
 
 /**
@@ -302,7 +376,7 @@ export async function postAlert(
   const send = await sendable(sql, jurisdictionId, capAlertId, "live");
   const result = await postCap(
     send.endpointUrl,
-    { cogId: send.cogId, secret: decryptSecret(send.credentialEnvelope) },
+    credentials(send, actor, decryptSecret(send.credentialEnvelope)),
     send.xml,
     transport,
   );
@@ -424,15 +498,17 @@ export async function confirmSend(
       subjectId: requestId,
       payload: { capAlertId, kind, requestedBy, confirmedBy: actor.person.id },
     });
-    return { capAlertId, requestedBy, send, secret: decryptSecret(send.credentialEnvelope) };
+    return { capAlertId, requestedBy, send, certificate: decryptSecret(send.credentialEnvelope) };
   });
 
   const { capAlertId, requestedBy, send } = claim;
-  const result = await postCap(send.endpointUrl, { cogId: send.cogId, secret: claim.secret }, send.xml, transport)
-    .catch((err: unknown): IpawsResult => ({
+  const result = await postCap(send.endpointUrl, credentials(send, actor, claim.certificate), send.xml, transport)
+    .catch((err: unknown): IpawsSend => ({
       accepted: false,
-      detail: `IPAWS-OPEN did not answer: ${err instanceof Error ? err.message : String(err)}`,
+      detail: `not sent: ${err instanceof Error ? err.message : String(err)}`,
       httpStatus: 0,
+      channels: [],
+      transmittedXml: null,
     }));
 
   return withPerson(sql, actor.person.id, async (tx) => {

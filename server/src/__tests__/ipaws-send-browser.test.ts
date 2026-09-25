@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
@@ -11,18 +10,20 @@ import { ensureStandardIncidentTemplates } from "../incidents/service.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { buildDir, buildWeb, launchBrowser, listen, login, post, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
+import { capTimeFromNow, cogCertificate, ipawsFixture } from "./ipaws-support.js";
 
 /**
  * The IPAWS operator surface end to end in a real browser: one admin
- * configures a test COG against a loopback stand-in for IPAWS-OPEN that
- * answers with the recorded acceptance, acknowledges the MOA, enables, and
- * requests a send; a second admin confirms it. Nothing leaves the machine.
+ * configures a test COG with its certificate against a loopback stand-in for
+ * IPAWS-OPEN that answers with an IDG-shaped acceptance, acknowledges the
+ * MOA, enables, and requests a send; a second admin confirms it. Nothing
+ * leaves the machine.
  */
 
 const DIST = buildDir("ipaws-send-app");
 const SHOTS = shotDir("ipaws-send");
-const ACCEPTED = readFileSync(join(process.cwd(), "server", "src", "ipaws", "__fixtures__", "postcap-accepted.xml"), "utf8");
-const CREDENTIAL = "fixture-pin-never-echoed";
+const ACCEPTED = ipawsFixture("accepted");
+const CREDENTIAL = cogCertificate("123456").bundle;
 const HEADLINE = "Flood Warning for the Lower Klamath";
 
 let admin: Sql;
@@ -73,7 +74,7 @@ beforeAll(async () => {
       info: [{
         language: "en-US", category: ["Met"], event: "Flood Warning", responseType: ["Prepare"],
         urgency: "Expected", severity: "Severe", certainty: "Likely", eventCode: [{ valueName: "SAME", value: "FLW" }],
-        effective: "2026-09-18T12:00:00-07:00", expires: "2026-09-18T18:00:00-07:00", senderName: "Synthetic OES",
+        effective: capTimeFromNow(0), expires: capTimeFromNow(360), senderName: "Synthetic OES",
         headline: HEADLINE, description: "Synthetic test content. No public warning is sent.",
         area: [{ areaDesc: "Lower Klamath River corridor", geocode: [{ valueName: "SAME", value: "006015" }] }],
       }],
@@ -136,7 +137,7 @@ describe("IPAWS enablement and the two-person send", () => {
     await config.getByRole("button", { name: "Save configuration" }).click();
     await config.getByText(/Stored credential fingerprint [0-9a-f]{12}\./).waitFor({ state: "visible", timeout: 20000 });
     expect(await config.getByLabel("COG credential").inputValue()).toBe("");
-    expect(await requester.content()).not.toContain(CREDENTIAL);
+    expect(await requester.content()).not.toContain("PRIVATE KEY");
     await mode.getByText("Fixture endpoint, not FEMA").waitFor({ state: "visible", timeout: 20000 });
 
     await config.getByLabel("MOA reference").fill("MOA-FEMA-IPAWS-2026-TEST");
