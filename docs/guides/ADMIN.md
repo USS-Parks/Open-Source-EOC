@@ -366,6 +366,32 @@ keeps failing is paused as a whole, not per recipient.
 the queue, and show the relay's or provider's answer or its error. Each test
 is recorded as `notification.channel_tested`.
 
+### When a message cannot go out
+
+Every email, SMS, webhook and push delivery is held while its relay, provider
+or target cannot be reached, and retried with a growing wait of up to fifteen
+minutes between tries. Nothing is dropped on a count of tries. While a
+message waits, Notifications shows it as **Waiting for a route**, with when
+the wait began, how long the message is kept and the last error. When its
+window closes with no route, it reads **Expired, not sent** and stays in
+Notifications. A message the relay or provider refuses, or one addressed to a
+destination no longer on the allowlist, fails at once and reads **Delivery
+failed**.
+
+Each kind waits 72 hours unless an administrator sets another window, from 1
+to 720 hours, under **When a message cannot go out** on the **Channels** tab,
+or with `PUT /api/v1/jurisdictions/:jurisdictionId/delivery-holds/:kind` and a
+body of `{"hours": 24}`; `GET` on `/delivery-holds` reads all four. A window
+applies to messages queued after it is saved. Each change is recorded as
+`notification.hold_set`.
+
+An administrator can resend a failed or expired message from its detail in
+Notifications (**Resend**), or with `POST
+/api/v1/notifications/:notificationId/resend`. The resend is queued with a
+fresh window, the notification returns to **Queued**, and the audit trail
+records `notification.resent`. The metrics endpoint counts expired messages
+under `openeoc_delivery_queue{status="expired"}`.
+
 ### Contacts and mass notification
 
 The **Contacts** screen under Coordination is the jurisdiction's contact

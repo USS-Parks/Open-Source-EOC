@@ -3,7 +3,7 @@ import type { ConnectionOptions } from "node:tls";
 import { z } from "zod";
 import { decryptSecret } from "../secrets/envelope.js";
 import { destinationRefusal, type Resolve } from "./allowlist.js";
-import { sendMail } from "./smtp.js";
+import { sendMail, type MailAttachment } from "./smtp.js";
 
 /**
  * Email and SMS channels. Each jurisdiction configures one SMTP relay and one
@@ -58,6 +58,8 @@ export interface Message {
   readonly to: string;
   readonly subject: string;
   readonly body: string;
+  /** Files sent with an email; SMS carries text only. */
+  readonly attachments?: readonly MailAttachment[] | undefined;
 }
 
 export interface SendOptions {

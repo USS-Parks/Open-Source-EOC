@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import { CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, decodeCursor, encodeCursor, pageQuery } from "../db/cursor.js";
-import { AuthError, requireAdmin, type Principal } from "../auth/service.js";
+import { AuthError, requireAdmin, requireMember, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 import { encryptSecret, fingerprint, hasSecretKey } from "../secrets/envelope.js";
 import { admittedBy, normalizeEntry } from "./allowlist.js";
@@ -19,6 +19,12 @@ import {
 } from "./channels.js";
 import { ChannelSchema, ConditionSchema, runScheduledRules, type Channel } from "./engine.js";
 
+/** The outbound delivery kinds a hold window applies to. */
+const DELIVERY_KINDS = ["email", "sms", "webhook", "ntfy"] as const;
+/** How long a delivery waits for a route when its jurisdiction set no window (decision 2). */
+const DEFAULT_HOLD_HOURS = 72;
+/** The longest window an administrator may set: thirty days. */
+const MAX_HOLD_HOURS = 720;
 const RuleEvent = z.enum(["record.created", "record.updated", "scheduled"]);
 // External deliveries a rule may queue per window; the rest are suppressed.
 const RateLimit = z.object({
@@ -538,6 +544,91 @@ export function notifyRoutes(
         acknowledged_at: (result.row.acknowledged_at as Date).toISOString(),
         acknowledged_by: result.row.acknowledged_by as string,
       });
+    },
+  );
+
+  // Queue a failed or expired delivery again with a fresh hold. An
+  // administrator of the notification's jurisdiction may; the database
+  // refuses anyone else and anything still pending or already delivered.
+  app.post(
+    "/api/v1/notifications/:notificationId/resend",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { notificationId } = z.object({ notificationId: z.string().uuid() }).parse(req.params);
+      const deliveryId = await withPerson(sql, req.principal.person.id, async (tx) => {
+        const [note] = await tx`select id, jurisdiction_id, status from notifications where id = ${notificationId}`;
+        if (!note) throw new AuthError(404, "notification not found");
+        const jurisdictionId = note.jurisdiction_id as string;
+        requireAdmin(req.principal, jurisdictionId);
+        const [queued] = await tx`select public.resend_delivery(${notificationId}) as id`;
+        const id = (queued?.id as string | null) ?? null;
+        if (!id) throw new AuthError(409, "only a failed or expired delivery can be resent");
+        await recordAudit(tx, req.principal, {
+          jurisdictionId,
+          category: "notification.resent",
+          subjectTable: "notifications",
+          subjectId: notificationId,
+          payload: { deliveryId: id, previousStatus: note.status as string },
+        });
+        return id;
+      });
+      return reply.status(202).send({ ok: true, deliveryId });
+    },
+  );
+
+  // How long each kind of outbound delivery waits for a route before it
+  // expires. A kind with no row holds for the default 72 hours.
+  app.get(
+    "/api/v1/jurisdictions/:jurisdictionId/delivery-holds",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId } = z.object({ jurisdictionId: z.string().uuid() }).parse(req.params);
+      requireMember(req.principal, jurisdictionId);
+      const rows = await withPerson(sql, req.principal.person.id, (tx) => tx`
+        select kind, hold_hours, updated_at from delivery_hold_windows
+        where jurisdiction_id = ${jurisdictionId}`);
+      const byKind = new Map(rows.map((r) => [r.kind as string, r]));
+      return reply.send({
+        holds: DELIVERY_KINDS.map((kind) => {
+          const row = byKind.get(kind);
+          return {
+            kind,
+            hours: row ? Number(row.hold_hours) : DEFAULT_HOLD_HOURS,
+            isDefault: !row,
+            updatedAt: row ? (row.updated_at as Date).toISOString() : null,
+          };
+        }),
+      });
+    },
+  );
+
+  app.put(
+    "/api/v1/jurisdictions/:jurisdictionId/delivery-holds/:kind",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId, kind } = z
+        .object({ jurisdictionId: z.string().uuid(), kind: z.enum(DELIVERY_KINDS) })
+        .parse(req.params);
+      const { hours } = z.object({ hours: z.number().int().min(1).max(MAX_HOLD_HOURS) }).parse(req.body);
+      requireAdmin(req.principal, jurisdictionId);
+      await withPerson(sql, req.principal.person.id, async (tx) => {
+        const [before] = await tx`
+          select hold_hours from delivery_hold_windows
+          where jurisdiction_id = ${jurisdictionId} and kind = ${kind}`;
+        await tx`
+          insert into delivery_hold_windows (jurisdiction_id, kind, hold_hours, updated_by, updated_at)
+          values (${jurisdictionId}, ${kind}, ${hours}, ${req.principal.person.id}, now())
+          on conflict (jurisdiction_id, kind) do update
+          set hold_hours = excluded.hold_hours, updated_by = excluded.updated_by, updated_at = now()`;
+        await recordAudit(tx, req.principal, {
+          jurisdictionId,
+          category: "notification.hold_set",
+          subjectTable: "delivery_hold_windows",
+          subjectId: jurisdictionId,
+          payload: { kind, hours, previousHours: before ? Number(before.hold_hours) : DEFAULT_HOLD_HOURS },
+        });
+      });
+      return reply.send({ kind, hours, isDefault: false });
     },
   );
 

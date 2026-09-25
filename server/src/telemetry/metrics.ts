@@ -171,9 +171,11 @@ export function metricsRoutes(
         where usename = current_user and datname = current_database()
         group by 1 order by 1`;
       family(out, "openeoc_delivery_queue", "gauge",
-        "Outbound webhook and push deliveries by status: pending or dead-lettered.", [
+        "Outbound deliveries by status: pending (including those waiting for a route), " +
+          "dead (refused) or expired (held past their window with no route).", [
           [labels({ status: "pending" }), Number(queues?.delivery_pending ?? 0)],
           [labels({ status: "dead" }), Number(queues?.delivery_dead ?? 0)],
+          [labels({ status: "expired" }), Number(queues?.delivery_expired ?? 0)],
         ]);
       family(out, "openeoc_federation_queue_pending", "gauge",
         "Federation outbox entries not yet delivered to their peer.",

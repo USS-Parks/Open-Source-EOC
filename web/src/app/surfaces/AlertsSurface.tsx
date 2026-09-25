@@ -20,6 +20,8 @@ export interface AlertsClient extends IpawsClient {
   fieldSyncToken(): string;
   markNotificationRead(id: string): Promise<{ ok: true }>;
   acknowledgeNotification(id: string): Promise<{ ok: true; acknowledged_at: string; acknowledged_by: string }>;
+  /** Queue a failed or expired delivery again; administrators only. */
+  resendNotification?(id: string): Promise<{ ok: true; deliveryId: string }>;
   listCapAlerts(jurisdictionId: string): Promise<CapAlertSummary[]>;
   getCapAlert(id: string): Promise<CapAlertDetail>;
   createCapDraft(jurisdictionId: string, alert: CapDraft, incidentId?: string): Promise<{ id: string }>;
@@ -39,7 +41,7 @@ export interface AlertsSurfaceProps {
   readonly notificationId?: string | null;
 }
 
-type InboxFilter = "all" | "unread" | "unacknowledged" | "failed";
+type InboxFilter = "all" | "unread" | "unacknowledged" | "failed" | "waiting";
 type AlertFilter = "all" | "draft" | "in_review" | "approved" | "exercise" | "received";
 type DraftKind = "Draft" | "Exercise" | "Test";
 
@@ -96,9 +98,7 @@ function channelLabel(channel: string): string {
 }
 
 function notificationState(item: RawNotification): { readonly key: string; readonly label: string } {
-  if (!item.assigned_to_current_actor) {
-    return { key: "delivery", label: item.status === "failed" ? "Delivery failed" : "Delivery log" };
-  }
+  if (!item.assigned_to_current_actor) return { key: "delivery", label: deliveryHeadline(item) };
   if (item.acknowledged_at) return { key: "acknowledged", label: "Acknowledged" };
   if (item.read_at) return { key: "read", label: "Read" };
   return { key: "unread", label: "Unread" };
@@ -110,8 +110,37 @@ function transmissionLabel(transmission: AlertTransmission): string {
   return `${outcome} · ${transmission.environment ?? "environment not recorded"} · ${formatTime(transmission.submittedAt)}`;
 }
 
+/** An outbound delivery's state in a few words, for lists and badges. */
+export function deliveryHeadline(item: Pick<RawNotification, "status" | "detail">): string {
+  if (item.status === "failed") return item.detail.expired === true ? "Expired, not sent" : "Delivery failed";
+  if (item.status === "pending") return item.detail.waiting ? "Waiting for a route" : "Queued";
+  if (item.status === "suppressed") return "Suppressed by the rule's cap";
+  return "Delivery log";
+}
+
+/** The delivery fact in full: where it stands and, while it waits or after it fails, why. */
+function deliveryFact(item: RawNotification): string {
+  const waiting = item.detail.waiting as { since?: string; holdUntil?: string; lastError?: string } | undefined;
+  if (item.status === "delivered") return "Delivered";
+  if (item.status === "suppressed") return "Not sent: the rule's rate cap was reached";
+  if (item.status === "pending" && waiting) {
+    const until = waiting.holdUntil ? `; kept until ${formatTime(waiting.holdUntil)}` : "";
+    const why = waiting.lastError ? `. Last error: ${waiting.lastError}` : "";
+    return `Waiting for a route since ${formatTime(waiting.since ?? item.created_at)}${until}${why}`;
+  }
+  if (item.status === "pending") return "Queued";
+  const error = typeof item.detail.error === "string" ? item.detail.error : "";
+  if (item.detail.expired === true) {
+    const heldUntil = typeof item.detail.heldUntil === "string" ? item.detail.heldUntil : null;
+    const last = /Last error: (.*)$/.exec(error)?.[1];
+    return heldUntil
+      ? `Expired, not sent: no route by ${formatTime(heldUntil)}${last ? `. Last error: ${last}` : ""}`
+      : error || "Expired, not sent";
+  }
+  return error ? `Failed: ${error}` : "Failed";
+}
+
 function urgencyLabel(item: RawNotification): string {
-  if (item.status === "failed") return "Delivery failed";
   const urgency = item.detail.urgency;
   return typeof urgency === "string" ? urgency : "Not specified";
 }
@@ -153,6 +182,9 @@ function NotificationDetail(props: {
   readonly actionError: string | null;
   readonly acknowledging: boolean;
   readonly onAcknowledge: () => void;
+  /** Offered to administrators on a failed or expired delivery. */
+  readonly onResend?: (() => void) | undefined;
+  readonly resending?: boolean;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { if (props.item) heading.current?.focus(); }, [props.item?.id]);
@@ -177,7 +209,7 @@ function NotificationDetail(props: {
         <div><dt>Source</dt><dd>{channelLabel(item.channel)}</dd></div>
         <div><dt>Destination</dt><dd>{item.destination}</dd></div>
         <div><dt>Received</dt><dd>{formatTime(item.created_at)}</dd></div>
-        <div><dt>Delivery</dt><dd>{item.status === "failed" ? "Failed" : "Delivered"}</dd></div>
+        <div><dt>Delivery</dt><dd>{deliveryFact(item)}</dd></div>
         <div><dt>Read</dt><dd>{formatTime(item.read_at)}</dd></div>
         <div><dt>Acknowledged</dt><dd>{item.acknowledged_at ? `${formatTime(item.acknowledged_at)} by ${item.acknowledged_by_name ?? "assigned operator"}` : "Not acknowledged"}</dd></div>
       </dl>
@@ -188,6 +220,10 @@ function NotificationDetail(props: {
         ) : canAcknowledge ? (
           <ActionButton kind="primary" loading={props.acknowledging} loadingLabel="Acknowledging…" onClick={props.onAcknowledge}>
             Acknowledge notification
+          </ActionButton>
+        ) : item.status === "failed" && props.onResend ? (
+          <ActionButton kind="primary" loading={props.resending ?? false} loadingLabel="Resending…" onClick={props.onResend}>
+            Resend
           </ActionButton>
         ) : (
           <p className="notification-muted">This delivery log is not assigned for acknowledgement.</p>
@@ -379,6 +415,7 @@ export function AlertsSurface({ client, jurisdictionId, incidentId, canAuthor, a
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
   const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
   const [acknowledging, setAcknowledging] = useState(false);
+  const [resending, setResending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [alertDetail, setAlertDetail] = useState<CapAlertDetail | null>(null);
   const [alertDetailLoading, setAlertDetailLoading] = useState(false);
@@ -409,7 +446,8 @@ export function AlertsSurface({ client, jurisdictionId, incidentId, canAuthor, a
   const filteredNotes = notificationItems.filter((item) => inboxFilter === "all"
     || (inboxFilter === "unread" && item.assigned_to_current_actor && !item.read_at)
     || (inboxFilter === "unacknowledged" && item.assigned_to_current_actor && !item.acknowledged_at)
-    || (inboxFilter === "failed" && item.status === "failed"));
+    || (inboxFilter === "failed" && item.status === "failed")
+    || (inboxFilter === "waiting" && item.status === "pending" && Boolean(item.detail.waiting)));
   const alertItems = alerts.data ?? [];
   const filteredAlerts = alertItems.filter((item) => alertFilter === "all"
     || (alertFilter === "received" && item.origin === "ingested")
@@ -449,6 +487,15 @@ export function AlertsSurface({ client, jurisdictionId, incidentId, canAuthor, a
     try { await client.acknowledgeNotification(selectedNote.id); notes.reload(); }
     catch (error) { setActionError(error instanceof Error ? error.message : "Notification could not be acknowledged"); }
     finally { setAcknowledging(false); }
+  }
+
+  async function resend() {
+    if (!selectedNote || !client.resendNotification) return;
+    setResending(true);
+    setActionError(null);
+    try { await client.resendNotification(selectedNote.id); notes.reload(); }
+    catch (error) { setActionError(error instanceof Error ? error.message : "The delivery could not be resent"); }
+    finally { setResending(false); }
   }
 
   async function review(state: AlertReviewState) {
@@ -498,13 +545,14 @@ export function AlertsSurface({ client, jurisdictionId, incidentId, canAuthor, a
       ) : tab === "inbox" ? (
         <section id="notification-workspace-inbox-panel" role="tabpanel" aria-labelledby="notification-workspace-inbox-tab" className="notification-split">
           <div className="notification-list-pane">
-            <label className="notification-filter">Show<select value={inboxFilter} onChange={(event: ChangeEvent<HTMLSelectElement>) => setInboxFilter(event.target.value as InboxFilter)}><option value="all">All notifications</option><option value="unread">Unread</option><option value="unacknowledged">Acknowledgement pending</option><option value="failed">Delivery failed</option></select></label>
+            <label className="notification-filter">Show<select value={inboxFilter} onChange={(event: ChangeEvent<HTMLSelectElement>) => setInboxFilter(event.target.value as InboxFilter)}><option value="all">All notifications</option><option value="unread">Unread</option><option value="unacknowledged">Acknowledgement pending</option><option value="failed">Delivery failed or expired</option><option value="waiting">Waiting for a route</option></select></label>
             {notes.error ? <p role="status" className="notification-stale">Update failed. Showing the last received inbox.</p> : null}
             {notes.loading && !notes.data ? <Loading label="Loading notifications…" /> : filteredNotes.length === 0 ? <p className="notification-empty">No notifications match this filter.</p> : <ul className="notification-list">
               {filteredNotes.map((item) => <li key={item.id}><button type="button" aria-pressed={item.id === selectedNoteId} onClick={() => void openNotification(item)}><span className="notification-list-title"><strong>{item.title}</strong><span className="notification-state" data-state={notificationState(item).key}>{notificationState(item).label}</span></span><span>{item.incident_name ?? channelLabel(item.channel)} · {formatTime(item.created_at)}</span><small>{item.destination}</small></button></li>)}
             </ul>}
           </div>
-          <NotificationDetail item={selectedNote} actionError={actionError} acknowledging={acknowledging} onAcknowledge={() => void acknowledge()} />
+          <NotificationDetail item={selectedNote} actionError={actionError} acknowledging={acknowledging} onAcknowledge={() => void acknowledge()}
+            onResend={isAdmin && client.resendNotification ? () => void resend() : undefined} resending={resending} />
         </section>
       ) : (
         <section id="notification-workspace-alerts-panel" role="tabpanel" aria-labelledby="notification-workspace-alerts-tab" className="notification-split">

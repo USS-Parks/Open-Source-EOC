@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../design/components.js";
-import type { ApiClient, NotificationChannelKind, NotificationChannelView } from "../app/api/client.js";
+import type {
+  ApiClient,
+  DeliveryHold,
+  DeliveryHoldKind,
+  NotificationChannelKind,
+  NotificationChannelView,
+} from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import { ErrorNote, Loading } from "../app/screens/parts.js";
 import "./admin.css";
@@ -14,13 +20,73 @@ import "./admin.css";
 export function Channels(props: { client: ApiClient; jurisdictionId: string }) {
   const email = useAsync(() => props.client.getNotificationChannel(props.jurisdictionId, "email"), [props.jurisdictionId]);
   const sms = useAsync(() => props.client.getNotificationChannel(props.jurisdictionId, "sms"), [props.jurisdictionId]);
-  if (email.error || sms.error) return <ErrorNote message={email.error ?? sms.error ?? ""} />;
-  if (!email.data || !sms.data) return <Loading label="Loading channels…" />;
+  const holds = useAsync(() => props.client.getDeliveryHolds(props.jurisdictionId), [props.jurisdictionId]);
+  if (email.error || sms.error || holds.error) return <ErrorNote message={email.error ?? sms.error ?? holds.error ?? ""} />;
+  if (!email.data || !sms.data || !holds.data) return <Loading label="Loading channels…" />;
   return (
     <div className="admin-tab">
       <EmailPanel client={props.client} jurisdictionId={props.jurisdictionId} view={email.data} onSaved={email.reload} />
       <SmsPanel client={props.client} jurisdictionId={props.jurisdictionId} view={sms.data} onChanged={sms.reload} />
+      <HoldPanel client={props.client} jurisdictionId={props.jurisdictionId} holds={holds.data.holds} onSaved={holds.reload} />
     </div>
+  );
+}
+
+const HOLD_LABELS: Readonly<Record<DeliveryHoldKind, string>> = {
+  email: "Email",
+  sms: "SMS",
+  webhook: "Webhooks",
+  ntfy: "Push (ntfy)",
+};
+
+const HOLD_BUTTONS: Readonly<Record<DeliveryHoldKind, string>> = {
+  email: "email window",
+  sms: "SMS window",
+  webhook: "webhooks window",
+  ntfy: "push window",
+};
+
+/**
+ * How long each kind of message waits for a route before it expires. During
+ * an outage a message is retried, never dropped, until its window closes;
+ * an expired message can be resent from Notifications.
+ */
+function HoldPanel(props: { client: ApiClient; jurisdictionId: string; holds: readonly DeliveryHold[]; onSaved: () => void }) {
+  const [hours, setHours] = useState<Record<string, string>>(
+    () => Object.fromEntries(props.holds.map((h) => [h.kind, String(h.hours)])));
+  const action = useAction();
+  const save = (kind: DeliveryHoldKind) => action.run(async () => {
+    const value = Number(hours[kind]);
+    if (!Number.isInteger(value) || value < 1 || value > 720) throw new Error("Enter whole hours from 1 to 720 (thirty days).");
+    await props.client.setDeliveryHold(props.jurisdictionId, kind, value);
+    props.onSaved();
+    return `${HOLD_LABELS[kind]} now waits up to ${value} hour${value === 1 ? "" : "s"} for a route.`;
+  });
+  return (
+    <Panel title="When a message cannot go out">
+      <fieldset disabled={action.busy} className="eoc-fieldset eoc-stack">
+        <p className="d21-muted">
+          If a relay, provider or target cannot be reached, each message waits and is retried until its window below
+          closes, then reads "Expired, not sent" and can be resent from Notifications. Nothing is dropped sooner.
+          A message the relay or provider refuses fails at once.
+        </p>
+        <ul className="d21-readiness-list" aria-label="How long messages wait for a route">
+          {props.holds.map((hold) => (
+            <li key={hold.kind} className="d21-readiness-row">
+              <div className="d21-card-actions is-start is-bottom">
+                <TextField label={`${HOLD_LABELS[hold.kind]}: hours to wait`} value={hours[hold.kind] ?? ""}
+                  onChange={(value) => setHours((all) => ({ ...all, [hold.kind]: value }))} />
+                <Button onClick={() => void save(hold.kind)}>Save {HOLD_BUTTONS[hold.kind]}</Button>
+              </div>
+              <span className="d21-readiness-badge">
+                <StatusBadge status="unknown">{hold.isDefault ? "Default, 72 hours" : `Set to ${hold.hours} hours`}</StatusBadge>
+              </span>
+            </li>
+          ))}
+        </ul>
+        {action.status}
+      </fieldset>
+    </Panel>
   );
 }
 

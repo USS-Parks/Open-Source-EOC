@@ -215,6 +215,11 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 - `POST /api/v1/incidents/:incidentId/data-packs`: Run incidents data packs (auth: bearer; audience: operator)
 - `GET /api/v1/incidents/:incidentId/datasets`: Read incidents datasets (auth: bearer; audience: operator)
 
+### delivery-holds
+
+- `GET /api/v1/jurisdictions/:jurisdictionId/delivery-holds`: Read jurisdictions delivery holds (auth: bearer; audience: operator)
+- `PUT /api/v1/jurisdictions/:jurisdictionId/delivery-holds/:kind`: Set jurisdictions delivery holds (auth: bearer; audience: operator)
+
 ### edxl
 
 - `POST /api/v1/jurisdictions/:jurisdictionId/edxl/import`: Run jurisdictions edxl import (auth: bearer; audience: machine)
@@ -416,6 +421,7 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 - `GET /api/v1/notifications`: Read notifications (auth: bearer; audience: operator)
 - `POST /api/v1/notifications/:notificationId/acknowledge`: Run notifications acknowledge (auth: bearer; audience: operator)
 - `POST /api/v1/notifications/:notificationId/read`: Run notifications read (auth: bearer; audience: operator)
+- `POST /api/v1/notifications/:notificationId/resend`: Run notifications resend (auth: bearer; audience: operator)
 - `GET /api/v1/notifications/stream`: Read notifications stream (auth: bearer; audience: operator)
 
 ### ogc

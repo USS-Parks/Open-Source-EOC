@@ -9,6 +9,7 @@ import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { BlobStore } from "../files/service.js";
 import { readFirstWorksheet } from "../forms/xlsx-import.js";
+import { DeliveryWorker } from "../notify/outbox.js";
 import { runDueReports } from "../reports/job.js";
 import { auth, buildDir, buildWeb, launchBrowser, listen, login, post, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type SeedResult, type Sql } from "./helpers.js";
@@ -160,11 +161,15 @@ describe("reports screen", () => {
     expect(saved!.schedule).toMatchObject({ cadence: { kind: "daily", time: "06:30" }, format: "pdf", emails: ["ops@example.org"] });
     const store = new BlobStore(mkdtempSync(join(tmpdir(), "openeoc-report-browser-")));
     expect(await runDueReports(runtime, new Date((saved!.next_run_at as Date).getTime() + 60_000), { store, timeoutMs: 3000 })).toBe(1);
+    // The run queues the email; the delivery worker sends it with the stored PDF.
+    expect(await new DeliveryWorker(runtime, { store, timeoutMs: 3000 }).drain()).toMatchObject({ delivered: 1 });
     const mail = sessions.find((s) => s.commands.includes("RCPT TO:<ops@example.org>"))!;
     expect(mail.data).toMatch(/Content-Type: application\/pdf; name="Supplies-by-priority-\d{8}-\d{4}\.pdf"/);
     await detail.getByRole("button", { name: "Close" }).click();
     await page.getByRole("button", { name: "Open Supplies by priority" }).click();
-    await page.getByRole("list", { name: "Recent scheduled runs" }).getByText("Delivered").waitFor();
+    const runs = page.getByRole("list", { name: "Recent scheduled runs" });
+    await runs.getByText("Emails queued").waitFor();
+    await runs.getByText("Each email's delivery shows under Notifications.").waitFor();
 
     await page.getByRole("button", { name: "Account menu" }).click();
     await page.getByRole("button", { name: "Use dark theme" }).click();

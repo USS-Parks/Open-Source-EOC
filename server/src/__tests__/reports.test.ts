@@ -9,6 +9,7 @@ import { addMembership, createPerson } from "../auth/service.js";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { BlobStore } from "../files/service.js";
+import { DeliveryWorker } from "../notify/outbox.js";
 import { readFirstWorksheet } from "../forms/xlsx-import.js";
 import { runDueReports } from "../reports/job.js";
 import { tablePdf } from "../reports/pdf.js";
@@ -332,6 +333,18 @@ describe("scheduled reports", () => {
     // Claimed: the same instant finds nothing further due.
     expect(await runDueReports(runtime, ranAt, { store, timeoutMs: 3000 })).toBe(0);
 
+    // The run queues one email per address; the delivery worker sends them with the stored file.
+    expect(sessions.filter((s) => s.data.includes("Subject: Report: Hourly supplies"))).toHaveLength(0);
+    const queued = await admin`
+      select d.target, d.attachments, n.status from delivery_outbox d
+      join notifications n on n.id = d.notification_id
+      where d.kind = 'email' and n.title = 'Report: Hourly supplies' order by d.target`;
+    expect(queued.map((q) => [q.target, q.status])).toEqual([["duty@example.org", "pending"], ["ops@example.org", "pending"]]);
+    expect(queued[0]!.attachments).toEqual([
+      expect.objectContaining({ contentType: "application/pdf", sha256: expect.stringMatching(/^[0-9a-f]{64}$/) }),
+    ]);
+    expect((await new DeliveryWorker(runtime, { store, timeoutMs: 3000 }).drain()).delivered).toBe(2);
+
     const mails = sessions.filter((s) => s.data.includes("Subject: Report: Hourly supplies"));
     expect(mails.flatMap((s) => s.commands.filter((c) => c.startsWith("RCPT"))).sort())
       .toEqual(["RCPT TO:<duty@example.org>", "RCPT TO:<ops@example.org>"]);
@@ -352,17 +365,23 @@ describe("scheduled reports", () => {
     expect(pdfText(attached)).toContain("All records: 4 records; Quantity sum 353; Quantity average 88.25; Quantity minimum 3; Quantity maximum 200");
 
     const [run] = await admin`select * from report_runs where report_id = ${report.id as string}`;
-    expect(run).toMatchObject({ run_by: authorId, row_count: 4, outcome: "delivered" });
+    expect(run).toMatchObject({ run_by: authorId, row_count: 4, outcome: "queued" });
+    expect(run!.detail.emails).toEqual([
+      expect.objectContaining({ to: "ops@example.org", queued: true }),
+      expect.objectContaining({ to: "duty@example.org", queued: true }),
+    ]);
+    const sent = await admin`select status from notifications where title = 'Report: Hourly supplies'`;
+    expect(sent.map((n) => n.status)).toEqual(["delivered", "delivered"]);
     expect(run!.detail.contactsWithoutEmail).toEqual(["No address"]);
     const [file] = await admin`select name, content_type, uploaded_by from files where id = ${run!.detail.fileId as string}`;
     expect(file).toMatchObject({ content_type: "application/pdf", uploaded_by: authorId });
     expect(file!.name).toMatch(/^Hourly-supplies-\d{8}-\d{4}\.pdf$/);
     const [audit] = await admin`select person_id, payload from audit_events where category = 'report.ran'`;
-    expect(audit).toMatchObject({ person_id: authorId, payload: { outcome: "delivered", rows: 4, emailed: 2 } });
+    expect(audit).toMatchObject({ person_id: authorId, payload: { outcome: "queued", rows: 4, emailsQueued: 2 } });
 
     const detail = (await request("GET", `/api/v1/reports/${report.id}`, viewerToken)).json();
     expect(detail.runs).toHaveLength(1);
-    expect(detail.runs[0]).toMatchObject({ rows: 4, outcome: "delivered", ranAs: "author" });
+    expect(detail.runs[0]).toMatchObject({ rows: 4, outcome: "queued", ranAs: "author" });
     expect(Date.parse(detail.nextRunAt)).toBe(ranAt.getTime() + 60 * 60_000);
   });
 });

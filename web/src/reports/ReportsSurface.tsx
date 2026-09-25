@@ -398,11 +398,12 @@ function ReportDetail(props: {
         <ul className="reports-runs" aria-label="Recent scheduled runs">
           {report.runs.map((run) => (
             <li key={run.id}>
-              <StatusBadge status={run.outcome === "delivered" ? "success" : run.outcome === "partial" ? "warning" : "critical"}>
-                {run.outcome === "delivered" ? "Delivered" : run.outcome === "partial" ? "Partly delivered" : "Failed"}
+              <StatusBadge status={run.outcome === "delivered" ? "success" : run.outcome === "queued" ? "unknown" : run.outcome === "partial" ? "warning" : "critical"}>
+                {run.outcome === "delivered" ? "Delivered" : run.outcome === "queued" ? "Emails queued" : run.outcome === "partial" ? "Partly delivered" : "Failed"}
               </StatusBadge>
               <span>{formatTime(run.ranAt)} · {run.rows ?? "no"} records · as {run.ranAs}</span>
               {typeof run.detail.error === "string" ? <span className="d21-muted">{run.detail.error}</span> : null}
+              {run.outcome === "queued" ? <span className="d21-muted">Each email's delivery shows under Notifications.</span> : null}
             </li>
           ))}
         </ul>

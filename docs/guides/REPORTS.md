@@ -87,8 +87,12 @@ schedule to run. When the owner leaves or becomes a viewer, the schedule stops
 until an administrator rebuilds the report under another owner.
 
 Each scheduled run is listed under **Recent scheduled runs** with its time,
-record count and outcome: delivered, partly delivered, or failed. A run is also
-recorded in the chronology. A failed email is not retried; the next scheduled
-run sends a new report. The server checks for due reports every minute
+record count and outcome: delivered (the file was stored), emails queued,
+partly delivered, or failed. A run is also recorded in the chronology. Emails
+go through the delivery queue with the report attached, one per address, so
+a relay that cannot be reached is retried until the email window under
+Administration, Channels, closes (72 hours unless changed); each email's
+delivery, and a resend if it expired, is under Notifications. The server
+checks for due reports every minute
 (`OPENEOC_SCHEDULER_REPORTS_MS`), so a run can start up to a minute after its
 time.

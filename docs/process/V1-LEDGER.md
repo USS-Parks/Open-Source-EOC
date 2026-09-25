@@ -6253,3 +6253,89 @@ integrating session landing each unit on `main` by fast-forward (decision
 17), the Windows setup rebuilt on a Windows machine (decision 18), and the
 Linux test bed (decision 19). The Operator Trust PSPR keeps RD6 open; its
 RD12 part two folds into VA36. Receipts for this plan's units follow here.
+
+## Veoci and air gap VA1: hold, do not drop
+
+Veoci Integration and Air Gap PSPR unit VA1 (AG-01; decision 2).
+
+- **What changed.**
+  - **A hold per delivery.** Migration `0143_delivery_hold.sql` adds
+    `delivery_hold_windows` (per jurisdiction and kind, 1 to 720 hours,
+    administrators write, members read) and stamps every queued delivery with
+    `hold_until` in a trigger, so rules, mass notification, report email and
+    resends all get the same window: 72 hours unless an administrator set
+    another. Existing rows take their creation time plus 72 hours.
+  - **Retry until the hold, then expire.** The delivery worker no longer
+    dead-letters at attempt 8. A delivery that cannot reach its relay,
+    provider or target is retried (backoff from 5 seconds to a 15-minute cap,
+    the last try placed at the hold's end) until `hold_until`, then marked
+    `expired`; its notification reads failed with `expired`, `heldUntil` and
+    "Expired, not sent: no route before ... Last error: ...". An open circuit
+    at the end of the hold expires the delivery instead of deferring it.
+    Refusals (a destination off the allowlist, an unconfigured channel, a
+    relay rejecting the message) still fail at once. The `maxAttempts` option
+    survives only as a test override, unset in every deployment.
+  - **Waiting is visible.** Each retry writes `waiting` into the
+    notification's detail (since when, attempts, last error, kept until, next
+    try); delivery clears it. The notification center shows "Waiting for a
+    route" and "Expired, not sent" as states and in the Delivery fact (which
+    used to read "Delivered" for anything not failed), with a "Waiting for a
+    route" filter; the command bar panel and the mass notification receipts
+    use the same words.
+  - **Resend.** `POST /api/v1/notifications/:notificationId/resend` queues a
+    dead or expired delivery again with a fresh hold (`resend_delivery`,
+    administrators of the jurisdiction only; 409 for anything still pending or
+    delivered), audited as `notification.resent`; the detail has **Resend**.
+    Receipts of a mass send and the metrics count read each notification's
+    latest delivery, so a resend shows once.
+  - **Windows on screen.** `GET /api/v1/jurisdictions/:jurisdictionId/delivery-holds`
+    and `PUT .../delivery-holds/:kind`, audited as `notification.hold_set`;
+    Administration, Channels gains "When a message cannot go out".
+  - **Report email through the queue.** A scheduled report stores its file
+    once by hash (`delivery_outbox.attachments`) and queues one email per
+    address with a pending notification; the worker reads the file from the
+    blob store and sends it. A run whose emails are queued records the new
+    outcome `queued` ("Emails queued" on the Reports screen).
+  - Metrics: `openeoc_delivery_queue{status="expired"}`. The contract and
+    `docs/API.md` list the three routes; the Administration and Reports
+    guides say how holds, expiry and resend work.
+- **Defaults and deviations.** The default window is decision 2's 72 hours.
+  A window applies to deliveries queued after it is saved. The hold is
+  stamped by the database, not the worker, so no insert site can forget it.
+  Report runs used to record per-email SMTP answers; they now record the
+  queued notification ids, and the answers live on each delivery.
+- **Air-gap behavior (decision 9).** Scenario A: an outbound message waits
+  through an internet outage for its whole window and goes out when the
+  relay or target answers again; nothing is lost before the window closes,
+  and an expired message can be resent. Scenario B: unchanged; with no relay
+  on the enclave's network, messages expire visibly rather than silently.
+  Scenarios C and D: not affected.
+- **Tests.** New: `delivery-hold.test.ts` (the default and a set window
+  stamped on deliveries, a member refused; ten failed tries with nothing
+  dropped and the waiting detail; expiry past the window, resend by an
+  administrator only, the resend delivered when the target returns and
+  counted once; expiry through an open circuit; a refusal still dead at once)
+  and `delivery-hold-browser.test.ts` (at 1586 by 992 and 1534 by 790: set
+  the webhook window under Channels, open the expired delivery, read why,
+  resend, see it delivered). Updated: `reports.test.ts` and
+  `reports-browser.test.ts` drain the queue to send the report email and
+  expect the `queued` outcome.
+- **Verification.** On the Linux test bed (decision 19): `pnpm check:static`
+  exit 0; the 23 files of the notification, report, retention, migration,
+  upgrade, contract, route-coverage and alerts suites, 121 tests, green after
+  the reports browser test was updated. Full `test:ci` (Vitest, the load
+  test excluded, three workers): 1,665 passed and 8 failed of 1,673 in
+  296 files. Six failures are the base's own on this bed
+  (console-controls lifeline rows, operational-relationships,
+  pwa-browser, resource-typing, webeoc-side-by-side and the web
+  incident-overview wording test). `fidelity-browser` (the rail keeps
+  Chronology after "Show every section" is cleared) fails the same way on
+  the base with this unit's changes stashed. `ipaws-send-browser` timed out
+  on a detached "Open center" button under full load and passed when run
+  again on its own with this unit's changes.
+- **Not run.** The Windows setup (decision 18); a live relay or SMS
+  provider, which remain external inputs.
+- **Evidence level:** real-database and browser tests.
+- **Rollback:** revert the commit; migration `0143` adds columns, a table,
+  a trigger and functions the earlier code does not read, except that
+  `report_runs` then holds `queued` rows the earlier screen shows as failed.

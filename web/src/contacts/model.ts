@@ -108,7 +108,7 @@ export interface MassNotificationsPage {
 export interface MassDelivery {
   readonly channel: MassChannel;
   readonly address: string | null;
-  readonly state: "queued" | "retrying" | "sent" | "failed" | "delivered";
+  readonly state: "queued" | "retrying" | "sent" | "failed" | "expired" | "delivered";
   readonly attempts: number;
   readonly error: string | null;
   readonly receipt: Readonly<Record<string, unknown>> | null;
@@ -163,7 +163,7 @@ export function stateStatus(state: MassState): "success" | "warning" | "critical
 
 /** What a delivery's receipt or error says, in one line. */
 export function deliveryDetail(d: MassDelivery): string {
-  if (d.state === "failed" || d.state === "retrying") return d.error ?? "";
+  if (d.state === "failed" || d.state === "retrying" || d.state === "expired") return d.error ?? "";
   const r = d.receipt;
   if (!r) return "";
   if (r.provider === "fixture") return "fixture: not sent";
@@ -173,8 +173,9 @@ export function deliveryDetail(d: MassDelivery): string {
 
 export const DELIVERY_LABELS: Readonly<Record<MassDelivery["state"], string>> = {
   queued: "Queued",
-  retrying: "Retrying",
+  retrying: "Waiting for a route",
   sent: "Sent",
   failed: "Failed",
+  expired: "Expired, not sent",
   delivered: "Delivered",
 };

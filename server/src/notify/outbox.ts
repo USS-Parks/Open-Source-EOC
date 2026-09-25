@@ -1,20 +1,25 @@
 import type { ConnectionOptions } from "node:tls";
 import type { FastifyBaseLogger } from "fastify";
 import type { Sql } from "../db/client.js";
+import { BlobStore } from "../files/service.js";
 import { decryptSecret } from "../secrets/envelope.js";
 import { markDelivered } from "../federation/service.js";
 import { destinationRefusal, type Resolve } from "./allowlist.js";
 import { channelKey, channelRefusal, sendMessage, type StoredChannel } from "./channels.js";
-import { SmtpRefused } from "./smtp.js";
+import { SmtpRefused, type MailAttachment } from "./smtp.js";
 
 /**
  * The outbound delivery worker. Board writes queue webhooks, pushes, email
  * and SMS in delivery_outbox inside their own transaction; this sends each by
- * its kind and keeps what the relay or provider answered. A failed
- * attempt is retried with exponential backoff and jitter until it succeeds or
- * exhausts its attempts, when it is dead-lettered and its notification marks
- * failed. A target that keeps failing opens a circuit, and its deliveries are
- * deferred without spending attempts until the circuit cools.
+ * its kind and keeps what the relay or provider answered. A failed attempt
+ * is retried with exponential backoff and jitter, capped at fifteen minutes,
+ * until it succeeds or its hold runs out: every delivery is held until the
+ * time the database stamped on it when it was queued (its jurisdiction's
+ * window for its kind, 72 hours unless an administrator set another). Past
+ * that it expires and its notification marks failed; no delivery is dropped
+ * on an attempt count. While it waits, its notification says so. A target
+ * that keeps failing opens a circuit, and its deliveries are deferred without
+ * spending attempts until the circuit cools.
  *
  * The same pass pushes the federation outbox to every peer with a link. Those
  * entries never dead-letter: store-and-forward holds through a partition of
@@ -33,6 +38,11 @@ import { SmtpRefused } from "./smtp.js";
 export interface DeliveryWorkerOptions {
   readonly batch?: number;
   readonly timeoutMs?: number;
+  /**
+   * Dead-letter after this many attempts instead of waiting out the hold.
+   * Unset in every deployment; tests use it to reach a failed delivery
+   * without waiting.
+   */
   readonly maxAttempts?: number;
   readonly baseDelayMs?: number;
   readonly maxDelayMs?: number;
@@ -45,14 +55,24 @@ export interface DeliveryWorkerOptions {
   readonly logger?: Pick<FastifyBaseLogger, "warn" | "error">;
   /** Extra TLS options for SMTP relays, such as a private CA. */
   readonly smtpTls?: ConnectionOptions;
+  /** Where queued attachments are read from; OPENEOC_DATA_DIR by default, as the file routes use. */
+  readonly store?: BlobStore;
 }
 
 export interface DrainResult {
   readonly delivered: number;
   readonly retried: number;
   readonly dead: number;
+  readonly expired: number;
   readonly deferred: number;
   readonly federated: number;
+}
+
+/** A stored file sent with an email delivery, by its content hash. */
+export interface QueuedAttachment {
+  readonly filename: string;
+  readonly contentType: string;
+  readonly sha256: string;
 }
 
 interface Circuit {
@@ -63,7 +83,7 @@ interface Circuit {
 export class DeliveryWorker {
   private readonly batch: number;
   private readonly timeoutMs: number;
-  private readonly maxAttempts: number;
+  private readonly maxAttempts: number | null;
   private readonly baseDelayMs: number;
   private readonly maxDelayMs: number;
   private readonly breakerThreshold: number;
@@ -72,7 +92,8 @@ export class DeliveryWorker {
   private readonly resolve: Resolve | undefined;
   private readonly log: Pick<FastifyBaseLogger, "warn" | "error"> | null;
   private readonly smtpTls: ConnectionOptions | undefined;
-  private readonly totals = { delivered: 0, retried: 0, dead: 0, deferred: 0, federated: 0 };
+  private store: BlobStore | null;
+  private readonly totals = { delivered: 0, retried: 0, dead: 0, expired: 0, deferred: 0, federated: 0 };
   // ponytail: per-process breaker state; a second node keeps its own, which
   // only means each node probes a dead target on its own schedule.
   private readonly circuits = new Map<string, Circuit>();
@@ -83,7 +104,7 @@ export class DeliveryWorker {
   ) {
     this.batch = options.batch ?? 25;
     this.timeoutMs = options.timeoutMs ?? 10_000;
-    this.maxAttempts = options.maxAttempts ?? 8;
+    this.maxAttempts = options.maxAttempts ?? null;
     this.baseDelayMs = options.baseDelayMs ?? 5_000;
     this.maxDelayMs = options.maxDelayMs ?? 15 * 60_000;
     this.breakerThreshold = options.breakerThreshold ?? 5;
@@ -92,6 +113,7 @@ export class DeliveryWorker {
     this.resolve = options.resolve;
     this.log = options.logger ?? null;
     this.smtpTls = options.smtpTls;
+    this.store = options.store ?? null;
   }
 
   /** Outcomes since this worker was created, for the metrics endpoint. */
@@ -101,7 +123,7 @@ export class DeliveryWorker {
 
   /** One pass over everything due. The scheduler runs it on an interval; tests call it directly. */
   async drain(): Promise<DrainResult> {
-    const counts = { delivered: 0, retried: 0, dead: 0, deferred: 0, federated: 0 };
+    const counts = { delivered: 0, retried: 0, dead: 0, expired: 0, deferred: 0, federated: 0 };
     const leaseSeconds = Math.ceil(this.timeoutMs / 1000) + 30;
     const rows = await this.sql`select * from claim_deliveries(${this.batch}, ${leaseSeconds})`;
     await Promise.all(
@@ -117,9 +139,10 @@ export class DeliveryWorker {
     return counts;
   }
 
-  private async deliverOne(row: Claimed): Promise<"delivered" | "retried" | "dead" | "deferred"> {
+  private async deliverOne(row: Claimed): Promise<"delivered" | "retried" | "dead" | "expired" | "deferred"> {
     const { id, kind, target, headers, body, allowlist } = row;
     const attempts = Number(row.attempts);
+    const heldUntil = new Date(row.hold_until);
     const message = kind === "email" || kind === "sms";
     const refused = message
       ? await channelRefusal(kind, row.channel, allowlist, this.resolve)
@@ -132,7 +155,11 @@ export class DeliveryWorker {
     const key = message ? channelKey(kind, row.channel!) : circuitKey(target);
     const circuit = this.circuits.get(key);
     if (circuit && circuit.openUntil > this.now()) {
-      await this.settle(id, "deferred", "circuit open", new Date(circuit.openUntil));
+      if (this.now() >= heldUntil.getTime()) {
+        await this.settle(id, "expire", expiryNote(heldUntil, "the target kept failing"), null);
+        return "expired";
+      }
+      await this.settle(id, "deferred", "circuit open", new Date(Math.min(circuit.openUntil, heldUntil.getTime())));
       return "deferred";
     }
     try {
@@ -141,7 +168,13 @@ export class DeliveryWorker {
         receipt = await sendMessage(
           kind,
           row.channel!,
-          { jurisdictionId: row.jurisdiction_id, to: target, subject: headers.subject ?? "", body },
+          {
+            jurisdictionId: row.jurisdiction_id,
+            to: target,
+            subject: headers.subject ?? "",
+            body,
+            attachments: await this.attachments(row.attachments),
+          },
           { timeoutMs: this.timeoutMs, tls: this.smtpTls },
         );
       } else {
@@ -170,15 +203,33 @@ export class DeliveryWorker {
         error,
         cause: err instanceof Error && err.cause instanceof Error ? err.cause.message : undefined,
       };
-      if (attempts >= this.maxAttempts || err instanceof SmtpRefused) {
+      if (err instanceof SmtpRefused || (this.maxAttempts !== null && attempts >= this.maxAttempts)) {
         this.log?.error(fields, "delivery dead-lettered");
         await this.settle(id, "dead", error, null);
         return "dead";
       }
-      this.log?.warn(fields, "delivery retry scheduled");
-      await this.settle(id, "retry", error, new Date(this.now() + this.backoff(attempts)));
+      const retryAt = this.now() + this.backoff(attempts);
+      if (this.now() >= heldUntil.getTime()) {
+        this.log?.error(fields, "delivery expired");
+        await this.settle(id, "expire", expiryNote(heldUntil, error), null);
+        return "expired";
+      }
+      this.log?.warn(fields, "delivery waiting for a route");
+      // The last try falls at the end of the hold, not past it.
+      await this.settle(id, "retry", error, new Date(Math.min(retryAt, heldUntil.getTime())));
       return "retried";
     }
+  }
+
+  /** Read a delivery's stored attachments; a missing file fails the attempt like any other error. */
+  private async attachments(refs: readonly QueuedAttachment[] | null): Promise<MailAttachment[] | undefined> {
+    if (!refs || refs.length === 0) return undefined;
+    const store = (this.store ??= new BlobStore(process.env.OPENEOC_DATA_DIR ?? "./data/blobs"));
+    return Promise.all(refs.map(async (ref) => ({
+      filename: ref.filename,
+      contentType: ref.contentType,
+      content: await store.get(ref.sha256),
+    })));
   }
 
   private async drainFederation(): Promise<number> {
@@ -239,7 +290,7 @@ export class DeliveryWorker {
 
   private async settle(
     id: string,
-    outcome: "delivered" | "retry" | "dead" | "deferred",
+    outcome: "delivered" | "retry" | "dead" | "expire" | "deferred",
     error: string | null,
     retryAt: Date | null,
     receipt: Record<string, unknown> | null = null,
@@ -261,6 +312,14 @@ interface Claimed {
   readonly jurisdiction_id: string;
   /** The jurisdiction's email or SMS channel; null for other kinds or when unconfigured. */
   readonly channel: StoredChannel | null;
+  /** When the delivery stops waiting for a route. */
+  readonly hold_until: Date | string;
+  readonly attachments: readonly QueuedAttachment[] | null;
+}
+
+/** Why a delivery expired, in words an operator reads on the notification. */
+function expiryNote(heldUntil: Date, lastError: string): string {
+  return `Expired, not sent: no route before ${heldUntil.toISOString()}. Last error: ${lastError}`;
 }
 
 function circuitKey(target: string): string {

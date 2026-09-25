@@ -2169,6 +2169,17 @@ export class ApiClient {
   testNotificationChannel(jurisdictionId: string, kind: NotificationChannelKind, to: string): Promise<{ receipt: Readonly<Record<string, unknown>> }> {
     return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/notification-channels/${kind}/test`, { to });
   }
+  /** How long each kind of outbound delivery waits for a route before it expires. */
+  getDeliveryHolds(jurisdictionId: string): Promise<{ holds: readonly DeliveryHold[] }> {
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/delivery-holds`);
+  }
+  setDeliveryHold(jurisdictionId: string, kind: DeliveryHoldKind, hours: number): Promise<DeliveryHold> {
+    return this.request("PUT", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/delivery-holds/${kind}`, { hours });
+  }
+  /** Queue a failed or expired delivery again, with a fresh hold. Administrators only. */
+  resendNotification(id: string): Promise<{ ok: true; deliveryId: string }> {
+    return this.request("POST", `/api/v1/notifications/${encodeURIComponent(id)}/resend`, {});
+  }
 
   // ---- Board engine: refined views, archive, delete, history, import and export ----
 
@@ -2473,6 +2484,14 @@ export class ApiClient {
 // ---- Notification channel types ----
 
 export type NotificationChannelKind = "email" | "sms";
+export type DeliveryHoldKind = "email" | "sms" | "webhook" | "ntfy";
+/** How long one kind of delivery waits for a route; isDefault when the jurisdiction set none (72 hours). */
+export interface DeliveryHold {
+  readonly kind: DeliveryHoldKind;
+  readonly hours: number;
+  readonly isDefault: boolean;
+  readonly updatedAt?: string | null;
+}
 export interface NotificationChannelView {
   readonly kind: NotificationChannelKind;
   readonly settings: Readonly<Record<string, unknown>> | null;
@@ -2803,7 +2822,8 @@ export interface ReportRun {
   readonly ranAt: string;
   readonly ranAs: string;
   readonly rows: number | null;
-  readonly outcome: "delivered" | "partial" | "failed";
+  /** Queued: the report was built and its emails wait in the delivery queue. */
+  readonly outcome: "delivered" | "queued" | "partial" | "failed";
   readonly detail: Readonly<Record<string, unknown>>;
 }
 export interface SavedReportDetail extends SavedReport {

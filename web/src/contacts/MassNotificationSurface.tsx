@@ -246,7 +246,7 @@ function Receipts(props: { client: ApiClient; id: string; nonce: number; onRefre
                           <strong>{CHANNEL_LABELS[channel]}</strong>
                           {d ? <>
                             <span>{d.address ?? ""}</span>
-                            <StatusBadge status={d.state === "failed" ? "critical" : d.state === "retrying" ? "warning" : d.state === "queued" ? "unknown" : "success"}>{DELIVERY_LABELS[d.state]}</StatusBadge>
+                            <StatusBadge status={d.state === "failed" || d.state === "expired" ? "critical" : d.state === "retrying" ? "warning" : d.state === "queued" ? "unknown" : "success"}>{DELIVERY_LABELS[d.state]}</StatusBadge>
                             <span className="d21-muted">{deliveryDetail(d)}</span>
                           </> : <span className="d21-muted">{channel === "inapp" ? "No linked account or position" : `No ${CHANNEL_LABELS[channel].toLowerCase()} address`}</span>}
                         </li>

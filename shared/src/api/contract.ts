@@ -126,6 +126,7 @@ GET /api/v1/jurisdictions/:jurisdictionId/corrective-actions
 GET /api/v1/jurisdictions/:jurisdictionId/damage/assessments
 GET /api/v1/jurisdictions/:jurisdictionId/damage/pa-items
 GET /api/v1/jurisdictions/:jurisdictionId/dashboards
+GET /api/v1/jurisdictions/:jurisdictionId/delivery-holds
 GET /api/v1/jurisdictions/:jurisdictionId/export
 GET /api/v1/jurisdictions/:jurisdictionId/facilities/board
 GET /api/v1/jurisdictions/:jurisdictionId/facilities/have
@@ -328,6 +329,7 @@ POST /api/v1/jurisdictions/:jurisdictionId/tracked-objects
 POST /api/v1/jurisdictions/:jurisdictionId/tracked-objects/scan
 POST /api/v1/notifications/:notificationId/acknowledge
 POST /api/v1/notifications/:notificationId/read
+POST /api/v1/notifications/:notificationId/resend
 POST /api/v1/peers/:peerId/agreements
 POST /api/v1/peers/:peerId/queue
 POST /api/v1/persons
@@ -355,6 +357,7 @@ PUT /api/v1/incidents/:incidentId/dashboard-configs/:key
 PUT /api/v1/incidents/:incidentId/operational-area
 PUT /api/v1/incidents/:incidentId/saved-state/:kind/:key
 PUT /api/v1/jurisdictions/:jurisdictionId/collab/backend
+PUT /api/v1/jurisdictions/:jurisdictionId/delivery-holds/:kind
 PUT /api/v1/jurisdictions/:jurisdictionId/ipaws/config
 PUT /api/v1/jurisdictions/:jurisdictionId/lifelines
 PUT /api/v1/jurisdictions/:jurisdictionId/meetings/config

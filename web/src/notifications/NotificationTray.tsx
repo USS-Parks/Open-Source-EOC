@@ -10,7 +10,12 @@ export interface NotificationTrayProps {
 }
 
 function state(item: RawNotification): { readonly key: string; readonly label: string } {
-  if (!item.assigned_to_current_actor) return { key: "delivery", label: item.status === "failed" ? "Delivery failed" : "Delivery log" };
+  if (!item.assigned_to_current_actor) {
+    const label = item.status === "failed"
+      ? (item.detail.expired === true ? "Expired, not sent" : "Delivery failed")
+      : item.status === "pending" && item.detail.waiting ? "Waiting for a route" : "Delivery log";
+    return { key: "delivery", label };
+  }
   if (item.acknowledged_at) return { key: "acknowledged", label: "Acknowledged" };
   if (item.read_at) return { key: "read", label: "Read, acknowledgement pending" };
   return { key: "unread", label: "Unread" };

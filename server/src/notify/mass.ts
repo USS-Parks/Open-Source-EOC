@@ -281,10 +281,15 @@ async function readSummaries(
     limit ${filter.limit ?? 1}`;
 }
 
-/** A delivery's state in plain terms: queued, retrying, sent, failed or, in the app, delivered. */
-function deliveryState(d: Row): "queued" | "retrying" | "sent" | "failed" | "delivered" {
+/**
+ * A delivery's state in plain terms: queued; retrying, which the screen calls
+ * waiting for a route; sent; failed, when refused; expired, when held past
+ * its window with no route; or, in the app, delivered.
+ */
+function deliveryState(d: Row): "queued" | "retrying" | "sent" | "failed" | "expired" | "delivered" {
   if (d.channel === "inapp") return "delivered";
   if (d.status === "delivered") return "sent";
+  if (d.status === "expired") return "expired";
   if (d.status === "dead" || d.status === "failed") return "failed";
   return d.error ? "retrying" : "queued";
 }
