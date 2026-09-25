@@ -5733,3 +5733,26 @@ Operator Trust PSPR unit TP9 (research E1, E7).
 - **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
 - **Evidence level:** browser tests.
 - **Rollback:** revert the commit; no schema or data change.
+
+## Readiness RD6: macOS, not started
+
+Operator Trust PSPR unit RD6: the macOS workstation, host and demo (the
+launcher ported, Node and PostgreSQL with PostGIS staged for both
+architectures and recorded in the asset inventory with the GPL source offer,
+and a `.pkg` with workstation, host and demo choices over launchd, HTTPS,
+backups, upgrade and uninstall).
+
+- **Not started, and why.** The unit's proof is a macOS runner and Basho's
+  Mac run. This session has neither: the machine is Windows, and GitHub
+  Actions has started no job on this repository since `12d430e` for the
+  billing reason "V1 CI stability: the deep-link race and the recurring red runs" records. Writing the port, the staging and the
+  package without running any of it would put code into the product that
+  claims a platform nobody has checked, which the project's own rules
+  forbid. Nothing for macOS was added.
+- **What unblocks it.** A macOS runner (billing restored), or a Mac this work
+  can run on; then the unit goes as the Readiness PSPR states, followed by
+  RD7's Safari run and the Mac side of Connect. On 2026-09-25 Basho raised
+  the GitHub Actions budget, so the macOS runner route is open; the unit
+  itself is still not started.
+- **Consequence.** The release stays Windows only. The parity matrix, the
+  facet register and the release decision say so.
