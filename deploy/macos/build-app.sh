@@ -52,6 +52,9 @@ ls "$res/runtime/pgsql" "$res/runtime/pgsql/share"
 # names it is rewritten relative to the file that loads it, and each changed
 # file is signed again (ad hoc), so the runtime works from inside the app.
 pg="$res/runtime/pgsql"
+# PL/Python loads the python.org framework from /Library, outside the app,
+# and the product creates no extension but PostGIS, so it is left out.
+find "$pg/lib/postgresql" "$pg/share/postgresql/extension" -name '*plpython*' -delete
 # A universal binary's otool listing heads each architecture's libraries with
 # a line naming the file, which ends in a colon; only the other lines are
 # libraries.
