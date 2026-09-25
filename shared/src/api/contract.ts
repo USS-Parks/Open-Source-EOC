@@ -39,6 +39,7 @@ const routeKeys = `
 DELETE /api/v1/boards/:boardId/records/:recordId
 DELETE /api/v1/contact-groups/:groupId
 DELETE /api/v1/contacts/:contactId
+DELETE /api/v1/equipment-hours/:hoursId
 DELETE /api/v1/guests/:grantId
 DELETE /api/v1/incidents/:incidentId/dashboard-configs/:key
 DELETE /api/v1/incidents/:incidentId/lockdown
@@ -97,6 +98,7 @@ GET /api/v1/incidents/:incidentId/dashboard-configs/:key/data
 GET /api/v1/incidents/:incidentId/datasets
 GET /api/v1/incidents/:incidentId/esf-assessments
 GET /api/v1/incidents/:incidentId/esf-assessments/:framework/:esf/history
+GET /api/v1/incidents/:incidentId/force-account
 GET /api/v1/incidents/:incidentId/handoff
 GET /api/v1/incidents/:incidentId/iaps
 GET /api/v1/incidents/:incidentId/ics-components
@@ -157,6 +159,7 @@ GET /api/v1/jurisdictions/:jurisdictionId/members
 GET /api/v1/jurisdictions/:jurisdictionId/notification-allowlist
 GET /api/v1/jurisdictions/:jurisdictionId/notification-channels/:kind
 GET /api/v1/jurisdictions/:jurisdictionId/notification-rules
+GET /api/v1/jurisdictions/:jurisdictionId/pa-rates
 GET /api/v1/jurisdictions/:jurisdictionId/plans
 GET /api/v1/jurisdictions/:jurisdictionId/position-assignments
 GET /api/v1/jurisdictions/:jurisdictionId/positions
@@ -264,8 +267,10 @@ POST /api/v1/incidents/:incidentId/collab/archive
 POST /api/v1/incidents/:incidentId/collab/provision
 POST /api/v1/incidents/:incidentId/collab/sync
 POST /api/v1/incidents/:incidentId/data-packs
+POST /api/v1/incidents/:incidentId/equipment-hours
 POST /api/v1/incidents/:incidentId/esf-assessments
 POST /api/v1/incidents/:incidentId/esf-assessments/:framework/:esf/decisions
+POST /api/v1/incidents/:incidentId/force-account/roll-up
 POST /api/v1/incidents/:incidentId/iap
 POST /api/v1/incidents/:incidentId/ics-components
 POST /api/v1/incidents/:incidentId/lifeline-assessments
@@ -328,6 +333,7 @@ POST /api/v1/jurisdictions/:jurisdictionId/members/:personId/mfa-reset
 POST /api/v1/jurisdictions/:jurisdictionId/notification-channels/:kind/test
 POST /api/v1/jurisdictions/:jurisdictionId/notification-rules
 POST /api/v1/jurisdictions/:jurisdictionId/notifications/run-scheduled
+POST /api/v1/jurisdictions/:jurisdictionId/pa-equipment-rates
 POST /api/v1/jurisdictions/:jurisdictionId/peers
 POST /api/v1/jurisdictions/:jurisdictionId/plans
 POST /api/v1/jurisdictions/:jurisdictionId/positions
@@ -387,6 +393,7 @@ PUT /api/v1/jurisdictions/:jurisdictionId/members/:personId/disabled
 PUT /api/v1/jurisdictions/:jurisdictionId/messaging-settings
 PUT /api/v1/jurisdictions/:jurisdictionId/notification-allowlist
 PUT /api/v1/jurisdictions/:jurisdictionId/notification-channels/:kind
+PUT /api/v1/jurisdictions/:jurisdictionId/pa-labor-rates/:personId
 PUT /api/v1/jurisdictions/:jurisdictionId/retention
 PUT /api/v1/peers/:peerId/link
 PUT /api/v1/plans/:planId
@@ -462,6 +469,8 @@ const tagAliases: Readonly<Record<string, string>> = {
   "contact-groups": "contacts",
   "corrective-actions": "aar",
   "dashboard-configs": "dashboards",
+  "equipment-hours": "damage",
+  "force-account": "damage",
   "data-packs": "datasets",
   "guests": "auth",
   "ics-components": "ics-forms",
@@ -472,6 +481,9 @@ const tagAliases: Readonly<Record<string, string>> = {
   "members": "auth",
   "operational-area": "incidents",
   "operational-relationships": "incidents",
+  "pa-equipment-rates": "damage",
+  "pa-labor-rates": "damage",
+  "pa-rates": "damage",
   "plan": "plans",
   "persons": "auth",
   "position-assignments": "auth",

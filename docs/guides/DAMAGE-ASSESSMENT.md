@@ -115,6 +115,47 @@ an incident of the jurisdiction through the API (`incidentId`); the screen does
 not show or change that link, and an edit keeps it. Line items are records:
 there is no delete and the retention purge does not remove them.
 
+## Force account
+
+With an incident selected, **Force account** costs the jurisdiction's own
+labor and equipment on it, for Public Assistance. Administrators and members
+see it; viewers and guests do not, since it shows wage rates.
+
+- **Labor** is one row per person per day, from each closed check-in on the
+  incident and each past shift on the incident assigned to someone that none
+  of their check-ins overlaps. A check-in still open is left out until it
+  closes. Days are cut at midnight in the browser's time zone, which the
+  panel names. Each day's hours are split into regular and overtime at the
+  person's overtime threshold (8 hours unless set otherwise). The summary
+  keeps them apart and decides nothing about eligibility: under the Public
+  Assistance Program and Policy Guide, straight time of budgeted staff on
+  emergency work (Categories A and B) is not eligible.
+- **Labor rates** are set by an administrator per person: job title, hourly
+  rate, an optional overtime rate, fringe benefits as a percent (and an
+  optional overtime fringe percent) and the overtime threshold. A person with
+  hours and no rate is listed under **Set a rate for**, and their rows cost
+  nothing until one is set.
+- **Equipment rate schedule.** An administrator imports FEMA's Schedule of
+  Equipment Rates, or local rates, from a CSV file with the schedule's Cost
+  Code, Equipment, Specifications, Capacity or Size, HP, Notes, Unit and rate
+  columns (Manufacturer is read when present), and names the edition, such
+  as "FEMA 2025". A code already imported is replaced. FEMA publishes the
+  2025 schedule as a PDF (for declarations on or after July 1, 2025) and
+  earlier schedules as CSV; copy the 2025 table into a spreadsheet and save
+  it as CSV with those headings. The product ships with no rates.
+- **Record equipment hours** logs a use: the pool resource (or none), the
+  rate code, the operator, the date and the hours (or miles, for a rate by
+  the mile). A use recorded in error is removed with **Remove**; the audit
+  keeps it.
+- **Download labor summary** and **Download equipment summary** save CSV
+  files in the layout of FEMA's Force Account Labor Summary Record and Force
+  Account Equipment Summary Record, each ending on the panel's total.
+- **Roll into line item** makes a Public Assistance line item's estimated
+  cost the force account total and keeps the summary it came from; the
+  counted totals on the **Public Assistance** tab follow. It is refused while
+  anyone with hours or any code used has no rate, and a line item of another
+  incident is refused.
+
 ## Shelter census
 
 When the server runs the facilities integration, the declaration summary
@@ -168,7 +209,11 @@ accepts at most 30 public reports per jurisdiction per minute.
 - Pre-disaster baseline import (assessor parcel rolls) is available through the
   API to administrators, not on this screen, and baselines do not yet feed the
   loss summary.
-- Public Assistance line items cannot be deleted, and the screen does not link
-  them to an incident.
+- Public Assistance line items cannot be deleted. The line item form does not
+  link an item to an incident; rolling a force account into an item links it
+  to that incident.
+- The force account does not cost materials, rented equipment or contract
+  work (FEMA's other summary records), and labor comes only from check-ins
+  and shifts on the incident.
 - The shelter census reads the latest report of each shelter as it stands; it
   does not mark a stale report. Check freshness on the Facilities screen.

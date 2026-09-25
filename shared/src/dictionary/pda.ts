@@ -29,7 +29,7 @@ export const IA_OWNERSHIP = defineEnum(
 
 const PAPPG: Citation = {
   authority: "FEMA",
-  document: "Public Assistance Program and Policy Guide (PAPPG), FP 104-009-2",
+  document: "Public Assistance Program and Policy Guide (PAPPG), FP 104-009-2, Version 5.0 as amended, for incidents declared on or after January 6, 2025",
   section: "Categories of work: emergency work (A and B) and permanent work (C to G)",
 };
 

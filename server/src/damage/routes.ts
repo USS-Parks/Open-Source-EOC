@@ -5,6 +5,7 @@ import { withPerson } from "../db/context.js";
 import { pageQuery } from "../db/cursor.js";
 import { PA_CATEGORIES, PA_ITEM_STATUSES } from "@openeoc/shared";
 import { AuthError } from "../auth/service.js";
+import { forceAccountRoutes } from "./force-account-routes.js";
 import {
   aggregate,
   createAssessment,
@@ -83,6 +84,7 @@ export function damageRoutes(
   authenticate: (req: FastifyRequest) => Promise<void>,
   options: { shelterCensus: boolean },
 ): void {
+  forceAccountRoutes(app, sql, authenticate);
   app.post(
     "/api/v1/jurisdictions/:jurisdictionId/damage/baseline",
     { preHandler: authenticate },

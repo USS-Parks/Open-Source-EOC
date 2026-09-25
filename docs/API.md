@@ -179,6 +179,10 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 
 - `POST /api/v1/damage/assessments/:id/moderate`: Run damage assessments moderate (auth: bearer; audience: operator)
 - `PUT /api/v1/damage/pa-items/:id`: Set damage pa items (auth: bearer; audience: operator)
+- `DELETE /api/v1/equipment-hours/:hoursId`: Delete equipment hours (auth: bearer; audience: operator)
+- `POST /api/v1/incidents/:incidentId/equipment-hours`: Run incidents equipment hours (auth: bearer; audience: operator)
+- `GET /api/v1/incidents/:incidentId/force-account`: Read incidents force account (auth: bearer; audience: operator)
+- `POST /api/v1/incidents/:incidentId/force-account/roll-up`: Run incidents force account roll up (auth: bearer; audience: operator)
 - `GET /api/v1/jurisdictions/:jurisdictionId/damage/assessments`: Read jurisdictions damage assessments (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/damage/assessments`: Run jurisdictions damage assessments (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/damage/baseline`: Run jurisdictions damage baseline (auth: bearer; audience: operator)
@@ -188,6 +192,9 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 - `POST /api/v1/jurisdictions/:jurisdictionId/damage/pa-items`: Run jurisdictions damage pa items (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/damage/report`: Run jurisdictions damage report (auth: intake-token; audience: machine)
 - `POST /api/v1/jurisdictions/:jurisdictionId/damage/summary`: Run jurisdictions damage summary (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/pa-equipment-rates`: Run jurisdictions pa equipment rates (auth: bearer; audience: operator)
+- `PUT /api/v1/jurisdictions/:jurisdictionId/pa-labor-rates/:personId`: Set jurisdictions pa labor rates (auth: bearer; audience: operator)
+- `GET /api/v1/jurisdictions/:jurisdictionId/pa-rates`: Read jurisdictions pa rates (auth: bearer; audience: operator)
 
 ### dashboard-templates
 

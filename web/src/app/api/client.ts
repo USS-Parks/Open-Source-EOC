@@ -75,6 +75,12 @@ import type {
   ComponentValues,
   IcsComponentFormId,
   IncidentPlan,
+  EquipmentHoursInput,
+  EquipmentRateImport,
+  EquipmentRateView,
+  ForceAccountSummary,
+  LaborRateInput,
+  LaborRateView,
   PlanActivation,
   PlanDetail,
   PlanSave,
@@ -2665,6 +2671,28 @@ export class ApiClient {
   }
   async updatePaItem(itemId: string, input: PaItemInput): Promise<void> {
     await this.request("PUT", `/api/v1/damage/pa-items/${encodeURIComponent(itemId)}`, { ...input });
+  }
+  // ---- Public Assistance force account (VC-10) ----
+  paRates(jurisdictionId: string): Promise<{ labor: LaborRateView[]; equipment: EquipmentRateView[] }> {
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/pa-rates`);
+  }
+  setLaborRate(jurisdictionId: string, personId: string, rate: LaborRateInput): Promise<LaborRateView> {
+    return this.request("PUT", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/pa-labor-rates/${encodeURIComponent(personId)}`, { ...rate });
+  }
+  importEquipmentRates(jurisdictionId: string, body: EquipmentRateImport): Promise<{ inserted: number; updated: number }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/pa-equipment-rates`, { ...body });
+  }
+  forceAccount(incidentId: string, timeZone: string): Promise<ForceAccountSummary> {
+    return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/force-account?timeZone=${encodeURIComponent(timeZone)}`);
+  }
+  rollUpForceAccount(incidentId: string, paItemId: string, timeZone: string): Promise<{ paItemId: string; summary: ForceAccountSummary }> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/force-account/roll-up`, { paItemId, timeZone });
+  }
+  recordEquipmentHours(incidentId: string, input: EquipmentHoursInput): Promise<{ id: string }> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/equipment-hours`, { ...input });
+  }
+  async removeEquipmentHours(hoursId: string): Promise<void> {
+    await this.request("DELETE", `/api/v1/equipment-hours/${encodeURIComponent(hoursId)}`);
   }
 
   // ---- Reports ----

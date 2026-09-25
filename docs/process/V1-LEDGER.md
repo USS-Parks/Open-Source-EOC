@@ -8632,3 +8632,120 @@ the local session.
   triggers and policies the earlier code ignores, and its `scheduler_due`
   answers the earlier work as before (the `plans` work is asked for by no
   earlier code).
+
+## Veoci and air gap VA14: Public Assistance force account
+
+Veoci Integration and Air Gap PSPR unit VA14 (VC-10).
+
+- **What the code did before.** Public Assistance line items took an
+  estimated cost typed by hand. Staff check-ins, shifts and pool resources
+  held the hours an applicant's own force account is built from, but
+  nothing costed them or put them in FEMA's summary layouts.
+- **What changed.**
+  - **Rates** (migration `0156_force_account.sql`). `pa_labor_rates`: per
+    person, a job title, hourly rate, optional overtime rate, fringe percent,
+    optional overtime fringe percent and the daily hours after which time is
+    overtime (8 by default). `pa_equipment_rates`: the jurisdiction's
+    equipment schedule by cost code (equipment, manufacturer, specification,
+    capacity or size, HP, notes, unit, rate), each named by its source (FEMA
+    or local) and edition. Administrators write both; wage rates are read by
+    administrators and members, not viewers or guests.
+  - **Equipment hours.** `pa_equipment_hours` logs a use on an incident: the
+    pool resource (or none), the rate code, the operator, the date and the
+    quantity in the rate's unit. Writers record and remove uses; each is
+    audited.
+  - **The summary** (`server/src/damage/force-account.ts`,
+    `GET /api/v1/incidents/:incidentId/force-account?timeZone=`). Labor is
+    one row per person per local day: each closed check-in on the incident,
+    and each past shift on the incident assigned to someone that none of
+    their check-ins overlaps, cut at local midnight in the time zone asked
+    for. Hours are split into regular and overtime at the person's
+    threshold and costed with fringe, each part rounded once to the cent
+    (`laborDay` in `shared/src/damage/force-account.ts`). Equipment rows cost
+    the quantity at the schedule's rate. The totals are the sums of the rows
+    (`forceAccountTotals`), and people and codes without a rate are listed.
+  - **FEMA-format summaries.** `laborSummaryCsv` and `equipmentSummaryCsv`
+    lay the rows out as the Force Account Labor Summary Record (FEMA Form
+    009-0-123: regular and overtime lines, hourly rate, benefit rate per
+    hour, total hourly rate, total cost) and the Force Account Equipment
+    Summary Record (FEMA Form 009-0-124: type, code, capacity, operator,
+    date, hours, rate, cost), each ending on the summary's total.
+  - **Roll-up** (`POST .../force-account/roll-up`) sets a Public Assistance
+    line item's estimated cost to the summary's total, links it to the
+    incident, and keeps the summary's totals, row counts and time zone on the
+    item (`force_account`, `force_account_at`). It is refused while anyone
+    with hours or any code used has no rate, and for another incident's item.
+  - **Import** (`POST /api/v1/jurisdictions/:jurisdictionId/pa-equipment-rates`)
+    replaces rates by cost code. The screen reads the CSV file with
+    `equipmentRatesFromTable`, which takes FEMA's published headings as they
+    are (padded, any case, the year's rate column, Manufacturer when present)
+    and reports each line it leaves out.
+  - **The screen** (`web/src/damage/ForceAccountPanel.tsx`). **Damage
+    Assessment** gains **Force account** when an incident is selected: the
+    totals, the labor and equipment tables with **No labor rate** and **No
+    rate** marks, **Download labor summary** and **Download equipment
+    summary**, **Record equipment hours**, **Roll into a Public Assistance
+    line item**, **Labor rates** with **Set a rate for** and **Edit**, and
+    **Equipment rate schedule** with the import. The browser's time zone
+    cuts the days.
+  - `docs/guides/DAMAGE-ASSESSMENT.md` gains **Force account** and updated
+    limits; seven routes in the contract and `docs/API.md`.
+- **Decision 10, for Basho to confirm.** The PA guide in force at plan date
+  is the Public Assistance Program and Policy Guide, FP 104-009-2, Version
+  5.0 as amended, for incidents declared on or after January 6, 2025
+  (fema.gov lists Version 5.0 and an amended 5.0). The dictionary citation in
+  `shared/src/dictionary/pda.ts` now names it.
+- **Decision 11.** The product ships no rates; the import path is the way
+  in. With Basho's download grant, fema.gov was read to confirm the layout:
+  the 2025 schedule (for declarations on or after July 1, 2025) is published
+  only as a PDF with Cost Code, Equipment, Manufacturer, Specification,
+  Capacity or Size, HP, Notes, Unit and 2025 Rates; the 2019 schedule is a
+  CSV whose header is `Cost Code,Equipment ,Specifications,Capacity or
+  Size,HP,Notes,Unit, 2019 Updated Rate ` with amounts such as `$1.62 `. The
+  tests use that header and a few of its rows. No FEMA data is committed.
+- **Deviations and limits.** Eligibility is not decided: regular and
+  overtime are kept apart and the guide names the PAPPG rule for emergency
+  work. Overtime is by daily threshold only, not weekly. Materials, rented
+  equipment and contract work (FEMA's other summary records) are not
+  costed. Labor comes only from check-ins and shifts on the incident.
+- **Files outside the "Owns" cell.** `shared/src/damage/force-account.ts`
+  and its test (the shared arithmetic), `shared/src/index.ts`,
+  `shared/src/api/contract.ts`, `web/src/app/api/client.ts`,
+  `web/src/app/screens/Console.tsx` (the incident passed to the screen),
+  `docs/API.md`, `docs/guides/DAMAGE-ASSESSMENT.md`. Staffing and resource
+  tables are read, not changed.
+- **Air-gap behavior (decision 9).** No network path is added; rates are
+  imported from a file.
+- **Tests.** `force-account.test.ts` (4, real database), with hand-worked
+  figures: labor per person per Pacific day from an 11.5-hour check-in
+  (8 regular, 3.5 overtime), a check-in across midnight split into two days,
+  an open check-in left out, a shift covered by a check-in left out, an
+  uncovered shift counted, another incident's shift left out; viewers
+  refused and a bad time zone refused; labor rates set by administrators
+  only, for members only, read by writers and hidden from viewers; the
+  schedule imported, a code replaced, a repeated code refused; truck and
+  compressor hours with an operator, an outsider operator refused; the
+  roll-up refused for an unrated code and for another incident's item,
+  then made: labor $783.25, equipment $354.00, total $1,137.25, equal to the
+  rows, to the FEMA-format totals, to the line item and to the category B
+  total, with the audit trail. `shared/src/damage/__tests__/force-account.test.ts`
+  (4): the overtime split and fringe, FEMA's amounts, the 2019 and 2025
+  headings with refused lines, and summaries whose lines add up.
+  `force-account-panel.test.tsx` (5, with axe): the tables and totals,
+  recording hours, setting a missing rate, rolling into this incident's
+  item only, importing FEMA's CSV file, and no rate controls for members.
+  `force-account-browser.test.ts` at 1586 by 992 and 1534 by 790 in the
+  Pacific time zone: the schedule imported from a CSV file (then replaced),
+  both labor rates set (then edited), a truck's hours recorded, the totals
+  $982.39, the downloaded labor summary ending on $633.25, and the line item
+  costed at $982.39.
+- **Verification.** On the Windows test bed: `pnpm check:static` exit 0; the
+  API document regenerated; 20 files, 143 tests green: the force account
+  (server, shared, panel and browser), damage, Public Assistance, damage
+  browser, staffing, resource typing, migration baseline, upgrade, restore
+  drill, API document, secure default, route coverage, contract, dictionary
+  and client tests.
+- **Not run.** The full `pnpm check`, left to CI on the push.
+- **Evidence level:** real-database, unit, component and browser tests.
+- **Rollback:** revert the commit; migration `0156` adds tables and two
+  line item columns the earlier code ignores.

@@ -29,6 +29,7 @@ import { Scroll, SurfaceHeader } from "../app/screens/parts.js";
 import { saveFile } from "../admin/labels.js";
 import "../datasets/datasets.css";
 import "./damage.css";
+import { ForceAccountPanel } from "./ForceAccountPanel.js";
 import {
   DEFAULT_DRAFT,
   DEGREE_LABELS,
@@ -74,6 +75,8 @@ export function DamageSurface(props: {
   canWrite: boolean;
   isAdmin: boolean;
   incidentName: string | null;
+  /** The selected incident, whose force account is shown; none shows none. */
+  incidentId?: string | null;
 }) {
   // Every change bumps the revision so the summary, map and lists read again.
   const [revision, setRevision] = useState(0);
@@ -102,6 +105,10 @@ export function DamageSurface(props: {
               : <ReportTable key={tab} {...common} status={tab as DamageReportStatus} canModerate={props.canWrite} onChanged={changed} />}
           </div>
         </Panel>
+        {props.canWrite && props.incidentId ? (
+          <ForceAccountPanel client={props.client} jurisdictionId={props.jurisdictionId} incidentId={props.incidentId}
+            incidentName={props.incidentName ?? "The incident"} isAdmin={props.isAdmin} onChanged={changed} />
+        ) : null}
         {props.canWrite ? <FieldAssessmentPanel client={props.client} jurisdictionId={props.jurisdictionId} onChanged={changed} /> : null}
         {props.isAdmin ? <IntakePanel client={props.client} jurisdictionId={props.jurisdictionId} /> : null}
         {props.isAdmin ? <BaselinePanel client={props.client} jurisdictionId={props.jurisdictionId} onChanged={changed} /> : null}

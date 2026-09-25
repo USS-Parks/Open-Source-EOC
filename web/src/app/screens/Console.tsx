@@ -842,7 +842,7 @@ function Center(props: {
       return <TrackingSurface client={props.client} jurisdictionId={props.jurisdictionId} />;
     case "damage":
       return <DamageSurface client={props.client} jurisdictionId={props.jurisdictionId} theme={props.theme}
-        canWrite={props.canAuthorAlerts} isAdmin={props.isAdmin} incidentName={props.incidentName} />;
+        canWrite={props.canAuthorAlerts} isAdmin={props.isAdmin} incidentName={props.incidentName} incidentId={props.incidentId} />;
     case "staffing":
       // Staffing writes need the admin-or-member role that alert authoring checks.
       return <StaffingSurface client={props.client} jurisdictionId={props.jurisdictionId} personId={props.personId}

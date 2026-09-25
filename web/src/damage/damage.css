@@ -22,3 +22,13 @@
 .damage-notice { margin: 8px 0 0; }
 @container (max-width: 760px) { .damage-thresholds, .damage-indicators { grid-template-columns: 1fr; } .damage-map-canvas { height: 520px; } }
 .damage-pa-form { margin-top: 12px; min-width: 0; }
+.damage-fa-total { background: var(--eoc-surface-raised); border: 1px solid var(--eoc-border); border-radius: var(--eoc-radius-sm); display: grid; gap: 4px; padding: 12px; }
+.damage-fa-total strong { font-size: 22px; }
+.damage-fa-total small { color: var(--eoc-text-muted); }
+.damage-fa-table { border-collapse: collapse; margin-top: 14px; width: 100%; }
+.damage-fa-table caption { font-weight: 600; padding-bottom: 6px; text-align: left; }
+.damage-fa-table th, .damage-fa-table td { border-bottom: 1px solid var(--eoc-border); padding: 6px 8px; text-align: left; vertical-align: top; }
+.damage-fa-table th { color: var(--eoc-text-muted); font-size: .84rem; font-weight: 600; }
+.damage-fa-form { border-top: 1px solid var(--eoc-border); margin-top: 16px; min-width: 0; }
+.damage-fa-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.damage-fa-rates { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }

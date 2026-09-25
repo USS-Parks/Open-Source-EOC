@@ -349,7 +349,7 @@ export interface DamageBaselineRow {
 }
 
 /** CSV text as rows of cells; quoted cells may hold commas, quotes and line breaks. */
-function csvRows(text: string): string[][] {
+export function csvRows(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = "";
