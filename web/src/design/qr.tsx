@@ -56,6 +56,7 @@ export async function qrDecoder(): Promise<DecodeQr> {
 }
 
 async function decodeQr(bitmap: ImageBitmap): Promise<string | null> {
+  if (!bitmap.width || !bitmap.height) return null;
   const scale = Math.min(1, DECODE_SIDE / Math.max(bitmap.width, bitmap.height));
   const width = Math.max(1, Math.round(bitmap.width * scale));
   const height = Math.max(1, Math.round(bitmap.height * scale));
@@ -71,19 +72,31 @@ async function decodeQr(bitmap: ImageBitmap): Promise<string | null> {
 /**
  * Read a code from a camera image. The browser's BarcodeDetector reads every
  * format it knows; where there is none (desktop Windows and Linux, iPhone and
- * iPad), the bundled decoder reads QR codes. Null when no code is found or the
- * browser can read none; a rejection means the image itself could not be read.
+ * iPad), the bundled decoder reads QR codes. Where a detector finds nothing,
+ * or fails, the bundled decoder tries too: macOS Chrome's detector missed
+ * small printed codes the bundled one reads. Null when no code is found or
+ * the browser can read none; a rejection means the image itself could not be
+ * read.
  */
 export async function readCodeFromImage(file: Blob, formats?: readonly string[]): Promise<string | null> {
   if (!canReadCodes()) return null;
   const api = globalThis as typeof globalThis & { BarcodeDetector?: Detector };
   const bitmap = await createImageBitmap(file);
+  const qr = !formats || formats.includes("qr_code");
   try {
     if (api.BarcodeDetector) {
-      const [result] = await new api.BarcodeDetector(formats ? { formats: [...formats] } : undefined).detect(bitmap);
-      return result?.rawValue?.trim() || null;
+      let detected: string | null = null;
+      try {
+        const [result] = await new api.BarcodeDetector(formats ? { formats: [...formats] } : undefined).detect(bitmap);
+        detected = result?.rawValue?.trim() || null;
+      } catch (error) {
+        const decoded = qr ? await decodeQr(bitmap).catch(() => null) : null;
+        if (decoded) return decoded;
+        throw error;
+      }
+      return detected ?? (qr ? await decodeQr(bitmap) : null);
     }
-    return formats && !formats.includes("qr_code") ? null : await decodeQr(bitmap);
+    return qr ? await decodeQr(bitmap) : null;
   } finally {
     bitmap.close();
   }

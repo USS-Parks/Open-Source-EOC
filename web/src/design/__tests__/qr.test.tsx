@@ -54,10 +54,19 @@ describe("QR codes", () => {
       expect(formats).toEqual([["qr_code", "code_128"]]);
       expect(close).toHaveBeenCalledTimes(1);
 
+      // A detector that finds nothing, or fails, leaves the bundled decoder to try; a barcode-only read has no second try.
+      Object.defineProperty(globalThis, "BarcodeDetector", { configurable: true, value: class { async detect() { return []; } } });
+      expect(await readCodeFromImage(new Blob(["x"]), ["code_128"])).toBeNull();
+      expect(await readCodeFromImage(new Blob(["x"]), ["qr_code"])).toBeNull();
+      const broken = new Error("detector unavailable");
+      Object.defineProperty(globalThis, "BarcodeDetector", { configurable: true, value: class { async detect() { throw broken; } } });
+      await expect(readCodeFromImage(new Blob(["x"]), ["qr_code"])).rejects.toBe(broken);
+      expect(close).toHaveBeenCalledTimes(4);
+
       // Without a detector, a barcode-only read finds nothing; the bundled decoder reads QR codes only.
       delete (globalThis as { BarcodeDetector?: unknown }).BarcodeDetector;
       expect(await readCodeFromImage(new Blob(["x"]), ["code_128"])).toBeNull();
-      expect(close).toHaveBeenCalledTimes(2);
+      expect(close).toHaveBeenCalledTimes(5);
 
       delete (globalThis as { createImageBitmap?: unknown }).createImageBitmap;
       expect(canReadCodes()).toBe(false);

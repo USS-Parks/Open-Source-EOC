@@ -8233,3 +8233,35 @@ package.
 - **Verification.** On the Linux test bed: the designer and route coverage
   tests 19 of 19; the package browser file 2 of 2.
 - **Rollback:** revert the commit; the route coverage test fails again.
+
+## CI repairs: the macOS job on e245e08
+
+The branch's macOS job on e245e08 (run 36186603974, started by hand) failed
+three browser tests.
+
+- **A printed badge and a printed label read nothing on macOS** (the VA9
+  staffing test and the resource labels test). macOS Chrome has its own
+  BarcodeDetector, so VA9's reader used it and nothing else; it found no code
+  in the printed badge's and label's images, which the bundled decoder reads
+  on Linux. A person with a Mac scanning a small printed code would have met
+  the same. The reader (`web/src/design/qr.tsx`) now tries the bundled QR
+  decoder whenever a detector finds nothing, and when a detector fails, before
+  giving the failure; a barcode-only read still has no second try.
+  Reproduced on Linux: the resource labels test now runs with a detector that
+  finds nothing, as macOS's did; against the earlier reader it fails exactly
+  as on macOS, waiting for "Found by label: Engine 41.", and against this one
+  it passes. The staffing test keeps the path with no detector at all.
+- **The board views test opened a record from the dashboard's calendar and
+  looked for it in a closed drawer.** The selected record shows in the context
+  drawer, which selecting a record does not open, and on the macOS runner it
+  was closed at that step. The test now opens the drawer when its **Open
+  context** button shows, as the board records and signature tests do, then
+  checks the record. Why only macOS had it closed there is not known; the
+  record still has to open.
+- **Tests.** `qr.test.tsx` adds a detector that finds nothing (a QR read gets
+  the second try, a barcode read does not) and one that fails with no QR
+  found (its error is kept).
+- **Verification.** On the Linux test bed: the reader, field capture and
+  tracking tests 17 of 17; the resource labels, staffing and board views
+  browser files, 6 of 6. The macOS job itself is the next check.
+- **Rollback:** revert the commit.

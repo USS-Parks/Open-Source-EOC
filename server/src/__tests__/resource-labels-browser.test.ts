@@ -23,8 +23,13 @@ let browser: Browser;
 let baseUrl: string;
 const ids: Record<string, string> = {};
 
-async function openPage(width: number, height: number, hash: string): Promise<{ page: Page; errors: string[]; external: string[] }> {
+async function openPage(width: number, height: number, hash: string, blindDetector = false): Promise<{ page: Page; errors: string[]; external: string[] }> {
   const page = await browser.newPage({ viewport: { width, height }, reducedMotion: "reduce" });
+  // A browser with its own barcode detector that reads nothing from the image,
+  // as macOS Chrome's did from a printed label: the bundled decoder must read it.
+  if (blindDetector) await page.addInitScript(() => {
+    (globalThis as { BarcodeDetector?: unknown }).BarcodeDetector = class { async detect() { return []; } };
+  });
   const errors: string[] = [];
   const external: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -64,7 +69,7 @@ afterAll(async () => {
 
 describe("pool resource labels", () => {
   it("prints a label for each resource, and a printed label scanned at the console finds its resource", async () => {
-    const { page, errors, external } = await openPage(1586, 992, "#/resources");
+    const { page, errors, external } = await openPage(1586, 992, "#/resources", true);
     const pool = page.getByRole("region", { name: "Resource pool" });
     await pool.getByText("Label code " + ids["Tender 7"]!.slice(0, 8).toUpperCase()).waitFor();
     await pool.getByRole("button", { name: "Show labels for 3 resources" }).click();

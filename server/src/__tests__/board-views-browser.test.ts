@@ -270,7 +270,14 @@ describe("board view modes in a real browser", () => {
     await supporting.getByText("Bridge inspection").first().waitFor();
     expect(await supporting.getByText("Culvert survey").count()).toBe(0);
     await due.getByRole("button", { name: "Bridge inspection" }).click();
-    await page.getByRole("region", { name: "Selected record" }).getByText("Bridge inspection").first().waitFor();
+    // The selected record shows in the context drawer, which selecting a record
+    // does not open; on the macOS runner it was closed here, so open it as the
+    // board records tests do.
+    const openContext = page.getByRole("button", { name: "Open context" });
+    const selectedRecord = page.getByRole("region", { name: "Selected record" });
+    await selectedRecord.or(openContext).first().waitFor();
+    if (await openContext.isVisible()) await openContext.click();
+    await selectedRecord.getByText("Bridge inspection").first().waitFor();
     await page.goBack();
     await kanban.waitFor();
     // The first walk left this person's theme preference dark.
