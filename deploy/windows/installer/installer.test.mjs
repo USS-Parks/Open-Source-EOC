@@ -175,7 +175,10 @@ test("installing for all users offers the network host, which the setup installs
   const stager = read("Stage-Installer.ps1");
   assert.match(stager, /Copy-File \(Join-Path \$CaddyRuntime 'caddy\.exe'\) \(Join-Path \$appRoot 'runtime\/caddy\/caddy\.exe'\)/);
   assert.match(stager, /Copy-File \(Join-Path \$WinswRuntime 'WinSW-x64\.exe'\) \(Join-Path \$appRoot 'runtime\/winsw\/WinSW-x64\.exe'\)/);
-  assert.match(stager, /'Open Source EOC\.cmd', 'Test-OpenEOCHost\.ps1'/);
+  assert.match(stager, /'Open Source EOC\.cmd', 'Test-OpenEOCHost\.ps1', 'Test-OpenEOCAirGap\.ps1'/);
+  // The unplugged check ships with every install; its clock check reads lib\clock.ps1, which the lib folder carries.
+  assert.match(source, /^Name: "\{group\}\\Check Open Source EOC with no internet"; .*-NoExit .*Test-OpenEOCAirGap\.ps1"""; WorkingDir: "\{app\}\\app"$/m);
+  assert.match(stager, /Copy-Tree \(Join-Path \$windowsRoot 'lib'\)/);
   const desktop = read("../desktop.mjs");
   assert.match(desktop, /resolve\(repoRoot, "runtime\/caddy\/caddy\.exe"\)/);
   assert.match(desktop, /resolve\(repoRoot, "runtime\/winsw\/WinSW-x64\.exe"\)/);

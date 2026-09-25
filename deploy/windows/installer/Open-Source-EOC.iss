@@ -42,6 +42,7 @@ Name: "{group}\Open Source EOC"; Filename: "{app}\app\deploy\windows\Open Source
 Name: "{group}\Open Source EOC Demo"; Filename: "{app}\app\deploy\windows\Open Source EOC.cmd"; Parameters: "-Action Launch -Profile demo"; WorkingDir: "{app}\app"
 Name: "{group}\Open Source EOC on a network host"; Filename: "{app}\app\deploy\windows\Open Source EOC.cmd"; Parameters: "-Action Connect"; WorkingDir: "{app}\app"
 Name: "{group}\Check the Open Source EOC host"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoLogo -NoProfile -ExecutionPolicy Bypass -File ""{app}\app\deploy\windows\Test-OpenEOCHost.ps1"""; WorkingDir: "{app}\app"; Tasks: host
+Name: "{group}\Check Open Source EOC with no internet"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoLogo -NoProfile -NoExit -ExecutionPolicy Bypass -File ""{app}\app\deploy\windows\Test-OpenEOCAirGap.ps1"""; WorkingDir: "{app}\app"
 Name: "{group}\Uninstall Open Source EOC"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\Open Source EOC"; Filename: "{app}\app\deploy\windows\Open Source EOC.cmd"; Parameters: "-Action Launch -Profile production"; WorkingDir: "{app}\app"; Tasks: desktopicon
 Name: "{autodesktop}\Open Source EOC Demo"; Filename: "{app}\app\deploy\windows\Open Source EOC.cmd"; Parameters: "-Action Launch -Profile demo"; WorkingDir: "{app}\app"; Tasks: demodesktopicon

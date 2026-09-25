@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { execFile, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, generateKeyPairSync, sign } from "node:crypto";
+import { createSocket } from "node:dgram";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import test from "node:test";
+import { createServer as createTlsServer } from "node:tls";
 import { fileURLToPath } from "node:url";
 import {
   PROFILE_DEFAULTS,
@@ -27,7 +29,7 @@ import {
 } from "./lib/static-host.mjs";
 import { rotateIfLarger, rotatingLog } from "./lib/rotating-log.mjs";
 import { backupBeforeMigrate, scheduledBackup, writeUpgradeReport } from "./lib/pre-upgrade-backup.mjs";
-import { caddyfile, commandLine, hostDefinitions, hostNames, parseWinswService } from "./lib/host.mjs";
+import { authorityBundle, caddyfile, commandLine, hostDefinitions, hostNames, parseWinswService } from "./lib/host.mjs";
 import { connectionAdvice, hostAddress } from "./lib/connect.mjs";
 
 function fixture() {
@@ -474,7 +476,7 @@ test("host definitions run PostgreSQL, the server and Caddy as LocalService behi
   const server = parseWinswService(host.services.server);
   assert.equal(server.id, "OpenSourceEOC-Server");
   assert.equal(server.executable, input.nodeExecutable);
-  assert.equal(server.arguments, '"C:\\Program Files\\Open Source EOC\\app\\deploy\\windows\\desktop.mjs" host-serve --profile=host');
+  assert.equal(server.arguments, '--use-system-ca "C:\\Program Files\\Open Source EOC\\app\\deploy\\windows\\desktop.mjs" host-serve --profile=host');
   assert.equal(server.workingDirectory, input.appRoot);
   assert.deepEqual(server.env, {
     OPENEOC_DESKTOP_PREBUILT: "1",
@@ -519,6 +521,9 @@ test("host definitions run PostgreSQL, the server and Caddy as LocalService behi
   assert.ok(agency.caddyfile.includes('tls "C:/certs/eoc.pem" "C:/certs/eoc.key"'));
   assert.doesNotMatch(agency.caddyfile, /tls internal|\/trust\//);
   assert.equal(parseWinswService(agency.services.server).env.OPENEOC_TRUST_CERTIFICATE_URL, undefined);
+  assert.equal(server.env.NODE_EXTRA_CA_CERTS, undefined);
+  const authorities = "C:\\ProgramData\\Open Source EOC\\host\\authorities.pem";
+  assert.equal(parseWinswService(hostDefinitions({ ...input, authorityFile: authorities }).services.server).env.NODE_EXTRA_CA_CERTS, authorities);
   assert.throws(() => hostDefinitions({ ...input, profile: "production" }), /Not a host profile/);
 });
 
@@ -554,5 +559,166 @@ test("a host profile is never started or stopped as a desktop profile, and remov
     assert.deepEqual(readdirSync(dataRoot), []);
   } finally {
     rmSync(dataRoot, { recursive: true, force: true });
+  }
+});
+
+/** Windows PowerShell on Windows; elsewhere PowerShell 7 if installed (OPENEOC_PWSH names another). */
+const powershellCommand = process.env.OPENEOC_PWSH ?? (process.platform === "win32" ? "powershell.exe" : "pwsh");
+const powershellFound = spawnSync(powershellCommand, ["-NoLogo", "-NoProfile", "-Command", "1"], { encoding: "utf8" }).status === 0;
+
+test("the check scripts parse, and the clock check measures this computer against an NTP time source", { skip: !powershellFound && "no PowerShell here" }, async () => {
+  const windows = fileURLToPath(new URL(".", import.meta.url));
+  // Asynchronous, so the time source below, in this process, can answer while PowerShell waits.
+  const powershell = (command) => new Promise((done, fail) => execFile(powershellCommand,
+    ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command], { cwd: windows, encoding: "utf8", timeout: 60_000 },
+    (error, stdout, stderr) => (error ? fail(new Error(`${error.message}\n${stderr}`)) : done(stdout.trim()))));
+  for (const script of ["Test-OpenEOCHost.ps1", "Test-OpenEOCAirGap.ps1", "Open-Source-EOC.ps1", "lib/clock.ps1"]) {
+    const errors = await powershell(`$e = $null; [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path '${script}').Path, [ref]$null, [ref]$e); @($e).Count`);
+    assert.equal(errors, "0", script);
+  }
+
+  // A time source 45 seconds ahead of this computer.
+  const source = createSocket("udp4");
+  source.on("message", (_request, from) => {
+    const reply = Buffer.alloc(48);
+    reply[0] = 0x1c; // version 3, server
+    reply[1] = 1;
+    const now = Date.now() + 45_000;
+    for (const at of [32, 40]) {
+      reply.writeUInt32BE(Math.floor(now / 1000) + 2_208_988_800, at);
+      reply.writeUInt32BE(Math.floor(((now % 1000) / 1000) * 2 ** 32), at + 4);
+    }
+    source.send(reply, from.port, from.address);
+  });
+  await new Promise((done) => source.bind(0, "127.0.0.1", done));
+  try {
+    const port = source.address().port;
+    const offset = Number(await powershell(`. ./lib/clock.ps1; Get-ClockOffset '127.0.0.1' ${port}`));
+    assert.ok(Math.abs(offset - 45) < 1, `offset ${offset}`);
+    const behind = await powershell(`. ./lib/clock.ps1; $r = Test-ClockAgainstSource -Source '127.0.0.1' -Port ${port}; "$($r.Level) $($r.Text)"`);
+    assert.match(behind, /^FAIL The clock is 45(\.\d)? seconds behind 127\.0\.0\.1; two-step sign-in refuses codes past 30 seconds/);
+    assert.match(await powershell(`. ./lib/clock.ps1; (Test-ClockAgainstSource -Source '127.0.0.1' -Port 9).Level`), /^NOTE$/);
+    assert.match(await powershell(". ./lib/clock.ps1; (Test-ClockAgainstSource -Source '').Text"), /no time source and keeps its own time/);
+    assert.equal(await powershell(". ./lib/clock.ps1; Select-TimeSource 'NTP' 'time.windows.com,0x9 pool.ntp.org,0x9' '' 'EOC-HOST'"), "time.windows.com");
+    assert.equal(await powershell(". ./lib/clock.ps1; Select-TimeSource 'NT5DS' '' '\\\\DC01' 'EOC-HOST'"), "DC01");
+    assert.equal(await powershell(". ./lib/clock.ps1; $null -eq (Select-TimeSource 'NoSync' 'x' '' 'EOC-HOST')"), "True");
+  } finally {
+    source.close();
+  }
+});
+
+/**
+ * A certificate built with node:crypto alone: an authority when no issuer is
+ * given, else a server certificate for 127.0.0.1 that the issuer signs.
+ */
+function certificate(commonName, issuer = null) {
+  const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const length = (n) => (n < 128 ? Buffer.from([n]) : n < 256 ? Buffer.from([0x81, n]) : Buffer.from([0x82, n >> 8, n & 255]));
+  const tlv = (tag, ...parts) => {
+    const body = Buffer.concat(parts);
+    return Buffer.concat([Buffer.from([tag]), length(body.length), body]);
+  };
+  const seq = (...parts) => tlv(0x30, ...parts);
+  const oid = (hex) => tlv(0x06, Buffer.from(hex, "hex"));
+  const algorithm = seq(oid("2a8648ce3d040302")); // ecdsa-with-SHA256
+  const name = seq(tlv(0x31, seq(oid("550403"), tlv(0x0c, Buffer.from(commonName)))));
+  const extensions = issuer
+    ? [seq(oid("551d13"), tlv(0x04, seq())), seq(oid("551d11"), tlv(0x04, seq(tlv(0x87, Buffer.from([127, 0, 0, 1])))))]
+    : [seq(oid("551d13"), tlv(0x01, Buffer.from([0xff])), tlv(0x04, seq(tlv(0x01, Buffer.from([0xff])))))];
+  const tbs = seq(
+    tlv(0xa0, tlv(0x02, Buffer.from([2]))),
+    tlv(0x02, Buffer.from([issuer ? 2 : 1])),
+    algorithm,
+    issuer ? issuer.name : name,
+    seq(tlv(0x17, Buffer.from("250101000000Z")), tlv(0x17, Buffer.from("491231235959Z"))),
+    name,
+    publicKey.export({ type: "spki", format: "der" }),
+    tlv(0xa3, seq(...extensions)),
+  );
+  const der = seq(tbs, algorithm, tlv(0x03, Buffer.from([0]), sign("sha256", tbs, issuer ? issuer.privateKey : privateKey)));
+  const pem = `-----BEGIN CERTIFICATE-----\n${der.toString("base64").match(/.{1,64}/g).join("\n")}\n-----END CERTIFICATE-----\n`;
+  return { name, privateKey, cert: pem, key: privateKey.export({ type: "pkcs8", format: "pem" }) };
+}
+
+/** An SMTP relay on implicit TLS that accepts every message: the stand-in for an agency's relay. */
+async function relayStandIn(tls) {
+  const received = [];
+  const server = createTlsServer(tls, (socket) => {
+    let buffer = "";
+    let message = null;
+    socket.on("error", () => {});
+    socket.write("220 relay.county.example ESMTP\r\n");
+    socket.on("data", (chunk) => {
+      buffer += chunk.toString("latin1");
+      for (let end = buffer.indexOf("\r\n"); end >= 0; end = buffer.indexOf("\r\n")) {
+        const line = buffer.slice(0, end);
+        buffer = buffer.slice(end + 2);
+        if (message !== null) {
+          if (line === ".") {
+            received.push(message);
+            message = null;
+            socket.write("250 2.0.0 Ok: queued as AGENCY1\r\n");
+          } else message += `${line}\n`;
+        } else if (/^(EHLO|HELO) /i.test(line)) socket.write("250-relay.county.example\r\n250 8BITMIME\r\n");
+        else if (/^DATA$/i.test(line)) {
+          message = "";
+          socket.write("354 End data with <CR><LF>.<CR><LF>\r\n");
+        } else if (/^QUIT$/i.test(line)) socket.end("221 2.0.0 Bye\r\n");
+        else socket.write("250 2.0.0 Ok\r\n");
+      }
+    });
+  });
+  await new Promise((done) => server.listen(0, "127.0.0.1", done));
+  return { server, port: server.address().port, received };
+}
+
+test("the host's server sends mail through a relay on an agency authority it was given, and refuses the relay without it", async () => {
+  const root = mkdtempSync(resolve(tmpdir(), "openeoc-authority-"));
+  const authority = certificate("County Agency Root");
+  const relay = await relayStandIn(certificate("127.0.0.1", authority));
+  try {
+    const authorities = resolve(root, "authorities.pem");
+    const bundle = authorityBundle(`agency roots\n${authority.cert}`);
+    assert.deepEqual(bundle.subjects, ["CN=County Agency Root"]);
+    writeFileSync(authorities, bundle.pem);
+    assert.throws(() => authorityBundle("not a certificate"), /holds no PEM certificate/);
+    assert.throws(() => authorityBundle("-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----"), /Certificate 1 in the authority file does not parse/);
+
+    // The server's flags and environment, read back from its service definition.
+    const definition = parseWinswService(hostDefinitions({
+      appRoot: "C:\\app", dataRoot: "C:\\data", profile: "host", profileRoot: "C:\\data\\profiles\\host", pgData: "C:\\data\\pg",
+      pgPort: 55443, httpPort: 8083, names: ["localhost"], nodeExecutable: "C:\\app\\node.exe", caddyExecutable: "C:\\app\\caddy.exe",
+      distRoot: "C:\\app\\dist", publicRoot: "C:\\app\\public", pgDist: "C:\\app\\pgsql", powershell: "powershell.exe", authorityFile: authorities,
+    }).services.server);
+    const flags = parseWindowsCommandLine(definition.arguments).filter((arg) => arg.startsWith("--") && !arg.startsWith("--profile="));
+    assert.deepEqual(flags, ["--use-system-ca"]);
+
+    // The server's SMTP client, in a process started with those flags and that environment.
+    const smtp = new URL("../../server/src/notify/smtp.ts", import.meta.url).href;
+    const loader = new URL("./ts-loader.mjs", import.meta.url).href;
+    const script = resolve(root, "send.mjs");
+    writeFileSync(script, [
+      `import { sendMail } from ${JSON.stringify(smtp)};`,
+      "try {",
+      `  const receipt = await sendMail({ host: "127.0.0.1", port: ${relay.port}, security: "tls", from: "eoc@county.example" }, null,`,
+      '    { to: "ops@county.example", subject: "Authority check", body: "Sent through the agency relay." }, { timeoutMs: 5000 });',
+      "  console.log(`SENT ${receipt.response}`);",
+      "} catch (error) {",
+      "  console.log(`REFUSED ${error.message}`);",
+      "}",
+    ].join("\n"));
+    const { NODE_EXTRA_CA_CERTS: _inherited, ...inherited } = process.env;
+    const send = (env) => new Promise((done, fail) => execFile(process.execPath, [...flags, "--import", loader, script],
+      { cwd: fileURLToPath(new URL("../..", import.meta.url)), env: { ...inherited, ...env }, encoding: "utf8", timeout: 60_000 },
+      (error, stdout, stderr) => (error ? fail(new Error(`${error.message}\n${stderr}`)) : done(stdout.trim()))));
+
+    assert.equal(await send({ NODE_EXTRA_CA_CERTS: definition.env.NODE_EXTRA_CA_CERTS }), "SENT 250 2.0.0 Ok: queued as AGENCY1");
+    assert.equal(relay.received.length, 1);
+    assert.match(relay.received[0], /Subject: Authority check/);
+    assert.match(await send({}), /^REFUSED .*(issuer|self[- ]signed|verify)/i);
+    assert.equal(relay.received.length, 1);
+  } finally {
+    relay.server.close();
+    rmSync(root, { recursive: true, force: true });
   }
 });

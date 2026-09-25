@@ -97,6 +97,7 @@ import type {
   DamageBaselineRow, DamageReportPage, DamageReportStatus, FieldAssessmentInput, PaItemInput, PaItemPage,
 } from "../../damage/model.js";
 import type { FacilityBoardRow, FacilityInput, FacilityStatusInput } from "../../facilities/model.js";
+import { clockOffsetMs } from "../layout/clock.js";
 import type {
   Contact,
   ContactGroup,
@@ -622,6 +623,9 @@ export class ApiClient {
   private accessToken: string | null = null;
   private resumeToken: string | null = null;
   private refreshing: Promise<void> | null = null;
+  /** The server's clock less this device's, from the latest answer that could say. */
+  private clockOffset: number | null = null;
+  private readonly clockListeners = new Set<(offsetMs: number) => void>();
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
   private readonly onTokens: ((tokens: Tokens | null) => void) | undefined;
@@ -704,6 +708,30 @@ export class ApiClient {
     return this.raw("GET", "/api/v1/health", undefined, false);
   }
 
+  /** The server's clock less this device's, in milliseconds, from the latest answer; null before one. */
+  serverClockOffset(): number | null {
+    return this.clockOffset;
+  }
+
+  /**
+   * Hear each new measure of the server's clock against this device's: when
+   * it first arrives, and after that when it moves by a second or more.
+   * Returns the call that stops listening.
+   */
+  onServerClock(listener: (offsetMs: number) => void): () => void {
+    this.clockListeners.add(listener);
+    return () => this.clockListeners.delete(listener);
+  }
+
+  private noteServerClock(res: Response, sentAt: number, receivedAt: number): void {
+    const date = typeof res.headers?.get === "function" ? res.headers.get("date") : null;
+    const offset = clockOffsetMs(date, sentAt, receivedAt);
+    if (offset === null) return;
+    const moved = this.clockOffset === null || Math.abs(offset - this.clockOffset) >= 1000;
+    this.clockOffset = offset;
+    if (moved) for (const listener of this.clockListeners) listener(offset);
+  }
+
   private async request<T>(method: string, path: string, body?: Body): Promise<T> {
     try {
       return await this.raw<T>(method, path, body, true);
@@ -730,8 +758,10 @@ export class ApiClient {
     const init: RequestInit = { method, headers };
     if (body !== undefined) init.body = form ? body : JSON.stringify(body);
     let res: Response;
+    const sentAt = Date.now();
     try {
       res = await this.fetchImpl(`${this.baseUrl}${path}`, init);
+      this.noteServerClock(res, sentAt, Date.now());
     } catch (err) {
       // fetch rejects with a TypeError when no response arrives at all; the
       // browser's wording ("Failed to fetch") means nothing to an operator.

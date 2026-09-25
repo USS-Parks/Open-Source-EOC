@@ -272,7 +272,7 @@ try {
   foreach ($license in $runtimeLicenses.GetEnumerator()) {
     Copy-File $license.Value (Join-Path $appRoot "licenses/$($license.Key)")
   }
-  foreach ($file in @('desktop.mjs', 'ts-loader.mjs', 'Open-Source-EOC.ps1', 'Open Source EOC.cmd', 'Test-OpenEOCHost.ps1')) {
+  foreach ($file in @('desktop.mjs', 'ts-loader.mjs', 'Open-Source-EOC.ps1', 'Open Source EOC.cmd', 'Test-OpenEOCHost.ps1', 'Test-OpenEOCAirGap.ps1')) {
     Copy-File (Join-Path $windowsRoot $file) (Join-Path $appRoot "deploy/windows/$file")
   }
   Copy-Tree (Join-Path $windowsRoot 'lib') (Join-Path $appRoot 'deploy/windows/lib')

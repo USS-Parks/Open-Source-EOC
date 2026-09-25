@@ -48,9 +48,11 @@ is involved. Each other computer trusts that authority once.
 5. Leave **Check the host now** ticked on the last page. It runs
    `Test-OpenEOCHost.ps1`, which checks the services, the firewall rule, the
    backup task, the trusted authority, HTTPS on every address, the
-   certificate download and the redirect from HTTP, runs one backup, and ends
-   with `HOST CHECK PASSED` or `HOST CHECK FAILED`. It is also in the Start
-   menu as **Check the Open Source EOC host**.
+   certificate download and the redirect from HTTP, what the server trusts
+   for its own connections out and the clock, runs one backup, and ends with
+   `HOST CHECK PASSED` or `HOST CHECK FAILED`. A `NOTE` line is advice and
+   does not fail the check. It is also in the Start menu as **Check the Open
+   Source EOC host**.
 
 Setup also:
 
@@ -147,6 +149,27 @@ Both files are PEM. The certificate must name every address people use. The
 sign-in page then offers no download, because the agency's computers already
 trust its authority.
 
+## Connections out through an agency authority
+
+The server makes connections of its own: to the mail relay, a text gateway,
+webhook targets and partner instances. It trusts the authorities Node carries
+and those in the host's Windows certificate store, so an authority that Group
+Policy put in the store works with nothing more. An authority kept elsewhere,
+such as the one that signed an agency mail relay inside the building, can be
+given to the setup as one PEM file:
+
+```powershell
+& "C:\Program Files\Open Source EOC\app\deploy\windows\Open Source EOC.cmd" -Action HostInstall -Profile host `
+  -AuthorityFile C:\certs\agency-roots.pem
+```
+
+The setup refuses a file with no certificate or one that does not parse. It
+keeps a copy as `%ProgramData%\Open Source EOC\host\authorities.pem`, which
+the server reads at every start. A later setup run, such as an upgrade, keeps
+that copy; delete it and run the setup again to stop trusting it.
+`Test-OpenEOCHost.ps1` names the authorities the server trusts. Desktop
+profiles trust the Windows store the same way.
+
 ## Backups
 
 The scheduled task dumps the database and copies the stored files into
@@ -193,9 +216,65 @@ For a building or a site cut off from the internet:
 What needs a connection outside the building waits: email and text alerts
 need a mail relay or text provider (a relay inside the building works), and
 IPAWS, federation with other agencies and outside data feeds need their own
-connections. The outbound queue keeps what could not be sent and retries when
-the connection returns. The maps cover what the setup carries: California
+connections. The outbound queue keeps what could not be sent and retries it
+for its channel's window, 72 hours unless an administrator changed it under
+**Administration > Channels**; a message still not sent then reads "Expired,
+not sent" and an administrator can resend it. Federation waits for as long as
+the partition lasts. The maps cover what the setup carries: California
 streets, and imagery and elevation for the North Coast.
+
+To check a computer with the internet unplugged, run **Check Open Source EOC
+with no internet** from the Start menu (`Test-OpenEOCAirGap.ps1`).
+
+## Keep time without the internet
+
+Two-step sign-in accepts a code 30 seconds either side of the host's time, so
+a host or phone clock more than 30 seconds off has its codes refused; the
+server also settles competing edits by its own clock. Windows sets its clock
+from the internet (`time.windows.com`) or a domain controller. With neither,
+it keeps its own time, and a computer's clock can drift by a second or more a
+day: a few days cut off is fine, weeks are not.
+
+- `Test-OpenEOCHost.ps1` and `Test-OpenEOCAirGap.ps1` compare the clock with
+  its time source: PASS within 30 seconds, FAIL beyond, and NOTE when there
+  is no source or it does not answer. The host check also says whether the
+  host serves time to the network.
+- The console tells anyone whose device is more than 30 seconds off the
+  server's clock, and which way.
+
+For a site cut off for days or longer, give the network one clock:
+
+1. Best, a GPS or radio time server on the network. On the host, in an
+   administrator PowerShell, with the time server's name in place of
+   `gps-clock`:
+
+   ```powershell
+   w32tm /config /manualpeerlist:"gps-clock,0x8" /syncfromflags:manual /update
+   w32tm /resync
+   ```
+
+2. With no such clock, make the host the network's clock. Set its date and
+   time by hand from a trusted source (a phone showing the cell network's or
+   GPS time), then have it serve time:
+
+   ```powershell
+   Set-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\W32Time\TimeProviders\NtpServer -Name Enabled -Value 1
+   w32tm /config /syncfromflags:NO /reliable:YES /update
+   Restart-Service w32time
+   New-NetFirewallRule -Name OpenSourceEOC-Time -DisplayName "Open Source EOC host (time)" -Direction Inbound -Protocol UDP -LocalPort 123 -Action Allow -Profile Any
+   ```
+
+3. Point the other computers at the host (or the time server). Windows, in
+   an administrator PowerShell, with the host's name in place of `eoc-host`:
+   `w32tm /config /manualpeerlist:"eoc-host,0x8" /syncfromflags:manual /update`
+   then `w32tm /resync`. A Mac: **System Settings > General > Date & Time**,
+   **Set time and date automatically**, with the host's name as the source.
+   Phones take their time from the cell network; with no service they keep
+   their own, and the console says when one is off.
+
+`w32tm /query /status` shows a computer's source and last update, and
+`w32tm /stripchart /computer:eoc-host /samples:3 /dataonly` its offset from
+the host.
 
 ## Limits
 

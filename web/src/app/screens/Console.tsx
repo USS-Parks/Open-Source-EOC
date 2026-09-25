@@ -13,6 +13,7 @@ import {
   type ShellSyncState,
   type WorkspaceArrangement,
 } from "../layout/AppShell.js";
+import { ClockNotice } from "../layout/ClockNotice.js";
 import { OperationalPeriodControl, PositionControl, useWorkspaceContext, type OperationalPeriodChoice } from "../layout/context.js";
 import { parseRouteHash, sectionOf, surfaceHash, useSurface, type RouteContext, type Surface } from "../router.js";
 import { EmptyState, ErrorNote, LoadBoundary, Loading, NotFoundState } from "./parts.js";
@@ -411,6 +412,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       onLayoutChange={(next) => workspace.updateLayout(page.arrangement, next)}
       rightDock={dock}
     >
+      <ClockNotice client={client} />
       {incident.selectedIncident?.lockedAt ? (
         <p className="eoc-lockdown-banner" role="status">
           <strong>{incident.selectedIncident.name}: guest access is locked.</strong> Guest grants cannot read its boards or records until an administrator lifts the lockdown; members and participating organizations keep their access.

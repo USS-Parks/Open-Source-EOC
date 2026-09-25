@@ -7,8 +7,10 @@ It first checks that the internet really is out of reach, then checks every
 Open Source EOC this computer runs: the network host (after the setup
 program's "Host for the network" choice) and each desktop profile, such as
 the North Coast Storm demo, that is open. Open the desktop app first if you
-want it checked. Every line reads PASS or FAIL, and the last line gives the
-result. It changes nothing on this computer.
+want it checked. It also compares this computer's clock with its time
+source. Every line reads PASS or FAIL, or NOTE for advice that does not fail
+the check, and the last line gives the result. It changes nothing on this
+computer.
 
 Then follow the steps it prints: sign in, open the screens, and for a host,
 reach it from a second computer or phone on the same switch or hotspot.
@@ -19,6 +21,7 @@ param()
 $ErrorActionPreference = 'Stop'
 $script:failures = 0
 $script:checked = 0
+. (Join-Path $PSScriptRoot 'lib\clock.ps1')
 # The check body runs in this function's scope, so its parameters are named to stay clear of the bodies' own variables.
 function Check([string]$CheckLabel, [scriptblock]$CheckBody) {
   try {
@@ -58,6 +61,9 @@ Check 'The internet is out of reach' {
   $adapters = @(Get-NetAdapter | Where-Object Status -eq 'Up' | ForEach-Object Name)
   if ($adapters.Count -eq 0) { 'no network adapter is up' } else { "adapters up with no route out: $($adapters -join ', ')" }
 }
+
+# With the internet out, a time source on the internet no longer answers: the clock runs on its own from here.
+$script:failures += Write-ClockCheck (Test-ClockAgainstSource)
 
 $hostConfig = Join-Path $env:ProgramData 'Open Source EOC\host\host.json'
 $hostRecord = $null

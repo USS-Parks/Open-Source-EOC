@@ -39,6 +39,7 @@ import {
   POSTGRES_INCLUDE,
   SERVICES,
   SID,
+  authorityBundle,
   firewallCommands,
   hostDefinitions,
   hostNames,
@@ -634,7 +635,8 @@ async function startProfile(args) {
     rotateIfLarger(resolve(paths.logs, "app-error.log"));
     const stdout = openSync(resolve(paths.logs, "app.log"), "a");
     const stderr = openSync(resolve(paths.logs, "app-error.log"), "a");
-    const child = spawn(process.execPath, [scriptPath, "serve", `--profile=${profile}`], {
+    // Connections out trust the Windows store too, so an agency authority there works for a desktop profile's mail.
+    const child = spawn(process.execPath, ["--use-system-ca", scriptPath, "serve", `--profile=${profile}`], {
       cwd: repoRoot,
       detached: true,
       windowsHide: true,
@@ -925,6 +927,16 @@ async function hostInstall(args) {
   if (certificate)
     for (const path of [certificate.cert, certificate.key])
       if (!existsSync(path)) throw new Error(`Certificate file is missing: ${path}`);
+  // An agency authority for the server's connections out. A later run without
+  // one keeps the file an earlier run stored; deleting the file removes it.
+  let authorities = null;
+  if (args["authority-file"]) {
+    const path = resolve(String(args["authority-file"]));
+    if (!existsSync(path)) throw new Error(`Authority file is missing: ${path}`);
+    authorities = authorityBundle(readFileSync(path, "utf8"));
+  } else if (existsSync(host.authorities)) {
+    authorities = authorityBundle(readFileSync(host.authorities, "utf8"));
+  }
 
   stopHostServices();
   secureDirectory(outRoot, hostGrants("M"));
@@ -955,6 +967,7 @@ async function hostInstall(args) {
     publicRoot,
     pgDist,
     certificate,
+    authorityFile: authorities ? host.authorities : null,
     powershell,
   });
 
@@ -964,6 +977,7 @@ async function hostInstall(args) {
   if (!readFileSync(postgresConf, "utf8").includes(POSTGRES_INCLUDE)) appendFileSync(postgresConf, `\n${POSTGRES_INCLUDE}\n`, "utf8");
   ensureDirectory(host.root);
   writeFileSync(host.caddyfile, definitions.caddyfile, "utf8");
+  if (authorities) writeFileSync(host.authorities, authorities.pem, "utf8");
   secureDirectory(host.services, hostGrants("RX"));
 
   for (const id of Object.values(SERVICES)) deleteService(id);
@@ -999,6 +1013,7 @@ async function hostInstall(args) {
     publicUrl: definitions.publicUrl,
     certificate: certificate ? "agency" : "internal",
     rootThumbprint,
+    authorities: authorities?.subjects ?? [],
     appRoot: repoRoot,
     installedAt: new Date().toISOString(),
   });

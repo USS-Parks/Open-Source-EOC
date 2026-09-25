@@ -6598,3 +6598,92 @@ find why the RD4 run's read times rose more than twofold.
   plans, real-database tests.
 - **Rollback:** revert the commit; drop the two functions and the index in a
   new migration.
+
+## Veoci and air gap VA3: private authorities and time
+
+Veoci Integration and Air Gap PSPR unit VA3 (AG-06). Landed on `main` after
+"Veoci and air gap VA2: federation batch sizing".
+
+- **What changed.**
+  - **Trust for the server's connections out.** The host's server service
+    now starts as `node --use-system-ca`, so its connections to a mail relay,
+    text gateway, webhook or partner trust the Windows certificate store as
+    well as Node's bundled authorities; an agency authority that Group Policy
+    put in the store works with no more setup. The desktop profile's server
+    starts the same way. `-AuthorityFile` on `-Action HostInstall` takes one
+    PEM file of agency authorities: `authorityBundle` refuses a file with no
+    certificate or one that does not parse, the setup keeps a copy as
+    `host\authorities.pem`, the service definition sets
+    `NODE_EXTRA_CA_CERTS` to it, a later setup run keeps it, and `host.json`
+    records its subjects.
+  - **Clock checks.** New `deploy/windows/lib/clock.ps1`, read by both check
+    scripts: the time source from Windows Time's settings (the first NTP
+    peer, a domain controller, or none), one NTP query over UDP 123 with a
+    3-second wait, the offset by the NTP formula, and a line that reads PASS
+    within 30 seconds, FAIL beyond, or NOTE when there is no source or it
+    does not answer; and whether the host serves time. NOTE lines do not fail
+    a check. `Test-OpenEOCHost.ps1` adds the server's trust (read from its
+    service definition: `--use-system-ca`, and the authority file present
+    when the setup was given one), the clock and the time-server line;
+    `Test-OpenEOCAirGap.ps1` adds the clock after the internet check.
+  - **The unplugged check ships.** The installer staged only the host check,
+    so an installed computer had no copy of `Test-OpenEOCAirGap.ps1`; it is
+    now staged, with the Start menu entry **Check Open Source EOC with no
+    internet**.
+  - **The console's clock notice.** The web API client reads each answer's
+    `Date` header (the offset is the header plus half a second less the
+    middle of the request; an answer slower than 5 seconds is ignored) and
+    tells listeners when the offset moves by a second or more. Past 30
+    seconds either way the console shows, above the workspace, "This
+    device's clock is 3 minutes ahead of the server's." with what it breaks
+    and what to do; **Dismiss** hides it until the clocks drift another 30
+    seconds apart, and it clears itself when they agree. No route was added:
+    the service worker leaves `/api/` to the network, so the header is
+    always the server's own answer.
+  - `docs/guides/NETWORK-HOST.md`: "Connections out through an agency
+    authority", "Keep time without the internet" (a GPS or radio time server;
+    the host as the network's clock; pointing Windows computers and Macs at
+    it; phones), the delivery hold in place of "retries when the connection
+    returns", and the Start menu check.
+- **Files outside the "Owns" cell.** `deploy/windows/desktop.mjs` (the host
+  setup and the desktop spawn), `deploy/windows/Open-Source-EOC.ps1` (the
+  parameter), the installer stager, `.iss` and test, the new
+  `deploy/windows/lib/clock.ps1`, `web/src/app/api/client.ts` and one line
+  of `web/src/app/screens/Console.tsx` mounting the notice.
+- **Air-gap behavior (decision 9).** Scenario A: a mail relay inside the
+  building on the agency's own authority is reached; the unplugged check says
+  the clock now runs on its own. Scenario B: an enclave's authority and clock
+  are both configurable and both checked. Scenario C: a device that was off
+  the network shows the notice on its first answer back if its clock
+  drifted. Scenario D: not affected.
+- **Tests.** Desktop suite: the host definitions carry the flag and, given
+  an authority file, the environment; a proof builds an agency root and a
+  relay certificate it signs with `node:crypto`, starts an implicit-TLS SMTP
+  stand-in, and runs the server's own `sendMail` in a process started with
+  the flags and environment read back from the service definition: the mail
+  is accepted with the authority and refused with a certificate verification
+  error without it; `authorityBundle` refusals. A PowerShell test parses
+  all four scripts and runs the clock helper against an NTP stand-in 45
+  seconds ahead (offset within a second, the FAIL text, NOTE for silence and
+  for no source, source selection); it runs under Windows PowerShell on
+  Windows and was run here with PowerShell 7.4.6 from the session's
+  scratchpad, and skips where there is no PowerShell. The installer test
+  covers the staged script and shortcut. New `clock.test.tsx` (4 tests: the
+  measure, the words, the client's listeners, the notice with axe) and
+  `clock-notice-browser.test.ts` (at 1586 by 992 and 1534 by 790, in both
+  themes: ahead, dismissed, behind, cleared).
+- **Verification.** On the Linux test bed (decision 19): `pnpm
+  check:static` exit 0; `test:desktop` 34 passed, 0 failed, 4 skipped (the
+  Windows-only tests) with PowerShell, the PowerShell test skipped without
+  it; the clock unit and browser tests green; every test file except the
+  browser, end-to-end and load files (Vitest, three workers): 1,553 passed
+  and 1 failed of 1,554 in 227 files, the failure the base's own web
+  incident-overview wording test.
+- **Not run.** The two check scripts on Windows and the `w32tm` commands in
+  the guide, which are Basho's host (decisions 12 and 14); `prove-host.mjs`,
+  which starts the server from its service definition and so with the new
+  flag; the Windows setup (decision 18).
+- **Evidence level:** process-level proof of the trust path, the PowerShell
+  helper against a stand-in, unit and browser tests.
+- **Rollback:** revert the commit. A host set up with an authority file
+  keeps `host\authorities.pem`, which nothing reads after the revert.

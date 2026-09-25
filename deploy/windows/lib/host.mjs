@@ -1,3 +1,4 @@
+import { X509Certificate } from "node:crypto";
 import { win32 } from "node:path";
 
 /**
@@ -7,6 +8,12 @@ import { win32 } from "node:path";
  * terminates HTTPS with a certificate authority it creates on the host and
  * forwards to the server on the loopback address. Everything here renders the
  * definitions as text; desktop.mjs installs them.
+ *
+ * The server's own connections out (an SMTP relay, an SMS gateway, a webhook,
+ * a partner instance) trust the Windows certificate store as well as Node's
+ * bundled authorities, so an agency authority that Group Policy put in the
+ * store works without more setup; an authority file given to the setup is
+ * trusted on top.
  */
 
 export const HOST_PROFILES = Object.freeze(["host", "host-demo"]);
@@ -33,12 +40,32 @@ export function hostPaths(dataRoot) {
     root,
     config: win32.join(root, "host.json"),
     caddyfile: win32.join(root, "Caddyfile"),
+    /** The agency's authority certificates the setup was given, in PEM, for the server's connections out. */
+    authorities: win32.join(root, "authorities.pem"),
     caddyStorage,
     rootCertificate: win32.join(caddyStorage, "pki", "authorities", "local", "root.crt"),
     intermediateCertificate: win32.join(caddyStorage, "pki", "authorities", "local", "intermediate.crt"),
     services: win32.join(root, "services"),
     backupTask: win32.join(root, "services", "backup-task.xml"),
   });
+}
+
+/**
+ * An agency's authority file as the server will read it: every certificate in
+ * it, in PEM, and their subjects. Refuses a file with no certificate or one
+ * that does not parse, so a wrong file stops the setup rather than the mail.
+ */
+export function authorityBundle(text) {
+  const blocks = String(text).match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) ?? [];
+  if (blocks.length === 0) throw new Error("The authority file holds no PEM certificate (-----BEGIN CERTIFICATE-----)");
+  const subjects = blocks.map((block, index) => {
+    try {
+      return new X509Certificate(block).subject.replaceAll("\n", ", ");
+    } catch (error) {
+      throw new Error(`Certificate ${index + 1} in the authority file does not parse: ${error.message}`, { cause: error });
+    }
+  });
+  return { pem: `${blocks.join("\n")}\n`, subjects };
 }
 
 const DNS_NAME = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
@@ -283,7 +310,7 @@ export const POSTGRES_INCLUDE = "include_if_exists = 'openeoc-host.conf'";
 export function hostDefinitions({
   appRoot, dataRoot, profile, profileRoot, pgData, pgPort, httpPort, names,
   nodeExecutable, caddyExecutable, distRoot, publicRoot, pgDist,
-  certificate = null, httpsPort = 443, redirectPort = 80, bind = null, powershell,
+  certificate = null, authorityFile = null, httpsPort = 443, redirectPort = 80, bind = null, powershell,
 }) {
   if (!isHostProfile(profile)) throw new Error(`Not a host profile: ${profile}`);
   const host = hostPaths(dataRoot);
@@ -294,9 +321,10 @@ export function hostDefinitions({
     name: "Open Source EOC server",
     description: "Open Source EOC for the network, with its delivery queue and scheduler. Reached through Open Source EOC HTTPS.",
     executable: nodeExecutable,
-    args: [win32.join(appRoot, "deploy", "windows", "desktop.mjs"), "host-serve", `--profile=${profile}`],
+    args: ["--use-system-ca", win32.join(appRoot, "deploy", "windows", "desktop.mjs"), "host-serve", `--profile=${profile}`],
     workingDirectory: appRoot,
     env: {
+      ...(authorityFile ? { NODE_EXTRA_CA_CERTS: authorityFile } : {}),
       OPENEOC_DESKTOP_PREBUILT: "1",
       OPENEOC_DESKTOP_DATA_ROOT: dataRoot,
       OPENEOC_DESKTOP_DIST_ROOT: distRoot,

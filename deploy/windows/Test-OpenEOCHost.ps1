@@ -3,7 +3,10 @@ Checks the Open Source EOC network host on this computer after the setup
 program's "Host for the network" choice: the three services, the firewall
 rule, the backup task, the trusted root, HTTPS on every host name, the
 certificate download and the redirect from HTTP. It also runs the backup task
-once and checks that it wrote a backup; -SkipBackup leaves that out.
+once and checks that it wrote a backup; -SkipBackup leaves that out. It checks
+that the server trusts this computer's certificate store and any agency
+authority file for its connections out, and the clock against its time source.
+A NOTE line is advice and does not fail the check.
 
 Run it on the host. It asks for administrator rights, which reading the host's
 data folder needs. Every line reads PASS or FAIL, and the last line gives the
@@ -22,6 +25,7 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 }
 
 $script:failures = 0
+. (Join-Path $PSScriptRoot 'lib\clock.ps1')
 # The check body runs in this function's scope, so its parameters are named to stay clear of the bodies' own variables.
 function Check([string]$CheckLabel, [scriptblock]$CheckBody) {
   try {
@@ -95,6 +99,23 @@ if ($internal) {
     "$($hostRecord.publicUrl)/trust/openeoc-root.crt"
   }
 }
+
+Check "The server trusts this computer's certificate store for its connections out" {
+  $definition = [xml](Get-Content -LiteralPath (Join-Path $dataRoot 'host\services\OpenSourceEOC-Server.xml') -Raw)
+  if ("$($definition.service.arguments)" -notmatch '(^|\s)--use-system-ca(\s|$)') { throw 'the service starts without --use-system-ca; run the setup again' }
+  $authority = @($definition.service.env | Where-Object { $_.name -eq 'NODE_EXTRA_CA_CERTS' })
+  $subjects = @($hostRecord.authorities | Where-Object { $_ })
+  if ($subjects.Count -gt 0) {
+    if ($authority.Count -eq 0) { throw 'the setup was given an authority file, but the service does not read it; run the setup again' }
+    if (-not (Test-Path -LiteralPath $authority[0].value)) { throw "the authority file $($authority[0].value) is missing" }
+    "and the agency authorities $($subjects -join '; ')"
+  } else {
+    'no agency authority file'
+  }
+}
+
+$script:failures += Write-ClockCheck (Test-ClockAgainstSource)
+$null = Write-ClockCheck (Test-TimeServer)
 
 Check 'Plain HTTP redirects to HTTPS' {
   $name = @($hostRecord.names)[0]

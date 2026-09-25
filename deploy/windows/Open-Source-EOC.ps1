@@ -18,6 +18,8 @@ param(
   [string[]]$HostName,
   [string]$Certificate,
   [string]$CertificateKey,
+  # HostInstall: the agency's certificate authorities, in one PEM file, that the server trusts for its connections out.
+  [string]$AuthorityFile,
   # Connect: the network host's address, kept for later opens.
   [string]$Url,
   # Keep the window open at the end, for a run the setup program opens.
@@ -96,6 +98,7 @@ if ($Action -eq 'HostInstall') {
     $arguments += "--certificate=$Certificate"
     $arguments += "--certificate-key=$CertificateKey"
   }
+  if ($AuthorityFile) { $arguments += "--authority-file=$AuthorityFile" }
 }
 
 $secretPointer = [IntPtr]::Zero
