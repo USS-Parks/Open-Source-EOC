@@ -1,0 +1,249 @@
+{
+  "publisher": "Open Source EOC",
+  "name": "Small EOC starter",
+  "version": "2026.1",
+  "description": "Day-one content for a small tribal or rural EOC: an all-hazards activation and a tabletop exercise, with their positions, boards, checklists, contact groups, reports, notification rules, a welfare check board and field form, and an overview dashboard. It names no hazard and no place, so it serves any exercise scenario.",
+  "contents": {
+    "boardTemplates": [
+      {
+        "key": "welfare_checks",
+        "version": 1,
+        "title": "Welfare Checks",
+        "description": "One record per household that may need help in an emergency: elders, people whose medical equipment needs power, people without transport. Directions and notes are read by members only.",
+        "fields": [
+          { "key": "household", "label": "Household", "type": "text", "required": true },
+          { "key": "directions", "label": "Address or directions", "type": "text", "read": "member" },
+          { "key": "people", "label": "People in household", "type": "number" },
+          { "key": "needs", "label": "Known needs", "type": "enum", "values": ["none", "medical_power", "oxygen", "mobility", "medication", "food_water", "transport", "other"] },
+          { "key": "status", "label": "Status", "type": "enum", "values": ["to_check", "reached_ok", "needs_help", "no_contact", "relocated"], "required": true },
+          { "key": "checked_by", "label": "Checked by", "type": "text" },
+          { "key": "checked_at", "label": "Checked at", "type": "datetime" },
+          { "key": "notes", "label": "Notes", "type": "text", "read": "member" },
+          { "key": "location", "label": "Location", "type": "geometry", "geometryKind": "point" }
+        ],
+        "views": [
+          { "key": "follow_up", "title": "Needs follow-up", "columns": ["household", "status", "needs", "people"], "filter": [{ "field": "status", "op": "in", "value": ["to_check", "needs_help", "no_contact"] }] },
+          { "key": "all", "title": "All households", "columns": ["household", "status", "checked_at", "checked_by"] }
+        ]
+      }
+    ],
+    "reportTemplates": [
+      {
+        "key": "shelter_census",
+        "version": 1,
+        "title": "Shelter census",
+        "board": "shelters",
+        "definition": {
+          "columns": ["name", "status", "capacity", "occupancy"],
+          "where": [{ "field": "planned", "op": "neq", "value": true }],
+          "totals": [{ "field": "capacity", "fn": "sum" }, { "field": "occupancy", "fn": "sum" }],
+          "sorts": [{ "field": "name", "dir": "asc" }]
+        },
+        "schedule": { "cadence": { "kind": "interval", "minutes": 720 }, "format": "pdf" }
+      },
+      {
+        "key": "open_resource_requests",
+        "version": 1,
+        "title": "Open resource requests",
+        "board": "resource_request",
+        "definition": {
+          "columns": ["item", "quantity", "priority", "state", "needed_by"],
+          "where": [{ "field": "state", "op": "in", "value": ["submitted", "accepted", "sourcing", "assigned", "deployed"] }],
+          "sorts": [{ "field": "needed_by", "dir": "asc" }]
+        },
+        "schedule": { "cadence": { "kind": "interval", "minutes": 720 }, "format": "pdf" }
+      },
+      {
+        "key": "welfare_follow_up",
+        "version": 1,
+        "title": "Welfare follow-up",
+        "board": "welfare_checks",
+        "definition": {
+          "columns": ["household", "status", "needs", "people", "checked_by"],
+          "where": [{ "field": "status", "op": "in", "value": ["to_check", "needs_help", "no_contact"] }],
+          "groupBy": ["status"],
+          "totals": [{ "field": "people", "fn": "sum" }]
+        }
+      }
+    ],
+    "ruleTemplates": [
+      {
+        "key": "immediate_resource_request",
+        "version": 1,
+        "title": "An immediate resource request arrives",
+        "board": "resource_request",
+        "event": "record.created",
+        "condition": { "field": "priority", "op": "eq", "value": "immediate" },
+        "channels": [{ "kind": "position", "position": "logistics_section_chief", "via": ["inapp", "email"] }]
+      },
+      {
+        "key": "welfare_needs_help",
+        "version": 1,
+        "title": "A household needs help",
+        "board": "welfare_checks",
+        "event": "record.updated",
+        "condition": { "field": "status", "op": "changed_to", "value": "needs_help" },
+        "channels": [
+          { "kind": "position", "position": "operations_section_chief", "via": ["inapp"] },
+          { "kind": "group", "group": "Community outreach", "via": ["inapp"] }
+        ]
+      }
+    ],
+    "dashboardTemplates": [
+      {
+        "key": "small_eoc_overview",
+        "version": 1,
+        "title": "Small EOC overview",
+        "description": "Households needing help, urgent requests, shelters and closures at a glance.",
+        "widgets": [
+          { "kind": "tile", "key": "households_need_help", "title": "Households needing help", "board": "welfare_checks", "filter": { "field": "status", "equals": "needs_help" }, "thresholds": { "warn": 1, "critical": 5 } },
+          { "kind": "tile", "key": "immediate_requests", "title": "Immediate resource requests", "board": "resource_request", "filter": { "field": "priority", "equals": "immediate" }, "thresholds": { "warn": 1, "critical": 3 } },
+          { "kind": "chart", "key": "welfare_by_status", "title": "Welfare checks by status", "board": "welfare_checks", "groupBy": "status", "display": "bar" },
+          { "kind": "tile", "key": "roads_closed", "title": "Roads closed", "board": "road_closures", "filter": { "field": "status", "equals": "closed" } },
+          { "kind": "list", "key": "recent_events", "title": "Significant events", "board": "significant_events", "columns": ["summary", "severity", "occurred_at"], "limit": 8 }
+        ]
+      }
+    ],
+    "incidentTemplates": [
+      {
+        "key": "small_eoc_activation",
+        "title": "Small EOC activation (any hazard)",
+        "positions": [
+          "incident_commander", "public_information_officer", "liaison_officer", "safety_officer",
+          "operations_section_chief", "planning_section_chief", "logistics_section_chief", "finance_admin_section_chief",
+          "community_liaison"
+        ],
+        "positionTitles": { "community_liaison": "Community Liaison" },
+        "boards": ["activity_log", "significant_events", "situation_report", "resource_request", "shelters", "road_closures", "welfare_checks"],
+        "checklists": [
+          { "position": "incident_commander", "items": [
+            { "item": "Confirm the activation level and who holds each position", "due": { "kind": "relative", "minutes": 30, "anchor": "created" } },
+            { "item": "Notify the governing body and emergency management partners of the activation", "due": { "kind": "relative", "minutes": 60, "anchor": "created" } },
+            { "key": "set_period", "item": "Set the operational period and the time of the first briefing", "due": { "kind": "relative", "minutes": 60, "anchor": "created" } },
+            { "item": "Hold the first briefing", "dependsOn": ["set_period"] },
+            "Decide protective actions with Operations and the PIO, and log each decision",
+            "Approve each situation report before it is shared"
+          ] },
+          { "position": "public_information_officer", "items": [
+            { "item": "Issue the first public message: what happened, what to do, where to get updates", "due": { "kind": "relative", "minutes": 60, "anchor": "created" } },
+            "Clear every release with the EOC Director before it goes out",
+            "Give each release to the Community Liaison for people without phone or internet",
+            "Log public questions and rumors, and answer them in the next release"
+          ] },
+          { "position": "liaison_officer", "items": [
+            "List the agencies and organizations assisting, with a contact for each",
+            "Ask each partner for its status and needs, and log the answers",
+            "Set check-in times with neighboring jurisdictions and the county or state EOC"
+          ] },
+          { "position": "safety_officer", "items": [
+            "Brief the hazards to EOC staff and field teams at the first briefing",
+            "Confirm every field team checks in and out and carries a working radio or phone"
+          ] },
+          { "position": "operations_section_chief", "items": [
+            { "item": "Assign the first welfare checks: elders, power-dependent medical equipment, no transport", "due": { "kind": "relative", "minutes": 120, "anchor": "created" } },
+            "Post each confirmed road closure on the road closures board",
+            "Post shelter openings, capacity and occupancy on the shelters board"
+          ] },
+          { "position": "planning_section_chief", "items": [
+            { "key": "first_sitrep", "item": "Start the situation report and set its reporting times", "due": { "kind": "relative", "minutes": 120, "anchor": "created" } },
+            "Post significant events on the significant events board as they are confirmed",
+            { "item": "Draft the next operational period's objectives for the EOC Director", "dependsOn": ["first_sitrep"] }
+          ] },
+          { "position": "logistics_section_chief", "items": [
+            "Check EOC power, fuel and communications, including the backups",
+            "Work each resource request to a named supplier on the resource requests board",
+            "Arrange food and rest for EOC staff for the operational period"
+          ] },
+          { "position": "finance_admin_section_chief", "items": [
+            "Start recording staff hours and equipment use for cost recovery from the first hour",
+            "Keep the receipts and agreements for every purchase and loan"
+          ] },
+          { "position": "community_liaison", "items": [
+            { "item": "Contact the governing body, elders and community organizations with the EOC's contact point", "due": { "kind": "relative", "minutes": 60, "anchor": "created" } },
+            "Bring community concerns and cultural considerations to the EOC Director",
+            "Help Operations reach households that may not answer an unfamiliar caller"
+          ] }
+        ],
+        "contactGroups": [
+          { "name": "EOC command and general staff", "positions": [
+            "incident_commander", "public_information_officer", "liaison_officer", "safety_officer",
+            "operations_section_chief", "planning_section_chief", "logistics_section_chief", "finance_admin_section_chief"
+          ] },
+          { "name": "Community outreach", "positions": ["community_liaison", "public_information_officer"] }
+        ],
+        "reports": ["shelter_census", "open_resource_requests", "welfare_follow_up"],
+        "rules": ["immediate_resource_request", "welfare_needs_help"]
+      },
+      {
+        "key": "small_eoc_tabletop",
+        "title": "Tabletop exercise (small EOC)",
+        "positions": [
+          "incident_commander", "public_information_officer", "operations_section_chief", "planning_section_chief",
+          "logistics_section_chief", "community_liaison"
+        ],
+        "positionTitles": { "community_liaison": "Community Liaison" },
+        "boards": ["activity_log", "significant_events", "situation_report", "resource_request", "welfare_checks"],
+        "checklists": [
+          { "position": "incident_commander", "items": [
+            "Read the exercise ground rules aloud: no-fault, real names, real roles",
+            "Confirm every product and message is marked EXERCISE",
+            "Close each module by naming one decision and who made it"
+          ] },
+          { "position": "public_information_officer", "items": [
+            "Draft the first public message for the scenario, marked EXERCISE"
+          ] },
+          { "position": "operations_section_chief", "items": [
+            "Enter at least three welfare checks from the scenario on the welfare checks board"
+          ] },
+          { "position": "planning_section_chief", "items": [
+            "Record each inject as a significant event",
+            "Write the exercise situation report before the hotwash"
+          ] },
+          { "position": "logistics_section_chief", "items": [
+            "Enter each resource the scenario asks for on the resource requests board"
+          ] },
+          { "position": "community_liaison", "items": [
+            "Say how the community would hear each message, and who might not"
+          ] }
+        ],
+        "contactGroups": [
+          { "name": "Exercise players", "positions": [
+            "incident_commander", "public_information_officer", "operations_section_chief", "planning_section_chief",
+            "logistics_section_chief", "community_liaison"
+          ] }
+        ],
+        "reports": ["welfare_follow_up"]
+      }
+    ],
+    "forms": [
+      {
+        "key": "welfare_check",
+        "version": 1,
+        "title": "Welfare check",
+        "boardTemplate": "welfare_checks",
+        "nodes": [
+          { "kind": "field", "name": "household", "type": "text", "label": "Household", "required": true },
+          { "kind": "field", "name": "directions", "type": "text", "label": "Address or directions" },
+          { "kind": "field", "name": "people", "type": "integer", "label": "People in household", "constraint": ". >= 0 and . <= 50", "constraintMessage": "Enter a number from 0 to 50." },
+          { "kind": "field", "name": "status", "type": "select_one", "label": "Status", "required": true, "list": "status", "choices": [
+            { "name": "reached_ok", "label": "Reached, doing well" },
+            { "name": "needs_help", "label": "Needs help" },
+            { "name": "no_contact", "label": "No contact" },
+            { "name": "relocated", "label": "Relocated" }
+          ] },
+          { "kind": "field", "name": "needs", "type": "select_one", "label": "What do they need?", "list": "needs", "relevant": "${status} = 'needs_help'", "choices": [
+            { "name": "medical_power", "label": "Power for medical equipment" },
+            { "name": "oxygen", "label": "Oxygen" },
+            { "name": "mobility", "label": "Help moving" },
+            { "name": "medication", "label": "Medication" },
+            { "name": "food_water", "label": "Food or water" },
+            { "name": "transport", "label": "Transport" },
+            { "name": "other", "label": "Other" }
+          ] },
+          { "kind": "field", "name": "checked_by", "type": "text", "label": "Checked by" },
+          { "kind": "field", "name": "notes", "type": "text", "label": "Notes" }
+        ]
+      }
+    ]
+  }
+}

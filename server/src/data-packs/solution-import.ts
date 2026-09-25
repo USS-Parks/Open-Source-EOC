@@ -7,7 +7,8 @@ import { canonical } from "../boards/package.js";
 import { storeForm } from "../forms/service.js";
 import { IncidentTemplateSchema } from "../incidents/service.js";
 import { saveIncidentTemplate } from "../incidents/templates.js";
-import { PackageRefused, PART_KINDS, ReportTemplateSchema, RuleTemplateSchema, verifySolutionPackage, type PartKind } from "./solution.js";
+import { PackageRefused, PART_KINDS, verifySolutionPackage, type PartKind } from "./solution.js";
+import { ReportTemplateSchema, RuleTemplateSchema } from "./templates.js";
 
 /**
  * Import a signed solution package (VA11) into an instance, in one

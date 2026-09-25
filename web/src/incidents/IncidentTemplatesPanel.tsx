@@ -65,6 +65,16 @@ const EMPTY: Draft = {
   positionTitles: {}, boards: [], lines: {}, original: null, newPosition: "",
 };
 
+/** What activation also opens, from a package (VA12), in a sentence; null when nothing. */
+export function alsoOpens(template: IncidentTemplateDefinition | null): string | null {
+  const parts = [
+    ...(template?.contactGroups?.length ? [`contact groups ${template.contactGroups.map((group) => group.name).join(", ")}`] : []),
+    ...(template?.reports?.length ? [`reports ${template.reports.join(", ")}`] : []),
+    ...(template?.rules?.length ? [`notification rules ${template.rules.join(", ")}`] : []),
+  ];
+  return parts.length ? `Activation also opens ${parts.join("; ")}. They are kept when you save.` : null;
+}
+
 /** The template the draft describes, ready to save. */
 export function definitionFrom(draft: Draft): Omit<IncidentTemplateDefinition, "key"> {
   const kept = new Map<string, Map<string, IncidentTemplateItem>>();
@@ -81,12 +91,20 @@ export function definitionFrom(draft: Draft): Omit<IncidentTemplateDefinition, "
     }))
     .filter((list) => list.items.length > 0);
   const titles = Object.fromEntries(Object.entries(draft.positionTitles).filter(([key]) => draft.positions.includes(key)));
+  // Contact groups, reports and rules have no controls here; they are kept as
+  // the template had them, so an edit on screen never drops what a package
+  // put in. The server refuses a save that leaves one without its position
+  // or board, and says which.
+  const original = draft.original;
   return {
     title: draft.title.trim(),
     positions: draft.positions,
     ...(Object.keys(titles).length > 0 ? { positionTitles: titles } : {}),
     boards: draft.boards,
     checklists,
+    ...(original?.contactGroups ? { contactGroups: original.contactGroups } : {}),
+    ...(original?.reports ? { reports: original.reports } : {}),
+    ...(original?.rules ? { rules: original.rules } : {}),
   };
 }
 
@@ -270,6 +288,7 @@ export function IncidentTemplatesPanel(props: {
               </label>
             ))}
           </fieldset>
+          {alsoOpens(draft.original) ? <p className="eoc-muted" role="note">{alsoOpens(draft.original)}</p> : null}
           <div className="incidents-actions">
             <Button type="submit" kind="primary" disabled={busy}>{busy ? "Saving…" : "Save template"}</Button>
             <Button onClick={() => setDraft(null)} disabled={busy}>Cancel</Button>

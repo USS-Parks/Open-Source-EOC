@@ -15,6 +15,8 @@ import { AuthError, requireAdmin, requireMember, type Principal } from "../auth/
 import { recordAudit } from "../audit/service.js";
 import { STANDARD_TITLES } from "../auth/authz.js";
 import { createBoard } from "../boards/service.js";
+import { ReportTemplateSchema, RuleTemplateSchema } from "../data-packs/templates.js";
+import { createReport } from "../reports/service.js";
 import { sendMassNotificationIn, type ActivationNotice } from "../notify/mass.js";
 import { getIncidentAuthority, lockIncidentMutation } from "./participation.js";
 import { completeLegacyChecklistItem } from "./tasks.js";
@@ -29,6 +31,19 @@ export const IncidentTemplateSchema = z.object({
   checklists: z.array(
     z.object({ position: z.string().min(1), items: z.array(TaskTemplateItemSchema).min(1) }),
   ),
+  /**
+   * Contact groups the incident opens with (VA12): each is made in the
+   * jurisdiction when it has none of that name, holding its contacts at the
+   * listed positions in that order. A group it already has is used as it is.
+   */
+  contactGroups: z.array(z.object({
+    name: z.string().trim().min(1).max(200),
+    positions: z.array(z.string().min(1)).max(30).default([]),
+  }).strict()).max(20).optional(),
+  /** Report templates made into the incident's reports on its boards at activation (VA12). */
+  reports: z.array(z.string().regex(/^[a-z][a-z0-9_]*$/)).max(30).optional(),
+  /** Rule templates made into notification rules on the incident's boards at activation (VA12). */
+  rules: z.array(z.string().regex(/^[a-z][a-z0-9_]*$/)).max(30).optional(),
 }).superRefine((template, ctx) => {
   const keyed = new Map<string, [number, number]>();
   for (const [listIndex, list] of template.checklists.entries()) {
@@ -170,6 +185,10 @@ export interface ActivationResult {
   readonly boards: number;
   readonly checklistItems: number;
   readonly libraries: number;
+  /** Contact groups made (not those the jurisdiction already had), reports and notification rules (VA12). */
+  readonly contactGroups: number;
+  readonly reports: number;
+  readonly rules: number;
   /** The activation notice, when one was asked for: its send and how many it reached. */
   readonly notice?: { readonly massNotificationId: string; readonly recipients: number };
 }
@@ -231,6 +250,7 @@ export async function activateIncident(
   }
 
   let boardCount = 0;
+  const boardIds = new Map<string, string>();
   for (const boardKey of template.boards) {
     // Titled for people: the incident's name and the board template's title, not its key.
     const [boardTemplate] = await sql`
@@ -239,6 +259,7 @@ export async function activateIncident(
       `${input.name}: ${(boardTemplate?.title as string | undefined) ?? boardKey}`);
     await sql`
       insert into incident_boards (incident_id, board_id) values (${incidentId}, ${boardId})`;
+    boardIds.set(boardKey, boardId);
     boardCount += 1;
   }
 
@@ -280,6 +301,8 @@ export async function activateIncident(
       values (${dependency.taskId}, ${prerequisiteTaskId})`;
   }
 
+  const opened = await openActivationParts(sql, actor, jurisdictionId, incidentId, input.name, template, positionIds, boardIds);
+
   const attached = await sql`
     insert into incident_libraries (incident_id, library_id)
     select ${incidentId}, id from libraries
@@ -315,8 +338,111 @@ export async function activateIncident(
     boards: boardCount,
     checklistItems: itemCount,
     libraries: attached.length,
+    ...opened,
     ...(notice ? { notice } : {}),
   };
+}
+
+/**
+ * The contact groups, reports and notification rules an incident template
+ * names (VA12), made as the activation's own work and audited as if an
+ * administrator had made each:
+ *
+ * - a contact group the jurisdiction lacks is made, holding its active
+ *   contacts at the listed positions, in that order; one it has is used as
+ *   it is, since it is the jurisdiction's;
+ * - each report comes from its template's latest version, on the incident's
+ *   board of that template, scoped to the incident; a scheduled one stores
+ *   its file, and recipients are added to it by hand;
+ * - each rule comes from its template's latest version, on the incident's
+ *   board, reaching positions and contact groups by their ids here.
+ */
+async function openActivationParts(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+  incidentId: string,
+  incidentName: string,
+  template: IncidentTemplate,
+  positionIds: ReadonlyMap<string, string>,
+  boardIds: ReadonlyMap<string, string>,
+): Promise<{ contactGroups: number; reports: number; rules: number }> {
+  const groupIds = new Map<string, string>();
+  let contactGroups = 0;
+  for (const group of template.contactGroups ?? []) {
+    const [existing] = await sql`select id from contact_groups where jurisdiction_id = ${jurisdictionId} and name = ${group.name}`;
+    if (existing) {
+      groupIds.set(group.name, existing.id as string);
+      continue;
+    }
+    const [created] = await sql`
+      insert into contact_groups (jurisdiction_id, name, updated_by)
+      values (${jurisdictionId}, ${group.name}, ${actor.person.id}) returning id`;
+    const groupId = created!.id as string;
+    groupIds.set(group.name, groupId);
+    const ids = group.positions.flatMap((key) => positionIds.get(key) ?? []);
+    const members = ids.length === 0 ? [] : await sql`
+      select id from contacts
+      where jurisdiction_id = ${jurisdictionId} and active and position_id = any(${ids}::uuid[])
+      order by array_position(${ids}::uuid[], position_id), name, id`;
+    for (const [index, member] of members.entries()) {
+      await sql`
+        insert into contact_group_members (group_id, contact_id, jurisdiction_id, priority)
+        values (${groupId}, ${member.id as string}, ${jurisdictionId}, ${index + 1})`;
+    }
+    await recordAudit(sql, actor, {
+      jurisdictionId, incidentId, category: "contact_group.saved", subjectTable: "contact_groups", subjectId: groupId,
+      payload: { name: group.name, members: members.length, incidentTemplate: template.key },
+    });
+    contactGroups += 1;
+  }
+
+  let reports = 0;
+  for (const key of template.reports ?? []) {
+    const [row] = await sql`select title, definition from report_templates where key = ${key} order by version desc limit 1`;
+    const report = ReportTemplateSchema.parse(row!.definition);
+    const boardId = boardIds.get(report.board);
+    if (!boardId) throw new AuthError(400, `report template ${key} runs on board template ${report.board}, which this incident does not open`);
+    await createReport(sql, actor, jurisdictionId, {
+      name: `${incidentName}: ${report.title}`.slice(0, 200),
+      boardId,
+      incidentId,
+      definition: report.definition,
+      schedule: report.schedule ? { ...report.schedule, emails: [], contactIds: [], storeFile: true } : null,
+    });
+    reports += 1;
+  }
+
+  let rules = 0;
+  for (const key of template.rules ?? []) {
+    const [row] = await sql`select definition from rule_templates where key = ${key} order by version desc limit 1`;
+    const rule = RuleTemplateSchema.parse(row!.definition);
+    const boardId = rule.board ? boardIds.get(rule.board) : undefined;
+    if (!boardId) throw new AuthError(400, `rule template ${key} runs on board template ${rule.board ?? "(none)"}, which this incident does not open`);
+    const channels = rule.channels.map((channel) => {
+      if (channel.kind === "inapp") return channel;
+      if (channel.kind === "position") {
+        const positionId = positionIds.get(channel.position);
+        if (!positionId) throw new AuthError(400, `rule template ${key} reaches ${channel.position}, which this incident does not open`);
+        return { kind: "position", positionId, reach: channel.reach, via: channel.via };
+      }
+      const groupId = groupIds.get(channel.group);
+      if (!groupId) throw new AuthError(400, `rule template ${key} reaches the contact group ${channel.group}, which this incident does not open`);
+      return { kind: "group", groupId, via: channel.via };
+    });
+    const [created] = await sql`
+      insert into notification_rules
+        (jurisdiction_id, board_id, event, condition, channels, schedule_interval_minutes, created_by)
+      values (${jurisdictionId}, ${boardId}, ${rule.event}, ${sql.json(rule.condition as never)}, ${sql.json(channels as never)},
+              ${rule.scheduleIntervalMinutes ?? null}, ${actor.person.id})
+      returning id`;
+    await recordAudit(sql, actor, {
+      jurisdictionId, incidentId, category: "notification.rule_created", subjectTable: "notification_rules", subjectId: created!.id as string,
+      payload: { boardId, event: rule.event, condition: rule.condition, channels, ruleTemplate: key },
+    });
+    rules += 1;
+  }
+  return { contactGroups, reports, rules };
 }
 
 export interface IncidentDetail {

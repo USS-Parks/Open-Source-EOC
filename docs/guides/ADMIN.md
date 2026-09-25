@@ -174,6 +174,19 @@ Other preparation happens on the screens that use it:
   opened from: a later edit changes no incident already open. Every version
   is kept and cannot be changed. On **Tasks**, **New task** adds a task of
   the incident's own beside the template's.
+- **What a packaged template also opens.** A template that came in a signed
+  solution package may also name contact groups, report templates and
+  notification rule templates; the editor lists them under the checklists and
+  keeps them through an edit. On activation, a contact group the jurisdiction
+  lacks is made holding its contacts at the named positions, in that order;
+  one it already has is used as it is. Each report is made on the incident's
+  board of its template, scoped to the incident; a scheduled one stores its
+  file, and recipients are added on **Reports**. Each rule is made on the
+  incident's board, reaching the positions and contact groups it names. A
+  save is refused, with the reason, when a report or rule runs on a board the
+  template does not open, or reaches a position or contact group it does not
+  name. The [small EOC starter pack](../../deploy/packs/small-eoc-starter/README.md)
+  is one such package.
 - **Libraries.** On **Incident Setup**, **Add a library** (administrators)
   stores a scenario, plan or reference text. A library attached to a template
   is linked to each incident activated from that template afterwards; the

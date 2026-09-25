@@ -77,6 +77,44 @@ export async function listIncidentTemplateVersions(sql: Sql, key: string): Promi
 }
 
 /**
+ * What activation opens beyond positions, boards and checklists (VA12) must
+ * be something it can make: contact groups of the template's own positions,
+ * and reports and rules from templates that exist, on boards the template
+ * opens, reaching its positions and its contact groups.
+ */
+async function checkActivationParts(sql: Sql, template: IncidentTemplate, positions: ReadonlySet<string>, boards: readonly string[]): Promise<void> {
+  const groupNames = new Set<string>();
+  for (const group of template.contactGroups ?? []) {
+    if (groupNames.has(group.name)) throw new AuthError(400, `contactGroups: ${group.name} is listed twice`);
+    groupNames.add(group.name);
+    for (const position of group.positions) {
+      if (!positions.has(position)) throw new AuthError(400, `contactGroups: ${position} in ${group.name} is not one of the template's positions`);
+    }
+  }
+  const parts = [["reports", "report_templates", "report"], ["rules", "rule_templates", "rule"]] as const;
+  for (const [field, table, noun] of parts) {
+    const keys = template[field] ?? [];
+    if (new Set(keys).size !== keys.length) throw new AuthError(400, `${field}: a ${noun} template is listed twice`);
+    for (const partKey of keys) {
+      const [row] = await sql`select definition from ${sql(table)} where key = ${partKey} order by version desc limit 1`;
+      if (!row) throw new AuthError(400, `${field}: no ${noun} template ${partKey}`);
+      const definition = row.definition as { board: string | null; channels?: ReadonlyArray<{ kind: string; position?: string; group?: string }> };
+      if (!definition.board || !boards.includes(definition.board)) {
+        throw new AuthError(400, `${field}: ${partKey} runs on board template ${definition.board ?? "(none)"}, which this template does not open`);
+      }
+      for (const channel of definition.channels ?? []) {
+        if (channel.kind === "position" && !positions.has(channel.position ?? "")) {
+          throw new AuthError(400, `rules: ${partKey} reaches ${channel.position}, which is not one of the template's positions`);
+        }
+        if (channel.kind === "group" && !groupNames.has(channel.group ?? "")) {
+          throw new AuthError(400, `rules: ${partKey} reaches the contact group ${channel.group}, which is not one of the template's contact groups`);
+        }
+      }
+    }
+  }
+}
+
+/**
  * Save a template: a new key starts at version 1, and a save of an existing
  * one becomes its next version. `expectedVersion` is the version the editor
  * opened (0 for a new template), so a save over someone else's is refused
@@ -115,6 +153,7 @@ export async function saveIncidentTemplate(
   const known = await sql`select distinct key from board_templates where key = any(${boards})`;
   const missing = boards.filter((board) => !known.some((row) => row.key === board));
   if (missing.length > 0) throw new AuthError(400, `boards: no board template ${missing.join(", ")}`);
+  await checkActivationParts(sql, template, positions, boards);
 
   const [current] = await sql`select version from incident_templates where key = ${key} for update`;
   if (!current) {

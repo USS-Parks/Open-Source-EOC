@@ -77,6 +77,31 @@ describe("incident templates on screen", () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
   });
 
+  it("keeps the contact groups, reports and rules a package put in, and says so, when a template is edited on screen (VA12)", async () => {
+    const api = client();
+    const packaged: IncidentTemplateDefinition = {
+      ...flood,
+      contactGroups: [{ name: "Community outreach", positions: ["tribal_liaison"] }],
+      reports: ["welfare_follow_up"],
+      rules: ["welfare_needs_help"],
+    };
+    api.getIncidentTemplate.mockResolvedValue({ template: packaged, version: 3, updatedAt: "2026-09-25T17:00:00Z" });
+    const view = render(<IncidentTemplatesPanel client={api} jurisdictionId="j1" />);
+    await view.findByText("1 checklist item");
+    fireEvent.click(view.getByRole("button", { name: "Edit River Flood" }));
+    const form = await view.findByRole("form", { name: "Edit River Flood" });
+    expect(form.querySelector("[role=note]")?.textContent).toBe("Activation also opens contact groups Community outreach; "
+      + "reports welfare_follow_up; notification rules welfare_needs_help. They are kept when you save.");
+    fireEvent.change(view.getByLabelText("Checklist for Tribal Liaison"), { target: { value: "Call the village representatives" } });
+    fireEvent.click(view.getByRole("button", { name: "Save template" }));
+    await view.findByText("Saved River Flood as version 4.");
+    expect(api.saveIncidentTemplate).toHaveBeenCalledWith("river_flood", expect.objectContaining({
+      contactGroups: [{ name: "Community outreach", positions: ["tribal_liaison"] }],
+      reports: ["welfare_follow_up"],
+      rules: ["welfare_needs_help"],
+    }), 3);
+  });
+
   it("starts a new template at version 0 with a key from its title, and shows a refusal", async () => {
     const api = client();
     api.saveIncidentTemplate.mockRejectedValueOnce(new Error("boards: no board template levee_gauges"));

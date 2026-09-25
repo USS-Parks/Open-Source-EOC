@@ -154,6 +154,8 @@ An instance trusts a publisher once the public key file is in the PEM bundle
 `OPENEOC_TRUSTED_TEMPLATE_KEYS` names; the same bundle serves signed board
 template packages. The import is in the board designer's **Import** tab; see
 [the designer guide](../docs/guides/DESIGNER.md#import-definitions).
+`deploy/packs/` holds packages ready to sign, starting with the
+[small EOC starter pack](packs/small-eoc-starter/README.md).
 
 ## Map archives
 

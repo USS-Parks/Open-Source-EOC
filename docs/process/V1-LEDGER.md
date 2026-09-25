@@ -8110,3 +8110,106 @@ as on be75d61, so this is not a one-off.
   the step and the page.
 - **Verification.** On the Linux test bed: the partner sharing file, 4 of 4.
 - **Rollback:** revert the commit.
+
+## Veoci and air gap VA12: the small EOC starter pack
+
+Veoci Integration and Air Gap PSPR unit VA12 (VC-08), on VA11's signed
+package.
+
+- **What the code did before.** An incident template opened positions,
+  boards and checklists. Contact groups, reports and notification rules were
+  made by hand in each jurisdiction, so a new instance, or a new EOC on one,
+  started blank apart from the standard boards and the demonstration
+  scenarios.
+- **What changed.**
+  - **An incident template may name contact groups, report templates and
+    rule templates** (`IncidentTemplateSchema`, all optional, so every
+    existing template is unchanged). On activation (`openActivationParts`):
+    a contact group the jurisdiction lacks is made holding its active
+    contacts at the named positions, in the order the positions are listed;
+    one it has under that name is used as it is. Each report is made from its
+    template's latest version on the incident's board of that template,
+    scoped to the incident, titled with the incident's name; a scheduled one
+    stores its file and has no recipients until someone adds them. Each rule
+    is made on the incident's board, its positions and groups resolved to
+    this jurisdiction's ids. Each is audited as the activating administrator's
+    work, and the activation result counts them.
+  - **Saving a template is held to what activation can make**
+    (`checkActivationParts`): a contact group's positions must be the
+    template's; a report or rule template must exist and run on a board the
+    template opens; a rule may reach only the template's positions and
+    contact groups. A refusal names the part and the reason.
+  - **The on-screen editor keeps them.** It rebuilt a template from its own
+    fields, which would have dropped the new parts on the first edit; it now
+    carries them through a save, and a note under the checklists lists what
+    activation also opens.
+  - **The pack** (`deploy/packs/small-eoc-starter/`): `package.json`, the
+    unsigned VA11 package; `README.md`, what it holds, what activation opens,
+    how to sign and import it and how to adapt it; `TABLETOP.md`, a two and a
+    half hour HSEEP-style tabletop that names no hazard, with scenario slots,
+    objectives, core capabilities, three modules of injects and questions, a
+    hotwash and a result template marked as not yet run. The pack holds:
+    - **Small EOC activation (any hazard)**: the eight Command and General
+      Staff positions and a Community Liaison; activity log, significant
+      events, situation report, resource requests, shelters, road closures
+      and welfare checks boards; 29 checklist items, five due 30 to 120
+      minutes after activation and two waiting on a prerequisite; contact
+      groups "EOC command and general staff" and "Community outreach"; three
+      reports; two rules.
+    - **Tabletop exercise (small EOC)**: six positions, five boards, exercise
+      checklists, an "Exercise players" group and the welfare follow-up
+      report, and no rules, so an exercise sends nothing.
+    - The **Welfare Checks** board (households that may need help, with
+      directions and notes readable by members only), the **Welfare check**
+      field form, the **Shelter census**, **Open resource requests** and
+      **Welfare follow-up** reports (the first two stored as a PDF every 12
+      hours, a cadence with no time zone so the pack fits anywhere), rules for
+      an immediate resource request and a household needing help, and the
+      **Small EOC overview** dashboard template.
+  - `ADMIN.md` describes what a packaged template also opens;
+    `deploy/README.md` points to `deploy/packs/`.
+- **Amendment 5.** The pack and the tabletop name no hazard, place or
+  scenario; the tabletop's slots take any exercise scenario, the scenario
+  session's three included.
+- **Defaults taken (recorded, not asked).** A contact group the jurisdiction
+  already has is never refilled, since its members are the jurisdiction's
+  choice. Scheduled reports store their file rather than send, since a pack
+  cannot know recipients. The pack is shipped unsigned: signing it is the
+  deploying organization's act with its own key, which its README walks
+  through. Dashboards from the pack are made by hand, as before, until VA16
+  makes them at activation.
+- **Files outside the "Owns" cell.** `server/src/incidents/service.ts` and
+  `templates.ts` (the schema, activation and save checks),
+  `server/src/data-packs/templates.ts` (the report and rule template schemas,
+  moved out of `solution.ts` so the incident and package modules do not import
+  each other), `web/src/incidents/IncidentTemplatesPanel.tsx`,
+  `web/src/app/api/client.ts`, `docs/guides/ADMIN.md` and `deploy/README.md`.
+- **Tests.**
+  - `starter-pack.test.ts` (real database): the pack as shipped, signed and
+    imported on a fresh profile, creates its ten parts; activating **Small
+    EOC activation** with no other setup opens 9 positions (the Community
+    Liaison titled), 7 boards titled with the incident, 29 checklist items
+    (the first public message due exactly an hour after activation, the first
+    briefing waiting on its prerequisite), both contact groups, the three
+    reports on the incident's boards (a scheduled one storing its file with no
+    recipients), and both rules with their position and group resolved to this
+    jurisdiction's ids. Activating the tabletop after three contacts are given
+    positions makes "Exercise players" holding them in position order; a
+    second activation uses the groups the first made. Saving templates that
+    name a report off their boards, a rule reaching a group they do not name,
+    a group of a position they do not open, or a report template that does not
+    exist is refused with the reason.
+  - `incident-templates-panel.test.tsx`: an edit on screen keeps the contact
+    groups, reports and rules and shows the note.
+  - The incident, template and activation notice tests pass unchanged.
+- **Verification.** On the Linux test bed: `pnpm check:static` exit 0 (links
+  118 files); the starter pack, incident template, package and incident
+  tests; the web panel tests 4 of 4. Every test file except the browser,
+  end-to-end and load files (Vitest, two workers): 1,656 passed and 1 failed,
+  the route coverage test, which found VA11's list of imported packages with
+  no screen; the next receipt gives it one.
+- **Evidence level:** real-database and component tests. The pack's content
+  is Basho's to judge; the tabletop has not been run.
+- **Rollback:** revert the commit; no migration. A template saved with the
+  new parts still loads after a revert: the older schema drops the parts it
+  does not know, and activation opens positions, boards and checklists only.

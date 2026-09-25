@@ -472,6 +472,10 @@ export interface IncidentTemplateDefinition {
   readonly positionTitles?: Readonly<Record<string, string>>;
   readonly boards: readonly string[];
   readonly checklists: ReadonlyArray<{ readonly position: string; readonly items: readonly IncidentTemplateItem[] }>;
+  /** What activation also opens (VA12): contact groups of the template's positions, and reports and rules by template key. */
+  readonly contactGroups?: ReadonlyArray<{ readonly name: string; readonly positions: readonly string[] }>;
+  readonly reports?: readonly string[];
+  readonly rules?: readonly string[];
 }
 export interface IncidentTemplateVersionEntry {
   readonly version: number;
