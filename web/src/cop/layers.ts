@@ -37,6 +37,7 @@ export function tagFeatures(fc: CopFeatureCollection): CopFeatureCollection {
       ...f,
       properties: {
         ...f.properties,
+        _featureId: f.id,
         _symbolStatus: symbolStatusFor(f.properties),
         _facilityType: facilityTypeFor(f.properties),
         _label: labelFor(f.properties),

@@ -228,6 +228,10 @@ export interface CopMapProps {
   readonly inspectionMode?: "popup" | "workspace" | undefined;
   /** Exact persisted dataset feature requested by an operational relationship. */
   readonly requestedFeature?: { readonly datasetId: string; readonly featureId: string } | null | undefined;
+  /** A board record to show and inspect once its layer loads, as a record's "Show on map" asks. */
+  readonly requestedRecord?: { readonly boardId: string; readonly recordId: string } | null | undefined;
+  /** Opens a board record beside its list from the inspector. */
+  readonly onOpenRecord?: ((boardId: string, recordId: string) => void) | undefined;
   /** Reports only persisted feed/dataset feature identity, never a rendered synthetic id. */
   readonly onInspectFeature?: ((feature: CopSelectedDatasetFeature | null) => void) | undefined;
   /** Vector tiles for a layer too large for one GeoJSON page (board items
@@ -289,6 +293,14 @@ function nextLayerId(map: maplibregl.Map, id: string): string | null {
   const ids = map.getStyle().layers.map((layer) => layer.id);
   const index = ids.indexOf(id);
   return index >= 0 ? ids[index + 1] ?? null : null;
+}
+
+/** The record fields that say when its condition was observed, most specific first. */
+const OBSERVED_FIELDS = ["observed_at", "occurred_at", "reported_at", "assessed_at"] as const;
+
+/** "Sep 24, 10:42": a record time in the viewer's zone. */
+function moment(value: string): string {
+  return new Date(value).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 }
 
 function visibleInspectionRows(properties: Record<string, unknown>) {
@@ -439,6 +451,7 @@ export function CopMap(props: CopMapProps) {
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const requestedFeatureRef = useRef(props.requestedFeature);
+  const requestedRecordRef = useRef(props.requestedRecord);
   const onInspectFeatureRef = useRef(props.onInspectFeature);
   const openedRequestedFeatureRef = useRef("");
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(loadBookmarks);
@@ -475,6 +488,7 @@ export function CopMap(props: CopMapProps) {
   boardsRef.current = props.boards;
   feedsRef.current = props.feeds ?? [];
   requestedFeatureRef.current = props.requestedFeature;
+  requestedRecordRef.current = props.requestedRecord;
   onInspectFeatureRef.current = props.onInspectFeature;
 
   useEffect(() => {
@@ -548,7 +562,15 @@ export function CopMap(props: CopMapProps) {
         : overlayInfo?.attribution);
     const coverageLabel = feed?.coverage ?? health?.coverage ?? overlayInfo?.coverage;
     const title = labelFor(properties);
+    // A board record says when it was observed and last changed, and by whom.
+    const recordId = typeof properties._featureId === "string" ? properties._featureId : featureId === undefined ? undefined : String(featureId);
+    const observedAt = board ? OBSERVED_FIELDS.map((key) => properties[key]).find((value) => typeof value === "string" && Number.isFinite(Date.parse(value))) as string | undefined : undefined;
+    const updatedAt = board && typeof properties._updatedAt === "string" ? properties._updatedAt : undefined;
+    const updatedBy = typeof properties._updatedBy === "string" ? properties._updatedBy : undefined;
     setSelection({
+      ...(observedAt ? { observed: moment(observedAt) } : {}),
+      ...(updatedAt ? { updated: `${moment(updatedAt)}${updatedBy ? ` by ${updatedBy}` : ""}` } : {}),
+      ...(board && recordId ? { record: { boardId: board.id, recordId } } : {}),
       title,
       kind,
       source,
@@ -565,8 +587,9 @@ export function CopMap(props: CopMapProps) {
   };
 
   const inspectRequestedFeature = (
-    datasetId: string,
+    source: string,
     feature: CopFeatureCollection["features"][number],
+    reveal: () => void,
   ) => {
     const map = mapRef.current;
     const bounds = geometryBounds(feature.geometry);
@@ -576,17 +599,11 @@ export function CopMap(props: CopMapProps) {
       (bounds[1] + bounds[3]) / 2,
     ];
     const isPoint = bounds[0] === bounds[2] && bounds[1] === bounds[3];
-    setFeedVisible((current) => ({ ...current, [datasetId]: true }));
+    reveal();
     if (isPoint) map.flyTo({ center, zoom: Math.max(map.getZoom(), 13), duration: 600 });
     else map.fitBounds(bounds, { padding: 64, maxZoom: 14, duration: 600 });
     popupRef.current?.remove();
-    openInspection(
-      feature.properties,
-      feedSourceId(datasetId),
-      feedSourceId(datasetId),
-      feature.properties._symbolStatus,
-      feature.id,
-    );
+    openInspection(feature.properties, source, source, feature.properties._symbolStatus, feature.id);
   };
 
   const closeInspection = () => {
@@ -886,6 +903,15 @@ export function CopMap(props: CopMapProps) {
             cartographyLayerSpecs(board.id, board.templateKey, props.theme, labelFont) ?? boardLayerSpecs(board.id, props.theme, labelFont),
             pastPage ? tileTemplate("board", board.id) : undefined, false, visibleRef.current[board.id] ?? boardDefault(board),
             board.templateKey);
+          const wanted = requestedRecordRef.current;
+          const wantedKey = wanted ? `board/${wanted.boardId}/${wanted.recordId}` : "";
+          if (wanted?.boardId === board.id && openedRequestedFeatureRef.current !== wantedKey) {
+            const feature = fc.features.find((candidate) => candidate.id === wanted.recordId);
+            if (feature) {
+              openedRequestedFeatureRef.current = wantedKey;
+              inspectRequestedFeature(sourceId(board.id), feature, () => setVisible((current) => ({ ...current, [board.id]: true })));
+            }
+          }
         } catch {
           // A failed refresh keeps the last good picture; never blank the COP.
           failed += 1;
@@ -912,7 +938,7 @@ export function CopMap(props: CopMapProps) {
               const feature = fc.features.find((candidate) => candidate.id === requested.featureId);
               if (feature) {
                 openedRequestedFeatureRef.current = requestKey;
-                inspectRequestedFeature(feed.id, feature);
+                inspectRequestedFeature(feedSourceId(feed.id), feature, () => setFeedVisible((current) => ({ ...current, [feed.id]: true })));
               }
             }
           } catch {
@@ -1799,7 +1825,7 @@ export function CopMap(props: CopMapProps) {
           <CardOverlays theme={props.theme} map={liveMap} frame={frameRef} toggles={cardToggles} more={moreToggles} search={props.cardSearch} />
         ) : null}
       </div>
-      {selection ? <CopFeatureInspector selection={selection} onClose={closeInspection} /> : null}
+      {selection ? <CopFeatureInspector selection={selection} onClose={closeInspection} onOpenRecord={props.onOpenRecord} /> : null}
     </div>
     </div>
   );

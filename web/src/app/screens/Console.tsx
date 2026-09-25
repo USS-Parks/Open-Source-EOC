@@ -304,6 +304,11 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
               >
                 Files for this record
               </Button>
+              {boardItems.find((board) => board.id === surface.id)?.hasGeometry ? (
+                <Button kind="quiet" onClick={() => navigate({ kind: "map" }, { ...baseContext, boardId: surface.id, recordId: recordContext.detail.id })}>
+                  Show on map
+                </Button>
+              ) : null}
             </>
           ) : null}
         </section>
@@ -443,6 +448,10 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
           boardsInView={scopedBoards}
           onIncidentActivated={incident.selectWhenListed}
           onIncidentsChanged={incident.reload}
+          onOpenBoardRecordFromMap={(boardId, recordId) => navigate(
+            { kind: "board", id: boardId },
+            { ...baseContext, recordId, returnTo: surfaceHash({ kind: "map" }, { ...baseContext, boardId, recordId }) },
+          )}
           boardsLoading={boards.loading && !boards.data}
           collections={(collections.data ?? []).filter((collection) => !outOfScope.has(collection.id))
             .map((collection) => ({ ...collection, templateKey: boardItems.find((board) => board.id === collection.id)?.templateKey }))}
@@ -589,6 +598,7 @@ function Center(props: {
   boardsInView: readonly BoardListItem[];
   onIncidentActivated: (incidentId: string) => Promise<void>;
   onIncidentsChanged: () => void;
+  onOpenBoardRecordFromMap: (boardId: string, recordId: string) => void;
   boardsLoading: boolean;
   collections: readonly CollectionRef[];
   feeds: readonly FeedHealth[];
@@ -635,6 +645,8 @@ function Center(props: {
           incidentBoardIds={props.incidentBoardIds}
           focusDatasetId={s.datasetId}
           focusFeatureId={s.featureId}
+          focusRecord={props.recordBoardId && props.recordId ? { boardId: props.recordBoardId, recordId: props.recordId } : null}
+          onOpenRecord={(boardId, recordId) => props.onOpenBoardRecordFromMap(boardId, recordId)}
           onOpenLifeline={(id) => props.onNavigate({ kind: "lifeline", id })}
           onOpenEsf={(id) => props.onNavigate({ kind: "esf", id })}
         />

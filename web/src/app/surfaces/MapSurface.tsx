@@ -96,6 +96,10 @@ export function MapSurface(props: {
   incidentBoardIds?: ReadonlySet<string>;
   focusDatasetId?: string | undefined;
   focusFeatureId?: string | undefined;
+  /** A board record to show and inspect, from its "Show on map". */
+  focusRecord?: { readonly boardId: string; readonly recordId: string } | null | undefined;
+  /** Opens a board record beside its list, from the map's inspector. */
+  onOpenRecord?: ((boardId: string, recordId: string) => void) | undefined;
   onOpenLifeline?: (id: string) => void;
   onOpenEsf?: (id: string) => void;
 }) {
@@ -460,7 +464,7 @@ export function MapSurface(props: {
       <div className="map-surface-map">
         <PlaceSearch client={props.client} onChoose={requestMapFocus} />
         <CopMap
-          key={JSON.stringify([props.jurisdictionId, props.incidentId ?? null, props.theme, areaBbox, geoBoards.map((b) => b.id), feedAndDatasetLayers.map((f) => f.id), props.focusDatasetId ?? null, props.focusFeatureId ?? null])}
+          key={JSON.stringify([props.jurisdictionId, props.incidentId ?? null, props.theme, areaBbox, geoBoards.map((b) => b.id), feedAndDatasetLayers.map((f) => f.id), props.focusDatasetId ?? null, props.focusFeatureId ?? null, props.focusRecord?.recordId ?? null])}
           theme={props.theme}
           boards={geoBoards.map((c) => ({ id: c.id, title: c.title, templateKey: c.templateKey }))}
           incidentArea={incidentArea.data?.geometry ? { geometry: incidentArea.data.geometry } : null}
@@ -501,6 +505,8 @@ export function MapSurface(props: {
           requestedFeature={props.focusDatasetId && props.focusFeatureId
             ? { datasetId: props.focusDatasetId, featureId: props.focusFeatureId }
             : null}
+          requestedRecord={props.focusRecord ?? null}
+          onOpenRecord={props.onOpenRecord}
           onInspectFeature={(feature) => {
             setRelationshipNotice(null);
             setRelationshipError(null);

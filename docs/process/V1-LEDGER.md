@@ -5698,3 +5698,38 @@ Operator Trust PSPR unit TP8 (research E4, E5).
 - **Evidence level:** real-database, browser and unit tests.
 - **Rollback:** revert the commit; reports already written stay beside
   their dumps.
+
+## Operator trust TP9: from the map to the action
+
+Operator Trust PSPR unit TP9 (research E1, E7).
+
+- **What changed.**
+  - **A record on the map says how it stands, since when, and who said
+    so.** Selecting a shelter, closure, facility or report on the Map
+    screen, by click or by "Find on map", opens the inspector beside the
+    map without moving it: its status, its source board, when its condition
+    was observed where the record states it (`observed_at`, `occurred_at`,
+    `reported_at` or `assessed_at`), and when it last changed and who
+    changed it. Board features from the map's items route
+    (`/api/v1/ogc/collections/:boardId/items`) now carry `_updatedAt` and
+    `_updatedBy` for this.
+  - **Map, list and detail on one record.** "Open record" in the inspector
+    opens the record in its board, as the selected row with its detail
+    beside the list, and keeps a way back to the map on that record. From a
+    record of a map board, "Show on map" opens the map, shows the record's
+    layer, moves to it and opens its inspector.
+- **Defaults and deviations.** A board past one page of items is drawn from
+  vector tiles, which carry the record's fields but not the last change;
+  its inspector then says freshness is unknown, as before. Coverage limits
+  where a count is partial were already shown for datasets and feeds
+  (coverage, stale last-good data); board layers are complete by
+  definition.
+- **Gate.** Acceptance scenario 6, map half, `scenario-map-records-browser.test.ts`,
+  on the North Coast Storm exercise at 1586 by 992 and 1534 by 790: Jordan
+  Lee finds the Eureka Municipal Auditorium on the map and reads its source
+  board and who last changed it; opens the record as the selected row with
+  its detail and a return path; and returns with "Show on map" to the map
+  inspecting the same shelter.
+- **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
+- **Evidence level:** browser tests.
+- **Rollback:** revert the commit; no schema or data change.

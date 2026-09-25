@@ -16,6 +16,12 @@ export interface CopInspection {
   readonly freshness?: string | undefined;
   readonly coverage?: string | undefined;
   readonly attribution?: string | undefined;
+  /** When the record's condition was observed, where the record says. */
+  readonly observed?: string | undefined;
+  /** When the record last changed, and who changed it. */
+  readonly updated?: string | undefined;
+  /** The board record behind a feature, to open beside its list. */
+  readonly record?: { readonly boardId: string; readonly recordId: string } | undefined;
   readonly rows: readonly CopInspectionRow[];
 }
 
@@ -69,6 +75,7 @@ export function EmptyLayerSearch(props: { readonly visible: boolean }) {
 export function CopFeatureInspector(props: {
   readonly selection: CopInspection;
   readonly onClose: () => void;
+  readonly onOpenRecord?: ((boardId: string, recordId: string) => void) | undefined;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -80,7 +87,9 @@ export function CopFeatureInspector(props: {
   ];
   if (props.selection.facilityType) meta.push(["Facility type", props.selection.facilityType, "map"]);
   meta.push(["Operational status", statusLabel(props.selection.status), "clock"]);
-  meta.push(["Freshness", props.selection.freshness ?? "Freshness unknown", "clock"]);
+  if (props.selection.observed) meta.push(["Observed", props.selection.observed, "clock"]);
+  if (props.selection.updated) meta.push(["Last updated", props.selection.updated, "clock"]);
+  else meta.push(["Freshness", props.selection.freshness ?? "Freshness unknown", "clock"]);
   meta.push(["Coverage", props.selection.coverage ?? "Coverage unknown", "map"]);
 
   return (
@@ -140,6 +149,11 @@ export function CopFeatureInspector(props: {
         </p>
       ) : null}
 
+      {props.selection.record && props.onOpenRecord ? (
+        <button type="button" className="eoc-cop-return" onClick={() => props.onOpenRecord!(props.selection.record!.boardId, props.selection.record!.recordId)}>
+          Open record
+        </button>
+      ) : null}
       <button type="button" className="eoc-cop-return" onClick={props.onClose}>
         Return to map
       </button>

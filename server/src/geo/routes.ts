@@ -90,17 +90,26 @@ export function geoRoutes(
         const readable = new Set(visibleFields(board).map((f) => f.key));
         const bbox = query.bbox?.split(",").map(Number);
         const after = decodeCursor(query.cursor, ["at", "id"]);
+        // Each feature also carries when its record last changed and who changed it,
+        // so the map says how current it is and whom to ask.
         const fetched = await tx`
-          select id, data, to_char(created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
-          from board_records
-          where board_id = ${boardId} and geom is not null
-            ${bbox ? tx`and geom && ST_MakeEnvelope(${bbox[0]!}, ${bbox[1]!}, ${bbox[2]!}, ${bbox[3]!}, 4326)` : tx``}
-            ${after ? tx`and (created_at, id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : tx``}
-          order by created_at desc, id desc limit ${query.limit + 1}`;
+          select r.id, r.data, coalesce(r.updated_at, r.created_at) as changed_at,
+            coalesce(updater.display_name, creator.display_name) as changed_by,
+            to_char(r.created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
+          from board_records r
+          left join persons updater on updater.id = r.updated_by
+          left join persons creator on creator.id = r.created_by
+          where r.board_id = ${boardId} and r.geom is not null
+            ${bbox ? tx`and r.geom && ST_MakeEnvelope(${bbox[0]!}, ${bbox[1]!}, ${bbox[2]!}, ${bbox[3]!}, 4326)` : tx``}
+            ${after ? tx`and (r.created_at, r.id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : tx``}
+          order by r.created_at desc, r.id desc limit ${query.limit + 1}`;
         const { items: rows, nextCursor } = cutPage(fetched, query.limit, (r) => [r.page_at as string, r.id as string]);
         const features = rows.map((r) => {
           const data = r.data as Record<string, unknown>;
-          const properties: Record<string, unknown> = {};
+          const properties: Record<string, unknown> = {
+            _updatedAt: new Date(r.changed_at as string).toISOString(),
+            ...(r.changed_by ? { _updatedBy: r.changed_by as string } : {}),
+          };
           for (const key of Object.keys(data)) {
             if (key !== geomKey && readable.has(key)) properties[key] = data[key];
           }
