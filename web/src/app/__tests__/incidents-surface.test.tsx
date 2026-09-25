@@ -18,6 +18,13 @@ const detail = {
   boards: [], checklists: [], libraries: [],
 };
 
+/** The plans panel and an incident's plan, empty: no plans are written in these tests. */
+const noPlans = () => ({
+  listPlans: vi.fn().mockResolvedValue([]),
+  listTemplates: vi.fn().mockResolvedValue([]),
+  incidentPlan: vi.fn().mockResolvedValue(null),
+});
+
 function setup(options: { isAdmin?: boolean; positionKey?: string | null; detail?: object; onActivated?: (id: string) => void } = {}) {
   const client = {
     listIncidents: vi.fn().mockResolvedValue([incident]),
@@ -37,6 +44,7 @@ function setup(options: { isAdmin?: boolean; positionKey?: string | null; detail
       nextCursor: null,
     }),
     listPositions: vi.fn().mockResolvedValue([{ id: "p2", key: "duty_officer", title: "Duty Officer" }]),
+    ...noPlans(),
   };
   render(<IncidentsSurface client={client as unknown as ApiClient} jurisdictionId="j1" isAdmin={options.isAdmin ?? true}
     theme="light" positionKey={options.positionKey ?? null}
@@ -155,6 +163,7 @@ it("offers collaboration and meeting actions only where each integration runs, t
     collabStatus: vi.fn().mockResolvedValue({ configured: false, enabled: false, kind: null, baseUrl: null }),
     listMeetingBridges: vi.fn().mockResolvedValue([]),
     listBriefings: vi.fn().mockResolvedValue([]),
+    ...noPlans(),
   };
   const open = async (integrations: readonly string[], role?: "admin" | "member" | "viewer") => {
     cleanup();
@@ -193,6 +202,7 @@ it("shows the jurisdiction master view and gives administrators archive and lock
     incidentOverview: vi.fn().mockResolvedValue({ incidents: [flood], nextCursor: null }),
     archiveIncident: vi.fn().mockResolvedValue({ ok: true }),
     unlockIncident: vi.fn().mockResolvedValue({ ok: true }),
+    ...noPlans(),
   };
   const show = async (isAdmin: boolean) => {
     cleanup();

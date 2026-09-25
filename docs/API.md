@@ -456,6 +456,17 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 - `GET /api/v1/peers/:peerId/pending`: Read peers pending (auth: bearer; audience: machine)
 - `POST /api/v1/peers/:peerId/queue`: Run peers queue (auth: bearer; audience: machine)
 
+### plans
+
+- `GET /api/v1/incidents/:incidentId/plan`: Read incidents plan (auth: bearer; audience: operator)
+- `GET /api/v1/jurisdictions/:jurisdictionId/plans`: Read jurisdictions plans (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/plans`: Run jurisdictions plans (auth: bearer; audience: operator)
+- `GET /api/v1/plans/:planId`: Read plans (auth: bearer; audience: operator)
+- `PUT /api/v1/plans/:planId`: Set plans (auth: bearer; audience: operator)
+- `POST /api/v1/plans/:planId/activate`: Run plans activate (auth: bearer; audience: operator)
+- `POST /api/v1/plans/:planId/review`: Run plans review (auth: bearer; audience: operator)
+- `GET /api/v1/plans/:planId/versions`: Read plans versions (auth: bearer; audience: operator)
+
 ### ready
 
 - `GET /api/v1/ready`: Read ready (auth: none; audience: system)

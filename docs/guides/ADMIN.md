@@ -187,6 +187,34 @@ Other preparation happens on the screens that use it:
   template does not open, or reaches a position or contact group it does not
   name. The [small EOC starter pack](../../deploy/packs/small-eoc-starter/README.md)
   is one such package.
+- **Plans.** A plan is the jurisdiction's emergency plan as something the
+  product runs. On **Incident Setup**, **Plans** lists them for every member;
+  **Read** shows a plan's sections and timed tasks. An administrator's **New
+  plan** takes a title, the kind (an incident response plan, or a recurring
+  event plan such as a fire season or a festival), the incident template it
+  activates, and how many days between reviews. Each section has text and
+  ticks for the template's positions, boards, contact groups and rules that
+  carry it out. Each timed task goes to one of the template's positions and
+  is released a number of hours after activation (for a recurring event,
+  hours from the event's start, negative for before it), with an optional
+  number of hours it is due within. **Notify people when the plan
+  activates** addresses contact groups, the holders of positions and whoever
+  is on call for them, by email, text message or in the app. A save is
+  refused, with the reason, when it names a part the template does not open.
+  **Save plan** makes version 1, and each later save the next version;
+  **Versions** lists them, and **Load into the editor** brings one back.
+  **Activate** asks for the incident's name (and, for a recurring event, when
+  this occurrence starts), opens the incident from the template, releases
+  each task whose time has come, keeps the others hidden until the scheduler
+  releases them to their position with a notice, and sends the plan's
+  notice, in one step; the result says how many tasks went out, how many
+  wait and how many people the notice reached, and **Switch to** moves the
+  console to the new incident. The incident's setup shows the plan's
+  sections at the version it opened from and the tasks still to be
+  released. A task waiting on a closed incident is not released unless the
+  incident is reopened. When a plan's review falls due, the jurisdiction's
+  administrators get one notification; **Mark reviewed** starts the next
+  interval.
 - **Libraries.** On **Incident Setup**, **Add a library** (administrators)
   stores a scenario, plan or reference text. A library attached to a template
   is linked to each incident activated from that template afterwards; the

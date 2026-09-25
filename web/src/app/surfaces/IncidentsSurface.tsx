@@ -18,6 +18,7 @@ import {
 } from "../../contacts/Audience.js";
 import { answersOf, audienceOf } from "../../contacts/model.js";
 import { IncidentTemplatesPanel } from "../../incidents/IncidentTemplatesPanel.js";
+import { IncidentPlanSection, PlansPanel } from "../../plans/PlansPanel.js";
 import { IncidentCollaboration } from "../../integrations/collab.js";
 import { IncidentMeetings } from "../../integrations/meetings.js";
 import { useAsync } from "../data/hooks.js";
@@ -204,6 +205,10 @@ export function IncidentsSurface(props: {
             onSaved={() => setTemplatesSaved((n) => n + 1)} />
         ) : null}
 
+        <PlansPanel client={props.client} jurisdictionId={props.jurisdictionId} isAdmin={props.isAdmin} templates={tpls}
+          onActivated={(incidentId) => { setReload((n) => n + 1); setSelectedIncident(incidentId); }}
+          {...(props.onActivated ? { onSwitch: props.onActivated } : {})} />
+
         {props.isAdmin ? (
           <Panel title="Add a library">
             <div className="incidents-form-row">
@@ -298,6 +303,7 @@ export function IncidentsSurface(props: {
                 })}
               </ul> : <p>No checklist items came with the template.</p>}
             </section> : null}
+            <IncidentPlanSection client={props.client} incidentId={incident.id} {...(detail.data ? { positions: detail.data.positions } : {})} />
             {detail.data ? <section aria-label="Incident libraries">
               <h3 className="incidents-first">Libraries</h3>
               {detail.data.libraries.length ? <ul className="incidents-libraries">

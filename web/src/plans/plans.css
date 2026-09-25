@@ -1,0 +1,49 @@
+.plans-block,
+.plans-task-row {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--eoc-border);
+}
+
+.plans-task-row {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: end;
+}
+
+.plans-block > .eoc-btn {
+  justify-self: start;
+}
+
+.plans-add {
+  display: flex;
+  padding-top: 8px;
+}
+
+.plans-choices {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.plans-choices legend {
+  font-weight: 600;
+  padding: 0;
+}
+
+.plans-sections {
+  padding-left: 1.25rem;
+}
+
+.plans-sections h4 {
+  margin: 12px 0 4px;
+}
+
+.plans-body {
+  white-space: pre-wrap;
+  margin: 0 0 4px;
+}
+
+.plans-tasks {
+  padding-left: 1.25rem;
+}

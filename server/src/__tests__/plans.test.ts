@@ -1,0 +1,245 @@
+import type { FastifyInstance } from "fastify";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { addMembership, createJurisdiction, createPerson, principalForPerson } from "../auth/service.js";
+import { buildApp } from "../app.js";
+import { ensureStandardTemplates } from "../boards/service.js";
+import { withPerson } from "../db/context.js";
+import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import { runDuePlans } from "../plans/service.js";
+import { auth, freshDb, seedIdentity, tokenFor, type SeedResult, type Sql } from "./helpers.js";
+
+/**
+ * Executable plans (Veoci and air gap VA13). A plan is saved against its
+ * incident template and versioned; activation opens the incident, records
+ * the plan version, releases the tasks whose time has come, keeps the rest
+ * hidden until the scheduler releases them to their positions, and sends the
+ * notice; a recurring event plan times its tasks from the event's start; and
+ * administrators are reminded once when a review falls due.
+ */
+
+let admin: Sql;
+let runtime: Sql;
+let app: FastifyInstance;
+let seed: SeedResult;
+let adminToken: string;
+let memberToken: string;
+let outsiderToken: string;
+let operationsId: string;
+
+const MINUTE = 60_000;
+
+async function call(token: string, method: "GET" | "POST" | "PUT", url: string, payload?: unknown) {
+  return app.inject({ method, url, headers: auth(token), ...(payload === undefined ? {} : { payload: payload as object }) });
+}
+
+async function runPlans(now: Date) {
+  const principal = await principalForPerson(runtime, seed.adminId);
+  return withPerson(runtime, seed.adminId, (tx) => runDuePlans(tx, principal, seed.jurisdictionId, now));
+}
+
+const stormPlan = {
+  kind: "incident_response",
+  templateKey: "severe_storm",
+  sections: [
+    {
+      title: "Concept of operations",
+      body: "The EOC opens at partial activation when the Weather Service issues a storm warning.",
+      positions: ["incident_commander", "operations_section_chief"],
+      boards: ["road_closures", "shelters"],
+    },
+  ],
+  tasks: [
+    { position: "operations_section_chief", item: "Confirm the road crews are staged", releaseMinutes: 0, dueMinutes: 30 },
+    { position: "operations_section_chief", item: "Check the culverts on the river road", releaseMinutes: 60, dueMinutes: 120 },
+    { position: "incident_commander", item: "Decide on the second operational period", releaseMinutes: 1440 },
+  ],
+  notice: { positions: ["operations_section_chief"], channels: ["inapp"], message: "Storm plan activated. Report to the EOC." },
+  reviewEveryDays: 30,
+};
+
+beforeAll(async () => {
+  ({ admin, runtime } = await freshDb());
+  seed = await seedIdentity(admin);
+  await ensureStandardTemplates(admin);
+  await ensureStandardIncidentTemplates(admin);
+  const elsewhere = await createJurisdiction(admin, "county", "Humboldt County OES");
+  const outsider = await createPerson(admin, { email: "outsider@example.org", displayName: "Other Admin", password: "outsider-password" });
+  await addMembership(admin, outsider, elsewhere, "admin");
+  app = buildApp(runtime, { oidc: null });
+  await app.ready();
+  adminToken = await tokenFor(app, "admin@example.org", "correct-horse-battery");
+  memberToken = await tokenFor(app, "member@example.org", "another-good-password");
+  outsiderToken = await tokenFor(app, "outsider@example.org", "outsider-password");
+  // The member holds Operations, so the plan's notice to that position reaches them.
+  const position = await call(adminToken, "POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/positions`,
+    { key: "operations_section_chief", title: "Operations Section Chief" });
+  expect(position.statusCode, position.body).toBeLessThan(300);
+  operationsId = position.json().id as string;
+  const assigned = await call(adminToken, "POST", `/api/v1/positions/${operationsId}/assignments`, { personId: seed.memberId });
+  expect(assigned.statusCode, assigned.body).toBeLessThan(300);
+}, 60_000);
+
+afterAll(async () => {
+  await app?.close();
+  await runtime?.end();
+  await admin?.end();
+});
+
+let stormId: string;
+
+describe("executable plans", () => {
+  it("saves a plan checked against its template and keeps every version", async () => {
+    const created = await call(adminToken, "POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/plans`,
+      { title: "Severe Storm Plan", definition: stormPlan, expectedVersion: 0 });
+    expect(created.statusCode, created.body).toBe(201);
+    stormId = created.json().id as string;
+    expect(created.json()).toMatchObject({ version: 1, kind: "incident_response", sections: 1, tasks: 3, reviewEveryDays: 30 });
+
+    const listed = await call(memberToken, "GET", `/api/v1/jurisdictions/${seed.jurisdictionId}/plans`);
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json().plans).toEqual([expect.objectContaining({ id: stormId, title: "Severe Storm Plan", templateKey: "severe_storm" })]);
+
+    const byMember = await call(memberToken, "POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/plans`,
+      { title: "Member plan", definition: stormPlan, expectedVersion: 0 });
+    expect(byMember.statusCode).toBe(403);
+    const unopened = await call(adminToken, "POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/plans`, {
+      title: "Bad links", expectedVersion: 0,
+      definition: { ...stormPlan, sections: [{ title: "Liaison", positions: ["tribal_liaison"] }] },
+    });
+    expect(unopened.statusCode).toBe(400);
+    expect(unopened.json().error).toContain("position tribal_liaison is not one the Severe Storm template opens");
+    const early = await call(adminToken, "POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/plans`, {
+      title: "Early", expectedVersion: 0,
+      definition: { ...stormPlan, tasks: [{ position: "incident_commander", item: "Too soon", releaseMinutes: -60 }] },
+    });
+    expect(early.statusCode).toBe(400);
+    expect(early.json().error).toContain("releases a task at activation or after it");
+    expect(await admin`select id from plans where title in ('Member plan', 'Bad links', 'Early')`).toHaveLength(0);
+
+    const edited = await call(adminToken, "PUT", `/api/v1/plans/${stormId}`,
+      { title: "Severe Storm Plan", definition: { ...stormPlan, reviewEveryDays: 60 }, expectedVersion: 1 });
+    expect(edited.statusCode, edited.body).toBe(200);
+    expect(edited.json()).toMatchObject({ version: 2, reviewEveryDays: 60 });
+    const stale = await call(adminToken, "PUT", `/api/v1/plans/${stormId}`,
+      { title: "Severe Storm Plan", definition: stormPlan, expectedVersion: 1 });
+    expect(stale.statusCode).toBe(409);
+    const versions = await call(memberToken, "GET", `/api/v1/plans/${stormId}/versions`);
+    expect(versions.json().versions.map((v: { version: number; savedBy: string }) => [v.version, v.savedBy])).toEqual([[2, "Admin"], [1, "Admin"]]);
+    await expect(admin`update plan_versions set title = 'x' where plan_id = ${stormId}`).rejects.toThrow(/append-only/);
+
+    const foreign = await call(outsiderToken, "GET", `/api/v1/plans/${stormId}`);
+    expect(foreign.statusCode).toBe(404);
+  });
+
+  it("activates the incident, releases what is due, sends the notice and releases the rest on schedule", async () => {
+    const before = Date.now();
+    const res = await call(adminToken, "POST", `/api/v1/plans/${stormId}/activate`, { name: "January Storm" });
+    expect(res.statusCode, res.body).toBe(201);
+    const activation = res.json();
+    expect(activation).toMatchObject({ planVersion: 2, tasksReleased: 1, tasksScheduled: 2, notice: { recipients: 1 } });
+    const incidentId = activation.incidentId as string;
+    const [incident] = await admin`select template_key, plan_id, plan_version, kind from incidents where id = ${incidentId}`;
+    expect(incident).toMatchObject({ template_key: "severe_storm", plan_id: stormId, plan_version: 2, kind: "incident" });
+
+    // The template's checklists and the plan's first task are on the incident; the others wait, unseen.
+    const tasks = await admin`select item, due_at from checklist_items where incident_id = ${incidentId}`;
+    expect(tasks.map((t) => t.item)).toContain("Confirm the road crews are staged");
+    expect(tasks.map((t) => t.item)).not.toContain("Check the culverts on the river road");
+    const staged = tasks.find((t) => t.item === "Confirm the road crews are staged")!;
+    expect(new Date(staged.due_at as string).getTime()).toBeGreaterThanOrEqual(before + 29 * MINUTE);
+
+    const inbox = await call(memberToken, "GET", "/api/v1/notifications");
+    expect(inbox.json().notifications).toContainEqual(expect.objectContaining({ title: "Activated: January Storm" }));
+
+    const plan = await call(memberToken, "GET", `/api/v1/incidents/${incidentId}/plan`);
+    expect(plan.statusCode).toBe(200);
+    expect(plan.json().plan).toMatchObject({
+      planId: stormId, title: "Severe Storm Plan", version: 2, eventAt: null,
+      sections: [expect.objectContaining({ title: "Concept of operations", boards: ["road_closures", "shelters"] })],
+      scheduled: [
+        expect.objectContaining({ item: "Check the culverts on the river road", positionTitle: "Operations Section Chief" }),
+        expect.objectContaining({ item: "Decide on the second operational period" }),
+      ],
+    });
+    expect((await call(outsiderToken, "GET", `/api/v1/incidents/${incidentId}/plan`)).statusCode).toBe(404);
+
+    const [due] = await admin`select count(*)::int as n from scheduler_due('plans', ${new Date(Date.now() + 61 * MINUTE)})`;
+    expect(due!.n).toBe(1);
+    expect(await runPlans(new Date(Date.now() + 30 * MINUTE))).toEqual({ released: 0, reminded: 0 });
+    const later = new Date(Date.now() + 61 * MINUTE);
+    expect(await runPlans(later)).toEqual({ released: 1, reminded: 0 });
+    expect(await runPlans(later)).toEqual({ released: 0, reminded: 0 });
+    const [released] = await admin`
+      select c.item, c.due_at, p.key from checklist_items c join positions p on p.id = c.position_id
+      where c.incident_id = ${incidentId} and c.item = 'Check the culverts on the river road'`;
+    expect(released).toMatchObject({ key: "operations_section_chief" });
+    expect(new Date(released!.due_at as string).getTime()).toBe(later.getTime() + 120 * MINUTE);
+    const told = await call(memberToken, "GET", "/api/v1/notifications");
+    expect(told.json().notifications).toContainEqual(expect.objectContaining({ title: "New task: Check the culverts on the river road" }));
+    expect((await call(memberToken, "GET", `/api/v1/incidents/${incidentId}/plan`)).json().plan.scheduled).toHaveLength(1);
+
+    // A closed incident's waiting task stays unreleased.
+    const closed = await call(adminToken, "POST", `/api/v1/incidents/${incidentId}/close`, {});
+    expect(closed.statusCode, closed.body).toBeLessThan(300);
+    expect(await runPlans(new Date(Date.now() + 2 * 1440 * MINUTE))).toMatchObject({ released: 0 });
+    const audits = await admin`select category from audit_events where incident_id = ${incidentId} and category like 'plan.%' order by seq`;
+    expect(audits.map((a) => a.category)).toEqual(["plan.activated", "plan.task_released"]);
+  });
+
+  it("times a recurring event plan's tasks from the event's start", async () => {
+    const created = await call(adminToken, "POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/plans`, {
+      title: "Salmon Festival", expectedVersion: 0,
+      definition: {
+        kind: "recurring_event", templateKey: "daily_ops",
+        tasks: [
+          { position: "operations_section_chief", item: "Book the first aid tent", releaseMinutes: -3 * 1440 },
+          { position: "operations_section_chief", item: "Walk the festival grounds", releaseMinutes: -60 },
+          { position: "operations_section_chief", item: "Open the event log", releaseMinutes: 0 },
+        ],
+      },
+    });
+    expect(created.statusCode, created.body).toBe(201);
+    const festivalId = created.json().id as string;
+    expect((await call(adminToken, "POST", `/api/v1/plans/${festivalId}/activate`, { name: "Festival" })).statusCode).toBe(400);
+    expect((await call(adminToken, "POST", `/api/v1/plans/${stormId}/activate`,
+      { name: "Storm", eventAt: new Date().toISOString() })).statusCode).toBe(400);
+
+    const eventAt = new Date(Date.now() + 1440 * MINUTE);
+    const res = await call(adminToken, "POST", `/api/v1/plans/${festivalId}/activate`, { name: "Salmon Festival 2026", eventAt: eventAt.toISOString() });
+    expect(res.statusCode, res.body).toBe(201);
+    expect(res.json()).toMatchObject({ tasksReleased: 1, tasksScheduled: 2 });
+    const incidentId = res.json().incidentId as string;
+    const [incident] = await admin`select kind, plan_event_at from incidents where id = ${incidentId}`;
+    expect(incident!.kind).toBe("planned_event");
+    expect(new Date(incident!.plan_event_at as string).getTime()).toBe(eventAt.getTime());
+    const releases = await admin`select item, release_at from plan_task_releases where incident_id = ${incidentId} order by release_at`;
+    expect(releases.map((r) => [r.item, new Date(r.release_at as string).getTime()])).toEqual([
+      ["Walk the festival grounds", eventAt.getTime() - 60 * MINUTE],
+      ["Open the event log", eventAt.getTime()],
+    ]);
+  });
+
+  it("reminds administrators once when a review falls due, and again after the next review", async () => {
+    const created = await call(adminToken, "POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/plans`, {
+      title: "Tsunami Annex", expectedVersion: 0,
+      definition: { kind: "incident_response", templateKey: "daily_ops", reviewEveryDays: 1 },
+    });
+    expect(created.statusCode, created.body).toBe(201);
+    const annexId = created.json().id as string;
+    const inTwoDays = new Date(Date.now() + 2 * 1440 * MINUTE);
+    expect(await runPlans(inTwoDays)).toMatchObject({ reminded: 1 });
+    expect(await runPlans(inTwoDays)).toMatchObject({ reminded: 0 });
+    const inbox = await call(adminToken, "GET", "/api/v1/notifications");
+    expect(inbox.json().notifications).toContainEqual(expect.objectContaining({ channel: "plan_review", title: "Plan review due: Tsunami Annex" }));
+    expect((await call(memberToken, "GET", "/api/v1/notifications")).json().notifications)
+      .not.toContainEqual(expect.objectContaining({ channel: "plan_review" }));
+
+    const reviewed = await call(adminToken, "POST", `/api/v1/plans/${annexId}/review`, {});
+    expect(reviewed.statusCode, reviewed.body).toBe(200);
+    expect(Date.parse(reviewed.json().reviewDueAt)).toBeGreaterThan(Date.now() + 1439 * MINUTE);
+    expect(await runPlans(new Date(Date.now() + 60 * MINUTE))).toMatchObject({ reminded: 0 });
+    expect(await runPlans(inTwoDays)).toMatchObject({ reminded: 1 });
+    const [audit] = await admin`select category from audit_events where subject_id = ${annexId} and category = 'plan.reviewed'`;
+    expect(audit).toBeDefined();
+  });
+});

@@ -74,6 +74,12 @@ import type {
   IncidentImpactComparison,
   ComponentValues,
   IcsComponentFormId,
+  IncidentPlan,
+  PlanActivation,
+  PlanDetail,
+  PlanSave,
+  PlanSummary,
+  PlanVersion,
 } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
 import type {
@@ -1246,6 +1252,31 @@ export class ApiClient {
       `/api/v1/jurisdictions/${jurisdictionId}/incidents`,
       body as unknown as Record<string, unknown>,
     );
+  }
+  // ---- Executable plans (VC-09) ----
+  async listPlans(jurisdictionId: string): Promise<PlanSummary[]> {
+    return (await this.request<{ plans: PlanSummary[] }>("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/plans`)).plans;
+  }
+  getPlan(planId: string): Promise<PlanDetail> {
+    return this.request("GET", `/api/v1/plans/${encodeURIComponent(planId)}`);
+  }
+  async listPlanVersions(planId: string): Promise<PlanVersion[]> {
+    return (await this.request<{ versions: PlanVersion[] }>("GET", `/api/v1/plans/${encodeURIComponent(planId)}/versions`)).versions;
+  }
+  /** A new plan (expectedVersion 0), or the next version of the one opened. */
+  savePlan(jurisdictionId: string, planId: string | null, plan: PlanSave): Promise<PlanDetail> {
+    return planId
+      ? this.request("PUT", `/api/v1/plans/${encodeURIComponent(planId)}`, plan as unknown as Record<string, unknown>)
+      : this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/plans`, plan as unknown as Record<string, unknown>);
+  }
+  markPlanReviewed(planId: string): Promise<PlanDetail> {
+    return this.request("POST", `/api/v1/plans/${encodeURIComponent(planId)}/review`, {});
+  }
+  activatePlan(planId: string, body: { name: string; eventAt?: string }): Promise<PlanActivation> {
+    return this.request("POST", `/api/v1/plans/${encodeURIComponent(planId)}/activate`, body);
+  }
+  async incidentPlan(incidentId: string): Promise<IncidentPlan | null> {
+    return (await this.request<{ plan: IncidentPlan | null }>("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/plan`)).plan;
   }
   async listIncidentParticipants(incidentId: string): Promise<IncidentParticipantGrant[]> {
     const result = await this.request<{ participants: IncidentParticipantGrant[] }>(

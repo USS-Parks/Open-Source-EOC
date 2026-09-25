@@ -112,6 +112,7 @@ GET /api/v1/incidents/:incidentId/operational-area/history
 GET /api/v1/incidents/:incidentId/operational-relationships
 GET /api/v1/incidents/:incidentId/participants
 GET /api/v1/incidents/:incidentId/participants/:participantId/preview
+GET /api/v1/incidents/:incidentId/plan
 GET /api/v1/incidents/:incidentId/resource-requests
 GET /api/v1/incidents/:incidentId/saved-state
 GET /api/v1/incidents/:incidentId/saved-state/:kind/:key
@@ -156,6 +157,7 @@ GET /api/v1/jurisdictions/:jurisdictionId/members
 GET /api/v1/jurisdictions/:jurisdictionId/notification-allowlist
 GET /api/v1/jurisdictions/:jurisdictionId/notification-channels/:kind
 GET /api/v1/jurisdictions/:jurisdictionId/notification-rules
+GET /api/v1/jurisdictions/:jurisdictionId/plans
 GET /api/v1/jurisdictions/:jurisdictionId/position-assignments
 GET /api/v1/jurisdictions/:jurisdictionId/positions
 GET /api/v1/jurisdictions/:jurisdictionId/reports
@@ -180,6 +182,8 @@ GET /api/v1/ogc/collections/:boardId/items
 GET /api/v1/ogc/conformance
 GET /api/v1/peers/:peerId/pending
 GET /api/v1/persons
+GET /api/v1/plans/:planId
+GET /api/v1/plans/:planId/versions
 GET /api/v1/ready
 GET /api/v1/reports/:reportId
 GET /api/v1/reports/:reportId/output
@@ -325,6 +329,7 @@ POST /api/v1/jurisdictions/:jurisdictionId/notification-channels/:kind/test
 POST /api/v1/jurisdictions/:jurisdictionId/notification-rules
 POST /api/v1/jurisdictions/:jurisdictionId/notifications/run-scheduled
 POST /api/v1/jurisdictions/:jurisdictionId/peers
+POST /api/v1/jurisdictions/:jurisdictionId/plans
 POST /api/v1/jurisdictions/:jurisdictionId/positions
 POST /api/v1/jurisdictions/:jurisdictionId/reports
 POST /api/v1/jurisdictions/:jurisdictionId/reports/preview
@@ -345,6 +350,8 @@ POST /api/v1/notifications/:notificationId/resend
 POST /api/v1/peers/:peerId/agreements
 POST /api/v1/peers/:peerId/queue
 POST /api/v1/persons
+POST /api/v1/plans/:planId/activate
+POST /api/v1/plans/:planId/review
 POST /api/v1/positions/:positionId/assignments
 POST /api/v1/positions/:positionId/reassignments
 POST /api/v1/positions/:positionId/sign-in
@@ -382,6 +389,7 @@ PUT /api/v1/jurisdictions/:jurisdictionId/notification-allowlist
 PUT /api/v1/jurisdictions/:jurisdictionId/notification-channels/:kind
 PUT /api/v1/jurisdictions/:jurisdictionId/retention
 PUT /api/v1/peers/:peerId/link
+PUT /api/v1/plans/:planId
 PUT /api/v1/reports/:reportId
 `
   .trim()
@@ -464,6 +472,7 @@ const tagAliases: Readonly<Record<string, string>> = {
   "members": "auth",
   "operational-area": "incidents",
   "operational-relationships": "incidents",
+  "plan": "plans",
   "persons": "auth",
   "position-assignments": "auth",
   "positions": "auth",

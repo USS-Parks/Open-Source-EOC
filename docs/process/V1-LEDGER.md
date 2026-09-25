@@ -8484,3 +8484,151 @@ plan's decisions 17 to 19 now read for that session: units commit on `main`
 and push with no hand-started workflow, the Windows setup is built on this
 machine at phase ends, and the test bed is a throwaway PostgreSQL 16.15 and
 PostGIS 3.6.2 cluster from the release runtime on 127.0.0.1:55440.
+
+## V1 grant: the rest of the Veoci and air gap plan, local
+
+Basho, 2026-09-25, to the local session: "You have my full authorization to
+STS all remaining prompts on the PSPR, with full permissions granted for any
+known or unknown downloads, and otherwise." It covers every unit of
+`VEOCI-AIR-GAP-PSPR-2026-09-25.md` not yet landed, from VA13, with commit,
+landing and push authority under the plan's gate, and downloads a unit needs.
+External actions the plan names as Basho's (section 9) stay Basho's.
+
+## Veoci and air gap VA13: executable plans
+
+Veoci Integration and Air Gap PSPR unit VA13 (VC-09), the first unit run by
+the local session.
+
+- **What the code did before.** An incident template opened an incident's
+  positions, boards, checklists and (VA12) its contact groups, reports and
+  rules. A jurisdiction's plan was a library: text attached to incidents, with
+  nothing it could run. Every checklist item arrived at activation; nothing
+  was released later, and nothing reminded anyone to review a plan.
+- **What changed.**
+  - **The plan object** (`shared/src/plans/contract.ts`, migration
+    `0155_plans.sql`). A plan belongs to a jurisdiction and has a title and a
+    definition: its kind (incident response, or recurring event such as a
+    fire season or a festival), the incident template it activates, an
+    optional incident type, sections, timed tasks, an optional activation
+    notice and an optional review cadence in days. Each section has text and
+    names the template's positions, boards, contact groups and rules that
+    carry it out. Each task goes to one of the template's positions and is
+    released a number of minutes after activation, or, for a recurring event,
+    from the event's start (negative is before it), with an optional due
+    time after release. The notice addresses contact groups by name and
+    positions and on-call positions by key, by email, SMS or in the app.
+  - **Versions.** `plans` holds the current version; `plan_versions` keeps
+    every version, append-only by trigger, whichever path saved it, as
+    migration `0147` does for incident templates. A change to the title or
+    definition is always the next version; a review changes neither.
+  - **Saving** (`server/src/plans/service.ts`) is for the jurisdiction's
+    administrators, over the version the editor opened (409 when someone
+    saved in between). A save is refused, naming the field, when it names a
+    position, board, rule or contact group the template does not open (a
+    contact group the jurisdiction already has is allowed, as activation
+    uses it), or when an incident response plan releases a task before
+    activation.
+  - **Activation** (`POST /api/v1/plans/:planId/activate`) opens the incident
+    through the existing `activateIncident`, then in the same transaction
+    records `plan_id`, `plan_version` and, for a recurring event, the event's
+    start on the incident; inserts each task whose release time has come into
+    the incident's tasks; keeps the rest in `plan_task_releases`, which the
+    task lists do not read; and sends the notice through the existing mass
+    notification path (a notice that reaches no one stops the activation, as
+    VA7's does). A recurring event plan needs the occurrence's start and an
+    incident response plan refuses one. The audit records `plan.activated`
+    with the counts.
+  - **The scheduler** gains a `plans` job (every 30 seconds), found through
+    `scheduler_due('plans', …)`, redefined in `0155`. For each jurisdiction
+    with work it runs as one of its administrators and releases each waiting
+    task whose time has come on an open incident into the incident's tasks,
+    with its due time, a notification to its position ("New task: …") and a
+    `plan.task_released` audit event. It claims rows with `skip locked`, so a
+    leader handover releases nothing twice. A task waiting on a closed
+    incident stays unreleased and releases if the incident reopens. When a
+    plan's review falls due it sends one notification to the jurisdiction's
+    administrators and records the due date it reminded for; **Mark
+    reviewed** (`POST /api/v1/plans/:planId/review`) starts the next
+    interval, and the reminder comes again when that one falls due.
+  - **Reading.** Members list and read plans and their versions.
+    `GET /api/v1/incidents/:incidentId/plan` answers the plan an incident
+    came from at that version, with the tasks still to be released, to anyone
+    who can read the incident; a participating organization reads that
+    version and no other plan (the `plan_versions` read policy).
+  - **The screen** (`web/src/plans/PlansPanel.tsx`). **Incident Setup**
+    gains **Plans**: the list with kind, version, template, counts and the
+    next review (a **Review due** badge when it has passed); **Read**;
+    administrators' **New plan**, **Edit**, **Versions** with **Load into
+    the editor**, **Mark reviewed** and **Activate**. The editor writes
+    sections with ticks for the template's parts, timed tasks in hours, and
+    the notice. Activation reports what it did ("1 task released now, 1 task
+    waiting for their time; the notice reached 1 person") and opens the new
+    incident's setup, which shows **Plan:** with its sections and the tasks
+    still to be released; **Switch to** moves the console to the incident.
+    The console remounts its center on an incident switch, and it selects the
+    first open incident itself when none was open, so the report is kept for
+    a minute outside the panel and shown by the panel mounted after the
+    remount, whichever side of the remount the activation's answer lands.
+  - Eight routes in the contract and `docs/API.md`; `docs/guides/ADMIN.md`
+    describes plans under "Prepare an incident".
+- **Files outside the "Owns" cell.** `server/src/app.ts` (the routes),
+  `server/src/scheduler/scheduler.ts` (the job), `shared/src/index.ts`,
+  `shared/src/api/contract.ts`, `web/src/app/api/client.ts`,
+  `web/src/app/surfaces/IncidentsSurface.tsx` (the panel and the incident's
+  plan), `web/src/app/__tests__/incidents-surface.test.tsx` (its stub client
+  gains the plan calls), `docs/API.md`, `docs/guides/ADMIN.md`.
+- **Decisions and deviations.** Recurring event plans are activated once
+  per occurrence with its start; a plan does not activate itself on a
+  calendar. The jurisdiction export leaves plans out, as it leaves out the
+  other configuration (templates, contacts); it carries operational records.
+  Plan activation does not switch the console by itself, unlike **Activate
+  an incident**, so its report can be read; **Switch to** does it.
+- **Air-gap behavior (decision 9).** No network path is added. Activation,
+  release and reminders run on the host; the notice goes through the
+  existing delivery queue and its VA1 hold.
+- **Schema, contract and dependencies.** Migration `0155_plans.sql` (two
+  tables, the release table, three incident columns, triggers, policies and
+  `scheduler_due`); eight routes. No dependency added.
+- **Tests.** `plans.test.ts` (4, real database): saving with a member refused,
+  a template-mismatched link and an early release refused with nothing
+  written, a second version, a stale save refused, append-only versions, and
+  another jurisdiction's administrator refused; activation with one task
+  released, two waiting and unseen, the notice in the holder's inbox, the
+  incident's plan with its waiting tasks, `scheduler_due` finding the work,
+  release at the right time only once with its due time and the position's
+  notification, and nothing released on a closed incident; a recurring
+  event's tasks timed from its start, one already past released at once;
+  a review reminded once, not to members, and again only after the next
+  review falls due. `plans-panel.test.tsx` (7, with axe): release wording,
+  the draft round trip, an edit saved over the version opened, a recurring
+  activation's event start, the report kept across a remount and across an
+  answer that lands after it, a member's read-only view, and the incident's
+  plan. `plans-browser.test.ts` at 1586 by 992 and 1534 by 790: a plan
+  written on screen with a section, two timed tasks and an in-app notice,
+  read back, activated with the report, the incident setup showing the plan
+  and its waiting task, the switch, and the task on **Tasks** once the
+  scheduler's time comes. The first width starts with no open incident, so
+  the console's own selection and remount are part of the proof.
+- **A fault found and fixed while testing.** The review reminder stored the
+  due date through a JavaScript date, which dropped its microseconds, so the
+  stored value fell just short of the due date and reminded again. It is set
+  in SQL.
+- **Verification.** On the Windows test bed (decision 19): `pnpm
+  check:static` exit 0 (licenses 348 packages, links 120 files); the API
+  document regenerated; 17 files, 109 tests green: the plans, scheduler,
+  incident template, reach, migration baseline, upgrade, upgrade
+  configuration, API document, restore drill, secure default, demo and
+  incident lifecycle tests, route coverage, the contract, the incident
+  screen, the client and the plans panel. The browser files that use
+  **Incident Setup** (incident templates, the integrated review,
+  activation notice, incident activation, incident lifecycle and plans), run
+  together: 17 of 17 three times running, after the remount fix; before it,
+  the plans file failed at the first width when run with the others and
+  passed alone.
+- **Not run.** The full `pnpm check`, left to CI on the push; the Windows
+  setup (phase end).
+- **Evidence level:** real-database, component and browser tests.
+- **Rollback:** revert the commit; migration `0155` adds tables, columns,
+  triggers and policies the earlier code ignores, and its `scheduler_due`
+  answers the earlier work as before (the `plans` work is asked for by no
+  earlier code).

@@ -9,6 +9,7 @@ import { runDueBriefings } from "../meetings/service.js";
 import { runScheduledRules } from "../notify/engine.js";
 import { runDueCalldowns } from "../notify/mass.js";
 import { DeliveryWorker } from "../notify/outbox.js";
+import { runDuePlans } from "../plans/service.js";
 import { runDueReports } from "../reports/job.js";
 import { purgeExpired } from "../retention/service.js";
 
@@ -16,8 +17,8 @@ import { purgeExpired } from "../retention/service.js";
  * The in-process scheduler. Every node runs one; the node holding a
  * PostgreSQL session advisory lock is the leader and the only one that runs
  * the jobs: scheduled notification rules, due briefings, feed polls, the
- * outbox worker, mass notification call-downs, scheduled reports, the retention
- * purge and, when configured, audit forwarding to syslog. The others retry the lock on an interval, so when the leader
+ * outbox worker, mass notification call-downs, scheduled reports, plan task
+ * releases and review reminders, the retention purge and, when configured, audit forwarding to syslog. The others retry the lock on an interval, so when the leader
  * stops or its session ends one of them takes over. A brief overlap during a
  * handover is tolerated: rule firing and outbox claims are atomic, and feed
  * items upsert.
@@ -27,7 +28,7 @@ import { purgeExpired } from "../retention/service.js";
  * the pool, and the stale handle would then run queries on another session.
  */
 
-export type JobName = "rules" | "briefings" | "feeds" | "outbox" | "calldowns" | "reports" | "retention" | "syslog";
+export type JobName = "rules" | "briefings" | "feeds" | "outbox" | "calldowns" | "reports" | "plans" | "retention" | "syslog";
 
 export interface SchedulerOptions {
   /** Connection string for the lock session; the entrypoint passes the runtime URL. */
@@ -56,6 +57,7 @@ const DEFAULT_MS: Record<JobName, number> = {
   outbox: 2_000,
   calldowns: 30_000,
   reports: 60_000,
+  plans: 30_000,
   retention: 3_600_000,
   syslog: 10_000,
 };
@@ -104,6 +106,7 @@ export class Scheduler {
       outbox: () => this.delivery.drain(),
       calldowns: () => this.runCalldowns(),
       reports: () => runDueReports(this.sql, new Date(), { logger: this.log }),
+      plans: () => this.runPlans(),
       retention: () => this.runRetention(),
       syslog: () => (syslog ? forwardAudit(this.sql, syslog) : Promise.resolve(0)),
     };
@@ -217,6 +220,13 @@ export class Scheduler {
     );
   }
 
+  private async runPlans(): Promise<void> {
+    const now = new Date();
+    await this.forEachDue("plans", now, (actor, jurisdictionId) =>
+      withPerson(this.sql, actor.person.id, (tx) => runDuePlans(tx, actor, jurisdictionId, now)),
+    );
+  }
+
   private async runRetention(): Promise<void> {
     const purged = await purgeExpired(this.sql);
     if (Object.keys(purged).length > 0) this.log.info({ purged }, "retention purge");
@@ -234,7 +244,7 @@ export class Scheduler {
    * the rest.
    */
   private async forEachDue(
-    work: "rules" | "briefings" | "calldowns",
+    work: "rules" | "briefings" | "calldowns" | "plans",
     now: Date,
     fn: (actor: Principal, jurisdictionId: string) => Promise<unknown>,
   ): Promise<void> {
