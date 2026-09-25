@@ -361,3 +361,5 @@
     scroll-behavior: auto;
   }
 }
+/* Rows exist but none pass the filters. */
+.eoc-operational-table-none td { padding: 16px 12px; color: var(--eoc-text-muted); }

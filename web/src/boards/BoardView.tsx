@@ -58,8 +58,9 @@ function ResolvedBoardView(props: Parameters<typeof BoardView>[0] & {
     if (props.selectedRecordId === undefined) setLocalSelection(new Set());
   }, [defaultState, props.selectedRecordId, props.viewKey, props.viewState]);
 
+  const base = useMemo(() => applyView(props.view, props.records, { fields: props.template.fields }),
+    [props.records, props.template.fields, props.view]);
   const filtered = useMemo(() => {
-    const base = applyView(props.view, props.records, { fields: props.template.fields });
     const rows = base.filter((record) => Object.entries(state.filters).every(([key, expected]) =>
       formatCell(record[key]).toLocaleLowerCase().includes(expected.trim().toLocaleLowerCase())));
     if (!state.sort) return rows;
@@ -68,7 +69,13 @@ function ResolvedBoardView(props: Parameters<typeof BoardView>[0] & {
       const order = formatCell(left[columnId]).localeCompare(formatCell(right[columnId]), undefined, { numeric: true });
       return direction === "asc" ? order : -order;
     });
-  }, [props.records, props.template.fields, props.view, state.filters, state.sort]);
+  }, [base, state.filters, state.sort]);
+  // An empty table says which cause it is: no records, the view's own conditions, or the column filters.
+  const empty = props.records.length === 0
+    ? { title: "No records yet", description: "No record on this board is visible to you yet." }
+    : base.length === 0
+      ? { title: "No records meet this view's conditions", description: `${props.view.title} lists only some of this board's records; another view lists the rest.` }
+      : { title: "No records match the column filters", description: `Clear the column filters to see the ${base.length} record${base.length === 1 ? "" : "s"} in this view.` };
   const pageStart = state.page * state.pageSize;
   const rows = filtered.slice(pageStart, pageStart + state.pageSize);
   const selectedIds = props.selectedRecordId === undefined
@@ -99,8 +106,8 @@ function ResolvedBoardView(props: Parameters<typeof BoardView>[0] & {
       {...(props.errorMessage ? { errorMessage: props.errorMessage } : {})}
       {...(props.onRetry ? { onRetry: props.onRetry } : {})}
       {...(props.onLoadMore ? { onLoadMore: props.onLoadMore } : {})}
-      emptyTitle="No records in this view"
-      emptyDescription="Clear a filter or choose another board view."
+      emptyTitle={empty.title}
+      emptyDescription={empty.description}
       viewState={state}
       onViewStateChange={changeView}
       totalRows={filtered.length}

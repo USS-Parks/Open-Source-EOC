@@ -189,6 +189,11 @@ export function MapSurface(props: {
   const datasetById = new Map(mapDatasets.map((d) => [d.id, d]));
   const feedAndDatasetLayers = [...feedLayers, ...datasetLayers];
   const empty = geoBoards.length === 0 && feedAndDatasetLayers.length === 0;
+  // A dataset with nothing to draw is named with its state, so a missing layer never reads as no data.
+  const missing = datasets.error
+    ? `Incident datasets could not be loaded: ${datasets.error}`
+    : (datasets.data ?? []).filter((d) => d.availability === "awaiting" || d.availability === "unavailable")
+      .map((d) => `${d.name} (${d.availability === "awaiting" ? "no data received yet" : d.reason ?? "source unavailable"})`).join("; ");
   const assessmentSources: ReadonlyArray<{ readonly value: string; readonly label: string; readonly source: AssessmentSource }> = [
     ...(lifelineAssessments.data?.states ?? []).filter((state) => state.reports.length > 0).map((state) => {
       const source: AssessmentSource = {
@@ -449,7 +454,9 @@ export function MapSurface(props: {
 
   return (
     <div className="map-surface">
-      {empty ? <EmptyState label="No operational layers yet" hint="The basemap is available. Add a geo-enabled board or feed to show incident information." /> : null}
+      {empty ? <EmptyState label={missing ? "No operational layer can be shown" : "No operational layers yet"}
+        hint={missing ? `The basemap is available. Not on the map: ${missing}.` : "The basemap is available. Add a geo-enabled board or feed to show incident information."} /> : null}
+      {!empty && missing ? <p className="map-surface-missing" role="status">Not on the map: {missing}.</p> : null}
       <div className="map-surface-map">
         <PlaceSearch client={props.client} onChoose={requestMapFocus} />
         <CopMap

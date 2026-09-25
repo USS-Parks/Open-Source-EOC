@@ -5514,3 +5514,51 @@ Operator Trust PSPR unit TP4 (research V2; section 5 rows 1 and 7).
 - **Evidence level:** unit and browser tests.
 - **Rollback:** revert the commit; drafts saved with a base still restore
   under the previous code, which ignores the base.
+
+## Operator trust TP5: information state you can read
+
+Operator Trust PSPR unit TP5 (research W5, E6, E7; section 5 rows 4 and 9).
+
+- **What changed.**
+  - **Observed apart from received.** A lifeline's assessment details show
+    when its condition was observed and, separately, when the server
+    received the report.
+  - **The map names what it cannot draw.** A dataset registered for the
+    incident that has sent nothing, or whose source failed, is named beside
+    the map with its state ("Not on the map: County river gauges (no data
+    received yet); Tide stations (The source answered 503 Service
+    Unavailable).") instead of being left off in silence; with no layer to
+    draw, the empty map says the same. A stale dataset already showed its
+    last-good data and age.
+  - **An empty table says which cause it is.** A board with no records says
+    "No records yet"; a view whose conditions exclude everything says so and
+    that another view lists the rest; rows filtered out by column filters
+    say "No records match the column filters" and how many records the
+    filters hide, with the filters still in view to clear. The shared table
+    shows the cause inside its body, so filters are never hidden by the
+    message. The request list already told its filters apart (TP1).
+  - **Refusals say what they are and whom to ask.** Where a screen's read is
+    refused, the message now says so: a 403 adds that the role does not
+    allow it and an administrator can change that; a 404, which is also how
+    the server answers an item the reader may not see, adds that it is not
+    open to the account or no longer exists, and to ask whoever sent the
+    link or an administrator. Neither says what the item holds.
+  - **Sign-in failures name the cause:** "That email and password do not
+    match an active account on this server.", too many attempts, the
+    server not reachable (with what to check), the server failing, and, on
+    start, a saved session the server no longer accepts ("Your session has
+    ended..."). An integration that is off registers no routes and its
+    screens are not offered, as before.
+- **Defaults and deviations.** Wrong password, unknown account and disabled
+  account share one message, as the server does not say which. The map's
+  record inspector (observation time, last change and who made it) is TP9.
+- **Gate.** Acceptance scenario 6, first half,
+  `scenario-information-state-browser.test.ts`, on the North Coast Storm
+  exercise at 1586 by 992 and 1534 by 790: the map names a dataset with no
+  data yet and one whose source failed; a shelter board filtered to nothing
+  names the filters and the count they hide; a lifeline report shows
+  Observed and Received; and the CA Energy Commission liaison following a
+  link to a board not open to them reads the refusal and whom to ask.
+- **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
+- **Evidence level:** unit and browser tests.
+- **Rollback:** revert the commit; no schema or data change.

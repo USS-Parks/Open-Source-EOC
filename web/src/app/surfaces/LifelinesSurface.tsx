@@ -235,7 +235,8 @@ function LifelineDrawer(props: DrawerRelations & {
             <summary>Assessment details</summary>
             <dl>
               <div><dt>Reporting organization</dt><dd>{item.source}</dd></div>
-              <div><dt>Assessed</dt><dd>{item.assessedLabel}</dd></div>
+              <div><dt>Observed</dt><dd>{item.assessedLabel}</dd></div>
+              <div><dt>Received</dt><dd>{item.receivedLabel}</dd></div>
               <div><dt>Confidence and evidence</dt><dd>{item.evidence}</dd></div>
               <div><dt>Freshness</dt><dd>{item.freshnessLabel}</dd></div>
               {outlook && outlook !== "Outlook not reported" ? <div><dt>Outlook</dt><dd>{outlook}</dd></div> : null}

@@ -88,7 +88,7 @@ function Probe() {
       <span data-testid="position">{session.me?.position?.title ?? ""}</span>
       <span data-testid="error">{session.error ?? ""}</span>
       <span data-testid="offline">{String(session.offline)}</span>
-      <button type="button" onClick={() => void session.login("e@x.org", "pw")}>
+      <button type="button" onClick={() => void session.login("e@x.org", "pw").catch(() => undefined)}>
         login
       </button>
       <button type="button" onClick={() => void session.recoverSession().catch(() => undefined)}>recover session</button>
@@ -191,6 +191,25 @@ describe("SessionProvider", () => {
     fireEvent.click(screen.getByText("recover session"));
     await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("anon"));
     expect(localStorage.getItem("openeoc.tokens")).toBeNull();
+  });
+
+  it("says the saved session ended when the server refuses it on start", async () => {
+    localStorage.setItem("openeoc.tokens", JSON.stringify({ accessToken: "A", resumeToken: "R" }));
+    const refused = new ApiClient({ fetchImpl: (async () => ({ ok: false, status: 401, statusText: "", json: async () => ({ error: "session expired" }) })) as unknown as typeof fetch });
+    render(<SessionProvider client={refused}><Probe /></SessionProvider>);
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("anon"));
+    expect(screen.getByTestId("error").textContent).toMatch(/^Your session has ended\./);
+  });
+
+  it("names why a sign-in failed", async () => {
+    const wrong = new ApiClient({ fetchImpl: (async () => ({ ok: false, status: 401, statusText: "", json: async () => ({ error: "invalid credentials" }) })) as unknown as typeof fetch });
+    const first = render(<SessionProvider client={wrong}><Probe /></SessionProvider>);
+    fireEvent.click(screen.getByText("login"));
+    await waitFor(() => expect(screen.getByTestId("error").textContent).toBe("That email and password do not match an active account on this server."));
+    first.unmount();
+    render(<SessionProvider client={makeClient(undefined, () => false)}><Probe /></SessionProvider>);
+    fireEvent.click(screen.getByText("login"));
+    await waitFor(() => expect(screen.getByTestId("error").textContent).toMatch(/^The server could not be reached\./));
   });
 
   it("rejects a jurisdiction outside the refreshed membership and guest list", async () => {

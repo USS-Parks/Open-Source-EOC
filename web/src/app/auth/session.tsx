@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { ApiClient, ApiError, SessionExpiredError, type Me, type MfaChallenge, type Tokens } from "../api/client.js";
+import { ApiClient, ApiError, NO_CONNECTION, SessionExpiredError, type Me, type MfaChallenge, type Tokens } from "../api/client.js";
 
 /**
  * Session state for the shell. The token pair is persisted per-viewer in
@@ -24,6 +24,19 @@ import { ApiClient, ApiError, SessionExpiredError, type Me, type MfaChallenge, t
  */
 
 export const SESSION_ENDED = "Your session has ended. Sign in again to continue; work saved on this device is kept.";
+
+/** Why a sign-in failed, in words an operator can act on. */
+export function signInFailure(cause: unknown): string {
+  if (cause instanceof ApiError) {
+    if (cause.status === 401) return "That email and password do not match an active account on this server.";
+    if (cause.status === 429) return "Too many sign-in attempts. Wait a few minutes, then try again.";
+    if (cause.status >= 500) return `The server could not complete the sign-in (${cause.message}). Try again shortly; if it persists, tell whoever runs the server.`;
+  }
+  if (cause instanceof Error && cause.message === NO_CONNECTION) {
+    return "The server could not be reached. Check this device's network connection; if it persists, ask whoever runs the server whether it is running.";
+  }
+  return cause instanceof Error ? cause.message : "Sign-in failed.";
+}
 
 const STORAGE_KEY = "openeoc.tokens";
 const PROFILE_KEY = "openeoc.me";
@@ -171,6 +184,7 @@ export function SessionProvider(props: { client?: ApiClient; children: ReactNode
           if (cause instanceof SessionExpiredError || (cause instanceof ApiError && [401, 403].includes(cause.status))) {
             client.clearTokens();
             setStatus("anon");
+            setError(SESSION_ENDED);
             return;
           }
           setError("No connection to the server. Your session is kept and resumes when the connection returns.");
@@ -253,7 +267,7 @@ export function SessionProvider(props: { client?: ApiClient; children: ReactNode
         } catch (e) {
           client.clearTokens();
           setStatus("anon");
-          setError(e instanceof Error ? e.message : "login failed");
+          setError(signInFailure(e));
           throw e;
         }
       },

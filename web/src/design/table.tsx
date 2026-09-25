@@ -510,6 +510,12 @@ export function OperationalTable<Row>(props: OperationalTableProps<Row>) {
                   })}
                 </tr>
               ))}
+              {/* Rows exist but none pass the filters: the filters stay in view, with the cause beside them. */}
+              {rowEntries.length === 0 ? (
+                <tr className="eoc-operational-table-none">
+                  <td colSpan={columns.length + 1}><strong>{props.emptyTitle ?? "No matching records"}</strong> <span>{props.emptyDescription ?? "No records match the current filters."}</span></td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>

@@ -11,6 +11,23 @@ import { ApiError, SessionExpiredError, type RawNotification } from "../api/clie
  * response never writes into a gone component.
  */
 
+/**
+ * A refusal says what it is and what to do, without saying what the item
+ * holds: the server refuses by role (403), or answers an item the reader
+ * may not see as not found (404), so an access failure never reads as an
+ * empty screen or a broken one.
+ */
+export function failureText(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  if (!(err instanceof ApiError)) return message;
+  const said = message.replace(/[.\s]*$/, ".");
+  if (err.status === 403) return `${said} Your role does not allow this; an administrator of your organization can change that.`;
+  if (err.status === 404) {
+    return `${said} It is not open to your account, or it no longer exists. If a link brought you here, ask whoever sent it, or an administrator of your organization, for access.`;
+  }
+  return message;
+}
+
 export interface AsyncState<T> {
   readonly data: T | null;
   readonly error: string | null;
@@ -52,7 +69,7 @@ function useRefreshable<T>(fn: () => Promise<T>, deps: readonly unknown[]): Asyn
             (err instanceof ApiError && [401, 403, 404].includes(err.status))
           )
             setResult(null);
-          setError(err instanceof Error ? err.message : String(err));
+          setError(failureText(err));
         }
         throw err;
       } finally {

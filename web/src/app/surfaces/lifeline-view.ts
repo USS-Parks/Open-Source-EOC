@@ -69,6 +69,8 @@ export interface LifelineCardView {
   readonly source: string;
   readonly assessedAt: string | null;
   readonly assessedLabel: string;
+  /** When the server received the standing report, apart from when its condition was observed. */
+  readonly receivedLabel: string;
   readonly freshness: LifelineFreshness;
   readonly freshnessLabel: string;
   readonly confidence: string;
@@ -219,6 +221,7 @@ export function projectLifeline(
     source: report?.attribution.homeOrganizationName ?? "Source not reported",
     assessedAt: report?.assessedAt ?? null,
     assessedLabel: formatAssessmentTime(report?.assessedAt ?? null),
+    receivedLabel: report ? formatAssessmentTime(report.attribution.recordedAt) : "Not received",
     freshness: freshness.freshness,
     freshnessLabel: freshness.label,
     confidence,

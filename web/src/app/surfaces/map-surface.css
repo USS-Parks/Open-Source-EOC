@@ -10,6 +10,7 @@
 .map-surface-links-title { font-size: 13px; margin: 12px 0 6px; }
 .map-surface-links { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }
 .map-surface-map { position: relative; flex: 1; min-height: 420px; }
+.map-surface-missing { margin: 0; color: var(--eoc-text-muted); font-size: 13px; }
 .map-surface-error { color: var(--eoc-status-critical); margin: 8px 0 0; }
 .map-surface-actions { margin-top: 8px; }
 
