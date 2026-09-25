@@ -60,7 +60,15 @@ function RequestRow(props: {
   const [ending, setEnding] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [target, setTarget] = useState("");
-  useEffect(() => { setEnding(null); setNote(""); }, [req.state]);
+  // A move clears the half-written reason and note; mounting does not, or a
+  // click that lands before the mount's effect runs would be undone by it.
+  const shownState = useRef(req.state);
+  useEffect(() => {
+    if (shownState.current === req.state) return;
+    shownState.current = req.state;
+    setEnding(null);
+    setNote("");
+  }, [req.state]);
   const number = `REQ-${req.number}`;
   const assign = () => {
     const [kind, id] = target.split(":", 2);
