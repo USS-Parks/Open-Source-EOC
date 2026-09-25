@@ -8277,3 +8277,195 @@ for XML signatures, and the handshake kept as a postCAP to the test
 environment. The research behind it is
 `FEMA-IPAWS-INTEGRATION-RESEARCH-2026-09-25.md`. Receipts for IC1 to IC3
 follow here.
+
+## IPAWS connector IC1: the connector to the Interface Design Guide
+
+IPAWS Connector PSPR unit IC1, landed on `main` as `96b6856`, after the plan
+(`b0b886d`).
+
+- **What changed.**
+  - `server/src/ipaws/connector.ts` builds the postCAP request of IDG
+    v4.02.06:
+    - the CAP alert carries an enveloped signature;
+    - the body is `postCAPRequestTypeDef` in
+      `http://gov.fema.ipaws.services/IPAWS_CAPService/`;
+    - `CAPHeaderTypeDef` carries `logonUser` and `logonCogId`;
+    - a WS-Security header holds the certificate as a
+      `BinarySecurityToken` and a signature over the Body (`wsu:Id`
+      reference);
+    - both signatures are RSA-SHA256 with exclusive canonicalization and
+      SHA-256 digests.
+
+    `readCertificate` checks the PEM bundle before anything is signed: an
+    unencrypted RSA key that pairs with the certificate, the certificate in
+    date, and a CN containing the COG id. It re-wraps each PEM block, so a
+    paste that lost or changed its line breaks still reads.
+
+    `parseIpawsResponse` reads `postCAPResponseTypeDef` as runs of
+    `CHANNELNAME`, `STATUSITEMID`, `ERROR` and `STATUS`, and fails closed.
+    A send is accepted only with at least one status item and no `ERROR`
+    of Y. A Fault, any other HTTP status, an unparseable body or an
+    unknown shape is a rejection, and a partial refusal names the channels
+    that acknowledged. `postCap` reports a refused certificate as "not
+    sent" without calling the transport, and a transport that throws as
+    unanswered, keeping the signed alert.
+  - `server/src/ipaws/service.ts`:
+    - configure checks the bundle, new or stored, against the COG id (422
+      naming the problem) and records `certificate_expires_at`;
+    - enable and send refuse a configuration without a certificate or with
+      an expired one;
+    - a send re-serializes the stored alert with `sent` set to now, in CAP
+      form, and refuses an alert already expired;
+    - `logonUser` is the confirming admin's email;
+    - each submission stores `channels` and `transmitted_xml`.
+  - `server/migrations/0154_ipaws_idg.sql` adds those three columns.
+  - `xml-crypto` 6.3.2 (MIT, with `@xmldom/xmldom`, `@xmldom/is-dom-node`
+    and `xpath`, all MIT).
+  - The fixtures are replaced with four answers shaped after the IDG's
+    examples, each saying so: accepted, a CMAS 615 refusal, an invalid
+    signature (208 and 221), and an expired-certificate Fault.
+    `postcap-rejected.xml` is removed.
+  - Tests:
+    - `selfSigned()` in `server/src/__tests__/smtp-relay.ts` makes an RSA
+      certificate with a chosen CN and notAfter, so no key is committed;
+    - `server/src/__tests__/ipaws-support.ts` shares the bundle, the
+      fixtures and an alert timed from now;
+    - `ipaws.test.ts` verifies both signatures with xml-crypto against the
+      certificate, and checks that tampering is caught;
+    - it covers each certificate refusal, and each response shape,
+      including the old connector's fail-open case: HTTP 200 carrying
+      `ERROR` Y;
+    - it also covers the `sent` re-stamp, the stored channels and the
+      transmitted XML;
+    - `write-path-network`, `security`, `secure-default` and
+      `ipaws-send-browser` are updated for the certificate.
+- **Air-gap behavior.** No new network path. The one IPAWS-OPEN call still
+  runs with no transaction open. When it cannot be reached, the send is
+  recorded as unanswered, with the signed alert kept.
+- **Verification.** Run on this Windows machine, not the Linux test bed,
+  against a throwaway PostgreSQL 16.15 with PostGIS 3.6.2 from the release
+  build's runtime (127.0.0.1:55440, durability off).
+  - `ipaws`, `write-path-network`, `security`, `secure-default`, `alerts`
+    and `demo`: 62 of 62.
+  - `ipaws-send-browser`: 1 of 1.
+  - `pnpm check`, static: green (typecheck, lint, license scan of 318
+    packages, 118 markdown files).
+  - `pnpm check`, desktop tests: 41 of 41 and 1 of 1.
+  - `pnpm check`, vitest: 1,718 of 1,721 tests. Four files were red:
+    - `federation-batches`, `fidelity-browser` and
+      `scenario-request-handoff-browser` failed under the full parallel
+      run; the three passed alone (8 of 8).
+    - `deploy/macos/iso9660.test.mjs`, added by another session (`ca6489f`
+      on `main`), is a `node:test` file that vitest collected and reported
+      as "No test suite found" on every run. `1e95799`, already on `main`
+      when these units were rebased onto it, keeps vitest off it.
+- **Not run.** A send to the IPAWS-OPEN test environment, which waits on
+  the developer MOA. Also the Linux test bed and hosted CI.
+- **Evidence level:** unit and real-database tests; both signatures
+  verified against the certificate; a real-browser walk against a loopback
+  stand-in.
+- **Rollback:** revert `96b6856`. Migration 0154 only adds columns, and can
+  stay.
+
+## IPAWS connector IC2: the certificate on screen and each channel's answer
+
+IPAWS Connector PSPR unit IC2, landed on `main` as `f575f6b`, after IC1.
+
+- **What changed.**
+  - `web/src/ipaws/IpawsPanel.tsx`:
+    - the credential input became **COG certificate and private key
+      (PEM)**, a text area with spellcheck off, cleared once saved;
+    - the screen shows the stored certificate's fingerprint and expiry, or
+      asks for the certificate again when a stored value is not one;
+    - a confirmed send's result names the channels acknowledged and
+      refused.
+  - `web/src/ipaws/model.ts`:
+    - `certificateExpiresAt` and `IpawsChannelStatus` added;
+    - `channelSummary` added;
+    - `sendOutcome` keeps its label short and returns the IPAWS-OPEN
+      answer apart, shown as its own row in the send list;
+    - only `.fema.gov` hosts count as FEMA endpoints.
+  - `web/src/ipaws/ipaws.css` styles the text area.
+  - Tests: `web/src/ipaws/__tests__/ipaws.test.tsx`,
+    `web/src/app/surfaces/__tests__/alerts-surface.test.tsx`, and
+    `server/src/__tests__/ipaws-send-browser.test.ts`, which pastes the
+    bundle and reads "Acknowledged on EAS, CMAS, PUBLIC.".
+- **Found in the screenshots.** The first version put the channel summary
+  in the status pill, which squeezed the alert headline into a narrow
+  column. The answer moved to its own row before landing.
+- **Air-gap behavior.** Screen only; no network path changes.
+- **Verification.**
+  - The two web files and the browser walk: 24 of 24.
+  - Screenshots at 1440 by 900 (light) and 390 by 844 (dark) reviewed.
+  - `pnpm check`, static: green.
+  - `pnpm check`, desktop tests: green.
+  - `pnpm check`, vitest: 1,720 of 1,722 tests. Three files were red:
+    - `clock-notice-browser` (timeout) and `resource-typing-browser`
+      failed under the full run; both passed alone (4 of 4).
+    - `iso9660` failed as in IC1.
+- **Not run.** Captures at 1534 by 790 and 1586 by 992.
+- **Evidence level:** component tests and a real-browser walk with
+  screenshots.
+- **Rollback:** revert `f575f6b`.
+
+## IPAWS connector IC3: documents
+
+IPAWS Connector PSPR unit IC3, landed on `main` in the commit that carries
+this receipt, after IC2.
+
+- **What changed.**
+  - `docs/IPAWS-ENABLEMENT.md`:
+    - the certificate bundle and the checks it passes;
+    - converting FEMA's keystore with `keytool` and `openssl pkcs12
+      -nodes`, and deleting the files afterwards;
+    - the `sent` re-stamp, and the request as the IDG shapes it;
+    - acceptance per channel, and what a partial refusal means for a
+      resend;
+    - the fixtures described as shaped after the IDG, correcting the old
+      claim that they were recorded from IPAWS-OPEN;
+    - the operator checklist.
+  - `CHANGELOG.md`: the connector under Unreleased, Changed; the
+    fail-open read under Fixed.
+  - `docs/API.md` is generated from the API contract and lists routes
+    only. No route changed, so nothing in it changes.
+- **Verification.** The phase gate, `pnpm check:gate`, ran on IC2 plus
+  these documents before the rebase below, on this Windows machine against
+  the throwaway cluster named in IC1. Its exit was 1, for causes outside
+  this plan.
+  - Static checks: green.
+  - Advisory gate: 0 high or critical, 0 exceptions, with `xml-crypto`
+    included.
+  - Desktop tests: 41 of 41 and 1 of 1.
+  - Serial vitest: 1,718 of 1,722 tests in 305 of 308 files, in 1,570
+    seconds.
+  - `deploy/macos/iso9660.test.mjs` failed as in IC1.
+  - Two workers crashed with Windows exit code 3221226505 (0xC0000409)
+    while running `damage-browser` and `iap-workspace-browser`, which
+    accounts for the four tests not counted. Both files then passed alone
+    (4 of 4).
+  - The gate's `&&` chain skipped the load test after the iso9660 failure;
+    run on its own, it passed 4 of 4.
+  - The link check covers this receipt: `node scripts/check-links.mjs`
+    after it was written.
+- **Rebase before the push.** `origin/main` had moved 26 commits ahead,
+  from other sessions. The four units were rebased onto `a00242b` with no
+  merge commit.
+  - This checkout's copy of the macOS commit dropped as already upstream
+    (`ca6489f`).
+  - The ledger conflicts resolved as appends.
+  - The lockfile was taken from `origin` with `xml-crypto` added back by
+    `pnpm install`.
+  - This plan's migration was renumbered from 0148 to 0154, after the
+    upstream 0148 to 0153.
+
+  Then `pnpm check` on the rebased tree:
+  - static green, with the license scan at 348 packages;
+  - desktop tests: 41 of 41;
+  - vitest: 1,808 of 1,809.
+  - The one red, `federation-batches`, passed alone (3 of 3), as it did in
+    IC1.
+- **Not run.** The Linux test bed, hosted CI, and any IPAWS-OPEN test
+  environment send, which waits on the developer MOA.
+- **Evidence level:** the phase gate, with each red named and each rerun
+  alone, and `pnpm check` after the rebase.
+- **Rollback:** revert the commit.

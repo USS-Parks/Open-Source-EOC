@@ -8,7 +8,25 @@ upgrade in place, is in the [upgrade guide](docs/guides/UPGRADE.md).
 
 ## Unreleased
 
-Nothing on `main` since 0.9.2 yet.
+### Changed
+
+- The IPAWS-OPEN connector follows FEMA's IPAWS-OPEN Interface Design Guide
+  v4.02. The alert and the SOAP request are both signed with the COG
+  certificate (WS-Security, RSA-SHA256, exclusive canonicalization), the
+  request carries `logonUser` and `logonCogId` in the IDG's namespace, and
+  the alert's `sent` is stamped at the second admin's confirmation. The COG
+  credential is now the FEMA certificate and private key as one PEM block,
+  checked when saved and before every send. Each send records every
+  channel's status and the signed alert as transmitted, and the IPAWS tab
+  shows which channels acknowledged and which refused. See
+  [IPAWS-ENABLEMENT](docs/IPAWS-ENABLEMENT.md). A PIN stored by an earlier
+  build no longer configures IPAWS; enter the certificate.
+
+### Fixed
+
+- An IPAWS-OPEN answer of HTTP 200 that flagged a channel as an error was
+  read as accepted. Acceptance now needs every channel status free of
+  errors, and any answer the connector does not recognize is a rejection.
 
 ## 0.9.2 - 2026-09-25
 
