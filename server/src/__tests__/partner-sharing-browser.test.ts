@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Browser, Page } from "playwright-core";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { addMembership, createJurisdiction, createPerson } from "../auth/service.js";
 import { NORTH_COAST_PASSWORD, NORTH_COAST_TIME_ZONE, seedNorthCoast, type NorthCoastScenario } from "../demo/north-coast.js";
@@ -27,10 +27,19 @@ let baseUrl: string;
 let scenario: NorthCoastScenario;
 const pageErrors: string[] = [];
 
+/** Each open page's report, so a test that fails or times out says where every page stood. */
+const openPages = new Map<Page, () => Promise<string>>();
+
 async function signIn(email: string, password: string): Promise<Page> {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, timezoneId: NORTH_COAST_TIME_ZONE, locale: "en-US" });
+  // No service worker: each new context's worker would copy the whole app and
+  // its map files through this process's server while the test signs in, and
+  // nothing here tests working offline.
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, timezoneId: NORTH_COAST_TIME_ZONE,
+    locale: "en-US", serviceWorkers: "block" });
   const page = await context.newPage();
   const report = watchPage(page);
+  openPages.set(page, report);
+  page.on("close", () => openPages.delete(page));
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.route("**/*", (route) => {
     const url = route.request().url();
@@ -61,6 +70,13 @@ beforeAll(async () => {
   browser = await launchBrowser();
 }, 240_000);
 
+// Twice on the Windows runner a test here outlived its budget where it takes
+// seconds locally, and the log said only that it timed out.
+afterEach(async ({ task }) => {
+  if (task.result?.state !== "fail") return;
+  for (const report of openPages.values()) console.error(`A page open when "${task.name}" failed: ${await report()}`);
+});
+
 afterAll(async () => {
   await browser?.close();
   await app?.close();
@@ -87,7 +103,7 @@ describe("partner sharing on the North Coast Storm exercise", () => {
     expect(row).toMatchObject({ jurisdiction_id: scenario.jurisdictionId, email: "a.brooks@cec.example" });
     await liaison.screenshot({ path: join(SHOTS, "liaison-resources.png") });
     await liaison.context().close();
-  }, 90_000);
+  }, 180_000);
 
   it("opens the county's generator request from the liaison's linked action", async () => {
     const liaison = await signIn("a.brooks@cec.example", NORTH_COAST_PASSWORD);
@@ -100,10 +116,12 @@ describe("partner sharing on the North Coast Storm exercise", () => {
     await liaison.getByRole("region", { name: /^REQ-\d+ Generator support for Wendy's Shelter$/ }).waitFor();
     await liaison.screenshot({ path: join(SHOTS, "liaison-linked-request.png") });
     await liaison.context().close();
-  }, 90_000);
+  }, 180_000);
 
   // Two people sign in, each in a fresh browser context: on the Windows CI runner
-  // this ran past the 30 second default, where it takes about 4 seconds locally.
+  // this ran past 30 and then 90 seconds, where it takes about 4 seconds locally.
+  // Each test's budget is twice a page action's 90 seconds on CI, so a step that
+  // hangs fails as itself and afterEach reports the open pages.
   it("lets the utility liaison post in an incident-wide thread that the county reads", async () => {
     const liaison = await signIn("a.brooks@cec.example", NORTH_COAST_PASSWORD);
     await liaison.locator('select[aria-label="Selected incident"] option:checked', { hasText: "North Coast Storm" }).waitFor({ state: "attached" });
@@ -126,7 +144,7 @@ describe("partner sharing on the North Coast Storm exercise", () => {
     expect(await message.textContent()).toContain("CA Energy Commission");
     await county.screenshot({ path: join(SHOTS, "county-messages.png") });
     await county.context().close();
-  }, 90_000);
+  }, 180_000);
 
   it("shows a person outside the incident none of it", async () => {
     const outsider = await signIn(OUTSIDER.email, OUTSIDER.password);
@@ -144,5 +162,5 @@ describe("partner sharing on the North Coast Storm exercise", () => {
     expect(status).toBe(404);
     await outsider.context().close();
     expect(pageErrors).toEqual([]);
-  }, 90_000);
+  }, 180_000);
 });

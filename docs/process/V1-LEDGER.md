@@ -8085,3 +8085,28 @@ Veoci Integration and Air Gap PSPR unit VA11 (VC-07).
   deploy/macos/iso9660.test.mjs`, 1 of 1 passing; Vitest no longer collects
   it.
 - **Rollback:** revert the commit.
+
+## CI repairs: the partner sharing stall, named when it recurs
+
+Follows "CI repairs: two Windows stalls at a second sign-in". Main's Windows
+run on e245e08 (run 36186594099) failed two files: the macOS disk image test,
+repaired in the previous receipt, and the partner sharing test in which the
+utility liaison posts and the county reads, which again outlived its budget,
+now 90 seconds, where it takes about 4 seconds locally. It is the same test
+as on be75d61, so this is not a one-off.
+
+- **Why the log said nothing.** The test's budget and a page action's wait
+  on CI were both 90 seconds, so the test's timer fired first and no step
+  reported which wait hung.
+- **What changed.** Each test in the file has 180 seconds, so a hung step
+  fails as itself with Playwright's call log. Every page the file opens is
+  watched (`watchPage`), and when a test fails an `afterEach` hook prints each
+  still-open page's address, load state, visible text, console errors,
+  failed requests and any crash. The file's browser contexts block service
+  workers: each new context's worker otherwise copies the whole app and its
+  map files through the test's in-process server while the next person signs
+  in, and nothing in the file tests working offline. **Whether that load is
+  the cause is not proven**; the next run on Windows either passes or names
+  the step and the page.
+- **Verification.** On the Linux test bed: the partner sharing file, 4 of 4.
+- **Rollback:** revert the commit.
