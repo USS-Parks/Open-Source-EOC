@@ -6182,3 +6182,52 @@ Operator Trust PSPR unit RD12, its CI part.
   this push; its first run is the push that carries it.
 - **Evidence level:** the workflow's first run on GitHub.
 - **Rollback:** revert the commit; CI returns to Ubuntu.
+
+## Operator Trust landing: the full gate
+
+The Operator Trust PSPR's units RD4 to RD12 landed together on 2026-09-25,
+at Basho's instruction to commit and push all work: one commit per unit in
+roster order, each with its receipt. Their gates had not run unit by unit;
+this is the gate they ran.
+
+- **On the tree with every unit,** the state the 0.9.1 setup was built from:
+  the API documentation check passed; `pnpm check:static` found two lint
+  errors, `URL` in `vitest.config.mjs` and `AbortSignal` in
+  `deploy/windows/desktop.mjs`, Node globals the lint configuration did not
+  declare, fixed in RD11 and RD7; `pnpm test:desktop` passed; `test:ci` ran
+  294 files and 1,659 tests, and 8 tests failed in 10 files, with one worker
+  crash.
+- **The failures, each fixed in the unit that caused it.**
+  - TP1's lifecycle test loaded the standard boards before the dictionaries
+    they name were registered. It now imports them through the shared
+    package's index, as the boards test does.
+  - TP7's close panel says "Closing stops new updates". Three older tests
+    waited for the removed "Closeout prevents new incident updates", and the
+    Incidents screen test's client had no closeout summary to read.
+  - TP6 changed the participant notice and the refused link's text;
+    `app-e2e` and the incident context test expected the old words.
+  - RD8 shows a choice's label in record history; `board-records-browser`
+    expected the stored value `open` rather than the label `Open`.
+  - TP9's map scenario filled "Find on map" once, and the map, still
+    settling after sign-in, cleared the box. It now fills the box on each
+    try. It failed at TP9's own state as well.
+  - Under the full run's load, `partner-sharing-browser` timed out,
+    `communications-workspace-browser` did not reach its sign-in form, and a
+    worker running `cop-kpi-browser` exited with `0xC0000409`, the known
+    crash ("Readiness RD11: the remaining checks"). Each passed when the
+    failed files ran again.
+- **The staged secret scan** stopped RD9A's first commit: gitleaks read
+  four request idempotency keys, passed after a `...Token` argument in the
+  workflow test, as generic API keys. The test's helper now takes the key
+  first; the test passes and the scan finds nothing.
+- **After the fixes,** the ten failed files passed when run again at the
+  full tree, the map scenario passed at TP9's state and at the full tree,
+  and every unit's `pnpm check:static` passed on that unit's own state
+  before its commit. The fixes change tests, the lint configuration and
+  the air-gap proof, not the application the 0.9.1 setup holds.
+- **Not run:** `test:ci` on each unit's own state, the phase gates
+  (`pnpm check:gate`) that close phases RD-B and TP-C, and a second full
+  `test:ci` after the fixes. CI on Windows (RD12) runs on this push.
+- **Evidence level:** one full gate over every unit, the failed files run
+  again, and each unit's static checks.
+- **Rollback:** revert the unit commits in reverse order.
