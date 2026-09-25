@@ -5756,3 +5756,48 @@ backups, upgrade and uninstall).
   itself is still not started.
 - **Consequence.** The release stays Windows only. The parity matrix, the
   facet register and the release decision say so.
+
+## Readiness RD7: connecting to a host, on Windows
+
+Operator Trust PSPR unit RD7. RD3 already served the host's certificate
+authority for download and put the steps on the sign-in page; this unit adds
+the installed app's way to a host and checks two browsers against one.
+
+- **What changed.**
+  - **Connect.** `-Action Connect -Url https://eoc-host` opens the app window
+    on a network host instead of a server of its own, and keeps the address
+    in the user's data folder for later opens; the setup adds **Open Source
+    EOC on a network host** to the Start menu, which asks for the address the
+    first time. The address must be HTTPS (plain HTTP only to this computer)
+    and carry no user name. Before the window opens the launcher checks the
+    host's `ready` route against the computer's own trusted roots
+    (`--use-system-ca`), as the browser will, and names the outcome:
+    `CONNECT_READY`, `CONNECT_UNTRUSTED` with the steps to download the
+    authority, compare its thumbprint and install it, `CONNECT_WRONG_NAME`,
+    `CONNECT_UNREACHABLE` or `CONNECT_NOT_READY`; on a problem the window
+    stays open until read. `-Action Stop -Profile connect` closes the window
+    it opened. The app window is the launcher's existing owned Chrome or Edge
+    window, pointed at the host.
+  - **The thumbprint to compare.** `Test-OpenEOCHost.ps1` now shows the
+    host authority's thumbprint beside its subject, and the sign-in page and
+    the network host guide say to compare it before installing the
+    downloaded certificate, and that Current User works without
+    administrator rights.
+  - **Checks in Edge and Chrome.** The host proof signs in to the loopback
+    host through HTTPS in the installed Chrome at 1586 by 992 (as before) and
+    now in the installed Edge at 1534 by 790, each trusting the host's
+    authority by its keys; and runs Connect against it twice: with the
+    computer's trust store, which does not hold the authority, it reports
+    `CONNECT_UNTRUSTED` and exits 2; with the authority added, as installing
+    it does, `CONNECT_READY`.
+- **Not done: Safari, and the Mac app.** RD7's Safari run and the macOS side
+  of Connect need RD6's Mac app and a Mac, which this session does not have
+  (see "Readiness RD6: macOS"). The guide says so.
+- **Tests.** Launcher unit tests for the address rules, the advice by cause,
+  and a Connect run against a local server (ready, kept address,
+  unreachable, refused HTTP); the installer's static test for the Start menu
+  entry; the host proof as above.
+- **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
+- **Evidence level:** launcher tests and the host proof on this machine
+  with Edge and Chrome.
+- **Rollback:** revert the commit.

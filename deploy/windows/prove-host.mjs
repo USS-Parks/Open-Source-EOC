@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { X509Certificate, createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { get as httpGet } from "node:http";
@@ -136,6 +136,47 @@ try {
     result.browser = { signedIn: true, liveSocket: sockets.find((url) => url.startsWith("wss://")), externalRequests: external.length, pageErrors: errors.length };
   } finally {
     await browser.close();
+  }
+
+  // Edge too, the other browser the app window opens in, at the scaled laptop size.
+  const edge = await chromium.launch({
+    executablePath: "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+    args: [`--ignore-certificate-errors-spki-list=${keys}`, "--disable-background-networking", "--disable-component-update", "--disable-default-apps"],
+  });
+  try {
+    const page = await (await edge.newContext({ viewport: { width: 1534, height: 790 } })).newPage();
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    const response = await page.goto(https, { waitUntil: "load" });
+    assert.equal(response.status(), 200);
+    await page.getByLabel("Email").fill("jordan.lee@humboldt.example");
+    await page.getByLabel("Password").fill("north-coast-exercise");
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await page.getByRole("button", { name: "Account menu" }).waitFor();
+    await page.screenshot({ path: join(out, "console-over-https-edge.png") });
+    assert.deepEqual(errors, []);
+    result.edge = { signedIn: true, pageErrors: errors.length };
+  } finally {
+    await edge.close();
+  }
+
+  // The installed app connecting to the host: checked against this computer's
+  // trust store, which does not hold the host's authority, then with it added,
+  // as installing the downloaded certificate does.
+  const connectRoot = mkdtempSync(resolve(tmpdir(), "oec-"));
+  try {
+    const connect = (extraEnv) => spawnSync(process.execPath, ["--use-system-ca", launcher, "connect", "--no-browser", `--url=${https}`],
+      { cwd: root, env: { ...process.env, OPENEOC_DESKTOP_DATA_ROOT: connectRoot, ...extraEnv }, encoding: "utf8" });
+    const untrusted = connect({});
+    assert.equal(untrusted.status, 2, untrusted.stdout + untrusted.stderr);
+    assert.match(untrusted.stdout, /^CONNECT_UNTRUSTED url=https:\/\/localhost:\d+$/m);
+    writeFileSync(resolve(connectRoot, "root.pem"), rootPem);
+    const trusted = connect({ NODE_EXTRA_CA_CERTS: resolve(connectRoot, "root.pem") });
+    assert.equal(trusted.status, 0, trusted.stdout + trusted.stderr);
+    assert.match(trusted.stdout, /^CONNECT_READY url=https:\/\/localhost:\d+$/m);
+    result.connect = { untrusted: "CONNECT_UNTRUSTED", trusted: "CONNECT_READY" };
+  } finally {
+    rmSync(connectRoot, { recursive: true, force: true });
   }
 
   // The backup task's command, against the running host; then the backup restored into a new database.

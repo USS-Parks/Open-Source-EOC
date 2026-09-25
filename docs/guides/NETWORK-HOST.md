@@ -72,10 +72,14 @@ Setup also:
    because it does not know the host's authority yet. Choose **Advanced**,
    then continue to the page.
 3. Under **Sign in**, open **Trust this server**, choose **Download the
-   certificate**, and install it:
+   certificate**, and before installing it compare its thumbprint with the
+   one `Test-OpenEOCHost.ps1` shows on the host (on Windows, the
+   **Thumbprint** on the certificate's **Details** tab). Install it only if
+   they match:
    - **Windows:** open the file, choose **Install Certificate**, then **Local
-     Machine**, then **Place all certificates in the following store**, and
-     choose **Trusted Root Certification Authorities**.
+     Machine** (or **Current User** without administrator rights), then
+     **Place all certificates in the following store**, and choose **Trusted
+     Root Certification Authorities**.
    - **macOS:** open the file to add it to the System keychain, open it in
      Keychain Access, expand **Trust** and set **When using this certificate**
      to **Always Trust**.
@@ -91,6 +95,28 @@ Setup also:
 
 An agency that manages its computers can push the certificate to them as a
 trusted root through its usual tools instead.
+
+### From the installed app on Windows
+
+A computer with the setup program installed can open the host in the app's
+own window instead of running a server of its own. Choose **Open Source EOC on
+a network host** in the Start menu; the first time, it asks for the host's
+address, for example `https://eoc-host`, and keeps it for later. The same
+from a terminal:
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\Open Source EOC\app\deploy\windows\Open Source EOC.cmd" -Action Connect -Url https://eoc-host
+```
+
+Before opening the window it checks the connection against the computer's
+own trusted roots, as the browser will. If the host's authority is not
+trusted yet, the window stays open with the steps above (download, compare
+the thumbprint, install), and the app window shows the browser's warning
+until they are done. An address that does not answer, or a name the host's
+certificate does not carry, is explained the same way. Plain `http://` is
+refused except to this computer. `-Action Stop -Profile connect` closes the
+window. This has been checked on Windows with Edge and Chrome; the Mac app
+and Safari are not built or checked yet.
 
 ## When the address changes
 

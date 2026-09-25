@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet('Build', 'Setup', 'Start', 'Status', 'Stop', 'Launch', 'Backup', 'HostInstall', 'HostRemove')]
+  [ValidateSet('Build', 'Setup', 'Start', 'Status', 'Stop', 'Launch', 'Backup', 'HostInstall', 'HostRemove', 'Connect')]
   [string]$Action = 'Launch',
   [string]$Profile = 'production',
   [ValidateRange(1024, 65535)]
@@ -18,6 +18,8 @@ param(
   [string[]]$HostName,
   [string]$Certificate,
   [string]$CertificateKey,
+  # Connect: the network host's address, kept for later opens.
+  [string]$Url,
   # Keep the window open at the end, for a run the setup program opens.
   [switch]$Pause
 )
@@ -34,7 +36,9 @@ $allowedProfiles = @('production', 'demo') + $hostProfiles
 if (-not $installed -and $env:OPENEOC_ENABLE_ACCEPTANCE_PROFILE -eq '1') {
   $allowedProfiles += 'acceptance'
 }
-if ($Action -ne 'Build' -and $Profile -notin $allowedProfiles) {
+# Stop -Profile connect closes the window a connection opened.
+if ($Action -eq 'Stop') { $allowedProfiles += 'connect' }
+if ($Action -notin @('Build', 'Connect') -and $Profile -notin $allowedProfiles) {
   throw "Profile must be one of: $($allowedProfiles -join ', ')"
 }
 # The network host keeps its data for the whole computer; every other profile, for its Windows user.
@@ -62,7 +66,15 @@ if ($installed) {
 Set-Location -LiteralPath $repoRoot
 
 $arguments = @($entry, $Action.ToLowerInvariant())
-if ($Action -ne 'Build') {
+if ($Action -eq 'Connect') {
+  # The connection is checked as the browser will check it, against this computer's trust store.
+  $arguments = @('--use-system-ca') + $arguments
+  if (-not $Url -and -not (Test-Path -LiteralPath (Join-Path $profileDataRoot 'connect.json'))) {
+    $Url = Read-Host 'Address of the Open Source EOC host, for example https://eoc.county.example'
+  }
+  if ($Url) { $arguments += "--url=$Url" }
+  if ($NoBrowser) { $arguments += '--no-browser' }
+} elseif ($Action -ne 'Build') {
   $arguments += "--profile=$Profile"
 }
 if ($PSBoundParameters.ContainsKey('PgPort')) {
@@ -125,7 +137,8 @@ try {
   }
 }
 
-if ($Pause) {
+# A connection that found a problem keeps its explanation on screen.
+if ($Pause -or ($Action -eq 'Connect' -and $commandExit -ne 0)) {
   Write-Host ''
   Read-Host 'Press Enter to close this window' | Out-Null
 }

@@ -165,6 +165,8 @@ test("installing for all users offers the network host, which the setup installs
   assert.match(source, /Parameters: "-Action HostRemove"; .*RunOnceId: "OpenSourceEOCHostRemove"$/m);
   // An upgrade stops the host's services before it replaces their programs.
   assert.match(source, /function PrepareToInstall[\s\S]+IsAdminInstallMode[\s\S]+Get-Service -Name ''OpenSourceEOC-\*''[\s\S]+Stop-Service -Force/);
+  // The app can open a network host instead of its own server.
+  assert.match(source, /^Name: "\{group\}\\Open Source EOC on a network host"; Filename: "\{app\}\\app\\deploy\\windows\\Open Source EOC\.cmd"; Parameters: "-Action Connect"/m);
   // The per-user demo opens as the person who ran the setup, never elevated.
   assert.match(source, /-Action Launch -Profile demo".*Tasks: not host; Flags: postinstall nowait skipifsilent runhidden runasoriginaluser$/m);
 

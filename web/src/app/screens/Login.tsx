@@ -19,8 +19,13 @@ function TrustThisServer({ url }: { readonly url: string }) {
         <a href={url} download="open-source-eoc-root.crt">Download the certificate</a>
       </p>
       <p>
-        <strong>Windows:</strong> open the file, choose Install Certificate, then Local Machine, then "Place all
-        certificates in the following store", and choose Trusted Root Certification Authorities. Restart the browser.
+        Before installing it, compare its thumbprint with the one the host's administrator reads from the host check.
+        Install it only if they match.
+      </p>
+      <p>
+        <strong>Windows:</strong> open the file (the Thumbprint is on its Details tab), choose Install Certificate,
+        then Local Machine (or Current User without administrator rights), then "Place all certificates in the
+        following store", and choose Trusted Root Certification Authorities. Restart the browser.
       </p>
       <p>
         <strong>macOS:</strong> open the file to add it to the System keychain, then open it in Keychain Access, expand

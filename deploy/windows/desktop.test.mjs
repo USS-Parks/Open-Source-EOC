@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -28,6 +28,7 @@ import {
 import { rotateIfLarger, rotatingLog } from "./lib/rotating-log.mjs";
 import { backupBeforeMigrate, scheduledBackup, writeUpgradeReport } from "./lib/pre-upgrade-backup.mjs";
 import { caddyfile, commandLine, hostDefinitions, hostNames, parseWinswService } from "./lib/host.mjs";
+import { connectionAdvice, hostAddress } from "./lib/connect.mjs";
 
 function fixture() {
   const root = mkdtempSync(resolve(tmpdir(), "openeoc-windows-"));
@@ -350,6 +351,60 @@ test("backing up a profile that is not set up changes nothing", { skip: process.
     assert.match(result.stderr, /Profile acceptance is not ready; nothing was backed up/);
     assert.deepEqual(readdirSync(dataRoot), []);
   } finally {
+    rmSync(dataRoot, { recursive: true, force: true });
+  }
+});
+
+test("a network host's address is its HTTPS origin, or plain HTTP to this computer alone", () => {
+  assert.equal(hostAddress(" https://eoc.county.example/sign-in?x=1 "), "https://eoc.county.example");
+  assert.equal(hostAddress("https://eoc.county.example:8443"), "https://eoc.county.example:8443");
+  assert.equal(hostAddress("http://127.0.0.1:8084"), "http://127.0.0.1:8084");
+  assert.throws(() => hostAddress("http://eoc.county.example"), /over HTTPS/);
+  assert.throws(() => hostAddress("https://user:secret@eoc.county.example"), /no user name or password/);
+  assert.throws(() => hostAddress("eoc.county.example"), /Not a web address/);
+});
+
+test("a failed connection check says what to do, by cause", () => {
+  const origin = "https://eoc.county.example";
+  const untrusted = connectionAdvice({ cause: { code: "SELF_SIGNED_CERT_IN_CHAIN" } }, origin);
+  assert.equal(untrusted[0], `CONNECT_UNTRUSTED url=${origin}`);
+  assert.match(untrusted.join(" "), /\/trust\/openeoc-root\.crt[\s\S]*Thumbprint[\s\S]*Trusted Root Certification Authorities/);
+  assert.equal(connectionAdvice({ cause: { code: "ERR_TLS_CERT_ALTNAME_INVALID" } }, origin)[0], `CONNECT_WRONG_NAME url=${origin}`);
+  assert.equal(connectionAdvice({ cause: { code: "ECONNREFUSED" } }, origin)[0], `CONNECT_UNREACHABLE url=${origin}`);
+  assert.equal(connectionAdvice({ name: "TimeoutError" }, origin)[0], `CONNECT_UNREACHABLE url=${origin}`);
+  assert.equal(connectionAdvice(new Error("something else"), origin), null);
+});
+
+test("connecting keeps the host's address, reports a ready host and explains one that does not answer", { skip: process.platform !== "win32" }, async () => {
+  const dataRoot = mkdtempSync(resolve(tmpdir(), "openeoc-connect-"));
+  const { createServer } = await import("node:http");
+  const server = createServer((request, response) => {
+    response.writeHead(request.url === "/api/v1/ready" ? 200 : 404).end();
+  });
+  await new Promise((done) => server.listen(0, "127.0.0.1", done));
+  const url = `http://127.0.0.1:${server.address().port}`;
+  const connect = (...args) => new Promise((done) => {
+    execFile(process.execPath, [fileURLToPath(new URL("./desktop.mjs", import.meta.url)), "connect", "--no-browser", ...args],
+      { encoding: "utf8", env: { ...process.env, OPENEOC_DESKTOP_DATA_ROOT: dataRoot } },
+      (error, stdout, stderr) => done({ status: error?.code ?? 0, stdout, stderr }));
+  });
+  try {
+    const first = await connect(`--url=${url}/any/path`);
+    assert.equal(first.status, 0, first.stderr);
+    assert.match(first.stdout, new RegExp(`CONNECT_READY url=${url}`));
+    assert.equal(JSON.parse(readFileSync(resolve(dataRoot, "connect.json"), "utf8")).url, url);
+    // Later opens use the kept address.
+    const again = await connect();
+    assert.match(again.stdout, new RegExp(`CONNECT_READY url=${url}`));
+    await new Promise((done) => server.close(done));
+    const down = await connect();
+    assert.equal(down.status, 2);
+    assert.match(down.stdout, new RegExp(`CONNECT_UNREACHABLE url=${url}`));
+    const refused = await connect("--url=http://eoc.county.example");
+    assert.equal(refused.status, 1);
+    assert.match(refused.stderr, /over HTTPS/);
+  } finally {
+    server.close();
     rmSync(dataRoot, { recursive: true, force: true });
   }
 });

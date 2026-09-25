@@ -33,6 +33,7 @@ import { desktopRuntimeConfig, registerStaticHost } from "./lib/static-host.mjs"
 import { desktopBuildSourceFingerprint } from "./lib/build-fingerprint.mjs";
 import { rotateIfLarger, rotatingLog } from "./lib/rotating-log.mjs";
 import { backupBeforeMigrate, scheduledBackup, writeUpgradeReport } from "./lib/pre-upgrade-backup.mjs";
+import { connectionAdvice, hostAddress } from "./lib/connect.mjs";
 import {
   BACKUP_TASK,
   POSTGRES_INCLUDE,
@@ -527,7 +528,12 @@ async function waitReady(url, timeoutMs = 20_000) {
 }
 
 function openBrowser(paths, config) {
-  const url = `http://127.0.0.1:${config.httpPort}`;
+  return openAppWindow(`http://127.0.0.1:${config.httpPort}`, paths.browser, paths.browserPid);
+}
+
+/** Open Chrome or Edge as an app window on `url` with its own browser profile, once. */
+function openAppWindow(url, userDataDir, pidPath) {
+  const paths = { browser: userDataDir, browserPid: pidPath };
   const existing = readPid(paths.browserPid);
   if (existing) {
     const commandLine = processCommandLine(existing.pid);
@@ -552,6 +558,41 @@ function openBrowser(paths, config) {
   child.unref();
   writeJsonAtomic(paths.browserPid, { pid: child.pid, userDataDir: paths.browser, startedAt: new Date().toISOString() });
   return child.pid;
+}
+
+/**
+ * The installed app on a network host: no server here, the app window on the
+ * host's address. The address is kept, so later opens need none. The
+ * connection is checked first against the computer's own trust store, as the
+ * browser will check it, and a problem is explained before the window opens.
+ */
+async function connectToHost(args) {
+  const configPath = resolve(outRoot, "connect.json");
+  const saved = existsSync(configPath) ? readJson(configPath) : null;
+  const origin = args.url ? hostAddress(String(args.url)) : saved?.url ?? null;
+  if (!origin) throw new Error("Give the host's address once, for example -Url https://eoc.county.example");
+  ensureDirectory(outRoot);
+  writeJsonAtomic(configPath, { url: origin, savedAt: new Date().toISOString() });
+  let problem = null;
+  try {
+    const response = await fetch(`${origin}/api/v1/ready`, { signal: AbortSignal.timeout(10_000) });
+    if (!response.ok) problem = [`CONNECT_NOT_READY url=${origin} status=${response.status}`, "The host answered but is not ready. Ask its administrator."];
+  } catch (error) {
+    problem = connectionAdvice(error, origin) ?? [`CONNECT_FAILED url=${origin}`, String(error?.cause?.message ?? error?.message ?? error)];
+  }
+  if (problem) {
+    for (const line of problem) console.log(line);
+    process.exitCode = 2;
+  } else console.log(`CONNECT_READY url=${origin}`);
+  if (!args["no-browser"]) openAppWindow(origin, resolve(outRoot, "connect", "browser"), resolve(outRoot, "connect", "browser.pid.json"));
+}
+
+/** Close the app window a connection opened. */
+async function stopConnection() {
+  const paths = { browser: resolve(outRoot, "connect", "browser"), browserPid: resolve(outRoot, "connect", "browser.pid.json") };
+  const saved = existsSync(resolve(outRoot, "connect.json")) ? readJson(resolve(outRoot, "connect.json")) : null;
+  const stopped = saved ? await stopOwnedBrowser(paths, saved.url) : false;
+  console.log(`CONNECTION_STOPPED browser=${stopped}`);
 }
 
 function refuseHostProfile(profile) {
@@ -711,7 +752,7 @@ async function serveProfile(args, { service = false } = {}) {
   process.on("SIGTERM", () => void close().then(() => process.exit(0)));
 }
 
-async function stopOwnedBrowser(paths, config) {
+async function stopOwnedBrowser(paths, url) {
   const record = readPid(paths.browserPid);
   if (!record) return false;
   const commandLine = processCommandLine(record.pid);
@@ -719,7 +760,6 @@ async function stopOwnedBrowser(paths, config) {
     removeOwnedStalePid(paths.browserPid, record.pid);
     return false;
   }
-  const url = `http://127.0.0.1:${config.httpPort}`;
   if (!matchesOwnedBrowserCommand(commandLine, { userDataDir: paths.browser, url }))
     throw new Error("Browser PID file does not own the running process; it was not stopped");
   execFileSync("taskkill.exe", ["/PID", String(record.pid), "/T"], { stdio: "ignore", windowsHide: true });
@@ -767,7 +807,7 @@ async function stopProfile(args) {
     console.log(`PROFILE_STOPPED configured=false profile=${profile} app=false postgres=false browser=false`);
     return;
   }
-  const browserStopped = await stopOwnedBrowser(paths, config);
+  const browserStopped = await stopOwnedBrowser(paths, `http://127.0.0.1:${config.httpPort}`);
   const appStopped = await stopOwnedApp(paths, config);
   const postgresStopped = stopPostgres(paths);
   console.log(`PROFILE_STOPPED profile=${profile} app=${appStopped} postgres=${postgresStopped} browser=${browserStopped}`);
@@ -1032,6 +1072,8 @@ async function main() {
   if (action === "hostinstall") return hostInstall(args);
   if (action === "hostremove") return hostRemove();
   if (action === "status") return profileStatus(args);
+  if (action === "connect") return connectToHost(args);
+  if (action === "stop" && String(args.profile) === "connect") return stopConnection();
   if (action === "stop") return stopProfile(args);
   if (action === "backup") return backupProfile(args);
   throw new Error(`Unknown action: ${args.action}`);

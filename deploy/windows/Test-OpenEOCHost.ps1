@@ -73,7 +73,8 @@ Check 'The daily backup is scheduled' {
 $internal = $hostRecord.certificate -eq 'internal'
 if ($internal) {
   Check "This computer trusts the host's certificate authority" {
-    (Get-Item -LiteralPath "Cert:\LocalMachine\Root\$($hostRecord.rootThumbprint)").Subject
+    # The thumbprint is what a person compares before trusting the authority on another computer.
+    "$((Get-Item -LiteralPath "Cert:\LocalMachine\Root\$($hostRecord.rootThumbprint)").Subject), thumbprint $($hostRecord.rootThumbprint)"
   }
 }
 
