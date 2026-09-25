@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import { DashboardSurface, parseDashboardViewState } from "../surfaces/DashboardSurface.js";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { DashboardSurface, DashboardViewControls, parseDashboardViewState } from "../surfaces/DashboardSurface.js";
 import type { ApiClient } from "../api/client.js";
 import type { DashboardSnapshot } from "@openeoc/shared";
 
@@ -87,6 +87,27 @@ it("shows an inaccessible dashboard as not found without retaining dashboard dat
   );
   await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("dashboard not found"));
   expect(screen.queryByText("EOC Status")).toBeNull();
+});
+
+it("keeps typed filters through a console refresh and follows the filters once applied", () => {
+  // The console parses the view state from the route on every render, so an
+  // unchanged view arrives as a new object each time it refreshes.
+  const onChange = vi.fn();
+  const view = () => parseDashboardViewState(JSON.stringify({ scope: "incident" }))!;
+  const { rerender } = render(<DashboardViewControls value={view()} error={null} onChange={onChange} />);
+  fireEvent.click(screen.getByRole("button", { name: "Edit filters" }));
+  fireEvent.change(screen.getByLabelText("Category field"), { target: { value: "status" } });
+  fireEvent.change(screen.getByLabelText("Category value"), { target: { value: "closed" } });
+  rerender(<DashboardViewControls value={view()} error={null} onChange={onChange} />);
+  expect((screen.getByLabelText("Category value") as HTMLInputElement).value).toBe("closed");
+  fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+  expect(onChange).toHaveBeenLastCalledWith({
+    scope: "incident", filterMode: "replace", filters: { category: { field: "status", equals: "closed" } },
+  });
+  // Filters changed elsewhere, as by the browser's back button, replace the fields.
+  rerender(<DashboardViewControls error={null} onChange={onChange}
+    value={{ scope: "incident", filterMode: "replace", filters: { category: { field: "kind", equals: "road" } } }} />);
+  expect((screen.getByLabelText("Category value") as HTMLInputElement).value).toBe("road");
 });
 
 it("parses only bounded, schema-valid saved dashboard route state", () => {

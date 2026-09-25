@@ -250,6 +250,11 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
     );
   }
 
+  // Until the incident list is in and the selection has followed it, the
+  // console waits as it does for the workspace below: a console mounted with
+  // no incident would be taken down again when the incident is chosen, and
+  // whatever the operator had opened in it, such as a menu, would close.
+  if (!incident.settled) return <Loading label="Restoring workspace…" />;
   const expectedWorkspaceScope = session.me && incident.selectedIncidentId
     ? `${session.me.person.id}:${incident.selectedIncidentId}`
     : null;

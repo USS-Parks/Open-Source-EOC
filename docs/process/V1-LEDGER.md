@@ -7393,3 +7393,73 @@ VA37 part one.
 - **Rollback:** revert the commit; migration `0150` widens a check, adds a
   column and a constraint, and restates the version trigger with the
   request's tie; no 213RR components exist before it.
+
+## CI repairs after the Actions runs resumed
+
+Basho's instruction of 2026-09-25: fix the reds on the earlier commits.
+The Actions spending limit had stopped every run after 17:28; Basho made
+the repository public and the runs resumed.
+
+- **What was red.**
+  - `main` at `3d5e385`, the Windows job's `pnpm check` (run 36170482266):
+    `board-views-browser.test.ts:272`, the selected record never showed
+    after a calendar item was opened; `d33-review-browser.test.ts:284`, the
+    account menu never opened after the first sign-in, and `:611`, the four
+    reviews that test left undone.
+  - The branch at `226de01`, Windows (run 36172801470):
+    `dashboard-browser.test.ts:173`, applied filters never showed;
+    `resource-typing-browser.test.ts:209`, a deleted kind still counted.
+  - The macOS demo disk image, which failed its self-containment check and
+    then the server deploy.
+- **What changed**, each in its own commit.
+  - **The Mac test browser** ("Draw maps in the Mac test browser and fit
+    report headings on a phone"): headless Chrome on a Mac runs WebGL
+    through SwiftShader, as on Linux, since the map's shaders did not
+    compile on the virtual Metal device; the report tables' headings fit at
+    phone width.
+  - **The Mac disk image** (five commits, "Read universal binaries
+    correctly…" through "Deploy the Mac app's server inside the
+    repository…"): universal binaries read by their own paths, only
+    absolute library paths outside `/usr/lib` and `/System` counted,
+    PL/Python left out, and the server deployed inside the repository as
+    the Windows staging is. Run 36175150836 built the image, and its smoke
+    test started the app's own PostgreSQL, answered ready on port 8081 and
+    stopped.
+  - **The resources decline form** ("Keep a request's decline or cancel
+    form open…"), recorded under VA38.
+  - **This commit.**
+    - **The console mounted twice after sign-in.** It showed an empty
+      console before the incident list arrived, then, once the incident was
+      chosen, gave way to "Restoring workspace…" and mounted again. Whatever
+      was opened in the first one closed; on the loaded Windows runner the
+      review test's account menu did. The incident context now says when
+      its first list is in and the selection has followed it (`settled`),
+      and the console shows the same wait until then, so it mounts once.
+    - **The dashboard's filter fields emptied as the operator typed.** The
+      console parses the view from the route on every render, and the fields
+      reset whenever that object changed, so any refresh of the console
+      between typing and **Apply filters** cleared them. They now follow the
+      applied filters only when those change.
+    - **The resource typing test** waits for the catalog to read itself
+      again after a delete; the notice arrives first.
+- **Not explained.** `board-views-browser.test.ts:272` passed on the
+  branch's Windows run and on the Linux bed, and its path reads correctly;
+  the next Windows run shows whether it recurs.
+- **Still red, not the push gate.** The branch's macOS job, which runs only
+  when started by hand (run 36172801470):
+  `operational-relationships-browser.test.ts:224` (the map feature
+  inspector covers **Open linked Lifeline**), `fidelity-browser.test.ts:193`
+  (**Chronology** in a navigation that should not hold it),
+  `authorized-viewing-browser.test.ts:155` and `load-retry-browser.test.ts:62`.
+  The first two fail on the Linux bed as well; they are next.
+- **Tests.** `dashboard-surface-incident.test.tsx` adds a refresh between
+  typing and applying, which fails on the old code ("expected '' to be
+  'closed'"); `incident-context.test.tsx` adds that no render settles before
+  the incident it opens on is chosen, and that a jurisdiction with no
+  incidents settles on none.
+- **Verification.** On the Linux test bed: `pnpm check:static` exit 0; the
+  web tests, 714 in 96 files; the review, dashboard, resource typing, board
+  views and incident activation browser tests, 15 of 15.
+- **Evidence level:** component and browser tests; the Windows run on the
+  landed head is the check that matters.
+- **Rollback:** revert the commit.

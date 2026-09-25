@@ -95,7 +95,7 @@ async function allDashboardConfigs(client: ApiClient, incidentId: string) {
   return configs;
 }
 
-function DashboardViewControls(props: {
+export function DashboardViewControls(props: {
   readonly value: DashboardViewState;
   readonly error: string | null;
   readonly onChange: (state: DashboardViewState) => void;
@@ -109,14 +109,20 @@ function DashboardViewControls(props: {
   const [to, setTo] = useState(props.value.filters?.date?.to ?? "");
   const [validation, setValidation] = useState<string | null>(null);
 
+  // The fields follow the applied filters when those change, and only then:
+  // the value is parsed from the route on every render of the console, so
+  // following its identity would clear what the operator is typing each time
+  // the console refreshes.
+  const applied = JSON.stringify(props.value.filters ?? null);
   useEffect(() => {
-    setCategoryField(props.value.filters?.category?.field ?? "");
-    setCategory(String(props.value.filters?.category?.equals ?? ""));
-    setPeriodField(props.value.filters?.operationalPeriod?.field ?? "");
-    setPeriodRevision(props.value.filters?.operationalPeriod?.areaRevision?.toString() ?? "");
-    setFrom(props.value.filters?.date?.from ?? "");
-    setTo(props.value.filters?.date?.to ?? "");
-  }, [props.value]);
+    const filters = JSON.parse(applied) as DashboardViewState["filters"] | null;
+    setCategoryField(filters?.category?.field ?? "");
+    setCategory(String(filters?.category?.equals ?? ""));
+    setPeriodField(filters?.operationalPeriod?.field ?? "");
+    setPeriodRevision(filters?.operationalPeriod?.areaRevision?.toString() ?? "");
+    setFrom(filters?.date?.from ?? "");
+    setTo(filters?.date?.to ?? "");
+  }, [applied]);
 
   const apply = () => {
     const candidate = {

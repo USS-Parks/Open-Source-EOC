@@ -206,7 +206,8 @@ describe("real-browser resource typing, pool and cost rollup", () => {
     await page.setViewportSize({ width: 1534, height: 790 });
     await catalog.getByRole("button", { name: "Delete Drone team (UAS)" }).click();
     await catalog.getByText("Deleted Drone team (UAS) from the catalog.").waitFor();
-    expect(await catalog.getByRole("row").filter({ hasText: "Drone team" }).count()).toBe(0);
+    // The notice comes with the answer; the catalog reads itself again after it.
+    await expect.poll(() => catalog.getByRole("row").filter({ hasText: "Drone team" }).count()).toBe(0);
     await page.screenshot({ path: join(SHOTS, "resource-kinds-1534.png"), fullPage: false });
     expect(pageErrors).toEqual([]);
     expect(externalRequests).toEqual([]);

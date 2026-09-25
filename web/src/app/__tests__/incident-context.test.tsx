@@ -51,11 +51,16 @@ function makeClient(incidents: () => readonly unknown[] = () => INCIDENTS): ApiC
   return new ApiClient({ fetchImpl });
 }
 
+/** Every render's settled state and selection, in order. */
+const renders: string[] = [];
+
 function Probe() {
-  const { selectedIncidentId, incidentBoardIds, selectWhenListed } = useIncident();
+  const { selectedIncidentId, incidentBoardIds, selectWhenListed, settled } = useIncident();
+  renders.push(`${settled}:${selectedIncidentId ?? ""}`);
   return (
     <>
       <span data-testid="selected">{selectedIncidentId ?? ""}</span>
+      <span data-testid="settled">{String(settled)}</span>
       <span data-testid="boards">{[...incidentBoardIds].sort().join(",")}</span>
       <button type="button" onClick={() => void selectWhenListed("new-1")}>Select new-1</button>
       <button type="button" onClick={() => void selectWhenListed("foreign")}>Select foreign</button>
@@ -76,6 +81,22 @@ function mount(client = makeClient()) {
 }
 
 describe("IncidentProvider", () => {
+  it("settles only once the list is in and the selection has followed it", async () => {
+    renders.length = 0;
+    mount();
+    await waitFor(() => expect(screen.getByTestId("settled").textContent).toBe("true"));
+    expect(screen.getByTestId("selected").textContent).toBe("open-1");
+    // The console mounts on settling, so no render may settle before the incident it opens on is chosen.
+    expect(renders[0]).toBe("false:");
+    expect(renders.filter((r) => r.startsWith("true:")).every((r) => r === "true:open-1")).toBe(true);
+  });
+
+  it("settles on no incident when the jurisdiction has none", async () => {
+    mount(makeClient(() => []));
+    await waitFor(() => expect(screen.getByTestId("settled").textContent).toBe("true"));
+    expect(screen.getByTestId("selected").textContent).toBe("");
+  });
+
   it("defaults to the first open incident and lists every incident in the switcher", async () => {
     mount();
     await waitFor(() => expect(screen.getByTestId("selected").textContent).toBe("open-1"));

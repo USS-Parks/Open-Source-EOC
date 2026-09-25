@@ -47,6 +47,9 @@ export interface IncidentValue {
    *  lacks is dropped. Settles when the list read is in. */
   readonly selectWhenListed: (id: string) => Promise<void>;
   readonly reload: () => void;
+  /** The first list read is in, or failed, and the selection has followed
+   *  it, so the console can mount once, on the incident it will show. */
+  readonly settled: boolean;
 }
 
 /**
@@ -190,6 +193,7 @@ export function IncidentProvider(props: { children: ReactNode }) {
     [incidentBoards],
   );
 
+  const listed = incidents.data !== null;
   const value = useMemo<IncidentValue>(() => {
     const selected = list.find((i) => i.id === selectedId) ?? null;
     return {
@@ -204,8 +208,11 @@ export function IncidentProvider(props: { children: ReactNode }) {
       selectIncident,
       selectWhenListed,
       reload: incidents.reload,
+      // A listed incident is always selected once the list is in (above), so
+      // a list with incidents and no selection is the moment before that.
+      settled: listed ? list.length === 0 || selected !== null : incidents.error !== null,
     };
-  }, [list, selectedId, incidentBoardIds, incidentBoards, selectionNotice, selectIncident, selectWhenListed, incidents.loading, incidents.error, incidents.reload]);
+  }, [list, listed, selectedId, incidentBoardIds, incidentBoards, selectionNotice, selectIncident, selectWhenListed, incidents.loading, incidents.error, incidents.reload]);
 
   return <IncidentContext.Provider value={value}>{props.children}</IncidentContext.Provider>;
 }
