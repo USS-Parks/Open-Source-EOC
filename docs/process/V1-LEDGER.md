@@ -5058,3 +5058,31 @@ installed demo named seven things; all seven are fixed and landed here.
   by 992 and 1534 by 790; visual acceptance is Basho's.
 - **Rollback:** revert the commit. Migration 0137 only adds a function;
   reverting leaves it unused.
+
+## Version 0.9.1: the Windows setup
+
+The version is set to `0.9.1` in `88d1430`, so this setup stands beside the
+`0.9.0` setup in `deploy/` instead of replacing it.
+
+- **The setup.** `deploy/Open-Source-EOC-Setup-0.9.1.exe`, 1,708,983,964
+  bytes, SHA-256
+  `e820049aa97452131486b2cd8fe56f04e12ea6285e15fb06a18677b7e3d66ee2` (also in
+  the `.sha256` file beside it), compiled by Inno Setup 6 on 2026-09-25 in
+  about 11 minutes, with the optional basemaps. The runtimes are those of
+  "Readiness RD2 part two: the Windows setup": Node `v24.15.0`, PostgreSQL
+  16.15 with PostGIS 3.6.2 from the assembled runtime, Caddy and WinSW.
+- **What it holds.** Built from `88d1430` with the working tree's
+  uncommitted Operator Trust PSPR work, the units from RD4 on, each described
+  in its own receipt as it lands. Until they land it cannot be rebuilt from
+  a commit on `main`; its build stamp records revision `88d1430` and source
+  hash `9ac511463ce0`.
+- **The 0.9.0 setup** stays in `deploy/` unchanged as the build to go back
+  to: its SHA-256 after this build,
+  `a1e05921aff77284234a6ee490de4a9c1b20cc9fe320780016eae473d7619b0d`,
+  matches its `.sha256` file.
+- **Verification.** The installer tests pass 10 of 10 on the stage. The setup
+  was not installed on this machine, where Basho's own installation is.
+- **Not done.** No tag was made; tagging `v0.9.1` is Basho's decision.
+- **Evidence level:** static installer tests on the stage; checksums.
+- **Rollback:** remove the `0.9.1` setup and its checksum from `deploy/`;
+  the `0.9.0` setup is untouched.
