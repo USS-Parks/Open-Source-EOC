@@ -14,6 +14,7 @@ import { usePolled } from "../data/hooks.js";
 import { PageActions, PageSubtitle } from "../layout/page-chrome.js";
 import { LIFELINE_KEYS, LIFELINE_SCOPES, conditionLabel, projectLifeline, type LifelineCondition } from "./lifeline-view.js";
 import { IncidentCop } from "./IncidentCop.js";
+import { ShiftHandoff } from "./ShiftHandoff.js";
 import "./incident-overview.css";
 
 /**
@@ -21,7 +22,8 @@ import "./incident-overview.css";
  * operational period. Four counts, the common operating picture, the eight
  * Community Lifelines, the priority work and the recent activity, each read
  * from its own engine and each opening the screen that owns it. The same
- * composition runs read-only and full screen as the briefing view.
+ * composition runs read-only and full screen as the briefing view, with the
+ * shift handoff above it for the owning organization's members.
  */
 
 export interface IncidentOverviewProps {
@@ -47,6 +49,8 @@ export interface IncidentOverviewProps {
   readonly onOpenLifeline: (key: string) => void;
   readonly onOpenLifelines: () => void;
   readonly onOpenChronology: () => void;
+  readonly onOpenRecord: (boardId: string, recordId: string) => void;
+  readonly onOpenEsf: () => void;
 }
 
 const REFRESH_MS = 30_000;
@@ -527,6 +531,9 @@ export function IncidentOverview(props: IncidentOverviewProps) {
           <div><h1 id="eoc-overview-briefing-title">{props.incidentName ?? "Incident"} briefing</h1><p>{props.operationalPeriod ?? "No operational period"} · {subtitle}</p></div>
           <button type="button" className="eoc-page-action" onClick={props.onExitBriefing} autoFocus>Exit briefing</button>
         </header>
+        {props.member ? <ShiftHandoff client={client} incidentId={incidentId} jurisdictionId={props.jurisdictionId}
+          onOpenRequest={(id) => props.onOpenRequests(id)} onOpenTasks={props.onOpenTasks} onOpenRecord={props.onOpenRecord}
+          onOpenLifeline={props.onOpenLifeline} onOpenEsf={props.onOpenEsf} /> : null}
         {body}
       </div>
     );

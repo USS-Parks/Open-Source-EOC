@@ -5411,3 +5411,46 @@ Operator Trust PSPR unit TP2 (research W3, V1; decision 6).
 - **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
 - **Evidence level:** unit, real-database and browser tests.
 - **Rollback:** revert the commit; no schema or data change.
+
+## Operator trust TP3: shift handoff
+
+Operator Trust PSPR unit TP3 (research W1; decision 5).
+
+- **What changed.**
+  - **A handoff at the top of the briefing.** The briefing view opens with
+    "Shift handoff" for members of the organization that owns the incident:
+    the reporting period and when the reader's last shift ended, then four
+    columns. "Changes since your last shift" lists the material changes,
+    newest first, each with its time, what changed ("REQ-1043 Tarps for roof
+    repairs: Received → Accepted", "Updated Eureka Municipal Auditorium on
+    North Coast Storm: Shelters (occupancy)"), who made it and as which
+    position; "Unresolved requests" and "Overdue work" list each item with
+    its owner and next action; "Decisions awaiting action" lists lifelines
+    and ESFs whose reports disagree with no decision recorded. Every line
+    opens its source record, request, task, lifeline or ESF, where the full
+    history stays; with more changes than shown, it says how many and that
+    the chronology holds them all.
+  - **When the last shift ended** (decision 5): the later of the reader's
+    last sign-out and last position sign-out; with neither, the start of the
+    current operational period; with no period, the incident's activation.
+    The line names which it used.
+  - **The route,** `GET /api/v1/incidents/:incidentId/handoff`
+    (`server/src/incidents/handoff.ts`), reads the owning organization's
+    record of events for material categories (records, requests, tasks, the
+    incident's area and membership, situation reports, release decisions)
+    and leaves out sync writes that changed no field. A reader outside the
+    owning organization gets the period and the time but no changes, as the
+    record of events is the owner's.
+- **Defaults and deviations.** The handoff shows the newest 100 changes;
+  the route takes a limit up to 200. Participants' briefing shows the
+  overview without the handoff, since the changes are the owner's.
+- **Gate.** Acceptance scenario 4, `scenario-shift-change-browser.test.ts`,
+  on the North Coast Storm exercise at 1586 by 992 and 1534 by 790: Taylor
+  Kim's last shift ends with a sign-out; Jordan Lee then accepts a request;
+  Kim signs in, opens the briefing, reads the period and "your last
+  sign-out", finds that change and nothing from before it, the unresolved
+  requests with owners, overdue work and decisions, and opens the change to
+  the request's full history.
+- **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
+- **Evidence level:** real-database and browser tests.
+- **Rollback:** revert the commit; no schema or data change.

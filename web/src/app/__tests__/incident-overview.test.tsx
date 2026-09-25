@@ -97,7 +97,7 @@ function Harness(props: { theme: ThemeName; api: ApiClient; handlers: Record<str
           onBriefing={props.handlers.briefing!} onExitBriefing={props.handlers.exit!} onOpenSitrep={props.handlers.sitrep!}
           onOpenRequests={props.handlers.requests!} onOpenShelters={props.handlers.shelters!} onOpenFieldReports={props.handlers.reports!}
           onOpenTasks={props.handlers.tasks!} onOpenLifeline={props.handlers.lifeline!} onOpenLifelines={props.handlers.lifelines!}
-          onOpenChronology={props.handlers.chronology!} />
+          onOpenChronology={props.handlers.chronology!} onOpenRecord={() => undefined} onOpenEsf={() => undefined} />
       </PageChromeContext.Provider>
     </Theme>
   );

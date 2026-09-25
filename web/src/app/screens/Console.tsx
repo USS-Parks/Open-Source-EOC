@@ -665,6 +665,8 @@ function Center(props: {
           onOpenLifeline={(id) => props.onNavigate({ kind: "lifeline", id })}
           onOpenLifelines={() => props.onNavigate({ kind: "lifelines" })}
           onOpenChronology={() => props.onNavigate({ kind: "chronology" })}
+          onOpenRecord={(boardId, recordId) => props.onOpenRecord(boardId, recordId, props.incidentId)}
+          onOpenEsf={() => props.onNavigate({ kind: "esf" })}
         />
       );
     case "dashboard": {

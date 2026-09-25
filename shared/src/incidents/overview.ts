@@ -40,3 +40,37 @@ export interface IncidentActivityEntry {
   /** A message's text and thread, when the entry is a message the reader may see. */
   readonly message: { readonly body: string; readonly thread: string } | null;
 }
+
+/**
+ * A shift handoff: when the reader's last shift ended, the operational period
+ * being reported, and the material changes on the incident since then, each
+ * naming its source record. Changes come from the owning organization's
+ * record of events, so a participating organization's reader gets none.
+ */
+export interface ShiftHandoff {
+  readonly since: string;
+  /** What set `since`: the reader's last sign-out, their last position sign-out, the period's start, or the incident's activation. */
+  readonly basis: "sign-out" | "position" | "period" | "activation";
+  readonly period: { readonly label: string; readonly startsAt: string; readonly endsAt: string } | null;
+  /** Newest first, at most `limit`; null when the reader's organization does not own the incident. */
+  readonly changes: readonly HandoffChange[] | null;
+  /** Every material change since, of which `changes` is the newest part. */
+  readonly total: number;
+}
+
+export interface HandoffChange {
+  readonly id: string;
+  readonly at: string;
+  readonly category: string;
+  readonly person: string;
+  readonly position: string | null;
+  readonly organization: string | null;
+  /** What changed, in words: "REQ-1043 Sandbags: Received → Accepted". */
+  readonly summary: string;
+  /** The source record to open. */
+  readonly subject:
+    | { readonly kind: "record"; readonly boardId: string; readonly id: string }
+    | { readonly kind: "request"; readonly id: string }
+    | { readonly kind: "task"; readonly id: string }
+    | { readonly kind: "incident" };
+}

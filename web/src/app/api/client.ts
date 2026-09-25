@@ -32,6 +32,7 @@ import type {
   TaskCompletionReceipt,
   IncidentOverviewSummary,
   IncidentActivityEntry,
+  ShiftHandoff,
   CreateLifelineAssessment,
   LifelineAssessmentReport,
   AssessmentDecisionInput,
@@ -1218,6 +1219,10 @@ export class ApiClient {
     const result = await this.request<{ entries: readonly IncidentActivityEntry[] }>(
       "GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/activity?limit=${limit}`);
     return result.entries;
+  }
+  /** What changed on the incident since the reader's last shift ended, newest first. */
+  shiftHandoff(incidentId: string): Promise<ShiftHandoff> {
+    return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/handoff`);
   }
   updateIncidentTask(incidentId: string, taskId: string, input: TaskMetadataPatch): Promise<IncidentTask> {
     return this.request("PATCH", `/api/v1/incidents/${encodeURIComponent(incidentId)}/tasks/${encodeURIComponent(taskId)}`, { ...input });

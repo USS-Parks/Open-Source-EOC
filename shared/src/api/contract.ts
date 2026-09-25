@@ -89,6 +89,7 @@ GET /api/v1/incidents/:incidentId/dashboard-configs/:key/data
 GET /api/v1/incidents/:incidentId/datasets
 GET /api/v1/incidents/:incidentId/esf-assessments
 GET /api/v1/incidents/:incidentId/esf-assessments/:framework/:esf/history
+GET /api/v1/incidents/:incidentId/handoff
 GET /api/v1/incidents/:incidentId/iaps
 GET /api/v1/incidents/:incidentId/ics-forms/:formId
 GET /api/v1/incidents/:incidentId/impact

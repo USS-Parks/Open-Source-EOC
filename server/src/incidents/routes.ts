@@ -37,6 +37,7 @@ import {
   updateIncidentTask,
 } from "./tasks.js";
 import { getIncidentSummary, listIncidentActivity } from "./summary.js";
+import { getShiftHandoff } from "./handoff.js";
 
 const ActivateBody = z.object({
   templateKey: z.string().min(1),
@@ -174,6 +175,12 @@ export function incidentRoutes(
     const entries = await withPerson(sql, req.principal.person.id, (tx) =>
       listIncidentActivity(tx, req.principal, incidentId, limit ?? 10));
     return { entries };
+  });
+
+  app.get("/api/v1/incidents/:incidentId/handoff", { preHandler: authenticate }, async (req) => {
+    const incidentId = IncidentId.parse((req.params as { incidentId: string }).incidentId);
+    const { limit } = z.object({ limit: z.coerce.number().int().min(1).max(200).optional() }).strict().parse(req.query);
+    return withPerson(sql, req.principal.person.id, (tx) => getShiftHandoff(tx, req.principal, incidentId, limit ?? 100));
   });
 
   app.post("/api/v1/incidents/:incidentId/tasks", { preHandler: authenticate }, async (req, reply) => {
