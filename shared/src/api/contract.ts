@@ -83,6 +83,7 @@ GET /api/v1/incidents/:incidentId/aar/observations
 GET /api/v1/incidents/:incidentId/activity
 GET /api/v1/incidents/:incidentId/briefings
 GET /api/v1/incidents/:incidentId/catalog
+GET /api/v1/incidents/:incidentId/closeout
 GET /api/v1/incidents/:incidentId/dashboard-configs
 GET /api/v1/incidents/:incidentId/dashboard-configs/:key
 GET /api/v1/incidents/:incidentId/dashboard-configs/:key/data
@@ -246,6 +247,7 @@ POST /api/v1/incidents/:incidentId/meetings
 POST /api/v1/incidents/:incidentId/operational-relationships
 POST /api/v1/incidents/:incidentId/participants
 POST /api/v1/incidents/:incidentId/participants/:participantId/revoke
+POST /api/v1/incidents/:incidentId/reopen
 POST /api/v1/incidents/:incidentId/tasks
 POST /api/v1/incidents/:incidentId/tasks/:taskId/complete
 POST /api/v1/incidents/:incidentId/unarchive

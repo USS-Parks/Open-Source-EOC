@@ -442,6 +442,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
           boards={boardItems}
           boardsInView={scopedBoards}
           onIncidentActivated={incident.selectWhenListed}
+          onIncidentsChanged={incident.reload}
           boardsLoading={boards.loading && !boards.data}
           collections={(collections.data ?? []).filter((collection) => !outOfScope.has(collection.id))
             .map((collection) => ({ ...collection, templateKey: boardItems.find((board) => board.id === collection.id)?.templateKey }))}
@@ -587,6 +588,7 @@ function Center(props: {
   boards: readonly BoardListItem[];
   boardsInView: readonly BoardListItem[];
   onIncidentActivated: (incidentId: string) => Promise<void>;
+  onIncidentsChanged: () => void;
   boardsLoading: boolean;
   collections: readonly CollectionRef[];
   feeds: readonly FeedHealth[];
@@ -833,6 +835,7 @@ function Center(props: {
           memberships={props.memberships}
           positionKey={props.positionKey}
           onActivated={props.onIncidentActivated}
+          onChanged={props.onIncidentsChanged}
         />
       );
     case "datasets":

@@ -25,6 +25,7 @@ function setup(options: { isAdmin?: boolean; positionKey?: string | null; detail
     activateIncident: vi.fn().mockResolvedValue({ incidentId: "incident-new" }),
     getIncident: vi.fn().mockResolvedValue(options.detail ?? detail),
     closeIncident: vi.fn().mockResolvedValue({ ok: true }),
+    incidentCloseout: vi.fn().mockResolvedValue({ openRequests: [], openTasks: [], activeGrants: [], datasets: 0 }),
     incidentOverview: vi.fn().mockResolvedValue({ incidents: [], nextCursor: null }),
     getIncidentArea: vi.fn().mockResolvedValue({ incidentId: "incident-a", revision: 0, geometry: null, operationalPeriod: null, reason: "", createdAt: null, createdBy: null, positionId: null, createdByName: null, positionTitle: null }),
     incidentAreaHistory: vi.fn().mockResolvedValue([]),
@@ -105,7 +106,7 @@ it("requires an explicit closeout confirmation", async () => {
   const client = setup();
   await screen.findByRole("button", { name: "Close incident" });
   fireEvent.click(screen.getByRole("button", { name: "Close incident" }));
-  expect(await screen.findByText(/Closeout prevents new incident updates/i)).toBeTruthy();
+  expect(await screen.findByText(/Closing stops new updates/i)).toBeTruthy();
   expect(client.closeIncident).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Confirm closeout" }));
   await waitFor(() => expect(client.closeIncident).toHaveBeenCalledWith("incident-a"));

@@ -18,6 +18,7 @@ import {
   activateIncident,
   changeIncidentLifecycle,
   closeIncident,
+  reopenIncident,
   completeChecklistItem,
   createLibrary,
   getIncident,
@@ -38,6 +39,7 @@ import {
 } from "./tasks.js";
 import { getIncidentSummary, listIncidentActivity } from "./summary.js";
 import { getShiftHandoff } from "./handoff.js";
+import { getIncidentCloseout } from "./closeout.js";
 
 const ActivateBody = z.object({
   templateKey: z.string().min(1),
@@ -248,6 +250,29 @@ export function incidentRoutes(
       return reply.send({ ok: true });
     },
   );
+
+  // What closing leaves running, for the administrator deciding to close.
+  app.get("/api/v1/incidents/:incidentId/closeout", { preHandler: authenticate }, async (req) => {
+    const incidentId = IncidentId.parse((req.params as { incidentId: string }).incidentId);
+    return withPerson(sql, req.principal.person.id, (tx) => getIncidentCloseout(tx, req.principal, incidentId));
+  });
+
+  app.post("/api/v1/incidents/:incidentId/reopen", { preHandler: authenticate }, async (req, reply) => {
+    const incidentId = IncidentId.parse((req.params as { incidentId: string }).incidentId);
+    const { reason } = z.object({ reason: z.string().trim().min(1).max(1000) }).strict().parse(req.body);
+    const jurisdictionId = await withPerson(sql, req.principal.person.id, async (tx) => {
+      await reopenIncident(tx, req.principal, incidentId, reason);
+      const [row] = await tx`select jurisdiction_id from incidents where id = ${incidentId}`;
+      return row!.jurisdiction_id as string;
+    });
+    // A collaboration space archived at close comes back with the incident.
+    try {
+      if (await isBackendEnabled(sql, jurisdictionId)) await provisionForIncident(sql, req.principal, incidentId);
+    } catch {
+      // The incident is open; provisioning can be retried from incident setup.
+    }
+    return reply.send({ ok: true });
+  });
 
   app.post(
     "/api/v1/jurisdictions/:jurisdictionId/libraries",

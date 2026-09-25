@@ -43,6 +43,8 @@ export function IncidentsSurface(props: {
   /** Called with a newly activated incident, so the workspace can switch to
    *  it; activation stays busy until the switch settles. */
   onActivated?: (incidentId: string) => Promise<void> | void;
+  /** The incident list changed shape (closed or reopened); the incident switcher reads it again. */
+  onChanged?: () => void;
 }) {
   const [reload, setReload] = useState(0);
   const [selectedIncident, setSelectedIncident] = useState<string | null>(null);
@@ -69,6 +71,8 @@ export function IncidentsSurface(props: {
   const [libraryKind, setLibraryKind] = useState<LibraryKind>("scenario");
   const [libraryTemplate, setLibraryTemplate] = useState("");
   const [libraryBody, setLibraryBody] = useState("");
+  const [reopenCandidate, setReopenCandidate] = useState<string | null>(null);
+  const [reopenReason, setReopenReason] = useState("");
 
   const run = async (fn: () => Promise<unknown>, done = "") => {
     setBusy(true);
@@ -191,7 +195,8 @@ export function IncidentsSurface(props: {
                   <div className="incidents-item-actions">
                     <Button onClick={() => { setSelectedIncident(i.id); setCloseCandidate(null); }}>Operational area</Button>
                     <Button onClick={() => { setSelectedIncident(i.id); setCloseCandidate(null); }}>Participants</Button>
-                    {i.canManageParticipation && !i.closedAt ? <Button kind="danger" onClick={() => setCloseCandidate(i.id)} disabled={busy}>Close incident</Button> : null}
+                    {i.canManageParticipation && !i.closedAt ? <Button kind="danger" onClick={() => { setCloseCandidate(i.id); setReopenCandidate(null); }} disabled={busy}>Close incident</Button> : null}
+                    {i.canManageParticipation && i.closedAt ? <Button onClick={() => { setReopenCandidate(i.id); setReopenReason(""); setCloseCandidate(null); }} disabled={busy}>Reopen incident</Button> : null}
                   </div>
                 </li>
               ))}
@@ -254,10 +259,21 @@ export function IncidentsSurface(props: {
 
         {list.filter((i) => i.id === closeCandidate).map((incident) => <Panel key={incident.id} title={"Close " + incident.name}>
           <div className="eoc-stack">
-            <p className="eoc-flush">Closeout prevents new incident updates. Recorded history remains available under existing authorization. End participant grants separately when their access should end.</p>
+            <CloseoutSummary client={props.client} incidentId={incident.id} />
             <div className="incidents-actions">
-              <Button kind="danger" onClick={() => run(async () => { await props.client.closeIncident(incident.id); setCloseCandidate(null); setSelectedIncident(null); })} disabled={busy}>Confirm closeout</Button>
+              <Button kind="danger" onClick={() => run(async () => { await props.client.closeIncident(incident.id); setCloseCandidate(null); setSelectedIncident(null); props.onChanged?.(); }, `${incident.name} is closed. Its records stay readable; an administrator can reopen it.`)} disabled={busy}>Confirm closeout</Button>
               <Button onClick={() => setCloseCandidate(null)} disabled={busy}>Keep incident open</Button>
+            </div>
+          </div>
+        </Panel>)}
+
+        {list.filter((i) => i.id === reopenCandidate).map((incident) => <Panel key={incident.id} title={"Reopen " + incident.name}>
+          <div className="eoc-stack">
+            <p className="eoc-flush">Reopening lets the incident take updates again: its requests, tasks and boards continue from where they stopped, and participant grants still in force apply again. The reason is kept in the incident's record of events.</p>
+            <TextField label="Reason for reopening" value={reopenReason} onChange={setReopenReason} />
+            <div className="incidents-actions">
+              <Button kind="primary" onClick={() => run(async () => { await props.client.reopenIncident(incident.id, reopenReason.trim()); setReopenCandidate(null); props.onChanged?.(); }, `${incident.name} is open again.`)} disabled={busy || !reopenReason.trim()}>Confirm reopen</Button>
+              <Button onClick={() => setReopenCandidate(null)} disabled={busy}>Keep incident closed</Button>
             </div>
           </div>
         </Panel>)}
@@ -383,4 +399,29 @@ function IntegrationActions(props: {
     {props.integrations?.has("meetings") ? <IncidentMeetings client={props.client} incidentId={incident.id}
       incidentName={incident.name} canWrite={canWrite} closed={closed} /> : null}
   </>;
+}
+
+const listed = (items: readonly string[]) => items.length ? `: ${items.join("; ")}` : "";
+
+/**
+ * What closing an incident leaves running: the open requests and tasks, which
+ * stay readable and stop taking steps; the participant grants still in force,
+ * which keep their read; and the datasets, which keep updating.
+ */
+function CloseoutSummary(props: { readonly client: ApiClient; readonly incidentId: string }) {
+  const closeout = useAsync(() => props.client.incidentCloseout(props.incidentId), [props.incidentId]);
+  if (closeout.error) return <ErrorNote message={closeout.error} />;
+  const data = closeout.data;
+  if (!data) return <Loading label="Reading what closing leaves running…" />;
+  return (
+    <section aria-label="What closing leaves running" className="incidents-closeout">
+      <p className="eoc-flush">Closing stops new updates. Everything recorded stays readable under the same access, and the incident stays in the incident lists marked closed until an administrator archives it. An administrator can reopen it, giving a reason.</p>
+      <ul>
+        <li>Open resource requests ({data.openRequests.length}) stay readable and stop taking steps{listed(data.openRequests.map((request) => `REQ-${request.number} ${request.item}`))}.</li>
+        <li>Tasks not completed ({data.openTasks.length}) stay readable and stop taking steps{listed(data.openTasks.map((task) => `TASK-${task.number} ${task.item}`))}.</li>
+        <li>Participant grants in force ({data.activeGrants.length}) keep their read until revoked or expired{listed(data.activeGrants.map((grant) => `${grant.person}, ${grant.organization}, until ${formatTime(grant.expiresAt)}`))}. End them under Participants if their access should end now.</li>
+        <li>Datasets registered for the incident ({data.datasets}) keep updating.</li>
+      </ul>
+    </section>
+  );
 }

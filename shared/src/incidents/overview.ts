@@ -47,6 +47,19 @@ export interface IncidentActivityEntry {
  * naming its source record. Changes come from the owning organization's
  * record of events, so a participating organization's reader gets none.
  */
+/** What closing an incident leaves running, so the administrator decides with it in view. */
+export interface IncidentCloseout {
+  readonly closedAt: string | null;
+  /** Resource requests not closed, declined or cancelled; they stay readable and stop taking steps. */
+  readonly openRequests: readonly { readonly id: string; readonly number: number; readonly item: string; readonly state: string }[];
+  /** Tasks not completed; they stay readable and stop taking steps. */
+  readonly openTasks: readonly { readonly id: string; readonly number: number; readonly item: string }[];
+  /** Participant grants still in force; a grant keeps its read after close until revoked or expired. */
+  readonly activeGrants: readonly { readonly id: string; readonly person: string; readonly organization: string; readonly expiresAt: string }[];
+  /** Datasets registered for the incident; closing it does not stop them updating. */
+  readonly datasets: number;
+}
+
 export interface ShiftHandoff {
   readonly since: string;
   /** What set `since`: the reader's last sign-out, their last position sign-out, the period's start, or the incident's activation. */

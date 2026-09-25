@@ -34,6 +34,7 @@ import type {
   IncidentOverviewSummary,
   IncidentActivityEntry,
   ShiftHandoff,
+  IncidentCloseout,
   CreateLifelineAssessment,
   LifelineAssessmentReport,
   AssessmentDecisionInput,
@@ -1185,6 +1186,13 @@ export class ApiClient {
   }
   closeIncident(incidentId: string): Promise<{ ok: true }> {
     return this.request<{ ok: true }>("POST", `/api/v1/incidents/${incidentId}/close`);
+  }
+  /** What closing the incident leaves running: open requests and tasks, grants in force, datasets. */
+  incidentCloseout(incidentId: string): Promise<IncidentCloseout> {
+    return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/closeout`);
+  }
+  reopenIncident(incidentId: string, reason: string): Promise<{ ok: true }> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/reopen`, { reason });
   }
   /** One page of the jurisdiction's master view, newest incident first. */
   incidentOverview(jurisdictionId: string, archived: IncidentArchiveFilter, page: PageOptions = {}): Promise<IncidentOverviewPage> {

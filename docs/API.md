@@ -142,6 +142,10 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 
 - `POST /api/v1/incidents/:incidentId/close`: Run incidents close (auth: bearer; audience: operator)
 
+### closeout
+
+- `GET /api/v1/incidents/:incidentId/closeout`: Read incidents closeout (auth: bearer; audience: operator)
+
 ### collab
 
 - `POST /api/v1/incidents/:incidentId/collab/announce`: Run incidents collab announce (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=collab)
@@ -431,6 +435,10 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 ### ready
 
 - `GET /api/v1/ready`: Read ready (auth: none; audience: system)
+
+### reopen
+
+- `POST /api/v1/incidents/:incidentId/reopen`: Run incidents reopen (auth: bearer; audience: operator)
 
 ### reports
 

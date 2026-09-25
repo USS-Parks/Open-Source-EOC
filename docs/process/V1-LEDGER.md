@@ -5617,3 +5617,45 @@ Operator Trust PSPR unit TP6 (research V3, E3, W4; decision 7).
 - **Evidence level:** real-database and browser tests.
 - **Rollback:** revert the commit; invitations already sent stay in the
   notification log.
+
+## Operator trust TP7: incident close and reopen
+
+Operator Trust PSPR unit TP7 (research E2).
+
+- **What changed.**
+  - **Closing shows what stays running.** Before an administrator confirms
+    a close, the panel reads it from the server
+    (`GET /api/v1/incidents/:incidentId/closeout`): the open resource
+    requests and unfinished tasks by number and name, which stay readable
+    and stop taking steps; the participant grants in force, by person,
+    organization and expiry, which keep their read until revoked or
+    expired, with a pointer to end them; and the datasets registered for
+    the incident, which keep updating. It also states that everything
+    recorded stays readable under the same access, that the incident stays
+    in the lists marked closed until archived, and that it can be reopened
+    with a reason.
+  - **Reopen.** `POST /api/v1/incidents/:incidentId/reopen` with a reason:
+    an administrator of the owning organization reopens a closed incident;
+    an archived one is unarchived first, so a reopened incident is never
+    hidden. Its requests, tasks and boards take steps again from where they
+    stopped, and the reason and the close time are kept in the record of
+    events (`incident.reopened`). A collaboration space archived at close is
+    provisioned again when a collaboration backend is enabled.
+  - **The incident list and switcher follow.** Closing or reopening from
+    the Incidents screen refreshes the incident switcher, so the closed
+    incident reads "(closed)" at once, and the other open incidents are one
+    choice away.
+- **Defaults and deviations.** Reopening needs no second approver; the
+  reason and the actor are in the record of events. Correcting a closed
+  incident's history means reopening it, as closed incidents refuse writes.
+- **Gate.** Acceptance scenario 7, `scenario-incident-close-browser.test.ts`,
+  on the North Coast Storm exercise at 1586 by 992 and 1534 by 790: Jordan
+  Lee closes the storm with the open requests, tasks, grants and datasets
+  in view; the switcher reads "(closed)"; the Resources screen says the
+  incident is closed and a request is still found by number; a second open
+  incident is chosen; Lee reopens the storm with a reason, which the record
+  of events keeps.
+- **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
+- **Evidence level:** real-database and browser tests.
+- **Rollback:** revert the commit; no schema change. Incidents reopened
+  under this code stay open.

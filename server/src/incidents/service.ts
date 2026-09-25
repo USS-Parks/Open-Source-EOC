@@ -564,6 +564,31 @@ export async function closeIncident(
   });
 }
 
+/**
+ * Reopen a closed incident, as an administrator of the owning jurisdiction,
+ * with the reason recorded. An archived incident is unarchived first, so a
+ * reopened incident is never hidden from the lists. Its records, requests,
+ * tasks and grants are as they were at close, and take steps again.
+ */
+export async function reopenIncident(sql: Sql, actor: Principal, incidentId: string, reason: string): Promise<void> {
+  await lockIncidentMutation(sql, incidentId);
+  const [incident] = await sql`
+    select jurisdiction_id, closed_at, archived_at from incidents where id = ${incidentId}`;
+  if (!incident) throw new AuthError(404, "incident not found");
+  requireAdmin(actor, incident.jurisdiction_id as string);
+  if (!incident.closed_at) throw new AuthError(409, "incident is open");
+  if (incident.archived_at) throw new AuthError(409, "unarchive the incident before reopening it");
+  await sql`update incidents set closed_at = null, closed_by = null where id = ${incidentId}`;
+  await recordAudit(sql, actor, {
+    jurisdictionId: incident.jurisdiction_id as string,
+    incidentId,
+    category: "incident.reopened",
+    subjectTable: "incidents",
+    subjectId: incidentId,
+    payload: { reason, closedAt: new Date(incident.closed_at as string).toISOString() },
+  });
+}
+
 /** Each lifecycle change: the state it sets, on or off, its conflict, and its audit category. */
 const LIFECYCLE_CHANGES = {
   archive: ["archived", true, "incident is already archived", "incident.archived"],

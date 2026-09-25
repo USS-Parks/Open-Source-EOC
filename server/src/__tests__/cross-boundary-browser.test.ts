@@ -294,7 +294,7 @@ describe("cross-boundary incident exercise in a real browser", () => {
 
     // The owner closes the incident; the second stays open.
     await incidentRow.getByRole("button", { name: "Close incident" }).click();
-    await owner.getByText(/Closeout prevents new incident updates/i).waitFor();
+    await owner.getByText(/Closing stops new updates/i).waitFor();
     await owner.getByRole("button", { name: "Confirm closeout" }).click();
     await incidentRow.getByText("closed", { exact: true }).waitFor();
     await owner.screenshot({ path: join(SHOTS, "cross-boundary-owner-closed-dark-1440.png"), fullPage: false });

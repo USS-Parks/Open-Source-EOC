@@ -190,7 +190,7 @@ describe("real-browser incident activation and participation", () => {
     expect(await darkParticipants.getByRole("button", { name: "Add participant" }).isVisible()).toBe(true);
     await page.screenshot({ path: join(SHOTS, "d20-narrow-dark.png"), fullPage: false });
     await activate(page.locator("li").filter({ hasText: "D20 California Exercise" }).getByRole("button", { name: "Close incident" }));
-    await page.getByText(/Closeout prevents new incident updates/i).waitFor();
+    await page.getByText(/Closing stops new updates/i).waitFor();
     await activate(page.getByRole("button", { name: "Confirm closeout" }));
     await page.getByText("closed", { exact: true }).waitFor();
     expect((await closePartnerRead()).statusCode).toBe(200);
