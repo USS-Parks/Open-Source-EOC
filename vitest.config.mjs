@@ -12,7 +12,9 @@ import { configDefaults, defineConfig } from "vitest/config";
  */
 export default defineConfig({
   test: {
-    exclude: [...configDefaults.exclude, "deploy/**/out/**", "deploy/windows/desktop.test.mjs", "deploy/windows/installer/installer.test.mjs"],
+    // The desktop tests run under `node --test` (`pnpm test:desktop`), not Vitest.
+    exclude: [...configDefaults.exclude, "deploy/**/out/**", "deploy/windows/desktop.test.mjs", "deploy/windows/installer/installer.test.mjs",
+      "deploy/macos/iso9660.test.mjs"],
     // Hosted runners have limited CPU. Serialize files so multiple Chromium
     // suites never drive the UI at the same time; the load benchmark is run
     // separately by `pnpm check` so its latency stays useful.

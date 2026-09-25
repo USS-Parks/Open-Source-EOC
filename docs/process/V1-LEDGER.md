@@ -8070,3 +8070,18 @@ Veoci Integration and Air Gap PSPR unit VA11 (VC-07).
 - **Evidence level:** real-database, component and browser tests.
 - **Rollback:** revert the commit; migration `0153` adds three tables that
   nothing else reads.
+
+## CI repairs: the macOS disk image test under Vitest
+
+- **What was wrong.** ca6489f ("Build the macOS disk image on Windows",
+  another session's landing) added `deploy/macos/iso9660.test.mjs`, a
+  `node:test` file run by `pnpm test:desktop`. Vitest, which `pnpm check`
+  runs, also collected it and failed the run with "No test suite found in
+  file", as it would on main's CI, the way the Windows desktop and installer
+  tests would if they were not excluded.
+- **What changed.** `vitest.config.mjs` excludes it beside the two Windows
+  `node:test` files. The test itself is unchanged.
+- **Verification.** On the Linux test bed: `node --test
+  deploy/macos/iso9660.test.mjs`, 1 of 1 passing; Vitest no longer collects
+  it.
+- **Rollback:** revert the commit.
