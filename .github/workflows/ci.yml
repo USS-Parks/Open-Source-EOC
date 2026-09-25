@@ -82,10 +82,15 @@ jobs:
             Expand-Archive -LiteralPath $path -DestinationPath $root
           }
           Copy-Item -Path (Join-Path $root 'postgis-bundle-pg16-3.6.2x64\*') -Destination (Join-Path $root 'pgsql') -Recurse -Force
+          # A native command that fails stops the step.
+          $PSNativeCommandUseErrorActionPreference = $true
+          $ErrorActionPreference = 'Stop'
           $bin = Join-Path $root 'pgsql\bin'
-          Set-Content -LiteralPath (Join-Path $root 'password.txt') -Value 'postgres' -NoNewline
-          & "$bin\initdb.exe" -D (Join-Path $root 'data') -U postgres --pwfile=(Join-Path $root 'password.txt') -A scram-sha-256 -E UTF8
-          & "$bin\pg_ctl.exe" -D (Join-Path $root 'data') -l (Join-Path $root 'postgres.log') -o '-h 127.0.0.1 -p 55439' -w start
+          $data = Join-Path $root 'data'
+          $pwfile = Join-Path $root 'password.txt'
+          Set-Content -LiteralPath $pwfile -Value 'postgres' -NoNewline
+          & "$bin\initdb.exe" -D $data -U postgres "--pwfile=$pwfile" -A scram-sha-256 -E UTF8
+          & "$bin\pg_ctl.exe" -D $data -l (Join-Path $root 'postgres.log') -o '-h 127.0.0.1 -p 55439' -w start
           $env:PGPASSWORD = 'postgres'
           & "$bin\createdb.exe" -h 127.0.0.1 -p 55439 -U postgres openeoc_test
           'OPENEOC_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55439/openeoc_test' | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
