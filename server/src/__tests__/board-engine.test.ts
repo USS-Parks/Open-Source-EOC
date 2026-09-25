@@ -6,6 +6,7 @@ import { BoardTemplateSchema, type BoardTemplate } from "@openeoc/shared";
 import { addMembership, createPerson, principalForPerson } from "../auth/service.js";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
+import { coerceCell, tableCsv } from "../boards/transfer.js";
 import { readFirstWorksheet } from "../forms/xlsx-import.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
 import { BoardSyncHub, RestrictedBoardError } from "../sync/hub.js";
@@ -519,6 +520,15 @@ describe("import and export", () => {
     const all = (await request("GET", `/api/v1/boards/${board}/views/all/export`, adminToken)).body;
     expect(all.split("\r\n")[0]).toBe("id,name,rank,status,secret");
     expect(all).toContain(",'-5 degrees,-2,");
+  });
+
+  it("exports a signature in words and refuses one in an import", () => {
+    const signed = { fileId: "11111111-1111-4111-8111-111111111111", signer: "Morgan Chief", signedAt: "2026-09-25T19:00:00Z" };
+    expect(tableCsv({ headers: ["id", "approval"], rows: [["r1", signed]] }))
+      .toBe("id,approval\r\nr1,Signed by Morgan Chief at 2026-09-25T19:00:00Z\r\n");
+    expect(() => coerceCell(
+      { key: "x_approval", label: "Section chief approval", type: "signature", required: false, read: "any", write: "member" },
+      "Signed by Someone")).toThrow("Section chief approval is a signature, which is signed on screen, not imported");
   });
 
   it("exports .xlsx that reads back cell for cell", async () => {

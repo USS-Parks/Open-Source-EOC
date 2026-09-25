@@ -70,6 +70,14 @@
 .eoc-form-unavailable { min-height: 66px; padding: 9px; display: grid; align-content: center; gap: 4px; color: var(--eoc-text-muted); background: var(--eoc-surface-raised); border: 1px dashed var(--eoc-border-strong); border-radius: var(--eoc-radius-sm); }
 .eoc-form-unavailable strong { color: var(--eoc-text); font-size: 13px; }
 .eoc-form-unavailable span { font-size: 12px; line-height: 1.35; }
+/* A signature: the width of the form, and the pad white in both themes, as paper is, so the ink shows. */
+.eoc-form-field[data-field-type="signature"] { grid-column: 1 / -1; }
+.eoc-signature { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.eoc-signature legend { padding: 0; font-weight: 600; }
+.eoc-signature-pad { display: block; width: 100%; height: 160px; background: #fff; border: 1px solid var(--eoc-border-strong); border-radius: var(--eoc-radius-sm); touch-action: none; cursor: crosshair; }
+.eoc-signature-actions, .eoc-signature-signed { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
+.eoc-signature-view { display: inline-grid; gap: 4px; }
+.eoc-signature-view img { max-width: min(320px, 100%); height: auto; background: #fff; border: 1px solid var(--eoc-border); border-radius: var(--eoc-radius-sm); }
 .eoc-form-actions { position: sticky; bottom: 0; z-index: 2; padding: 10px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--eoc-surface); border-top: 1px solid var(--eoc-border); }
 .eoc-form-dirty-state { color: var(--eoc-text-muted); font-size: 12px; }
 

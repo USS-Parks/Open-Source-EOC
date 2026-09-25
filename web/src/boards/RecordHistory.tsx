@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { choiceLabel, type FieldDef } from "@openeoc/shared";
+import { choiceLabel, signatureText, type FieldDef } from "@openeoc/shared";
 import type { BoardRecordChange, PageOptions } from "../app/api/client.js";
 import { ActionButton } from "../design/controls.js";
 import "./board-tools.css";
@@ -64,5 +64,5 @@ function historyValue(value: unknown, type: FieldDef["type"] | undefined): strin
   if (value === null || value === undefined || value === "") return "empty";
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (type === "enum" && typeof value === "string") return choiceLabel(value);
-  return typeof value === "object" ? JSON.stringify(value) : String(value);
+  return signatureText(value) ?? (typeof value === "object" ? JSON.stringify(value) : String(value));
 }

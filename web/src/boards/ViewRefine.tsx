@@ -3,6 +3,7 @@ import {
   choiceLabel,
   conditionFitsField,
   dictionaryValues,
+  signatureText,
   ViewConditionSchema,
   type FieldDef,
   type ViewCondition,
@@ -317,6 +318,6 @@ export function GroupCounts(props: {
 function groupLabel(value: unknown, type: FieldDef["type"] | undefined): string {
   if (value === null || value === undefined || value === "") return "No value";
   if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (typeof value === "object") return JSON.stringify(value);
+  if (typeof value === "object") return signatureText(value) ?? JSON.stringify(value);
   return type === "enum" ? choiceLabel(String(value)) : String(value);
 }

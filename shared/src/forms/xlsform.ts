@@ -69,6 +69,8 @@ export interface FormField {
   readonly choices?: readonly Choice[];
   /** XLSForm choice_filter: a choice is offered only where this is true for its row. */
   readonly choiceFilter?: string;
+  /** An image question with the XLSForm appearance "signature": drawn on a pad, not photographed. */
+  readonly signature?: boolean;
 }
 
 export interface FormContainer {
@@ -223,6 +225,7 @@ export function importXlsForm(
       ...(cell(row, "calculation") ? { calculation: cell(row, "calculation") } : {}),
       ...(select ? { list: listName!, choices: lists.get(listName!)! } : {}),
       ...(choiceFilter ? { choiceFilter } : {}),
+      ...(type === "image" && /(^|\s)signature(\s|$)/.test(cell(row, "appearance")) ? { signature: true } : {}),
     };
     top().push(field);
   }
@@ -287,6 +290,7 @@ export const FormFieldSchema: z.ZodType<FormField> = z.lazy(() =>
       properties: z.record(z.string(), z.string()).optional(),
     })).optional(),
     choiceFilter: z.string().optional(),
+    signature: z.boolean().optional(),
   }),
 ) as z.ZodType<FormField>;
 

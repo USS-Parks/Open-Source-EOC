@@ -17,6 +17,7 @@ import {
   type ReactNode,
 } from "react";
 import { ActionButton } from "./controls.js";
+import { SignatureInput } from "./signature.js";
 import { draftScopeKey, type DraftScope, type ScopedDraftStore } from "./form-drafts.js";
 import { workStateText } from "./work-state.js";
 import "./forms.css";
@@ -95,6 +96,7 @@ function validationMessage(field: FieldDef | undefined, issue: { readonly code: 
     if (field.type === "number") return "Enter a valid number";
     if (field.type === "enum" || field.type === "person_ref" || field.type === "record_ref" || field.type === "boolean") return `Choose ${field.label}`;
     if (field.type === "attachment") return `Attach ${field.label}`;
+    if (field.type === "signature") return `Sign ${field.label}`;
     if (field.type === "geometry") return `Set ${field.label}`;
     return `Enter ${field.label}`;
   }
@@ -456,6 +458,14 @@ function FieldControl(props: FieldControlProps) {
       return props.onUpload
         ? <AttachmentField {...props} onUpload={props.onUpload} />
         : <UnavailableField label={props.field.label} reason="Attachment upload is unavailable in this context." />;
+    case "signature": {
+      const upload = props.onUpload;
+      return upload
+        ? <SignatureInput id={props.inputId} label={props.field.label} value={props.value} disabled={props.disabled}
+            describedBy={props.describedBy} onUpload={(file) => upload(props.field, file)} onChange={props.onChange}
+            onPendingChange={(pending) => props.onUploadPendingChange(props.field.key, pending, props.generation)} />
+        : <UnavailableField label={props.field.label} reason="Signing is unavailable in this context." />;
+    };
     case "text":
       return <label htmlFor={props.inputId}>{props.field.label}<textarea {...common} maxLength={props.field.maxLength} value={String(props.value ?? "")} onChange={(event) => props.onChange(event.target.value || undefined)} /></label>;
   }

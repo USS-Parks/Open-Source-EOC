@@ -10,8 +10,10 @@ import {
   type FormDefinition,
   type FormField,
   type FormNode,
+  type SignatureValue,
 } from "@openeoc/shared";
 import { ActionButton } from "../design/controls.js";
+import { SignatureInput } from "../design/signature.js";
 import { MAX_ATTACHMENT_BYTES, type FieldAttachment } from "./field-submissions.js";
 import { GeometryCapture } from "./GeometryCapture.js";
 
@@ -110,6 +112,32 @@ function MediaControl(props: ControlProps) {
   );
 }
 
+/**
+ * An image question with the signature appearance: drawn on a pad, kept on
+ * the device with the report, and uploaded when the report synchronizes, as
+ * a photo is.
+ */
+function SignatureCapture(props: ControlProps) {
+  const label = props.field.label ?? props.field.name;
+  const [signed, setSigned] = useState<SignatureValue | null>(null);
+  const kept = props.media.has(String(props.value ?? ""));
+  return (
+    <div className="eoc-field-media">
+      <SignatureInput id={props.id} label={`${label}${props.field.required ? " *" : ""}`} disabled={false}
+        value={kept && signed ? signed : undefined} describedBy={props.error ? `${props.id}-error` : undefined}
+        onUpload={async (drawn) => {
+          const token = crypto.randomUUID();
+          props.onMedia(token, drawn);
+          return token;
+        }}
+        onChange={(value) => { setSigned(value ?? null); props.onChange(value?.fileId); }}
+        onPendingChange={() => undefined} />
+      {kept ? <small>The signature uploads after the report synchronizes.</small> : null}
+      {props.error ? <small id={`${props.id}-error`} role="alert">{props.error}</small> : null}
+    </div>
+  );
+}
+
 function BarcodeControl(props: ControlProps) {
   const [problem, setProblem] = useState<string | null>(null);
   const label = props.field.label ?? props.field.name;
@@ -147,6 +175,7 @@ function FieldControl(props: ControlProps) {
   if (field.type === "calculate") return (
     <div className="eoc-field-calculation"><span>{label}</span><output>{String(props.value ?? "Pending inputs")}</output></div>
   );
+  if (field.type === "image" && field.signature) return <SignatureCapture {...props} />;
   if (field.type === "image" || field.type === "audio") return <MediaControl {...props} />;
   if (field.type === "barcode") return <BarcodeControl {...props} />;
   if (field.type === "geotrace" || field.type === "geoshape") return (

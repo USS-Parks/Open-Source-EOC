@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { choiceLabel, type BoardWorkflow, type FieldDef, type ViewRecord } from "@openeoc/shared";
+import { choiceLabel, signatureText, type BoardWorkflow, type FieldDef, type ViewRecord } from "@openeoc/shared";
 import type { BoardViewQuery } from "../app/api/client.js";
 import { ActionButton } from "../design/controls.js";
 import { enumValues } from "./ViewRefine.js";
@@ -211,7 +211,7 @@ function cellText(value: unknown, type: FieldDef["type"] | undefined): string {
   if (type === "datetime" && typeof value === "string" && Number.isFinite(Date.parse(value))) return new Date(value).toLocaleString();
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (type === "enum") return choiceLabel(String(value));
-  return typeof value === "object" ? JSON.stringify(value) : String(value);
+  return signatureText(value) ?? (typeof value === "object" ? JSON.stringify(value) : String(value));
 }
 
 /** A record's title from the view's first column, and up to two further columns as detail. */

@@ -19,7 +19,26 @@ export const FIELD_TYPES = [
   "record_ref",
   "geometry",
   "attachment",
+  "signature",
 ] as const;
+
+/**
+ * A signature: the drawn image, stored as a file like an attachment, and who
+ * signed and when, as the signer gave them. The record's history keeps who
+ * saved it.
+ */
+export const SignatureValueSchema = z.object({
+  fileId: z.uuid(),
+  signer: z.string().trim().min(1).max(200),
+  signedAt: z.iso.datetime({ offset: true }),
+}).strict();
+export type SignatureValue = z.infer<typeof SignatureValueSchema>;
+
+/** A signature in words, for a cell, an export or a history line; null for any other value. */
+export function signatureText(value: unknown): string | null {
+  const parsed = SignatureValueSchema.safeParse(value);
+  return parsed.success ? `Signed by ${parsed.data.signer} at ${parsed.data.signedAt}` : null;
+}
 
 /** GeoJSON geometry kinds a geometry field may constrain itself to. */
 export const GEOMETRY_KINDS = ["any", "point", "linestring", "polygon"] as const;
@@ -381,6 +400,8 @@ function fieldValueSchema(f: FieldDef): z.ZodType {
     case "attachment":
       // Stores the id of an uploaded file (photo or document) in the store.
       return z.uuid();
+    case "signature":
+      return SignatureValueSchema;
   }
 }
 

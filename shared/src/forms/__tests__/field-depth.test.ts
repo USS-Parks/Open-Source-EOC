@@ -78,6 +78,21 @@ describe("XLSForm import of the field depth types", () => {
     expect(FormDefinitionSchema.parse(def)).toEqual(def);
   });
 
+  it("reads an image question with the signature appearance as a signature, kept through storage", () => {
+    const signed = importXlsForm({
+      survey: [
+        { type: "image", name: "receiver", label: "Received by", appearance: "signature" },
+        { type: "image", name: "scene", label: "Scene photo", appearance: "annotate" },
+      ],
+      choices: [],
+    }, { key: "delivery_receipt" });
+    const [receiver, scene] = allFields(signed.nodes);
+    expect(receiver).toMatchObject({ name: "receiver", type: "image", signature: true });
+    expect(scene!.signature).toBeUndefined();
+    const stored = FormDefinitionSchema.parse(JSON.parse(JSON.stringify(signed)));
+    expect(allFields(stored.nodes)[0]).toMatchObject({ signature: true });
+  });
+
   it("refuses unsupported constructs with the survey row that carries them", () => {
     const one = (row: Record<string, string>, choices = survey.choices) =>
       () => importXlsForm({ survey: [row], choices }, { key: "x" });

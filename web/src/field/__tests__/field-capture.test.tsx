@@ -56,6 +56,19 @@ afterEach(() => {
 });
 
 describe("the smart form runner", () => {
+  it("shows a signature question as a pad to sign, not a file to choose", () => {
+    const receipt = importXlsForm({
+      survey: [{ type: "image", name: "receiver", label: "Received by", appearance: "signature" }],
+      choices: [],
+    }, { key: "delivery_receipt" });
+    render(<form aria-label="Receipt"><FieldCaptureFields definition={receipt} answers={{}} media={new Map()}
+      onMedia={() => undefined} onChange={() => undefined} /></form>);
+    const signature = screen.getByRole("group", { name: "Received by" });
+    expect(within(signature).getByLabelText("Signed by")).toBeTruthy();
+    expect(within(signature).getByRole("button", { name: "Sign" })).toBeTruthy();
+    expect(signature.querySelector('input[type="file"]')).toBeNull();
+  });
+
   it("draws a line and a closed polygon from map taps, with undo and typed coordinates", async () => {
     render(<Harness />);
     const line = screen.getByRole("group", { name: "Road segment" });

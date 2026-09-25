@@ -7700,3 +7700,65 @@ with GitHub Actions stopped by its spending limit.
 - **Evidence level:** unit test and a read back of the built image; no Mac
   run.
 - **Rollback:** revert the commit; remove the image from `deploy/`.
+
+## Veoci and air gap VA9 part one: the signature field
+
+Veoci Integration and Air Gap PSPR unit VA9 (VC-04), the signature; the QR
+codes of VC-05 follow as part two.
+
+- **What the code did before.** A board field could hold text, numbers, a
+  file and the rest, but not a signature, and a smart form's image question
+  took only a photo or a file.
+- **What changed.**
+  - **A `signature` field type** (`shared/src/boards/fields.ts`). Its value
+    is the drawn image's stored file, the signer's name and the time
+    (`SignatureValueSchema`, strict). `signatureText` puts it in words, "Signed
+    by" the signer "at" the time, for tables, calendars, kanban cards, group
+    headings, the record history and CSV and Excel exports, which showed
+    other objects as JSON. An import refuses a signature column with the
+    reason.
+  - **The pad** (`web/src/design/signature.tsx`), with `signature_pad` 5.1.4
+    (MIT): draw with a mouse, pen or finger, or, without a pointer, type the
+    signer's name and set it in script on the pad with **Use my typed name**;
+    type who is signing; **Sign** stores the PNG through the same upload an
+    attachment uses and keeps the file, the signer and the time. **Sign
+    again** replaces it before saving. The pad is white in both themes and
+    spans the form. The record shows the image, read with the viewer's own
+    access, with who signed and when.
+  - **The form question.** An XLSForm `image` question with the appearance
+    `signature` is drawn on the same pad, kept with the report and uploaded
+    when the report synchronizes, as a photo is; the form definition keeps
+    the appearance.
+  - **Where a 213RR is signed.** Any board may carry a signature field, and a
+    jurisdiction adds one to its 213RR board as a local field, such as a
+    section chief's approval, without a new template version.
+  - `docs/guides/DESIGNER.md` and `docs/guides/FIELD-USER.md` describe them.
+- **Dependencies.** `signature_pad` 5.1.4 and, for part two, `qrcode` 1.5.4
+  in the web app, both MIT; `jsqr` 1.4.0 (Apache-2.0) for the server's
+  browser tests only. The license scan (335 packages) and the advisory gate
+  pass.
+- **Files outside the "Owns" cell.** `web/src/design/forms.tsx`,
+  `forms.css` and `signature.tsx`, `web/src/field/FieldCapture.tsx`,
+  `web/src/app/surfaces/BoardSurface.tsx`, `server/src/boards/transfer.ts`.
+- **Air-gap behavior (decision 9).** The pad, the typed signature's script
+  and the storage run on the host; the script face falls back to the
+  browser's own cursive font.
+- **Tests.** `boards.test.ts` (shared) accepts a signature and refuses a
+  blank signer, a malformed file, an extra key and an inline image, and
+  reads it in words; `field-depth.test.ts` reads the signature appearance and
+  keeps it through storage; `board-engine.test.ts` exports a signature in
+  words and refuses one in an import; `field-capture.test.tsx` shows a
+  signature question as a pad, not a file picker.
+  `signature-browser.test.ts` at 1586 by 992 and 1534 by 790: a jurisdiction
+  adds "Section chief approval" to its 213RR board; signing with nothing
+  drawn is refused; the approver draws on the pad and signs; the image is
+  stored as the jurisdiction's PNG file; the record shows the signature with
+  who signed and when.
+- **Verification.** On the Linux test bed: `pnpm check:static` exit 0 and
+  `pnpm audit:advisories` ok. Every test file except the browser, end-to-end
+  and load files (Vitest, two workers): 1,637 passed in 241 files; the field
+  capture tests, 6. The signature browser test, 1 of 1.
+- **Evidence level:** component, real-database and browser tests.
+- **Rollback:** revert the commit; no migration. A record already holding a
+  signature keeps the value, which the reverted schema would refuse on its
+  next save.

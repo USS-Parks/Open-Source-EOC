@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { choiceLabel, type BoardTemplate, type FieldDef, type FormLayout, type ViewRecord } from "@openeoc/shared";
+import { choiceLabel, signatureText, type BoardTemplate, type FieldDef, type FormLayout, type ViewRecord } from "@openeoc/shared";
+import { SignatureView } from "../../design/signature.js";
 import { BoardImport, type ImportRun } from "../../boards/BoardImport.js";
 import {
   BoardModeBody,
@@ -68,6 +69,8 @@ export type BoardRecordContext =
       readonly canEdit: boolean;
       readonly onEdit: () => void;
       readonly onDownloadAttachment: (fieldKey: string) => Promise<void>;
+      /** A stored file, such as a signature's image, read with the viewer's access. */
+      readonly onLoadFile?: (fileId: string) => Promise<Blob>;
       readonly workflow?: RecordWorkflowSource;
       /** Archive and restore for writers the record's edit rule admits; delete for jurisdiction admins. */
       readonly lifecycle?: {
@@ -174,6 +177,7 @@ export function BoardSurface(props: {
     const file = await props.client.downloadFile(value);
     saveBlob(file, resources.data?.attachments[fieldKey]?.name ?? "attachment");
   }, [detail.data, props.client, resources.data?.attachments]);
+  const loadFile = useCallback((fileId: string) => props.client.downloadFile(fileId), [props.client]);
   const { reload: reloadView } = view;
   const { reload: reloadDetail } = detail;
   // The route object changes on every render; the record callbacks read it
@@ -224,6 +228,7 @@ export function BoardSurface(props: {
       canEdit: detail.data.canEdit && board.data.canContribute,
       onEdit: editRecord,
       onDownloadAttachment: downloadAttachment,
+      onLoadFile: loadFile,
       workflow: {
         client: props.client,
         boardId: props.boardId,
@@ -245,7 +250,7 @@ export function BoardSurface(props: {
       history: loadHistory,
     });
     return () => props.onRecordContext?.(null);
-  }, [archiveRecord, board.data, deleteRecord, detail.data, detail.loading, downloadAttachment, editRecord, loadHistory, props.boardId, props.client, props.onRecordContext, props.recordId, resources.data, resources.loading, session.jurisdictionId, session.me]);
+  }, [archiveRecord, board.data, deleteRecord, detail.data, detail.loading, downloadAttachment, editRecord, loadFile, loadHistory, props.boardId, props.client, props.onRecordContext, props.recordId, resources.data, resources.loading, session.jurisdictionId, session.me]);
 
   if (board.loading && !board.data) return <Loading label="Loading board…" />;
   if (board.error && !board.data) return <ErrorNote message={board.error} />;
@@ -676,7 +681,9 @@ export function BoardRecordDetailPane(props: {
                       void context.onDownloadAttachment(key).catch((reason: unknown) =>
                         setDownloadError(reason instanceof Error ? reason.message : "Attachment could not be downloaded."));
                     }}>{attachment.name}</button>
-                  ) : related ? related.label : formatDetailValue(value, field.type)}</dd>
+                  ) : related ? related.label : field.type === "signature" && value
+                    ? <SignatureView value={value} load={context.onLoadFile} />
+                    : formatDetailValue(value, field.type)}</dd>
                 </div>
               );
             })}
@@ -755,7 +762,7 @@ function formatDetailValue(value: unknown, type: FieldDef["type"]): string {
   if (type === "attachment") return "Attachment unavailable";
   if (type === "record_ref") return `Related record ${String(value)}`;
   if (type === "enum") return choiceLabel(String(value));
-  if (typeof value === "object") return JSON.stringify(value);
+  if (typeof value === "object") return signatureText(value) ?? JSON.stringify(value);
   return String(value);
 }
 

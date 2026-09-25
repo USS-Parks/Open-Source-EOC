@@ -4,6 +4,7 @@ import {
   buildRecordSchema,
   deriveRecordValues,
   effectiveFields,
+  signatureText,
   STANDARD_TEMPLATES,
   type FieldDef,
 } from "../../index.js";
@@ -46,6 +47,21 @@ describe("standard board library (F1: boards as data)", () => {
     expect(good.success).toBe(true);
     const bad = schema.safeParse({ summary: "x", category: "damage", photo: "not-a-uuid" });
     expect(bad.success).toBe(false);
+  });
+
+  it("keeps a signature as its stored image, its signer and its time, and reads it in words", () => {
+    const fields: FieldDef[] = [
+      { key: "x_approval", label: "Section chief approval", type: "signature", required: false, read: "any", write: "member" },
+    ];
+    const schema = buildRecordSchema(fields);
+    const signed = { fileId: "11111111-1111-4111-8111-111111111111", signer: "Morgan Chief", signedAt: "2026-09-25T19:00:00Z" };
+    expect(schema.safeParse({ x_approval: signed }).success).toBe(true);
+    expect(schema.safeParse({ x_approval: { ...signed, signer: " " } }).success).toBe(false);
+    expect(schema.safeParse({ x_approval: { ...signed, fileId: "not-a-file" } }).success).toBe(false);
+    expect(schema.safeParse({ x_approval: { ...signed, extra: true } }).success).toBe(false);
+    expect(schema.safeParse({ x_approval: "data:image/png;base64,AAAA" }).success).toBe(false);
+    expect(signatureText(signed)).toBe("Signed by Morgan Chief at 2026-09-25T19:00:00Z");
+    expect(signatureText({ type: "Point", coordinates: [0, 0] })).toBeNull();
   });
 
   it("every template builds a working record validator", () => {

@@ -84,6 +84,11 @@ submission uses the connected map-capture path and is disabled while offline.
 - **Photo** and **audio** questions take a picture or a recording from the
   device camera, microphone or files. Photos may be PNG, JPEG or GIF; audio may
   be MP3, M4A, AAC, Ogg, WebM or WAV.
+- **Signature** questions (an XLSForm `image` question with the appearance
+  `signature`) take a signature drawn on a pad with a finger, pen or mouse, or
+  your name typed and set in script with **Use my typed name**. **Sign**
+  keeps it with the report, and it uploads when the report synchronizes, as a
+  photo does.
 - **Cascading selects** offer only the choices that fit an earlier answer, such
   as the towns of the chosen county. When the earlier answer changes, a choice it
   no longer allows is flagged and must be chosen again.

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { applyView, choiceLabel, type FieldDef, type ViewRecord } from "@openeoc/shared";
+import { applyView, choiceLabel, signatureText, type FieldDef, type ViewRecord } from "@openeoc/shared";
 import type { BoardTemplate } from "@openeoc/shared";
 import {
   OperationalTable,
@@ -123,6 +123,6 @@ function ResolvedBoardView(props: Parameters<typeof BoardView>[0] & {
 function formatCell(value: unknown, type?: FieldDef["type"]): string {
   if (value === undefined || value === null || value === "") return "Unavailable";
   if (typeof value === "boolean") return value ? "yes" : "no";
-  if (typeof value === "object") return JSON.stringify(value);
+  if (typeof value === "object") return signatureText(value) ?? JSON.stringify(value);
   return type === "enum" ? choiceLabel(String(value)) : String(value);
 }

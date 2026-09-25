@@ -1,6 +1,6 @@
 import { strToU8, zipSync } from "fflate";
 import { z } from "zod";
-import type { FieldDef } from "@openeoc/shared";
+import { signatureText, type FieldDef } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
 import { csvCell } from "../audit/export.js";
@@ -92,7 +92,7 @@ export function tableXlsx(table: BoardTable): Uint8Array {
 
 function cellText(value: unknown): string {
   if (value === undefined || value === null) return "";
-  return typeof value === "object" ? JSON.stringify(value) : String(value);
+  return signatureText(value) ?? (typeof value === "object" ? JSON.stringify(value) : String(value));
 }
 
 function xlsxCell(value: unknown, ref: string): string {
@@ -317,6 +317,8 @@ export function coerceCell(field: FieldDef, raw: string): unknown {
       }
     case "text":
       return raw;
+    case "signature":
+      throw new Error(`${field.label} is a signature, which is signed on screen, not imported`);
     default:
       return text;
   }

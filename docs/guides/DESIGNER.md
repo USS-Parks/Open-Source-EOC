@@ -47,6 +47,21 @@ target field keys, in display order, separated by commas, for example
 field the reader cannot read is left out of the label; a reader who can read
 none of them cannot pick or save the reference.
 
+## Signature fields
+
+A `signature` field takes a signature drawn on a pad with a mouse, pen or
+finger, or, for anyone signing without a pointer, the signer's name typed and
+set in script on the same pad with **Use my typed name**. The signer also
+types who is signing. **Sign** stores the drawn image as a file of the
+jurisdiction, as an attachment is, and the field keeps that file with the
+signer's name and the time; the record's history keeps who saved it.
+**Sign again** replaces a signature before the record is saved. The record
+shows the signature's image with who signed and when; a table, a calendar, an
+export and the history show "Signed by" the signer and the time. An import
+refuses a signature column, since a signature is signed on screen. A local
+field may be a signature, which is how a jurisdiction adds, for example, a
+section chief's approval to its ICS 213RR board.
+
 ## Restrict individual records
 
 The **Record access** tab limits who may read and who may edit each record,
