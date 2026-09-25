@@ -94,8 +94,8 @@ function makeClient() {
     }),
     getIpawsStatus: vi.fn(async () => ({
       enabled: false, environment: "test" as const, configured: false, cogId: null, endpointUrl: null,
-      credentialFingerprint: null, moaAcknowledged: false, moaReference: null, moaAcknowledgedAt: null,
-      secretStorageAvailable: true,
+      credentialFingerprint: null, certificateExpiresAt: null, moaAcknowledged: false, moaReference: null,
+      moaAcknowledgedAt: null, secretStorageAvailable: true,
     })),
     configureIpaws: vi.fn(),
     acknowledgeIpawsMoa: vi.fn(),

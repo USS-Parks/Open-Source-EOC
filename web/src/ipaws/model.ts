@@ -12,8 +12,10 @@ export interface IpawsStatus {
   readonly configured: boolean;
   readonly cogId: string | null;
   readonly endpointUrl: string | null;
-  /** A short fingerprint of the stored credential; the credential itself is never returned. */
+  /** A short fingerprint of the stored certificate bundle; the bundle itself is never returned. */
   readonly credentialFingerprint: string | null;
+  /** When the stored COG certificate expires; null until one is configured. */
+  readonly certificateExpiresAt: string | null;
   readonly moaAcknowledged: boolean;
   readonly moaReference: string | null;
   readonly moaAcknowledgedAt: string | null;
@@ -24,7 +26,7 @@ export interface IpawsConfigInput {
   readonly environment: IpawsEnvironment;
   readonly cogId: string;
   readonly endpointUrl: string;
-  /** Omit to keep the stored credential. */
+  /** The COG's FEMA certificate and private key as one PEM bundle; omit to keep the stored one. */
   readonly credential?: string;
 }
 
@@ -44,10 +46,19 @@ export interface IpawsSendRequest {
   readonly submissionId: string | null;
 }
 
+/** One status item IPAWS-OPEN returned for a dissemination channel. */
+export interface IpawsChannelStatus {
+  readonly channel: string;
+  readonly code: string | null;
+  readonly error: boolean;
+  readonly status: string;
+}
+
 export interface IpawsSendResult {
   readonly accepted: boolean;
   readonly detail: string;
   readonly httpStatus: number;
+  readonly channels: readonly IpawsChannelStatus[];
   readonly submissionId: string;
   readonly request: IpawsSendRequest;
 }
@@ -62,8 +73,8 @@ export interface IpawsTrailEntry {
   readonly payload: Readonly<Record<string, unknown>>;
 }
 
-// Hosts FEMA serves IPAWS-OPEN from. Any other endpoint is a stand-in.
-const FEMA_HOST_SUFFIXES = [".fema.gov", ".integratedpublicalertsystem.gov"];
+// FEMA serves IPAWS-OPEN from fema.gov hosts (IDG v4.02 section 4.3). Any other endpoint is a stand-in.
+const FEMA_HOST_SUFFIXES = [".fema.gov"];
 
 /** True only for an https endpoint on a FEMA IPAWS-OPEN host. */
 export function isFemaEndpoint(url: string | null): boolean {
@@ -148,12 +159,15 @@ export function timeLeft(expiresAt: string, now: number): string | null {
 
 export type SendOutcomeKey = "pending" | "accepted" | "rejected" | "submitted" | "expired" | "cancelled";
 
-/** The state an operator reads for a send request, including the IPAWS-OPEN answer once confirmed. */
+/**
+ * The state an operator reads for a send request: a short label, and once
+ * IPAWS-OPEN has answered, its answer by channel or its reason.
+ */
 export function sendOutcome(
   send: IpawsSendRequest,
   trail: readonly IpawsTrailEntry[],
   now: number,
-): { readonly key: SendOutcomeKey; readonly label: string } {
+): { readonly key: SendOutcomeKey; readonly label: string; readonly answer?: string } {
   if (send.status === "cancelled") return { key: "cancelled", label: "Cancelled" };
   if (send.status === "expired" || (send.status === "pending" && timeLeft(send.expiresAt, now) === null)) {
     return { key: "expired", label: "Expired without confirmation" };
@@ -162,9 +176,37 @@ export function sendOutcome(
   const submitted = trail.find((entry) => entry.category === "ipaws.submitted" && entry.payload.requestId === send.id);
   if (!submitted) return { key: "submitted", label: "Submitted" };
   const detail = typeof submitted.payload.detail === "string" ? submitted.payload.detail : "";
-  return submitted.payload.accepted === true
-    ? { key: "accepted", label: "Accepted by IPAWS-OPEN" }
-    : { key: "rejected", label: detail ? `Rejected by IPAWS-OPEN: ${detail}` : "Rejected by IPAWS-OPEN" };
+  const channels = Array.isArray(submitted.payload.channels) ? (submitted.payload.channels as IpawsChannelStatus[]) : [];
+  const summary = channelSummary(channels);
+  const accepted = submitted.payload.accepted === true;
+  const answer = accepted || channels.some((c) => c.error) ? summary : detail;
+  return {
+    key: accepted ? "accepted" : "rejected",
+    label: accepted ? "Accepted by IPAWS-OPEN" : "Rejected by IPAWS-OPEN",
+    ...(answer ? { answer } : {}),
+  };
+}
+
+/** The channels that reach the public, as opposed to CAP exchange and profile checks (IDG Table 1). */
+const DISSEMINATION = new Set(["NWEM", "EAS", "CMAS", "PUBLIC"]);
+
+/**
+ * Which public channels IPAWS-OPEN acknowledged and which it refused, with
+ * the code and status of each refusal. A refusal on one channel can come
+ * with an alert already out on another, so both are named.
+ */
+export function channelSummary(channels: readonly IpawsChannelStatus[]): string {
+  const refused = channels.filter((c) => c.error);
+  const failed = new Set(refused.map((c) => c.channel));
+  const reached = [...new Set(
+    channels.filter((c) => DISSEMINATION.has(c.channel) && !failed.has(c.channel) && c.status === "Ack").map((c) => c.channel),
+  )];
+  const parts: string[] = [];
+  if (reached.length > 0) parts.push(`Acknowledged on ${reached.join(", ")}.`);
+  if (refused.length > 0) {
+    parts.push(`Refused on ${refused.map((c) => `${c.channel} (${[c.code, c.status].filter(Boolean).join(" ")})`).join(", ")}.`);
+  }
+  return parts.join(" ");
 }
 
 /** A person's display name from the IPAWS audit trail; "You" for the viewer. */

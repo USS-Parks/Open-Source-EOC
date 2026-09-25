@@ -41,7 +41,8 @@
 .ipaws-form p { margin: 0; overflow-wrap: anywhere; }
 .ipaws-form label { display: grid; gap: 5px; color: var(--eoc-text-muted); font-size: 12px; font-weight: 650; }
 .ipaws-form input,
-.ipaws-form select {
+.ipaws-form select,
+.ipaws-form textarea {
   width: 100%;
   min-height: 44px;
   padding: 7px 9px;
@@ -51,6 +52,7 @@
   border: 1px solid var(--eoc-border-strong);
   border-radius: var(--eoc-radius-sm);
 }
+.ipaws-form textarea { min-height: 96px; resize: vertical; font-family: var(--eoc-font-mono, ui-monospace, monospace); font-size: 12px; }
 
 .ipaws-send-list { margin: 12px 0 0; padding: 0; display: grid; gap: 10px; list-style: none; }
 .ipaws-send-list > li { min-width: 0; padding: 12px; display: grid; gap: 10px; border: 1px solid var(--eoc-border); border-left: 4px solid var(--eoc-border-strong); border-radius: var(--eoc-radius-sm); }

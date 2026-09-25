@@ -4,6 +4,7 @@ import { useAsync, usePolled } from "../app/data/hooks.js";
 import { Loading } from "../app/screens/parts.js";
 import {
   actorName,
+  channelSummary,
   ipawsMode,
   sendAvailability,
   sendOutcome,
@@ -99,7 +100,7 @@ export function IpawsConfigPanel(props: {
       endpointUrl: endpointUrl.trim(),
       ...(credential ? { credential } : {}),
     };
-    // The credential never stays in the page once the server holds it.
+    // The certificate and key never stay in the page once the server holds them.
     if (await run("config", () => props.client.configureIpaws(props.jurisdictionId, input))) setCredential("");
   }
 
@@ -120,20 +121,26 @@ export function IpawsConfigPanel(props: {
         </select></label>
         <label>COG id<input value={cogId} required onChange={(event) => setCogId(event.target.value)} /></label>
         <label>IPAWS-OPEN endpoint<input type="url" value={endpointUrl} required onChange={(event) => setEndpointUrl(event.target.value)} /></label>
-        <label>COG credential<input
-          type="password"
-          autoComplete="new-password"
+        <label>COG certificate and private key (PEM)<textarea
           value={credential}
           required={!status.credentialFingerprint}
-          placeholder={status.credentialFingerprint ? "Leave blank to keep the stored credential" : ""}
+          autoComplete="off"
+          spellCheck={false}
+          placeholder={status.credentialFingerprint
+            ? "Leave blank to keep the stored certificate"
+            : "-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----\n-----BEGIN PRIVATE KEY-----\n…\n-----END PRIVATE KEY-----"}
           onChange={(event) => setCredential(event.target.value)}
         /></label>
         <p className="notification-muted">
-          {status.credentialFingerprint
-            ? `Stored credential fingerprint ${status.credentialFingerprint}. The credential itself is never shown.`
-            : "No credential stored."}
+          The certificate FEMA issued for this COG and its unencrypted RSA key. Its CN must contain the COG id.
+          It is checked, encrypted at rest and never shown again.
         </p>
-        {status.secretStorageAvailable ? null : <p role="alert" className="notification-error">This server has no secret key (OPENEOC_SECRET_KEY), so it cannot store a credential.</p>}
+        <p className="notification-muted">
+          {status.credentialFingerprint
+            ? `Stored certificate fingerprint ${status.credentialFingerprint}${status.certificateExpiresAt ? `, expires ${formatTime(status.certificateExpiresAt)}` : ", not a valid certificate: enter it again"}.`
+            : "No certificate stored."}
+        </p>
+        {status.secretStorageAvailable ? null : <p role="alert" className="notification-error">This server has no secret key (OPENEOC_SECRET_KEY), so it cannot store a certificate.</p>}
         <div className="notification-actions">
           <ActionButton kind="primary" type="submit" loading={busy === "config"} loadingLabel="Saving configuration…">Save configuration</ActionButton>
         </div>
@@ -166,7 +173,7 @@ export function IpawsConfigPanel(props: {
             {status.enabled ? "Disable IPAWS" : "Enable IPAWS"}
           </ActionButton>
         </div>
-        {status.enabled || canEnable ? null : <p className="notification-muted">Enabling needs a saved configuration with a credential and an acknowledged MOA.</p>}
+        {status.enabled || canEnable ? null : <p className="notification-muted">Enabling needs a saved configuration with a COG certificate and an acknowledged MOA.</p>}
       </div>
       {error ? <p role="alert" className="notification-error">{error}</p> : null}
     </section>
@@ -277,7 +284,7 @@ export function IpawsSendsPanel(props: {
       {sends.error ? <p role="status" className="notification-stale">Update failed. Showing the last received send requests.</p> : null}
       {result ? (
         <p role="status" className="ipaws-result" data-accepted={result.accepted}>
-          IPAWS-OPEN {result.accepted ? "accepted" : "rejected"} the alert. Response: {result.detail}
+          IPAWS-OPEN {result.accepted ? "accepted" : "rejected"} the alert. {channelSummary(result.channels) || `Response: ${result.detail}`}
         </p>
       ) : null}
       {error ? <p role="alert" className="notification-error">{error}</p> : null}
@@ -298,6 +305,7 @@ export function IpawsSendsPanel(props: {
                   {outcome.key === "pending"
                     ? <div><dt>Time left to confirm</dt><dd className="ipaws-countdown">{timeLeft(send.expiresAt, now)}</dd></div>
                     : <div><dt>Decided by</dt><dd>{send.decidedBy ? `${actorName(send.decidedBy, props.personId, entries)} · ${formatTime(send.decidedAt)}` : "No one"}</dd></div>}
+                  {outcome.answer ? <div><dt>IPAWS-OPEN answer</dt><dd>{outcome.answer}</dd></div> : null}
                 </dl>
                 {outcome.key === "pending" ? (
                   <div className="notification-actions">

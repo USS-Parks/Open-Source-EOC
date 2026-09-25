@@ -6,6 +6,7 @@ import { Theme } from "../../design/components.js";
 import { IpawsConfigPanel, IpawsSendAction, IpawsSendsPanel, type IpawsClient } from "../IpawsPanel.js";
 import {
   actorName,
+  channelSummary,
   ipawsMode,
   sendAvailability,
   sendOutcome,
@@ -25,8 +26,9 @@ const status = (overrides: Partial<IpawsStatus> = {}): IpawsStatus => ({
   environment: "test",
   configured: true,
   cogId: "123456",
-  endpointUrl: "https://tdl.integratedpublicalertsystem.gov/IPAWS_CAPService/IPAWS",
+  endpointUrl: "https://tdl.integration.aws.fema.gov/IPAWS_CAPService/IPAWS",
   credentialFingerprint: "fingerprint",
+  certificateExpiresAt: "2029-09-25T00:00:00.000Z",
   moaAcknowledged: true,
   moaReference: "MOA-1",
   moaAcknowledgedAt: REQUESTED,
@@ -60,7 +62,13 @@ const entry = (overrides: Partial<IpawsTrailEntry>): IpawsTrailEntry => ({
 
 describe("IPAWS mode", () => {
   it("names a stand-in endpoint as a fixture whatever environment it claims", () => {
-    for (const url of ["http://127.0.0.1:4100/IPAWS", "https://ipaws.example.org/IPAWS", "https://evil.fema.gov.example.org/"]) {
+    for (const url of [
+      "http://127.0.0.1:4100/IPAWS",
+      "https://ipaws.example.org/IPAWS",
+      "https://evil.fema.gov.example.org/",
+      // Not a host the IDG names.
+      "https://tdl.integratedpublicalertsystem.gov/IPAWS_CAPService/IPAWS",
+    ]) {
       expect(ipawsMode(status({ endpointUrl: url, environment: "production", enabled: true })).key).toBe("fixture");
     }
   });
@@ -111,7 +119,42 @@ describe("countdown and outcome", () => {
     const accepted = entry({ category: "ipaws.submitted", personId: "person-b", payload: { requestId: "send-1", accepted: true } });
     expect(sendOutcome(confirmed, [accepted], start).label).toBe("Accepted by IPAWS-OPEN");
     const rejected = entry({ category: "ipaws.submitted", payload: { requestId: "send-1", accepted: false, detail: "not authorized" } });
-    expect(sendOutcome(confirmed, [rejected], start).label).toBe("Rejected by IPAWS-OPEN: not authorized");
+    expect(sendOutcome(confirmed, [rejected], start)).toEqual({
+      key: "rejected", label: "Rejected by IPAWS-OPEN", answer: "not authorized",
+    });
+  });
+
+  it("names the channels IPAWS-OPEN acknowledged and the ones it refused", () => {
+    const channels = [
+      { channel: "CAPEXCH", code: "200", error: false, status: "Ack" },
+      { channel: "EAS", code: "500", error: false, status: "Ack" },
+      { channel: "CMAS", code: "615", error: true, status: "signer-not-authorized-for-event-code-CMAS" },
+      { channel: "NWEM", code: "401", error: false, status: "message-not-disseminated-as-NWEM" },
+      { channel: "PUBLIC", code: "800", error: false, status: "Ack" },
+    ];
+    expect(channelSummary(channels)).toBe(
+      "Acknowledged on EAS, PUBLIC. Refused on CMAS (615 signer-not-authorized-for-event-code-CMAS).",
+    );
+    expect(channelSummary(channels.filter((c) => !c.error))).toBe("Acknowledged on EAS, PUBLIC.");
+    expect(channelSummary([])).toBe("");
+
+    const confirmed = send({ status: "confirmed", decidedBy: "person-b" });
+    const partial = entry({
+      category: "ipaws.submitted",
+      payload: { requestId: "send-1", accepted: false, detail: "rejected on CMAS", channels },
+    });
+    expect(sendOutcome(confirmed, [partial], Date.parse(REQUESTED))).toEqual({
+      key: "rejected",
+      label: "Rejected by IPAWS-OPEN",
+      answer: "Acknowledged on EAS, PUBLIC. Refused on CMAS (615 signer-not-authorized-for-event-code-CMAS).",
+    });
+    const accepted = entry({
+      category: "ipaws.submitted",
+      payload: { requestId: "send-1", accepted: true, channels: channels.filter((c) => !c.error) },
+    });
+    expect(sendOutcome(confirmed, [accepted], Date.parse(REQUESTED))).toEqual({
+      key: "accepted", label: "Accepted by IPAWS-OPEN", answer: "Acknowledged on EAS, PUBLIC.",
+    });
   });
 
   it("names the viewer as You and others from the trail", () => {
@@ -177,7 +220,8 @@ function mockClient(overrides: Partial<IpawsClient> = {}): IpawsClient {
     requestIpawsSend: vi.fn(async () => send()),
     listIpawsSends: vi.fn(async () => [fresh()]),
     confirmIpawsSend: vi.fn(async () => ({
-      accepted: true, detail: "accepted (ACK-1)", httpStatus: 200, submissionId: "sub-1",
+      accepted: true, detail: "accepted: EAS 500 Ack", httpStatus: 200, submissionId: "sub-1",
+      channels: [{ channel: "EAS", code: "500", error: false, status: "Ack" }],
       request: send({ status: "confirmed", decidedBy: "person-b" }),
     })),
     cancelIpawsSend: vi.fn(async () => send({ status: "cancelled" })),
@@ -207,7 +251,7 @@ describe("IPAWS screens", () => {
     expect(confirm.disabled).toBe(false);
     fireEvent.click(confirm);
     await waitFor(() => expect(client.confirmIpawsSend).toHaveBeenCalledWith("j", "send-1"));
-    expect(await view.findByText("IPAWS-OPEN accepted the alert. Response: accepted (ACK-1)")).not.toBeNull();
+    expect(await view.findByText("IPAWS-OPEN accepted the alert. Acknowledged on EAS.")).not.toBeNull();
     expect(onChanged).toHaveBeenCalled();
   });
 
@@ -219,14 +263,23 @@ describe("IPAWS screens", () => {
     expect(await view.findByText(/Nothing is sent until a\s+different admin confirms it/)).not.toBeNull();
   });
 
-  it("clears the credential after saving and shows only its fingerprint", async () => {
+  it("clears the certificate after saving and shows only its fingerprint and expiry", async () => {
     const client = mockClient();
-    const view = render(<IpawsConfigPanel client={client} jurisdictionId="j" status={status({ configured: false, credentialFingerprint: null })} onChanged={() => undefined} />);
-    const credential = view.getByLabelText("COG credential") as HTMLInputElement;
-    fireEvent.change(credential, { target: { value: "pin-secret" } });
+    const bundle = "-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n-----BEGIN PRIVATE KEY-----\nBBBB\n-----END PRIVATE KEY-----\n";
+    const view = render(<IpawsConfigPanel client={client} jurisdictionId="j" status={status({ configured: false, credentialFingerprint: null, certificateExpiresAt: null })} onChanged={() => undefined} />);
+    expect(view.getByText("No certificate stored.")).not.toBeNull();
+    const credential = view.getByLabelText("COG certificate and private key (PEM)") as HTMLTextAreaElement;
+    expect(credential.tagName).toBe("TEXTAREA");
+    // Nothing typed here goes to a spelling service.
+    expect(credential.getAttribute("spellcheck")).toBe("false");
+    fireEvent.change(credential, { target: { value: bundle } });
     fireEvent.submit(view.getByRole("button", { name: "Save configuration" }).closest("form")!);
-    await waitFor(() => expect(client.configureIpaws).toHaveBeenCalledWith("j", expect.objectContaining({ credential: "pin-secret" })));
+    await waitFor(() => expect(client.configureIpaws).toHaveBeenCalledWith("j", expect.objectContaining({ credential: bundle })));
     await waitFor(() => expect(credential.value).toBe(""));
-    expect(credential.type).toBe("password");
+
+    view.rerender(<IpawsConfigPanel client={client} jurisdictionId="j" status={status()} onChanged={() => undefined} />);
+    expect(view.getByText(/^Stored certificate fingerprint fingerprint, expires .+\.$/)).not.toBeNull();
+    view.rerender(<IpawsConfigPanel client={client} jurisdictionId="j" status={status({ certificateExpiresAt: null })} onChanged={() => undefined} />);
+    expect(view.getByText("Stored certificate fingerprint fingerprint, not a valid certificate: enter it again.")).not.toBeNull();
   });
 });

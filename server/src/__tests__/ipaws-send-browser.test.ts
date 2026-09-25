@@ -133,10 +133,10 @@ describe("IPAWS enablement and the two-person send", () => {
     await config.getByLabel("Environment").selectOption("test");
     await config.getByLabel("COG id").fill("123456");
     await config.getByLabel("IPAWS-OPEN endpoint").fill(endpointUrl);
-    await config.getByLabel("COG credential").fill(CREDENTIAL);
+    await config.getByLabel("COG certificate and private key (PEM)").fill(CREDENTIAL);
     await config.getByRole("button", { name: "Save configuration" }).click();
-    await config.getByText(/Stored credential fingerprint [0-9a-f]{12}\./).waitFor({ state: "visible", timeout: 20000 });
-    expect(await config.getByLabel("COG credential").inputValue()).toBe("");
+    await config.getByText(/Stored certificate fingerprint [0-9a-f]{12}, expires .*2049/).waitFor({ state: "visible", timeout: 20000 });
+    expect(await config.getByLabel("COG certificate and private key (PEM)").inputValue()).toBe("");
     expect(await requester.content()).not.toContain("PRIVATE KEY");
     await mode.getByText("Fixture endpoint, not FEMA").waitFor({ state: "visible", timeout: 20000 });
 
@@ -171,7 +171,7 @@ describe("IPAWS enablement and the two-person send", () => {
     expect(await pending.locator(".ipaws-countdown").textContent()).toMatch(/^1?\d:\d\d$/);
     expect(hits).toBe(0);
     await pending.getByRole("button", { name: "Confirm send" }).click();
-    await confirmer.getByText(/^IPAWS-OPEN accepted the alert/).waitFor({ state: "visible", timeout: 20000 });
+    await confirmer.getByText("IPAWS-OPEN accepted the alert. Acknowledged on EAS, CMAS, PUBLIC.").waitFor({ state: "visible", timeout: 20000 });
     await pending.getByText("Accepted by IPAWS-OPEN").waitFor({ state: "visible", timeout: 20000 });
     expect(hits).toBe(1);
     await confirmer.screenshot({ path: join(SHOTS, "ipaws-confirmed-wide-light.png"), fullPage: false });
