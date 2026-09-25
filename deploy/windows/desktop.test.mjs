@@ -26,7 +26,7 @@ import {
   staticCaching,
 } from "./lib/static-host.mjs";
 import { rotateIfLarger, rotatingLog } from "./lib/rotating-log.mjs";
-import { backupBeforeMigrate, scheduledBackup } from "./lib/pre-upgrade-backup.mjs";
+import { backupBeforeMigrate, scheduledBackup, writeUpgradeReport } from "./lib/pre-upgrade-backup.mjs";
 import { caddyfile, commandLine, hostDefinitions, hostNames, parseWinswService } from "./lib/host.mjs";
 
 function fixture() {
@@ -279,6 +279,26 @@ test("a newer build backs up an existing profile database before migrating it, a
     assert.throws(() => backupBeforeMigrate({ ...pending, dump: (file) => writeFileSync(file, "") }), /missing or empty; the database was not migrated/);
   } finally {
     rmSync(backupsDir, { recursive: true, force: true });
+  }
+});
+
+test("an upgrade report beside the dump names each migration applied with what it changes, and the way back", () => {
+  const root = mkdtempSync(resolve(tmpdir(), "openeoc-upgrade-report-"));
+  try {
+    const migrationsDir = resolve(root, "migrations");
+    mkdirSync(migrationsDir);
+    writeFileSync(resolve(migrationsDir, "0138_request_acceptance.sql"), "-- Receipt is not acceptance.\n-- Triaged requests become accepted.\nalter table x add column y int;\n");
+    writeFileSync(resolve(migrationsDir, "0139_quiet.sql"), "create table z (id int);\n");
+    const backup = resolve(root, "pre-upgrade-20260925T010203Z.sql");
+    const path = writeUpgradeReport({ backup, applied: ["0138_request_acceptance.sql", "0139_quiet.sql"], migrationsDir, profile: "production", now: new Date("2026-09-25T01:02:03Z") });
+    assert.equal(path, resolve(root, "pre-upgrade-20260925T010203Z.txt"));
+    const report = readFileSync(path, "utf8");
+    assert.match(report, /^Open Source EOC upgrade of the production profile, 2026-09-25T01:02:03.000Z/);
+    assert.match(report, /0138_request_acceptance.sql\n {2}Receipt is not acceptance.\n {2}Triaged requests become accepted.\n/);
+    assert.match(report, /0139_quiet.sql\n {2}No description at the head of the migration.\n/);
+    assert.match(report, /"Go back" section of docs\/guides\/UPGRADE.md/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

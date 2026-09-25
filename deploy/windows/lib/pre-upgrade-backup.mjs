@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 
 const utcStamp = (date) => date.toISOString().replace(/\.\d+Z$/, "Z").replaceAll(/[-:]/g, "");
@@ -19,6 +19,45 @@ export function backupBeforeMigrate({ applied, files, backupsDir, dump, now = ne
   dump(path);
   if (!existsSync(path) || statSync(path).size === 0)
     throw new Error(`The pre-upgrade backup ${path} is missing or empty; the database was not migrated`);
+  return path;
+}
+
+/**
+ * Beside a pre-upgrade dump, a report an administrator can review before
+ * relying on the upgrade: the migrations applied, each with the comment at
+ * its head that says what it changes, what an upgrade keeps, and the way
+ * back. Written as the dump's name with .txt; returns its path.
+ */
+export function writeUpgradeReport({ backup, applied, migrationsDir, profile, now = new Date() }) {
+  const lines = [
+    `Open Source EOC upgrade of the ${profile} profile, ${now.toISOString()}`,
+    "",
+    "Before migrating, the database was dumped to:",
+    `  ${backup}`,
+    "",
+    `Migrations applied (${applied.length}), each with what it changes:`,
+    "",
+  ];
+  for (const file of applied) {
+    const head = [];
+    for (const line of readFileSync(resolve(migrationsDir, file), "utf8").split(/\r?\n/)) {
+      if (!line.startsWith("--")) break;
+      head.push(`  ${line.replace(/^--\s?/, "")}`);
+    }
+    lines.push(file, ...(head.length ? head : ["  No description at the head of the migration."]), "");
+  }
+  lines.push(
+    "What an upgrade keeps: boards with their local fields, templates and views; dashboards; notification rules;",
+    "positions and who holds them; memberships, guest and participant grants; saved layouts. Templates shipped",
+    "with a new version are added beside the ones in use and never written over.",
+    "",
+    "The way back: stop the profile, install the previous version, and restore the dump above as the",
+    "\"Go back\" section of docs/guides/UPGRADE.md shows, or put back the copy of the profile directory",
+    "taken before the upgrade.",
+    "",
+  );
+  const path = backup.replace(/\.sql$/, ".txt");
+  writeFileSync(path, lines.join("\n"));
   return path;
 }
 

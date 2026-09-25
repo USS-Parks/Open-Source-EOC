@@ -102,7 +102,10 @@ the baseline, so only evaluation databases built from source before
    to `backups\pre-upgrade-<UTC time>.sql` in the profile directory, prints
    `PRE_UPGRADE_BACKUP path=` with its path, and only then migrates. If the
    dump fails or is empty, the launcher stops with the error and the database
-   is not migrated.
+   is not migrated. After migrating it writes a report beside the dump,
+   `backups\pre-upgrade-<UTC time>.txt`, and prints `UPGRADE_REPORT path=`:
+   each migration applied with what it changes, what an upgrade keeps, and
+   the way back.
 5. Sign in and check the incident you are working. Keep the profile copy
    until the new version has run through an operational period.
 

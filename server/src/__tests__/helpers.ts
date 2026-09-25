@@ -44,9 +44,12 @@ const TEMPLATE = (() => {
  * One throwaway database per test file, so files can run concurrently
  * without racing each other's schemas. A run tag isolates concurrent teardown.
  * It copies the migrated template, or with `fromScratch` runs every
- * migration on an empty database, for suites that prove the migrations.
+ * migration on an empty database, for suites that prove the migrations;
+ * `migrateThrough` stops after the named migration, as a database an earlier
+ * release left would be.
  */
-export async function freshDb(options: { fromScratch?: boolean } = {}): Promise<TestDb> {
+export async function freshDb(options: { fromScratch?: boolean; migrateThrough?: string } = {}): Promise<TestDb> {
+  const scratch = options.fromScratch === true || options.migrateThrough !== undefined;
   const suffix = Math.random().toString(36).slice(2, 12).padEnd(10, "0");
   const dbName = DB_TAG === undefined ? `t_${suffix}` : `t_${DB_TAG}_${suffix}`;
   const bootstrap = connect();
@@ -61,13 +64,13 @@ export async function freshDb(options: { fromScratch?: boolean } = {}): Promise<
     await bootstrap`select pg_advisory_lock(421)`;
     try {
       const [ready] = await bootstrap`select 1 from pg_database where datname = ${TEMPLATE}`;
-      if (options.fromScratch) {
+      if (scratch) {
         await bootstrap.unsafe(`create database ${dbName}`);
-        const scratch = database(dbName);
+        const fresh = database(dbName);
         try {
-          await migrate(scratch, MIGRATIONS);
+          await migrate(fresh, MIGRATIONS, options.migrateThrough === undefined ? {} : { through: options.migrateThrough });
         } finally {
-          await scratch.end();
+          await fresh.end();
         }
       } else if (!ready) {
         // Built under a working name and renamed when complete, so an
@@ -92,7 +95,7 @@ export async function freshDb(options: { fromScratch?: boolean } = {}): Promise<
       // Migrations create the app_runtime role (0002); the password can only
       // be set after they have run. A fresh CI cluster proves the order.
       await bootstrap.unsafe(`alter role app_runtime login password '${RUNTIME_TEST_PASSWORD}'`);
-      if (!options.fromScratch) await bootstrap.unsafe(`create database ${dbName} template "${TEMPLATE}" strategy wal_log`);
+      if (!scratch) await bootstrap.unsafe(`create database ${dbName} template "${TEMPLATE}" strategy wal_log`);
     } finally {
       await bootstrap`select pg_advisory_unlock(421)`;
     }

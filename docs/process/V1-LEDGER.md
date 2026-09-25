@@ -5659,3 +5659,42 @@ Operator Trust PSPR unit TP7 (research E2).
 - **Evidence level:** real-database and browser tests.
 - **Rollback:** revert the commit; no schema change. Incidents reopened
   under this code stay open.
+
+## Operator trust TP8: upgrades keep configuration
+
+Operator Trust PSPR unit TP8 (research E4, E5).
+
+- **What changed.**
+  - **An upgrade across real migrations, tested.**
+    `upgrade-configuration.test.ts` builds a database only through
+    `0131_exercise_incidents.sql`, as an earlier release left it
+    (`freshDb({ migrateThrough })`, with `migrate` taking a `through` file),
+    and configures an organization on it: a board with a local field, a
+    saved map layout, a dashboard, a notification rule, a position and its
+    holder, admin, member and viewer grants, a partner's incident grant and
+    a request its owner triaged. It then applies every migration since and
+    checks that each is still there, that the triaged request is now
+    accepted and owned by whoever triaged it with its history kept, and
+    that every role can still do what it could: the member writes and signs
+    in to the position, the viewer reads and may not write, the
+    administrator adds a local field, the partner reads and submits
+    requests. The member then opens the console at both viewports and finds
+    the request under its new stage with its owner, and the dashboard.
+  - **A reviewable upgrade.** After migrating, the launcher writes a report
+    beside the pre-upgrade dump, `backups/pre-upgrade-<UTC>.txt`, and prints
+    `UPGRADE_REPORT path=`: each migration applied with the comment at its
+    head that says what it changes, what an upgrade keeps, and the way back
+    (the "Go back" steps of `docs/guides/UPGRADE.md`, or the profile copy).
+    The Upgrade guide says so.
+  - The recovery path itself is RD3's: the pre-upgrade dump, the documented
+    go-back steps, and the restore drill test.
+- **Defaults and deviations.** Acceptance scenario 8 runs as a
+  real-database test of the upgrade with a browser leg after it, since the
+  upgrade itself has no screen.
+- **Gate.** Acceptance scenario 8, `upgrade-configuration.test.ts` (six
+  checks, two in a browser at 1586 by 992 and 1534 by 790), and the upgrade
+  report's check in `desktop.test.mjs`.
+- **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
+- **Evidence level:** real-database, browser and unit tests.
+- **Rollback:** revert the commit; reports already written stay beside
+  their dumps.

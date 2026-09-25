@@ -50,7 +50,8 @@ export function assertCompatibleMigrationHistory(
  * schema_migrations. No down migrations: recovery is restore-from-backup,
  * which matches the deployment doctrine (ADR-0007).
  */
-export async function migrate(sql: Sql, dir: string): Promise<readonly string[]> {
+/** Apply the pending migrations in order; with `through`, stop after that file, as an earlier release would. */
+export async function migrate(sql: Sql, dir: string, options: { readonly through?: string } = {}): Promise<readonly string[]> {
   await sql`
     create table if not exists public.schema_migrations (
       name text primary key,
@@ -60,7 +61,7 @@ export async function migrate(sql: Sql, dir: string): Promise<readonly string[]>
     (await sql`select name from public.schema_migrations`).map((r) => r.name as string),
   );
   const files = readdirSync(dir)
-    .filter((f) => f.endsWith(".sql"))
+    .filter((f) => f.endsWith(".sql") && (options.through === undefined || f <= options.through))
     .sort();
   assertCompatibleMigrationHistory([...applied], files);
   const ran: string[] = [];

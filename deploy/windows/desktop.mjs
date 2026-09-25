@@ -32,7 +32,7 @@ import {
 import { desktopRuntimeConfig, registerStaticHost } from "./lib/static-host.mjs";
 import { desktopBuildSourceFingerprint } from "./lib/build-fingerprint.mjs";
 import { rotateIfLarger, rotatingLog } from "./lib/rotating-log.mjs";
-import { backupBeforeMigrate, scheduledBackup } from "./lib/pre-upgrade-backup.mjs";
+import { backupBeforeMigrate, scheduledBackup, writeUpgradeReport } from "./lib/pre-upgrade-backup.mjs";
 import {
   BACKUP_TASK,
   POSTGRES_INCLUDE,
@@ -326,7 +326,8 @@ async function prepareDatabase(paths, config, { bootstrap = false, bootstrapInpu
       dump: pgDump(config, ownerPassword),
     });
     if (backup) console.log(`PRE_UPGRADE_BACKUP path=${backup}`);
-    await migrate(owner, migrations);
+    const applied = await migrate(owner, migrations);
+    if (backup) console.log(`UPGRADE_REPORT path=${writeUpgradeReport({ backup, applied, migrationsDir: migrations, profile: config.profile })}`);
     if (setRuntimePassword)
       await owner.unsafe(`alter role app_runtime login password '${runtimePassword.replaceAll("'", "''")}'`);
     await boards.ensureStandardTemplates(owner);
