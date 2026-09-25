@@ -7040,3 +7040,49 @@ Operator Trust PSPR, RD12 part two, closed at Basho's instruction of
   - RD6, macOS, still not started.
 - **Evidence level:** installer tests on the stage; checksums.
 - **Rollback:** remove the `0.9.2` setup and its checksum from `deploy/`.
+
+## Version 0.9.2: the macOS build and its map data packet
+
+At Basho's instruction of 2026-09-25: a macOS disk image of the demo, with
+the maps and layers as a data packet downloaded beside it.
+
+- **The Mac app** (`c0c85e4`). The launcher runs the workstation and the
+  demo on macOS as well as Windows; the network host stays on Windows. The
+  "macOS demo" workflow builds `Open Source EOC.app` on a Mac runner with
+  Node for Apple silicon and Intel and PostgreSQL 16 with PostGIS from
+  Postgres.app, each pinned by checksum, rewrites Postgres.app's library
+  paths to work from inside the app, packs
+  `Open-Source-EOC-<version>-macOS.dmg`, opens it on the runner and keeps it
+  as the run's artifact.
+- **The map data packet** (`18bf75a`). `deploy/Open-Source-EOC-0.9.2-map-data.zip`,
+  1,733,606,581 bytes, SHA-256
+  `a8131b050fdc42109bfe940dafa4d072b0b6e634fb56c54263002eb554536727` (also
+  in the `.sha256` file beside it): the statewide California map, building
+  footprints and their release file, overlays and their manifest, the North
+  Coast imagery and elevation (the Del Norte rebuild), and the address
+  search index, 8 files and 1,856,830,809 bytes unpacked, the same files the
+  `0.9.2` Windows setup carries, with a manifest of each file's size and
+  SHA-256, the third-party notices that carry their attribution and
+  licenses, and a READ-ME. `tools/basemap/pack-map-data.mjs` packs it. The
+  launcher's `install-map-data` action checks a packet against its manifest
+  and swaps it into the profile data folder whole; the Mac app installs the
+  packet it finds in Downloads or on the Desktop, as the zip or the folder
+  Safari unpacks, and says so when there is none. The server serves the
+  packet's map folder, never its address index, and reads the index from
+  it.
+- **Verification.** The launcher tests pass 30 of 30 on Windows, two of
+  them new: a packet's map folder is served and its index is not, and a
+  packet installs only when every file matches, from a folder or a zip, a
+  bad one leaving the installed maps in place. The real packet was installed
+  through `install-map-data` into a throwaway folder: every file matched its
+  manifest. The Mac scripts parse (`bash -n`).
+- **Not done.** The disk image itself. The workflow's first run was refused
+  before starting: GitHub Actions reported the account's spending limit
+  reached ("Version 0.9.2: the Windows setup" gives the cause). Nothing has
+  run on a Mac yet; the workflow's smoke test (the demo started from the
+  image, a packet installed from Downloads, its maps offered and served and
+  its index loaded) runs on the first run the limit allows.
+- **Evidence level:** unit tests and the real packet verified on Windows;
+  no Mac run.
+- **Rollback:** revert `18bf75a` and `c0c85e4`; remove the packet from
+  `deploy/`.
