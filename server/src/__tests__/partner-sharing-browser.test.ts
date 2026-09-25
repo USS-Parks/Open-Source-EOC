@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { addMembership, createJurisdiction, createPerson } from "../auth/service.js";
 import { NORTH_COAST_PASSWORD, NORTH_COAST_TIME_ZONE, seedNorthCoast, type NorthCoastScenario } from "../demo/north-coast.js";
-import { buildDir, buildWeb, launchBrowser, listen, serveStatic, shotDir } from "./browser.js";
+import { buildDir, buildWeb, launchBrowser, listen, serveStatic, shotDir, waitForSignIn, watchPage } from "./browser.js";
 import { freshDb, type Sql } from "./helpers.js";
 import { join } from "node:path";
 
@@ -30,12 +30,14 @@ const pageErrors: string[] = [];
 async function signIn(email: string, password: string): Promise<Page> {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, timezoneId: NORTH_COAST_TIME_ZONE, locale: "en-US" });
   const page = await context.newPage();
+  const report = watchPage(page);
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.route("**/*", (route) => {
     const url = route.request().url();
     return url.startsWith(baseUrl) || url.startsWith("data:") || url.startsWith("blob:") ? route.continue() : route.abort();
   });
   await page.goto(`${baseUrl}/app/index.html`, { waitUntil: "load" });
+  await waitForSignIn(page, report);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
@@ -85,7 +87,7 @@ describe("partner sharing on the North Coast Storm exercise", () => {
     expect(row).toMatchObject({ jurisdiction_id: scenario.jurisdictionId, email: "a.brooks@cec.example" });
     await liaison.screenshot({ path: join(SHOTS, "liaison-resources.png") });
     await liaison.context().close();
-  });
+  }, 90_000);
 
   it("opens the county's generator request from the liaison's linked action", async () => {
     const liaison = await signIn("a.brooks@cec.example", NORTH_COAST_PASSWORD);
@@ -98,8 +100,10 @@ describe("partner sharing on the North Coast Storm exercise", () => {
     await liaison.getByRole("region", { name: /^REQ-\d+ Generator support for Wendy's Shelter$/ }).waitFor();
     await liaison.screenshot({ path: join(SHOTS, "liaison-linked-request.png") });
     await liaison.context().close();
-  });
+  }, 90_000);
 
+  // Two people sign in, each in a fresh browser context: on the Windows CI runner
+  // this ran past the 30 second default, where it takes about 4 seconds locally.
   it("lets the utility liaison post in an incident-wide thread that the county reads", async () => {
     const liaison = await signIn("a.brooks@cec.example", NORTH_COAST_PASSWORD);
     await liaison.locator('select[aria-label="Selected incident"] option:checked', { hasText: "North Coast Storm" }).waitFor({ state: "attached" });
@@ -122,7 +126,7 @@ describe("partner sharing on the North Coast Storm exercise", () => {
     expect(await message.textContent()).toContain("CA Energy Commission");
     await county.screenshot({ path: join(SHOTS, "county-messages.png") });
     await county.context().close();
-  });
+  }, 90_000);
 
   it("shows a person outside the incident none of it", async () => {
     const outsider = await signIn(OUTSIDER.email, OUTSIDER.password);
@@ -140,5 +144,5 @@ describe("partner sharing on the North Coast Storm exercise", () => {
     expect(status).toBe(404);
     await outsider.context().close();
     expect(pageErrors).toEqual([]);
-  });
+  }, 90_000);
 });

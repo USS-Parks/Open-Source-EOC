@@ -7864,3 +7864,39 @@ decoding fallback VC-05 names. With part one, VA9 is complete.
   printed label on the LAN is the phone walk (VA23), which is Basho's.
 - **Rollback:** revert the commit; no migration. Printed labels then link to
   a path the console reads as an unknown link.
+
+## CI repairs: two Windows stalls at a second sign-in
+
+Follows "CI repairs: the macOS job's browser tests". The branch run on
+be75d61 (run 36180307957, Windows and macOS, started by hand) and main's
+Windows run on 059371f (run 36181684638) finished red.
+
+- **What was already fixed.** On be75d61, both jobs failed the load-retry
+  test and macOS failed the board views test; 7e7dc65, which followed
+  be75d61, fixed both, and main's run on 059371f, which carries it, passed
+  them.
+- **Partner sharing, Windows, be75d61.** The test where the utility liaison
+  posts and the county reads ran past Vitest's 30 second default. The file
+  gave no test a budget of its own, and that test signs in twice, each time
+  in a fresh browser context; locally it takes about 4 seconds. Each test
+  in the file now has 90 seconds, as the other browser files do.
+- **Board records, Windows, 059371f.** In the first test, the member's page
+  loaded and the sign-in form did not appear in 90 seconds; the next two
+  tests in the file passed at once, and every later file passed. The whole
+  job log, read in full, has no crash, page error, failed request or server
+  output, and the file ran alone (CI runs one file at a time). The admin
+  page open beside it made 7 requests in the 6 seconds after publishing, so
+  it was not flooding the server. **The cause is not known.** Nothing in
+  059371f or the commits before it changes what a signed-out page renders.
+- **What the next stall will say.** `watchPage` and `waitForSignIn` in the
+  browser harness record a page's console errors and warnings, failed
+  requests and a renderer crash; when the sign-in form does not appear they
+  fail with the page's address, load state, script count and visible text
+  beside the timeout. The board records and partner sharing sign-ins use
+  them. A throwaway test pointed at a missing page produced that report.
+- **The harness's wait, made consistent.** Pages opened with
+  `browser.newPage()` waited 90 seconds on CI and pages of a
+  `browser.newContext()` waited Playwright's 30; both wait 90 seconds now.
+- **Verification.** On the Linux test bed: the board records and partner
+  sharing browser files, 7 of 7; `pnpm check:static` exit 0.
+- **Rollback:** revert the commit.

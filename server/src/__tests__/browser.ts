@@ -3,7 +3,7 @@ import { closeSync, cpSync, existsSync, mkdirSync, openSync, readdirSync, readFi
 import { setTimeout as sleep } from "node:timers/promises";
 import { join, relative, resolve } from "node:path";
 import type { FastifyInstance } from "fastify";
-import { chromium, type Browser, type LaunchOptions } from "playwright-core";
+import { chromium, type Browser, type LaunchOptions, type Page } from "playwright-core";
 import { expect } from "vitest";
 
 /**
@@ -194,6 +194,9 @@ export async function launchBrowser(options: LaunchOptions & { readonly coreRail
   const newContext = browser.newContext.bind(browser);
   browser.newContext = async (contextOptions) => {
     const context = await newContext(contextOptions);
+    // Pages of a context wait as long as pages opened with newPage below.
+    context.setDefaultTimeout(PAGE_TIMEOUT_MS);
+    context.setDefaultNavigationTimeout(PAGE_TIMEOUT_MS);
     if (!coreRail) await context.addInitScript(EVERY_SECTION);
     return context;
   };
@@ -205,6 +208,43 @@ export async function launchBrowser(options: LaunchOptions & { readonly coreRail
     return page;
   };
   return browser;
+}
+
+/**
+ * Watch a page for what would explain a stall: console errors and warnings,
+ * failed requests and a renderer crash. The report adds the page's own state,
+ * read under a short limit so a hung page cannot hang the report. A sign-in
+ * form that never appeared on the Windows runner left only a bare locator
+ * timeout; this is what the next one prints instead.
+ */
+export function watchPage(page: Page): () => Promise<string> {
+  const events: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" || message.type() === "warning") events.push(`console ${message.type()}: ${message.text()}`);
+  });
+  page.on("requestfailed", (request) => events.push(`failed ${request.method()} ${request.url()}: ${request.failure()?.errorText ?? "unknown"}`));
+  page.on("crash", () => events.push("the page crashed"));
+  return async () => {
+    const state = await Promise.race([
+      page.evaluate(`({ ready: document.readyState, scripts: document.scripts.length,
+        text: (document.body ? document.body.innerText : "").replace(/\\s+/g, " ").slice(0, 300) })`)
+        .then((value) => {
+          const s = value as { ready: string; scripts: number; text: string };
+          return `readyState ${s.ready}, ${s.scripts} scripts, text "${s.text}"`;
+        }, (error: unknown) => `the page did not answer: ${String(error)}`),
+      sleep(5_000).then(() => "the page did not answer within 5 seconds"),
+    ]);
+    return `URL ${page.url()}; ${state}; ${events.length ? events.join("; ") : "no console errors, failed requests or crash"}`;
+  };
+}
+
+/** Wait for the sign-in form; on a timeout, fail with where the page stood. */
+export async function waitForSignIn(page: Page, report: () => Promise<string>): Promise<void> {
+  try {
+    await page.getByLabel("Email").waitFor();
+  } catch (error) {
+    throw new Error(`The sign-in form did not appear. ${error instanceof Error ? error.message : String(error)}\n${await report()}`, { cause: error });
+  }
 }
 
 export const auth = (token: string) => ({ authorization: `Bearer ${token}` });

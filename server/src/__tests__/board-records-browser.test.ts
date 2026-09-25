@@ -7,7 +7,7 @@ import { buildApp } from "../app.js";
 import { addMembership, createPerson } from "../auth/service.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
-import { auth, buildDir, buildWeb, launchBrowser, listen, login, post, serveStatic, shotDir } from "./browser.js";
+import { auth, buildDir, buildWeb, launchBrowser, listen, login, post, serveStatic, shotDir, waitForSignIn, watchPage } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 const DIST = buildDir("board-records-app");
@@ -54,6 +54,7 @@ const opsTemplate = {
 async function openPage(email: string, password: string, hash: string): Promise<Page> {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   pages.push(page);
+  const report = watchPage(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.route("**/*", (route) => {
@@ -63,6 +64,7 @@ async function openPage(email: string, password: string, hash: string): Promise<
     return route.abort();
   });
   await page.goto(`${baseUrl}/app/index.html${hash}`);
+  await waitForSignIn(page, report);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
