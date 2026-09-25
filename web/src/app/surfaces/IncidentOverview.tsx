@@ -115,11 +115,11 @@ function Unavailable(props: { readonly children: ReactNode }) {
 const LIFELINE_GLYPHS: Readonly<Record<ThemeName, Readonly<Record<(typeof LIFELINE_KEYS)[number], IconName>>>> = {
   light: {
     safety_security: "shieldPlate", food_hydration_shelter: "restaurant", health_medical: "plusSolid", energy: "boltSolid",
-    communications: "cellTower", transportation: "roadSolid", hazardous_materials: "biohazard", water_systems: "waterDrop",
+    communications: "communications", transportation: "roadSolid", hazardous_materials: "hazardousMaterials", water_systems: "waterDrop",
   },
   dark: {
     safety_security: "shieldQuarters", food_hydration_shelter: "homeSolid", health_medical: "plusSolid", energy: "boltSolid",
-    communications: "cellTower", transportation: "roadSolid", hazardous_materials: "warningSolid", water_systems: "waterDrop",
+    communications: "communications", transportation: "roadSolid", hazardous_materials: "warningSolid", water_systems: "waterDrop",
   },
 };
 

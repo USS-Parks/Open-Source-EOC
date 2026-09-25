@@ -24,7 +24,7 @@ async function violations(container: Element) {
 }
 
 describe("icon registry", () => {
-  it("contains the complete project-owned lifeline family", () => {
+  it("contains the complete lifeline family, each drawing's source and license recorded", () => {
     expect(Object.keys(lifelineIconByKey)).toEqual([
       "safety_security",
       "food_hydration_shelter",
@@ -37,11 +37,15 @@ describe("icon registry", () => {
     ]);
     expect(lifelineIconNames).toHaveLength(8);
     expect(new Set(Object.values(lifelineIconByKey))).toEqual(new Set(lifelineIconNames));
+    // Two drawings follow the canonical frames from third-party sets; docs/ASSET-LICENSES.md records both.
+    const thirdParty: Partial<Record<string, { provenance: string; license: string }>> = {
+      communications: { provenance: "Google Material Symbols", license: "Apache-2.0" },
+      hazardousMaterials: { provenance: "Font Awesome Free 6.7.2", license: "CC-BY-4.0" },
+    };
     for (const name of lifelineIconNames) {
       expect(iconRegistry[name]).toMatchObject({
         category: "lifeline",
-        license: "Apache-2.0",
-        provenance: "Open Source EOC original artwork",
+        ...(thirdParty[name] ?? { license: "Apache-2.0", provenance: "Open Source EOC original artwork" }),
       });
     }
   });
