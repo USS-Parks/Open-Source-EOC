@@ -185,6 +185,8 @@ GET /api/v1/reports/:reportId
 GET /api/v1/reports/:reportId/output
 GET /api/v1/resource-requests/:id
 GET /api/v1/resource-requests/:id/costs/export
+GET /api/v1/resource-requests/:id/ics-213rr
+GET /api/v1/resource-requests/:id/ics-213rr/pdf
 GET /api/v1/resources/:resourceId/history
 GET /api/v1/sitreps/:sitrepId
 GET /api/v1/status-queries/:id

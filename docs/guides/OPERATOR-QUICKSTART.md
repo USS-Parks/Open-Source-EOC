@@ -133,7 +133,10 @@ come first; **Load more records** reads the next page.
 ### Record costs and escalate a request
 
 Select **Open** on a request in **Resources**. The costs and mutual aid
-panel sits below the request history.
+panel sits below the request history. **Print ICS 213RR** gives the
+request's Resource Request Message as a PDF as it stands now: the order,
+who accepted it, the supplier and every step since receipt, and its costs
+(costs show only to the owning organization).
 
 - **Reimbursement costs**: enter the category, the amount in dollars, a
   description and the date the cost was incurred, then choose **Record cost**.
@@ -376,7 +379,10 @@ whether it is a draft or ready, and who saved it last.
    holds one of most forms; if it already has the one chosen, the button
    opens it instead. The 204, 213 and 214 can be several to a period, so
    they ask for a name: the division or group, the message subject, or the
-   person and position.
+   person and position. A 213RR starts from one of the incident's resource
+   requests, chosen under **Resource request**, and is named by its number;
+   its blocks come from the request's record, and **Take the request's
+   current record** brings in what has happened to the request since.
 2. Fill the form in block by block; the numbers follow the NIMS ICS Forms
    Booklet (FEMA 502-2, September 2010). A table takes **Add row** and
    **Remove**.

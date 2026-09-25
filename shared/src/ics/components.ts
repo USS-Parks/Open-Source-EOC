@@ -1,5 +1,7 @@
 import { z } from "zod";
 import type { FormSection, IapDocument, IcsFormContent, IncidentContext } from "./forms.js";
+import { RESOURCE_REQUEST_STAGES } from "../dictionary/resource-request.js";
+import type { ResourceRequestDetail } from "../resource/contract.js";
 
 /**
  * ICS forms as components of an incident's operational period (Veoci and air
@@ -17,7 +19,7 @@ export const ICS_COMPONENT_EDITION = "NIMS ICS Forms Booklet, FEMA 502-2 (Septem
 
 export const ICS_COMPONENT_FORM_IDS = [
   "ICS-201", "ICS-202", "ICS-203", "ICS-204", "ICS-205", "ICS-205A", "ICS-206", "ICS-207",
-  "ICS-208", "ICS-209", "ICS-211", "ICS-213", "ICS-214", "ICS-215", "ICS-215A",
+  "ICS-208", "ICS-209", "ICS-211", "ICS-213", "ICS-213RR", "ICS-214", "ICS-215", "ICS-215A",
 ] as const;
 export type IcsComponentFormId = (typeof ICS_COMPONENT_FORM_IDS)[number];
 
@@ -239,6 +241,33 @@ export const ICS_COMPONENT_FORMS: Readonly<Record<IcsComponentFormId, ComponentF
       text("repliedBy", "10", "Replied by (Name, Position/Title, Date/Time)"),
     ],
   },
+  "ICS-213RR": {
+    // Started from one of the incident's resource requests (VA38) and named by its number.
+    id: "ICS-213RR", title: "Resource Request Message", many: true, labelHint: "Resource request number",
+    fields: [
+      when("requested", "2", "Date/Time"),
+      text("requestNumber", "3", "Resource Request Number"),
+      table("order", "4", "Order", [
+        "Qty", "Kind", "Type", "Priority", "Detailed Item Description", "Requested Arrival Date/Time",
+        "Estimated Arrival Date/Time", "Cost",
+      ]),
+      text("deliveryLocation", "5", "Requested Delivery/Reporting Location"),
+      long("substitutes", "6", "Suitable Substitutes and/or Suggested Sources"),
+      text("requestedBy", "7", "Requested by Name/Position"),
+      choice("priority", "8", "Priority", ["Urgent", "Routine", "Low"]),
+      text("sectionChiefApproval", "9", "Section Chief Approval"),
+      text("logisticsOrderNumber", "10", "Logistics Order Number"),
+      text("supplierContact", "11", "Supplier Phone/Fax/Email"),
+      text("supplier", "12", "Name of Supplier/POC"),
+      long("logisticsNotes", "13", "Notes"),
+      text("logisticsApproval", "14", "Approval Signature of Auth Logistics Rep"),
+      when("logisticsApprovedAt", "15", "Date/Time"),
+      choice("orderPlacedBy", "16", "Order placed by", ["SPUL", "PROC", "Other"]),
+      long("financeComments", "17", "Reply/Comments from Finance"),
+      text("financeSignature", "18", "Finance Section Signature"),
+      when("financeAt", "19", "Date/Time"),
+    ],
+  },
   "ICS-214": {
     id: "ICS-214", title: "Activity Log", many: true, labelHint: "Name and ICS position",
     fields: [
@@ -413,6 +442,81 @@ export function prefillComponent(formId: IcsComponentFormId, ctx: IncidentContex
 
 function sectionName(section: string): string {
   return section.split("_").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ").replace("Finance Admin", "Finance/Administration");
+}
+
+/** A cost recorded on a resource request, as a 213RR's finance blocks read it. */
+export interface Rr213Cost {
+  readonly category: string;
+  readonly description: string;
+  readonly amountCents: number;
+  /** The day the cost was incurred, YYYY-MM-DD. */
+  readonly incurredAt: string;
+  readonly recordedBy: string;
+}
+
+const stamp = (at: string | null | undefined): string =>
+  (at ? `${new Date(at).toISOString().slice(0, 16).replace("T", " ")} UTC` : "");
+const dollars = (cents: number): string => `$${(cents / 100).toFixed(2)}`;
+const stage = (state: string): string => RESOURCE_REQUEST_STAGES[state]?.label ?? state;
+/** The request's three priorities on the booklet's three; "priority" is urgent there. */
+const PRIORITY_213RR: Readonly<Record<string, string>> = { immediate: "Urgent", priority: "Urgent", routine: "Routine" };
+
+function assignee(assignment: ResourceRequestDetail["assignment"]): string {
+  if (!assignment) return "";
+  return assignment.kind === "position"
+    ? `${assignment.positionTitle}, ${assignment.organization.name}`
+    : `${assignment.personName}, ${assignment.incidentPositionTitle}, ${assignment.organization.name}`;
+}
+
+/**
+ * A 213RR's values from a resource request through its lifecycle (VA38): the
+ * requestor's order; the acceptance as the section chief's approval; the
+ * supplier, the assignee and each step from receipt on for logistics, with
+ * whoever moved it to sourcing or assignment as the approving logistics
+ * representative; and the recorded costs for finance. What the request does
+ * not record (the delivery location, substitutes, the supplier's contact and
+ * how the order was placed) stays empty for the logistics section.
+ */
+export function prefill213rr(request: ResourceRequestDetail, costs: readonly Rr213Cost[]): Record<string, ComponentValue> {
+  const values: Record<string, ComponentValue> = Object.fromEntries(
+    ICS_COMPONENT_FORMS["ICS-213RR"].fields.map((field) => [field.key, emptyValue(field)]));
+  const number = `REQ-${request.number}`;
+  const reached = (state: string) => request.chronology.find((entry) => entry.toState === state);
+  const logistics = reached("assigned") ?? reached("sourcing");
+  const total = costs.reduce((sum, cost) => sum + cost.amountCents, 0);
+  const last = costs[costs.length - 1];
+  values.requested = stamp(request.createdAt);
+  values.requestNumber = number;
+  values.order = [[
+    String(request.quantity), request.resourceKind ?? "", request.resourceType === null ? "" : `Type ${request.resourceType}`,
+    request.priority.charAt(0).toUpperCase() + request.priority.slice(1), request.item, stamp(request.neededBy),
+    stamp(reached("deployed")?.at), request.costCents === null ? "" : dollars(request.costCents),
+  ]];
+  values.requestedBy = request.requestedByName ?? "";
+  values.priority = PRIORITY_213RR[request.priority] ?? "";
+  values.sectionChiefApproval = request.acceptance
+    ? [request.acceptance.personName, request.acceptance.positionTitle, stamp(request.acceptance.at)].filter(Boolean).join(", ")
+    : "";
+  values.logisticsOrderNumber = number;
+  // The supplier, then who holds the assignment; an assignee of the supplier itself names it once.
+  const supplying = request.supplyingOrganization?.name;
+  values.supplier = request.assignment && request.assignment.organization.name === supplying
+    ? assignee(request.assignment)
+    : [supplying, assignee(request.assignment)].filter(Boolean).join("; ");
+  values.logisticsNotes = [
+    ...(request.notes ? [request.notes] : []),
+    ...request.chronology.map((entry) => `${stamp(entry.at)}: ${entry.fromState ? `${stage(entry.fromState)} to ` : ""}${stage(entry.toState)}`
+      + `${entry.by ? ` by ${entry.by}` : ""}${entry.note ? ` (${entry.note})` : ""}`),
+  ].join("\n");
+  values.logisticsApproval = logistics?.by ?? "";
+  values.logisticsApprovedAt = stamp(logistics?.at);
+  values.financeComments = costs.length === 0 ? "" : [
+    ...costs.map((cost) => `${cost.incurredAt} ${cost.category}: ${dollars(cost.amountCents)}${cost.description ? ` (${cost.description})` : ""}`),
+    `Total: ${dollars(total)}`,
+  ].join("\n");
+  values.financeSignature = last?.recordedBy ?? "";
+  values.financeAt = last?.incurredAt ?? "";
+  return values;
 }
 
 export interface ComponentHeader {

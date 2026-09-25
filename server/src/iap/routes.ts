@@ -75,6 +75,8 @@ const CreateComponentBody = z.object({
   formId: z.string().min(1).max(20),
   periodRevision: z.number().int().positive(),
   label: z.string().max(200).optional(),
+  /** The incident's resource request a 213RR is started from (VA38). */
+  requestId: z.uuid().optional(),
 }).strict();
 
 const ComponentListQuery = z.object({

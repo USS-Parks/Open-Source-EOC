@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import axe from "axe-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ICS_COMPONENT_EDITION, type IcsComponentFormId } from "@openeoc/shared";
+import { ICS_COMPONENT_EDITION, validateComponentValues, type IcsComponentFormId } from "@openeoc/shared";
 import type { IcsComponentDetail } from "../../app/api/client.js";
 import { FormComponents } from "../FormComponents.js";
 
@@ -14,7 +14,7 @@ const channels: IcsComponentDetail = {
   id: "c-205", incidentId: INCIDENT, formId: "ICS-205", title: "Incident Radio Communications Plan", label: "",
   periodRevision: 4, operationalPeriod: "OP 4", status: "draft", version: 1, preparedBy: "Rosa Planner",
   preparedRole: "Planning Section Chief", updatedAt: "2026-09-25T17:00:00Z", edition: ICS_COMPONENT_EDITION,
-  incidentName: "Klamath River Flood",
+  incidentName: "Klamath River Flood", resourceRequestId: null,
   values: { channels: [["", "", "", "CMD-1", "Command", "154.2800", "", "154.2800", "", "", ""]], specialInstructions: "" },
 };
 
@@ -28,6 +28,10 @@ function client() {
     listIcsComponentVersions: vi.fn().mockResolvedValue([]),
     downloadIcsComponentPdf: vi.fn().mockResolvedValue(new Blob(["%PDF-1.4"])),
     createIap: vi.fn().mockResolvedValue({ id: "iap-1", content: { incidentName: "Klamath River Flood", operationalPeriod: "OP 4", preparedBy: "Rosa Planner", forms: [] } }),
+    listResourceRequests: vi.fn().mockResolvedValue([
+      { id: "rr-1", number: 1026, item: "Swift-water rescue team", state: "deployed" },
+    ]),
+    getIcs213rr: vi.fn(),
   };
 }
 
@@ -127,6 +131,34 @@ describe("ICS forms as components of a period", () => {
     });
     fireEvent.click(within(choice).getByRole("button", { name: "Review it in the IAP workspace" }));
     expect(onOpenIap).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts a 213RR from one of the incident's requests and takes the request's latest record", async () => {
+    const api = client();
+    const rrValues = (logisticsNotes: string) => validateComponentValues("ICS-213RR", { requestNumber: "REQ-1026", logisticsNotes });
+    const rr: IcsComponentDetail = {
+      ...channels, id: "c-rr", formId: "ICS-213RR", title: "Resource Request Message", label: "REQ-1026",
+      resourceRequestId: "rr-1", values: rrValues("Received"),
+    };
+    api.createIcsComponent.mockResolvedValue(rr);
+    api.getIcs213rr.mockResolvedValue({ requestId: "rr-1", number: 1026, incidentId: INCIDENT, incidentName: "Klamath River Flood",
+      values: rrValues("Received\nAssigned"), form: { id: "ICS-213RR", title: "", incidentName: "", operationalPeriod: "", preparedBy: "", sections: [] } });
+    const view = render(<FormComponents client={api} incidentId={INCIDENT} periodRevision={4} periodLabel="OP 4" />);
+    await view.findByRole("list", { name: "Forms for this period" });
+    fireEvent.change(view.getByLabelText("Form to start"), { target: { value: "ICS-213RR" } });
+    const choice = await view.findByRole("option", { name: "REQ-1026 Swift-water rescue team (In progress)" });
+    expect(api.listResourceRequests).toHaveBeenCalledWith("", INCIDENT);
+    fireEvent.click(view.getByRole("button", { name: "Start form" }));
+    await view.findByText("Choose the resource request the ICS 213RR is for.");
+    fireEvent.change(view.getByLabelText("Resource request"), { target: { value: (choice as HTMLOptionElement).value } });
+    fireEvent.click(view.getByRole("button", { name: "Start form" }));
+    const form = await view.findByRole("form", { name: "Edit ICS 213RR: Resource Request Message, REQ-1026" });
+    expect(api.createIcsComponent).toHaveBeenCalledWith(INCIDENT, { formId: "ICS-213RR", periodRevision: 4, requestId: "rr-1" });
+    expect(within(form).queryByLabelText(/^Name/)).toBeNull();
+    fireEvent.click(within(form).getByRole("button", { name: "Take the request's current record" }));
+    await view.findByText("The request's current record is in the editor. Save it to make it version 2.");
+    expect((within(form).getByLabelText("13. Notes") as HTMLTextAreaElement).value).toBe("Received\nAssigned");
+    expect(form.textContent).toContain("Unsaved changes.");
   });
 
   it("says when a form marked ready starts the plan's next revision", async () => {

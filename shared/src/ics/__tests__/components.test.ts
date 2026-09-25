@@ -8,6 +8,7 @@ import {
   componentToFormContent,
   emptyValue,
   isComponentFormId,
+  prefill213rr,
   prefillComponent,
   validateComponentValues,
 } from "../components.js";
@@ -57,7 +58,7 @@ describe("ICS form components", () => {
         }
       }
     }
-    expect(ICS_COMPONENT_FORM_IDS.filter((id) => ICS_COMPONENT_FORMS[id].many)).toEqual(["ICS-204", "ICS-213", "ICS-214"]);
+    expect(ICS_COMPONENT_FORM_IDS.filter((id) => ICS_COMPONENT_FORMS[id].many)).toEqual(["ICS-204", "ICS-213", "ICS-213RR", "ICS-214"]);
     expect(componentFormLabel("ICS-205A")).toBe("ICS 205A: Communications List");
     expect(isComponentFormId("ICS-215A")).toBe(true);
     expect(isComponentFormId("ICS-999")).toBe(false);
@@ -157,5 +158,63 @@ describe("ICS form components", () => {
       (b) => String.fromCharCode(b)).join("");
     expect(pdf).toContain("(Approval: approved by Basho at) Tj");
     expect(DEFAULT_PLAN_FORMS).toEqual(["ICS-202", "ICS-203", "ICS-204", "ICS-205", "ICS-205A", "ICS-206", "ICS-207", "ICS-208"]);
+  });
+
+  it("fills a 213RR from a request taken through acceptance, sourcing and assignment, with its costs", () => {
+    const org = { id: "00000000-0000-4000-8000-000000000001", name: "Humboldt County OES" };
+    const request = {
+      id: "00000000-0000-4000-8000-000000000002", number: 1026, incidentId: null, item: "Swift-water rescue team",
+      quantity: 2, priority: "immediate", state: "deployed", receivingOrganization: org,
+      supplyingOrganization: { id: "00000000-0000-4000-8000-000000000003", name: "Cal OES Region II" },
+      assignment: {
+        kind: "position" as const, positionId: "00000000-0000-4000-8000-000000000004", positionKey: "logistics_section_chief",
+        positionTitle: "Logistics Section Chief", organization: org,
+      },
+      resourceKind: "Swiftwater/Flood Search and Rescue Team", resourceType: 2, costCents: 125_050,
+      neededBy: "2026-09-25T20:00:00.000Z", notes: "Stage at the Weitchpec store", createdAt: "2026-09-25T17:02:00.000Z",
+      updatedAt: "2026-09-25T18:30:00.000Z", requestedByName: "Rosa Planner",
+      acceptance: { personId: null, personName: "Jordan Lee", positionTitle: "Operations Section Chief", at: "2026-09-25T17:10:00.000Z" },
+      chronology: [
+        { fromState: null, toState: "submitted", note: null, by: "Rosa Planner", at: "2026-09-25T17:02:00.000Z" },
+        { fromState: "submitted", toState: "accepted", note: null, by: "Jordan Lee", at: "2026-09-25T17:10:00.000Z" },
+        { fromState: "accepted", toState: "sourcing", note: "Asked the region", by: "Sam Ortiz", at: "2026-09-25T17:20:00.000Z" },
+        { fromState: "sourcing", toState: "assigned", note: null, by: "Sam Ortiz", at: "2026-09-25T17:45:00.000Z" },
+        { fromState: "assigned", toState: "deployed", note: null, by: "Sam Ortiz", at: "2026-09-25T18:30:00.000Z" },
+      ],
+    };
+    const values = prefill213rr(request, [
+      { category: "equipment", description: "Boat fuel", amountCents: 25_050, incurredAt: "2026-09-25", recordedBy: "Lee Chan" },
+      { category: "personnel", description: "", amountCents: 100_000, incurredAt: "2026-09-25", recordedBy: "Ana Ruiz" },
+    ]);
+    expect(validateComponentValues("ICS-213RR", values)).toEqual(values);
+    expect(values).toMatchObject({
+      requested: "2026-09-25 17:02 UTC",
+      requestNumber: "REQ-1026",
+      order: [["2", "Swiftwater/Flood Search and Rescue Team", "Type 2", "Immediate", "Swift-water rescue team",
+        "2026-09-25 20:00 UTC", "2026-09-25 18:30 UTC", "$1250.50"]],
+      requestedBy: "Rosa Planner",
+      priority: "Urgent",
+      sectionChiefApproval: "Jordan Lee, Operations Section Chief, 2026-09-25 17:10 UTC",
+      logisticsOrderNumber: "REQ-1026",
+      supplier: "Cal OES Region II; Logistics Section Chief, Humboldt County OES",
+      logisticsApproval: "Sam Ortiz",
+      logisticsApprovedAt: "2026-09-25 17:45 UTC",
+      financeComments: "2026-09-25 equipment: $250.50 (Boat fuel)\n2026-09-25 personnel: $1000.00\nTotal: $1250.50",
+      financeSignature: "Ana Ruiz",
+      financeAt: "2026-09-25",
+      deliveryLocation: "",
+    });
+    expect((values.logisticsNotes as string).split("\n")).toEqual([
+      "Stage at the Weitchpec store",
+      "2026-09-25 17:02 UTC: Received by Rosa Planner",
+      "2026-09-25 17:10 UTC: Received to Accepted by Jordan Lee",
+      "2026-09-25 17:20 UTC: Accepted to Sourcing by Sam Ortiz (Asked the region)",
+      "2026-09-25 17:45 UTC: Sourcing to Assigned by Sam Ortiz",
+      "2026-09-25 18:30 UTC: Assigned to In progress by Sam Ortiz",
+    ]);
+    const form = componentToFormContent("ICS-213RR", values, { incidentName: "Klamath River Flood", operationalPeriod: "OP 1", preparedBy: "Sam Ortiz", label: "REQ-1026" });
+    expect(form.title).toBe("Resource Request Message: REQ-1026");
+    expect(form.sections.map((section) => section.heading)[0]).toBe("2. Date/Time");
+    expect(form.sections).toHaveLength(18);
   });
 });

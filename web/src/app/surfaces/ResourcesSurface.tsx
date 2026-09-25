@@ -875,7 +875,11 @@ export function ResourcesSurface(props: {
 
         {detail.loading && selectedRequest ? <Loading label="Loading request history…" /> : null}
         {detail.error ? <ErrorNote message={detail.error} /> : null}
-        {detail.data ? <ResourceRequestDetailPanel detail={detail.data} onClose={() => selectRequest(null)} /> : null}
+        {detail.data ? <ResourceRequestDetailPanel detail={detail.data} onClose={() => selectRequest(null)}
+          onPrint213rr={() => {
+            const request = detail.data!;
+            void run(async () => saveBlob(await props.client.downloadIcs213rrPdf(request.id), `ics-213rr-req-${request.number}.pdf`));
+          }} /> : null}
         {detail.data ? (
           <RequestCostsAndEscalation
             key={detail.data.id}

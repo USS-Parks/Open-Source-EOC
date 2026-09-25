@@ -553,6 +553,8 @@ export interface IcsComponentSummary {
   readonly preparedBy: string;
   readonly preparedRole: string;
   readonly updatedAt: string;
+  /** The resource request a 213RR was started from (VA38); null for every other form. */
+  readonly resourceRequestId: string | null;
 }
 export interface IcsComponentDetail extends IcsComponentSummary {
   readonly edition: string;
@@ -1735,7 +1737,7 @@ export class ApiClient {
     return r.components;
   }
   /** Start a form for a period, prefilled from the incident's records. */
-  createIcsComponent(incidentId: string, body: { formId: string; periodRevision: number; label?: string }): Promise<IcsComponentDetail> {
+  createIcsComponent(incidentId: string, body: { formId: string; periodRevision: number; label?: string; requestId?: string }): Promise<IcsComponentDetail> {
     return this.request<IcsComponentDetail>("POST", `/api/v1/incidents/${incidentId}/ics-components`, body);
   }
   getIcsComponent(componentId: string): Promise<IcsComponentDetail> {
@@ -2204,6 +2206,13 @@ export class ApiClient {
   /** The request's recorded costs as the reimbursement CSV, with its total row. */
   exportResourceRequestCosts(id: string): Promise<Blob> {
     return this.requestBlob(`/api/v1/resource-requests/${encodeURIComponent(id)}/costs/export`);
+  }
+  /** The request's ICS 213RR as it stands now (VA38). */
+  getIcs213rr(id: string): Promise<{ requestId: string; number: number; incidentId: string | null; incidentName: string | null; values: ComponentValues; form: IcsFormContent }> {
+    return this.request("GET", `/api/v1/resource-requests/${encodeURIComponent(id)}/ics-213rr`);
+  }
+  downloadIcs213rrPdf(id: string): Promise<Blob> {
+    return this.requestBlob(`/api/v1/resource-requests/${encodeURIComponent(id)}/ics-213rr/pdf`);
   }
   /** The server delivers the request to the peer tier; a failed delivery answers 502 and nothing is recorded. */
   escalateResourceRequest(id: string, input: { peerName: string; peerBaseUrl: string; peerToken: string }): Promise<{ ok: true }> {

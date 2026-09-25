@@ -17,6 +17,7 @@ import { recordAudit } from "../audit/service.js";
 import { getIncidentAuthority, type IncidentAuthority } from "../incidents/participation.js";
 import { gatherContext, resolvePreparedAttribution } from "./service.js";
 import { followComponentChange, type PlanChange } from "./plan.js";
+import { ics213rr } from "../resource/rr213.js";
 
 /**
  * ICS forms as components of an operational period (Veoci and air gap VA37,
@@ -40,6 +41,8 @@ export interface ComponentSummary {
   readonly preparedBy: string;
   readonly preparedRole: string;
   readonly updatedAt: string;
+  /** The resource request a 213RR was started from; null for every other form. */
+  readonly resourceRequestId: string | null;
 }
 
 export interface ComponentDetail extends ComponentSummary {
@@ -76,6 +79,7 @@ function summary(row: Record<string, unknown>): ComponentSummary {
     preparedBy: row.prepared_name as string,
     preparedRole: row.prepared_role_label as string,
     updatedAt: iso(row.updated_at),
+    resourceRequestId: (row.resource_request_id as string | null) ?? null,
   };
 }
 
@@ -129,18 +133,27 @@ export async function listComponents(sql: Sql, actor: Principal, incidentId: str
     || a.label.localeCompare(b.label));
 }
 
+/** A 213RR's label and values, from the incident's resource request it is started from (VA38). */
+async function fromRequest(sql: Sql, actor: Principal, incidentId: string, requestId: string | undefined) {
+  if (!requestId) throw new AuthError(400, "requestId: start an ICS 213RR from one of the incident's resource requests");
+  const { request, values } = await ics213rr(sql, actor, requestId);
+  if (request.incidentId !== incidentId) throw new AuthError(400, "requestId: that resource request belongs to another incident");
+  return { label: `REQ-${request.number}`, values };
+}
+
 /** Start a form for a period: a draft at version 1, prefilled from the incident's records. */
 export async function createComponent(
   sql: Sql,
   actor: Principal,
   incidentId: string,
-  input: { formId: string; periodRevision: number; label?: string | undefined },
+  input: { formId: string; periodRevision: number; label?: string | undefined; requestId?: string | undefined },
 ): Promise<ComponentDetail> {
   if (!isComponentFormId(input.formId)) throw new AuthError(400, `formId: ${input.formId} is not an ICS form this workspace keeps`);
   const formId = input.formId;
   const authority = await getIncidentAuthority(sql, actor, incidentId);
   const attribution = await resolvePreparedAttribution(sql, actor, authority);
-  const label = labelFor(formId, input.label);
+  const request = formId === "ICS-213RR" ? await fromRequest(sql, actor, incidentId, input.requestId) : null;
+  const label = request?.label ?? labelFor(formId, input.label);
   const operationalPeriod = await periodOf(sql, incidentId, input.periodRevision);
   const [incident] = await sql`select activated_at from incidents where id = ${incidentId}`;
   if (!incident) throw new AuthError(404, "incident not found");
@@ -152,7 +165,7 @@ export async function createComponent(
     operationalPeriod,
     objectives: String(objectives?.text ?? "").split("\n").map((line) => line.trim()).filter(Boolean),
   });
-  const values = prefillComponent(formId, ctx, {
+  const values = request?.values ?? prefillComponent(formId, ctx, {
     preparedRole: attribution.roleLabel,
     incidentStart: `${iso(incident.activated_at).slice(0, 16).replace("T", " ")} UTC`,
   });
@@ -161,10 +174,10 @@ export async function createComponent(
     const [row] = await sql`
       insert into ics_form_components
         (incident_id, period_revision, operational_period, form_id, label, edition, field_values,
-         prepared_by, prepared_role_label, prepared_organization_id, prepared_participation_id)
+         prepared_by, prepared_role_label, prepared_organization_id, prepared_participation_id, resource_request_id)
       values (${incidentId}, ${input.periodRevision}, ${operationalPeriod}, ${formId}, ${label}, ${ICS_COMPONENT_EDITION},
         ${sql.json(values as never)}, ${actor.person.id}, ${attribution.roleLabel}, ${attribution.organizationId},
-        ${attribution.participationId})
+        ${attribution.participationId}, ${request ? input.requestId! : null})
       returning id`;
     id = row!.id as string;
   } catch (error) {
@@ -233,7 +246,8 @@ export async function saveComponent(
     }
     throw error;
   }
-  const label = input.label === undefined ? (row.label as string) : labelFor(formId, input.label);
+  // A 213RR keeps its request's number as its name.
+  const label = input.label === undefined || formId === "ICS-213RR" ? (row.label as string) : labelFor(formId, input.label);
   const [locked] = await sql`select version from ics_form_components where id = ${componentId} for update`;
   const current = Number(locked!.version);
   if (input.expectedVersion !== current) {

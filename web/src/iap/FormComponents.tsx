@@ -4,6 +4,7 @@ import {
   ICS_COMPONENT_FORM_IDS,
   DEFAULT_PLAN_FORMS,
   componentFormLabel,
+  requestStage,
   emptyValue,
   type ComponentField,
   type ComponentValue,
@@ -26,7 +27,7 @@ import { ErrorNote, Loading } from "../app/screens/parts.js";
 
 type ComponentClient = Pick<ApiClient,
   "listIcsComponents" | "createIcsComponent" | "getIcsComponent" | "saveIcsComponent"
-  | "listIcsComponentVersions" | "downloadIcsComponentPdf" | "createIap">;
+  | "listIcsComponentVersions" | "downloadIcsComponentPdf" | "createIap" | "listResourceRequests" | "getIcs213rr">;
 
 interface Draft {
   readonly component: IcsComponentDetail;
@@ -168,6 +169,12 @@ export function FormComponents(props: {
   );
   const [formId, setFormId] = useState<IcsComponentFormId>("ICS-202");
   const [newLabel, setNewLabel] = useState("");
+  // A 213RR starts from one of the incident's resource requests (VA38).
+  const [requestChoice, setRequestChoice] = useState("");
+  const requests = useAsync(
+    () => (formId === "ICS-213RR" ? props.client.listResourceRequests("", props.incidentId) : Promise.resolve([])),
+    [formId, props.incidentId],
+  );
   const [draft, setDraft] = useState<Draft | null>(null);
   const [versions, setVersions] = useState<readonly IcsComponentVersion[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -213,15 +220,27 @@ export function FormComponents(props: {
       setDraft(draftOf(await props.client.getIcsComponent(existing.id)));
       return;
     }
-    if (chosen.many && !newLabel.trim()) throw new Error(`Name this ${formId.replace("-", " ")}: ${chosen.labelHint}.`);
+    const fromRequest = formId === "ICS-213RR";
+    if (fromRequest && !requestChoice) throw new Error("Choose the resource request the ICS 213RR is for.");
+    if (!fromRequest && chosen.many && !newLabel.trim()) throw new Error(`Name this ${formId.replace("-", " ")}: ${chosen.labelHint}.`);
     const created = await props.client.createIcsComponent(props.incidentId, {
-      formId, periodRevision: props.periodRevision, ...(chosen.many ? { label: newLabel.trim() } : {}),
+      formId, periodRevision: props.periodRevision,
+      ...(fromRequest ? { requestId: requestChoice } : chosen.many ? { label: newLabel.trim() } : {}),
     });
     setNewLabel("");
+    setRequestChoice("");
     setVersions(null);
     setDraft(draftOf(created));
     setReload((n) => n + 1);
-    return `Started ${named(created.formId, created.label)} as a draft, prefilled from the incident's records.`;
+    return `Started ${named(created.formId, created.label)} as a draft, prefilled from ${fromRequest ? "the request's record" : "the incident's records"}.`;
+  });
+  // A 213RR takes its request's lifecycle again, as unsaved changes to save as the next version.
+  const takeRequest = () => act(async () => {
+    const requestId = draft?.component.resourceRequestId;
+    if (!draft || !requestId) return;
+    const current = await props.client.getIcs213rr(requestId);
+    setDraft({ ...draft, values: { ...current.values }, dirty: true });
+    return `The request's current record is in the editor. Save it to make it version ${draft.component.version + 1}.`;
   });
   const save = (status: "draft" | "ready") => act(async () => {
     if (!draft) return;
@@ -326,7 +345,17 @@ export function FormComponents(props: {
       <div className="iap-component-start">
         <EnumSelect label="Form to start" values={ICS_COMPONENT_FORM_IDS} value={formId} labels={FORM_LABELS}
           onChange={(value) => setFormId(value as IcsComponentFormId)} />
-        {chosen.many ? <TextField label={`Name (${chosen.labelHint})`} value={newLabel} onChange={setNewLabel} /> : null}
+        {formId === "ICS-213RR" ? (
+          <label className="iap-field">
+            <span>Resource request</span>
+            <select value={requestChoice} onChange={(event) => setRequestChoice(event.target.value)}>
+              <option value="">{requests.loading ? "Loading the incident's requests…" : "Choose a request"}</option>
+              {(requests.data ?? []).map((r) => (
+                <option key={r.id} value={r.id}>REQ-{r.number} {r.item} ({requestStage(r.state)})</option>
+              ))}
+            </select>
+          </label>
+        ) : chosen.many ? <TextField label={`Name (${chosen.labelHint})`} value={newLabel} onChange={setNewLabel} /> : null}
         <Button kind="primary" onClick={() => void start()} disabled={busy}>
           {existing ? `Open the period's ${formId.replace("-", " ")}` : "Start form"}
         </Button>
@@ -346,7 +375,11 @@ export function FormComponents(props: {
             {editing.incidentName} · {editing.operationalPeriod} · Prepared by {editing.preparedBy}, {editing.preparedRole}
             {" "}· Layout after the {editing.edition}
           </p>
-          {editingForm.many ? (
+          {editing.resourceRequestId ? (
+            <div className="iap-actions">
+              <Button onClick={() => void takeRequest()} disabled={busy}>Take the request&apos;s current record</Button>
+            </div>
+          ) : editingForm.many ? (
             <TextField label={`Name (${editingForm.labelHint})`} value={draft.label}
               onChange={(label) => setDraft({ ...draft, label, dirty: true })} />
           ) : null}

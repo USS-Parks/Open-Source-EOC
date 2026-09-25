@@ -491,6 +491,8 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 - `POST /api/v1/resource-requests/:id/costs`: Run resource requests costs (auth: bearer; audience: operator)
 - `GET /api/v1/resource-requests/:id/costs/export`: Read resource requests costs export (auth: bearer; audience: operator)
 - `POST /api/v1/resource-requests/:id/escalate`: Run resource requests escalate (auth: bearer; audience: operator)
+- `GET /api/v1/resource-requests/:id/ics-213rr`: Read resource requests ics 213rr (auth: bearer; audience: operator)
+- `GET /api/v1/resource-requests/:id/ics-213rr/pdf`: Read resource requests ics 213rr pdf (auth: bearer; audience: operator)
 - `POST /api/v1/resource-requests/:id/transition`: Run resource requests transition (auth: bearer; audience: operator)
 - `POST /api/v1/resource-requests/receive`: Run resource requests receive (auth: peer-token; audience: machine)
 - `POST /api/v1/resource-requests/report`: Run resource requests report (auth: peer-token; audience: machine)

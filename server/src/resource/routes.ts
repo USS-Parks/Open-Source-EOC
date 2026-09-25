@@ -10,6 +10,7 @@ import type { Sql } from "../db/client.js";
 import { AuthError } from "../auth/service.js";
 import { withPerson } from "../db/context.js";
 import { pageQuery } from "../db/cursor.js";
+import { ics213rr, ics213rrPdf } from "./rr213.js";
 import {
   addCost,
   addResource,
@@ -250,6 +251,23 @@ export function resourceRoutes(
       return reply.header("content-type", "text/csv").send(csv);
     },
   );
+
+  // The request's ICS 213RR as it stands now, to read or print (VA38).
+  app.get("/api/v1/resource-requests/:id/ics-213rr", { preHandler: authenticate }, async (req, reply) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const { request, incidentName, values, form } = await withPerson(sql, req.principal.person.id, (tx) =>
+      ics213rr(tx, req.principal, id));
+    return reply.send({ requestId: request.id, number: request.number, incidentId: request.incidentId, incidentName, values, form });
+  });
+
+  app.get("/api/v1/resource-requests/:id/ics-213rr/pdf", { preHandler: authenticate }, async (req, reply) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const { filename, bytes } = await withPerson(sql, req.principal.person.id, (tx) => ics213rrPdf(tx, req.principal, id));
+    return reply
+      .header("content-type", "application/pdf")
+      .header("content-disposition", `attachment; filename="${filename}"`)
+      .send(Buffer.from(bytes));
+  });
 
   // The typing catalog: members read it, administrators add local kinds and import RTLT definitions.
   app.get("/api/v1/jurisdictions/:jurisdictionId/resources/kinds", { preHandler: authenticate }, async (req, reply) => {

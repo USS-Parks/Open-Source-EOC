@@ -15,6 +15,8 @@ function eventLabel(fromState: string | null, toState: string): string {
 export function ResourceRequestDetailPanel(props: {
   detail: ResourceRequestDetail;
   onClose: () => void;
+  /** Print the request's ICS 213RR as it stands now (VA38). */
+  onPrint213rr?: () => void;
 }) {
   const { detail } = props;
   const next = nextAction(detail.state);
@@ -45,7 +47,10 @@ export function ResourceRequestDetailPanel(props: {
           </li>)}
         </ol>
       </section>
-      <div><Button onClick={props.onClose}>Close details</Button></div>
+      <div className="resources-row">
+        {props.onPrint213rr ? <Button onClick={props.onPrint213rr}>Print ICS 213RR</Button> : null}
+        <Button onClick={props.onClose}>Close details</Button>
+      </div>
     </div>
   </Panel>;
 }

@@ -7303,3 +7303,93 @@ components").
   a function and a widened audit function that the earlier code ignores;
   plans assembled from forms keep their stored content and print as before,
   without the contents list.
+
+## Veoci and air gap VA38: the ICS 213RR as a form component
+
+Veoci Integration and Air Gap PSPR unit VA38 (Basho's amendment 3), after
+VA37 part one.
+
+- **What the code did before.** A resource request carried its lifecycle,
+  assignment and costs, and a 213RR board kept request records, but nothing
+  rendered a request as the ICS 213RR, and the period's forms could not
+  hold one.
+- **What changed.**
+  - **The form.** `ICS-213RR`, Resource Request Message, joins the form
+    components after the Forms Booklet's blocks 2 to 19 (the incident name
+    is the shared header): the date and number; the order table (quantity,
+    kind, type, priority, description, requested and estimated arrival,
+    cost); delivery location, substitutes, requested by, priority (urgent,
+    routine, low) and section chief approval; the logistics order number,
+    supplier contact, supplier, notes, the approving logistics
+    representative and time, and how the order was placed; and the finance
+    reply, signature and time. A period may hold several, one per request,
+    each named by the request's number.
+  - **From the request's record** (`prefill213rr` in `shared`): the order
+    from the request (the estimated arrival is when it was deployed, the
+    cost its recorded total); the requester; "immediate" and "priority" as
+    urgent, "routine" as routine; the acceptance (who, position, when) as
+    the section chief's approval; the request number as the logistics order
+    number; the supplying organization and the assignee (named once when the
+    assignee belongs to the supplier); the request's notes and every step
+    since receipt, with who took it and its note, as the logistics notes;
+    whoever moved it to assignment (or sourcing) as the approving logistics
+    representative; and the costs, each and their total, with the last
+    recorder and day, for finance. What the record does not hold (delivery
+    location, substitutes, supplier contact, how the order was placed) stays
+    for the logistics section to write. Costs stay with the owning
+    organization, as the cost table's policy keeps them, so another
+    organization's reader sees the finance blocks and the cost empty.
+  - **Routes.** `GET /api/v1/resource-requests/:id/ics-213rr` answers the
+    request's 213RR as it stands (its values and printable form) and
+    `GET .../ics-213rr/pdf` prints it. `POST .../ics-components` takes
+    `requestId` for a 213RR, refuses one without it or for another
+    incident's request, and refuses a second for the same request in the
+    period; a save keeps the request's number as the name.
+  - **Migration** `0150_ics_213rr.sql` admits `ICS-213RR`, ties a 213RR to
+    its request (`resource_request_id`, required for a 213RR and refused for
+    any other form) and keeps that tie unchanged across versions.
+  - **The screens.** A request's details on **Resources** gain **Print ICS
+    213RR**. On **ICS Forms**, choosing the 213RR asks for **Resource
+    request** (the incident's requests by number, item and stage) instead
+    of a name, and its editor has **Take the request's current record** to
+    bring in what has happened since, saved as the next version. It is
+    listed, versioned, printed and chosen for the IAP like any other form.
+  - `docs/guides/OPERATOR-QUICKSTART.md` describes both; the contract and
+    `docs/API.md` list the two routes.
+- **Files outside the "Owns" cell.** `server/src/iap/**` and
+  `web/src/iap/**` (starting the component from a request), one line of
+  `web/src/app/surfaces/ResourcesSurface.tsx` passing the print action,
+  `web/src/app/api/client.ts`, `shared/src/api/contract.ts`.
+- **Air-gap behavior (decision 9).** Rendering and printing run on the host
+  with no outside service.
+- **Tests.** `components.test.ts` (shared) adds a request through acceptance,
+  sourcing, assignment and deployment with two costs filling each block.
+  `ics-213rr.test.ts` (4, real database): a request taken through
+  acceptance, sourcing, assignment and deployment with two costs, its
+  213RR's blocks and its PDF; a partner organization's reader seeing no
+  costs; the 213RR started as a period form from the request, refused
+  without a request, for another incident's request and a second time, its
+  name kept on save, listed, and assembled into the period's IAP; the tie
+  to the request unchangeable and refused on any other form.
+  `form-components.test.tsx` adds the request picker, the start with the
+  request and **Take the request's current record**.
+  `ics-213rr-browser.test.ts` at 1586 by 992 and 1534 by 790: the request's
+  details print its 213RR with the approval, supplier, logistics
+  representative and cost total; the planning section starts it as the
+  period's form from the request, writes the delivery location and marks it
+  ready.
+- **Verification.** On the Linux test bed (decision 19): `pnpm
+  check:static` exit 0; the API document regenerated; this unit's tests with
+  the form, plan and resource tests green (46), the web IAP and resources
+  tests (22) and the browser test (2). Every test file except the browser,
+  end-to-end and load files (Vitest, two workers): 1,615 passed and 1
+  failed of 1,616 in 240 files. The failure was the resources screen's
+  decline form, which a click right after the row appears could close;
+  that race is fixed in its own commit ("Keep a request's decline or cancel
+  form open when clicked right after it appears"), after which the web app
+  tests ran green three times (232 each).
+- **Not run.** The Windows setup (decision 18).
+- **Evidence level:** real-database, component and browser tests.
+- **Rollback:** revert the commit; migration `0150` widens a check, adds a
+  column and a constraint, and restates the version trigger with the
+  request's tie; no 213RR components exist before it.
