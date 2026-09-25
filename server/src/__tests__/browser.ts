@@ -171,6 +171,17 @@ export async function listen(app: FastifyInstance): Promise<string> {
 const PAGE_TIMEOUT_MS = process.env["CI"] ? 90_000 : 30_000;
 
 /**
+ * Headless Chrome on a Mac without a real GPU (a CI runner) drives WebGL
+ * through ANGLE on the virtual Metal device, where MapLibre's fragment
+ * shaders fail to compile and the map never draws. SwiftShader, the software
+ * renderer headless Chrome already uses on Linux, draws the same maps on
+ * every machine the suite runs on.
+ */
+const WEBGL_ARGS: readonly string[] = process.platform === "darwin"
+  ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
+  : [];
+
+/**
  * The rail shows the core sections by default and every section when the
  * viewer asks. Walks reach every section from the rail, so their pages ask;
  * `coreRail` keeps the default for the captures and the rail's own test.
@@ -179,7 +190,7 @@ const EVERY_SECTION = `try { localStorage.setItem("openeoc.navigation.allSection
 
 export async function launchBrowser(options: LaunchOptions & { readonly coreRail?: boolean } = {}): Promise<Browser> {
   const { coreRail, ...launch } = options;
-  const browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"], ...launch });
+  const browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox", ...WEBGL_ARGS], ...launch });
   const newContext = browser.newContext.bind(browser);
   browser.newContext = async (contextOptions) => {
     const context = await newContext(contextOptions);

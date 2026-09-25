@@ -9,9 +9,15 @@
 .reports-heading { font-size: 1em; margin: 16px 0 8px; }
 .reports-result { display: grid; gap: 8px; margin-top: 12px; min-width: 0; }
 .reports-scroll { max-width: 100%; overflow-x: auto; }
-/* On a phone the cells pad less, so a four-column report keeps every heading inside the panel. */
+/*
+ * On a phone the cells pad less and the headings drop their capitals and
+ * tracking, so a four-column report keeps every heading inside the panel
+ * whatever fonts the device has. Capitals alone made "OCCUPIED" and
+ * "CAPACITY" the widest words in their columns.
+ */
 @container (max-width: 480px) {
-  .reports-scroll .eoc-table th, .reports-scroll .eoc-table td { padding-inline: 6px; }
+  .reports-scroll .eoc-table th, .reports-scroll .eoc-table td { padding-inline: 4px; }
+  .reports-scroll .eoc-table thead th { letter-spacing: 0; text-transform: none; }
 }
 .reports-group td { font-weight: 600; }
 .reports-schedule { display: grid; gap: 10px; }
