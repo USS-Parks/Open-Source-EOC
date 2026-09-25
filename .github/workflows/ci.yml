@@ -50,31 +50,46 @@ jobs:
             exit 1
           fi
 
+  # The product runs on Windows (and, once built, macOS), never Linux or a
+  # container, so its checks run on Windows with the PostgreSQL and PostGIS
+  # archives the local test runtime uses, pinned by checksum. A macOS job
+  # joins when the Mac app and its staged runtime exist.
   check:
-    name: Typecheck, lint, licenses, links, tests
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgis/postgis:16-3.4
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: openeoc_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+    name: Typecheck, lint, licenses, links, tests (Windows)
+    runs-on: windows-latest
     env:
-      OPENEOC_DATABASE_URL: postgres://postgres:postgres@localhost:5432/openeoc_test
+      PG_ARCHIVE: https://get.enterprisedb.com/postgresql/postgresql-16.15-4-windows-x64-binaries.zip
+      PG_ARCHIVE_SHA256: f5f55b03bd54ce0dd1c51d524b54c7e015abd4d620af27d6971288a2dbe4a8f8
+      POSTGIS_ARCHIVE: https://download.osgeo.org/postgis/windows/pg16/postgis-bundle-pg16-3.6.2x64.zip
+      POSTGIS_ARCHIVE_SHA256: 9f4e8a30d69ed7cc0088dd3d218ac65bd4e26aa5b7bffcb2ebd7dcb74a4ff2a6
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
+      - name: PostgreSQL 16.15 with PostGIS 3.6.2 on the loopback address
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'pg'
+          New-Item -ItemType Directory -Force $root | Out-Null
+          foreach ($archive in @(@{ Url = $env:PG_ARCHIVE; Sha = $env:PG_ARCHIVE_SHA256; File = 'pg.zip' },
+                                 @{ Url = $env:POSTGIS_ARCHIVE; Sha = $env:POSTGIS_ARCHIVE_SHA256; File = 'postgis.zip' })) {
+            $path = Join-Path $root $archive.File
+            Invoke-WebRequest -Uri $archive.Url -OutFile $path
+            if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $archive.Sha) { throw "$($archive.Url) does not match its pinned checksum" }
+            Expand-Archive -LiteralPath $path -DestinationPath $root
+          }
+          Copy-Item -Path (Join-Path $root 'postgis-bundle-pg16-3.6.2x64\*') -Destination (Join-Path $root 'pgsql') -Recurse -Force
+          $bin = Join-Path $root 'pgsql\bin'
+          Set-Content -LiteralPath (Join-Path $root 'password.txt') -Value 'postgres' -NoNewline
+          & "$bin\initdb.exe" -D (Join-Path $root 'data') -U postgres --pwfile=(Join-Path $root 'password.txt') -A scram-sha-256 -E UTF8
+          & "$bin\pg_ctl.exe" -D (Join-Path $root 'data') -l (Join-Path $root 'postgres.log') -o '-h 127.0.0.1 -p 55439' -w start
+          $env:PGPASSWORD = 'postgres'
+          & "$bin\createdb.exe" -h 127.0.0.1 -p 55439 -U postgres openeoc_test
+          'OPENEOC_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55439/openeoc_test' | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          'OPENEOC_CHROMIUM=C:/Program Files/Google/Chrome/Application/chrome.exe' | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit:advisories
       - run: pnpm check

@@ -6161,3 +6161,24 @@ Operator Trust PSPR unit RD11, the remaining checks of the Readiness PSPR.
   documents checked against the launcher and seeds; the crash stated as
   unresolved.
 - **Rollback:** revert the commit.
+
+## Readiness RD12 part one: CI on Windows
+
+Operator Trust PSPR unit RD12, its CI part.
+
+- **What changed.** The CI check job (typecheck, lint, licenses, links and
+  the tests) runs on `windows-latest` instead of Ubuntu with a PostGIS
+  container, since the product runs on Windows and macOS and never on Linux
+  or in a container. The job downloads the PostgreSQL 16.15 binaries from
+  EDB and the PostGIS 3.6.2 bundle from OSGeo, the archives the local test
+  runtime uses, refuses either if its SHA-256 differs from the pinned value,
+  starts the cluster on 127.0.0.1:55439, and points the browser tests at the
+  runner's Chrome. Node moves from 22 to 24, the version the setup ships. A
+  macOS job joins when the Mac app and its staged runtime exist (RD6).
+- **Not done here.** The release decision's reconciliation (the scenarios
+  table, the parity matrix, the facet register and the README) and the
+  phase gate that closes the roster are RD12's remaining part.
+- **Verification.** `pnpm check:static` exit 0 on the full tree, which this commit completes; the tests are in "Operator Trust landing: the full gate". This workflow had not run on GitHub before
+  this push; its first run is the push that carries it.
+- **Evidence level:** the workflow's first run on GitHub.
+- **Rollback:** revert the commit; CI returns to Ubuntu.
