@@ -284,6 +284,74 @@ describe("acknowledgement link", () => {
   });
 });
 
+describe("response options", () => {
+  const answer = (token: string, body: string) =>
+    app.inject({ method: "POST", url: `/api/v1/ack/${token}`, headers: { "content-type": "text/plain" }, payload: body });
+
+  it("asks a question with three answers, takes each on the link and counts them", async () => {
+    const id = await send({
+      subject: "Shift availability", message: "Can you work the 1900 shift?", groupId, channels: ["sms", "email"],
+      mode: "broadcast", responseOptions: ["Available", "Not available", "<b>Later</b>"],
+    });
+    await drain();
+    const avery = smsToken("+17075550101");
+    const bailey = smsToken("+17075550102");
+    const text = fixtureMessages(seed.jurisdictionId).find((m) => m.to === "+17075550101")!;
+    expect(text.body).toContain("Answer Available, Not available or <b>Later</b>:");
+
+    const page = await call("GET", `/api/v1/ack/${avery}`, null);
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain("<h1>Answer this message</h1>");
+    expect(page.body).toContain('<button type="submit" name="response" value="0">Available</button>');
+    // An answer is the sender's words, shown as text, never as markup.
+    expect(page.body).toContain("&#60;b&#62;Later&#60;/b&#62;");
+    expect(page.body).not.toContain("<b>Later</b>");
+    expect(page.body).not.toContain("Shift availability");
+
+    // An acknowledgement without an answer, or with one not offered, is refused and records nothing.
+    expect((await answer(avery, "")).statusCode).toBe(400);
+    expect((await answer(avery, "response=3\r\n")).statusCode).toBe(400);
+    expect((await detail(id)).acknowledged).toBe(0);
+
+    const done = await answer(avery, "response=1\r\n");
+    expect(done.statusCode).toBe(200);
+    expect(done.body).toContain("Your answer, Not available, is recorded.");
+    expect((await answer(bailey, "response=0\r\n")).statusCode).toBe(200);
+    let sent = (await call("GET", `/api/v1/mass-notifications/${id}`, memberToken)).json();
+    expect(sent.responses).toEqual([
+      { option: "Available", count: 1 }, { option: "Not available", count: 1 }, { option: "<b>Later</b>", count: 0 },
+    ]);
+    expect(sent.recipients.map((r: { name: string; response: string | null }) => [r.name, r.response])).toEqual([
+      ["Avery First", "Not available"], ["Bailey Second", "Available"], ["Cameron Third", null],
+    ]);
+
+    // Avery changes the answer; the first acknowledgement's time stands.
+    const [first] = await admin`select acknowledged_at from mass_notification_recipients where mass_notification_id = ${id} and name = 'Avery First'`;
+    expect((await answer(avery, "response=2\r\n")).statusCode).toBe(200);
+    sent = (await call("GET", `/api/v1/mass-notifications/${id}`, memberToken)).json();
+    expect(sent.responses.map((r: { count: number }) => r.count)).toEqual([1, 0, 1]);
+    const [again] = await admin`select acknowledged_at from mass_notification_recipients where mass_notification_id = ${id} and name = 'Avery First'`;
+    expect(again!.acknowledged_at).toEqual(first!.acknowledged_at);
+    expect(sent.acknowledged).toBe(2);
+  });
+
+  it("keeps a plain acknowledgement for a send that asks nothing, and refuses duplicate or overlong answers", async () => {
+    const id = await send({ subject: "Plain", message: "No question.", contactIds: [contact.b], channels: ["sms"], mode: "broadcast" });
+    await drain();
+    const token = smsToken("+17075550102");
+    const page = await call("GET", `/api/v1/ack/${token}`, null);
+    expect(page.body).toContain("<button type=\"submit\">Acknowledge</button>");
+    expect((await answer(token, "")).statusCode).toBe(200);
+    expect((await detail(id)).acknowledged).toBe(1);
+    expect((await call("GET", `/api/v1/mass-notifications/${id}`, memberToken)).json().responses).toEqual([]);
+    const url = `/api/v1/jurisdictions/${seed.jurisdictionId}/mass-notifications`;
+    const base = { subject: "S", message: "M", contactIds: [contact.b], channels: ["sms"], mode: "broadcast" };
+    expect((await call("POST", url, memberToken, { ...base, responseOptions: ["Yes", "Yes"] })).statusCode).toBe(400);
+    expect((await call("POST", url, memberToken, { ...base, responseOptions: ["x".repeat(61)] })).statusCode).toBe(400);
+    expect((await call("POST", url, memberToken, { ...base, responseOptions: ["1", "2", "3", "4", "5", "6", "7"] })).statusCode).toBe(400);
+  });
+});
+
 describe("call-down", () => {
   const minutes = (n: number) => new Date(Date.now() + n * 60_000);
 

@@ -11,6 +11,7 @@ import { AudiencePicker, DEFAULT_DELIVERY, DeliveryChoice, NO_AUDIENCE, delivery
 import {
   CHANNEL_LABELS,
   DELIVERY_LABELS,
+  answersOf,
   audienceOf,
   deliveryDetail,
   stateLabel,
@@ -102,6 +103,7 @@ function Compose(props: { client: ApiClient; jurisdictionId: string; onSent: (id
   const { client, jurisdictionId } = props;
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
+  const [answers, setAnswers] = useState("");
   const [audience, setAudience] = useState<AudienceParts>(NO_AUDIENCE);
   const [delivery, setDelivery] = useState(DEFAULT_DELIVERY);
   const [mode, setMode] = useState<string>("broadcast");
@@ -118,6 +120,7 @@ function Compose(props: { client: ApiClient; jurisdictionId: string; onSent: (id
       const to = audienceOf(audience);
       if (!to) throw new Error("Choose whom to notify: a contact group, contacts, a position or who is on call.");
       const how = deliveryOf(delivery, mode === "broadcast");
+      const responseOptions = answersOf(answers);
       const minutes = Number(waitMinutes);
       const acknowledgements = Number(needed);
       if (mode === "calldown" && !(Number.isInteger(minutes) && minutes >= 1 && minutes <= 1440))
@@ -129,11 +132,12 @@ function Compose(props: { client: ApiClient; jurisdictionId: string; onSent: (id
         message: message.trim(),
         ...to,
         ...how,
+        ...(responseOptions.length ? { responseOptions } : {}),
         mode: mode as "broadcast" | "calldown",
         ...(mode === "calldown" ? { intervalMinutes: minutes, acknowledgementsNeeded: acknowledgements } : {}),
       });
       setNotice(`${subject.trim()} sent.`);
-      setSubject(""); setMessage(""); setAudience(NO_AUDIENCE);
+      setSubject(""); setMessage(""); setAnswers(""); setAudience(NO_AUDIENCE);
       props.onSent(sent.id);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The notification was not sent.");
@@ -147,6 +151,10 @@ function Compose(props: { client: ApiClient; jurisdictionId: string; onSent: (id
       <fieldset disabled={busy} className="d21-form-grid">
         <div className="d21-form-grid-wide"><TextField label="Subject" value={subject} onChange={setSubject} required /></div>
         <label className="contacts-field d21-form-grid-wide">Message<textarea rows={4} value={message} onChange={(e) => setMessage(e.target.value)} /></label>
+        <label className="contacts-field d21-form-grid-wide">Answers to ask for (optional), one per line, up to six
+          <textarea rows={3} value={answers} onChange={(e) => setAnswers(e.target.value)}
+            placeholder={"Available\nNot available"} />
+        </label>
         <AudiencePicker client={client} jurisdictionId={jurisdictionId} value={audience} onChange={setAudience} contacts />
         <EnumSelect label="Mode" values={MODES} labels={MODE_LABELS} value={mode} onChange={setMode} />
         <DeliveryChoice value={delivery} onChange={setDelivery} allowFallback={mode === "broadcast"} />
@@ -205,6 +213,12 @@ function Receipts(props: { client: ApiClient; id: string; nonce: number; onRefre
             <div><dt>To</dt><dd>{m.audience}</dd></div>
           </dl>
           <p className="contacts-message">{m.message}</p>
+          {m.responses.length ? (
+            <dl className="d21-metrics" aria-label="Answers">
+              {m.responses.map((r) => <div key={r.option}><dt>{r.option}</dt><dd>{r.count}</dd></div>)}
+              <div><dt>No answer yet</dt><dd>{m.contactCount - m.responses.reduce((sum, r) => sum + r.count, 0)}</dd></div>
+            </dl>
+          ) : null}
           <ol className="contacts-receipts">
             {m.recipients.map((r) => (
               <li key={r.id} className="d21-card" aria-label={`Receipt for ${r.name}`}>
@@ -215,7 +229,7 @@ function Receipts(props: { client: ApiClient; id: string; nonce: number; onRefre
                     <span>{r.notifiedAt ? `Notified ${formatTime(r.notifiedAt)}` : "Not called"}</span>
                   </div>
                   {r.acknowledgedAt ? (
-                    <StatusBadge status="success">Acknowledged {r.acknowledgedVia === "app" ? "in the app" : "by link"} {formatTime(r.acknowledgedAt)}</StatusBadge>
+                    <StatusBadge status="success">{r.response ? `Answered ${r.response}` : "Acknowledged"} {r.acknowledgedVia === "app" ? "in the app" : "by link"} {formatTime(r.acknowledgedAt)}</StatusBadge>
                   ) : r.notifiedAt ? <StatusBadge status="warning">Not acknowledged</StatusBadge> : null}
                 </div>
                 {r.notifiedAt ? (

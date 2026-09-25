@@ -93,6 +93,8 @@ export interface MassSendInput extends Audience {
   /** A broadcast's minutes to wait for an acknowledgement before the next device. */
   readonly fallbackMinutes?: number;
   readonly acknowledgementsNeeded?: number;
+  /** Up to six answers the recipient chooses from on the acknowledgement link. */
+  readonly responseOptions?: readonly string[];
 }
 
 /** The notice an activation sends; without a message it says the incident is activated. */
@@ -100,6 +102,16 @@ export interface ActivationNotice extends Audience {
   readonly channels: readonly MassChannel[];
   readonly message?: string;
   readonly fallbackMinutes?: number;
+  readonly responseOptions?: readonly string[];
+}
+
+/** Answers typed one per line, checked as the server checks them; throws the reason. */
+export function answersOf(text: string): string[] {
+  const answers = text.split("\n").map((line) => line.trim()).filter(Boolean);
+  if (answers.length > 6) throw new Error("Ask for at most six answers.");
+  if (answers.some((a) => a.length > 60)) throw new Error("Keep each answer to 60 characters.");
+  if (new Set(answers).size !== answers.length) throw new Error("Each answer must differ from the others.");
+  return answers;
 }
 
 /** An audience with its empty parts left out, or null when it names no one. */
@@ -127,6 +139,8 @@ export interface MassNotificationSummary {
   readonly notified: number;
   readonly acknowledged: number;
   readonly state: MassState;
+  /** Each answer the send asked for, with how many chose it; empty when it asked nothing. */
+  readonly responses: ReadonlyArray<{ readonly option: string; readonly count: number }>;
 }
 
 export interface MassNotificationsPage {
@@ -156,6 +170,8 @@ export interface MassRecipient {
   readonly inApp: boolean;
   /** How the send found this person: a group, a position held, a shift. */
   readonly reachedThrough: string | null;
+  /** The answer chosen on the link, when the send asked for one. */
+  readonly response: string | null;
   readonly notifiedAt: string | null;
   readonly linkExpiresAt: string | null;
   readonly acknowledgedAt: string | null;

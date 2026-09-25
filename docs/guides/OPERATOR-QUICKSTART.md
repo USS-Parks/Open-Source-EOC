@@ -320,7 +320,11 @@ contact stays in the directory but is skipped by every send.
 chosen contacts, positions and whoever is on call. Members and administrators
 send; viewers follow the sends.
 
-1. Enter a **Subject** and a **Message**.
+1. Enter a **Subject** and a **Message**. To ask a question, write up to six
+   **Answers to ask for**, one per line, such as "Available" and "Not
+   available". The acknowledgement link then shows one button per answer,
+   and the answer chosen is the acknowledgement; a recipient may open the
+   link again to change it. The email and text list the answers.
 2. Tick whom to reach, in any mix: **Contact groups**; **Contacts**, notified
    in the order you tick them; **Positions: whoever holds each now**; and
    **On call: whoever is on shift in each now**. A position reaches its own
@@ -348,7 +352,8 @@ send; viewers follow the sends.
    no one is refused with the reason.
 
 The receipts say what the send was addressed to (a position or shift that
-reached no one is marked so) and list each person in order: how the send
+reached no one is marked so), count each answer when the send asked a
+question, with how many have not answered yet, and list each person in order: how the send
 found them (their group, the position they hold, their shift), when they were
 notified or **Not called**, whether and how they acknowledged, and for each
 channel **Queued**, **Retrying**, **Sent** or **Failed** with the relay's or

@@ -151,4 +151,37 @@ describe("activation that notifies", () => {
     expect(pageErrors).toEqual([]);
     expect(externalRequests).toEqual([]);
   }, 180_000);
+
+  it("asks the duty officers a question with three answers and counts the answers (VA8)", async () => {
+    await page.setViewportSize({ width: 1586, height: 992 });
+    await page.getByLabel("Subject").fill("Night shift");
+    await page.getByLabel("Message", { exact: true }).fill("Can you cover the night shift?");
+    await page.getByLabel("Answers to ask for (optional), one per line, up to six").fill("Available\nNot available\nAvailable after 2200");
+    await page.getByRole("checkbox", { name: "Duty officers (2)" }).check();
+    await page.getByRole("button", { name: "Send notification" }).click();
+    const receipts = page.getByRole("region", { name: "Receipts: Night shift" });
+    await receipts.waitFor();
+
+    // Blair answers on a phone from the text's link.
+    await new DeliveryWorker(runtime, { timeoutMs: 3000 }).drain();
+    const text = fixtureMessages(seed.jurisdictionId).find((m) => m.to === "+17075550302" && m.body.includes("Night shift"))!;
+    expect(text.body).toContain("Answer Available, Not available or Available after 2200:");
+    const link = /http:\/\/\S+\/api\/v1\/ack\/[A-Za-z0-9_-]{22}/.exec(text.body)![0];
+    const phone = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await phone.goto(link, { waitUntil: "load" });
+    await phone.getByRole("heading", { name: "Answer this message" }).waitFor();
+    await phone.screenshot({ path: join(SHOTS, "answer-link-390.png"), fullPage: false });
+    await phone.getByRole("button", { name: "Available after 2200" }).click();
+    await phone.getByText("Your answer, Available after 2200, is recorded.").waitFor();
+    await phone.close();
+
+    await receipts.getByRole("button", { name: "Refresh receipts" }).click();
+    const answers = receipts.getByRole("definition").filter({ hasText: /^\d+$/ });
+    await receipts.getByRole("listitem", { name: "Receipt for Blair Baker" }).getByText(/Answered Available after 2200 by link/).waitFor();
+    expect(await answers.allTextContents()).toEqual(["0", "0", "1", "1"]);
+    await receipts.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: join(SHOTS, "answer-receipts-1586.png"), fullPage: false });
+    expect(pageErrors).toEqual([]);
+    expect(externalRequests).toEqual([]);
+  }, 120_000);
 });

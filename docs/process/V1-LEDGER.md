@@ -7608,3 +7608,51 @@ macOS job (run 36172801470, started by hand) with four red browser tests.
   the operational relationships, fidelity, authorized viewing, load retry
   and board views browser tests, green.
 - **Rollback:** revert the commit.
+
+## Veoci and air gap VA8: response options on mass sends
+
+Veoci Integration and Air Gap PSPR unit VA8 (VC-03).
+
+- **What the code did before.** A recipient could only acknowledge a mass
+  send, by its link or in the app.
+- **What changed.**
+  - A send, or an activation's notice, may ask a question with up to six
+    answers, each 1 to 60 characters and each different. The email and text
+    list them ("Answer Available, Not available or Available after 2200").
+  - The acknowledgement link shows one button per answer instead of
+    **Acknowledge**; choosing one records it as the acknowledgement. The page
+    still shows nothing about the send but its answers, written as text (an
+    answer holding markup is shown, never run). A post without an answer, or
+    with one not offered, is refused and records nothing. A recipient may
+    open the link again to change the answer; the first acknowledgement's
+    time stands. An acknowledgement in the app records no answer.
+  - The receipts count each answer, in the order asked, and how many have
+    not answered; each recipient shows the answer chosen.
+  - **Migration** `0152_mass_responses.sql`: the send's answers (checked by
+    the database for number, length and repeats), the recipient's answer,
+    `mass_token_options` (a valid link's answers and nothing else), and
+    `acknowledge_mass_token` with the answer's place.
+  - **The screens.** **Mass Notification** and the activation notice gain
+    **Answers to ask for**; the receipts show the counts and each answer.
+    `docs/guides/OPERATOR-QUICKSTART.md` describes it.
+- **Files outside the "Owns" cell.** `web/src/contacts/**`,
+  `web/src/app/surfaces/IncidentsSurface.tsx`, `web/src/app/api/client.ts`
+  (through the contacts model).
+- **Air-gap behavior (decision 9).** The page and its answers are served by
+  the host; nothing leaves it but the text and email the send already sent.
+- **Tests.** `mass-notification.test.ts` adds a question with three answers:
+  the text lists them, the page offers each (the one holding markup shown as
+  text), a post without an answer or with a fourth is refused, two
+  recipients answer and the counts are one, one and none, an answer changed
+  moves the count and keeps the first acknowledgement's time; and a send
+  with no question keeps its **Acknowledge** button, with repeated, overlong
+  and seventh answers refused. `activation-notice-browser.test.ts` adds the
+  question sent from **Mass Notification**, answered on a phone from the
+  text's link, and counted in the receipts.
+- **Verification.** On the Linux test bed: `pnpm check:static` exit 0. Every
+  test file except the browser, end-to-end and load files (Vitest, two
+  workers): 1,633 passed in 241 files. The activation notice browser tests,
+  2 of 2.
+- **Evidence level:** real-database and browser tests.
+- **Rollback:** revert the commit; migration `0152` adds two columns and two
+  functions and restates `acknowledge_mass_token` with its answer.

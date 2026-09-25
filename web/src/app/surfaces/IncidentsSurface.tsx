@@ -16,7 +16,7 @@ import { formatTime } from "../../datasets/format.js";
 import {
   AudiencePicker, DEFAULT_DELIVERY, DeliveryChoice, NO_AUDIENCE, deliveryOf, type AudienceParts, type DeliveryChoiceValue,
 } from "../../contacts/Audience.js";
-import { audienceOf } from "../../contacts/model.js";
+import { answersOf, audienceOf } from "../../contacts/model.js";
 import { IncidentTemplatesPanel } from "../../incidents/IncidentTemplatesPanel.js";
 import { IncidentCollaboration } from "../../integrations/collab.js";
 import { IncidentMeetings } from "../../integrations/meetings.js";
@@ -80,6 +80,7 @@ export function IncidentsSurface(props: {
     ...DEFAULT_DELIVERY, channels: new Set(["email", "sms", "inapp"] as const),
   });
   const [notifyMessage, setNotifyMessage] = useState("");
+  const [notifyAnswers, setNotifyAnswers] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
@@ -115,16 +116,21 @@ export function IncidentsSurface(props: {
       if (!activeTpl || !name.trim()) throw new Error("Pick a template and enter an incident name.");
       const reach = notifying ? audienceOf(notifyAudience) : null;
       if (notifying && !reach) throw new Error("Choose whom the activation notifies: a contact group, a position or who is on call.");
+      const responseOptions = notifying ? answersOf(notifyAnswers) : [];
       const activated = await props.client.activateIncident(props.jurisdictionId, {
         templateKey: activeTpl,
         name: name.trim(),
         kind,
         ...(reach ? {
-          notify: { ...reach, ...deliveryOf(notifyDelivery, true), ...(notifyMessage.trim() ? { message: notifyMessage.trim() } : {}) },
+          notify: {
+            ...reach, ...deliveryOf(notifyDelivery, true),
+            ...(notifyMessage.trim() ? { message: notifyMessage.trim() } : {}),
+            ...(responseOptions.length ? { responseOptions } : {}),
+          },
         } : {}),
       });
       setName("");
-      setNotifying(false); setNotifyAudience(NO_AUDIENCE); setNotifyMessage("");
+      setNotifying(false); setNotifyAudience(NO_AUDIENCE); setNotifyMessage(""); setNotifyAnswers("");
       setSelectedIncident(activated.incidentId);
       await props.onActivated?.(activated.incidentId);
     });
@@ -177,6 +183,10 @@ export function IncidentsSurface(props: {
                 <label className="incidents-field d21-form-grid-wide">Message (optional)
                   <textarea rows={2} value={notifyMessage} onChange={(event) => setNotifyMessage(event.target.value)}
                     placeholder="Without one, the notice says the incident is activated and asks people to check in." />
+                </label>
+                <label className="incidents-field d21-form-grid-wide">Answers to ask for (optional), one per line, up to six
+                  <textarea rows={2} value={notifyAnswers} onChange={(event) => setNotifyAnswers(event.target.value)}
+                    placeholder={"Available\nNot available"} />
                 </label>
                 <p className="eoc-flush eoc-muted d21-form-grid-wide">The notice goes with the activation, as one step: if it would reach no one, nothing is activated. Follow who acknowledged under Mass Notification.</p>
               </fieldset>

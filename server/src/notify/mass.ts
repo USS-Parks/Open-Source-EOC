@@ -55,6 +55,9 @@ export const AudienceSchema = z.object({
   onCallPositionIds: Ids(50).optional(),
 });
 const Fallback = z.number().int().min(1).max(1440);
+/** The answers a send asks for, answered on the acknowledgement link (VA8). */
+const ResponseOptions = z.array(z.string().trim().min(1).max(60)).max(6)
+  .refine((options) => new Set(options).size === options.length, "each answer must differ from the others");
 const SendBody = AudienceSchema.extend({
   subject: z.string().trim().min(1).max(200),
   message: z.string().trim().min(1).max(2000),
@@ -67,14 +70,16 @@ const SendBody = AudienceSchema.extend({
   /** A broadcast's minutes to wait for an acknowledgement before the next device. */
   fallbackMinutes: Fallback.optional(),
   acknowledgementsNeeded: z.number().int().min(1).max(MAX_RECIPIENTS).default(1),
+  responseOptions: ResponseOptions.optional(),
 });
 export type MassSend = z.input<typeof SendBody>;
 
-/** The notice an activation sends: whom it reaches, how, and optionally its words. */
+/** The notice an activation sends: whom it reaches, how, and optionally its words and answers. */
 export const ActivationNoticeSchema = AudienceSchema.extend({
   channels: z.array(Channel).min(1).max(3),
   message: z.string().trim().min(1).max(2000).optional(),
   fallbackMinutes: Fallback.optional(),
+  responseOptions: ResponseOptions.optional(),
 });
 export type ActivationNotice = z.infer<typeof ActivationNoticeSchema>;
 
@@ -89,6 +94,12 @@ interface Mass {
   readonly link_base: string;
   readonly incident_id: string | null;
   readonly fallback_minutes: number | null;
+  readonly response_options: readonly string[];
+}
+
+/** The answers in words for a message: "A, B or C". */
+function answerList(options: readonly string[]): string {
+  return options.length > 1 ? `${options.slice(0, -1).join(", ")} or ${options.at(-1)}` : options[0] ?? "";
 }
 
 /** Where acknowledgement links point: OPENEOC_PUBLIC_URL when set, else the address the sender reached. */
@@ -143,9 +154,14 @@ async function notifyRecipient(tx: Sql, mass: Mass, recipient: Row, now: Date): 
            ? tx`${detail}::jsonb || jsonb_build_object('fallbackAt', now() + make_interval(mins => ${after}))`
            : detail},
          ${recipient.id as string})`;
+    const asks = mass.response_options.length > 0;
     const body = channel === "email"
-      ? `${mass.message}\n\nAcknowledge that you received this message:\n${link}\n`
-      : `${mass.subject}: ${mass.message} Acknowledge: ${link}`;
+      ? asks
+        ? `${mass.message}\n\nAnswer ${answerList(mass.response_options)} at this link:\n${link}\n`
+        : `${mass.message}\n\nAcknowledge that you received this message:\n${link}\n`
+      : asks
+        ? `${mass.subject}: ${mass.message} Answer ${answerList(mass.response_options)}: ${link}`
+        : `${mass.subject}: ${mass.message} Acknowledge: ${link}`;
     const headers = channel === "email" ? { subject: mass.subject } : {};
     await tx`
       insert into delivery_outbox (jurisdiction_id, notification_id, kind, target, headers, body, next_attempt_at)
@@ -210,12 +226,13 @@ export async function sendMassNotificationIn(
   const [row] = await tx`
     insert into mass_notifications
       (jurisdiction_id, subject, message, group_id, group_name, channels, mode, interval_minutes,
-       acknowledgements_needed, link_base, sent_by, created_at, incident_id, audience, fallback_minutes)
+       acknowledgements_needed, link_base, sent_by, created_at, incident_id, audience, fallback_minutes,
+       response_options)
     values
       (${jurisdictionId}, ${body.subject}, ${body.message}, ${soleGroup?.id ?? null}, ${soleGroup?.name ?? null},
        ${channels}::text[], ${body.mode}, ${body.mode === "calldown" ? body.intervalMinutes! : null},
        ${body.acknowledgementsNeeded}, ${linkBase}, ${actor.person.id}, ${now}, ${options.incidentId ?? null},
-       ${tx.json(audience as never)}, ${body.fallbackMinutes ?? null})
+       ${tx.json(audience as never)}, ${body.fallbackMinutes ?? null}, ${body.responseOptions ?? []}::text[])
     returning id`;
   const mass: Mass = {
     id: row!.id as string,
@@ -226,6 +243,7 @@ export async function sendMassNotificationIn(
     link_base: linkBase,
     incident_id: options.incidentId ?? null,
     fallback_minutes: body.fallbackMinutes ?? null,
+    response_options: body.responseOptions ?? [],
   };
   const column = <K extends keyof (typeof reached)[number]>(key: K) => reached.map((r) => r[key]);
   const recipients = await tx`
@@ -274,7 +292,7 @@ export async function runDueCalldowns(
     // The row lock keeps an overlapping run during a leader handover from calling twice.
     const open = await tx`
       select id, jurisdiction_id, subject, message, channels, link_base, interval_minutes,
-        acknowledgements_needed, incident_id, fallback_minutes
+        acknowledgements_needed, incident_id, fallback_minutes, response_options
       from mass_notifications
       where jurisdiction_id = ${jurisdictionId} and mode = 'calldown' and completed_at is null
       order by created_at
@@ -329,6 +347,11 @@ function summaryView(r: Row) {
     notified: Number(r.notified),
     acknowledged: Number(r.acknowledged),
     state: stateOf(r),
+    // Each answer the send asked for, with how many chose it, in the order asked.
+    responses: (r.response_options as string[]).map((option) => ({
+      option,
+      count: Number((r.response_counts as Record<string, number> | null)?.[option] ?? 0),
+    })),
   };
 }
 
@@ -339,7 +362,10 @@ async function readSummaries(
   return tx`
     select m.id, m.subject, m.message, m.mode, m.channels, m.group_name, m.interval_minutes,
       m.acknowledgements_needed, m.created_at, m.completed_at, m.jurisdiction_id,
-      m.audience, m.incident_id, m.fallback_minutes,
+      m.audience, m.incident_id, m.fallback_minutes, m.response_options,
+      (select jsonb_object_agg(x.response, x.n) from (
+         select r.response, count(*) as n from mass_notification_recipients r
+         where r.mass_notification_id = m.id and r.response is not null group by r.response) x) as response_counts,
       p.display_name as sent_by_name,
       to_char(m.created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at,
       (select count(*) from mass_notification_recipients r where r.mass_notification_id = m.id) as recipients,
@@ -371,10 +397,17 @@ function deliveryState(d: Row, now: Date): "scheduled" | "queued" | "retrying" |
 }
 
 /** The public link's pages: plain HTML, no data beyond what the page says. */
-function ackPage(reply: FastifyReply, status: number, title: string, text: string, button: boolean) {
-  const form = button
-    ? `<form method="post" enctype="text/plain"><button type="submit">Acknowledge</button></form>`
-    : "";
+const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+/**
+ * `answers` null shows no form; empty, one Acknowledge button; otherwise a
+ * button for each answer, which posts its place in the list.
+ */
+function ackPage(reply: FastifyReply, status: number, title: string, text: string, answers: readonly string[] | null) {
+  const buttons = answers?.length
+    ? answers.map((answer, i) => `<button type="submit" name="response" value="${i}">${escapeHtml(answer)}</button>`).join(" ")
+    : `<button type="submit">Acknowledge</button>`;
+  const form = answers ? `<form method="post" enctype="text/plain">${buttons}</form>` : "";
   return reply
     .status(status)
     .header("content-type", "text/html; charset=utf-8")
@@ -384,7 +417,7 @@ function ackPage(reply: FastifyReply, status: number, title: string, text: strin
     .send(`<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>${title}</title>
 <style>body{font-family:system-ui,sans-serif;margin:2rem auto;max-width:32rem;padding:0 1rem;line-height:1.5}
-button{font:inherit;padding:.75rem 1.5rem;min-height:44px}</style></head>
+button{font:inherit;padding:.75rem 1.5rem;min-height:44px;margin:0 .5rem .5rem 0}</style></head>
 <body><h1>${title}</h1><p>${text}</p>${form}</body></html>`);
 }
 
@@ -432,7 +465,7 @@ export function massNotificationRoutes(
       requireMember(req.principal, mass.jurisdiction_id as string);
       const recipients = await tx`
         select id, priority, contact_id, name, email, phone, person_id, position_id,
-          notified_at, token_expires_at, acknowledged_at, acknowledged_via, reached_through
+          notified_at, token_expires_at, acknowledged_at, acknowledged_via, reached_through, response
         from mass_notification_recipients where mass_notification_id = ${massNotificationId}
         order by priority`;
       const deliveries = await tx`select * from mass_notification_deliveries(${massNotificationId})`;
@@ -450,6 +483,7 @@ export function massNotificationRoutes(
           phone: r.phone as string | null,
           inApp: Boolean(r.person_id || r.position_id),
           reachedThrough: r.reached_through as string | null,
+          response: r.response as string | null,
           notifiedAt: r.notified_at ? (r.notified_at as Date).toISOString() : null,
           linkExpiresAt: r.token_expires_at ? (r.token_expires_at as Date).toISOString() : null,
           acknowledgedAt: r.acknowledged_at ? (r.acknowledged_at as Date).toISOString() : null,
@@ -475,18 +509,30 @@ export function massNotificationRoutes(
   // The acknowledgement link. No sign-in: the token alone names one
   // recipient of one send. Opening it shows a button; pressing the button
   // records the acknowledgement. Neither page shows anything about the send.
+  // A send that asks a question shows its answers instead, and the answer
+  // chosen is the acknowledgement; the recipient may change it later.
   const acknowledge = async (req: FastifyRequest, reply: FastifyReply, record: boolean) => {
     if (!rateLimit(`ack:${req.ip}`, ACK_PER_MINUTE, 60_000).allowed)
-      return ackPage(reply, 429, "Try again shortly", "Too many requests from this address. Wait a minute and try again.", false);
+      return ackPage(reply, 429, "Try again shortly", "Too many requests from this address. Wait a minute and try again.", null);
+    const invalid = () => ackPage(reply, 404, "Link not valid", "This acknowledgement link is not valid or has expired.", null);
     const { token } = req.params as { token: string };
-    const [row] = ACK_TOKEN.test(token)
-      ? await sql`select acknowledge_mass_token(${hashToken(token)}, ${record}) as ok`
-      : [{ ok: false }];
-    if (!row?.ok)
-      return ackPage(reply, 404, "Link not valid", "This acknowledgement link is not valid or has expired.", false);
-    return record
-      ? ackPage(reply, 200, "Acknowledged", "Your acknowledgement is recorded. You can close this page.", false)
-      : ackPage(reply, 200, "Acknowledge this message", "Select Acknowledge to confirm that you received the message.", true);
+    if (!ACK_TOKEN.test(token)) return invalid();
+    const hashed = hashToken(token);
+    const [found] = await sql`select mass_token_options(${hashed}) as options`;
+    const answers = found?.options as string[] | null | undefined;
+    if (!answers) return invalid();
+    const ask = answers.length > 0;
+    const choose = (status: number, text: string) => ackPage(reply, status, ask ? "Answer this message" : "Acknowledge this message", text, answers);
+    if (!record)
+      return choose(200, ask ? "Choose your answer. It is recorded as your acknowledgement." : "Select Acknowledge to confirm that you received the message.");
+    const picked = /(?:^|\n)response=(\d{1,2})\r?(?:\n|$)/.exec(typeof req.body === "string" ? req.body : "");
+    const choice = ask && picked ? Number(picked[1]) : null;
+    if (ask && (choice === null || choice >= answers.length)) return choose(400, "Choose one of the answers.");
+    const [row] = await sql`select acknowledge_mass_token(${hashed}, true, ${choice}) as ok`;
+    if (!row?.ok) return invalid();
+    return ackPage(reply, 200, "Acknowledged", ask
+      ? `Your answer, ${escapeHtml(answers[choice!]!)}, is recorded. You can close this page, or open the link again to change it.`
+      : "Your acknowledgement is recorded. You can close this page.", null);
   };
   app.get("/api/v1/ack/:token", (req, reply) => acknowledge(req, reply, false));
   app.post("/api/v1/ack/:token", (req, reply) => acknowledge(req, reply, true));
