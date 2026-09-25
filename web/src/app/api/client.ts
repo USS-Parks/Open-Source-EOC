@@ -1609,6 +1609,12 @@ export class ApiClient {
     const query = new URLSearchParams({ q, ...(near ? { near: near.join(",") } : {}) });
     return this.request("GET", `/api/v1/geocode/search?${query}`);
   }
+  /** What the offline gazetteer has nearest a point, each result with its distance. */
+  reverseGeocode(at: readonly [number, number]): Promise<{
+    readonly available: boolean; readonly results: ReadonlyArray<PlaceResult & { readonly distanceMeters: number }>;
+  }> {
+    return this.request("GET", `/api/v1/geocode/reverse?${new URLSearchParams({ at: at.join(",") })}`);
+  }
   /** Streams the file as multipart/form-data; the text fields go first, as the server requires. */
   uploadFile(
     jurisdictionId: string,

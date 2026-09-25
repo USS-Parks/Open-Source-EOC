@@ -17,6 +17,8 @@ export interface FeedLayerHealth {
   readonly stale: boolean;
   readonly ageSeconds: number | null;
   readonly incomplete?: boolean | undefined;
+  /** Drawn from vector tiles whatever its page count, as a parcel layer is. */
+  readonly tiled?: boolean | undefined;
   readonly coverage?: string | undefined;
   readonly attribution?: string | undefined;
 }

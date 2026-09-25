@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { Gazetteer } from "../../server/src/geocode/gazetteer.ts";
 import { GAZETTEER_HEADER } from "../../server/src/geocode/normalize.ts";
 import {
-  archiveTiles, createGazetteerBuilder, decodeTile, lonLat, readAddressPoints, tileIdToZxy,
+  archiveTiles, createGazetteerBuilder, decodeTile, lonLat, readAddressPoints, readBoundaries, tileIdToZxy,
 } from "./build-gazetteer.mjs";
 
 // Runs under the workspace vitest (not node --test) so the normal CI run covers it.
@@ -148,5 +148,65 @@ describe("county address point files", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("containing city, saints and reverse lookup", () => {
+  const gazetteerOf = (builder) =>
+    new Gazetteer(Buffer.from(`${GAZETTEER_HEADER}\t2026-09-25T00:00:00Z\n${builder.build().lines.join("\n")}\n`));
+
+  it("names a street by the city boundary that contains it, and by the nearest settlement outside every boundary", () => {
+    const builder = createGazetteerBuilder();
+    builder.addTile(14, A.x, A.y, new Map([
+      ["place", layer(point("Eureka", { class: "city" }, 2048, 2048))],
+      ["transportation_name", layer(line("Main St", "minor", [500, 3800, 1500, 3800]), line("3rd St", "tertiary", [500, 1000, 3500, 1000]))],
+    ]));
+    const corner = (px, py) => lonLat(14, A.x, A.y, 4096, px, py);
+    const ring = [corner(0, 3600), corner(1700, 3600), corner(1700, 4095), corner(0, 4095), corner(0, 3600)];
+    const dir = mkdtempSync(join(tmpdir(), "gazetteer-"));
+    try {
+      const path = join(dir, "places.geojson");
+      writeFileSync(path, JSON.stringify({ type: "FeatureCollection", features: [
+        { type: "Feature", properties: { NAME: "Myrtletown" }, geometry: { type: "Polygon", coordinates: [ring] } },
+        { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [ring] } },
+      ] }));
+      const boundaries = readBoundaries(path);
+      expect(boundaries.map((b) => b.name)).toEqual(["Myrtletown"]);
+      builder.addBoundaries(boundaries);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    const gazetteer = gazetteerOf(builder);
+    expect(gazetteer.search("main st", { limit: 1 })[0]).toMatchObject({ label: "Main St", detail: "Myrtletown" });
+    expect(gazetteer.search("3rd st", { limit: 1 })[0]).toMatchObject({ label: "3rd St", detail: "Eureka" });
+    expect(gazetteer.search("main myrtletown", { limit: 1 })[0]).toMatchObject({ label: "Main St" });
+  });
+
+  it("reads a leading St as saint, and St after a name as street", () => {
+    const builder = createGazetteerBuilder();
+    builder.addTile(14, B.x, B.y, new Map([
+      ["place", layer(point("St Helena", { class: "town" }, 1000, 1000))],
+      ["transportation_name", layer(line("Oak St", "minor", [500, 2000, 1500, 2000]))],
+    ]));
+    const gazetteer = gazetteerOf(builder);
+    for (const query of ["st helena", "saint helena", "saint hel"]) {
+      expect(gazetteer.search(query, { limit: 1 })[0]).toMatchObject({ kind: "place", label: "St Helena" });
+    }
+    expect(gazetteer.search("oak street", { limit: 1 })[0]).toMatchObject({ kind: "street", label: "Oak St", detail: "St Helena" });
+    // A file built before the rule keyed the town as "street helena"; it still reads as saint.
+    const old = new Gazetteer(Buffer.from(`${GAZETTEER_HEADER}\t2026-09-01T00:00:00Z\nplace\tSt Helena\ttown\t\t-122.47\t38.5\tstreet helena\t\n`));
+    expect(old.search("saint helena", { limit: 1 })[0]).toMatchObject({ label: "St Helena" });
+  });
+
+  it("answers a point with the nearest house number, place and point of interest, and a street when no number is near", () => {
+    const { gazetteer, replaced } = fixture();
+    const [address, ...rest] = gazetteer.reverse(replaced[0], replaced[1]);
+    expect(address).toMatchObject({ kind: "address", label: "816 3rd St", detail: "Eureka", distanceMeters: 0 });
+    expect(rest.map((r) => r.kind)).toEqual(["place", "poi"]);
+    expect(rest[0]).toMatchObject({ label: "Eureka" });
+    // Half a kilometre south of the numbered block, no house number is near.
+    const away = gazetteer.reverse(replaced[0], replaced[1] - 0.005);
+    expect(away.map((r) => r.kind)).toEqual(["street", "place", "poi"]);
+    expect(away[0].distanceMeters).toBeGreaterThan(150);
   });
 });

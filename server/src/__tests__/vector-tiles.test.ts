@@ -281,6 +281,26 @@ describe("dataset vector tiles", () => {
     }
   });
 
+  it("leaves out areas too small to see at low zoom and draws them close up", async () => {
+    const square = (lng: number, lat: number, size: number) =>
+      `POLYGON((${lng} ${lat},${lng + size} ${lat},${lng + size} ${lat + size},${lng} ${lat + size},${lng} ${lat}))`;
+    const [item] = await admin`select incident_id, loaded_by from data_pack_items where dataset_id = ${datasetId} limit 1`;
+    await admin`
+      insert into data_pack_items (dataset_id, incident_id, source_id, data, geom, loaded_by)
+      values (${datasetId}, ${item!.incident_id as string}, 'parcel-small', '{"title":"Small parcel"}',
+              ST_GeomFromText(${square(-123.6, 41.25, 0.0002)}, 4326), ${item!.loaded_by as string}),
+             (${datasetId}, ${item!.incident_id as string}, 'zone-large', '{"title":"Large zone"}',
+              ST_GeomFromText(${square(-123.62, 41.24, 0.05)}, 4326), ${item!.loaded_by as string})`;
+    try {
+      const ids = async (z: number) => ((await tile(datasetTile(...tileOf(-123.5999, 41.2501, z)), memberToken)).layers.features ?? [])
+        .map((f) => f._id).filter((id) => !String(id).startsWith("pt-"));
+      expect(await ids(8)).toEqual(["zone-large"]);
+      expect((await ids(16)).sort()).toEqual(["parcel-small", "zone-large"]);
+    } finally {
+      await admin`delete from data_pack_items where dataset_id = ${datasetId} and source_id in ('parcel-small', 'zone-large')`;
+    }
+  });
+
   it("denies a caller outside the incident", async () => {
     const denied = await tile(datasetTile(...tileOf(WEST, SOUTH, 8)), outsiderToken);
     expect([403, 404]).toContain(denied.status);

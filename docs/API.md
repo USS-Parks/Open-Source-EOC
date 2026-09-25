@@ -273,6 +273,7 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 
 ### geocode
 
+- `GET /api/v1/geocode/reverse`: Read geocode reverse (auth: bearer; audience: operator)
 - `GET /api/v1/geocode/search`: Read geocode search (auth: bearer; audience: operator)
 
 ### handoff

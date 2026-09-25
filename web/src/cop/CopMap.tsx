@@ -240,6 +240,11 @@ export interface CopMapProps {
   readonly tileUrl?: ((kind: "board" | "feed", id: string) => string | undefined) | undefined;
   /** Headers (the bearer) for tile requests from tileUrl, read per request. */
   readonly tileHeaders?: (() => Record<string, string>) | undefined;
+  /** The offline gazetteer's answer for a point, for the "What is here?" tool. */
+  readonly describePoint?: ((lngLat: [number, number]) => Promise<{
+    readonly available: boolean;
+    readonly results: ReadonlyArray<{ readonly kind: string; readonly label: string; readonly detail: string; readonly distanceMeters: number }>;
+  }>) | undefined;
   /** Test/instrumentation hook: receives the live map instance. */
   readonly onMap?: ((map: maplibregl.Map) => void) | undefined;
   /** Stored incident context printed outside the map frame in PNG exports. */
@@ -442,6 +447,12 @@ export function CopMap(props: CopMapProps) {
   const measureRef = useRef<MeasureMode>("off");
   const measureCoordsRef = useRef<[number, number][]>([]);
   const [measure, setMeasure] = useState<MeasureMode>("off");
+  // "What is here?": the next map click asks the gazetteer about that point.
+  const [identifying, setIdentifying] = useState(false);
+  const identifyRef = useRef(false);
+  identifyRef.current = identifying;
+  const describeRef = useRef(props.describePoint);
+  describeRef.current = props.describePoint;
   // The last fetched features per source, so zoom-to-extent and search cover
   // every feature, not just those in the current viewport (querySourceFeatures
   // is viewport-bound).
@@ -784,6 +795,35 @@ export function CopMap(props: CopMapProps) {
         onPickRef.current([e.lngLat.lng, e.lngLat.lat]);
         return;
       }
+      if (identifyRef.current && describeRef.current) {
+        setIdentifying(false);
+        const box = document.createElement("div");
+        box.className = "eoc-cop-identify";
+        box.setAttribute("role", "status");
+        box.textContent = "Looking this point up…";
+        popup.setLngLat(e.lngLat).setDOMContent(box).addTo(map);
+        void describeRef.current([e.lngLat.lng, e.lngLat.lat]).then((answer) => {
+          box.replaceChildren();
+          const heading = document.createElement("strong");
+          heading.textContent = "Near this point";
+          box.append(heading);
+          if (!answer.available || answer.results.length === 0) {
+            const note = document.createElement("p");
+            note.textContent = answer.available ? "Nothing in the offline address data is near here."
+              : "Offline address search is not installed on this server.";
+            box.append(note);
+            return;
+          }
+          const list = document.createElement("ul");
+          for (const result of answer.results) {
+            const item = document.createElement("li");
+            item.textContent = `${result.label}${result.detail ? `, ${result.detail}` : ""} (${result.distanceMeters} m)`;
+            list.append(item);
+          }
+          box.append(list);
+        }).catch(() => { box.textContent = "The address lookup failed. Try again."; });
+        return;
+      }
       // Measure mode: each click extends the path; nothing is inspected.
       if (measureRef.current !== "off") {
         measureCoordsRef.current = [...measureCoordsRef.current, [e.lngLat.lng, e.lngLat.lat]];
@@ -928,10 +968,12 @@ export function CopMap(props: CopMapProps) {
             dataRef.current[feedSourceId(feed.id)] = fc;
             // Flood styling classifies by pattern matching, which tile
             // expressions cannot do, so flood references stay GeoJSON.
-            const tiles = feed.kind !== "fema-flood" && res.feed.incomplete ? tileTemplate("feed", feed.id) : undefined;
+            const tiles = feed.kind !== "fema-flood" && (res.feed.incomplete || res.feed.tiled)
+              ? tileTemplate("feed", feed.id) : undefined;
             mount(feedSourceId(feed.id), fc, feedLayerSpecs(feed.id, props.theme, labelFont, feed.kind),
               tiles, res.feed.stale, feedVisibleRef.current[feed.id] ?? true);
-            setFeedHealth((current) => ({ ...current, [feed.id]: res.feed }));
+            // Tiles carry every feature, so a layer drawn from them is not incomplete on the map.
+            setFeedHealth((current) => ({ ...current, [feed.id]: { ...res.feed, tiled: Boolean(tiles) } }));
             const requested = requestedFeatureRef.current;
             const requestKey = requested ? `${requested.datasetId}/${requested.featureId}` : "";
             if (requested?.datasetId === feed.id && openedRequestedFeatureRef.current !== requestKey) {
@@ -1128,7 +1170,7 @@ export function CopMap(props: CopMapProps) {
         const freshness = health
           ? health.stale ? `stale last-good data, ${formatAge(health.ageSeconds)}` : `current, ${formatAge(health.ageSeconds)}`
           : "freshness unknown";
-        return { title: feed.title, detail: `${freshness}${health?.incomplete ? ", display incomplete" : ""}` };
+        return { title: feed.title, detail: `${freshness}${health?.incomplete && !health.tiled ? ", display incomplete" : ""}` };
       }),
     ];
     const references: string[] = [];
@@ -1671,7 +1713,9 @@ export function CopMap(props: CopMapProps) {
                       {feedHealth[f.id]!.stale ? "Stale last-good data" : `Freshness: ${formatAge(feedHealth[f.id]!.ageSeconds)}`}
                     </small>
                   ) : <small className="eoc-cop-layer-meta">Freshness unknown</small>}
-                  {feedHealth[f.id]?.incomplete ? (
+                  {feedHealth[f.id]?.tiled ? (
+                    <small className="eoc-cop-note">Drawn from vector tiles: every feature is on the map.</small>
+                  ) : feedHealth[f.id]?.incomplete ? (
                     <small role="status" className="eoc-cop-note is-warning">
                       Display incomplete: bounded page limit reached.
                     </small>
@@ -1759,6 +1803,11 @@ export function CopMap(props: CopMapProps) {
             >
               {measure === "area" ? "Measuring area…" : "Measure area"}
             </button>
+            {props.describePoint ? (
+              <button type="button" aria-pressed={identifying} onClick={() => setIdentifying((on) => !on)} className="eoc-cop-tool">
+                {identifying ? "Click a point on the map…" : "What is here?"}
+              </button>
+            ) : null}
             <button type="button" onClick={exportImage} className="eoc-cop-tool">
               Export image
             </button>

@@ -8,6 +8,10 @@ const SearchQuery = z.object({
   near: z.string().regex(/^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/).optional(),
 });
 
+const ReverseQuery = z.object({
+  at: z.string().regex(/^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/),
+});
+
 /**
  * The gazetteer named by OPENEOC_GAZETTEER_PATH, or null. Search is an aid,
  * not a dependency: a missing or unreadable file is logged and the server
@@ -26,7 +30,7 @@ export function loadGazetteer(path: string | undefined, log: FastifyBaseLogger):
   }
 }
 
-/** Offline forward search for any signed-in person; the data is the basemap's. */
+/** Offline forward and reverse search for any signed-in person; the data is the basemap's. */
 export function geocodeRoutes(
   app: FastifyInstance,
   authenticate: (req: FastifyRequest) => Promise<void>,
@@ -37,5 +41,14 @@ export function geocodeRoutes(
     if (!gazetteer) return reply.send({ available: false, results: [] });
     const near = query.near?.split(",").map(Number) as [number, number] | undefined;
     return reply.send({ available: true, results: gazetteer.search(query.q, { limit: query.limit, near }) });
+  });
+
+  /** Offline reverse lookup: the nearest address, street, place and point of interest. */
+  app.get("/api/v1/geocode/reverse", { preHandler: authenticate }, async (req, reply) => {
+    const query = ReverseQuery.parse(req.query);
+    const [lon, lat] = query.at.split(",").map(Number) as [number, number];
+    if (Math.abs(lon) > 180 || Math.abs(lat) > 90) return reply.status(400).send({ error: "at is outside the world" });
+    if (!gazetteer) return reply.send({ available: false, results: [] });
+    return reply.send({ available: true, results: gazetteer.reverse(lon, lat) });
   });
 }

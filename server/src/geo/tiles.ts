@@ -38,13 +38,17 @@ type Tile = z.infer<typeof TileXYZ>;
  * Render one tile from a row source selecting (fid text, props jsonb, geom
  * geometry 4326) already filtered to `bounds`. Geometry is clipped to the
  * buffered tile before projection, so nothing past the Web Mercator limit is
- * ever projected.
+ * ever projected. With `dropSmall`, a line or area narrower than two tile
+ * pixels at this zoom is left out, so a county of parcels stays a small tile
+ * until the view is close enough to tell them apart.
  */
 async function renderTile(
   tx: Sql,
   t: Tile,
   rows: (bounds: never) => never,
+  dropSmall = false,
 ): Promise<Buffer> {
+  const minSize = dropSmall ? (2 * 360) / (2 ** t.z * EXTENT) : 0;
   const envelope = tx`ST_TileEnvelope(${t.z}::int, ${t.x}::int, ${t.y}::int)` as never;
   const bounds = tx`ST_Transform(ST_TileEnvelope(${t.z}::int, ${t.x}::int, ${t.y}::int,
     margin => ${BUFFER / EXTENT}::float8), 4326)` as never;
@@ -56,6 +60,8 @@ async function renderTile(
           ${EXTENT}::int, ${BUFFER}::int, true) as g,
         ${cluster}::boolean and GeometryType(s.geom) = 'POINT' as clustered
       from (${rows(bounds)}) s
+      where ${minSize}::float8 = 0 or GeometryType(s.geom) in ('POINT', 'MULTIPOINT')
+        or greatest(ST_XMax(s.geom) - ST_XMin(s.geom), ST_YMax(s.geom) - ST_YMin(s.geom)) >= ${minSize}::float8
     ),
     cells as (
       select fid, props, g, floor(ST_X(g) / ${CELL}) as cx, floor(ST_Y(g) / ${CELL}) as cy,
@@ -122,7 +128,7 @@ export function tileRoutes(
       return renderTile(tx, t, (bounds) => tx`
         select source_id as fid, data as props, geom
         from data_pack_items
-        where dataset_id = ${t.datasetId} and geom is not null and geom && ${bounds}` as never);
+        where dataset_id = ${t.datasetId} and geom is not null and geom && ${bounds}` as never, true);
     });
     return sendTile(reply, mvt);
   });

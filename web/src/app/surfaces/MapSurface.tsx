@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import {
+  CALIFORNIA_CATALOG,
   CALIFORNIA_ESF_TITLES,
   LIFELINE_DEFINITION,
   geometryFieldKey,
@@ -190,6 +191,10 @@ export function MapSurface(props: {
     attribution: d.key === FEMA_NFHL_DATASET_KEY ? FEMA_NFHL_ATTRIBUTION : undefined,
   }));
   const datasetIds = new Set(mapDatasets.map((d) => d.id));
+  // A parcel layer is drawn from vector tiles at once: one page of items for
+  // the layer panel, rather than tens of thousands of features first.
+  const tilesFirst = new Set(mapDatasets.filter((d) => CALIFORNIA_CATALOG.some((source) =>
+    source.category === "parcels_buildings" && source.id.replace(/-/g, "_") === d.key)).map((d) => d.id));
   const datasetById = new Map(mapDatasets.map((d) => [d.id, d]));
   const feedAndDatasetLayers = [...feedLayers, ...datasetLayers];
   const empty = geoBoards.length === 0 && feedAndDatasetLayers.length === 0;
@@ -473,12 +478,14 @@ export function MapSurface(props: {
             ? `/api/v1/tiles/boards/${id}/{z}/{x}/{y}.mvt`
             : datasetIds.has(id) ? `/api/v1/tiles/datasets/${id}/{z}/{x}/{y}.mvt` : undefined}
           tileHeaders={() => ({ authorization: `Bearer ${props.client.fieldSyncToken()}` })}
+          describePoint={(at) => props.client.reverseGeocode(at)}
           feeds={feedAndDatasetLayers}
           fetchFeedItems={(id) =>
             datasetIds.has(id)
               ? props.client.datasetItemsInArea(
                   id,
                   id === props.focusDatasetId ? undefined : areaBbox ?? undefined,
+                  tilesFirst.has(id) ? { maxPages: 1 } : {},
                 ).then((fc) => ({
                   ...fc,
                   feed: {
@@ -486,6 +493,7 @@ export function MapSurface(props: {
                     stale: datasetById.get(id)!.availability === "stale",
                     ageSeconds: ageSeconds(datasetById.get(id)!.lastSuccessAt),
                     incomplete: fc.incomplete,
+                    tiled: tilesFirst.has(id),
                     coverage: datasetLayers.find((layer) => layer.id === id)?.coverage,
                     attribution: datasetLayers.find((layer) => layer.id === id)?.attribution,
                   },

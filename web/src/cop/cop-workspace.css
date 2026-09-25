@@ -592,3 +592,7 @@
 .eoc-cop-area-callout .eoc-cop-card-key.is-boundary { margin-top: 2px; border-color: #3f55d4; background: #6f8cf255; }
 .eoc-cop-area-callout strong { display: block; font-size: 12px; }
 .eoc-cop-area-callout span:not(.eoc-cop-card-key) { display: block; }
+
+/* The "What is here?" answer in a map popup. */
+.eoc-cop-identify ul { margin: 4px 0 0; padding-left: 16px; }
+.eoc-cop-identify p { margin: 4px 0 0; }

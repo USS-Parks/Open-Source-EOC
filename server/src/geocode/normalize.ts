@@ -11,10 +11,9 @@ export const GAZETTEER_HEADER = "#openeoc-gazetteer\t1";
 
 /**
  * Street and place abbreviations, expanded rather than contracted so a
- * half-typed word still prefix-matches ("mou" finds "Mt Shasta").
- * ponytail: "st" always reads as street, so "St Helena" keys as "street
- * helena"; a query for it normalizes the same way. Add saint handling if
- * operators search saints by the full word.
+ * half-typed word still prefix-matches ("mou" finds "Mt Shasta"). "St" is
+ * street, except as the first of several words, where it is saint: "St
+ * Helena" keys as "saint helena" and "3rd St" as "3rd street".
  */
 const EXPANSIONS: Readonly<Record<string, string>> = {
   av: "avenue", ave: "avenue", blvd: "boulevard", cir: "circle", ct: "court", dr: "drive",
@@ -41,5 +40,11 @@ export function expandToken(word: string): string {
 
 /** The stored search key: folded words with abbreviations expanded. */
 export function searchKey(text: string): string {
-  return foldTokens(text).map(expandToken).join(" ");
+  const words = foldTokens(text);
+  return words.map((word, i) => (word === "st" && i === 0 && words.length > 1 ? "saint" : expandToken(word))).join(" ");
+}
+
+/** The words a typed word may stand for in a key, the expansion first. */
+export function wordAlternatives(word: string): string[] {
+  return [...new Set([expandToken(word), ...(word === "st" ? ["saint"] : []), word])];
 }

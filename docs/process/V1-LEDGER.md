@@ -5976,3 +5976,56 @@ lifecycle" and "V1 W2.12: network calls out of every write path".
 - **Evidence level:** real-database and browser tests.
 - **Rollback:** revert the commit. Migration `0141`'s link clearing on
   repeated escalations cannot be reversed; the requests themselves stay.
+
+## Readiness RD9 part three: address search and parcel tiles
+
+The map items of RD9, from "V1 W4.6: offline address search" and "V1 W4.5:
+operational vector tiles".
+
+- **What changed.**
+  - **Reverse lookup.** `GET /api/v1/geocode/reverse?at=lon,lat` answers a
+    point from the offline gazetteer: the nearest house number within 150
+    m, the nearest place and point of interest, each with its distance, and
+    the nearest street when no house number is that close (a street is
+    placed at its middle, so its distance says little once an address is
+    known). On the statewide gazetteer (827,699 entries) it takes 7 to 41 ms;
+    at 1375 Main Street, St. Helena it answers that address at 14 m. The
+    map has a "What is here?" tool: the next click shows the answer in a
+    popup.
+  - **"St" as "Saint".** A leading "St" before another word keys and
+    searches as saint, and "St" after a name stays street: "st helena",
+    "saint helena" and "saint hel" find St Helena, and "3rd st" still finds
+    3rd Street. A gazetteer built before the rule is read the same way.
+  - **The containing city.** The builder takes an optional city boundary
+    file (`--places`, GeoJSON polygons named by `NAME` or `name`, such as
+    Census TIGER places) and names each street and point of interest by the
+    boundary that contains it, falling back to the nearest settlement
+    outside every boundary.
+  - **Parcel vector tiles.** A parcel dataset is drawn from vector tiles at
+    once: the map reads one page of its items for the layer panel instead
+    of up to 50,000 features first, and says "Drawn from vector tiles: every
+    feature is on the map" in place of the incomplete-display warning, which
+    no longer shows for any layer the map draws from tiles. Dataset tiles
+    leave out a line or area narrower than two tile pixels at the tile's
+    zoom, so a county of parcels stays a small tile until the view is close
+    enough to tell them apart.
+  - The contract and `docs/API.md` list the reverse route.
+- **Not done: house numbers by containment.** Attaching a house number to
+  the parcel or building that contains it needs parcel data with situs
+  addresses, which is not on this machine; fetching it is an outside
+  download for Basho to authorize. Numbers still attach to the nearest named
+  street in their tile. The shipped gazetteer is also not rebuilt with city
+  boundaries, for the same reason: no boundary file is on disk, so contexts
+  stay the nearest settlement until one is supplied and the gazetteer
+  rebuilt.
+- **Tests.** The builder test builds a gazetteer with a boundary, with a
+  saint's town, and answers reverse lookups near and away from a house
+  number; the geocode route test covers the reverse route, its refusals and
+  a server without a gazetteer; the vector tile test drops a small area at
+  zoom 8 and draws it at 16. Screens: the place search browser test uses
+  "What is here?" at 1586 by 992, and the COP browser test checks a parcel
+  layer reads one page and fetches tiles.
+- **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
+- **Evidence level:** unit and route tests, a measurement on the statewide
+  gazetteer, browser tests.
+- **Rollback:** revert the commit; no schema change.

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { expandToken, foldTokens, GAZETTEER_HEADER, searchKey } from "./normalize.js";
+import { foldTokens, GAZETTEER_HEADER, searchKey, wordAlternatives } from "./normalize.js";
 
 /**
  * The offline gazetteer: places, streets with their house numbers, and
@@ -21,6 +21,17 @@ export interface GeocodeResult {
   /** The map zoom that frames the result. */
   readonly zoom: number;
 }
+
+/** A reverse lookup's answer: how far the entry is from the point asked about. */
+export interface ReverseResult extends GeocodeResult {
+  readonly distanceMeters: number;
+}
+
+/** A house number counts as the point's address within this distance. */
+const ADDRESS_METERS = 150;
+/** Streets whose representative point lies within this many degrees are searched for house numbers. */
+const STREET_DEGREES = 0.03;
+const METERS_PER_DEGREE = 111_320;
 
 export interface GeocodeOptions {
   readonly limit: number;
@@ -96,7 +107,9 @@ export class Gazetteer {
         const kind = KINDS[bytes.toString("latin1", pos, tabs[0])];
         const lon = Number(bytes.toString("latin1", tabs[3]! + 1, tabs[4]));
         const lat = Number(bytes.toString("latin1", tabs[4]! + 1, tabs[5]));
-        const key = bytes.toString("utf8", tabs[5]! + 1, tabs[6]);
+        let key = bytes.toString("utf8", tabs[5]! + 1, tabs[6]);
+        // A file built before "St" first read as saint keys "St Helena" as street helena.
+        if (key.startsWith("street ")) key = searchKey(bytes.toString("utf8", tabs[0]! + 1, tabs[1])) || key;
         if (kind === undefined || !Number.isFinite(lon) || !Number.isFinite(lat) || !key) {
           throw new Error(`malformed gazetteer line at byte ${pos}`);
         }
@@ -192,7 +205,7 @@ export class Gazetteer {
    */
   private match(words: readonly string[]): number[] {
     if (words.length === 0) return [];
-    const alternatives = words.map((word) => [...new Set([word, expandToken(word)])]);
+    const alternatives = words.map(wordAlternatives);
     // Walk the postings of the query word with the fewest, checking the rest by key and settlement.
     let lead = 0;
     let leadRanges: Array<[number, number]> = [];
@@ -249,9 +262,55 @@ export class Gazetteer {
    */
   private quality(id: number, words: readonly string[]): number {
     const key = this.keys[id]!;
-    const named = words.filter((word) => key.includes(` ${word}`) || key.includes(` ${expandToken(word)}`));
-    const exact = ` ${named.map(expandToken).join(" ")}`;
+    const named = words.map((word) => wordAlternatives(word).find((alt) => key.includes(` ${alt}`)))
+      .filter((alt): alt is string => alt !== undefined);
+    const exact = ` ${named.join(" ")}`;
     return key === exact ? 0 : key.startsWith(exact) ? 1 : 2;
+  }
+
+  /**
+   * What is at a point: the nearest house number within ADDRESS_METERS, the
+   * nearest place and point of interest, each with its distance, and the
+   * nearest street when no house number is that close (a street is placed at
+   * its middle, so its distance says little once an address is known). An
+   * address's context is its settlement, the containing city when the
+   * gazetteer was built with boundaries. A linear scan over every entry: tens
+   * of milliseconds on the statewide file.
+   */
+  reverse(lon: number, lat: number): ReverseResult[] {
+    const scale = Math.cos((lat * Math.PI) / 180);
+    const d2 = (x: number, y: number) => ((x - lon) * scale) ** 2 + (y - lat) ** 2;
+    const meters = (d: number) => Math.round(Math.sqrt(d) * METERS_PER_DEGREE);
+    const nearest = [-1, -1, -1];
+    const best = [Infinity, Infinity, Infinity];
+    const nearby: Array<[number, number]> = [];
+    for (let id = 0; id < this.size; id += 1) {
+      const d = d2(this.lons[id]!, this.lats[id]!);
+      const kind = this.kinds[id]!;
+      if (d < best[kind]!) [best[kind], nearest[kind]] = [d, id];
+      if (kind === STREET && d < STREET_DEGREES ** 2) nearby.push([d, id]);
+    }
+    const results: ReverseResult[] = [];
+    let address: ReverseResult | null = null;
+    let addressD = (ADDRESS_METERS / METERS_PER_DEGREE) ** 2;
+    for (const [, id] of nearby.sort((a, b) => a[0] - b[0]).slice(0, 400)) {
+      const [, name = "", , context = "", , , , addresses = ""] = this.columns(id);
+      for (const entry of addresses.split(";")) {
+        const [value = "", x, y] = entry.split(",");
+        if (!value || x === undefined || y === undefined) continue;
+        const d = d2(Number(x), Number(y));
+        if (d < addressD) {
+          addressD = d;
+          address = { kind: "address", label: `${value} ${name}`, detail: context, lon: Number(x), lat: Number(y), zoom: 18, distanceMeters: meters(d) };
+        }
+      }
+    }
+    if (address) results.push(address);
+    for (const kind of address ? [PLACE, POI] : [STREET, PLACE, POI]) {
+      const id = nearest[kind]!;
+      if (id >= 0) results.push({ ...this.result(id), distanceMeters: meters(best[kind]!) });
+    }
+    return results;
   }
 
   private distance(id: number, near: GeocodeOptions["near"]): number {

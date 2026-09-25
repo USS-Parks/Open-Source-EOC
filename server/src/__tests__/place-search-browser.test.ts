@@ -150,4 +150,25 @@ describe("real-browser address and place search", () => {
     expect(pageErrors).toEqual([]);
     expect(externalRequests).toEqual([]);
   }, 120_000);
+
+  it("tells what is at a point on the map from the offline gazetteer", async () => {
+    await page.setViewportSize({ width: 1586, height: 992 });
+    await choose(page, "816 3rd street eureka", /816 3rd Street/);
+    await atPlace(page, -124.16261, 40.80401, 18);
+    const tools = page.getByText("Map tools and saved views", { exact: true });
+    if (await tools.isVisible()) await tools.click();
+    await page.getByRole("button", { name: "What is here?" }).click();
+    await page.getByRole("button", { name: "Click a point on the map…" }).waitFor();
+    const canvas = await page.locator("canvas.maplibregl-canvas").boundingBox();
+    // Just below the search marker, which sits over the address itself.
+    await page.mouse.click(canvas!.x + canvas!.width / 2, canvas!.y + canvas!.height / 2 + 12);
+    const answer = page.locator(".eoc-cop-identify");
+    await answer.getByText("Near this point").waitFor();
+    await answer.getByText(/^816 3rd Street, Eureka \(\d+ m\)$/).waitFor();
+    await answer.getByText(/^Eureka, city \(\d+ m\)$/).waitFor();
+    await page.getByRole("button", { name: "What is here?" }).waitFor();
+    await page.screenshot({ path: join(SHOTS, "place-search-what-is-here-1586.png"), fullPage: false });
+    expect(pageErrors).toEqual([]);
+    expect(externalRequests).toEqual([]);
+  }, 120_000);
 });

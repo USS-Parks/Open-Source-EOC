@@ -225,4 +225,23 @@ describe("COP viewport KPI presentation", () => {
     expect(pageErrors).toEqual([]);
     expect(externalRequests).toEqual([]);
   }, 120_000);
+
+  it("draws a parcel layer from vector tiles at once, reading one page of its items", async () => {
+    await page.setViewportSize({ width: 1586, height: 992 });
+    const pages: string[] = [];
+    const listen = (response: { url(): string }) => {
+      if (response.url().includes(`/api/v1/datasets/${datasetId}/items`)) pages.push(response.url());
+    };
+    page.on("response", listen);
+    const tile = page.waitForResponse((response) =>
+      response.url().includes(`/api/v1/tiles/datasets/${datasetId}/`) && response.status() === 200, { timeout: 60_000 });
+    await page.reload({ waitUntil: "load" });
+    await tile;
+    page.off("response", listen);
+    expect(pages).toHaveLength(1);
+    await page.getByText("Drawn from vector tiles: every feature is on the map.").waitFor({ state: "attached" });
+    expect(await page.getByText("Display incomplete: bounded page limit reached.").count()).toBe(0);
+    expect(pageErrors).toEqual([]);
+    expect(externalRequests).toEqual([]);
+  }, 120_000);
 });

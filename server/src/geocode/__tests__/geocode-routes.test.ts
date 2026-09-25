@@ -92,3 +92,28 @@ describe("GET /api/v1/geocode/search", () => {
     }
   });
 });
+
+describe("GET /api/v1/geocode/reverse", () => {
+  const reverse = (target: FastifyInstance, at: string, headers: Record<string, string> = auth(token)) =>
+    target.inject({ method: "GET", url: `/api/v1/geocode/reverse?at=${at}`, headers });
+
+  it("answers a point with the nearest house number, place and point of interest", async () => {
+    expect((await reverse(app, "-124.1626,40.804", {})).statusCode).toBe(401);
+    const res = await reverse(app, "-124.1626,40.804");
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { available: boolean; results: Array<{ kind: string; label: string; distanceMeters: number }> };
+    expect(body.available).toBe(true);
+    expect(body.results.map((r) => `${r.kind}:${r.label}`)).toEqual([
+      "address:816 3rd Street", "place:Eureka", "poi:Humboldt County Courthouse",
+    ]);
+    expect(body.results[0]!.distanceMeters).toBeLessThan(10);
+  });
+
+  it("rejects a malformed or impossible point, and reports lookup unavailable without a gazetteer", async () => {
+    expect((await reverse(app, "north")).statusCode).toBe(400);
+    expect((await reverse(app, "-200,40")).statusCode).toBe(400);
+    const target = buildApp(runtime, { oidc: null, gazetteerPath: null });
+    others.push(target);
+    expect((await reverse(target, "-124.16,40.8")).json()).toEqual({ available: false, results: [] });
+  });
+});

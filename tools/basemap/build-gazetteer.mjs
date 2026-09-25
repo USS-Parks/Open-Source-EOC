@@ -4,7 +4,13 @@
 // merging a county address-point file. Node only, no dependencies.
 //
 //   node tools/basemap/build-gazetteer.mjs <archive.pmtiles>
-//     [--out tools/basemap/out/gazetteer.tsv] [--addresses <points.csv|.geojson>] [--zoom <z>]
+//     [--out tools/basemap/out/gazetteer.tsv] [--addresses <points.csv|.geojson>]
+//     [--places <boundaries.geojson>] [--zoom <z>]
+//
+// --places names each street and point of interest by the city boundary that
+// contains it (GeoJSON polygons with a NAME or name property, such as Census
+// TIGER places); without it, or outside every boundary, the nearest
+// settlement names it.
 //
 // The output is one tab-separated entry per line after a format header:
 //   kind  name  class  context  lon  lat  key  addresses
@@ -304,9 +310,29 @@ function segmentDistance2(px, py, ax, ay, bx, by) {
 const touches = (a, b, pad) =>
   a.minLon - pad <= b.maxLon && b.minLon - pad <= a.maxLon && a.minLat - pad <= b.maxLat && b.minLat - pad <= a.maxLat;
 
+/** Whether a point is inside a closed ring of [lon, lat] pairs (even-odd rule). */
+function inRing(ring, lon, lat) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if ((yi > lat) !== (yj > lat) && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** Whether a boundary (polygons of an outer ring and holes) contains a point. */
+export function boundaryContains(boundary, lon, lat) {
+  const [minLon, minLat, maxLon, maxLat] = boundary.bbox;
+  if (lon < minLon || lon > maxLon || lat < minLat || lat > maxLat) return false;
+  return boundary.polygons.some(([outer, ...holes]) => inRing(outer, lon, lat) && !holes.some((hole) => inRing(hole, lon, lat)));
+}
+
 export function createGazetteerBuilder() {
   const places = new Map();
   const pois = new Map();
+  /** City boundaries on the settlement grid, smallest first. */
+  const boundaryGrid = new Map();
   /** search key -> street clusters */
   const streets = new Map();
   const counts = { tiles: 0, osmAddresses: 0, unplacedAddresses: 0, countyAddresses: 0, skippedCountyRows: 0 };
@@ -436,9 +462,10 @@ export function createGazetteerBuilder() {
       if (!grid.has(id)) grid.set(id, []);
       grid.get(id).push(place);
     }
-    // ponytail: nearest settlement, not the containing city; a county
-    // boundary join would name the jurisdiction exactly.
+    // The containing city boundary when one was given, else the nearest settlement.
     const near = (lon, lat) => {
+      const city = boundaryGrid.get(cell(lon, lat))?.find((boundary) => boundaryContains(boundary, lon, lat));
+      if (city) return city.name;
       let found = "";
       let best = Infinity;
       const [cx, cy] = [Math.floor(lon * 5), Math.floor(lat * 5)];
@@ -488,7 +515,23 @@ export function createGazetteerBuilder() {
     return { lines, counts: { ...counts, places: places.size, streets: streetCount, pois: pois.size, addresses: addressCount } };
   }
 
-  return { addTile, addAddressPoints, build };
+  /** City boundaries: { name, bbox, polygons }. A point inside one takes its name as context. */
+  function addBoundaries(boundaries) {
+    const sized = [...boundaries].sort((a, b) =>
+      (a.bbox[2] - a.bbox[0]) * (a.bbox[3] - a.bbox[1]) - (b.bbox[2] - b.bbox[0]) * (b.bbox[3] - b.bbox[1]));
+    for (const boundary of sized) {
+      for (let cx = Math.floor(boundary.bbox[0] * 5); cx <= Math.floor(boundary.bbox[2] * 5); cx += 1) {
+        for (let cy = Math.floor(boundary.bbox[1] * 5); cy <= Math.floor(boundary.bbox[3] * 5); cy += 1) {
+          const id = `${cx},${cy}`;
+          if (!boundaryGrid.has(id)) boundaryGrid.set(id, []);
+          boundaryGrid.get(id).push(boundary);
+        }
+      }
+    }
+    counts.boundaries = (counts.boundaries ?? 0) + boundaries.length;
+  }
+
+  return { addTile, addAddressPoints, addBoundaries, build };
 }
 
 // ---------------------------------------------------------------------------
@@ -552,9 +595,33 @@ export function readAddressPoints(path) {
   }));
 }
 
+/** City boundaries from GeoJSON polygons or multipolygons named by NAME or name. */
+export function readBoundaries(path) {
+  const raw = readFileSync(path, "utf8");
+  const collection = JSON.parse(raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw);
+  const boundaries = [];
+  for (const feature of collection.features ?? []) {
+    const props = Object.fromEntries(Object.entries(feature.properties ?? {}).map(([k, v]) => [k.toLowerCase(), v]));
+    const name = clean(props.name ?? "");
+    const geometry = feature.geometry;
+    const polygons = geometry?.type === "Polygon" ? [geometry.coordinates]
+      : geometry?.type === "MultiPolygon" ? geometry.coordinates : [];
+    if (!name || polygons.length === 0) continue;
+    const bbox = [Infinity, Infinity, -Infinity, -Infinity];
+    for (const [outer] of polygons) {
+      for (const [lon, lat] of outer) {
+        bbox[0] = Math.min(bbox[0], lon); bbox[1] = Math.min(bbox[1], lat);
+        bbox[2] = Math.max(bbox[2], lon); bbox[3] = Math.max(bbox[3], lat);
+      }
+    }
+    boundaries.push({ name, bbox, polygons });
+  }
+  return boundaries;
+}
+
 // ---------------------------------------------------------------------------
 
-export function buildGazetteer({ archive, zoom, addresses, out, log = () => {} }) {
+export function buildGazetteer({ archive, zoom, addresses, places, out, log = () => {} }) {
   const started = Date.now();
   const builder = createGazetteerBuilder();
   for (const tile of archiveTiles(archive, zoom)) {
@@ -562,6 +629,7 @@ export function buildGazetteer({ archive, zoom, addresses, out, log = () => {} }
   }
   log(`read tiles in ${((Date.now() - started) / 1000).toFixed(1)} s`);
   if (addresses) builder.addAddressPoints(readAddressPoints(addresses));
+  if (places) builder.addBoundaries(readBoundaries(places));
   const { lines, counts } = builder.build();
   mkdirSync(dirname(out), { recursive: true });
   const temporary = `${out}.partial`;
@@ -579,11 +647,11 @@ export function buildGazetteer({ archive, zoom, addresses, out, log = () => {} }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
-    options: { out: { type: "string" }, addresses: { type: "string" }, zoom: { type: "string" } },
+    options: { out: { type: "string" }, addresses: { type: "string" }, places: { type: "string" }, zoom: { type: "string" } },
   });
   const [archive] = positionals;
   if (!archive) {
-    console.error("usage: node tools/basemap/build-gazetteer.mjs <archive.pmtiles> [--out file] [--addresses file] [--zoom z]");
+    console.error("usage: node tools/basemap/build-gazetteer.mjs <archive.pmtiles> [--out file] [--addresses file] [--places file] [--zoom z]");
     process.exit(2);
   }
   const out = resolve(values.out ?? fileURLToPath(new URL("out/gazetteer.tsv", import.meta.url)));
@@ -591,6 +659,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     archive,
     zoom: values.zoom === undefined ? undefined : Number(values.zoom),
     addresses: values.addresses,
+    places: values.places,
     out,
     log: (message) => console.error(message),
   });
