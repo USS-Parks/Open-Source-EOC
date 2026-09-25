@@ -6975,3 +6975,68 @@ run on `5a73e9a`, the commit that closed the phase, on the Linux test bed
   reconciled (VA2, VA4) against local stand-ins.
 - **Not run.** The Windows setup rebuild at the phase end (decision 18).
 - **Evidence level:** the phase gate on Linux, with the exceptions named.
+
+## Version 0.9.2: the Windows setup
+
+Operator Trust PSPR, RD12 part two, closed at Basho's instruction of
+2026-09-25 to ship `0.9.2` now, without the two-hour load rerun.
+
+- **The setup.** `deploy/Open-Source-EOC-Setup-0.9.2.exe`, 1,876,460,790
+  bytes, SHA-256
+  `7ccd6a4dbe860395f781acc6a3aaae6909cbfcd438ec2f002c540f49755aecfd` (also in
+  the `.sha256` file beside it), built from `eb1277d` with the optional
+  basemaps. It holds everything on `main` at that
+  commit: the Operator Trust units, the read path fix ("Readiness RD4
+  follow-up: reads that slowed as the incident filled"), the Veoci roster's
+  VA1 to VA5, and the three exercise scenarios (`d503d80`). The imagery and
+  elevation archives are the exercise session's rebuild that reaches Del
+  Norte, SHA-256 `1f99d3d7...49267b` and `124e5a91...56ca28` as its XS3
+  receipt records; the archives are not in git. The `0.9.1` and `0.9.0`
+  setups stay in `deploy/` unchanged.
+- **The ZIP.** `deploy/Open-Source-EOC-0.9.2.zip`, 1,979,245,281 bytes, SHA-256
+  `16d800e3c59aa8912e079d2a1c40dfb1025310e0335d7147c579681b3d2381e6`: the
+  same staged `app` folder the setup installs, to run without installing
+  (`app\deploy\windows\Open Source EOC.cmd -Action Launch -Profile demo`,
+  the command the setup's Start menu entry runs). Not run from an unzipped
+  copy here.
+- **The macOS disk image: built by a workflow, not yet run.** `c0c85e4` ports
+  the launcher's workstation and demo to macOS (the network host stays on
+  Windows) and adds `deploy/macos/` and the "macOS demo" workflow, which
+  builds `Open-Source-EOC-0.9.2-macOS.dmg` on a Mac runner with Node for
+  Apple silicon and Intel and PostgreSQL 16 with PostGIS from Postgres.app,
+  opens it on the runner to prove the demo starts, and keeps it as the
+  run's artifact. Its first run was refused before starting: GitHub Actions
+  reported the account's spending limit reached. The CI change of `4183eb1`
+  ran a macOS job of up to 90 minutes on every push to `main` while three
+  sessions pushed; that is what spent the budget. The CI's macOS job now runs
+  only when started by hand, and superseded runs cancel again. The Mac build
+  holds only the maps in git: the statewide, building, imagery, terrain,
+  overlay and address search archives exist only on this machine.
+- **Also in RD12 part two.** `4183eb1`: a macOS CI job (PostgreSQL 16.15 with
+  PostGIS from Postgres.app, pinned by checksum) and every run on `main`
+  finishing. `38c744f`: the Windows job checks out the repository's own line
+  endings, and the suites run on the North Coast Storm's Pacific clock.
+  `83e353f`: the parity matrix and facet register reconciled to the Operator
+  Trust receipts. `eb1277d`: version `0.9.2`, and `pnpm test:coverage`
+  (`@vitest/coverage-v8` 5.0.1, installed with Basho's permission).
+  `RELEASE-DECISION.md` brought to `0.9.2`: the gate states, acceptance
+  scenarios 1 to 8, and what remains.
+- **Verification.** The installer tests pass 10 of 10 on the stage; the link
+  checker passes. The setup was not installed on this machine.
+- **Not done.**
+  - Gate 20: coverage has not been measured to a result. One run on the
+    current tree failed four files while other sessions landed files in the
+    checkout mid-run, and vitest writes no coverage report when tests fail;
+    the `00deba5` baseline was exported and prepared but not run.
+  - The serial `pnpm check:gate` on the `0.9.2` commit.
+  - Hosted CI green. The first complete Windows run failed eight files; five
+    are fixed in `4183eb1` and `38c744f`. Three browser suites failed on the
+    runner and are not diagnosed: templates for a jurisdiction
+    administrator, authorized viewing, load retry. The macOS job's first
+    results were not in.
+  - The two-hour load rerun with the read fix, skipped at Basho's
+    instruction; the probe measurements in the follow-up receipt stand for
+    it.
+  - RD6, macOS, still not started.
+- **Evidence level:** installer tests on the stage; checksums.
+- **Rollback:** remove the `0.9.2` setup and its checksum from `deploy/`.

@@ -4,12 +4,12 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
-# A newer push to a pull request supersedes its run still in progress. Every
-# push to main runs to the end, so each commit there gets its own verdict.
+# A newer push supersedes a run still in progress on the same branch.
 concurrency:
-  group: ci-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   secret-scan:
@@ -105,10 +105,11 @@ jobs:
       - run: pnpm check
 
   # The same checks on a Mac, with PostgreSQL 16.15 and PostGIS from
-  # Postgres.app, pinned by checksum. The desktop launcher's tests stay on the
-  # Windows job until the Mac launcher exists (RD6).
+  # Postgres.app, pinned by checksum. A macOS minute costs ten Windows minutes,
+  # so this job runs only when started by hand (Actions, CI, Run workflow).
   check-macos:
     name: Typecheck, lint, licenses, links, tests (macOS)
+    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-14
     timeout-minutes: 90
     env:

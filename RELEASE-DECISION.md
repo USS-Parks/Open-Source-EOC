@@ -1,7 +1,9 @@
 # Release decision
 
 For Basho. Prepared on 2026-09-24 from `main` at `ec11af5`, the point at which
-every engineering unit of the Finish PSPR had landed. Evidence is cited by
+every engineering unit of the Finish PSPR had landed, and brought up to date
+on 2026-09-25 for version `0.9.2`, after the Operator Trust PSPR landed
+("Operator Trust landing: the full gate"). Evidence is cited by
 receipt heading in the [V1 ledger](docs/process/V1-LEDGER.md). Capability
 status is in the [parity matrix](docs/VEOC-PARITY-MATRIX.md) and the
 [facet register](docs/FACET-STATUS.md), both reconciled to the receipts for
@@ -27,6 +29,16 @@ this document.
   routes; W4.11 Public Assistance and shelter census; W4.12 REST record writes
   through the sync log; W4.13 the side-by-side gaps; W5.3 remaining interface
   findings; the W4 gate's WebEOC side-by-side run; two CI stability units.
+- The [Readiness PSPR](docs/process/READINESS-PSPR-2026-09-24.md) and the
+  [Operator Trust PSPR](docs/process/OPERATOR-TRUST-PSPR-2026-09-24.md),
+  approved 2026-09-24: the Linux path removed (RD1), the frames' look and the
+  Windows demo (RD2), the Windows network host (RD3), 150 people for two
+  hours (RD4), the air gap (RD5), operator trust TP0 to TP9 with acceptance
+  scenarios 1 to 8, connecting to a host (RD7), the open engineering list
+  (RD8 to RD11), CI on Windows and macOS (RD12), and the reads that slowed
+  under load ("Readiness RD4 follow-up: reads that slowed as the incident
+  filled"). RD6, macOS, is not started ("Readiness RD6: macOS, not
+  started").
 - This reconciliation: every matrix and register row checked against the
   receipts, eight rows added; README, ROADMAP, the design-to-capability
   matrix, the [asset and license inventory](docs/ASSET-LICENSES.md), the
@@ -41,15 +53,15 @@ No line carries a written waiver.
 
 | # | Gate | State | Receipt, or what is missing |
 |---|---|---|---|
-| 1 | `pnpm check` green, serial, gate tag, with route-table, secret and advisory scans | Green | "V1 final milestone gate" on `ec11af5`: every static gate, 273 of 273 files and 1,553 of 1,553 tests in one run, the load benchmark 4 of 4. `pnpm check` runs no secret scan itself: gitleaks runs in the pre-commit hook, which passed on every commit, and in hosted CI, which has started no job since `12d430e` for a billing reason on Basho's account |
+| 1 | `pnpm check` green, serial, gate tag, with route-table, secret and advisory scans | Open for `0.9.2` | Green on `ec11af5` in "V1 final milestone gate": every static gate, 273 of 273 files and 1,553 of 1,553 tests in one run, the load benchmark 4 of 4. `pnpm check` runs no secret scan itself: gitleaks runs in the pre-commit hook, which passed on every commit, and in hosted CI. For `0.9.2`: the Operator Trust units ran one full `test:ci` with its failures fixed ("Operator Trust landing: the full gate"); the serial `pnpm check:gate` was not run on the `0.9.2` commit. Hosted CI runs again since Basho raised the Actions budget on 2026-09-25, on Windows and macOS; it has not yet had a green run |
 | 2 | Single-node declaration | Green | "V1 W2.5: rate limiting and identity caching" |
-| 3 | Heap flat over two hours with 150 sockets; real-hardware run recorded | External | Heap flat in "V1 W2 milestone gate". No deployment hardware: "V1 R1-REAL: the real-hardware 150-user run (boundary recorded)" |
+| 3 | Heap flat over two hours with 150 sockets; real-hardware run recorded | Green | "Readiness RD4: 150 people at once": 150 people with 300 sockets for two hours on Basho's Windows machine against the network host profile, 0 errors, reads 245 ms and writes 33 ms at the 95th percentile, heap growth 8.4%. The reads that rose during that run are flat since "Readiness RD4 follow-up: reads that slowed as the incident filled". Not run: the same against the installed host services |
 | 4 | No network call inside a write path; outbox worker and scheduler in both deploy paths | Green | "V1 W2.12: network calls out of every write path"; "V1 W2.1: outbound delivery queue"; "V1 W2.2: scheduler", whose desktop path was checked by loading the module, not by running a profile |
 | 5 | Every list paginated; push replaces the notifications poll | Green | "V1 W2.3: pagination and push-down"; "V1 W2.11: remaining list pagination"; "V1 W2.4: WebSocket discipline". The templates catalogue stays unpaged, with the reason in the W2.12 receipt |
 | 6 | Logs, metrics and rotation in both paths; retention enforced | Green | "V1 W2.8: observability"; "V1 W2.9: retention and export" |
 | 7 | MFA for administrators; two-person IPAWS send; webhook allowlists | Green | "V1 W2.10: MFA"; "V1 W2.7: threat-model controls"; "V1 W3.5: IPAWS enablement and send" |
 | 8 | Refuse to serve with row-level security off | Green | "V1 W2.6: secure by default" |
-| 9 | Windows and macOS setups, each with a workstation and a network host with HTTPS; installer rebuilt with archives; backup scheduled; restore drill (restated by ADR-0010: the platforms are Windows and macOS, and the Docker install is removed) | Open | Windows setup built, not installed ("V1 W6.4: installer rebuild"); schedule written, not run ("V1 W6.2: disaster recovery runbook"); drill recorded ("V1 W6.1: versioning and upgrade"). Missing: the Windows host and the macOS setups, scheduled in the readiness plan, and a first real run of each install and schedule |
+| 9 | Windows and macOS setups, each with a workstation and a network host with HTTPS; installer rebuilt with archives; backup scheduled; restore drill (restated by ADR-0010: the platforms are Windows and macOS, and the Docker install is removed) | Open | Windows: workstation, demo and network host in `Open-Source-EOC-Setup-0.9.2.exe` ("Readiness RD3: the Windows network host"; "Version 0.9.2: the Windows setup"), connecting to a host ("Readiness RD7: connecting to a host, on Windows"); drill recorded ("V1 W6.1: versioning and upgrade"). Missing: the macOS setup (RD6, not started), and Basho's first real run of the host install, its scripted check and its backup schedule |
 | 10 | Every operator route on a screen; no dead ends; administration without curl | Green | "V1 W3 milestone gate"; "V1 W3 route coverage: every operator route owes a screen"; "V1 W3.0: administration" |
 | 11 | Email and SMS with a contacts directory | Green | "V1 W4.0 part one: email and SMS channels"; "V1 W4.0 part two: contacts and mass notification", against a local relay and a fixture SMS provider |
 | 12 | Board CSV and Excel import and export; WebEOC importer with a guide | Green | "V1 W4.1 part one: board engine depth"; "V1 W4.1 part two: board screen controls"; "V1 W4.4: WebEOC migration" |
@@ -60,17 +72,35 @@ No line carries a written waiver.
 | 17 | SECURITY.md, CHANGELOG.md, versioned packages; second maintainer or waiver | External | "V1 W6.3: project hygiene for adoption"; "V1 W6.1: versioning and upgrade". Missing: a second maintainer or Basho's written INV-10 waiver |
 | 18 | Basho's aesthetic and functional acceptance of the release candidate | External | Not recorded |
 | 19 | One roster; link checker green after the archive move | Green | "V1 W1.12: retire the roster stack"; link checker at 94 files in "V1 M5 milestone gate" |
-| 20 | Test lines and assertions recorded before and after W1.14; coverage not lower than the W1.11 baseline | Open | Counts in "V1 W1.14: consolidate the server test suite". Coverage was never measured, and the W1.11 receipt records no baseline. Close by measuring coverage at `00deba5` and at the release commit, or by Basho accepting the assertion counts in its place |
+| 20 | Test lines and assertions recorded before and after W1.14; coverage not lower than the W1.11 baseline | Open | Counts in "V1 W1.14: consolidate the server test suite". The measurement exists since `0.9.2` (`pnpm test:coverage`, the v8 provider over `server/src`) but has not been run to a result at `00deba5` and the release commit. Close by running it at both, or by Basho accepting the assertion counts in its place |
 | 21 | Each optional integration registers by default or is named in README with its variable | Green | "V1 W6.6: gated-module disposition"; README now names OIDC sign-in and its variables |
 
-## 3. What remains
+## 3. Acceptance scenarios 1 to 8
+
+The Operator Trust PSPR's scenarios, each a browser test on the North Coast
+Storm demonstration at 1586 by 992 and 1534 by 790, with no page errors and
+no request outside the machine. Automated tests are evidence, not Basho's
+acceptance (gate 18).
+
+| # | Scenario | Test | Receipt |
+|---|---|---|---|
+| 1 | An occasional operator returns and finds their own work | `scenario-occasional-operator-browser.test.ts` | "Operator trust TP2: my work" |
+| 2 | A request survives an interruption: navigation, a closed tab, an expired session | `scenario-request-interruption-browser.test.ts` | "Operator trust TP4: durable work and explicit state" |
+| 3 | A request is handed from receipt to acceptance to an owner, by number | `scenario-request-handoff-browser.test.ts` | "Operator trust TP1: request lifecycle and findability" |
+| 4 | A shift changes: the incoming operator reads what changed since their last shift | `scenario-shift-change-browser.test.ts` | "Operator trust TP3: shift handoff" |
+| 5 | A partner follows a link to what they were invited to, and is refused the rest with a reason | `scenario-partner-link-browser.test.ts` | "Operator trust TP6: partner invitations and recipient preview" |
+| 6 | The map and the records agree, and information says how old it is | `scenario-information-state-browser.test.ts`, `scenario-map-records-browser.test.ts` | "Operator trust TP5: information state you can read"; "Operator trust TP9: from the map to the action" |
+| 7 | An incident closes, says what stays active, and can be reopened | `scenario-incident-close-browser.test.ts` | "Operator trust TP7: incident close and reopen" |
+| 8 | Configuration moves forward through an upgrade | `upgrade-configuration.test.ts` | "Operator trust TP8: upgrades keep configuration" |
+
+## 4. What remains
 
 ### Basho's external inputs
 
 | Input | What it unblocks |
 |---|---|
-| Deployment hardware for a two-hour `scripts/soak.mjs` run at 150 sockets on the release candidate | Gate 3; R1; INV-8 |
-| A second computer with no network, for the check in the [installer README](deploy/windows/installer/README.md) | AR7; INV-3 |
+| The two-hour load against the installed host services, if wanted beyond RD4's run on the host profile | R1; INV-8 |
+| The unplugged check, `deploy/windows/Test-OpenEOCAirGap.ps1`, with a second device on the same switch | AR7; INV-3 |
 | A Windows machine and a Mac to run the host setups and their scripted checks on, then a first real upgrade and scheduled backup on each | Gate 9; G-DR |
 | IPAWS-OPEN test credentials and the signed MOA | R2's live send |
 | Representative operators, with licensed WebEOC access if possible | F14; F17; INV-8; D34 |
@@ -78,7 +108,7 @@ No line carries a written waiver.
 | A second maintainer, or the written INV-10 waiver in the ledger | Gate 17; INV-10 |
 | Acceptance of the release candidate | Gate 18 |
 | A pilot jurisdiction | A 1.0 not marked evaluation-only |
-| GitHub Actions billing restored; private vulnerability reporting switched on | Hosted CI and its secret scan; the security policy's first channel |
+| Private vulnerability reporting switched on (the Actions budget was raised on 2026-09-25) | The security policy's first channel |
 | A phone or tablet to install the web app on; a code-signing certificate | G-PWA; a signed setup |
 | Live data: FEMA NFHL, a statewide shelter feed, ACS population, parcels beyond Humboldt, county address points, the full RTLT set, a live feed; a live SMTP relay and SMS provider | F9; F18; G-INGEST; G-CATALOG; G-IMPACT; G-PARCELS; G-FLOOD; address search; resource typing; live email and SMS |
 
@@ -109,8 +139,10 @@ categories; archiving the retired rosters (item 11); branch protection
 ### Known product limits
 
 - One API process per database.
-- Federation: edits of incident records and all deletes stay local, records
-  are not backfilled, and the peer attributes a batch to the sending instance.
+- Federation: incident records are not federated, and the peer attributes a
+  batch to the sending instance. Deletes of other records and records made
+  before an agreement travel ("Readiness RD10: federation of record deletes
+  and earlier records").
 - No voice channel; Teams and Slack only as a generic webhook; no inbound SMS
   acknowledgement.
 - The WebEOC importer moves records only: no value translation, coordinates,
@@ -119,7 +151,8 @@ categories; archiving the retired rosters (item 11); branch protection
 - A guest socket that joins between a lockdown or revocation and its re-check
   stays open until it rejoins.
 - A desktop profile started while the Backup action holds its PostgreSQL is
-  stopped with it; the Windows setup does not stop running profiles.
+  stopped with it.
+- No macOS setup: RD6 is not started.
 - No training video. Tracking and facilities are not reviewed for
   patient-level data.
 
@@ -134,57 +167,43 @@ categories; archiving the retired rosters (item 11); branch protection
   of the bundle's other libraries, the web bundle's npm packages and the
   Liberation Sans glyphs; and the offered source kept for three years. See
   [the asset inventory](docs/ASSET-LICENSES.md#license-work-open-before-a-setup-is-published).
-- **Checks:** a coverage measurement for gate 20; a desktop profile run of
-  the scheduler.
-- **Screens:** choice labels in change history, record detail, kanban cards
-  and the calendar; `.xlsx` on the WebEOC migration screen; creating from a
-  published template for a jurisdiction admin who is not an instance admin;
-  a console-wide lockdown banner; saving conditions, sorts and groups into
-  template views; drilldown from kanban and calendar widgets; the pool status
-  badges' case; renaming boards activated before the title change.
-- **Engine:** federation of incident record edits and deletes, unless F3 is
-  accepted as a limit; workflow reject and cancel, and names on history;
-  badge revocation and ICS-211 history; facility registry edit and removal; a
-  status request list; per-resource history, a cap per request, editing local
-  kinds and changing a pool resource's kind or type; an index on
-  `resource_requests(incident_id)`; refusing a duplicate `originRequestId` on
-  the peer; gazetteer reverse lookup, containment, containing city and "St"
-  as "Saint"; parcel vector tiles.
-- **Offline and deploy:** opening the console offline after a restart; a
-  reload offline before the app has cached its files; stopping profiles
-  before the setup replaces files; hard links for file store copies; an
-  inject-card file and a launcher note on the administrator two-step switch.
-  The Docker path's items went with the path (ADR-0010).
-- **Test stability:** the intermittent test worker crash (Windows exit code
-  `0xC0000409`). The `esf-workspace-browser` wait was found and fixed
-  ("Partner sharing PS5: scenario, review and gate").
+- **Checks:** coverage at `00deba5` and the release commit (gate 20); the
+  serial `pnpm check:gate` on the release commit; hosted CI's first green
+  run on Windows, where three browser suites failed on the runner and are
+  not yet diagnosed (templates for a jurisdiction administrator, authorized
+  viewing, load retry), and on macOS.
+- **macOS:** RD6, the Mac launcher, runtime, package and host, open under
+  the Operator Trust PSPR.
+- **Address data:** house numbers by parcel containment and the containing
+  city need county data (G-GEOCODE), an input only Basho can authorize.
+- **Test stability:** the intermittent Windows worker crash (`0xC0000409`),
+  not found at its root ("Readiness RD11: the remaining checks").
 
-Every item above is scheduled in
-[the readiness plan](docs/process/READINESS-PSPR-2026-09-24.md), approved
-2026-09-24.
+The [Veoci Integration and Air Gap PSPR](docs/process/VEOCI-AIR-GAP-PSPR-2026-09-25.md),
+approved 2026-09-25, is the live roster; its unit VA36 reconciles this
+document to its own receipts.
 
-## 4. The release decision
+## 5. The release decision
 
 The roster sets the release act as Basho's: "tag, release assets, installer,
 announcement text; the pilot jurisdiction named or the release marked
 evaluation-only". No pilot jurisdiction, second maintainer or waiver,
-real-hardware run, operator comparison or screen-reader pass exists. Gate
-lines 3, 9, 16, 17, 18 and 20 are not green; line 1 is green on the final
-gate.
+operator comparison or screen-reader pass exists. Gate lines 1 (for
+`0.9.2`), 9, 16, 17, 18 and 20 are not green.
 
 **Recommendation: tag the current build as an evaluation-only release,
-version `0.9.0`, the version every package already carries.** It claims no
+version `0.9.2`, the version every package already carries.** It claims no
 gate it has not met, so it needs no waiver. It requires, in order:
 
 1. The milestone gate green on the release commit, as "V1 final milestone
    gate" was on `ec11af5`.
 2. The license work above done, since the setup is a release asset.
-3. The changelog's Unreleased section folded into the `0.9.0` entry with the
-   release date, since no `0.9.0` was ever published.
-4. The Windows setup rebuilt from the release commit with
-   `-IncludeOptionalBasemaps`. The existing setup was staged from `5875c2f`
-   and predates the exercise, review, write path and interface changes.
-5. The tag `v0.9.0` on the release commit.
+3. The changelog's `0.9.2` entry, written and dated.
+4. The Windows setup built from the release commit with
+   `-IncludeOptionalBasemaps`: `deploy/Open-Source-EOC-Setup-0.9.2.exe`
+   ("Version 0.9.2: the Windows setup"). A later release commit needs it
+   rebuilt.
+5. The tag `v0.9.2` on the release commit.
 6. Release assets: the setup with its SHA-256.
 7. Announcement text that says evaluation-only and synthetic data only, and
    points to the [evaluator's page](docs/EVALUATOR.md).
@@ -192,7 +211,7 @@ gate it has not met, so it needs no waiver. It requires, in order:
 Alternatives:
 
 - **`1.0.0` marked evaluation-only.** Needs Basho's written waiver in the
-  ledger of every line not green (3, 9, 16, 17, 18 and 20), the version
+  ledger of every line not green (1, 9, 16, 17, 18 and 20), the version
   changed in every package manifest with a
   changelog entry, and then the same rebuild, tag, assets and announcement.
   Under [the support statement](GOVERNANCE.md#releases-and-support), 1.0

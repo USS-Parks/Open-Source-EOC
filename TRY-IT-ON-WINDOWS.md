@@ -9,7 +9,10 @@ every screen says so beside the FOUO marking.
 
 1. Run `deploy\Open-Source-EOC-Setup-0.9.2.exe` from this repository (or a
    copy of it; 1.6 GB, SHA-256 in the `.sha256` file beside it). The
-   `0.9.1` and `0.9.0` setups beside it are earlier builds, kept to go back to. It needs no administrator rights and no internet connection,
+   `0.9.1` and `0.9.0` setups beside it are earlier builds, kept to go back to.
+   To run it without installing, unzip `deploy\Open-Source-EOC-0.9.2.zip` and
+   run `app\deploy\windows\Open Source EOC.cmd -Action Launch -Profile demo`
+   from the unzipped folder. It needs no administrator rights and no internet connection,
    and installs to `%LOCALAPPDATA%\Programs\Open Source EOC`.
 2. The setup is not code-signed yet. If Windows says it protected your PC,
    choose **More info**, then **Run anyway**.
