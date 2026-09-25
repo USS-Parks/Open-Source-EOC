@@ -5,10 +5,11 @@ on:
     branches: [main]
   pull_request:
 
-# A newer push to the same branch supersedes a run still in progress.
+# A newer push to a pull request supersedes its run still in progress. Every
+# push to main runs to the end, so each commit there gets its own verdict.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   secret-scan:
@@ -50,13 +51,13 @@ jobs:
             exit 1
           fi
 
-  # The product runs on Windows (and, once built, macOS), never Linux or a
-  # container, so its checks run on Windows with the PostgreSQL and PostGIS
-  # archives the local test runtime uses, pinned by checksum. A macOS job
-  # joins when the Mac app and its staged runtime exist.
+  # The product runs on Windows and macOS, never Linux or a container, so its
+  # checks run on Windows with the PostgreSQL and PostGIS archives the local
+  # test runtime uses, pinned by checksum, and on macOS below.
   check:
     name: Typecheck, lint, licenses, links, tests (Windows)
     runs-on: windows-latest
+    timeout-minutes: 120
     env:
       PG_ARCHIVE: https://get.enterprisedb.com/postgresql/postgresql-16.15-4-windows-x64-binaries.zip
       PG_ARCHIVE_SHA256: f5f55b03bd54ce0dd1c51d524b54c7e015abd4d620af27d6971288a2dbe4a8f8
@@ -95,9 +96,50 @@ jobs:
           & "$bin\createdb.exe" -h 127.0.0.1 -p 55439 -U postgres openeoc_test
           'OPENEOC_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55439/openeoc_test' | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           'OPENEOC_CHROMIUM=C:/Program Files/Google/Chrome/Application/chrome.exe' | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "OPENEOC_PG_DIST=$(Join-Path $root 'pgsql')" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit:advisories
       - run: pnpm check
+
+  # The same checks on a Mac, with PostgreSQL 16.15 and PostGIS from
+  # Postgres.app, pinned by checksum. The desktop launcher's tests stay on the
+  # Windows job until the Mac launcher exists (RD6).
+  check-macos:
+    name: Typecheck, lint, licenses, links, tests (macOS)
+    runs-on: macos-14
+    timeout-minutes: 90
+    env:
+      PG_APP: https://github.com/PostgresApp/PostgresApp/releases/download/v2.9.6/Postgres-2.9.6-16.dmg
+      PG_APP_SHA256: 2689dc64d6a02e0a66e4585616919060d8fbf5bb06886fccc05b7f87638bf081
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: PostgreSQL 16.15 with PostGIS on the loopback address
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/pg"
+          mkdir -p "$root"
+          curl -fsSL -o "$root/postgres.dmg" "$PG_APP"
+          echo "$PG_APP_SHA256  $root/postgres.dmg" | shasum -a 256 -c -
+          hdiutil attach -nobrowse -readonly -mountpoint "$root/mount" "$root/postgres.dmg"
+          # Postgres.app expects its own place in /Applications.
+          cp -R "$root/mount/Postgres.app" /Applications/
+          hdiutil detach "$root/mount"
+          dist=/Applications/Postgres.app/Contents/Versions/16
+          printf 'postgres' > "$root/password.txt"
+          "$dist/bin/initdb" -D "$root/data" -U postgres "--pwfile=$root/password.txt" -A scram-sha-256 -E UTF8
+          "$dist/bin/pg_ctl" -D "$root/data" -l "$root/postgres.log" -o '-h 127.0.0.1 -p 55439' -w start
+          PGPASSWORD=postgres "$dist/bin/createdb" -h 127.0.0.1 -p 55439 -U postgres openeoc_test
+          echo 'OPENEOC_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55439/openeoc_test' >> "$GITHUB_ENV"
+          echo 'OPENEOC_CHROMIUM=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' >> "$GITHUB_ENV"
+          echo "OPENEOC_PG_DIST=$dist" >> "$GITHUB_ENV"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:static
+      - run: pnpm test:ci
 
   commit-hygiene:
     name: Commit message hygiene
