@@ -380,14 +380,19 @@ async function prepareDatabase(paths, config, { bootstrap = false, bootstrapInpu
 
 /**
  * The demo profile's dataset: the North Coast Storm reference scenario the
- * design frames show, written through the API as each of its people, then
- * placed on the scenario clock (09:42 on the most recent morning).
+ * design frames show, then the Deerhorn Lightning Complex, Del Norte
+ * Atmospheric Rivers and Cascadia Earthquake and Tsunami exercises, each
+ * written through the API as its people and placed on its own scenario clock.
+ * Jordan Lee's one sign-in reaches all four.
  */
 async function seedReferenceScenario(owner, config, runtimePassword) {
-  const [{ connect }, { buildApp }, { seedNorthCoast, placeOnScenarioClock }] = await Promise.all([
+  const [{ connect }, { buildApp }, { seedNorthCoast, placeOnScenarioClock }, { seedDeerhorn }, { seedDelNorte }, { seedCascadia }] = await Promise.all([
     importServer("server/src/db/client.ts"),
     importServer("server/src/app.ts"),
     importServer("server/src/demo/north-coast.ts"),
+    importServer("server/src/demo/deerhorn.ts"),
+    importServer("server/src/demo/del-norte.ts"),
+    importServer("server/src/demo/cascadia.ts"),
   ]);
   const runtime = connect({ url: databaseUrl("app_runtime", runtimePassword, config) });
   // Several hundred seeding requests are not the served profile's log.
@@ -397,6 +402,8 @@ async function seedReferenceScenario(owner, config, runtimePassword) {
     await app.ready();
     const scenario = await seedNorthCoast(app, owner);
     await placeOnScenarioClock(owner, scenario);
+    // North Coast Storm goes first: the exercises seat its lead on theirs.
+    for (const seed of [seedDeerhorn, seedDelNorte, seedCascadia]) await placeOnScenarioClock(owner, await seed(app, owner));
     return { jurisdictionId: scenario.jurisdictionId, incidentId: scenario.incidentId };
   } finally {
     await app.close();

@@ -6800,3 +6800,38 @@ air gap VA4: collaboration and feeds in an outage".
 - **Not run.** A fresh clone on macOS, which RD6's Mac work will be.
 - **Evidence level:** link check and the hook running on commit.
 - **Rollback:** revert the commit.
+
+## Exercise scenarios XS4 to XS7: the three exercises in the demo
+
+Basho, 2026-09-25: push the three scenarios to main so he can open them in
+demo mode, with one admin email and password for all of them, and stop
+running extended tests. This receipt covers XS4 to XS7 in one change.
+
+- **What changed.** `server/src/demo/deerhorn.ts`, `del-norte.ts` and
+  `cascadia.ts` seed the Deerhorn Lightning Complex (Hoopa Valley Tribe OES,
+  Yurok Tribe OES as coordinator), Del Norte Atmospheric Rivers (Del Norte
+  County OES) and Cascadia Earthquake and Tsunami (Humboldt County OES)
+  through the API, with shelters, facilities, closures, field reports,
+  requests, lifelines and their history, ESFs, exercise alerts under each
+  issuer, a joint release and hand-drawn exercise map layers. The Windows
+  demo profiles seed all four after North Coast Storm, each on its own clock
+  (`deploy/windows/desktop.mjs`). One sign-in reaches all four:
+  `jordan.lee@humboldt.example` with `north-coast-exercise`, which every
+  exercise account now shares. Jordan Lee administers Humboldt County OES,
+  which owns North Coast Storm and Cascadia, and holds a coordinator seat on
+  the Deerhorn and Del Norte incidents (`grantDemoDirector` in the scenario
+  kit). The Deerhorn situation manual, facilitator guide and inject cards
+  are under `docs/guides/training/deerhorn/`; `TRY-IT-ON-WINDOWS.md` names
+  the four exercises and the sign-in.
+- **Verification.** Typecheck and lint clean; `pnpm test:desktop` 26 of 26;
+  link check clean. `scenario-demo-seed.test.ts` seeds all four into one
+  database as the demo does and Jordan Lee's incident list holds all four.
+  `scenario-deerhorn-seed.test.ts` 7 of 7 and `scenario-deerhorn-browser.test.ts`
+  2 of 2 at 1586 by 992 and 1534 by 790, on the tree before the shared
+  password.
+- **Not done, by Basho's instruction to stop:** the full suite; seed tests and
+  browser walks for Del Norte and Cascadia; their exercise documents; the
+  review package (XS8); and a rebuilt setup, so a demo installed from the
+  0.9.1 setup has North Coast Storm only until a setup built from this
+  commit is installed and its data folder rebuilt.
+- **Rollback:** revert the commit; the demo seeds North Coast Storm alone.

@@ -36,6 +36,24 @@ position menu in the top bar, as the reference dashboards show it. Signing
 into a position is an explicit act in ICS, so the application does not do it
 for you.
 
+## Four exercises, one sign-in
+
+The demonstration holds four exercises, each on its own scenario clock. Jordan
+Lee's sign-in reaches all of them: choose one from the incident menu in the
+top bar.
+
+| Exercise | Owned by | Guides |
+|---|---|---|
+| North Coast Storm | Humboldt County OES | This page |
+| Deerhorn Lightning Complex | Hoopa Valley Tribe OES, with the Yurok Tribe in unified command | [Deerhorn exercise](docs/guides/training/deerhorn/EXERCISE-SITUATION-MANUAL.md) |
+| Del Norte Atmospheric Rivers | Del Norte County OES | |
+| Cascadia Earthquake and Tsunami | Humboldt County OES | |
+
+Every exercise account uses the same password, `north-coast-exercise`. The
+demonstration database is built on the first start, so one built by an older
+setup has North Coast Storm only: install a setup that carries the exercises,
+remove the data folder (below) and start the demo again.
+
 ## What to look at
 
 - **Incident overview** (the first screen): the counts, the common operating

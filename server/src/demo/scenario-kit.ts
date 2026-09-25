@@ -157,6 +157,30 @@ export async function startScenario(app: FastifyInstance, sql: Sql, clock: Date,
   return { at, iso, api, later, runInOrder, finish, jurisdictionId, organizations, people };
 }
 
+/** The demo's one sign-in: North Coast Storm's lead, Humboldt County OES's administrator. */
+export const DEMO_DIRECTOR_EMAIL = "jordan.lee@humboldt.example";
+
+/**
+ * Seat the demo's director on an incident another organization owns, as a
+ * coordinator for Humboldt County OES, when the director is in this database,
+ * so the one demo sign-in reaches every exercise.
+ */
+export async function grantDemoDirector(
+  sql: Sql,
+  api: (who: string, when: Date, method: "POST", url: string, payload?: unknown) => Promise<unknown>,
+  owner: string,
+  when: Date,
+  incidentId: string,
+): Promise<void> {
+  const [director] = await sql`select 1 from persons where email = ${DEMO_DIRECTOR_EMAIL}`;
+  if (!director) return;
+  await api(owner, when, "POST", `/api/v1/incidents/${incidentId}/participants`, {
+    organizationSlug: "humboldt-oes", personEmail: DEMO_DIRECTOR_EMAIL, incidentPositionTitle: "Exercise director",
+    role: "coordinator", expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    reason: "The demo's exercise director",
+  });
+}
+
 /**
  * Put the server-stamped times of a freshly seeded throwaway database on the
  * scenario clock. Every timestamp written during an API call moves to the
