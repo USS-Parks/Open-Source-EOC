@@ -36,7 +36,8 @@ const detail: ResourceRequestDetail = {
 };
 
 function setup(
-  options: { canMutate?: boolean; closed?: boolean; jurisdictionId?: string; incidentOwnerId?: string; personId?: string } = {},
+  options: { canMutate?: boolean; closed?: boolean; jurisdictionId?: string; incidentOwnerId?: string; personId?: string;
+    foundResourceId?: string; onFindResource?: (id: string | null) => void } = {},
   requests: readonly ResourceRequestSummary[] = [request],
   canManage = false,
 ) {
@@ -216,8 +217,9 @@ it("refreshes request data without discarding another row's selected assignee", 
 it("finds a request by number and names every filter it applies", async () => {
   const client = setup();
   expect(await screen.findByText("Showing all 1 request, open and ended.")).toBeTruthy();
-  fireEvent.change(screen.getByRole("searchbox"), { target: { value: "REQ-1027" } });
-  fireEvent.click(screen.getByRole("button", { name: "Find" }));
+  const find = screen.getByRole("search", { name: "Find requests" });
+  fireEvent.change(within(find).getByRole("searchbox"), { target: { value: "REQ-1027" } });
+  fireEvent.click(within(find).getByRole("button", { name: "Find" }));
   fireEvent.change(screen.getByLabelText("Show"), { target: { value: "open" } });
   await waitFor(() => expect(client.listResourceRequests).toHaveBeenCalledWith(
     "33333333-3333-4333-8333-333333333333", request.incidentId, { q: "REQ-1027", status: "open", mine: false }));
@@ -271,6 +273,61 @@ it("offers a resource only the requests its kind and type can fill, and demobili
   await waitFor(() => expect(client.transitionResource).toHaveBeenCalledWith("a2222222-2222-4222-8222-222222222222", {
     to: "demobilized", returnCondition: "needs_service", checks: ["equipment_returned", "records_submitted"],
   }));
+});
+
+it("finds a pool resource by name, label code or scanned label link, and shows labels to print", async () => {
+  const found: Array<string | null> = [];
+  setup({ onFindResource: (id) => found.push(id) });
+  const poolPanel = screen.getByRole("region", { name: "Resource pool" });
+  await within(poolPanel).findByText("Tender 7");
+  expect(within(poolPanel).getByText("Label code A3333333")).toBeTruthy();
+  const finder = within(poolPanel).getByRole("search", { name: "Find a resource" });
+  const rows = () => within(poolPanel).getAllByRole("listitem").map((row) => row.querySelector("strong")?.textContent);
+
+  // Words match the name or the kind.
+  fireEvent.change(within(finder).getByRole("searchbox"), { target: { value: "engine" } });
+  fireEvent.click(within(finder).getByRole("button", { name: "Find" }));
+  expect(rows()).toEqual(["Engine 3", "Engine 44"]);
+  expect(within(poolPanel).getByText(/^2 of 3 resources matching "engine"\./)).toBeTruthy();
+  expect(found).toEqual([]);
+
+  // A typed label code, in any case, finds its resource.
+  fireEvent.change(within(finder).getByRole("searchbox"), { target: { value: "a3333333" } });
+  fireEvent.click(within(finder).getByRole("button", { name: "Find" }));
+  expect(rows()).toEqual(["Tender 7"]);
+
+  // A scanned label is the resource's link in this console; it finds that resource and keeps it in the address.
+  fireEvent.change(within(finder).getByRole("searchbox"), { target: { value: `https://eoc.example.org/app/#/resources/pool/${pool[1]!.id}` } });
+  fireEvent.click(within(finder).getByRole("button", { name: "Find" }));
+  expect(rows()).toEqual(["Engine 44"]);
+  expect(within(poolPanel).getByText(/^Found by label: Engine 44\./)).toBeTruthy();
+  expect((within(finder).getByRole("searchbox") as HTMLInputElement).value).toBe("A2222222");
+  expect(found).toEqual([pool[1]!.id]);
+  fireEvent.change(within(finder).getByRole("searchbox"), { target: { value: "c0ffee00-0000-4000-8000-000000000000" } });
+  fireEvent.click(within(finder).getByRole("button", { name: "Find" }));
+  expect(within(poolPanel).getByText(/^No resource in this pool has that label\./)).toBeTruthy();
+  fireEvent.click(within(poolPanel).getByRole("button", { name: "Show every resource" }));
+  expect(rows()).toEqual(["Engine 3", "Engine 44", "Tender 7"]);
+  expect(found.at(-1)).toBeNull();
+
+  // Labels: one per listed resource, each a QR code of its link with its name, kind and label code.
+  fireEvent.click(within(poolPanel).getByRole("button", { name: "Show labels for 3 resources" }));
+  const labels = within(poolPanel).getByRole("region", { name: "Labels to print" });
+  const label = within(labels).getByRole("article", { name: "Label for Tender 7" });
+  expect(label.textContent).toContain("Water Tender, Type 1");
+  expect(label.textContent).toContain("Label code A3333333");
+  expect(within(label).getByRole("img", { name: "QR code linking to Tender 7 in the resource pool" }).querySelector("path")?.getAttribute("d")).toMatch(/^M4 4h7v1h-7z/);
+  // The printed copy sits on its own sheet outside the console.
+  expect(document.querySelectorAll(".resources-tag-sheet .resources-tag")).toHaveLength(3);
+  fireEvent.click(within(labels).getByRole("button", { name: "Close labels" }));
+  expect(document.querySelector(".resources-tag-sheet")).toBeNull();
+});
+
+it("finds the pool resource a label link names when the screen opens", async () => {
+  setup({ foundResourceId: pool[2]!.id });
+  const poolPanel = screen.getByRole("region", { name: "Resource pool" });
+  await within(poolPanel).findByText(/^Found by label: Tender 7\./);
+  expect(within(poolPanel).queryByText("Engine 3")).toBeNull();
 });
 
 it("totals recorded costs by kind and shows catalog changes to administrators only", async () => {

@@ -802,6 +802,8 @@ function Center(props: {
           personId={props.personId}
           selectedRequestId={s.id ?? null}
           onSelectRequest={(id) => props.onNavigate(id ? { kind: "resources", id } : { kind: "resources" })}
+          foundResourceId={s.resourceId ?? null}
+          onFindResource={(resourceId) => props.onNavigate(resourceId ? { kind: "resources", resourceId } : { kind: "resources" })}
           canMutate={props.canWriteResources}
           closed={props.incidentClosed}
         />

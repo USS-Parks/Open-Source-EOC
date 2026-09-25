@@ -27,7 +27,8 @@ export type Surface =
   | { readonly kind: "files" }
   | { readonly kind: "incidents" }
   | { readonly kind: "datasets" }
-  | { readonly kind: "resources"; readonly id?: string }
+  /** `id` opens a request; `resourceId` finds a pool resource, as its printed label links. */
+  | { readonly kind: "resources"; readonly id?: string; readonly resourceId?: string }
   | { readonly kind: "aar" }
   | { readonly kind: "feeds" }
   | { readonly kind: "messages" }
@@ -169,8 +170,11 @@ function parseSurfacePath(clean: string): Surface {
       return { kind: "incidents" };
     case "datasets":
       return { kind: "datasets" };
-    case "resources":
-      return id ? { kind: "resources", id } : { kind: "resources" };
+    case "resources": {
+      const [first, resourceId, extra] = id.split("/");
+      if (first !== "pool") return id ? { kind: "resources", id } : { kind: "resources" };
+      return resourceId && !extra && resourceId.length <= 128 ? { kind: "resources", resourceId } : { kind: "not-found", path: "invalid-link" };
+    }
     case "aar":
       return { kind: "aar" };
     case "feeds":
@@ -310,7 +314,8 @@ function surfacePath(surface: Surface): string {
     case "datasets":
       return "#/datasets";
     case "resources":
-      return surface.id ? `#/resources/${surface.id}` : "#/resources";
+      return surface.resourceId ? `#/resources/pool/${surface.resourceId}`
+        : surface.id ? `#/resources/${surface.id}` : "#/resources";
     case "aar":
       return "#/aar";
     case "feeds":

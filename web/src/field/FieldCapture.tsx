@@ -13,24 +13,10 @@ import {
   type SignatureValue,
 } from "@openeoc/shared";
 import { ActionButton } from "../design/controls.js";
+import { readCodeFromImage } from "../design/qr.js";
 import { SignatureInput } from "../design/signature.js";
 import { MAX_ATTACHMENT_BYTES, type FieldAttachment } from "./field-submissions.js";
 import { GeometryCapture } from "./GeometryCapture.js";
-
-/** Read a barcode or QR code from a camera image where the browser has BarcodeDetector; null when it cannot. */
-async function detectBarcode(file: File): Promise<string | null> {
-  const api = globalThis as typeof globalThis & {
-    BarcodeDetector?: new () => { detect(source: ImageBitmap): Promise<Array<{ rawValue?: string }>> };
-  };
-  if (!api.BarcodeDetector) return null;
-  const bitmap = await createImageBitmap(file);
-  try {
-    const [result] = await new api.BarcodeDetector().detect(bitmap);
-    return result?.rawValue?.trim() || null;
-  } finally {
-    bitmap.close();
-  }
-}
 
 /**
  * Photo and audio answers hold a local token until the report is queued;
@@ -154,7 +140,7 @@ function BarcodeControl(props: ControlProps) {
           event.target.value = "";
           if (!picked) return;
           setProblem(null);
-          void detectBarcode(picked)
+          void readCodeFromImage(picked)
             .then((code) => code ? props.onChange(code) : setProblem("This browser could not read the code. Enter it manually."))
             .catch(() => setProblem("This image could not be read. Enter the code manually."));
         }} />

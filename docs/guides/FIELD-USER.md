@@ -78,9 +78,11 @@ submission uses the connected map-capture path and is disabled while offline.
   each point; **Undo point** removes the last one. A line needs two points. A
   polygon needs three different points and must be closed: select **Close
   polygon** to repeat the first point at the end.
-- **Barcode** questions take the code typed into the field. Where the browser
-  can read codes from an image, **Scan** takes a photo of the code and fills
-  the field; where it cannot, the screen says so and the typed entry is used.
+- **Barcode** questions take the code typed into the field, or **Scan** takes
+  a photo of the code and fills the field. A browser with its own barcode
+  reader reads QR codes and common barcodes; where the browser has none, as on
+  Windows and Linux desktops, the app's own reader reads QR codes only. When
+  no code is read, the screen says so and the typed entry is used.
 - **Photo** and **audio** questions take a picture or a recording from the
   device camera, microphone or files. Photos may be PNG, JPEG or GIF; audio may
   be MP3, M4A, AAC, Ogg, WebM or WAV.

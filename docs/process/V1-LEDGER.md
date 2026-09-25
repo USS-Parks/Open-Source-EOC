@@ -7762,3 +7762,105 @@ codes of VC-05 follow as part two.
 - **Rollback:** revert the commit; no migration. A record already holding a
   signature keeps the value, which the reverted schema would refuse on its
   next save.
+
+## Veoci and air gap VA9 part two: QR codes on badges and pool resources
+
+Veoci Integration and Air Gap PSPR unit VA9 (VC-05), the QR codes, with the
+decoding fallback VC-05 names. With part one, VA9 is complete.
+
+- **What the code did before.** A staff badge carried its code as text only
+  ("printed as text, not as a QR image", from "V1 W3.3: staffing"). The badge
+  scan at check-in, a barcode question in a smart form and the tracking
+  scan read a code from a photo only through the browser's BarcodeDetector,
+  which desktop Windows and Linux browsers and iPhone Safari do not have, so
+  on the demonstration's Windows machines no scan button appeared at all.
+  Pool resources had no label and no way to be found other than scrolling.
+- **What changed.**
+  - **A shared QR module** (`web/src/design/qr.tsx`). `QrCode` draws a
+    symbol from `qrcode` 1.5.4 (MIT) as SVG, one path of module runs with the
+    standard four-module quiet zone, black on white in both themes, so it
+    prints sharp. `readCodeFromImage` uses the browser's BarcodeDetector
+    where there is one; elsewhere it scales the photo to at most 1,600
+    pixels on its long side and decodes QR codes with `jsqr` 1.4.0
+    (Apache-2.0), loaded on first use. The staffing badge scan, the smart
+    form barcode question and the tracking scan all read through it. The
+    research named `@zxing/library` (Apache-2.0) as the decoder; `jsqr` was
+    taken instead because it is one QR-only file already in the lockfile.
+    Code 128 and Code 39 barcodes still need BarcodeDetector.
+  - **Badges.** The badge shows the code as a QR code beside the text, and
+    the printed sheet holds the badge alone with a 1.3 inch QR code. The QR
+    code holds exactly the code, so a scanner that types what it reads, a
+    photo through **Scan badge QR code**, and a person typing all enter the
+    same thing. The hint now says to scan or type it.
+  - **Pool resource labels** (the Resources screen's pool). Each row shows
+    its label code, the first eight characters of the resource's id. **Find a
+    resource** matches words in the name or kind, a label code, a whole id or
+    a scanned label link. **Scan a resource label** reads a label's QR code
+    from a photo. **Show labels for** *n* **resources** lays out a label for
+    each listed resource that is not demobilized (name, kind and type, label
+    code, QR code), and **Print labels** prints them alone, two across, on a
+    sheet outside the console shell. The QR code is a link,
+    `#/resources/pool/<id>` at the address the console was open at: a phone
+    camera opens the console there and, after sign-in, the pool with the
+    resource found and in view. A label found by scan or link is kept in the
+    address, so the back button and a shared link work. The screen warns
+    when the console is open at a loopback address, where a printed link
+    would not open on a phone.
+  - **Guides.** `OPERATOR-QUICKSTART.md` describes the badge QR code and
+    the pool labels, and corrects its stale claim that the staffing screen
+    cannot revoke a badge (RD9 part one added **Revoke badge for**).
+    `FIELD-USER.md` says which codes a browser without its own reader can
+    scan.
+- **Default taken (recorded, not asked).** A label links into the console
+  rather than holding a bare id, because a phone's own camera app follows a
+  link and does nothing with an id; the in-console finder accepts either.
+  The link takes the printing browser's address, since the server does not
+  know which address phones use; the warning covers the one address that is
+  always wrong.
+- **Correction to part one's receipt.** Part one listed `jsqr` as a server
+  test dependency only. It is now a runtime dependency of the web app, and
+  the server no longer lists it.
+- **Files outside the "Owns" cell.** `web/src/design/qr.tsx` (new),
+  `web/src/app/surfaces/ResourcesSurface.tsx` (the pool lives there, not in
+  `web/src/resources/`), `web/src/app/router.tsx`,
+  `web/src/app/screens/Console.tsx`, `web/src/field/FieldCapture.tsx`,
+  `web/src/app/surfaces/TrackingSurface.tsx`, `web/package.json`,
+  `server/package.json`, `pnpm-lock.yaml`, and the two guides.
+- **Air-gap behavior (decision 9).** Drawing and decoding run in the
+  browser; nothing leaves the host. The decoder is its own 46.6 kB (gzipped)
+  chunk, which the service worker precaches with every other chunk, so
+  scanning works offline once the app is installed. First-load JavaScript is
+  184.6 kB gzipped against the 300 kB budget.
+- **Tests.**
+  - `qr.test.tsx`: a drawn label link and a badge code, rasterized from the
+    SVG path, decode back to their values; every run is whole modules; the
+    reader passes formats to BarcodeDetector, returns nothing for a
+    barcode-only read without one, and reports that it cannot read at all
+    when the browser has neither a detector nor image decoding.
+  - `resources-surface.test.tsx`: the pool finder by words, by label code in
+    either case and by a scanned link (kept in the address), an unknown
+    label, **Show every resource**, and the labels with their QR codes on
+    screen and on the print sheet; a label link opening the screen finds its
+    resource. `router.test.ts`: the pool link round-trips and a malformed
+    one is refused. `field-capture.test.tsx` now removes image decoding as
+    well to stand for a browser that cannot read codes.
+  - `staffing-browser.test.ts`, a second test at 1586 by 992 and 1534 by
+    790: a badge is issued with its QR code; under print media the sheet
+    holds the badge alone; the printed badge's image, fed to **Scan badge
+    QR code**, fills the exact code and checks the holder in as a badge scan.
+    Headless Chromium on Linux has no BarcodeDetector, so this proves the
+    bundled decoder.
+  - `resource-labels-browser.test.ts` (new), at 1586 by 992 and 1534 by 790:
+    three resources' labels are shown with the loopback warning and printed
+    alone; one printed label's image, scanned into the pool, finds that
+    resource and puts it in the address; **Show every resource** clears it;
+    the label's link opened directly signs in to the pool with the resource
+    found and in view.
+- **Verification.** On the Linux test bed: `pnpm check:static` exit 0
+  (license scan 335 packages, links 116 files); the bundle budget passes.
+  Every test file except the browser, end-to-end and load files (Vitest,
+  two workers): 1,642 passed in 242 files. The two browser files, 4 of 4.
+- **Evidence level:** component and browser tests. A phone camera opening a
+  printed label on the LAN is the phone walk (VA23), which is Basho's.
+- **Rollback:** revert the commit; no migration. Printed labels then link to
+  a path the console reads as an unknown link.

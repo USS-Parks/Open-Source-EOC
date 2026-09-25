@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   choiceLabel,
   DEMOBILIZATION_CHECK_LABELS,
@@ -16,6 +17,7 @@ import {
 } from "@openeoc/shared";
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../../design/components.js";
 import { Icon } from "../../design/icons/Icon.js";
+import { canReadCodes, QrCode, readCodeFromImage } from "../../design/qr.js";
 import { WorkStateLine, type WorkState } from "../../design/work-state.js";
 import { useDraftStore } from "../../offline/draft-store.js";
 import { ResourceRequestDetailPanel } from "../../resources/ResourceRequestDetail.js";
@@ -369,6 +371,7 @@ function PoolRow(props: {
         <StatusBadge status={poolBadge[r.status] ?? "unknown"}>{choiceLabel(r.status)}</StatusBadge>
         <strong>{r.name}</strong>
         <span className="eoc-muted">{kindText(props.kinds, r.kind, r.type)}</span>
+        <span className="eoc-muted">Label code {labelCode(r.id)}</span>
       </div>
       {r.request ? <span className="eoc-flush eoc-muted">Assigned to request: {r.request.item}</span> : null}
       {r.status === "demobilized" ? <span className="eoc-flush eoc-muted">
@@ -400,13 +403,65 @@ function PoolRow(props: {
   );
 }
 
-/** The jurisdiction's pool of typed resources: add one, assign it to a matching request, take it out of service, demobilize it. */
+/** The code printed on a pool resource's label, to type where there is no scanner: the first eight characters of its id. */
+const labelCode = (id: string): string => id.slice(0, 8).toUpperCase();
+
+/** The address a pool resource's label links to: this console's resource pool, found to that resource. */
+const labelLink = (id: string): string => `${location.origin}${location.pathname}#/resources/pool/${id}`;
+
+/** The resource id a scanned label link or a whole id names; null for anything else. */
+function labelledId(text: string): string | null {
+  const value = text.trim().toLowerCase();
+  const id = /#\/resources\/pool\/([0-9a-f-]{36})$/.exec(value)?.[1] ?? value;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id) ? id : null;
+}
+
+/** Whether a pool resource answers a search: a label link, its id or its label code finds it; other words match its name or kind. */
+function poolMatches(resource: PoolResource, kind: string, search: string): boolean {
+  const text = search.trim().toLowerCase();
+  if (!text) return true;
+  const id = labelledId(text);
+  if (id) return resource.id === id;
+  if (/^[0-9a-f]{8}$/.test(text) && resource.id.startsWith(text)) return true;
+  return resource.name.toLowerCase().includes(text) || kind.toLowerCase().includes(text);
+}
+
+/** Labels print on a sheet of their own at the body level, outside the console shell's fixed panes. */
+function LabelSheet(props: { children: ReactNode }) {
+  return createPortal(<div className="resources-tag-sheet">{props.children}</div>, document.body);
+}
+
+/** A pool resource's label: its name, kind and type, label code, and a QR code linking to it in the pool. */
+function ResourceLabel(props: { resource: PoolResource; kind: string }) {
+  const r = props.resource;
+  return (
+    <article className="resources-tag" aria-label={`Label for ${r.name}`}>
+      <QrCode value={labelLink(r.id)} label={`QR code linking to ${r.name} in the resource pool`} className="resources-tag-qr" />
+      <div className="resources-tag-text">
+        <strong className="resources-tag-name">{r.name}</strong>
+        <span>{props.kind}</span>
+        <span className="resources-tag-code">Label code {labelCode(r.id)}</span>
+      </div>
+    </article>
+  );
+}
+
+/** Where this console is open at the computer's own address, so a phone cannot follow a label's link. */
+const onLoopback = () => ["localhost", "127.0.0.1", "[::1]", "::1"].includes(location.hostname);
+
+/**
+ * The jurisdiction's pool of typed resources: add one, assign it to a matching
+ * request, take it out of service, demobilize it; find one by name or by its
+ * scanned label, and print labels.
+ */
 function ResourcePool(props: {
   client: ApiClient;
   jurisdictionId: string;
   kinds: readonly ResourceKind[];
   requests: readonly ResourceRequestSummary[];
   canMutate: boolean;
+  foundResourceId: string | null;
+  onFindResource: (resourceId: string | null) => void;
 }) {
   const pool = useAsync(() => props.client.listResources(props.jurisdictionId), [props.jurisdictionId]);
   const [name, setName] = useState("");
@@ -414,6 +469,39 @@ function ResourcePool(props: {
   const [type, setType] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [find, setFind] = useState(props.foundResourceId ? labelCode(props.foundResourceId) : "");
+  const [search, setSearch] = useState(props.foundResourceId ?? "");
+  const [scanProblem, setScanProblem] = useState<string | null>(null);
+  const [labelsOpen, setLabelsOpen] = useState(false);
+  const stack = useRef<HTMLDivElement>(null);
+  // A label link opened from a phone, or a label scanned here, finds its
+  // resource and brings the pool into view; going back from it shows every resource.
+  useEffect(() => {
+    if (props.foundResourceId) {
+      setFind(labelCode(props.foundResourceId));
+      setSearch(props.foundResourceId);
+      stack.current?.scrollIntoView?.({ block: "start" });
+    } else if (labelledId(search)) {
+      setFind("");
+      setSearch("");
+    }
+  }, [props.foundResourceId]);
+  const applySearch = (text: string) => {
+    const id = labelledId(text);
+    const wasLabel = props.foundResourceId !== null || labelledId(search) !== null;
+    setSearch(id ?? text.trim());
+    if (id) {
+      setFind(labelCode(id));
+      if (id !== props.foundResourceId) props.onFindResource(id);
+    } else if (wasLabel) props.onFindResource(null);
+  };
+  const scanLabel = (file: File | undefined) => {
+    if (!file) return;
+    setScanProblem(null);
+    void readCodeFromImage(file, ["qr_code"])
+      .then((code) => code ? applySearch(code) : setScanProblem("No label was found in that image. Type the label code instead."))
+      .catch(() => setScanProblem("That image could not be read. Type the label code instead."));
+  };
   const run = async (action: () => Promise<unknown>) => {
     setBusy(true);
     setError(null);
@@ -432,9 +520,15 @@ function ResourcePool(props: {
     setName("");
   });
   const list = pool.data ?? [];
+  const kindOf = (resource: PoolResource) => kindText(props.kinds, resource.kind, resource.type);
+  const shown = list.filter((resource) => poolMatches(resource, kindOf(resource), search));
+  const byLabel = labelledId(search) !== null;
+  // A demobilized resource has left the pool for good, so it gets no label.
+  const printable = shown.filter((resource) => resource.status !== "demobilized");
+  const count = (n: number) => `${n} ${n === 1 ? "resource" : "resources"}`;
   return (
     <Panel title="Resource pool">
-      <div className="resources-stack">
+      <div className="resources-stack" ref={stack}>
         {props.canMutate ? <div className="resources-form">
           <div className="resources-cell"><TextField label="Resource name" value={name} onChange={setName} /></div>
           <KindTypeFields kinds={props.kinds} kind={kind} type={type} onKind={setKind} onType={setType} forRequest={false} />
@@ -443,8 +537,40 @@ function ResourcePool(props: {
         {pool.loading && !pool.data ? <Loading label="Loading the resource pool…" /> : null}
         {pool.error && !pool.data ? <ErrorNote message={pool.error} /> : null}
         {pool.data && list.length === 0 ? <p className="eoc-flush eoc-muted">No resources in the pool.</p> : null}
-        {list.length ? <ul className="resources-list">
-          {list.map((resource) => <PoolRow key={resource.id} client={props.client} resource={resource} kinds={props.kinds} requests={props.requests}
+        {list.length ? <form className="resources-filters resources-find" role="search" aria-label="Find a resource"
+          onSubmit={(event) => { event.preventDefault(); applySearch(find); }}>
+          <label className="resources-label">Find a resource<input type="search" className="resources-select" value={find}
+            placeholder="Name, kind or label code" onChange={(event) => setFind(event.target.value)} /></label>
+          <Button type="submit">Find</Button>
+          {canReadCodes() ? <label className="resources-label resources-camera">Scan a resource label<input type="file" accept="image/*"
+            capture="environment" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; scanLabel(file); }} /></label> : null}
+        </form> : null}
+        {scanProblem ? <p role="alert" className="eoc-flush eoc-text-critical">{scanProblem}</p> : null}
+        {list.length && search ? <p className="resources-filter-summary" role="status">
+          {byLabel ? shown[0] ? `Found by label: ${shown[0].name}.` : "No resource in this pool has that label."
+            : `${shown.length} of ${count(list.length)} matching "${search}".`}{" "}
+          <button type="button" className="resources-link" onClick={() => { setFind(""); applySearch(""); }}>Show every resource</button>
+        </p> : null}
+        {list.length ? <div className="resources-actions">
+          <Button onClick={() => setLabelsOpen(true)} disabled={!printable.length || labelsOpen}>Show labels for {count(printable.length)}</Button>
+        </div> : null}
+        {labelsOpen && printable.length ? <section className="resources-tags" aria-labelledby="resources-tags-title">
+          <h3 id="resources-tags-title" className="resources-tags-title">Labels to print</h3>
+          <p className="eoc-flush eoc-muted">A label's QR code opens its resource in this pool on a phone signed in on this network.
+            At the console, scan it into Find a resource, or type its label code.</p>
+          {onLoopback() ? <p className="resources-tags-warning">This console is open at this computer's own address, which a phone
+            cannot reach, so a phone cannot open these labels. Open the console at the address phones use, then print. Scanning at the
+            console works either way.</p> : null}
+          <div className="resources-tag-grid">{printable.map((r) => <ResourceLabel key={r.id} resource={r} kind={kindOf(r)} />)}</div>
+          <LabelSheet>{printable.map((r) => <ResourceLabel key={r.id} resource={r} kind={kindOf(r)} />)}</LabelSheet>
+          <div className="resources-actions">
+            <Button kind="primary" onClick={() => window.print()}>Print labels</Button>
+            <Button onClick={() => setLabelsOpen(false)}>Close labels</Button>
+          </div>
+        </section> : null}
+        {list.length && !shown.length && !byLabel ? <p className="eoc-flush eoc-muted">No resource in the pool matches.</p> : null}
+        {shown.length ? <ul className="resources-list">
+          {shown.map((resource) => <PoolRow key={resource.id} client={props.client} resource={resource} kinds={props.kinds} requests={props.requests}
             canMutate={props.canMutate} busy={busy} onMove={(id, move) => void run(() => props.client.transitionResource(id, move))}
             onEdit={async (id, input) => { let saved = false; await run(async () => { await props.client.updateResource(id, input); saved = true; }); return saved; }} />)}
         </ul> : null}
@@ -640,6 +766,9 @@ export function ResourcesSurface(props: {
   personId?: string | null;
   selectedRequestId?: string | null;
   onSelectRequest?: (id: string | null) => void;
+  /** The pool resource a label link or scan found, kept in the address. */
+  foundResourceId?: string | null;
+  onFindResource?: (resourceId: string | null) => void;
   canMutate?: boolean;
   closed?: boolean;
 }) {
@@ -897,7 +1026,8 @@ export function ResourcesSurface(props: {
           </p>
         ) : null}
 
-        <ResourcePool client={props.client} jurisdictionId={props.jurisdictionId} kinds={kinds} requests={allRequests} canMutate={props.canMutate ?? true} />
+        <ResourcePool client={props.client} jurisdictionId={props.jurisdictionId} kinds={kinds} requests={allRequests} canMutate={props.canMutate ?? true}
+          foundResourceId={props.foundResourceId ?? null} onFindResource={props.onFindResource ?? (() => undefined)} />
         <CostRollup kinds={kinds} requests={allRequests} incidentScoped={props.incidentId !== null} />
         {catalog.error && !catalog.data ? <ErrorNote message={catalog.error} /> : null}
         {catalog.data ? <TypingCatalog client={props.client} jurisdictionId={props.jurisdictionId} kinds={kinds}

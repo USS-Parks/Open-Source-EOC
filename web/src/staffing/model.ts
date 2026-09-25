@@ -1,4 +1,5 @@
 import { ICS_FORMS } from "@openeoc/shared";
+import { canReadCodes, readCodeFromImage } from "../design/qr.js";
 
 /**
  * Staffing as the web client sees it: the summary shape the staffing route
@@ -116,21 +117,10 @@ export function instant(local: string): string | undefined {
   return local && !Number.isNaN(date.getTime()) ? date.toISOString() : undefined;
 }
 
-/** Read a QR code from a camera image where the browser has BarcodeDetector; null when it cannot. */
+/** Read a badge's QR code from a camera image; null when none is found. */
 export async function readQrCode(file: File): Promise<string | null> {
-  const api = globalThis as typeof globalThis & {
-    BarcodeDetector?: new (options?: { formats?: string[] }) => {
-      detect(source: ImageBitmap): Promise<Array<{ rawValue?: string }>>;
-    };
-  };
-  if (!api.BarcodeDetector) return null;
-  const bitmap = await createImageBitmap(file);
-  try {
-    const [result] = await new api.BarcodeDetector({ formats: ["qr_code"] }).detect(bitmap);
-    return result?.rawValue ? normalizeBadgeCode(result.rawValue) || null : null;
-  } finally {
-    bitmap.close();
-  }
+  const code = await readCodeFromImage(file, ["qr_code"]);
+  return code ? normalizeBadgeCode(code) || null : null;
 }
 
-export const canReadQrCodes = (): boolean => "BarcodeDetector" in globalThis;
+export const canReadQrCodes = canReadCodes;

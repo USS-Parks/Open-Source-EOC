@@ -3,6 +3,7 @@ import { dictionaryValues } from "@openeoc/shared";
 import { ActionButton, Tabs } from "../../design/controls.js";
 import { ConditionBadge, EmptyState, ErrorState, LoadingState } from "../../design/feedback.js";
 import { Icon } from "../../design/icons/Icon.js";
+import { readCodeFromImage } from "../../design/qr.js";
 import type { ApiClient, ReunificationAnswer, TrackedObject } from "../api/client.js";
 import { useAsync } from "../data/hooks.js";
 import { Scroll, SurfaceHeader } from "../screens/parts.js";
@@ -26,21 +27,8 @@ function useOnline(): boolean {
   return online;
 }
 
-async function detectBarcode(file: File): Promise<string | null> {
-  const api = globalThis as typeof globalThis & {
-    BarcodeDetector?: new (options?: { formats?: string[] }) => {
-      detect(source: ImageBitmap): Promise<Array<{ rawValue?: string }>>;
-    };
-  };
-  if (!api.BarcodeDetector) return null;
-  const bitmap = await createImageBitmap(file);
-  try {
-    const [result] = await new api.BarcodeDetector({ formats: ["qr_code", "code_128", "code_39"] }).detect(bitmap);
-    return result?.rawValue?.trim() || null;
-  } finally {
-    bitmap.close();
-  }
-}
+/** A tag is a QR code or a Code 128 or Code 39 barcode; without BarcodeDetector only a QR code is read. */
+const detectBarcode = (file: File) => readCodeFromImage(file, ["qr_code", "code_128", "code_39"]);
 
 function human(value: string): string {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());

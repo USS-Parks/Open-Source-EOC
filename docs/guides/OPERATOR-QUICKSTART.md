@@ -176,6 +176,18 @@ the NIMS resource typing catalog. In NIMS typing, Type 1 is the most capable.
   can still leave it. To demobilize, record the **Return condition** and tick
   the demobilization checks made. Demobilization is final. Read-only access
   sees the pool but cannot change it. Every move is in the audit log.
+- **Find and label pool resources**: **Find a resource** takes words from a
+  resource's name or kind, or its label code, the eight characters each row
+  shows. **Scan a resource label** reads a printed label's QR code from a
+  photo and finds its resource. **Show labels for** *n* **resources** lays out
+  a label for each listed resource that is not demobilized, with its name,
+  kind and type, label code and a QR code; **Print labels** prints them alone,
+  two across. A label's QR code is a link to its resource in the pool: a phone
+  that scans it opens the console, and after signing in, the pool with that
+  resource found. The link uses the address the console was open at when the
+  labels were printed, so print them from the address phones use. The screen
+  warns when the console is open at the computer's own address, which no phone
+  can reach.
 - **Cost rollup**: the costs recorded on the requests in scope, per request and
   per kind, with the total. Record and export costs from the request's
   history, as above.
@@ -535,8 +547,9 @@ organization. Times are local, 24-hour.
 - **Check-in and on duty.** Choose the **Position** and choose **Check in**.
   Without a badge code you check yourself in; a jurisdiction admin can choose
   another **Person**. To check in a badge holder, type the code printed on the
-  badge into **Badge code, optional**; spaces are ignored. On a browser that
-  can read QR codes, **Scan badge QR code** takes a photo and fills the code in.
+  badge into **Badge code, optional**; spaces are ignored. **Scan badge QR
+  code** reads the badge's QR code from a photo and fills the code in; a
+  scanner that types what it reads into the field works as typing does.
   **On duty** lists open check-ins, earliest first, with **Check out** on each
   and **Load more check-ins** when there are more. **Vacant positions** lists
   every position with no one checked in.
@@ -547,9 +560,11 @@ organization. Times are local, 24-hour.
   listed.
 - **Badges.** A jurisdiction admin chooses a person and the position printed on
   the badge, then **Issue badge**. The badge code appears once: print it with
-  **Print badge** before leaving the page. The code is printed as text, not as
-  a QR image. Issuing a new badge does not cancel an earlier one, and this
-  screen has no way to revoke a badge, so report a lost badge to an admin.
+  **Print badge** before leaving the page. The badge carries the code twice,
+  as a QR code and as text in groups of four, and prints alone on the page.
+  Issuing a new badge does not cancel an earlier one. **Issued badges** lists
+  every badge, and **Revoke badge for** *name* stops a lost badge's code from
+  checking anyone in.
 - **Shifts.** **Upcoming shifts** lists scheduled coverage until each shift
   ends. To schedule one, choose the position, optionally who is assigned, and
   the start and end, then **Schedule shift**. The server refuses a shift that

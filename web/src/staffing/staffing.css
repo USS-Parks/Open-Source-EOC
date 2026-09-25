@@ -28,6 +28,8 @@
 .eoc-staffing-badge h2 { font-size: 1.5rem; }
 .eoc-staffing-badge-position { margin: 0 0 10px; font-size: 1.1rem; font-weight: 700; }
 .eoc-staffing-badge-code { margin: 0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 1rem; line-height: 1.6; overflow-wrap: anywhere; }
+.eoc-staffing-badge-scan { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; align-items: center; }
+.eoc-staffing-badge-qr { display: block; width: 120px; height: 120px; }
 .eoc-staffing-print-sheet { display: none; }
 @media (max-width: 720px) {
   .eoc-staffing { padding: 10px; }
@@ -38,6 +40,8 @@
   .eoc-staffing-print-sheet { display: block; color: #000; font: 10pt/1.35 system-ui, sans-serif; }
   .eoc-staffing-print-sheet .eoc-ics211, .eoc-staffing-print-sheet .eoc-staffing-badge { padding: 0; border: 0; background: none; color: #000; }
   .eoc-staffing-print-sheet .eoc-staffing-badge { width: 3.4in; padding: .2in; border: 1pt solid #000; break-inside: avoid; }
+  .eoc-staffing-print-sheet .eoc-staffing-badge-scan { grid-template-columns: 1.3in minmax(0, 1fr); gap: .12in; }
+  .eoc-staffing-print-sheet .eoc-staffing-badge-qr { width: 1.3in; height: 1.3in; }
   .eoc-staffing-print-sheet h2 { margin: 0 0 6pt; font-size: 14pt; }
   .eoc-staffing-print-sheet dt { color: #000; }
   .eoc-staffing-print-sheet .eoc-table { display: table; width: 100%; font-size: 9pt; }

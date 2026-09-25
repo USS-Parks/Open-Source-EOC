@@ -16,6 +16,7 @@ describe("surface hash routing", () => {
     { kind: "datasets" },
     { kind: "resources" },
     { kind: "resources", id: "request-1" },
+    { kind: "resources", resourceId: "a3333333-3333-4333-8333-333333333333" },
     { kind: "boards" },
     { kind: "board", id: "b1" },
     { kind: "sitreps" },
@@ -58,6 +59,14 @@ describe("surface hash routing", () => {
   it("falls back to the list when a detail id is missing", () => {
     expect(parseHash("#/board")).toEqual({ kind: "boards" });
     expect(parseHash("#/sitrep")).toEqual({ kind: "sitreps" });
+  });
+
+  it("reads a printed pool label's link and refuses a malformed one", () => {
+    expect(parseHash("#/resources/pool/a3333333-3333-4333-8333-333333333333"))
+      .toEqual({ kind: "resources", resourceId: "a3333333-3333-4333-8333-333333333333" });
+    expect(parseHash("#/resources/pool")).toEqual({ kind: "not-found", path: "invalid-link" });
+    expect(parseHash("#/resources/pool/a/b")).toEqual({ kind: "not-found", path: "invalid-link" });
+    expect(sectionOf({ kind: "resources", resourceId: "a3333333-3333-4333-8333-333333333333" })).toBe("resources");
   });
 
   it("maps detail surfaces to their rail section", () => {

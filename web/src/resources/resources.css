@@ -46,3 +46,26 @@
 .resources-history summary { cursor: pointer; }
 .resources-history-list { display: grid; gap: 4px; margin: 6px 0 0; padding-left: 20px; }
 .resources-row-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* Finding a pool resource, and its printed labels (VA9): on screen in a grid, printed on a sheet of their own. */
+.resources-find { grid-template-columns: minmax(min(100%, 220px), 2fr) auto minmax(min(100%, 220px), 1fr); }
+.resources-camera input { cursor: pointer; min-height: 44px; }
+@container (max-width: 640px) { .resources-find { grid-template-columns: 1fr; } }
+.resources-tags { border: 1px solid var(--eoc-border); border-radius: 4px; display: grid; gap: 10px; min-width: 0; padding: 14px; }
+.resources-tags-title { font-size: 1rem; margin: 0; }
+.resources-tags-warning { border-left: 4px solid var(--eoc-status-warning); margin: 0; padding: 6px 10px; }
+.resources-tag-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); min-width: 0; }
+.resources-tag { align-items: center; background: var(--eoc-surface); border: 2px solid var(--eoc-text); border-radius: 8px; display: grid; gap: 12px; grid-template-columns: 110px minmax(0, 1fr); min-width: 0; padding: 12px; }
+.resources-tag-qr { display: block; height: 110px; width: 110px; }
+.resources-tag-text { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.resources-tag-name { font-size: 1.15rem; }
+.resources-tag-code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+.resources-tag-sheet { display: none; }
+@media print {
+  html:has(> body > .resources-tag-sheet), body:has(> .resources-tag-sheet) { background: #fff !important; height: auto !important; }
+  body:has(> .resources-tag-sheet) > :not(.resources-tag-sheet) { display: none !important; }
+  .resources-tag-sheet { color: #000; display: grid; font: 10pt/1.3 system-ui, sans-serif; gap: .15in; grid-template-columns: repeat(2, 3.4in); }
+  .resources-tag-sheet .resources-tag { background: none; border: 1pt solid #000; border-radius: 6pt; break-inside: avoid; color: #000; grid-template-columns: 1.1in minmax(0, 1fr); padding: .12in; }
+  .resources-tag-sheet .resources-tag-qr { height: 1.1in; width: 1.1in; }
+  .resources-tag-sheet .resources-tag-name { font-size: 13pt; }
+}

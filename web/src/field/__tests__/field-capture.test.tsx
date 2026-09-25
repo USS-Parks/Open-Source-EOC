@@ -131,7 +131,9 @@ describe("the smart form runner", () => {
       fireEvent.change(screen.getByLabelText("Scan Asset tag"), { target: { files: [new File(["code"], "tag.png", { type: "image/png" })] } });
       await waitFor(() => expect(latest.answers.asset_tag).toBe("CUL-0042"));
 
+      // A browser with no BarcodeDetector and no way to decode an image itself.
       delete (globalThis as { BarcodeDetector?: unknown }).BarcodeDetector;
+      delete (globalThis as { createImageBitmap?: unknown }).createImageBitmap;
       fireEvent.change(screen.getByLabelText("Scan Asset tag"), { target: { files: [new File(["code"], "tag.png", { type: "image/png" })] } });
       expect(await screen.findByText("This browser could not read the code. Enter it manually.")).toBeTruthy();
       fireEvent.change(screen.getByLabelText("Asset tag"), { target: { value: "CUL-0043" } });

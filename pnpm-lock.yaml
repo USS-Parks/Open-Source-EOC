@@ -69,9 +69,6 @@ importers:
       jose:
         specifier: ^6.2.12
         version: 6.2.12
-      jsqr:
-        specifier: 1.4.0
-        version: 1.4.0
       playwright-core:
         specifier: ^1.63.0
         version: 1.63.0
@@ -93,6 +90,9 @@ importers:
       '@openeoc/shared':
         specifier: workspace:*
         version: link:../shared
+      jsqr:
+        specifier: 1.4.0
+        version: 1.4.0
       maplibre-gl:
         specifier: ^6.10.0
         version: 6.10.0

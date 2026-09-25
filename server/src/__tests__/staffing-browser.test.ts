@@ -165,4 +165,61 @@ describe("staffing in a real browser", () => {
     expect(external).toEqual([]);
     await page.close();
   }, 90_000);
+
+  it("prints a badge with a QR code, and the printed badge scanned back checks its holder in (VA9)", async () => {
+    const page = await browser.newPage({ viewport: { width: 1586, height: 992 }, reducedMotion: "reduce" });
+    const external: string[] = [];
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.route("**/*", (route) => {
+      const url = route.request().url();
+      if (url.startsWith(baseUrl) || url.startsWith("data:") || url.startsWith("blob:")) return route.continue();
+      external.push(url); return route.abort();
+    });
+    await page.goto(`${baseUrl}/app/index.html#/staffing`, { waitUntil: "load" });
+    await page.getByLabel("Email").fill("admin@example.org");
+    await page.getByLabel("Password").fill("correct-horse-battery");
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.locator(".eoc-staffing").getByRole("heading", { name: "Staffing", level: 2 }).waitFor();
+    const panel = page.locator(".eoc-staffing-panel:not([hidden])");
+
+    await page.getByRole("tab", { name: "Badges" }).click();
+    await panel.getByLabel("Person", { exact: true }).locator("option", { hasText: "Member" }).waitFor({ state: "attached" });
+    await panel.getByLabel("Person", { exact: true }).selectOption({ label: "Member" });
+    await panel.getByLabel("Position printed on the badge").selectOption({ label: "Logistics Section Chief" });
+    await panel.getByRole("button", { name: "Issue badge" }).click();
+    const badge = panel.getByRole("article", { name: "Badge for Member" });
+    await badge.getByRole("img", { name: "QR code of the badge code for Member" }).waitFor();
+    const printedCode = (await badge.locator(".eoc-staffing-badge-code").textContent())!;
+    await page.screenshot({ path: join(SHOTS, "staffing-badge-qr-1586.png"), fullPage: false });
+
+    // Printed, the sheet holds the badge alone, QR code and all; its image is what a camera sees.
+    await page.emulateMedia({ media: "print" });
+    expect(await page.locator("#root").isVisible()).toBe(false);
+    const printed = page.locator(".eoc-staffing-print-sheet").getByRole("article", { name: "Badge for Member" });
+    await printed.getByRole("img", { name: "QR code of the badge code for Member" }).waitFor();
+    const photo = await printed.screenshot();
+    await page.screenshot({ path: join(SHOTS, "staffing-badge-qr-print.png"), fullPage: true });
+    await page.emulateMedia({ media: "screen" });
+
+    // Scanned back at check-in, the image fills the badge code and checks the holder in.
+    await page.getByRole("tab", { name: "Check-in and on duty" }).click();
+    await panel.getByLabel("Position", { exact: true }).selectOption({ label: "Logistics Section Chief" });
+    await panel.getByLabel("Scan badge QR code").setInputFiles({ name: "badge.png", mimeType: "image/png", buffer: photo });
+    await expect.poll(() => panel.getByLabel("Badge code, optional").inputValue(), { timeout: 20_000 })
+      .toBe(printedCode.replace(/\s+/g, ""));
+    await panel.getByRole("button", { name: "Check in badge holder" }).click();
+    await page.getByRole("status").filter({ hasText: "Member checked in as Logistics Section Chief." }).waitFor();
+    await panel.getByRole("region", { name: "On duty" }).getByRole("row").filter({ hasText: "Member" })
+      .filter({ hasText: "Logistics Section Chief" }).filter({ hasText: "Badge scan" }).waitFor();
+    await page.screenshot({ path: join(SHOTS, "staffing-badge-scanned-1586.png"), fullPage: false });
+
+    await page.setViewportSize({ width: 1534, height: 790 });
+    await page.getByRole("tab", { name: "Badges" }).click();
+    await badge.getByRole("img", { name: "QR code of the badge code for Member" }).waitFor();
+    await page.screenshot({ path: join(SHOTS, "staffing-badge-qr-1534.png"), fullPage: false });
+    expect(errors).toEqual([]);
+    expect(external).toEqual([]);
+    await page.close();
+  }, 120_000);
 });

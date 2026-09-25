@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { EnumSelect } from "../design/components.js";
 import { ActionButton, Tabs } from "../design/controls.js";
 import { ConditionBadge, EmptyState, ErrorState, LoadingState } from "../design/feedback.js";
+import { QrCode } from "../design/qr.js";
 import { readAllPages, type ApiClient } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import {
@@ -70,13 +71,19 @@ function BadgeList(props: { badges: readonly BadgeEntry[]; busy: boolean; onRevo
   </table></div>;
 }
 
+/** A badge: the QR code holds the badge code as printed beside it, so a scanner or a typist enters the same thing. */
 function Badge(props: { name: string; position: string; code: string }) {
   return <article className="eoc-staffing-badge" aria-label={`Badge for ${props.name}`}>
     <p className="eoc-staffing-eyebrow">Staff badge</p>
     <h2>{props.name}</h2>
     <p className="eoc-staffing-badge-position">{props.position}</p>
-    <p className="eoc-staffing-eyebrow">Badge code</p>
-    <p className="eoc-staffing-badge-code">{groupBadgeCode(props.code)}</p>
+    <div className="eoc-staffing-badge-scan">
+      <QrCode value={props.code} label={`QR code of the badge code for ${props.name}`} className="eoc-staffing-badge-qr" />
+      <div>
+        <p className="eoc-staffing-eyebrow">Badge code</p>
+        <p className="eoc-staffing-badge-code">{groupBadgeCode(props.code)}</p>
+      </div>
+    </div>
   </article>;
 }
 
@@ -286,7 +293,7 @@ export function StaffingSurface(props: {
       {issued ? <section className="eoc-staffing-block" aria-label="Issued badge">
         <Badge name={issued.name} position={issued.position} code={issued.code} />
         <PrintSheet><Badge name={issued.name} position={issued.position} code={issued.code} /></PrintSheet>
-        <p className="eoc-staffing-hint">This code is shown only once, so print the badge now. It is printed as text: type it into Badge code at check-in. A new badge does not cancel an earlier one; revoke it below.</p>
+        <p className="eoc-staffing-hint">This code is shown only once, so print the badge now. At check-in, scan its QR code or type the printed code into Badge code. A new badge does not cancel an earlier one; revoke it below.</p>
         <div className="eoc-staffing-actions"><ActionButton kind="primary" onClick={() => window.print()}>Print badge</ActionButton></div>
       </section> : null}
       <section className="eoc-staffing-block" aria-labelledby="staffing-badges">
