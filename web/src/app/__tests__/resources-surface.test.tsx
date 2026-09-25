@@ -14,6 +14,8 @@ const request: ResourceRequestSummary = {
   supplyingOrganization: null, assignment: null,
   resourceKind: "water_tender", resourceType: 2, costCents: 540005,
   number: 1027, neededBy: null, notes: null, createdAt: "2026-09-23T12:00:00.000Z",
+  updatedAt: "2026-09-23T12:30:00.000Z", requestedByName: "Dana Ortiz",
+  acceptance: { personId: "99999999-0000-4000-8000-000000000009", personName: "Sam Rivera", positionTitle: "Logistics Section Chief", at: "2026-09-23T12:10:00.000Z" },
 };
 const levels = (count: number) => Array.from({ length: count }, (_, index) => ({ type: index + 1, capability: "" }));
 const kinds: ResourceKind[] = [
@@ -49,8 +51,8 @@ function setup(
     listPositions: vi.fn().mockResolvedValue([{ id: "44444444-4444-4444-8444-444444444444", key: "logistics", title: "Logistics Section Chief" }]),
     listIncidentParticipants: vi.fn().mockResolvedValue([{ id: "55555555-5555-4555-8555-555555555555", organizationId: "66666666-6666-4666-8666-666666666666", organizationName: "Mutual Aid", personName: "Morgan Lee", incidentPositionTitle: "Mutual Aid Logistics", role: "contributor", revokedAt: null, expiresAt: "2099-09-21T00:00:00.000Z" }]),
     getResourceRequest: vi.fn().mockResolvedValue(detail),
-    submitResourceRequest: vi.fn().mockResolvedValue({ id: request.id }),
-    transitionResourceRequest: vi.fn().mockResolvedValue({ state: "triaged" }),
+    submitResourceRequest: vi.fn().mockResolvedValue({ ...request, id: "10101010-1010-4101-8101-101010101010", number: 1044, item: "Portable generator", state: "submitted", acceptance: null }),
+    transitionResourceRequest: vi.fn().mockResolvedValue({ state: "accepted" }),
     assignResourceRequest: vi.fn().mockResolvedValue({ state: "assigned" }),
     addResourceRequestCost: vi.fn().mockResolvedValue({ id: "88888888-8888-4888-8888-888888888888" }),
     exportResourceRequestCosts: vi.fn().mockResolvedValue(new Blob(["Request,Item\n"], { type: "text/csv" })),
@@ -63,7 +65,8 @@ function setup(
 
 it("shows receiving ownership and assigns a sourcing request to a named incident participant", async () => {
   const client = setup();
-  expect(await screen.findByText("Receiving: Receiving County")).toBeTruthy();
+  expect(await screen.findByText(/sent to Receiving County$/)).toBeTruthy();
+  expect(screen.getByText("Owner: Sam Rivera, Logistics Section Chief · Receiving County")).toBeTruthy();
   expect(screen.getByText("Supplying: Not identified")).toBeTruthy();
   fireEvent.change(screen.getByLabelText("Assignment for Portable water tender"), { target: { value: "participant:55555555-5555-4555-8555-555555555555" } });
   fireEvent.click(screen.getByRole("button", { name: "Assign and advance" }));
@@ -75,23 +78,26 @@ it("shows receiving ownership and assigns a sourcing request to a named incident
 it("lets a partner request from the incident's owner and record delivery only on the request assigned to it", async () => {
   const partnerOrg = "77777777-7777-4777-8777-777777777777";
   const assignedToMe: ResourceRequestSummary = {
-    ...request, id: "12121212-1212-4121-8121-121212121212", item: "Generator", state: "assigned", costCents: null,
+    ...request, id: "12121212-1212-4121-8121-121212121212", number: 1028, item: "Generator", state: "assigned", costCents: null,
     assignment: {
       kind: "incident_participant", participantId: "55555555-5555-4555-8555-555555555555", incidentId: request.incidentId!,
       personId: "99999999-0000-4000-8000-000000000001", personName: "Morgan Lee", incidentPositionTitle: "Utility liaison",
       participantRole: "contributor", organization: { id: partnerOrg, name: "Partner Utility" },
     },
   };
-  const ownersOwn: ResourceRequestSummary = { ...request, id: "13131313-1313-4131-8131-131313131313", item: "Sandbags", state: "submitted", costCents: null };
+  const ownersOwn: ResourceRequestSummary = { ...request, id: "13131313-1313-4131-8131-131313131313", number: 1029, item: "Sandbags", state: "submitted", costCents: null, acceptance: null };
   const client = setup({ jurisdictionId: partnerOrg, incidentOwnerId: request.receivingOrganization.id, personId: "99999999-0000-4000-8000-000000000001" },
     [assignedToMe, ownersOwn]);
 
-  const next = await screen.findByLabelText("Next state for Generator");
-  expect([...(next as HTMLSelectElement).options].map((option) => option.value)).toEqual(["deployed"]);
+  const generator = await screen.findByRole("listitem", { name: "REQ-1028 Generator" });
+  // The assignee records the delivery step and nothing else.
+  expect(within(generator).getAllByRole("button").map((button) => button.getAttribute("aria-label") ?? button.textContent))
+    .toEqual(["Mark deployed REQ-1028", "Open REQ-1028"]);
   expect(screen.queryByLabelText("Assignment for Generator")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Advance" }));
+  fireEvent.click(within(generator).getByRole("button", { name: "Mark deployed REQ-1028" }));
   await waitFor(() => expect(client.transitionResourceRequest).toHaveBeenCalledWith(assignedToMe.id, "deployed", ""));
-  expect(screen.queryByLabelText("Next state for Sandbags")).toBeNull();
+  const sandbags = screen.getByRole("listitem", { name: "REQ-1029 Sandbags" });
+  expect(within(sandbags).queryByRole("button", { name: /^Accept/ })).toBeNull();
   expect(screen.getByText("Read-only request")).toBeTruthy();
 
   fireEvent.change(screen.getByLabelText("Request from"), { target: { value: "owner" } });
@@ -109,8 +115,13 @@ it("keeps intake and immutable request history in the same coordination workspac
   fireEvent.change(screen.getByLabelText("Request notes"), { target: { value: "Shelter backup" } });
   fireEvent.click(screen.getByRole("button", { name: "Submit request" }));
   await waitFor(() => expect(client.submitResourceRequest).toHaveBeenCalledWith("33333333-3333-4333-8333-333333333333", expect.objectContaining({ item: "Portable generator", notes: "Shelter backup", incidentId: request.incidentId })));
-  fireEvent.click(screen.getByRole("button", { name: "History" }));
+  // A receipt says it arrived, where, and that nobody owns it yet.
+  const receipt = await screen.findByRole("status", { name: "Request receipt" });
+  expect(receipt.textContent).toMatch(/^REQ-1044 received .* by Receiving County/);
+  expect(receipt.textContent).toContain("Stage: Received. Receipt is not acceptance");
+  fireEvent.click(screen.getByRole("button", { name: "Open REQ-1027" }));
   expect(await screen.findByRole("heading", { name: "History" })).toBeTruthy();
+  expect(screen.getByText("Accepted → Sourcing")).toBeTruthy();
   expect(screen.getByText("Local supply exhausted")).toBeTruthy();
 });
 
@@ -119,7 +130,7 @@ it("records a cost in cents, exports the costs, and escalates to a peer tier aft
   client.escalateResourceRequest.mockRejectedValueOnce(new Error("escalation delivery failed"));
   Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:costs") });
   Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
-  fireEvent.click(await screen.findByRole("button", { name: "History" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Open REQ-1027" }));
   const costs = await screen.findByRole("region", { name: "Reimbursement costs" });
   fireEvent.change(within(costs).getByLabelText("Cost category"), { target: { value: "equipment" } });
   fireEvent.change(within(costs).getByLabelText("Amount (USD)"), { target: { value: "$5,400.05" } });
@@ -151,7 +162,7 @@ it("records a cost in cents, exports the costs, and escalates to a peer tier aft
 
 it("refuses an unreadable cost amount without calling the server", async () => {
   const client = setup();
-  fireEvent.click(await screen.findByRole("button", { name: "History" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Open REQ-1027" }));
   const costs = await screen.findByRole("region", { name: "Reimbursement costs" });
   fireEvent.change(within(costs).getByLabelText("Cost category"), { target: { value: "fuel" } });
   fireEvent.change(within(costs).getByLabelText("Amount (USD)"), { target: { value: "12.345" } });
@@ -165,33 +176,57 @@ it("keeps request history visible while an incident is closed or access is read-
   expect(await screen.findByText("This incident is closed. Request history remains available.")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Submit request" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Assign and advance" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "History" }));
+  fireEvent.click(screen.getByRole("button", { name: "Open REQ-1027" }));
   expect(await screen.findByRole("button", { name: "Export costs (CSV)" })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Record cost" })).toBeNull();
   expect(screen.queryByRole("region", { name: "Escalate to another tier" })).toBeNull();
 });
 
-it("shows request state, priority and next action as labels, not stored keys", async () => {
-  const nextRequest: ResourceRequestSummary = { ...request, id: "77777777-7777-4777-8777-777777777777", item: "Medical oxygen", priority: "routine", state: "submitted", costCents: 0 };
-  setup({}, [request, nextRequest]);
-  const row = (await screen.findByText("Medical oxygen")).closest("li")!;
-  expect(within(row).getByText("Submitted", { exact: true })).toBeTruthy();
+it("shows the stage, owner and next action, steps in one click, and asks a reason to decline", async () => {
+  const nextRequest: ResourceRequestSummary = { ...request, id: "77777777-7777-4777-8777-777777777777", number: 1030, item: "Medical oxygen", priority: "routine", state: "submitted", costCents: 0, acceptance: null };
+  const client = setup({}, [request, nextRequest]);
+  const row = await screen.findByRole("listitem", { name: "REQ-1030 Medical oxygen" });
+  expect(within(row).getByText("Received", { exact: true })).toBeTruthy();
   expect(within(row).getByText("Priority: Routine")).toBeTruthy();
-  const next = within(row).getByLabelText("Next state for Medical oxygen") as HTMLSelectElement;
-  expect([...next.options].map((option) => [option.value, option.text])).toEqual([["triaged", "Triaged"], ["cancelled", "Cancelled"]]);
+  expect(within(row).getByText("Owner: No one yet · Receiving County has not accepted it")).toBeTruthy();
+  expect(within(row).getByText("Next: The receiving organization accepts or declines it")).toBeTruthy();
+  expect(within(row).getAllByRole("button").map((button) => button.textContent)).toEqual(["Accept", "Decline…", "Cancel request…", "Open"]);
+  fireEvent.click(within(row).getByRole("button", { name: "Decline REQ-1030" }));
+  const decline = within(row).getByRole("group", { name: "Decline REQ-1030" });
+  const confirm = within(decline).getByRole("button", { name: "Decline" });
+  expect((confirm as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(within(decline).getByLabelText("Reason (required)"), { target: { value: "No oxygen in county stock" } });
+  fireEvent.click(confirm);
+  await waitFor(() => expect(client.transitionResourceRequest).toHaveBeenCalledWith(nextRequest.id, "declined", "No oxygen in county stock"));
   const priority = screen.getByLabelText("Priority") as HTMLSelectElement;
   expect([...priority.options].map((option) => option.text)).toEqual(["Routine", "Priority", "Immediate"]);
 });
 
 it("refreshes request data without discarding another row's selected assignee", async () => {
-  const nextRequest: ResourceRequestSummary = { ...request, id: "77777777-7777-4777-8777-777777777777", item: "Medical oxygen", state: "submitted", costCents: 0 };
+  const nextRequest: ResourceRequestSummary = { ...request, id: "77777777-7777-4777-8777-777777777777", number: 1030, item: "Medical oxygen", state: "submitted", costCents: 0, acceptance: null };
   const client = setup({}, [request, nextRequest]);
   const assignment = await screen.findByLabelText("Assignment for Portable water tender") as HTMLSelectElement;
   fireEvent.change(assignment, { target: { value: "participant:55555555-5555-4555-8555-555555555555" } });
-  fireEvent.click(within(screen.getByText("Medical oxygen").closest("li")!).getByRole("button", { name: "Advance" }));
-  await waitFor(() => expect(client.transitionResourceRequest).toHaveBeenCalledWith(nextRequest.id, "triaged", ""));
+  fireEvent.click(screen.getByRole("button", { name: "Accept REQ-1030" }));
+  await waitFor(() => expect(client.transitionResourceRequest).toHaveBeenCalledWith(nextRequest.id, "accepted", ""));
   await waitFor(() => expect(client.listResourceRequests).toHaveBeenCalledTimes(2));
   expect(assignment.value).toBe("participant:55555555-5555-4555-8555-555555555555");
+});
+
+it("finds a request by number and names every filter it applies", async () => {
+  const client = setup();
+  expect(await screen.findByText("Showing all 1 request, open and ended.")).toBeTruthy();
+  fireEvent.change(screen.getByRole("searchbox"), { target: { value: "REQ-1027" } });
+  fireEvent.click(screen.getByRole("button", { name: "Find" }));
+  fireEvent.change(screen.getByLabelText("Show"), { target: { value: "open" } });
+  await waitFor(() => expect(client.listResourceRequests).toHaveBeenCalledWith(
+    "33333333-3333-4333-8333-333333333333", request.incidentId, { q: "REQ-1027", status: "open", mine: false }));
+  // The pool and cost rollup still read every request in scope.
+  expect(client.listResourceRequests).toHaveBeenCalledWith("33333333-3333-4333-8333-333333333333", request.incidentId);
+  expect(await screen.findByText(/Showing 1 request: open only, matching "REQ-1027"\./)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+  await waitFor(() => expect(client.listResourceRequests).toHaveBeenLastCalledWith(
+    "33333333-3333-4333-8333-333333333333", request.incidentId, { q: "", status: "all", mine: false }));
 });
 
 it("submits a typed request and adds a typed resource to the pool", async () => {

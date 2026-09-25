@@ -26,7 +26,7 @@ assignments for the ICS-204.
    Work "Confirm resource status with dispatch" and "Open the resource request
    board": **Start**, do the work, **Complete**. A task with an unfinished
    prerequisite stays blocked.
-4. On **Operations > Resources**, read the triaged request for synthetic
+4. On **Operations > Resources**, read the accepted request for synthetic
    portable generators. Its note says nothing was ordered or delivered.
 5. Open **Operations > Field Reports** and **Situation > Map** and keep both
    in view.

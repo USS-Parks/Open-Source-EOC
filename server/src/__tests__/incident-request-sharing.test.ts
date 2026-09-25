@@ -132,7 +132,7 @@ describe("requests shared across an incident's organizations", () => {
   });
 
   it("lets the partner the owner assigns record the delivery steps, and nothing else", async () => {
-    await call("owner", "POST", `/api/v1/resource-requests/${ownerRequest}/transition`, { toState: "triaged" });
+    await call("owner", "POST", `/api/v1/resource-requests/${ownerRequest}/transition`, { toState: "accepted" });
     await call("owner", "POST", `/api/v1/resource-requests/${ownerRequest}/transition`, { toState: "sourcing" });
     const [contributorGrant] = await admin`
       select id from incident_participants where incident_id = ${incidentId} and person_id = ${contributorId}`;
@@ -169,7 +169,7 @@ describe("requests shared across an incident's organizations", () => {
     expect((await call("shared-viewer", "POST", `/api/v1/resource-requests/${ownerRequest}/transition`, { toState: "demobilizing" })).statusCode).toBe(403);
     const unassigned = (await call("owner", "POST", `/api/v1/jurisdictions/${ownerId}/resource-requests`,
       { origin: "eoc", item: "Sandbags", incidentId })).json().id as string;
-    expect((await call("shared-contributor", "POST", `/api/v1/resource-requests/${unassigned}/transition`, { toState: "triaged" })).statusCode).toBe(403);
+    expect((await call("shared-contributor", "POST", `/api/v1/resource-requests/${unassigned}/transition`, { toState: "accepted" })).statusCode).toBe(403);
   });
 
   it("lets a partner contributor request from the incident's owner, who assigns it", async () => {
@@ -179,9 +179,9 @@ describe("requests shared across an incident's organizations", () => {
     const id = asked.json().id as string;
     const [row] = await admin`select jurisdiction_id, receiving_organization_id, requested_by, state from resource_requests where id = ${id}`;
     expect(row).toMatchObject({ jurisdiction_id: ownerId, receiving_organization_id: ownerId, requested_by: contributorId, state: "submitted" });
-    expect((await call("owner", "POST", `/api/v1/resource-requests/${id}/transition`, { toState: "triaged" })).statusCode).toBe(200);
+    expect((await call("owner", "POST", `/api/v1/resource-requests/${id}/transition`, { toState: "accepted" })).statusCode).toBe(200);
     const detail = (await call("shared-contributor", "GET", `/api/v1/resource-requests/${id}`)).json();
-    expect(detail.chronology.map((entry: { toState: string }) => entry.toState)).toEqual(["submitted", "triaged"]);
+    expect(detail.chronology.map((entry: { toState: string }) => entry.toState)).toEqual(["submitted", "accepted"]);
     const [notice] = await admin`
       select count(*)::int as n from notifications where person_id = ${contributorId} and jurisdiction_id = ${ownerId} and channel = 'resource'`;
     expect(notice!.n).toBe(2);
@@ -254,7 +254,7 @@ describe("requests shared across an incident's organizations", () => {
     expect((await call("shared-expiring", "GET", `/api/v1/incidents/${incidentId}/resource-requests`)).statusCode).toBe(404);
 
     await admin`update incidents set closed_at = now(), closed_by = ${ownerAdminId} where id = ${incidentId}`;
-    const closed = await call("shared-contributor", "POST", `/api/v1/resource-requests/${ownerRequest}/transition`, { toState: "demobilizing" });
+    const closed = await call("shared-contributor", "POST", `/api/v1/resource-requests/${ownerRequest}/transition`, { toState: "fulfilled" });
     expect(closed.statusCode).toBe(409);
     expect((await call("shared-contributor", "POST", `/api/v1/jurisdictions/${ownerId}/resource-requests`,
       { origin: "eoc", item: "After close", incidentId })).statusCode).toBe(409);

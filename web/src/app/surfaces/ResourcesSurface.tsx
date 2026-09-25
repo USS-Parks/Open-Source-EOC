@@ -4,6 +4,8 @@ import {
   DEMOBILIZATION_CHECK_LABELS,
   DEMOBILIZATION_CHECKS,
   RESOURCE_REQUEST_DELIVERY_STEPS,
+  RESOURCE_REQUEST_ENDED,
+  RESOURCE_REQUEST_REASON_REQUIRED,
   RESOURCE_REQUEST_TRANSITIONS,
   RESOURCE_RETURN_CONDITIONS,
   RESOURCE_STATUS_TRANSITIONS,
@@ -15,6 +17,7 @@ import {
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../../design/components.js";
 import { Icon } from "../../design/icons/Icon.js";
 import { ResourceRequestDetailPanel } from "../../resources/ResourceRequestDetail.js";
+import { nextAction, ownerLabel, requestStage, stageTone, when } from "../../resources/request-view.js";
 import type { ApiClient, ResourceRequestSummary } from "../api/client.js";
 import { useAsync } from "../data/hooks.js";
 import { ErrorNote, Loading, Scroll, SurfaceHeader } from "../screens/parts.js";
@@ -23,19 +26,12 @@ import "../../resources/resources.css";
 const PRIORITIES = ["routine", "priority", "immediate"];
 const PRIORITY_LABELS = Object.fromEntries(PRIORITIES.map((value) => [value, choiceLabel(value)]));
 
-type BadgeStatus = "info" | "warning" | "success" | "unknown";
-function stateStatus(state: string): BadgeStatus {
-  if (state === "closed") return "success";
-  if (state === "cancelled") return "unknown";
-  if (state === "submitted" || state === "triaged") return "warning";
-  return "info";
-}
-
-function assignmentLabel(request: ResourceRequestSummary): string {
-  if (!request.assignment) return "Unassigned";
-  if (request.assignment.kind === "position") return `${request.assignment.positionTitle} · ${request.assignment.organization.name}`;
-  return `${request.assignment.personName} · ${request.assignment.incidentPositionTitle} · ${request.assignment.organization.name}`;
-}
+/** What each move is called on its button. Decline and cancel ask for a reason first. */
+const ACTION_VERBS: Readonly<Record<string, string>> = {
+  submitted: "Submit", accepted: "Accept", sourcing: "Start sourcing", assigned: "Mark assigned",
+  deployed: "Mark deployed", fulfilled: "Mark fulfilled", demobilizing: "Start demobilizing", closed: "Close",
+  declined: "Decline", cancelled: "Cancel request",
+};
 
 function RequestRow(props: {
   req: ResourceRequestSummary;
@@ -49,34 +45,82 @@ function RequestRow(props: {
   busy: boolean;
   onAdvance: (id: string, toState: string, note: string) => void;
   onAssign: (id: string, assignment: ResourceRequestAssignment) => void;
-  onHistory: (id: string) => void;
+  onOpen: (id: string) => void;
 }) {
-  const delivery = RESOURCE_REQUEST_DELIVERY_STEPS[props.req.state as keyof typeof RESOURCE_REQUEST_DELIVERY_STEPS];
-  const nexts = props.assignee ? (delivery ? [delivery] : []) : RESOURCE_REQUEST_TRANSITIONS[props.req.state] ?? [];
-  const [to, setTo] = useState<string>(nexts[0] ?? "");
-  const [note, setNote] = useState("");
-  const [target, setTarget] = useState("");
-  const needsAssignment = props.req.state === "sourcing";
+  const { req } = props;
+  const delivery = RESOURCE_REQUEST_DELIVERY_STEPS[req.state as keyof typeof RESOURCE_REQUEST_DELIVERY_STEPS];
+  const nexts = props.assignee ? (delivery ? [delivery] : []) : RESOURCE_REQUEST_TRANSITIONS[req.state] ?? [];
+  const needsAssignment = req.state === "sourcing";
   const transitions = needsAssignment ? nexts.filter((state) => state !== "assigned") : nexts;
-  useEffect(() => setTo(nexts[0] ?? ""), [props.req.state]);
+  const steps = transitions.filter((state) => !RESOURCE_REQUEST_REASON_REQUIRED.includes(state));
+  const endings = transitions.filter((state) => RESOURCE_REQUEST_REASON_REQUIRED.includes(state));
+  const [note, setNote] = useState("");
+  const [ending, setEnding] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+  const [target, setTarget] = useState("");
+  useEffect(() => { setEnding(null); setNote(""); }, [req.state]);
+  const number = `REQ-${req.number}`;
   const assign = () => {
     const [kind, id] = target.split(":", 2);
-    if (kind === "position" && id) props.onAssign(props.req.id, { kind, positionId: id });
+    if (kind === "position" && id) props.onAssign(req.id, { kind, positionId: id });
     if (kind === "participant" && id && props.incidentId) {
-      props.onAssign(props.req.id, { kind: "incident_participant", incidentId: props.incidentId, participantId: id });
+      props.onAssign(req.id, { kind: "incident_participant", incidentId: props.incidentId, participantId: id });
     }
   };
+  const acting = props.canMutate || props.assignee;
   return (
-    <li className="resources-request">
+    <li className="resources-request" aria-label={`${number} ${req.item}`}>
       <div className="resources-request-body">
-        <div className="resources-row"><StatusBadge status={stateStatus(props.req.state)}>{choiceLabel(props.req.state)}</StatusBadge><span className="eoc-muted">REQ-{props.req.number}</span><strong>{props.req.item}</strong><span className="eoc-muted">×{props.req.quantity}</span><span className="eoc-muted">Priority: {choiceLabel(props.req.priority)}</span>{props.req.neededBy ? <span className="eoc-muted">Needed by {new Date(props.req.neededBy).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}</span> : null}</div>
-        <div className="resources-request-facts"><span>Receiving: {props.req.receivingOrganization.name}</span><span>Supplying: {props.req.supplyingOrganization?.name ?? "Not identified"}</span><span>Owner: {assignmentLabel(props.req)}</span>{props.kindText ? <span>Kind: {props.kindText}</span> : null}</div>
-        {props.canMutate && !props.assignee && needsAssignment ? <div className="resources-assign"><div className="resources-assign-form"><label className="resources-label">Assign to named authority<select aria-label={`Assignment for ${props.req.item}`} value={target} onChange={(event) => setTarget(event.target.value)} className="resources-select"><option value="">Choose a position or incident participant</option>{props.positions.length ? <optgroup label="Positions">{props.positions.map((position) => <option key={position.id} value={`position:${position.id}`}>{position.title}</option>)}</optgroup> : null}{props.participants.length ? <optgroup label="Incident participants">{props.participants.map((participant) => <option key={participant.id} value={`participant:${participant.id}`}>{participant.personName} · {participant.incidentPositionTitle} · {participant.organizationName}</option>)}</optgroup> : null}</select></label><Button kind="primary" onClick={assign} disabled={props.busy || !target}>Assign and advance</Button></div>{props.positions.length === 0 && props.participants.length === 0 ? <span role="status" className="eoc-muted">No eligible position or active incident participant is available for assignment.</span> : null}</div> : null}
-        {(props.canMutate || props.assignee) && transitions.length ? <div className="resources-assign-form"><label className="resources-label">Next action<select aria-label={`Next state for ${props.req.item}`} value={to} onChange={(event) => setTo(event.target.value)} className="resources-select">{transitions.map((state) => <option key={state} value={state}>{choiceLabel(state)}</option>)}</select></label><div className="resources-cell"><TextField label="Transition note" value={note} onChange={setNote} /></div><Button onClick={() => props.onAdvance(props.req.id, to, note)} disabled={props.busy || !to}>Advance</Button></div> : !needsAssignment ? <span className="eoc-muted">{props.canMutate ? "Lifecycle complete" : "Read-only request"}</span> : !props.canMutate ? <span className="eoc-muted">Read-only request</span> : null}
+        <div className="resources-row"><StatusBadge status={stageTone(req.state)}>{requestStage(req.state)}</StatusBadge><strong>{number}</strong><strong>{req.item}</strong><span className="eoc-muted">×{req.quantity}</span><span className="eoc-muted">Priority: {choiceLabel(req.priority)}</span>{req.neededBy ? <span className="eoc-muted">Needed by {when(req.neededBy)}</span> : null}</div>
+        <div className="resources-request-facts">
+          <span>Received {when(req.createdAt)}{req.requestedByName ? ` from ${req.requestedByName}` : ""} · sent to {req.receivingOrganization.name}</span>
+          <span>Owner: {ownerLabel(req)}</span>
+          <span>Next: {nextAction(req.state) ?? "None; the request has ended"}</span>
+          <span>Supplying: {req.supplyingOrganization?.name ?? "Not identified"}</span>
+          {props.kindText ? <span>Kind: {props.kindText}</span> : null}
+        </div>
+        {props.canMutate && !props.assignee && needsAssignment ? <div className="resources-assign"><div className="resources-assign-form"><label className="resources-label">Assign to named authority<select aria-label={`Assignment for ${req.item}`} value={target} onChange={(event) => setTarget(event.target.value)} className="resources-select"><option value="">Choose a position or incident participant</option>{props.positions.length ? <optgroup label="Positions">{props.positions.map((position) => <option key={position.id} value={`position:${position.id}`}>{position.title}</option>)}</optgroup> : null}{props.participants.length ? <optgroup label="Incident participants">{props.participants.map((participant) => <option key={participant.id} value={`participant:${participant.id}`}>{participant.personName} · {participant.incidentPositionTitle} · {participant.organizationName}</option>)}</optgroup> : null}</select></label><Button kind="primary" onClick={assign} disabled={props.busy || !target}>Assign and advance</Button></div>{props.positions.length === 0 && props.participants.length === 0 ? <span role="status" className="eoc-muted">No eligible position or active incident participant is available for assignment.</span> : null}</div> : null}
+        {acting && transitions.length ? (
+          <div className="resources-actions">
+            {steps.length ? <div className="resources-cell"><TextField label="Note (optional)" value={note} onChange={setNote} /></div> : null}
+            {steps.map((state, index) => (
+              <Button key={state} kind={index === 0 ? "primary" : "quiet"} disabled={props.busy} label={`${ACTION_VERBS[state] ?? requestStage(state)} ${number}`}
+                onClick={() => props.onAdvance(req.id, state, note.trim())}>{ACTION_VERBS[state] ?? requestStage(state)}</Button>
+            ))}
+            {endings.map((state) => (
+              <Button key={state} kind="quiet" disabled={props.busy} label={`${ACTION_VERBS[state]} ${number}`}
+                onClick={() => { setEnding(state); setReason(""); }}>{ACTION_VERBS[state]}…</Button>
+            ))}
+          </div>
+        ) : !needsAssignment ? <span className="eoc-muted">{nextAction(req.state) ? "Read-only request" : "Lifecycle complete"}</span> : !props.canMutate ? <span className="eoc-muted">Read-only request</span> : null}
+        {ending ? (
+          <div className="resources-actions" role="group" aria-label={`${ACTION_VERBS[ending]} ${number}`}>
+            <div className="resources-cell"><TextField label="Reason (required)" value={reason} onChange={setReason} /></div>
+            <Button kind="primary" disabled={props.busy || !reason.trim()} onClick={() => { props.onAdvance(req.id, ending, reason.trim()); setEnding(null); }}>{ACTION_VERBS[ending]}</Button>
+            <Button onClick={() => setEnding(null)}>Keep it</Button>
+          </div>
+        ) : null}
       </div>
-      <Button onClick={() => props.onHistory(props.req.id)} disabled={props.busy}>History</Button>
+      <Button onClick={() => props.onOpen(req.id)} disabled={props.busy} label={`Open ${number}`}>Open</Button>
     </li>
   );
+}
+
+/** The active filters, in words. */
+function filterParts(filters: { readonly q: string; readonly status: "open" | "ended" | "all"; readonly mine: boolean }): string[] {
+  return [
+    ...(filters.status === "open" ? ["open only"] : filters.status === "ended" ? ["closed, declined or cancelled only"] : []),
+    ...(filters.q ? [`matching "${filters.q}"`] : []),
+    ...(filters.mine ? ["asked for by you"] : []),
+  ];
+}
+
+/** How many requests are shown and every filter that narrows them. */
+function filterSummary(count: number, filters: Parameters<typeof filterParts>[0]): string {
+  const parts = filterParts(filters);
+  const shown = `${count} ${count === 1 ? "request" : "requests"}`;
+  if (parts.length === 0) return `Showing all ${shown}, open and ended.`;
+  return count === 0 ? `No request is ${parts.join(", ")}.` : `Showing ${shown}: ${parts.join(", ")}.`;
 }
 
 function saveBlob(blob: Blob, filename: string) {
@@ -119,7 +163,7 @@ function RequestCostsAndEscalation(props: {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const open = props.request.state !== "closed" && props.request.state !== "cancelled";
+  const open = !RESOURCE_REQUEST_ENDED.includes(props.request.state);
 
   const run = async (action: () => Promise<string | null>) => {
     setBusy(true);
@@ -234,7 +278,7 @@ function KindTypeFields(props: {
   );
 }
 
-const poolBadge: Record<string, BadgeStatus> = { available: "success", assigned: "info", out_of_service: "warning", demobilized: "unknown" };
+const poolBadge: Record<string, "info" | "warning" | "success" | "unknown"> = { available: "success", assigned: "info", out_of_service: "warning", demobilized: "unknown" };
 
 function PoolRow(props: {
   resource: PoolResource;
@@ -482,10 +526,14 @@ export function ResourcesSurface(props: {
   canMutate?: boolean;
   closed?: boolean;
 }) {
+  // Every filter narrows the server's answer and is named above the list, so nothing is hidden unsaid.
+  const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<{ q: string; status: "open" | "ended" | "all"; mine: boolean }>({ q: "", status: "all", mine: false });
   const requests = useAsync(
-    () => props.client.listResourceRequests(props.jurisdictionId, props.incidentId),
-    [props.jurisdictionId, props.incidentId],
+    () => props.client.listResourceRequests(props.jurisdictionId, props.incidentId, filters),
+    [props.jurisdictionId, props.incidentId, filters.q, filters.status, filters.mine],
   );
+  const [receipt, setReceipt] = useState<ResourceRequestSummary | null>(null);
   const positions = useAsync(() => props.client.listPositions(props.jurisdictionId), [props.jurisdictionId]);
   const participants = useAsync(
     () => props.incidentId ? props.client.listIncidentParticipants(props.incidentId) : Promise.resolve([]),
@@ -536,7 +584,8 @@ export function ResourcesSurface(props: {
   const submit = () =>
     run(async () => {
       if (!item.trim()) throw new Error("Enter a requested item.");
-      await props.client.submitResourceRequest(fromOwner ? props.incidentOwnerId! : props.jurisdictionId, {
+      setReceipt(null);
+      const created = await props.client.submitResourceRequest(fromOwner ? props.incidentOwnerId! : props.jurisdictionId, {
         origin: "eoc",
         item: item.trim(),
         quantity: Number(quantity) || 1,
@@ -550,6 +599,7 @@ export function ResourcesSurface(props: {
         ...(requestKind && !fromOwner ? { resourceKind: requestKind } : {}),
         ...(requestType && !fromOwner ? { resourceType: Number(requestType) } : {}),
       });
+      setReceipt(created);
       setItem("");
       setQuantity("1");
       setNotes("");
@@ -559,6 +609,13 @@ export function ResourcesSurface(props: {
     });
 
   const list = requests.data ?? [];
+  // The pool and the cost rollup count every request in scope, whatever the list is narrowed to.
+  const filtered = filterParts(filters).length > 0;
+  const everything = useAsync(
+    () => filtered ? props.client.listResourceRequests(props.jurisdictionId, props.incidentId) : Promise.resolve(null),
+    [filtered, props.jurisdictionId, props.incidentId, requests.data],
+  );
+  const allRequests = filtered ? everything.data ?? [] : list;
   const canMutate = (props.canMutate ?? true) && !props.closed;
   const ownerName = list.find((request) => request.receivingOrganization.id === props.incidentOwnerId)?.receivingOrganization.name
     ?? "The incident's owner";
@@ -588,14 +645,40 @@ export function ResourcesSurface(props: {
             <div className="resources-cell"><label className="resources-label">Needed by<input type="datetime-local" className="resources-select" value={neededBy} onChange={(event) => setNeededBy(event.target.value)} /></label></div>
             <div className="resources-cell"><TextField label="Request notes" value={notes} onChange={setNotes} /></div>
             {fromOwner ? null : <KindTypeFields kinds={kinds} kind={requestKind} type={requestType} onKind={setRequestKind} onType={setRequestType} forRequest />}
-          </div><div className="eoc-space-above"><Button kind="primary" onClick={submit} disabled={busy}>Submit request</Button></div></> : <p role="status" className="resources-last eoc-muted">{props.closed ? "This incident is closed. Request history remains available." : "Your access is read-only. Request history remains available."}</p>}
+          </div><div className="eoc-space-above"><Button kind="primary" onClick={submit} disabled={busy}>Submit request</Button></div>
+          {receipt ? (
+            <section className="resources-receipt" role="status" aria-label="Request receipt">
+              <strong>REQ-{receipt.number} received {when(receipt.createdAt)} by {receipt.receivingOrganization.name}</strong>
+              <span>Stage: {requestStage(receipt.state)}. Receipt is not acceptance: {receipt.receivingOrganization.name} accepts or declines it next, and whoever accepts it owns it.</span>
+              <div className="resources-actions"><Button onClick={() => selectRequest(receipt.id)} label={`Open REQ-${receipt.number} receipt`}>Open REQ-{receipt.number}</Button><Button onClick={() => setReceipt(null)}>Dismiss</Button></div>
+            </section>
+          ) : null}</> : <p role="status" className="resources-last eoc-muted">{props.closed ? "This incident is closed. Request history remains available." : "Your access is read-only. Request history remains available."}</p>}
         </Panel>
 
         <Panel title="Requests and next actions">
+          <form className="resources-filters" role="search" aria-label="Find requests"
+            onSubmit={(event) => { event.preventDefault(); setFilters((current) => ({ ...current, q: search.trim() })); }}>
+            <label className="resources-label">Find a request<input type="search" className="resources-select" value={search}
+              placeholder="REQ number or words" onChange={(event) => setSearch(event.target.value)} /></label>
+            <Button type="submit">Find</Button>
+            <label className="resources-label">Show<select className="resources-select" value={filters.status}
+              onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value as "open" | "ended" | "all" }))}>
+              <option value="all">Open and ended</option><option value="open">Open only</option><option value="ended">Ended only</option>
+            </select></label>
+            <label className="resources-check"><input type="checkbox" checked={filters.mine}
+              onChange={(event) => setFilters((current) => ({ ...current, mine: event.target.checked }))} />Only requests I asked for</label>
+          </form>
+          {requests.data ? (
+            <p className="resources-filter-summary" role="status">
+              {filterSummary(list.length, filters)}
+              {filterParts(filters).length ? <> <button type="button" className="resources-link"
+                onClick={() => { setSearch(""); setFilters({ q: "", status: "all", mine: false }); }}>Clear filters</button></> : null}
+            </p>
+          ) : null}
           {requests.loading && !requests.data ? <Loading label="Loading requests…" /> : null}
           {requests.error && !requests.data ? <ErrorNote message={requests.error} /> : null}
-          {requests.data && list.length === 0 ? (
-            <p className="eoc-flush eoc-muted">No resource requests in this scope.</p>
+          {requests.data && list.length === 0 && filterParts(filters).length === 0 ? (
+            <p className="eoc-flush eoc-muted">No resource requests {props.incidentId ? "on this incident" : "in this organization"} yet.</p>
           ) : null}
           {list.length > 0 ? (
             <ul className="resources-list">
@@ -610,7 +693,7 @@ export function ResourcesSurface(props: {
                   canMutate={canMutate && owns(r)}
                   assignee={assignedToMe(r)}
                   busy={busy}
-                  onHistory={selectRequest}
+                  onOpen={selectRequest}
                   onAdvance={(id, toState, note) => run(() => props.client.transitionResourceRequest(id, toState, note))}
                   onAssign={(id, assignment) => run(() => props.client.assignResourceRequest(id, assignment))}
                 />
@@ -639,8 +722,8 @@ export function ResourcesSurface(props: {
           </p>
         ) : null}
 
-        <ResourcePool client={props.client} jurisdictionId={props.jurisdictionId} kinds={kinds} requests={list} canMutate={props.canMutate ?? true} />
-        <CostRollup kinds={kinds} requests={list} incidentScoped={props.incidentId !== null} />
+        <ResourcePool client={props.client} jurisdictionId={props.jurisdictionId} kinds={kinds} requests={allRequests} canMutate={props.canMutate ?? true} />
+        <CostRollup kinds={kinds} requests={allRequests} incidentScoped={props.incidentId !== null} />
         {catalog.error && !catalog.data ? <ErrorNote message={catalog.error} /> : null}
         {catalog.data ? <TypingCatalog client={props.client} jurisdictionId={props.jurisdictionId} kinds={kinds}
           canManage={catalog.data.canManage} onChanged={catalog.reload} /> : null}

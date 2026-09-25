@@ -36,7 +36,7 @@ function request(overrides: Partial<ResourceRequestSummary>): ResourceRequestSum
     id: "00000000-0000-4000-8000-00000000a001", number: 1027, incidentId: INCIDENT, item: "Clear debris", quantity: 1,
     priority: "routine", state: "submitted", receivingOrganization: { id: "o1", name: "Humboldt County OES" },
     supplyingOrganization: null, assignment: null, resourceKind: null, resourceType: null, costCents: 0,
-    neededBy: "2026-09-24T12:00:00-07:00", notes: null, createdAt: "2026-09-24T07:00:00-07:00", ...overrides,
+    neededBy: "2026-09-24T12:00:00-07:00", notes: null, createdAt: "2026-09-24T07:00:00-07:00", updatedAt: "2026-09-24T07:00:00-07:00", requestedByName: null, acceptance: null, ...overrides,
   };
 }
 

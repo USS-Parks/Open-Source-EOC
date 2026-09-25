@@ -24,7 +24,7 @@ page to the organizations, incidents, fields, and records you may read.
 - **SITREP** displays frozen briefing snapshots. Check the incident, period,
   composition time, source notes, and unresolved warnings.
 - **Resources** and **Tasks** show authorized records and status. A request
-  marked submitted or triaged is not proof of delivery; a locally queued task
+  marked received or accepted is not proof of delivery; a locally queued task
   completion is not complete until the server confirms it.
 
 ## Recognize data state

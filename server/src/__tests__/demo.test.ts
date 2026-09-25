@@ -144,7 +144,7 @@ describe("the demo dataset loads", () => {
 
     const [rr] = await admin`select state, incident_id, item
       from resource_requests where id = ${result.resourceRequestId}`;
-    expect(rr).toMatchObject({ state: "triaged", incident_id: result.incidentId });
+    expect(rr).toMatchObject({ state: "accepted", incident_id: result.incidentId });
     expect(rr!.item).toContain("SYNTHETIC");
     const [rel] = await admin`select status, incident_id, title
       from press_releases where id = ${result.releaseId}`;

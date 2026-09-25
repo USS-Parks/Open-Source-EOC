@@ -222,7 +222,7 @@ const cases: readonly ListCase[] = [
   {
     name: "resource requests", key: "requests", path: () => `/api/v1/jurisdictions/${jurisdictionId}/resource-requests`,
     expected: async () => idsOf(await admin`
-      select id from resource_requests where jurisdiction_id = ${jurisdictionId} order by item, id`),
+      select id from resource_requests where jurisdiction_id = ${jurisdictionId} order by number desc, id desc`),
   },
   {
     name: "AAR observations", key: "observations", path: () => `/api/v1/incidents/${incidentId}/aar/observations`,

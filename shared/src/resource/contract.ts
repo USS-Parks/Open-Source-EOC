@@ -51,7 +51,18 @@ export const ResourceRequestSummarySchema = z.object({
   costCents: z.number().int().nonnegative().nullable(),
   neededBy: z.iso.datetime({ offset: true }).nullable(),
   notes: z.string().nullable(),
+  /** When the request was received. */
   createdAt: z.iso.datetime({ offset: true }),
+  /** When its stage last changed. */
+  updatedAt: z.iso.datetime({ offset: true }),
+  requestedByName: z.string().nullable(),
+  /** Who accepted the request, as which position, and when; null until the receiving organization accepts it. */
+  acceptance: z.object({
+    personId: z.uuid().nullable(),
+    personName: z.string().min(1),
+    positionTitle: z.string().nullable(),
+    at: z.iso.datetime({ offset: true }),
+  }).nullable(),
 });
 export type ResourceRequestSummary = z.infer<typeof ResourceRequestSummarySchema>;
 

@@ -40,7 +40,7 @@ endorsed by FEMA or any other authority.
 - **Situation > Chronology**, **All events**: attributed, append-only record
   of milestones, including request submissions and status changes, IAP
   submission and approval, published JIC releases and composed SITREPs.
-- **Operations > Resources**, **History** on each request.
+- **Operations > Resources**, **Open** on each request.
 - **Planning > IAP**: prepared, submitted and approved by whom and when, and
   the revision history.
 - **Situation > ESFs & Lifelines**: each lifeline's assessment history.

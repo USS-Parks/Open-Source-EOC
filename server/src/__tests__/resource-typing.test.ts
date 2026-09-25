@@ -23,7 +23,7 @@ const call = (who: Who, method: "GET" | "POST", url: string, payload?: Record<st
   app.inject({ method, url, headers: auth(tokens[who]), ...(payload ? { payload } : {}) });
 const base = () => `/api/v1/jurisdictions/${jurisdictionId}`;
 
-async function request(fields: Record<string, unknown>, states = ["triaged", "sourcing"]): Promise<string> {
+async function request(fields: Record<string, unknown>, states = ["accepted", "sourcing"]): Promise<string> {
   const submitted = await call("admin", "POST", `${base()}/resource-requests`, { origin: "eoc", item: "Engine request", ...fields });
   expect(submitted.statusCode, submitted.body).toBe(201);
   const id = submitted.json().id as string;
@@ -167,7 +167,7 @@ describe("typed requests and the pool", () => {
     expect((await move(engine2, { to: "assigned" })).statusCode).toBe(400);
     const untyped = await request({});
     expect((await move(engine2, { to: "assigned", requestId: untyped })).statusCode).toBe(409);
-    const unsourced = await request({ resourceKind: "engine" }, ["triaged"]);
+    const unsourced = await request({ resourceKind: "engine" }, ["accepted"]);
     expect((await move(engine2, { to: "assigned", requestId: unsourced })).statusCode).toBe(409);
     expect((await move(engine2, { to: "assigned", requestId }, "viewer")).statusCode).toBe(403);
     expect((await move(engine2, { to: "assigned", requestId }, "outsider")).statusCode).toBe(404);

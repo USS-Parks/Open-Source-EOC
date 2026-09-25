@@ -5306,3 +5306,68 @@ Operator Trust PSPR unit TP0 (research Appendix A, section 8).
 - **Evidence level:** documentation; the qualifications rest on the sources
   cited in the September 24 research.
 - **Rollback:** revert the commit.
+
+## Operator trust TP1: request lifecycle and findability
+
+Operator Trust PSPR unit TP1 (research W2, W4, V1; decisions 3, 4 and 6).
+
+- **What changed.**
+  - **Receipt is not acceptance.** The request lifecycle gains `accepted`
+    in place of `triaged`, and `declined` and `fulfilled`: received
+    (`submitted`), accepted, sourcing, assigned, in progress (`deployed`),
+    fulfilled, demobilizing, closed, with declined and cancelled as the
+    other ends. Accepting records who accepted, acting as which position,
+    and when (migration `0138_request_acceptance.sql`: `accepted_by`,
+    `accepted_position`, `accepted_at`); that person owns the request until
+    it is assigned. Declining or cancelling needs a reason, which reaches
+    the requester in the notice. The migration moves stored `triaged`
+    requests to `accepted`, owned by whoever triaged them, and leaves the
+    recorded history as written; `triaged` history reads as "Accepted". A
+    peer on an older version that reports `triaged` is read as `accepted`.
+    The partner's delivery steps pass through fulfilled.
+  - **A receipt on submit.** Submitting returns the request as stored, and
+    the screen shows "REQ-1043 received 10:42 by Humboldt County OES. Stage:
+    Received. Receipt is not acceptance: Humboldt County OES accepts or
+    declines it next, and whoever accepts it owns it."
+  - **Owner and next action on every request.** Each row shows its number,
+    stage, when and from whom it was received, where it went, its owner
+    (the assignee, else whoever accepted it, else "No one yet · the
+    organization has not accepted it") and its next action with whose it
+    is. Steps take one click with an optional note (Accept, Start sourcing,
+    Mark deployed, Mark fulfilled, Start demobilizing, Close); Decline and
+    Cancel request ask for the reason first.
+  - **Readable history.** The request's panel, titled with its number,
+    states when it was received and from whom, where it went, whether and
+    by whom it was accepted, the owner and next action, and each step with
+    its stage names, who took it and why.
+  - **Finding a request.** "Find a request" searches by number (REQ-1043 or
+    1043) or by words in the item or notes, across open and ended requests;
+    "Show" narrows to open or ended, and "Only requests I asked for" to the
+    requester's own. The server applies every filter (`q`, `status`, `mine`
+    on both list routes), newest first, and the screen names each one:
+    "Showing 1 request: open only, matching "REQ-1043"." with Clear filters.
+  - **The overview's priority work** counts every open stage and names the
+    acceptor when no one is assigned.
+  - Operator guides and training job aids use the new stages and controls.
+- **Defaults and deviations.** The list shows open and ended requests by
+  default, so nothing is hidden before a filter is chosen. Decline is
+  offered until sourcing starts; cancel until deployment. The Resource
+  Requests board takes its State choices from the same list, so the
+  migration also moves that board's `triaged` records to `accepted` and
+  its Open requests view to the new open stages (fulfilled included), and
+  the shipped template says the same for new installs. A `triaged` value
+  that arrives later, such as a field device's edit queued before the
+  upgrade, is read and saved as `accepted` rather than refused as a
+  conflict. A partner whose grant is revoked no longer reads the requests
+  it made; that is the access rule, not a findability gap.
+- **Gate.** Acceptance scenario 3, `scenario-request-handoff-browser.test.ts`,
+  on the North Coast Storm exercise at 1586 by 992 and 1534 by 790: the
+  CA Energy Commission's liaison submits to the county and gets a receipt;
+  Jordan Lee, acting as Planning Section Chief, accepts it (owner named),
+  sources it and assigns it to the Operations Section Chief; the liaison
+  finds the same request by its number and sees the stage, the owner, the
+  next action and the history with names, receipt and acceptance apart.
+- **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
+- **Evidence level:** unit, real-database and browser tests.
+- **Rollback:** revert the commit and restore the pre-upgrade backup to
+  undo the migration's state change; the added columns alone are harmless.

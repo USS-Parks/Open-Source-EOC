@@ -66,7 +66,7 @@ beforeAll(async () => {
   requestId = (await post(app, token, `/api/v1/jurisdictions/${jurisdictionId}/resource-requests`, {
     origin: "field", item: "Swiftwater rescue team", quantity: 1, priority: "immediate", incidentId,
   })).id as string;
-  for (const toState of ["triaged", "sourcing"]) {
+  for (const toState of ["accepted", "sourcing"]) {
     await post(app, token, `/api/v1/resource-requests/${requestId}/transition`, { toState }, 200);
   }
 
@@ -243,7 +243,7 @@ describe("real-browser JIC and resource follow-through", () => {
   it("records and exports a cost, escalates to a peer tier, and shows the tier's reports", async () => {
     await page.getByRole("button", { name: "Resources", exact: true }).click();
     await page.getByRole("heading", { name: "Resource coordination" }).waitFor();
-    await page.getByRole("listitem").filter({ hasText: "Swiftwater rescue team" }).getByRole("button", { name: "History" }).click();
+    await page.getByRole("listitem").filter({ hasText: "Swiftwater rescue team" }).getByRole("button", { name: /^Open REQ-/ }).click();
     const costs = page.getByRole("region", { name: "Reimbursement costs" });
     await costs.getByLabel("Cost category").fill("equipment");
     await costs.getByLabel("Amount (USD)").fill("5,400.00");
@@ -289,8 +289,8 @@ describe("real-browser JIC and resource follow-through", () => {
     await page.reload({ waitUntil: "load" });
     await page.getByText("state reported deployed: State swiftwater team 4 on scene").waitFor();
     await page.getByText("state reported assigned: State swiftwater team 4 assigned").waitFor();
-    await page.getByRole("listitem").filter({ hasText: "Swiftwater rescue team" }).getByText("Deployed", { exact: true }).waitFor();
-    await page.getByRole("region", { name: "Swiftwater rescue team: request history" }).scrollIntoViewIfNeeded();
+    await page.getByRole("listitem").filter({ hasText: "Swiftwater rescue team" }).getByText("In progress", { exact: true }).waitFor();
+    await page.getByRole("region", { name: /^REQ-\d+ Swiftwater rescue team$/ }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: join(SHOTS, "resources-light-1440.png"), fullPage: false });
 
     await page.getByRole("button", { name: "Account menu" }).click();

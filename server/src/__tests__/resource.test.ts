@@ -90,7 +90,7 @@ describe("single-instance lifecycle", () => {
     expect(submit.statusCode).toBe(201);
     const id = submit.json().id as string;
 
-    await post(county, `/api/v1/resource-requests/${id}/transition`, { toState: "triaged" });
+    await post(county, `/api/v1/resource-requests/${id}/transition`, { toState: "accepted" });
     await post(county, `/api/v1/resource-requests/${id}/transition`, { toState: "sourcing" });
 
     // A skip is refused by the state machine.
@@ -114,7 +114,7 @@ describe("single-instance lifecycle", () => {
     expect(detail.state).toBe("closed");
     expect(detail.chronology.map((e: { toState: string }) => e.toState)).toEqual([
       "submitted",
-      "triaged",
+      "accepted",
       "sourcing",
       "assigned",
       "deployed",
@@ -149,7 +149,7 @@ describe("assignment and organization projection", () => {
     });
     expect(submitted.statusCode).toBe(201);
     const id = submitted.json().id as string;
-    await post(county, `/api/v1/resource-requests/${id}/transition`, { toState: "triaged" });
+    await post(county, `/api/v1/resource-requests/${id}/transition`, { toState: "accepted" });
     await post(county, `/api/v1/resource-requests/${id}/transition`, { toState: "sourcing" });
     const assigned = await post(county, `/api/v1/resource-requests/${id}/assign`, {
       kind: "incident_participant", incidentId: incident!.id as string, participantId: participant!.id as string,
@@ -207,7 +207,7 @@ describe("partner-owned incident requests", () => {
     });
     expect(submitted.statusCode, submitted.body).toBe(201);
     const requestId = submitted.json().id as string;
-    expect((await partnerPost(`/api/v1/resource-requests/${requestId}/transition`, { toState: "triaged" })).statusCode).toBe(200);
+    expect((await partnerPost(`/api/v1/resource-requests/${requestId}/transition`, { toState: "accepted" })).statusCode).toBe(200);
     expect((await partnerPost(`/api/v1/resource-requests/${requestId}/transition`, { toState: "sourcing" })).statusCode).toBe(200);
     const assigned = await partnerPost(`/api/v1/resource-requests/${requestId}/assign`, { positionId: position!.id as string });
     expect(assigned.statusCode, assigned.body).toBe(200);
@@ -238,7 +238,7 @@ describe("closed incident resource mutations", () => {
     const rejectedCreate = await post(county, `/api/v1/jurisdictions/${county.jurisdictionId}/resource-requests`, {
       origin: "eoc", item: "Rejected after close", incidentId,
     });
-    const rejectedTransition = await post(county, `/api/v1/resource-requests/${requestId}/transition`, { toState: "triaged" });
+    const rejectedTransition = await post(county, `/api/v1/resource-requests/${requestId}/transition`, { toState: "accepted" });
     const rejectedAssignment = await post(county, `/api/v1/resource-requests/${requestId}/assign`, {
       positionId: position.json().id as string,
     });
@@ -267,7 +267,7 @@ describe("cross-tier escalation, field to state and back", () => {
         priority: "immediate",
       })
     ).json().id as string;
-    await post(county, `/api/v1/resource-requests/${countyReqId}/transition`, { toState: "triaged" });
+    await post(county, `/api/v1/resource-requests/${countyReqId}/transition`, { toState: "accepted" });
     await post(county, `/api/v1/resource-requests/${countyReqId}/transition`, { toState: "sourcing" });
 
     // Escalate up to the state tier (delivery injected into the state app).
@@ -286,7 +286,7 @@ describe("cross-tier escalation, field to state and back", () => {
     expect(stateReqId).not.toBe("");
 
     // The state tier works the escalated request.
-    await post(state, `/api/v1/resource-requests/${stateReqId}/transition`, { toState: "triaged" });
+    await post(state, `/api/v1/resource-requests/${stateReqId}/transition`, { toState: "accepted" });
     await post(state, `/api/v1/resource-requests/${stateReqId}/transition`, { toState: "sourcing" });
     const statePosition = (
       await post(state, `/api/v1/jurisdictions/${state.jurisdictionId}/positions`, {
@@ -377,7 +377,7 @@ describe("escalation to a peer that never answers", () => {
         priority: "priority",
       })
     ).json().id as string;
-    await post(county, `/api/v1/resource-requests/${id}/transition`, { toState: "triaged" });
+    await post(county, `/api/v1/resource-requests/${id}/transition`, { toState: "accepted" });
     await post(county, `/api/v1/resource-requests/${id}/transition`, { toState: "sourcing" });
     const sent: RequestInit[] = [];
     // A silent peer: the call ends the way fetch ends when its timeout fires.

@@ -373,7 +373,7 @@ export async function seedNorthCoast(
   // Resource requests: 24 open, six of them immediate. A request is sourced
   // before it is assigned; an owner is a participating organization's
   // liaison or, for county work, the Operations Section Chief.
-  type RequestState = "submitted" | "triaged" | "sourcing" | "assigned" | "deployed";
+  type RequestState = "submitted" | "accepted" | "sourcing" | "assigned" | "deployed";
   const requests: ReadonlyArray<{ item: string; notes: string; priority: string; state: RequestState; neededBy: string; days?: number; owner?: string; who?: string }> = [
     { item: "Clear US-101 debris at the Mad River bridge", notes: "Northbound lanes blocked by debris", priority: "immediate", state: "deployed", neededBy: "12:00", owner: "martinez" },
     { item: "Generator support for Wendy's Shelter", notes: "Shelter lacks backup power", priority: "immediate", state: "deployed", neededBy: "12:00", owner: "alvarez" },
@@ -381,14 +381,14 @@ export async function seedNorthCoast(
     { item: "Check access on Westhaven Drive (Trinidad)", notes: "Assess for debris and washouts", priority: "priority", state: "deployed", neededBy: "14:00", owner: "operations" },
     { item: "Deliver additional shelter supplies", notes: "Cots, blankets, hygiene kits", priority: "routine", state: "assigned", neededBy: "18:00", owner: "patel", who: "moreno" },
     { item: "Pump trucks for the King Salmon flooding", notes: "Two trucks with operators", priority: "immediate", state: "sourcing", neededBy: "13:00" },
-    { item: "Sandbags for the Arcata Marsh gate", notes: "2,000 filled bags", priority: "immediate", state: "triaged", neededBy: "13:30" },
+    { item: "Sandbags for the Arcata Marsh gate", notes: "2,000 filled bags", priority: "immediate", state: "accepted", neededBy: "13:30" },
     { item: "Traffic control for the SR-299 closure", notes: "Flaggers and message boards", priority: "immediate", state: "assigned", neededBy: "14:30", owner: "rkim" },
     { item: "Tree crew for Old Arcata Road", notes: "Chainsaw team with chipper", priority: "immediate", state: "sourcing", neededBy: "15:00" },
-    { item: "Fuel for field crew trucks", notes: "Diesel delivery to the county yard", priority: "priority", state: "triaged", neededBy: "13:00" },
+    { item: "Fuel for field crew trucks", notes: "Diesel delivery to the county yard", priority: "priority", state: "accepted", neededBy: "13:00" },
     { item: "Tarps for roof repairs", notes: "200 heavy tarps", priority: "priority", state: "submitted", neededBy: "16:00" },
     { item: "Portable toilets for Redwood Acres", notes: "Six units with service", priority: "priority", state: "sourcing", neededBy: "15:00" },
     { item: "Cots for the Arcata Community Center", notes: "60 cots", priority: "priority", state: "assigned", neededBy: "12:30", owner: "patel" },
-    { item: "Water tender for Blue Lake", notes: "Potable water while treatment runs on backup power", priority: "priority", state: "triaged", neededBy: "14:30" },
+    { item: "Water tender for Blue Lake", notes: "Potable water while treatment runs on backup power", priority: "priority", state: "accepted", neededBy: "14:30" },
     { item: "Light towers for the Fernbridge inspection", notes: "Two towers", priority: "routine", state: "submitted", neededBy: "17:00" },
     { item: "Medical supplies for shelter first aid", notes: "Basic kits for eight shelters", priority: "routine", state: "assigned", neededBy: "16:30", owner: "singh" },
     { item: "Interpreters for shelter intake", notes: "Spanish and Hmong", priority: "routine", state: "submitted", neededBy: "17:30" },
@@ -406,7 +406,7 @@ export async function seedNorthCoast(
   await api("lee", at("05:33"), "POST", `/api/v1/positions/${operations.id}/assignments`, { personId: people["nguyen"]!.id });
   const logistics = positions.positions.find((position) => position.key === "logistics_section_chief");
   if (!logistics) throw new Error("the severe storm activation has no Logistics Section Chief position");
-  const order: readonly RequestState[] = ["submitted", "triaged", "sourcing", "assigned", "deployed"];
+  const order: readonly RequestState[] = ["submitted", "accepted", "sourcing", "assigned", "deployed"];
   const requestIds: Record<string, string> = {};
   for (const [index, request] of requests.entries()) {
     const when = at(`07:${String(2 + index * 2).padStart(2, "0")}`);

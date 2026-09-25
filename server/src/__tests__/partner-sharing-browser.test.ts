@@ -73,7 +73,7 @@ describe("partner sharing on the North Coast Storm exercise", () => {
     await rail(liaison, "Resources");
     const list = liaison.locator(".resources-list");
     await list.getByText("Generator support for Wendy's Shelter").waitFor();
-    expect(await list.getByText("Receiving: Humboldt County OES").count()).toBeGreaterThan(1);
+    expect(await list.getByText(/sent to Humboldt County OES$/).count()).toBeGreaterThan(1);
 
     await liaison.getByLabel("Request from").selectOption({ label: "Humboldt County OES (incident owner)" });
     await liaison.getByLabel("Requested item").fill("Fuel for the substation generators");
@@ -95,7 +95,7 @@ describe("partner sharing on the North Coast Storm exercise", () => {
     const drawer = liaison.getByRole("complementary", { name: "Energy" });
     await drawer.getByText("Logistics Section Chief").waitFor();
     await drawer.getByRole("button", { name: /Generator request/ }).click();
-    await liaison.getByRole("region", { name: "Generator support for Wendy's Shelter: request history" }).waitFor();
+    await liaison.getByRole("region", { name: /^REQ-\d+ Generator support for Wendy's Shelter$/ }).waitFor();
     await liaison.screenshot({ path: join(SHOTS, "liaison-linked-request.png") });
     await liaison.context().close();
   });

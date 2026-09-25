@@ -21,26 +21,28 @@ record and export costs as well.
    **Logistics Section Chief**.
 2. Check in on **Operations > Staffing**.
 3. On **Operations > Resources**, read every request: state, priority,
-   receiving and supplying organization, owner. The seeded generator request
-   is triaged, and nothing has been ordered.
-4. Select **History** on each open request to see who changed it and when.
+   receiving and supplying organization, owner and next action. The seeded
+   generator request is accepted, and nothing has been ordered.
+4. Select **Open** on each open request to see who changed it, when and why.
 
 ## Every operational period
 
-- **Move each request one honest step at a time.** Choose the **Next action**,
-  add a **Transition note** that says what actually happened, then
-  **Advance**. The states are submitted, triaged, sourcing, assigned,
-  deployed, demobilizing and closed; cancelled is available until the request
-  is deployed.
+- **Move each request one honest step at a time.** Add a note that says what
+  actually happened if it helps, then choose the step: **Accept**, **Start
+  sourcing**, **Mark deployed**, **Mark fulfilled**, **Start demobilizing** or
+  **Close**. The stages are received, accepted, sourcing, assigned, in
+  progress, fulfilled, demobilizing and closed. **Decline** (before sourcing)
+  and **Cancel request** (until deployment) ask for the reason, which the
+  requester sees.
 - **Name the owner.** A request in sourcing needs a named authority: choose a
   position under **Assign to named authority**, then **Assign and advance**.
-- **Record costs.** Under **History**, **Reimbursement costs**: category,
+- **Record costs.** Under **Open**, **Reimbursement costs**: category,
   **Amount (USD)**, description and the date incurred, then **Record cost**.
   **Export costs (CSV)** downloads every cost on the request with a total row.
 - **Handle offers.** When the Liaison Officer relays an offer of help, record
   the source in the transition note of the request it fills.
 - **Report status.** State at the briefing which requests are deployed and
-  which are still only submitted or triaged.
+  which are still only received or accepted.
 
 ## Screens used
 

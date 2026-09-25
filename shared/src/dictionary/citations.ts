@@ -16,6 +16,8 @@ export interface DictEnum {
   readonly values: readonly string[];
   readonly schema: z.ZodType<string>;
   readonly citation: Citation;
+  /** Values an earlier release stored, each read as the value that replaced it. */
+  readonly aliases?: Readonly<Record<string, string>>;
 }
 
 const registry: DictEnum[] = [];
@@ -25,12 +27,14 @@ export function defineEnum(
   id: string,
   values: readonly [string, ...string[]],
   citation: Citation,
+  aliases?: Readonly<Record<string, string>>,
 ): DictEnum {
   const entry: DictEnum = {
     id,
     values,
     schema: z.enum(values as [string, ...string[]]),
     citation,
+    ...(aliases ? { aliases } : {}),
   };
   registry.push(entry);
   return entry;

@@ -90,12 +90,13 @@ describe("real-browser resource coordination", () => {
       && response.url().endsWith(`/jurisdictions/${jurisdictionId}/resource-requests`));
     await page.getByRole("button", { name: "Submit request" }).click();
     expect((await submitted).status()).toBe(201);
-    await page.getByText("Submitted", { exact: true }).waitFor();
-    await page.getByLabel("Next state for Portable water tender").selectOption("triaged");
-    await page.getByRole("button", { name: "Advance", exact: true }).click();
-    await page.getByText("Triaged", { exact: true }).waitFor();
-    await page.getByLabel("Next state for Portable water tender").selectOption("sourcing");
-    await page.getByRole("button", { name: "Advance", exact: true }).click();
+    // A receipt, not an acceptance: the number, the time, where it went.
+    await page.getByRole("status", { name: "Request receipt" }).getByText(/^REQ-\d+ received .* by /).waitFor();
+    const row = page.getByRole("listitem", { name: /Portable water tender/ });
+    await row.getByText("Received", { exact: true }).waitFor();
+    await row.getByRole("button", { name: /^Accept REQ-/ }).click();
+    await row.getByText("Accepted", { exact: true }).waitFor();
+    await row.getByRole("button", { name: /^Start sourcing REQ-/ }).click();
     await page.getByRole("button", { name: "Assign and advance", exact: true }).waitFor();
     await page.getByLabel("Assignment for Portable water tender").selectOption(`participant:${participantId}`);
     const assigned = page.waitForResponse((response) => response.request().method() === "POST"
@@ -105,9 +106,9 @@ describe("real-browser resource coordination", () => {
     await page.getByText("Assigned", { exact: true }).waitFor();
     await page.getByText("Supplying: D22 Mutual Aid").waitFor();
     await page.getByText("Owner: D22 Resource Partner · Resource Support · D22 Mutual Aid").waitFor();
-    const history = page.getByRole("button", { name: "History", exact: true });
+    const history = row.getByRole("button", { name: /^Open REQ-/ });
     await history.focus();
-    expect(await page.evaluate("document.activeElement?.textContent?.trim()")).toBe("History");
+    expect(await page.evaluate("document.activeElement?.textContent?.trim()")).toBe("Open");
     await page.keyboard.press("Enter");
     await page.getByRole("heading", { name: "History", exact: true }).waitFor();
     expect(new URL(page.url()).hash).toContain("/resources/");
@@ -115,7 +116,7 @@ describe("real-browser resource coordination", () => {
     await page.getByRole("heading", { name: "History", exact: true }).waitFor();
     await page.getByText("assigned to Resource Support").waitFor();
     await page.screenshot({ path: join(SHOTS, "d22-light.png"), fullPage: false });
-    await page.getByRole("button", { name: "Close history" }).click();
+    await page.getByRole("button", { name: "Close details" }).click();
     await page.getByRole("button", { name: "Account menu" }).click();
     await page.getByRole("button", { name: "Use dark theme" }).click();
     await page.getByRole("button", { name: "Account menu" }).click();

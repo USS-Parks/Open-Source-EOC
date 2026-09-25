@@ -179,7 +179,7 @@ describe("the 213RR notification lane (F4 acceptance)", () => {
       method: "PATCH",
       url: `/api/v1/boards/${boardId}/records/${recordId}`,
       headers: auth(memberToken),
-      payload: { state: "triaged" },
+      payload: { state: "accepted" },
     });
     expect(upd.statusCode).toBe(200);
     expect(received).toHaveLength(0); // not the watched transition
@@ -203,7 +203,7 @@ describe("the 213RR notification lane (F4 acceptance)", () => {
 
     const push = received.find((r) => r.path === "/eoc-ops")!;
     expect(push.title).toBe("Resource Requests record updated: Potable water");
-    expect(push.body).toContain("State: Assigned (was Triaged)");
+    expect(push.body).toContain("State: Assigned (was Accepted)");
 
     // The requesting position (ops chief, the record creator) has a tray entry.
     const tray = await app.inject({

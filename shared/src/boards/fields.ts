@@ -370,8 +370,11 @@ function fieldValueSchema(f: FieldDef): z.ZodType {
     case "record_ref":
       return z.uuid();
     case "enum": {
-      const values = f.enumId ? (dictionaryValues(f.enumId) ?? []) : (f.values ?? []);
-      return z.enum(values as [string, ...string[]]);
+      const dictionary = f.enumId ? allEnums().find((e) => e.id === f.enumId) : undefined;
+      const choice = z.enum((f.enumId ? dictionary?.values ?? [] : f.values ?? []) as [string, ...string[]]);
+      const aliases = dictionary?.aliases;
+      // A value an earlier release stored is read, and saved, as the value that replaced it.
+      return aliases ? z.preprocess((value) => typeof value === "string" ? aliases[value] ?? value : value, choice) : choice;
     }
     case "geometry":
       return geometrySchema(f.geometryKind ?? "any");

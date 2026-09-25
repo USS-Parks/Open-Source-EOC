@@ -47,6 +47,8 @@ export function Button(props: {
   kind?: "primary" | "quiet" | "danger";
   disabled?: boolean;
   type?: "button" | "submit";
+  /** The accessible name, where the visible text alone would be ambiguous in a list. */
+  label?: string;
 }) {
   return (
     <button
@@ -54,6 +56,7 @@ export function Button(props: {
       className={`eoc-btn is-${props.kind ?? "quiet"}`}
       onClick={props.onClick}
       disabled={props.disabled}
+      aria-label={props.label}
     >
       {props.children}
     </button>

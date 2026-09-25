@@ -69,8 +69,11 @@ incident uses it.
   attributed chronology.
 - Use **Tasks** for My Tasks or authorized Team Tasks. Start and complete only
   work permitted by your current assignment; dependencies can block completion.
-- Use **Resources** for the 213RR lifecycle. Submitted, triaged, assigned, and
-  fulfilled are distinct states. Do not infer delivery from submission. Costs
+- Use **Resources** for the 213RR lifecycle. Received, accepted, assigned, in
+  progress and fulfilled are distinct stages: receipt is not acceptance, and
+  whoever accepts a request owns it until it is assigned. Each request shows
+  its number, owner and next action; **Find a request** searches by number or
+  words across open and ended requests. Do not infer delivery from submission. Costs
   and escalation are described under
   [Record costs and escalate a request](#record-costs-and-escalate-a-request).
 - Use **Smart Forms** for supported field reports. Select the attached incident
@@ -129,7 +132,7 @@ come first; **Load more records** reads the next page.
 
 ### Record costs and escalate a request
 
-Select **History** on a request in **Resources**. The costs and mutual aid
+Select **Open** on a request in **Resources**. The costs and mutual aid
 panel sits below the request history.
 
 - **Reimbursement costs**: enter the category, the amount in dollars, a

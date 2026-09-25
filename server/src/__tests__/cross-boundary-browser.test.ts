@@ -212,7 +212,7 @@ describe("cross-boundary incident exercise in a real browser", () => {
       && r.url().endsWith(`/jurisdictions/${partnerId}/resource-requests`));
     await partner.getByRole("button", { name: "Submit request" }).click();
     expect((await requested).status()).toBe(201);
-    await partner.getByText("Receiving: Valley Mutual Aid").waitFor();
+    await partner.getByText(/ · sent to Valley Mutual Aid$/).waitFor();
 
     // The owner assigns the engine request it receives on this incident to the partner as supplier.
     await owner.getByLabel("Selected incident").selectOption(incidentA);
@@ -221,11 +221,11 @@ describe("cross-boundary incident exercise in a real browser", () => {
     await owner.getByLabel("Requested item").fill("Engine strike team");
     await owner.getByLabel("Priority").selectOption("immediate");
     await owner.getByRole("button", { name: "Submit request" }).click();
-    await owner.getByText("Submitted", { exact: true }).waitFor();
-    for (const [state, label] of [["triaged", "Triaged"], ["sourcing", "Sourcing"]] as const) {
-      await owner.getByLabel("Next state for Engine strike team").selectOption(state);
-      await owner.getByRole("button", { name: "Advance", exact: true }).click();
-      await owner.getByText(label, { exact: true }).first().waitFor();
+    const engine = owner.getByRole("listitem", { name: /Engine strike team/ });
+    await engine.getByText("Received", { exact: true }).waitFor();
+    for (const [verb, stage] of [["Accept", "Accepted"], ["Start sourcing", "Sourcing"]] as const) {
+      await engine.getByRole("button", { name: new RegExp(`^${verb} REQ-`) }).click();
+      await engine.getByText(stage, { exact: true }).waitFor();
     }
     await owner.getByLabel("Assignment for Engine strike team").selectOption(`participant:${participantId}`);
     await owner.getByRole("button", { name: "Assign and advance", exact: true }).click();
@@ -256,7 +256,7 @@ describe("cross-boundary incident exercise in a real browser", () => {
     await owner.getByLabel("Selected incident").selectOption(incidentB);
     expect(await closedRoads(owner, incidentB)).toBe(0);
     await rail(owner, "Resources");
-    await owner.getByText("No resource requests in this scope.").waitFor();
+    await owner.getByText("No resource requests on this incident yet.").waitFor();
     await owner.getByLabel("Selected incident").selectOption(incidentA);
 
     // The owner publishes the operational-period plan.

@@ -14,7 +14,7 @@ The seed creates **SYNTHETIC Ridge Wildfire Exercise** for **Synthetic Demo
 County OES**. It includes an incident area and operational period, incomplete
 tasks assigned through an operations position, a field form targeting an
 attached Field Reports board, mixed-freshness Lifeline and ESF assessments, a
-partial-coverage exercise dataset, a triaged resource request, a local CAP
+partial-coverage exercise dataset, an accepted resource request, a local CAP
 exercise record, a JIC draft, and an AAR observation. Unknown, stale, and
 partial states are intentional.
 
@@ -57,7 +57,7 @@ Exercise** and **OP SYNTHETIC 1** whenever the shell asks for incident context.
    position control, and open **Operations / Tasks**. A task assigned through
    that position is in progress; other work remains open. Filters and totals
    describe the selected incident only. (F12)
-7. Open **Operations / Resources**. Inspect the triaged request for synthetic
+7. Open **Operations / Resources**. Inspect the accepted request for synthetic
    portable generators. Its note explicitly says no resource was ordered or
    delivered. (F5)
 8. Open **Planning / IAP**. Use the selected incident and operational period to

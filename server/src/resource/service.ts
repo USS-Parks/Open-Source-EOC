@@ -1,6 +1,9 @@
 import {
+  RESOURCE_REQUEST_ENDED,
+  RESOURCE_REQUEST_REASON_REQUIRED,
   RESOURCE_STATUS_TRANSITIONS,
   canTransition,
+  requestStage,
   isDeliveryStep,
   formatCostExport,
   typeSatisfies,
@@ -49,7 +52,23 @@ export interface SubmitInput {
   readonly resourceType?: number | undefined;
 }
 
+/**
+ * Submit a request and return its receipt: the number, the time it was
+ * received, its stage and the organization it went to. Receipt is not
+ * acceptance; the receiving organization accepts or declines it next.
+ */
 export async function submitRequest(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+  input: SubmitInput,
+): Promise<ResourceRequestSummary> {
+  const { id } = await insertRequest(sql, actor, jurisdictionId, input);
+  const [row] = await sql.unsafe(`${requestSelect} where r.id = $1`, [id]);
+  return requestSummary(row as Record<string, unknown>);
+}
+
+async function insertRequest(
   sql: Sql,
   actor: Principal,
   jurisdictionId: string,
@@ -128,13 +147,22 @@ export async function transition(
   requireWriter(actor, req.jurisdiction_id);
   if (req.incident_id) await requireOpenIncidentScope(sql, actor, req.incident_id, req.jurisdiction_id);
   if (!canTransition(req.state, toState))
-    throw new AuthError(409, `cannot move a request from ${req.state} to ${toState}`);
+    throw new AuthError(409, `cannot move a request from ${requestStage(req.state)} to ${requestStage(toState)}`);
+  const reason = note?.trim() ?? "";
+  if (RESOURCE_REQUEST_REASON_REQUIRED.includes(toState) && !reason)
+    throw new AuthError(400, `give the reason the request is ${requestStage(toState).toLowerCase()}`);
+  // Accepting names the owner: this person, as the position they act in.
+  const accepting = toState === "accepted";
   const [moved] = await sql`
-    update resource_requests set state = ${toState}, updated_at = now()
+    update resource_requests set state = ${toState}, updated_at = now(),
+      accepted_by = case when ${accepting} then ${actor.person.id}::uuid else accepted_by end,
+      accepted_position = case when ${accepting} then ${actor.position?.id ?? null}::uuid else accepted_position end,
+      accepted_at = case when ${accepting} then now() else accepted_at end
     where id = ${requestId} and state = ${req.state} returning id`;
   if (!moved) throw new AuthError(409, "the request changed; reload and try again");
-  await appendEvent(sql, requestId, req.state, toState, note ?? null, actor.person.id, null);
-  await notify(sql, req.jurisdiction_id, req.requested_by, `${req.item}: ${req.state} → ${toState}`);
+  await appendEvent(sql, requestId, req.state, toState, reason || null, actor.person.id, null);
+  await notify(sql, req.jurisdiction_id, req.requested_by,
+    `${req.item}: ${requestStage(req.state)} → ${requestStage(toState)}${reason ? `. ${reason}` : ""}`);
   await recordAudit(sql, actor, {
     jurisdictionId: req.jurisdiction_id,
     ...(req.incident_id ? { incidentId: req.incident_id } : {}),
@@ -291,6 +319,8 @@ export async function reportBack(
     if (req.jurisdiction_id !== (peer.jurisdiction_id as string))
       throw new AuthError(403, "request belongs to another jurisdiction");
     if (req.incident_id) await requireOpenIncidentScope(tx, local, req.incident_id, req.jurisdiction_id);
+    // A peer on an earlier version still reports acceptance by its old name.
+    if (toState === "triaged") toState = "accepted";
     const applied = canTransition(req.state, toState);
     if (applied)
       await tx`update resource_requests set state = ${toState}, updated_at = now() where id = ${sourceRequestId}`;
@@ -372,7 +402,9 @@ export interface ChronologyEntry {
 
 const requestSelect = `
   select r.id, r.number, r.incident_id, r.item, r.quantity, r.priority, r.state,
-    r.needed_by, r.notes, r.created_at,
+    r.needed_by, r.notes, r.created_at, r.updated_at,
+    requester.display_name as requested_by_name,
+    r.accepted_by, acceptor.display_name as accepted_by_name, accepted_position.title as accepted_position_title, r.accepted_at,
     receiving.id as receiving_organization_id, receiving.name as receiving_organization_name,
     supplying.id as supplying_organization_id, supplying.name as supplying_organization_name,
     position.id as assigned_position_id, position.key as assigned_position_key,
@@ -397,6 +429,9 @@ const requestSelect = `
   left join incident_participants participant on participant.id = r.assigned_participant_id
   left join persons person on person.id = participant.person_id
   left join jurisdictions participant_org on participant_org.id = participant.organization_id
+  left join persons requester on requester.id = r.requested_by
+  left join persons acceptor on acceptor.id = r.accepted_by
+  left join positions accepted_position on accepted_position.id = r.accepted_position
 `;
 
 function organization(row: Record<string, unknown>, prefix: "receiving" | "supplying" | "assigned_participant"): { id: string; name: string } | null {
@@ -452,14 +487,69 @@ function requestSummary(row: Record<string, unknown>): ResourceRequestSummary {
     neededBy: row.needed_by ? new Date(row.needed_by as string).toISOString() : null,
     notes: (row.notes as string | null) ?? null,
     createdAt: new Date(row.created_at as string).toISOString(),
+    updatedAt: new Date((row.updated_at ?? row.created_at) as string).toISOString(),
+    requestedByName: (row.requested_by_name as string | null) ?? null,
+    acceptance: row.accepted_at
+      ? {
+          personId: (row.accepted_by as string | null) ?? null,
+          personName: (row.accepted_by_name as string | null) ?? "Unknown",
+          positionTitle: (row.accepted_position_title as string | null) ?? null,
+          at: new Date(row.accepted_at as string).toISOString(),
+        }
+      : null,
   };
+}
+
+/** What a request list is narrowed to. Every filter the caller sets is one the screen names. */
+export interface RequestFilters {
+  /** A request number (REQ-1043 or 1043), or words in the item or notes. */
+  readonly q?: string | undefined;
+  /** Open requests, ended ones (closed, declined, cancelled), or all of them, the default. */
+  readonly status?: "open" | "ended" | "all" | undefined;
+  /** Only the requests this person asked for. */
+  readonly mine?: boolean | undefined;
+}
+
+/** A page of requests in one scope, newest first, narrowed by the filters. Row-level security stays the wall. */
+async function requestPage(
+  sql: Sql,
+  actor: Principal,
+  scope: { readonly where: string; readonly params: readonly unknown[] },
+  filters: RequestFilters,
+  page: PageRequest,
+): Promise<Page<ResourceRequestSummary>> {
+  const after = decodeCursor(page.cursor, ["seq", "id"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
+  const params: unknown[] = [...scope.params];
+  const param = (value: unknown) => {
+    params.push(value);
+    return `$${params.length}`;
+  };
+  const where = [scope.where];
+  const text = filters.q?.trim();
+  if (text) {
+    // LIKE's wildcards and its escape character, taken literally.
+    const words = param(`%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
+    const number = /^(?:req-?\s*)?(\d{1,15})$/i.exec(text)?.[1];
+    where.push(`(r.item ilike ${words} or coalesce(r.notes, '') ilike ${words}${number ? ` or r.number = ${param(number)}::bigint` : ""})`);
+  }
+  if (filters.status === "open") where.push(`r.state <> all(${param(RESOURCE_REQUEST_ENDED)}::text[])`);
+  if (filters.status === "ended") where.push(`r.state = any(${param(RESOURCE_REQUEST_ENDED)}::text[])`);
+  if (filters.mine) where.push(`r.requested_by = ${param(actor.person.id)}::uuid`);
+  if (after) where.push(`(r.number, r.id) < (${param(after[0])}::bigint, ${param(after[1])}::uuid)`);
+  const rows = await sql.unsafe(`${requestSelect}
+    where ${where.join(" and ")}
+    order by r.number desc, r.id desc limit ${param(limit + 1)}`, params as never[]);
+  const { items, nextCursor } = cutPage(rows as unknown as Record<string, unknown>[], limit,
+    (row) => [String(row.number), row.id as string]);
+  return { items: items.map(requestSummary), nextCursor };
 }
 
 /**
  * Resource requests visible in a jurisdiction, for the 213RR board. An
  * optional incident narrows the list to that incident's requests;
  * unscoped returns every request in the jurisdiction, so a standing cache with
- * no incident is never silently hidden. Row-level security stays the wall.
+ * no incident is never silently hidden.
  */
 export async function listRequests(
   sql: Sql,
@@ -467,42 +557,30 @@ export async function listRequests(
   jurisdictionId: string,
   incidentId: string | undefined,
   page: PageRequest,
+  filters: RequestFilters = {},
 ): Promise<Page<ResourceRequestSummary>> {
   requireMember(actor, jurisdictionId);
-  const after = decodeCursor(page.cursor, ["key", "id"]);
-  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
-  const rows = await sql.unsafe(`${requestSelect}
-    where r.jurisdiction_id = $1 and ($2::uuid is null or r.incident_id = $2)
-      and ($3::text is null or (r.item, r.id) > ($3::text, $4::uuid))
-    order by r.item, r.id limit $5`,
-  [jurisdictionId, incidentId ?? null, after?.[0] ?? null, after?.[1] ?? null, limit + 1]);
-  const { items, nextCursor } = cutPage(rows as unknown as Record<string, unknown>[], limit,
-    (row) => [row.item as string, row.id as string]);
-  return { items: items.map(requestSummary), nextCursor };
+  return requestPage(sql, actor, {
+    where: "r.jurisdiction_id = $1 and ($2::uuid is null or r.incident_id = $2)",
+    params: [jurisdictionId, incidentId ?? null],
+  }, filters, page);
 }
 
 /**
  * Every resource request attached to an incident, from every organization,
  * for anyone who can read the incident: its owner's members and each active
- * participant. Row-level security stays the wall.
+ * participant.
  */
 export async function listIncidentRequests(
   sql: Sql,
   actor: Principal,
   incidentId: string,
   page: PageRequest,
+  filters: RequestFilters = {},
 ): Promise<Page<ResourceRequestSummary>> {
   const [access] = await sql`select public.can_read_incident(${incidentId}) as readable`;
   if (access?.readable !== true) throw new AuthError(404, "incident not found");
-  const after = decodeCursor(page.cursor, ["key", "id"]);
-  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
-  const rows = await sql.unsafe(`${requestSelect}
-    where r.incident_id = $1 and ($2::text is null or (r.item, r.id) > ($2::text, $3::uuid))
-    order by r.item, r.id limit $4`,
-  [incidentId, after?.[0] ?? null, after?.[1] ?? null, limit + 1]);
-  const { items, nextCursor } = cutPage(rows as unknown as Record<string, unknown>[], limit,
-    (row) => [row.item as string, row.id as string]);
-  return { items: items.map(requestSummary), nextCursor };
+  return requestPage(sql, actor, { where: "r.incident_id = $1", params: [incidentId] }, filters, page);
 }
 
 export async function getRequest(

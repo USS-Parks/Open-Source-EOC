@@ -332,7 +332,7 @@ describe("ApiClient", () => {
         return res(200, {
           requests: [{ id: "r1", item: "Cots", quantity: 50, priority: "routine", state: "submitted" }],
         });
-      if (u.endsWith("/transition")) return res(200, { state: "triaged" });
+      if (u.endsWith("/transition")) return res(200, { state: "accepted" });
       return res(404, { error: "nope" });
     }) as unknown as typeof fetch;
 
@@ -340,7 +340,7 @@ describe("ApiClient", () => {
     await client.login("e@x.org", "pw");
     expect((await client.submitResourceRequest("j", { origin: "eoc", item: "Cots", quantity: 50 })).id).toBe("r1");
     expect((await client.listResourceRequests("j"))[0]!.state).toBe("submitted");
-    expect((await client.transitionResourceRequest("r1", "triaged")).state).toBe("triaged");
+    expect((await client.transitionResourceRequest("r1", "accepted")).state).toBe("accepted");
   });
 
   it("reads a picker list to its last page by cursor", async () => {

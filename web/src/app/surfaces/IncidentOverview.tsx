@@ -6,6 +6,7 @@ import type {
   LifelineCurrentState,
   ResourceRequestSummary,
 } from "@openeoc/shared";
+import { RESOURCE_REQUEST_ENDED } from "@openeoc/shared";
 import { Icon, type IconName } from "../../design/icons/index.js";
 import type { ThemeName } from "../../design/tokens.js";
 import type { ApiClient, CollectionRef } from "../api/client.js";
@@ -189,11 +190,12 @@ const STATUS_LABEL: Readonly<Record<WorkItem["status"], string>> = {
 };
 
 /** Work is under way once resources are deployed; before that it has not started. */
-const REQUEST_IN_PROGRESS = new Set(["deployed"]);
-const REQUEST_OPEN = new Set(["submitted", "triaged", "sourcing", "assigned", "deployed"]);
+const REQUEST_IN_PROGRESS = new Set(["deployed", "fulfilled", "demobilizing"]);
+const requestOpen = (state: string) => state !== "draft" && !RESOURCE_REQUEST_ENDED.includes(state);
 
 const STATE_DETAIL: Readonly<Record<string, string>> = {
-  submitted: "Awaiting triage", triaged: "Triaged", sourcing: "Sourcing resources", assigned: "Resources assigned", deployed: "Resources deployed",
+  submitted: "Received, awaiting acceptance", accepted: "Accepted", sourcing: "Sourcing resources", assigned: "Resources assigned",
+  deployed: "Resources deployed", fulfilled: "Fulfilled", demobilizing: "Demobilizing",
 };
 
 /** Open requests and tasks, most pressing first: urgent, then in progress, then by due time. */
@@ -204,7 +206,7 @@ export function priorityWork(
   onTask: () => void,
 ): WorkItem[] {
   const items: WorkItem[] = [
-    ...requests.filter((request) => REQUEST_OPEN.has(request.state)).map((request): WorkItem => ({
+    ...requests.filter((request) => requestOpen(request.state)).map((request): WorkItem => ({
       key: `request:${request.id}`,
       kind: "request",
       number: `REQ-${request.number}`,
@@ -213,7 +215,8 @@ export function priorityWork(
       status: request.priority === "immediate" ? "urgent" : REQUEST_IN_PROGRESS.has(request.state) ? "in_progress" : "not_started",
       statusDetail: STATE_DETAIL[request.state] ?? request.state,
       owner: request.assignment?.organization.name ?? request.supplyingOrganization?.name ?? request.receivingOrganization.name,
-      ownerPerson: request.assignment?.kind === "incident_participant" ? request.assignment.personName : request.assignment?.positionTitle ?? "Unassigned",
+      ownerPerson: request.assignment?.kind === "incident_participant" ? request.assignment.personName
+        : request.assignment?.positionTitle ?? request.acceptance?.personName ?? "Not yet accepted",
       due: request.neededBy ? new Date(request.neededBy) : null,
       open: () => onRequest(request.id),
     })),

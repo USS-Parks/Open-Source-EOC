@@ -209,10 +209,10 @@ describe("jurisdiction export", () => {
     expect(rows("correctiveActions")).toMatchObject([{ recommendation: "Stage generators earlier" }]);
 
     const [requested] = rows("resourceRequests");
-    expect(requested).toMatchObject({ id: demo.resourceRequestId, state: "triaged" });
+    expect(requested).toMatchObject({ id: demo.resourceRequestId, state: "accepted" });
     expect(requested!.costs).toMatchObject([{ category: "equipment", amount_cents: 12500 }]);
     // The seed writes both events in one transaction, so they share a timestamp.
-    expect((requested!.history as Row[]).map((event) => event.to_state).sort()).toEqual(["submitted", "triaged"]);
+    expect((requested!.history as Row[]).map((event) => event.to_state).sort()).toEqual(["accepted", "submitted"]);
 
     expect(rows("tasks").length).toBeGreaterThan(0);
     expect(rows("tasks").every((task) => task.incident_id === demo.incidentId && Array.isArray(task.prerequisite_task_ids)))

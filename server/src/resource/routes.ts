@@ -47,7 +47,13 @@ const SubmitBody = z.object({
   resourceKind: z.string().min(1).max(200).optional(),
   resourceType: z.number().int().min(1).max(10).optional(),
 });
-const TransitionBody = z.object({ toState: z.string().min(1), note: z.string().optional() });
+const TransitionBody = z.object({ toState: z.string().min(1), note: z.string().max(2000).optional() });
+/** A request list's filters: a number or words, open or ended, and only the caller's own. */
+const RequestFilterQuery = {
+  q: z.string().max(200).optional(),
+  status: z.enum(["open", "ended", "all"]).optional(),
+  mine: z.enum(["true", "false"]).optional().transform((value) => value === "true"),
+};
 const AssignBody = z.union([
   ResourceRequestAssignmentSchema,
   z.object({ positionId: z.uuid() }).strict(),
@@ -131,9 +137,11 @@ export function resourceRoutes(
       const { jurisdictionId } = req.params as { jurisdictionId: string };
       // Optional incident scope: narrow the 213RR list to the selected
       // incident's requests so the surface reconciles with its context (79B2).
-      const { incidentId, ...page } = z.object({ incidentId: z.string().uuid().optional(), ...pageQuery }).parse(req.query);
+      const { incidentId, q, status, mine, ...page } = z.object({
+        incidentId: z.string().uuid().optional(), ...RequestFilterQuery, ...pageQuery,
+      }).parse(req.query);
       const { items, nextCursor } = await withPerson(sql, req.principal.person.id, (tx) =>
-        listRequests(tx, req.principal, jurisdictionId, incidentId, page),
+        listRequests(tx, req.principal, jurisdictionId, incidentId, page, { q, status, mine }),
       );
       return reply.send({ requests: items, nextCursor });
     },
@@ -145,9 +153,9 @@ export function resourceRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { incidentId } = z.object({ incidentId: z.uuid() }).parse(req.params);
-      const page = z.object(pageQuery).parse(req.query);
+      const { q, status, mine, ...page } = z.object({ ...RequestFilterQuery, ...pageQuery }).parse(req.query);
       const { items, nextCursor } = await withPerson(sql, req.principal.person.id, (tx) =>
-        listIncidentRequests(tx, req.principal, incidentId, page),
+        listIncidentRequests(tx, req.principal, incidentId, page, { q, status, mine }),
       );
       return reply.send({ requests: items, nextCursor });
     },

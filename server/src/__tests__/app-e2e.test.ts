@@ -482,10 +482,10 @@ describe("the operations console in a real browser, offline", () => {
     await page.getByLabel("Requested item").fill("Sandbags, 500 ct");
     await page.getByRole("button", { name: "Submit request" }).click();
     await page.getByText("Sandbags, 500 ct").first().waitFor({ state: "visible", timeout: 20000 });
-    await page.getByLabel("Next state for Sandbags, 500 ct").selectOption("triaged");
-    await page.getByRole("button", { name: "Advance" }).first().click();
-    // The row's state badge flips to "Triaged" (the first allowed transition).
-    await page.getByText("Triaged", { exact: true }).first().waitFor({ state: "visible", timeout: 20000 });
+    const sandbags = page.getByRole("listitem", { name: /Sandbags, 500 ct/ }).first();
+    await sandbags.getByRole("button", { name: /^Accept REQ-/ }).click();
+    // The row's stage badge flips to "Accepted", and whoever accepted it owns it.
+    await sandbags.getByText("Accepted", { exact: true }).waitFor({ state: "visible", timeout: 20000 });
 
     // After-action review: record an observation against a Core Capability.
     await page.getByRole("button", { name: "AAR" }).click();

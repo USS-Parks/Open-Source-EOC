@@ -54,7 +54,7 @@ export const STANDARD_TEMPLATES: readonly BoardTemplate[] = [
       { key: "notes", label: "Notes", type: "text" },
     ],
     views: [
-      { key: "open", title: "Open requests", columns: ["item", "quantity", "priority", "state"], filter: [{ field: "state", op: "in", value: ["submitted", "triaged", "sourcing", "assigned", "deployed"] }] },
+      { key: "open", title: "Open requests", columns: ["item", "quantity", "priority", "state"], filter: [{ field: "state", op: "in", value: ["submitted", "accepted", "sourcing", "assigned", "deployed", "fulfilled"] }] },
       { key: "all", title: "All requests", columns: ["item", "quantity", "state"] },
     ],
   }),

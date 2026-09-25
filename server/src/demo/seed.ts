@@ -233,7 +233,7 @@ export async function ensureDemoData(sql: Sql): Promise<DemoResult> {
       notes: "Exercise request; no real resource order or delivery.",
       incidentId,
     });
-    await transition(tx, actor, rr.id, "triaged");
+    await transition(tx, actor, rr.id, "accepted");
 
     await createLifelineAssessment(tx, actor, incidentId, {
       lifeline: "energy",

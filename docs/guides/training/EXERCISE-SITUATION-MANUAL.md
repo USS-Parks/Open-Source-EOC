@@ -50,7 +50,7 @@ any other authority.
    another account.
 3. When OpenEOC cannot do what your position needs, say so aloud, work around
    it in the open, and make sure it is recorded as an observation.
-4. Queued, submitted, triaged and approved are not delivered. Say which state
+4. Queued, received, accepted and approved are not delivered. Say which state
    a thing is in.
 5. Scenario time is compressed. Controllers announce the scenario time at
    each module.
@@ -77,7 +77,7 @@ at StartEx:
 - The other lifelines have no assessment. Missing is not stable.
 - SYNTHETIC Route 12 is closed. The synthetic road source covers only part of
   the incident area.
-- A request for three synthetic portable generators is triaged. Nothing has
+- A request for three synthetic portable generators is accepted. Nothing has
   been ordered.
 - A local exercise CAP record exists. It was never transmitted.
 
@@ -114,7 +114,7 @@ Discussion questions:
 
 1. How long did the blocked road take to reach the Road Closures board, the
    map and the Transportation assessment?
-2. Which request is only submitted, which triaged, and who owns each?
+2. Which request is only received, which accepted, and who owns each?
 3. The offer from Harbor County cannot be recorded as a partner assignment in
    this product. How did you record it, and what did you lose?
 

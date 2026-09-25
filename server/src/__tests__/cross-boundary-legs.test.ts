@@ -285,7 +285,7 @@ describe("cross-boundary incident exercise: resources, COP and KPIs, attribution
     // The owner requests an engine on the incident and names the partner's participant as the supplier.
     engineId = (await expectJson(ownerToken, "POST", `/api/v1/jurisdictions/${ownerId}/resource-requests`, 201,
       { origin: "eoc", item: "Engine strike team", quantity: 1, priority: "immediate", incidentId: incidentA })).id as string;
-    for (const toState of ["triaged", "sourcing"]) {
+    for (const toState of ["accepted", "sourcing"]) {
       await expectJson(ownerToken, "POST", `/api/v1/resource-requests/${engineId}/transition`, 200, { toState });
     }
     await expectJson(ownerToken, "POST", `/api/v1/resource-requests/${engineId}/assign`, 200,

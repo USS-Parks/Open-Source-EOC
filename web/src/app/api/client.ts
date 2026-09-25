@@ -1245,9 +1245,14 @@ export class ApiClient {
   listResourceRequests(
     jurisdictionId: string,
     incidentId?: string | null,
+    filters: { readonly q?: string; readonly status?: "open" | "ended" | "all"; readonly mine?: boolean } = {},
   ): Promise<ResourceRequestSummaryContract[]> {
     return readAllPages(async (page) => {
-      const query = pageParams(page, new URLSearchParams());
+      const query = pageParams(page, new URLSearchParams({
+        ...(filters.q?.trim() ? { q: filters.q.trim() } : {}),
+        ...(filters.status && filters.status !== "all" ? { status: filters.status } : {}),
+        ...(filters.mine ? { mine: "true" } : {}),
+      }));
       const path = incidentId
         ? `/api/v1/incidents/${encodeURIComponent(incidentId)}/resource-requests?${query}`
         : `/api/v1/jurisdictions/${jurisdictionId}/resource-requests?${query}`;
@@ -1268,8 +1273,8 @@ export class ApiClient {
       resourceKind?: string;
       resourceType?: number;
     },
-  ): Promise<{ id: string }> {
-    return this.request<{ id: string }>(
+  ): Promise<ResourceRequestSummaryContract> {
+    return this.request<ResourceRequestSummaryContract>(
       "POST",
       `/api/v1/jurisdictions/${jurisdictionId}/resource-requests`,
       body as unknown as Record<string, unknown>,

@@ -39,7 +39,7 @@ beforeAll(async () => {
     origin: "eoc", item: "Engine strike team", resourceKind: "engine", resourceType: 3, incidentId,
   });
   requestId = request.id as string;
-  for (const toState of ["triaged", "sourcing"]) {
+  for (const toState of ["accepted", "sourcing"]) {
     await post(app, token, `/api/v1/resource-requests/${requestId}/transition`, { toState }, 200);
   }
   await post(app, token, `/api/v1/resource-requests/${requestId}/costs`, { category: "equipment", amountCents: 540_000 });

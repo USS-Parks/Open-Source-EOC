@@ -33,3 +33,11 @@
 .resources-facts dt { color: var(--eoc-text-muted); }
 .resources-facts dd { margin: 4px 0 0; }
 .resources-history { display: grid; gap: 8px; margin: 0; padding-left: 20px; }
+.resources-actions { align-items: end; display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.resources-actions .resources-cell { flex: 1 1 200px; }
+.resources-receipt { border: 1px solid var(--eoc-brand-teal); border-radius: 4px; display: grid; gap: 6px; margin-top: 12px; padding: 12px; }
+.resources-filters { align-items: end; display: grid; gap: 8px; grid-template-columns: minmax(min(100%, 220px), 2fr) auto minmax(min(100%, 170px), 1fr) auto; margin-bottom: 8px; min-width: 0; }
+.resources-check { align-items: center; display: flex; gap: 6px; min-height: 44px; }
+.resources-filter-summary { color: var(--eoc-text-muted); margin: 0 0 8px; }
+.resources-link { background: none; border: 0; color: var(--eoc-brand-teal); cursor: pointer; font: inherit; padding: 0; text-decoration: underline; }
+@container (max-width: 640px) { .resources-filters { grid-template-columns: 1fr; } }
