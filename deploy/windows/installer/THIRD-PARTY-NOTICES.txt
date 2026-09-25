@@ -124,6 +124,16 @@ NAPSG Foundation symbols
   web/public/napsg/CC-BY-4.0.txt. acquisition-manifest.json in the same
   folder records each symbol's source.
 
+Material Symbols
+  The web application's solid glyphs include path data from Google's
+  Material Symbols, under the Apache License 2.0, the license in LICENSE:
+  https://github.com/google/material-design-icons
+
+Font Awesome Free
+  Biohazard icon by Font Awesome, https://fontawesome.com, under the
+  Creative Commons Attribution 4.0 International License:
+  https://creativecommons.org/licenses/by/4.0/
+
 
 WRITTEN OFFER FOR SOURCE CODE
 -----------------------------

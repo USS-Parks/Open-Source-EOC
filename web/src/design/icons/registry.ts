@@ -2,7 +2,7 @@ export const ICON_SIZES = [16, 20, 24, 32, 40, 48] as const;
 export type IconSize = (typeof ICON_SIZES)[number];
 
 export type IconPrimitive =
-  | { readonly element: "path"; readonly d: string; readonly fill?: "currentColor" }
+  | { readonly element: "path"; readonly d: string; readonly fill?: "currentColor"; readonly fillRule?: "evenodd" }
   | { readonly element: "circle"; readonly cx: number; readonly cy: number; readonly r: number; readonly fill?: "currentColor" }
   | { readonly element: "line"; readonly x1: number; readonly y1: number; readonly x2: number; readonly y2: number }
   | { readonly element: "polyline"; readonly points: string }
@@ -10,12 +10,15 @@ export type IconPrimitive =
 
 interface IconDefinition {
   readonly label: string;
-  readonly category: "navigation" | "action" | "lifeline";
+  /** "glyph": a solid silhouette drawn by fill, as the canonical frames draw them. */
+  readonly category: "navigation" | "action" | "lifeline" | "glyph";
   readonly description: string;
   readonly intendedSizes: readonly IconSize[];
   readonly primitives: readonly IconPrimitive[];
-  readonly provenance: "Open Source EOC original artwork";
-  readonly license: "Apache-2.0";
+  /** The coordinate space of the primitives; 0 0 24 24 unless a source glyph uses its own. */
+  readonly viewBox?: string;
+  readonly provenance: "Open Source EOC original artwork" | "Google Material Symbols" | "Font Awesome Free 6.7.2";
+  readonly license: "Apache-2.0" | "CC-BY-4.0";
 }
 
 const NAV_SIZES = [16, 20, 24] as const;
@@ -39,6 +42,31 @@ function icon<const Category extends IconDefinition["category"]>(
     license: "Apache-2.0",
   };
 }
+
+const MATERIAL = "0 -960 960 960";
+const GLYPH_SIZES = [16, 20, 24, 32, 40, 48] as const;
+
+/** A solid silhouette: one or more filled paths in its source's coordinate space. */
+function glyph(
+  label: string,
+  description: string,
+  paths: readonly string[],
+  source: { readonly viewBox: string; readonly provenance: IconDefinition["provenance"]; readonly license: IconDefinition["license"]; readonly evenodd?: boolean },
+): IconDefinition & { readonly category: "glyph" } {
+  return {
+    label,
+    category: "glyph",
+    description,
+    intendedSizes: GLYPH_SIZES,
+    primitives: paths.map((d) => ({ element: "path", d, fill: "currentColor", ...(source.evenodd ? { fillRule: "evenodd" as const } : {}) })),
+    viewBox: source.viewBox,
+    provenance: source.provenance,
+    license: source.license,
+  };
+}
+
+const material = { viewBox: MATERIAL, provenance: "Google Material Symbols", license: "Apache-2.0" } as const;
+const original = { viewBox: MATERIAL, provenance: "Open Source EOC original artwork", license: "Apache-2.0" } as const;
 
 export const iconRegistry = {
   overview: icon("Overview", "navigation", "House with a centered doorway", NAV_SIZES, [
@@ -295,26 +323,91 @@ export const iconRegistry = {
   energy: icon("Energy", "lifeline", "Electric transmission tower", LIFELINE_SIZES, [
     { element: "path", d: "M10 2.5h4L17.5 21M10 2.5 6.5 21M8.2 12h7.6M7.3 16.5h9.4M9 7.5h6M6.2 9.5h11.6M8 21l4-4.5 4 4.5" },
   ]),
-  communications: icon("Communications", "lifeline", "Radio mast with signal arcs", LIFELINE_SIZES, [
-    { element: "circle", cx: 12, cy: 7, r: 1.5, fill: "currentColor" },
-    { element: "path", d: "M12 8.5 8.5 21M12 8.5 15.5 21M9.5 16h5" },
-    { element: "path", d: "M8.5 3.5a5 5 0 0 0 0 7M15.5 3.5a5 5 0 0 1 0 7M5.5 1a8.5 8.5 0 0 0 0 12M18.5 1a8.5 8.5 0 0 1 0 12" },
-  ]),
+  communications: { ...glyph("Communications", "Cell tower with signal arcs", [
+    "M196-276q-57-60-86.5-133T80-560q0-78 29.5-151T196-844l48 48q-48 48-72 110.5T148-560q0 63 24 125.5T244-324l-48 48Zm96-96q-39-39-59.5-88T212-560q0-51 20.5-100t59.5-88l48 48q-30 27-45 64t-15 76q0 36 15 73t45 67l-48 48ZM280-80l135-405q-16-14-25.5-33t-9.5-42q0-42 29-71t71-29q42 0 71 29t29 71q0 23-9.5 42T545-485L680-80h-80l-26-80H387l-27 80h-80Zm133-160h134l-67-200-67 200Zm255-132-48-48q30-27 45-64t15-76q0-36-15-73t-45-67l48-48q39 39 58 88t22 100q0 51-20.5 100T668-372Zm96 96-48-48q48-48 72-110.5T812-560q0-63-24-125.5T716-796l48-48q57 60 86.5 133T880-560q0 78-28 151t-88 133Z",
+  ], material), category: "lifeline" as const, intendedSizes: LIFELINE_SIZES },
   transportation: icon("Transportation", "lifeline", "Divided roadway with lane marks", LIFELINE_SIZES, [
     { element: "path", d: "M8.5 2.5 4 21M15.5 2.5 20 21" },
     { element: "line", x1: 12, y1: 3, x2: 12, y2: 7 },
     { element: "line", x1: 12, y1: 10, x2: 12, y2: 14 },
     { element: "line", x1: 12, y1: 17, x2: 12, y2: 21 },
   ]),
-  hazardousMaterials: icon("Hazardous Materials", "lifeline", "Three-lobed biohazard mark", LIFELINE_SIZES, [
-    { element: "circle", cx: 12, cy: 12, r: 1.5, fill: "currentColor" },
-    { element: "path", d: "M9 9.5A4.5 4.5 0 1 1 15 9.5M9.8 12.8A4.5 4.5 0 1 1 8.2 9.7M14.2 12.8A4.5 4.5 0 1 0 15.8 9.7" },
-    { element: "path", d: "M10.7 10.8 9 8.3M13.3 10.8 15 8.3M12 13.5v3" },
+  hazardousMaterials: {
+    ...glyph("Hazardous Materials", "Three-lobed biohazard mark", [
+      "M173.2 0c-1.8 0-3.5 .7-4.8 2C138.5 32.3 120 74 120 120c0 26.2 6 50.9 16.6 73c-22 2.4-43.8 9.1-64.2 20.5C37.9 232.8 13.3 262.4 .4 296c-.7 1.7-.5 3.7 .5 5.2c2.2 3.7 7.4 4.3 10.6 1.3C64.2 254.3 158 245.1 205 324s-8.1 153.1-77.6 173.2c-4.2 1.2-6.3 5.9-4.1 9.6c1 1.6 2.6 2.7 4.5 3c36.5 5.9 75.2 .1 109.7-19.2c20.4-11.4 37.4-26.5 50.5-43.8c13.1 17.3 30.1 32.4 50.5 43.8c34.5 19.3 73.3 25.2 109.7 19.2c1.9-.3 3.5-1.4 4.5-3c2.2-3.7 .1-8.4-4.1-9.6C379.1 477.1 324 403 371 324s140.7-69.8 193.5-21.4c3.2 2.9 8.4 2.3 10.6-1.3c1-1.6 1.1-3.5 .5-5.2c-12.9-33.6-37.5-63.2-72.1-82.5c-20.4-11.4-42.2-18.1-64.2-20.5C450 170.9 456 146.2 456 120c0-46-18.5-87.7-48.4-118c-1.3-1.3-3-2-4.8-2c-5 0-8.4 5.2-6.7 9.9C421.7 80.5 385.6 176 288 176S154.3 80.5 179.9 9.9c1.7-4.7-1.6-9.9-6.7-9.9zM240 272a48 48 0 1 1 96 0 48 48 0 1 1 -96 0zM181.7 417.6c6.3-11.8 9.8-25.1 8.6-39.8c-19.5-18-34-41.4-41.2-67.8c-12.5-8.1-26.2-11.8-40-12.4c-9-.4-18.1 .6-27.1 2.7c7.8 57.1 38.7 106.8 82.9 139.4c6.8-6.7 12.6-14.1 16.8-22.1zM288 64c-28.8 0-56.3 5.9-81.2 16.5c2 8.3 5 16.2 9 23.5c6.8 12.4 16.7 23.1 30.1 30.3c13.3-4.1 27.5-6.3 42.2-6.3s28.8 2.2 42.2 6.3c13.4-7.2 23.3-17.9 30.1-30.3c4-7.3 7-15.2 9-23.5C344.3 69.9 316.8 64 288 64zM426.9 310c-7.2 26.4-21.7 49.7-41.2 67.8c-1.2 14.7 2.2 28.1 8.6 39.8c4.3 8 10 15.4 16.8 22.1c44.3-32.6 75.2-82.3 82.9-139.4c-9-2.2-18.1-3.1-27.1-2.7c-13.8 .6-27.5 4.4-40 12.4z",
+    ], { viewBox: "0 -32 576 576", provenance: "Font Awesome Free 6.7.2", license: "CC-BY-4.0" }),
+    category: "lifeline" as const,
+    intendedSizes: LIFELINE_SIZES,
+  },
+  waterSystems: icon("Water Systems", "lifeline", "Two water drops", LIFELINE_SIZES, [
+    { element: "path", d: "M7.5 4.5s-4.5 5.4-4.5 9a4.5 4.5 0 0 0 9 0c0-3.6-4.5-9-4.5-9Z" },
+    { element: "path", d: "M17 8.5s-3.5 4.2-3.5 7a3.5 3.5 0 0 0 7 0c0-2.8-3.5-7-3.5-7Z" },
   ]),
-  waterSystems: icon("Water Systems", "lifeline", "Three water drops", LIFELINE_SIZES, [
-    { element: "path", d: "M12 2.5s-4 5-4 8a4 4 0 0 0 8 0c0-3-4-8-4-8Z" },
-    { element: "path", d: "M5.5 13.5s-3 3.8-3 6a3 3 0 0 0 6 0c0-2.2-3-6-3-6ZM18.5 13.5s-3 3.8-3 6a3 3 0 0 0 6 0c0-2.2-3-6-3-6Z" },
-  ]),
+  // Solid glyphs, as the canonical frames draw the overview's counts, lifelines, work and rail.
+  alertSolid: glyph("Needs attention", "Exclamation mark cut from a filled circle", [
+    "M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z",
+  ], material),
+  homeSolid: glyph("Shelter", "Filled house with a doorway", [
+    "M160-120v-480l320-240 320 240v480H560v-280H400v280H160Z",
+  ], material),
+  checkCircleSolid: glyph("Done", "Check mark cut from a filled circle", [
+    "m424-296 282-282-56-56-226 226-114-114-56 56 170 170Zm56 216q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z",
+  ], material),
+  shieldPlate: glyph("Safety and Security", "Shield outline around a filled shield", [
+    "M480-80q-139-35-229.5-159.5T160-516v-244l320-120 320 120v244q0 152-90.5 276.5T480-80Zm0-84q104-33 172-132t68-220v-189l-240-90-240 90v189q0 121 68 220t172 132Zm0-316Z",
+    "M480-232q-86.18-21.7-142.29-98.89T281.6-502.32v-151.28l198.4-74.4 198.4 74.4v151.28q0 94.24-56.11 171.43T480-232Z",
+  ], material),
+  shieldQuarters: glyph("Safety and Security", "Shield in filled and open quarters", [
+    "M480-80q-139-35-229.5-159.5T160-516v-244l320-120 320 120v244q0 152-90.5 276.5T480-80Zm0-84q97-30 162-118.5T718-480H480v-315l-240 90v207q0 7 2 18h238v316Z",
+  ], material),
+  restaurant: glyph("Food, Hydration, Shelter", "Fork and knife", [
+    "M280-80v-366q-51-14-85.5-56T160-600v-280h80v280h40v-280h80v280h40v-280h80v280q0 56-34.5 98T360-446v366h-80Zm400 0v-320H560v-280q0-83 58.5-141.5T760-880v800h-80Z",
+  ], material),
+  plusSolid: glyph("Health and Medical", "Filled medical cross", [
+    "M360-840h240v240h240v240H600v240H360v-240H120v-240h240Z",
+  ], original),
+  boltSolid: glyph("Energy", "Filled lightning bolt", [
+    "m320-80 40-280H160l360-520h80l-40 320h240L400-80h-80Z",
+  ], material),
+  cellTower: glyph("Communications", "Cell tower with signal arcs", [
+    "M196-276q-57-60-86.5-133T80-560q0-78 29.5-151T196-844l48 48q-48 48-72 110.5T148-560q0 63 24 125.5T244-324l-48 48Zm96-96q-39-39-59.5-88T212-560q0-51 20.5-100t59.5-88l48 48q-30 27-45 64t-15 76q0 36 15 73t45 67l-48 48ZM280-80l135-405q-16-14-25.5-33t-9.5-42q0-42 29-71t71-29q42 0 71 29t29 71q0 23-9.5 42T545-485L680-80h-80l-26-80H387l-27 80h-80Zm133-160h134l-67-200-67 200Zm255-132-48-48q30-27 45-64t15-76q0-36-15-73t-45-67l48-48q39 39 58 88t22 100q0 51-20.5 100T668-372Zm96 96-48-48q48-48 72-110.5T812-560q0-63-24-125.5T716-796l48-48q57 60 86.5 133T880-560q0 78-28 151t-88 133Z",
+  ], material),
+  roadSolid: glyph("Transportation", "Filled roadway with open lane marks", [
+    "M320-840h320l200 720H120ZM448-780h64v120h-64ZM444-580h72v140h-72ZM440-360h80v160h-80Z",
+  ], { ...original, evenodd: true }),
+  biohazard: glyph("Hazardous Materials", "Three-lobed biohazard mark", [
+    "M173.2 0c-1.8 0-3.5 .7-4.8 2C138.5 32.3 120 74 120 120c0 26.2 6 50.9 16.6 73c-22 2.4-43.8 9.1-64.2 20.5C37.9 232.8 13.3 262.4 .4 296c-.7 1.7-.5 3.7 .5 5.2c2.2 3.7 7.4 4.3 10.6 1.3C64.2 254.3 158 245.1 205 324s-8.1 153.1-77.6 173.2c-4.2 1.2-6.3 5.9-4.1 9.6c1 1.6 2.6 2.7 4.5 3c36.5 5.9 75.2 .1 109.7-19.2c20.4-11.4 37.4-26.5 50.5-43.8c13.1 17.3 30.1 32.4 50.5 43.8c34.5 19.3 73.3 25.2 109.7 19.2c1.9-.3 3.5-1.4 4.5-3c2.2-3.7 .1-8.4-4.1-9.6C379.1 477.1 324 403 371 324s140.7-69.8 193.5-21.4c3.2 2.9 8.4 2.3 10.6-1.3c1-1.6 1.1-3.5 .5-5.2c-12.9-33.6-37.5-63.2-72.1-82.5c-20.4-11.4-42.2-18.1-64.2-20.5C450 170.9 456 146.2 456 120c0-46-18.5-87.7-48.4-118c-1.3-1.3-3-2-4.8-2c-5 0-8.4 5.2-6.7 9.9C421.7 80.5 385.6 176 288 176S154.3 80.5 179.9 9.9c1.7-4.7-1.6-9.9-6.7-9.9zM240 272a48 48 0 1 1 96 0 48 48 0 1 1 -96 0zM181.7 417.6c6.3-11.8 9.8-25.1 8.6-39.8c-19.5-18-34-41.4-41.2-67.8c-12.5-8.1-26.2-11.8-40-12.4c-9-.4-18.1 .6-27.1 2.7c7.8 57.1 38.7 106.8 82.9 139.4c6.8-6.7 12.6-14.1 16.8-22.1zM288 64c-28.8 0-56.3 5.9-81.2 16.5c2 8.3 5 16.2 9 23.5c6.8 12.4 16.7 23.1 30.1 30.3c13.3-4.1 27.5-6.3 42.2-6.3s28.8 2.2 42.2 6.3c13.4-7.2 23.3-17.9 30.1-30.3c4-7.3 7-15.2 9-23.5C344.3 69.9 316.8 64 288 64zM426.9 310c-7.2 26.4-21.7 49.7-41.2 67.8c-1.2 14.7 2.2 28.1 8.6 39.8c4.3 8 10 15.4 16.8 22.1c44.3-32.6 75.2-82.3 82.9-139.4c-9-2.2-18.1-3.1-27.1-2.7c-13.8 .6-27.5 4.4-40 12.4z",
+  ], { viewBox: "0 -32 576 576", provenance: "Font Awesome Free 6.7.2", license: "CC-BY-4.0" }),
+  warningSolid: glyph("Hazardous Materials", "Exclamation mark cut from a filled triangle", [
+    "m40-120 440-760 440 760H40Zm440-120q17 0 28.5-11.5T520-280q0-17-11.5-28.5T480-320q-17 0-28.5 11.5T440-280q0 17 11.5 28.5T480-240Zm-40-120h80v-200h-80v200Z",
+  ], material),
+  waterDrop: glyph("Water Systems", "Filled water drop with a highlight", [
+    "M491-200q12-1 20.5-9.5T520-230q0-14-9-22.5t-23-7.5q-41 3-87-22.5T343-375q-2-11-10.5-18t-19.5-7q-14 0-23 10.5t-6 24.5q17 91 80 130t127 35ZM480-80q-137 0-228.5-94T160-408q0-100 79.5-217.5T480-880q161 137 240.5 254.5T800-408q0 140-91.5 234T480-80Z",
+  ], material),
+  briefcase: glyph("Equipment", "Filled briefcase", [
+    "M160-120q-33 0-56.5-23.5T80-200v-440q0-33 23.5-56.5T160-720h160v-80q0-33 23.5-56.5T400-880h160q33 0 56.5 23.5T640-800v80h160q33 0 56.5 23.5T880-640v440q0 33-23.5 56.5T800-120H160Zm240-600h160v-80H400v80Z",
+  ], material),
+  package: glyph("Supplies", "Filled package cube", [
+    "M440-91 160-252q-19-11-29.5-29T120-321v-318q0-22 10.5-40t29.5-29l280-161q19-11 40-11t40 11l280 161q19 11 29.5 29t10.5 40v318q0 22-10.5 40T800-252L520-91q-19 11-40 11t-40-11Zm0-366v274l40 23 40-23v-274l240-139v-42l-43-25-237 137-237-137-43 25v42l240 139Z",
+  ], material),
+  edit: glyph("Edit", "Pencil", [
+    "M120-120v-170l528-527q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L290-120H120Zm584-528 56-56-56-56-56 56 56 56Z",
+  ], material),
+  arrowForward: glyph("Open", "Arrow pointing right", [
+    "M647-440H160v-80h487L423-744l57-56 320 320-320 320-57-56 224-224Z",
+  ], material),
+  truckSolid: glyph("Resources", "Filled delivery truck", [
+    "M240-160q-50 0-85-35t-35-85H40v-440q0-33 23.5-56.5T120-800h560v160h120l120 160v200h-80q0 50-35 85t-85 35q-50 0-85-35t-35-85H360q0 50-35 85t-85 35Zm0-80q17 0 28.5-11.5T280-280q0-17-11.5-28.5T240-320q-17 0-28.5 11.5T200-280q0 17 11.5 28.5T240-240Zm480 0q17 0 28.5-11.5T760-280q0-17-11.5-28.5T720-320q-17 0-28.5 11.5T680-280q0 17 11.5 28.5T720-240Zm-40-200h170l-90-120h-80v120Z",
+  ], material),
+  calendarSolid: glyph("Operational periods", "Filled calendar with day marks", [
+    "M480-400q-17 0-28.5-11.5T440-440q0-17 11.5-28.5T480-480q17 0 28.5 11.5T520-440q0 17-11.5 28.5T480-400Zm-160 0q-17 0-28.5-11.5T280-440q0-17 11.5-28.5T320-480q17 0 28.5 11.5T360-440q0 17-11.5 28.5T320-400Zm320 0q-17 0-28.5-11.5T600-440q0-17 11.5-28.5T640-480q17 0 28.5 11.5T680-440q0 17-11.5 28.5T640-400ZM480-240q-17 0-28.5-11.5T440-280q0-17 11.5-28.5T480-320q17 0 28.5 11.5T520-280q0 17-11.5 28.5T480-240Zm-160 0q-17 0-28.5-11.5T280-280q0-17 11.5-28.5T320-320q17 0 28.5 11.5T360-280q0 17-11.5 28.5T320-240Zm320 0q-17 0-28.5-11.5T600-280q0-17 11.5-28.5T640-320q17 0 28.5 11.5T680-280q0 17-11.5 28.5T640-240ZM200-80q-33 0-56.5-23.5T120-160v-560q0-33 23.5-56.5T200-800h40v-80h80v80h320v-80h80v80h40q33 0 56.5 23.5T840-720v560q0 33-23.5 56.5T760-80H200Zm0-80h560v-400H200v400Z",
+  ], material),
+  groupSolid: glyph("Participants", "Two filled people", [
+    "M40-160v-112q0-34 17.5-62.5T104-378q62-31 126-46.5T360-440q66 0 130 15.5T616-378q29 15 46.5 43.5T680-272v112H40Zm720 0v-120q0-44-24.5-84.5T666-434q51 6 96 20.5t84 35.5q36 20 55 44.5t19 53.5v120H760ZM360-480q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 66-47 113t-113 47Zm400-160q0 66-47 113t-113 47q-11 0-28-2.5t-28-5.5q27-32 41.5-71t14.5-81q0-42-14.5-81T544-792q14-5 28-6.5t28-1.5q66 0 113 47t47 113Z",
+  ], material),
+  gridSolid: glyph("Boards", "Four filled board tiles", [
+    "M120-520v-320h320v320H120Zm0 400v-320h320v320H120Zm400-400v-320h320v320H520Zm0 400v-320h320v320H520Z",
+  ], material),
 } as const satisfies Readonly<Record<string, IconDefinition>>;
 
 export type IconName = keyof typeof iconRegistry;

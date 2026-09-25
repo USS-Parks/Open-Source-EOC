@@ -4785,3 +4785,60 @@ Receipts for its units follow here.
   changes in place.
 - **Evidence level:** document, unit and real-database.
 - **Rollback:** revert the commit.
+- **Commit:** `2c12d73`.
+
+## Readiness RD2 part one: the three frames, exactly
+
+- **What changed.** Every difference between the build and the three proofs
+  that is not the scenario's own data is closed, from a side-by-side reading
+  of each frame at full size:
+  - An icon bug: the icon root set no fill, so every open polyline (each
+    chevron, each check mark) was painted as a solid wedge. The root is now
+    unfilled; chevrons are thin as drawn.
+  - Solid glyphs where the frames draw them: the counts (a red alert, a green
+    shelter, a green check in the light frame), the overview's lifeline rows
+    (shield, fork and knife, cross, bolt, cell tower, road, biohazard, drop in
+    light; the quartered shield, house and warning triangle where the dark
+    frame differs), the priority work rows by what a request asks for, the
+    recent activity tiles and the dark rail (home, boards grid, truck,
+    calendar, people). Arrows for "Open workspace" and "View all".
+  - The frame-03 cards: the true biohazard mark, the cell tower, two drops,
+    each name on one line; the filter reads "All conditions"; the ESF
+    coordinator column names the liaison; the drawer lists components by
+    name, marks the inspection with a magnifier and "Update assessment" with
+    a pencil. The assessment details, the outlook and the recorded
+    relationships move under View history, and the jurisdiction's standing
+    lifeline status under Assessment history, so the default view is the
+    frame's while every function stays one step away.
+  - The rail shows the frames' twelve sections; "Show every section" in
+    Settings lists the rest, and the section in view is always listed.
+  - The dark theme carries the dark frame's compass mark and "People ·
+    Information · Action".
+  - The light map takes the frame's terrain look: green land shaded by
+    relief, a blue sea.
+  - A deployment serving the synthetic demonstration dataset marks every
+    screen "Demonstration · Synthetic data" beside FOUO, where the frames
+    note synthetic data; the desktop launcher sets it for a synthetic
+    profile.
+- **Defaults and deviations.** Where the frames contradict each other each
+  theme follows its own frame (the brand mark and line; the Food and
+  Hazardous Materials glyphs on the overview). Frame 03 draws a third mark,
+  a compass star with "California"; the light theme keeps frame 01's, and
+  the review names it as the one contradiction left. "Design preview" and
+  "Concept from Design PSPR" are notes on the frames, not product text.
+- **Sources.** Solid glyphs are Google Material Symbols path data (Apache-2.0)
+  and one Font Awesome Free glyph, the biohazard (CC BY 4.0, attributed);
+  both are recorded in the asset inventory and the setup's third-party
+  notices, and each registry entry names its source and license.
+- **Verification.** The fidelity harness passes 3 of 3, including a new test
+  that the rail shows exactly the twelve sections, lists every section when
+  asked, and keeps the section in view; the side-by-side images are
+  refreshed. The browser walks that read the moved panels (operational
+  relationships, operator screens, lifelines) now take the one extra step
+  and pass, with the D33 review, lifeline assessment, app end-to-end and
+  partner sharing walks (7 files, 22 tests). Browser walks turn on every
+  section through the shared launcher, as a viewer would. The web unit tests
+  pass 89 files and 660 tests; `pnpm check:static` passes; the desktop and
+  installer tests pass 27 of 27.
+- **Evidence level:** unit, browser and the fidelity captures.
+- **Rollback:** revert the commit.

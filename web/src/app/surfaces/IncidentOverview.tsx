@@ -6,7 +6,7 @@ import type {
   LifelineCurrentState,
   ResourceRequestSummary,
 } from "@openeoc/shared";
-import { Icon, LifelineIcon, type IconName } from "../../design/icons/index.js";
+import { Icon, type IconName } from "../../design/icons/index.js";
 import type { ThemeName } from "../../design/tokens.js";
 import type { ApiClient, CollectionRef } from "../api/client.js";
 import { usePolled } from "../data/hooks.js";
@@ -111,6 +111,18 @@ function Unavailable(props: { readonly children: ReactNode }) {
 
 // ---------------------------------------------------------------- lifelines
 
+/** The overview's solid lifeline glyphs, as each theme's canonical frame draws them. */
+const LIFELINE_GLYPHS: Readonly<Record<ThemeName, Readonly<Record<(typeof LIFELINE_KEYS)[number], IconName>>>> = {
+  light: {
+    safety_security: "shieldPlate", food_hydration_shelter: "restaurant", health_medical: "plusSolid", energy: "boltSolid",
+    communications: "cellTower", transportation: "roadSolid", hazardous_materials: "biohazard", water_systems: "waterDrop",
+  },
+  dark: {
+    safety_security: "shieldQuarters", food_hydration_shelter: "homeSolid", health_medical: "plusSolid", energy: "boltSolid",
+    communications: "cellTower", transportation: "roadSolid", hazardous_materials: "warningSolid", water_systems: "waterDrop",
+  },
+};
+
 function LifelinesCard(props: {
   readonly theme: ThemeName;
   readonly states: readonly LifelineCurrentState[] | null;
@@ -121,7 +133,7 @@ function LifelinesCard(props: {
 }) {
   const period = props.period ? { label: props.period.label, startsAt: props.period.startsAt, endsAt: props.period.endsAt } : null;
   const action = props.theme === "light"
-    ? <button type="button" className="eoc-overview-link" onClick={props.onOpenAll}>Open workspace<Icon name="chevronRight" size={16} decorative /></button>
+    ? <button type="button" className="eoc-overview-link" onClick={props.onOpenAll}>Open workspace<Icon name="arrowForward" size={16} decorative /></button>
     : <button type="button" className="eoc-overview-chevron" aria-label="Open the ESFs & Lifelines workspace" onClick={props.onOpenAll}><Icon name="chevronRight" size={20} decorative /></button>;
   return (
     <Card title="Community Lifelines" className="lifelines" action={action}>
@@ -135,7 +147,7 @@ function LifelinesCard(props: {
               <li key={key}>
                 <button type="button" onClick={() => props.onOpen(key)} data-condition={condition}
                   aria-label={`${view.label}: ${conditionLabel(condition)}. Open details`}>
-                  <LifelineIcon lifeline={key} size={32} decorative />
+                  <Icon name={LIFELINE_GLYPHS[props.theme][key]} size={32} decorative />
                   <span className="eoc-overview-lifeline-name">
                     <strong>{view.label}</strong>
                     {props.theme === "light" ? <small>{LIFELINE_SCOPES[key]}</small> : null}
@@ -225,8 +237,18 @@ export function priorityWork(
     || left.title.localeCompare(right.title));
 }
 
-function statusIcon(status: WorkItem["status"]) {
-  return <span className="eoc-overview-status-icon" data-status={status} aria-hidden="true">{status === "urgent" ? "!" : status === "in_progress" ? "!" : ""}</span>;
+/** The light frame marks only urgent work with "!"; the dark frame marks work in progress too. */
+function statusIcon(status: WorkItem["status"], theme: ThemeName) {
+  const mark = status === "urgent" || (status === "in_progress" && theme === "dark") ? "!" : "";
+  return <span className="eoc-overview-status-icon" data-status={status} aria-hidden="true">{mark}</span>;
+}
+
+/** The kind of work a request is, by what it asks for, for the light frame's row glyph. */
+export function workGlyph(item: Pick<WorkItem, "kind" | "title">): IconName {
+  if (item.kind === "task") return "tasks";
+  if (/road|route|access|debris|traffic|bridge|highway|closure/i.test(item.title)) return "roadSolid";
+  if (/generator|power|electric|substation|fuel/i.test(item.title)) return "briefcase";
+  return "package";
 }
 
 function PriorityWork(props: {
@@ -238,7 +260,7 @@ function PriorityWork(props: {
   readonly onViewAll: () => void;
 }) {
   const now = new Date();
-  const action = <button type="button" className="eoc-overview-link" onClick={props.onViewAll}>View all{props.theme === "light" ? <Icon name="chevronRight" size={16} decorative /> : null}</button>;
+  const action = <button type="button" className="eoc-overview-link" onClick={props.onViewAll}>View all{props.theme === "light" ? <Icon name="arrowForward" size={16} decorative /> : null}</button>;
   const shown = (props.items ?? []).slice(0, 3);
   return (
     <Card title="Priority work" className="work" action={props.theme === "light" ? action : null}>
@@ -253,7 +275,7 @@ function PriorityWork(props: {
                     <tr key={item.key} onClick={item.open}>
                       <td><button type="button" className="eoc-overview-row-open" onClick={item.open}>{item.number}</button></td>
                       <td>{item.title}</td>
-                      <td><span className="eoc-overview-work-status" data-status={item.status}>{statusIcon(item.status)}{STATUS_LABEL[item.status]}</span></td>
+                      <td><span className="eoc-overview-work-status" data-status={item.status}>{statusIcon(item.status, "dark")}{STATUS_LABEL[item.status]}</span></td>
                       <td>{item.owner}</td>
                       <td data-pressing={item.due !== null && props.periodEnds !== null && item.due <= props.periodEnds || undefined}>
                         {item.due ? `${dayLabel(item.due, now)} ${clock(item.due)}` : "No due time"}
@@ -270,12 +292,12 @@ function PriorityWork(props: {
                     <tr key={item.key} onClick={item.open}>
                       <td>
                         <span className="eoc-overview-work-request">
-                          <Icon name={item.kind === "task" ? "tasks" : "resources"} size={24} decorative />
+                          <Icon name={workGlyph(item)} size={24} decorative />
                           <span><button type="button" className="eoc-overview-row-open" onClick={item.open}>{item.title}</button><small>{item.detail}</small></span>
                         </span>
                       </td>
                       <td><strong>{item.owner}</strong><small>{item.ownerPerson}</small></td>
-                      <td><span className="eoc-overview-work-status" data-status={item.status}>{statusIcon(item.status)}<span><strong>{STATUS_LABEL[item.status]}</strong><small>{item.statusDetail}</small></span></span></td>
+                      <td><span className="eoc-overview-work-status" data-status={item.status}>{statusIcon(item.status, "light")}<span><strong>{STATUS_LABEL[item.status]}</strong><small>{item.statusDetail}</small></span></span></td>
                       <td>{item.due ? <><strong>{dayLabel(item.due, now)}</strong><strong>{clock(item.due)}</strong></> : "No due time"}</td>
                     </tr>
                   ))}
@@ -342,13 +364,16 @@ export function activityItem(entry: IncidentActivityEntry): ActivityItem {
   return { ...base, icon: "boards", title: created ? "Record added" : "Record updated", text: sentence(field(data, "summary") ?? field(data, "name") ?? field(data, "entry") ?? "Board record") };
 }
 
+/** The light frame draws a shelter and a road as solid glyphs. */
+const LIGHT_ACTIVITY_GLYPH: Partial<Record<IconName, IconName>> = { overview: "homeSolid", transportation: "roadSolid" };
+
 function RecentActivity(props: {
   readonly theme: ThemeName;
   readonly items: readonly ActivityItem[] | null;
   readonly error: string | null;
   readonly onViewAll: () => void;
 }) {
-  const action = <button type="button" className="eoc-overview-link" onClick={props.onViewAll}>View all{props.theme === "light" ? <Icon name="chevronRight" size={16} decorative /> : null}</button>;
+  const action = <button type="button" className="eoc-overview-link" onClick={props.onViewAll}>View all{props.theme === "light" ? <Icon name="arrowForward" size={16} decorative /> : null}</button>;
   const shown = (props.items ?? []).slice(0, 2);
   return (
     <Card title="Recent activity" className="activity" action={action}>
@@ -369,7 +394,7 @@ function RecentActivity(props: {
                 ) : (
                   <li key={item.id}>
                     <time dateTime={item.at.toISOString()}>{clock(item.at)}</time>
-                    <span className="eoc-overview-activity-icon"><Icon name={item.icon} size={20} decorative /></span>
+                    <span className="eoc-overview-activity-icon" data-icon={item.icon}><Icon name={LIGHT_ACTIVITY_GLYPH[item.icon] ?? item.icon} size={20} decorative /></span>
                     <span className="eoc-overview-activity-body">
                       <strong>{item.title}</strong>
                       <span>{item.text}</span>
@@ -465,13 +490,13 @@ export function IncidentOverview(props: IncidentOverviewProps) {
       {summary.error ? <p className="eoc-overview-alert" role="alert">The incident counts could not be loaded: {summary.error}</p> : null}
       {composeError ? <p className="eoc-overview-alert" role="alert">{composeError}</p> : null}
       <div className="eoc-overview-kpis">
-        <Kpi theme={props.theme} tone="critical" icon="alertCircle" label="Open requests" value={counts?.openRequests ?? null}
+        <Kpi theme={props.theme} tone="critical" icon="alertSolid" label="Open requests" value={counts?.openRequests ?? null}
           detail={`${counts?.urgentRequests ?? 0} urgent`} detailTone={counts?.urgentRequests ? "critical" : "muted"} onOpen={() => props.onOpenRequests()} />
-        <Kpi theme={props.theme} tone="success" icon="overview" label="Active shelters" value={counts?.activeShelters ?? null}
+        <Kpi theme={props.theme} tone="success" icon={props.theme === "light" ? "homeSolid" : "overview"} label="Active shelters" value={counts?.activeShelters ?? null}
           detail={`${counts?.shelterOccupants ?? 0} occupants`} onOpen={props.onOpenShelters} />
         <Kpi theme={props.theme} tone="info" icon="sitrep" label="Field reports" value={counts?.fieldReports ?? null}
           detail={`${counts?.unverifiedFieldReports ?? 0} unverified`} detailTone={counts?.unverifiedFieldReports ? "warning" : "muted"} onOpen={props.onOpenFieldReports} />
-        <Kpi theme={props.theme} tone="done" icon="tasks" label="Tasks due" value={counts ? counts.tasksDue ?? 0 : null}
+        <Kpi theme={props.theme} tone="done" icon={props.theme === "light" ? "checkCircleSolid" : "tasks"} label="Tasks due" value={counts ? counts.tasksDue ?? 0 : null}
           detail={period ? "This operational period" : "No operational period set"} onOpen={props.onOpenTasks} />
       </div>
       <div className="eoc-overview-middle">

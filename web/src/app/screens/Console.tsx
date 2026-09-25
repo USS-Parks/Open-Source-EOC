@@ -132,6 +132,28 @@ function railFor(administers: boolean, designsBoards: boolean, integrations: Rea
   return NAV.map((group) => ({ ...group, items: group.items.filter((item) => !hidden.has(item.key)) }));
 }
 
+/** The sections the canonical frames' rail shows; the others are listed when a viewer asks for every section. */
+const CORE_SECTIONS = new Set([
+  "overview", "map", "lifelines", "sitreps", "boards", "resources", "tasks", "fieldReports",
+  "operationalPeriods", "iap", "participants", "messages",
+]);
+const ALL_SECTIONS_KEY = "openeoc.navigation.allSections";
+
+/** The core rail, keeping the section in view so the viewer always sees where it is. */
+function coreRail(rail: readonly NavGroup[], active: string): readonly NavGroup[] {
+  return rail
+    .map((group) => ({ ...group, items: group.items.filter((item) => CORE_SECTIONS.has(item.key) || item.key === active) }))
+    .filter((group) => group.items.length > 0);
+}
+
+function readAllSections(): boolean {
+  try { return localStorage.getItem(ALL_SECTIONS_KEY) === "1"; } catch { return false; }
+}
+
+function saveAllSections(value: boolean): void {
+  try { localStorage.setItem(ALL_SECTIONS_KEY, value ? "1" : "0"); } catch { /* a viewer convenience only */ }
+}
+
 /**
  * The operations console: the map-first hybrid. The rail switches the
  * center surface, the right dock keeps the boards and notifications always
@@ -145,6 +167,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
   const workspace = useWorkspaceContext();
   const { surface, routeContext, navigate } = useSurface();
   const [recordContext, setRecordContext] = useState<BoardRecordContext | null>(null);
+  const [allSections, setAllSections] = useState(readAllSections);
   const receiveRecordContext = useCallback((next: BoardRecordContext | null) => setRecordContext(next), []);
   const viewingJurisdictionId = incident.selectedIncident?.jurisdictionId ?? jurisdictionId;
   const viewingMembership = session.me?.memberships.find(
@@ -331,22 +354,26 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
   const drawerless = ["lifelines", "lifeline", "esf", "dashboard", "overview", "briefing"].includes(surface.kind);
   const page = pageFor(surface, scope);
 
+  const rail = railFor(
+    Boolean(session.me?.isInstanceAdmin || session.me?.memberships.some((m) => m.role === "admin")),
+    // Board templates are published by an instance admin who also administers this jurisdiction.
+    Boolean(session.me?.isInstanceAdmin && viewingMembership?.role === "admin"),
+    enabledIntegrations,
+    Boolean(viewingMembership),
+  );
   return (
     <AppShell
       product="Open Source EOC"
-      organization="People · Information · Safer communities"
+      // Each theme's canonical frame carries its own line under the product name.
+      organization={props.theme === "dark" ? "People · Information · Action" : "People · Information · Safer communities"}
       context={<IncidentSwitcher />}
       periodLabel={workspace.selectedPeriodDisplay}
       positionLabel={session.me?.position?.title ?? "No acting position"}
       periodControl={<OperationalPeriodControl />}
       positionControl={<PositionControl />}
-      nav={railFor(
-        Boolean(session.me?.isInstanceAdmin || session.me?.memberships.some((m) => m.role === "admin")),
-        // Board templates are published by an instance admin who also administers this jurisdiction.
-        Boolean(session.me?.isInstanceAdmin && viewingMembership?.role === "admin"),
-        enabledIntegrations,
-        Boolean(viewingMembership),
-      )}
+      nav={allSections ? rail : coreRail(rail, sectionOf(surface))}
+      allSections={allSections}
+      onAllSections={(value) => { setAllSections(value); saveAllSections(value); }}
       activeNav={sectionOf(surface)}
       onNavigate={(key) => navigateInContext(sectionForNav(key))}
       userName={session.me?.person.displayName ?? ""}

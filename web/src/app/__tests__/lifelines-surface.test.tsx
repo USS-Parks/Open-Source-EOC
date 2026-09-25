@@ -168,9 +168,12 @@ describe("Community Lifelines overview", () => {
       />,
     );
     const drawer = await screen.findByRole("complementary", { name: "Energy" });
-    expect(within(drawer).getByText("North district")).toBeTruthy();
-    expect(within(drawer).getByText("Confirmed · 1 evidence item")).toBeTruthy();
+    // The drawer lists components by name, as the frame does; the geography rides on each one.
+    expect(within(drawer).getByTitle(/North district/)).toBeTruthy();
     expect(within(drawer).getByRole("heading", { name: "Linked actions (1)" })).toBeTruthy();
+    // The assessment's particulars sit with its history.
+    fireEvent.click(within(drawer).getByRole("button", { name: "View history" }));
+    expect(await within(drawer).findByText("Confirmed · 1 evidence item")).toBeTruthy();
 
     const results = await axe.run(container, { rules: { region: { enabled: false } } });
     expect(results.violations).toEqual([]);
@@ -232,10 +235,10 @@ describe("Community Lifelines overview", () => {
     const { container, rerender } = render(surface({}));
     await waitFor(() => expect(container.querySelectorAll(".eoc-lifeline-card")).toHaveLength(8));
 
-    fireEvent.change(screen.getByLabelText("Condition"), { target: { value: "unstable" } });
+    fireEvent.change(screen.getByLabelText("All conditions"), { target: { value: "unstable" } });
     expect([...container.querySelectorAll<HTMLElement>(".eoc-lifeline-card")].map((card) => card.dataset.lifeline))
       .toEqual(["energy", "transportation"]);
-    fireEvent.change(screen.getByLabelText("Condition"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("All conditions"), { target: { value: "" } });
     fireEvent.change(screen.getByLabelText("Incident area"), { target: { value: "Arcata" } });
     expect(container.querySelectorAll(".eoc-lifeline-card")).toHaveLength(1);
     fireEvent.change(screen.getByLabelText("Incident area"), { target: { value: "" } });

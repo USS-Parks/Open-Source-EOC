@@ -334,10 +334,10 @@ export function terrainSpecs(
         layout: { visibility: "none" },
         paint: {
           // Light shades in a muted green so relief reads as forested terrain.
-          "hillshade-exaggeration": dark ? 0.5 : 0.45,
-          "hillshade-shadow-color": dark ? "#000000" : "#4d6b52",
-          "hillshade-highlight-color": dark ? "#6b7280" : "#f4f7ef",
-          "hillshade-accent-color": dark ? "#000000" : "#5b7a5f",
+          "hillshade-exaggeration": dark ? 0.5 : 0.55,
+          "hillshade-shadow-color": dark ? "#000000" : "#3f6440",
+          "hillshade-highlight-color": dark ? "#6b7280" : "#eef5e2",
+          "hillshade-accent-color": dark ? "#000000" : "#557a4f",
         },
       },
     ],

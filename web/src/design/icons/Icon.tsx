@@ -29,7 +29,7 @@ function primitiveElement(primitive: IconPrimitive, key: number) {
 
   switch (primitive.element) {
     case "path":
-      return <path key={key} d={primitive.d} {...common} />;
+      return <path key={key} d={primitive.d} fillRule={primitive.fillRule} {...common} />;
     case "circle":
       return <circle key={key} cx={primitive.cx} cy={primitive.cy} r={primitive.r} {...common} />;
     case "line":
@@ -63,6 +63,7 @@ export function Icon(props: IconProps) {
   const label = decorative ? undefined : props.label.trim();
   if (!decorative && !label) throw new Error("Meaningful icons require a non-empty label");
 
+  // The root is unfilled: an open polyline (a chevron, a check) stays a line, never a filled wedge.
   return (
     <svg
       aria-hidden={decorative ? true : undefined}
@@ -72,6 +73,7 @@ export function Icon(props: IconProps) {
       data-disabled={props.disabled || undefined}
       data-icon={props.name}
       data-selected={props.selected || undefined}
+      fill="none"
       focusable="false"
       height={size}
       role={decorative ? undefined : "img"}
@@ -88,7 +90,7 @@ export function Icon(props: IconProps) {
         ...props.style,
         opacity: props.disabled ? 0.38 : props.style?.opacity,
       }}
-      viewBox="0 0 24 24"
+      viewBox={definition.viewBox ?? "0 0 24 24"}
       width={size}
       xmlns="http://www.w3.org/2000/svg"
     >

@@ -9,6 +9,8 @@ export function SettingsDialog(props: {
   readonly onTheme: (theme: ThemeName) => void;
   readonly compactNavigation: boolean;
   readonly onCompactNavigation: (compact: boolean) => void;
+  readonly allSections?: boolean;
+  readonly onAllSections?: (value: boolean) => void;
   readonly onOpenAdministration?: (() => void) | undefined;
   readonly onClose: () => void;
 }) {
@@ -33,6 +35,17 @@ export function SettingsDialog(props: {
             Compact navigation
           </label>
           <p>Shows the section rail as icons only. The setting is saved with this incident's workspace.</p>
+          {props.onAllSections ? (
+            <>
+              <label>
+                <input type="checkbox" checked={props.allSections ?? false}
+                  onChange={(event) => props.onAllSections!(event.target.checked)} />
+                Show every section
+              </label>
+              <p>The rail lists the core sections. Turn this on to list every section as well: chronology,
+                dashboards, staffing, forms, the JIC, contacts, datasets and the rest. Saved on this computer.</p>
+            </>
+          ) : null}
         </fieldset>
         {props.onOpenAdministration ? (
           <fieldset>

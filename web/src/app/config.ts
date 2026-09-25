@@ -49,6 +49,8 @@ interface RuntimeConfig {
   readonly OPENEOC_TERRAIN_TILE_URL?: string;
   readonly OPENEOC_TERRAIN_ENCODING?: string;
   readonly OPENEOC_TERRAIN_ATTRIBUTION?: string;
+  /** "1" when the deployment serves a synthetic demonstration dataset. */
+  readonly OPENEOC_SYNTHETIC_DATA?: string;
 }
 
 export interface StreetBasemapSettings {
@@ -60,6 +62,11 @@ export interface StreetBasemapSettings {
 
 function runtime(): RuntimeConfig {
   return (globalThis as unknown as { OPENEOC?: RuntimeConfig }).OPENEOC ?? {};
+}
+
+/** Whether this deployment serves a synthetic demonstration dataset, which every screen then marks. */
+export function syntheticData(): boolean {
+  return runtime().OPENEOC_SYNTHETIC_DATA === "1";
 }
 
 /** A deployment's own basemap style URL, if configured. */

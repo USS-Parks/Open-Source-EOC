@@ -64,13 +64,15 @@
 .eoc-overview-kpi:hover { border-color: var(--eoc-brand-teal); }
 .eoc-overview-kpi-icon { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 8px; }
 [data-theme="dark"] .eoc-overview-kpi-icon { width: 48px; height: 48px; border-radius: 50%; }
-.eoc-overview-kpi[data-tone="critical"] .eoc-overview-kpi-icon { color: #fff; background: #fce4e6; }
-.eoc-overview-kpi[data-tone="critical"] .eoc-overview-kpi-icon svg { padding: 4px; color: #fff; background: #d0242f; border-radius: 50%; box-sizing: content-box; stroke-width: 2.4; }
-.eoc-overview-kpi[data-tone="success"] .eoc-overview-kpi-icon { color: #2e7d4a; background: #e1f2e6; }
-.eoc-overview-kpi[data-tone="info"] .eoc-overview-kpi-icon { color: #1d5f8c; background: #dcedf8; }
-.eoc-overview-kpi[data-tone="done"] .eoc-overview-kpi-icon { color: #2e7d4a; background: #e1f2e6; }
-[data-theme="dark"] .eoc-overview-kpi[data-tone="critical"] .eoc-overview-kpi-icon { background: #3a2230; }
-[data-theme="dark"] .eoc-overview-kpi[data-tone="critical"] .eoc-overview-kpi-icon svg { color: #3a1d24; background: #f25c5c; }
+.eoc-overview-kpi-icon svg { width: 30px; height: 30px; }
+.eoc-overview-kpi[data-tone="critical"] .eoc-overview-kpi-icon { color: #d0242f; background: #fce4e6; }
+.eoc-overview-kpi[data-tone="success"] .eoc-overview-kpi-icon { color: #1f6b3a; background: #e1f2e6; }
+.eoc-overview-kpi[data-tone="info"] .eoc-overview-kpi-icon { color: #1d4f7a; background: #dcedf8; }
+.eoc-overview-kpi[data-tone="info"] .eoc-overview-kpi-icon svg { width: 26px; height: 26px; }
+.eoc-overview-kpi[data-tone="done"] .eoc-overview-kpi-icon { color: #1f6b3a; background: #e1f2e6; }
+[data-theme="dark"] .eoc-overview-kpi-icon svg { width: 26px; height: 26px; }
+[data-theme="dark"] .eoc-overview-kpi[data-tone="critical"] .eoc-overview-kpi-icon { color: #f25c5c; background: #3a2230; }
+[data-theme="dark"] .eoc-overview-kpi[data-tone="critical"] .eoc-overview-kpi-icon svg { width: 30px; height: 30px; }
 [data-theme="dark"] .eoc-overview-kpi[data-tone="success"] .eoc-overview-kpi-icon { color: #63d3a0; background: #1b3a37; }
 [data-theme="dark"] .eoc-overview-kpi[data-tone="info"] .eoc-overview-kpi-icon { color: #c7d5e4; background: #28394e; }
 [data-theme="dark"] .eoc-overview-kpi[data-tone="done"] .eoc-overview-kpi-icon { color: #63d3a0; background: #1b3a37; }
@@ -213,6 +215,9 @@
 .eoc-overview-activity-body { min-width: 0; display: grid; gap: 2px; font-size: 13px; }
 .eoc-overview-activity.is-dark .eoc-overview-activity-body strong { color: #9fd0ff; font-weight: 600; }
 .eoc-overview-activity.is-dark .eoc-overview-activity-body time { color: var(--ov-muted); }
+/* Each entry's text keeps to two lines, as the dark frame shows it; the full text opens from View all. */
+.eoc-overview-activity.is-dark .eoc-overview-activity-body > span:last-child { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.eoc-overview-activity.is-dark li { padding: 8px 0; }
 .eoc-overview-activity-author { display: grid; gap: 2px; padding-top: 10px; font-size: 13px; }
 .eoc-overview-activity-author strong { color: var(--ov-title); font-weight: 600; }
 .eoc-overview-activity-author small { color: var(--ov-muted); font-size: 11.5px; }
@@ -223,6 +228,7 @@
 .eoc-overview-activity.is-light li::after { content: ""; position: absolute; top: 8px; left: 48px; width: 7px; height: 7px; background: #c6ced8; border-radius: 50%; }
 .eoc-overview-activity.is-light time { padding-top: 2px; color: var(--ov-muted); font-size: 12px; }
 .eoc-overview-activity.is-light .eoc-overview-activity-icon { width: 36px; height: 36px; margin-left: 10px; display: grid; place-items: center; color: #2e7d4a; background: #e1f2e6; border-radius: 6px; }
+.eoc-overview-activity.is-light .eoc-overview-activity-icon[data-icon="transportation"] { color: #12324a; background: #dcedf8; }
 .eoc-overview-activity.is-light .eoc-overview-activity-body strong { color: var(--ov-title); font-size: 14px; font-weight: 600; }
 .eoc-overview-activity.is-light .eoc-overview-activity-body small { color: var(--ov-muted); font-size: 12px; }
 

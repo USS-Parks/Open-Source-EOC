@@ -102,6 +102,8 @@
 
 .eoc-shell-brand-mark { width: 42px; height: 42px; flex: none; color: #e9f4fb; }
 .eoc-shell-brand-mark .eoc-shell-brand-core { fill: #6cc8f2; stroke: none; }
+.eoc-shell-brand-mark .eoc-shell-brand-accent { stroke: #3fa9f5; }
+.eoc-shell-brand-mark .eoc-shell-brand-accent-fill { fill: #8ccaf7; }
 .eoc-shell-brand > span { min-width: 0; display: grid; }
 .eoc-shell-brand strong { color: #fff; font-size: 21.5px; font-weight: 700; line-height: 1.15; letter-spacing: -0.005em; white-space: nowrap; }
 [data-theme="dark"] .eoc-shell-brand strong { font-size: 20px; font-weight: 600; }
@@ -306,8 +308,12 @@
 .eoc-shell-page-side { flex: none; display: grid; justify-items: end; gap: 12px; }
 .eoc-shell-page-actions { display: flex; align-items: center; gap: 10px; }
 .eoc-shell-page-actions-slot { display: contents; }
+.eoc-shell-markings { display: flex; align-items: center; gap: 14px; }
+[data-theme="light"] .eoc-shell-markings { display: none; }
 .eoc-shell-marking { padding: 3px 9px; color: #ff9a92; border: 1px solid #e5484d; border-radius: 3px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; }
-[data-theme="light"] .eoc-shell-marking { display: none; }
+.eoc-shell-synthetic { color: var(--eoc-text-muted); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+.eoc-shell-page-footer .eoc-shell-synthetic { font-size: 12px; }
+.eoc-shell-page-footer .eoc-shell-synthetic::after { content: "|"; margin: 0 12px; }
 
 /* Page actions share one button language: teal primary, outlined secondary. */
 .eoc-shell-page-actions button,

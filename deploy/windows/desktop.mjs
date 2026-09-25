@@ -598,7 +598,10 @@ async function serveProfile(args) {
     void reply.send({ status: "stopping" });
     globalThis.setImmediate(() => void close().then(() => process.exit(0)));
   });
-  registerStaticHost(app, { distRoot, publicRoot, runtimeConfig: await desktopRuntimeConfig(publicRoot) });
+  const runtimeConfig = await desktopRuntimeConfig(publicRoot);
+  // A synthetic profile says so on every screen, beside the handling marking.
+  if (config.synthetic) runtimeConfig.OPENEOC_SYNTHETIC_DATA = "1";
+  registerStaticHost(app, { distRoot, publicRoot, runtimeConfig });
   await app.listen({ host: "127.0.0.1", port: config.httpPort });
   scheduler.start();
   console.log(`DESKTOP_READY profile=${profile} url=http://127.0.0.1:${config.httpPort}`);

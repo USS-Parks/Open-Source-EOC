@@ -38,6 +38,8 @@ const VIEWPORT = { width: 1586, height: 992 };
 function runtimeConfig(): Record<string, string> {
   const has = (name: string) => existsSync(join(process.cwd(), "web", "public", "basemap", name));
   return {
+    // The reference scenario is synthetic, as a demo profile's is.
+    OPENEOC_SYNTHETIC_DATA: "1",
     ...(has("california.pmtiles") ? { OPENEOC_BASEMAP_PMTILES_URL: "/app/basemap/california.pmtiles" } : {}),
     ...(has("north-coast-imagery.pmtiles") ? {
       OPENEOC_IMAGERY_TILE_URL: "pmtiles:///app/basemap/north-coast-imagery.pmtiles",
@@ -119,7 +121,7 @@ beforeAll(async () => {
   baseUrl = await listen(app);
   mkdirSync(OUT, { recursive: true });
 
-  browser = await launchBrowser();
+  browser = await launchBrowser({ coreRail: true });
   context = await browser.newContext({ viewport: VIEWPORT, timezoneId: NORTH_COAST_TIME_ZONE, locale: "en-US" });
   await context.addInitScript(`globalThis.OPENEOC = ${JSON.stringify(runtimeConfig())};`);
   page = await context.newPage();
@@ -168,4 +170,26 @@ describe("design fidelity captures of the North Coast Storm scenario", () => {
     }
     expect(pageErrors).toEqual([]);
   }, 240_000);
+
+  it("shows the frames' twelve sections in the rail, and every section when the viewer asks", async () => {
+    const rail = page.getByRole("navigation", { name: "Sections" });
+    const sections = () => rail.locator(".eoc-shell-nav-scroll button").allInnerTexts();
+    await openOverview();
+    expect(await sections()).toEqual([
+      "Overview", "Map", "ESFs & Lifelines", "SITREP", "Boards", "Resources", "Tasks", "Field Reports",
+      "Operational Periods", "IAP", "Participants", "Messages",
+    ]);
+    await rail.getByRole("button", { name: "Settings" }).click();
+    await page.getByLabel("Show every section").check();
+    await page.keyboard.press("Escape");
+    await rail.getByRole("button", { name: "Chronology", exact: true }).click();
+    await page.getByRole("heading", { level: 1, name: "Chronology" }).waitFor();
+    await rail.getByRole("button", { name: "Settings" }).click();
+    await page.getByLabel("Show every section").uncheck();
+    await page.keyboard.press("Escape");
+    // The section in view stays listed, so the viewer always sees where it is.
+    expect(await sections()).toContain("Chronology");
+    await openOverview();
+    expect(await sections()).not.toContain("Chronology");
+  }, 120_000);
 });

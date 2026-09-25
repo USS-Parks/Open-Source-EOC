@@ -32,40 +32,40 @@ what the region shows.
 
 | Region | Result | Remaining difference and reason |
 |---|---|---|
-| Brand block | Matches | The build's mark is its own ring and core, as the frame draws it. |
+| Brand block | Matches | The ring with four knobs around a filled core, and "People · Information · Safer communities". |
 | Command bar | Matches | Incident, period, position, "Synced HH:MM", bell with 3 and the account chip are live controls. The avatar shows initials, not a photograph (no photographs are stored); the name is the scenario's Jordan Lee, not "J. Carter"; the position chip names the held position, "Planning Section Chief", where the frame abbreviates. |
-| Rail | Matches | Every destination stays, in the frames' groups and item style (decision 3), so the rail is longer and scrolls; Settings, Help and the theme menu sit at its foot. |
+| Rail | Matches | The frame's twelve sections in its four groups, with Settings, Help and the theme menu at the foot. Every other section is listed when the viewer turns on "Show every section" in Settings, and the section in view is always listed. |
 | Page header | Matches | Title, "Incident area · 7 participating organizations · Updated HH:MM", "Create report" and "Briefing view". |
-| Counts | Matches | Open requests 24 with 6 urgent, active shelters 8 with 312 occupants, field reports 46 with 9 unverified, tasks due 12. |
-| Common operating picture | Matches | Checklist with More layers, place search, locate, layers, full screen, legend strip, north arrow, miles and kilometres scale, the incident callout and the shaded terrain basemap. The seeded incident area is the operational area near the coast, where the frame's illustrated extent reaches far over the ocean; symbols sit at real locations, so some cover place names the frame shows clear; the basemap is the OpenStreetMap street style under green relief, not a painted terrain map; the attribution button stays in the corner for the map's licences. |
-| Community Lifelines | Matches | Eight rows with scope lines and conditions ("Disrupted" for unstable), each opening its lifeline. |
-| Priority work | Matches with a data difference | The three most pressing items are all urgent requests in the scenario, where the frame shows one urgent, one in progress and one not started; one icon per kind where the frame varies them. |
-| Recent activity | Matches with a data difference | The two newest items (the shelter update and the field report) where the frame shows a shelter update and a road closure. |
-| Frame annotations | Not shipped | "DESIGN PREVIEW · SYNTHETIC DATA" and "Concept from Design PSPR" are notes on the frame (decision 4); FOUO stays in the footer. |
+| Counts | Matches | Solid glyphs on tinted tiles as the frame draws them (a red alert, a green shelter, the report page, a green check), thin chevrons; open requests 24 with 6 urgent, active shelters 8 with 312 occupants, field reports 46 with 9 unverified, tasks due 12. |
+| Common operating picture | Matches with a data difference | Checklist with More layers, place search, locate, layers, full screen, legend strip, north arrow, miles and kilometres scale, the incident callout, and the frame's terrain look: green land shaded by elevation relief and a blue sea. The seeded incident area is the operational area near the coast, where the frame's illustrated extent reaches far over the ocean; symbols sit at real locations, so some cover place names the frame shows clear; the attribution button stays in the corner for the map's licences. |
+| Community Lifelines | Matches | Eight rows with the frame's solid glyphs (shield, fork and knife, cross, bolt, cell tower, road, biohazard, water drop), scope lines, a divider before the condition, and thin chevrons; "Open workspace" with an arrow. |
+| Priority work | Matches with a data difference | Solid glyphs by what a request asks for (a road, equipment, supplies), the red alert for urgent and plain dots otherwise, "View all" with an arrow. The three most pressing items are all urgent requests in the scenario, where the frame shows one urgent, one in progress and one not started. |
+| Recent activity | Matches with a data difference | The timeline with solid glyphs on tinted tiles. The two newest items (the shelter update and the field report) where the frame shows a shelter update and a road closure. |
+| Footer | Matches | "Demonstration · Synthetic data \| FOUO" when the deployment serves the synthetic demonstration dataset, and "FOUO" otherwise. The frame's "Design preview" and "Concept from Design PSPR" are notes on the frame, not product text (decision 4). |
 
 ### Frame 02: incident overview, dark
 
 | Region | Result | Remaining difference and reason |
 |---|---|---|
-| Brand block | Differs | The frame draws a compass star; the build uses the light frame's ring in both themes, since the two frames disagree. |
-| Command bar and rail | Matches | As frame 01, in the dark frame's colors and larger type; rail icons are outlined where the dark frame fills them. |
-| Page header and FOUO | Matches | FOUO sits above the actions, as the dark frame places it. |
-| Counts | Matches | As frame 01. |
+| Brand block | Matches | The dark frame's compass needle in a two-tone ring, and "People · Information · Action". Each theme carries its own frame's mark and line. |
+| Command bar and rail | Matches | As frame 01, in the dark frame's colors and larger type, with its solid rail glyphs for Overview, Boards, Resources, Operational Periods and Participants. |
+| Page header and markings | Matches | FOUO above the actions with "Demonstration · Synthetic data" beside it on the synthetic dataset, as the dark frame places its note. |
+| Counts | Matches | The dark frame's glyphs in dark circles: the solid red alert, the outlined shelter, report page and task check. |
 | Common operating picture | Matches | NAIP imagery under the title band, dashed cyan boundary, closure lines and points, open and planned shelters, key facilities, the command post with "ICP", cameras, the helibase, the legend panel, the layer list (Roads, Incidents, Facilities, Shelters, Weather, Terrain; weather off as in the frame), zoom, north arrow and miles scale. The card frames the whole seeded area, a little wider than the frame's view; facilities close together at this zoom give way by rank (command post first), so the frame's spread of symbols near Eureka is not all visible until one zooms in. |
-| Community Lifelines | Matches | Rows with dot, condition and the impact line under it. |
+| Community Lifelines | Matches | Rows with the dark frame's solid glyphs (the quartered shield, the house, the cross, the bolt, the cell tower, the road, the warning triangle, the water drop), dot, condition and the impact line under it. |
 | Priority work and recent activity | Matches with data differences | As frame 01. The frame's recent message is posted in the scenario as the frame shows it, by R. Martinez of Caltrans District 1 at 08:51 in the incident-wide "Road status" thread, and reads in the incident's activity. It is the third item there, after the 09:28 shelter update and the 09:18 field report: the two overview frames show different recent pairs, so the build shows the two newest. |
 
 ### Frame 03: ESFs & Lifelines with Energy open, light
 
 | Region | Result | Remaining difference and reason |
 |---|---|---|
-| Shell | Matches | The rail follows the overview frames' width and type, where this frame's rail is narrower. |
+| Shell | Differs in one place | The rail follows the overview frames' width and type, where this frame's rail is narrower. The brand block keeps the light frames' ring and line: this frame draws a third mark, a compass star with "California", and the three frames cannot all be matched by one light theme. |
 | Header actions | Matches | "Compare periods" and "New assessment". |
 | Tabs | Matches | Community Lifelines, ESF coordination, Dependencies, Assessment history, each its own route. |
-| Filters | Matches | Incident area, current period, condition. The third filter is labelled "Condition" where the frame's label reads "All conditions", because the label stays true once a condition is chosen. |
-| Lifeline cards | Matches | Tinted by condition, pill, impact line, source and assessed time; Energy selected. "Food, Hydration, Shelter" wraps between words at this width (no break inside a word). Source names are the scenario's organizations ("Cal OES" where the frame writes "CA OES – Law Enforcement"). The Hazardous Materials icon is the registry's drawing, not a biohazard mark. |
-| Related ESF coordination | Matches | Function, activation, coordinator and open missions, Energy's function first. The coordinator column names the coordinating organization where the frame names liaison titles. |
-| Drawer | Matches | Icon, condition, "Assessed 09:35 PDT · Utility liaison", the impact, affected components with icons, the stabilization objective, the next update, "Linked actions (2)", "Update assessment" and "View history". The Energy liaison's actions link the county's generator and substation crew requests and name their owners, "Logistics Section Chief" (the frame abbreviates it "Logistics") and "Utility liaison", each with its status and a chevron that opens the linked request. The drawer also shows the assessment details under a disclosure and the operational relationships below, which the frame does not show. |
+| Filters | Matches | "Incident area", "Current period" and "All conditions". |
+| Lifeline cards | Matches | Tinted by condition, the frame's line glyphs (the true biohazard mark, the cell tower, two water drops), each name on one line, pill, impact line, source and assessed time; Energy selected. Source names are the scenario's organizations ("Cal OES" where the frame writes "CA OES – Law Enforcement"). |
+| Related ESF coordination | Matches | Function, activation, coordinator and open missions, Energy's function first; the coordinator column names the coordinating liaison, "Utility liaison" and "Transport liaison", with its organization on hover. The jurisdiction's standing lifeline status, which the frame does not show, sits under Assessment history. |
+| Drawer | Matches | Icon, condition, "Assessed 09:35 PDT · Utility liaison", the impact, affected components by name with their icons (the geography on hover), the stabilization objective, the next update, "Linked actions (2)" with a page for the generator request and a magnifier for the inspection, statuses and chevrons that open the linked requests, "Update assessment" with a pencil and "View history". The owners read "Logistics Section Chief" (the frame abbreviates it "Logistics") and "Utility liaison". The assessment details, the outlook and the recorded relationships sit under View history. |
 
 ## What each control does
 

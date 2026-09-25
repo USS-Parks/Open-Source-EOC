@@ -223,6 +223,10 @@ describe("map relationship browser journey", () => {
       response.url().includes(`/api/v1/boards/${boardId}/views/`) && response.status() === 200);
     await featureLinks.getByRole("button", { name: "Open linked Lifeline", exact: true }).click();
     expect(new URL(page.url()).hash).toContain("#/lifeline/transportation");
+    // A lifeline's recorded links sit with its assessment history.
+    const viewHistory = () => page.getByRole("complementary", { name: "Transportation" })
+      .getByRole("button", { name: "View history", exact: true }).click();
+    await viewHistory();
     await boardRecords;
     const relationshipPanel = page.getByRole("region", { name: "Operational relationships" });
     await relationshipPanel.locator('li[data-target-kind="map_feature"] > span')
@@ -265,6 +269,7 @@ describe("map relationship browser journey", () => {
       new URL(response.url()).pathname.endsWith(`/api/v1/incidents/${incidentId}/operational-relationships`)
       && response.request().method() === "GET" && response.status() === 200);
     await page.reload({ waitUntil: "load" });
+    await viewHistory();
     await refreshedRelationships;
     const refreshedPanel = page.getByRole("region", { name: "Operational relationships" });
     const iapRelationship = refreshedPanel.locator('li[data-target-kind="iap_objective"]');
@@ -278,6 +283,7 @@ describe("map relationship browser journey", () => {
     expect(new URL(page.url()).hash).toContain(`#/iap/${iapId}`);
     await page.getByRole("region", { name: "Stored IAP forms" }).waitFor();
     await page.goBack({ waitUntil: "load" });
+    await viewHistory();
     const returnedPanel = page.getByRole("region", { name: "Operational relationships" });
     await returnedPanel.waitFor();
     await returnedPanel.getByRole("button", { name: "Open source record", exact: true }).click();
@@ -287,6 +293,7 @@ describe("map relationship browser journey", () => {
     await selectedRecord.waitFor();
     await selectedRecord.getByText("River Crossing Shelter", { exact: true }).waitFor();
     await page.goBack({ waitUntil: "load" });
+    await viewHistory();
     await page.getByRole("region", { name: "Operational relationships" }).waitFor();
 
     const returnedItems = page.waitForResponse((response) =>

@@ -107,8 +107,9 @@ describe("screens for existing engines", () => {
     await acting.selectOption(commanderId);
     await positionRefresh;
 
-    // Standing lifeline status, outside the incident's assessments.
+    // Standing lifeline status, outside the incident's assessments, kept with the assessment history.
     await page.getByRole("button", { name: "ESFs & Lifelines", exact: true }).click();
+    await page.getByRole("button", { name: "Assessment history", exact: true }).click();
     const standing = page.getByRole("list", { name: "Standing lifeline status" });
     await standing.waitFor();
     await page.getByLabel("Lifeline", { exact: true }).selectOption("energy");

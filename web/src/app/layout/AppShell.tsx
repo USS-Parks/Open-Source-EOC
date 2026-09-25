@@ -7,8 +7,9 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { Icon, destinationIconByKey, type DestinationIconKey } from "../../design/icons/index.js";
+import { Icon, destinationIconByKey, type DestinationIconKey, type IconName } from "../../design/icons/index.js";
 import type { ThemeName } from "../../design/tokens.js";
+import { syntheticData } from "../config.js";
 import { BrandMark } from "./BrandMark.js";
 import { PageChromeContext } from "./page-chrome.js";
 import { HelpDialog, SettingsDialog } from "./ShellDialogs.js";
@@ -58,6 +59,9 @@ export interface AppShellProps {
   readonly periodControl?: ReactNode;
   readonly positionControl?: ReactNode;
   readonly nav: readonly NavGroup[];
+  /** Whether the rail lists every section rather than the core ones; a viewer setting. */
+  readonly allSections?: boolean;
+  readonly onAllSections?: (value: boolean) => void;
   readonly activeNav: string;
   readonly onNavigate: (key: string) => void;
   readonly userName: string;
@@ -76,6 +80,11 @@ export interface AppShellProps {
   readonly rightDock: ReactNode;
   readonly children: ReactNode;
 }
+
+/** The dark frame draws these rail entries as solid glyphs. */
+const DARK_RAIL_GLYPHS: Partial<Record<DestinationIconKey, IconName>> = {
+  overview: "homeSolid", boards: "gridSolid", resources: "truckSolid", operationalPeriods: "calendarSolid", participants: "groupSolid",
+};
 
 const MIN_DRAWER = 280;
 const MAX_DRAWER = 520;
@@ -360,6 +369,8 @@ export function AppShell(props: AppShellProps) {
     });
   }
 
+  const synthetic = syntheticData();
+
   function chooseTheme(theme: ThemeName) {
     if (theme !== props.theme) props.onToggleTheme();
   }
@@ -375,7 +386,7 @@ export function AppShell(props: AppShellProps) {
           <span>All sections</span>
         </button>
         <div className="eoc-shell-brand">
-          <BrandMark />
+          <BrandMark variant={props.theme === "dark" ? "compass" : "ring"} />
           <span><strong>{props.product}</strong><small>{props.organization}</small></span>
         </div>
         <div className="eoc-shell-context">{props.context}</div>
@@ -414,7 +425,7 @@ export function AppShell(props: AppShellProps) {
                   const active = item.key === props.activeNav;
                   return (
                     <button key={item.key} type="button" aria-current={active ? "page" : undefined} aria-label={compactNav ? item.label : undefined} onClick={() => { props.onNavigate(item.key); closeNavigation(viewport === "narrow" ? "workspace" : null); }}>
-                      <Icon name={destinationIconByKey[item.icon]} size={24} selected={active} decorative />
+                      <Icon name={(props.theme === "dark" ? DARK_RAIL_GLYPHS[item.icon] : undefined) ?? destinationIconByKey[item.icon]} size={24} selected={active} decorative />
                       <span>{item.label}</span>
                     </button>
                   );
@@ -440,7 +451,10 @@ export function AppShell(props: AppShellProps) {
               <p><span ref={setSubtitleSlot} className="eoc-shell-page-subtitle-slot" /><span className="eoc-shell-page-scope">{props.page.scope}</span></p>
             </div>
             <div className="eoc-shell-page-side">
-              <span className="eoc-shell-marking" aria-label="Handling marking: FOUO">FOUO</span>
+              <div className="eoc-shell-markings">
+                <span className="eoc-shell-marking" aria-label="Handling marking: FOUO">FOUO</span>
+                {synthetic ? <span className="eoc-shell-synthetic is-header">Demonstration · Synthetic data</span> : null}
+              </div>
               <div className="eoc-shell-page-actions">
                 <div ref={setActionsSlot} className="eoc-shell-page-actions-slot" />
                 {!drawerOpen && props.contextOpener !== false ? <button ref={drawerOpener} type="button" className="eoc-shell-context-opener" onClick={(event) => openDrawer(event.currentTarget)}>Open context</button> : null}
@@ -450,7 +464,10 @@ export function AppShell(props: AppShellProps) {
           <PageChromeContext.Provider value={{ actions: actionsSlot, subtitle: subtitleSlot }}>
             <div className="eoc-shell-workspace">{props.children}</div>
           </PageChromeContext.Provider>
-          <footer className="eoc-shell-page-footer"><span aria-label="Handling marking: FOUO">FOUO</span></footer>
+          <footer className="eoc-shell-page-footer">
+            {synthetic ? <span className="eoc-shell-synthetic">Demonstration · Synthetic data</span> : null}
+            <span aria-label="Handling marking: FOUO">FOUO</span>
+          </footer>
         </main>
 
         {drawerModal ? <div className="eoc-shell-drawer-overlay" aria-hidden="true" onPointerDown={closeDrawer} /> : null}
@@ -466,6 +483,7 @@ export function AppShell(props: AppShellProps) {
       </div>
       <SettingsDialog open={dialog === "settings"} theme={props.theme} onTheme={chooseTheme}
         compactNavigation={compactNav} onCompactNavigation={setCompact}
+        {...(props.onAllSections ? { allSections: props.allSections ?? false, onAllSections: props.onAllSections } : {})}
         onOpenAdministration={administration ? () => { setDialog(null); props.onNavigate("admin"); } : undefined}
         onClose={() => setDialog(null)} />
       <HelpDialog open={dialog === "help"} onClose={() => setDialog(null)} />

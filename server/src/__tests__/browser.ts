@@ -170,8 +170,22 @@ export async function listen(app: FastifyInstance): Promise<string> {
  */
 const PAGE_TIMEOUT_MS = process.env["CI"] ? 90_000 : 30_000;
 
-export async function launchBrowser(options: LaunchOptions = {}): Promise<Browser> {
-  const browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"], ...options });
+/**
+ * The rail shows the core sections by default and every section when the
+ * viewer asks. Walks reach every section from the rail, so their pages ask;
+ * `coreRail` keeps the default for the captures and the rail's own test.
+ */
+const EVERY_SECTION = `try { localStorage.setItem("openeoc.navigation.allSections", "1"); } catch {}`;
+
+export async function launchBrowser(options: LaunchOptions & { readonly coreRail?: boolean } = {}): Promise<Browser> {
+  const { coreRail, ...launch } = options;
+  const browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--no-sandbox"], ...launch });
+  const newContext = browser.newContext.bind(browser);
+  browser.newContext = async (contextOptions) => {
+    const context = await newContext(contextOptions);
+    if (!coreRail) await context.addInitScript(EVERY_SECTION);
+    return context;
+  };
   const newPage = browser.newPage.bind(browser);
   browser.newPage = async (pageOptions) => {
     const page = await newPage(pageOptions);

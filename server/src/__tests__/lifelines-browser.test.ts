@@ -163,7 +163,8 @@ describe("real incident Lifelines presentation", () => {
     expect(await page.evaluate(`location.hash.startsWith("#/lifeline/energy?")`)).toBe(true);
     const energyDetails = page.getByRole("complementary", { name: "Energy" });
     await energyDetails.waitFor({ state: "visible" });
-    await energyDetails.getByText("North district", { exact: true }).waitFor({ state: "visible" });
+    // Components are listed by name, as the frame shows them; each carries its geography.
+    await energyDetails.getByTitle(/North district/).waitFor({ state: "visible" });
     await page.screenshot({ path: join(SHOTS, "p-life-1-light.png"), fullPage: false });
 
     await page.getByRole("button", { name: "Account menu" }).click();

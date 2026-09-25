@@ -140,6 +140,12 @@ function LifelineCard(props: {
   );
 }
 
+/** A linked action's glyph: an inspection or survey reads as a search, other work as its request. */
+function actionGlyph(action: { readonly title: string; readonly resourceRequestId?: string | null }): "search" | "report" {
+  if (/inspect|survey|assess|check/i.test(action.title)) return "search";
+  return action.resourceRequestId || /request/i.test(action.title) ? "report" : "search";
+}
+
 function componentIcon(label: string, lifeline: LifelineKey): ReactNode {
   const name = label.toLowerCase();
   if (/electric|power|grid/.test(name)) return <Icon name="power" size={20} decorative />;
@@ -224,6 +230,21 @@ function LifelineDrawer(props: DrawerRelations & {
         <div className="eoc-lw-drawer-body">
           <button type="button" className="eoc-lw-back" onClick={() => props.onMode("overview")}>Back to {item.label}</button>
           <h3 className="eoc-lw-drawer-heading">Assessment history</h3>
+          {/* The standing report's particulars and its recorded links sit with its history. */}
+          <details className="eoc-lw-details">
+            <summary>Assessment details</summary>
+            <dl>
+              <div><dt>Reporting organization</dt><dd>{item.source}</dd></div>
+              <div><dt>Assessed</dt><dd>{item.assessedLabel}</dd></div>
+              <div><dt>Confidence and evidence</dt><dd>{item.evidence}</dd></div>
+              <div><dt>Freshness</dt><dd>{item.freshnessLabel}</dd></div>
+              {outlook && outlook !== "Outlook not reported" ? <div><dt>Outlook</dt><dd>{outlook}</dd></div> : null}
+            </dl>
+            <p className="eoc-lifeline-callout">Exposure and ESF activation do not determine this assessed condition.</p>
+          </details>
+          <AssessmentRelationships client={props.client} incidentId={props.incidentId}
+            source={{ domain: "lifeline", framework: "fema_community_lifelines", definitionKey: item.key }}
+            {...relationProps(props)} />
           <LifelineAssessmentHistory client={props.client} incidentId={props.incidentId} lifeline={item.key}
             currentState={props.currentState} refreshToken={props.refreshToken} onDecision={props.onDecision} />
         </div>
@@ -250,12 +271,10 @@ function LifelineDrawer(props: DrawerRelations & {
                 {components.length === 0 ? <p>Not reported</p> : (
                   <ul className="eoc-lw-components">
                     {components.map((component) => (
-                      <li key={component.label}>
+                      <li key={component.label}
+                        title={[component.condition && component.condition !== item.condition ? conditionLabel(component.condition as LifelineCondition) : null, component.geography].filter(Boolean).join(" · ") || undefined}>
                         {componentIcon(component.label, item.key)}
                         {component.label}
-                        {component.condition && component.condition !== item.condition
-                          ? <small>{conditionLabel(component.condition as LifelineCondition)}</small> : null}
-                        {component.geography ? <small>{component.geography}</small> : null}
                       </li>
                     ))}
                   </ul>
@@ -267,7 +286,6 @@ function LifelineDrawer(props: DrawerRelations & {
               <div>
                 <h3>Stabilization objective</h3>
                 <p>{report?.stabilizationObjective ?? "Not set"}</p>
-                {outlook && outlook !== "Outlook not reported" ? <p className="eoc-lw-muted">Outlook: {outlook}</p> : null}
               </div>
             </section>
             <section className="eoc-lw-fact">
@@ -287,7 +305,7 @@ function LifelineDrawer(props: DrawerRelations & {
                   {actions.map((action) => {
                     const body = (
                       <>
-                        <Icon name={action.resourceRequestId || /request/i.test(action.title) ? "report" : "search"} size={20} decorative />
+                        <Icon name={actionGlyph(action)} size={20} decorative />
                         <span><strong>{action.title}</strong><span>{action.owner}</span></span>
                         <span className="eoc-lw-status" data-status={action.status}>{action.statusLabel}</span>
                       </>
@@ -305,23 +323,10 @@ function LifelineDrawer(props: DrawerRelations & {
                 </ul>
               )}
             </section>
-            <details className="eoc-lw-details">
-              <summary>Assessment details</summary>
-              <dl>
-                <div><dt>Reporting organization</dt><dd>{item.source}</dd></div>
-                <div><dt>Assessed</dt><dd>{item.assessedLabel}</dd></div>
-                <div><dt>Confidence and evidence</dt><dd>{item.evidence}</dd></div>
-                <div><dt>Freshness</dt><dd>{item.freshnessLabel}</dd></div>
-              </dl>
-              <p className="eoc-lifeline-callout">Exposure and ESF activation do not determine this assessed condition.</p>
-            </details>
-            <AssessmentRelationships client={props.client} incidentId={props.incidentId}
-              source={{ domain: "lifeline", framework: "fema_community_lifelines", definitionKey: item.key }}
-              {...relationProps(props)} />
           </div>
           <footer className="eoc-lw-drawer-foot">
             <button type="button" className="eoc-lw-button is-primary" onClick={() => props.onMode("update")}>
-              <Icon name="report" size={20} decorative />Update assessment
+              <Icon name="edit" size={20} decorative />Update assessment
             </button>
             <button type="button" className="eoc-lw-button" onClick={() => props.onMode("history")}>
               <Icon name="clock" size={20} decorative />View history
@@ -415,9 +420,11 @@ function RelatedEsfCoordination(props: {
           <thead><tr><th scope="col">Function</th><th scope="col">Activation</th><th scope="col">Coordinator</th><th scope="col">Open missions</th></tr></thead>
           <tbody>
             {shown.map(({ state, report }) => {
-              const coordinator = typeof report.payload.coordinatorOrganizationId === "string"
+              // The coordinating liaison, by the title it reports under, as the frame names it.
+              const organization = typeof report.payload.coordinatorOrganizationId === "string"
                 ? props.organizationNames.get(report.payload.coordinatorOrganizationId) ?? report.attribution.homeOrganizationName
-                : report.attribution.positionTitle ?? report.attribution.homeOrganizationName;
+                : report.attribution.homeOrganizationName;
+              const coordinator = report.attribution.positionTitle ?? organization;
               return (
                 <tr key={`${state.framework}:${state.esf}`}>
                   <th scope="row">
@@ -426,7 +433,7 @@ function RelatedEsfCoordination(props: {
                       : shortEsfLabel(state)}
                   </th>
                   <td><span className="eoc-lw-status" data-status={state.activation}>{state.activation === "activated" ? "Active" : conditionCase(state.activation)}</span></td>
-                  <td>{coordinator}</td>
+                  <td title={organization}>{coordinator}</td>
                   <td>{strings(report.payload.missions).length}</td>
                 </tr>
               );
@@ -725,7 +732,7 @@ export function LifelinesSurface(props: LifelinesSurfaceProps) {
                     {periods.map((period) => <option key={period.revision} value={period.revision}>{periodLabel(period)}</option>)}
                   </select>
                 </label>
-                <label>Condition
+                <label>All conditions
                   <select value={conditionFilter} onChange={(event) => setConditionFilter(event.target.value as "" | LifelineCondition)}>
                     <option value="">All conditions</option>
                     {CONDITIONS.map((condition) => <option key={condition} value={condition}>{conditionLabel(condition)}</option>)}
@@ -797,7 +804,8 @@ export function LifelinesSurface(props: LifelinesSurfaceProps) {
           />
         ) : null}
       </div>
-      {standingStatus}
+      {/* With an incident open, the jurisdiction's standing status sits with the assessment history. */}
+      {view === "history" ? standingStatus : null}
     </section>
   );
 }
