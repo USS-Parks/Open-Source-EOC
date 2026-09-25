@@ -18,6 +18,7 @@ import {
 } from "react";
 import { ActionButton } from "./controls.js";
 import { draftScopeKey, type DraftScope, type ScopedDraftStore } from "./form-drafts.js";
+import { workStateText } from "./work-state.js";
 import "./forms.css";
 
 export interface FieldOption {
@@ -101,6 +102,36 @@ function validationMessage(field: FieldDef | undefined, issue: { readonly code: 
   return issue.message;
 }
 
+const same = (left: unknown, right: unknown) => JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+const shown = (value: unknown) => value === undefined || value === null || value === "" ? "empty" : typeof value === "object" ? JSON.stringify(value) : String(value);
+
+/**
+ * A restored draft against the record as the server holds it now. A field
+ * the draft left alone takes the server's value, so the draft never reverts
+ * a colleague's change; a field only the draft changed keeps the draft's;
+ * a field both changed differently keeps the draft's and is named.
+ */
+export function mergeDraft(
+  fields: readonly FieldDef[],
+  draft: Readonly<Record<string, unknown>>,
+  base: Readonly<Record<string, unknown>> | undefined,
+  server: Readonly<Record<string, unknown>>,
+): { values: Record<string, unknown>; conflicts: string[] } {
+  const values = { ...draft };
+  const conflicts: string[] = [];
+  if (!base) return { values, conflicts };
+  for (const key of new Set([...Object.keys(draft), ...Object.keys(server), ...Object.keys(base)])) {
+    if (same(server[key], base[key]) || same(draft[key], server[key])) continue;
+    if (same(draft[key], base[key])) {
+      if (server[key] === undefined) delete values[key];
+      else values[key] = server[key];
+      continue;
+    }
+    conflicts.push(`${fields.find((field) => field.key === key)?.label ?? key}: yours ${shown(draft[key])}, now on the server ${shown(server[key])}`);
+  }
+  return { values, conflicts };
+}
+
 export function SchemaForm({
   fields,
   layout,
@@ -115,6 +146,9 @@ export function SchemaForm({
   submitLabel = "Save record",
 }: SchemaFormProps) {
   const formId = useId();
+  const formRef = useRef<HTMLFormElement>(null);
+  const baseRef = useRef<Readonly<Record<string, unknown>>>({ ...initialValues });
+  const [conflicts, setConflicts] = useState<readonly string[]>([]);
   const summaryRef = useRef<HTMLDivElement>(null);
   const focusSummaryForSubmit = useRef(false);
   const saveSequence = useRef(0);
@@ -147,6 +181,8 @@ export function SchemaForm({
     let active = true;
     saveSequence.current += 1;
     const resetValues = { ...initialValues };
+    baseRef.current = resetValues;
+    setConflicts([]);
     valuesRef.current = resetValues;
     setValues(resetValues);
     setErrors({});
@@ -165,11 +201,13 @@ export function SchemaForm({
     void draftStore.load(draftScope).then((draft) => {
       if (!active) return;
       if (draft) {
-        const restoredValues = { ...draft.values };
+        const merged = mergeDraft(fields, draft.values, draft.base, resetValues);
+        const restoredValues = merged.values;
         valuesRef.current = restoredValues;
         setValues(restoredValues);
+        setConflicts(merged.conflicts);
         setDirty(true);
-        setDraftMessage(`Draft restored from ${new Date(draft.savedAt).toLocaleString()}`);
+        setDraftMessage(workStateText({ kind: "draft", savedAt: draft.savedAt, restored: true }));
         setDraftPhase("saved");
       } else {
         setDraftPhase("ready");
@@ -203,10 +241,10 @@ export function SchemaForm({
     setDraftPhase("saving");
     setDraftMessage(null);
     try {
-      const saved = await draftStore.save(draftScope, next);
+      const saved = await draftStore.save(draftScope, next, baseRef.current);
       if (sequence !== saveSequence.current || !isCurrentGeneration(operationGeneration)) return;
       setDraftPhase("saved");
-      setDraftMessage(`Draft saved at ${new Date(saved.savedAt).toLocaleTimeString()}`);
+      setDraftMessage(workStateText({ kind: "draft", savedAt: saved.savedAt }));
     } catch (error) {
       if (sequence !== saveSequence.current || !isCurrentGeneration(operationGeneration)) return;
       setDraftPhase("error");
@@ -288,7 +326,8 @@ export function SchemaForm({
       }
       if (!isCurrentGeneration(operationGeneration)) return;
       setDirty(false);
-      setSuccess("Record saved");
+      setConflicts([]);
+      setSuccess(workStateText({ kind: "received", at: new Date().toISOString() }));
     } catch (error) {
       if (!isCurrentGeneration(operationGeneration)) return;
       setSubmitError(error instanceof Error ? error.message : "Record could not be saved");
@@ -301,10 +340,21 @@ export function SchemaForm({
 
   const loading = draftPhase === "loading";
   return (
-    <form className="eoc-form" aria-busy={loading || submitting || pendingUploads.size > 0 || undefined} onSubmit={(event) => void submit(event)} noValidate>
+    <form ref={formRef} className="eoc-form" aria-busy={loading || submitting || pendingUploads.size > 0 || undefined} onSubmit={(event) => void submit(event)} noValidate>
       {loading ? <div className="eoc-form-storage" role="status">Loading saved draft…</div> : null}
       {draftMessage ? <div className={`eoc-form-storage is-${draftPhase}`} role={draftPhase === "error" ? "alert" : "status"}>{draftMessage}</div> : null}
-      {submitError ? <div className="eoc-form-submit-error" role="alert"><strong>Record was not saved.</strong> {submitError} Your values remain in this form.</div> : null}
+      {conflicts.length ? (
+        <div className="eoc-form-conflict" role="alert" aria-label="Changed on the server">
+          <strong>Changed on the server since this draft began.</strong> Your values are shown; saving replaces the server's.
+          <ul>{conflicts.map((conflict) => <li key={conflict}>{conflict}</li>)}</ul>
+        </div>
+      ) : null}
+      {submitError ? (
+        <div className="eoc-form-submit-error" role="alert">
+          {workStateText({ kind: "failed", reason: submitError, keptInForm: !draftStore || !draftScope })}{" "}
+          <button type="button" className="eoc-work-state-retry" disabled={submitting} onClick={() => formRef.current?.requestSubmit()}>Retry</button>
+        </div>
+      ) : null}
       {success ? <div className="eoc-form-success" role="status">{success}</div> : null}
       {derived.error ? <div className="eoc-form-submit-error" role="alert">{derived.error}</div> : null}
       {Object.keys(errors).length > 0 ? (

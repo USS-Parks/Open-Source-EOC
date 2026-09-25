@@ -5454,3 +5454,63 @@ Operator Trust PSPR unit TP3 (research W1; decision 5).
 - **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
 - **Evidence level:** real-database and browser tests.
 - **Rollback:** revert the commit; no schema or data change.
+
+## Operator trust TP4: durable work and explicit state
+
+Operator Trust PSPR unit TP4 (research V2; section 5 rows 1 and 7).
+
+- **What changed.**
+  - **One state language.** `web/src/design/work-state.tsx` words where a
+    piece of work stands, and every form uses it: "Draft saved on this
+    device at 10:42. Not sent yet.", "Draft restored from this device, saved
+    10:42. Not sent yet.", "Received by the server at 10:43 as REQ-1043.",
+    and "Not sent: No connection to the server. ... Your work is kept on
+    this device." with a Retry, or "Your values remain in this form." where
+    no draft store holds it. The field client and the continuity panel
+    already said "this device", so the new wording follows them.
+  - **The request intake is a draft until the server has it.** The
+    Resources screen's intake keeps every field in the offline store as it
+    is typed, per person and incident, restores it on return (leaving for
+    the map and back, a closed tab, a reload), and clears it only when the
+    server returns the request's number. The hook that opens the store moved
+    from the board screen to `web/src/offline/draft-store.ts`, so both use
+    it.
+  - **Board record drafts know what they began from.** A record draft now
+    stores the values it began from. Restored against the record as the
+    server holds it now, a field the draft left alone takes the server's
+    value, so a draft never reverts a colleague's change; a field only the
+    draft changed keeps it; a field both changed differently keeps the
+    draft's and is named: "Changed on the server since this draft began.
+    Occupancy: yours 55, now on the server 61." Saving replaces the
+    server's value. A draft saved before this change has no base and
+    restores as before.
+  - **A lapsed session returns to sign-in and says so.** When the server
+    ends a session while the console is open (signed out elsewhere, or a
+    password change), the first refused request now returns the console to
+    sign-in with "Your session has ended. Sign in again to continue; work
+    saved on this device is kept." Before, the console stayed on screen with
+    no credentials, every list failing "not authenticated" and the incident
+    selection lost, which also discarded what the operator was looking at.
+    After signing in, drafts restore where they were.
+- **Defaults and deviations.** Attachments in a record draft are kept as
+  the ids of files already uploaded, as before; a file chosen but not yet
+  uploaded when the tab closes is not kept. The continuity panel keeps its
+  labels ("Stored locally", "Pending confirmation"), which already name the
+  device and the server's confirmation. The continuity browser test ended
+  its session through the API and then clicked Reconnect; the console now
+  notices the ended session first, so the test reloads and expects sign-in,
+  then reconciles the queued report after signing in.
+- **Gate.** Acceptance scenario 2, `scenario-request-interruption-browser.test.ts`,
+  on the North Coast Storm exercise at 1586 by 992 and 1534 by 790: L.
+  Moreno starts a request, leaves for the map and finds the draft on
+  return; the send meets a dropped connection and says so, with the work
+  kept and a Retry; before the retry the session is ended elsewhere and the
+  console returns to sign-in with the message; after signing in the draft
+  is restored and the server receives it with its number, quantity and
+  notes. A shelter record drafted while a colleague changed it on the
+  server returns with the clash named and the colleague's other change
+  kept.
+- **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
+- **Evidence level:** unit and browser tests.
+- **Rollback:** revert the commit; drafts saved with a base still restore
+  under the previous code, which ignores the base.

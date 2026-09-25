@@ -158,16 +158,15 @@ describe("Console continuity panel", () => {
     await page.evaluate(async (accessToken) => {
       await fetch("/api/v1/auth/logout", { method: "POST", headers: { authorization: `Bearer ${accessToken}` } });
     }, expiredToken.accessToken);
-    await continuity.getByRole("button", { name: "Reconnect and reconcile" }).click();
-    await continuity.locator("header").getByText("Session recovery required", { exact: true }).waitFor();
-    await continuity.getByRole("button", { name: "Restore session" }).click();
+    // A session ended elsewhere returns the console to sign-in; the queued report stays, and no credential is kept.
+    await page.reload({ waitUntil: "load" });
     await page.getByText("Sign in to the operations console.").waitFor();
     expect(await persistedMeta()).not.toContain(expiredToken.accessToken);
 
     await signIn();
     await page.getByLabel("Selected incident").selectOption(incidentId);
-    await continuity.locator("header").getByText("Session recovery required", { exact: true }).waitFor();
-    await continuity.getByRole("button", { name: "Restore session" }).click();
+    await continuity.locator("header").getByText("Stored locally", { exact: true }).waitFor();
+    await continuity.getByRole("button", { name: "Reconnect and reconcile" }).click();
     await continuity.locator("header").getByText("No queued work", { exact: true }).waitFor();
     const records = await admin`select data, created_by from board_records where board_id = ${boardId} and incident_id = ${incidentId} order by created_at`;
     expect(records).toHaveLength(2);

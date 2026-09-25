@@ -9,11 +9,13 @@ export interface DraftScope {
 interface DraftRecord {
   readonly values: Readonly<Record<string, unknown>>;
   readonly savedAt: string;
+  /** The values the draft began from, to tell a colleague's change on the server from the draft's own. */
+  readonly base?: Readonly<Record<string, unknown>>;
 }
 
 export interface ScopedDraftStore {
   load(scope: DraftScope): Promise<DraftRecord | null>;
-  save(scope: DraftScope, values: Readonly<Record<string, unknown>>): Promise<DraftRecord>;
+  save(scope: DraftScope, values: Readonly<Record<string, unknown>>, base?: Readonly<Record<string, unknown>>): Promise<DraftRecord>;
   clear(scope: DraftScope): Promise<void>;
 }
 
@@ -27,6 +29,7 @@ interface StoredDraft {
   readonly scope: DraftScope;
   readonly values: Readonly<Record<string, unknown>>;
   readonly savedAt: string;
+  readonly base?: Readonly<Record<string, unknown>>;
 }
 
 function scopeParts(scope: DraftScope): readonly string[] {
@@ -74,19 +77,20 @@ export function createMetadataDraftStore(backend: MetadataDraftBackend): ScopedD
       await (writes.get(key) ?? Promise.resolve()).catch(() => undefined);
       const stored = await backend.getMeta<StoredDraft>(key);
       if (!stored || stored.version !== 1 || !sameScope(stored.scope, scope)) return null;
-      return { values: { ...stored.values }, savedAt: stored.savedAt };
+      return { values: { ...stored.values }, savedAt: stored.savedAt, ...(stored.base ? { base: { ...stored.base } } : {}) };
     },
 
-    async save(scope, values) {
+    async save(scope, values, base) {
       const key = draftScopeKey(scope);
       const record: StoredDraft = {
         version: 1,
         scope: { ...scope },
         values: { ...values },
         savedAt: new Date().toISOString(),
+        ...(base ? { base: { ...base } } : {}),
       };
       await enqueue(key, () => backend.setMeta(key, record));
-      return { values: record.values, savedAt: record.savedAt };
+      return { values: record.values, savedAt: record.savedAt, ...(record.base ? { base: record.base } : {}) };
     },
 
     async clear(scope) {

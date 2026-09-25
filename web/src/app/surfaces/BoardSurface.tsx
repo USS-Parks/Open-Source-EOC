@@ -24,7 +24,7 @@ import {
   type ViewRefinement,
 } from "../../boards/ViewRefine.js";
 import { ActionButton, Tabs } from "../../design/controls.js";
-import { createMetadataDraftStore, type ScopedDraftStore } from "../../design/form-drafts.js";
+import type { ScopedDraftStore } from "../../design/form-drafts.js";
 import { Drawer, ModalDialog } from "../../design/overlays.js";
 import { Icon } from "../../design/icons/Icon.js";
 import {
@@ -32,7 +32,7 @@ import {
   type OperationalTableViewState,
 } from "../../design/table.js";
 import { OperationalTableSavedViews, useOperationalTableViews } from "../../design/table-saved-views.js";
-import { openOfflineStore } from "../../offline/store.js";
+import { useDraftStore } from "../../offline/draft-store.js";
 import type {
   ApiClient,
   BoardRecordDetailResponse,
@@ -145,7 +145,7 @@ export function BoardSurface(props: {
     () => loadRecordResources(props.client, board.data?.fields ?? [], detail.data, props.boardId, incidentViewId),
     [board.data?.fields, detail.data, incidentViewId, props.boardId],
   );
-  const drafts = useBoardDraftStore(props.draftStore);
+  const drafts = useDraftStore(props.draftStore);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(false);
   const [addingDirty, setAddingDirty] = useState(false);
@@ -476,36 +476,6 @@ async function loadRecordResources(
     related,
     attachments,
   };
-}
-
-function useBoardDraftStore(injected?: ScopedDraftStore): { store: ScopedDraftStore | null; error: string | null } {
-  const [local, setLocal] = useState<ScopedDraftStore | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (injected) return;
-    if (typeof indexedDB === "undefined") {
-      setError("Draft storage is unavailable in this browser.");
-      return;
-    }
-    let active = true;
-    let close: (() => void) | null = null;
-    void openOfflineStore().then((store) => {
-      close = store.close;
-      if (!active) {
-        store.close();
-        return;
-      }
-      setLocal(createMetadataDraftStore(store));
-      setError(null);
-    }).catch((reason: unknown) => {
-      if (active) setError(reason instanceof Error ? reason.message : "Draft storage is unavailable.");
-    });
-    return () => {
-      active = false;
-      close?.();
-    };
-  }, [injected]);
-  return { store: injected ?? local, error };
 }
 
 function boardDraftScope(personId: string, incidentId: string, board: EffectiveBoardResponse, recordId: string | null) {

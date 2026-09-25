@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   choiceLabel,
   DEMOBILIZATION_CHECK_LABELS,
@@ -16,6 +16,8 @@ import {
 } from "@openeoc/shared";
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../../design/components.js";
 import { Icon } from "../../design/icons/Icon.js";
+import { WorkStateLine, type WorkState } from "../../design/work-state.js";
+import { useDraftStore } from "../../offline/draft-store.js";
 import { ResourceRequestDetailPanel } from "../../resources/ResourceRequestDetail.js";
 import { nextAction, ownerLabel, requestStage, stageTone, when } from "../../resources/request-view.js";
 import type { ApiClient, ResourceRequestSummary } from "../api/client.js";
@@ -552,6 +554,44 @@ export function ResourcesSurface(props: {
   const partner = Boolean(props.incidentId && props.incidentOwnerId && props.incidentOwnerId !== props.jurisdictionId);
   const [requestFrom, setRequestFrom] = useState<"own" | "owner">("own");
   const fromOwner = partner && requestFrom === "owner";
+
+  // The intake is a draft on this device until the server has received it,
+  // so leaving the screen, closing the tab or a lapsed session loses nothing.
+  const drafts = useDraftStore();
+  const intakeScope = props.personId
+    ? { personId: props.personId, incidentId: props.incidentId ?? "none", formId: "resource-request", recordId: null, schema: "1" }
+    : null;
+  const [intake, setIntake] = useState<WorkState>({ kind: "empty" });
+  const touched = useRef(false);
+  const kept = useRef(false);
+  const edit = <T,>(set: (value: T) => void) => (value: T) => { touched.current = true; set(value); };
+  useEffect(() => {
+    touched.current = false;
+    if (!drafts.store || !intakeScope) return;
+    let active = true;
+    void drafts.store.load(intakeScope).then((draft) => {
+      if (!active || !draft || touched.current) return;
+      const values = draft.values as Partial<Record<string, string>>;
+      setItem(values.item ?? "");
+      setQuantity(values.quantity ?? "1");
+      setPriority(values.priority ?? "routine");
+      setNotes(values.notes ?? "");
+      setNeededBy(values.neededBy ?? "");
+      setRequestKind(values.requestKind ?? "");
+      setRequestType(values.requestType ?? "");
+      setRequestFrom(values.requestFrom === "owner" ? "owner" : "own");
+      kept.current = true;
+      setIntake({ kind: "draft", savedAt: draft.savedAt, restored: true });
+    }, () => undefined);
+    return () => { active = false; };
+  }, [drafts.store, intakeScope?.personId, intakeScope?.incidentId]);
+  useEffect(() => {
+    if (!touched.current || !drafts.store || !intakeScope) return;
+    void drafts.store.save(intakeScope, { item, quantity, priority, notes, neededBy, requestKind, requestType, requestFrom }).then(
+      (saved) => { kept.current = true; if (touched.current) setIntake({ kind: "draft", savedAt: saved.savedAt }); },
+      () => { kept.current = false; },
+    );
+  }, [item, quantity, priority, notes, neededBy, requestKind, requestType, requestFrom]);
   const [selectedRequest, setSelectedRequest] = useState<string | null>(props.selectedRequestId ?? null);
   useEffect(() => {
     if (props.selectedRequestId !== undefined) setSelectedRequest(props.selectedRequestId);
@@ -581,10 +621,15 @@ export function ResourcesSurface(props: {
     }
   };
 
-  const submit = () =>
-    run(async () => {
-      if (!item.trim()) throw new Error("Enter a requested item.");
-      setReceipt(null);
+  const submit = async () => {
+    if (!item.trim()) {
+      setIntake({ kind: "failed", reason: "Enter a requested item.", keptInForm: !kept.current });
+      return;
+    }
+    setBusy(true);
+    setReceipt(null);
+    setIntake({ kind: "sending" });
+    try {
       const created = await props.client.submitResourceRequest(fromOwner ? props.incidentOwnerId! : props.jurisdictionId, {
         origin: "eoc",
         item: item.trim(),
@@ -599,14 +644,24 @@ export function ResourcesSurface(props: {
         ...(requestKind && !fromOwner ? { resourceKind: requestKind } : {}),
         ...(requestType && !fromOwner ? { resourceType: Number(requestType) } : {}),
       });
+      touched.current = false;
+      if (drafts.store && intakeScope) await drafts.store.clear(intakeScope).catch(() => undefined);
+      kept.current = false;
       setReceipt(created);
+      setIntake({ kind: "received", at: created.createdAt, reference: `REQ-${created.number}` });
       setItem("");
       setQuantity("1");
       setNotes("");
       setNeededBy("");
       setRequestKind("");
       setRequestType("");
-    });
+      requests.reload();
+    } catch (cause) {
+      setIntake({ kind: "failed", reason: cause instanceof Error ? cause.message : String(cause), keptInForm: !kept.current });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const list = requests.data ?? [];
   // The pool and the cost rollup count every request in scope, whatever the list is narrowed to.
@@ -638,14 +693,15 @@ export function ResourcesSurface(props: {
           <p className="resources-first eoc-muted">The receiving organization owns the request. A supplier is named only when an authorized position or incident participant accepts the assignment.</p>
           {props.incidentId ? <p className="resources-first eoc-muted">This intake is linked to the selected incident; the request history retains every lifecycle action.</p> : null}
           {canMutate ? <><div className="resources-intake">
-            {partner ? <div className="resources-cell"><label className="resources-label">Request from<select className="resources-select" value={requestFrom} onChange={(event) => setRequestFrom(event.target.value as "own" | "owner")}><option value="own">My organization</option><option value="owner">{ownerName} (incident owner)</option></select></label></div> : null}
-            <div className="resources-cell"><TextField label="Requested item" value={item} onChange={setItem} /></div>
-            <div className="resources-cell"><TextField label="Quantity" value={quantity} onChange={setQuantity} /></div>
-            <div className="resources-cell"><EnumSelect label="Priority" values={PRIORITIES} labels={PRIORITY_LABELS} value={priority} onChange={setPriority} /></div>
-            <div className="resources-cell"><label className="resources-label">Needed by<input type="datetime-local" className="resources-select" value={neededBy} onChange={(event) => setNeededBy(event.target.value)} /></label></div>
-            <div className="resources-cell"><TextField label="Request notes" value={notes} onChange={setNotes} /></div>
-            {fromOwner ? null : <KindTypeFields kinds={kinds} kind={requestKind} type={requestType} onKind={setRequestKind} onType={setRequestType} forRequest />}
-          </div><div className="eoc-space-above"><Button kind="primary" onClick={submit} disabled={busy}>Submit request</Button></div>
+            {partner ? <div className="resources-cell"><label className="resources-label">Request from<select className="resources-select" value={requestFrom} onChange={(event) => edit(setRequestFrom)(event.target.value as "own" | "owner")}><option value="own">My organization</option><option value="owner">{ownerName} (incident owner)</option></select></label></div> : null}
+            <div className="resources-cell"><TextField label="Requested item" value={item} onChange={edit(setItem)} /></div>
+            <div className="resources-cell"><TextField label="Quantity" value={quantity} onChange={edit(setQuantity)} /></div>
+            <div className="resources-cell"><EnumSelect label="Priority" values={PRIORITIES} labels={PRIORITY_LABELS} value={priority} onChange={edit(setPriority)} /></div>
+            <div className="resources-cell"><label className="resources-label">Needed by<input type="datetime-local" className="resources-select" value={neededBy} onChange={(event) => edit(setNeededBy)(event.target.value)} /></label></div>
+            <div className="resources-cell"><TextField label="Request notes" value={notes} onChange={edit(setNotes)} /></div>
+            {fromOwner ? null : <KindTypeFields kinds={kinds} kind={requestKind} type={requestType} onKind={edit(setRequestKind)} onType={edit(setRequestType)} forRequest />}
+          </div><div className="eoc-space-above"><Button kind="primary" onClick={() => void submit()} disabled={busy}>Submit request</Button></div>
+          <WorkStateLine state={intake} onRetry={() => void submit()} />
           {receipt ? (
             <section className="resources-receipt" role="status" aria-label="Request receipt">
               <strong>REQ-{receipt.number} received {when(receipt.createdAt)} by {receipt.receivingOrganization.name}</strong>

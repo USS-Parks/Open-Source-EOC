@@ -18,7 +18,12 @@ import { ApiClient, ApiError, SessionExpiredError, type Me, type MfaChallenge, t
  * access token and reading /me; the server's refusal is a clean fall back to
  * anonymous, not an error screen. With no connection the saved profile opens
  * the console offline, and the read is tried again until the server answers.
+ * A session the server ends while the console is open returns to sign-in and
+ * says so, rather than leaving every screen failing unauthenticated; work
+ * saved on this device is kept for the next sign-in.
  */
+
+export const SESSION_ENDED = "Your session has ended. Sign in again to continue; work saved on this device is kept.";
 
 const STORAGE_KEY = "openeoc.tokens";
 const PROFILE_KEY = "openeoc.me";
@@ -98,7 +103,11 @@ export function useSession(): SessionValue {
 
 export function SessionProvider(props: { client?: ApiClient; children: ReactNode }) {
   const clientRef = useRef<ApiClient | null>(props.client ?? null);
-  if (!clientRef.current) clientRef.current = new ApiClient({ onTokens: saveTokens });
+  const ended = useRef<() => void>(() => undefined);
+  const leaving = useRef(false);
+  if (!clientRef.current) {
+    clientRef.current = new ApiClient({ onTokens: (tokens) => { saveTokens(tokens); if (!tokens) ended.current(); } });
+  }
   const client = clientRef.current;
 
   const [status, setStatus] = useState<SessionStatus>("loading");
@@ -106,6 +115,13 @@ export function SessionProvider(props: { client?: ApiClient; children: ReactNode
   const [jurisdictionId, setJurisdictionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
+  ended.current = () => {
+    if (leaving.current || status !== "authed") return;
+    setMe(null);
+    setJurisdictionId(null);
+    setStatus("anon");
+    setError(SESSION_ENDED);
+  };
 
   const adoptMe = useCallback((next: Me) => {
     saveProfile(next);
@@ -242,9 +258,11 @@ export function SessionProvider(props: { client?: ApiClient; children: ReactNode
         }
       },
       logout: async () => {
+        leaving.current = true;
         try {
           await client.logout();
         } finally {
+          leaving.current = false;
           setMe(null);
           setJurisdictionId(null);
           setStatus("anon");

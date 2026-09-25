@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FieldDef } from "@openeoc/shared";
 import { Theme } from "../components.js";
 import type { DraftScope, ScopedDraftStore } from "../form-drafts.js";
-import { SchemaForm } from "../forms.js";
+import { mergeDraft, SchemaForm } from "../forms.js";
 
 afterEach(cleanup);
 
@@ -82,11 +82,17 @@ describe("shared-schema form validation", () => {
     expect(await view.findByRole("link", { name: /Priority:/ })).not.toBeNull();
     fireEvent.change(view.getByLabelText("Priority"), { target: { value: "urgent" } });
     fireEvent.click(view.getByRole("button", { name: "Save record" }));
-    await waitFor(() => expect(view.getByText("Record saved")).not.toBeNull());
+    await waitFor(() => expect(view.getByText(/^Received by the server at /)).not.toBeNull());
   });
 });
 
 describe("draft hydration and submission truth", () => {
+  it("keeps a colleague's change the draft left alone and names a field both changed", () => {
+    const merged = mergeDraft(fields, { summary: "mine", quantity: 3 }, { summary: "start", quantity: 3 }, { summary: "theirs", quantity: 5 });
+    expect(merged.values).toEqual({ summary: "mine", quantity: 5 });
+    expect(merged.conflicts).toEqual(["Summary: yours mine, now on the server theirs"]);
+  });
+
   it("hydrates a scoped draft without saving defaults over it", async () => {
     const load = deferred<{ values: Readonly<Record<string, unknown>>; savedAt: string } | null>();
     const save = vi.fn(async (_scope: DraftScope, values: Readonly<Record<string, unknown>>) => ({ values, savedAt: "2026-09-21T12:00:00.000Z" }));
@@ -122,12 +128,12 @@ describe("draft hydration and submission truth", () => {
     await waitFor(() => expect(view.queryByText("Loading saved draft…")).toBeNull());
     fillRequired(view.getByLabelText);
     fireEvent.click(view.getByRole("button", { name: "Save record" }));
-    expect(await view.findByText("Record was not saved.")).not.toBeNull();
+    expect(await view.findByText(/^Not sent: Service unavailable. Your work is kept on this device./)).not.toBeNull();
     expect(view.getByRole("alert").textContent).toContain("Service unavailable");
     expect((view.getByLabelText("Summary") as HTMLTextAreaElement).value).toBe("Generator request");
     expect(clear).not.toHaveBeenCalled();
     expect(save).toHaveBeenCalled();
-    expect(view.queryByText("Record saved")).toBeNull();
+    expect(view.queryByText(/^Received by the server at /)).toBeNull();
   });
 
   it("shows success and clears draft only after submission resolves", async () => {
@@ -137,10 +143,10 @@ describe("draft hydration and submission truth", () => {
     await waitFor(() => expect(view.queryByText("Loading saved draft…")).toBeNull());
     fillRequired(view.getByLabelText);
     fireEvent.click(view.getByRole("button", { name: "Save record" }));
-    expect(view.queryByText("Record saved")).toBeNull();
+    expect(view.queryByText(/^Received by the server at /)).toBeNull();
     expect(clear).not.toHaveBeenCalled();
     await act(async () => pending.resolve());
-    await waitFor(() => expect(view.getByText("Record saved")).not.toBeNull());
+    await waitFor(() => expect(view.getByText(/^Received by the server at /)).not.toBeNull());
     expect(clear).toHaveBeenCalledOnce();
   });
 
@@ -154,7 +160,7 @@ describe("draft hydration and submission truth", () => {
     view.rerender(<Theme name="light"><SchemaForm fields={fields} initialValues={{ summary: "Incident B", quantity: 2 }} draftScope={{ ...scope, incidentId: "incident-b" }} onSubmit={onSubmit} /></Theme>);
     await waitFor(() => expect((view.getByLabelText("Summary") as HTMLTextAreaElement).value).toBe("Incident B"));
     await act(async () => pending.resolve());
-    expect(view.queryByText("Record saved")).toBeNull();
+    expect(view.queryByText(/^Received by the server at /)).toBeNull();
     expect(view.getByText("No unsaved changes")).not.toBeNull();
     expect((view.getByRole("button", { name: "Save record" }) as HTMLButtonElement).disabled).toBe(false);
   });
