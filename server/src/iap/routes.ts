@@ -27,6 +27,7 @@ import {
   listComponents,
   saveComponent,
 } from "./components.js";
+import { createComponentPlan, planComponents, refreshPlanForms } from "./plan.js";
 
 /**
  * ICS form and IAP routes (F5). Forms prefill from live incident
@@ -41,6 +42,8 @@ const IapBody = z.object({
   safetyMessage: z.string().min(1).optional(),
   formIds: z.array(z.string().min(1)).optional(),
   periodRevision: z.number().int().positive().optional(),
+  /** Assemble from these ICS form components of the period instead of building from live records (VA37). */
+  componentIds: z.array(z.uuid()).max(100).optional(),
 });
 
 const Ics204ResourceBody = z.object({
@@ -112,6 +115,18 @@ export function iapRoutes(
     async (req, reply) => {
       const { incidentId } = req.params as { incidentId: string };
       const body = IapBody.parse(req.body);
+      if (body.componentIds !== undefined) {
+        const componentIds = body.componentIds;
+        if (body.periodRevision === undefined)
+          return reply.status(400).send({ error: "periodRevision: a plan assembled from forms names its period" });
+        const periodRevision = body.periodRevision;
+        const plan = await withPerson(sql, req.principal.person.id, (tx) =>
+          createComponentPlan(tx, req.principal, incidentId, {
+            operationalPeriod: body.operationalPeriod, periodRevision, componentIds,
+          }),
+        );
+        return reply.status(201).send(plan);
+      }
       const result = await withPerson(sql, req.principal.person.id, (tx) =>
         createIap(tx, req.principal, incidentId, {
           operationalPeriod: body.operationalPeriod,
@@ -142,8 +157,18 @@ export function iapRoutes(
 
   app.get("/api/v1/iap/:iapId", { preHandler: authenticate }, async (req, reply) => {
     const { iapId } = req.params as { iapId: string };
-    const iap = await withPerson(sql, req.principal.person.id, (tx) => getIap(tx, req.principal, iapId));
+    const iap = await withPerson(sql, req.principal.person.id, async (tx) => ({
+      ...await getIap(tx, req.principal, iapId),
+      components: await planComponents(tx, iapId),
+    }));
     return reply.send(iap);
+  });
+
+  // Bring a plan assembled from ICS forms up to their latest ready versions (VA37 part two).
+  app.post("/api/v1/iap/:iapId/forms/refresh", { preHandler: authenticate }, async (req, reply) => {
+    const { iapId } = z.object({ iapId: z.uuid() }).parse(req.params);
+    const change = await withPerson(sql, req.principal.person.id, (tx) => refreshPlanForms(tx, req.principal, iapId));
+    return reply.send(change);
   });
 
   app.put("/api/v1/iap/:iapId/ics-204", { preHandler: authenticate }, async (req, reply) => {

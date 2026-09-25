@@ -392,6 +392,33 @@ A reader of the incident can open and print the forms but not save them. A
 partner organization's contributor on the incident can write them under
 their incident grant, and each start and save is in the owner's chronology.
 
+#### Assemble the IAP from the period's forms
+
+Under **Assemble the IAP from these forms**, tick the ready forms the plan
+holds. The 202, 203, 204s, 205, 205A, 206, 207 and 208 are ticked by
+default; the 215 and 215A worksheets, and any other form, go in only when
+ticked. A form still in draft cannot be ticked. **Assemble IAP** makes a
+draft plan holding each form at its current version, then **Review it in the
+IAP workspace** opens it.
+
+In the IAP workspace the plan is submitted and approved as a whole, and
+**Forms in this plan** lists each form with the version the plan holds. When
+a form in the plan is saved and marked ready again:
+
+- a draft plan takes the new version in place;
+- an approved plan stays as approved, and its next revision starts as a
+  draft holding the new version, waiting for approval;
+- a plan in approval keeps the forms it was submitted with; approve it, then
+  select **Start revision N with the changed forms**.
+
+A form saved as a draft goes into no plan until it is marked ready. If you
+cannot revise the plan (a partner who did not prepare it, say), the change
+shows as waiting, and someone who can revise it takes it with the same
+button. The plan's PDF opens with its contents, each form and version, and
+says who approved it and when. A plan assembled from forms takes its 204s
+from the period's ICS 204 forms, so the ICS-204 assignment editor does not
+appear for it.
+
 ### Review, publish and answer from the JIC panel
 
 Open **JIC** under Coordination, then a frozen SITREP. The JIC draft panel

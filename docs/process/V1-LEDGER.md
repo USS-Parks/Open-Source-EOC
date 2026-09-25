@@ -7204,3 +7204,102 @@ assembled from these components, follows as its own unit.
 - **Evidence level:** real-database, component and browser tests.
 - **Rollback:** revert the commit; migration `0148` adds two tables, a
   trigger and two functions that the earlier code ignores.
+
+## Veoci and air gap VA37 part two: the IAP assembled from its forms
+
+Veoci Integration and Air Gap PSPR unit VA37, part two (Basho's amendment 2),
+on part one ("Veoci and air gap VA37 part one: ICS forms as stored
+components").
+
+- **What the code did before.** An IAP was assembled only from live incident
+  records at the moment of assembly, and its 204 came from the plan's own
+  assignment editor. The forms part one keeps could not go into a plan, and
+  a change to one could not reach a plan already approved.
+- **What changed.**
+  - **The plan's forms.** Migration `0149_iap_components.sql`:
+    `iap_components` records the forms each plan revision holds, each at the
+    version it took (a foreign key to the kept version), in order. A trigger
+    keeps a plan's forms to its own incident and period, lets them change only
+    while the plan is a draft, and refuses any delete, even by the owner; the
+    runtime has no delete privilege. Owners' writers, or the plan's preparer
+    under a contributor grant (`can_write_iap`), write them.
+    `append_iap_participant_audit` gains `iap.forms.refreshed` so a
+    partner's own plan records it in the owner's trail.
+  - **Assembly.** `POST /api/v1/incidents/:incidentId/iap` with
+    `componentIds` (and the period revision) assembles a draft from the
+    chosen forms at their current versions, in form order then name
+    (`assembleComponentPlan` in `shared`). Only ready forms of that period go
+    in; a draft form, another period's form, an empty choice or an unknown
+    form is refused with the reason. The default set is decision 16's: the
+    202, 203, 204s, 205, 205A, 206, 207 and 208, with the 215 and 215A only
+    when chosen. The plan's stored content is the forms rendered, so its
+    workflow (submit, approve as a whole, complete) and exact-revision PDF
+    are unchanged.
+  - **A change after assembly.** When a form is saved and marked ready, each
+    latest plan revision holding it takes the change if the saver may revise
+    it: a draft in place as its next content revision (`iap.forms.refreshed`
+    in the audit); an approved revision as its next revision, a draft for
+    approval (`iap.revision.created`, reason "forms changed"), while the
+    approved revision stays exactly as approved. A second change goes into
+    that draft, not a third revision. A plan in approval keeps the forms it
+    was submitted with; a draft save changes no plan. The save answers which
+    plans took it. `POST /api/v1/iap/:iapId/forms/refresh` does the same by
+    hand, for a change made by someone who could not revise the plan or made
+    during approval. `GET /api/v1/iap/:iapId` answers the forms a plan holds
+    with each form's latest version and status.
+  - **The PDF.** A plan assembled from forms opens with its contents (each
+    form and version), and every IAP PDF now carries an approval line (who
+    approved it and when, or "not approved").
+  - **The ICS-204 editor.** A plan assembled from forms takes its 204s from
+    the period's ICS 204 forms; the assignment editor's save and revision
+    routes refuse it, and the IAP screen shows a note in its place.
+  - **The screens.** On **ICS Forms**, **Assemble the IAP from these forms**
+    lists the period's forms with the default set ticked and drafts disabled,
+    **Assemble IAP from N forms**, and **Review it in the IAP workspace**; a
+    save's notice says when the plan took it or started its next revision.
+    In the IAP workspace, **Forms in this plan** lists each form with the
+    version held and whether a newer version is ready or in draft, with
+    **Take the changed forms into this draft** or **Start revision N with the
+    changed forms** when one is waiting. Stored-form tabs are keyed by
+    position, since a plan can hold several 204s, and name each one's label.
+  - `docs/guides/OPERATOR-QUICKSTART.md` gains "Assemble the IAP from the
+    period's forms"; the contract and `docs/API.md` list the refresh route.
+- **Files outside the "Owns" cell.** `web/src/app/surfaces/FormsSurface.tsx`
+  (one prop), `web/src/app/api/client.ts` (types and a method),
+  `web/src/audit/chronology.ts` (one label), `shared/src/api/contract.ts`.
+- **Air-gap behavior (decision 9).** Assembly, revision and the PDF run on
+  the host with no outside service.
+- **Tests.** `iap-components.test.ts` (8, real database): assembly in form
+  order with the forms held and the audit, and five refusals; a draft save
+  leaving the plan alone and a ready save taken in place; approval, then a
+  change making revision 2 with the approved revision unchanged, and a
+  second change going into revision 2; a plan in approval refusing a
+  refresh, then revision 3 after approval, and a refresh with nothing
+  changed; the plan PDF's contents and approval line, approved and not; the
+  ICS-204 editor and revision routes refused; a partner who may not revise
+  the host's plan leaving the change waiting for a host member, and the
+  partner's own plan assembled and taking their change in the owner's
+  trail; the database refusing a delete, a change to a submitted plan's
+  forms, another period's form and a version that does not exist.
+  `components.test.ts` (5, shared) adds the plan's order, cover and
+  approval line. `form-components.test.tsx` (5, with axe) adds the default
+  choice with a ticked worksheet assembled, and the notice naming the
+  plan's next revision. `iap-components-browser.test.ts` at 1586 by 992 and
+  1534 by 790: acting as Planning Section Chief, the administrator writes
+  the 202, a 205 channel and the 208, assembles the plan from them, sees
+  its forms current and no ICS-204 editor, submits and approves it, changes
+  the 205 and marks it ready, finds revision 2 as a draft holding the 205's
+  version 3 beside the approved revision 1, and prints revision 2 with its
+  contents and "not approved".
+- **Verification.** On the Linux test bed (decision 19): `pnpm
+  check:static` exit 0; the API document regenerated; this unit's tests
+  with the IAP, IAP workspace, ICS 204, part one's forms, API document and
+  shared ICS tests green, the web IAP and chronology tests (15) and the
+  browser test (2). Every test file except the browser, end-to-end and
+  load files (Vitest, two workers): 1,610 passed of 1,610 in 239 files.
+- **Not run.** The Windows setup (decision 18).
+- **Evidence level:** real-database, component and browser tests.
+- **Rollback:** revert the commit; migration `0149` adds a table, a trigger,
+  a function and a widened audit function that the earlier code ignores;
+  plans assembled from forms keep their stored content and print as before,
+  without the contents list.

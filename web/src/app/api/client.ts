@@ -509,6 +509,24 @@ export interface IapResult {
   readonly operationalPeriod: string;
   readonly contentRevision: number;
   readonly content: IapDocument;
+  /** The ICS form components a plan assembled from them holds; empty for a plan built from live records. */
+  readonly components?: readonly IapPlanComponent[];
+}
+/** A form a plan holds, at the version it took, beside the form's own latest version (VA37). */
+export interface IapPlanComponent {
+  readonly componentId: string;
+  readonly formId: IcsComponentFormId;
+  readonly label: string;
+  readonly version: number;
+  readonly currentVersion: number;
+  readonly currentStatus: "draft" | "ready";
+}
+/** A plan that took changed forms: in place for a draft, or as the next revision after approval. */
+export interface IapPlanChange {
+  readonly id: string;
+  readonly revisionNumber: number;
+  readonly contentRevision: number;
+  readonly changed: readonly { readonly formId: IcsComponentFormId; readonly label: string; readonly version: number }[];
 }
 export interface IapListItem {
   readonly id: string;
@@ -557,6 +575,8 @@ export interface CreateIapBody {
   readonly preparedBy?: string;
   readonly safetyMessage?: string;
   readonly formIds?: readonly string[];
+  /** Assemble from these ICS form components of the period instead (VA37). */
+  readonly componentIds?: readonly string[];
 }
 export interface Ics204AssignmentInput {
   readonly id?: string;
@@ -1702,6 +1722,10 @@ export class ApiClient {
   completeIap(iapId: string): Promise<{ ok: true }> {
     return this.request<{ ok: true }>("POST", `/api/v1/iap/${iapId}/complete`);
   }
+  /** Bring a plan assembled from ICS forms up to their latest ready versions. */
+  refreshIapForms(iapId: string): Promise<IapPlanChange> {
+    return this.request<IapPlanChange>("POST", `/api/v1/iap/${iapId}/forms/refresh`);
+  }
   downloadIapPdf(iapId: string): Promise<Blob> {
     return this.requestBlob(`/api/v1/iap/${iapId}/pdf`);
   }
@@ -1721,8 +1745,8 @@ export class ApiClient {
   saveIcsComponent(
     componentId: string,
     body: { values: ComponentValues; status: "draft" | "ready"; expectedVersion: number; label?: string },
-  ): Promise<IcsComponentDetail> {
-    return this.request<IcsComponentDetail>("PUT", `/api/v1/ics-components/${componentId}`, body as unknown as Record<string, unknown>);
+  ): Promise<IcsComponentDetail & { readonly plans: readonly IapPlanChange[] }> {
+    return this.request("PUT", `/api/v1/ics-components/${componentId}`, body as unknown as Record<string, unknown>);
   }
   async listIcsComponentVersions(componentId: string): Promise<IcsComponentVersion[]> {
     const r = await this.request<{ versions: IcsComponentVersion[] }>("GET", `/api/v1/ics-components/${componentId}/versions`);

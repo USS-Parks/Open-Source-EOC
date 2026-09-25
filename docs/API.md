@@ -294,6 +294,7 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 - `GET /api/v1/iap/:iapId`: Read iap (auth: bearer; audience: operator)
 - `POST /api/v1/iap/:iapId/approve`: Run iap approve (auth: bearer; audience: operator)
 - `POST /api/v1/iap/:iapId/complete`: Run iap complete (auth: bearer; audience: operator)
+- `POST /api/v1/iap/:iapId/forms/refresh`: Run iap forms refresh (auth: bearer; audience: operator)
 - `PUT /api/v1/iap/:iapId/ics-204`: Set iap ics 204 (auth: bearer; audience: operator)
 - `GET /api/v1/iap/:iapId/pdf`: Read iap pdf (auth: bearer; audience: operator)
 - `GET /api/v1/iap/:iapId/revisions`: Read iap revisions (auth: bearer; audience: operator)

@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import axe from "axe-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ICS_COMPONENT_EDITION } from "@openeoc/shared";
+import { ICS_COMPONENT_EDITION, type IcsComponentFormId } from "@openeoc/shared";
 import type { IcsComponentDetail } from "../../app/api/client.js";
 import { FormComponents } from "../FormComponents.js";
 
@@ -24,11 +24,15 @@ function client() {
     createIcsComponent: vi.fn(),
     getIcsComponent: vi.fn().mockResolvedValue(channels),
     saveIcsComponent: vi.fn().mockImplementation((_id: string, body: { values: unknown; status: "draft" | "ready" }) =>
-      Promise.resolve({ ...channels, values: body.values, status: body.status, version: 2 })),
+      Promise.resolve({ ...channels, values: body.values, status: body.status, version: 2, plans: [] })),
     listIcsComponentVersions: vi.fn().mockResolvedValue([]),
     downloadIcsComponentPdf: vi.fn().mockResolvedValue(new Blob(["%PDF-1.4"])),
+    createIap: vi.fn().mockResolvedValue({ id: "iap-1", content: { incidentName: "Klamath River Flood", operationalPeriod: "OP 4", preparedBy: "Rosa Planner", forms: [] } }),
   };
 }
+
+const summary = (id: string, formId: IcsComponentFormId, status: "draft" | "ready", label = "") =>
+  ({ ...channels, id, formId, label, status });
 
 describe("ICS forms as components of a period", () => {
   it("edits a table block by block and saves it as the next version, marked ready", async () => {
@@ -98,5 +102,43 @@ describe("ICS forms as components of a period", () => {
     fireEvent.click(within(form).getByRole("button", { name: "Save as draft" }));
     expect((await view.findByRole("alert")).textContent).toBe("the form changed after it was opened: version 3 is current");
     expect(view.getByRole("form")).toBeTruthy();
+  });
+
+  it("assembles the plan from the default set of ready forms, plus any ticked", async () => {
+    const api = client();
+    api.listIcsComponents.mockResolvedValue([
+      summary("c-202", "ICS-202", "ready"), summary("c-204a", "ICS-204", "ready", "Division A"),
+      summary("c-205", "ICS-205", "ready"), summary("c-206", "ICS-206", "draft"), summary("c-215", "ICS-215", "ready"),
+    ]);
+    const onOpenIap = vi.fn();
+    const view = render(<FormComponents client={api} incidentId={INCIDENT} periodRevision={4} periodLabel="OP 4" onOpenIap={onOpenIap} />);
+    const choice = await view.findByRole("group", { name: "Assemble the IAP from these forms" });
+    const box = (name: string) => within(choice).getByRole("checkbox", { name }) as HTMLInputElement;
+    expect(box("ICS 202: Incident Objectives").checked).toBe(true);
+    expect(box("ICS 204: Assignment List, Division A").checked).toBe(true);
+    expect(box("ICS 206: Medical Plan (draft)").disabled).toBe(true);
+    expect(box("ICS 215: Operational Planning Worksheet").checked).toBe(false);
+    fireEvent.click(box("ICS 215: Operational Planning Worksheet"));
+    expect((await axe.run(view.container)).violations).toEqual([]);
+    fireEvent.click(within(choice).getByRole("button", { name: "Assemble IAP from 4 forms" }));
+    await view.findByText("Assembled a draft IAP for OP 4 from 4 forms.");
+    expect(api.createIap).toHaveBeenCalledWith(INCIDENT, {
+      operationalPeriod: "OP 4", periodRevision: 4, componentIds: ["c-202", "c-204a", "c-205", "c-215"],
+    });
+    fireEvent.click(within(choice).getByRole("button", { name: "Review it in the IAP workspace" }));
+    expect(onOpenIap).toHaveBeenCalledTimes(1);
+  });
+
+  it("says when a form marked ready starts the plan's next revision", async () => {
+    const api = client();
+    api.saveIcsComponent.mockResolvedValue({
+      ...channels, status: "ready", version: 2,
+      plans: [{ id: "iap-2", revisionNumber: 2, contentRevision: 1, changed: [{ formId: "ICS-205", label: "", version: 2 }] }],
+    });
+    const view = render(<FormComponents client={api} incidentId={INCIDENT} periodRevision={4} periodLabel="OP 4" />);
+    fireEvent.click(await view.findByRole("button", { name: /ICS 205: Incident Radio Communications Plan/ }));
+    fireEvent.click(within(await view.findByRole("form")).getByRole("button", { name: "Save and mark ready" }));
+    await view.findByText("Saved ICS 205: Incident Radio Communications Plan as version 2, ready."
+      + " The IAP's revision 2 started from it, a draft for approval.");
   });
 });

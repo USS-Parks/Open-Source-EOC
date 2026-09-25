@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_PLAN_FORMS,
   ICS_COMPONENT_FORMS,
   ICS_COMPONENT_FORM_IDS,
+  assembleComponentPlan,
   componentFormLabel,
   componentToFormContent,
   emptyValue,
@@ -9,8 +11,8 @@ import {
   prefillComponent,
   validateComponentValues,
 } from "../components.js";
-import { formToTextLines, type IncidentContext } from "../forms.js";
-import { renderIcsFormPdf } from "../pdf.js";
+import { formToTextLines, iapToTextLines, type IncidentContext } from "../forms.js";
+import { renderIapPdf, renderIcsFormPdf } from "../pdf.js";
 
 /**
  * ICS forms as components (Veoci and air gap VA37). Each form's fields follow
@@ -131,5 +133,29 @@ describe("ICS form components", () => {
     expect(pdf).toContain("(Revision: Version 3; ready) Tj");
     expect(pdf).toContain("(Prepared by: Rosa Planner, Planning Section Chief) Tj");
     expect(renderIcsFormPdf(form)).toEqual(renderIcsFormPdf(form));
+  });
+
+  it("assembles a plan from components in form order, with its contents on the cover and its approval", () => {
+    const part = (componentId: string, formId: (typeof ICS_COMPONENT_FORM_IDS)[number], label: string, version: number) => ({
+      componentId, formId, label, version, values: validateComponentValues(formId, {}), preparedBy: "Rosa Planner, Planning Section Chief",
+    });
+    const plan = assembleComponentPlan({ incidentName: "Klamath River Flood", operationalPeriod: "OP 2", preparedBy: "Rosa Planner" }, [
+      part("c-208", "ICS-208", "", 3), part("c-204b", "ICS-204", "Division B", 2), part("c-202", "ICS-202", "", 4),
+      part("c-204a", "ICS-204", "Division A", 2),
+    ]);
+    expect(plan.forms.map((form) => form.title)).toEqual([
+      "Incident Objectives", "Assignment List: Division A", "Assignment List: Division B", "Safety Message/Plan",
+    ]);
+    expect(plan.components?.map((ref) => `${ref.componentId} v${ref.version}`)).toEqual(["c-202 v4", "c-204a v2", "c-204b v2", "c-208 v3"]);
+    expect(plan.forms[0]!.preparedBy).toBe("Rosa Planner, Planning Section Chief");
+    const lines = iapToTextLines(plan);
+    expect(lines.slice(4, 10)).toEqual([
+      "", "Contents:", "  ICS 202 Incident Objectives, version 4", "  ICS 204 Assignment List: Division A, version 2",
+      "  ICS 204 Assignment List: Division B, version 2", "  ICS 208 Safety Message/Plan, version 3",
+    ]);
+    const pdf = Array.from(renderIapPdf(plan, { approval: "approved by Basho at 2026-09-25T18:00:00.000Z" }),
+      (b) => String.fromCharCode(b)).join("");
+    expect(pdf).toContain("(Approval: approved by Basho at) Tj");
+    expect(DEFAULT_PLAN_FORMS).toEqual(["ICS-202", "ICS-203", "ICS-204", "ICS-205", "ICS-205A", "ICS-206", "ICS-207", "ICS-208"]);
   });
 });

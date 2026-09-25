@@ -79,6 +79,7 @@ export const CATEGORY_LABELS: Readonly<Record<string, string>> = {
   "iap.approved": "IAP approved",
   "iap.assembled": "IAP assembled",
   "iap.completed": "IAP completed",
+  "iap.forms.refreshed": "IAP took changed ICS forms",
   "iap.ics204.revised": "IAP ICS 204 revised",
   "iap.revision.created": "IAP revision created",
   "iap.submitted": "IAP submitted for approval",

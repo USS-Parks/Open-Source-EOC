@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { componentFormLabel } from "@openeoc/shared";
 import type {
   IapDisplayState,
   IapWorkspaceItem,
@@ -70,6 +71,11 @@ function emptyWorkspace(query: IapWorkspaceQuery): IapWorkspaceResponse {
     },
     facets: { organizations: [], roles: [] },
   };
+}
+
+/** A stored form's tab key: a plan assembled from forms can hold several 204s. */
+function formKey(form: { readonly id: string }, index: number): string {
+  return `${index}:${form.id}`;
 }
 
 function formatTime(value: string): string {
@@ -249,7 +255,7 @@ export function IapSurface(props: IapSurfaceProps) {
       setSelectedForm(null);
       return;
     }
-    if (!selectedForm || !forms.some((form) => form.id === selectedForm)) setSelectedForm(forms[0]!.id);
+    if (!selectedForm || !forms.some((form, index) => formKey(form, index) === selectedForm)) setSelectedForm(formKey(forms[0]!, 0));
   }, [detail.data, selectedForm]);
 
   if (!active) {
@@ -334,7 +340,10 @@ export function IapSurface(props: IapSurfaceProps) {
     }
   }
 
-  const selectedFormContent = detail.data?.iap.content.forms.find((form) => form.id === selectedForm) ?? null;
+  const selectedFormContent = detail.data?.iap.content.forms.find((form, index) => formKey(form, index) === selectedForm) ?? null;
+  const planForms = detail.data?.iap.components ?? [];
+  const waitingForms = planForms.filter((part) => part.currentVersion > part.version && part.currentStatus === "ready").length;
+  const hasSuccessor = (detail.data?.revisions ?? []).some((revision) => revision.supersedesIapId === selectedId);
   const summary = workspace.data?.summary ?? emptyWorkspace(query).summary;
   const contextPeriod = query.periodRevision === undefined
     ? null
@@ -512,24 +521,72 @@ export function IapSurface(props: IapSurfaceProps) {
                   <p className="iap-callout">Save the ICS-204 assignment draft before changing workflow status.</p>
                 ) : null}
 
+                {planForms.length > 0 ? (
+                  <section aria-label="Forms in this plan">
+                    <h3>Forms in this plan</h3>
+                    <ul className="iap-lineage">
+                      {planForms.map((part) => (
+                        <li key={part.componentId} className="iap-lineage-row">
+                          <span>
+                            <strong>{componentFormLabel(part.formId)}{part.label ? `, ${part.label}` : ""}</strong>
+                            {" · "}version {part.version}
+                          </span>
+                          {part.currentVersion > part.version ? (
+                            <StatusBadge status={part.currentStatus === "ready" ? "warning" : "unknown"}>
+                              Version {part.currentVersion} {part.currentStatus === "ready" ? "ready" : "in draft"}
+                            </StatusBadge>
+                          ) : <StatusBadge status="success">Current</StatusBadge>}
+                        </li>
+                      ))}
+                    </ul>
+                    {waitingForms > 0 && (selectedItem.status === "not_started" || selectedItem.status === "in_progress"
+                      || (selectedItem.status === "approved" && !hasSuccessor)) ? (
+                      <div className="iap-actions">
+                        <Button kind="primary" disabled={busy} onClick={() => void run(async () => {
+                          const change = await props.client.refreshIapForms(selectedItem.id);
+                          if (change.id !== selectedItem.id) {
+                            setQuery((current) => ({ ...current, view: "working" }));
+                            setSelectedId(change.id);
+                          }
+                        })}>
+                          {selectedItem.status === "approved"
+                            ? `Start revision ${selectedItem.revisionNumber + 1} with the changed forms`
+                            : "Take the changed forms into this draft"}
+                        </Button>
+                      </div>
+                    ) : null}
+                    {waitingForms > 0 && selectedItem.status === "in_approval" ? (
+                      <p className="iap-callout">A form changed after this plan was submitted. Approve it, then start the next revision with the changed forms.</p>
+                    ) : null}
+                  </section>
+                ) : null}
+
                 <section aria-label="Stored IAP forms">
                   <h3>Stored form snapshot</h3>
                   <div className="iap-form-tabs" role="tablist" aria-label="Stored forms">
-                    {detail.data.iap.content.forms.map((form) => (
-                      <button
-                        key={form.id}
-                        type="button"
-                        role="tab"
-                        aria-selected={form.id === selectedForm}
-                        onClick={() => setSelectedForm(form.id)}
-                      >
-                        {form.id}
-                      </button>
-                    ))}
+                    {detail.data.iap.content.forms.map((form, index) => {
+                      const ref = detail.data!.iap.content.components?.[index];
+                      return (
+                        <button
+                          key={formKey(form, index)}
+                          type="button"
+                          role="tab"
+                          aria-selected={formKey(form, index) === selectedForm}
+                          onClick={() => setSelectedForm(formKey(form, index))}
+                        >
+                          {ref?.label ? `${form.id} ${ref.label}` : form.id}
+                        </button>
+                      );
+                    })}
                   </div>
                   {selectedFormContent ? <FormPreview form={selectedFormContent} /> : <p>No forms recorded.</p>}
                 </section>
 
+                {planForms.length > 0 ? (
+                  <p className="iap-muted">
+                    This plan&apos;s 204 assignments are ICS forms of the period; change them under ICS Forms.
+                  </p>
+                ) : (
                 <section aria-label="ICS-204 planning">
                   <h3>ICS-204 assignments</h3>
                   <Ics204Editor
@@ -557,6 +614,7 @@ export function IapSurface(props: IapSurfaceProps) {
                   {positions.error ? <p role="alert" className="iap-error">Position authorities unavailable: {positions.error}</p> : null}
                   {participants.error ? <p role="alert" className="iap-error">Participant authorities unavailable: {participants.error}</p> : null}
                 </section>
+                )}
 
                 <section aria-label="Revision history">
                   <h3>Revision history</h3>

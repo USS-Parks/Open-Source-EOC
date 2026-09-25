@@ -16,6 +16,7 @@ import { AuthError, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 import { getIncidentAuthority, type IncidentAuthority } from "../incidents/participation.js";
 import { gatherContext, resolvePreparedAttribution } from "./service.js";
+import { followComponentChange, type PlanChange } from "./plan.js";
 
 /**
  * ICS forms as components of an operational period (Veoci and air gap VA37,
@@ -207,8 +208,15 @@ export type SaveComponentInput = z.infer<typeof SaveComponentSchema>;
 /**
  * Save a component as its next version over the version the editor opened;
  * a save over someone else's is refused. The saver becomes its "prepared by".
+ * A version marked ready goes into the plans that hold the form and that the
+ * saver may revise (part two); the answer names each plan it changed.
  */
-export async function saveComponent(sql: Sql, actor: Principal, componentId: string, input: SaveComponentInput): Promise<ComponentDetail> {
+export async function saveComponent(
+  sql: Sql,
+  actor: Principal,
+  componentId: string,
+  input: SaveComponentInput,
+): Promise<ComponentDetail & { readonly plans: readonly PlanChange[] }> {
   const [row] = await sql`select incident_id, form_id, version, label from ics_form_components where id = ${componentId}`;
   if (!row) throw new AuthError(404, "ICS form not found");
   const incidentId = row.incident_id as string;
@@ -248,7 +256,8 @@ export async function saveComponent(sql: Sql, actor: Principal, componentId: str
     incidentId, componentId, category: "ics_form.saved",
     payload: { formId, label, version: current + 1, status: input.status },
   });
-  return getComponent(sql, actor, componentId);
+  const plans = input.status === "ready" ? await followComponentChange(sql, actor, componentId) : [];
+  return { ...await getComponent(sql, actor, componentId), plans };
 }
 
 /** Every version of a component, newest first. */

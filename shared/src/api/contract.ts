@@ -243,6 +243,7 @@ POST /api/v1/forms/:key/submit
 POST /api/v1/forms/records/:recordId/attachments
 POST /api/v1/iap/:iapId/approve
 POST /api/v1/iap/:iapId/complete
+POST /api/v1/iap/:iapId/forms/refresh
 POST /api/v1/iap/:iapId/revisions
 POST /api/v1/iap/:iapId/submit
 POST /api/v1/incidents/:incidentId/aar

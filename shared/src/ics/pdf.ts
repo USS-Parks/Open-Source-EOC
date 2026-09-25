@@ -8,6 +8,8 @@ export interface PdfExportMetadata {
   readonly source?: string | undefined;
   readonly sourceTime?: string | undefined;
   readonly revision?: string | undefined;
+  /** Who approved the document and when, or that it is not approved. */
+  readonly approval?: string | undefined;
   readonly handling?: string | undefined;
 }
 
@@ -177,6 +179,7 @@ function physicalLines(
     metadata.source ? `Source: ${metadata.source}` : undefined,
     metadata.sourceTime ? `Source time: ${metadata.sourceTime}` : undefined,
     metadata.revision ? `Revision: ${metadata.revision}` : undefined,
+    metadata.approval ? `Approval: ${metadata.approval}` : undefined,
     metadata.handling ? `Handling: ${metadata.handling}` : undefined,
   ].filter((line): line is string => line !== undefined);
   for (const line of metadataLines)

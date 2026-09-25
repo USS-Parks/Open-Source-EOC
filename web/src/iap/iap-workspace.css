@@ -358,6 +358,10 @@
   font: inherit;
 }
 
+.iap-component-checks.iap-plan-choice {
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
 .iap-component-table td {
   padding: 4px;
   vertical-align: top;

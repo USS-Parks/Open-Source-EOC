@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { FormSection, IcsFormContent, IncidentContext } from "./forms.js";
+import type { FormSection, IapDocument, IcsFormContent, IncidentContext } from "./forms.js";
 
 /**
  * ICS forms as components of an incident's operational period (Veoci and air
@@ -448,5 +448,56 @@ export function componentToFormContent(formId: IcsComponentFormId, values: Compo
     operationalPeriod: header.operationalPeriod,
     preparedBy: header.preparedBy,
     sections,
+  };
+}
+
+/** The forms a plan is assembled from when the planning section keeps the default (decision 16). */
+export const DEFAULT_PLAN_FORMS: readonly IcsComponentFormId[] = [
+  "ICS-202", "ICS-203", "ICS-204", "ICS-205", "ICS-205A", "ICS-206", "ICS-207", "ICS-208",
+];
+
+/** One component as a plan holds it: the form, the version it took and that version's values. */
+export interface PlanComponent {
+  readonly componentId: string;
+  readonly formId: IcsComponentFormId;
+  readonly label: string;
+  readonly version: number;
+  readonly values: ComponentValues;
+  /** Who saved that version, and in which role. */
+  readonly preparedBy: string;
+}
+
+/** Form order, then label: the order a plan prints its components in. */
+export function comparePlanComponents(
+  a: { readonly formId: IcsComponentFormId; readonly label: string },
+  b: { readonly formId: IcsComponentFormId; readonly label: string },
+): number {
+  return ICS_COMPONENT_FORM_IDS.indexOf(a.formId) - ICS_COMPONENT_FORM_IDS.indexOf(b.formId)
+    || a.label.localeCompare(b.label);
+}
+
+/**
+ * An IAP document assembled from a period's components (VA37 part two), each
+ * rendered at the version the plan holds, in form order. The references go
+ * with it, so the plan's cover lists what it holds.
+ */
+export function assembleComponentPlan(
+  header: { readonly incidentName: string; readonly operationalPeriod: string; readonly preparedBy: string },
+  parts: readonly PlanComponent[],
+): IapDocument {
+  const ordered = [...parts].sort(comparePlanComponents);
+  return {
+    incidentName: header.incidentName,
+    operationalPeriod: header.operationalPeriod,
+    preparedBy: header.preparedBy,
+    forms: ordered.map((part) => componentToFormContent(part.formId, part.values, {
+      incidentName: header.incidentName,
+      operationalPeriod: header.operationalPeriod,
+      preparedBy: part.preparedBy,
+      ...(part.label ? { label: part.label } : {}),
+    })),
+    components: ordered.map((part) => ({
+      componentId: part.componentId, formId: part.formId, label: part.label, version: part.version,
+    })),
   };
 }

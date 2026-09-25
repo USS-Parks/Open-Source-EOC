@@ -248,12 +248,22 @@ function sectionLabel(section: string): string {
     .join(" ");
 }
 
+/** A form a plan assembled from ICS form components holds, at the version it took (VA37). */
+export interface IapComponentRef {
+  readonly componentId: string;
+  readonly formId: string;
+  readonly label: string;
+  readonly version: number;
+}
+
 export interface IapDocument {
   readonly incidentName: string;
   readonly operationalPeriod: string;
   readonly preparedBy: string;
   readonly forms: readonly IcsFormContent[];
   readonly ics204Assignments?: readonly Ics204Assignment[];
+  /** Present when the plan was assembled from ICS form components, one per form in order. */
+  readonly components?: readonly IapComponentRef[];
 }
 
 /** Assemble the operational period's forms into one IAP document. */
@@ -349,6 +359,15 @@ export function iapToTextLines(iap: IapDocument): string[] {
   lines.push(`Operational Period: ${iap.operationalPeriod}`);
   lines.push(`Prepared by: ${iap.preparedBy}`);
   lines.push("");
+  if (iap.components?.length) {
+    // The cover of a plan assembled from components lists what it holds.
+    lines.push("Contents:");
+    for (const [index, ref] of iap.components.entries()) {
+      const form = iap.forms[index];
+      lines.push(`  ${ref.formId.replace("-", " ")} ${form?.title ?? ""}, version ${ref.version}`);
+    }
+    lines.push("");
+  }
   for (const form of iap.forms) {
     lines.push(...formToTextLines(form));
     lines.push("");

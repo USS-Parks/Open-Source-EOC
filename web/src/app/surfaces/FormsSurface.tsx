@@ -142,7 +142,7 @@ export function FormsSurface(props: FormsSurfaceProps) {
         {selectedPeriod ? (
           <Panel title="ICS forms for this period">
             <FormComponents client={props.client} incidentId={active} periodRevision={selectedPeriod.revision}
-              periodLabel={selectedPeriod.label} />
+              periodLabel={selectedPeriod.label} {...(props.onOpenIap ? { onOpenIap: props.onOpenIap } : {})} />
           </Panel>
         ) : null}
 

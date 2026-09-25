@@ -217,7 +217,7 @@ function roleKey(prefix: "incident" | "position", value: string): string {
   return `${prefix}:${normalized || "unspecified"}`;
 }
 
-async function resolvePeriod(
+export async function resolvePeriod(
   sql: Sql,
   incidentId: string,
   operationalPeriod: string,
@@ -299,7 +299,7 @@ export async function resolvePreparedAttribution(
   };
 }
 
-async function recordIapAudit(
+export async function recordIapAudit(
   sql: Sql,
   actor: Principal,
   authority: IncidentAuthority,
@@ -309,7 +309,8 @@ async function recordIapAudit(
       | "iap.assembled"
       | "iap.submitted"
       | "iap.ics204.revised"
-      | "iap.revision.created";
+      | "iap.revision.created"
+      | "iap.forms.refreshed";
     subjectId: string;
     payload?: Record<string, unknown>;
   },
@@ -468,7 +469,13 @@ function hasOwnerWriteAuthority(actor: Principal, authority: IncidentAuthority):
       && (membership.role === "admin" || membership.role === "member"));
 }
 
-function requireIapEditAuthority(
+/** A plan assembled from ICS form components takes its 204s from them, not from the assignment editor. */
+function refuseComponentPlan(content: IapDocument): void {
+  if (content.components?.length)
+    throw new AuthError(409, "this plan's forms are ICS form components; change them under ICS Forms");
+}
+
+export function requireIapEditAuthority(
   actor: Principal,
   authority: IncidentAuthority,
   row: { preparedBy: string; preparedParticipationId: string | null },
@@ -492,6 +499,7 @@ export async function replaceIcs204Assignments(
   await requireCurrentClaimedPosition(sql, actor, row.jurisdictionId);
   requireIapEditAuthority(actor, authority, row);
   if (row.status !== "draft") throw new AuthError(409, "only a draft IAP can be edited");
+  refuseComponentPlan(row.content);
   if (row.contentRevision !== input.expectedContentRevision)
     throw new AuthError(409, "IAP content revision conflict");
   const assignments = await resolveIcs204Assignments(
@@ -534,6 +542,7 @@ export async function createIapRevision(
   requireIapEditAuthority(actor, authority, source);
   if (source.status !== "approved")
     throw new AuthError(409, "only an approved IAP can start a revision");
+  refuseComponentPlan(source.content);
   const [successor] = await sql`select id from iaps where supersedes_iap_id = ${sourceIapId}`;
   if (successor) throw new AuthError(409, "this IAP revision already has a successor");
   const attribution = await resolvePreparedAttribution(sql, actor, authority);
@@ -657,7 +666,7 @@ export async function markIapComplete(sql: Sql, actor: Principal, iapId: string)
   });
 }
 
-async function iapWorkflowRow(
+export async function iapWorkflowRow(
   sql: Sql,
   iapId: string,
 ): Promise<{
@@ -700,7 +709,7 @@ async function iapWorkflowRow(
   };
 }
 
-async function requireCurrentClaimedPosition(
+export async function requireCurrentClaimedPosition(
   sql: Sql,
   actor: Principal,
   jurisdictionId: string,
@@ -989,14 +998,18 @@ export async function exportIapPdf(
 ): Promise<{ filename: string; bytes: Uint8Array }> {
   await getIap(sql, actor, iapId);
   const [snapshot] = await sql`
-    select content, created_at, approved_at, revision_number, content_revision, status
-    from iaps where id = ${iapId}`;
+    select i.content, i.created_at, i.approved_at, i.revision_number, i.content_revision, i.status,
+      approver.display_name as approved_by
+    from iaps i left join persons approver on approver.id = i.approved_by where i.id = ${iapId}`;
   if (!snapshot) throw new AuthError(404, "IAP not found");
   const content = snapshot.content as IapDocument;
   const bytes = renderIapPdf(content, {
     source: "Stored IAP snapshot",
     sourceTime: iso(snapshot.approved_at ?? snapshot.created_at),
     revision: `IAP revision ${snapshot.revision_number}; content revision ${snapshot.content_revision}; status ${snapshot.status}`,
+    approval: snapshot.approved_at
+      ? `approved by ${snapshot.approved_by as string} at ${iso(snapshot.approved_at)}`
+      : "not approved",
   });
   const safe = content.incidentName.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase();
   return { filename: `iap-${safe}.pdf`, bytes };

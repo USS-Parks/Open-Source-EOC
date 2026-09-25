@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   ICS_COMPONENT_FORMS,
   ICS_COMPONENT_FORM_IDS,
+  DEFAULT_PLAN_FORMS,
   componentFormLabel,
   emptyValue,
   type ComponentField,
@@ -25,7 +26,7 @@ import { ErrorNote, Loading } from "../app/screens/parts.js";
 
 type ComponentClient = Pick<ApiClient,
   "listIcsComponents" | "createIcsComponent" | "getIcsComponent" | "saveIcsComponent"
-  | "listIcsComponentVersions" | "downloadIcsComponentPdf">;
+  | "listIcsComponentVersions" | "downloadIcsComponentPdf" | "createIap">;
 
 interface Draft {
   readonly component: IcsComponentDetail;
@@ -157,6 +158,8 @@ export function FormComponents(props: {
   readonly incidentId: string;
   readonly periodRevision: number;
   readonly periodLabel: string;
+  /** Open the IAP workspace, where an assembled plan is submitted and approved. */
+  readonly onOpenIap?: () => void;
 }) {
   const [reload, setReload] = useState(0);
   const list = useAsync(
@@ -170,12 +173,17 @@ export function FormComponents(props: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
+  // Forms ticked or unticked for the plan; the rest follow the default set.
+  const [picked, setPicked] = useState<Readonly<Record<string, boolean>>>({});
+  const [assembled, setAssembled] = useState(false);
 
   useEffect(() => {
     setDraft(null);
     setVersions(null);
     setError(null);
     setNotice("");
+    setPicked({});
+    setAssembled(false);
   }, [props.incidentId, props.periodRevision]);
 
   const act = async (fn: () => Promise<string | void>) => {
@@ -225,10 +233,24 @@ export function FormComponents(props: {
     setDraft(draftOf(saved));
     setVersions(null);
     setReload((n) => n + 1);
-    return `Saved ${named(saved.formId, saved.label)} as version ${saved.version}, ${saved.status}.`;
+    const plans = saved.plans.map((plan) => (plan.revisionNumber > 1 && plan.contentRevision === 1
+      ? ` The IAP's revision ${plan.revisionNumber} started from it, a draft for approval.`
+      : ` IAP revision ${plan.revisionNumber} took it.`)).join("");
+    return `Saved ${named(saved.formId, saved.label)} as version ${saved.version}, ${saved.status}.${plans}`;
   });
   const showVersions = () => act(async () => {
     if (draft) setVersions(await props.client.listIcsComponentVersions(draft.component.id));
+  });
+  // A ready form is in the plan when ticked; untouched, the default set (decision 16) is.
+  const inPlan = (c: { readonly id: string; readonly formId: IcsComponentFormId; readonly status: string }) =>
+    c.status === "ready" && (picked[c.id] ?? DEFAULT_PLAN_FORMS.includes(c.formId));
+  const planIds = (list.data ?? []).filter(inPlan).map((c) => c.id);
+  const assemble = () => act(async () => {
+    await props.client.createIap(props.incidentId, {
+      operationalPeriod: props.periodLabel, periodRevision: props.periodRevision, componentIds: planIds,
+    });
+    setAssembled(true);
+    return `Assembled a draft IAP for ${props.periodLabel} from ${planIds.length} ${planIds.length === 1 ? "form" : "forms"}.`;
   });
   const print = (version?: number) => act(async () => {
     if (!draft) return;
@@ -274,6 +296,31 @@ export function FormComponents(props: {
             </li>
           ))}
         </ul>
+      ) : null}
+
+      {list.data && list.data.length > 0 ? (
+        <fieldset className="iap-component-field">
+          <legend>Assemble the IAP from these forms</legend>
+          <p className="iap-muted">
+            A plan takes ready forms at their current version and is approved as a whole. The 202, 203, 204, 205,
+            205A, 206, 207 and 208 are ticked by default; the others go in when ticked.
+          </p>
+          <div className="iap-component-checks iap-plan-choice">
+            {list.data.map((c) => (
+              <label key={c.id}>
+                <input type="checkbox" checked={inPlan(c)} disabled={c.status !== "ready" || busy}
+                  onChange={(event) => setPicked((current) => ({ ...current, [c.id]: event.target.checked }))} />
+                {" "}{named(c.formId, c.label)}{c.status === "ready" ? "" : " (draft)"}
+              </label>
+            ))}
+          </div>
+          <div className="iap-actions">
+            <Button kind="primary" onClick={() => void assemble()} disabled={busy || planIds.length === 0}>
+              Assemble IAP from {planIds.length} {planIds.length === 1 ? "form" : "forms"}
+            </Button>
+            {assembled && props.onOpenIap ? <Button onClick={props.onOpenIap}>Review it in the IAP workspace</Button> : null}
+          </div>
+        </fieldset>
       ) : null}
 
       <div className="iap-component-start">
