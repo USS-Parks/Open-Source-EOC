@@ -349,6 +349,8 @@ acknowledges and more acknowledgements are needed.
 - Prepare IAP content against the selected incident and a real incident-area
   operational period. Working, in approval, approved, and complete are distinct
   states; export the selected immutable revision.
+- Fill in the period's ICS forms one at a time under
+  [Write the period's ICS forms](#write-the-periods-ics-forms).
 - Use **Situation / SITREP** to compose from the selected incident. Review source warnings and
   period provenance before treating it as a shift briefing.
 - Prepare JIC language as a draft, then save and submit the exact saved content.
@@ -359,6 +361,36 @@ acknowledges and more acknowledgements are needed.
   that integration is configured.
 - In **AAR**, **Load latest revision** on a corrective action reads that one
   action again from the server, so a save does not overwrite a newer change.
+
+### Write the period's ICS forms
+
+Open **ICS Forms** under Planning and select the operational period. **ICS
+forms for this period** lists each form the period holds, with its version,
+whether it is a draft or ready, and who saved it last.
+
+1. Choose a form in **Form to start** and select **Start form**. The form
+   opens as a draft, filled in where the incident's records hold the answer:
+   positions and their holders for the 201, 203, 205A and 207, the radio
+   channels board for the 205, check-ins for the 211, the activity log for
+   the 214, and the period's 202 objectives for a later 201 or 209. A period
+   holds one of most forms; if it already has the one chosen, the button
+   opens it instead. The 204, 213 and 214 can be several to a period, so
+   they ask for a name: the division or group, the message subject, or the
+   person and position.
+2. Fill the form in block by block; the numbers follow the NIMS ICS Forms
+   Booklet (FEMA 502-2, September 2010). A table takes **Add row** and
+   **Remove**.
+3. **Save as draft** or **Save and mark ready**. Each save is a new version
+   and makes you its preparer, under the position you are acting in. A save
+   over a version someone else saved first is refused with the current
+   version's number; open the form again and reapply the change.
+4. **Versions** lists every saved version. **Print** gives any version as a
+   PDF; **Load into the editor** brings an earlier version back to save as
+   the next one. Printing uses the saved version, not unsaved changes.
+
+A reader of the incident can open and print the forms but not save them. A
+partner organization's contributor on the incident can write them under
+their incident grant, and each start and save is in the owner's chronology.
 
 ### Review, publish and answer from the JIC panel
 

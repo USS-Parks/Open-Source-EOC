@@ -72,6 +72,8 @@ import type {
   PoolResource,
   CapAlert,
   IncidentImpactComparison,
+  ComponentValues,
+  IcsComponentFormId,
 } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
 import type {
@@ -518,6 +520,35 @@ export interface IapListItem {
   readonly approvedBy: string | null;
   readonly approvedAt: string | null;
   readonly createdAt: string;
+}
+/** An ICS form kept as a component of an operational period (VA37). */
+export interface IcsComponentSummary {
+  readonly id: string;
+  readonly incidentId: string;
+  readonly formId: IcsComponentFormId;
+  readonly title: string;
+  readonly label: string;
+  readonly periodRevision: number;
+  readonly operationalPeriod: string;
+  readonly status: "draft" | "ready";
+  readonly version: number;
+  readonly preparedBy: string;
+  readonly preparedRole: string;
+  readonly updatedAt: string;
+}
+export interface IcsComponentDetail extends IcsComponentSummary {
+  readonly edition: string;
+  readonly incidentName: string;
+  readonly values: ComponentValues;
+}
+export interface IcsComponentVersion {
+  readonly version: number;
+  readonly status: "draft" | "ready";
+  readonly label: string;
+  readonly values: ComponentValues;
+  readonly savedBy: string;
+  readonly savedRole: string;
+  readonly savedAt: string;
 }
 export interface CreateIapBody {
   readonly operationalPeriod: string;
@@ -1673,6 +1704,32 @@ export class ApiClient {
   }
   downloadIapPdf(iapId: string): Promise<Blob> {
     return this.requestBlob(`/api/v1/iap/${iapId}/pdf`);
+  }
+  async listIcsComponents(incidentId: string, periodRevision?: number): Promise<IcsComponentSummary[]> {
+    const q = periodRevision === undefined ? "" : `?periodRevision=${periodRevision}`;
+    const r = await this.request<{ components: IcsComponentSummary[] }>("GET", `/api/v1/incidents/${incidentId}/ics-components${q}`);
+    return r.components;
+  }
+  /** Start a form for a period, prefilled from the incident's records. */
+  createIcsComponent(incidentId: string, body: { formId: string; periodRevision: number; label?: string }): Promise<IcsComponentDetail> {
+    return this.request<IcsComponentDetail>("POST", `/api/v1/incidents/${incidentId}/ics-components`, body);
+  }
+  getIcsComponent(componentId: string): Promise<IcsComponentDetail> {
+    return this.request<IcsComponentDetail>("GET", `/api/v1/ics-components/${componentId}`);
+  }
+  /** Save a form as its next version over the version the editor opened. */
+  saveIcsComponent(
+    componentId: string,
+    body: { values: ComponentValues; status: "draft" | "ready"; expectedVersion: number; label?: string },
+  ): Promise<IcsComponentDetail> {
+    return this.request<IcsComponentDetail>("PUT", `/api/v1/ics-components/${componentId}`, body as unknown as Record<string, unknown>);
+  }
+  async listIcsComponentVersions(componentId: string): Promise<IcsComponentVersion[]> {
+    const r = await this.request<{ versions: IcsComponentVersion[] }>("GET", `/api/v1/ics-components/${componentId}/versions`);
+    return r.versions;
+  }
+  downloadIcsComponentPdf(componentId: string, version?: number): Promise<Blob> {
+    return this.requestBlob(`/api/v1/ics-components/${componentId}/pdf${version === undefined ? "" : `?version=${version}`}`);
   }
   async searchJurisdiction(jurisdictionId: string, q: string): Promise<SearchHit[]> {
     const r = await this.request<{ hits: SearchHit[] }>(

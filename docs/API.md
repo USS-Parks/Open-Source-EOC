@@ -308,6 +308,12 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 
 ### ics-forms
 
+- `GET /api/v1/ics-components/:componentId`: Read ics components (auth: bearer; audience: operator)
+- `PUT /api/v1/ics-components/:componentId`: Set ics components (auth: bearer; audience: operator)
+- `GET /api/v1/ics-components/:componentId/pdf`: Read ics components pdf (auth: bearer; audience: operator)
+- `GET /api/v1/ics-components/:componentId/versions`: Read ics components versions (auth: bearer; audience: operator)
+- `GET /api/v1/incidents/:incidentId/ics-components`: Read incidents ics components (auth: bearer; audience: operator)
+- `POST /api/v1/incidents/:incidentId/ics-components`: Run incidents ics components (auth: bearer; audience: operator)
 - `GET /api/v1/incidents/:incidentId/ics-forms/:formId`: Read incidents ics forms (auth: bearer; audience: operator)
 
 ### impact

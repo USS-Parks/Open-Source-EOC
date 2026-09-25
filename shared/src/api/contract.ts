@@ -78,6 +78,9 @@ GET /api/v1/iap/:iapId
 GET /api/v1/iap/:iapId/pdf
 GET /api/v1/iap/:iapId/revisions
 GET /api/v1/iap/:iapId/revisions/:revision/pdf
+GET /api/v1/ics-components/:componentId
+GET /api/v1/ics-components/:componentId/pdf
+GET /api/v1/ics-components/:componentId/versions
 GET /api/v1/incident-templates
 GET /api/v1/incident-templates/:key
 GET /api/v1/incident-templates/:key/versions
@@ -96,6 +99,7 @@ GET /api/v1/incidents/:incidentId/esf-assessments
 GET /api/v1/incidents/:incidentId/esf-assessments/:framework/:esf/history
 GET /api/v1/incidents/:incidentId/handoff
 GET /api/v1/incidents/:incidentId/iaps
+GET /api/v1/incidents/:incidentId/ics-components
 GET /api/v1/incidents/:incidentId/ics-forms/:formId
 GET /api/v1/incidents/:incidentId/impact
 GET /api/v1/incidents/:incidentId/impact/compare
@@ -255,6 +259,7 @@ POST /api/v1/incidents/:incidentId/data-packs
 POST /api/v1/incidents/:incidentId/esf-assessments
 POST /api/v1/incidents/:incidentId/esf-assessments/:framework/:esf/decisions
 POST /api/v1/incidents/:incidentId/iap
+POST /api/v1/incidents/:incidentId/ics-components
 POST /api/v1/incidents/:incidentId/lifeline-assessments
 POST /api/v1/incidents/:incidentId/lifeline-assessments/:lifeline/decisions
 POST /api/v1/incidents/:incidentId/lockdown
@@ -355,6 +360,7 @@ PUT /api/v1/contact-groups/:groupId
 PUT /api/v1/contacts/:contactId
 PUT /api/v1/damage/pa-items/:id
 PUT /api/v1/iap/:iapId/ics-204
+PUT /api/v1/ics-components/:componentId
 PUT /api/v1/incident-templates/:key
 PUT /api/v1/incidents/:incidentId/dashboard-configs/:key
 PUT /api/v1/incidents/:incidentId/operational-area
@@ -445,6 +451,7 @@ const tagAliases: Readonly<Record<string, string>> = {
   "dashboard-configs": "dashboards",
   "data-packs": "datasets",
   "guests": "auth",
+  "ics-components": "ics-forms",
   "incident-templates": "incidents",
   "integrations": "auth",
   "lockdown": "incidents",

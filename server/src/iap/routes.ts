@@ -18,6 +18,15 @@ import {
   replaceIcs204Assignments,
   submitIapForApproval,
 } from "./service.js";
+import {
+  SaveComponentSchema,
+  componentPdf,
+  createComponent,
+  getComponent,
+  listComponentVersions,
+  listComponents,
+  saveComponent,
+} from "./components.js";
 
 /**
  * ICS form and IAP routes (F5). Forms prefill from live incident
@@ -58,6 +67,23 @@ const ReplaceIcs204Body = z.object({
 const CreateRevisionBody = z.object({
   assignments: z.array(Ics204AssignmentBody).min(1).max(100),
 }).strict();
+
+const CreateComponentBody = z.object({
+  formId: z.string().min(1).max(20),
+  periodRevision: z.number().int().positive(),
+  label: z.string().max(200).optional(),
+}).strict();
+
+const ComponentListQuery = z.object({
+  periodRevision: z.coerce.number().int().positive().optional(),
+}).strict();
+
+const ComponentPdfQuery = z.object({
+  version: z.coerce.number().int().positive().optional(),
+}).strict();
+
+const IncidentParams = z.object({ incidentId: z.uuid() });
+const ComponentParams = z.object({ componentId: z.uuid() });
 
 export function iapRoutes(
   app: FastifyInstance,
@@ -183,6 +209,62 @@ export function iapRoutes(
     const { iapId } = req.params as { iapId: string };
     const { filename, bytes } = await withPerson(sql, req.principal.person.id, (tx) =>
       exportIapPdf(tx, req.principal, iapId),
+    );
+    return reply
+      .header("content-type", "application/pdf")
+      .header("content-disposition", `attachment; filename="${filename}"`)
+      .send(Buffer.from(bytes));
+  });
+
+  // ICS forms kept as components of an operational period (VA37).
+  app.get("/api/v1/incidents/:incidentId/ics-components", { preHandler: authenticate }, async (req, reply) => {
+    const { incidentId } = IncidentParams.parse(req.params);
+    const { periodRevision } = ComponentListQuery.parse(req.query);
+    const components = await withPerson(sql, req.principal.person.id, (tx) =>
+      listComponents(tx, req.principal, incidentId, periodRevision),
+    );
+    return reply.send({ components });
+  });
+
+  app.post("/api/v1/incidents/:incidentId/ics-components", { preHandler: authenticate }, async (req, reply) => {
+    const { incidentId } = IncidentParams.parse(req.params);
+    const body = CreateComponentBody.parse(req.body);
+    const component = await withPerson(sql, req.principal.person.id, (tx) =>
+      createComponent(tx, req.principal, incidentId, body),
+    );
+    return reply.status(201).send(component);
+  });
+
+  app.get("/api/v1/ics-components/:componentId", { preHandler: authenticate }, async (req, reply) => {
+    const { componentId } = ComponentParams.parse(req.params);
+    const component = await withPerson(sql, req.principal.person.id, (tx) =>
+      getComponent(tx, req.principal, componentId),
+    );
+    return reply.send(component);
+  });
+
+  app.put("/api/v1/ics-components/:componentId", { preHandler: authenticate }, async (req, reply) => {
+    const { componentId } = ComponentParams.parse(req.params);
+    const body = SaveComponentSchema.parse(req.body);
+    const component = await withPerson(sql, req.principal.person.id, (tx) =>
+      saveComponent(tx, req.principal, componentId, body),
+    );
+    return reply.send(component);
+  });
+
+  app.get("/api/v1/ics-components/:componentId/versions", { preHandler: authenticate }, async (req, reply) => {
+    const { componentId } = ComponentParams.parse(req.params);
+    const versions = await withPerson(sql, req.principal.person.id, (tx) =>
+      listComponentVersions(tx, req.principal, componentId),
+    );
+    return reply.send({ versions });
+  });
+
+  app.get("/api/v1/ics-components/:componentId/pdf", { preHandler: authenticate }, async (req, reply) => {
+    const { componentId } = ComponentParams.parse(req.params);
+    const { version } = ComponentPdfQuery.parse(req.query);
+    const { filename, bytes } = await withPerson(sql, req.principal.person.id, (tx) =>
+      componentPdf(tx, req.principal, componentId, version),
     );
     return reply
       .header("content-type", "application/pdf")

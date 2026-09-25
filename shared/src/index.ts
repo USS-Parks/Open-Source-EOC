@@ -24,6 +24,7 @@ export * from "./cot/cot.js";
 export * from "./api/contract.js";
 export * from "./collab/plan.js";
 export * from "./ics/forms.js";
+export * from "./ics/components.js";
 export * from "./ics/pdf.js";
 export * from "./resource/lifecycle.js";
 export * from "./resource/contract.js";

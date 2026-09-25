@@ -82,6 +82,8 @@ export const CATEGORY_LABELS: Readonly<Record<string, string>> = {
   "iap.ics204.revised": "IAP ICS 204 revised",
   "iap.revision.created": "IAP revision created",
   "iap.submitted": "IAP submitted for approval",
+  "ics_form.created": "ICS form started",
+  "ics_form.saved": "ICS form saved",
   "incident.activated": "Incident activated",
   "incident.area.revised": "Incident area or period revised",
   "incident.closed": "Incident closed",

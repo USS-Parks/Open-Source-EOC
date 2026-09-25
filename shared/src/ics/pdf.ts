@@ -1,5 +1,5 @@
 import { aarToTextLines, type AarDocument } from "../aar/aar.js";
-import { iapToTextLines, type IapDocument } from "./forms.js";
+import { formToTextLines, iapToTextLines, type IapDocument, type IcsFormContent } from "./forms.js";
 
 /** Metadata must come from the stored export record. Handling is omitted unless the record marks it. */
 export interface PdfExportMetadata {
@@ -209,6 +209,20 @@ export function renderAarPdf(
     source: "Open Source EOC AAR document",
     ...metadata,
   });
+}
+
+/** Render one ICS form on its own, with its incident, period and preparer. */
+export function renderIcsFormPdf(
+  form: IcsFormContent,
+  metadata: PdfExportMetadata = {},
+): Uint8Array {
+  return renderPdf(`${form.id.replace("-", " ")} ${form.title}: ${form.incidentName}`,
+    [`Operational Period: ${form.operationalPeriod}`, `Prepared by: ${form.preparedBy}`, "", ...formToTextLines(form)], {
+      incident: form.incidentName,
+      operationalPeriod: form.operationalPeriod,
+      source: "Open Source EOC ICS form",
+      ...metadata,
+    });
 }
 
 /** Render the exact stored IAP revision with bounded, multipage physical lines. */

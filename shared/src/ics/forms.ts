@@ -329,6 +329,18 @@ export function orgSectionFor(positionKey: string): string {
   return sectionForPosition(positionKey);
 }
 
+/** One form as flat text lines: its id and title, then each section's heading, columns, rows and lines. */
+export function formToTextLines(form: IcsFormContent): string[] {
+  const lines = [`${form.id} ${form.title}`];
+  for (const section of form.sections) {
+    lines.push(`  ${section.heading}`);
+    if (section.columns) lines.push(`    ${section.columns.join(" | ")}`);
+    for (const row of section.rows ?? []) lines.push(`    ${row.join(" | ")}`);
+    for (const line of section.lines ?? []) lines.push(`    ${line}`);
+  }
+  return lines;
+}
+
 /** A deterministic, flat text projection of an IAP for rendering and snapshots. */
 export function iapToTextLines(iap: IapDocument): string[] {
   const lines: string[] = [];
@@ -338,13 +350,7 @@ export function iapToTextLines(iap: IapDocument): string[] {
   lines.push(`Prepared by: ${iap.preparedBy}`);
   lines.push("");
   for (const form of iap.forms) {
-    lines.push(`${form.id} ${form.title}`);
-    for (const section of form.sections) {
-      lines.push(`  ${section.heading}`);
-      if (section.columns) lines.push(`    ${section.columns.join(" | ")}`);
-      for (const row of section.rows ?? []) lines.push(`    ${row.join(" | ")}`);
-      for (const line of section.lines ?? []) lines.push(`    ${line}`);
-    }
+    lines.push(...formToTextLines(form));
     lines.push("");
   }
   return lines;

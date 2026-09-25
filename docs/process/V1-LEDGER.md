@@ -7086,3 +7086,121 @@ the maps and layers as a data packet downloaded beside it.
   no Mac run.
 - **Rollback:** revert `18bf75a` and `c0c85e4`; remove the packet from
   `deploy/`.
+
+## Veoci and air gap VA37 part one: ICS forms as stored components
+
+Veoci Integration and Air Gap PSPR unit VA37, part one (Basho's amendment 2:
+the ICS forms as separate components of the IAP). Part two, the plan
+assembled from these components, follows as its own unit.
+
+- **What the code did before.** The twelve ICS forms were built on demand
+  from the incident's records (`GET .../ics-forms/:formId`) and existed only
+  inside an assembled IAP snapshot. No form could be kept on its own, edited
+  field by field, saved, versioned or marked ready, and the 209, 213, 215
+  and 215A had no form at all.
+- **What changed.**
+  - **The forms.** `shared/src/ics/components.ts` lays out the fifteen forms
+    of amendment 2 (201, 202, 203, 204, 205, 205A, 206, 207, 208, 209, 211,
+    213, 214, 215 and 215A) after the Forms Booklet's block numbering, and
+    records the edition each follows, "NIMS ICS Forms Booklet, FEMA 502-2
+    (September 2010)" (decision 15). A field is text, long text, a date and
+    time, a choice, check boxes or a table with named columns, and some
+    tables start with the rows the booklet names (the 204's personnel, the
+    209's status rows). Blocks every form shares (incident name, operational
+    period, prepared by) come from the component's incident, period and
+    saver, not from fields. A component's values are checked against its
+    form (every field of its kind and size, no field the form lacks, a
+    missing field taking its empty value), prefilled from the incident's
+    records, and printed in block order. `formToTextLines` came out of the
+    IAP text writer so one form prints alone (`renderIcsFormPdf`); the IAP
+    PDF is unchanged.
+  - **The store.** Migration `0148_ics_form_components.sql`:
+    `ics_form_components` holds a period's forms, keyed by incident, period
+    revision (a recorded period of that incident, by foreign key, as for an
+    IAP), form and label, each with its edition, version, draft or ready
+    status, values and preparer (person, role label, organization and any
+    incident grant). `ics_form_component_versions` keeps every version,
+    written only by a trigger: the runtime may read it and nothing else, and
+    the trigger refuses a change or delete even by the owner. A save must
+    move the version by exactly one, a change that leaves the version alone
+    is refused, and a component keeps its incident, period and form. The
+    204, 213 and 214 may be several to a period, told apart by a label (the
+    division or group, the subject, the person and position); the others
+    are one per period. Reading follows the incident; writing needs the
+    jurisdiction's writer or a contributor grant on the incident
+    (`can_contribute_incident`), and the saver becomes the preparer. A
+    partner's contributor writes the owner's audit trail only through
+    `append_ics_form_participant_audit`, as for an IAP.
+  - **Prefill.** A new component reads the incident's positions and holders
+    (201 organization, 203 sections, 205A, 207 chart, the 204's Operations
+    Section Chief), the radio channels board (205), check-ins (211), the
+    activity log (214, 209 significant events), resource requests (201
+    resources, 215), the period's 202 objectives (a later 201 or 209), the
+    incident's start (201, 209) and the preparer and position (213 from, 214
+    name and position). What the records do not hold stays empty. The shared
+    prefill also reads medical facilities (206) and a safety message (208),
+    but the server's incident context carries neither yet, so those two
+    start empty.
+  - **Routes.** `GET` and `POST /api/v1/incidents/:incidentId/ics-components`
+    (list a period's forms in form order; start one, 201, or 409 when the
+    period already has it); `GET` and `PUT /api/v1/ics-components/:componentId`
+    (read; save over the version opened with `expectedVersion`, 409 when
+    someone saved in between, 400 naming the field a value is refused for);
+    `GET .../versions` (newest first, with who saved each and in which
+    role); `GET .../pdf?version=` (any version). A malformed id answers 400.
+    The audit records `ics_form.created` and `ics_form.saved`, labelled in
+    the chronology.
+  - **The screen.** **ICS Forms** under Planning gains **ICS forms for this
+    period** once a period is selected: the period's forms with version,
+    draft or ready, and preparer; **Form to start** (the button opens the
+    period's form instead when it already holds one; the 204, 213 and 214
+    ask for a name); an editor laid out block by block, with tables that add
+    and remove rows; **Save as draft**, **Save and mark ready**, **Print**,
+    and **Versions** with **Print** and **Load into the editor**. Enter in a
+    field saves nothing. `docs/guides/OPERATOR-QUICKSTART.md` gains "Write
+    the period's ICS forms"; the contract and `docs/API.md` list the six
+    routes.
+- **Files outside the "Owns" cell.** `web/src/app/surfaces/FormsSurface.tsx`
+  (the editor mounts where the period's forms are built; `IapSurface.tsx`,
+  in the cell, is where part two assembles the plan),
+  `web/src/app/api/client.ts` (types and six methods),
+  `web/src/audit/chronology.ts` (two labels), `shared/src/api/contract.ts`,
+  `shared/src/index.ts`, and the IAP web test's mock client, which gained the
+  list method.
+- **Air-gap behavior (decision 9).** Forms are written, kept and printed on
+  the host with no outside service; the PDF is written in-process.
+- **Tests.** `ics-components.test.ts` (8, real database): a 202 started as a
+  prefilled draft and a second refused; saves over the version opened, a
+  stale save refused, the versions listed, the current and first version
+  printed and a missing version 404; the 202's objectives in a new 201 and
+  209 and the positions in the 203; several 204s by name, a duplicate name
+  refused on start and on rename, the 214 prefilled with the preparer, the
+  list in form order; values refused with the field named, an unknown form,
+  a period of another incident and a malformed id; a partner's contributor
+  preparing a 213 under the grant, each start and save in the owner's
+  trail, then a host member taking it over; a reader who can read and print
+  but not write, and an outsider shown nothing; the version table read-only
+  to the runtime and append-only to the owner, a change without a version,
+  a skipped version and a changed form refused. `components.test.ts` (4,
+  shared): every form's fields, validation, every form's prefill valid
+  against its own form, and printing. `form-components.test.tsx` (3, with
+  axe): a table edited and saved ready over version 1, a name asked before
+  a 204 starts, a stale save shown. `ics-components-browser.test.ts` at 1586
+  by 992 and 1534 by 790: the member, acting as Planning Section Chief,
+  writes the 202 objectives, a 205 channel and the 208 safety message, marks
+  each ready, reads the 208's versions and prints it; the page does not
+  scroll sideways and the stored forms carry the position as preparer.
+- **Verification.** On the Linux test bed (decision 19): `pnpm
+  check:static` exit 0; the API document regenerated; this unit's tests with
+  the IAP, IAP workspace, ICS 204, API document, migration, route coverage,
+  chronology and web IAP tests green (74), then the browser test (2) again
+  after the style fix. Every test file except the browser, end-to-end and
+  load files (Vitest, two workers): 1,599 passed of 1,599 in 238 files.
+  Rebased onto the four commits that reached `main` meanwhile (the 0.9.2
+  record and the macOS build, none touching this unit's files): `pnpm
+  check:static` exit 0 and this unit's tests with the IAP and web IAP tests
+  green again.
+- **Not run.** The Windows setup (decision 18).
+- **Evidence level:** real-database, component and browser tests.
+- **Rollback:** revert the commit; migration `0148` adds two tables, a
+  trigger and two functions that the earlier code ignores.

@@ -57,7 +57,8 @@ export interface ContextExtras {
   readonly safetyMessage?: string;
 }
 
-async function gatherContext(
+/** The live incident context the form builders read, with the caller's authority on the incident. */
+export async function gatherContext(
   sql: Sql,
   actor: Principal,
   incidentId: string,
@@ -202,7 +203,7 @@ interface ResolvedPeriod {
   readonly endsAt: string;
 }
 
-interface PreparedAttribution {
+export interface PreparedAttribution {
   readonly organizationId: string;
   readonly positionId: string | null;
   readonly participationId: string | null;
@@ -253,7 +254,8 @@ async function resolvePeriod(
   return periods[0]!;
 }
 
-async function resolvePreparedAttribution(
+/** Who prepares a form or plan: the organization, and the incident grant, position or membership they act under. */
+export async function resolvePreparedAttribution(
   sql: Sql,
   actor: Principal,
   authority: IncidentAuthority,

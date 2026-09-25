@@ -5,6 +5,7 @@ import type { ApiClient, IapResult } from "../api/client.js";
 import { useAsync } from "../data/hooks.js";
 import { EmptyState, Loading, Scroll, SurfaceHeader } from "../screens/parts.js";
 import { FORM_TITLES, FormPreview, formLabel } from "../../iap/FormPreview.js";
+import { FormComponents } from "../../iap/FormComponents.js";
 import "../../iap/iap-workspace.css";
 
 interface PeriodChoice {
@@ -137,6 +138,13 @@ export function FormsSurface(props: FormsSurfaceProps) {
             </p>
           )}
         </Panel>
+
+        {selectedPeriod ? (
+          <Panel title="ICS forms for this period">
+            <FormComponents client={props.client} incidentId={active} periodRevision={selectedPeriod.revision}
+              periodLabel={selectedPeriod.label} />
+          </Panel>
+        ) : null}
 
         <Panel title="Build from live incident records">
           <EnumSelect

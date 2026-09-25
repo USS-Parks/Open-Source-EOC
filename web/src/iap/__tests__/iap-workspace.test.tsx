@@ -51,6 +51,7 @@ it("assembles from the selected authoritative period revision without inventing 
   const client = {
     getIncidentArea: vi.fn().mockResolvedValue(area),
     incidentAreaHistory: vi.fn().mockResolvedValue([]),
+    listIcsComponents: vi.fn().mockResolvedValue([]),
     createIap,
     getIap: vi.fn().mockResolvedValue({ id: "iap-4", operationalPeriod: "Operational Period 4", content: document }),
   } as unknown as ApiClient;
