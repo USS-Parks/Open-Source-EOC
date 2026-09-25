@@ -20,7 +20,7 @@ import { WorkStateLine, type WorkState } from "../../design/work-state.js";
 import { useDraftStore } from "../../offline/draft-store.js";
 import { ResourceRequestDetailPanel } from "../../resources/ResourceRequestDetail.js";
 import { nextAction, ownerLabel, requestStage, stageTone, when } from "../../resources/request-view.js";
-import type { ApiClient, ResourceRequestSummary } from "../api/client.js";
+import type { ApiClient, ResourceHistoryEntry, ResourceRequestSummary } from "../api/client.js";
 import { useAsync } from "../data/hooks.js";
 import { ErrorNote, Loading, Scroll, SurfaceHeader } from "../screens/parts.js";
 import "../../resources/resources.css";
@@ -280,17 +280,71 @@ function KindTypeFields(props: {
   );
 }
 
+/** One line of a pool resource's history. */
+function historyText(entry: ResourceHistoryEntry, kinds: readonly ResourceKind[]): string {
+  const d = entry.detail as Record<string, unknown>;
+  const typeOf = (value: unknown) => (typeof value === "number" ? value : null);
+  if (entry.category === "resource.added") return `Added as ${kindText(kinds, String(d.kind ?? ""), typeOf(d.type))}`;
+  if (entry.category === "resource.updated") {
+    const from = (d.from ?? {}) as Record<string, unknown>;
+    const to = (d.to ?? {}) as Record<string, unknown>;
+    const parts: string[] = [];
+    if (from.name !== to.name) parts.push(`renamed from ${String(from.name)}`);
+    if (from.kind !== to.kind || from.type !== to.type)
+      parts.push(`changed from ${kindText(kinds, String(from.kind ?? ""), typeOf(from.type))} to ${kindText(kinds, String(to.kind ?? ""), typeOf(to.type))}`);
+    return parts.length ? `Edited: ${parts.join("; ")}` : "Edited";
+  }
+  if (entry.category === "resource.status") {
+    const moved = `${choiceLabel(String(d.from ?? ""))} to ${choiceLabel(String(d.to ?? ""))}`;
+    return typeof d.returnCondition === "string" ? `${moved}, returned ${plain(d.returnCondition)}` : moved;
+  }
+  return plain(entry.category.replace(/^resource\./, ""));
+}
+
+/** A pool resource's history, read when opened. */
+function PoolHistory(props: { client: ApiClient; resourceId: string; name: string; kinds: readonly ResourceKind[]; revision: string }) {
+  const [open, setOpen] = useState(false);
+  const history = useAsync(() => open ? props.client.resourceHistory(props.resourceId) : Promise.resolve(null),
+    [props.client, props.resourceId, open, props.revision]);
+  return (
+    <details className="resources-history" onToggle={(event) => setOpen((event.currentTarget as HTMLDetailsElement).open)}>
+      <summary>History of {props.name}</summary>
+      {history.loading && !history.data ? <Loading label="Loading history…" /> : null}
+      {history.error ? <ErrorNote message={history.error} /> : null}
+      {history.data ? <ol aria-label={`History of ${props.name}`} className="resources-history-list">
+        {history.data.map((entry, index) => <li key={index}>
+          {new Date(entry.at).toLocaleString()} · {entry.actorName} · {historyText(entry, props.kinds)}
+        </li>)}
+      </ol> : null}
+    </details>
+  );
+}
+
 const poolBadge: Record<string, "info" | "warning" | "success" | "unknown"> = { available: "success", assigned: "info", out_of_service: "warning", demobilized: "unknown" };
 
 function PoolRow(props: {
+  client: ApiClient;
   resource: PoolResource;
   kinds: readonly ResourceKind[];
   requests: readonly ResourceRequestSummary[];
   canMutate: boolean;
   busy: boolean;
   onMove: (id: string, move: { to: string; requestId?: string; returnCondition?: string; checks?: string[] }) => void;
+  onEdit: (id: string, input: { name: string; kind: string; type: number | null }) => Promise<boolean>;
 }) {
   const r = props.resource;
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(r.name);
+  const [kind, setKind] = useState(r.kind);
+  const [type, setType] = useState(r.type === null ? "" : String(r.type));
+  // Kind and type change only while no request holds the resource.
+  const retypable = r.status === "available" || r.status === "out_of_service";
+  const startEdit = () => { setName(r.name); setKind(r.kind); setType(r.type === null ? "" : String(r.type)); setEditing(true); };
+  const save = async () => {
+    const saved = await props.onEdit(r.id, { name: name.trim(), kind: retypable ? kind : r.kind,
+      type: retypable ? (type ? Number(type) : null) : r.type });
+    if (saved) setEditing(false);
+  };
   const nexts = RESOURCE_STATUS_TRANSITIONS[r.status] ?? [];
   const [to, setTo] = useState(nexts[0] ?? "");
   const [requestId, setRequestId] = useState("");
@@ -326,6 +380,14 @@ function PoolRow(props: {
         </fieldset> : null}
         <Button onClick={apply} disabled={props.busy || !to || (to === "assigned" && !requestId)}>Update status</Button>
       </div> : null}
+      {props.canMutate && r.status !== "demobilized" ? editing ? <div className="resources-form" role="group" aria-label={`Edit ${r.name}`}>
+        <div className="resources-cell"><TextField label="Resource name" value={name} onChange={setName} /></div>
+        {retypable ? <KindTypeFields kinds={props.kinds} kind={kind} type={type} onKind={setKind} onType={setType} forRequest={false} />
+          : <span className="eoc-flush eoc-muted">Its kind and type change once it is no longer assigned.</span>}
+        <Button kind="primary" onClick={() => void save()} disabled={props.busy || !name.trim() || !kind}>Save changes</Button>
+        <Button onClick={() => setEditing(false)} disabled={props.busy}>Cancel</Button>
+      </div> : <div><Button onClick={startEdit} disabled={props.busy}>Edit {r.name}</Button></div> : null}
+      <PoolHistory client={props.client} resourceId={r.id} name={r.name} kinds={props.kinds} revision={`${r.status}:${r.name}:${r.kind}:${r.type}`} />
     </li>
   );
 }
@@ -374,8 +436,9 @@ function ResourcePool(props: {
         {pool.error && !pool.data ? <ErrorNote message={pool.error} /> : null}
         {pool.data && list.length === 0 ? <p className="eoc-flush eoc-muted">No resources in the pool.</p> : null}
         {list.length ? <ul className="resources-list">
-          {list.map((resource) => <PoolRow key={resource.id} resource={resource} kinds={props.kinds} requests={props.requests}
-            canMutate={props.canMutate} busy={busy} onMove={(id, move) => void run(() => props.client.transitionResource(id, move))} />)}
+          {list.map((resource) => <PoolRow key={resource.id} client={props.client} resource={resource} kinds={props.kinds} requests={props.requests}
+            canMutate={props.canMutate} busy={busy} onMove={(id, move) => void run(() => props.client.transitionResource(id, move))}
+            onEdit={async (id, input) => { let saved = false; await run(async () => { await props.client.updateResource(id, input); saved = true; }); return saved; }} />)}
         </ul> : null}
         {error ? <p role="alert" className="eoc-flush eoc-text-critical">{error}</p> : null}
       </div>
@@ -460,6 +523,35 @@ function TypingCatalog(props: {
     setLevelCount("");
     return `Added ${name.trim()} to the catalog.`;
   });
+  const [editing, setEditing] = useState<ResourceKind | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDiscipline, setEditDiscipline] = useState("");
+  const [editLevels, setEditLevels] = useState("");
+  const startEdit = (kind: ResourceKind) => {
+    setEditing(kind);
+    setEditName(kind.name);
+    setEditDiscipline(kind.discipline);
+    setEditLevels(kind.levels.length ? String(kind.levels.length) : "");
+  };
+  const saveKind = () => run(async () => {
+    if (!editing) return "";
+    const count = editLevels.trim() === "" ? 0 : Number(editLevels);
+    if (!editName.trim()) throw new Error("Enter the name of the kind.");
+    if (!Number.isInteger(count) || count < 0 || count > 10) throw new Error("Enter from 1 to 10 type levels, or leave it blank for a single type.");
+    // A kept level keeps its capability text.
+    const levels = Array.from({ length: count }, (_, index) =>
+      editing.levels.find((level) => level.type === index + 1) ?? { type: index + 1, capability: "" });
+    await props.client.updateResourceKind(props.jurisdictionId, editing.key, {
+      name: editName.trim(), discipline: editDiscipline.trim(), levels: [...levels], notes: editing.notes,
+    });
+    setEditing(null);
+    return `Saved ${editName.trim()}.`;
+  });
+  const deleteKind = (kind: ResourceKind) => run(async () => {
+    await props.client.deleteResourceKind(props.jurisdictionId, kind.key);
+    if (editing?.key === kind.key) setEditing(null);
+    return `Deleted ${kind.name} from the catalog.`;
+  });
   const importFile = () => run(async () => {
     if (!file) throw new Error("Choose the RTLT export file.");
     if (!sourceNote.trim()) throw new Error("Say where the file came from.");
@@ -474,16 +566,31 @@ function TypingCatalog(props: {
           <summary>Show the {props.kinds.length} kinds</summary>
           <div className="resources-scroll is-below">
             <table className="resources-table">
-              <thead><tr><th scope="col">Kind</th><th scope="col">Discipline</th><th scope="col">Types</th><th scope="col">Source</th></tr></thead>
+              <thead><tr><th scope="col">Kind</th><th scope="col">Discipline</th><th scope="col">Types</th><th scope="col">Source</th>{props.canManage ? <th scope="col">Actions</th> : null}</tr></thead>
               <tbody>{props.kinds.map((kind) => <tr key={kind.key}>
                 <td>{kind.name}</td>
                 <td>{kind.discipline}</td>
                 <td>{kind.levels.length === 0 ? "Single type" : kind.levels.map((level) => level.capability ? `Type ${level.type}: ${level.capability}` : `Type ${level.type}`).join("; ")}</td>
                 <td title={kind.sourceNote}>{sourceText(kind)}</td>
+                {props.canManage ? <td>{kind.source === "local" ? <span className="resources-row-actions">
+                  <Button onClick={() => startEdit(kind)} disabled={busy}>Edit {kind.name}</Button>
+                  <Button onClick={() => void deleteKind(kind)} disabled={busy}>Delete {kind.name}</Button>
+                </span> : null}</td> : null}
               </tr>)}</tbody>
             </table>
           </div>
         </details>
+        {props.canManage && editing ? <section aria-label={`Edit ${editing.name}`} className="resources-part">
+          <h3 className="eoc-flush">Edit {editing.name}</h3>
+          <p className="eoc-flush eoc-muted">A type level that a request or a resource still names cannot be removed.</p>
+          <div className="resources-form">
+            <div className="resources-cell"><TextField label="Kind name" value={editName} onChange={setEditName} /></div>
+            <div className="resources-cell"><TextField label="Discipline" value={editDiscipline} onChange={setEditDiscipline} /></div>
+            <div className="resources-cell"><TextField label="Type levels (blank for a single type)" value={editLevels} onChange={setEditLevels} /></div>
+            <Button kind="primary" onClick={() => void saveKind()} disabled={busy}>Save kind</Button>
+            <Button onClick={() => setEditing(null)} disabled={busy}>Cancel</Button>
+          </div>
+        </section> : null}
         {props.canManage ? <section aria-label="Add a local kind" className="resources-part">
           <h3 className="eoc-flush">Add a local kind</h3>
           <div className="resources-form">

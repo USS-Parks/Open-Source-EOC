@@ -229,3 +229,70 @@ describe("cost rollup", () => {
     expect(csv).toContain("TOTAL,5496.05");
   });
 });
+
+describe("pool edits, history, the cap per request and local kinds", () => {
+  const send = (who: Who, method: "PATCH" | "DELETE", url: string, payload?: Record<string, unknown>) =>
+    app.inject({ method, url, headers: auth(tokens[who]), ...(payload ? { payload } : {}) });
+
+  it("assigns no more resources to a request than its quantity, even when two assignments race", async () => {
+    const requestId = await request({ resourceKind: "engine", resourceType: 3, quantity: 2, item: "Two engines" });
+    const engines = await Promise.all(["Engine 51", "Engine 52", "Engine 53"].map((name) => resource(name, "engine", 3)));
+    expect((await move(engines[0]!, { to: "assigned", requestId })).statusCode).toBe(200);
+    const raced = await Promise.all(engines.slice(1).map((id) => move(id, { to: "assigned", requestId })));
+    expect(raced.map((reply) => reply.statusCode).sort()).toEqual([200, 409]);
+    expect(raced.find((reply) => reply.statusCode === 409)!.json().error).toMatch(/already has the 2 resources it asked for/);
+    // A released place is taken again.
+    const holder = engines[1 + raced.findIndex((reply) => reply.statusCode === 200)]!;
+    expect((await move(holder, { to: "available" })).statusCode).toBe(200);
+    const waiting = engines[1 + raced.findIndex((reply) => reply.statusCode === 409)]!;
+    expect((await move(waiting, { to: "assigned", requestId })).statusCode).toBe(200);
+  });
+
+  it("edits a pool resource's kind and type only while no request holds it, and keeps its history", async () => {
+    const id = await resource("Tender 9", "water_tender", 1);
+    expect((await send("member", "PATCH", `/api/v1/resources/${id}`, { name: "Tender 19", kind: "engine", type: 2 })).statusCode).toBe(200);
+    expect((await send("member", "PATCH", `/api/v1/resources/${id}`, { name: "Tender 19", kind: "engine", type: 9 })).statusCode).toBe(400);
+    expect((await send("viewer", "PATCH", `/api/v1/resources/${id}`, { name: "Viewer edit", kind: "engine", type: 2 })).statusCode).toBe(403);
+    const requestId = await request({ resourceKind: "engine", resourceType: 2, item: "Engine for the history" });
+    expect((await move(id, { to: "assigned", requestId })).statusCode).toBe(200);
+    const locked = await send("member", "PATCH", `/api/v1/resources/${id}`, { name: "Tender 19", kind: "water_tender", type: 1 });
+    expect(locked.statusCode).toBe(409);
+    expect((await send("member", "PATCH", `/api/v1/resources/${id}`, { name: "Engine 19", kind: "engine", type: 2 })).statusCode).toBe(200);
+    expect((await move(id, { to: "demobilized", returnCondition: "ready", checks: [] })).statusCode).toBe(200);
+
+    const history = (await call("viewer", "GET", `/api/v1/resources/${id}/history`)).json().history as Array<{ category: string; actorName: string; detail: Record<string, unknown> }>;
+    expect(history.map((entry) => entry.category)).toEqual([
+      "resource.added", "resource.updated", "resource.status", "resource.updated", "resource.status",
+    ]);
+    expect(history[1]).toMatchObject({ actorName: "Member", detail: { from: { kind: "water_tender", type: 1 }, to: { name: "Tender 19", kind: "engine", type: 2 } } });
+    expect(history[4]!.detail).toMatchObject({ from: "assigned", to: "demobilized", returnCondition: "ready" });
+    // Another organization cannot tell the resource exists.
+    expect((await call("outsider", "GET", `/api/v1/resources/${id}/history`)).statusCode).toBe(404);
+  });
+
+  it("edits and deletes local kinds, keeping what requests and resources still name", async () => {
+    const created = await call("admin", "POST", `${base()}/resources/kinds`, {
+      name: "Drone team", discipline: "Search", levels: [{ type: 1, capability: "Thermal" }, { type: 2, capability: "" }],
+    });
+    const key = created.json().key as string;
+    const url = `${base()}/resources/kinds/${encodeURIComponent(key)}`;
+    const body = (levels: Array<{ type: number; capability: string }>) => ({ name: "Drone team (UAS)", discipline: "Search and rescue", levels, notes: "" });
+    expect((await send("member", "PATCH", url, body([{ type: 1, capability: "Thermal" }]))).statusCode).toBe(403);
+    const drone = await resource("Drone 2", key, 2);
+    const refused = await send("admin", "PATCH", url, body([{ type: 1, capability: "Thermal" }]));
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json().error).toMatch(/type 2 is still named/);
+    expect((await send("admin", "PATCH", url, body([{ type: 1, capability: "Thermal" }, { type: 2, capability: "Visual" }, { type: 3, capability: "" }]))).statusCode).toBe(200);
+    const kinds = (await call("member", "GET", `${base()}/resources/kinds`)).json().kinds as Array<Record<string, unknown>>;
+    expect(kinds.find((kind) => kind.key === key)).toMatchObject({ name: "Drone team (UAS)", discipline: "Search and rescue", levels: [{ type: 1 }, { type: 2, capability: "Visual" }, { type: 3 }] });
+    expect((await send("admin", "DELETE", url)).statusCode).toBe(409);
+    expect((await move(drone, { to: "demobilized", returnCondition: "ready", checks: [] })).statusCode).toBe(200);
+    // A demobilized resource still names the kind, so it stays.
+    expect((await send("admin", "DELETE", url)).statusCode).toBe(409);
+    const unused = (await call("admin", "POST", `${base()}/resources/kinds`, { name: "Spare kind" })).json().key as string;
+    expect((await send("admin", "DELETE", `${base()}/resources/kinds/${encodeURIComponent(unused)}`)).statusCode).toBe(200);
+    expect((await send("admin", "DELETE", `${base()}/resources/kinds/engine`)).statusCode).toBe(404);
+    const [audit] = await admin`select count(*)::int as n from audit_events where category in ('resource.kind_updated', 'resource.kind_deleted')`;
+    expect(audit!.n).toBe(2);
+  });
+});

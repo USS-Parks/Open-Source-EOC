@@ -274,12 +274,14 @@ export async function receiveEscalation(
   sql: Sql,
   peerToken: string,
   payload: EscalationPayload,
-): Promise<{ id: string }> {
+): Promise<{ id: string; duplicate: boolean }> {
   const [peer] = await sql`
     select name, jurisdiction_id, created_by from peers where token_hash = ${hashToken(peerToken)}`;
   if (!peer) throw new AuthError(401, "unknown peer");
   const local = await principalForPerson(sql, peer.created_by as string);
   return withPerson(sql, local.person.id, async (tx) => {
+    // A repeated delivery of one escalation, as after a lost acknowledgement,
+    // answers with the request it made the first time and records nothing new.
     const [row] = await tx`
       insert into resource_requests
         (jurisdiction_id, receiving_organization_id, origin, item, quantity, priority, state, notes, requested_by,
@@ -288,8 +290,16 @@ export async function receiveEscalation(
         (${peer.jurisdiction_id as string}, ${peer.jurisdiction_id as string}, 'escalated', ${payload.item}, ${payload.quantity},
          ${payload.priority}, 'submitted', ${payload.notes}, ${local.person.id},
          ${peer.name as string}, ${payload.originRequestId})
+      on conflict (jurisdiction_id, source_peer, source_request_id) where source_request_id is not null do nothing
       returning id`;
-    const id = row!.id as string;
+    if (!row) {
+      const [existing] = await tx`
+        select id from resource_requests
+        where jurisdiction_id = ${peer.jurisdiction_id as string} and source_peer = ${peer.name as string}
+          and source_request_id = ${payload.originRequestId}`;
+      return { id: existing!.id as string, duplicate: true };
+    }
+    const id = row.id as string;
     await appendEvent(tx, id, null, "submitted", `escalated from ${peer.name as string}`, null, peer.name as string);
     await recordAudit(tx, local, {
       jurisdictionId: peer.jurisdiction_id as string,
@@ -298,7 +308,7 @@ export async function receiveEscalation(
       subjectId: id,
       payload: { peer: peer.name as string, originRequestId: payload.originRequestId },
     });
-    return { id };
+    return { id, duplicate: false };
   });
 }
 
@@ -678,6 +688,67 @@ export async function addResource(
   return { id };
 }
 
+/**
+ * Correct a pool resource's name, kind or type. Kind and type change only
+ * while the resource is not assigned, so no request holds a resource it no
+ * longer matches.
+ */
+export async function updateResource(
+  sql: Sql,
+  actor: Principal,
+  resourceId: string,
+  input: { name: string; kind: string; type: number | null },
+): Promise<void> {
+  const [resource] = await sql`
+    select jurisdiction_id, name, resource_kind, resource_type, status from resources where id = ${resourceId}`;
+  if (!resource) throw new AuthError(404, "resource not found");
+  const jurisdictionId = resource.jurisdiction_id as string;
+  requireWriter(actor, jurisdictionId);
+  const retyped = input.kind !== resource.resource_kind || input.type !== resource.resource_type;
+  if (retyped && !["available", "out_of_service"].includes(resource.status as string))
+    throw new AuthError(409, `a ${String(resource.status).replace("_", " ")} resource keeps its kind and type`);
+  if (retyped) await requireKind(sql, jurisdictionId, input.kind, input.type, true);
+  await sql`
+    update resources set name = ${input.name}, resource_kind = ${input.kind}, resource_type = ${input.type},
+      updated_by = ${actor.person.id}, updated_at = now()
+    where id = ${resourceId}`;
+  await recordAudit(sql, actor, {
+    jurisdictionId,
+    category: "resource.updated",
+    subjectTable: "resources",
+    subjectId: resourceId,
+    payload: {
+      from: { name: resource.name, kind: resource.resource_kind, type: resource.resource_type },
+      to: { name: input.name, kind: input.kind, type: input.type },
+    },
+  });
+}
+
+export interface ResourceHistoryEntry {
+  readonly at: string;
+  readonly actorName: string;
+  readonly category: string;
+  readonly detail: Readonly<Record<string, unknown>>;
+}
+
+/** A pool resource's history from the audit trail: added, edited and every status move, oldest first. */
+export async function resourceHistory(sql: Sql, actor: Principal, resourceId: string): Promise<ResourceHistoryEntry[]> {
+  const [resource] = await sql`select jurisdiction_id from resources where id = ${resourceId}`;
+  if (!resource) throw new AuthError(404, "resource not found");
+  requireMember(actor, resource.jurisdiction_id as string);
+  const rows = await sql`
+    select e.created_at, e.category, e.payload, p.display_name
+    from audit_events e join persons p on p.id = e.person_id
+    where e.subject_table = 'resources' and e.subject_id = ${resourceId}
+    order by e.seq limit 500`;
+  return rows.map((row) => ({
+    at: new Date(row.created_at as string).toISOString(),
+    actorName: row.display_name as string,
+    category: row.category as string,
+    detail: (row.payload as Record<string, unknown> | null) ?? {},
+  }));
+}
+
 export interface ResourceMove {
   readonly to: string;
   /** Required to assign: the request the resource goes to. */
@@ -712,6 +783,16 @@ export async function transitionResource(
     if (req.resource_kind !== resource.resource_kind ||
         !typeSatisfies(resource.resource_type as number | null, req.resource_type))
       throw new AuthError(409, "the resource is not the kind and type the request asks for");
+    // A request takes no more resources than its quantity. The lock orders
+    // concurrent assignments to one request, so two cannot both take the last place.
+    await sql`select pg_advisory_xact_lock(hashtextextended(${`resource-cap:${move.requestId}`}, 0))`;
+    const [held] = await sql`
+      select r.quantity, (select count(*)::int from resources s where s.request_id = r.id and s.status = 'assigned') as assigned
+      from resource_requests r where r.id = ${move.requestId}`;
+    if (held && (held.assigned as number) >= (held.quantity as number)) {
+      const quantity = held.quantity as number;
+      throw new AuthError(409, `the request already has the ${quantity} resource${quantity === 1 ? "" : "s"} it asked for`);
+    }
     incidentId = req.incident_id;
   }
   const demobilized = move.to === "demobilized";

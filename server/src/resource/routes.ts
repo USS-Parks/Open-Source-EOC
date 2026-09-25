@@ -22,12 +22,14 @@ import {
   listResources,
   receiveEscalation,
   reportBack,
+  resourceHistory,
   submitRequest,
   transition,
   transitionResource,
+  updateResource,
   type EscalationPayload,
 } from "./service.js";
-import { addLocalKind, importKinds, listKinds } from "./typing.js";
+import { addLocalKind, deleteLocalKind, importKinds, listKinds, updateLocalKind } from "./typing.js";
 
 /**
  * 213RR resource-request routes (F5). Submission, the guarded
@@ -204,7 +206,7 @@ export function resourceRoutes(
     if (!token) return reply.status(401).send({ error: "missing peer token" });
     const body = ReceiveBody.parse(req.body);
     const result = await receiveEscalation(sql, token, body);
-    return reply.status(201).send(result);
+    return reply.status(result.duplicate ? 200 : 201).send(result);
   });
 
   app.post("/api/v1/resource-requests/report", async (req, reply) => {
@@ -262,6 +264,20 @@ export function resourceRoutes(
     return reply.status(201).send(result);
   });
 
+  const KindParams = z.object({ jurisdictionId: z.uuid(), key: z.string().min(1).max(200) });
+  app.patch("/api/v1/jurisdictions/:jurisdictionId/resources/kinds/:key", { preHandler: authenticate }, async (req, reply) => {
+    const { jurisdictionId, key } = KindParams.parse(req.params);
+    const body = KindBody.parse(req.body);
+    await withPerson(sql, req.principal.person.id, (tx) => updateLocalKind(tx, req.principal, jurisdictionId, key, body));
+    return reply.send({ ok: true });
+  });
+
+  app.delete("/api/v1/jurisdictions/:jurisdictionId/resources/kinds/:key", { preHandler: authenticate }, async (req, reply) => {
+    const { jurisdictionId, key } = KindParams.parse(req.params);
+    await withPerson(sql, req.principal.person.id, (tx) => deleteLocalKind(tx, req.principal, jurisdictionId, key));
+    return reply.send({ ok: true });
+  });
+
   app.post(
     "/api/v1/jurisdictions/:jurisdictionId/resources/kinds/import",
     { preHandler: authenticate, bodyLimit: 5 * 1024 * 1024 },
@@ -287,6 +303,19 @@ export function resourceRoutes(
     const body = ResourceBody.parse(req.body);
     const result = await withPerson(sql, req.principal.person.id, (tx) => addResource(tx, req.principal, jurisdictionId, body));
     return reply.status(201).send(result);
+  });
+
+  app.patch("/api/v1/resources/:resourceId", { preHandler: authenticate }, async (req, reply) => {
+    const { resourceId } = z.object({ resourceId: z.uuid() }).parse(req.params);
+    const body = ResourceBody.parse(req.body);
+    await withPerson(sql, req.principal.person.id, (tx) => updateResource(tx, req.principal, resourceId, body));
+    return reply.send({ ok: true });
+  });
+
+  app.get("/api/v1/resources/:resourceId/history", { preHandler: authenticate }, async (req, reply) => {
+    const { resourceId } = z.object({ resourceId: z.uuid() }).parse(req.params);
+    const history = await withPerson(sql, req.principal.person.id, (tx) => resourceHistory(tx, req.principal, resourceId));
+    return reply.send({ history });
   });
 
   app.post("/api/v1/resources/:resourceId/transition", { preHandler: authenticate }, async (req, reply) => {

@@ -44,6 +44,7 @@ DELETE /api/v1/incidents/:incidentId/dashboard-configs/:key
 DELETE /api/v1/incidents/:incidentId/lockdown
 DELETE /api/v1/incidents/:incidentId/saved-state/:kind/:key
 DELETE /api/v1/jurisdictions/:jurisdictionId/members/:personId
+DELETE /api/v1/jurisdictions/:jurisdictionId/resources/kinds/:key
 DELETE /api/v1/notification-rules/:ruleId
 DELETE /api/v1/positions/:positionId/assignments/:personId
 DELETE /api/v1/reports/:reportId
@@ -176,6 +177,7 @@ GET /api/v1/reports/:reportId
 GET /api/v1/reports/:reportId/output
 GET /api/v1/resource-requests/:id
 GET /api/v1/resource-requests/:id/costs/export
+GET /api/v1/resources/:resourceId/history
 GET /api/v1/sitreps/:sitrepId
 GET /api/v1/status-queries/:id
 GET /api/v1/sync/boards/:boardId
@@ -191,7 +193,9 @@ PATCH /api/v1/boards/:boardId/records/:recordId
 PATCH /api/v1/corrective-actions/:id
 PATCH /api/v1/facilities/:id
 PATCH /api/v1/incidents/:incidentId/tasks/:taskId
+PATCH /api/v1/jurisdictions/:jurisdictionId/resources/kinds/:key
 PATCH /api/v1/notification-rules/:ruleId
+PATCH /api/v1/resources/:resourceId
 POST /api/v1/ack/:token
 POST /api/v1/audit/:eventId/corrections
 POST /api/v1/auth/login

@@ -322,6 +322,23 @@ describe("cross-tier escalation, field to state and back", () => {
       select source_peer, source_request_id from resource_requests where id = ${stateReqId}`;
     expect(stateRow!.source_peer).toBe("county");
     expect(stateRow!.source_request_id).toBe(countyReqId);
+
+    // A repeated delivery, as after a lost acknowledgement, answers with the
+    // same request and records nothing new.
+    const [before] = await state.admin`select count(*)::int as n from resource_requests`;
+    const repeated = await state.app.inject({
+      method: "POST",
+      url: "/api/v1/resource-requests/receive",
+      headers: { "x-peer-token": tokenIntoState },
+      payload: { originRequestId: countyReqId, item: "Type 1 Strike Team", quantity: 1, priority: "urgent", notes: null },
+    });
+    expect(repeated.statusCode).toBe(200);
+    expect(repeated.json()).toEqual({ id: stateReqId, duplicate: true });
+    const [after] = await state.admin`select count(*)::int as n from resource_requests`;
+    expect(after!.n).toBe(before!.n);
+    const [received] = await state.admin`
+      select count(*)::int as n from audit_events where category = 'rr.received_escalation'`;
+    expect(received!.n).toBe(1);
   });
 });
 
@@ -400,5 +417,19 @@ describe("escalation to a peer that never answers", () => {
     expect(sent[0]!.signal).toBeInstanceOf(AbortSignal);
     const [row] = await county.admin`select state from resource_requests where id = ${id}`;
     expect(row!.state).toBe("sourcing");
+  });
+});
+
+describe("reading an incident's requests", () => {
+  it("uses the incident index, newest number first", async () => {
+    const plan = await county.admin.begin(async (tx) => {
+      await tx`set local enable_seqscan = off`;
+      return tx`
+        explain select id from resource_requests
+        where incident_id = ${"00000000-0000-0000-0000-000000000001"} order by number desc, id desc limit 25`;
+    });
+    const text = plan.map((line) => line["QUERY PLAN"] as string).join("\n");
+    expect(text).toContain("resource_requests_incident");
+    expect(text).not.toMatch(/\bSort\b/);
   });
 });

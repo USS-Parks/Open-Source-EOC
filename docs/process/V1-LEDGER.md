@@ -5922,3 +5922,57 @@ and "V1 W3.13: screens for the optional integrations".
 - **Evidence level:** real-database and browser tests.
 - **Rollback:** revert the commit; migration `0140` adds a check value,
   columns, a policy and indexes, none of which the earlier code reads.
+
+## Readiness RD9 part two: resources
+
+The resource items of RD9, from "V1 W4.8: resources", "V1 W4.9: incident
+lifecycle" and "V1 W2.12: network calls out of every write path".
+
+- **What changed.**
+  - **A cap per request.** Assigning a pool resource to a request is refused
+    once the request holds as many assigned resources as its quantity asks
+    for ("the request already has the 2 resources it asked for"). A
+    transaction lock per request orders concurrent assignments, so two
+    cannot both take the last place; a released place is taken again.
+  - **Per-resource history.** `GET /api/v1/resources/:resourceId/history`
+    reads a pool resource's audit trail, oldest first, with each actor's
+    name: added, edited, and every status move with its return condition.
+    Each pool row has a History disclosure.
+  - **Changing a pool resource's kind or type.** `PATCH
+    /api/v1/resources/:resourceId` corrects its name, and its kind and type
+    while it is available or out of service; an assigned resource keeps its
+    kind and type, so no request holds a resource it no longer matches.
+    Audited as `resource.updated` with before and after. Each pool row has
+    Edit.
+  - **Editing and deleting local kinds.** An administrator edits a kind the
+    jurisdiction added (name, discipline, type levels, keeping each kept
+    level's capability text) and deletes one no request or resource names
+    (`PATCH` and `DELETE /api/v1/jurisdictions/:jurisdictionId/resources/kinds/:key`).
+    A type level still named by a request or a resource cannot be removed.
+    Starter and RTLT kinds are not changed here. Audited; the catalog table
+    has Edit and Delete for local kinds.
+  - **An index on `resource_requests(incident_id)`**, ordered as an
+    incident's request list reads (`number desc, id desc`), so the list
+    needs no sort.
+  - **Refusing a duplicate `originRequestId`.** A peer's escalation of one
+    request is received once: a repeated delivery, as after a lost
+    acknowledgement, answers 200 with the request the first one made and
+    records nothing new. It answers rather than refusing with 409 because
+    the sender treats any refusal as a failed delivery and would record no
+    escalation. A unique partial index enforces it; an instance that
+    already holds repeats keeps the earliest as the escalation's request
+    and clears the later ones' link back to the origin.
+  - Migration `0141_resource_gaps.sql` holds the two indexes, the local kind
+    update policy and grant, and an audit index for a resource's history.
+    The contract and `docs/API.md` list the five routes.
+- **Tests.** Real PostgreSQL (`resource-typing.test.ts`,
+  `resource.test.ts`): the cap under two racing assignments, pool edits and
+  history, local kind edit and delete with the in-use refusals, the
+  repeated escalation, and the incident list's query plan using the new
+  index. Screen: the resource typing browser test caps a request, edits a
+  pool resource and reads its history at 1586 by 992, and edits and deletes
+  a local kind at 1534 by 790.
+- **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
+- **Evidence level:** real-database and browser tests.
+- **Rollback:** revert the commit. Migration `0141`'s link clearing on
+  repeated escalations cannot be reversed; the requests themselves stay.

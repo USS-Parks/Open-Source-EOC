@@ -107,6 +107,67 @@ export async function addLocalKind(
   return { key };
 }
 
+async function localKind(sql: Sql, jurisdictionId: string, key: string): Promise<void> {
+  const [row] = await sql`
+    select source from resource_kinds where jurisdiction_id = ${jurisdictionId} and key = ${key}`;
+  if (!row) throw new AuthError(404, "resource kind not found");
+  if (row.source !== "local") throw new AuthError(409, "only a kind this jurisdiction added can be changed here");
+}
+
+/** The type levels of a kind that requests or pool resources name. */
+async function levelsInUse(sql: Sql, jurisdictionId: string, key: string): Promise<{ used: boolean; types: Set<number> }> {
+  const rows = await sql`
+    select resource_type from resources where jurisdiction_id = ${jurisdictionId} and resource_kind = ${key}
+    union all
+    select resource_type from resource_requests where jurisdiction_id = ${jurisdictionId} and resource_kind = ${key}`;
+  return {
+    used: rows.length > 0,
+    types: new Set(rows.map((row) => row.resource_type as number | null).filter((type): type is number => type !== null)),
+  };
+}
+
+/** Edit a local kind. A type level still named by a request or a resource stays. */
+export async function updateLocalKind(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+  key: string,
+  input: { name: string; discipline: string; levels: readonly ResourceTypeLevel[]; notes: string },
+): Promise<void> {
+  requireAdmin(actor, jurisdictionId);
+  await localKind(sql, jurisdictionId, key);
+  const levels = checkLevels(input.levels);
+  const { types } = await levelsInUse(sql, jurisdictionId, key);
+  const kept = new Set(levels.map((level) => level.type));
+  const dropped = [...types].filter((type) => !kept.has(type)).sort((a, b) => a - b);
+  if (dropped.length) throw new AuthError(409, `type ${dropped.join(", ")} is still named by a request or a resource`);
+  await sql`
+    update resource_kinds set name = ${input.name}, discipline = ${input.discipline},
+      levels = ${sql.json(levels as never)}, notes = ${input.notes}
+    where jurisdiction_id = ${jurisdictionId} and key = ${key}`;
+  await recordAudit(sql, actor, {
+    jurisdictionId,
+    category: "resource.kind_updated",
+    subjectTable: "resource_kinds",
+    payload: { key, name: input.name, types: levels.map((level) => level.type) },
+  });
+}
+
+/** Delete a local kind that no request or resource names. */
+export async function deleteLocalKind(sql: Sql, actor: Principal, jurisdictionId: string, key: string): Promise<void> {
+  requireAdmin(actor, jurisdictionId);
+  await localKind(sql, jurisdictionId, key);
+  if ((await levelsInUse(sql, jurisdictionId, key)).used)
+    throw new AuthError(409, "a request or a resource still names this kind");
+  await sql`delete from resource_kinds where jurisdiction_id = ${jurisdictionId} and key = ${key}`;
+  await recordAudit(sql, actor, {
+    jurisdictionId,
+    category: "resource.kind_deleted",
+    subjectTable: "resource_kinds",
+    payload: { key },
+  });
+}
+
 const IMPORT_COLUMNS = {
   name: ["name", "kindname", "resourcename", "resourcetypingdefinition"],
   id: ["id", "rtltid", "resourceid"],

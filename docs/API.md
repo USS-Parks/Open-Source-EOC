@@ -466,6 +466,8 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 - `POST /api/v1/jurisdictions/:jurisdictionId/resources`: Run jurisdictions resources (auth: bearer; audience: operator)
 - `GET /api/v1/jurisdictions/:jurisdictionId/resources/kinds`: Read jurisdictions resources kinds (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/resources/kinds`: Run jurisdictions resources kinds (auth: bearer; audience: operator)
+- `DELETE /api/v1/jurisdictions/:jurisdictionId/resources/kinds/:key`: Delete jurisdictions resources kinds (auth: bearer; audience: operator)
+- `PATCH /api/v1/jurisdictions/:jurisdictionId/resources/kinds/:key`: Update jurisdictions resources kinds (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/resources/kinds/import`: Run jurisdictions resources kinds import (auth: bearer; audience: operator)
 - `GET /api/v1/resource-requests/:id`: Read resource requests (auth: bearer; audience: operator)
 - `POST /api/v1/resource-requests/:id/assign`: Run resource requests assign (auth: bearer; audience: operator)
@@ -475,6 +477,8 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 - `POST /api/v1/resource-requests/:id/transition`: Run resource requests transition (auth: bearer; audience: operator)
 - `POST /api/v1/resource-requests/receive`: Run resource requests receive (auth: peer-token; audience: machine)
 - `POST /api/v1/resource-requests/report`: Run resource requests report (auth: peer-token; audience: machine)
+- `PATCH /api/v1/resources/:resourceId`: Update resources (auth: bearer; audience: operator)
+- `GET /api/v1/resources/:resourceId/history`: Read resources history (auth: bearer; audience: operator)
 - `POST /api/v1/resources/:resourceId/transition`: Run resources transition (auth: bearer; audience: operator)
 
 ### retention

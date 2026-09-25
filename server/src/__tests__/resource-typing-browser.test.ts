@@ -145,4 +145,70 @@ describe("real-browser resource typing, pool and cost rollup", () => {
     expect(pageErrors).toEqual([]);
     expect(externalRequests).toEqual([]);
   }, 120_000);
+
+  it("caps a request at its quantity, edits a pool resource with its history, and edits and deletes a local kind", async () => {
+    await page.setViewportSize({ width: 1586, height: 992 });
+    await page.getByRole("button", { name: "Account menu" }).click();
+    await page.getByRole("button", { name: "Use light theme" }).click();
+    await page.getByRole("button", { name: "Account menu" }).click();
+    const pool = page.getByRole("region", { name: "Resource pool" });
+    const add = async (name: string) => {
+      await pool.getByLabel("Resource name").first().fill(name);
+      await pool.getByLabel("Resource kind").first().selectOption("engine");
+      await pool.getByLabel("Resource type").first().selectOption("3");
+      await pool.getByRole("button", { name: "Add to pool" }).click();
+      await pool.getByRole("listitem").filter({ hasText: name }).getByText("Available", { exact: true }).waitFor();
+    };
+    await add("Engine 42");
+    await add("Engine 43");
+    const engine42 = pool.getByRole("listitem").filter({ hasText: "Engine 42" });
+    const engine43 = pool.getByRole("listitem").filter({ hasText: "Engine 43" });
+    await engine42.getByLabel("Request for Engine 42").selectOption(requestId);
+    await engine42.getByRole("button", { name: "Update status" }).click();
+    await engine42.getByText("Assigned to request: Engine strike team").waitFor();
+    // The request asked for one engine, and has it.
+    await engine43.getByLabel("Request for Engine 43").selectOption(requestId);
+    await engine43.getByRole("button", { name: "Update status" }).click();
+    await pool.getByRole("alert").filter({ hasText: "the request already has the 1 resource it asked for" }).waitFor();
+    await engine43.getByText("Available", { exact: true }).waitFor();
+
+    await engine43.getByRole("button", { name: "Edit Engine 43" }).click();
+    const editor = engine43.getByRole("group", { name: "Edit Engine 43" });
+    await editor.getByLabel("Resource name").fill("Engine 43B");
+    await editor.getByLabel("Resource type").selectOption("2");
+    await editor.getByRole("button", { name: "Save changes" }).click();
+    const edited = pool.getByRole("listitem").filter({ hasText: "Engine 43B" });
+    await edited.getByText("Engine, Type 2").waitFor();
+    await edited.getByText("History of Engine 43B").click();
+    const history = edited.getByRole("list", { name: "History of Engine 43B" });
+    await history.getByText(/Admin · Added as Engine, Type 3/).waitFor();
+    await history.getByText(/Admin · Edited: renamed from Engine 43; changed from Engine, Type 3 to Engine, Type 2/).waitFor();
+    // An assigned resource keeps its kind and type.
+    await engine42.getByRole("button", { name: "Edit Engine 42" }).click();
+    await engine42.getByText("Its kind and type change once it is no longer assigned.").waitFor();
+    expect(await engine42.getByLabel("Resource kind").count()).toBe(0);
+    await engine42.getByRole("button", { name: "Cancel" }).click();
+    await page.screenshot({ path: join(SHOTS, "resource-pool-history-1586.png"), fullPage: false });
+
+    const catalog = page.getByRole("region", { name: "Resource typing catalog" });
+    await catalog.getByLabel("Kind name").fill("Drone team");
+    await catalog.getByLabel("Type levels (blank for a single type)").fill("2");
+    await catalog.getByRole("button", { name: "Add kind" }).click();
+    await catalog.getByText("Added Drone team to the catalog.").waitFor();
+    await catalog.getByRole("button", { name: "Edit Drone team" }).click();
+    const kindEditor = catalog.getByRole("region", { name: "Edit Drone team" });
+    await kindEditor.getByLabel("Kind name").fill("Drone team (UAS)");
+    await kindEditor.getByLabel("Type levels (blank for a single type)").fill("3");
+    await kindEditor.getByRole("button", { name: "Save kind" }).click();
+    await catalog.getByText("Saved Drone team (UAS).").waitFor();
+    await catalog.getByRole("row").filter({ hasText: "Drone team (UAS)" }).getByText("Type 1; Type 2; Type 3").waitFor();
+    expect(await catalog.getByRole("button", { name: "Edit Engine" }).count()).toBe(0);
+    await page.setViewportSize({ width: 1534, height: 790 });
+    await catalog.getByRole("button", { name: "Delete Drone team (UAS)" }).click();
+    await catalog.getByText("Deleted Drone team (UAS) from the catalog.").waitFor();
+    expect(await catalog.getByRole("row").filter({ hasText: "Drone team" }).count()).toBe(0);
+    await page.screenshot({ path: join(SHOTS, "resource-kinds-1534.png"), fullPage: false });
+    expect(pageErrors).toEqual([]);
+    expect(externalRequests).toEqual([]);
+  }, 120_000);
 });

@@ -2072,6 +2072,19 @@ export class ApiClient {
   transitionResource(resourceId: string, input: { to: string; requestId?: string; returnCondition?: string; checks?: string[] }): Promise<{ status: string }> {
     return this.request("POST", `/api/v1/resources/${encodeURIComponent(resourceId)}/transition`, input);
   }
+  /** Corrects a pool resource's name, or its kind and type while it is not assigned. */
+  async updateResource(resourceId: string, input: { name: string; kind: string; type: number | null }): Promise<void> {
+    await this.request("PATCH", `/api/v1/resources/${encodeURIComponent(resourceId)}`, input);
+  }
+  async resourceHistory(resourceId: string): Promise<ResourceHistoryEntry[]> {
+    return (await this.request<{ history: ResourceHistoryEntry[] }>("GET", `/api/v1/resources/${encodeURIComponent(resourceId)}/history`)).history;
+  }
+  async updateResourceKind(jurisdictionId: string, key: string, input: { name: string; discipline: string; levels: ResourceTypeLevel[]; notes: string }): Promise<void> {
+    await this.request("PATCH", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/resources/kinds/${encodeURIComponent(key)}`, input);
+  }
+  async deleteResourceKind(jurisdictionId: string, key: string): Promise<void> {
+    await this.request("DELETE", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/resources/kinds/${encodeURIComponent(key)}`);
+  }
 
   // ---- Facilities and shelters (optional integration) ----
   /** The status board: every facility's registry fields, latest report and staleness. */
@@ -2705,6 +2718,14 @@ export interface Briefing {
   readonly scheduledAt: string;
   readonly notifiedAt: string | null;
 }
+/** One entry of a pool resource's history, from the audit trail. */
+export interface ResourceHistoryEntry {
+  readonly at: string;
+  readonly actorName: string;
+  readonly category: string;
+  readonly detail: Readonly<Record<string, unknown>>;
+}
+
 export interface StatusQuery {
   readonly id: string;
   readonly prompt: string;
