@@ -97,8 +97,9 @@ this screen are not used for it.
   every peer that reads the board.
 - Making an agreement sends the partner the board's records with no incident
   as they stand, so records made before the board was shared arrive whole.
-  The organization's audit trail records it ("federation.backfilled" with the
-  number of records).
+  A large board goes as several outbox entries of about 384 KB of records
+  each, every record whole in one of them. The organization's audit trail
+  records it ("federation.backfilled" with the number of records and parts).
 - When a console edit and a field edit to the same field cross, both
   instances settle on the same value: the console's REST write wins over any
   edit made without seeing it, and an edit made after it arrived wins over
@@ -110,6 +111,18 @@ this screen are not used for it.
   queued and are retried with backoff; they never expire. The peer applies a
   batch through the same reconciliation the live sync uses, so there is no
   synchronous dual-commit and no lost data.
+- A batch holds at most 768 KB of request body and 5,000 entries, so it fits
+  under the 1 MB request limit of a partner still on an earlier release; an
+  entry larger than that goes alone. Entries go in the order they were
+  queued, per partner and board: after a failed push the same entries go
+  first on the next try, and nothing queued later overtakes them. When the
+  link returns after a long partition, each pass of the worker sends batch
+  after batch while the partner accepts them, up to 20, and continues on the
+  next pass.
+- The receive lane accepts a request body up to 8 MB, and reads it only after
+  the peer token is known; an unknown token gets 401 before its body is read.
+  A body over the limit gets 413, which the sending instance shows as the
+  entry's last error.
 - The convergence is attributed to the sending peer in the audit trail.
 
 ## Resource escalation across tiers

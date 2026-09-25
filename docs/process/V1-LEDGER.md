@@ -6339,3 +6339,82 @@ Veoci Integration and Air Gap PSPR unit VA1 (AG-01; decision 2).
 - **Rollback:** revert the commit; migration `0143` adds columns, a table,
   a trigger and functions the earlier code does not read, except that
   `report_runs` then holds `queued` rows the earlier screen shows as failed.
+
+## Veoci and air gap VA2: federation batch sizing
+
+Veoci Integration and Air Gap PSPR unit VA2 (AG-02). Landed on `main` after
+"Veoci and air gap VA1: hold, do not drop".
+
+- **What the audit said, checked.** `claim_federation_batches` put every
+  waiting entry for a peer and board into one POST, and the receive route
+  had Fastify's 1 MiB default limit. A body over it did not even read as
+  too large: the server's error handler turned Fastify's 413 into 500
+  "internal error" (confirmed with Fastify and a handler of the same shape),
+  so the sender logged "peer responded 500" and retried the same batch
+  without end. A board shared with more than about 750 KB of records
+  (RD10's backfill) reached that with no outage at all.
+- **What changed.**
+  - **Sized, ordered batches.** Migration `0144_federation_batches.sql`
+    replaces the claim with `claim_federation_batches(batch, max_bytes)`: a
+    batch per peer and remote board stops at the byte budget, counted as the
+    JSON the push sends (each update base64-encoded, each deletion a quoted
+    id), and at 5,000 entries; its first entry always goes. The worker asks
+    for 768 KiB (`FEDERATION_BATCH_BYTES`), under the 1 MiB limit of an
+    instance on an earlier release. Entries go strictly in queue order: a
+    batch is claimed only when the oldest waiting entry is due, so an entry
+    queued after a failed push no longer overtakes it (before, a deletion
+    could reach a partner ahead of the record's creation, and the creation
+    then restored it). Entries queued in one transaction keep their order
+    (`created_at` now defaults to `clock_timestamp()`).
+  - **Rounds.** A worker pass sends batch after batch while peers accept
+    them, up to 20 rounds, and leaves the rest to the next pass. A 413 is
+    logged as "peer refused the batch as too large (413)".
+  - **Backfill in parts.** Making an agreement cuts the board's records into
+    updates of about 384 KB of record data, each record whole in one part and
+    each part its own writer's update, so parts apply in any order.
+    "federation.backfilled" records the number of parts.
+  - **Receive limit.** `POST /api/v1/federation/receive` has an explicit
+    8 MiB `bodyLimit` (`FEDERATION_BODY_LIMIT`) and checks the peer token in
+    `onRequest`, before the body is read: an unknown or missing token gets
+    401 whatever the body's size.
+  - **Errors keep their status.** The server's error handler passes a
+    Fastify request error with a 4xx status through (413 for a body over a
+    route's limit, 400 for malformed JSON) instead of answering 500. This is
+    three lines in `server/src/app.ts`, outside the unit's "Owns" cell, and
+    applies to every route; no test expected the 500.
+  - `docs/guides/FEDERATION-SETUP.md` says how batches, order, the receive
+    limit and backfill parts work.
+- **Files outside the "Owns" cell.** `server/src/notify/outbox.ts` (the
+  worker that pushes the federation outbox; VA1 had landed, so no unit in
+  flight owned it) and the `server/src/app.ts` error handler.
+- **Air-gap behavior (decision 9).** Scenario A: a partner across the
+  internet gets its backlog back in order, in pushes it accepts, when the
+  link returns, whatever the backlog's size. Scenario B: partners inside the
+  enclave exchange as before, and a large shared board now reaches them.
+  Scenario C: not affected. Scenario D: exchange by file (VA20) will carry the
+  same sized batches.
+- **Tests.** New `federation-batches.test.ts`, two instances on separate
+  databases over HTTP: 900 records of about 3,900 characters (over 3 MiB)
+  shared with a new partner queue as at least eight parts, go as at least
+  five pushes each under 768 KiB, and all 900 arrive; 300 entries and ten
+  deletions made while the link points at a closed port stay queued through
+  three failed passes and a day's aging (the head batch tried three times,
+  the rest waiting untried), then drain in one pass as at least two pushes
+  in queue order, with the deleted records deleted on the partner; an
+  unknown token with a body over 8 MiB gets 401, a known peer's 2.6 MB body
+  is applied (500 records), and a body over 8 MiB gets 413. Updated:
+  `federation.test.ts` expects `parts: 1` in the backfill audit.
+- **Verification.** On the Linux test bed (decision 19): `pnpm
+  check:static` exit 0; the new file and the federation, delivery outbox,
+  federation browser, record sync, cross-boundary, migration, upgrade,
+  delivery hold, API docs, files and WebEOC import suites, 13 files and 73
+  tests, green; every test file except the browser, end-to-end and load
+  files (Vitest, three workers): 1,549 passed and 1 failed of 1,550 in 226
+  files, the failure the base's own web incident-overview wording test.
+- **Not run.** The browser suites beyond `federation-browser`, which this
+  unit does not touch; the full gate runs at the phase end. The Windows
+  setup (decision 18).
+- **Evidence level:** two-instance real-database tests over HTTP.
+- **Rollback:** revert the commit and restore the one-argument claim from
+  `0142` in a new migration; the `created_at` default change is harmless to
+  keep.

@@ -4,8 +4,10 @@ import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import type { BoardSyncHub } from "../sync/hub.js";
 import {
+  FEDERATION_BODY_LIMIT,
   createAgreement,
   federationStatus,
+  isPeerToken,
   pending,
   queueOutbound,
   receiveUpdates,
@@ -99,11 +101,23 @@ export function federationRoutes(
 
   // Peer-to-peer receive: authenticated by the peer token, not a user
   // session, so a remote instance can deliver its store-and-forward batch.
-  app.post("/api/v1/federation/receive", async (req, reply) => {
-    const token = String(req.headers["x-peer-token"] ?? "");
-    if (!token) return reply.status(401).send({ error: "missing peer token" });
-    const body = ReceiveBody.parse(req.body);
-    const result = await receiveUpdates(sql, hub, token, body.boardId, body.updates, body.deletes);
-    return reply.status(200).send(result);
-  });
+  // The token is checked before the body is read, so only a known peer can
+  // send a body up to the federation limit.
+  app.post(
+    "/api/v1/federation/receive",
+    {
+      bodyLimit: FEDERATION_BODY_LIMIT,
+      onRequest: async (req, reply) => {
+        const token = String(req.headers["x-peer-token"] ?? "");
+        if (!token) return reply.status(401).send({ error: "missing peer token" });
+        if (!(await isPeerToken(sql, token))) return reply.status(401).send({ error: "unknown peer" });
+      },
+    },
+    async (req, reply) => {
+      const token = String(req.headers["x-peer-token"] ?? "");
+      const body = ReceiveBody.parse(req.body);
+      const result = await receiveUpdates(sql, hub, token, body.boardId, body.updates, body.deletes);
+      return reply.status(200).send(result);
+    },
+  );
 }

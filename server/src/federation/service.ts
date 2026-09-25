@@ -31,7 +31,57 @@ import { lockBoardMutation } from "../boards/service.js";
  * reaches a deleted record is recorded as a conflict on the side that
  * deleted it. Records of an incident stay on their home instance: an
  * agreement is per board, and a peer could not keep them to the incident.
+ *
+ * A push carries at most FEDERATION_BATCH_BYTES of JSON, so a backlog after
+ * a long partition, or a large board's first copy, goes as several pushes in
+ * queue order rather than one a receiver refuses.
  */
+
+/**
+ * The size a push aims for, in bytes of JSON on the wire. It stays under the
+ * 1 MiB request limit an instance before this one enforces, so instances on
+ * different releases keep exchanging while an upgrade is under way.
+ */
+export const FEDERATION_BATCH_BYTES = 768 * 1024;
+
+/** The receive route's request limit: room for a batch and for one entry larger than the batch size. */
+export const FEDERATION_BODY_LIMIT = 8 * 1024 * 1024;
+
+/** A board's first copy is cut into updates of about this much record data, each well inside one push. */
+const BACKFILL_PART_BYTES = 384 * 1024;
+
+interface RecordCopy {
+  readonly id: string;
+  readonly data: Record<string, unknown>;
+}
+
+/** A record's size in an update, near enough: per field, its id-prefixed key, some framing and its value as JSON. */
+function recordBytes(record: RecordCopy): number {
+  let bytes = 0;
+  for (const [key, value] of Object.entries(record.data)) {
+    if (value !== undefined) bytes += record.id.length + key.length + 16 + Buffer.byteLength(JSON.stringify(value));
+  }
+  return bytes;
+}
+
+/** Records in order, cut into parts of about `maxBytes` each; a record larger than that is a part of its own. */
+export function backfillParts<T extends RecordCopy>(records: readonly T[], maxBytes = BACKFILL_PART_BYTES): T[][] {
+  const parts: T[][] = [];
+  let part: T[] = [];
+  let bytes = 0;
+  for (const record of records) {
+    const size = recordBytes(record);
+    if (part.length > 0 && bytes + size > maxBytes) {
+      parts.push(part);
+      part = [];
+      bytes = 0;
+    }
+    part.push(record);
+    bytes += size;
+  }
+  if (part.length > 0) parts.push(part);
+  return parts;
+}
 
 export async function registerPeer(
   sql: Sql,
@@ -73,19 +123,24 @@ export async function createAgreement(
     throw error;
   });
   // The board's records as they stand go to the new peer first, so records
-  // made before the agreement are shared as well as those after it.
+  // made before the agreement are shared as well as those after it. Each
+  // part is an update of its own records, whole, so the parts apply in any
+  // order.
   if (perms.canRead ?? true) {
     const records = await sql`
       select id, data from board_records where board_id = ${boardId} and incident_id is null order by created_at, id`;
-    const update = recordsUpdate(records.map((r) => ({ id: r.id as string, data: r.data as Record<string, unknown> })));
-    if (update) {
+    const parts = backfillParts(records.map((r) => ({ id: r.id as string, data: r.data as Record<string, unknown> })));
+    for (const part of parts) {
+      const update = recordsUpdate(part)!;
       await sql`select queue_federation_to(${peerId}::uuid, ${boardId}::uuid, ${Buffer.from(update)})`;
+    }
+    if (parts.length > 0) {
       await recordAudit(sql, actor, {
         jurisdictionId: peer.jurisdiction_id as string,
         category: "federation.backfilled",
         subjectTable: "boards",
         subjectId: boardId,
-        payload: { peer: peer.name as string, records: records.length },
+        payload: { peer: peer.name as string, records: records.length, parts: parts.length },
       });
     }
   }
@@ -321,6 +376,12 @@ export async function setPeerLink(
     subjectId: peerId,
     payload: { endpointUrl },
   });
+}
+
+/** Whether a token is one this instance issued to a peer; the receive route asks before it reads a body. */
+export async function isPeerToken(sql: Sql, peerToken: string): Promise<boolean> {
+  const [peer] = await sql`select 1 from peers where token_hash = ${hashToken(peerToken)}`;
+  return Boolean(peer);
 }
 
 /**

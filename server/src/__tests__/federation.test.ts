@@ -433,6 +433,6 @@ describe("record deletions and records made before an agreement", () => {
     expect(rows.map((r) => r.entry)).toEqual(["county: generator inventory", "county: road closure list"]);
     const [audit] = await county.admin`
       select payload from audit_events where category = 'federation.backfilled' and subject_id = ${board}`;
-    expect(audit!.payload).toEqual({ peer: "state-backfill", records: 2 });
+    expect(audit!.payload).toEqual({ peer: "state-backfill", records: 2, parts: 1 });
   });
 });

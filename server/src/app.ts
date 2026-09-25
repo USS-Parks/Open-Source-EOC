@@ -238,6 +238,9 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof AuthError) return reply.status(err.status).send({ error: err.message });
     if (err instanceof z.ZodError) return reply.status(400).send({ error: "invalid request" });
+    // Fastify's own request errors, such as a body over the route's limit, keep their 4xx status.
+    const status = (err as { statusCode?: unknown }).statusCode;
+    if (typeof status === "number" && status >= 400 && status < 500) return reply.status(status).send({ error: (err as Error).message });
     req.log.error({ err }, "request failed");
     return reply.status(500).send({ error: "internal error" });
   });

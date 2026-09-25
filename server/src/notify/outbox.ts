@@ -3,7 +3,7 @@ import type { FastifyBaseLogger } from "fastify";
 import type { Sql } from "../db/client.js";
 import { BlobStore } from "../files/service.js";
 import { decryptSecret } from "../secrets/envelope.js";
-import { markDelivered } from "../federation/service.js";
+import { FEDERATION_BATCH_BYTES, markDelivered } from "../federation/service.js";
 import { destinationRefusal, type Resolve } from "./allowlist.js";
 import { channelKey, channelRefusal, sendMessage, type StoredChannel } from "./channels.js";
 import { SmtpRefused, type MailAttachment } from "./smtp.js";
@@ -23,7 +23,9 @@ import { SmtpRefused, type MailAttachment } from "./smtp.js";
  *
  * The same pass pushes the federation outbox to every peer with a link. Those
  * entries never dead-letter: store-and-forward holds through a partition of
- * any length, so they back off and wait.
+ * any length, so they back off and wait. Each push is one batch under the
+ * federation batch size, in queue order; a pass sends batch after batch while
+ * they are accepted, up to FEDERATION_ROUNDS, and leaves the rest to the next.
  *
  * A destination that is no longer on its jurisdiction's allowlist, or that a
  * host-suffix entry lets resolve to a private address, is dead-lettered
@@ -79,6 +81,9 @@ interface Circuit {
   failures: number;
   openUntil: number;
 }
+
+/** Batches a pass sends per peer and board at most: about 15 MiB after a long partition. */
+const FEDERATION_ROUNDS = 20;
 
 export class DeliveryWorker {
   private readonly batch: number;
@@ -233,7 +238,18 @@ export class DeliveryWorker {
   }
 
   private async drainFederation(): Promise<number> {
-    const batches = await this.sql`select * from claim_federation_batches(${this.batch})`;
+    let delivered = 0;
+    for (let round = 0; round < FEDERATION_ROUNDS; round += 1) {
+      const sent = await this.federationRound();
+      if (sent === 0) break;
+      delivered += sent;
+    }
+    return delivered;
+  }
+
+  /** One batch to each peer and remote board that has entries due; entries delivered. */
+  private async federationRound(): Promise<number> {
+    const batches = await this.sql`select * from claim_federation_batches(${this.batch}, ${FEDERATION_BATCH_BYTES})`;
     let delivered = 0;
     for (const b of batches) {
       const ids = b.ids as string[];
@@ -255,6 +271,7 @@ export class DeliveryWorker {
           }),
           signal: AbortSignal.timeout(this.timeoutMs),
         });
+        if (res.status === 413) throw new Error("peer refused the batch as too large (413)");
         if (!res.ok) throw new Error(`peer responded ${res.status}`);
         this.circuits.delete(key);
         await markDelivered(this.sql, ids);
