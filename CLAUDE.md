@@ -97,9 +97,10 @@ writes before. Follow the same discipline as the Mighty-Eel-OS protocol:
 - TypeScript full-stack: Node backend, React front end, PostgreSQL + PostGIS,
   Yjs CRDT sync over WebSocket, MapLibre GL JS and PMTiles. No martin sidecar
   was built.
-- `field-node/` is a placeholder Rust field gateway pending V1 unit W1.0.
+- There is no `field-node/`: V1 W1.0 removed the placeholder Rust crate, and
+  the CoT/TAK gateway is TypeScript in the server (ADR-0008).
 - The workspace exists at repository root: `server/`, `web/`, `shared/`,
-  `field-node/`, `deploy/` and `docs/`.
+  `deploy/` and `docs/`.
 - License: Apache-2.0, recorded by VEOC-02 and present in `LICENSE`.
 - No AGPL, SSPL, OSL, fair-code, or source-available code may be vendored or
   embedded. AGPL systems integrate only across a process boundary.

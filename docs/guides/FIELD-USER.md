@@ -29,10 +29,11 @@ facility symbols. Without a connection:
   data say it is unavailable, and field reports and task completions queue on
   the device as described below.
 - Signing in needs the connection, so sign in before you leave coverage. If the
-  app is closed or reloaded while offline, it keeps your session and shows "No
-  connection to the server" until the connection returns, then opens where you
-  were; queued work stays on the device. Keep the app open while offline so
-  the screens stay usable.
+  app is closed or reloaded while offline, it opens again from what it kept on
+  the device, marked "No connection · working offline", and signs in for real
+  when the server answers; queued work stays on the device. This needs the
+  offline copy: **Settings > This computer** shows "Kept on this computer" once
+  it is installed, which happens on the first visit with a connection.
 - The bundled basemap draws from the device copy. A street, buildings or
   overlay map hosted by your deployment is read from the server as you pan and
   needs the connection.

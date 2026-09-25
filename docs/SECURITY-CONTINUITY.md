@@ -91,8 +91,14 @@ grant, proven in the security suite. Attribution is total (INV-2).
 - `GET /api/v1/health` (liveness) and `GET /api/v1/ready` (database reachable)
   serve load balancers and orchestration; both are unauthenticated and exempt
   from the flood limiter.
-- The field client operates offline and syncs on reconnect; federation is
-  store-and-forward. Disconnection is the normal case (INV-3).
+- Disconnection is the normal case (INV-3). A signed-in device keeps
+  working without a connection: every screen opens, including after a
+  restart, and field reports (form submissions), task completions and
+  unsent drafts queue on the device and sync on reconnect. Map captures,
+  messages and new tasks need the connection until Veoci and air gap unit
+  VA22 queues them. Outbound messages wait for their channel's window
+  (72 hours unless an administrator sets another), and federation is
+  store-and-forward for as long as a partition lasts.
 - Backups: the Windows launcher's `Backup` action writes a database dump and a
   matching copy of the uploaded files; the
   [disaster recovery runbook](./guides/DISASTER-RECOVERY.md) restores both.

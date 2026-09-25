@@ -6762,3 +6762,41 @@ migration is `0146` because `0145` is RD4's.
   fetch.
 - **Rollback:** revert the commit and restore `retention_purge` from
   `0110` in a new migration; the relaxed reference can stay.
+
+## Veoci and air gap VA5: corrections
+
+Veoci Integration and Air Gap PSPR unit VA5 (AG-11), the air-gap audit's
+section 9 "stale or contradicted" list. Landed on `main` after "Veoci and
+air gap VA4: collaboration and feeds in an outage".
+
+- **What changed.**
+  - `docs/guides/FIELD-USER.md`: the offline restart as RD5 left it. A
+    reload or restart offline opens from what the device kept, marked "No
+    connection · working offline", and signs in when the server answers,
+    given the offline copy that **Settings > This computer** reports; the old
+    text said it waited on "No connection to the server" and asked the
+    reader to keep the app open.
+  - `docs/SECURITY-CONTINUITY.md`: "the field client operates offline and
+    syncs on reconnect" is narrowed to what is true: screens open, field
+    reports, task completions and drafts queue; map captures, messages and
+    new tasks wait for VA22; outbound messages wait their window;
+    federation holds through a partition.
+  - `ADR-0006`: a status note that peers authenticate by token today, with
+    no signed payloads and no revoke route, which are VA19's.
+  - `ADR-0003`: a status note reconciling "never silently" with its own
+    addendum: refused edits are listed as conflicts; a field's losing value
+    stays in the log without one.
+  - `CLAUDE.md`: the project shape no longer names `field-node/`, which V1
+    W1.0 removed (ADR-0008).
+  - `.githooks/pre-commit` is tracked as executable (`100755`). Git skipped
+    it on Linux and macOS clones while it was `100644`, which is how this
+    session's earlier commits ran it by hand.
+- **Air-gap behavior (decision 9).** Documentation and a file mode; no
+  network path changes.
+- **Verification.** `pnpm check:static` (with the link check) exit 0. This
+  unit's own commit ran `.githooks/pre-commit` from `git commit` on this
+  Linux clone with no manual step: the staged-content check and the gitleaks
+  scan printed their results before the commit was written.
+- **Not run.** A fresh clone on macOS, which RD6's Mac work will be.
+- **Evidence level:** link check and the hook running on commit.
+- **Rollback:** revert the commit.

@@ -2,6 +2,17 @@
 
 Status: accepted, 2026-09-17 (VEOC-04)
 
+Status note, 2026-09-25 (Veoci and air gap VA5): the decision is only partly
+built. As built, a peer authenticates with a token the receiving instance
+issued (stored there as a hash; the sender keeps its copy encrypted under
+`OPENEOC_SECRET_KEY`), over HTTPS where the peer's address uses it. Payloads
+are not signed, and no route revokes an agreement: flow stops only by
+removing the peer or the agreement in the database. Store-and-forward
+delivery holds through a partition, and each batch is checked against the
+agreement for its board. The Ed25519 identity, signed batches verified before
+ingestion and a revoke route are unit VA19 of the
+[Veoci Integration and Air Gap PSPR](../process/VEOCI-AIR-GAP-PSPR-2026-09-25.md).
+
 ## Decision
 
 - Each instance holds a long-lived Ed25519 identity keypair; peering is a

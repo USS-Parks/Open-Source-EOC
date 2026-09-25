@@ -2,6 +2,15 @@
 
 Status: accepted, 2026-09-17 (VEOC-04)
 
+Status note, 2026-09-25 (Veoci and air gap VA5): "never silently" below
+holds for edits the server refuses. A sync edit the board cannot accept (a
+value its fields refuse, or an edit reaching a deleted record) is kept as a
+visible conflict in `sync_conflicts` and audited as `sync.conflict`. Two
+accepted edits to one field settle by the ordering rule in the addendum, and
+the losing edit stays in the sync log without a conflict entry. Workflow
+state such as a resource request's lifecycle is not a Yjs document: the
+server applies its transitions.
+
 ## Decision
 
 - Concurrently edited surfaces (board records mid-edit, messages, map
