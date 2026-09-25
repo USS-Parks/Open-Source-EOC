@@ -425,16 +425,17 @@ export function notifyRoutes(
     const page = z.object(pageQuery).parse(req.query);
     const after = decodeCursor(page.cursor, ["at", "id"]);
     const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
-    const rows = await withPerson(sql, req.principal.person.id, (tx) => {
+    const me = req.principal.person.id;
+    const rows = await withPerson(sql, me, (tx) => {
       return tx`
         select n.id, n.channel, n.title, n.body, n.status, n.detail,
           to_char(n.created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at,
           n.person_id, n.position_id, n.created_at, n.read_at,
           n.acknowledged_at, n.acknowledged_by,
-          (n.person_id = ${req.principal.person.id} or (n.position_id is not null and exists (
+          (n.person_id = ${me} or (n.position_id is not null and exists (
             select 1 from position_assignments assignment
             where assignment.position_id = n.position_id
-              and assignment.person_id = ${req.principal.person.id}
+              and assignment.person_id = ${me}
               and assignment.revoked_at is null
           ))) as assigned_to_current_actor,
           recipient.display_name as recipient_name, position.title as position_title,
@@ -445,7 +446,10 @@ export function notifyRoutes(
         left join positions position on position.id = n.position_id
         left join persons acknowledger on acknowledger.id = n.acknowledged_by
         left join incidents incident on incident.id = n.incident_id
-        ${after ? tx`where (n.created_at, n.id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : tx``}
+        -- The page's candidates, from each source the read policy allows through its
+        -- own index (notification_page); the policy still applies to every row here.
+        where n.id = any(array(select page.id from public.notification_page(
+          ${after ? after[0]! : null}::text::timestamptz, ${after ? after[1]! : null}::uuid, ${limit + 1}) page))
         order by n.created_at desc, n.id desc limit ${limit + 1}`;
     });
     const last = rows.length > limit ? rows[limit - 1]! : null;

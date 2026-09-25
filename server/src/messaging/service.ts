@@ -176,7 +176,8 @@ export async function listMessages(
       where ip.incident_id = t.incident_id and ip.person_id = m.sender_person and m.sender_position is null
       order by ip.created_at <= m.created_at desc, ip.created_at desc, ip.id desc limit 1) sender_grant on true
     where m.thread_id = ${threadId} and m.seq > ${afterSeq}::bigint
-      and m.created_at > now() - make_interval(days => coalesce(public.thread_retention_days(${threadId}), 36500))
+      -- A subquery, so the retention is looked up once and not for every message.
+      and m.created_at > (select now() - make_interval(days => coalesce(public.thread_retention_days(${threadId}), 36500)))
     order by m.seq limit ${limit + 1}`;
   const { items, nextCursor } = cutPage(rows, limit, (r) => [String(r.seq)]);
   return {

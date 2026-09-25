@@ -411,9 +411,8 @@ export async function listIncidentOverview(
         ${after ? sql`and (i.activated_at, i.id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : sql``}
       order by i.activated_at desc, i.id desc limit ${limit + 1}
     ), requests as (
-      select incident_id, count(*)::int as n from resource_requests
-      where incident_id in (select id from page) and state <> all(${FINISHED_REQUEST_STATES as string[]})
-      group by incident_id
+      select incident_id, unfinished as n
+      from public.incident_request_counts(array(select id from page), ${FINISHED_REQUEST_STATES as string[]}::text[])
     ), tasks as (
       select incident_id, count(*)::int as n from checklist_items
       where incident_id in (select id from page) and status <> 'completed'

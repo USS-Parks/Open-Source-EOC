@@ -45,14 +45,12 @@ export async function getIncidentSummary(
       join board_records r on r.board_id = ib.board_id
       where ib.incident_id = ${incidentId} and r.deleted_at is null and r.archived_at is null
         and b.template_key in ('shelters', 'field_reports')
+    ), requests as (
+      select * from public.incident_request_counts(array[${incidentId}]::uuid[], ${FINISHED_REQUEST_STATES as string[]}::text[])
     )
     select
-      (select count(*)::int from resource_requests
-        where incident_id = ${incidentId} and state <> 'draft'
-          and state <> all(${FINISHED_REQUEST_STATES as string[]})) as open_requests,
-      (select count(*)::int from resource_requests
-        where incident_id = ${incidentId} and state <> 'draft' and priority = 'immediate'
-          and state <> all(${FINISHED_REQUEST_STATES as string[]})) as urgent_requests,
+      (select coalesce(sum(open_requests), 0)::int from requests) as open_requests,
+      (select coalesce(sum(urgent_requests), 0)::int from requests) as urgent_requests,
       (select count(*)::int from records
         where template_key = 'shelters' and coalesce(data->>'status', '') <> 'closed'
           and coalesce(data->>'planned', 'false') <> 'true') as active_shelters,

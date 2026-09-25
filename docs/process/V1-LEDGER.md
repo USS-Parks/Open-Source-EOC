@@ -6521,3 +6521,80 @@ approved by Basho on 2026-09-25 for STS with express permissions throughout.
 - **Evidence level:** archive headers and tile reads, one browser capture,
   focused tests.
 - **Rollback:** revert the commit and rebuild the archives.
+
+## Readiness RD4 follow-up: reads that slowed as the incident filled
+
+Operator Trust PSPR, RD12 part two, at Basho's instruction of 2026-09-25 to
+find why the RD4 run's read times rose more than twofold.
+
+- **What was found.** In "Readiness RD4: 150 people at once" the minute's read
+  time at the 95th percentile rose from 127 ms to 399 ms over two hours while
+  writes and live delivery stayed flat. A probe on the North Coast Storm, with
+  the run's two-hour writes added in four steps (35,432 record edits, 2,923
+  thread posts, 2,992 requests and their moves), timed every read the run
+  makes. Eleven stayed flat within the machine's noise; the activity feed
+  varied between 21 and 104 ms with no steady trend, and its plan took 10 ms
+  at the full volume. These grew, median milliseconds from the start to the
+  full volume: thread messages 11 to 96, the notification list 23 to
+  93, the incident summary 30 to 86, the incidents overview 24 to 77 and the
+  request list 17 to 38. Four of them are on the overview, the screen the run
+  visits most. PostgreSQL's plans (`auto_explain`) gave three causes, all the
+  same kind: row-level security checks run once for every row a query passes.
+  - **Open request counts.** The summary and the incidents overview counted
+    an incident's open requests through the requests table's policies, one
+    check per request: 19 ms for 2,560 open requests, growing with every
+    request. The run's people also moved requests with the stage names from
+    before TP1, so each request stopped after one move and nearly all stayed
+    open (a fault in the load model, corrected below).
+  - **The notification list.** It ordered every notification in the database
+    by time and let the read policy drop those not for the reader, one row at
+    a time, until a page was full. The more notifications other people had,
+    the more rows it read: 2,782 discarded for one page in the probe, and
+    325 ms per page at 60,000 notifications.
+  - **Thread messages.** The retention check called
+    `thread_retention_days()`, itself several permission checks, for every
+    message on the page: a fixed 30 ms per page once a thread held 100
+    messages.
+- **What changed.**
+  - Migration `0145_read_paths.sql`: `incident_request_counts(incidents,
+    finished states)` counts an incident's unfinished, open and urgent
+    requests with the incident's read check made once
+    (`can_read_incident`, the incidents read policy itself, so it returns
+    exactly what the per-row policies did for a reader of the incident, and
+    nothing for anyone else); `notification_page(before, limit)` picks a
+    page's candidates from the three sources `notifications_read` allows (the
+    person's own, their current positions', every notification in a
+    jurisdiction they administer), each newest first through its own index;
+    and an index on `notifications (jurisdiction_id, created_at, id)`.
+  - The incident summary and the incidents overview take their request
+    counts from the function; each keeps its own meaning (the summary leaves
+    drafts out, the overview counts every unfinished request).
+  - The notification list reads its candidates by key; the read policy still
+    applies to every row it returns.
+  - The thread read looks the retention up once per page.
+  - `deploy/windows/prove-load.mjs` reports each read route's 95th percentile
+    in the 20 minutes after the warm-up and in the last 20 minutes, and moves
+    requests through the current stages (received, accepted, sourcing,
+    assigned, deployed, fulfilled, closed).
+- **Measured after.** The same probe at the full volume, before and after:
+  the incidents overview 42.6 to 15.1 ms, thread messages 38.8 to 9.0 ms, the
+  incident summary 39.4 to 27.1 ms (the rest is its board record counts, which
+  do not grow with requests). The notification list on 60,000 notifications
+  among 150 people: a member's page 295 ms to 11 ms, an administrator's 2 ms
+  to 8 ms, both now independent of how many notifications others have.
+- **Tests.** `notification-inbox.test.ts` is new: a member reads their own
+  notifications and their current position's, not a released position's or
+  another person's, and an administrator reads every notification in the
+  jurisdiction they administer and none elsewhere, newest first, two to a
+  page across the whole list.
+- **Verification.** On the tree with VA1, VA2 and XS1 to XS3: the inbox,
+  notify, alerts, delivery outbox, incident overview, messaging, request
+  sharing, list pagination and api-docs tests, 9 files and 81 tests, pass;
+  before the rebase, 101 files and 771 tests over those areas and the web
+  suite passed. `pnpm check:static` exit 0.
+- **Not run here.** The two-hour load run with these changes; it follows in
+  its own receipt.
+- **Evidence level:** probe measurements against a real database, query
+  plans, real-database tests.
+- **Rollback:** revert the commit; drop the two functions and the index in a
+  new migration.

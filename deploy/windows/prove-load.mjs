@@ -86,6 +86,23 @@ let window = measures();
 const errorKinds = new Map();
 const counts = { signIns: 0, renewals: 0, retriedAfterRenewal: 0, screens: 0, restEdits: 0, fieldSyncs: 0, messages: 0, requestsSubmitted: 0, requestMoves: 0, notificationRefetches: 0, deliveries: 0 };
 let stopping = false;
+let runStartedAt = Date.now();
+
+/**
+ * Each read route's times in the 20 minutes after the warm-up and in the run's
+ * last 20 minutes, so a route whose reads slow as the incident's work piles up
+ * shows by name.
+ */
+const routes = new Map();
+function routeRead(path, ms) {
+  const minute = (Date.now() - runStartedAt) / 60_000;
+  const phase = minute >= WARMUP_MINUTES && minute < WARMUP_MINUTES + 20 ? "early" : minute >= MINUTES - 20 ? "late" : null;
+  const key = routeOf(path);
+  let entry = routes.get(key);
+  if (!entry) routes.set(key, entry = { count: 0, early: new Histogram(), late: new Histogram() });
+  entry.count += 1;
+  if (phase) entry[phase].add(ms);
+}
 
 const routeOf = (path) => path.split("?")[0].replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, ":id");
 function fail(kind) {
@@ -198,6 +215,7 @@ try {
         const histogram = kind === "write" ? "writes" : "reads";
         window[histogram].add(ms);
         total[histogram].add(ms);
+        if (kind === "read") routeRead(path, ms);
       }
       if (!response) { fail(`${method} ${routeOf(path)}: no response`); return null; }
       if (response.status >= 400) { fail(`${method} ${routeOf(path)}: ${response.status}`); return null; }
@@ -238,7 +256,7 @@ try {
         if (created?.id) { ownRequests.push({ id: created.id, state: "submitted" }); counts.requestsSubmitted += 1; }
       },
       async () => {
-        const next = { submitted: "triaged", triaged: "sourcing", sourcing: "assigned", assigned: "deployed", deployed: "demobilizing", demobilizing: "closed" };
+        const next = { submitted: "accepted", accepted: "sourcing", sourcing: "assigned", assigned: "deployed", deployed: "fulfilled", fulfilled: "closed" };
         const open = ownRequests.find((item) => next[item.state]);
         if (!open) return;
         const moved = await call("write", "POST", `/resource-requests/${open.id}/transition`, { toState: next[open.state] });
@@ -393,6 +411,7 @@ try {
   // People arrive over the first three minutes, as an activation fills a room.
   const crowd = people.map((_, index) => person(index));
   const runStarted = Date.now();
+  runStartedAt = runStarted;
   const arrival = (3 * 60_000) / USERS;
   for (const member of crowd) {
     void member.start();
@@ -528,6 +547,15 @@ try {
     `Sign-ins ${counts.signIns}, session renewals ${counts.renewals} (${counts.retriedAfterRenewal} requests sent with the access token a renewal had just replaced, renewed and retried once as the web client does), screen visits ${counts.screens}, REST record edits ${counts.restEdits}, field syncs acknowledged ${counts.fieldSyncs}, thread messages ${counts.messages}, resource requests submitted ${counts.requestsSubmitted} and moved on ${counts.requestMoves} times, inbox refetches on a notification signal ${counts.notificationRefetches}.`,
     "",
     `Server memory after warm-up (median of the first and last fifth of the settled samples): heap ${mb(heapFirst)} MB to ${mb(heapLast)} MB, resident ${mb(rssFirst)} MB to ${mb(rssLast)} MB${rssGrowth === null ? "" : ` (${(rssGrowth * 100).toFixed(1)}%)`}.`,
+    "",
+    "## Reads by route",
+    "",
+    `The 95th percentile of each read route in the 20 minutes after the warm-up (minutes ${WARMUP_MINUTES} to ${WARMUP_MINUTES + 20}) and in the run's last 20 minutes (${MINUTES - 20} to ${MINUTES}), most read first.`,
+    "",
+    "| Route | Reads | 95th, after warm-up | 95th, last 20 minutes |",
+    "|---|---|---|---|",
+    ...[...routes].sort((a, b) => b[1].count - a[1].count).map(([route, entry]) =>
+      `| \`GET ${route}\` | ${entry.count} | ${entry.early.quantile(0.95) ?? "n/a"} ms | ${entry.late.quantile(0.95) ?? "n/a"} ms |`),
     "",
     "## Every ten minutes",
     "",
