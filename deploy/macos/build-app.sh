@@ -52,6 +52,10 @@ ls "$res/runtime/pgsql" "$res/runtime/pgsql/share"
 # names it is rewritten relative to the file that loads it, and each changed
 # file is signed again (ad hoc), so the runtime works from inside the app.
 pg="$res/runtime/pgsql"
+# A universal binary's otool listing heads each architecture's libraries with
+# a line naming the file, which ends in a colon; only the other lines are
+# libraries.
+deps() { otool -L "$1" | grep -v ':$' | awk '{print $1}'; }
 relocated=0
 while IFS= read -r -d '' file; do
   file -b "$file" | grep -q "Mach-O" || continue
@@ -67,15 +71,22 @@ while IFS= read -r -d '' file; do
     rel="$(python3 -c 'import os,sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))' "$target" "$(dirname "$file")")"
     install_name_tool -change "$dep" "@loader_path/$rel" "$file" 2>/dev/null
     changed=1
-  done < <(otool -L "$file" | tail -n +2 | awk '{print $1}')
+  done < <(deps "$file")
   if [ "$changed" = 1 ]; then
     codesign --force --sign - "$file" 2>/dev/null
     relocated=$((relocated + 1))
   fi
 done < <(find "$pg" -type f -print0)
 echo "relocated $relocated files"
-left="$(find "$pg" -type f -print0 | xargs -0 file | grep Mach-O | cut -d: -f1 | while IFS= read -r f; do otool -L "$f" | tail -n +2 | awk '{print $1}' | grep -v '^@\|^/usr/lib/\|^/System/' | sed "s|^|$f: |"; done || true)"
-if [ -n "$left" ]; then echo "Library paths outside the app remain:"; echo "$left" | head -40; exit 1; fi
+# Each file is checked by its own path: file(1) lists a universal binary once
+# per architecture, and the app's path has spaces in it.
+left=""
+while IFS= read -r -d '' f; do
+  file -b "$f" | grep -q "Mach-O" || continue
+  outside="$(deps "$f" | grep -v '^@\|^/usr/lib/\|^/System/' || true)"
+  [ -z "$outside" ] || left+="$f: $outside"$'\n'
+done < <(find "$pg" -type f -print0)
+if [ -n "$left" ]; then echo "Library paths outside the app remain:"; printf '%s' "$left" | head -40; exit 1; fi
 
 echo "== the app"
 cp package.json LICENSE NOTICE "$res/"
