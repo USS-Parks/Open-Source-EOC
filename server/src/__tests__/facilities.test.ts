@@ -201,3 +201,88 @@ describe("the registry on the board", () => {
     expect(have.body).not.toContain("555-0100");
   });
 });
+
+describe("editing and removing registry entries, and the list of status requests", () => {
+  const inject = (method: "GET" | "POST" | "PATCH", url: string, payload?: Record<string, unknown>) =>
+    app.inject({ method, url, headers: { authorization: `Bearer ${memberToken}` }, ...(payload ? { payload } : {}) });
+  const boardNames = async () => ((await inject("GET", `/api/v1/jurisdictions/${seed.jurisdictionId}/facilities/board`))
+    .json().facilities as Array<{ organizationName: string }>).map((row) => row.organizationName);
+
+  it("edits a facility's registry fields and clears what the edit leaves empty", async () => {
+    const id = await facility("Pecwan Clinic", "clinic");
+    const edited = await inject("PATCH", `/api/v1/facilities/${id}`, {
+      name: "Pecwan Health Center", kind: "hospital", contact: "Charge nurse 555-0142",
+      staleAfterSeconds: 1800, location: { lon: -123.9, lat: 41.4 },
+    });
+    expect(edited.statusCode, edited.body).toBe(200);
+    const board = (await inject("GET", `/api/v1/jurisdictions/${seed.jurisdictionId}/facilities/board`))
+      .json().facilities as Array<Record<string, unknown>>;
+    expect(board.find((row) => row.organizationId === id)).toMatchObject({
+      organizationName: "Pecwan Health Center", facilityKind: "hospital", contact: "Charge nurse 555-0142",
+      staleAfterSeconds: 1800, location: { lon: -123.9, lat: 41.4 },
+    });
+    await inject("PATCH", `/api/v1/facilities/${id}`, {
+      name: "Pecwan Health Center", kind: "hospital", contact: null, staleAfterSeconds: 1800, location: null,
+    });
+    const [row] = await admin`select contact, geom from facilities where id = ${id}`;
+    expect(row).toMatchObject({ contact: null, geom: null });
+    const [audit] = await admin`select count(*)::int as n from audit_events where category = 'facility.updated' and subject_id = ${id}`;
+    expect(audit!.n).toBe(2);
+    // A viewer of the jurisdiction reads the registry but cannot change it.
+    const viewer = await admin`
+      insert into persons (email, display_name, password_hash) values ('facility-viewer@example.org', 'Viewer', 'x') returning id`;
+    await admin`insert into jurisdiction_memberships (person_id, jurisdiction_id, role) values (${viewer[0]!.id as string}, ${seed.jurisdictionId}, 'viewer')`;
+    const viewerP = await principalForPerson(runtime, viewer[0]!.id as string);
+    const { updateFacility } = await import("../facilities/service.js");
+    await expect(withPerson(runtime, viewerP.person.id, (tx) => updateFacility(tx, viewerP, id, {
+      name: "Renamed", kind: "hospital", contact: null, staleAfterSeconds: 60, location: null,
+    }))).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("removes a facility from the board and from open requests, and keeps its reports", async () => {
+    const id = await facility("Martins Ferry Station", "fire_station");
+    await report(id, { operatingStatus: "normal" });
+    const launched = (await inject("POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/status-queries`,
+      { prompt: "Road access check", kind: "fire_station" })).json() as { id: string; targets: number };
+    expect(launched.targets).toBeGreaterThan(0);
+    const before = (await inject("GET", `/api/v1/status-queries/${launched.id}`)).json() as { outstanding: Array<{ facilityId: string }> };
+    expect(before.outstanding.map((f) => f.facilityId)).toContain(id);
+
+    expect((await inject("POST", `/api/v1/facilities/${id}/retire`)).statusCode).toBe(200);
+    expect(await boardNames()).not.toContain("Martins Ferry Station");
+    const after = (await inject("GET", `/api/v1/status-queries/${launched.id}`)).json() as { outstanding: Array<{ facilityId: string }>; total: number };
+    expect(after.outstanding.map((f) => f.facilityId)).not.toContain(id);
+    expect((await inject("POST", `/api/v1/facilities/${id}/status`, { operatingStatus: "normal" })).statusCode).toBe(409);
+    expect((await inject("POST", `/api/v1/facilities/${id}/retire`)).statusCode).toBe(409);
+    const [kept] = await admin`select count(*)::int as n from facility_status_reports where facility_id = ${id}`;
+    expect(kept!.n).toBe(1);
+    const again = (await inject("POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/status-queries`,
+      { prompt: "Second check", kind: "fire_station" })).json() as { id: string };
+    const targets = await admin`select facility_id from status_query_targets where query_id = ${again.id}`;
+    expect(targets.map((t) => t.facility_id)).not.toContain(id);
+  });
+
+  it("lists the jurisdiction's status requests newest first with their answers, a page at a time", async () => {
+    const first = (await inject("POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/status-queries`,
+      { prompt: "Generator fuel", kind: "shelter" })).json() as { id: string };
+    await report(shelter, { operatingStatus: "normal" });
+    const second = (await inject("POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/status-queries`,
+      { prompt: "Water pressure", kind: "hospital" })).json() as { id: string };
+    const listed = (await inject("GET", `/api/v1/jurisdictions/${seed.jurisdictionId}/status-queries`)).json() as {
+      queries: Array<{ id: string; prompt: string; total: number; responded: number; complete: boolean; outstanding: Array<{ name: string }> }>;
+    };
+    const ids = listed.queries.map((q) => q.id);
+    expect(ids.indexOf(second.id)).toBeLessThan(ids.indexOf(first.id));
+    const water = listed.queries.find((q) => q.id === second.id)!;
+    const one = (await inject("GET", `/api/v1/status-queries/${second.id}`)).json() as Record<string, unknown>;
+    expect(water).toMatchObject({ prompt: "Water pressure", total: one.total, responded: one.responded, complete: one.complete });
+    expect(water.outstanding.map((f) => f.name)).toEqual((one.outstanding as Array<{ name: string }>).map((f) => f.name));
+    // The gym answered the fuel request with its report.
+    expect(listed.queries.find((q) => q.id === first.id)!.outstanding.map((f) => f.name)).not.toContain("Weitchpec Gym");
+    const page = (await inject("GET", `/api/v1/jurisdictions/${seed.jurisdictionId}/status-queries?limit=1`)).json() as { queries: Array<{ id: string }>; nextCursor: string };
+    expect(page.queries[0]!.id).toBe(second.id);
+    const next = (await inject("GET", `/api/v1/jurisdictions/${seed.jurisdictionId}/status-queries?limit=1&cursor=${encodeURIComponent(page.nextCursor)}`))
+      .json() as { queries: Array<{ id: string }> };
+    expect(next.queries[0]!.id).toBe(first.id);
+  });
+});

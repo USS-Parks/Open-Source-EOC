@@ -202,17 +202,19 @@ function ReportPanel(props: PanelProps) {
   );
 }
 
+const RECENT_REQUESTS = 20;
+
 /**
- * Ask facilities to report now and follow who has answered. The server keeps
- * no list of requests, so the panel follows the ones sent from this screen;
- * a status report from a facility answers every open request for it.
+ * Ask facilities to report now and follow who has answered: the recent
+ * requests of the jurisdiction, whoever sent them. A status report from a
+ * facility answers every open request for it.
  */
 function StatusRequestPanel(props: PanelProps & { revision: number }) {
   const [prompt, setPrompt] = useState("Report your current status");
   const [kind, setKind] = useState("");
-  const [sent, setSent] = useState<readonly string[]>([]);
   const { busy, run, feedback } = useRun();
-  const results = useAsync(() => Promise.all(sent.map((id) => props.client.statusQuery(id))), [props.client, sent]);
+  const results = useAsync(() => props.client.listStatusQueries(props.jurisdictionId, { limit: RECENT_REQUESTS }),
+    [props.client, props.jurisdictionId]);
   const { reload } = results;
   // A report or a Refresh bumps the revision; the answers read again with the board.
   useEffect(() => reload(), [props.revision, reload]);
@@ -221,7 +223,7 @@ function StatusRequestPanel(props: PanelProps & { revision: number }) {
     void run(async () => {
       if (!prompt.trim()) throw new Error("Enter what the facilities should report.");
       const query = await props.client.launchStatusQuery(props.jurisdictionId, { prompt: prompt.trim(), ...(kind ? { kind } : {}) });
-      setSent((current) => [query.id, ...current]);
+      reload();
       return `Request sent to ${query.targets} ${query.targets === 1 ? "facility" : "facilities"}.`;
     });
   };
@@ -240,11 +242,12 @@ function StatusRequestPanel(props: PanelProps & { revision: number }) {
       </form>
       {feedback}
       {results.error ? <p className="d21-error" role="alert">{results.error}</p> : null}
-      {results.data?.length ? (
-        <ul className="facilities-requests" aria-label="Requests sent from this screen">
-          {results.data.map((query) => (
+      {results.data?.queries.length ? (
+        <ul className="facilities-requests" aria-label="Recent status requests">
+          {results.data.queries.map((query) => (
             <li key={query.id} aria-label={query.prompt}>
               <strong>{query.prompt}</strong>{" "}
+              <span className="d21-muted">sent {new Date(query.createdAt).toLocaleString()}</span>{" "}
               <StatusBadge status={query.complete ? "success" : "warning"}>
                 {query.complete ? "All reported" : `${query.responded} of ${query.total} reported`}
               </StatusBadge>
@@ -252,7 +255,8 @@ function StatusRequestPanel(props: PanelProps & { revision: number }) {
             </li>
           ))}
         </ul>
-      ) : null}
+      ) : results.data ? <p className="d21-muted">No status requests have been sent.</p> : null}
+      {results.data?.nextCursor ? <p className="d21-muted">Showing the {RECENT_REQUESTS} most recent requests.</p> : null}
     </Panel>
   );
 }
@@ -367,6 +371,26 @@ function RegistryPanel(props: PanelProps & { canWrite: boolean }) {
   const [form, setForm] = useState(EMPTY_FACILITY);
   const set = (patch: Partial<typeof EMPTY_FACILITY>) => setForm((current) => ({ ...current, ...patch }));
   const { busy, run, feedback } = useRun();
+  // The facility being edited, or null while the form registers a new one.
+  const [editing, setEditing] = useState<FacilityBoardRow | null>(null);
+  const [removing, setRemoving] = useState<FacilityBoardRow | null>(null);
+  const startEdit = (row: FacilityBoardRow) => {
+    setRemoving(null);
+    setEditing(row);
+    setForm({
+      name: row.organizationName, kind: row.facilityKind, contact: row.contact ?? "",
+      lon: row.location ? String(row.location.lon) : "", lat: row.location ? String(row.location.lat) : "",
+      windowMinutes: String(Math.max(1, Math.round(row.staleAfterSeconds / 60))),
+    });
+  };
+  const stopEdit = () => { setEditing(null); setForm(EMPTY_FACILITY); };
+  const remove = (row: FacilityBoardRow) => run(async () => {
+    await props.client.retireFacility(row.organizationId);
+    setRemoving(null);
+    if (editing?.organizationId === row.organizationId) stopEdit();
+    props.onChanged();
+    return `${row.organizationName} removed from the registry. Its past reports stay in the record.`;
+  });
   const submit = (event: FormEvent) => {
     event.preventDefault();
     void run(async () => {
@@ -379,6 +403,15 @@ function RegistryPanel(props: PanelProps & { canWrite: boolean }) {
       const lat = Number(form.lat);
       if (placed && !(form.lon.trim() && form.lat.trim() && Math.abs(lon) <= 180 && Math.abs(lat) <= 90))
         throw new Error("Enter both longitude and latitude in decimal degrees, or leave both empty.");
+      if (editing) {
+        await props.client.updateFacility(editing.organizationId, {
+          name, kind: form.kind, staleAfterSeconds: minutes * 60,
+          contact: form.contact.trim() || null, location: placed ? { lon, lat } : null,
+        });
+        stopEdit();
+        props.onChanged();
+        return `${name} updated.`;
+      }
       await props.client.registerFacility(props.jurisdictionId, {
         name,
         kind: form.kind,
@@ -395,17 +428,31 @@ function RegistryPanel(props: PanelProps & { canWrite: boolean }) {
     <Panel title="Registry">
       {props.rows.length ? (
         <div className="facilities-table">
-          <BoardTable caption="Registered facilities" columns={["Facility", "Type", "Contact", "Position", "Report expected"]}
+          <BoardTable caption="Registered facilities"
+            columns={["Facility", "Type", "Contact", "Position", "Report expected", ...(props.canWrite ? ["Actions"] : [])]}
             rows={props.rows.map((row) => [
               row.organizationName, kindLabel(row.facilityKind), row.contact ?? "None given",
               row.location ? `${row.location.lat.toFixed(4)}, ${row.location.lon.toFixed(4)}` : "Not placed",
               windowLabel(row.staleAfterSeconds),
+              ...(props.canWrite ? [<span className="facilities-row-actions">
+                <ActionButton kind="quiet" disabled={busy} onClick={() => startEdit(row)}>Edit {row.organizationName}</ActionButton>
+                <ActionButton kind="quiet" disabled={busy} onClick={() => { setRemoving(row); }}>Remove {row.organizationName}</ActionButton>
+              </span>] : []),
             ])} />
         </div>
       ) : <p className="d21-muted">No facilities are registered yet.</p>}
+      {removing ? (
+        <div className="facilities-confirm" role="group" aria-label={`Remove ${removing.organizationName}`}>
+          <p>Remove {removing.organizationName} from the registry? It leaves the board, the map and new status requests; its past reports stay in the record.</p>
+          <div className="facilities-actions">
+            <ActionButton kind="danger" loading={busy} loadingLabel="Removing…" onClick={() => void remove(removing)}>Remove facility</ActionButton>
+            <ActionButton kind="quiet" disabled={busy} onClick={() => setRemoving(null)}>Keep it</ActionButton>
+          </div>
+        </div>
+      ) : null}
       {props.canWrite ? (
         <form onSubmit={submit}>
-          <h3 className="facilities-subhead">Register a facility</h3>
+          <h3 className="facilities-subhead">{editing ? `Edit ${editing.organizationName}` : "Register a facility"}</h3>
           <fieldset disabled={busy} className="d21-form-grid facilities-fieldset">
             <TextField label="Facility name" value={form.name} onChange={(name) => set({ name })} required />
             <EnumSelect label="Facility type" values={FACILITY_KINDS.values} labels={KIND_LABELS} value={form.kind} onChange={(kind) => set({ kind })} />
@@ -415,12 +462,14 @@ function RegistryPanel(props: PanelProps & { canWrite: boolean }) {
             <NumberField id="facility-lon" label="Longitude" value={form.lon} min={-180} step="any" onChange={(lon) => set({ lon })} hint="Optional; places the facility on the map." />
             <NumberField id="facility-lat" label="Latitude" value={form.lat} min={-90} step="any" onChange={(lat) => set({ lat })} />
             <div className="d21-form-grid-wide facilities-actions">
-              <ActionButton kind="primary" type="submit" loading={busy} loadingLabel="Registering…">Register facility</ActionButton>
+              <ActionButton kind="primary" type="submit" loading={busy} loadingLabel={editing ? "Saving…" : "Registering…"}>
+                {editing ? "Save changes" : "Register facility"}
+              </ActionButton>
+              {editing ? <ActionButton kind="quiet" onClick={stopEdit}>Cancel edit</ActionButton> : null}
             </div>
           </fieldset>
         </form>
       ) : null}
-      <p className="d21-muted">The name, type, contact and position are set at registration; the server offers no edit.</p>
       {feedback}
     </Panel>
   );

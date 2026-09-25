@@ -294,6 +294,61 @@ afterAll(async () => {
 });
 
 describe("board workflow runtime", () => {
+  it("rejects and cancels pending requests without changing state, and names who acted", async () => {
+    const [row] = await admin`
+      insert into board_records (board_id, data, created_by, incident_id)
+      values (${boardId}, ${admin.json({ summary: "Withdrawn request" })}, ${adminId}, ${incidentId})
+      returning id`;
+    const recordId = row!.id as string;
+    const routed = await post(recordId, "/transitions", adminToken, {
+      transitionKey: "route",
+      assignment: { kind: "incident_participant", incidentId, participantId: targetParticipantId },
+      idempotencyKey: "withdraw-route",
+    });
+    expect(routed.statusCode, routed.body).toBe(200);
+    const request = (key: string) => post(recordId, "/transitions", targetToken, { transitionKey: "complete", idempotencyKey: key });
+    const approve = (key: string, token: string) =>
+      post(recordId, "/approvals", token, { transitionKey: "complete", ruleKey: "coord_review", idempotencyKey: key });
+    const withdraw = (token: string, action: "reject" | "cancel", key: string, note?: string) =>
+      post(recordId, "/withdrawals", token, { transitionKey: "complete", action, ...(note ? { note } : {}), idempotencyKey: key });
+
+    expect((await withdraw(targetToken, "cancel", "withdraw-nothing")).statusCode).toBe(409);
+    expect((await request("withdraw-request-1")).statusCode).toBe(200);
+    expect((await approve("withdraw-approve-b1", coordinatorBToken)).statusCode).toBe(200);
+    // Cancelling is the requester's; rejecting needs approval authority, which a
+    // requester without self-approval does not have.
+    expect((await withdraw(coordinatorCToken, "cancel", "withdraw-c-cancel")).statusCode).toBe(403);
+    expect((await withdraw(targetToken, "reject", "withdraw-self-reject")).statusCode).toBe(403);
+    const rejected = await withdraw(coordinatorCToken, "reject", "withdraw-c-reject", "Crew still on site");
+    expect(rejected.statusCode, rejected.body).toBe(200);
+    expect(rejected.json()).toMatchObject({ state: "routed", pendingTransition: null });
+
+    // B's approval belonged to the rejected request, so the next request needs two again.
+    expect((await request("withdraw-request-2")).statusCode).toBe(200);
+    const one = await approve("withdraw-approve-c2", coordinatorCToken);
+    expect(one.json()).toMatchObject({ state: "routed", pendingTransition: "complete" });
+    const cancelled = await withdraw(targetToken, "cancel", "withdraw-cancel");
+    expect(cancelled.json()).toMatchObject({ state: "routed", pendingTransition: null });
+    expect((await request("withdraw-request-3")).statusCode).toBe(200);
+    expect((await approve("withdraw-approve-b3", coordinatorBToken)).json()).toMatchObject({ pendingTransition: "complete" });
+    expect((await approve("withdraw-approve-c3", coordinatorCToken)).json()).toMatchObject({ state: "done", pendingTransition: null });
+
+    const read = await app.inject({ method: "GET", url: workflowUrl(recordId), headers: auth(adminToken) });
+    const history = read.json().history as Array<{ eventKind: string; actorPersonId: string; actorName: string | null; detail: Record<string, unknown> }>;
+    expect(history.map((event) => event.eventKind)).toEqual([
+      "transition_requested", "transition_completed",
+      "transition_requested", "approval_recorded", "transition_rejected",
+      "transition_requested", "approval_recorded", "transition_cancelled",
+      "transition_requested", "approval_recorded", "approval_recorded", "transition_completed",
+    ]);
+    const names = await admin`select id, display_name from persons`;
+    const nameOf = new Map(names.map((person) => [person.id as string, person.display_name as string]));
+    for (const event of history) expect(event.actorName).toBe(nameOf.get(event.actorPersonId));
+    expect(history.find((event) => event.eventKind === "transition_rejected")!.detail).toEqual({ note: "Crew still on site" });
+    const replayed = await withdraw(coordinatorCToken, "reject", "withdraw-c-reject", "Crew still on site");
+    expect(replayed.json()).toEqual(rejected.json());
+  });
+
   it("routes to current local positions and applies due escalation once under concurrent retry", async () => {
     const routed = await post(localRecordId, "/transitions", adminToken, {
       transitionKey: "route_review",

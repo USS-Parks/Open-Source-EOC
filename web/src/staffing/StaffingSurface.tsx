@@ -7,6 +7,7 @@ import { readAllPages, type ApiClient } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import {
   ICS_211,
+  type BadgeEntry,
   canReadQrCodes,
   groupBadgeCode,
   ics211Rows,
@@ -36,7 +37,7 @@ function PrintSheet(props: { children: ReactNode }) {
   return createPortal(<div className="eoc-staffing-print-sheet">{props.children}</div>, document.body);
 }
 
-function Ics211(props: { rows: ReturnType<typeof ics211Rows>; incidentName: string | null; partial: boolean }) {
+function Ics211(props: { rows: ReturnType<typeof ics211Rows>; incidentName: string | null }) {
   return <section className="eoc-ics211" aria-label={`${ICS_211.id} ${ICS_211.title}`}>
     <header>
       <h2>{ICS_211.id} {ICS_211.title}</h2>
@@ -47,13 +48,26 @@ function Ics211(props: { rows: ReturnType<typeof ics211Rows>; incidentName: stri
       </dl>
     </header>
     <table className="eoc-table">
-      <thead><tr><th>No.</th><th>Name</th><th>Incident assignment</th><th>Check-in date</th><th>Check-in time</th><th>Method</th></tr></thead>
+      <thead><tr><th>No.</th><th>Name</th><th>Agency</th><th>Incident assignment</th><th>Check-in date</th><th>Check-in time</th><th>Checked out</th><th>Method</th></tr></thead>
       <tbody>{props.rows.map((row) => <tr key={row.id}>
-        <td>{row.number}</td><td>{row.name}</td><td>{row.assignment}</td><td>{row.date}</td><td>{row.time}</td><td>{row.method}</td>
+        <td>{row.number}</td><td>{row.name}</td><td>{row.agency}</td><td>{row.assignment}</td><td>{row.date}</td><td>{row.time}</td><td>{row.checkOut}</td><td>{row.method}</td>
       </tr>)}</tbody>
     </table>
-    {props.partial ? <p className="eoc-ics211-partial">Partial list: more check-ins are on the server. Load them all before printing.</p> : null}
   </section>;
+}
+
+function BadgeList(props: { badges: readonly BadgeEntry[]; busy: boolean; onRevoke: (badge: BadgeEntry) => void }) {
+  if (props.badges.length === 0) return <EmptyState title="No badges issued" description="Issued badges are listed here, and a lost one can be revoked." />;
+  return <div className="eoc-staffing-scroll"><table className="eoc-table">
+    <thead><tr><th>Holder</th><th>Printed position</th><th>Issued</th><th>Status</th><th>Action</th></tr></thead>
+    <tbody>{props.badges.map((badge) => <tr key={badge.id}>
+      <td>{badge.personName}</td><td>{badge.label ?? "None"}</td>
+      <td><time dateTime={badge.issuedAt}>{icsDateTime(badge.issuedAt)}</time></td>
+      <td>{badge.revokedAt ? <>Revoked <time dateTime={badge.revokedAt}>{icsDateTime(badge.revokedAt)}</time></> : "Active"}</td>
+      <td>{badge.revokedAt ? null : <ActionButton kind="quiet" disabled={props.busy}
+        onClick={() => props.onRevoke(badge)}>Revoke badge for {badge.personName}</ActionButton>}</td>
+    </tr>)}</tbody>
+  </table></div>;
 }
 
 function Badge(props: { name: string; position: string; code: string }) {
@@ -90,13 +104,19 @@ export function StaffingSurface(props: {
   const [badgeCode, setBadgeCode] = useState("");
   const [badgePerson, setBadgePerson] = useState("");
   const [badgePosition, setBadgePosition] = useState("");
-  const [issued, setIssued] = useState<{ name: string; position: string; code: string } | null>(null);
+  const [issued, setIssued] = useState<{ id: string; name: string; position: string; code: string } | null>(null);
   const [shiftPosition, setShiftPosition] = useState("");
   const [shiftPerson, setShiftPerson] = useState("");
   const [shiftStart, setShiftStart] = useState("");
   const [shiftEnd, setShiftEnd] = useState("");
 
   const summary = useAsync(() => client.staffingSummary(j), [client, j]);
+  // The ICS-211 prints every check-in, so it reads them all, and only when shown.
+  const history = useAsync(() => view === "ics211"
+    ? readAllPages((page) => client.checkinHistory(j, props.incidentId, page).then((r) => ({ items: r.checkins, nextCursor: r.nextCursor })))
+    : Promise.resolve(null), [client, j, props.incidentId, view]);
+  const badges = useAsync(() => view === "badges" && props.isAdmin ? client.listBadges(j) : Promise.resolve(null),
+    [client, j, view, props.isAdmin]);
   const positions = useAsync(() => client.listPositions(j), [client, j]);
   // Only an administrator can list the jurisdiction's people; everyone else
   // checks in and schedules themselves, or checks in a badge holder.
@@ -164,11 +184,19 @@ export function StaffingSurface(props: {
     void act(async () => {
       const name = nameOf(badgePerson) ?? "Staff member";
       const position = titleOf(badgePosition);
-      const { token } = await client.issueBadge(j, { personId: badgePerson, label: position });
-      setIssued({ name, position, code: token });
+      const { id, token } = await client.issueBadge(j, { personId: badgePerson, label: position });
+      setIssued({ id, name, position, code: token });
+      badges.reload();
       return `Badge issued to ${name}. Print it now; the code is not shown again.`;
     }, false);
   };
+  const revoke = (badge: BadgeEntry) => act(async () => {
+    await client.revokeBadge(badge.id);
+    // A revoked badge is not left on screen to print.
+    if (issued?.id === badge.id) setIssued(null);
+    badges.reload();
+    return `Badge for ${badge.personName} revoked. Its code no longer checks anyone in.`;
+  }, false);
   const scheduleShift = (event: FormEvent) => {
     event.preventDefault();
     void act(async () => {
@@ -194,7 +222,7 @@ export function StaffingSurface(props: {
       : content;
   const loadMoreButton = loaded?.nextCursor
     ? <ActionButton kind="secondary" loading={busy} onClick={() => void loadMore()}>Load more check-ins</ActionButton> : null;
-  const rows = ics211Rows(onDuty);
+  const rows = ics211Rows(history.data ?? []);
 
   const panels: Record<View, () => ReactNode> = {
     duty: () => <>
@@ -234,13 +262,15 @@ export function StaffingSurface(props: {
       </section>
     </>,
     ics211: () => <>
-      {listState(<>
-        <Ics211 rows={rows} incidentName={props.incidentName} partial={Boolean(loaded?.nextCursor)} />
-        <PrintSheet><Ics211 rows={rows} incidentName={props.incidentName} partial={Boolean(loaded?.nextCursor)} /></PrintSheet>
-      </>)}
+      {history.loading && !history.data ? <LoadingState label="Loading check-ins…" />
+        : history.error && !history.data ? <ErrorState title="Check-ins unavailable" message={history.error}
+          action={<ActionButton onClick={history.reload}>Retry</ActionButton>} />
+          : <>
+            <Ics211 rows={rows} incidentName={props.incidentName} />
+            <PrintSheet><Ics211 rows={rows} incidentName={props.incidentName} /></PrintSheet>
+          </>}
       <div className="eoc-staffing-actions">
-        <ActionButton kind="primary" onClick={() => window.print()}>Print ICS-211</ActionButton>
-        {loadMoreButton}
+        <ActionButton kind="primary" disabled={!history.data} onClick={() => window.print()}>Print ICS-211</ActionButton>
       </div>
     </>,
     badges: () => props.isAdmin ? <>
@@ -254,11 +284,18 @@ export function StaffingSurface(props: {
         <ActionButton kind="primary" type="submit" loading={busy} loadingLabel="Issuing…" disabled={!badgePerson || !badgePosition}>Issue badge</ActionButton>
       </form>
       {issued ? <section className="eoc-staffing-block" aria-label="Issued badge">
-        <Badge {...issued} />
-        <PrintSheet><Badge {...issued} /></PrintSheet>
-        <p className="eoc-staffing-hint">This code is shown only once, so print the badge now. It is printed as text: type it into Badge code at check-in. A new badge does not cancel an earlier one.</p>
+        <Badge name={issued.name} position={issued.position} code={issued.code} />
+        <PrintSheet><Badge name={issued.name} position={issued.position} code={issued.code} /></PrintSheet>
+        <p className="eoc-staffing-hint">This code is shown only once, so print the badge now. It is printed as text: type it into Badge code at check-in. A new badge does not cancel an earlier one; revoke it below.</p>
         <div className="eoc-staffing-actions"><ActionButton kind="primary" onClick={() => window.print()}>Print badge</ActionButton></div>
       </section> : null}
+      <section className="eoc-staffing-block" aria-labelledby="staffing-badges">
+        <h2 id="staffing-badges">Issued badges</h2>
+        {badges.loading && !badges.data ? <LoadingState label="Loading badges…" />
+          : badges.error && !badges.data ? <ErrorState title="Badges unavailable" message={badges.error}
+            action={<ActionButton onClick={badges.reload}>Retry</ActionButton>} />
+            : <BadgeList badges={badges.data ?? []} busy={busy} onRevoke={(badge) => void revoke(badge)} />}
+      </section>
     </> : <EmptyState title="Badges are issued by an administrator" description="Ask a jurisdiction administrator for a badge. You can still check in by name." />,
     shifts: () => <>
       {props.canWrite ? <form className="eoc-staffing-form" onSubmit={scheduleShift} aria-label="Schedule a shift">

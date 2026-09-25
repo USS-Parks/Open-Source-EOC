@@ -2,8 +2,8 @@ import { ICS_FORMS } from "@openeoc/shared";
 
 /**
  * Staffing as the web client sees it: the summary shape the staffing route
- * returns, the ICS 211 rows built from the open check-ins, and the badge code
- * helpers used when a code is printed or typed at check-in.
+ * returns, the ICS 211 rows built from the check-in history, and the badge
+ * code helpers used when a code is printed or typed at check-in.
  */
 
 export interface OnDutyEntry {
@@ -14,6 +14,28 @@ export interface OnDutyEntry {
   readonly positionTitle: string;
   readonly since: string;
   readonly method: string;
+}
+
+/** One check-in as the ICS-211 lists it, open or closed. */
+export interface CheckinHistoryEntry {
+  readonly checkinId: string;
+  readonly personId: string;
+  readonly personName: string;
+  readonly agency: string;
+  readonly positionTitle: string;
+  readonly checkedInAt: string;
+  readonly checkedOutAt: string | null;
+  readonly method: string;
+}
+
+/** An issued badge; its code is never sent again. */
+export interface BadgeEntry {
+  readonly id: string;
+  readonly personId: string;
+  readonly personName: string;
+  readonly label: string | null;
+  readonly issuedAt: string;
+  readonly revokedAt: string | null;
 }
 
 export interface UpcomingShift {
@@ -55,23 +77,28 @@ export interface Ics211Row {
   readonly id: string;
   readonly number: number;
   readonly name: string;
+  readonly agency: string;
   readonly assignment: string;
   readonly date: string;
   readonly time: string;
+  /** When the person checked out, or "On duty". */
+  readonly checkOut: string;
   readonly method: string;
 }
 
-/** One numbered ICS 211 line per open check-in, in check-in order. */
-export function ics211Rows(onDuty: readonly OnDutyEntry[]): Ics211Row[] {
-  return onDuty.map((entry, index) => {
-    const at = new Date(entry.since);
+/** One numbered ICS 211 line per check-in, open or closed, in check-in order. */
+export function ics211Rows(checkins: readonly CheckinHistoryEntry[]): Ics211Row[] {
+  return checkins.map((entry, index) => {
+    const at = new Date(entry.checkedInAt);
     return {
       id: entry.checkinId,
       number: index + 1,
       name: entry.personName,
+      agency: entry.agency,
       assignment: entry.positionTitle,
       date: icsDate(at),
       time: icsTime(at),
+      checkOut: entry.checkedOutAt ? icsDateTime(entry.checkedOutAt) : "On duty",
       method: methodLabel(entry.method),
     };
   });

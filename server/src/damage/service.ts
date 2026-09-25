@@ -289,7 +289,7 @@ async function shelterReports(sql: Sql, jurisdictionId: string): Promise<Shelter
     left join lateral (
       select beds, reported_at from facility_status_reports
       where facility_id = f.id order by reported_at desc limit 1) r on true
-    where f.jurisdiction_id = ${jurisdictionId} and f.kind = 'shelter'
+    where f.jurisdiction_id = ${jurisdictionId} and f.kind = 'shelter' and f.retired_at is null
     order by f.name, f.id`;
   return rows.map((r) => {
     const beds = (r.beds as Array<{ available: number; baseline: number }> | null) ?? [];

@@ -26,6 +26,14 @@ export interface WorkflowApprovalInput {
   readonly idempotencyKey: string;
 }
 
+export interface WorkflowWithdrawalInput {
+  readonly transitionKey: string;
+  /** Reject is an approver's refusal; cancel is the requester taking the request back. */
+  readonly action: "reject" | "cancel";
+  readonly note?: string | undefined;
+  readonly idempotencyKey: string;
+}
+
 export interface WorkflowEscalationInput {
   readonly ruleKey: string;
   readonly occurrence: number;
@@ -113,10 +121,12 @@ export async function getRecordWorkflow(
   }
   const instance = asInstance(row);
   const history = await sql`
-    select id, sequence, state_revision, event_kind, event_key, from_state, to_state,
-      actor_person_id, actor_position_id, actor_participation_id, detail, created_at
-    from board_workflow_history where record_id = ${recordId}
-    order by sequence`;
+    select h.id, h.sequence, h.state_revision, h.event_kind, h.event_key, h.from_state, h.to_state,
+      h.actor_person_id, p.display_name as actor_name, h.actor_position_id, h.actor_participation_id,
+      h.detail, h.created_at
+    from board_workflow_history h left join persons p on p.id = h.actor_person_id
+    where h.record_id = ${recordId}
+    order by h.sequence`;
   return {
     ...resultFrom(instance),
     pinnedTemplateVersion: instance.template_version,
@@ -129,6 +139,7 @@ export async function getRecordWorkflow(
       fromState: (event.from_state as string | null) ?? null,
       toState: (event.to_state as string | null) ?? null,
       actorPersonId: event.actor_person_id as string,
+      actorName: (event.actor_name as string | null) ?? null,
       actorPositionId: (event.actor_position_id as string | null) ?? null,
       actorParticipationId: (event.actor_participation_id as string | null) ?? null,
       detail: event.detail as unknown,
@@ -244,6 +255,59 @@ export async function approveWorkflowTransition(
   return result;
 }
 
+/**
+ * End a pending transition without taking it: the requester cancels their own
+ * request, and a person who could approve one of its rules rejects it. The
+ * record stays in its state. The request's revision is spent, so approvals
+ * recorded against it never count toward a later request of the transition.
+ */
+export async function withdrawWorkflowTransition(
+  sql: Sql,
+  actor: Principal,
+  boardId: string,
+  recordId: string,
+  input: WorkflowWithdrawalInput,
+): Promise<WorkflowResult> {
+  const loaded = await loadWorkflowForWrite(sql, actor, boardId, recordId);
+  const digest = commandDigest("withdrawal", input);
+  const prior = await replay(sql, loaded.context, actor, input.idempotencyKey, digest);
+  if (prior) return prior;
+  const pendingKey = loaded.instance.pending_transition_key;
+  if (!pendingKey || pendingKey !== input.transitionKey)
+    throw new AuthError(409, "workflow transition is not awaiting approval");
+  const transition = requireWorkflow(loaded.template).transitions.find((item) => item.key === pendingKey);
+  if (!transition) throw new AuthError(409, "pinned workflow transition is unavailable");
+  const requester = loaded.instance.pending_requested_by;
+  if (input.action === "cancel") {
+    if (requester !== actor.person.id) throw new AuthError(403, "only the requester can cancel this transition");
+  } else {
+    let approver = false;
+    for (const rule of transition.approvals) {
+      if (!rule.allowSelfApproval && requester === actor.person.id) continue;
+      approver = await requireApprover(sql, actor, loaded, rule.approver).then(() => true, (error: unknown) => {
+        if (error instanceof AuthError) return false;
+        throw error;
+      });
+      if (approver) break;
+    }
+    if (!approver) throw new AuthError(403, "rejecting requires authority to approve this transition");
+  }
+  const revision = loaded.instance.state_revision + 1;
+  await sql`
+    update board_workflow_instances set state_revision = ${revision},
+      pending_transition_key = null, pending_to_state = null,
+      pending_requested_by = null, pending_assignment_request = null,
+      pending_assignment_snapshot = null, pending_started_at = null, updated_at = now()
+    where record_id = ${recordId}`;
+  await appendHistory(sql, actor, loaded.context, revision,
+    input.action === "reject" ? "transition_rejected" : "transition_cancelled", transition.key,
+    loaded.instance.state_key, transition.to, input.note ? { note: input.note } : {});
+  const [updated] = await sql`select * from board_workflow_instances where record_id = ${recordId}`;
+  const result = resultFrom(asInstance(updated!));
+  await storeReplay(sql, loaded.context, actor, input.idempotencyKey, digest, result);
+  return result;
+}
+
 export async function processWorkflowEscalation(
   sql: Sql,
   actor: Principal,
@@ -272,9 +336,15 @@ export async function processWorkflowEscalation(
   if (new Date(scheduledAt) > new Date(clock!.at as string))
     throw new AuthError(409, "workflow escalation is not due");
   const eventKey = `${rule.key}:${input.occurrence}`;
+  // Escalations belong to the completion that set the schedule; a withdrawn
+  // request since then has advanced the revision without changing the state.
+  const [completion] = await sql`
+    select max(state_revision) as revision from board_workflow_history
+    where record_id = ${recordId} and event_kind = 'transition_completed'`;
+  const completedRevision = (completion?.revision as number | null) ?? loaded.instance.state_revision;
   const [existing] = await sql`
     select id from board_workflow_history
-    where record_id = ${recordId} and state_revision = ${loaded.instance.state_revision}
+    where record_id = ${recordId} and state_revision = ${completedRevision}
       and event_kind = 'escalation' and event_key = ${eventKey}`;
   let result = resultFrom(loaded.instance);
   if (!existing) {
@@ -288,7 +358,7 @@ export async function processWorkflowEscalation(
       result = resultFrom(loaded.instance);
     }
     const historyId = await appendHistory(sql, actor, loaded.context,
-      loaded.instance.state_revision, "escalation",
+      completedRevision, "escalation",
       eventKey, loaded.instance.state_key, loaded.instance.state_key,
       { ruleKey: rule.key, occurrence: input.occurrence, scheduledAt, assignment });
     await notifyAssignment(sql, loaded.context, assignment,
@@ -699,7 +769,8 @@ async function appendHistory(
   actor: Principal,
   context: RecordContext,
   revision: number,
-  kind: "transition_requested" | "approval_recorded" | "transition_completed" | "escalation",
+  kind: "transition_requested" | "approval_recorded" | "transition_completed" | "escalation"
+    | "transition_rejected" | "transition_cancelled",
   key: string,
   from: string | null,
   to: string | null,

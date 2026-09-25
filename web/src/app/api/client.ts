@@ -90,6 +90,7 @@ import type {
   WorkflowCommandResult,
   WorkflowEscalationCommand,
   WorkflowTransitionCommand,
+  WorkflowWithdrawalCommand,
 } from "../../boards/workflow.js";
 import type { DamageSummary, DeclarationThresholds } from "@openeoc/shared";
 import type {
@@ -1751,6 +1752,9 @@ export class ApiClient {
   approveWorkflowTransition(boardId: string, recordId: string, command: WorkflowApprovalCommand): Promise<WorkflowCommandResult> {
     return this.request("POST", `/api/v1/boards/${encodeURIComponent(boardId)}/records/${encodeURIComponent(recordId)}/workflow/approvals`, { ...command });
   }
+  withdrawWorkflowTransition(boardId: string, recordId: string, command: WorkflowWithdrawalCommand): Promise<WorkflowCommandResult> {
+    return this.request("POST", `/api/v1/boards/${encodeURIComponent(boardId)}/records/${encodeURIComponent(recordId)}/workflow/withdrawals`, { ...command });
+  }
   escalateWorkflow(boardId: string, recordId: string, command: WorkflowEscalationCommand): Promise<WorkflowCommandResult> {
     return this.request("POST", `/api/v1/boards/${encodeURIComponent(boardId)}/records/${encodeURIComponent(recordId)}/workflow/escalations`, { ...command });
   }
@@ -1966,8 +1970,25 @@ export class ApiClient {
     await this.request("POST", `/api/v1/checkins/${encodeURIComponent(checkinId)}/checkout`);
   }
   /** Issue a badge; the returned code is shown only this once. */
-  issueBadge(jurisdictionId: string, input: { personId: string; label?: string }): Promise<{ token: string }> {
+  issueBadge(jurisdictionId: string, input: { personId: string; label?: string }): Promise<{ id: string; token: string }> {
     return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/badges`, input);
+  }
+  async listBadges(jurisdictionId: string): Promise<readonly import("../../staffing/model.js").BadgeEntry[]> {
+    const result = await this.request<{ badges: import("../../staffing/model.js").BadgeEntry[] }>(
+      "GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/badges`);
+    return result.badges;
+  }
+  async revokeBadge(badgeId: string): Promise<void> {
+    await this.request("POST", `/api/v1/badges/${encodeURIComponent(badgeId)}/revoke`);
+  }
+  /** Every check-in, open and closed, earliest first; with an incident, its own and the jurisdiction's. */
+  checkinHistory(jurisdictionId: string, incidentId: string | null, page: PageOptions = {}): Promise<{
+    checkins: import("../../staffing/model.js").CheckinHistoryEntry[]; nextCursor: string | null;
+  }> {
+    const query = pageParams(page);
+    if (incidentId) query.set("incidentId", incidentId);
+    const text = query.toString();
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/checkins${text ? `?${text}` : ""}`);
   }
   createShift(jurisdictionId: string, input: { positionId: string; personId?: string; startsAt: string; endsAt: string; note?: string; incidentId?: string }): Promise<{ id: string }> {
     return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/shifts`, input);
@@ -2067,6 +2088,16 @@ export class ApiClient {
   }
   registerFacility(jurisdictionId: string, input: FacilityInput): Promise<{ id: string }> {
     return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/facilities`, { ...input });
+  }
+  /** Replaces a facility's registry fields; a null contact or location clears it. */
+  async updateFacility(facilityId: string, input: {
+    name: string; kind: string; contact: string | null; staleAfterSeconds: number; location: { lon: number; lat: number } | null;
+  }): Promise<void> {
+    await this.request("PATCH", `/api/v1/facilities/${encodeURIComponent(facilityId)}`, { ...input });
+  }
+  /** Removes a facility from the registry; its reports stay in its history. */
+  async retireFacility(facilityId: string): Promise<void> {
+    await this.request("POST", `/api/v1/facilities/${encodeURIComponent(facilityId)}/retire`);
   }
   reportFacilityStatus(facilityId: string, input: FacilityStatusInput): Promise<{ reportId: string }> {
     return this.request("POST", `/api/v1/facilities/${encodeURIComponent(facilityId)}/status`, { ...input });
@@ -2228,6 +2259,13 @@ export class ApiClient {
   /** Asks every facility, or every facility of one kind, to report now; its next status report answers. */
   launchStatusQuery(jurisdictionId: string, input: { prompt: string; kind?: string; dueInSeconds?: number }): Promise<{ id: string; targets: number }> {
     return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/status-queries`, { ...input });
+  }
+  /** The jurisdiction's status requests, newest first, each with its answers so far. */
+  listStatusQueries(jurisdictionId: string, page: PageOptions = {}): Promise<{
+    queries: Array<StatusQuery & { readonly createdAt: string }>; nextCursor: string | null;
+  }> {
+    const params = pageParams(page);
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/status-queries${params.size ? `?${params}` : ""}`);
   }
   statusQuery(id: string): Promise<StatusQuery> {
     return this.request("GET", `/api/v1/status-queries/${encodeURIComponent(id)}`);

@@ -234,6 +234,7 @@ export function BoardSurface(props: {
         incidentId: detail.data.incidentId,
         canAct: board.data.canContribute,
         people: knownPeople(detail.data, session.me?.person ?? null),
+        personId: session.me?.person.id ?? null,
       },
       lifecycle: {
         canArchive: detail.data.canEdit && board.data.canContribute,

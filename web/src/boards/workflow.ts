@@ -15,7 +15,9 @@ export type WorkflowEventKind =
   | "transition_requested"
   | "approval_recorded"
   | "transition_completed"
-  | "escalation";
+  | "escalation"
+  | "transition_rejected"
+  | "transition_cancelled";
 
 export interface WorkflowHistoryEvent {
   readonly id: string;
@@ -26,6 +28,8 @@ export interface WorkflowHistoryEvent {
   readonly fromState: string | null;
   readonly toState: string | null;
   readonly actorPersonId: string;
+  /** The actor's display name, when the server could read it. */
+  readonly actorName?: string | null;
   readonly actorPositionId: string | null;
   readonly actorParticipationId: string | null;
   readonly detail: Readonly<Record<string, unknown>>;
@@ -66,6 +70,13 @@ export interface WorkflowTransitionCommand {
 export interface WorkflowApprovalCommand {
   readonly transitionKey: string;
   readonly ruleKey: string;
+  readonly idempotencyKey: string;
+}
+
+export interface WorkflowWithdrawalCommand {
+  readonly transitionKey: string;
+  readonly action: "reject" | "cancel";
+  readonly note?: string;
   readonly idempotencyKey: string;
 }
 
@@ -171,6 +182,8 @@ export function workflowPanelModel(
 /**
  * Escalations belong to the transition that produced the current state and
  * run from the moment it completed; the completion event records that moment.
+ * A request rejected or cancelled since then advances the revision but not the
+ * state, so the latest completion is the one that counts.
  * Each rule lists its escalated and due occurrences and the next scheduled one.
  */
 function escalationSteps(
@@ -178,14 +191,13 @@ function escalationSteps(
   runtime: RecordWorkflow,
   now: Date,
 ): WorkflowEscalationStep[] {
-  const completed = lastEvent(runtime.history, (event) => event.eventKind === "transition_completed"
-    && event.stateRevision === runtime.stateRevision);
+  const completed = lastEvent(runtime.history, (event) => event.eventKind === "transition_completed");
   const transition = completed
     ? definition.transitions.find((candidate) => candidate.key === completed.eventKey)
     : undefined;
   if (!completed || !transition) return [];
   const escalated = new Set(runtime.history.filter((event) => event.eventKind === "escalation"
-    && event.stateRevision === runtime.stateRevision).map((event) => event.eventKey));
+    && event.stateRevision === completed.stateRevision).map((event) => event.eventKey));
   const steps: WorkflowEscalationStep[] = [];
   for (const rule of transition.escalations) {
     for (let occurrence = 0; occurrence < rule.maxOccurrences; occurrence += 1) {
@@ -214,6 +226,10 @@ export function historyAction(definition: BoardWorkflow, event: WorkflowHistoryE
     return `Requested ${transitionLabel(definition, event.eventKey)}: ${from} to ${to}`;
   if (event.eventKind === "transition_completed")
     return `Moved ${from} to ${to} by ${transitionLabel(definition, event.eventKey)}`;
+  if (event.eventKind === "transition_rejected")
+    return `Rejected ${transitionLabel(definition, event.eventKey)}; stays ${from}`;
+  if (event.eventKind === "transition_cancelled")
+    return `Cancelled the request for ${transitionLabel(definition, event.eventKey)}; stays ${from}`;
   if (event.eventKind === "approval_recorded") {
     const transitionKey = typeof event.detail["transitionKey"] === "string" ? event.detail["transitionKey"] : "";
     const rule = definition.transitions.find((transition) => transition.key === transitionKey)
@@ -227,6 +243,7 @@ export function historyAction(definition: BoardWorkflow, event: WorkflowHistoryE
 /** Assignment, due time and schedule details the server recorded with an event. */
 export function historyNote(event: WorkflowHistoryEvent, formatTime: (iso: string) => string): string | null {
   const notes: string[] = [];
+  if (typeof event.detail["note"] === "string") notes.push(event.detail["note"]);
   const assignee = event.detail["assignment"] as WorkflowAssignee | null | undefined;
   if (assignee) notes.push(`Assigned to ${assigneeLabel(assignee)}`);
   if (typeof event.detail["dueAt"] === "string") notes.push(`Due ${formatTime(event.detail["dueAt"])}`);

@@ -23,14 +23,58 @@ export async function issueBadge(
   actor: Principal,
   jurisdictionId: string,
   input: { personId: string; label?: string | undefined },
-): Promise<{ token: string }> {
+): Promise<{ id: string; token: string }> {
   requireAdmin(actor, jurisdictionId);
   const token = newToken();
-  await sql`
+  const [row] = await sql`
     insert into badges (jurisdiction_id, person_id, token_hash, label, issued_by)
     values (${jurisdictionId}, ${input.personId}, ${token.hash}, ${input.label ?? null},
-            ${actor.person.id})`;
-  return { token: token.token };
+            ${actor.person.id})
+    returning id`;
+  return { id: row!.id as string, token: token.token };
+}
+
+export interface BadgeEntry {
+  readonly id: string;
+  readonly personId: string;
+  readonly personName: string;
+  readonly label: string | null;
+  readonly issuedAt: string;
+  readonly revokedAt: string | null;
+}
+
+/** The jurisdiction's badges, newest first; a badge's code is never returned. */
+export async function listBadges(sql: Sql, actor: Principal, jurisdictionId: string): Promise<BadgeEntry[]> {
+  requireAdmin(actor, jurisdictionId);
+  const rows = await sql`
+    select b.id, b.person_id, p.display_name, b.label, b.created_at, b.revoked_at
+    from badges b join persons p on p.id = b.person_id
+    where b.jurisdiction_id = ${jurisdictionId}
+    order by b.created_at desc, b.id desc limit 500`;
+  return rows.map((row) => ({
+    id: row.id as string,
+    personId: row.person_id as string,
+    personName: row.display_name as string,
+    label: (row.label as string | null) ?? null,
+    issuedAt: new Date(row.created_at as string).toISOString(),
+    revokedAt: row.revoked_at ? new Date(row.revoked_at as string).toISOString() : null,
+  }));
+}
+
+/** Revoke a lost or retired badge: its code no longer checks anyone in. */
+export async function revokeBadge(sql: Sql, actor: Principal, badgeId: string): Promise<void> {
+  const [badge] = await sql`select jurisdiction_id, person_id, revoked_at from badges where id = ${badgeId}`;
+  if (!badge) throw new AuthError(404, "badge not found");
+  requireAdmin(actor, badge.jurisdiction_id as string);
+  if (badge.revoked_at) throw new AuthError(409, "badge already revoked");
+  await sql`update badges set revoked_at = now() where id = ${badgeId}`;
+  await recordAudit(sql, actor, {
+    jurisdictionId: badge.jurisdiction_id as string,
+    category: "staff.badge_revoked",
+    subjectTable: "badges",
+    subjectId: badgeId,
+    payload: { personId: badge.person_id as string },
+  });
 }
 
 export interface CheckInInput {
@@ -127,6 +171,61 @@ export async function checkOut(
     subjectTable: "staff_checkins",
     subjectId: checkinId,
   });
+}
+
+export interface CheckinHistoryEntry {
+  readonly checkinId: string;
+  readonly personId: string;
+  readonly personName: string;
+  /** The organization the person checked in with. */
+  readonly agency: string;
+  readonly positionTitle: string;
+  readonly checkedInAt: string;
+  readonly checkedOutAt: string | null;
+  readonly method: string;
+}
+
+/**
+ * Every check-in, open and closed, earliest first: the ICS-211 list. With an
+ * incident, the check-ins made for it and those made to the jurisdiction as a
+ * whole, which is how an EOC activation checks its staff in.
+ */
+export async function checkinHistory(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+  incidentId: string | null,
+  page: PageRequest,
+): Promise<{ checkins: CheckinHistoryEntry[]; nextCursor: string | null }> {
+  requireMember(actor, jurisdictionId);
+  const after = decodeCursor(page.cursor, ["at", "id"]);
+  const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
+  const rows = await sql`
+    select c.id, c.person_id, p.display_name, j.name as agency, pos.title, c.checked_in_at,
+      c.checked_out_at, c.method,
+      to_char(c.checked_in_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
+    from staff_checkins c
+    join persons p on p.id = c.person_id
+    join positions pos on pos.id = c.position_id
+    join jurisdictions j on j.id = c.jurisdiction_id
+    where c.jurisdiction_id = ${jurisdictionId}
+      ${incidentId ? sql`and (c.incident_id = ${incidentId} or c.incident_id is null)` : sql``}
+      ${after ? sql`and (c.checked_in_at, c.id) > (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : sql``}
+    order by c.checked_in_at, c.id limit ${limit + 1}`;
+  const cut = cutPage(rows, limit, (r) => [r.page_at as string, r.id as string]);
+  return {
+    checkins: cut.items.map((r) => ({
+      checkinId: r.id as string,
+      personId: r.person_id as string,
+      personName: r.display_name as string,
+      agency: r.agency as string,
+      positionTitle: r.title as string,
+      checkedInAt: new Date(r.checked_in_at as string).toISOString(),
+      checkedOutAt: r.checked_out_at ? new Date(r.checked_out_at as string).toISOString() : null,
+      method: r.method as string,
+    })),
+    nextCursor: cut.nextCursor,
+  };
 }
 
 export interface ShiftInput {

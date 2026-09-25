@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify";
 import type { Browser, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
-import { buildDir, buildWeb, launchBrowser, listen, serveStatic, shotDir } from "./browser.js";
+import { buildDir, buildWeb, launchBrowser, listen, login, post, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
@@ -26,11 +26,14 @@ let browser: Browser;
 let baseUrl: string;
 let plainUrl: string;
 let memberId: string;
+let jurisdictionId: string;
 
 beforeAll(async () => {
   await buildWeb(DIST);
   ({ admin, runtime } = await freshDb());
-  memberId = (await seedIdentity(admin)).memberId;
+  const seed = await seedIdentity(admin);
+  memberId = seed.memberId;
+  jurisdictionId = seed.jurisdictionId;
   app = buildApp(runtime, { oidc: null, integrations: ["facilities"] });
   serveStatic(app, "/app", DIST);
   baseUrl = await listen(app);
@@ -222,6 +225,50 @@ describe("facilities surface", () => {
     await show("Shelters");
     await page.screenshot({ path: join(SHOTS, "facilities-shelters-light-390.png") });
 
+    expect(errors).toEqual([]);
+    expect(external).toEqual([]);
+    await page.close();
+  }, 180_000);
+
+  it("edits and removes registry entries, and lists every status request with its answers", async () => {
+    const { page, errors, external } = await signIn(baseUrl);
+    await page.setViewportSize({ width: 1586, height: 992 });
+    await page.getByRole("button", { name: "Facilities", exact: true }).click();
+    const registry = page.getByRole("table", { name: "Registered facilities" });
+    await registry.getByRole("button", { name: "Edit Weitchpec Gym" }).click();
+    await page.getByRole("heading", { name: "Edit Weitchpec Gym" }).waitFor();
+    expect(await page.getByLabel("Facility name").inputValue()).toBe("Weitchpec Gym");
+    expect(await page.getByLabel("Report expected every (minutes)").inputValue()).toBe("120");
+    await page.getByLabel("Contact", { exact: true }).fill("Site lead 555-0100");
+    await page.getByLabel("Report expected every (minutes)").fill("30");
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await page.getByText("Weitchpec Gym updated.").waitFor();
+    await registry.getByRole("row", { name: /Weitchpec Gym Shelter Site lead 555-0100 .* Every 30 minutes/ }).waitFor();
+    await page.getByRole("heading", { name: "Register a facility" }).waitFor();
+
+    // A status request sent elsewhere shows here too, with who has not answered.
+    const token = await login(app, "admin@example.org", "correct-horse-battery");
+    await post(app, token, `/api/v1/jurisdictions/${jurisdictionId}/status-queries`, { prompt: "Confirm generator fuel" });
+    await page.reload();
+    const requests = page.getByRole("list", { name: "Recent status requests" });
+    const fuel = requests.getByRole("listitem", { name: "Confirm generator fuel" });
+    await fuel.getByText(/0 of 2 reported/).waitFor();
+    await fuel.getByText(/Waiting for Klamath General, Weitchpec Gym/).waitFor();
+
+    await registry.getByRole("button", { name: "Remove Klamath General" }).click();
+    const confirm = page.getByRole("group", { name: "Remove Klamath General" });
+    await confirm.getByText(/its past reports stay in the record/).waitFor();
+    await page.screenshot({ path: join(SHOTS, "facilities-remove-1586.png") });
+    await confirm.getByRole("button", { name: "Remove facility" }).click();
+    await page.getByText("Klamath General removed from the registry. Its past reports stay in the record.").waitFor();
+    await expect.poll(() => registry.getByRole("row", { name: /Klamath General/ }).count()).toBe(0);
+    await fuel.getByText(/0 of 1 reported/).waitFor();
+    await fuel.getByText(/Waiting for Weitchpec Gym\./).waitFor();
+    const [retired] = await admin`select retired_at from facilities where name = 'Klamath General'`;
+    expect(retired!.retired_at).not.toBeNull();
+
+    await page.setViewportSize({ width: 1534, height: 790 });
+    await page.screenshot({ path: join(SHOTS, "facilities-registry-1534.png") });
     expect(errors).toEqual([]);
     expect(external).toEqual([]);
     await page.close();

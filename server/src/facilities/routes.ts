@@ -2,13 +2,17 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
+import { pageQuery } from "../db/cursor.js";
 import {
   exportHave,
   launchQuery,
+  listStatusQueries,
   queryStatus,
   registerFacility,
   reportStatus,
+  retireFacility,
   statusBoard,
+  updateFacility,
 } from "./service.js";
 
 const FacilityBody = z.object({
@@ -18,6 +22,13 @@ const FacilityBody = z.object({
   staleAfterSeconds: z.number().int().positive().optional(),
   location: z.object({ lon: z.number(), lat: z.number() }).optional(),
 });
+const FacilityEditBody = z.object({
+  name: z.string().trim().min(1),
+  kind: z.string().min(1),
+  contact: z.string().trim().min(1).nullable(),
+  staleAfterSeconds: z.number().int().positive(),
+  location: z.object({ lon: z.number().min(-180).max(180), lat: z.number().min(-90).max(90) }).nullable(),
+}).strict();
 const StatusBody = z.object({
   operatingStatus: z.string().min(1),
   emsTraffic: z.string().optional(),
@@ -49,6 +60,19 @@ export function facilityRoutes(
       return reply.status(201).send(result);
     },
   );
+
+  app.patch("/api/v1/facilities/:id", { preHandler: authenticate }, async (req, reply) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = FacilityEditBody.parse(req.body);
+    await withPerson(sql, req.principal.person.id, (tx) => updateFacility(tx, req.principal, id, body));
+    return reply.send({ ok: true });
+  });
+
+  app.post("/api/v1/facilities/:id/retire", { preHandler: authenticate }, async (req, reply) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    await withPerson(sql, req.principal.person.id, (tx) => retireFacility(tx, req.principal, id));
+    return reply.send({ ok: true });
+  });
 
   app.post("/api/v1/facilities/:id/status", { preHandler: authenticate }, async (req, reply) => {
     const { id } = req.params as { id: string };
@@ -95,6 +119,19 @@ export function facilityRoutes(
         launchQuery(tx, req.principal, jurisdictionId, body),
       );
       return reply.status(201).send(result);
+    },
+  );
+
+  app.get(
+    "/api/v1/jurisdictions/:jurisdictionId/status-queries",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const query = z.object({ ...pageQuery, incidentId: z.string().uuid().optional() }).parse(req.query);
+      const result = await withPerson(sql, req.principal.person.id, (tx) =>
+        listStatusQueries(tx, req.principal, jurisdictionId, query.incidentId ?? null, query),
+      );
+      return reply.send(result);
     },
   );
 

@@ -20,4 +20,7 @@
 .facilities-map-canvas > * { inset: 0; position: absolute; }
 .facilities-notice { margin: 8px 0 0; }
 .facilities-requests { display: grid; gap: 8px; list-style: none; margin: 12px 0 0; padding: 0; }
+.facilities-row-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.facilities-confirm { background: var(--eoc-surface-raised); border: 1px solid var(--eoc-status-critical); border-radius: var(--eoc-radius-sm); margin-top: 10px; padding: 10px 12px; }
+.facilities-confirm p { margin: 0; }
 @container (max-width: 760px) { .facilities-hospitals { grid-template-columns: 1fr; } .facilities-map-canvas { height: 520px; } }

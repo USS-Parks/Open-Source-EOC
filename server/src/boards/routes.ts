@@ -46,6 +46,7 @@ import {
   getRecordWorkflow,
   processWorkflowEscalation,
   requestWorkflowTransition,
+  withdrawWorkflowTransition,
 } from "./workflow-runtime.js";
 
 const CreateBoardBody = z.object({
@@ -65,6 +66,12 @@ const TransitionBody = z.object({
 const ApprovalBody = z.object({
   transitionKey: WorkflowKey,
   ruleKey: WorkflowKey,
+  idempotencyKey: IdempotencyKey,
+}).strict();
+const WithdrawalBody = z.object({
+  transitionKey: WorkflowKey,
+  action: z.enum(["reject", "cancel"]),
+  note: z.string().trim().min(1).max(500).optional(),
   idempotencyKey: IdempotencyKey,
 }).strict();
 const EscalationBody = z.object({
@@ -314,6 +321,18 @@ export function boardRoutes(
       const body = ApprovalBody.parse(req.body);
       const result = await withPerson(sql, req.principal.person.id, (tx) =>
         approveWorkflowTransition(tx, req.principal, boardId, recordId, body));
+      return reply.send(result);
+    },
+  );
+
+  app.post(
+    "/api/v1/boards/:boardId/records/:recordId/workflow/withdrawals",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { boardId, recordId } = req.params as { boardId: string; recordId: string };
+      const body = WithdrawalBody.parse(req.body);
+      const result = await withPerson(sql, req.principal.person.id, (tx) =>
+        withdrawWorkflowTransition(tx, req.principal, boardId, recordId, body));
       return reply.send(result);
     },
   );

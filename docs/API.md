@@ -68,6 +68,8 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 
 ### badges
 
+- `POST /api/v1/badges/:badgeId/revoke`: Run badges revoke (auth: bearer; audience: operator)
+- `GET /api/v1/jurisdictions/:jurisdictionId/badges`: Read jurisdictions badges (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/badges`: Run jurisdictions badges (auth: bearer; audience: operator)
 
 ### boards
@@ -89,6 +91,7 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 - `POST /api/v1/boards/:boardId/records/:recordId/workflow/approvals`: Run boards records workflow approvals (auth: bearer; audience: operator)
 - `POST /api/v1/boards/:boardId/records/:recordId/workflow/escalations`: Run boards records workflow escalations (auth: bearer; audience: operator)
 - `POST /api/v1/boards/:boardId/records/:recordId/workflow/transitions`: Run boards records workflow transitions (auth: bearer; audience: operator)
+- `POST /api/v1/boards/:boardId/records/:recordId/workflow/withdrawals`: Run boards records workflow withdrawals (auth: bearer; audience: operator)
 - `POST /api/v1/boards/:boardId/upgrade`: Run boards upgrade (auth: bearer; audience: operator)
 - `GET /api/v1/boards/:boardId/views/:viewKey`: Read boards views (auth: bearer; audience: operator)
 - `GET /api/v1/boards/:boardId/views/:viewKey/export`: Read boards views export (auth: bearer; audience: operator)
@@ -127,6 +130,7 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 ### checkins
 
 - `POST /api/v1/checkins/:id/checkout`: Run checkins checkout (auth: bearer; audience: operator)
+- `GET /api/v1/jurisdictions/:jurisdictionId/checkins`: Read jurisdictions checkins (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/checkins`: Run jurisdictions checkins (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/checkins/scan`: Run jurisdictions checkins scan (auth: bearer; audience: operator)
 
@@ -228,10 +232,13 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 
 ### facilities
 
+- `PATCH /api/v1/facilities/:id`: Update facilities (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=facilities)
+- `POST /api/v1/facilities/:id/retire`: Run facilities retire (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=facilities)
 - `POST /api/v1/facilities/:id/status`: Run facilities status (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=facilities)
 - `POST /api/v1/jurisdictions/:jurisdictionId/facilities`: Run jurisdictions facilities (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=facilities)
 - `GET /api/v1/jurisdictions/:jurisdictionId/facilities/board`: Read jurisdictions facilities board (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=facilities)
 - `GET /api/v1/jurisdictions/:jurisdictionId/facilities/have`: Read jurisdictions facilities have (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=facilities)
+- `GET /api/v1/jurisdictions/:jurisdictionId/status-queries`: Read jurisdictions status queries (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=facilities)
 - `POST /api/v1/jurisdictions/:jurisdictionId/status-queries`: Run jurisdictions status queries (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=facilities)
 - `GET /api/v1/status-queries/:id`: Read status queries (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=facilities)
 

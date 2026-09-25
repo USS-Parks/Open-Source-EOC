@@ -5857,3 +5857,68 @@ Operator Trust PSPR unit RD8, the screen items the Readiness PSPR lists.
   PostgreSQL for the migration.
 - **Rollback:** revert the commit; migration `0139` renames titles only and
   needs no reverse for the code to run.
+
+## Readiness RD9 part one: workflow, staffing and facilities
+
+Operator Trust PSPR unit RD9, the engine items of the Readiness PSPR, in
+three parts. This part closes the items from "V1 W3.7: workflow runtime in
+the record detail", "V1 W3.3: staffing", "V1 W3.4: facilities and shelters"
+and "V1 W3.13: screens for the optional integrations".
+
+- **What changed.**
+  - **Workflow reject and cancel, with names.** A pending transition can be
+    rejected by anyone who could approve one of its rules (a requester who
+    may not approve their own request may not reject it either) and
+    cancelled by the person who requested it
+    (`POST /api/v1/boards/:boardId/records/:recordId/workflow/withdrawals`,
+    idempotent like the other workflow commands, with an optional note). The
+    record keeps its state. The request's revision is spent, so approvals
+    given to a rejected or cancelled request never count toward a later
+    request of the same transition. Escalations belong to the completion
+    that set their schedule and are keyed to its revision, so a withdrawn
+    request neither repeats nor hides them. History gains
+    `transition_rejected` and `transition_cancelled` (migration
+    `0140_engine_gaps.sql`), and the history route returns each actor's
+    display name, so the record detail names people it has no other list
+    for. The workflow panel has a note field, Reject request, and Cancel
+    request for the requester.
+  - **Badge revocation.** An administrator lists the jurisdiction's badges
+    (never their codes) and revokes a lost one
+    (`GET /api/v1/jurisdictions/:jurisdictionId/badges`,
+    `POST /api/v1/badges/:badgeId/revoke`, audited as
+    `staff.badge_revoked`); a revoked code no longer checks anyone in. The
+    Badges tab lists issued badges with Revoke, and revoking the badge just
+    issued removes its printable copy from the screen.
+  - **ICS-211 history.** The check-in list is every check-in, open and
+    closed, with the organization it was made with and the check-out time
+    (`GET /api/v1/jurisdictions/:jurisdictionId/checkins`, paged, earliest
+    first; with an incident, its check-ins and those made to the
+    jurisdiction as a whole). The printed ICS-211 reads every page. Index
+    `staff_checkins_history`.
+  - **Facility registry edit and removal.** A writer edits a facility's
+    name, type, contact, window and position (`PATCH /api/v1/facilities/:id`)
+    and removes it from the registry (`POST /api/v1/facilities/:id/retire`),
+    both audited. Removal retires the row (`retired_at`), so its reports and
+    the requests that asked it keep their history; it leaves the board, the
+    map, HAVE, shelter counts and new requests, a status report for it is
+    refused, and it no longer holds an open request. Migration `0140` adds
+    the columns and the update policy.
+  - **A status request list.** The jurisdiction's requests, newest first,
+    each with its answers and who is still to answer
+    (`GET /api/v1/jurisdictions/:jurisdictionId/status-queries`, paged), so
+    the panel shows requests whoever sent them. Index `status_queries_recent`.
+  - The frozen API contract and `docs/API.md` list the six routes.
+- **Tests.** Real PostgreSQL: reject and cancel with approvals not carried
+  over, replay, and names on history (`workflow-runtime.test.ts`); badge
+  revocation and the check-in history with paging and incident scope
+  (`staffing.test.ts`); facility edit, retirement and the request list
+  (`facilities.test.ts`). Screens: the workflow browser test rejects with a
+  note at 1534 by 790 and cancels at 1586 by 992; the staffing browser test
+  shows the closed check-in with agency and check-out, revokes the badge and
+  is refused its code; the facilities browser test edits and removes
+  entries and follows a request sent elsewhere at 1586 by 992. Web unit
+  tests for the workflow model after a rejection and the ICS-211 rows.
+- **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
+- **Evidence level:** real-database and browser tests.
+- **Rollback:** revert the commit; migration `0140` adds a check value,
+  columns, a policy and indexes, none of which the earlier code reads.

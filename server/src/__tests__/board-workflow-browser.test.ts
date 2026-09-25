@@ -21,6 +21,7 @@ let baseUrl: string;
 let boardId: string;
 let incidentId: string;
 let recordId: string;
+let withdrawnId: string;
 const pageErrors: string[] = [];
 const externalRequests: string[] = [];
 
@@ -56,8 +57,8 @@ const template = {
   },
 };
 
-async function openPage(): Promise<Page> {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+async function openPage(viewport = { width: 1440, height: 1000 }): Promise<Page> {
+  const page = await browser.newPage({ viewport });
   await page.emulateMedia({ reducedMotion: "reduce" });
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.route("**/*", (route) => {
@@ -69,8 +70,8 @@ async function openPage(): Promise<Page> {
   return page;
 }
 
-async function signInToRecord(page: Page, email: string, password: string) {
-  await page.goto(`${baseUrl}/app/index.html#/board/${boardId}?incident=${incidentId}&view=all&record=${recordId}`);
+async function signInToRecord(page: Page, email: string, password: string, record = recordId) {
+  await page.goto(`${baseUrl}/app/index.html#/board/${boardId}?incident=${incidentId}&view=all&record=${record}`);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
@@ -105,6 +106,9 @@ beforeAll(async () => {
   recordId = (await post(app, memberToken, `/api/v1/boards/${boardId}/records?incidentId=${incidentId}`, {
     summary: "Generator fuel for the shelter",
     due_by: new Date(Date.now() - 60 * 60_000).toISOString(),
+  })).id as string;
+  withdrawnId = (await post(app, memberToken, `/api/v1/boards/${boardId}/records?incidentId=${incidentId}`, {
+    summary: "Tarps for the fairgrounds",
   })).id as string;
 
   baseUrl = await listen(app);
@@ -208,5 +212,53 @@ describe("board record workflow", () => {
 
     expect(pageErrors).toEqual([]);
     expect(externalRequests).toEqual([]);
+  }, 180_000);
+
+  it("rejects a request with a note, lets the requester cancel the next, and names each person", async () => {
+    const member = await openPage({ width: 1586, height: 992 });
+    const officer = await openPage({ width: 1534, height: 790 });
+    try {
+      const memberWorkflow = (await signInToRecord(member, "member@example.org", "another-good-password", withdrawnId))
+        .getByRole("region", { name: "Workflow" });
+      const release = () => memberWorkflow.getByRole("group", { name: "Available transitions" })
+        .getByRole("button", { name: "Release to operations" }).click();
+      await release();
+      const memberPending = memberWorkflow.getByRole("group", { name: "Awaiting approval" });
+      await memberPending.getByRole("button", { name: "Cancel request" }).waitFor();
+
+      const officerWorkflow = (await signInToRecord(officer, "admin@example.org", "correct-horse-battery", withdrawnId))
+        .getByRole("region", { name: "Workflow" });
+      const officerPending = officerWorkflow.getByRole("group", { name: "Awaiting approval" });
+      await officerPending.waitFor();
+      expect(await officerPending.getByRole("button", { name: "Cancel request" }).count()).toBe(0);
+      await officerPending.getByLabel("Note with a rejection or cancellation (optional)").fill("Needs a quantity first");
+      await officerPending.getByRole("button", { name: "Reject request" }).click();
+      await officerWorkflow.getByRole("list", { name: "Workflow history" })
+        .getByText(/Admin · Rejected Release to operations; stays Submitted · Needs a quantity first/).waitFor();
+      await officer.screenshot({ path: join(SHOTS, "board-workflow-rejected-1534.png"), fullPage: false });
+
+      await member.reload();
+      const reloaded = member.getByRole("region", { name: "Selected record" }).getByRole("region", { name: "Workflow" });
+      const history = reloaded.getByRole("list", { name: "Workflow history" });
+      await history.getByText(/Admin · Rejected Release to operations/).waitFor();
+      await reloaded.getByRole("group", { name: "Available transitions" })
+        .getByRole("button", { name: "Release to operations" }).click();
+      await reloaded.getByRole("group", { name: "Awaiting approval" }).getByRole("button", { name: "Cancel request" }).click();
+      await history.getByText(/Member · Cancelled the request for Release to operations; stays Submitted/).waitFor();
+      await reloaded.getByText("Submitted", { exact: true }).waitFor();
+      expect(await reloaded.getByRole("group", { name: "Awaiting approval" }).count()).toBe(0);
+      await member.screenshot({ path: join(SHOTS, "board-workflow-cancelled-1586.png"), fullPage: false });
+
+      const kinds = await admin`
+        select event_kind from board_workflow_history where record_id = ${withdrawnId} order by sequence`;
+      expect(kinds.map((row) => row.event_kind)).toEqual([
+        "transition_requested", "transition_rejected", "transition_requested", "transition_cancelled",
+      ]);
+      expect(pageErrors).toEqual([]);
+      expect(externalRequests).toEqual([]);
+    } finally {
+      await member.close();
+      await officer.close();
+    }
   }, 180_000);
 });

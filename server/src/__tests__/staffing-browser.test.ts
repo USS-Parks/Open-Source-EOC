@@ -14,6 +14,7 @@ let runtime: Sql;
 let app: FastifyInstance;
 let browser: Browser;
 let baseUrl: string;
+let jurisdictionName: string;
 
 /** A datetime-local value for a moment `days` from now, on the hour. */
 function localInput(days: number, hour: number): string {
@@ -28,6 +29,8 @@ beforeAll(async () => {
   await buildWeb(DIST);
   ({ admin, runtime } = await freshDb());
   const seed = await seedIdentity(admin);
+  const [named] = await admin`select name from jurisdictions where id = ${seed.jurisdictionId}`;
+  jurisdictionName = named!.name as string;
   app = buildApp(runtime, { oidc: null });
   serveStatic(app, "/app", DIST);
   baseUrl = await listen(app);
@@ -115,6 +118,28 @@ describe("staffing in a real browser", () => {
     await page.getByRole("status").filter({ hasText: "Member checked out of Operations Section Chief." }).waitFor();
     await onDuty.getByText("No one is checked in").waitFor();
     await vacant.getByText("Operations Section Chief").waitFor();
+
+    // The ICS-211 keeps the closed check-in, with the agency and the check-out time.
+    await page.getByRole("tab", { name: "ICS-211 check-in list" }).click();
+    const closed = form.getByRole("row").filter({ hasText: "Member" }).filter({ hasText: "Operations Section Chief" });
+    await closed.filter({ hasText: /\d{4}-\d{2}-\d{2} \d{4}\s*Badge scan/ }).waitFor();
+    expect(await closed.textContent()).toContain(jurisdictionName);
+    expect(await closed.textContent()).not.toContain("On duty");
+
+    // A lost badge is revoked, and its printed code no longer checks anyone in.
+    await page.getByRole("tab", { name: "Badges" }).click();
+    const issuedList = panel.getByRole("region", { name: "Issued badges" });
+    await issuedList.getByRole("button", { name: "Revoke badge for Member" }).click();
+    await page.getByRole("status").filter({ hasText: "Badge for Member revoked." }).waitFor();
+    await issuedList.getByRole("row").filter({ hasText: "Member" }).filter({ hasText: /Revoked/ }).waitFor();
+    expect(await panel.getByRole("article", { name: "Badge for Member" }).count()).toBe(0);
+    await page.screenshot({ path: join(SHOTS, "staffing-badge-revoked-light.png"), fullPage: true });
+    await page.getByRole("tab", { name: "Check-in and on duty" }).click();
+    await panel.getByLabel("Position", { exact: true }).selectOption({ label: "Operations Section Chief" });
+    await panel.getByLabel("Badge code, optional").fill(printedCode);
+    await panel.getByRole("button", { name: "Check in badge holder" }).click();
+    await page.getByRole("alert").filter({ hasText: "unknown or revoked badge" }).waitFor();
+    await onDuty.getByText("No one is checked in").waitFor();
 
     await page.getByRole("tab", { name: "Shifts" }).click();
     const shifts = panel.getByRole("region", { name: "Upcoming shifts" });

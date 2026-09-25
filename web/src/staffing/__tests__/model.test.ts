@@ -1,17 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { ICS_211, groupBadgeCode, ics211Rows, icsDateTime, instant, methodLabel, normalizeBadgeCode, type OnDutyEntry } from "../model.js";
+import { ICS_211, groupBadgeCode, ics211Rows, icsDateTime, instant, methodLabel, normalizeBadgeCode, type CheckinHistoryEntry } from "../model.js";
 
-const entry = (checkinId: string, since: Date, method = "manual"): OnDutyEntry => ({
-  checkinId, personId: `p-${checkinId}`, personName: `Person ${checkinId}`, positionId: "pos",
-  positionTitle: "Planning Section Chief", since: since.toISOString(), method,
+const entry = (checkinId: string, since: Date, method = "manual", out: Date | null = null): CheckinHistoryEntry => ({
+  checkinId, personId: `p-${checkinId}`, personName: `Person ${checkinId}`, agency: "Humboldt County OES",
+  positionTitle: "Planning Section Chief", checkedInAt: since.toISOString(), checkedOutAt: out?.toISOString() ?? null, method,
 });
 
 describe("staffing view logic", () => {
-  it("numbers ICS-211 lines in check-in order with local date, 24-hour time and a plain method", () => {
-    const rows = ics211Rows([entry("a", new Date(2026, 8, 23, 6, 5)), entry("b", new Date(2026, 8, 23, 18, 40), "scan")]);
+  it("numbers ICS-211 lines in check-in order with agency, local date, 24-hour time, check-out and a plain method", () => {
+    const rows = ics211Rows([
+      entry("a", new Date(2026, 8, 23, 6, 5), "manual", new Date(2026, 8, 23, 18, 0)),
+      entry("b", new Date(2026, 8, 23, 18, 40), "scan"),
+    ]);
     expect(rows).toEqual([
-      { id: "a", number: 1, name: "Person a", assignment: "Planning Section Chief", date: "2026-09-23", time: "0605", method: "Manual entry" },
-      { id: "b", number: 2, name: "Person b", assignment: "Planning Section Chief", date: "2026-09-23", time: "1840", method: "Badge scan" },
+      { id: "a", number: 1, name: "Person a", agency: "Humboldt County OES", assignment: "Planning Section Chief",
+        date: "2026-09-23", time: "0605", checkOut: "2026-09-23 1800", method: "Manual entry" },
+      { id: "b", number: 2, name: "Person b", agency: "Humboldt County OES", assignment: "Planning Section Chief",
+        date: "2026-09-23", time: "1840", checkOut: "On duty", method: "Badge scan" },
     ]);
     expect(icsDateTime(new Date(2026, 0, 2, 3, 4).toISOString())).toBe("2026-01-02 0304");
     expect(methodLabel("radio")).toBe("radio");

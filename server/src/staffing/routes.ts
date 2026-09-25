@@ -6,8 +6,11 @@ import { pageQuery } from "../db/cursor.js";
 import {
   checkIn,
   checkOut,
+  checkinHistory,
   createShift,
   issueBadge,
+  listBadges,
+  revokeBadge,
   scanCheckIn,
   staffingSummary,
 } from "./service.js";
@@ -49,6 +52,37 @@ export function staffingRoutes(
         issueBadge(tx, req.principal, jurisdictionId, body),
       );
       return reply.status(201).send(result);
+    },
+  );
+
+  app.get(
+    "/api/v1/jurisdictions/:jurisdictionId/badges",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const badges = await withPerson(sql, req.principal.person.id, (tx) =>
+        listBadges(tx, req.principal, jurisdictionId),
+      );
+      return reply.send({ badges });
+    },
+  );
+
+  app.post("/api/v1/badges/:badgeId/revoke", { preHandler: authenticate }, async (req, reply) => {
+    const { badgeId } = z.object({ badgeId: z.string().uuid() }).parse(req.params);
+    await withPerson(sql, req.principal.person.id, (tx) => revokeBadge(tx, req.principal, badgeId));
+    return reply.send({ ok: true });
+  });
+
+  app.get(
+    "/api/v1/jurisdictions/:jurisdictionId/checkins",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const query = z.object({ ...pageQuery, incidentId: z.string().uuid().optional() }).parse(req.query);
+      const result = await withPerson(sql, req.principal.person.id, (tx) =>
+        checkinHistory(tx, req.principal, jurisdictionId, query.incidentId ?? null, query),
+      );
+      return reply.send(result);
     },
   );
 

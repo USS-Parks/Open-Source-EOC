@@ -112,8 +112,10 @@ GET /api/v1/incidents/:incidentId/tasks
 GET /api/v1/incidents/:incidentId/threads
 GET /api/v1/integrations
 GET /api/v1/jurisdictions/:jurisdictionId/audit/export
+GET /api/v1/jurisdictions/:jurisdictionId/badges
 GET /api/v1/jurisdictions/:jurisdictionId/boards
 GET /api/v1/jurisdictions/:jurisdictionId/cap/alerts
+GET /api/v1/jurisdictions/:jurisdictionId/checkins
 GET /api/v1/jurisdictions/:jurisdictionId/chronology
 GET /api/v1/jurisdictions/:jurisdictionId/collab
 GET /api/v1/jurisdictions/:jurisdictionId/contact-groups
@@ -156,6 +158,7 @@ GET /api/v1/jurisdictions/:jurisdictionId/reunification
 GET /api/v1/jurisdictions/:jurisdictionId/search
 GET /api/v1/jurisdictions/:jurisdictionId/sitreps
 GET /api/v1/jurisdictions/:jurisdictionId/staffing
+GET /api/v1/jurisdictions/:jurisdictionId/status-queries
 GET /api/v1/jurisdictions/:jurisdictionId/threads
 GET /api/v1/mass-notifications/:massNotificationId
 GET /api/v1/me
@@ -186,6 +189,7 @@ GET /api/v1/tiles/datasets/:datasetId/:z/:x/:y.mvt
 GET /api/v1/tracked-objects/:id
 PATCH /api/v1/boards/:boardId/records/:recordId
 PATCH /api/v1/corrective-actions/:id
+PATCH /api/v1/facilities/:id
 PATCH /api/v1/incidents/:incidentId/tasks/:taskId
 PATCH /api/v1/notification-rules/:ruleId
 POST /api/v1/ack/:token
@@ -197,6 +201,7 @@ POST /api/v1/auth/mfa/enroll
 POST /api/v1/auth/mfa/verify
 POST /api/v1/auth/password
 POST /api/v1/auth/resume
+POST /api/v1/badges/:badgeId/revoke
 POST /api/v1/boards/:boardId/import
 POST /api/v1/boards/:boardId/local-fields
 POST /api/v1/boards/:boardId/records
@@ -207,6 +212,7 @@ POST /api/v1/boards/:boardId/records/:recordId/restore
 POST /api/v1/boards/:boardId/records/:recordId/workflow/approvals
 POST /api/v1/boards/:boardId/records/:recordId/workflow/escalations
 POST /api/v1/boards/:boardId/records/:recordId/workflow/transitions
+POST /api/v1/boards/:boardId/records/:recordId/workflow/withdrawals
 POST /api/v1/boards/:boardId/upgrade
 POST /api/v1/boards/:boardId/webeoc-import
 POST /api/v1/cap/alerts/:id/review
@@ -216,6 +222,7 @@ POST /api/v1/corrective-actions/:id/status
 POST /api/v1/damage/assessments/:id/moderate
 POST /api/v1/dashboard-templates
 POST /api/v1/data-packs/datasets/:datasetId/load
+POST /api/v1/facilities/:id/retire
 POST /api/v1/facilities/:id/status
 POST /api/v1/federation/receive
 POST /api/v1/feeds/:feedId/ingest

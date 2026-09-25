@@ -195,4 +195,68 @@ describe("shift scheduling", () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it("revokes a badge for administrators only, after which its code checks no one in", async () => {
+    const as = (token: string) => ({ authorization: `Bearer ${token}` });
+    const issued = await app.inject({
+      method: "POST", url: `/api/v1/jurisdictions/${seed.jurisdictionId}/badges`, headers: as(adminToken),
+      payload: { personId: seed.memberId, label: "Planning Section Chief" },
+    });
+    expect(issued.statusCode).toBe(201);
+    const { id, token } = issued.json() as { id: string; token: string };
+    const listed = await app.inject({ method: "GET", url: `/api/v1/jurisdictions/${seed.jurisdictionId}/badges`, headers: as(adminToken) });
+    const badge = (listed.json().badges as Array<Record<string, unknown>>).find((entry) => entry.id === id)!;
+    expect(badge).toMatchObject({ personId: seed.memberId, personName: "Member", label: "Planning Section Chief", revokedAt: null });
+    expect(JSON.stringify(listed.json())).not.toContain(token);
+    expect((await app.inject({ method: "GET", url: `/api/v1/jurisdictions/${seed.jurisdictionId}/badges`, headers: as(memberToken) })).statusCode).toBe(403);
+
+    expect((await app.inject({ method: "POST", url: `/api/v1/badges/${id}/revoke`, headers: as(memberToken) })).statusCode).toBe(403);
+    expect((await app.inject({ method: "POST", url: `/api/v1/badges/${id}/revoke`, headers: as(adminToken) })).statusCode).toBe(200);
+    expect((await app.inject({ method: "POST", url: `/api/v1/badges/${id}/revoke`, headers: as(adminToken) })).statusCode).toBe(409);
+    const scan = await app.inject({
+      method: "POST", url: `/api/v1/jurisdictions/${seed.jurisdictionId}/checkins/scan`, headers: as(memberToken),
+      payload: { badgeToken: token, positionId: planPositionId },
+    });
+    expect(scan.statusCode).toBe(404);
+    const [audit] = await admin`
+      select person_id from audit_events where category = 'staff.badge_revoked' and subject_id = ${id}`;
+    expect(audit!.person_id).toBe(seed.adminId);
+  });
+
+  it("lists every check-in with its agency and check-out, earliest first and a page at a time", async () => {
+    const as = { authorization: `Bearer ${memberToken}` };
+    const [incident] = await admin`
+      insert into incidents (jurisdiction_id, name, kind, activated_by)
+      values (${seed.jurisdictionId}, 'Check-in history', 'incident', ${seed.adminId}) returning id`;
+    const [other] = await admin`
+      insert into incidents (jurisdiction_id, name, kind, activated_by)
+      values (${seed.jurisdictionId}, 'Another incident', 'incident', ${seed.adminId}) returning id`;
+    const checkIn = async (positionId: string, incidentId?: string) => (await app.inject({
+      method: "POST", url: `/api/v1/jurisdictions/${seed.jurisdictionId}/checkins`, headers: as,
+      payload: { personId: seed.memberId, positionId, clientCheckinId: randomUUID(), ...(incidentId ? { incidentId } : {}) },
+    })).json().id as string;
+    const mine = await checkIn(planPositionId, incident!.id as string);
+    await app.inject({ method: "POST", url: `/api/v1/checkins/${mine}/checkout`, headers: as });
+    const elsewhere = await checkIn(planPositionId, other!.id as string);
+
+    const read = async (query: string) => (await app.inject({
+      method: "GET", url: `/api/v1/jurisdictions/${seed.jurisdictionId}/checkins${query}`, headers: as,
+    })).json() as { checkins: Array<{ checkinId: string; agency: string; checkedOutAt: string | null; checkedInAt: string }>; nextCursor: string | null };
+    const all = await read("");
+    const [jurisdiction] = await admin`select name from jurisdictions where id = ${seed.jurisdictionId}`;
+    expect(all.checkins.every((entry) => entry.agency === jurisdiction!.name)).toBe(true);
+    const ordered = [...all.checkins].sort((a, b) => a.checkedInAt.localeCompare(b.checkedInAt));
+    expect(all.checkins.map((entry) => entry.checkinId)).toEqual(ordered.map((entry) => entry.checkinId));
+    expect(all.checkins.find((entry) => entry.checkinId === mine)!.checkedOutAt).not.toBeNull();
+
+    // An incident's list leaves out another incident's check-ins.
+    const scoped = await read(`?incidentId=${incident!.id as string}`);
+    expect(scoped.checkins.map((entry) => entry.checkinId)).toContain(mine);
+    expect(scoped.checkins.map((entry) => entry.checkinId)).not.toContain(elsewhere);
+
+    const first = await read("?limit=1");
+    expect(first.checkins).toHaveLength(1);
+    const second = await read(`?limit=1&cursor=${encodeURIComponent(first.nextCursor!)}`);
+    expect(second.checkins[0]!.checkinId).toBe(all.checkins[1]!.checkinId);
+  });
 });

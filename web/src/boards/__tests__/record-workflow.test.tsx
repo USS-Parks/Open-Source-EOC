@@ -125,6 +125,28 @@ describe("workflow panel model", () => {
       .toEqual({ kind: "missing" });
   });
 
+  it("keeps the completed transition's escalations after a later request is rejected", () => {
+    const later: RecordWorkflow = {
+      ...releasedRuntime,
+      stateRevision: 2,
+      history: [
+        ...releasedRuntime.history,
+        event({ eventKind: "transition_requested", eventKey: "close", stateRevision: 2, fromState: "released", toState: "closed" }),
+        event({ eventKind: "transition_rejected", eventKey: "close", stateRevision: 2, fromState: "released", toState: "closed",
+          actorPersonId: "admin", detail: { note: "Still in use" } }),
+      ],
+    };
+    const model = workflowPanelModel(definition, later, new Date("2026-09-23T10:25:00.000Z"));
+    expect(model.pending).toBeNull();
+    expect(model.transitions.map((transition) => transition.key)).toEqual(["close"]);
+    expect(model.escalations.map((step) => [step.occurrence, step.escalated])).toEqual([[0, true], [1, false], [2, false]]);
+    const rejected = later.history[later.history.length - 1]!;
+    expect(historyAction(definition, rejected)).toBe("Rejected Close request; stays Released");
+    expect(historyNote(rejected, (iso) => iso)).toBe("Still in use");
+    expect(historyAction(definition, { ...rejected, eventKind: "transition_cancelled", detail: {} }))
+      .toBe("Cancelled the request for Close request; stays Released");
+  });
+
   it("describes every history event in plain words with its recorded detail", () => {
     const [requested, approved, completed, escalated] = releasedRuntime.history;
     expect(historyAction(definition, requested!)).toBe("Requested Release request: Submitted to Released");

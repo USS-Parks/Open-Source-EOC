@@ -32,6 +32,8 @@ export interface RecordWorkflowSource {
   readonly canAct: boolean;
   /** Display names the shell already holds, keyed by person id. */
   readonly people: Readonly<Record<string, string>>;
+  /** The signed-in person, who may cancel a request of their own. */
+  readonly personId?: string | null;
 }
 
 interface WorkflowData {
@@ -81,6 +83,7 @@ export function RecordWorkflowPanel(props: { readonly source: RecordWorkflowSour
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [choices, setChoices] = useState<Readonly<Record<string, string>>>({});
+  const [note, setNote] = useState("");
 
   if (!loaded.data) {
     return loaded.error ? (
@@ -95,6 +98,7 @@ export function RecordWorkflowPanel(props: { readonly source: RecordWorkflowSour
   const model = workflowPanelModel(definition, runtime, new Date());
   const pending = model.pending;
   const names = new Map(participants.map((participant) => [participant.personId, participant.personName]));
+  for (const event of runtime.history) if (event.actorName) names.set(event.actorPersonId, event.actorName);
   for (const [personId, name] of Object.entries(source.people)) names.set(personId, name);
   const positionTitles = new Map(positions.map((position) => [position.id, position.title]));
   const participationTitles = new Map(participants.map((participant) =>
@@ -118,6 +122,17 @@ export function RecordWorkflowPanel(props: { readonly source: RecordWorkflowSour
       setBusy(null);
       loaded.reload();
     }
+  }
+
+  function withdraw(action: "reject" | "cancel") {
+    if (!pending) return;
+    const text = note.trim();
+    void run(action, async (idempotencyKey) => {
+      await source.client.withdrawWorkflowTransition(source.boardId, source.recordId, {
+        transitionKey: pending.transition.key, action, ...(text ? { note: text } : {}), idempotencyKey,
+      });
+      setNote("");
+    });
   }
 
   function chosen(key: string, rule: AssignmentRule | undefined): WorkflowAssignmentRequest | undefined {
@@ -196,6 +211,27 @@ export function RecordWorkflowPanel(props: { readonly source: RecordWorkflowSour
               </li>
             ))}
           </ul>
+          {source.canAct ? (
+            <div className="board-workflow-action">
+              <div className="eoc-form-field board-workflow-picker">
+                <label>
+                  Note with a rejection or cancellation (optional)
+                  <input value={note} maxLength={500} disabled={busy !== null}
+                    onChange={(event) => setNote(event.target.value)} />
+                </label>
+              </div>
+              <ActionButton kind="danger" loading={busy === "reject"} disabled={busy !== null}
+                onClick={() => withdraw("reject")}>
+                Reject request
+              </ActionButton>
+              {pending.requestedBy && pending.requestedBy === source.personId ? (
+                <ActionButton kind="secondary" loading={busy === "cancel"} disabled={busy !== null}
+                  onClick={() => withdraw("cancel")}>
+                  Cancel request
+                </ActionButton>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
