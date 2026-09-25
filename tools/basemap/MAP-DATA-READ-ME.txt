@@ -1,0 +1,18 @@
+Open Source EOC map data
+
+The maps and layers for the macOS app, as a download beside its disk image:
+the statewide California map, building footprints, map overlays, North Coast
+imagery and elevation, and the offline address search index. The Windows
+setup carries the same files inside it.
+
+Install on a Mac: leave this .zip, or the folder your browser unpacked it
+into, in Downloads or on the Desktop, then open Open Source EOC. The app
+checks every file against map-data.json and installs the maps into
+~/Library/Application Support/Open Source EOC/map-data. Or, in Terminal:
+
+  "/Applications/Open Source EOC.app/Contents/MacOS/Open Source EOC" install-map-data --from=<the .zip or folder>
+
+Restart the demo to see new maps: run the same command with "stop", then open
+the app again.
+
+The attribution and licenses of this data are in THIRD-PARTY-NOTICES.txt.

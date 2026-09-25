@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFile, spawnSync } from "node:child_process";
+import { execFile, execFileSync, spawnSync } from "node:child_process";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { createSocket } from "node:dgram";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -31,6 +31,7 @@ import { rotateIfLarger, rotatingLog } from "./lib/rotating-log.mjs";
 import { backupBeforeMigrate, scheduledBackup, writeUpgradeReport } from "./lib/pre-upgrade-backup.mjs";
 import { authorityBundle, caddyfile, commandLine, hostDefinitions, hostNames, parseWinswService } from "./lib/host.mjs";
 import { connectionAdvice, hostAddress } from "./lib/connect.mjs";
+import { MAP_DATA_FILES, installMapData, packMapData, verifyMapData } from "./lib/map-data.mjs";
 
 function fixture() {
   const root = mkdtempSync(resolve(tmpdir(), "openeoc-windows-"));
@@ -110,6 +111,91 @@ test("desktop configures the offline imagery and elevation archives it finds", a
     assert.equal(config.OPENEOC_TERRAIN_TILE_URL, undefined);
   } finally {
     rmSync(files.root, { recursive: true, force: true });
+  }
+});
+
+/** A map data packet folder with a small stand-in for every file a packet carries. */
+async function packetFixture(root, name = "packet") {
+  const sources = {};
+  for (const path of MAP_DATA_FILES) {
+    const source = resolve(root, "sources", path);
+    mkdirSync(resolve(source, ".."), { recursive: true });
+    writeFileSync(source, `stand-in for ${path}`);
+    sources[path] = source;
+  }
+  const folder = resolve(root, name);
+  await packMapData({ sources, folder, version: "0.0.0-test" });
+  return folder;
+}
+
+test("an installed map data packet serves its map folder alone and fills in the maps it carries", async () => {
+  const files = fixture();
+  try {
+    const mapDataRoot = resolve(files.root, "map-data");
+    mkdirSync(resolve(mapDataRoot, "basemap"), { recursive: true });
+    writeFileSync(resolve(mapDataRoot, "basemap/california.pmtiles"), "california");
+    writeFileSync(resolve(mapDataRoot, "basemap/north-coast-terrain.pmtiles"), "terrain");
+    writeFileSync(resolve(mapDataRoot, "gazetteer.tsv"), "index");
+    const selected = selectStaticFile({ rawPath: "basemap/california.pmtiles", ...files, mapDataRoot });
+    assert.equal(selected.file, resolve(mapDataRoot, "basemap/california.pmtiles"));
+    // The public files come first, and the address index is never served.
+    assert.equal(selectStaticFile({ rawPath: "basemap/map.pmtiles", ...files, mapDataRoot }).file, resolve(files.publicRoot, "basemap/map.pmtiles"));
+    assert.equal(selectStaticFile({ rawPath: "gazetteer.tsv", ...files, mapDataRoot }), null);
+    assert.throws(() => selectStaticFile({ rawPath: "basemap/../gazetteer.tsv", ...files, mapDataRoot }), /invalid path segment/);
+    const config = await desktopRuntimeConfig(files.publicRoot, { mapDataRoot });
+    assert.equal(config.OPENEOC_BASEMAP_PMTILES_URL, "/basemap/california.pmtiles");
+    assert.equal(config.OPENEOC_TERRAIN_TILE_URL, "pmtiles:///basemap/north-coast-terrain.pmtiles");
+    assert.equal(config.OPENEOC_IMAGERY_TILE_URL, undefined);
+    assert.equal((await desktopRuntimeConfig(files.publicRoot)).OPENEOC_BASEMAP_PMTILES_URL, undefined);
+  } finally {
+    rmSync(files.root, { recursive: true, force: true });
+  }
+});
+
+test("a map data packet installs only when every file matches its manifest, from a folder or a zip", async () => {
+  const root = mkdtempSync(resolve(tmpdir(), "openeoc-map-data-"));
+  try {
+    const target = resolve(root, "installed");
+    // Windows' own tar, or the Mac's, reads and writes zip files.
+    const tar = process.platform === "win32" ? resolve(process.env.SystemRoot ?? "C:/Windows", "System32/tar.exe") : "tar";
+    const unzip = (zip, folder) => execFileSync(tar, ["-xf", zip, "-C", folder]);
+    const good = await packetFixture(root);
+    assert.deepEqual(Object.keys(await verifyMapData(good)), ["schema", "product", "version", "createdAt", "files"]);
+    const installed = await installMapData({ from: good, target, unzip });
+    assert.equal(installed.files, MAP_DATA_FILES.length);
+    assert.equal(readFileSync(resolve(target, "gazetteer.tsv"), "utf8"), "stand-in for gazetteer.tsv");
+    assert.equal(existsSync(resolve(good, "gazetteer.tsv")), true, "a folder the person gave is copied, not moved");
+
+    // A changed file is refused, and the maps already installed stay as they were.
+    const bad = await packetFixture(root, "bad");
+    writeFileSync(resolve(bad, "basemap/california.pmtiles"), "stand-in for basemap/california.pmtilez");
+    await assert.rejects(installMapData({ from: bad, target, unzip }), /california\.pmtiles does not match/);
+    assert.equal(readFileSync(resolve(target, "basemap/california.pmtiles"), "utf8"), "stand-in for basemap/california.pmtiles");
+    // A manifest naming a file a packet may not carry is refused.
+    const manifest = JSON.parse(readFileSync(resolve(bad, "map-data.json"), "utf8"));
+    manifest.files[0].path = "../escape.txt";
+    writeFileSync(resolve(bad, "map-data.json"), JSON.stringify(manifest));
+    await assert.rejects(verifyMapData(bad), /may not carry/);
+
+    // The download as a zip, with the packet in its one folder.
+    const zip = resolve(root, "packet.zip");
+    execFileSync(tar, ["-a", "-cf", zip, "-C", root, "packet"]);
+    rmSync(target, { recursive: true, force: true });
+    await installMapData({ from: zip, target, unzip });
+    assert.equal(readFileSync(resolve(target, "basemap/overlays-manifest.json"), "utf8"), "stand-in for basemap/overlays-manifest.json");
+    assert.deepEqual(readdirSync(root).filter((name) => name.includes(".new") || name.includes(".old")), []);
+
+    // The launcher's action installs into the profile data folder.
+    const dataRoot = resolve(root, "data");
+    const result = spawnSync(process.execPath, [fileURLToPath(new URL("./desktop.mjs", import.meta.url)), "install-map-data", `--from=${good}`], {
+      encoding: "utf8",
+      env: { ...process.env, OPENEOC_DESKTOP_DATA_ROOT: dataRoot },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /MAP_DATA_INSTALLED files=8 /);
+    assert.equal(existsSync(resolve(dataRoot, "map-data", "map-data.json")), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

@@ -35,6 +35,7 @@ import { desktopBuildSourceFingerprint } from "./lib/build-fingerprint.mjs";
 import { rotateIfLarger, rotatingLog } from "./lib/rotating-log.mjs";
 import { backupBeforeMigrate, scheduledBackup, writeUpgradeReport } from "./lib/pre-upgrade-backup.mjs";
 import { connectionAdvice, hostAddress } from "./lib/connect.mjs";
+import { MAP_DATA_MANIFEST, installMapData } from "./lib/map-data.mjs";
 import {
   BACKUP_TASK,
   POSTGRES_INCLUDE,
@@ -64,6 +65,9 @@ const pgBin = resolve(pgDist, "bin");
 const powershell = "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe";
 const caddyExe = resolve(process.env.OPENEOC_CADDY ?? resolve(repoRoot, "runtime/caddy/caddy.exe"));
 const winswExe = resolve(process.env.OPENEOC_WINSW ?? resolve(repoRoot, "runtime/winsw/WinSW-x64.exe"));
+// A map data packet installed beside the profiles (lib/map-data.mjs): the maps and layers too large for the app.
+const mapDataRoot = resolve(process.env.OPENEOC_MAP_DATA_ROOT ?? resolve(outRoot, "map-data"));
+const installedMapData = () => (existsSync(resolve(mapDataRoot, MAP_DATA_MANIFEST)) ? mapDataRoot : null);
 // The North Coast Storm reference scenario's profiles: seeded as its people, who sign in with a password alone.
 const NORTH_COAST_PROFILES = new Set(["demo", "host-demo"]);
 
@@ -733,8 +737,9 @@ async function serveProfile(args, { service = false } = {}) {
   process.env.OPENEOC_DATA_DIR = paths.blobs;
   // Offline address search: the gazetteer at the builder's output path, in a
   // checkout and in an install alike. Absent, search reports unavailable.
-  const gazetteer = resolve(repoRoot, "tools/basemap/out/gazetteer.tsv");
-  if (!process.env.OPENEOC_GAZETTEER_PATH && existsSync(gazetteer)) process.env.OPENEOC_GAZETTEER_PATH = gazetteer;
+  const gazetteer = [resolve(repoRoot, "tools/basemap/out/gazetteer.tsv"), ...(installedMapData() ? [resolve(mapDataRoot, "gazetteer.tsv")] : [])]
+    .find((path) => existsSync(path));
+  if (!process.env.OPENEOC_GAZETTEER_PATH && gazetteer) process.env.OPENEOC_GAZETTEER_PATH = gazetteer;
   // Credentials at rest (MFA secrets, connector credentials) are encrypted
   // with this profile's own key. Profiles created before the key existed get
   // one here.
@@ -776,13 +781,13 @@ async function serveProfile(args, { service = false } = {}) {
       void reply.send({ status: "stopping" });
       globalThis.setImmediate(() => void close().then(() => process.exit(0)));
     });
-  const runtimeConfig = await desktopRuntimeConfig(publicRoot);
+  const runtimeConfig = await desktopRuntimeConfig(publicRoot, { mapDataRoot: installedMapData() });
   // A synthetic profile says so on every screen, beside the handling marking.
   if (config.synthetic) runtimeConfig.OPENEOC_SYNTHETIC_DATA = "1";
   // A host with its own certificate authority offers the root on the sign-in page.
   if (service && process.env.OPENEOC_TRUST_CERTIFICATE_URL)
     runtimeConfig.OPENEOC_TRUST_CERTIFICATE_URL = process.env.OPENEOC_TRUST_CERTIFICATE_URL;
-  registerStaticHost(app, { distRoot, publicRoot, runtimeConfig });
+  registerStaticHost(app, { distRoot, publicRoot, mapDataRoot: installedMapData(), runtimeConfig });
   await app.listen({ host: "127.0.0.1", port: config.httpPort });
   scheduler.start();
   console.log(`DESKTOP_READY profile=${profile} url=http://127.0.0.1:${config.httpPort}`);
@@ -1080,6 +1085,18 @@ async function hostRemove() {
   console.log(`HOST_REMOVED profile=${record.profile} data=${outRoot}`);
 }
 
+/** Check a map data packet (a .zip or its folder) against its manifest and install it. */
+async function installMapDataAction(args) {
+  if (!args.from) throw new Error("Give the map data packet: --from=<the .zip or its folder>");
+  const result = await installMapData({
+    from: String(args.from),
+    target: mapDataRoot,
+    // Windows' own tar reads zip files; a tar found first on the PATH may not.
+    unzip: (zip, folder) => execFileSync(onMac ? "ditto" : resolve(process.env.SystemRoot ?? "C:/Windows", "System32/tar.exe"), onMac ? ["-x", "-k", zip, folder] : ["-xf", zip, "-C", folder], { stdio: "ignore", windowsHide: true }),
+  });
+  console.log(`MAP_DATA_INSTALLED files=${result.files} bytes=${result.bytes} version=${result.version} path=${mapDataRoot}`);
+}
+
 async function profileStatus(args) {
   const profile = validateProfileName(String(args.profile ?? "production"));
   const { paths, config } = loadProfile(profile);
@@ -1130,6 +1147,7 @@ async function main() {
   if (action === "stop" && String(args.profile) === "connect") return stopConnection();
   if (action === "stop") return stopProfile(args);
   if (action === "backup") return backupProfile(args);
+  if (action === "install-map-data") return installMapDataAction(args);
   throw new Error(`Unknown action: ${args.action}`);
 }
 

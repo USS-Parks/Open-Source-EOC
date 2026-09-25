@@ -9,12 +9,18 @@ macOS 13 or later, Apple silicon or Intel. Synthetic data only.
    button: open it once, then in System Settings, Privacy & Security, choose
    "Open Anyway".
 
-3. The first open sets up the demo, about two minutes, then opens it in
+3. Download the map data packet, Open-Source-EOC-<version>-map-data.zip,
+   into Downloads before the first open. It holds the maps and layers: the
+   statewide map, buildings, overlays, North Coast imagery and elevation,
+   and address search. The app finds it there, checks every file and
+   installs it. Without it the demo opens on the base map and says so.
+
+4. The first open sets up the demo, about two minutes, then opens it in
    Chrome or Edge as an app window, or in your default browser. Later opens
    take seconds. Sign in with the demo accounts listed in
    TRY-IT-ON-WINDOWS.md in the repository; the demo is the same.
 
-4. To stop the demo, run this in Terminal:
+5. To stop the demo, run this in Terminal:
    "/Applications/Open Source EOC.app/Contents/MacOS/Open Source EOC" stop
 
 Data lives in ~/Library/Application Support/Open Source EOC and the log in

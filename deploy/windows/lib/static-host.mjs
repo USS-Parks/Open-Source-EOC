@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
-import { extname, isAbsolute, relative, resolve } from "node:path";
+import { dirname, extname, isAbsolute, relative, resolve } from "node:path";
 
 const TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -54,7 +54,12 @@ export function resolveInside(root, relativePath) {
   return candidate;
 }
 
-export function selectStaticFile({ rawPath, distRoot, publicRoot, acceptsHtml = false }) {
+/**
+ * A static file from the web build, then the public files, then, for the map
+ * folder alone, an installed map data packet (lib/map-data.mjs). The packet's
+ * address index and manifest are never served.
+ */
+export function selectStaticFile({ rawPath, distRoot, publicRoot, mapDataRoot = null, acceptsHtml = false }) {
   const relativePath = safeRelativePath(rawPath);
   const requested = relativePath || "index.html";
   const distFile = resolveInside(distRoot, requested);
@@ -63,6 +68,11 @@ export function selectStaticFile({ rawPath, distRoot, publicRoot, acceptsHtml = 
   const publicFile = resolveInside(publicRoot, requested);
   if (existsSync(publicFile) && statSync(publicFile).isFile())
     return { file: publicFile, relativePath: requested, index: false, fromDist: false };
+  if (mapDataRoot && requested.startsWith("basemap/")) {
+    const mapFile = resolveInside(mapDataRoot, requested);
+    if (existsSync(mapFile) && statSync(mapFile).isFile())
+      return { file: mapFile, relativePath: requested, index: false, fromDist: false };
+  }
   if (acceptsHtml && extname(requested) === "") {
     const indexFile = resolveInside(distRoot, "index.html");
     if (existsSync(indexFile) && statSync(indexFile).isFile())
@@ -165,8 +175,11 @@ async function verifiedBuildingsRelease(archivePath, sidecarPath, diagnostic) {
   }
 }
 
-export async function desktopRuntimeConfig(publicRoot, { diagnostic = (message) => console.warn(message) } = {}) {
+export async function desktopRuntimeConfig(publicRoot, { diagnostic = (message) => console.warn(message), mapDataRoot = null } = {}) {
   const config = {};
+  // A map file in the public files, or else in an installed map data packet.
+  const located = (relativePath) => [publicRoot, mapDataRoot].filter(Boolean)
+    .map((root) => resolve(root, relativePath)).find((path) => existsSync(path)) ?? null;
   const optional = [
     ["OPENEOC_BASEMAP_PMTILES_URL", "basemap/california.pmtiles"],
     ["OPENEOC_BUILDINGS_PMTILES_URL", "basemap/buildings.pmtiles"],
@@ -174,22 +187,23 @@ export async function desktopRuntimeConfig(publicRoot, { diagnostic = (message) 
     ["OPENEOC_OVERLAYS_MANIFEST_URL", "basemap/overlays-manifest.json"],
   ];
   for (const [key, relativePath] of optional)
-    if (existsSync(resolve(publicRoot, relativePath))) config[key] = `/${relativePath.replaceAll("\\", "/")}`;
+    if (located(relativePath)) config[key] = `/${relativePath.replaceAll("\\", "/")}`;
   // Offline raster archives: the map reads their zoom range and bounds from each archive's header.
   const rasters = [
     ["OPENEOC_IMAGERY", "basemap/north-coast-imagery.pmtiles", "Imagery: USDA NAIP via USGS The National Map"],
     ["OPENEOC_TERRAIN", "basemap/north-coast-terrain.pmtiles", "Elevation: USGS 3DEP"],
   ];
   for (const [prefix, relativePath, attribution] of rasters) {
-    if (!existsSync(resolve(publicRoot, relativePath))) continue;
+    if (!located(relativePath)) continue;
     config[`${prefix}_TILE_URL`] = `pmtiles:///${relativePath}`;
     config[`${prefix}_ATTRIBUTION`] = attribution;
   }
-  const buildings = resolve(publicRoot, "basemap/buildings.pmtiles");
-  if (existsSync(buildings)) {
+  const buildings = located("basemap/buildings.pmtiles");
+  if (buildings) {
+    // The release file beside the archive it describes.
     const release = await verifiedBuildingsRelease(
       buildings,
-      resolve(publicRoot, "basemap/buildings-overture.json"),
+      resolve(dirname(buildings), "buildings-overture.json"),
       diagnostic,
     );
     if (release) config.OPENEOC_BUILDINGS_OVERTURE_RELEASE = release;
@@ -210,7 +224,7 @@ function documentHeaders(reply) {
     .header("accept-ranges", "bytes");
 }
 
-export function registerStaticHost(app, { distRoot, publicRoot, runtimeConfig }) {
+export function registerStaticHost(app, { distRoot, publicRoot, mapDataRoot = null, runtimeConfig }) {
   app.get("/runtime-config.js", async (_request, reply) =>
     documentHeaders(reply).type(TYPES[".js"]).send(runtimeScript(runtimeConfig)),
   );
@@ -223,6 +237,7 @@ export function registerStaticHost(app, { distRoot, publicRoot, runtimeConfig })
         rawPath,
         distRoot,
         publicRoot,
+        mapDataRoot,
         acceptsHtml: String(request.headers.accept ?? "").includes("text/html"),
       });
     } catch {
