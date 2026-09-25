@@ -210,6 +210,30 @@ instance administrator who also administers the selected jurisdiction.
   version. Forms belong to the selected jurisdiction.
 - **Dashboard template file**: the JSON definition that
   `GET /api/v1/dashboard-templates/:key/:version/export` returns.
+- **Signed solution package**: one file (`"format": "openeoc-package-v2"`)
+  carrying board, incident, dashboard, report and rule templates and forms,
+  signed by a publisher whose key the server trusts, as for a template
+  package. A report template names its board template by key and carries its
+  columns, conditions, groups, totals, sorts and when it runs; a rule template
+  names its board template, event and condition, and reaches positions by key
+  and contact groups by name. Neither carries addresses or recipients, which
+  are each jurisdiction's own. Forms join the selected jurisdiction; the rest
+  join the instance. The import runs as one step, and nothing already here is
+  replaced:
+  - a template or form version this instance holds with the same content is
+    counted as already here;
+  - the same key and version with other content, or a part naming a board
+    template neither the package nor this instance has, refuses the whole
+    package, and nothing is imported;
+  - an incident template this instance already has under that key, edited
+    here since, is kept as it is; edit it to take the package's.
+
+  The result names what was created, what was already here and what was
+  kept. A package changed after signing, or signed by a key the server does
+  not trust, is refused with the reason. A package dropped on **Board
+  template file** is imported the same way. Publishers make and sign
+  packages with two server commands; see
+  [Signing solution packages](../../deploy/README.md#signing-solution-packages).
 
 JSON is checked before it is sent, and a malformed file is reported with the
 fields at fault. A refusal from the server, such as a version that already

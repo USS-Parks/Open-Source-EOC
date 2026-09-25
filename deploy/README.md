@@ -130,6 +130,31 @@ Signed audit export pages are keyed from the same key. Pages exported before a
 rotation verify only with the old key, so record it with those exports if
 they may need verifying later.
 
+## Signing solution packages
+
+A solution package carries board, incident, dashboard, report and rule
+templates and forms in one signed file, and an instance imports it only when
+it trusts the publisher's key. A publisher makes a key pair once and signs
+each package with it; neither command needs a database or a connection:
+
+```sh
+node server/dist/main.js new-package-key --private publisher.key.pem --public publisher.pub.pem
+node server/dist/main.js sign-package --key publisher.key.pem --in package.json --out package.signed.json
+```
+
+`new-package-key` refuses to overwrite either file. Keep the private key off
+shared drives: whoever holds it can sign. `sign-package` checks the package
+as an instance will, so a mistake is named before the file is shipped, and
+prints the key's fingerprint. `package.json` holds `publisher`, `name`,
+`version`, an optional `description`, and `contents` with any of
+`boardTemplates`, `incidentTemplates`, `forms`, `dashboardTemplates`,
+`reportTemplates` and `ruleTemplates`.
+
+An instance trusts a publisher once the public key file is in the PEM bundle
+`OPENEOC_TRUSTED_TEMPLATE_KEYS` names; the same bundle serves signed board
+template packages. The import is in the board designer's **Import** tab; see
+[the designer guide](../docs/guides/DESIGNER.md#import-definitions).
+
 ## Map archives
 
 The street basemap, buildings, overlays, the North Coast imagery and
@@ -273,7 +298,7 @@ restore drill.
 | `OPENEOC_LOG_LEVEL` | Log level (default `info`) |
 | `OPENEOC_SLOW_REQUEST_MS` | Slow request threshold in milliseconds (default 1000) |
 | `OPENEOC_METRICS_TOKEN` | Scrape token for `GET /api/v1/metrics`; unset serves 404 |
-| `OPENEOC_TRUSTED_TEMPLATE_KEYS` | Path to a PEM file of template publisher public keys; signed template packages from other publishers are refused, and unset refuses all |
+| `OPENEOC_TRUSTED_TEMPLATE_KEYS` | Path to a PEM file of publisher public keys, for signed board template packages and signed solution packages; packages from other publishers are refused, and unset refuses all. See [Signing solution packages](#signing-solution-packages) |
 | `OPENEOC_SCHEDULER_*_MS` | Scheduler intervals; see [Scheduler](#scheduler) |
 | `OPENEOC_TRUST_PROXY` | Reverse proxy addresses or CIDRs whose `X-Forwarded-For` is trusted, or `true`; unset trusts none |
 | `OPENEOC_PRINCIPAL_CACHE_MS` | How long a request principal is cached, in milliseconds (default 5000; `0` turns it off) |

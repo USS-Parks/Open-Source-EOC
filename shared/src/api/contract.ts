@@ -189,6 +189,7 @@ GET /api/v1/resource-requests/:id/ics-213rr
 GET /api/v1/resource-requests/:id/ics-213rr/pdf
 GET /api/v1/resources/:resourceId/history
 GET /api/v1/sitreps/:sitrepId
+GET /api/v1/solution-packages
 GET /api/v1/status-queries/:id
 GET /api/v1/sync/boards/:boardId
 GET /api/v1/templates
@@ -333,6 +334,7 @@ POST /api/v1/jurisdictions/:jurisdictionId/resources/kinds
 POST /api/v1/jurisdictions/:jurisdictionId/resources/kinds/import
 POST /api/v1/jurisdictions/:jurisdictionId/shifts
 POST /api/v1/jurisdictions/:jurisdictionId/sitreps
+POST /api/v1/jurisdictions/:jurisdictionId/solution-packages
 POST /api/v1/jurisdictions/:jurisdictionId/status-queries
 POST /api/v1/jurisdictions/:jurisdictionId/threads
 POST /api/v1/jurisdictions/:jurisdictionId/tracked-objects

@@ -53,7 +53,7 @@ export function isTimeZone(name: string): boolean {
   }
 }
 
-const CadenceSchema = z.discriminatedUnion("kind", [
+export const CadenceSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("interval"), minutes: z.number().int().min(15).max(10_080) }).strict(),
   z.object({
     kind: z.literal("daily"),

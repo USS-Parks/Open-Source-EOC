@@ -1,4 +1,6 @@
-import { dirname, join } from "node:path";
+import { createPublicKey } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { text } from "node:stream/consumers";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
@@ -7,7 +9,9 @@ import { provisionJurisdiction } from "./auth/authz.js";
 import { createPerson, type Principal } from "./auth/service.js";
 import { connect, type Sql } from "./db/client.js";
 import { migrate } from "./db/migrate.js";
+import { generateSigningKeyPair } from "./boards/package.js";
 import { ensureStandardTemplates } from "./boards/service.js";
+import { keyFingerprint, PART_KINDS, signSolutionPackage, type SignedPackage } from "./data-packs/solution.js";
 import { ensureStandardIncidentTemplates } from "./incidents/service.js";
 import { Scheduler } from "./scheduler/scheduler.js";
 import { rotateSecretKey } from "./secrets/rotate.js";
@@ -20,7 +24,8 @@ import { rotateSecretKey } from "./secrets/rotate.js";
  * force. In an air-gapped install nothing here reaches the network: it talks
  * only to PostgreSQL and listens.
  *
- * Commands: `serve` (the default), `bootstrap` and `rotate-secret-key`.
+ * Commands: `serve` (the default), `bootstrap`, `rotate-secret-key`, and
+ * `new-package-key` and `sign-package` for publishing solution packages.
  */
 
 export interface StartResult {
@@ -213,7 +218,53 @@ export async function bootstrapCommand(
   return result;
 }
 
+/**
+ * `new-package-key --private <file> --public <file>` (VA11): an Ed25519 key
+ * pair for signing solution packages. Neither file may exist already, so a
+ * key in use is never replaced by accident. No database is needed.
+ */
+export function newPackageKeyCommand(args: readonly string[], log: (line: string) => void = print): void {
+  const { values } = parseArgs({ args: [...args], options: { private: { type: "string" }, public: { type: "string" } } });
+  if (!values.private || !values.public) throw new Error("new-package-key needs --private <file> and --public <file>");
+  for (const file of [values.private, values.public]) if (existsSync(file)) throw new Error(`${file} already exists; choose another name`);
+  const { privateKeyPem, publicKeyPem } = generateSigningKeyPair();
+  writeFileSync(values.private, privateKeyPem, { flag: "wx", mode: 0o600 });
+  writeFileSync(values.public, publicKeyPem, { flag: "wx" });
+  log(`Wrote the private key to ${values.private}. Keep it off shared drives; whoever holds it can sign packages.`);
+  log(`Wrote the public key to ${values.public}. An instance trusts packages signed with it once the file named by OPENEOC_TRUSTED_TEMPLATE_KEYS holds it.`);
+}
+
+/**
+ * `sign-package --key <private.pem> --in <package.json> --out <signed.json>`
+ * (VA11): check a solution package as an instance will, then sign it. No
+ * database is needed.
+ */
+export function signPackageCommand(args: readonly string[], log: (line: string) => void = print, now: Date = new Date()): SignedPackage {
+  const { values } = parseArgs({ args: [...args], options: { key: { type: "string" }, in: { type: "string" }, out: { type: "string" } } });
+  if (!values.key || !values.in || !values.out) throw new Error("sign-package needs --key <private key file>, --in <package file> and --out <signed file>");
+  if (resolve(values.in) === resolve(values.out)) throw new Error("--out must name a new file, not the package being signed");
+  let input: unknown;
+  try {
+    input = JSON.parse(readFileSync(values.in, "utf8"));
+  } catch (error) {
+    throw new Error(`${values.in} is not readable JSON: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+  }
+  const signed = signSolutionPackage(input, readFileSync(values.key, "utf8"), now);
+  writeFileSync(values.out, `${JSON.stringify(signed, null, 2)}\n`);
+  const items = PART_KINDS.reduce((n, kind) => n + signed.contents[kind].length, 0);
+  log(`Signed ${signed.name} ${signed.version} for ${signed.publisher}: ${items} item(s), key ${keyFingerprint(createPublicKey(signed.publicKey)).slice(0, 16)}. Wrote ${values.out}.`);
+  return signed;
+}
+
 async function run(command: string, args: readonly string[]): Promise<void> {
+  if (command === "new-package-key") {
+    newPackageKeyCommand(args);
+    return;
+  }
+  if (command === "sign-package") {
+    signPackageCommand(args);
+    return;
+  }
   if (command === "serve") {
     await start();
     return;
@@ -245,7 +296,7 @@ async function run(command: string, args: readonly string[]): Promise<void> {
     }
     return;
   }
-  throw new Error(`Unknown command: ${command}. Use serve, bootstrap or rotate-secret-key.`);
+  throw new Error(`Unknown command: ${command}. Use serve, bootstrap, rotate-secret-key, new-package-key or sign-package.`);
 }
 
 // Run only when executed directly, never on import (tests import buildApp instead).

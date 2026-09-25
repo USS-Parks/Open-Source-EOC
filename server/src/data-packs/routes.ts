@@ -14,6 +14,7 @@ import {
   WebeocMappingSchema,
   type WebeocMapping,
 } from "./webeoc.js";
+import { importSolutionPackage, listImportedPackages } from "./solution-import.js";
 import {
   listCatalogForIncident,
   listDatasetItems,
@@ -53,7 +54,23 @@ export function dataPackRoutes(
   app: FastifyInstance,
   sql: Sql,
   authenticate: (req: FastifyRequest) => Promise<void>,
+  options: { readonly trustedTemplateKeys: readonly string[] } = { trustedTemplateKeys: [] },
 ): void {
+  /** Import a signed solution package (VA11): an instance admin who administers the jurisdiction its forms join. */
+  app.post("/api/v1/jurisdictions/:jurisdictionId/solution-packages", { preHandler: authenticate }, async (req, reply) => {
+    const jurisdictionId = z.string().uuid().parse((req.params as { jurisdictionId: string }).jurisdictionId);
+    const summary = await withPerson(sql, req.principal.person.id, (tx) =>
+      importSolutionPackage(tx, req.principal, jurisdictionId, req.body, options.trustedTemplateKeys),
+    );
+    return reply.status(201).send(summary);
+  });
+
+  /** Every signed solution package imported on this instance, newest first. */
+  app.get("/api/v1/solution-packages", { preHandler: authenticate }, async (req) => {
+    const packages = await withPerson(sql, req.principal.person.id, (tx) => listImportedPackages(tx, req.principal));
+    return { packages };
+  });
+
   app.get("/api/v1/incidents/:incidentId/datasets", { preHandler: authenticate }, async (req) => {
     const incidentId = IncidentId.parse((req.params as { incidentId: string }).incidentId);
     const datasets = await withPerson(sql, req.principal.person.id, (tx) =>

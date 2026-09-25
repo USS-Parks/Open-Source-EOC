@@ -7958,3 +7958,115 @@ Veoci Integration and Air Gap PSPR unit VA10 (VC-06).
   5 of 5; `pnpm check:static` exit 0.
 - **Evidence level:** unit and command tests.
 - **Rollback:** revert the commit; the scan returns to its earlier pattern.
+
+## Veoci and air gap VA11: signed solution packages
+
+Veoci Integration and Air Gap PSPR unit VA11 (VC-07).
+
+- **What the code did before.** The only signed package was the version 1
+  board template package (`openeoc-templates-v1`): board templates only,
+  signed over part of its fields after schema defaults were applied, imported
+  without comparing a held version's content, and with no command to make a
+  key or sign one (`exportPackage` and `generateSigningKeyPair` were used
+  only by tests). Incident templates, forms, dashboards, reports and
+  notification rules each had their own import path or none. Reports and
+  rules existed only as live objects naming a jurisdiction's own board,
+  group and position ids, with nothing a package could carry.
+- **What changed.**
+  - **The package** (`server/src/data-packs/solution.ts`, format
+    `openeoc-package-v2`). One file holds `publisher`, `name`, `version`, an
+    optional description and `contents`: board templates, incident templates,
+    forms, dashboard templates, report templates and rule templates, each
+    checked by its own schema and each key and version once. The Ed25519
+    signature covers the canonical JSON of everything in the file but the
+    signature, the format and public key included, as the file is written.
+    An instance checks the format, a trusted key and the signature before it
+    reads any content, so a changed package is refused as changed whatever
+    else is wrong with it.
+  - **Report and rule templates** (migration `0153`, tables
+    `report_templates` and `rule_templates`, instance-wide and insert-only
+    like board and dashboard templates). A report template names its board
+    template by key and carries the report definition and, optionally, its
+    cadence and format; a rule template names its board template, event and
+    condition and reaches the requesting position, positions by key and
+    contact groups by name. Addresses, webhook URLs and recipients are a
+    jurisdiction's own and are not carried. Making a jurisdiction's live
+    reports and rules from them is VA12's, at activation.
+  - **The import** (`solution-import.ts`,
+    `POST /api/v1/jurisdictions/:id/solution-packages`, an instance
+    administrator who administers that jurisdiction), in one transaction:
+    board templates first; then dashboard, report and rule templates; then
+    incident templates, which may name them (through the on-screen save, so
+    its checks and version history apply); then forms (into the
+    jurisdiction, through the form import). A version already held with the
+    same content, compared after
+    both pass the same schema, is "already here"; the same key and version
+    with other content, a part naming a board template neither the package
+    nor the instance has, or a report or rule template naming a field its
+    board template lacks (or totalling a field that is not a number), refuses
+    the whole package: such a report would fail every activation that made
+    it. An incident template the instance already has under that key and has
+    edited is kept. Each import
+    is recorded in `solution_packages` (publisher, key fingerprint, digest,
+    what it did) and the audit trail (`package.imported`);
+    `GET /api/v1/solution-packages` lists them.
+  - **Commands** (`server/src/main.ts`). `new-package-key --private --public`
+    writes an Ed25519 key pair and refuses to overwrite either file.
+    `sign-package --key --in --out` checks a package as an instance will,
+    signs it, and prints the key's fingerprint; it refuses to write over its
+    input. Neither needs a database.
+  - **The designer's Import tab** has **Signed solution package**, and a
+    package dropped on **Board template file** goes the same way. The result
+    names what was created, what was already here and what was kept.
+  - One trusted key bundle, `OPENEOC_TRUSTED_TEMPLATE_KEYS`, serves both
+    package formats (`app.ts` reads it once). `deploy/README.md` has
+    "Signing solution packages"; `DESIGNER.md` describes the import.
+- **Defaults taken (recorded, not asked).** Nothing already on an instance is
+  overwritten. A conflicting version refuses the whole package rather than
+  importing around it, since two publishers' versions of one key and version
+  cannot both be it. A locally edited incident template is kept rather than
+  given a new version from the package. A package cannot carry positions or
+  contact groups on their own: positions come with an incident template's
+  titles and contact groups are made at activation (VA12, VA16).
+- **Files outside the "Owns" cell.** Migration `0153`, `server/src/app.ts`
+  (one key bundle for both routes), `server/src/boards/package.ts`
+  (`canonical` exported), `server/src/reports/service.ts` (`CadenceSchema`
+  exported), `web/src/app/api/client.ts`, `shared/src/api/contract.ts` and
+  the generated `docs/API.md` (the two routes), and the two guides.
+- **Air-gap behavior (decision 9).** The package is a file; signing and
+  importing make no network request.
+- **Tests.**
+  - `solution-package.test.ts` (real database): `new-package-key` writes a
+    pair and refuses an existing file; `sign-package` refuses to overwrite
+    its input and an invalid package, and its output verifies. On a fresh
+    profile a signed package with one of each part imports all six: the board
+    template, the incident template with its position titles, the form in
+    the jurisdiction, the dashboard, report and rule templates; an incident
+    activates from the imported template. The same package again creates
+    nothing and counts each part as already here; both imports are listed
+    and audited. A package changed after signing, and one signed by an
+    untrusted key, are refused and import nothing; a member cannot import.
+    A board template version with other content, a rule naming a board
+    template no one has, and report and rule templates naming fields their
+    board lacks or totalling a text field, refuse the whole package. An
+    incident template
+    edited on screen is kept.
+  - `designer.test.tsx`: the Import tab's package picker sends the file with
+    the jurisdiction and states what was created, held and kept; a package on
+    the board template picker goes the same way; another file is refused.
+  - `solution-package-browser.test.ts`, at 1586 by 992 and 1534 by 790: on a
+    fresh profile the Import tab imports a signed package and names each of
+    the six parts; the same package changed after signing is refused with the
+    reason and imports nothing; importing again says all six were already
+    here.
+- **Verification.** On the Linux test bed: `pnpm check:static` exit 0; the
+  package tests 5 of 5; the designer tests 16 of 16; the browser file 2 of 2;
+  the API docs and contract tests 11 of 11. Every test file except the
+  browser, end-to-end and load files (Vitest, two workers): 1,650 passed and
+  3 failed. The API docs lacked the two routes (added); the package test had
+  changed while the run was under way (it passes); and the macOS disk image
+  test, which runs under `node --test`, was also collected by Vitest, which
+  the next receipt repairs.
+- **Evidence level:** real-database, component and browser tests.
+- **Rollback:** revert the commit; migration `0153` adds three tables that
+  nothing else reads.

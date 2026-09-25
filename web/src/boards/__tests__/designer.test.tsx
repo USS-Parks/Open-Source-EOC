@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   allEnums,
@@ -374,5 +374,37 @@ describe("definition import from the designer", () => {
     choose("Dashboard template file", json("ops.json", STANDARD_DASHBOARDS[0]));
     expect((await screen.findByText(/already exists/)).textContent)
       .toBe("ops.json: dashboard template version already exists");
+  });
+
+  it("imports a signed solution package into the selected jurisdiction and says what it created, held and kept (VA11)", async () => {
+    const empty = { created: [], held: [], kept: [] };
+    const importSolutionPackage = vi.fn().mockResolvedValue({
+      id: "p-1", publisher: "Klamath River Region", name: "Tribal EOC starter", version: "2026.1",
+      publishedAt: "2026-09-25T20:00:00.000Z", keyFingerprint: "ab".repeat(32),
+      parts: {
+        boardTemplates: { ...empty, created: ["tribal_shelter_log version 1"] },
+        incidentTemplates: { ...empty, kept: ["tribal_flood"] },
+        forms: { ...empty, held: ["shelter_count version 1"] },
+        dashboardTemplates: empty,
+        reportTemplates: { ...empty, created: ["shelter_daily version 1"] },
+        ruleTemplates: empty,
+      },
+    });
+    const client = importClient({ importSolutionPackage });
+    openImport(client);
+    const pkg = { format: "openeoc-package-v2", publisher: "Klamath River Region", contents: {}, signature: "s" };
+    choose("Signed solution package", json("starter.json", pkg));
+    const line = await screen.findByText(/^Package Tribal EOC starter 2026\.1/);
+    expect(line.textContent).toBe(`Package Tribal EOC starter 2026.1 from Klamath River Region, signed with key ${"ab".repeat(8)}. `
+      + "Created board templates tribal_shelter_log version 1; report templates shelter_daily version 1. "
+      + "1 item was already here. Kept this instance's own incident template tribal_flood; edit it to take the package's.");
+    expect(importSolutionPackage).toHaveBeenCalledWith("j-1", pkg);
+
+    // A package dropped on the board template picker goes the same way; any other file is refused here.
+    choose("Board template file", json("starter-again.json", pkg));
+    await waitFor(() => expect(importSolutionPackage).toHaveBeenCalledTimes(2));
+    choose("Signed solution package", json("template.json", { key: "generator_log", version: 1 }));
+    expect((await screen.findByRole("alert")).textContent)
+      .toBe("template.json: the file is not a signed solution package (format openeoc-package-v2).");
   });
 });

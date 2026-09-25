@@ -523,6 +523,11 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 - `POST /api/v1/jurisdictions/:jurisdictionId/sitreps`: Run jurisdictions sitreps (auth: bearer; audience: operator)
 - `GET /api/v1/sitreps/:sitrepId`: Read sitreps (auth: bearer; audience: operator)
 
+### solution-packages
+
+- `POST /api/v1/jurisdictions/:jurisdictionId/solution-packages`: Run jurisdictions solution packages (auth: bearer; audience: operator)
+- `GET /api/v1/solution-packages`: Read solution packages (auth: bearer; audience: operator)
+
 ### staffing
 
 - `GET /api/v1/jurisdictions/:jurisdictionId/staffing`: Read jurisdictions staffing (auth: bearer; audience: operator)

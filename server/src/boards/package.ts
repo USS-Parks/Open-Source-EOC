@@ -22,7 +22,7 @@ export const TemplatePackageSchema = z.object({
 export type TemplatePackage = z.infer<typeof TemplatePackageSchema>;
 
 /** Deterministic serialization: sorted keys, no whitespace variance. */
-function canonical(value: unknown): string {
+export function canonical(value: unknown): string {
   return JSON.stringify(sortKeys(value));
 }
 

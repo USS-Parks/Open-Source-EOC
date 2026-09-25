@@ -18,7 +18,7 @@ import {
   type RecordAccess,
   type ViewDef,
 } from "@openeoc/shared";
-import type { ApiClient } from "../app/api/client.js";
+import { SOLUTION_PARTS, type ApiClient, type SolutionImportSummary } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import { ActionButton, Tabs } from "../design/controls.js";
 import { Button, EnumSelect, Panel, TextField } from "../design/components.js";
@@ -716,7 +716,21 @@ function DetailPreview(props: { template: BoardTemplate; record: Record<string, 
     </div>)}</dl></section>)}</div>;
 }
 
-type ImportKind = "template" | "form" | "dashboard";
+type ImportKind = "template" | "form" | "dashboard" | "package";
+
+/** A solution package import in sentences: what it created, what was already here, and what the instance kept as its own. */
+export function packageSummary(summary: SolutionImportSummary): string {
+  const created = SOLUTION_PARTS.flatMap(([part, name]) => summary.parts[part].created.length
+    ? [`${name} ${summary.parts[part].created.join(", ")}`] : []);
+  const held = SOLUTION_PARTS.reduce((n, [part]) => n + summary.parts[part].held.length, 0);
+  const kept = SOLUTION_PARTS.flatMap(([part]) => summary.parts[part].kept);
+  return [
+    `Package ${summary.name} ${summary.version} from ${summary.publisher}, signed with key ${summary.keyFingerprint.slice(0, 16)}.`,
+    created.length ? `Created ${created.join("; ")}.` : "Nothing new.",
+    ...(held ? [`${held} ${held === 1 ? "item was" : "items were"} already here.`] : []),
+    ...(kept.length ? [`Kept this instance's own incident template ${kept.join(", ")}; edit it to take the package's.`] : []),
+  ].join(" ");
+}
 
 /**
  * Imports from files through the existing routes. JSON is checked against the
@@ -756,10 +770,15 @@ function DefinitionImport(props: { client: ApiClient; jurisdictionId: string }) 
       <p>A board template is its JSON definition or a signed template package. A form is an XLSForm workbook,
         whose file name becomes the form key, or form definition JSON. A dashboard template is its JSON
         definition, as its export gives it. Each import adds a version and changes no existing board.</p>
+      <p>A signed solution package carries board, incident, dashboard, report and rule templates and forms in one
+        file, signed by a publisher this instance trusts. Its forms join the selected jurisdiction; the rest
+        join the instance. Nothing already here is replaced, and a package that conflicts with what is here
+        imports nothing.</p>
       <div className="board-designer__grid board-designer__grid--3">
         {picker("template", "Board template file", ".json,application/json")}
         {picker("form", "Form file", ".xlsx,.json,application/json")}
         {picker("dashboard", "Dashboard template file", ".json,application/json")}
+        {picker("package", "Signed solution package", ".json,application/json")}
       </div>
       {busy ? <p role="status">Importing…</p> : null}
       {error ? <p role="alert" className="board-designer__error">{error}</p> : null}
@@ -785,7 +804,12 @@ async function importDefinition(client: ApiClient, jurisdictionId: string, kind:
   } catch {
     throw new Error("the file is not valid JSON.");
   }
-  if (kind === "template" && (raw as { format?: unknown } | null)?.format === "openeoc-templates-v1") {
+  const format = (raw as { format?: unknown } | null)?.format;
+  if (format === "openeoc-package-v2") {
+    return packageSummary(await client.importSolutionPackage(jurisdictionId, raw as Record<string, unknown>));
+  }
+  if (kind === "package") throw new Error("the file is not a signed solution package (format openeoc-package-v2).");
+  if (kind === "template" && format === "openeoc-templates-v1") {
     const count = await client.importTemplatePackage(raw as Record<string, unknown>);
     return `Template package ${file.name}, ${count} new ${count === 1 ? "version" : "versions"}`;
   }

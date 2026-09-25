@@ -503,9 +503,9 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   });
   adminRoutes(app, sql, authenticate);
 
-  boardRoutes(app, sql, authenticate, {
-    trustedTemplateKeys: options.trustedTemplateKeys ?? trustedTemplateKeysFromEnv(),
-  });
+  // One trusted key bundle for both signed package formats: board templates (v1) and solution packages (v2).
+  const trustedTemplateKeys = options.trustedTemplateKeys ?? trustedTemplateKeysFromEnv();
+  boardRoutes(app, sql, authenticate, { trustedTemplateKeys });
   auditRoutes(app, sql, authenticate);
   capRoutes(app, sql, authenticate);
   cotRoutes(app, sql, authenticate);
@@ -526,7 +526,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   staffingRoutes(app, sql, authenticate);
   if (integrations.has("tracking")) trackingRoutes(app, sql, authenticate);
   incidentRoutes(app, sql, authenticate);
-  dataPackRoutes(app, sql, authenticate);
+  dataPackRoutes(app, sql, authenticate, { trustedTemplateKeys });
   impactRoutes(app, sql, authenticate);
   savedStateRoutes(app, sql, authenticate);
   lifelineRoutes(app, sql, authenticate);

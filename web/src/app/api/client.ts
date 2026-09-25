@@ -2330,6 +2330,10 @@ export class ApiClient {
   importDashboardTemplate(template: DashboardTemplate): Promise<{ key: string; version: number }> {
     return this.request("POST", "/api/v1/dashboard-templates", template as unknown as Record<string, unknown>);
   }
+  /** A signed solution package (VA11); its forms join this jurisdiction, the rest the instance. */
+  importSolutionPackage(jurisdictionId: string, pkg: Record<string, unknown>): Promise<SolutionImportSummary> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/solution-packages`, pkg);
+  }
 
   // ---- Notification channels (Administration) ----
   getNotificationChannel(jurisdictionId: string, kind: NotificationChannelKind): Promise<NotificationChannelView> {
@@ -2657,6 +2661,28 @@ export class ApiClient {
 }
 
 // ---- Notification channel types ----
+
+/** The kinds of content a signed solution package carries, in the order a summary lists them. */
+export const SOLUTION_PARTS = [
+  ["boardTemplates", "board templates"],
+  ["incidentTemplates", "incident templates"],
+  ["forms", "forms"],
+  ["dashboardTemplates", "dashboard templates"],
+  ["reportTemplates", "report templates"],
+  ["ruleTemplates", "rule templates"],
+] as const;
+export type SolutionPart = (typeof SOLUTION_PARTS)[number][0];
+
+/** What a solution package import did with each part: created, already held, or kept as the instance had it. */
+export interface SolutionImportSummary {
+  readonly id: string;
+  readonly publisher: string;
+  readonly name: string;
+  readonly version: string;
+  readonly publishedAt: string;
+  readonly keyFingerprint: string;
+  readonly parts: Readonly<Record<SolutionPart, { readonly created: readonly string[]; readonly held: readonly string[]; readonly kept: readonly string[] }>>;
+}
 
 export type NotificationChannelKind = "email" | "sms";
 export type DeliveryHoldKind = "email" | "sms" | "webhook" | "ntfy";
