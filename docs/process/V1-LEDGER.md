@@ -7590,14 +7590,21 @@ macOS job (run 36172801470, started by hand) with four red browser tests.
 - **The authorized-viewing test gave the first console 5 seconds.** The first
   console after sign-in waits for the incident list and the workspace; the
   test now allows 30 seconds for it, as the other browser tests do.
-- **The load-retry test** passes on the Linux bed; it clicked Reports during
-  the double mount after sign-in that "CI repairs after the Actions runs
-  resumed" removed. The macOS job, started by hand after landing, is the
-  check.
+- **The load-retry test lost its module only to the page.** It blocks the
+  Reports screen's module with the page's routes, to show the failure and the
+  reload. The service worker's precache fetches every screen's module past
+  those routes and, once it takes over, serves the module from its cache; on
+  a machine slow enough for the worker to take over first, Reports loaded and
+  the failure never showed. The test now runs with no service worker, so the
+  module is lost as the test says. (Main's Windows run on the first repairs,
+  run 36178180078, showed this; the double mount was not the cause.)
+- **The board views test read the chart before its bars.** The chart's
+  figure shows first and its bars once its counts are read; the test now
+  waits for the bars. That run showed this too, with the fidelity race above.
 - **Tests.** `map-surface.test.tsx` checks that the link panel is in the
   selected feature's panel; `operational-relationships-browser.test.ts`,
   which failed on the Linux bed as on macOS, passes.
 - **Verification.** On the Linux test bed: the map and map-layer tests, 108;
-  the operational relationships, fidelity, authorized viewing and load retry
-  browser tests, green.
+  the operational relationships, fidelity, authorized viewing, load retry
+  and board views browser tests, green.
 - **Rollback:** revert the commit.

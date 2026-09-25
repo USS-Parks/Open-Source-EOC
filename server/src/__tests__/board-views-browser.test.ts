@@ -204,7 +204,8 @@ describe("board view modes in a real browser", () => {
     const counts = await statusCounts();
     const total = Object.values(counts).reduce((sum, n) => sum + n, 0);
     const title = (label: string, n: number) => `${label}: ${n} records, ${Math.round((n / total) * 100)}%`;
-    expect(await attributes(chart.locator(".board-chart__bars li"), "title"))
+    // The figure shows first; its bars follow once the chart's counts are read.
+    await expect.poll(() => attributes(chart.locator(".board-chart__bars li"), "title"))
       .toEqual([title("Open", counts.open!), title("In progress", counts.in_progress!), title("Closed", counts.closed!)]);
     expect(counts).toEqual({ open: 2, in_progress: 2, closed: 1 });
     await setTheme(page, "dark");

@@ -36,7 +36,11 @@ afterAll(async () => {
 
 describe("a screen that fails to load", () => {
   it("shows an error with a reload, keeps the console usable, and opens the screen after the reload", async () => {
-    const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" });
+    // No service worker: its precache fetches every screen's module past the
+    // page's routes and then serves it from its cache, so on a slow machine
+    // the Reports module would not be lost at all.
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce", serviceWorkers: "block" });
+    const page = await context.newPage();
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     // The Reports module is lost, as when the network drops before the console has fetched it.
@@ -81,5 +85,6 @@ describe("a screen that fails to load", () => {
     await page.getByRole("heading", { level: 2, name: "Reports", exact: true }).waitFor();
     expect(await failed.count()).toBe(0);
     expect(errors).toEqual([]);
+    await context.close();
   }, 120_000);
 });
