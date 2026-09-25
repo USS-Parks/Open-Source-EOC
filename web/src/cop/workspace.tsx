@@ -76,6 +76,8 @@ export function CopFeatureInspector(props: {
   readonly selection: CopInspection;
   readonly onClose: () => void;
   readonly onOpenRecord?: ((boardId: string, recordId: string) => void) | undefined;
+  /** What the screen adds about the selected feature, shown in the panel under its details. */
+  readonly extra?: ReactNode;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -148,6 +150,8 @@ export function CopFeatureInspector(props: {
           {props.selection.attribution}
         </p>
       ) : null}
+
+      {props.extra}
 
       {props.selection.record && props.onOpenRecord ? (
         <button type="button" className="eoc-cop-return" onClick={() => props.onOpenRecord!(props.selection.record!.boardId, props.selection.record!.recordId)}>

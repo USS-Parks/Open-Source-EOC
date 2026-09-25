@@ -190,6 +190,7 @@ describe("design fidelity captures of the North Coast Storm scenario", () => {
     // The section in view stays listed, so the viewer always sees where it is.
     expect(await sections()).toContain("Chronology");
     await openOverview();
-    expect(await sections()).not.toContain("Chronology");
+    // The rail follows the route once the console renders the new section.
+    await expect.poll(sections).not.toContain("Chronology");
   }, 120_000);
 });

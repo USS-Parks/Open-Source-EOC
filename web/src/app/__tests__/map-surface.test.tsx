@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
 import { useRef } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MapSurface } from "../surfaces/MapSurface.js";
 import type { ApiClient } from "../api/client.js";
 vi.mock("../../cop/CopMap.js", () => {
@@ -15,6 +15,7 @@ vi.mock("../../cop/CopMap.js", () => {
       onInspectFeature?: (feature: { datasetId: string; featureId: string; title: string }) => void;
       exportContext?: { incidentName?: string | null; operationalPeriod?: string | null; handling?: string | null };
       overlay?: React.ReactNode;
+      inspectorExtra?: React.ReactNode;
     }) => {
       const mountedTheme = useRef(props.theme);
       const mountedBoards = useRef(props.boards.map((b) => b.id).join(","));
@@ -30,6 +31,7 @@ vi.mock("../../cop/CopMap.js", () => {
           title: "County Route 7 closure",
         })}>Inspect routed feature</button> : null}
         {props.overlay}
+        {props.inspectorExtra ? <aside aria-label="Selected map feature">{props.inspectorExtra}</aside> : null}
       </div>;
     },
   };
@@ -170,6 +172,9 @@ it("links an exact routed dataset feature to a recorded assessment", async () =>
   const map = await screen.findByTestId("map");
   expect(map.getAttribute("data-requested-feature")).toBe(`${datasetId}/route/7`);
   fireEvent.click(screen.getByRole("button", { name: "Inspect routed feature" }));
+  // The link sits in the selected feature's panel, not over the map where that panel would cover it.
+  const panel = screen.getByRole("complementary", { name: "Selected map feature" });
+  expect(within(panel).getByRole("heading", { name: "Link selected dataset feature" })).toBeTruthy();
   fireEvent.change(await screen.findByLabelText("Recorded assessment"), {
     target: { value: "lifeline|fema_community_lifelines|energy" },
   });

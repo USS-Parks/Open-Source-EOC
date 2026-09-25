@@ -7569,3 +7569,35 @@ Veoci Integration and Air Gap PSPR unit VA7 (VC-02 with VC-15).
 - **Rollback:** revert the commit; migration `0151` adds three columns to the
   sends and one to the recipients, a trigger, and restates the hold stamp and
   the receipts function from `0143`.
+
+## CI repairs: the macOS job's browser tests
+
+Follows "CI repairs after the Actions runs resumed", which left the branch's
+macOS job (run 36172801470, started by hand) with four red browser tests.
+
+- **The map's feature link sat under the feature panel.** On **Map**, the
+  panel linking a selected dataset feature to an assessment floated over the
+  map's top left, up to 400 px wide, and the selected feature's panel over
+  its right, 340 px. At 1440 by 900 with the context drawer docked the map is
+  about 600 px wide, so the feature panel covered the link panel's right edge,
+  **Open linked Lifeline** with it; which fonts the machine had decided
+  whether the button showed. The link panel now sits in the selected
+  feature's panel, under its details (`inspectorExtra` on the map), where it
+  cannot be covered at any width. Its heading, fields and buttons are
+  unchanged.
+- **The fidelity test read the rail before it changed.** After returning to
+  Overview it now waits for the rail to drop Chronology.
+- **The authorized-viewing test gave the first console 5 seconds.** The first
+  console after sign-in waits for the incident list and the workspace; the
+  test now allows 30 seconds for it, as the other browser tests do.
+- **The load-retry test** passes on the Linux bed; it clicked Reports during
+  the double mount after sign-in that "CI repairs after the Actions runs
+  resumed" removed. The macOS job, started by hand after landing, is the
+  check.
+- **Tests.** `map-surface.test.tsx` checks that the link panel is in the
+  selected feature's panel; `operational-relationships-browser.test.ts`,
+  which failed on the Linux bed as on macOS, passes.
+- **Verification.** On the Linux test bed: the map and map-layer tests, 108;
+  the operational relationships, fidelity, authorized viewing and load retry
+  browser tests, green.
+- **Rollback:** revert the commit.

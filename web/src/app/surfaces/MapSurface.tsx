@@ -308,8 +308,8 @@ export function MapSurface(props: {
   const fields = board.data?.fields ?? [];
   const geomKey = fields.length ? geometryFieldKey(fields) : null;
 
-  // The map fills the screen; its tools, the new record form and the feature
-  // link float over its top left, and the impact indicators over its foot.
+  // The map fills the screen; its tools and the new record form float over
+  // its top left, and the impact indicators over its foot.
   const floating = (
     <div className="map-surface-float">
       {geoBoards.length > 0 ? (
@@ -406,50 +406,49 @@ export function MapSurface(props: {
           </Panel>
         </div>
       ) : null}
-      {selectedFeature && props.incidentId ? (
-        <div className="map-surface-card">
-          <Panel title="Link selected dataset feature">
-            <div className="map-surface-link">
-              <div className="map-surface-feature">
-                <strong>{selectedFeature.title}</strong>
-                <p className="map-surface-note">
-                  Dataset feature {selectedFeature.featureId}. The relationship records context only and does not change assessment status or command authority.
-                </p>
-              </div>
-              <label className="map-surface-source">
-                Recorded assessment
-                <select aria-label="Recorded assessment" value={relationshipSource}
-                  onChange={(event) => setRelationshipSource(event.target.value)} className="map-surface-select">
-                  <option value="">Choose a Lifeline or ESF assessment</option>
-                  {assessmentSources.map((candidate) => <option key={candidate.value} value={candidate.value}>{candidate.label}</option>)}
-                </select>
-              </label>
-              <Button kind="primary" disabled={!relationshipSource || relationshipBusy || assessmentSources.length === 0}
-                onClick={linkSelectedFeature}>{relationshipBusy ? "Linking…" : "Link selected feature"}</Button>
-            </div>
-            {assessmentSources.length === 0 ? <p role="status">No recorded Lifeline or ESF assessment is available to link.</p> : null}
-            {relationshipNotice ? <p role="status" className="eoc-text-success">{relationshipNotice}</p> : null}
-            {relationshipError ? <p role="alert" className="eoc-text-critical">{relationshipError}</p> : null}
-            {relationships.error ? <p role="status">Existing assessment links are unavailable.</p> : (
-              <section aria-label="Existing assessment links">
-                <h3 className="map-surface-links-title">Existing assessment links</h3>
-                {selectedFeatureLinks.length ? <ul className="map-surface-links">
-                  {selectedFeatureLinks.map((link) => <li key={link.id} className="map-surface-row">
-                    <span>{relationshipSourceLabel(link)}</span>
-                    {link.source.domain === "lifeline" && props.onOpenLifeline
-                      ? <Button onClick={() => props.onOpenLifeline!(link.source.definitionKey)}>Open linked Lifeline</Button>
-                      : link.source.domain === "esf" && props.onOpenEsf
-                        ? <Button onClick={() => props.onOpenEsf!(link.source.definitionKey)}>Open linked ESF</Button>
-                        : null}
-                  </li>)}
-                </ul> : <p className="eoc-flush eoc-muted">No recorded assessment links for this feature.</p>}
-              </section>
-            )}
-          </Panel>
-        </div>
-      ) : null}
     </div>
   );
+
+  // Linking the selected dataset feature to an assessment sits in the feature's
+  // own panel, which on a narrow map would otherwise cover it.
+  const linking = selectedFeature && props.incidentId ? (
+    <section className="map-surface-link-section" aria-labelledby="map-surface-link-title">
+      <h3 id="map-surface-link-title">Link selected dataset feature</h3>
+      <div className="map-surface-link">
+        <p className="map-surface-note map-surface-feature">
+          Dataset feature {selectedFeature.featureId}. The relationship records context only and does not change assessment status or command authority.
+        </p>
+        <label className="map-surface-source">
+          Recorded assessment
+          <select aria-label="Recorded assessment" value={relationshipSource}
+            onChange={(event) => setRelationshipSource(event.target.value)} className="map-surface-select">
+            <option value="">Choose a Lifeline or ESF assessment</option>
+            {assessmentSources.map((candidate) => <option key={candidate.value} value={candidate.value}>{candidate.label}</option>)}
+          </select>
+        </label>
+        <Button kind="primary" disabled={!relationshipSource || relationshipBusy || assessmentSources.length === 0}
+          onClick={linkSelectedFeature}>{relationshipBusy ? "Linking…" : "Link selected feature"}</Button>
+      </div>
+      {assessmentSources.length === 0 ? <p role="status">No recorded Lifeline or ESF assessment is available to link.</p> : null}
+      {relationshipNotice ? <p role="status" className="eoc-text-success">{relationshipNotice}</p> : null}
+      {relationshipError ? <p role="alert" className="eoc-text-critical">{relationshipError}</p> : null}
+      {relationships.error ? <p role="status">Existing assessment links are unavailable.</p> : (
+        <section aria-label="Existing assessment links">
+          <h3 className="map-surface-links-title">Existing assessment links</h3>
+          {selectedFeatureLinks.length ? <ul className="map-surface-links">
+            {selectedFeatureLinks.map((link) => <li key={link.id} className="map-surface-row">
+              <span>{relationshipSourceLabel(link)}</span>
+              {link.source.domain === "lifeline" && props.onOpenLifeline
+                ? <Button onClick={() => props.onOpenLifeline!(link.source.definitionKey)}>Open linked Lifeline</Button>
+                : link.source.domain === "esf" && props.onOpenEsf
+                  ? <Button onClick={() => props.onOpenEsf!(link.source.definitionKey)}>Open linked ESF</Button>
+                  : null}
+            </li>)}
+          </ul> : <p className="eoc-flush eoc-muted">No recorded assessment links for this feature.</p>}
+        </section>
+      )}
+    </section>
+  ) : null;
 
   const impact = props.incidentId ? (
     <div className="map-surface-impact" data-open={impactOpen || undefined}>
@@ -530,6 +529,7 @@ export function MapSurface(props: {
           onPickPoint={placePoint}
           onMap={focusOnSearch}
           overlay={<>{floating}{impact}</>}
+          inspectorExtra={linking}
         />
       </div>
     </div>

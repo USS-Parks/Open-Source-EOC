@@ -152,7 +152,8 @@ describe("authorized viewing in a real browser", () => {
     await page.getByLabel("Password").fill("browser-viewer-password");
     await page.getByRole("button", { name: "Sign in" }).click();
 
-    await page.locator("#main .eoc-shell-page-scope").getByText("Authorized Host A Fire", { exact: false }).waitFor({ timeout: 5000 });
+    // The first console after sign-in waits for the incident list and the workspace, as other tests allow for.
+    await page.locator("#main .eoc-shell-page-scope").getByText("Authorized Host A Fire", { exact: false }).waitFor({ timeout: 30_000 });
     await page.getByTestId("cop-map").waitFor({ timeout: 5000 });
     expect(await page.getByRole("option", { name: "Unrelated Host B Flood" }).count()).toBe(0);
     await page.getByText("Authorized Geometry").waitFor({ timeout: 5000 });

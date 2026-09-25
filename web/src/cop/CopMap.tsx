@@ -256,6 +256,12 @@ export interface CopMapProps {
   readonly cardSearch?: ReactNode;
   /** Panels the Map screen floats over the map itself: its tools, the impact panel, the record form. */
   readonly overlay?: ReactNode;
+  /**
+   * What the Map screen adds to the selected feature's panel, such as linking
+   * it to an assessment. It sits in the panel rather than over the map, which
+   * the panel would otherwise cover where the map is narrow.
+   */
+  readonly inspectorExtra?: ReactNode;
 }
 
 let pmtilesRegistered = false;
@@ -1874,7 +1880,8 @@ export function CopMap(props: CopMapProps) {
           <CardOverlays theme={props.theme} map={liveMap} frame={frameRef} toggles={cardToggles} more={moreToggles} search={props.cardSearch} />
         ) : null}
       </div>
-      {selection ? <CopFeatureInspector selection={selection} onClose={closeInspection} onOpenRecord={props.onOpenRecord} /> : null}
+      {selection ? <CopFeatureInspector selection={selection} onClose={closeInspection} onOpenRecord={props.onOpenRecord}
+        extra={props.inspectorExtra} /> : null}
     </div>
     </div>
   );
