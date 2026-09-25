@@ -25,6 +25,7 @@ const QueueBody = z.object({ boardId: z.string().uuid(), update: z.string().min(
 const ReceiveBody = z.object({
   boardId: z.string().uuid(),
   updates: z.array(z.string().min(1)),
+  deletes: z.array(z.string().uuid()).max(10_000).default([]),
 });
 
 export function federationRoutes(
@@ -102,7 +103,7 @@ export function federationRoutes(
     const token = String(req.headers["x-peer-token"] ?? "");
     if (!token) return reply.status(401).send({ error: "missing peer token" });
     const body = ReceiveBody.parse(req.body);
-    const result = await receiveUpdates(sql, hub, token, body.boardId, body.updates);
+    const result = await receiveUpdates(sql, hub, token, body.boardId, body.updates, body.deletes);
     return reply.status(200).send(result);
   });
 }

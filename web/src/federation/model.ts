@@ -29,6 +29,8 @@ export interface ReceivedBatch {
   readonly boardId: string;
   readonly boardTitle: string | null;
   readonly updates: number;
+  /** Records the batch deleted; batches received before deletions travelled carry 0. */
+  readonly deletes: number;
   readonly conflicts: number;
 }
 

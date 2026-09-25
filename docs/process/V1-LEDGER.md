@@ -6029,3 +6029,67 @@ operational vector tiles".
 - **Evidence level:** unit and route tests, a measurement on the statewide
   gazetteer, browser tests.
 - **Rollback:** revert the commit; no schema change.
+
+## Readiness RD10: federation of record deletes and earlier records
+
+Operator Trust PSPR unit RD10 (Readiness decision 12). Before this unit a
+shared board forwarded its jurisdiction-wide record creates and edits
+("V1 W3.11: engine gaps the screens exposed", "V1 W4.12: REST record writes
+through the sync log"); deletes were not forwarded, and records made before
+an agreement never reached the partner.
+
+- **What changed.**
+  - **Deletes travel.** Deleting a record with no incident on a shared
+    board queues its id for every peer that reads the board, in the
+    deleting transaction (`queue_federation_delete`). A deletion is its own
+    outbox entry, not a Yjs deletion, because a Yjs deletion removes only
+    the items its sender had seen and would leave a record the partner had
+    edited meanwhile. The delivery worker sends a batch's deletions beside
+    its updates; the receive lane takes `deletes` and applies them after
+    the batch's updates.
+  - **The receiving side.** The partner deletes its copy (a tombstone, as a
+    local delete), records "board.record.deleted" with `via: "federation"`
+    and the peer's name, removes it from its sync log and open documents,
+    and passes the deletion on to the board's other readers, never back to
+    the sender. A deletion of a record it does not hold, or holds under an
+    incident, changes nothing. The federation screen's received batches say
+    how many records each deleted.
+  - **Conflict rule.** A deletion wins: the partner deletes the record
+    whatever edits it holds, and an edit that reaches a deleted record is
+    listed as a sync conflict ("record was deleted") on the instance that
+    deleted it and never restores the record. Two edits to one field keep
+    the rule "V1 W4.12" set: the servers' clocks decide.
+  - **Records made before an agreement.** Making an agreement that lets the
+    peer read the board queues the board's jurisdiction-wide records as
+    they stand, whole, for that peer alone (`queue_federation_to`), audited
+    as "federation.backfilled" with the number of records.
+  - Migration `0142_federated_deletes.sql` lets an outbox entry carry a
+    deleted record's id in place of an update, adds the two queue
+    functions, and has the batch claim return deletions.
+  - `docs/guides/FEDERATION-SETUP.md` states what is forwarded now.
+- **Not built: incident records.** The release decision names federation of
+  incident record edits and deletes, unless F3 is accepted as a limit. That
+  part is not built. An agreement covers a board, and a partner applies
+  what it receives to its board's jurisdiction-wide document: an incident
+  record sent there would be readable by every reader of the partner's
+  board, not only the incident's participants. Doing it safely needs an
+  opt-in on the agreement and the partner's copy kept under an incident of
+  its own, which is a design for Basho to choose, not a default this unit
+  can take. Records of an incident and their deletion stay on their home
+  instance, and F3 stays partial on that account. The other bounds the
+  parity matrix names stay too: the partner attributes a batch to the
+  sending instance, not its author, and a restricted board's live edits
+  federate outside the record rule.
+- **Tests.** Two instances on real PostgreSQL (`federation.test.ts`): a
+  record deleted at one instance while the other edits it ends deleted on
+  both, with the partner's audit naming the county, no echo of the
+  deletion, the edit recorded as a conflict where the record was deleted,
+  and a repeated deletion changing nothing; a new agreement sends the
+  board's two jurisdiction records and not its incident record. The
+  delivery outbox tests now count the backfill an agreement on a board with
+  records sends.
+- **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
+- **Evidence level:** two-instance tests on real PostgreSQL.
+- **Rollback:** revert the commit after the outbox's queued deletions are
+  delivered or removed, since the earlier code expects every outbox entry to
+  hold an update.

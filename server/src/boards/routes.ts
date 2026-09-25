@@ -9,6 +9,7 @@ import { notifyBoardEvent, type BoardEvent } from "../notify/engine.js";
 import { publishBoardEvent } from "../events/bus.js";
 import { appendRecordRemoval } from "../sync/hub.js";
 import { publishRecordRemoved } from "./removals.js";
+import { queueRecordDeletion } from "../federation/service.js";
 import {
   addLocalField,
   createBoard,
@@ -479,6 +480,8 @@ export function boardRoutes(
     const deleted = await withPerson(sql, req.principal.person.id, async (tx) => {
       const result = await deleteRecord(tx, req.principal, boardId, recordId);
       await appendRecordRemoval(tx, boardId, recordId);
+      // A jurisdiction-wide record's deletion goes to the board's peers too.
+      if (result.incidentId === null) await queueRecordDeletion(tx, boardId, recordId, null);
       return result;
     });
     publishRecordRemoved({ boardId, recordId, incidentId: deleted.incidentId });

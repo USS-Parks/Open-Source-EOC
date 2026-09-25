@@ -22,7 +22,7 @@ const status: FederationStatus = {
       nextAttemptAt: "2026-09-22T10:05:00.000Z", lastError: "peer responded 503", lastDeliveredAt: null,
     }],
   }],
-  received: [{ at: "2026-09-22T11:00:00.000Z", peer: "State OES", boardId: "b2", boardTitle: "Shelters", updates: 3, conflicts: 1 }],
+  received: [{ at: "2026-09-22T11:00:00.000Z", peer: "State OES", boardId: "b2", boardTitle: "Shelters", updates: 3, deletes: 2, conflicts: 1 }],
 };
 
 function client(): ApiClient {
@@ -44,7 +44,7 @@ describe("federation screen", () => {
     expect(shared.textContent).toContain("peer responded 503");
     expect(within(shared).getByText("Held until a receiving board is set")).toBeTruthy();
     const batch = screen.getByRole("listitem", { name: "Received from State OES" });
-    expect(batch.textContent).toContain("3 updates, 1 conflicts reconciled");
+    expect(batch.textContent).toContain("3 updates, 2 deleted, 1 conflicts reconciled");
     expect(screen.getByText(/Resource escalation keeps no stored targets/)).toBeTruthy();
   });
 

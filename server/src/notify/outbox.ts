@@ -200,6 +200,7 @@ export class DeliveryWorker {
           body: JSON.stringify({
             boardId: b.remote_board_id as string,
             updates: (b.updates as Buffer[]).map((u) => Buffer.from(u).toString("base64")),
+            deletes: b.deletes as string[],
           }),
           signal: AbortSignal.timeout(this.timeoutMs),
         });

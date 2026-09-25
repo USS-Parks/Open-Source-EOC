@@ -81,17 +81,24 @@ this screen are not used for it.
 - An update received from a peer is queued the same way for the board's other
   readers, but never back to the peer it came from, so two instances sharing
   a board do not echo updates to each other.
-- Three kinds of change are not forwarded in this release. Edits to an
+- Deleting a record with no incident is forwarded as its own outbox entry,
+  the record's id, and the partner deletes its copy and records who asked in
+  its audit trail ("board.record.deleted" with the peer's name). A deletion
+  wins: the partner deletes the record whatever edits it holds, and an edit
+  that reaches a deleted record is listed as a sync conflict ("record was
+  deleted") on the instance that deleted it, never restoring the record. A
+  deletion received from a peer is passed on to the board's other readers.
+- Records that belong to an incident stay on their home instance: edits to an
   incident-scoped sync document (the continuity client joins with an
-  incident) and REST writes to a record that belongs to an incident are not
-  federated, because an agreement covers a board and the peer applies
-  updates to its board's jurisdiction-wide document. Deleting a record is not
-  forwarded: the partner keeps its copy. The route
+  incident), REST writes to such a record and its deletion are not
+  federated, because an agreement covers a board and the partner could not
+  keep the record to the incident's participants. The route
   `POST /api/v1/peers/:peerId/queue` still queues a sync update by hand for
   every peer that reads the board.
-- Records that existed before the board was shared are not sent. A later
-  change to one reaches the partner as the changed fields only, and the
-  partner does not list the record until every required field has arrived.
+- Making an agreement sends the partner the board's records with no incident
+  as they stand, so records made before the board was shared arrive whole.
+  The organization's audit trail records it ("federation.backfilled" with the
+  number of records).
 - When a console edit and a field edit to the same field cross, both
   instances settle on the same value: the console's REST write wins over any
   edit made without seeing it, and an edit made after it arrived wins over

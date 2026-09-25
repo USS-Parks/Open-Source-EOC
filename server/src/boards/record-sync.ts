@@ -41,6 +41,25 @@ function serverClientId(): number {
 }
 
 /**
+ * Some records whole, as one update from a writer of its own: the first copy
+ * a peer receives of records it has not seen. Null when there are none.
+ */
+export function recordsUpdate(records: ReadonlyArray<{ readonly id: string; readonly data: Readonly<Record<string, unknown>> }>): Uint8Array | null {
+  if (records.length === 0) return null;
+  const doc = new Y.Doc();
+  doc.clientID = serverClientId();
+  const map = doc.getMap<unknown>("records");
+  doc.transact(() => {
+    for (const record of records) {
+      for (const [key, value] of Object.entries(record.data)) if (value !== undefined) map.set(`${record.id}/${key}`, value);
+    }
+  });
+  const update = Y.encodeStateAsUpdate(doc);
+  doc.destroy();
+  return update;
+}
+
+/**
  * The writer of an unfederated scope's REST writes, one per scope in this
  * process. Its updates continue its own clock, so a document gains one writer
  * per process rather than one per write: Yjs does work in proportion to a

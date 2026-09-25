@@ -285,9 +285,10 @@ describe("the worker pushes the federation outbox to a linked peer", () => {
       headers: auth(county.adminToken),
       payload: { endpointUrl: state.baseUrl, token: intoState.json().token as string },
     });
-    expect((await new DeliveryWorker(county.runtime).drain()).federated).toBe(1);
-    const [delivered] = await county.admin`select delivered_at from federation_outbox`;
-    expect(delivered!.delivered_at).not.toBeNull();
+    // The board's earlier records, sent when the agreement was made, and the queued edit.
+    expect((await new DeliveryWorker(county.runtime).drain()).federated).toBe(2);
+    const undelivered = await county.admin`select id from federation_outbox where delivered_at is null`;
+    expect(undelivered).toHaveLength(0);
     const entries = await state.admin`
       select data ->> 'entry' as entry from board_records where board_id = ${state.boardId}`;
     expect(entries.map((r) => r.entry)).toContain("county: bridge closed");
@@ -318,9 +319,10 @@ describe("the worker pushes the federation outbox to a linked peer", () => {
     const entries = await state.admin`
       select data ->> 'entry' as entry from board_records where board_id = ${state.boardId}`;
     expect(entries.map((r) => r.entry)).toContain("county: shelter open at the gym");
+    // The region has the board's records as they stood when it joined, and the county's edit after them.
     const onward = await state.admin`
-      select p.name from federation_outbox o join peers p on p.id = o.peer_id`;
-    expect(onward.map((r) => r.name)).toEqual(["region"]);
+      select p.name from federation_outbox o join peers p on p.id = o.peer_id order by o.created_at`;
+    expect(onward.map((r) => r.name)).toEqual(["region", "region"]);
   });
 
   it("refuses a link from a non-admin", async () => {

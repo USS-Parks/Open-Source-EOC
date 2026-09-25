@@ -137,7 +137,7 @@ async function pushEdit(inst: Instance, entry: string): Promise<void> {
   });
 }
 
-async function pendingFor(inst: Instance, peerId: string): Promise<Array<{ updateBase64: string }>> {
+async function pendingFor(inst: Instance, peerId: string): Promise<Array<{ updateBase64: string; deletedRecordId: string | null }>> {
   const res = await inst.app.inject({
     method: "GET",
     url: `/api/v1/peers/${peerId}/pending`,
@@ -343,5 +343,96 @@ describe("federation status for administrators", () => {
       headers: { authorization: `Bearer ${county.memberToken}` },
     });
     expect(res.statusCode).toBe(403);
+  });
+});
+
+describe("record deletions and records made before an agreement", () => {
+  const as = (inst: Instance) => ({ authorization: `Bearer ${inst.adminToken}` });
+  /** Deliver everything pending from one instance to the other, as the delivery worker would. */
+  async function deliver(from: Instance, peerId: string, to: Instance, token: string, boardId: string) {
+    const pending = await pendingFor(from, peerId);
+    const res = await to.app.inject({
+      method: "POST", url: "/api/v1/federation/receive", headers: { "x-peer-token": token },
+      payload: {
+        boardId,
+        updates: pending.filter((e) => e.updateBase64).map((e) => e.updateBase64),
+        deletes: pending.filter((e) => e.deletedRecordId).map((e) => e.deletedRecordId),
+      },
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    await from.admin`update federation_outbox set delivered_at = now() where peer_id = ${peerId} and delivered_at is null`;
+    return res.json() as { applied: number; conflicts: number; deleted: number };
+  }
+  const live = async (inst: Instance, id: string) =>
+    (await inst.admin`select deleted_at from board_records where id = ${id}`)[0]?.deleted_at === null;
+
+  it("deletes on both sides, and a deletion wins over an edit made at the same time", async () => {
+    // Earlier batches are already delivered.
+    for (const inst of [county, state]) await inst.admin`update federation_outbox set delivered_at = now() where delivered_at is null`;
+    const created = await county.app.inject({ method: "POST", url: `/api/v1/boards/${county.boardId}/records`,
+      headers: as(county), payload: { entry: "county: shelter at the fairgrounds" } });
+    expect(created.statusCode, created.body).toBe(201);
+    const id = created.json().id as string;
+    await deliver(county, peerCountySide, state, tokenIntoState, state.boardId);
+    expect(await live(state, id)).toBe(true);
+
+    // During a partition the state edits the record while the county deletes it.
+    const edited = await state.app.inject({ method: "PATCH", url: `/api/v1/boards/${state.boardId}/records/${id}`,
+      headers: as(state), payload: { entry: "state: shelter moved to the high school" } });
+    expect(edited.statusCode, edited.body).toBe(200);
+    const removed = await county.app.inject({ method: "DELETE", url: `/api/v1/boards/${county.boardId}/records/${id}`, headers: as(county) });
+    expect(removed.statusCode, removed.body).toBe(200);
+    expect((await pendingFor(county, peerCountySide)).map((e) => e.deletedRecordId)).toContain(id);
+
+    // The deletion reaches the state, which deletes its copy and says who asked.
+    expect((await deliver(county, peerCountySide, state, tokenIntoState, state.boardId)).deleted).toBe(1);
+    expect(await live(state, id)).toBe(false);
+    const [stateAudit] = await state.admin`
+      select payload ->> 'via' as via, payload ->> 'peer' as peer from audit_events
+      where category = 'board.record.deleted' and subject_id = ${id}`;
+    expect(stateAudit).toEqual({ via: "federation", peer: "county" });
+    // A deletion that came from the county is not sent back to it.
+    expect((await pendingFor(state, peerStateSide)).some((e) => e.deletedRecordId === id)).toBe(false);
+
+    // The state's edit reaches the county after the deletion: recorded as a conflict, not a resurrection.
+    const back = await deliver(state, peerStateSide, county, tokenIntoCounty, county.boardId);
+    expect(back.conflicts).toBe(1);
+    expect(await live(county, id)).toBe(false);
+    const [conflict] = await county.admin`select reason from sync_conflicts where record_id = ${id}`;
+    expect(conflict!.reason).toBe("record was deleted");
+    // A repeated deletion changes nothing.
+    const again = await state.app.inject({ method: "POST", url: "/api/v1/federation/receive", headers: { "x-peer-token": tokenIntoState },
+      payload: { boardId: state.boardId, updates: [], deletes: [id] } });
+    expect(again.json()).toMatchObject({ deleted: 0 });
+  });
+
+  it("sends a new agreement the board's records as they stand, and keeps incident records home", async () => {
+    const board = (await county.app.inject({ method: "POST", url: `/api/v1/jurisdictions/${county.jurisdictionId}/boards`,
+      headers: as(county), payload: { templateKey: "activity_log" } })).json().id as string;
+    const [incident] = await county.admin`
+      insert into incidents (jurisdiction_id, name, kind, activated_by)
+      select ${county.jurisdictionId}, 'Kept home', 'incident', id from persons where email = 'admin@example.org' returning id`;
+    await county.admin`insert into incident_boards (incident_id, board_id) values (${incident!.id as string}, ${board})`;
+    for (const entry of ["county: road closure list", "county: generator inventory"]) {
+      await county.app.inject({ method: "POST", url: `/api/v1/boards/${board}/records`, headers: as(county), payload: { entry } });
+    }
+    await county.app.inject({ method: "POST", url: `/api/v1/boards/${board}/records?incidentId=${incident!.id as string}`,
+      headers: as(county), payload: { entry: "county: incident-only note" } });
+    const peer = await registerPeer(county, "state-backfill");
+    await makeAgreement(county, peer.id, board);
+    const pending = await pendingFor(county, peer.id);
+    expect(pending).toHaveLength(1);
+    const target = (await state.app.inject({ method: "POST", url: `/api/v1/jurisdictions/${state.jurisdictionId}/boards`,
+      headers: as(state), payload: { templateKey: "activity_log" } })).json().id as string;
+    const ps = await registerPeer(state, "county-backfill");
+    await makeAgreement(state, ps.id, target);
+    const received = await state.app.inject({ method: "POST", url: "/api/v1/federation/receive", headers: { "x-peer-token": ps.token },
+      payload: { boardId: target, updates: pending.map((e) => e.updateBase64) } });
+    expect(received.statusCode, received.body).toBe(200);
+    const rows = await state.admin`select data ->> 'entry' as entry from board_records where board_id = ${target} order by 1`;
+    expect(rows.map((r) => r.entry)).toEqual(["county: generator inventory", "county: road closure list"]);
+    const [audit] = await county.admin`
+      select payload from audit_events where category = 'federation.backfilled' and subject_id = ${board}`;
+    expect(audit!.payload).toEqual({ peer: "state-backfill", records: 2 });
   });
 });

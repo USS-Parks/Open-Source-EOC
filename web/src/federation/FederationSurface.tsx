@@ -118,7 +118,7 @@ function Federation(props: { client: ApiClient; jurisdictionId: string; boards: 
                 <div className="d21-readiness-title">
                   <div><strong>{batch.boardTitle ?? "A board no longer listed"}</strong><span>From {batch.peer} · {formatTime(batch.at)}</span></div>
                 </div>
-                <span>{batch.updates === 1 ? "1 update" : `${batch.updates} updates`}{batch.conflicts ? `, ${batch.conflicts} conflicts reconciled` : ""}</span>
+                <span>{batch.updates === 1 ? "1 update" : `${batch.updates} updates`}{batch.deletes ? `, ${batch.deletes} deleted` : ""}{batch.conflicts ? `, ${batch.conflicts} conflicts reconciled` : ""}</span>
               </li>
             ))}
           </ul>

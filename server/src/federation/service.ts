@@ -10,7 +10,10 @@ import { hashToken, newToken } from "../auth/tokens.js";
 import { withPerson } from "../db/context.js";
 import { recordAudit } from "../audit/service.js";
 import { encryptSecret, hasSecretKey } from "../secrets/envelope.js";
-import { FEDERATION_ORIGIN, type BoardSyncHub } from "../sync/hub.js";
+import { FEDERATION_ORIGIN, appendRecordRemoval, type BoardSyncHub } from "../sync/hub.js";
+import { recordsUpdate } from "../boards/record-sync.js";
+import { publishRecordRemoved } from "../boards/removals.js";
+import { lockBoardMutation } from "../boards/service.js";
 
 /**
  * Instance federation, store-and-forward (F3). Peers are mutually
@@ -21,6 +24,13 @@ import { FEDERATION_ORIGIN, type BoardSyncHub } from "../sync/hub.js";
  * returns after a partition the stranded batch goes then. The peer applies it
  * through the offline reconciliation path, so both sides converge with no
  * synchronous dual-commit and every jurisdiction keeps its own data.
+ *
+ * Deletions travel as their own entries, the deleted record's id, because a
+ * Yjs deletion removes only what its sender had seen. A deletion wins: the
+ * receiver deletes the record whatever edits it holds, and an edit that
+ * reaches a deleted record is recorded as a conflict on the side that
+ * deleted it. Records of an incident stay on their home instance: an
+ * agreement is per board, and a peer could not keep them to the incident.
  */
 
 export async function registerPeer(
@@ -45,7 +55,7 @@ export async function createAgreement(
   boardId: string,
   perms: { canRead?: boolean; canWrite?: boolean; remoteBoardId?: string } = {},
 ): Promise<{ id: string }> {
-  const [peer] = await sql`select jurisdiction_id from peers where id = ${peerId}`;
+  const [peer] = await sql`select jurisdiction_id, name from peers where id = ${peerId}`;
   if (!peer) throw new AuthError(404, "peer not found");
   requireAdmin(actor, peer.jurisdiction_id as string);
   const [board] = await sql`select jurisdiction_id from boards where id = ${boardId}`;
@@ -62,7 +72,60 @@ export async function createAgreement(
       throw new AuthError(409, "this board is already shared with that peer");
     throw error;
   });
+  // The board's records as they stand go to the new peer first, so records
+  // made before the agreement are shared as well as those after it.
+  if (perms.canRead ?? true) {
+    const records = await sql`
+      select id, data from board_records where board_id = ${boardId} and incident_id is null order by created_at, id`;
+    const update = recordsUpdate(records.map((r) => ({ id: r.id as string, data: r.data as Record<string, unknown> })));
+    if (update) {
+      await sql`select queue_federation_to(${peerId}::uuid, ${boardId}::uuid, ${Buffer.from(update)})`;
+      await recordAudit(sql, actor, {
+        jurisdictionId: peer.jurisdiction_id as string,
+        category: "federation.backfilled",
+        subjectTable: "boards",
+        subjectId: boardId,
+        payload: { peer: peer.name as string, records: records.length },
+      });
+    }
+  }
   return { id: row!.id as string };
+}
+
+/** Queue a deleted record for the board's peers, never back to the one it came from. */
+export async function queueRecordDeletion(tx: Sql, boardId: string, recordId: string, excludePeer: string | null): Promise<void> {
+  await tx`select queue_federation_delete(${boardId}::uuid, ${recordId}::uuid, ${excludePeer}::uuid)`;
+}
+
+/**
+ * Delete a record a peer deleted: its jurisdiction-wide copy here, if there
+ * is one. The deletion is audited with the peer's name and passed on to the
+ * board's other peers. False when there was nothing to delete.
+ */
+async function deleteFederatedRecord(
+  tx: Sql,
+  actor: Principal,
+  boardId: string,
+  recordId: string,
+  peer: { id: string; name: string },
+): Promise<boolean> {
+  await lockBoardMutation(tx, boardId);
+  const [row] = await tx`
+    select r.data, b.jurisdiction_id, b.template_key from board_records r join boards b on b.id = r.board_id
+    where r.id = ${recordId} and r.board_id = ${boardId} and r.incident_id is null`;
+  if (!row) return false;
+  const [done] = await tx`select public.tombstone_board_record(${recordId}) as ok`;
+  if (!done?.ok) return false;
+  await recordAudit(tx, actor, {
+    jurisdictionId: row.jurisdiction_id as string,
+    category: "board.record.deleted",
+    subjectTable: "board_records",
+    subjectId: recordId,
+    payload: { board: row.template_key as string, previous: row.data, via: "federation", peer: peer.name },
+  });
+  await appendRecordRemoval(tx, boardId, recordId);
+  await queueRecordDeletion(tx, boardId, recordId, peer.id);
+  return true;
 }
 
 /**
@@ -92,7 +155,10 @@ export async function queueOutbound(
 export interface OutboxEntry {
   readonly id: string;
   readonly boardId: string;
-  readonly updateBase64: string;
+  /** An update, or null for a deletion. */
+  readonly updateBase64: string | null;
+  /** The deleted record, for a deletion. */
+  readonly deletedRecordId: string | null;
 }
 
 /** Undelivered updates for a peer (what a partition has stranded). */
@@ -101,12 +167,13 @@ export async function pending(sql: Sql, actor: Principal, peerId: string): Promi
   if (!peer) throw new AuthError(404, "peer not found");
   requireMember(actor, peer.jurisdiction_id as string);
   const rows = await sql`
-    select id, board_id, update_data from federation_outbox
+    select id, board_id, update_data, deleted_record from federation_outbox
     where peer_id = ${peerId} and delivered_at is null order by created_at`;
   return rows.map((r) => ({
     id: r.id as string,
     boardId: r.board_id as string,
-    updateBase64: Buffer.from(r.update_data as Buffer).toString("base64"),
+    updateBase64: r.update_data ? Buffer.from(r.update_data as Buffer).toString("base64") : null,
+    deletedRecordId: (r.deleted_record as string | null) ?? null,
   }));
 }
 
@@ -140,6 +207,7 @@ export interface ReceivedBatch {
   readonly boardId: string;
   readonly boardTitle: string | null;
   readonly updates: number;
+  readonly deletes: number;
   readonly conflicts: number;
 }
 
@@ -205,13 +273,14 @@ export async function federationStatus(
         })),
     })),
     received: received.map((r) => {
-      const payload = r.payload as { peer?: string; updates?: number; conflicts?: number };
+      const payload = r.payload as { peer?: string; updates?: number; deletes?: number; conflicts?: number };
       return {
         at: iso(r.created_at)!,
         peer: payload.peer ?? "",
         boardId: r.subject_id as string,
         boardTitle: (r.title as string | null) ?? null,
         updates: Number(payload.updates ?? 0),
+        deletes: Number(payload.deletes ?? 0),
         conflicts: Number(payload.conflicts ?? 0),
       };
     }),
@@ -266,7 +335,8 @@ export async function receiveUpdates(
   peerToken: string,
   targetBoardId: string,
   updatesBase64: readonly string[],
-): Promise<{ applied: number; conflicts: number }> {
+  deletes: readonly string[] = [],
+): Promise<{ applied: number; conflicts: number; deleted: number }> {
   const [peer] = await sql`
     select id, jurisdiction_id, name, created_by from peers where token_hash = ${hashToken(peerToken)}`;
   if (!peer) throw new AuthError(401, "unknown peer");
@@ -290,14 +360,23 @@ export async function receiveUpdates(
     );
     conflicts += result.conflicts;
   }
+  // Deletions after updates: a record deleted and edited in one batch is deleted.
+  let deleted = 0;
+  for (const recordId of deletes) {
+    const removed = await withPerson(sql, localAdmin.person.id, (tx) =>
+      deleteFederatedRecord(tx, localAdmin, targetBoardId, recordId, { id: peer.id as string, name: peer.name as string }));
+    if (!removed) continue;
+    deleted += 1;
+    publishRecordRemoved({ boardId: targetBoardId, recordId, incidentId: null });
+  }
   await withPerson(sql, localAdmin.person.id, (tx) =>
     recordAudit(tx, localAdmin, {
       jurisdictionId: peer.jurisdiction_id as string,
       category: "federation.received",
       subjectTable: "boards",
       subjectId: targetBoardId,
-      payload: { peer: peer.name as string, updates: updatesBase64.length, conflicts },
+      payload: { peer: peer.name as string, updates: updatesBase64.length, deletes: deleted, conflicts },
     }),
   );
-  return { applied: updatesBase64.length, conflicts };
+  return { applied: updatesBase64.length, conflicts, deleted };
 }
