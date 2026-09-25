@@ -6835,3 +6835,106 @@ running extended tests. This receipt covers XS4 to XS7 in one change.
   0.9.1 setup has North Coast Storm only until a setup built from this
   commit is installed and its data folder rebuilt.
 - **Rollback:** revert the commit; the demo seeds North Coast Storm alone.
+
+## Veoci and air gap VA6: incident templates as data
+
+Veoci Integration and Air Gap PSPR unit VA6 (VC-01), the first unit of
+phase VA-B. Built in a lane worktree (`lane/va6`, local) while the phase VA-A
+gate ran in the canonical checkout, then landed on `main` by fast-forward.
+
+- **What the code did before.** Templates were rows in `incident_templates`,
+  but `GET /api/v1/incident-templates` answered the three templates compiled
+  into the server, so a template added as data (the exercise scenario
+  templates among them) was never offered for activation, and no route or
+  screen could write one: "activation needs code today", as the Veoci
+  research found.
+- **What changed.**
+  - **Versions.** Migration `0147_incident_template_versions.sql`:
+    `incident_templates` gains `version`, `updated_by` and `updated_at`;
+    `incident_template_versions` keeps every version (title, definition, who
+    saved it, when), append-only by trigger; a trigger records version 1 of
+    every inserted template, whatever path inserts it (the screen, standard
+    or scenario seeding, an import), and each new version. A change to a
+    template's title or definition is always its next version: one that
+    leaves the version alone (an edit made directly in the database, as the
+    exercise scenario session's test does) is numbered by the trigger, one
+    that sets the version must move it by exactly one, and the key never
+    changes. Existing templates are recorded as version 1. Instance
+    administrators may update a template (a new update policy);
+    `incidents.template_version` records the version an incident opened from.
+  - **Routes.** `GET /api/v1/incident-templates` reads the database, with
+    each template's version, update time and counts;
+    `GET /api/v1/incident-templates/:key` answers one at its current version;
+    `GET .../:key/versions` lists every version, newest first, with who saved
+    it; `PUT .../:key` saves over the version the editor opened
+    (`expectedVersion`, 0 for a new template), answering 201 for a new
+    template, 200 with the next version for an edit, and 409 when someone
+    saved in between. Only an instance administrator saves, as for board
+    templates. A save is refused with the field and reason when a board is
+    not a published board template, a position is listed twice or is not a
+    key, a checklist or position title names a position the template does
+    not open, or the checklist dependencies are wrong.
+  - **Activation** keeps the version in `incidents.template_version` and in
+    the `incident.activated` audit payload, and titles a position the
+    jurisdiction does not have from the template's new optional
+    `positionTitles` (standard ICS positions keep their titles). The incident
+    detail answers `templateKey` and `templateVersion`.
+  - **The screen.** **Incident Setup** gains **Incident templates** for
+    instance administrators: the list with version and counts; **New
+    template** (title, a key that follows it, the standard ICS positions
+    plus the jurisdiction's and any added with **Another position**, board
+    templates as tick boxes, one checklist per position one item per line);
+    **Edit** over the version opened; **Versions** with **Load into the
+    editor**. An item that came with a category, task key, dependencies or a
+    due rule keeps them while its text is unchanged. After a save the
+    activation list reads the templates again. The standard position titles
+    moved into `shared` (`ICS_POSITION_TITLES`) for the screen.
+  - **Ad hoc tasks** were already on the Tasks screen (**New task**, for the
+    incident's owner administrators); the browser proof adds one to an
+    incident opened from an authored template.
+  - `docs/guides/ADMIN.md` describes authoring, versions and ad hoc tasks;
+    the contract and `docs/API.md` list the three routes.
+- **Files outside the "Owns" cell.** `web/src/app/api/client.ts` (types and
+  three methods), one line of `web/src/app/screens/Console.tsx` passing the
+  instance-administrator flag, `shared/src/index.ts` (the export), and the
+  new `web/src/incidents/**` panel.
+- **The exercise scenario roster.** Its scenario templates insert with
+  `on conflict (key) do nothing`, which the version trigger records as
+  version 1; they now appear in the activation list, which they did not
+  before. No file that roster owns was edited.
+- **Air-gap behavior (decision 9).** No network path changes; templates are
+  authored and activated on the host with no outside service.
+- **Tests.** `incident-templates.test.ts` (5): the seeded list and history;
+  authoring, a second version and two refused stale saves; refusals for a
+  jurisdiction administrator, a member and five bad templates, with nothing
+  written; activation from version 2 with the custom position titled, the
+  version on the incident and in the audit, and version 3 changing nothing
+  on the open incident; the database keeping the version table append-only,
+  numbering a direct edit as version 4 and keeping it, and refusing a
+  skipped version or a new key. `incident-templates-panel.test.tsx` (3, with axe): keys from
+  titles; an edit saved over version 3 keeping structured items; a new
+  template at version 0 and a refusal shown. `incident-templates-browser.test.ts`
+  at 1586 by 992 and 1534 by 790: a new template with an added position,
+  boards and two checklists, a second version, the versions list, activation
+  recorded as version 2, the template's task under **Team Tasks**, and an ad
+  hoc task added.
+- **Verification.** In the lane, on the Linux test bed (decision 19): `pnpm
+  check:static` exit 0; the API document regenerated; the route coverage,
+  API docs, template, collaboration, migration and upgrade tests (25), the
+  web incident screen and client tests with the panel's (43) and the browser
+  test (2) green. Every test file except the browser, end-to-end and load
+  files (Vitest, two workers) first ran 1,570 passed and 1 failed of 1,571:
+  the exercise session's `scenario-templates.test.ts` edits a template's
+  title directly, which the first version of the trigger refused. The
+  trigger now numbers such an edit as the next version; that file, the demo
+  test, this unit's tests and the migration test then ran green (17).
+  Rebased onto the three commits that reached `main` meanwhile (the three
+  exercise scenarios, the Operator Trust reconciliation and 0.9.2): `pnpm
+  check:static` exit 0, and this unit's tests with the scenario template,
+  scenario seed, demo, migration, API document, route coverage and incident
+  screen tests green (41).
+- **Not run.** The Windows setup (decision 18).
+- **Evidence level:** real-database, component and browser tests.
+- **Rollback:** revert the commit; migration `0147` adds a table, columns,
+  triggers and a policy that the earlier code ignores, and the list route
+  returns to the compiled templates.

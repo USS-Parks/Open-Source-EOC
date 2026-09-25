@@ -319,6 +319,9 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 ### incidents
 
 - `GET /api/v1/incident-templates`: Read incident templates (auth: bearer; audience: operator)
+- `GET /api/v1/incident-templates/:key`: Read incident templates (auth: bearer; audience: operator)
+- `PUT /api/v1/incident-templates/:key`: Set incident templates (auth: bearer; audience: operator)
+- `GET /api/v1/incident-templates/:key/versions`: Read incident templates versions (auth: bearer; audience: operator)
 - `GET /api/v1/incidents/:incidentId`: Read incidents (auth: bearer; audience: operator)
 - `POST /api/v1/incidents/:incidentId/archive`: Run incidents archive (auth: bearer; audience: operator)
 - `DELETE /api/v1/incidents/:incidentId/lockdown`: Delete incidents lockdown (auth: bearer; audience: operator)

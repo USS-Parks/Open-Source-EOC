@@ -159,6 +159,21 @@ Local password accounts support a second factor: a time-based one-time code
 
 Other preparation happens on the screens that use it:
 
+- **Incident templates.** A template is the positions an incident opens
+  with, its boards, and each position's checklist. On **Incident Setup**, an
+  instance administrator sees **Incident templates**: **New template** takes
+  a title (the key follows it), ticks the standard ICS positions and any the
+  template adds with **Another position**, ticks the boards, and takes each
+  position's checklist one item per line. **Save template** makes version 1;
+  **Edit** and a save make the next version. A save over a version someone
+  else replaced is refused, so reopen and save again. **Versions** lists each
+  version with who saved it; **Load into the editor** brings one back to save
+  as the newest. An item that came with a category, a task key or a due rule
+  keeps them while its text stays the same. **Activate an incident** offers
+  every template the database holds, and an incident keeps the version it
+  opened from: a later edit changes no incident already open. Every version
+  is kept and cannot be changed. On **Tasks**, **New task** adds a task of
+  the incident's own beside the template's.
 - **Libraries.** On **Incident Setup**, **Add a library** (administrators)
   stores a scenario, plan or reference text. A library attached to a template
   is linked to each incident activated from that template afterwards; the

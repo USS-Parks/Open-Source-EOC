@@ -430,6 +430,9 @@ export interface IncidentDetail {
   readonly name: string;
   readonly kind: string;
   readonly closedAt: string | null;
+  /** The template and version the incident opened from, where it recorded them. */
+  readonly templateKey?: string | null;
+  readonly templateVersion?: number | null;
   readonly canManageParticipation: boolean;
   readonly canEditArea: boolean;
   readonly positions: ReadonlyArray<{ id: string; key: string; title: string }>;
@@ -445,6 +448,35 @@ export interface IncidentDetail {
 export interface IncidentTemplateOption {
   readonly key: string;
   readonly title: string;
+  readonly version: number;
+  readonly updatedAt: string;
+  readonly positions: number;
+  readonly boards: number;
+  readonly checklistItems: number;
+}
+/** A checklist item: plain text, or text with a category, a key other items depend on, or a due rule. */
+export type IncidentTemplateItem = string | {
+  readonly item: string;
+  readonly category?: string;
+  readonly key?: string;
+  readonly dependsOn?: readonly string[];
+  readonly due?: unknown;
+};
+export interface IncidentTemplateDefinition {
+  readonly key: string;
+  readonly title: string;
+  readonly positions: readonly string[];
+  readonly positionTitles?: Readonly<Record<string, string>>;
+  readonly boards: readonly string[];
+  readonly checklists: ReadonlyArray<{ readonly position: string; readonly items: readonly IncidentTemplateItem[] }>;
+}
+export interface IncidentTemplateVersionEntry {
+  readonly version: number;
+  readonly title: string;
+  readonly template: IncidentTemplateDefinition;
+  readonly savedAt: string;
+  /** Who saved it; null for a version the standard or scenario seeding put in. */
+  readonly savedBy: string | null;
 }
 export type { ResourceRequestAssignment, ResourceRequestDetail, ResourceRequestSummary } from "@openeoc/shared";
 export type AarObservation = SharedAarObservation;
@@ -1125,6 +1157,21 @@ export class ApiClient {
       "/api/v1/incident-templates",
     );
     return r.templates;
+  }
+  getIncidentTemplate(key: string): Promise<{ template: IncidentTemplateDefinition; version: number; updatedAt: string }> {
+    return this.request("GET", `/api/v1/incident-templates/${encodeURIComponent(key)}`);
+  }
+  async listIncidentTemplateVersions(key: string): Promise<IncidentTemplateVersionEntry[]> {
+    const r = await this.request<{ versions: IncidentTemplateVersionEntry[] }>(
+      "GET", `/api/v1/incident-templates/${encodeURIComponent(key)}/versions`,
+    );
+    return r.versions;
+  }
+  /** Save a template over the version the editor opened (0 for a new one); answers the version it became. */
+  saveIncidentTemplate(key: string, template: Omit<IncidentTemplateDefinition, "key">, expectedVersion: number): Promise<{ key: string; version: number }> {
+    return this.request("PUT", `/api/v1/incident-templates/${encodeURIComponent(key)}`, {
+      template: template as unknown as Record<string, unknown>, expectedVersion,
+    });
   }
   activateIncident(
     jurisdictionId: string,

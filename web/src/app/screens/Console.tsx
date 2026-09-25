@@ -850,6 +850,7 @@ function Center(props: {
           client={props.client}
           jurisdictionId={props.discoveryJurisdictionId}
           isAdmin={props.canActivateIncident}
+          isInstanceAdmin={props.isInstanceAdmin}
           theme={props.theme}
           integrations={props.integrations}
           memberships={props.memberships}

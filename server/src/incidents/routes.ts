@@ -14,7 +14,6 @@ import { closeWithdrawnGuestSockets } from "../sync/routes.js";
 import { getIncidentArea, listIncidentAreaHistory, reviseIncidentArea } from "./area.js";
 import { incidentParticipationRoutes } from "./participation-routes.js";
 import {
-  STANDARD_INCIDENT_TEMPLATES,
   activateIncident,
   changeIncidentLifecycle,
   closeIncident,
@@ -40,6 +39,12 @@ import {
 import { getIncidentSummary, listIncidentActivity } from "./summary.js";
 import { getShiftHandoff } from "./handoff.js";
 import { getIncidentCloseout } from "./closeout.js";
+import {
+  getIncidentTemplate,
+  listIncidentTemplates,
+  listIncidentTemplateVersions,
+  saveIncidentTemplate,
+} from "./templates.js";
 
 const ActivateBody = z.object({
   templateKey: z.string().min(1),
@@ -54,6 +59,12 @@ const LibraryBody = z.object({
   forTemplate: z.string().optional(),
 });
 const IncidentId = z.string().uuid();
+const TemplateKey = z.string().regex(/^[a-z][a-z0-9_]*$/).max(80);
+const SaveTemplateBody = z.object({
+  template: z.record(z.string(), z.unknown()),
+  /** The version the editor opened; 0 for a new template. */
+  expectedVersion: z.number().int().min(0),
+});
 const ArchiveQuery = z.object({
   archived: z.enum(["exclude", "include", "only"]).default("exclude"),
 }).strict();
@@ -86,9 +97,30 @@ export function incidentRoutes(
     },
   );
 
-  app.get("/api/v1/incident-templates", { preHandler: authenticate }, async (_req, reply) => {
-    const templates = STANDARD_INCIDENT_TEMPLATES.map((t) => ({ key: t.key, title: t.title }));
+  // Incident templates are data: the list reads the database, so a template
+  // authored on screen, imported or seeded is offered for activation.
+  app.get("/api/v1/incident-templates", { preHandler: authenticate }, async (req, reply) => {
+    const templates = await withPerson(sql, req.principal.person.id, (tx) => listIncidentTemplates(tx));
     return reply.send({ templates });
+  });
+
+  app.get("/api/v1/incident-templates/:key", { preHandler: authenticate }, async (req, reply) => {
+    const key = TemplateKey.parse((req.params as { key: string }).key);
+    return reply.send(await withPerson(sql, req.principal.person.id, (tx) => getIncidentTemplate(tx, key)));
+  });
+
+  app.get("/api/v1/incident-templates/:key/versions", { preHandler: authenticate }, async (req, reply) => {
+    const key = TemplateKey.parse((req.params as { key: string }).key);
+    const versions = await withPerson(sql, req.principal.person.id, (tx) => listIncidentTemplateVersions(tx, key));
+    return reply.send({ versions });
+  });
+
+  app.put("/api/v1/incident-templates/:key", { preHandler: authenticate }, async (req, reply) => {
+    const key = TemplateKey.parse((req.params as { key: string }).key);
+    const body = SaveTemplateBody.parse(req.body);
+    const saved = await withPerson(sql, req.principal.person.id, (tx) =>
+      saveIncidentTemplate(tx, req.principal, key, body.template, body.expectedVersion));
+    return reply.status(saved.created ? 201 : 200).send({ key: saved.key, version: saved.version });
   });
 
   app.get(

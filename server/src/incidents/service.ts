@@ -22,6 +22,8 @@ export const IncidentTemplateSchema = z.object({
   key: z.string().regex(/^[a-z][a-z0-9_]*$/),
   title: z.string().min(1),
   positions: z.array(z.string().min(1)).min(1),
+  /** Titles for positions the jurisdiction does not have yet; the standard ICS positions need none. */
+  positionTitles: z.record(z.string(), z.string().min(1).max(120)).optional(),
   boards: z.array(z.string().min(1)),
   checklists: z.array(
     z.object({ position: z.string().min(1), items: z.array(TaskTemplateItemSchema).min(1) }),
@@ -187,14 +189,15 @@ export async function activateIncident(
 ): Promise<ActivationResult> {
   requireAdmin(actor, jurisdictionId);
   const [templateRow] = await sql`
-    select definition from incident_templates where key = ${input.templateKey}`;
+    select definition, version from incident_templates where key = ${input.templateKey}`;
   if (!templateRow) throw new AuthError(404, "incident template not found");
   const template = IncidentTemplateSchema.parse(templateRow.definition);
 
+  // The incident keeps the template version it opened from; a later edit to the template changes no incident.
   const [incident] = await sql`
-    insert into incidents (jurisdiction_id, template_key, name, kind, activated_by)
-    values (${jurisdictionId}, ${template.key}, ${input.name}, ${input.kind ?? "incident"},
-            ${actor.person.id})
+    insert into incidents (jurisdiction_id, template_key, template_version, name, kind, activated_by)
+    values (${jurisdictionId}, ${template.key}, ${templateRow.version as number}, ${input.name},
+            ${input.kind ?? "incident"}, ${actor.person.id})
     returning id`;
   const incidentId = incident!.id as string;
 
@@ -206,7 +209,7 @@ export async function activateIncident(
     if (!positionId) {
       const [created] = await sql`
         insert into positions (jurisdiction_id, key, title)
-        values (${jurisdictionId}, ${key}, ${STANDARD_TITLES[key] ?? key})
+        values (${jurisdictionId}, ${key}, ${STANDARD_TITLES[key] ?? template.positionTitles?.[key] ?? key})
         returning id`;
       positionId = created!.id as string;
     }
@@ -278,7 +281,9 @@ export async function activateIncident(
     category: "incident.activated",
     subjectTable: "incidents",
     subjectId: incidentId,
-    payload: { template: template.key, name: input.name, kind: input.kind ?? "incident" },
+    payload: {
+      template: template.key, templateVersion: templateRow.version as number, name: input.name, kind: input.kind ?? "incident",
+    },
   });
 
   return {
@@ -295,6 +300,9 @@ export interface IncidentDetail {
   readonly name: string;
   readonly kind: string;
   readonly closedAt: string | null;
+  /** The template and version the incident was activated from; null for one made another way or before versions were kept. */
+  readonly templateKey: string | null;
+  readonly templateVersion: number | null;
   readonly canManageParticipation: boolean;
   readonly canEditArea: boolean;
   readonly positions: ReadonlyArray<{ id: string; key: string; title: string }>;
@@ -472,7 +480,7 @@ export async function getIncident(
 ): Promise<IncidentDetail> {
   const authority = await getIncidentAuthority(sql, actor, incidentId);
   const [incident] = await sql`
-    select id, jurisdiction_id, name, kind, closed_at from incidents where id = ${incidentId}`;
+    select id, jurisdiction_id, name, kind, closed_at, template_key, template_version from incidents where id = ${incidentId}`;
   if (!incident) throw new AuthError(404, "incident not found");
   const positions = await sql`
     select p.id, p.key, p.title from incident_positions ip
@@ -500,6 +508,8 @@ export async function getIncident(
     name: incident.name as string,
     kind: incident.kind as string,
     closedAt: (incident.closed_at as string | null) ?? null,
+    templateKey: (incident.template_key as string | null) ?? null,
+    templateVersion: (incident.template_version as number | null) ?? null,
     canManageParticipation: authority.canManageParticipation,
     canEditArea: authority.canEditArea,
     positions: positions.map((p) => ({

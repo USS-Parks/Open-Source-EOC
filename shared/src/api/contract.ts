@@ -79,6 +79,8 @@ GET /api/v1/iap/:iapId/pdf
 GET /api/v1/iap/:iapId/revisions
 GET /api/v1/iap/:iapId/revisions/:revision/pdf
 GET /api/v1/incident-templates
+GET /api/v1/incident-templates/:key
+GET /api/v1/incident-templates/:key/versions
 GET /api/v1/incidents/:incidentId
 GET /api/v1/incidents/:incidentId/aar/analytics
 GET /api/v1/incidents/:incidentId/aar/observations
@@ -353,6 +355,7 @@ PUT /api/v1/contact-groups/:groupId
 PUT /api/v1/contacts/:contactId
 PUT /api/v1/damage/pa-items/:id
 PUT /api/v1/iap/:iapId/ics-204
+PUT /api/v1/incident-templates/:key
 PUT /api/v1/incidents/:incidentId/dashboard-configs/:key
 PUT /api/v1/incidents/:incidentId/operational-area
 PUT /api/v1/incidents/:incidentId/saved-state/:kind/:key

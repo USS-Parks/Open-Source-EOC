@@ -13,6 +13,7 @@ import type {
   ApiClient, IncidentArchiveFilter, IncidentOverviewPage, IncidentOverviewRow, LibraryKind, Membership,
 } from "../api/client.js";
 import { formatTime } from "../../datasets/format.js";
+import { IncidentTemplatesPanel } from "../../incidents/IncidentTemplatesPanel.js";
 import { IncidentCollaboration } from "../../integrations/collab.js";
 import { IncidentMeetings } from "../../integrations/meetings.js";
 import { useAsync } from "../data/hooks.js";
@@ -34,6 +35,8 @@ export function IncidentsSurface(props: {
   client: ApiClient;
   jurisdictionId: string;
   isAdmin: boolean;
+  /** Instance administrators author the incident templates, which every jurisdiction activates from. */
+  isInstanceAdmin?: boolean;
   theme: ThemeName;
   /** Optional integrations the server runs; their incident actions show only when on. */
   integrations?: ReadonlySet<string>;
@@ -53,9 +56,10 @@ export function IncidentsSurface(props: {
     () => props.client.listIncidents(props.jurisdictionId),
     [props.jurisdictionId, reload],
   );
+  const [templatesSaved, setTemplatesSaved] = useState(0);
   const templates = useAsync(
     () => (props.isAdmin ? props.client.listIncidentTemplates() : Promise.resolve([])),
-    [props.isAdmin],
+    [props.isAdmin, templatesSaved],
   );
   const detail = useAsync(
     () => selectedIncident ? props.client.getIncident(selectedIncident) : Promise.resolve(null),
@@ -149,6 +153,11 @@ export function IncidentsSurface(props: {
               </Button>
             </div>
           </Panel>
+        ) : null}
+
+        {props.isInstanceAdmin ? (
+          <IncidentTemplatesPanel client={props.client} jurisdictionId={props.jurisdictionId}
+            onSaved={() => setTemplatesSaved((n) => n + 1)} />
         ) : null}
 
         {props.isAdmin ? (
