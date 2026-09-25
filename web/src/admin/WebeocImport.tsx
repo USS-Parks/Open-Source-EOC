@@ -96,7 +96,7 @@ export function WebeocImport(props: { client: ApiClient; jurisdictionId: string 
   return (
     <Panel title="WebEOC migration">
       <div className="admin-stack">
-        <p className="d21-muted">Moves the records of one WebEOC board into a board here, from the CSV file WebEOC exports for that board. Records only: WebEOC processes, views, links and menus are not migrated. Check the file first; nothing is written until you choose Import. Import writes the valid rows and leaves the rejected rows out, so download the rejection report, correct those rows and import that file.</p>
+        <p className="d21-muted">Moves the records of one WebEOC board into a board here, from the CSV or Excel (.xlsx) file WebEOC exports for that board. Records only: WebEOC processes, views, links and menus are not migrated. Check the file first; nothing is written until you choose Import. Import writes the valid rows and leaves the rejected rows out, so download the rejection report, correct those rows and import that file.</p>
         {boards.error ? <ErrorNote message={boards.error} /> : null}
         <div className="d21-form-section-grid">
           <span className="admin-label">
@@ -114,8 +114,8 @@ export function WebeocImport(props: { client: ApiClient; jurisdictionId: string 
               </select>
             </span>
             <span className="admin-label">
-              <label htmlFor={`${id}-file`}>WebEOC CSV export</label>
-              <input id={`${id}-file`} type="file" accept=".csv,text/csv" disabled={busy !== null} className={FILL}
+              <label htmlFor={`${id}-file`}>WebEOC export (CSV or Excel)</label>
+              <input id={`${id}-file`} type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={busy !== null} className={FILL}
                 onChange={(event) => choose(event.currentTarget)} />
             </span>
           </> : null}

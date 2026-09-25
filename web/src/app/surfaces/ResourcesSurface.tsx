@@ -304,7 +304,7 @@ function PoolRow(props: {
   return (
     <li className="resources-pool-item">
       <div className="resources-row">
-        <StatusBadge status={poolBadge[r.status] ?? "unknown"}>{plain(r.status)}</StatusBadge>
+        <StatusBadge status={poolBadge[r.status] ?? "unknown"}>{choiceLabel(r.status)}</StatusBadge>
         <strong>{r.name}</strong>
         <span className="eoc-muted">{kindText(props.kinds, r.kind, r.type)}</span>
       </div>

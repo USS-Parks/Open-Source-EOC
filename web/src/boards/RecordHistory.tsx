@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { FieldDef } from "@openeoc/shared";
+import { choiceLabel, type FieldDef } from "@openeoc/shared";
 import type { BoardRecordChange, PageOptions } from "../app/api/client.js";
 import { ActionButton } from "../design/controls.js";
 import "./board-tools.css";
@@ -24,6 +24,7 @@ export function RecordHistory(props: { readonly load: HistoryPageLoader; readonl
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const labels = new Map(props.fields.map((field) => [field.key, field.label]));
+  const types = new Map(props.fields.map((field) => [field.key, field.type]));
 
   async function read(after: string | null, replace: boolean) {
     setLoading(true);
@@ -49,7 +50,7 @@ export function RecordHistory(props: { readonly load: HistoryPageLoader; readonl
           ? ` (${[entry.actor.positionTitle, entry.actor.organizationName].filter(Boolean).join(" · ")})` : ""}
         {entry.changes.length ? <dl>{entry.changes.map((change) => <div key={change.field}>
           <dt>{labels.get(change.field) ?? change.field}</dt>
-          <dd>{historyValue(change.before)} → {historyValue(change.after)}</dd>
+          <dd>{historyValue(change.before, types.get(change.field))} → {historyValue(change.after, types.get(change.field))}</dd>
         </div>)}</dl> : null}
       </li>)}
     </ol> : !loading && !error ? <p>No history is recorded for this record.</p> : null}
@@ -59,8 +60,9 @@ export function RecordHistory(props: { readonly load: HistoryPageLoader; readonl
   </div>;
 }
 
-function historyValue(value: unknown): string {
+function historyValue(value: unknown, type: FieldDef["type"] | undefined): string {
   if (value === null || value === undefined || value === "") return "empty";
   if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (type === "enum" && typeof value === "string") return choiceLabel(value);
   return typeof value === "object" ? JSON.stringify(value) : String(value);
 }

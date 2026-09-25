@@ -27,21 +27,23 @@ import "./widgets.css";
  */
 
 type Drill = (field: string, value: string) => void;
+/** Opens one record of a board, as a calendar item does. */
+export type OpenRecord = (boardId: string, recordId: string) => void;
 
-export function Dashboard(props: { snapshot: DashboardSnapshot; onDrill?: Drill | undefined }) {
+export function Dashboard(props: { snapshot: DashboardSnapshot; onDrill?: Drill | undefined; onOpenRecord?: OpenRecord | undefined }) {
   return (
     <section aria-label={props.snapshot.title}>
       <h2 className="dash-title">{props.snapshot.title}</h2>
       <div className="dash-grid">
         {props.snapshot.widgets.map((w) => (
-          <DashboardWidget key={w.key} widget={w} onDrill={props.onDrill} />
+          <DashboardWidget key={w.key} widget={w} onDrill={props.onDrill} onOpenRecord={props.onOpenRecord} />
         ))}
       </div>
     </section>
   );
 }
 
-export function DashboardWidget(props: { widget: WidgetResult; onDrill?: Drill | undefined }) {
+export function DashboardWidget(props: { widget: WidgetResult; onDrill?: Drill | undefined; onOpenRecord?: OpenRecord | undefined }) {
   const w = props.widget;
   return (
     <article
@@ -57,37 +59,47 @@ export function DashboardWidget(props: { widget: WidgetResult; onDrill?: Drill |
           No matching board in this jurisdiction.
         </p>
       ) : (
-        renderBody(w, props.onDrill)
+        renderBody(w, props.onDrill, props.onOpenRecord)
       )}
     </article>
   );
 }
 
-function renderBody(w: WidgetResult, onDrill?: Drill | undefined) {
+function renderBody(w: WidgetResult, onDrill?: Drill | undefined, onOpenRecord?: OpenRecord | undefined) {
   if (w.kind === "tile") return <Tile widget={w} />;
   if (w.kind === "chart") return <Chart widget={w} onDrill={onDrill} />;
   if (w.kind === "status") return <StatusGrid widget={w} />;
-  if (w.kind === "kanban") return <KanbanSummary widget={w} />;
-  if (w.kind === "calendar") return <Upcoming widget={w} />;
+  if (w.kind === "kanban") return <KanbanSummary widget={w} onDrill={onDrill} />;
+  if (w.kind === "calendar") return <Upcoming widget={w} onOpenRecord={onOpenRecord} />;
   return <List widget={w} />;
 }
 
 /** Record counts per kanban column, in the field's own order. */
-function KanbanSummary(props: { widget: KanbanResult }) {
+function KanbanSummary(props: { widget: KanbanResult; onDrill?: Drill | undefined }) {
+  const field = props.widget.field;
+  const drill = props.onDrill && field ? (value: string) => props.onDrill!(field, value) : null;
   return (
     <ol className="dash-kanban">
-      {props.widget.columns.map((column) => (
-        <li key={column.value ?? ""}>
-          <span className="dash-meta">{valueLabel(column.value)}</span>
-          <strong>{column.count}</strong>
-        </li>
-      ))}
+      {props.widget.columns.map((column) => {
+        const body = <><span className="dash-meta">{valueLabel(column.value)}</span><strong>{column.count}</strong></>;
+        // A column with a value drills to its records; the no-value column has nothing to filter on.
+        return (
+          <li key={column.value ?? ""}>
+            {drill && column.value !== null ? (
+              <button type="button" className="dash-kanban-drill" onClick={() => drill(column.value!)}
+                aria-label={`Show the ${column.count} record${column.count === 1 ? "" : "s"} in ${valueLabel(column.value)}`}>{body}</button>
+            ) : body}
+          </li>
+        );
+      })}
     </ol>
   );
 }
 
 /** The next dated records, soonest first, in the viewer's timezone. */
-function Upcoming(props: { widget: CalendarResult }) {
+function Upcoming(props: { widget: CalendarResult; onOpenRecord?: OpenRecord | undefined }) {
+  const boardId = props.widget.boardId;
+  const open = props.onOpenRecord && boardId ? (id: string) => props.onOpenRecord!(boardId, id) : null;
   if (props.widget.items.length === 0) {
     return <p className="eoc-flush eoc-muted">Nothing scheduled from now on.</p>;
   }
@@ -100,7 +112,8 @@ function Upcoming(props: { widget: CalendarResult }) {
               weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
             })}
           </time>
-          <span>{item.label ?? "Untitled record"}</span>
+          {open ? <button type="button" className="dash-upcoming-open" onClick={() => open(item.id)}>{item.label ?? "Untitled record"}</button>
+            : <span>{item.label ?? "Untitled record"}</span>}
         </li>
       ))}
     </ol>

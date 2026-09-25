@@ -356,6 +356,7 @@ async function computeWidget(
       key: widget.key,
       title: widget.title,
       field: widget.field,
+      boardId,
       items: rows.map((r) => ({
         id: r.id as string,
         at: new Date(r.at as Date | string).toISOString(),
@@ -526,8 +527,10 @@ export async function listDashboardContributions(
   if (!widget) throw new AuthError(404, "dashboard widget not found");
   if (widget.kind === "status")
     throw new AuthError(409, "status widgets do not expose contributing records");
-  if (group !== undefined && widget.kind !== "chart")
-    throw new AuthError(400, "group drilldown requires a chart widget");
+  // A chart groups by its groupBy field and a kanban by its column field.
+  const groupField = widget.kind === "chart" ? widget.groupBy : widget.kind === "kanban" ? widget.field : null;
+  if (group !== undefined && !groupField)
+    throw new AuthError(400, "group drilldown requires a chart or kanban widget");
   const resolvedOperationalPeriod = await resolveDashboardOperationalPeriod(
     sql, actor, incidentId, filters?.operationalPeriod,
   );
@@ -546,9 +549,7 @@ export async function listDashboardContributions(
   const geometryKey = geometryFieldKey(effective.fields);
   if (bbox && (!geometryKey || !readable.has(geometryKey)))
     throw new AuthError(404, "dashboard widget not found");
-  const groupFilter = group === undefined || widget.kind !== "chart"
-    ? undefined
-    : { field: widget.groupBy, equals: group };
+  const groupFilter = group === undefined || !groupField ? undefined : { field: groupField, equals: group };
   const baseFilters = filtersFragment(
     sql, widget.filter, runtimeFilter, filters, operationalPeriodFilter,
   );

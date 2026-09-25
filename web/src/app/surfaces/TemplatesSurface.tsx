@@ -67,7 +67,11 @@ export function TemplatesSurface(props: TemplatesSurfaceProps) {
     props.onBoardsChanged?.();
   };
 
-  if (!props.isInstanceAdmin || !props.isJurisdictionAdmin) {
+  if (!props.isJurisdictionAdmin) {
+    return <EmptyState label="Board templates are unavailable for this account."
+      hint="Creating a board from a published template requires an administrator of the selected jurisdiction." />;
+  }
+  if (!props.isInstanceAdmin && (props.boardId || creating)) {
     return <EmptyState label="Board customization is unavailable for this account."
       hint="Publishing templates requires an instance administrator who also administers the selected jurisdiction." />;
   }
@@ -78,7 +82,7 @@ export function TemplatesSurface(props: TemplatesSurfaceProps) {
   };
 
   if (!props.boardId && !creating) {
-    return <TemplateIndex client={props.client} jurisdictionId={props.jurisdictionId} boards={props.boards} onCreate={() => {
+    return <TemplateIndex client={props.client} jurisdictionId={props.jurisdictionId} boards={props.boards} designs={props.isInstanceAdmin} onCreate={() => {
       setFeedback(null);
       setCreating(true);
     }} onDesign={props.onDesignBoard} onBoardCreated={boardCreated} />;
@@ -202,6 +206,8 @@ function TemplateIndex(props: {
   client: ApiClient;
   jurisdictionId: string;
   boards: readonly BoardListItem[];
+  /** An instance administrator also publishes templates and customizes boards. */
+  designs: boolean;
   onCreate: () => void;
   onDesign: (boardId: string) => void;
   onBoardCreated: (boardId: string) => void;
@@ -227,10 +233,12 @@ function TemplateIndex(props: {
     }
   };
   return <Scroll>
-    <SurfaceHeader title="Templates" actions={<ActionButton kind="primary" onClick={props.onCreate}>
+    <SurfaceHeader title="Templates" actions={props.designs ? <ActionButton kind="primary" onClick={props.onCreate}>
       Create template
-    </ActionButton>} />
-    <p className="board-template-intro">Published templates are immutable. Open a configured board to publish its next version.</p>
+    </ActionButton> : undefined} />
+    <p className="board-template-intro">{props.designs
+      ? "Published templates are immutable. Open a configured board to publish its next version."
+      : "Create a board from a template an instance administrator published. Publishing and customizing templates are an instance administrator's."}</p>
     <section className="board-template-versions is-create" aria-label="Create a board from a published template">
       <h2>Create a board from a published template</h2>
       {templates.error ? <ErrorNote message={templates.error} /> : null}
@@ -250,7 +258,7 @@ function TemplateIndex(props: {
       hint="Create a template to provision the first board." /> : <div className="board-template-list">
       {props.boards.map((board) => <article key={board.id}>
         <div><h2>{board.title}</h2><p>{board.templateKey} · version {board.templateVersion}</p></div>
-        <ActionButton onClick={() => props.onDesign(board.id)}>Customize</ActionButton>
+        {props.designs ? <ActionButton onClick={() => props.onDesign(board.id)}>Customize</ActionButton> : null}
       </article>)}
     </div>}
   </Scroll>;

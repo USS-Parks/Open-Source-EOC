@@ -185,7 +185,7 @@ describe("record history and lifecycle", () => {
     const list = await screen.findByRole("list", { name: "Record history" });
     expect(list.textContent).toMatch(/Created · .* · A\. Operator \(Planning\)Roadempty → SR-96/);
     fireEvent.click(screen.getByRole("button", { name: "Load more history" }));
-    await screen.findByText("closed → reopened");
+    await screen.findByText("Closed → Reopened");
     expect(load).toHaveBeenLastCalledWith({ cursor: "c1" });
     expect(screen.queryByRole("button", { name: "Load more history" })).toBeNull();
   });

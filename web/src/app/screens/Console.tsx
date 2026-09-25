@@ -362,8 +362,8 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
 
   const rail = railFor(
     Boolean(session.me?.isInstanceAdmin || session.me?.memberships.some((m) => m.role === "admin")),
-    // Board templates are published by an instance admin who also administers this jurisdiction.
-    Boolean(session.me?.isInstanceAdmin && viewingMembership?.role === "admin"),
+    // A jurisdiction's administrators create boards from published templates; publishing also needs an instance admin.
+    viewingMembership?.role === "admin",
     enabledIntegrations,
     Boolean(viewingMembership),
   );
@@ -411,6 +411,11 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       onLayoutChange={(next) => workspace.updateLayout(page.arrangement, next)}
       rightDock={dock}
     >
+      {incident.selectedIncident?.lockedAt ? (
+        <p className="eoc-lockdown-banner" role="status">
+          <strong>{incident.selectedIncident.name}: guest access is locked.</strong> Guest grants cannot read its boards or records until an administrator lifts the lockdown; members and participating organizations keep their access.
+        </p>
+      ) : null}
       <LoadBoundary name={page.page.title}><Suspense fallback={<Loading />}>
         <Center
           // Remount the whole center when the incident changes, so no records,
@@ -709,6 +714,7 @@ function Center(props: {
             props.onDashboardContext({ ...props.routeContext, filter: filterState });
           }}
           onOpenMap={() => props.onNavigate({ kind: "map" })}
+          onOpenRecord={(boardId, recordId) => props.onOpenRecord(boardId, recordId, props.incidentId)}
           // The jurisdiction's own dashboard list is for its members; a partner
           // viewer sees only the dashboards shared with their incident.
           {...(props.memberships.some((m) => m.jurisdictionId === props.jurisdictionId)

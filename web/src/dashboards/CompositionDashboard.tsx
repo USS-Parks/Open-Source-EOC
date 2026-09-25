@@ -50,6 +50,7 @@ export interface CompositionDashboardProps {
   readonly loadMapRecords: (panel: DashboardCompositionPanel) => Promise<DashboardMapRecords>;
   readonly onDrill: (panel: DashboardCompositionPanel, field: string, value: string) => void;
   readonly onOpenMap?: (() => void) | undefined;
+  readonly onOpenRecord?: ((boardId: string, recordId: string) => void) | undefined;
 }
 
 function sourcePanel(
@@ -260,6 +261,7 @@ function StandardPanel(props: {
   readonly panel: DashboardPanelSnapshot;
   readonly source: DashboardCompositionPanel | null;
   readonly onDrill: CompositionDashboardProps["onDrill"];
+  readonly onOpenRecord?: CompositionDashboardProps["onOpenRecord"];
 }) {
   if (!isWidget(props.panel.data)) return <PanelUnavailable panel={props.panel} />;
   if (props.panel.data.kind === "status") {
@@ -291,6 +293,7 @@ function StandardPanel(props: {
       <DashboardWidget
         widget={{ ...props.panel.data, title: props.panel.title }}
         onDrill={props.source ? (field, value) => props.onDrill(props.source!, field, value) : undefined}
+        onOpenRecord={props.onOpenRecord}
       />
     </div>
   );
@@ -323,7 +326,7 @@ export function CompositionDashboard(props: CompositionDashboardProps) {
           </div>
           <section className="p-dash-lifelines" aria-label="Community Lifelines">
             {statuses.length ? statuses.map(({ panel, source }) => (
-              <StandardPanel key={panel.key} panel={panel} source={source} onDrill={props.onDrill} />
+              <StandardPanel key={panel.key} panel={panel} source={source} onDrill={props.onDrill} onOpenRecord={props.onOpenRecord} />
             )) : (
               <section className="p-dash-panel-state" aria-label="Community Lifelines">
                 <ConditionBadge state="unknown" label="Not configured" />
@@ -336,12 +339,12 @@ export function CompositionDashboard(props: CompositionDashboardProps) {
       ) : null}
       {charts.length ? (
         <div className="p-dash-charts">
-          {charts.map(({ panel, source }) => <StandardPanel key={panel.key} panel={panel} source={source} onDrill={props.onDrill} />)}
+          {charts.map(({ panel, source }) => <StandardPanel key={panel.key} panel={panel} source={source} onDrill={props.onDrill} onOpenRecord={props.onOpenRecord} />)}
         </div>
       ) : null}
       {lists.length ? (
         <section className="p-dash-activity" aria-label="Priority work and recent activity">
-          {lists.map(({ panel, source }) => <StandardPanel key={panel.key} panel={panel} source={source} onDrill={props.onDrill} />)}
+          {lists.map(({ panel, source }) => <StandardPanel key={panel.key} panel={panel} source={source} onDrill={props.onDrill} onOpenRecord={props.onOpenRecord} />)}
         </section>
       ) : null}
     </section>

@@ -123,7 +123,9 @@ describe("no-code designer (INV-6)", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Views" }));
     fireEvent.click(screen.getByText("Operating shelters"));
     setByLabel("open view title", "Available shelters");
-    setByLabel("open sort field", "capacity");
+    fireEvent.click(screen.getAllByRole("button", { name: "Add sort key" })[0]!);
+    setByLabel("Sort 1 field", "capacity");
+    fireEvent.click(screen.getAllByRole("button", { name: "Save to view" })[0]!);
 
     fireEvent.click(screen.getByRole("tab", { name: "Layouts" }));
     fireEvent.click(screen.getAllByRole("button", { name: "Add section" })[0]!);
@@ -141,7 +143,8 @@ describe("no-code designer (INV-6)", () => {
     fireEvent.click(screen.getByText(`Publish version ${base.version + 1}`));
     const saved = onSave.mock.calls[0]![0] as BoardTemplate;
     expect(saved.fields.find((field) => field.key === "name")).toMatchObject({ label: "Site name", required: false });
-    expect(saved.views[0]).toMatchObject({ title: "Available shelters", sort: { field: "capacity", dir: "asc" } });
+    expect(saved.views[0]).toMatchObject({ title: "Available shelters", sorts: [{ field: "capacity", dir: "asc" }] });
+    expect(saved.views[0]).not.toHaveProperty("sort");
     expect(saved.inputLayout?.sections[0]?.fields).toEqual(["name"]);
     expect(saved.workflow?.transitions[0]).toMatchObject({
       assignment: { required: true, allowedTargets: ["position"] },

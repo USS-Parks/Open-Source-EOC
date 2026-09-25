@@ -47,7 +47,7 @@ it("checks a WebEOC export with the saved mapping, imports the valid rows and do
   const client = setup();
   await screen.findByRole("option", { name: "Significant Events" });
   fireEvent.change(screen.getByLabelText("Target board"), { target: { value: "b1" } });
-  const input = await screen.findByLabelText("WebEOC CSV export");
+  const input = await screen.findByLabelText("WebEOC export (CSV or Excel)");
   // The saved zone replaces the browser's zone once the board has loaded.
   await waitFor(() => expect((screen.getByLabelText("WebEOC server time zone") as HTMLSelectElement).value).toBe("America/Chicago"));
   const file = new File(["dataid,Summary,sev\r\n11,Levee seep,normal\r\n12,Power out,High\r\n"], "events.csv", { type: "text/csv" });

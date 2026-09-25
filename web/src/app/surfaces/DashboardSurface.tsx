@@ -76,6 +76,8 @@ export interface DashboardSurfaceProps {
   readonly onFilter: (filter: WidgetFilter | null) => void;
   readonly onViewStateChange: (state: DashboardViewState) => void;
   readonly onOpenMap?: (() => void) | undefined;
+  /** Opens a board record, from a calendar widget's item. */
+  readonly onOpenRecord?: ((boardId: string, recordId: string) => void) | undefined;
   /** With a jurisdiction, the surface also lists its dashboards; administrators create them. */
   readonly jurisdictionId?: string | undefined;
   readonly isAdmin?: boolean | undefined;
@@ -399,7 +401,7 @@ export function DashboardSurface(props: DashboardSurfaceProps) {
     return (
       <Scroll><div className="p-dash-surface">
         <KitEmptyState title="Select an incident" description="Saved dashboards, impact totals and map records are incident scoped." />
-        {legacy.data ? <Dashboard snapshot={legacy.data} onDrill={(field, value) => props.onFilter({ field, equals: value })} /> : null}
+        {legacy.data ? <Dashboard snapshot={legacy.data} onDrill={(field, value) => props.onFilter({ field, equals: value })} onOpenRecord={props.onOpenRecord} /> : null}
         {jurisdictionDashboards}
       </div></Scroll>
     );
@@ -466,6 +468,7 @@ export function DashboardSurface(props: DashboardSurfaceProps) {
               openDrill(panel, field, value, title);
             }}
             onOpenMap={props.onOpenMap}
+            onOpenRecord={props.onOpenRecord}
           />
           <p className="p-dash-context-line">
             Updated {new Date(snapshot.data.computedAt).toLocaleTimeString()} · {snapshot.data.scope.kind === "viewport" ? "Viewport totals" : "Incident-area totals"}
@@ -483,7 +486,7 @@ export function DashboardSurface(props: DashboardSurfaceProps) {
       {!props.configKey && legacy.data ? (
         <section aria-label="Legacy dashboard fallback">
           <p className="p-dash-context-line">Legacy dashboard · not a saved incident overview</p>
-          <Dashboard snapshot={legacy.data} onDrill={(field, value) => props.onFilter({ field, equals: value })} />
+          <Dashboard snapshot={legacy.data} onDrill={(field, value) => props.onFilter({ field, equals: value })} onOpenRecord={props.onOpenRecord} />
         </section>
       ) : null}
       {drill ? (

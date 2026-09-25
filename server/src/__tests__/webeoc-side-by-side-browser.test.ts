@@ -298,7 +298,7 @@ describe("WebEOC side-by-side evaluation, internal run", () => {
     await page.getByRole("tab", { name: "Records" }).click();
     const migration = page.getByRole("region", { name: "WebEOC migration" });
     await migration.getByLabel("Target board").selectOption({ label: "Shelter status" });
-    await migration.getByLabel("WebEOC CSV export").setInputFiles({ name: "shelters.csv", mimeType: "text/csv", buffer: WEBEOC_EXPORT });
+    await migration.getByLabel("WebEOC export (CSV or Excel)").setInputFiles({ name: "shelters.csv", mimeType: "text/csv", buffer: WEBEOC_EXPORT });
     await migration.getByText("2 rows read: 1 will be created, 0 already imported, 1 rejected.").waitFor();
     await migration.getByRole("button", { name: "Import 1 record" }).click();
     await migration.getByText("Imported 1 record. 1 row rejected, 0 already imported.").waitFor();

@@ -135,4 +135,29 @@ describe("the dashboard renders a computed snapshot and nothing else", () => {
     expect([...upcoming.querySelectorAll("li > span")].map((item) => item.textContent)).toEqual(["SR-96", "Untitled record"]);
     expect(screen.getByTestId("widget-empty").textContent).toContain("Nothing scheduled from now on.");
   });
+
+  it("drills from a kanban column and opens a calendar item's record", () => {
+    const onDrill = vi.fn();
+    const onOpenRecord = vi.fn();
+    render(
+      <Theme name="light">
+        <Dashboard onDrill={onDrill} onOpenRecord={onOpenRecord} snapshot={{
+          dashboardId: "d1", title: "Board views", computedAt: new Date().toISOString(),
+          widgets: [
+            { kind: "kanban", key: "by_status", title: "Closures by status", field: "status", columns: [
+              { value: "closed", count: 2 }, { value: null, count: 1 },
+            ] },
+            { kind: "calendar", key: "reopenings", title: "Reopenings", field: "reopen_estimate", boardId: "b1", items: [
+              { id: "r1", at: "2026-09-24T16:00:00.000Z", label: "SR-96" },
+            ] },
+          ],
+        }} />
+      </Theme>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Show the 2 records in Closed" }));
+    expect(onDrill).toHaveBeenCalledWith("status", "closed");
+    expect(screen.queryByRole("button", { name: /No value/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "SR-96" }));
+    expect(onOpenRecord).toHaveBeenCalledWith("b1", "r1");
+  });
 });

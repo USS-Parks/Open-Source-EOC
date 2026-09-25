@@ -133,6 +133,8 @@ export function ViewRefineControls(props: {
   readonly fields: readonly FieldDef[];
   readonly value: ViewRefinement;
   readonly onApply: (next: ViewRefinement) => void;
+  /** In a template's own view, where archived records follow the board's reads, the archived choice is left out. */
+  readonly forView?: boolean;
 }) {
   const filterable = props.fields.filter((field) => field.type !== "geometry");
   const groupable = filterable.filter((field) => !field.calculation);
@@ -177,7 +179,7 @@ export function ViewRefineControls(props: {
   ].filter(Boolean);
 
   return <details className="board-refine">
-    <summary><span>Filter, sort and group</span>{active.length ? <small>{active.join(" · ")}</small> : null}</summary>
+    <summary><span>{props.forView ? "Conditions, sorts and groups" : "Filter, sort and group"}</span>{active.length ? <small>{active.join(" · ")}</small> : null}</summary>
     <div className="board-refine__body">
       <fieldset className="board-refine__group">
         <legend>Conditions</legend>
@@ -219,14 +221,14 @@ export function ViewRefineControls(props: {
       <div className="board-refine__row">
         <Select label="Group by" value={groupBy} options={[{ value: "", label: "No grouping" }, ...fieldOptions(groupable)]}
           onChange={setGroupBy} />
-        <Select label="Archived records" value={archived}
+        {props.forView ? null : <Select label="Archived records" value={archived}
           options={[{ value: "exclude", label: "Leave out archived records" },
             { value: "include", label: "Include archived records" }, { value: "only", label: "Only archived records" }]}
-          onChange={(next) => setArchived(next as ViewRefinement["archived"])} />
+          onChange={(next) => setArchived(next as ViewRefinement["archived"])} />}
       </div>
       {problem ? <p role="alert">{problem}</p> : null}
       <div className="board-refine__actions">
-        <ActionButton kind="primary" onClick={apply}>Apply</ActionButton>
+        <ActionButton kind="primary" onClick={apply}>{props.forView ? "Save to view" : "Apply"}</ActionButton>
         <ActionButton kind="quiet" onClick={() => props.onApply(NO_REFINEMENT)}>Clear</ActionButton>
       </div>
     </div>

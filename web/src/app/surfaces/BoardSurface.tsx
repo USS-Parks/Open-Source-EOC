@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { BoardTemplate, FieldDef, FormLayout, ViewRecord } from "@openeoc/shared";
+import { choiceLabel, type BoardTemplate, type FieldDef, type FormLayout, type ViewRecord } from "@openeoc/shared";
 import { BoardImport, type ImportRun } from "../../boards/BoardImport.js";
 import {
   BoardModeBody,
@@ -753,6 +753,7 @@ function formatDetailValue(value: unknown, type: FieldDef["type"]): string {
   if (type === "boolean") return value ? "Yes" : "No";
   if (type === "attachment") return "Attachment unavailable";
   if (type === "record_ref") return `Related record ${String(value)}`;
+  if (type === "enum") return choiceLabel(String(value));
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }

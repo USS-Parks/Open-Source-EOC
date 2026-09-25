@@ -25,6 +25,7 @@ import { Button, EnumSelect, Panel, TextField } from "../design/components.js";
 import { BoardView } from "./BoardView.js";
 import { RecordForm } from "./RecordForm.js";
 import { RecordAccessEditor } from "./record-access.js";
+import { ViewRefineControls } from "./ViewRefine.js";
 import "./designer.css";
 
 export interface DesignerPositionOption {
@@ -199,15 +200,14 @@ function ExistingViewEditor(props: {
     <CheckGroup label={`${view.key} view columns`} values={view.columns}
       options={props.fields.map((field) => ({ value: field.key, label: field.label }))}
       onChange={(columns) => props.onChange({ ...view, columns })} />
-    <div className="board-designer__grid board-designer__grid--2">
-      <Select label={`${view.key} sort field`} value={view.sort?.field ?? ""}
-        options={[{ value: "", label: "No sort" }, ...props.fields.map((field) => ({ value: field.key, label: field.label }))]}
-        onChange={(field) => props.onChange({ ...view,
-          sort: field ? { field, dir: view.sort?.dir ?? "asc" } : undefined })} />
-      {view.sort ? <Select label={`${view.key} sort direction`} value={view.sort.dir}
-        options={[{ value: "asc", label: "Ascending" }, { value: "desc", label: "Descending" }]}
-        onChange={(dir) => props.onChange({ ...view, sort: { ...view.sort!, dir: dir as "asc" | "desc" } })} /> : null}
-    </div>
+    <ViewRefineControls fields={props.fields} forView
+      value={{ where: view.where ?? [], sorts: view.sorts ?? (view.sort ? [view.sort] : []), groupBy: view.groupBy ?? null, archived: "exclude" }}
+      onApply={(next) => {
+        // The view keeps its own conditions, ordered sort keys and grouping; a single legacy sort folds into the sort keys.
+        const { sort: _sort, sorts: _sorts, where: _where, groupBy: _groupBy, ...rest } = view;
+        props.onChange({ ...rest, ...(next.where.length ? { where: [...next.where] } : {}),
+          ...(next.sorts.length ? { sorts: [...next.sorts] } : {}), ...(next.groupBy ? { groupBy: next.groupBy } : {}) });
+      }} />
     <div className="board-designer__stack">
       {view.filter.map((filter, index) => <div className="board-designer__rule" key={`${filter.field}-${index}`}>
         <Select label={`${view.key} filter ${index + 1} field`} value={filter.field}

@@ -4,6 +4,8 @@
 .dash-widget { background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: var(--eoc-radius-md); box-shadow: var(--eoc-shadow-sm); padding: 14px; }
 .dash-widget-title { color: var(--eoc-text-muted); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; margin: 0 0 10px; text-transform: uppercase; }
 .dash-meta { color: var(--eoc-text-muted); font-size: 12px; }
+.dash-kanban-drill { display: grid; gap: 2px; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.dash-upcoming-open { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; text-decoration: underline; cursor: pointer; }
 .dash-kanban { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
 .dash-kanban > li { border: 1px solid var(--eoc-border); border-radius: 6px; border-top: 3px solid var(--eoc-brand-teal); display: grid; flex: 1 1 96px; gap: 2px; min-width: 96px; padding: 6px 10px; }
 .dash-kanban strong { font-size: 22px; font-variant-numeric: tabular-nums; }

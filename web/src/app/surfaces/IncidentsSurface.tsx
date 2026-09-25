@@ -82,6 +82,8 @@ export function IncidentsSurface(props: {
       await fn();
       setNotice(done);
       setReload((n) => n + 1);
+      // Closing, reopening and lockdown change what the console shows for the incident.
+      props.onChanged?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

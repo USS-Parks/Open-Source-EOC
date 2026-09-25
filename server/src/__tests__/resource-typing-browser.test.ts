@@ -102,11 +102,11 @@ describe("real-browser resource typing, pool and cost rollup", () => {
     await pool.getByRole("button", { name: "Add to pool" }).click();
     expect((await added).status()).toBe(201);
     const engine = pool.getByRole("listitem").filter({ hasText: "Engine 41" });
-    await engine.getByText("available", { exact: true }).waitFor();
+    await engine.getByText("Available", { exact: true }).waitFor();
     await engine.getByLabel("Request for Engine 41").selectOption(requestId);
     await engine.getByRole("button", { name: "Update status" }).click();
     await engine.getByText("Assigned to request: Engine strike team").waitFor();
-    await engine.getByText("assigned", { exact: true }).waitFor();
+    await engine.getByText("Assigned", { exact: true }).waitFor();
 
     const rollup = page.getByRole("region", { name: "Cost rollup" });
     await rollup.getByRole("row", { name: "Engine total $5,400.00" }).waitFor();
@@ -119,7 +119,7 @@ describe("real-browser resource typing, pool and cost rollup", () => {
     await engine.getByLabel("Communications equipment returned").check();
     await engine.getByLabel("Time and cost records submitted").check();
     await engine.getByRole("button", { name: "Update status" }).click();
-    await engine.getByText("demobilized", { exact: true }).waitFor();
+    await engine.getByText("Demobilized", { exact: true }).waitFor();
     await engine.getByText(/Returned needs service\. Checks made: Equipment and supplies returned; Communications equipment returned; Time and cost records submitted\./).waitFor();
     expect(await engine.getByRole("button", { name: "Update status" }).count()).toBe(0);
 

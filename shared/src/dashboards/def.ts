@@ -241,6 +241,8 @@ export interface CalendarResult {
   readonly missing?: boolean;
   readonly field?: string;
   readonly items: ReadonlyArray<{ readonly id: string; readonly at: string; readonly label: string | null }>;
+  /** The board the items are records of, to open one. */
+  readonly boardId?: string;
 }
 export type WidgetResult = TileResult | ChartResult | StatusResult | ListResult | KanbanResult | CalendarResult;
 

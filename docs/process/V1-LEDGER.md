@@ -5801,3 +5801,59 @@ the installed app's way to a host and checks two browsers against one.
 - **Evidence level:** launcher tests and the host proof on this machine
   with Edge and Chrome.
 - **Rollback:** revert the commit.
+
+## Readiness RD8: the screens on the open engineering list
+
+Operator Trust PSPR unit RD8, the screen items the Readiness PSPR lists.
+
+- **What changed.**
+  - **Choice labels everywhere a record shows.** A choice field reads as its
+    label ("Accepted", "Immediate") in the record detail, the change history
+    ("Submitted → Accepted"), and the cards of the kanban and calendar modes,
+    not as its stored value.
+  - **Excel on the WebEOC migration screen.** The screen takes a CSV or an
+    Excel (`.xlsx`) export, which the server already read, and sends the
+    file under its own name.
+  - **Creating from a published template** is open to an administrator of
+    the selected jurisdiction who is not an instance administrator. The
+    Templates screen lists published templates and creates boards from them;
+    publishing and customizing stay an instance administrator's, and their
+    buttons are shown only to one.
+  - **A console-wide lockdown banner.** While guest access to the selected
+    incident is locked, every screen shows a banner saying so and that
+    members and participating organizations keep their access. Closing,
+    reopening and locking an incident refresh the console's view of it.
+  - **Conditions, sorts and groups saved into a template's own views.** The
+    board designer edits a view with the same controls as the board's
+    refinement: conditions, ordered sort keys and a group field, saved into
+    the template (`where`, `sorts`, `groupBy`); a single legacy sort folds
+    into the sort keys.
+  - **Drilldown from kanban and calendar widgets.** A kanban widget's column
+    opens the supporting records of that value, and a calendar widget's item
+    opens its record. The server's contributing-records route takes a group
+    for a kanban widget by its column field as it did for a chart, and a
+    calendar widget's result carries its board.
+  - **The pool status badges' case.** The resource pool's status badges read
+    in sentence case.
+  - **Renaming boards activated before the title change.** Migration
+    `0139_board_titles.sql` retitles each board an incident activated while
+    titles took the template key ("Winter Storm: shelters") with the
+    template's title, and leaves a board someone renamed as it is.
+- **Tests.** New: `board-choice-labels-browser.test.ts`,
+  `templates-jurisdiction-admin-browser.test.ts`,
+  `board-titles-migration.test.ts`. Extended: the board views browser test
+  (kanban and calendar drilldown), the designer browser test (a view's
+  conditions, sorts and grouping), the WebEOC import tests, the incident
+  lifecycle browser test (the banner), the resource typing browser test (the
+  badges), and the unit tests of the board tools, designer, templates
+  screen and dashboard. Three of the new tests were written ahead of the
+  screens and corrected when they first ran: the migration test named an
+  incident template the fixture lacked, the kanban card shows a choice as
+  "State: Accepted" rather than alone, and the designer's view already held a
+  condition, so the one added is the second. The designer test that saves
+  into a view now runs after the one that publishes version 3.
+- **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
+- **Evidence level:** browser tests at 1586 by 992 for the new screens, real
+  PostgreSQL for the migration.
+- **Rollback:** revert the commit; migration `0139` renames titles only and
+  needs no reverse for the code to run.

@@ -218,7 +218,7 @@ describe("board records in depth", () => {
     const entries = await history.locator(":scope > li").allTextContents();
     expect(entries).toHaveLength(3);
     expect(entries[0]).toMatch(/^Created · .* · Admin/);
-    for (const change of ["Summaryempty → Bridge inspection", "Statusempty → open", "Quantityempty → 5"]) {
+    for (const change of ["Summaryempty → Bridge inspection", "Statusempty → Open", "Quantityempty → 5"]) {
       expect(entries[0]).toContain(change);
     }
     expect(entries[1]).toMatch(/^Updated · .* · AdminQuantity5 → 6$/);

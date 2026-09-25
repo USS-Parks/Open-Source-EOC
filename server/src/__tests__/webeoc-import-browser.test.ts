@@ -5,6 +5,7 @@ import type { FastifyInstance } from "fastify";
 import type { Browser, Locator, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
+import { parseCsv, tableXlsx } from "../boards/transfer.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { buildDir, buildWeb, launchBrowser, listen, login, post, serveStatic, shotDir } from "./browser.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
@@ -59,7 +60,7 @@ async function openMigration(): Promise<Locator> {
   await page.getByRole("tab", { name: "Records" }).click();
   const panel = page.getByRole("region", { name: "WebEOC migration" });
   await panel.getByLabel("Target board").selectOption({ label: "Significant Events" });
-  await panel.getByLabel("WebEOC CSV export").waitFor();
+  await panel.getByLabel("WebEOC export (CSV or Excel)").waitFor();
   return panel;
 }
 
@@ -83,7 +84,7 @@ describe("WebEOC migration screen", () => {
     // Upload and dry run: fields are matched to columns by name and nothing is written.
     let panel = await openMigration();
     await panel.getByLabel("WebEOC server time zone").selectOption("America/Los_Angeles");
-    await panel.getByLabel("WebEOC CSV export").setInputFiles({ name: "significant-events.csv", mimeType: "text/csv", buffer: EXPORT });
+    await panel.getByLabel("WebEOC export (CSV or Excel)").setInputFiles({ name: "significant-events.csv", mimeType: "text/csv", buffer: EXPORT });
     await panel.getByRole("heading", { name: "Check result" }).waitFor();
     await panel.getByText("8 rows read: 3 will be created, 0 already imported, 5 rejected.").waitFor();
     expect(await panel.getByLabel("Column for Occurred").inputValue()).toBe("occurred");
@@ -133,7 +134,7 @@ describe("WebEOC migration screen", () => {
     panel = await openMigration();
     await panel.getByText(/This board has a saved mapping/).waitFor();
     expect(await panel.getByLabel("WebEOC server time zone").inputValue()).toBe("America/Los_Angeles");
-    await panel.getByLabel("WebEOC CSV export").setInputFiles({ name: "significant-events.csv", mimeType: "text/csv", buffer: EXPORT });
+    await panel.getByLabel("WebEOC export (CSV or Excel)").setInputFiles({ name: "significant-events.csv", mimeType: "text/csv", buffer: EXPORT });
     await panel.getByText("8 rows read: 1 will be created, 3 already imported, 4 rejected.").waitFor();
     await shot(panel, "webeoc-check-dark-1440.png");
 
@@ -146,4 +147,17 @@ describe("WebEOC migration screen", () => {
     expect(pageErrors).toEqual([]);
     expect(externalRequests).toEqual([]);
   }, 180_000);
+
+  it("reads the same export saved as an Excel workbook", async () => {
+    const [headers, ...rows] = parseCsv(EXPORT.toString("utf8"));
+    const workbook = Buffer.from(tableXlsx({ headers: headers!, rows }));
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    const panel = await openMigration();
+    await panel.getByLabel("WebEOC export (CSV or Excel)").setInputFiles({
+      name: "significant-events.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: workbook,
+    });
+    await panel.getByText("8 rows read: 1 will be created, 3 already imported, 4 rejected.").waitFor();
+    expect(await records()).toBe(3);
+    expect(pageErrors).toEqual([]);
+  }, 120_000);
 });

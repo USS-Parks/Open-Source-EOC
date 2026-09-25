@@ -53,6 +53,16 @@ describe("board template lifecycle surface", () => {
     expect(screen.queryByRole("button", { name: /Publish/ })).toBeNull();
   });
 
+  it("lets a jurisdiction-only administrator create a board from a published template", async () => {
+    const api = client();
+    render(<TemplatesSurface client={api} jurisdictionId="jurisdiction-1" boards={[board]}
+      isInstanceAdmin={false} isJurisdictionAdmin={true}
+      onOpenBoard={() => undefined} onDesignBoard={() => undefined} />);
+    expect(await screen.findByRole("region", { name: "Create a board from a published template" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Create template" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Customize" })).toBeNull();
+  });
+
   it("publishes an immutable version and applies it to the selected board", async () => {
     const api = client();
     const onOpenBoard = vi.fn();

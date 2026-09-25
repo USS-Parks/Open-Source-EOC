@@ -2162,7 +2162,7 @@ export class ApiClient {
     const form = new FormData();
     if (options.mapping) form.append("mapping", JSON.stringify(options.mapping));
     if (options.timeZone) form.append("timeZone", options.timeZone);
-    form.append("file", file, "webeoc.csv");
+    form.append("file", file, file instanceof File ? file.name : "webeoc.csv");
     return this.request("POST", `/api/v1/boards/${encodeURIComponent(boardId)}/webeoc-import?dryRun=${String(options.dryRun)}`, form);
   }
   /** One page of a record's change history, oldest first. */

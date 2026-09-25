@@ -259,10 +259,19 @@ describe("board view modes in a real browser", () => {
     const upcoming = Object.entries(dues).filter(([, at]) => Date.parse(at) >= Date.now())
       .sort(([, left], [, right]) => Date.parse(left) - Date.parse(right)).map(([summary]) => summary);
     expect(upcoming).toContain("Bridge inspection");
-    expect(await due.locator("li > span").allTextContents()).toEqual(upcoming);
+    expect(await due.locator("li > button").allTextContents()).toEqual(upcoming);
     const bars = composed.getByTestId("widget-work_counts");
     expect(await attributes(bars.locator('[role="img"]'), "aria-label"))
       .toEqual([`closed: ${counts.closed}`, `in_progress: ${counts.in_progress}`, `open: ${counts.open}`]);
+    // Each kanban column drills to its records, and a calendar item opens its record.
+    await kanban.getByRole("button", { name: `Show the ${counts.open} records in Open` }).click();
+    const supporting = page.getByRole("region", { name: "Supporting records for Work by status" });
+    await supporting.getByText("Bridge inspection").first().waitFor();
+    expect(await supporting.getByText("Culvert survey").count()).toBe(0);
+    await due.getByRole("button", { name: "Bridge inspection" }).click();
+    await page.getByRole("region", { name: "Selected record" }).getByText("Bridge inspection").first().waitFor();
+    await page.goBack();
+    await kanban.waitFor();
     // The first walk left this person's theme preference dark.
     await setTheme(page, "light");
     await page.screenshot({ path: join(SHOTS, "board-views-dashboard-light-1440.png"), fullPage: false });

@@ -104,6 +104,9 @@ describe("real-browser incident lifecycle", () => {
 
     await press(stormRow.getByRole("button", { name: "Lock guest access" }));
     await page.getByText("Guest access to Coastal Storm is locked.").waitFor();
+    // With the storm selected, every screen carries the lockdown.
+    await page.getByLabel("Selected incident").selectOption({ label: "Coastal Storm" });
+    await page.getByRole("status").filter({ hasText: "Coastal Storm: guest access is locked." }).waitFor();
     await stormRow.getByText("Locked", { exact: true }).waitFor();
     const stormItem = incidentItems.filter({ hasText: "Coastal Storm" });
     await stormItem.getByText("Guest access locked", { exact: true }).waitFor();

@@ -123,4 +123,43 @@ describe("no-code board authoring", () => {
     expect(pageErrors).toEqual([]);
     expect(externalRequests).toEqual([]);
   }, 120_000);
+
+  it("saves conditions, sorts and a grouping into a template's own view", async () => {
+    const viewPage = await browser.newPage({ viewport: { width: 1586, height: 992 } });
+    viewPage.on("pageerror", (error) => pageErrors.push(error.message));
+    await viewPage.goto(`${baseUrl}/app/index.html#/board/${boardId}/design`);
+    await viewPage.getByLabel("Email").fill("admin@example.org");
+    await viewPage.getByLabel("Password").fill("correct-horse-battery");
+    await viewPage.getByRole("button", { name: "Sign in" }).click();
+    await viewPage.getByRole("heading", { name: "Customize Shelters" }).waitFor();
+    await viewPage.getByRole("tab", { name: "Views" }).click();
+    // The view already holds one condition; the one added here is the second.
+    const view = viewPage.locator("details.board-designer__field").filter({ hasText: "open:" });
+    await view.locator("summary").first().click();
+    const refine = view.locator("details.board-refine");
+    await refine.locator("summary").click();
+    await refine.getByRole("button", { name: "Add condition" }).click();
+    await refine.getByLabel("Condition 2 field").selectOption("status");
+    await refine.getByLabel("Condition 2 operator").selectOption("eq");
+    await refine.getByLabel("Condition 2 value").selectOption("normal");
+    await refine.getByRole("button", { name: "Add sort key" }).click();
+    await refine.getByLabel("Sort 1 field").selectOption("occupancy");
+    await refine.getByLabel("Sort 1 direction").selectOption("desc");
+    await refine.getByLabel("Group by").selectOption("status");
+    expect(await refine.getByLabel("Archived records").count()).toBe(0);
+    await refine.getByRole("button", { name: "Save to view" }).click();
+    const published = viewPage.waitForResponse((response) => response.request().method() === "POST"
+      && response.url().endsWith("/api/v1/templates") && response.status() === 201);
+    await viewPage.getByRole("button", { name: /^Publish and apply version \d+$/ }).click();
+    await published;
+    const [template] = await admin`select definition from board_templates where key = 'shelters' order by version desc limit 1`;
+    const saved = (template!.definition as { views: Array<Record<string, unknown>> }).views.find((candidate) => candidate.key === "open")!;
+    expect(saved).toMatchObject({
+      where: [{ field: "planned", op: "neq", value: true }, { field: "status", op: "eq", value: "normal" }],
+      sorts: [{ field: "occupancy", dir: "desc" }], groupBy: "status",
+    });
+    expect(saved).not.toHaveProperty("sort");
+    await viewPage.close();
+    expect(pageErrors).toEqual([]);
+  }, 120_000);
 });

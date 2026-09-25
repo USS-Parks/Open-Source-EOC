@@ -210,6 +210,7 @@ function cellText(value: unknown, type: FieldDef["type"] | undefined): string {
   if (valueKey(value) === null) return "";
   if (type === "datetime" && typeof value === "string" && Number.isFinite(Date.parse(value))) return new Date(value).toLocaleString();
   if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (type === "enum") return choiceLabel(String(value));
   return typeof value === "object" ? JSON.stringify(value) : String(value);
 }
 
