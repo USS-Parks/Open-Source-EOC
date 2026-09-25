@@ -8265,3 +8265,15 @@ three browser tests.
   tracking tests 17 of 17; the resource labels, staffing and board views
   browser files, 6 of 6. The macOS job itself is the next check.
 - **Rollback:** revert the commit.
+
+## IPAWS connector grant
+
+Basho, 2026-09-25, on `docs/process/IPAWS-CONNECTOR-PSPR-2026-09-25.md`:
+"approved, run it STS". Every default in the plan's section 4 is in force:
+the certificate and key as one PEM bundle, the confirming admin's email as
+`logonUser`, `sent` re-stamped at transmission, acceptance judged per
+channel and failing closed, checks before any network call, `xml-crypto`
+for XML signatures, and the handshake kept as a postCAP to the test
+environment. The research behind it is
+`FEMA-IPAWS-INTEGRATION-RESEARCH-2026-09-25.md`. Receipts for IC1 to IC3
+follow here.
