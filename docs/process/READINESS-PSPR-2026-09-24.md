@@ -1,5 +1,9 @@
 # Readiness PSPR: Windows and macOS, 150 users, air gap, completion
 
+> **Superseded 2026-09-24** for every unit not landed (RD4 to RD12) by
+> `docs/process/OPERATOR-TRUST-PSPR-2026-09-24.md`, which carries those units
+> forward under their RD numbers. RD1 to RD3 landed under this plan.
+
 **Status:** APPROVED 2026-09-24. Basho: "Yes, run it STS with my full
 approval now. All necessary or unknown permissions are granted with my
 express authorization having been attained with this statement. Do not report

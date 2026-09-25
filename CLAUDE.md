@@ -2,7 +2,8 @@
 
 ## Authority documents
 
-- `docs/process/FINISH-PSPR-2026-09-22.md` is the only live roster and the approved execution authority: order, ownership, gates and landing from the evaluation build to version 1.0. Approved by Basho 2026-09-23.
+- `docs/process/OPERATOR-TRUST-PSPR-2026-09-24.md` is the only live roster and the approved execution authority, approved by Basho 2026-09-24 for STS with full permissions. It supersedes `docs/process/READINESS-PSPR-2026-09-24.md` for every unit not landed; RD receipts keep their numbers.
+- `docs/process/FINISH-PSPR-2026-09-22.md` remains the execution contract (commit, ledger and landing discipline) where the live roster does not supersede it. Approved by Basho 2026-09-23.
 - `docs/process/archive/` holds the rosters it supersedes. They are read for history, never executed. Each carries a supersession header. The universal execution contract and product invariants of the original roster remain binding where the Finish PSPR does not supersede them.
 - `docs/process/VIRTUAL-EOC-PLATFORM-RESEARCH-2026-09-17.md` is the research basis behind the roster and is not superseded.
 - Unit receipts append to `docs/process/V1-LEDGER.md`. `docs/process/VEOC-EXECUTION-LEDGER.md` is frozen and historical; nothing is appended to it. Cite a receipt in either by its heading, never by line number.
