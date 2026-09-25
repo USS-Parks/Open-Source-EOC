@@ -176,7 +176,7 @@ function DeviceSettings() {
   const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
-    void navigator.serviceWorker?.getRegistration().then((registration) => setInstalled(Boolean(registration))).catch(() => setInstalled(false));
+    void navigator.serviceWorker?.getRegistration().then((registration) => setInstalled(Boolean(registration?.active))).catch(() => setInstalled(false));
     void navigator.storage?.estimate().then((estimate) => setUsage(estimate.usage === undefined ? null : formatBytes(estimate.usage))).catch(() => undefined);
     void navigator.storage?.persisted().then(setPersisted).catch(() => undefined);
   }, []);

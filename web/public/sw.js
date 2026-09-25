@@ -7,7 +7,9 @@
  *
  * - The precache holds this build's shell, every code-split chunk, the
  *   manifest and icons, the map glyphs, the NAPSG symbols and the bundled
- *   basemap. It is served cache first.
+ *   basemap. It is served cache first. On the first install the map files,
+ *   most of the bytes, are copied after the worker takes over, so a reload
+ *   without a connection opens the console as soon as its own files are in.
  * - Navigations go to the network first; the cached shell answers offline.
  * - API calls and WebSocket streams are never cached. The app keeps offline
  *   work in its own IndexedDB outbox, so a stored response must never stand
@@ -33,13 +35,20 @@ const PRECACHE_NAME = `openeoc-precache-${PRECACHE.version}`;
 const RUNTIME_NAME = "openeoc-runtime";
 const precached = new Set(PRECACHE.files.map((file) => new URL(file, self.location.href).href));
 const shellUrl = new URL("index.html", self.location.href).href;
+const MAP_FILES = /\/(fonts|napsg|basemap)\//;
+
+/** Copy every listed file not yet in the precache, one at a time, so it never crowds out the console's own requests. */
+async function fillPrecache(skip = () => false) {
+  const cache = await caches.open(PRECACHE_NAME);
+  const held = new Set((await cache.keys()).map((request) => request.url));
+  for (const url of precached) if (!held.has(url) && !skip(url)) await cache.add(url);
+}
 
 self.addEventListener("install", (event) => {
-  // One file at a time, so installing never crowds out the console's own requests.
-  event.waitUntil((async () => {
-    const cache = await caches.open(PRECACHE_NAME);
-    for (const url of precached) await cache.add(url);
-  })());
+  // An update copies everything before it can take over; the first install
+  // leaves the map files to the page's COMPLETE_PRECACHE message.
+  const first = !self.registration.active;
+  event.waitUntil(fillPrecache((url) => first && MAP_FILES.test(url)));
 });
 
 self.addEventListener("activate", (event) => {
@@ -52,6 +61,7 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") event.waitUntil(self.skipWaiting());
+  if (event.data?.type === "COMPLETE_PRECACHE") event.waitUntil(fillPrecache());
 });
 
 self.addEventListener("fetch", (event) => {

@@ -54,6 +54,9 @@ export async function registerFieldWorker(
     watch(registration.waiting);
     watch(registration.installing);
     registration.addEventListener("updatefound", () => watch(registration.installing));
+    // The first install leaves the map files until the worker takes over;
+    // this copies whatever the precache still lacks, on every start.
+    void navigator.serviceWorker.ready.then((ready) => ready.active?.postMessage({ type: "COMPLETE_PRECACHE" }));
     // A console left open through a shift still learns of a new build.
     setInterval(() => void registration.update().catch(() => undefined), UPDATE_CHECK_MS);
     return registration;

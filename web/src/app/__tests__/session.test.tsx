@@ -87,6 +87,7 @@ function Probe() {
       <span data-testid="jur">{session.jurisdictionId ?? ""}</span>
       <span data-testid="position">{session.me?.position?.title ?? ""}</span>
       <span data-testid="error">{session.error ?? ""}</span>
+      <span data-testid="offline">{String(session.offline)}</span>
       <button type="button" onClick={() => void session.login("e@x.org", "pw")}>
         login
       </button>
@@ -145,6 +146,29 @@ describe("SessionProvider", () => {
     reachable = true;
     window.dispatchEvent(new Event("online"));
     await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("authed"));
+    expect(screen.getByTestId("error").textContent).toBe("");
+  });
+
+  it("opens offline from the profile this computer saved, then resumes when the server answers", async () => {
+    let reachable = true;
+    const client = makeClient(undefined, () => reachable);
+    const first = render(<SessionProvider client={client}><Probe /></SessionProvider>);
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("anon"));
+    fireEvent.click(screen.getByText("login"));
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("authed"));
+    first.unmount();
+
+    // A restart with the server out of reach.
+    localStorage.setItem("openeoc.tokens", JSON.stringify({ accessToken: "A", resumeToken: "R" }));
+    reachable = false;
+    render(<SessionProvider client={makeClient(undefined, () => reachable)}><Probe /></SessionProvider>);
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("authed"));
+    expect(screen.getByTestId("offline").textContent).toBe("true");
+    expect(screen.getByTestId("who").textContent).toBe("Duty Officer");
+    expect(screen.getByTestId("jur").textContent).toBe("j1");
+    reachable = true;
+    window.dispatchEvent(new Event("online"));
+    await waitFor(() => expect(screen.getByTestId("offline").textContent).toBe("false"));
     expect(screen.getByTestId("error").textContent).toBe("");
   });
 

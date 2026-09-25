@@ -343,11 +343,13 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
     : notifications.loading && !notifications.data
       ? { state: "checking", label: "Checking updates" }
       : { state: "current", live: notifications.live, label: lastNotificationCheck ? `Synced ${formatTime(lastNotificationCheck)}` : "Synced" };
-  const sync: ShellSyncState = workspace.phase === "loading" || workspace.phase === "saving"
-    ? { state: "checking", label: workspace.message ?? "Restoring workspace" }
-    : workspace.phase === "conflict" || workspace.phase === "error"
-      ? { state: "error", label: workspace.message ?? "Workspace settings unavailable" }
-      : notificationSync;
+  const sync: ShellSyncState = session.offline
+    ? { state: "error", label: "No connection · working offline" }
+    : workspace.phase === "loading" || workspace.phase === "saving"
+      ? { state: "checking", label: workspace.message ?? "Restoring workspace" }
+      : workspace.phase === "conflict" || workspace.phase === "error"
+        ? { state: "error", label: workspace.message ?? "Workspace settings unavailable" }
+        : notificationSync;
   const scope = `${incident.selectedIncident?.name ?? "No incident selected"} · ${workspace.selectedPeriodDisplay}`;
   // The overview and the lifelines workspace keep their context drawer closed and offer no opener.
   const drawerless = ["lifelines", "lifeline", "esf", "dashboard", "overview", "briefing"].includes(surface.kind);

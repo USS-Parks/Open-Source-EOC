@@ -82,8 +82,9 @@ describe("installable web app", () => {
     await page.waitForFunction("navigator.serviceWorker.controller !== null", undefined, { timeout: 60_000 });
     expect(precache.files).toEqual(expect.arrayContaining(["index.html", "manifest.webmanifest", "basemap/basemap.pmtiles"]));
     expect(await cacheNames()).toContain(`openeoc-precache-${precache.version}`);
-    const stored = await page.evaluate(`caches.open("openeoc-precache-${precache.version}").then((cache) => cache.keys()).then((keys) => keys.length)`);
-    expect(stored).toBe(precache.files.length);
+    // The first install takes over with the console's own files; the page then has the map files copied.
+    await expect.poll(() => page.evaluate(`caches.open("openeoc-precache-${precache.version}").then((cache) => cache.keys()).then((keys) => keys.length)`),
+      { timeout: 60_000 }).toBe(precache.files.length);
 
     const manifestHref = await page.locator('link[rel="manifest"]').getAttribute("href");
     expect(manifestHref).toBe("./manifest.webmanifest");
@@ -122,8 +123,10 @@ describe("installable web app", () => {
     await page.context().setOffline(true);
     const shell = await page.reload({ waitUntil: "load" });
     expect(shell?.fromServiceWorker()).toBe(true);
-    // The saved session needs the API to resume, so an offline start keeps it and waits.
-    await page.getByText("No connection to the server. Your session is kept and resumes when the connection returns.").waitFor();
+    // The saved session needs the API to resume; meanwhile the console opens
+    // from the profile this computer saved and says it is working offline.
+    await page.getByText("No connection · working offline").waitFor();
+    await page.getByRole("navigation", { name: "Sections" }).waitFor();
     expect(await page.evaluate("localStorage.getItem('openeoc.tokens') !== null")).toBe(true);
     const offline = await page.evaluate(`(async () => {
       const files = ${JSON.stringify(precache.files)};

@@ -13,12 +13,33 @@ import { ApiClient, ApiError, SessionExpiredError, type Me, type MfaChallenge, t
 /**
  * Session state for the shell. The token pair is persisted per-viewer in
  * localStorage (guarded: private mode or blocked storage degrades to a
- * login-each-time session, never a crash). On mount, a saved session is
- * revived by renewing the access token and reading /me; a failure there is
- * a clean fall back to anonymous, not an error screen.
+ * login-each-time session, never a crash), with the last profile the server
+ * returned beside it. On mount, a saved session is revived by renewing the
+ * access token and reading /me; the server's refusal is a clean fall back to
+ * anonymous, not an error screen. With no connection the saved profile opens
+ * the console offline, and the read is tried again until the server answers.
  */
 
 const STORAGE_KEY = "openeoc.tokens";
+const PROFILE_KEY = "openeoc.me";
+
+function loadProfile(): Me | null {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    return raw ? JSON.parse(raw) as Me : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveProfile(me: Me | null): void {
+  try {
+    if (me) localStorage.setItem(PROFILE_KEY, JSON.stringify(me));
+    else localStorage.removeItem(PROFILE_KEY);
+  } catch {
+    // Without storage an offline start waits for the server instead.
+  }
+}
 
 function loadTokens(): Tokens | null {
   try {
@@ -36,7 +57,10 @@ function loadTokens(): Tokens | null {
 function saveTokens(tokens: Tokens | null): void {
   try {
     if (tokens) localStorage.setItem(STORAGE_KEY, JSON.stringify(tokens));
-    else localStorage.removeItem(STORAGE_KEY);
+    else {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(PROFILE_KEY);
+    }
   } catch {
     // A viewer with storage disabled simply keeps the session in memory.
   }
@@ -51,6 +75,8 @@ export interface SessionValue {
   readonly jurisdictionId: string | null;
   readonly role: string | null;
   readonly error: string | null;
+  /** The console opened from this device's saved profile because the server cannot be reached. */
+  readonly offline: boolean;
   readonly setJurisdiction: (id: string) => void;
   readonly refreshMe: () => Promise<Me>;
   readonly recoverSession: () => Promise<void>;
@@ -79,8 +105,10 @@ export function SessionProvider(props: { client?: ApiClient; children: ReactNode
   const [me, setMe] = useState<Me | null>(null);
   const [jurisdictionId, setJurisdictionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [offline, setOffline] = useState(false);
 
   const adoptMe = useCallback((next: Me) => {
+    saveProfile(next);
     const available = new Set([
       ...next.memberships.map((membership) => membership.jurisdictionId),
       ...next.guests
@@ -116,6 +144,7 @@ export function SessionProvider(props: { client?: ApiClient; children: ReactNode
         .then((m) => {
           if (cancelled) return;
           setError(null);
+          setOffline(false);
           adoptMe(m);
           setStatus("authed");
         })
@@ -129,6 +158,12 @@ export function SessionProvider(props: { client?: ApiClient; children: ReactNode
             return;
           }
           setError("No connection to the server. Your session is kept and resumes when the connection returns.");
+          const saved = loadProfile();
+          if (saved) {
+            adoptMe(saved);
+            setOffline(true);
+            setStatus("authed");
+          }
           window.addEventListener("online", attempt);
           timer = setTimeout(attempt, 15_000);
         });
@@ -152,6 +187,7 @@ export function SessionProvider(props: { client?: ApiClient; children: ReactNode
           ? (me.memberships.find((x) => x.jurisdictionId === jurisdictionId)?.role ?? null)
           : null,
       error,
+      offline,
       setJurisdiction: (id: string) => {
         const allowed = me?.memberships.some((membership) => membership.jurisdictionId === id)
           || me?.guests.some((grant) => grant.jurisdictionId === id && Date.parse(grant.expiresAt) > Date.now());
@@ -215,7 +251,7 @@ export function SessionProvider(props: { client?: ApiClient; children: ReactNode
         }
       },
     }),
-    [status, me, jurisdictionId, error, client, adoptMe, refreshMe],
+    [status, me, jurisdictionId, error, offline, client, adoptMe, refreshMe],
   );
 
   return <SessionContext.Provider value={value}>{props.children}</SessionContext.Provider>;

@@ -5220,3 +5220,66 @@ Operator Trust PSPR unit RD4 (Readiness decision 7).
 - **Evidence level:** measured two-hour run with raw samples; unit and
   real-database tests for the fix.
 - **Rollback:** revert the commit; no schema or data change.
+
+## Readiness RD5: the air gap
+
+Operator Trust PSPR unit RD5 (Readiness decision 8).
+
+- **What changed.**
+  - **The proof,** `deploy/windows/prove-airgap.mjs`. It sets up the network
+    host profile with the North Coast Storm demo and starts it as its
+    service definitions do (PostgreSQL, the server with its delivery queue
+    and scheduler, Caddy with the host's own certificate authority), walks
+    it in Chrome over HTTPS (sign-in, every section of the rail, the map,
+    the notifications panel, the account menu), then idles and takes a
+    backup, while four recorders watch: `deploy/windows/lib/net-recorder.mjs`,
+    loaded into every Node process the system starts through `NODE_OPTIONS`,
+    writes each TCP, TLS, DNS and UDP destination asked for; a sampler lists
+    twice a second the TCP connections of every process descended from the
+    proof and of the PostgreSQL server (which covers PostgreSQL and Caddy);
+    Chrome writes its own network log; and the page records every request.
+    Then the built web app and the server and shared sources are scanned for
+    outside addresses. It writes `AIR-GAP-REPORT.md` at the repository root
+    and fails on any connection beyond the machine and its local network.
+  - **The unplugged check for Basho,** `deploy/windows/Test-OpenEOCAirGap.ps1`:
+    run with the cable out and Wi-Fi off, it first confirms the internet is
+    out of reach, then checks every Open Source EOC this computer runs (the
+    network host and each open desktop profile), each line PASS or FAIL, and
+    prints the steps to sign in, open the screens, and reach a host from a
+    second device on the same switch. It changes nothing.
+  - **The offline gaps closed.** The console now opens with no connection
+    after a restart: the last profile the server returned is kept beside
+    the session, and when the server cannot be reached at start the console
+    opens from it, marked "No connection · working offline", and signs in
+    for real when the server answers. The first install of the service
+    worker no longer waits for the map files (most of the bytes) before
+    taking over; it copies them after, so a reload offline opens the console
+    as soon as its own files are in, and the Settings screen reports the
+    offline copy installed only once the worker is active.
+- **Defaults and deviations.** The browser's own services: Chrome, with its
+  background services switched off by flag, still reached Google's update,
+  autofill and account services during the walk, in requests no page
+  started. The proof counts every request a page starts (Chrome's network
+  log names the page's origin as the initiator) and every connection of the
+  system's own processes, and lists the browser's own requests apart in the
+  report as the browser's, which an agency's browser policy governs; a
+  page's request to an outside address still fails the run. The first run
+  failed on those requests alone, and its walk opened none of the rail's
+  sections; the walk now takes each rail button in turn.
+- **The run.** 2026-09-25 from 14:49Z, on the tree with every unit of
+  this push (RD4 to RD12) and the web build of the 0.9.1 setup: **PASS**, no
+  connection outside this computer and its local network, and no page
+  errors. The walk opened all 14 rail sections, zoomed the map, opened the
+  notifications and the account menu, and the backup ran. The Node
+  recorder logged 19 destinations from two processes, all on 127.0.0.1; the sampler (55 samples, up to 34 processes) saw Node,
+  PostgreSQL and Caddy only on loopback; the page made 612 requests, all to
+  the host. Chrome's own services reached eight Google hosts, listed apart
+  in `AIR-GAP-REPORT.md`. The code scan lists 20 outside hosts written in
+  the code (documentation links, schema identifiers, and optional
+  integrations an administrator must configure), none contacted.
+- **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
+- **Not run.** Basho's unplugged run on a real network, with a second
+  device; it is his to do with the script above.
+- **Evidence level:** the recorded run and the static scan; browser tests
+  for the offline start.
+- **Rollback:** revert the commit.
