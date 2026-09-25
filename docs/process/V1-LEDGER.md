@@ -6231,3 +6231,25 @@ this is the gate they ran.
 - **Evidence level:** one full gate over every unit, the failed files run
   again, and each unit's static checks.
 - **Rollback:** revert the unit commits in reverse order.
+
+## V1 grant: Veoci integration and air gap
+
+Basho, 2026-09-25, on `docs/process/VEOCI-AIR-GAP-PSPR-2026-09-25.md`: "The
+PSPR looks solid. I'd add Job Aids and the ability to create forms 201, 202,
+203, 204, 205, 206, 207, 208, etc as separate components of the IAP as a
+whole. Resource request forms as well. The unplugged run and 72-hour drill can
+be created as placeholders, biut not gates to the next prompt execution. We
+will also be adding three more exercise scenarios soon (from a sibling
+session) that you should be mindful of. As for public forms and public facing
+dashboards, I prefer to keep all of that separate for now. Table all of the
+public facing actions until a future date, as yet to be determined." Then:
+"execute this new PSPR in its entirety now, with my express authorization and
+full permissions granted with this statement. Run it all."
+
+The plan's section 1a records the six amendments and its section 4 the
+defaults in force: the delivery hold of 72 hours (decision 2), the ICS form
+set and IAP composition (decisions 15 and 16), this session as the
+integrating session landing each unit on `main` by fast-forward (decision
+17), the Windows setup rebuilt on a Windows machine (decision 18), and the
+Linux test bed (decision 19). The Operator Trust PSPR keeps RD6 open; its
+RD12 part two folds into VA36. Receipts for this plan's units follow here.
