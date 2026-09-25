@@ -14,6 +14,7 @@ vi.mock("../../cop/CopMap.js", () => {
       requestedFeature?: { datasetId: string; featureId: string } | null;
       onInspectFeature?: (feature: { datasetId: string; featureId: string; title: string }) => void;
       exportContext?: { incidentName?: string | null; operationalPeriod?: string | null; handling?: string | null };
+      overlay?: React.ReactNode;
     }) => {
       const mountedTheme = useRef(props.theme);
       const mountedBoards = useRef(props.boards.map((b) => b.id).join(","));
@@ -28,6 +29,7 @@ vi.mock("../../cop/CopMap.js", () => {
           featureId: props.requestedFeature!.featureId,
           title: "County Route 7 closure",
         })}>Inspect routed feature</button> : null}
+        {props.overlay}
       </div>;
     },
   };
@@ -82,7 +84,7 @@ it("remounts the COP when the selected incident changes, and not when it stays",
   expect(screen.getByTestId("map").getAttribute("data-mount-id")).toBe(first); // same incident: no remount
   view.rerender(<MapSurface {...props} incidentId="b" incidentName="Fire B" />);
   expect(screen.getByTestId("map").getAttribute("data-mount-id")).not.toBe(first); // switch tears down the old map
-  expect(screen.getByText("Fire B")).toBeTruthy();
+  expect(screen.getByTestId("map").getAttribute("data-export-incident")).toBe("Fire B");
 });
 
 it("places a point from validated WGS84 coordinates with the keyboard", async () => {

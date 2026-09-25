@@ -4958,3 +4958,103 @@ Receipts for its units follow here.
   system changes, unit; the installed host is Basho's to run.
 - **Rollback:** revert the commit; `-Action HostRemove` takes an installed
   host's services down and keeps its data.
+
+## Readiness RD2 part three: the first review
+
+Operator Trust PSPR unit TP-A1. Basho's first hands-on review of the
+installed demo named seven things; all seven are fixed and landed here.
+
+- **What changed.**
+  - **The bell** opens a notifications panel flush under it: what is
+    addressed to the person, unread first, with its time and body, eight at
+    most. Opening an item routes to `#/alerts/<id>`, where the center opens
+    it and marks it read; "Open center" opens the whole center. Showing an
+    item never marks it read. The Context drawer no longer carries the tray.
+  - **The command bar's lists.** The incident, period and position lists use
+    Chrome and Edge customizable selects (`appearance: base-select`, anchor
+    positioning): the incident list hangs flush under its pill, the others
+    from the command bar's lower edge at their column's width. Other
+    browsers keep their native list. The account menu is a button with a
+    flush navy panel holding Settings, the theme and Sign out.
+  - **Every workspace scrolls** instead of clipping
+    (`.eoc-shell-workspace { overflow: auto }`), which gives the ESF
+    coordination grid its scroll.
+  - **The Map screen** is the map: it fills the page, the layers column
+    folds away, Add point and its form float over the map, and the impact
+    indicators open over its foot on request. The "common operating
+    picture" line is gone.
+  - **Field Reports** is a triage screen: counts, Unverified, Verified and
+    All, category and search filters, a list with time and reporter, and a
+    detail with Verify or Mark unverified, Show on map and Open record. The
+    recent count covers the selected operational period ("This period"), or
+    the last hour when none is selected, so the demo's morning scenario no
+    longer reads 0 in the evening. The server adds `createdAt` and
+    `createdByName` to board view records.
+  - **Settings** has General (navigation, administration), Account (change
+    password), Notifications (desktop alerts and a sound for arrivals), Map
+    (distance units, coordinate format, grid references), This computer
+    (offline copy, storage, clear) and About. The theme is chosen only at
+    the rail's foot. Changing a password is `POST /api/v1/auth/password`
+    over migration `0137_change_own_password.sql`: the current password is
+    checked first with the sign-in backoff, and the change ends the person's
+    other sessions and position sign-ins and is audited. The frozen API
+    contract and `docs/API.md` list the route.
+  - **The overview** no longer overprints on a short screen: the lifeline
+    rows and the middle row have minimum heights so the page scrolls, and
+    the card map keeps its legend and scale.
+- **Test harness.** The full suite could not pass on this machine at first:
+  six files timed out in their setup hooks. Each test file migrated its own
+  database from scratch under one cluster-wide lock, about three seconds
+  each, so sixteen workers starting together queued past the 60-second hook
+  limit. `freshDb` now migrates a template database once per migration set
+  and run tag (`tpl_<tag>_<hash>`, built under a working name and renamed
+  when complete) and copies it per file, still under the lock, which also
+  keeps a parallel run inside the cluster's 100 connections (copying outside
+  the lock was tried and exhausted them). `freshDb({ fromScratch: true })`
+  keeps migrating an empty database, and the INV-10 reproducible-deploy
+  suite uses it for both of its independent deploys. The full parallel run
+  fell from about fifteen minutes to eight. The three suites that stand up
+  two instances in one hook get 120 seconds for it, and the IPAWS test that
+  builds a second database inside a test gets 120 seconds. Two browser
+  suites that click the bell straight after signing in now open its panel
+  again if the console redrew itself as the incident's workspace restored;
+  the D33 review waits for the account menu before looking for its theme
+  button; the overview check measures the lifeline rows once their
+  assessments have loaded.
+- **Defaults and deviations.** The notification panel's eight-item cap and
+  the period count are this unit's defaults. A panel or menu opened in the
+  moment between sign-in and the incident's workspace restoring closes when
+  the console redraws; keeping the shell up through the restore was tried
+  and reverted, because a layout change made in that moment was then
+  overwritten by the restored layout. Recorded, not fixed.
+- **The setup.** `deploy/windows/out/installer/Open-Source-EOC-Setup-0.9.0.exe`,
+  1,630 MB (1,708,967,195 bytes), SHA-256
+  `a1e05921aff77284234a6ee490de4a9c1b20cc9fe320780016eae473d7619b0d`,
+  compiled in 696 s from a 9,978-file stage; copied to `deploy/` with its
+  `.sha256` for Basho. The compile does not write the `.sha256` file; the
+  one beside the build output was the RD3 build's and was rewritten.
+- **Verification.** `pnpm check:static` green (typecheck, lint, license scan
+  of 303 packages, links in 106 files). `pnpm test:desktop` 32 of 32.
+  The field reports surface test 7 of 7 (a new check counts the selected period).
+  `pnpm test:ci`: the parallel run passed 281 of 282 files and 1,600 of
+  1,601 tests in 487 s; the remaining file, `authorized-viewing.test.ts`,
+  was the known Windows worker crash (exit `0xC0000409`), and its one
+  isolated retry passed. The serial load benchmark, which the crash kept
+  from running, then passed 4 of 4. Earlier full runs found what this
+  receipt fixes: the six setup-hook timeouts, the missing contract entry for
+  the password route, the D33 theme race, the bell race in two suites, and
+  the dark overview's first lifeline row needing 56 pixels in a 54-pixel row
+  once its impact ran to two lines (the dark rows now take at least 58, the
+  middle row at least 512, and the check waits for the assessments). `pnpm
+  fidelity` 3 of 3: the overview in both themes and the lifelines workspace
+  at 1586 by 992 match the frames as before.
+  One earlier full run also saw `resource-typing-browser` wait 30 seconds
+  for the sign-in page and fail; it passed alone and in the final run, and
+  its cause was not found.
+- **Not run.** No install of this setup on this machine: Basho's own install
+  is here, and a second per-user install would take over its uninstall
+  entry. Basho installs it.
+- **Evidence level:** automated unit, integration and browser tests at 1586
+  by 992 and 1534 by 790; visual acceptance is Basho's.
+- **Rollback:** revert the commit. Migration 0137 only adds a function;
+  reverting leaves it unused.

@@ -90,8 +90,9 @@ describe("responsive shell frame", () => {
     const view = frame({ onToggleTheme, onNavigate });
     fireEvent.click(view.getByRole("button", { name: "Settings" }));
     const settings = await view.findByRole("dialog", { name: "Settings" });
-    fireEvent.click(within(settings).getByRole("radio", { name: "Dark" }));
-    expect(onToggleTheme).toHaveBeenCalledTimes(1);
+    // The theme is chosen at the foot of the rail, not in Settings.
+    expect(within(settings).queryByRole("radio", { name: "Dark" })).toBeNull();
+    expect(within(settings).getByRole("tab", { name: "General" }).getAttribute("aria-selected")).toBe("true");
     fireEvent.click(within(settings).getByRole("button", { name: "Open Administration" }));
     expect(onNavigate).toHaveBeenCalledWith("admin");
     expect(view.queryByRole("dialog", { name: "Settings" })).toBeNull();
@@ -106,7 +107,7 @@ describe("responsive shell frame", () => {
 
     fireEvent.click(view.getByRole("button", { name: "Light theme" }));
     fireEvent.click(view.getByRole("menuitemradio", { name: "Dark" }));
-    expect(onToggleTheme).toHaveBeenCalledTimes(2);
+    expect(onToggleTheme).toHaveBeenCalledTimes(1);
   });
 
   it("compacts navigation without removing accessible destination names", () => {

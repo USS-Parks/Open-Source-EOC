@@ -35,6 +35,8 @@ export interface AlertsSurfaceProps {
   /** Jurisdiction admin: configures IPAWS and requests or confirms sends. */
   readonly isAdmin?: boolean;
   readonly personId?: string | null;
+  /** A notification to open on arrival, as the command bar's notifications panel asks. */
+  readonly notificationId?: string | null;
 }
 
 type InboxFilter = "all" | "unread" | "unacknowledged" | "failed";
@@ -365,7 +367,7 @@ function AlertComposer(props: {
   );
 }
 
-export function AlertsSurface({ client, jurisdictionId, incidentId, canAuthor, actorEmail, isAdmin = false, personId = null }: AlertsSurfaceProps) {
+export function AlertsSurface({ client, jurisdictionId, incidentId, canAuthor, actorEmail, isAdmin = false, personId = null, notificationId = null }: AlertsSurfaceProps) {
   const notes = useNotifications(client);
   const alerts = useAsync(() => client.listCapAlerts(jurisdictionId), [jurisdictionId]);
   const ipaws = useAsync(() => client.getIpawsStatus(jurisdictionId), [client, jurisdictionId]);
@@ -427,6 +429,17 @@ export function AlertsSurface({ client, jurisdictionId, incidentId, canAuthor, a
     }
     catch (error) { setActionError(error instanceof Error ? error.message : "Notification could not be marked read"); }
   }
+
+  // Opening a notification from the command bar opens it here once, and marks it read as a click in the list does.
+  const arrived = useRef<string | null>(null);
+  useEffect(() => {
+    if (!notificationId || arrived.current === notificationId) return;
+    const item = notes.data?.find((note) => note.id === notificationId);
+    if (!item) return;
+    arrived.current = notificationId;
+    setTab("inbox");
+    void openNotification(item);
+  }, [notificationId, notes.data]);
 
   async function acknowledge() {
     if (!selectedNote) return;

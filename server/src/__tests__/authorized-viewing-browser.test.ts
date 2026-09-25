@@ -152,8 +152,8 @@ describe("authorized viewing in a real browser", () => {
     await page.getByLabel("Password").fill("browser-viewer-password");
     await page.getByRole("button", { name: "Sign in" }).click();
 
-    await page.locator("#main").getByText("Authorized Host A Fire", { exact: true }).waitFor({ timeout: 5000 });
-    await page.getByText("· common operating picture").waitFor({ timeout: 5000 });
+    await page.locator("#main .eoc-shell-page-scope").getByText("Authorized Host A Fire", { exact: false }).waitFor({ timeout: 5000 });
+    await page.getByTestId("cop-map").waitFor({ timeout: 5000 });
     expect(await page.getByRole("option", { name: "Unrelated Host B Flood" }).count()).toBe(0);
     await page.getByText("Authorized Geometry").waitFor({ timeout: 5000 });
     await page.getByRole("button", { name: "Dashboards", exact: true }).click();

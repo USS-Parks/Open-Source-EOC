@@ -90,8 +90,15 @@ async function signIn() {
 }
 
 async function openCenter() {
-  await page.getByRole("button", { name: /^Notifications, \d+ unread$/ }).click();
-  await page.getByRole("button", { name: "Open center" }).click();
+  const bell = page.getByRole("button", { name: /^Notifications, \d+ unread$/ });
+  // A click in the moment the console restores the incident's workspace lands
+  // on a shell that is then redrawn with the panel closed; open it again.
+  const center = page.getByRole("button", { name: "Open center" });
+  await expect.poll(async () => {
+    if (!(await center.isVisible())) await bell.click();
+    return center.isVisible();
+  }, { timeout: 20_000, interval: 500 }).toBe(true);
+  await center.click();
   await page.getByRole("heading", { name: "Alerts and notifications" }).waitFor({ state: "visible", timeout: 20000 });
 }
 

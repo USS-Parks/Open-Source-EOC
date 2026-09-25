@@ -107,13 +107,16 @@ afterAll(async () => {
 
 describe("COP viewport KPI presentation", () => {
   it("updates with map extent and drills the same revision and bbox to source records", async () => {
+    // The impact indicators open over the map on request.
+    await page.getByRole("button", { name: "Impact in view" }).click();
     const impactRegion = page.getByRole("region", { name: "Map impact indicators" });
     const structures = page.getByTestId("impact-kpi-structures_parcels");
     await structures.waitFor({ timeout: 30_000 });
+    // The panel opens on request, so its first analysis may still be arriving.
+    await expect.poll(() => page.getByTestId("impact-kpi-infrastructure_facilities").textContent(), { timeout: 30_000 })
+      .toContain("coverage unknown");
     expect(await page.getByTestId("impact-kpi-infrastructure_facilities").getAttribute("data-value-state"))
       .toBe("unknown");
-    expect(await page.getByTestId("impact-kpi-infrastructure_facilities").textContent())
-      .toContain("coverage unknown");
 
     await page.getByText("Map tools and saved views", { exact: true }).click();
     const twoRecords = page.waitForResponse(async (response) => {

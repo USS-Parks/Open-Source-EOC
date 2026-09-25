@@ -114,6 +114,14 @@ export function MapSurface(props: {
   const [relationshipNotice, setRelationshipNotice] = useState<string | null>(null);
   const [relationshipError, setRelationshipError] = useState<string | null>(null);
   const focusOnSearch = useMapFocus();
+  // The impact indicators open over the map on request; the choice is kept on this computer.
+  const [impactOpen, setImpactOpen] = useState(() => {
+    try { return localStorage.getItem("openeoc.map.impactOpen") === "1"; } catch { return false; }
+  });
+  const openImpact = (open: boolean) => {
+    setImpactOpen(open);
+    try { localStorage.setItem("openeoc.map.impactOpen", open ? "1" : "0"); } catch { /* not kept */ }
+  };
 
   const geoBoards = props.collections;
   const activeBoard = boardId || geoBoards[0]?.id || "";
@@ -286,122 +294,162 @@ export function MapSurface(props: {
   const fields = board.data?.fields ?? [];
   const geomKey = fields.length ? geometryFieldKey(fields) : null;
 
-  return (
-    <div className="map-surface">
-      <div role="status" className="map-surface-status">
-        <span className="map-surface-incident">
-          {props.incidentName ?? "No incident selected"}
-        </span>
-        <span>· common operating picture</span>
-      </div>
-      {empty ? <EmptyState label="No operational layers yet" hint="The basemap is available. Add a geo-enabled board or feed to show incident information." /> : null}
+  // The map fills the screen; its tools, the new record form and the feature
+  // link float over its top left, and the impact indicators over its foot.
+  const floating = (
+    <div className="map-surface-float">
       {geoBoards.length > 0 ? (
-        <div className="map-surface-row">
-          <Button
-            kind={adding ? "primary" : "quiet"}
-            onClick={() => (adding ? reset() : setAdding(true))}
-          >
+        <div className="map-surface-tools">
+          <Button kind={adding ? "primary" : "quiet"} onClick={() => (adding ? reset() : setAdding(true))}>
             <Icon name={adding ? "close" : "add"} size={16} decorative />
             {adding ? "Cancel" : "Add point"}
           </Button>
-          {adding ? (
-            <>
-              <label className="map-surface-pick">
-                <span className="eoc-muted">Board</span>
-                <select
-                  aria-label="Map record board"
-                  value={activeBoard}
-                  onChange={(e) => {
-                    setBoardId(e.target.value);
-                    setPoint(null);
-                    setCoordinateError(null);
-                  }}
-                  className="map-surface-select"
-                >
-                  {geoBoards.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="map-surface-coordinate">
-                <span className="eoc-muted">Longitude</span>
-                <input
-                  aria-label="Longitude"
-                  inputMode="decimal"
-                  value={longitude}
-                  onChange={(event) => setLongitude(event.target.value)}
-                  className="map-surface-select is-coordinate"
-                />
-              </label>
-              <label className="map-surface-coordinate">
-                <span className="eoc-muted">Latitude</span>
-                <input
-                  aria-label="Latitude"
-                  inputMode="decimal"
-                  value={latitude}
-                  onChange={(event) => setLatitude(event.target.value)}
-                  className="map-surface-select is-coordinate"
-                />
-              </label>
-              <Button onClick={useCoordinates}>Use coordinates</Button>
-              <span className="eoc-muted">
-                {point ? "Point placed. Fill the form, then save." : "Click the map or enter coordinates to place the point."}
-              </span>
-              {coordinateError ? (
-                <span role="alert" className="eoc-text-critical">{coordinateError}</span>
-              ) : null}
-            </>
+        </div>
+      ) : null}
+      {adding ? (
+        <div className="map-surface-card map-surface-adding">
+          <label className="map-surface-pick">
+            <span>Board</span>
+            <select
+              aria-label="Map record board"
+              value={activeBoard}
+              onChange={(e) => {
+                setBoardId(e.target.value);
+                setPoint(null);
+                setCoordinateError(null);
+              }}
+              className="map-surface-select"
+            >
+              {geoBoards.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="map-surface-coordinates">
+            <label className="map-surface-coordinate">
+              <span>Longitude</span>
+              <input
+                aria-label="Longitude"
+                inputMode="decimal"
+                value={longitude}
+                onChange={(event) => setLongitude(event.target.value)}
+                className="map-surface-select is-coordinate"
+              />
+            </label>
+            <label className="map-surface-coordinate">
+              <span>Latitude</span>
+              <input
+                aria-label="Latitude"
+                inputMode="decimal"
+                value={latitude}
+                onChange={(event) => setLatitude(event.target.value)}
+                className="map-surface-select is-coordinate"
+              />
+            </label>
+            <Button onClick={useCoordinates}>Use coordinates</Button>
+          </div>
+          <p className="map-surface-note">
+            {point ? "Point placed. Fill the form, then save." : "Click the map or enter coordinates to place the point."}
+          </p>
+          {coordinateError ? (
+            <p role="alert" className="eoc-text-critical map-surface-note">{coordinateError}</p>
           ) : null}
         </div>
       ) : null}
-
-      {props.incidentId ? (
-        <ImpactKpiPanel client={props.client} incidentId={props.incidentId} bbox={impactBounds} />
-      ) : null}
-
-      {selectedFeature && props.incidentId ? (
-        <Panel title="Link selected dataset feature">
-          <div className="map-surface-link">
-            <div className="map-surface-feature">
-              <strong>{selectedFeature.title}</strong>
-              <p className="map-surface-note">
-                Dataset feature {selectedFeature.featureId}. The relationship records context only and does not change assessment status or command authority.
+      {adding && point ? (
+        <div className="map-surface-card">
+          <Panel title="New map record">
+            {board.loading && !board.data ? <Loading label="Loading form…" /> : null}
+            {board.error ? (
+              <p role="alert" className="map-surface-error">
+                The form for {geoBoards.find((b) => b.id === activeBoard)?.title ?? "this board"} could not be loaded: {board.error}
               </p>
+            ) : null}
+            {board.data ? (
+              geomKey ? (
+                <RecordForm
+                  fields={fields}
+                  initial={{ [geomKey]: { type: "Point", coordinates: point } }}
+                  onSubmit={save}
+                  onUpload={(file) => uploadPickedFile(props.client, props.jurisdictionId, file)}
+                />
+              ) : (
+                <p className="eoc-muted">This board has no location field.</p>
+              )
+            ) : null}
+            {error ? (
+              <p role="alert" className="map-surface-error">
+                {error}
+              </p>
+            ) : null}
+            <div className="map-surface-actions">
+              <Button onClick={reset} disabled={busy}>
+                Cancel
+              </Button>
             </div>
-            <label className="map-surface-source">
-              Recorded assessment
-              <select aria-label="Recorded assessment" value={relationshipSource}
-                onChange={(event) => setRelationshipSource(event.target.value)} className="map-surface-select">
-                <option value="">Choose a Lifeline or ESF assessment</option>
-                {assessmentSources.map((candidate) => <option key={candidate.value} value={candidate.value}>{candidate.label}</option>)}
-              </select>
-            </label>
-            <Button kind="primary" disabled={!relationshipSource || relationshipBusy || assessmentSources.length === 0}
-              onClick={linkSelectedFeature}>{relationshipBusy ? "Linking…" : "Link selected feature"}</Button>
-          </div>
-          {assessmentSources.length === 0 ? <p role="status">No recorded Lifeline or ESF assessment is available to link.</p> : null}
-          {relationshipNotice ? <p role="status" className="eoc-text-success">{relationshipNotice}</p> : null}
-          {relationshipError ? <p role="alert" className="eoc-text-critical">{relationshipError}</p> : null}
-          {relationships.error ? <p role="status">Existing assessment links are unavailable.</p> : (
-            <section aria-label="Existing assessment links">
-              <h3 className="map-surface-links-title">Existing assessment links</h3>
-              {selectedFeatureLinks.length ? <ul className="map-surface-links">
-                {selectedFeatureLinks.map((link) => <li key={link.id} className="map-surface-row">
-                  <span>{relationshipSourceLabel(link)}</span>
-                  {link.source.domain === "lifeline" && props.onOpenLifeline
-                    ? <Button onClick={() => props.onOpenLifeline!(link.source.definitionKey)}>Open linked Lifeline</Button>
-                    : link.source.domain === "esf" && props.onOpenEsf
-                      ? <Button onClick={() => props.onOpenEsf!(link.source.definitionKey)}>Open linked ESF</Button>
-                      : null}
-                </li>)}
-              </ul> : <p className="eoc-flush eoc-muted">No recorded assessment links for this feature.</p>}
-            </section>
-          )}
-        </Panel>
+          </Panel>
+        </div>
       ) : null}
+      {selectedFeature && props.incidentId ? (
+        <div className="map-surface-card">
+          <Panel title="Link selected dataset feature">
+            <div className="map-surface-link">
+              <div className="map-surface-feature">
+                <strong>{selectedFeature.title}</strong>
+                <p className="map-surface-note">
+                  Dataset feature {selectedFeature.featureId}. The relationship records context only and does not change assessment status or command authority.
+                </p>
+              </div>
+              <label className="map-surface-source">
+                Recorded assessment
+                <select aria-label="Recorded assessment" value={relationshipSource}
+                  onChange={(event) => setRelationshipSource(event.target.value)} className="map-surface-select">
+                  <option value="">Choose a Lifeline or ESF assessment</option>
+                  {assessmentSources.map((candidate) => <option key={candidate.value} value={candidate.value}>{candidate.label}</option>)}
+                </select>
+              </label>
+              <Button kind="primary" disabled={!relationshipSource || relationshipBusy || assessmentSources.length === 0}
+                onClick={linkSelectedFeature}>{relationshipBusy ? "Linking…" : "Link selected feature"}</Button>
+            </div>
+            {assessmentSources.length === 0 ? <p role="status">No recorded Lifeline or ESF assessment is available to link.</p> : null}
+            {relationshipNotice ? <p role="status" className="eoc-text-success">{relationshipNotice}</p> : null}
+            {relationshipError ? <p role="alert" className="eoc-text-critical">{relationshipError}</p> : null}
+            {relationships.error ? <p role="status">Existing assessment links are unavailable.</p> : (
+              <section aria-label="Existing assessment links">
+                <h3 className="map-surface-links-title">Existing assessment links</h3>
+                {selectedFeatureLinks.length ? <ul className="map-surface-links">
+                  {selectedFeatureLinks.map((link) => <li key={link.id} className="map-surface-row">
+                    <span>{relationshipSourceLabel(link)}</span>
+                    {link.source.domain === "lifeline" && props.onOpenLifeline
+                      ? <Button onClick={() => props.onOpenLifeline!(link.source.definitionKey)}>Open linked Lifeline</Button>
+                      : link.source.domain === "esf" && props.onOpenEsf
+                        ? <Button onClick={() => props.onOpenEsf!(link.source.definitionKey)}>Open linked ESF</Button>
+                        : null}
+                  </li>)}
+                </ul> : <p className="eoc-flush eoc-muted">No recorded assessment links for this feature.</p>}
+              </section>
+            )}
+          </Panel>
+        </div>
+      ) : null}
+    </div>
+  );
 
+  const impact = props.incidentId ? (
+    <div className="map-surface-impact" data-open={impactOpen || undefined}>
+      <button type="button" className="map-surface-impact-toggle" aria-expanded={impactOpen} onClick={() => openImpact(!impactOpen)}>
+        <Icon name="chevronRight" size={16} decorative />
+        Impact in view
+      </button>
+      {impactOpen ? <ImpactKpiPanel client={props.client} incidentId={props.incidentId} bbox={impactBounds} /> : null}
+    </div>
+  ) : null;
+
+  return (
+    <div className="map-surface">
+      {empty ? <EmptyState label="No operational layers yet" hint="The basemap is available. Add a geo-enabled board or feed to show incident information." /> : null}
       <div className="map-surface-map">
         <PlaceSearch client={props.client} onChoose={requestMapFocus} />
         <CopMap
@@ -460,43 +508,9 @@ export function MapSurface(props: {
           picking={adding && !point}
           onPickPoint={placePoint}
           onMap={focusOnSearch}
+          overlay={<>{floating}{impact}</>}
         />
       </div>
-
-      {adding && point ? (
-        <div className="map-surface-overlay">
-          <Panel title="New map record">
-            {board.loading && !board.data ? <Loading label="Loading form…" /> : null}
-            {board.error ? (
-              <p role="alert" className="map-surface-error">
-                The form for {geoBoards.find((b) => b.id === activeBoard)?.title ?? "this board"} could not be loaded: {board.error}
-              </p>
-            ) : null}
-            {board.data ? (
-              geomKey ? (
-                <RecordForm
-                  fields={fields}
-                  initial={{ [geomKey]: { type: "Point", coordinates: point } }}
-                  onSubmit={save}
-                  onUpload={(file) => uploadPickedFile(props.client, props.jurisdictionId, file)}
-                />
-              ) : (
-                <p className="eoc-muted">This board has no location field.</p>
-              )
-            ) : null}
-            {error ? (
-              <p role="alert" className="map-surface-error">
-                {error}
-              </p>
-            ) : null}
-            <div className="map-surface-actions">
-              <Button onClick={reset} disabled={busy}>
-                Cancel
-              </Button>
-            </div>
-          </Panel>
-        </div>
-      ) : null}
     </div>
   );
 }

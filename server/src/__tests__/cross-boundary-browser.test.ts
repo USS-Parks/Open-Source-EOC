@@ -181,7 +181,7 @@ describe("cross-boundary incident exercise in a real browser", () => {
     expect(await partnerSelector.getByRole("option", { name: "Separate Flood" }).count()).toBe(0);
     await partnerSelector.selectOption(incidentA);
     await rail(partner, "Map");
-    await partner.getByText("· common operating picture").waitFor();
+    await partner.getByTestId("cop-map").waitFor();
     await partner.getByText("Mutual aid shelters").first().waitFor();
 
     // The partner posts a field impact on the map.
@@ -234,6 +234,9 @@ describe("cross-boundary incident exercise in a real browser", () => {
 
     // The owner checks the COP impact indicator and the dashboard against the partner's contributions.
     await rail(owner, "Map");
+    // The impact indicators open over the map on request.
+    const impactToggle = owner.getByRole("button", { name: "Impact in view" });
+    if (await impactToggle.getAttribute("aria-expanded") !== "true") await impactToggle.click();
     const shelters = owner.getByTestId("impact-kpi-shelters");
     await shelters.waitFor();
     await owner.getByText("Map tools and saved views", { exact: true }).click();

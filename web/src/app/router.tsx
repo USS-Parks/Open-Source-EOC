@@ -35,7 +35,7 @@ export type Surface =
   | { readonly kind: "tracking" }
   | { readonly kind: "damage" }
   | { readonly kind: "facilities" }
-  | { readonly kind: "alerts" }
+  | { readonly kind: "alerts"; readonly id?: string }
   | { readonly kind: "lifelines"; readonly view?: "dependencies" | "history" }
   | { readonly kind: "lifeline"; readonly id: string }
   | { readonly kind: "esf"; readonly id?: string }
@@ -186,7 +186,10 @@ function parseSurfacePath(clean: string): Surface {
     case "facilities":
       return { kind: "facilities" };
     case "alerts":
-      return { kind: "alerts" };
+    {
+      const notificationId = id ? safeDecode(id) : null;
+      return notificationId ? { kind: "alerts", id: notificationId } : { kind: "alerts" };
+    }
     case "lifelines":
       return id === "dependencies" || id === "history" ? { kind: "lifelines", view: id } : { kind: "lifelines" };
     case "lifeline":
@@ -323,7 +326,7 @@ function surfacePath(surface: Surface): string {
     case "facilities":
       return "#/facilities";
     case "alerts":
-      return "#/alerts";
+      return surface.id ? `#/alerts/${encodeURIComponent(surface.id)}` : "#/alerts";
     case "lifelines":
       return surface.view ? `#/lifelines/${surface.view}` : "#/lifelines";
     case "lifeline":

@@ -7,6 +7,7 @@ import {
   addMembership,
   assignPosition,
   AuthError,
+  changeOwnPassword,
   createJurisdiction,
   createPerson,
   createPosition,
@@ -97,6 +98,7 @@ const SERVER_VERSION = (JSON.parse(readFileSync(new URL("../package.json", impor
 
 const LoginBody = z.object({ email: z.string().email(), password: z.string().min(1) });
 const ResumeBody = z.object({ resumeToken: z.string().min(1) });
+const PasswordChangeBody = z.object({ currentPassword: z.string().min(1).max(1024), newPassword: z.string().max(1024) });
 const MfaTokenBody = z.object({ mfaToken: z.string().min(1) });
 const MfaCodeBody = z.object({ mfaToken: z.string().min(1), code: z.string().min(1).max(64) });
 const CreatePositionBody = z.object({ key: z.string().min(1), title: z.string().min(1) });
@@ -312,6 +314,25 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
     await withPerson(sql, req.principal.person.id, (tx) => logout(tx, req.principal.sessionId));
     forgetSession(req.principal.sessionId);
     return reply.send({ ok: true });
+  });
+
+  // Changing one's own password. Wrong current passwords count toward the
+  // same backoff as sign-in, keyed on the person, so a left-open session
+  // cannot be used to guess the password.
+  app.post("/api/v1/auth/password", { preHandler: authenticate }, async (req, reply) => {
+    const body = PasswordChangeBody.parse(req.body);
+    const key = `password:${req.principal.person.id}`;
+    if (!checkAllowed(key)) return reply.code(429).send({ error: "too many attempts; wait a moment and try again" });
+    try {
+      const ended = await withPerson(sql, req.principal.person.id,
+        (tx) => changeOwnPassword(tx, req.principal, body.currentPassword, body.newPassword));
+      recordSuccess(key);
+      forgetPerson(req.principal.person.id);
+      return reply.send({ ok: true, otherSessionsEnded: ended });
+    } catch (error) {
+      if (error instanceof AuthError && error.status === 403) recordFailure(key);
+      throw error;
+    }
   });
 
   // Keep the session contract truthful for scope-limited raw guest grants.

@@ -109,8 +109,14 @@ async function openAlerts(email: string, password: string): Promise<Page> {
   await page.getByRole("button", { name: "Sign in" }).click();
   const bell = page.getByRole("button", { name: /^Notifications, \d+ unread$/ });
   await bell.waitFor({ state: "visible", timeout: 20000 });
-  await bell.click();
-  await page.getByRole("button", { name: "Open center" }).click();
+  // A click in the moment the console restores the incident's workspace lands
+  // on a shell that is then redrawn with the panel closed; open it again.
+  const center = page.getByRole("button", { name: "Open center" });
+  await expect.poll(async () => {
+    if (!(await center.isVisible())) await bell.click();
+    return center.isVisible();
+  }, { timeout: 20_000, interval: 500 }).toBe(true);
+  await center.click();
   await page.getByRole("heading", { name: "Alerts and notifications" }).waitFor({ state: "visible", timeout: 20000 });
   return page;
 }

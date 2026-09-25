@@ -135,7 +135,7 @@ beforeAll(async () => {
     payload: { entries: [receiverUrl] },
   });
   expect(allow.statusCode).toBe(200);
-}, 60000);
+}, 120_000); // two databases and two apps
 
 afterAll(async () => {
   release();

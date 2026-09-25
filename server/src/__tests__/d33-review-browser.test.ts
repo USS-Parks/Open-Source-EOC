@@ -273,15 +273,15 @@ function rail(name: string): Promise<void> {
 
 /** Open or close the account menu, whatever state a re-render left it in. */
 async function accountMenu(open: boolean): Promise<void> {
-  const menu = page.locator("details.eoc-shell-account");
-  if (await menu.evaluate((node) => (node as unknown as { open: boolean }).open) !== open) {
-    await page.getByRole("button", { name: "Account menu" }).click();
-  }
+  const menu = page.getByRole("button", { name: "Account menu" });
+  if (await menu.getAttribute("aria-expanded") !== String(open)) await menu.click();
 }
 
 async function setTheme(theme: Theme): Promise<void> {
   await page.setViewportSize(WIDE);
   await accountMenu(true);
+  // The menu holds one theme button, for the theme not in use; isVisible does not wait for the panel.
+  await page.getByRole("group", { name: "Account" }).waitFor();
   const toggle = page.getByRole("button", { name: theme === "dark" ? "Use dark theme" : "Use light theme" });
   if (await toggle.isVisible()) await toggle.click();
   await page.locator(`.eoc-theme[data-theme="${theme}"]`).waitFor();
@@ -317,7 +317,7 @@ const goToBoard = async () => { await page.evaluate(`location.hash = ${JSON.stri
 const views: readonly View[] = [
   {
     key: "map", open: () => rail("Map"),
-    ready: async () => { await page.getByTestId("cop-map").waitFor(); await page.getByText("· common operating picture").waitFor(); },
+    ready: async () => { await page.getByTestId("cop-map").waitFor(); },
     reach: ["Skip to workspace", "Selected incident", "Account menu", "Overview", "Add point"],
   },
   {

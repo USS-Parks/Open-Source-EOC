@@ -42,6 +42,7 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 - `POST /api/v1/auth/mfa/verify`: Run auth mfa verify (auth: none; audience: operator)
 - `GET /api/v1/auth/oidc/callback`: Read auth oidc callback (auth: none; audience: machine)
 - `GET /api/v1/auth/oidc/start`: Read auth oidc start (auth: none; audience: machine)
+- `POST /api/v1/auth/password`: Run auth password (auth: bearer; audience: operator)
 - `POST /api/v1/auth/resume`: Run auth resume (auth: none; audience: operator)
 - `DELETE /api/v1/guests/:grantId`: Delete guests (auth: bearer; audience: operator)
 - `GET /api/v1/integrations`: Read integrations (auth: bearer; audience: operator)

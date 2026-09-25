@@ -80,7 +80,7 @@ beforeAll(async () => {
   peerStateSide = ps.id;
   tokenIntoState = ps.token;
   await makeAgreement(state, peerStateSide, state.boardId);
-}, 60000);
+}, 120_000); // two databases and two apps
 
 afterAll(async () => {
   for (const inst of [county, state]) {

@@ -12,7 +12,7 @@ import type { ThemeName } from "../../design/tokens.js";
 import { syntheticData } from "../config.js";
 import { BrandMark } from "./BrandMark.js";
 import { PageChromeContext } from "./page-chrome.js";
-import { HelpDialog, SettingsDialog } from "./ShellDialogs.js";
+import { HelpDialog, SettingsDialog, type SettingsSection } from "./ShellDialogs.js";
 import "./shell.css";
 
 export interface NavItem {
@@ -70,6 +70,10 @@ export interface AppShellProps {
   readonly onToggleTheme: () => void;
   readonly onLogout: () => void;
   readonly notificationCount: number;
+  /** The notifications panel the bell opens; it closes the panel when it navigates. */
+  readonly notifications?: (close: () => void) => ReactNode;
+  /** Settings pages beyond General: the account, notifications, map, this computer and about. */
+  readonly settingsSections?: readonly SettingsSection[];
   readonly sync: ShellSyncState;
   readonly page: ShellPage;
   readonly arrangement: WorkspaceArrangement;
@@ -144,8 +148,8 @@ function initials(name: string): string {
   return (parts.length === 1 ? parts[0]!.slice(0, 2) : `${parts[0]![0]}${parts.at(-1)![0]}`).toUpperCase();
 }
 
-/** The theme chooser at the foot of the rail: the current theme, and a menu of both. */
-function ThemeMenu(props: { readonly theme: ThemeName; readonly onChoose: (theme: ThemeName) => void }) {
+/** A command bar menu that closes on Escape, on a pointer outside it, and when it asks to. */
+function useCommandMenu() {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -157,19 +161,25 @@ function ThemeMenu(props: { readonly theme: ThemeName; readonly onChoose: (theme
     document.addEventListener("pointerdown", outside);
     return () => document.removeEventListener("pointerdown", outside);
   }, [open]);
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== "Escape" || !open) return;
+    event.preventDefault();
+    setOpen(false);
+    trigger.current?.focus();
+  };
+  return { open, setOpen, root, trigger, onKeyDown };
+}
+
+/** The theme chooser at the foot of the rail: the current theme, and a menu of both. */
+function ThemeMenu(props: { readonly theme: ThemeName; readonly onChoose: (theme: ThemeName) => void }) {
+  const { open, setOpen, root, trigger, onKeyDown } = useCommandMenu();
   const choose = (theme: ThemeName) => {
     props.onChoose(theme);
     setOpen(false);
     trigger.current?.focus();
   };
   return (
-    <div ref={root} className="eoc-shell-theme-menu" onKeyDown={(event) => {
-      if (event.key === "Escape" && open) {
-        event.preventDefault();
-        setOpen(false);
-        trigger.current?.focus();
-      }
-    }}>
+    <div ref={root} className="eoc-shell-theme-menu" onKeyDown={onKeyDown}>
       <button ref={trigger} type="button" aria-haspopup="menu" aria-expanded={open}
         aria-label={props.theme === "light" ? "Light theme" : "Theme, dark"} onClick={() => setOpen(!open)}>
         <Icon name={props.theme === "light" ? "sun" : "theme"} size={20} decorative />
@@ -201,6 +211,8 @@ export function AppShell(props: AppShellProps) {
   const [drawerWidth, setDrawerWidth] = useState(props.layout?.drawerWidth ?? 340);
   const [viewport, setViewport] = useState<ShellViewport>(currentViewport);
   const [dialog, setDialog] = useState<"settings" | "help" | null>(null);
+  const bell = useCommandMenu();
+  const account = useCommandMenu();
   const [actionsSlot, setActionsSlot] = useState<HTMLElement | null>(null);
   const [subtitleSlot, setSubtitleSlot] = useState<HTMLElement | null>(null);
   const mainRef = useRef<HTMLElement>(null);
@@ -393,22 +405,47 @@ export function AppShell(props: AppShellProps) {
         {viewport === "dock" ? <div className="eoc-shell-chip is-period">{props.periodControl ?? <strong>{props.periodLabel}</strong>}</div> : null}
         {viewport === "dock" ? <div className="eoc-shell-chip is-position">{props.positionControl ?? <strong>{props.positionLabel}</strong>}</div> : null}
         <div className="eoc-shell-sync" data-state={props.sync.state} data-live={props.sync.live || undefined}><span aria-hidden="true" />{props.sync.label}</div>
-        <button className="eoc-shell-notifications" type="button" aria-label={`Notifications, ${props.notificationCount} unread`} aria-expanded={drawerOpen} onClick={(event) => openDrawer(event.currentTarget)}>
-          <Icon name={destinationIconByKey.alerts} size={24} decorative />
-          {props.notificationCount > 0 ? <span>{props.notificationCount}</span> : null}
-        </button>
-        <details className="eoc-shell-account">
-          <summary role="button" aria-label="Account menu">
+        <div ref={bell.root} className="eoc-shell-bell" onKeyDown={bell.onKeyDown}>
+          <button ref={bell.trigger} className="eoc-shell-notifications" type="button"
+            aria-label={`Notifications, ${props.notificationCount} unread`}
+            aria-haspopup={props.notifications ? "dialog" : undefined}
+            aria-expanded={props.notifications ? bell.open : drawerOpen}
+            aria-controls={props.notifications ? "eoc-shell-bell-panel" : undefined}
+            onClick={(event) => {
+              if (props.notifications) bell.setOpen(!bell.open);
+              else openDrawer(event.currentTarget);
+            }}>
+            <Icon name={destinationIconByKey.alerts} size={24} decorative />
+            {props.notificationCount > 0 ? <span>{props.notificationCount}</span> : null}
+          </button>
+          {props.notifications && bell.open ? (
+            <div id="eoc-shell-bell-panel" className="eoc-shell-menu-panel eoc-shell-bell-panel" role="dialog" aria-label="Notifications">
+              {props.notifications(() => bell.setOpen(false))}
+            </div>
+          ) : null}
+        </div>
+        <div ref={account.root} className="eoc-shell-account" data-open={account.open || undefined} onKeyDown={account.onKeyDown}>
+          <button ref={account.trigger} type="button" className="eoc-shell-account-trigger" aria-label="Account menu"
+            aria-expanded={account.open} aria-controls="eoc-shell-account-menu" onClick={() => account.setOpen(!account.open)}>
             <span className="eoc-shell-avatar" aria-hidden="true">{initials(props.userName)}</span>
             <span className="eoc-shell-account-name"><strong>{props.userName}</strong><small>{props.positionLabel}</small></span>
             <Icon name="chevronDown" size={20} decorative />
-          </summary>
-          <div>
-            <p><strong>{props.userName}</strong><span>{props.roleLabel}</span><span>{props.positionLabel}</span></p>
-            <button type="button" onClick={props.onToggleTheme}>{props.theme === "dark" ? "Use light theme" : "Use dark theme"}</button>
-            <button type="button" onClick={props.onLogout}>Sign out</button>
-          </div>
-        </details>
+          </button>
+          {account.open ? (
+            <div id="eoc-shell-account-menu" className="eoc-shell-menu-panel eoc-shell-account-menu" role="group" aria-label="Account">
+              <p><strong>{props.userName}</strong><span>{props.roleLabel}</span><span>{props.positionLabel}</span></p>
+              <button type="button" onClick={() => { account.setOpen(false); setDialog("settings"); }}>
+                <Icon name="settings" size={16} decorative />Settings
+              </button>
+              <button type="button" onClick={props.onToggleTheme}>
+                <Icon name={props.theme === "dark" ? "sun" : "theme"} size={16} decorative />{props.theme === "dark" ? "Use light theme" : "Use dark theme"}
+              </button>
+              <button type="button" onClick={props.onLogout}>
+                <Icon name="close" size={16} decorative />Sign out
+              </button>
+            </div>
+          ) : null}
+        </div>
       </header>
 
       <div className="eoc-shell-body">
@@ -481,8 +518,9 @@ export function AppShell(props: AppShellProps) {
           </div>
         </div>
       </div>
-      <SettingsDialog open={dialog === "settings"} theme={props.theme} onTheme={chooseTheme}
+      <SettingsDialog open={dialog === "settings"}
         compactNavigation={compactNav} onCompactNavigation={setCompact}
+        {...(props.settingsSections ? { sections: props.settingsSections } : {})}
         {...(props.onAllSections ? { allSections: props.allSections ?? false, onAllSections: props.onAllSections } : {})}
         onOpenAdministration={administration ? () => { setDialog(null); props.onNavigate("admin"); } : undefined}
         onClose={() => setDialog(null)} />

@@ -876,7 +876,8 @@ export async function listViewRecords(
   const orderBy = keys.reduce((clauses, key) =>
     sql`${clauses} ${key.expr} ${key.dir === "asc" ? sql`asc` : sql`desc`},`, sql``);
   const rows = await sql`
-    select id, data, archived_at,
+    select id, data, archived_at, created_at,
+           (select p.display_name from persons p where p.id = board_records.created_by) as creator_name,
            to_char(created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at ${keyColumns}
     from board_records
     where ${scope} ${keyset}
@@ -889,6 +890,9 @@ export async function listViewRecords(
     const out: Record<string, unknown> & { id: string } = { id: r.id as string };
     for (const key of Object.keys(data)) if (readable.has(key)) out[key] = data[key];
     if (r.archived_at) out.archivedAt = new Date(r.archived_at as string).toISOString();
+    // When and by whom, as the record's detail shows them to the same readers.
+    out.createdAt = new Date(r.created_at as string).toISOString();
+    if (r.creator_name) out.createdByName = r.creator_name as string;
     return out;
   });
   // One view semantics for server and browser (shared applyView): the SQL

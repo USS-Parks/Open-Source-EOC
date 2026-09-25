@@ -125,18 +125,33 @@
 .alert-compose-preview h3 { margin: 12px 0 6px; color: var(--eoc-text-strong); font-size: 19px; overflow-wrap: anywhere; }
 .alert-compose-preview > p { line-height: 1.5; overflow-wrap: anywhere; }
 
-.notification-tray { display: grid; gap: 8px; }
-.notification-tray-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.notification-tray-heading h2 { margin: 0; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; }
-.notification-tray ul { margin: 0; padding: 0; display: grid; gap: 6px; list-style: none; }
-.notification-tray li { min-width: 0; padding: 8px; display: grid; gap: 4px; background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: var(--eoc-radius-sm); }
-.notification-tray li:not([data-read]) { border-left: 4px solid var(--eoc-brand-teal); }
+/* The command bar's notifications panel, on its navy. */
+.notification-tray { min-height: 0; flex: 1; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; }
+.notification-tray-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.notification-tray-heading h2 { margin: 0; color: #fff; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; }
+.notification-tray-count { color: #b9d3e6; font-size: 12px; }
+.notification-tray .notification-muted { margin: 0; color: #b9d3e6; }
+.notification-tray ul { min-height: 0; margin: 0; padding: 0 2px 0 0; display: grid; align-content: start; gap: 6px; overflow-y: auto; list-style: none; }
+.notification-tray li { min-width: 0; }
+.notification-tray li > button,
+.notification-tray li:not(:has(> button)) { width: 100%; display: grid; gap: 3px; padding: 9px 11px; color: inherit; background: rgb(255 255 255 / 0.04); border: 1px solid var(--eoc-shell-menu-border, #33597c); border-left: 4px solid transparent; border-radius: 6px; font: inherit; text-align: left; }
+.notification-tray li > button { cursor: pointer; }
+.notification-tray li > button:hover,
+.notification-tray li > button:focus-visible { background: var(--eoc-shell-menu-hover, #21507a); outline: none; }
+.notification-tray li:not([data-read]) > button,
+.notification-tray li:not([data-read]):not(:has(> button)) { border-left-color: #3be0f9; }
 .notification-tray strong,
 .notification-tray small { overflow-wrap: anywhere; }
-.notification-tray strong { color: var(--eoc-text-strong); font-size: 13px; }
-.notification-tray small { color: var(--eoc-text-muted); font-size: 11px; }
-.notification-tray-state { color: var(--eoc-text-muted); font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .04em; }
-.notification-tray-state[data-state="unread"] { color: var(--eoc-brand-teal); }
+.notification-tray strong { color: #fff; font-size: 13.5px; }
+.notification-tray small { color: #b9d3e6; font-size: 12px; }
+.notification-tray-state { color: #b9d3e6; font-size: 10.5px; font-weight: 750; text-transform: uppercase; letter-spacing: .05em; }
+.notification-tray-state[data-state="unread"] { color: #5ee6f5; }
+.notification-tray-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.notification-tray-meta time { color: #b9d3e6; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.notification-tray-body { display: -webkit-box; overflow: hidden; color: #dbe7f1; font-size: 12.5px; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.notification-tray-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 2px; }
+.notification-tray-foot small { color: #b9d3e6; font-size: 11.5px; }
+.notification-tray-foot button { color: #9fe3ee !important; }
 
 @media (max-width: 760px) {
   .notification-workspace-header { align-items: stretch; flex-direction: column; }

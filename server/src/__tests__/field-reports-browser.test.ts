@@ -104,7 +104,15 @@ describe("field reports and the navigation rail in a real browser", () => {
     expect(await workspace.getByLabel("Field Reports board").count()).toBe(0);
     await page.screenshot({ path: join(SHOTS, "field-reports-light-1440.png"), fullPage: true });
 
-    await page.getByLabel(`Select record ${reportId}`).click();
+    // The report shows its reporter; the EOC verifies it here, then opens its record on the board.
+    await workspace.getByRole("button", { name: "Report: Culvert washout on Bald Hills Rd" }).click();
+    const detail = workspace.getByRole("region", { name: "Selected report" });
+    await detail.getByText("Member", { exact: true }).waitFor();
+    await detail.getByRole("button", { name: "Verify report" }).click();
+    await detail.getByRole("button", { name: "Mark unverified" }).waitFor();
+    const [verified] = await admin`select data->>'verified' as verified from board_records where id = ${reportId}`;
+    expect(verified?.verified).toBe("true");
+    await detail.getByRole("button", { name: "Open record" }).click();
     await page.waitForURL((url) => url.hash.startsWith(`#/board/${reportBoardId}`) && url.hash.includes(`record=${reportId}`));
     const openContext = page.getByRole("button", { name: "Open context" });
     if (await openContext.isVisible()) await openContext.click();
@@ -116,6 +124,9 @@ describe("field reports and the navigation rail in a real browser", () => {
     await page.getByRole("button", { name: "Capture a field report" }).click();
     await page.locator(".eoc-shell-page-header h1").filter({ hasText: "Smart Forms" }).waitFor();
     await page.getByRole("button", { name: "Field Reports", exact: true }).click();
+    // Verified, the report has left the unverified list and is under All.
+    await workspace.getByText("Every report is verified.").waitFor();
+    await workspace.getByRole("button", { name: "All (1)" }).click();
     await workspace.getByText("Culvert washout on Bald Hills Rd", { exact: true }).waitFor();
 
     await page.getByRole("button", { name: "Account menu", exact: true }).click();

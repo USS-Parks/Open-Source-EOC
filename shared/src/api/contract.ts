@@ -192,6 +192,7 @@ POST /api/v1/auth/logout
 POST /api/v1/auth/mfa/activate
 POST /api/v1/auth/mfa/enroll
 POST /api/v1/auth/mfa/verify
+POST /api/v1/auth/password
 POST /api/v1/auth/resume
 POST /api/v1/boards/:boardId/import
 POST /api/v1/boards/:boardId/local-fields

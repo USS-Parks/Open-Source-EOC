@@ -21,7 +21,7 @@ interface Instance {
 }
 
 async function deployFromSource(): Promise<Instance> {
-  const { admin, runtime } = await freshDb(); // migrates from scratch
+  const { admin, runtime } = await freshDb({ fromScratch: true });
   await ensureStandardTemplates(admin);
   await ensureStandardIncidentTemplates(admin);
   const app = buildApp(runtime, { oidc: null });

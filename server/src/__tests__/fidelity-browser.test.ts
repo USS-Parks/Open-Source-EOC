@@ -75,11 +75,11 @@ const pageErrors: string[] = [];
 async function useTheme(theme: Theme): Promise<void> {
   const current = await page.locator(".eoc-theme").first().getAttribute("data-theme");
   if (current === theme) return;
-  const menu = page.locator("details.eoc-shell-account");
-  if (await menu.getAttribute("open") === null) await page.getByRole("button", { name: "Account menu" }).click();
+  const menu = page.getByRole("button", { name: "Account menu" });
+  if (await menu.getAttribute("aria-expanded") !== "true") await menu.click();
   await page.getByRole("button", { name: theme === "dark" ? "Use dark theme" : "Use light theme" }).click();
   await expect.poll(() => page.locator(".eoc-theme").first().getAttribute("data-theme")).toBe(theme);
-  if (await menu.getAttribute("open") !== null) await page.getByRole("button", { name: "Account menu" }).click();
+  if (await menu.getAttribute("aria-expanded") === "true") await menu.click();
 }
 
 async function openOverview(): Promise<void> {

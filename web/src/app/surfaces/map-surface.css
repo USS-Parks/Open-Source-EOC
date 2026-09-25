@@ -1,19 +1,18 @@
-/* The map screen around the COP. */
-.map-surface { display: flex; flex: 1; flex-direction: column; gap: 8px; min-height: 0; padding: 12px; position: relative; }
-.map-surface-status { align-items: center; color: var(--eoc-text-muted); display: flex; font-size: 0.9em; gap: 6px; }
-.map-surface-incident { color: var(--eoc-text); font-weight: 600; }
+/* The map screen: the map fills the workspace; its tools and panels float over it. */
+.map-surface { display: flex; flex: 1; flex-direction: column; gap: 8px; min-height: 0; padding: 0 16px 16px; position: relative; }
 .map-surface-row { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
-.map-surface-pick { align-items: center; display: flex; gap: 6px; }
-.map-surface-coordinate { display: grid; gap: 3px; }
-.map-surface-select { background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: 4px; box-sizing: border-box; color: var(--eoc-text); font-family: inherit; font-size: 1em; max-width: 100%; min-height: 44px; min-width: 0; padding: 6px; width: 100%; }
+.map-surface-select { background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: 4px; box-sizing: border-box; color: var(--eoc-text); font-family: inherit; font-size: 1em; max-width: 100%; min-height: 40px; min-width: 0; padding: 6px; width: 100%; }
 .map-surface-select.is-coordinate { width: 116px; }
 .map-surface-link { align-items: end; display: flex; flex-wrap: wrap; gap: 8px; }
-.map-surface-feature { flex: 1 1 280px; min-width: 220px; }
-.map-surface-note { color: var(--eoc-text-muted); margin: 4px 0 0; }
+.map-surface-feature { flex: 1 1 280px; min-width: 0; }
+.map-surface-note { color: var(--eoc-text-muted); font-size: 12.5px; margin: 4px 0 0; }
 .map-surface-source { display: grid; flex: 1 1 320px; gap: 4px; min-width: min(100%, 260px); }
 .map-surface-links-title { font-size: 13px; margin: 12px 0 6px; }
 .map-surface-links { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }
-.map-surface-map { position: relative; flex: 1; min-height: 0; }
+.map-surface-map { position: relative; flex: 1; min-height: 420px; }
+.map-surface-error { color: var(--eoc-status-critical); margin: 8px 0 0; }
+.map-surface-actions { margin-top: 8px; }
+
 /* Address and place search, over the map's top right beside its controls. */
 .map-surface-map .eoc-shell-search { position: absolute; z-index: 6; top: 10px; right: 56px; width: min(300px, calc(100% - 120px)); }
 .map-surface-map .eoc-shell-search input,
@@ -27,6 +26,69 @@
 .eoc-shell-search-popup li[aria-selected="true"] { background: var(--eoc-selection); }
 .eoc-shell-search-popup li strong { font-size: 13px; }
 .eoc-shell-search-popup li span { color: var(--eoc-text-muted); font-size: 12px; }
-.map-surface-overlay { max-height: 78%; overflow: auto; position: absolute; right: 24px; top: 64px; width: 360px; z-index: 10; }
-.map-surface-error { color: var(--eoc-status-critical); margin: 8px 0 0; }
-.map-surface-actions { margin-top: 8px; }
+
+/* Tools and panels over the map's top left, under the coordinate readout. */
+.map-surface-float {
+  position: absolute;
+  z-index: 7;
+  top: 52px;
+  left: 8px;
+  width: min(400px, calc(100% - 16px));
+  max-height: calc(100% - 110px);
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  overflow: auto;
+  pointer-events: none;
+}
+.map-surface-float > * { pointer-events: auto; }
+.map-surface-tools { display: flex; gap: 8px; justify-self: start; }
+.map-surface-tools button { box-shadow: var(--eoc-shadow-sm); }
+.map-surface-card { color: var(--eoc-text); background: var(--eoc-surface); border: 1px solid var(--eoc-border-strong); border-radius: 6px; box-shadow: var(--eoc-shadow-md, var(--eoc-shadow-sm)); }
+.map-surface-card > .eoc-panel { margin: 0; border: 0; box-shadow: none; }
+.map-surface-adding { display: grid; gap: 8px; padding: 12px; }
+.map-surface-pick,
+.map-surface-coordinate { display: grid; gap: 4px; color: var(--eoc-text-muted); font-size: 12px; font-weight: 600; }
+.map-surface-coordinates { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+
+/* The impact indicators over the map's foot: a tab when closed, the strip when open. */
+.map-surface-impact {
+  position: absolute;
+  z-index: 6;
+  right: 8px;
+  bottom: 30px;
+  max-width: calc(100% - 16px);
+  display: grid;
+  justify-items: end;
+  gap: 0;
+}
+.map-surface-impact[data-open] { left: 8px; }
+.map-surface-impact-toggle {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  color: var(--eoc-text-strong);
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border-strong);
+  border-radius: 6px;
+  box-shadow: var(--eoc-shadow-sm);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.map-surface-impact-toggle svg { transform: rotate(-90deg); transition: transform 120ms ease; }
+.map-surface-impact[data-open] .map-surface-impact-toggle { border-bottom-color: transparent; border-radius: 6px 6px 0 0; }
+.map-surface-impact[data-open] .map-surface-impact-toggle svg { transform: rotate(90deg); }
+.map-surface-impact > .eoc-impact-kpis {
+  width: 100%;
+  max-height: min(46vh, 380px);
+  overflow: auto;
+  margin: -1px 0 0;
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border-strong);
+  border-radius: 6px 0 6px 6px;
+  box-shadow: var(--eoc-shadow-md, var(--eoc-shadow-sm));
+}

@@ -690,6 +690,16 @@ export class ApiClient {
     }
   }
 
+  /** Change the signed-in person's own password; their other sessions end. */
+  changePassword(currentPassword: string, newPassword: string): Promise<{ ok: true; otherSessionsEnded: number }> {
+    return this.request("POST", "/api/v1/auth/password", { currentPassword, newPassword });
+  }
+
+  /** The server's liveness answer, which names its version. */
+  serverHealth(): Promise<{ status: string; version: string }> {
+    return this.raw("GET", "/api/v1/health", undefined, false);
+  }
+
   private async request<T>(method: string, path: string, body?: Body): Promise<T> {
     try {
       return await this.raw<T>(method, path, body, true);

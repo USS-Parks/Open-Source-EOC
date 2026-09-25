@@ -17,7 +17,9 @@
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-rows: 72px minmax(300px, 1fr) minmax(200px, 220px);
+  /* The middle row never falls below what its eight lifeline rows need; a
+     shorter window scrolls the overview instead of pressing them together. */
+  grid-template-rows: 72px minmax(420px, 1fr) minmax(200px, 220px);
   gap: 16px;
   padding: 0 20px 6px 20px;
   overflow: auto;
@@ -37,7 +39,7 @@
   --ov-stable: #5fd08e;
   --ov-unknown: #a9b4c2;
   --ov-link: #6ab8ff;
-  grid-template-rows: 97px minmax(300px, 1fr) 175px;
+  grid-template-rows: 97px minmax(512px, 1fr) 175px;
   gap: 13px;
   padding: 2px 20px 34px 22px;
 }
@@ -134,7 +136,9 @@
 .eoc-overview-map .eoc-cop-map { height: 100%; }
 
 /* Community Lifelines. */
-.eoc-overview-lifelines { min-height: 0; flex: 1; margin: 0; padding: 0 0 4px; display: grid; grid-template-rows: repeat(8, minmax(0, 1fr)); list-style: none; }
+.eoc-overview-lifelines { min-height: 0; flex: 1; margin: 0; padding: 0 0 4px; display: grid; grid-template-rows: repeat(8, minmax(44px, 1fr)); list-style: none; }
+/* A dark row carries a two-line impact under its condition. */
+[data-theme="dark"] .eoc-overview-lifelines { grid-template-rows: repeat(8, minmax(58px, 1fr)); }
 .eoc-overview-lifelines li { min-height: 0; border-top: 1px solid var(--ov-line); }
 [data-theme="dark"] .eoc-overview-lifelines li { margin: 0 8px; }
 [data-theme="dark"] .eoc-overview-lifelines li:first-child { border-top-color: transparent; }

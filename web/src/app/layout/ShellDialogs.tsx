@@ -1,61 +1,89 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ModalDialog } from "../../design/overlays.js";
-import type { ThemeName } from "../../design/tokens.js";
 
-/** Settings for this viewer: theme and navigation density, plus Administration for administrators. */
+/** One page of the Settings dialog. */
+export interface SettingsSection {
+  readonly key: string;
+  readonly title: string;
+  readonly content: ReactNode;
+}
+
+/**
+ * Settings for this viewer: General (navigation, and Administration for
+ * administrators) and the sections the console adds. The theme is chosen at
+ * the foot of the rail, where the frames place it.
+ */
 export function SettingsDialog(props: {
   readonly open: boolean;
-  readonly theme: ThemeName;
-  readonly onTheme: (theme: ThemeName) => void;
   readonly compactNavigation: boolean;
   readonly onCompactNavigation: (compact: boolean) => void;
   readonly allSections?: boolean;
   readonly onAllSections?: (value: boolean) => void;
   readonly onOpenAdministration?: (() => void) | undefined;
+  readonly sections?: readonly SettingsSection[];
   readonly onClose: () => void;
 }) {
+  const [active, setActive] = useState("general");
+  useEffect(() => { if (props.open) setActive("general"); }, [props.open]);
+  const general: SettingsSection = { key: "general", title: "General", content: <GeneralSettings {...props} /> };
+  const sections = [general, ...(props.sections ?? [])];
+  const shown = sections.find((section) => section.key === active) ?? general;
   return (
     <ModalDialog open={props.open} title="Settings" onClose={props.onClose}>
       <div className="eoc-shell-settings">
-        <fieldset>
-          <legend>Theme</legend>
-          {(["light", "dark"] as const).map((theme) => (
-            <label key={theme}>
-              <input type="radio" name="eoc-shell-theme" value={theme} checked={props.theme === theme}
-                onChange={() => props.onTheme(theme)} />
-              {theme === "light" ? "Light" : "Dark"}
-            </label>
+        <div className="eoc-shell-settings-nav" role="tablist" aria-label="Settings sections" aria-orientation="vertical">
+          {sections.map((section) => (
+            <button key={section.key} type="button" role="tab" id={`eoc-settings-tab-${section.key}`}
+              aria-selected={section.key === shown.key} aria-controls="eoc-settings-panel"
+              onClick={() => setActive(section.key)}>{section.title}</button>
           ))}
-        </fieldset>
-        <fieldset>
-          <legend>Navigation</legend>
-          <label>
-            <input type="checkbox" checked={props.compactNavigation}
-              onChange={(event) => props.onCompactNavigation(event.target.checked)} />
-            Compact navigation
-          </label>
-          <p>Shows the section rail as icons only. The setting is saved with this incident's workspace.</p>
-          {props.onAllSections ? (
-            <>
-              <label>
-                <input type="checkbox" checked={props.allSections ?? false}
-                  onChange={(event) => props.onAllSections!(event.target.checked)} />
-                Show every section
-              </label>
-              <p>The rail lists the core sections. Turn this on to list every section as well: chronology,
-                dashboards, staffing, forms, the JIC, contacts, datasets and the rest. Saved on this computer.</p>
-            </>
-          ) : null}
-        </fieldset>
-        {props.onOpenAdministration ? (
-          <fieldset>
-            <legend>Administration</legend>
-            <p>People, positions, integrations and records for the jurisdictions you administer.</p>
-            <button type="button" className="eoc-kit-button" onClick={props.onOpenAdministration}>Open Administration</button>
-          </fieldset>
-        ) : null}
+        </div>
+        <div id="eoc-settings-panel" className="eoc-shell-settings-panel" role="tabpanel" aria-labelledby={`eoc-settings-tab-${shown.key}`}>
+          {shown.content}
+        </div>
       </div>
     </ModalDialog>
+  );
+}
+
+function GeneralSettings(props: {
+  readonly compactNavigation: boolean;
+  readonly onCompactNavigation: (compact: boolean) => void;
+  readonly allSections?: boolean;
+  readonly onAllSections?: (value: boolean) => void;
+  readonly onOpenAdministration?: (() => void) | undefined;
+}) {
+  return (
+    <>
+      <fieldset>
+        <legend>Navigation</legend>
+        <label>
+          <input type="checkbox" checked={props.compactNavigation}
+            onChange={(event) => props.onCompactNavigation(event.target.checked)} />
+          Compact navigation
+        </label>
+        <p>Shows the section rail as icons only. The setting is saved with this incident's workspace.</p>
+        {props.onAllSections ? (
+          <>
+            <label>
+              <input type="checkbox" checked={props.allSections ?? false}
+                onChange={(event) => props.onAllSections!(event.target.checked)} />
+              Show every section
+            </label>
+            <p>The rail lists the core sections. Turn this on to list every section as well: chronology,
+              dashboards, staffing, forms, the JIC, contacts, datasets and the rest. Saved on this computer.</p>
+          </>
+        ) : null}
+      </fieldset>
+      {props.onOpenAdministration ? (
+        <fieldset>
+          <legend>Administration</legend>
+          <p>People, positions, integrations and records for the jurisdictions you administer.</p>
+          <button type="button" className="eoc-kit-button" onClick={props.onOpenAdministration}>Open Administration</button>
+        </fieldset>
+      ) : null}
+      <p>The theme, light or dark, is chosen at the foot of the section rail.</p>
+    </>
   );
 }
 

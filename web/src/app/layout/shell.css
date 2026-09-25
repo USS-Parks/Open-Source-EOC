@@ -62,8 +62,7 @@
 
 /* The command bar and rail stay navy in both themes, where the theme's focus
    blue measures about 2:1. Their controls take the light signal color, and
-   full-height buttons keep the ring inside their edges. The account menu
-   opens on the page surface and keeps the theme's ring. */
+   full-height buttons keep the ring inside their edges. */
 .eoc-shell-command :where(a, button, input, select, summary):focus-visible,
 .eoc-shell-rail button:focus-visible {
   outline: 2px solid #63d5cf;
@@ -72,10 +71,8 @@
 }
 .eoc-shell-notifications:focus-visible,
 .eoc-shell-mobile-nav:focus-visible,
-.eoc-shell-account summary:focus-visible,
 .eoc-shell-nav-scroll button:focus-visible,
 .eoc-shell-rail-foot button:focus-visible { outline-offset: -4px; }
-.eoc-shell-account > div button:focus-visible,
 .eoc-shell-theme-popup button:focus-visible { outline-color: var(--eoc-focus); }
 
 .eoc-shell-command {
@@ -162,6 +159,83 @@
 [data-theme="dark"] .eoc-shell-chip.is-period .eoc-shell-select-icon { display: none !important; }
 .eoc-shell-context > span { color: #d7e6f2; font-size: 13px; }
 
+/* Command bar menus: one navy panel language. The incident list hangs flush
+   under its pill at the pill's width; the period and position lists, the
+   account menu and the notifications panel hang from the command bar's lower
+   edge, flush with their own column. Chrome and Edge style a native select's
+   list this way; another browser keeps its own list for the selects. */
+.eoc-shell {
+  --eoc-shell-menu-bg: #183a59;
+  --eoc-shell-menu-border: #33597c;
+  --eoc-shell-menu-hover: #21507a;
+  --eoc-shell-menu-selected: #1d6186;
+  --eoc-shell-menu-shadow: 0 16px 32px rgb(3 12 22 / 0.42);
+}
+[data-theme="dark"] .eoc-shell {
+  --eoc-shell-menu-bg: #111f2f;
+  --eoc-shell-menu-border: #2c3e52;
+  --eoc-shell-menu-hover: #17314a;
+  --eoc-shell-menu-selected: #11364b;
+}
+.eoc-shell-command { anchor-name: --eoc-command; }
+.eoc-shell-chip { anchor-name: --eoc-chip; anchor-scope: --eoc-chip; }
+.eoc-shell-select.is-incident { anchor-name: --eoc-pill; anchor-scope: --eoc-pill; }
+
+@supports (appearance: base-select) {
+  .eoc-shell-command .eoc-shell-select select,
+  .eoc-shell-command .eoc-shell-select select::picker(select) { appearance: base-select; }
+  .eoc-shell-command .eoc-shell-select select {
+    display: block;
+    align-content: center;
+    white-space: nowrap;
+    overflow: hidden;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .eoc-shell-command .eoc-shell-select select::picker-icon { display: none; }
+  .eoc-shell-command .eoc-shell-select select::picker(select) {
+    position-area: none;
+    inset: auto;
+    top: anchor(--eoc-command bottom);
+    left: anchor(--eoc-chip left);
+    width: anchor-size(--eoc-chip width);
+    min-width: 220px;
+    max-height: min(420px, 70vh);
+    margin: 0;
+    padding: 6px 0;
+    overflow-y: auto;
+    color: #fff;
+    background: var(--eoc-shell-menu-bg);
+    border: 1px solid var(--eoc-shell-menu-border);
+    border-top: 0;
+    border-radius: 0 0 8px 8px;
+    box-shadow: var(--eoc-shell-menu-shadow);
+  }
+  .eoc-shell-command .eoc-shell-select.is-incident select::picker(select) {
+    top: anchor(--eoc-pill bottom);
+    left: anchor(--eoc-pill left);
+    width: anchor-size(--eoc-pill width);
+  }
+  .eoc-shell-command .eoc-shell-select.is-incident:has(select:open) { border-radius: 6px 6px 0 0; border-bottom-color: transparent; }
+  .eoc-shell-command .eoc-shell-select option {
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    color: #eef5fb;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: normal;
+    cursor: pointer;
+  }
+  .eoc-shell-command .eoc-shell-select option:hover,
+  .eoc-shell-command .eoc-shell-select option:focus-visible { background: var(--eoc-shell-menu-hover); outline: none; }
+  .eoc-shell-command .eoc-shell-select option:checked { font-weight: 650; background: var(--eoc-shell-menu-selected); box-shadow: inset 3px 0 0 var(--eoc-shell-active-bar); }
+  .eoc-shell-command .eoc-shell-select option::checkmark { order: 1; margin-left: auto; color: var(--eoc-shell-active-bar); }
+}
+
 .eoc-shell-chip {
   min-width: 0;
   height: 34px;
@@ -207,21 +281,45 @@
 
 .eoc-shell-account { position: relative; min-width: 220px; height: 100%; margin-left: 10px; }
 [data-theme="light"] .eoc-shell-account { min-width: 190px; border-left: 1px solid var(--eoc-shell-line); }
-.eoc-shell-account summary { height: 100%; min-height: 44px; display: flex; align-items: center; gap: 12px; padding: 7px 18px 7px 14px; cursor: pointer; list-style: none; }
-.eoc-shell-account summary::-webkit-details-marker { display: none; }
-.eoc-shell-account summary > svg { margin-left: auto; color: #d7e6f2; }
+.eoc-shell-account-trigger { width: 100%; height: 100%; min-height: 44px; display: flex; align-items: center; gap: 12px; padding: 7px 18px 7px 14px; color: inherit; background: transparent; border: 0; font: inherit; text-align: left; cursor: pointer; }
+.eoc-shell-account-trigger:hover,
+.eoc-shell-account[data-open] .eoc-shell-account-trigger { background: var(--eoc-shell-menu-bg); }
+.eoc-shell-account-trigger > svg { margin-left: auto; color: #d7e6f2; transition: transform 120ms ease; }
+.eoc-shell-account[data-open] .eoc-shell-account-trigger > svg { transform: rotate(180deg); }
+.eoc-shell-account-trigger:focus-visible { outline-offset: -4px; }
+
+/* The account menu and notifications panel: flush under the command bar,
+   the account menu at its column's width, the panel at the bell's right edge. */
+.eoc-shell-bell { position: relative; height: 100%; }
+.eoc-shell-menu-panel {
+  position: absolute;
+  z-index: 80;
+  top: 100%;
+  margin-top: 1px;
+  color: #eef5fb;
+  background: var(--eoc-shell-menu-bg);
+  border: 1px solid var(--eoc-shell-menu-border);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  box-shadow: var(--eoc-shell-menu-shadow);
+}
+.eoc-shell-account-menu { left: 0; right: 0; padding: 6px 0; }
+.eoc-shell-account-menu p { margin: 0; padding: 8px 16px 10px; display: grid; gap: 3px; border-bottom: 1px solid var(--eoc-shell-menu-border); }
+.eoc-shell-account-menu p strong { color: #fff; font-size: 14px; }
+.eoc-shell-account-menu p span { color: var(--eoc-shell-muted); font-size: 12px; }
+.eoc-shell-account-menu p span:first-of-type { text-transform: capitalize; }
+.eoc-shell-account-menu button { width: 100%; min-height: 40px; display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: #eef5fb; background: transparent; border: 0; font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.eoc-shell-account-menu button:hover,
+.eoc-shell-account-menu button:focus-visible { background: var(--eoc-shell-menu-hover); outline: none; box-shadow: inset 3px 0 0 var(--eoc-shell-active-bar); }
+.eoc-shell-account-menu button > svg { color: #b9d3e6; }
+.eoc-shell-bell-panel { right: 0; width: 380px; max-height: min(600px, calc(100vh - 76px)); display: flex; overflow: hidden; padding: 12px 14px 12px; }
 .eoc-shell-avatar { width: 38px; height: 38px; flex: none; display: grid; place-items: center; color: #e8f1f8; background: #2d4057; border: 1px solid #52667e; border-radius: 50%; font-size: 14px; font-weight: 600; }
 [data-theme="light"] .eoc-shell-avatar { background: #3a5a7a; border-color: #7b98b3; }
 .eoc-shell-account-name { min-width: 0; display: grid; }
 .eoc-shell-account-name strong { overflow: hidden; max-width: 150px; color: #fff; font-size: 14px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .eoc-shell-account-name small { overflow: hidden; max-width: 150px; color: var(--eoc-shell-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 [data-theme="light"] .eoc-shell-account-name small { display: none; }
-.eoc-shell-account > div { position: absolute; z-index: 80; top: calc(100% + 4px); right: 6px; width: 230px; padding: 10px; color: var(--eoc-text); background: var(--eoc-surface-overlay); border: 1px solid var(--eoc-border-strong); border-radius: var(--eoc-radius-md); box-shadow: var(--eoc-shadow-lg); }
-.eoc-shell-account p { margin: 0 0 8px; display: grid; gap: 3px; }
-.eoc-shell-account p span { color: var(--eoc-text-muted); font-size: 12px; }
-.eoc-shell-account > div button,
 .eoc-shell-drawer button { min-height: 36px; border: 1px solid var(--eoc-border); border-radius: var(--eoc-radius-sm); color: var(--eoc-text); background: var(--eoc-surface); font: inherit; cursor: pointer; }
-.eoc-shell-account > div button { width: 100%; margin-top: 6px; text-align: left; padding: 6px 9px; }
 
 .eoc-shell-mobile-nav { display: none; }
 .eoc-shell-body { position: relative; min-width: 0; min-height: 0; display: grid; grid-template-columns: var(--eoc-shell-rail-width) minmax(0, 1fr) var(--eoc-shell-drawer-width); overflow: hidden; }
@@ -338,9 +436,8 @@
 [data-theme="dark"] .eoc-page-action.is-primary { color: var(--eoc-action-text); background: var(--eoc-action); border-color: var(--eoc-action-border); }
 .eoc-shell-context-opener { color: var(--eoc-brand-teal) !important; border-color: var(--eoc-brand-teal) !important; }
 
-.eoc-shell-workspace { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-.eoc-shell[data-arrangement="boards"] .eoc-shell-workspace,
-.eoc-shell[data-arrangement="planning"] .eoc-shell-workspace { overflow: auto; }
+/* Every workspace scrolls when its screen is taller than the window; a screen that fits (the map, the lifelines) never shows a bar. */
+.eoc-shell-workspace { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
 .eoc-shell-page-footer { padding: 6px 22px 10px; color: var(--eoc-text-muted); font-size: 12px; letter-spacing: 0.04em; }
 [data-theme="dark"] .eoc-shell-page-footer { display: none; }
 
@@ -384,11 +481,35 @@
 .eoc-shell-overlay { display: none; }
 
 /* Settings and help dialogs. */
-.eoc-shell-settings { display: grid; gap: 14px; }
+/* Settings: its sections down the left, the chosen one on the right. */
+.eoc-modal:has(.eoc-shell-settings) { width: min(860px, 100%); }
+.eoc-shell-settings { min-height: 440px; display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 20px; }
+.eoc-shell-settings-nav { display: grid; align-content: start; gap: 2px; padding-right: 14px; border-right: 1px solid var(--eoc-border); }
+.eoc-shell-settings-nav button { min-height: 38px; padding: 7px 12px; color: var(--eoc-text); background: transparent; border: 0; border-left: 3px solid transparent; border-radius: 0 4px 4px 0; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.eoc-shell-settings-nav button:hover { background: var(--eoc-surface-sunken); }
+.eoc-shell-settings-nav button[aria-selected="true"] { color: var(--eoc-text-strong); background: var(--eoc-selection); border-left-color: var(--eoc-brand-teal); }
+.eoc-shell-settings-panel { min-width: 0; display: grid; align-content: start; gap: 14px; }
 .eoc-shell-settings fieldset { margin: 0; padding: 10px 12px 12px; display: grid; gap: 8px; border: 1px solid var(--eoc-border); border-radius: var(--eoc-radius-md); }
 .eoc-shell-settings legend { padding: 0 4px; color: var(--eoc-text-strong); font-weight: 650; }
 .eoc-shell-settings label { min-height: 32px; display: flex; align-items: center; gap: 8px; }
+.eoc-shell-settings label.is-field { display: grid; gap: 4px; color: var(--eoc-text-muted); font-size: 12px; font-weight: 600; }
+.eoc-shell-settings label.is-field input { min-height: 38px; padding: 6px 10px; color: var(--eoc-text); background: var(--eoc-surface); border: 1px solid var(--eoc-border-strong); border-radius: 4px; font: inherit; font-size: 14px; font-weight: 400; }
 .eoc-shell-settings p { margin: 0; color: var(--eoc-text-muted); font-size: 13px; line-height: 1.4; }
+.eoc-shell-settings fieldset > button,
+.eoc-shell-settings form button[type="submit"] { justify-self: start; }
+.eoc-shell-settings-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.eoc-shell-settings-value { display: grid; gap: 2px; }
+.eoc-shell-settings-value strong { color: var(--eoc-text-strong); }
+.eoc-shell-settings-facts { margin: 0; display: grid; border: 1px solid var(--eoc-border); border-radius: 6px; overflow: hidden; }
+.eoc-shell-settings-facts > div { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 10px; padding: 8px 12px; }
+.eoc-shell-settings-facts > div + div { border-top: 1px solid var(--eoc-border); }
+.eoc-shell-settings-facts dt { color: var(--eoc-text-muted); font-size: 12.5px; font-weight: 600; }
+.eoc-shell-settings-facts dd { margin: 0; color: var(--eoc-text-strong); overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+  .eoc-shell-settings { grid-template-columns: minmax(0, 1fr); }
+  .eoc-shell-settings-nav { display: flex; overflow-x: auto; padding: 0 0 8px; border-right: 0; border-bottom: 1px solid var(--eoc-border); }
+  .eoc-shell-settings-facts > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}
 .eoc-shell-help { display: grid; gap: 16px; }
 .eoc-shell-help h3 { margin: 0 0 6px; color: var(--eoc-text-strong); font-size: 16px; }
 .eoc-shell-help ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; line-height: 1.4; }
@@ -418,8 +539,8 @@
   .eoc-shell-sync { max-width: 150px; overflow: hidden; padding: 0 10px; text-overflow: ellipsis; }
   .eoc-shell-select.is-incident { width: 220px; }
   .eoc-shell-account { min-width: 56px; margin-left: 0; }
-  .eoc-shell-account summary { justify-content: center; padding-inline: 8px; }
-  .eoc-shell-account summary > svg,
+  .eoc-shell-account-trigger { justify-content: center; padding-inline: 8px; }
+  .eoc-shell-account-trigger > svg,
   .eoc-shell-account-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .eoc-shell-nav-scroll h2,
   .eoc-shell-nav-scroll button span,

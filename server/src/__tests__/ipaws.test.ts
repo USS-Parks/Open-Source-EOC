@@ -320,7 +320,7 @@ describe("transmission requires enablement and eligibility", () => {
       await other.runtime.end();
       await other.admin.end();
     }
-  });
+  }, 120_000); // builds a second database, which waits its turn behind other files' setup
 
   it("transmits an eligible alert and records an acceptance", async () => {
     const { id, ipawsEligible } = await authorAlert(eligibleDraft);

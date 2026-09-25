@@ -5,6 +5,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { Protocol } from "pmtiles";
 import { Icon } from "../design/icons/index.js";
 import { pollWhileVisible } from "../app/data/hooks.js";
+import { preferences, toDms, usePreferences } from "../app/preferences.js";
 import "./cop-workspace.css";
 import { withJurisdictionOverlays, readOverlayCoverage, type OverlayCoverage, VECTOR_OVERLAYS, ROAD_OVERLAYS, OWNERSHIP_LEVELS, overlayGroupOf, type JurisdictionOverlays } from "./overlays.js";
 import { themes, type ThemeName } from "../design/tokens.js";
@@ -244,6 +245,8 @@ export interface CopMapProps {
   readonly incidentArea?: CopIncidentArea | null | undefined;
   /** The place search shown among the light card's map tools. */
   readonly cardSearch?: ReactNode;
+  /** Panels the Map screen floats over the map itself: its tools, the impact panel, the record form. */
+  readonly overlay?: ReactNode;
 }
 
 let pmtilesRegistered = false;
@@ -420,6 +423,10 @@ export function CopMap(props: CopMapProps) {
   const [groups, setGroups] = useState<readonly (typeof BASEMAP_GROUPS)[number][]>([]);
   const [groupOn, setGroupOn] = useState<Record<string, boolean>>({});
   const readoutRef = useRef<HTMLDivElement>(null);
+  // The viewer's units and coordinate format (Settings); the scale bar follows a change at once.
+  const scaleRef = useRef<maplibregl.ScaleControl | null>(null);
+  const distanceUnit = usePreferences().distanceUnit;
+  useEffect(() => { scaleRef.current?.setUnit(distanceUnit); }, [distanceUnit]);
   const measureRef = useRef<MeasureMode>("off");
   const measureCoordsRef = useRef<[number, number][]>([]);
   const [measure, setMeasure] = useState<MeasureMode>("off");
@@ -437,6 +444,14 @@ export function CopMap(props: CopMapProps) {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(loadBookmarks);
   const [bookmarkName, setBookmarkName] = useState("");
   const [layerQuery, setLayerQuery] = useState("");
+  // The layer column folds away so the map takes the whole screen; the choice is kept on this computer.
+  const [layersOpen, setLayersOpen] = useState(() => {
+    try { return localStorage.getItem("openeoc.map.layersOpen") !== "0"; } catch { return true; }
+  });
+  const showLayers = (open: boolean) => {
+    setLayersOpen(open);
+    try { localStorage.setItem("openeoc.map.layersOpen", open ? "1" : "0"); } catch { /* not kept */ }
+  };
   const [selection, setSelection] = useState<CopInspection | null>(null);
   // Operator opacity per operational source key, 0 to 1 (default 1).
   const [opacity, setOpacity] = useState<Record<string, number>>({});
@@ -587,18 +602,24 @@ export function CopMap(props: CopMapProps) {
     if (!el) return;
     const coords = measureCoordsRef.current;
     const mode = measureRef.current;
+    const prefs = preferences();
+    const metric = prefs.distanceUnit === "metric";
     let tail = "";
     if (mode === "distance") {
-      tail = coords.length >= 2 ? ` · ${totalMiles(coords).toFixed(2)} mi` : " · click to measure";
+      const miles = totalMiles(coords);
+      tail = coords.length >= 2 ? ` · ${metric ? `${(miles * 1.609344).toFixed(2)} km` : `${miles.toFixed(2)} mi`}` : " · click to measure";
     } else if (mode === "area") {
+      const squareMiles = polygonAreaSqMi(coords);
+      const squareKm = squareMiles * 2.589988;
       tail =
         coords.length >= 3
-          ? ` · ${formatArea(polygonAreaSqMi(coords))}`
+          ? ` · ${metric ? (squareKm < 1 ? `${(squareKm * 100).toFixed(1)} ha` : `${squareKm.toFixed(2)} km²`) : formatArea(squareMiles)}`
           : " · click three or more points";
     }
-    const usng = toUsng(lng, lat);
-    const grid = usng ? `\nUSNG ${usng} · MGRS ${toMgrs(lng, lat)}` : "\nUSNG/MGRS: outside UTM coverage";
-    el.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)} · z${zoom.toFixed(1)}${tail}${grid}`;
+    const usng = prefs.gridReference ? toUsng(lng, lat) : null;
+    const grid = !prefs.gridReference ? "" : usng ? `\nUSNG ${usng} · MGRS ${toMgrs(lng, lat)}` : "\nUSNG/MGRS: outside UTM coverage";
+    const position = prefs.coordinateFormat === "dms" ? `${toDms(lat, "lat")} ${toDms(lng, "lon")}` : `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    el.textContent = `${position} · z${zoom.toFixed(1)}${tail}${grid}`;
   };
 
   useEffect(() => {
@@ -681,7 +702,10 @@ export function CopMap(props: CopMapProps) {
         "top-right",
       );
     }
-    if (!card) map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-left");
+    if (!card) {
+      scaleRef.current = new maplibregl.ScaleControl({ unit: preferences().distanceUnit });
+      map.addControl(scaleRef.current, "bottom-left");
+    }
     const basemapAttribution = props.basemapStyleUrl
       ? ""
       : props.streetBasemap
@@ -1387,11 +1411,14 @@ export function CopMap(props: CopMapProps) {
 
   return (
     <div ref={frameRef} className="eoc-cop-container" data-layout={props.layout ?? "workspace"}>
-    <div className="eoc-cop-workspace" data-inspecting={selection ? true : undefined} data-testid="cop-workspace">
-      <nav aria-label="Map layers" className="eoc-cop-layers">
+    <div className="eoc-cop-workspace" data-inspecting={selection ? true : undefined} data-layers-closed={layersOpen ? undefined : true} data-testid="cop-workspace">
+      <nav aria-label="Map layers" className="eoc-cop-layers" hidden={!layersOpen}>
         <header>
           <Icon name="map" size={20} decorative />
           <h2>Map layers</h2>
+          <button type="button" className="eoc-cop-layers-hide" aria-label="Hide map layers" onClick={() => showLayers(false)}>
+            <Icon name="chevronRight" size={16} decorative />
+          </button>
         </header>
         <div className="eoc-cop-filter">
           <label htmlFor="cop-layer-filter">Filter layer groups</label>
@@ -1762,6 +1789,12 @@ export function CopMap(props: CopMapProps) {
           className="eoc-cop-map"
         />
         <div ref={readoutRef} data-testid="cop-readout" className="eoc-cop-readout" />
+        {!card && !layersOpen ? (
+          <button type="button" className="eoc-cop-layers-show" onClick={() => showLayers(true)}>
+            <Icon name="map" size={16} decorative />Map layers
+          </button>
+        ) : null}
+        {props.overlay}
         {card ? (
           <CardOverlays theme={props.theme} map={liveMap} frame={frameRef} toggles={cardToggles} more={moreToggles} search={props.cardSearch} />
         ) : null}

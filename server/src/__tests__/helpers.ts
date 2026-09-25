@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, type Sql } from "../db/client.js";
@@ -23,32 +25,81 @@ export interface TestDb {
 }
 
 /**
+ * The migrated schema every test database copies, named by the run tag and a
+ * hash of the migration files so a changed migration builds a new one.
+ * Migrating once and copying keeps each file's setup short; migrating per file
+ * under the shared lock made files queue past their hook timeout on a loaded
+ * machine.
+ */
+const TEMPLATE_PREFIX = DB_TAG === undefined ? "tpl_" : `tpl_${DB_TAG}_`;
+const TEMPLATE = (() => {
+  const hash = createHash("sha256");
+  for (const file of readdirSync(MIGRATIONS).filter((name) => name.endsWith(".sql")).sort()) {
+    hash.update(file).update("|").update(readFileSync(join(MIGRATIONS, file))).update("|");
+  }
+  return `${TEMPLATE_PREFIX}${hash.digest("hex").slice(0, 16)}`;
+})();
+
+/**
  * One throwaway database per test file, so files can run concurrently
  * without racing each other's schemas. A run tag isolates concurrent teardown.
+ * It copies the migrated template, or with `fromScratch` runs every
+ * migration on an empty database, for suites that prove the migrations.
  */
-export async function freshDb(): Promise<TestDb> {
+export async function freshDb(options: { fromScratch?: boolean } = {}): Promise<TestDb> {
   const suffix = Math.random().toString(36).slice(2, 12).padEnd(10, "0");
   const dbName = DB_TAG === undefined ? `t_${suffix}` : `t_${DB_TAG}_${suffix}`;
   const bootstrap = connect();
   const url = process.env.OPENEOC_DATABASE_URL;
-  let admin: Sql;
-  // Concurrent test files race shared-catalog changes (role alteration,
-  // grants inside migrations: "tuple concurrently updated"), so the whole
-  // per-file setup runs under one advisory lock.
-  await bootstrap`select pg_advisory_lock(421)`;
+  const database = (name: string) => url ? connect({ url: withUrlParts(url, { database: name }) }) : connect({ database: name });
   try {
-    await bootstrap.unsafe(`create database ${dbName}`);
-    admin = url
-      ? connect({ url: withUrlParts(url, { database: dbName }) })
-      : connect({ database: dbName });
-    // Migrations create the app_runtime role (0002); the password can only
-    // be set after they have run. A fresh CI cluster proves the order.
-    await migrate(admin, MIGRATIONS);
-    await bootstrap.unsafe(`alter role app_runtime login password '${RUNTIME_TEST_PASSWORD}'`);
+    // Concurrent test files race shared-catalog changes (role alteration,
+    // grants inside migrations: "tuple concurrently updated"), so the whole
+    // per-file setup runs under one advisory lock. It also staggers file
+    // starts, which keeps a full parallel run inside the cluster's
+    // connection limit.
+    await bootstrap`select pg_advisory_lock(421)`;
+    try {
+      const [ready] = await bootstrap`select 1 from pg_database where datname = ${TEMPLATE}`;
+      if (options.fromScratch) {
+        await bootstrap.unsafe(`create database ${dbName}`);
+        const scratch = database(dbName);
+        try {
+          await migrate(scratch, MIGRATIONS);
+        } finally {
+          await scratch.end();
+        }
+      } else if (!ready) {
+        // Built under a working name and renamed when complete, so an
+        // interrupted build is never copied. This run tag's templates of
+        // other migration sets are dropped.
+        const building = `${TEMPLATE}_wip`;
+        await bootstrap.unsafe(`drop database if exists "${building}" with (force)`);
+        await bootstrap.unsafe(`create database "${building}"`);
+        const template = database(building);
+        try {
+          await migrate(template, MIGRATIONS);
+        } finally {
+          await template.end();
+        }
+        await bootstrap.unsafe(`alter database "${building}" rename to "${TEMPLATE}"`);
+        for (const { datname } of await bootstrap<{ datname: string }[]>`
+          select datname from pg_database
+          where datname ~ ${`^${TEMPLATE_PREFIX}[0-9a-f]{16}$`} and datname <> ${TEMPLATE}`) {
+          await bootstrap.unsafe(`drop database if exists "${datname}" with (force)`);
+        }
+      }
+      // Migrations create the app_runtime role (0002); the password can only
+      // be set after they have run. A fresh CI cluster proves the order.
+      await bootstrap.unsafe(`alter role app_runtime login password '${RUNTIME_TEST_PASSWORD}'`);
+      if (!options.fromScratch) await bootstrap.unsafe(`create database ${dbName} template "${TEMPLATE}" strategy wal_log`);
+    } finally {
+      await bootstrap`select pg_advisory_unlock(421)`;
+    }
   } finally {
-    await bootstrap`select pg_advisory_unlock(421)`;
     await bootstrap.end();
   }
+  const admin = database(dbName);
   const runtime = url
     ? connect({
         url: withUrlParts(url, {

@@ -20,6 +20,8 @@ import type { DashboardSurfaceProps, DashboardViewState } from "../surfaces/Dash
 import type { BoardRecordContext } from "../surfaces/BoardSurface.js";
 import { BoardsIndex } from "../surfaces/lists.js";
 import { NotificationTray } from "../../notifications/NotificationTray.js";
+import { useArrivalAlerts } from "../../notifications/alerting.js";
+import { consoleSettingsSections } from "../settings/SettingsSections.js";
 
 /**
  * Every surface, the map with MapLibre and PMTiles, and the Yjs offline tree
@@ -220,6 +222,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
   // null while the check runs; an unreachable check hides the screen like a disabled one.
   const facilitiesEnabled = integrations.error ? false : integrations.data ? enabledIntegrations.has("facilities") : null;
   const notifications = useNotifications(client);
+  useArrivalAlerts(notifications.data);
   const [lastNotificationCheck, setLastNotificationCheck] = useState<Date | null>(null);
   useEffect(() => {
     if (!notifications.loading && !notifications.error && notifications.data) setLastNotificationCheck(new Date());
@@ -332,10 +335,6 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
           />
         )}
       </section>
-      <NotificationTray
-        items={notifications.data ?? []}
-        onOpenCenter={() => navigateInContext({ kind: "alerts" })}
-      />
     </>
   );
 
@@ -382,6 +381,19 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       onToggleTheme={props.onToggleTheme}
       onLogout={() => void session.logout()}
       notificationCount={(notifications.data ?? []).filter((item) => item.assigned_to_current_actor && !item.read_at).length}
+      settingsSections={consoleSettingsSections({
+        client,
+        email: session.me?.person.email ?? "",
+        displayName: session.me?.person.displayName ?? "",
+        onLogout: () => void session.logout(),
+      })}
+      notifications={(close) => (
+        <NotificationTray
+          items={notifications.data ?? []}
+          onOpenCenter={() => { close(); navigateInContext({ kind: "alerts" }); }}
+          onOpenItem={(id) => { close(); navigateInContext({ kind: "alerts", id }); }}
+        />
+      )}
       sync={sync}
       page={page.page}
       arrangement={page.arrangement}
@@ -785,7 +797,10 @@ function Center(props: {
     case "field-reports":
       return <FieldReportsSurface client={props.client} boards={props.boards} boardsLoading={props.boardsLoading}
         incidentId={props.incidentId} incidentBoardIds={props.incidentBoardIds}
-        onOpenSmartForms={() => props.onNavigate({ kind: "smartforms" })} />;
+        period={props.periods.find((period) => period.revision === props.periodRevision) ?? null}
+        onOpenSmartForms={() => props.onNavigate({ kind: "smartforms" })}
+        onOpenRecord={props.onOpenBoardRecord}
+        onOpenMap={() => props.onNavigate({ kind: "map" })} />;
     case "tracking":
       return <TrackingSurface client={props.client} jurisdictionId={props.jurisdictionId} />;
     case "damage":
@@ -823,7 +838,7 @@ function Center(props: {
     case "alerts":
       return <AlertsSurface client={props.client} jurisdictionId={props.jurisdictionId}
         incidentId={props.incidentId} canAuthor={props.canAuthorAlerts} actorEmail={props.actorEmail}
-        isAdmin={props.isAdmin} personId={props.personId} />;
+        isAdmin={props.isAdmin} personId={props.personId} notificationId={s.id ?? null} />;
     case "lifelines":
     case "lifeline":
       return <LifelinesSurface client={props.client} incidentId={props.incidentId}

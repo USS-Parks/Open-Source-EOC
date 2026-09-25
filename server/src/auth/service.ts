@@ -86,6 +86,34 @@ export async function checkPassword(sql: Sql, email: string, password: string): 
   return person.id as string;
 }
 
+/**
+ * A signed-in person changes their own password, inside withPerson. The
+ * current password is checked as sign-in checks it; the new one must be at
+ * least twelve characters and differ from it. The person's other sessions
+ * end, and each jurisdiction they belong to records the change. Returns how
+ * many other sessions ended.
+ */
+export async function changeOwnPassword(sql: Sql, actor: Principal, current: string, next: string): Promise<number> {
+  if (next.length < 12) throw new AuthError(400, "the new password must have at least 12 characters");
+  if (next === current) throw new AuthError(400, "the new password must differ from the current one");
+  const [person] = await sql`select password_hash from find_person_by_email(${actor.person.email})`;
+  if (!person || !verifyPassword(current, person.password_hash as string)) {
+    throw new AuthError(403, "the current password is not correct");
+  }
+  const [row] = await sql`select public.change_own_password(${hashPassword(next)}, ${actor.sessionId}::uuid) as ended`;
+  if (row?.ended === null || row?.ended === undefined) throw new AuthError(409, "the password could not be changed");
+  for (const membership of actor.memberships) {
+    await recordAudit(sql, actor, {
+      jurisdictionId: membership.jurisdictionId,
+      category: "auth.password.changed",
+      subjectTable: "persons",
+      subjectId: actor.person.id,
+      payload: { otherSessionsEnded: Number(row.ended) },
+    });
+  }
+  return Number(row.ended);
+}
+
 /** Mint a fresh session for an already-authenticated person. */
 export async function createSession(sql: Sql, personId: string): Promise<LoginResult> {
   const access = newToken();

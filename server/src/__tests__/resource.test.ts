@@ -68,7 +68,7 @@ async function registerPeer(inst: Instance, name: string): Promise<string> {
 beforeAll(async () => {
   county = await standUp();
   state = await standUp();
-}, 60000);
+}, 120_000); // two databases and two apps
 
 afterAll(async () => {
   for (const inst of [county, state]) {

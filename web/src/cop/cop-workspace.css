@@ -476,9 +476,50 @@
   pointer-events: none;
 }
 
+/* The layer column folds away and the map takes its width. */
+.eoc-cop-layers[hidden] { display: none; }
+.eoc-cop-workspace[data-layers-closed] { grid-template-columns: minmax(0, 1fr); }
+.eoc-cop-layers > header .eoc-cop-layers-hide {
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  color: var(--eoc-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.eoc-cop-layers-hide svg { transform: rotate(180deg); }
+.eoc-cop-layers-hide:hover { color: var(--eoc-text-strong); border-color: var(--eoc-border); }
+.eoc-cop-map-frame > .eoc-cop-layers-show {
+  position: absolute;
+  z-index: 6;
+  top: 8px;
+  left: 8px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  color: var(--eoc-text-strong);
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border-strong);
+  border-radius: 4px;
+  box-shadow: var(--eoc-shadow-sm);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.eoc-cop-workspace[data-layers-closed] .eoc-cop-map-frame > .eoc-cop-readout { left: 136px; }
+
 /* A map inside an overview card: the map alone, filling the card. */
 .eoc-cop-container[data-layout="card"] { height: 100%; }
 .eoc-cop-container[data-layout="card"] .eoc-cop-workspace { height: 100%; grid-template-columns: minmax(0, 1fr); }
+/* The card sets the height; the Map screen's floor would push the legend and scale out of a short card. */
+.eoc-cop-container[data-layout="card"] .eoc-cop-map-frame { min-height: 0; }
 .eoc-cop-container[data-layout="card"] .eoc-cop-layers,
 .eoc-cop-container[data-layout="card"] .eoc-cop-readout { display: none; }
 
