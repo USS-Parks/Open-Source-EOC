@@ -6,7 +6,7 @@ and native CAP, EDXL, CoT, HAVE and GeoJSON interchange.
 
 ## Status
 
-Version `0.9.0`, an evaluation build. No release has been tagged. The Finish
+Version `0.9.1`, an evaluation build. No release has been tagged. The Finish
 PSPR's waves W1 to W7 have been executed as far as they can go without
 Basho's inputs: every engineering unit has landed with a receipt in the
 [V1 ledger](./docs/process/V1-LEDGER.md), and the remaining blockers and the

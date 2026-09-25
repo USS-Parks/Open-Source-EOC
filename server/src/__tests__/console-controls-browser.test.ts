@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type { FastifyInstance } from "fastify";
 import type { Browser, BrowserContext, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -108,7 +109,8 @@ describe("the console's command bar, settings and layouts at a laptop's size", (
     await settings.getByRole("tab", { name: "Account" }).click();
     await settings.getByLabel("Current password").waitFor();
     await settings.getByRole("tab", { name: "About" }).click();
-    await settings.getByText("0.9.0", { exact: false }).waitFor();
+    const { version } = JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf8")) as { version: string };
+    await settings.getByText(version, { exact: false }).waitFor();
     await settings.getByRole("tab", { name: "Map" }).click();
     await settings.getByRole("radio", { name: "Kilometers and meters" }).check();
     await settings.getByRole("button", { name: "Close Settings" }).click();

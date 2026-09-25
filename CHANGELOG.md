@@ -8,12 +8,19 @@ upgrade in place, is in the [upgrade guide](docs/guides/UPGRADE.md).
 
 ## Unreleased
 
-Changes on `main` after the 0.9.0 entry was written. The packages still carry
-`0.9.0`. The Windows setup `Open-Source-EOC-Setup-0.9.0.exe` was rebuilt on
-2026-09-24 with everything below, the three frames' look and the North Coast
-Storm demo; its commit and SHA-256 are in the ledger receipt "Readiness RD2
-part two: the Windows setup". It is rebuilt again from the release commit
-when a release is made.
+Nothing on `main` since 0.9.1 yet.
+
+## 0.9.1 - 2026-09-25
+
+An evaluation build, not tagged. The version is set so the Windows setup
+built on this date, `Open-Source-EOC-Setup-0.9.1.exe`, stands beside the
+earlier `0.9.0` setup, which is kept as the build to go back to. The
+`0.9.0` setup rebuilt on 2026-09-24 already held everything below, the three
+frames' look and the North Coast Storm demo (ledger receipt "Readiness RD2
+part two: the Windows setup"). The `0.9.1` setup adds the Operator Trust
+PSPR's work, built from the working tree before those units land; each is
+described in its ledger receipt as it lands, and the setup's SHA-256 is in
+the receipt "Version 0.9.1: the Windows setup".
 
 ### Added
 
