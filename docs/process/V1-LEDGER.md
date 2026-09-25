@@ -6938,3 +6938,40 @@ gate ran in the canonical checkout, then landed on `main` by fast-forward.
 - **Rollback:** revert the commit; migration `0147` adds a table, columns,
   triggers and a policy that the earlier code ignores, and the list route
   returns to the compiled templates.
+
+## Veoci and air gap phase VA-A gate
+
+The phase gate for VA1 to VA5 (Veoci Integration and Air Gap PSPR section 7),
+run on `5a73e9a`, the commit that closed the phase, on the Linux test bed
+(decision 19). VA6 was built in a lane meanwhile and landed after it.
+
+- **`pnpm check:gate`.** `check:static` exit 0 (licenses: 294 packages;
+  links: 113 files); `audit:advisories` "0 high/critical; 0 time-bounded
+  exceptions"; `test:desktop` 34 passed, 0 failed, 4 skipped (the Windows-only
+  tests), with the PowerShell test run under PowerShell 7.4.6; the serial
+  Vitest run (one worker, the load test excluded) 1,686 passed and 5 failed
+  of 1,691 in 301 files, in 25 minutes. The five are browser tests that fail
+  on this bed without these units: the console controls' lifeline rows,
+  `fidelity-browser` (shown failing on the base with VA1 stashed, in "Veoci
+  and air gap VA1: hold, do not drop"), operational relationships,
+  `pwa-browser` and the WebEOC side-by-side walk; all five were in the
+  session's baseline list or VA1's record. The web incident-overview wording
+  test, a baseline failure until the test time zone was pinned on `main`,
+  passed.
+- **The load test,** which the chain skipped after the failures, run on its
+  own twice: 2 of 4 failed, then 1 of 4. The first page of the "notable"
+  view over 50,000 records took 322 ms and then 308 ms against a 300 ms
+  budget (the unfiltered view: 7 ms and 6 ms); the socket fan-out's slowest
+  update took 104.7 ms against 100 ms once and passed the second time. No
+  phase VA-A unit changed the board view query or the sync sockets, but the
+  base was not run on this bed for comparison, so this is recorded as
+  unexplained on this container rather than as the base's; CI on Windows
+  runs the same test.
+- **RD5's proof with the integrations on local stand-ins** (section 7's
+  phase-end rerun) was not run: `prove-airgap.mjs` starts the Windows
+  PostgreSQL, Caddy and Chrome builds and runs only on Windows (decisions 12
+  and 18). Each unit's receipt records its four-scenario behavior, and the
+  units' tests stand in for what queued (VA1, VA2), expired (VA1) and
+  reconciled (VA2, VA4) against local stand-ins.
+- **Not run.** The Windows setup rebuild at the phase end (decision 18).
+- **Evidence level:** the phase gate on Linux, with the exceptions named.
