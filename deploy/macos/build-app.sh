@@ -79,11 +79,15 @@ while IFS= read -r -d '' file; do
 done < <(find "$pg" -type f -print0)
 echo "relocated $relocated files"
 # Each file is checked by its own path: file(1) lists a universal binary once
-# per architecture, and the app's path has spaces in it.
+# per architecture, and the app's path has spaces in it. Only an absolute path
+# can point outside the app: a relative one starts with @, and ICU's bare
+# names match the ICU libraries already loaded from inside it. Static archives
+# are never loaded.
 left=""
 while IFS= read -r -d '' f; do
+  [[ "$f" == *.a ]] && continue
   file -b "$f" | grep -q "Mach-O" || continue
-  outside="$(deps "$f" | grep -v '^@\|^/usr/lib/\|^/System/' || true)"
+  outside="$(deps "$f" | grep '^/' | grep -v '^/usr/lib/\|^/System/' || true)"
   [ -z "$outside" ] || left+="$f: $outside"$'\n'
 done < <(find "$pg" -type f -print0)
 if [ -n "$left" ]; then echo "Library paths outside the app remain:"; printf '%s' "$left" | head -40; exit 1; fi
