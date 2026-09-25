@@ -7900,3 +7900,61 @@ Windows run on 059371f (run 36181684638) finished red.
 - **Verification.** On the Linux test bed: the board records and partner
   sharing browser files, 7 of 7; `pnpm check:static` exit 0.
 - **Rollback:** revert the commit.
+
+## Veoci and air gap VA10: the license gate
+
+Veoci Integration and Air Gap PSPR unit VA10 (VC-06).
+
+- **What the code did before.** `scripts/license-scan.mjs` failed on a
+  package whose declared license matched one pattern (AGPL, SSPL, OSL, BUSL,
+  the words "Elastic License", Commons Clause, CC-BY-NC, Sustainable Use,
+  Prosperity, Parity). Run against a fixture package under each of
+  FSL-1.1-MIT, "Fair Use License 1.1", "Camunda License 1.0", "Carbone
+  Community License", "Open WebUI License", GPL-3.0-only, Elastic-2.0 and
+  PolyForm-Noncommercial-1.0.0, the old scan exited 0 for all eight. The
+  research's example, HyperFormula under GPL-3.0-only, would have passed.
+  The scan had no test.
+- **What changed.**
+  - **Denied** as well: the Functional Source License (`FSL-` ids and the
+    words), the Fair Use License, the Camunda License, the Carbone Community
+    License and the Open WebUI license, as the roster names them.
+  - **Denied beyond the roster, recorded as defaults:** the Fair Core License
+    (`FCL-`), the other fair-source license beside FSL; the PolyForm
+    licenses, source-available; and the SPDX id `Elastic-2.0`, which is how
+    npm packages declare the Elastic License the old pattern named only in
+    words. All fall under CONTRIBUTING.md's existing "fair-code, or
+    source-available" rule.
+  - **A license file named by "SEE LICENSE IN".** The scan now reads the
+    first 2,000 characters of the file a package points to, so a license
+    declared only in its file (as Carbone's community edition can be) is
+    matched too.
+  - **GPL, LGPL and MPL held for review.** A package whose license is one of
+    these with no permissive alternative fails the scan until it is recorded
+    in `scripts/license-review.json` with its license and how the project
+    uses it; a recorded package whose license changes fails again. A package
+    offered under "MIT OR MPL-2.0" is taken under MIT and passes. A denied
+    name anywhere in a license still denies, as before, even beside a
+    permissive alternative.
+  - **The review list starts with the three MPL-2.0 packages installed
+    today:** axe-core (web tests only), lightningcss (CSS at build time
+    inside Vite) and `lightningcss-*`, its per-platform binary, which is a
+    different package on Linux, Windows and macOS. None is in the shipped
+    bundle; all are used unmodified. The lockfile's other platform-only
+    packages, rolldown's bindings and fsevents, are MIT.
+  - `CONTRIBUTING.md` names the denied licenses and the review step;
+    `docs/ASSET-LICENSES.md` points to the review list. The scan's classifier
+    is exported for the tests and runs only when the file is the command.
+- **Tests.** `scripts/__tests__/license-scan.test.mjs` runs the scan as a
+  command against one fixture package at a time, from an empty working
+  directory: it refuses each of twelve forbidden licenses (the roster's
+  five, FSL in words, Fair Core, PolyForm, Elastic-2.0, AGPL, SSPL, BUSL)
+  and names the package; refuses a package whose license file, named by
+  "SEE LICENSE IN", is Carbone's; holds GPL-3.0-only, LGPL-2.1-or-later and
+  MPL-2.0 for review; passes a reviewed platform binary and fails it once
+  relicensed; passes permissive licenses and a copyleft one offered beside a
+  permissive one. The classifier is checked on AND, OR and exception forms.
+- **Verification.** On the Linux test bed: the scan over the installed tree,
+  "ok (335 package(s) checked, 3 reviewed copyleft)"; the license gate tests,
+  5 of 5; `pnpm check:static` exit 0.
+- **Evidence level:** unit and command tests.
+- **Rollback:** revert the commit; the scan returns to its earlier pattern.

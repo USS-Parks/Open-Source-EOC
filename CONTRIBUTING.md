@@ -28,7 +28,13 @@ Requires Node 22+ and pnpm 10+. Then:
    stewardship footer; do not bypass it with --no-verify.
 3. **License hygiene.** No AGPL, SSPL, OSL, fair-code, or source-available
    code may be vendored or embedded. The license scan in `pnpm check` blocks
-   known-bad dependency licenses and must stay green.
+   known-bad dependency licenses (among them the Functional Source, Fair Use,
+   Fair Core, Business Source, PolyForm, Elastic, Camunda, Carbone community
+   and Open WebUI licenses) and must stay green. A dependency under GPL, LGPL
+   or MPL with no permissive alternative fails the scan until it is reviewed:
+   record the package, its license and how the project uses it in
+   `scripts/license-review.json`. A reviewed package whose license changes
+   fails again.
 4. **Tests prove behavior.** Every behavioral change carries a test that
    fails on the old behavior. Audit-log surfaces are append-only; no change
    may add an update or delete path to them.

@@ -125,7 +125,9 @@ Still open:
   corresponding source of PostGIS 3.6.2 and the other GPL- and
   LGPL-licensed bundle components, fetched from their upstream releases at
   the release act.
-- `scripts/license-scan.mjs` checks the licenses of npm packages only.
+- `scripts/license-scan.mjs` checks the licenses of npm packages only; the
+  copyleft npm packages it has passed on review are listed, with their use,
+  in `scripts/license-review.json`.
   Images, runtimes, map data, fonts and icons are covered by this document by
   hand.
 

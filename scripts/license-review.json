@@ -1,0 +1,20 @@
+{
+  "note": "Copyleft packages (GPL, LGPL, MPL) reviewed for this project's use. scripts/license-scan.mjs fails on any such package not listed here with the same license. A key ending in * covers every package whose name starts with the rest, such as a tool's per-platform binaries.",
+  "packages": {
+    "axe-core": {
+      "license": "MPL-2.0",
+      "use": "Accessibility checks in the web tests only (a devDependency); never in the shipped bundle; used unmodified. MPL-2.0 is per-file copyleft, which binds only changes to its own files.",
+      "reviewed": "2026-09-25"
+    },
+    "lightningcss": {
+      "license": "MPL-2.0",
+      "use": "CSS processing inside Vite at build time; its code is not in the shipped bundle; used unmodified.",
+      "reviewed": "2026-09-25"
+    },
+    "lightningcss-*": {
+      "license": "MPL-2.0",
+      "use": "lightningcss's native binary for the build machine's platform (Linux, Windows or macOS); the same review as lightningcss.",
+      "reviewed": "2026-09-25"
+    }
+  }
+}
