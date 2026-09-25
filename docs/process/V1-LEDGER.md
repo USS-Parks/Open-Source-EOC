@@ -6418,3 +6418,39 @@ Veoci Integration and Air Gap PSPR unit VA2 (AG-02). Landed on `main` after
 - **Rollback:** revert the commit and restore the one-argument claim from
   `0142` in a new migration; the `created_at` default change is harmless to
   keep.
+
+## Exercise scenarios XS1: scenario kit
+
+The first unit of `docs/process/EXERCISE-SCENARIOS-PSPR-2026-09-25.md`,
+approved by Basho on 2026-09-25 for STS with express permissions throughout.
+
+- **What changed.** The seeding machinery moved out of
+  `server/src/demo/north-coast.ts` into `server/src/demo/scenario-kit.ts`:
+  the zoned scenario clock (`scenarioClock`), sign-in and API calls as a
+  person with their wall-clock windows, the time-ordered plan
+  (`later`, `runInOrder`), and `placeOnScenarioClock`, now typed for any
+  scenario run. Organizations are created or reused by slug, so several
+  scenarios can share one database. North Coast Storm is re-expressed on the
+  kit; its exports (`NORTH_COAST_*`, `NorthCoastScenario`, `seedNorthCoast`,
+  `placeOnScenarioClock`, `ScenarioPerson`, `ScenarioWindow`) keep their
+  names and meaning. The plan document lands with this unit, and the root
+  `CLAUDE.md` names it as the live roster for XS1 to XS8 while the Operator
+  Trust plan keeps RD6 and the RD12 remainder.
+- **Where the work ran.** Another session was committing to `main` in the
+  canonical checkout during this unit, so the work runs in the lane worktree
+  `lane/xs` under the standing fan-out grant and lands by fast-forward.
+- **Verification.** `pnpm check:static` exit 0. `incident-overview.test.ts`
+  3 of 3; `fidelity-browser.test.ts` and `console-controls-browser.test.ts`
+  9 of 9, the fidelity captures compared against the frames as before. The
+  suite (`test:ci` with `--maxWorkers=4`, because another run shared the
+  database cluster): 290 of 294 files and 1,652 of 1,666 tests passed, and
+  the load test 4 of 4. Of the four files that did not pass,
+  `notify.test.ts` and `scenario-shift-change-browser.test.ts` were the known
+  worker crash (`0xC0000409`) and passed alone; `restore-drill.test.ts` could
+  not find `pg_dump` because the lane had no `OPENEOC_PG_DIST`, then with it
+  set hit a connection reset once and passed on its isolated retry;
+  `app-e2e.test.ts` failed its URL hash assertion in the full run and passed
+  alone. None of the four imports a file this unit changed.
+- **Evidence level:** the full suite plus isolated reruns of the four files.
+- **Rollback:** revert the commit; North Coast Storm returns to its inline
+  machinery.

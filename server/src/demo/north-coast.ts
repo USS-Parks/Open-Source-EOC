@@ -1,9 +1,16 @@
 import type { FastifyInstance } from "fastify";
 import type { Sql } from "../db/client.js";
-import { addMembership, createJurisdiction, createPerson } from "../auth/service.js";
-import { ensureStandardTemplates } from "../boards/service.js";
-import { ensureStandardDashboards } from "../dashboards/service.js";
-import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import {
+  placeOnScenarioClock,
+  SCENARIO_TIME_ZONE,
+  scenarioClock,
+  startScenario,
+  type ScenarioPerson,
+  type ScenarioRun,
+} from "./scenario-kit.js";
+
+export { placeOnScenarioClock };
+export type { ScenarioPerson, ScenarioWindow } from "./scenario-kit.js";
 
 /**
  * The reference scenario for the design fidelity work: a synthetic severe
@@ -22,32 +29,9 @@ import { ensureStandardIncidentTemplates } from "../incidents/service.js";
  */
 
 export const NORTH_COAST_PASSWORD = "north-coast-exercise";
-export const NORTH_COAST_TIME_ZONE = "America/Los_Angeles";
+export const NORTH_COAST_TIME_ZONE = SCENARIO_TIME_ZONE;
 
-export interface ScenarioPerson {
-  readonly key: string;
-  readonly displayName: string;
-  readonly email: string;
-  readonly organization: string;
-  readonly incidentPositionTitle?: string;
-}
-
-export interface ScenarioWindow {
-  readonly startedAt: Date;
-  readonly endedAt: Date;
-  readonly scenarioAt: Date;
-}
-
-export interface NorthCoastScenario {
-  readonly clock: Date;
-  readonly jurisdictionId: string;
-  readonly incidentId: string;
-  readonly organizations: Readonly<Record<string, string>>;
-  readonly people: Readonly<Record<string, { readonly id: string; readonly email: string }>>;
-  readonly windows: readonly ScenarioWindow[];
-  readonly startedAt: Date;
-  readonly endedAt: Date;
-}
+export type NorthCoastScenario = ScenarioRun;
 
 const OWNER = { slug: "humboldt-oes", name: "Humboldt County OES" };
 const PARTNERS = [
@@ -87,83 +71,19 @@ export const NORTH_COAST_AREA = {
   ]],
 };
 
-/** Local wall-clock date and UTC offset of `instant` in the scenario time zone. */
-function zoned(instant: Date): { date: string; offset: string } {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
-    timeZone: NORTH_COAST_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit",
-    timeZoneName: "longOffset",
-  }).formatToParts(instant).map((part) => [part.type, part.value]));
-  const offset = String(parts.timeZoneName).replace("GMT", "") || "+00:00";
-  return { date: `${parts.year}-${parts.month}-${parts.day}`, offset };
-}
-
-/**
- * The scenario clock: the most recent 09:42 in the scenario time zone, so
- * every scenario time is in the past and at most a day old when the seed runs.
- */
+/** The scenario clock: the most recent 09:42 in the scenario time zone. */
 export function northCoastClock(now = new Date()): Date {
-  const { date, offset } = zoned(now);
-  const today = new Date(`${date}T09:42:00${offset}`);
-  if (today.getTime() <= now.getTime()) return today;
-  const yesterday = zoned(new Date(now.getTime() - 24 * 60 * 60 * 1000));
-  return new Date(`${yesterday.date}T09:42:00${yesterday.offset}`);
+  return scenarioClock("09:42", now);
 }
-
-type Method = "GET" | "POST" | "PUT" | "PATCH";
 
 export async function seedNorthCoast(
   app: FastifyInstance,
   sql: Sql,
   clock = northCoastClock(),
 ): Promise<NorthCoastScenario> {
-  const startedAt = new Date();
-  const windows: ScenarioWindow[] = [];
-  /** Scenario day local time "HH:MM", optionally days from the scenario day. */
-  const at = (hhmm: string, days = 0): Date => {
-    const day = new Date(clock.getTime() + days * 24 * 60 * 60 * 1000);
-    const { date, offset } = zoned(day);
-    return new Date(`${date}T${hhmm}:00${offset}`);
-  };
-  const iso = (hhmm: string, days = 0) => at(hhmm, days).toISOString();
-
-  await ensureStandardTemplates(sql);
-  await ensureStandardIncidentTemplates(sql);
-  await ensureStandardDashboards(sql);
-
-  const organizations: Record<string, string> = {};
-  organizations[OWNER.slug] = await createJurisdiction(sql, OWNER.slug, OWNER.name);
-  for (const partner of PARTNERS) organizations[partner.slug] = await createJurisdiction(sql, partner.slug, partner.name);
-  const people: Record<string, { id: string; email: string }> = {};
-  for (const person of NORTH_COAST_PEOPLE) {
-    const id = await createPerson(sql, { email: person.email, displayName: person.displayName, password: NORTH_COAST_PASSWORD });
-    await addMembership(sql, id, organizations[person.organization]!, person.key === "lee" ? "admin" : "member");
-    people[person.key] = { id, email: person.email };
-  }
-  const jurisdictionId = organizations[OWNER.slug]!;
-
-  const tokens: Record<string, string> = {};
-  async function token(key: string): Promise<string> {
-    if (tokens[key]) return tokens[key];
-    const response = await app.inject({
-      method: "POST", url: "/api/v1/auth/login",
-      payload: { email: people[key]!.email, password: NORTH_COAST_PASSWORD },
-    });
-    if (response.statusCode !== 200) throw new Error(`sign-in for ${key} failed: ${response.statusCode} ${response.body}`);
-    tokens[key] = response.json().accessToken as string;
-    return tokens[key];
-  }
-  /** One API call as `who`, standing for scenario time `when`. */
-  async function api<T = Record<string, unknown>>(who: string, when: Date, method: Method, url: string, payload?: unknown): Promise<T> {
-    const authorization = `Bearer ${await token(who)}`;
-    const begun = new Date();
-    const response = await app.inject({
-      method, url, headers: { authorization },
-      ...(payload === undefined ? {} : { payload: payload as Record<string, unknown> }),
-    });
-    windows.push({ startedAt: begun, endedAt: new Date(), scenarioAt: when });
-    if (response.statusCode >= 300) throw new Error(`${method} ${url} as ${who} failed: ${response.statusCode} ${response.body}`);
-    return (response.body ? response.json() : {}) as T;
-  }
+  const { at, iso, api, later, runInOrder, finish, jurisdictionId, organizations, people } = await startScenario(app, sql, clock, {
+    owner: OWNER, partners: PARTNERS, people: NORTH_COAST_PEOPLE, admins: ["lee"], password: NORTH_COAST_PASSWORD,
+  });
 
   // Activation the evening before, as an exercise on the severe storm template.
   const activation = await api<{ incidentId: string }>("lee", at("17:05", -1), "POST",
@@ -223,10 +143,6 @@ export async function seedNorthCoast(
     api<{ id: string }>(who, when, "POST", `/api/v1/boards/${boardFor(templateKey)}/records?incidentId=${incidentId}`, data);
   const update = (who: string, when: Date, templateKey: string, recordId: string, data: Record<string, unknown>) =>
     api(who, when, "PATCH", `/api/v1/boards/${boardFor(templateKey)}/records/${recordId}?incidentId=${incidentId}`, data);
-
-  /** The morning's events, run below in scenario time order. */
-  const plan: { when: Date; run: () => Promise<unknown> }[] = [];
-  const later = (when: Date, run: () => Promise<unknown>) => { plan.push({ when, run }); };
 
   // Shelters: eight open with 312 occupants in all.
   // Two more sites are planned but not yet open.
@@ -625,42 +541,6 @@ export async function seedNorthCoast(
   });
 
   // Run the morning in scenario time order, so the record of events reads in order.
-  plan.sort((left, right) => left.when.getTime() - right.when.getTime());
-  for (const step of plan) await step.run();
-
-  const endedAt = new Date();
-  return { clock, jurisdictionId, incidentId, organizations, people, windows, startedAt, endedAt };
-}
-
-/**
- * Put the server-stamped times of a freshly seeded throwaway database on the
- * scenario clock. Every timestamp written during an API call moves to the
- * scenario time that call stands for, keeping its order within the call;
- * anything else written while seeding moves to just before activation. This
- * runs as the database owner with triggers off, because audit and assessment
- * rows are append-only; it is for scenario databases only.
- */
-export async function placeOnScenarioClock(sql: Sql, scenario: NorthCoastScenario): Promise<void> {
-  const columns = await sql`
-    select c.table_name, c.column_name from information_schema.columns c
-    join information_schema.tables t on t.table_schema = c.table_schema and t.table_name = c.table_name
-    where c.table_schema = 'public' and t.table_type = 'BASE TABLE'
-      and c.data_type = 'timestamp with time zone'`;
-  const before = new Date(scenario.windows[0]!.scenarioAt.getTime() - 60 * 60 * 1000);
-  await sql.begin(async (tx) => {
-    await tx`set local session_replication_role = replica`;
-    await tx`create temporary table scenario_windows
-      (started timestamptz, ended timestamptz, scenario timestamptz) on commit drop`;
-    for (const window of scenario.windows) {
-      await tx`insert into scenario_windows values (${window.startedAt}, ${window.endedAt}, ${window.scenarioAt})`;
-    }
-    for (const column of columns) {
-      const table = tx(column.table_name as string);
-      const name = tx(column.column_name as string);
-      await tx`update ${table} set ${name} = w.scenario + (${table}.${name} - w.started)
-        from scenario_windows w where ${table}.${name} between w.started and w.ended`;
-      await tx`update ${table} set ${name} = ${before}
-        where ${name} between ${scenario.startedAt} and ${scenario.endedAt}`;
-    }
-  });
+  await runInOrder();
+  return finish(incidentId);
 }
