@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ViewConditionSchema } from "./conditions.js";
 
 const WorkflowKeySchema = z.string().regex(/^[a-z][a-z0-9_]*$/, "snake_case keys only");
 
@@ -6,6 +7,21 @@ export const WorkflowStateSchema = z.object({
   key: WorkflowKeySchema,
   label: z.string().trim().min(1).max(120),
   terminal: z.boolean().default(false),
+  /** Fields no one may change while a record is in this state; its creation sets them. */
+  readOnlyFields: z.array(WorkflowKeySchema).max(200).optional(),
+}).strict();
+
+/**
+ * A transition's guard: conditions on the record's fields, all or any of
+ * which must hold for the transition to be requested and, after its
+ * approvals, completed. The conditions are the board views' own language,
+ * evaluated the same way on the server and in the browser.
+ */
+export const WorkflowGuardSchema = z.object({
+  match: z.enum(["all", "any"]).default("all"),
+  conditions: z.array(ViewConditionSchema).min(1).max(16),
+  /** Said when the guard refuses the transition; without one, the unmet conditions are named. */
+  message: z.string().trim().min(1).max(200).optional(),
 }).strict();
 
 export const WorkflowActorSchema = z.enum([
@@ -75,6 +91,7 @@ export const WorkflowTransitionSchema = z.object({
   approvals: z.array(WorkflowApprovalRuleSchema).max(20).default([]),
   due: WorkflowDueRuleSchema.optional(),
   escalations: z.array(WorkflowEscalationRuleSchema).max(20).default([]),
+  guard: WorkflowGuardSchema.optional(),
 }).strict();
 
 export const BoardWorkflowSchema = z.object({
@@ -138,6 +155,7 @@ export const WorkflowAssignmentRequestSchema = z.discriminatedUnion("kind", [
 ]);
 
 export type BoardWorkflow = z.infer<typeof BoardWorkflowSchema>;
+export type WorkflowGuard = z.infer<typeof WorkflowGuardSchema>;
 export type WorkflowTransition = z.infer<typeof WorkflowTransitionSchema>;
 export type WorkflowDueRule = z.infer<typeof WorkflowDueRuleSchema>;
 export type WorkflowEscalationRule = z.infer<typeof WorkflowEscalationRuleSchema>;

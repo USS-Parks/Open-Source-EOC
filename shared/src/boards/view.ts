@@ -116,6 +116,42 @@ export function conditionHolds(condition: ViewCondition, v: unknown, now: Date):
   }
 }
 
+/** A workflow guard, as far as evaluating it goes. */
+export interface GuardLike {
+  readonly match: "all" | "any";
+  readonly conditions: readonly ViewCondition[];
+  readonly message?: string | undefined;
+}
+
+/** The guard's conditions a record does not meet; empty when the guard holds. */
+export function unmetGuardConditions(guard: GuardLike, record: Readonly<Record<string, unknown>>, now: Date): ViewCondition[] {
+  const unmet = guard.conditions.filter((condition) => !conditionHolds(condition, record[condition.field], now));
+  if (guard.match === "any" && unmet.length < guard.conditions.length) return [];
+  return unmet;
+}
+
+const OP_WORDS: Readonly<Record<ViewCondition["op"], string>> = {
+  eq: "is", neq: "is not", in: "is one of", not_in: "is not one of", contains: "contains", starts_with: "starts with",
+  gt: "is more than", gte: "is at least", lt: "is less than", lte: "is at most", between: "is between",
+  before: "is before", after: "is after", is_empty: "is empty", is_not_empty: "is filled in",
+};
+
+/** A condition in words, by the field's label: "Priority is one of high, critical". */
+export function describeCondition(condition: ViewCondition, fields: readonly FieldDef[] = []): string {
+  const label = fields.find((field) => field.key === condition.field)?.label ?? condition.field;
+  const value = condition.value;
+  const shown = Array.isArray(value)
+    ? condition.op === "between" ? `${String(value[0])} and ${String(value[1])}` : value.map(String).join(", ")
+    : value === undefined ? "" : String(value);
+  return `${label} ${OP_WORDS[condition.op]}${shown ? ` ${shown}` : ""}`;
+}
+
+/** Why a guard refuses: its own message, or the conditions not met, joined by "and" or "or" as the guard matches. */
+export function guardRefusal(guard: GuardLike, unmet: readonly ViewCondition[], fields: readonly FieldDef[] = []): string {
+  if (guard.message) return guard.message;
+  return unmet.map((condition) => describeCondition(condition, fields)).join(guard.match === "any" ? " or " : " and ");
+}
+
 function isScalar(v: unknown): boolean {
   return typeof v === "string" || typeof v === "number" || typeof v === "boolean";
 }

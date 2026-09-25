@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import {
   BoardTemplateSchema,
   WorkflowAssignmentRequestSchema,
+  guardRefusal,
+  unmetGuardConditions,
   workflowDueAt,
   workflowEscalationAt,
   type BoardTemplate,
@@ -167,6 +169,7 @@ export async function requestWorkflowTransition(
   if (transition.from !== loaded.instance.state_key)
     throw new AuthError(409, `transition requires state ${transition.from}`);
   await requireTransitionActor(sql, actor, loaded, transition);
+  requireGuard(loaded, transition, false);
   const assignment = await resolveTransitionAssignment(sql, actor, loaded.context, transition, input.assignment);
   const revision = loaded.instance.state_revision + 1;
   const [clock] = await sql`select now() as at`;
@@ -246,6 +249,7 @@ export async function approveWorkflowTransition(
       .map((row) => row.actor_person_id as string)).size >= required.count);
   let result = resultFrom(loaded.instance);
   if (complete) {
+    requireGuard(loaded, transition, true);
     const assignment = await validatePendingAssignment(sql, loaded);
     const [clock] = await sql`select now() as at`;
     result = await completeTransition(sql, actor, loaded, transition, assignment,
@@ -448,6 +452,19 @@ async function loadRecordContext(
     boardRole,
     incidentAuthority,
   };
+}
+
+/**
+ * Refuse a transition whose guard the record does not meet: when it is
+ * requested, and again when its last approval would complete it, since the
+ * record may have changed while it waited.
+ */
+function requireGuard(loaded: LoadedWorkflow, transition: WorkflowTransition, completing: boolean): void {
+  if (!transition.guard) return;
+  const unmet = unmetGuardConditions(transition.guard, loaded.context.record, new Date());
+  if (unmet.length === 0) return;
+  const reason = guardRefusal(transition.guard, unmet, loaded.template.fields).replace(/[.\s]+$/, "");
+  throw new AuthError(409, `${transition.label} ${completing ? "can no longer" : "cannot"} be taken: ${reason}.`);
 }
 
 function requireWorkflow(template: BoardTemplate) {

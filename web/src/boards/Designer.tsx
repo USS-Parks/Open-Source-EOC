@@ -25,7 +25,7 @@ import { Button, EnumSelect, Panel, TextField } from "../design/components.js";
 import { BoardView } from "./BoardView.js";
 import { RecordForm } from "./RecordForm.js";
 import { RecordAccessEditor } from "./record-access.js";
-import { ViewRefineControls } from "./ViewRefine.js";
+import { ConditionRow, ViewRefineControls, blankDraft, conditionDraft, draftCondition, type DraftCondition } from "./ViewRefine.js";
 import "./designer.css";
 
 export interface DesignerPositionOption {
@@ -503,6 +503,13 @@ function WorkflowEditor(props: {
           <Input label={`State ${index + 1} key`} value={state.key} onChange={(key) => setState(index, { key })} />
           <Input label={`State ${index + 1} label`} value={state.label} onChange={(label) => setState(index, { label })} />
           <Check label="Terminal state" checked={state.terminal} onChange={(terminal) => setState(index, { terminal })} />
+          <CheckGroup label={`Read-only while ${state.label}`} values={state.readOnlyFields ?? []}
+            options={props.fields.filter((field) => !field.calculation).map((field) => ({ value: field.key, label: field.label }))}
+            onChange={(keys) => props.onChange({ ...workflow, states: workflow.states.map((item, itemIndex) => {
+              if (itemIndex !== index) return item;
+              const { readOnlyFields: _dropped, ...rest } = item;
+              return keys.length ? { ...rest, readOnlyFields: keys } : rest;
+            }) })} />
           <ActionButton kind="danger" disabled={workflow.states.length < 2}
             onClick={() => props.onChange({ ...workflow,
               states: workflow.states.filter((_, itemIndex) => itemIndex !== index) })}>Remove</ActionButton>
@@ -579,11 +586,58 @@ function TransitionEditor(props: {
         options={props.fields.filter((field) => field.type === "datetime").map((field) => ({ value: field.key, label: field.label }))}
         onChange={(field) => set({ due: { kind: "record_field", field } })} /> : null}
     </div>
+    <GuardEditor n={props.index + 1} fields={props.fields} value={transition.guard}
+      onChange={(guard) => {
+        const { guard: _dropped, ...rest } = transition;
+        props.onChange(guard ? { ...rest, guard } : rest);
+      }} />
     <ApprovalEditor value={transition.approvals} positions={props.positions}
       onChange={(approvals) => set({ approvals })} />
     <EscalationEditor value={transition.escalations} onChange={(escalations) => set({ escalations })} />
     <ActionButton kind="danger" onClick={props.onRemove}>Remove transition</ActionButton>
   </Panel>;
+}
+
+/**
+ * A transition's guard: conditions on the record, all or any of which must
+ * hold, and what to say when they do not. A condition still being typed is
+ * left out of the saved guard until it is complete, and says so.
+ */
+function GuardEditor(props: {
+  n: number;
+  fields: readonly FieldDef[];
+  value: Transition["guard"];
+  onChange: (guard: Transition["guard"]) => void;
+}) {
+  const fields = props.fields.filter((field) => field.type !== "geometry");
+  const byKey = new Map(fields.map((field) => [field.key, field]));
+  const [drafts, setDrafts] = useState<DraftCondition[]>(() => (props.value?.conditions ?? []).map(conditionDraft));
+  const match = props.value?.match ?? "all";
+  const message = props.value?.message ?? "";
+  const emit = (next: DraftCondition[], nextMatch: "all" | "any", nextMessage: string) => {
+    setDrafts(next);
+    const conditions = next.flatMap((draft) => draftCondition(draft, byKey.get(draft.field)) ?? []);
+    props.onChange(conditions.length ? {
+      match: nextMatch, conditions, ...(nextMessage.trim() ? { message: nextMessage.trim() } : {}),
+    } : undefined);
+  };
+  const incomplete = drafts.flatMap((draft, index) => draftCondition(draft, byKey.get(draft.field)) ? [] : [index + 1]);
+  return <div className="board-designer__nested" role="group" aria-label={`Guard for transition ${props.n}`}>
+    <Check label="Guard this transition with conditions on the record" checked={drafts.length > 0} disabled={fields.length === 0}
+      onChange={(on) => emit(on ? [{ ...blankDraft(fields[0]!), op: "is_not_empty" }] : [], match, message)} />
+    {drafts.length ? <>
+      <Select label="The transition needs" value={match}
+        options={[{ value: "all", label: "Every condition to hold" }, { value: "any", label: "Any condition to hold" }]}
+        onChange={(next) => emit(drafts, next as "all" | "any", message)} />
+      {drafts.map((draft, index) => <ConditionRow key={index} n={index + 1} draft={draft} fields={fields}
+        onChange={(next) => emit(drafts.map((item, itemIndex) => itemIndex === index ? next : item), match, message)}
+        onRemove={() => emit(drafts.filter((_, itemIndex) => itemIndex !== index), match, message)} />)}
+      <div><ActionButton disabled={drafts.length >= 16}
+        onClick={() => emit([...drafts, { ...blankDraft(fields[0]!), op: "is_not_empty" }], match, message)}>Add condition</ActionButton></div>
+      <Input label="Said when the guard refuses (optional)" value={message} onChange={(next) => emit(drafts, match, next)} />
+      {incomplete.length ? <p role="status">Condition {incomplete.join(", ")} is left out of the guard until its value is complete.</p> : null}
+    </> : null}
+  </div>;
 }
 
 function AssignmentEditor(props: {

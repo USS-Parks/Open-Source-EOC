@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   allEnums,
@@ -152,6 +152,33 @@ describe("no-code designer (INV-6)", () => {
       approvals: [{ approver: { kind: "position_key", positionKey: "planning_chief" } }],
       escalations: [{ afterMinutes: 60, maxOccurrences: 1 }],
     });
+  });
+
+  it("guards a transition with conditions on the record and locks fields in a state", () => {
+    const base = STANDARD_TEMPLATES.find((template) => template.key === "shelters")!;
+    const onSave = vi.fn();
+    render(<Designer base={base} positions={[]} onSave={onSave} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Routing" }));
+    fireEvent.click(screen.getByRole("button", { name: "Enable routing" }));
+    const complete = screen.getByRole("group", { name: "Read-only while Complete" });
+    const capacity = base.fields.find((field) => field.key === "capacity")!;
+    fireEvent.click(within(complete).getByLabelText(capacity.label));
+    const guard = screen.getByRole("group", { name: "Guard for transition 1" });
+    fireEvent.click(within(guard).getByLabelText("Guard this transition with conditions on the record"));
+    fireEvent.change(within(guard).getByLabelText("Condition 1 field"), { target: { value: "capacity" } });
+    fireEvent.change(within(guard).getByLabelText("Condition 1 operator"), { target: { value: "gt" } });
+    expect(within(guard).getByRole("status").textContent).toBe("Condition 1 is left out of the guard until its value is complete.");
+    fireEvent.change(within(guard).getByLabelText("Condition 1 value"), { target: { value: "0" } });
+    expect(within(guard).queryByRole("status")).toBeNull();
+    fireEvent.change(within(guard).getByLabelText("Said when the guard refuses (optional)"), { target: { value: "Enter the shelter's capacity first." } });
+    fireEvent.click(screen.getByText(`Publish version ${base.version + 1}`));
+    const saved = onSave.mock.calls[0]![0] as BoardTemplate;
+    expect(saved.workflow?.states.find((state) => state.key === "complete")?.readOnlyFields).toEqual(["capacity"]);
+    expect(saved.workflow?.states.find((state) => state.key === "new")).not.toHaveProperty("readOnlyFields");
+    expect(saved.workflow?.transitions[0]?.guard).toEqual({
+      match: "all", conditions: [{ field: "capacity", op: "gt", value: 0 }], message: "Enter the shelter's capacity first.",
+    });
+    expect(BoardTemplateSchema.safeParse(saved).success).toBe(true);
   });
 
   it("authors conditional, calculated, and record-reference fields with structured controls", () => {

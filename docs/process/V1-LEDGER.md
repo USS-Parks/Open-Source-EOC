@@ -8749,3 +8749,102 @@ Veoci Integration and Air Gap PSPR unit VA14 (VC-10).
 - **Evidence level:** real-database, unit, component and browser tests.
 - **Rollback:** revert the commit; migration `0156` adds tables and two
   line item columns the earlier code ignores.
+
+## Veoci and air gap VA15: workflow guards and per-state field permissions
+
+Veoci Integration and Air Gap PSPR unit VA15 (the rest of VC-11).
+
+- **What the code did before.** A transition could be limited by who may run
+  it, approvals, due rules and escalations, but not by what the record says:
+  a claim could be submitted with no amount. Field write levels were per
+  field for the whole life of a record; nothing kept a field from changing
+  once a record reached a state.
+- **What changed.**
+  - **Guards** (`shared/src/boards/workflow.ts`). A transition may carry a
+    guard: conditions on the record's fields in the board views' own
+    condition language, with `match` of all or any and an optional message.
+    The template refuses a guard on a field it lacks or an operator that
+    does not fit the field's type. The runtime
+    (`server/src/boards/workflow-runtime.ts`) refuses a transition whose
+    guard the record does not meet, with the guard's message or its unmet
+    conditions in the fields' words ("Submit cannot be taken: Amount is more
+    than 0."), and checks again when the last approval would complete a
+    pending transition, refusing it then ("can no longer be taken") without
+    recording the approval. Evaluation and wording are shared
+    (`unmetGuardConditions`, `describeCondition`, `guardRefusal` in
+    `shared/src/boards/view.ts`), so the browser shows the server's reason
+    before the button is pressed.
+  - **Read-only fields per state.** A workflow state may list
+    `readOnlyFields`. An edit that changes one of them while the record is
+    in that state is refused, naming the fields and the state, through the
+    REST edit (`updateRecord`) and through sync, where it becomes a durable
+    conflict (`server/src/sync/hub.ts` checkpoint), for everyone including
+    jurisdiction administrators. The state comes from the template version
+    the record's workflow is pinned to, or the board's initial state for a
+    record whose workflow has not moved. Sending a locked field unchanged is
+    not a change. Creation sets fields whatever the initial state locks. The
+    record detail answers `readOnly` (the state and its readable locked
+    fields).
+  - **The condition language moved** into `shared/src/boards/conditions.ts`,
+    which `fields.ts` re-exports unchanged, so the workflow schema can use it
+    without an import cycle.
+  - **Screens.** The designer's **Routing** tab gains **Read-only while**
+    a state (a checkbox per field) and, per transition, **Guard this
+    transition with conditions on the record**, built from the view
+    refinement's condition row (now `ConditionRow` in
+    `web/src/boards/ViewRefine.tsx`), with **The transition needs** every or
+    any condition and **Said when the guard refuses**; a condition still
+    being typed is left out, and the designer says so. The record's
+    **Workflow** section shows a guarded transition the record does not meet
+    as unavailable with "Not yet:" and the reason. The edit form
+    (`SchemaForm` in `web/src/design/forms.tsx`, through `RecordForm`) shows
+    a locked field disabled with "Read-only while the record is" the state,
+    linked to the control.
+  - `docs/guides/DESIGNER.md` gains **Guard a transition and lock fields in
+    a state**; `docs/guides/OPERATOR-QUICKSTART.md` describes both for
+    operators.
+- **Files outside the "Owns" cell.** `server/src/sync/hub.ts` (the sync
+  write path), `shared/src/boards/conditions.ts`, `fields.ts` and `view.ts`,
+  `web/src/design/forms.tsx` and `forms.css`,
+  `web/src/app/surfaces/BoardSurface.tsx`, `web/src/app/api/client.ts` (the
+  detail type), the two guides.
+- **Decisions.** Locks bind administrators too; the way out of a locked
+  state is a transition, which keeps the record's history the authority.
+  Federation ingestion of a peer's records is not held to local states.
+- **Air-gap behavior (decision 9).** No network path changes. An offline
+  edit of a locked field syncs as a conflict the history keeps.
+- **Schema, contract and dependencies.** No migration; template JSON gains
+  optional `guard` and `readOnlyFields`, so every existing template parses
+  as before. No route added; the record detail gains `readOnly`. No
+  dependency.
+- **Tests.** `workflow-guards.test.ts` (5, real database): templates
+  refused for a guard on a missing field, a read-only list naming a missing
+  field and an operator that does not fit; a submit refused until the
+  amount is filled, then taken; the amount refused through REST for a
+  member and for an administrator, an unchanged locked value accepted with
+  an editable change, the detail's `readOnly`, none for a draft; a sync edit
+  of the amount turned into a conflict with the reason and the value kept;
+  an approval refused when the record stopped meeting an any-guard while
+  waiting, with no approval recorded, then completed, and the approved
+  state's locks applied. `workflow-guard.test.ts` (shared, 3): all and any,
+  the wording, and the template checks. Component tests: the record
+  workflow panel holds a guarded transition back with its reason and
+  releases it when the record meets it; the form disables a locked field
+  with its reason and still submits its value; the designer writes a guard,
+  names an incomplete condition, and locks a field in one state only.
+  `workflow-guards-browser.test.ts` at 1586 by 992 and 1534 by 790: the
+  held transition with "Not yet: Amount is more than 0", the amount filled
+  in the edit drawer, the transition taken, and the amount read-only in the
+  edit drawer after it.
+- **Verification.** On the Windows test bed: `pnpm check:static` exit 0; 41
+  files, 358 tests green: the new tests with the board engine, boards,
+  board workflow, workflow runtime, record sync, sync, continuity sync, sync
+  hub lifecycle, board authoring, solution package and federation tests, the
+  board workflow, workspace, records and designer browser tests, and the
+  shared board, web board, design, board record context and templates
+  surface tests.
+- **Not run.** The full `pnpm check`, left to CI on the push.
+- **Evidence level:** real-database, unit, component and browser tests.
+- **Rollback:** revert the commit; templates holding a guard or read-only
+  fields then fail to parse under the earlier schema, so remove those parts
+  first.

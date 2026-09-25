@@ -48,6 +48,8 @@ interface SchemaFormProps {
   readonly onSubmit: (values: Record<string, unknown>) => Promise<void>;
   readonly onDirtyChange?: (dirty: boolean) => void;
   readonly submitLabel?: string;
+  /** Fields shown but not editable, and why, such as the record's workflow state. */
+  readonly readOnly?: { readonly fields: ReadonlySet<string>; readonly reason: string };
 }
 
 type DraftPhase = "ready" | "loading" | "saving" | "saved" | "error";
@@ -146,6 +148,7 @@ export function SchemaForm({
   onSubmit,
   onDirtyChange,
   submitLabel = "Save record",
+  readOnly,
 }: SchemaFormProps) {
   const formId = useId();
   const formRef = useRef<HTMLFormElement>(null);
@@ -378,7 +381,8 @@ export function SchemaForm({
               {activeFields.map((field) => {
                 const error = errors[field.key];
                 const inputId = `${formId}-${field.key}`;
-                const errorId = error ? `${inputId}-error` : undefined;
+                const locked = readOnly?.fields.has(field.key) ?? false;
+                const errorId = error ? `${inputId}-error` : locked ? `${inputId}-locked` : undefined;
                 return (
                   <div key={`${generation}:${field.key}`} className="eoc-form-field" data-field-type={field.type}>
                     <FieldControl
@@ -386,7 +390,7 @@ export function SchemaForm({
                       value={derived.values[field.key]}
                       onChange={(value) => change(field.key, value)}
                       inputId={inputId}
-                      disabled={loading || submitting}
+                      disabled={loading || submitting || locked}
                       {...(errorId ? { describedBy: errorId } : {})}
                       {...(referenceOptions[field.key] ? { options: referenceOptions[field.key] } : {})}
                       {...(renderGeometry ? { renderGeometry } : {})}
@@ -395,6 +399,7 @@ export function SchemaForm({
                       onUploadPendingChange={uploadPending}
                     />
                     {error ? <p id={errorId} className="eoc-form-inline-error">{error}</p> : null}
+                    {locked && !error ? <p id={errorId} className="eoc-form-hint">{readOnly!.reason}</p> : null}
                   </div>
                 );
               })}

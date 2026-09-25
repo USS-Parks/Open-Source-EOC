@@ -452,6 +452,9 @@ export async function updateRecord(
   if (!existing) throw new AuthError(404, "record not found");
   if (!existing.can_edit) throw new AuthError(403, "not permitted to edit this record");
   const previous = existing.data as Record<string, unknown>;
+  const lockedRefusal = readOnlyRefusal(board, await stateReadOnlyFields(sql, board, recordId),
+    Object.keys(patch).filter((key) => JSON.stringify(previous[key]) !== JSON.stringify(patch[key])));
+  if (lockedRefusal) throw new AuthError(409, lockedRefusal);
   const merged = { ...previous, ...patch };
   const accepted = new Set(board.fields.filter((field) => !field.calculation).map((field) => field.key));
   const rejectedKey = Object.keys(patch).find((key) => !accepted.has(key));
@@ -567,6 +570,7 @@ export async function getBoardRecordDetail(
   });
   const latestUpdate = [...history].reverse().find((event) =>
     event.category === "board.record.updated" && event.actor.personId === row.updated_by);
+  const locked = await stateReadOnlyFields(sql, board, recordId);
   return {
     id: row.id as string, incidentId: row.incident_id as string | null,
     data: { ...data, id: row.id as string },
@@ -580,6 +584,8 @@ export async function getBoardRecordDetail(
       organizationName: latestUpdate?.actor.organizationName ?? null } : null,
     archivedAt: row.archived_at ? new Date(row.archived_at as string).toISOString() : null,
     canEdit: shape.canContribute && Boolean(row.can_edit),
+    /** The fields the record's workflow state keeps from changing, and that state; none when nothing is locked. */
+    readOnly: locked ? { state: locked.state, fields: [...locked.fields].filter((key) => readable.has(key)) } : null,
     history,
   };
 }
@@ -1229,6 +1235,37 @@ export function geomExpr(
   const g = key ? data[key] : null;
   // A query fragment; typed as never so it slots into any template position.
   return (g ? sql`ST_SetSRID(ST_GeomFromGeoJSON(${JSON.stringify(g)}), 4326)` : null) as never;
+}
+
+/**
+ * The fields a record's workflow state makes read-only (VC-11), and the
+ * state's label: from the template version its workflow runs on, or, for a
+ * record whose workflow has not moved yet, the board's initial state. Null
+ * when nothing is locked.
+ */
+export async function stateReadOnlyFields(
+  sql: Sql, board: EffectiveBoard, recordId: string,
+): Promise<{ readonly state: string; readonly fields: ReadonlySet<string> } | null> {
+  const [instance] = await sql`
+    select w.state_key, t.definition from board_workflow_instances w
+    join board_templates t on t.key = w.template_key and t.version = w.template_version
+    where w.record_id = ${recordId}`;
+  const workflow = instance ? (instance.definition as BoardTemplate).workflow : board.template.workflow;
+  if (!workflow) return null;
+  const key = instance ? (instance.state_key as string) : workflow.initialState;
+  const state = workflow.states.find((item) => item.key === key);
+  if (!state?.readOnlyFields?.length) return null;
+  return { state: state.label, fields: new Set(state.readOnlyFields) };
+}
+
+/** Why an edit changing `changed` is refused in a state that locks some of them; null when it is not. */
+export function readOnlyRefusal(
+  board: EffectiveBoard, locked: { readonly state: string; readonly fields: ReadonlySet<string> } | null, changed: readonly string[],
+): string | null {
+  const hit = locked ? changed.filter((key) => locked.fields.has(key)) : [];
+  if (!locked || hit.length === 0) return null;
+  const labels = hit.map((key) => board.fields.find((field) => field.key === key)?.label ?? key);
+  return `${labels.join(", ")} cannot change while the record is ${locked.state}`;
 }
 
 export function checkFieldWrites(board: EffectiveBoard, keys: readonly string[]): void {

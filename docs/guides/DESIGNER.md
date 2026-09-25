@@ -62,6 +62,31 @@ refuses a signature column, since a signature is signed on screen. A local
 field may be a signature, which is how a jurisdiction adds, for example, a
 section chief's approval to its ICS 213RR board.
 
+## Guard a transition and lock fields in a state
+
+On the **Routing** tab, each workflow state has **Read-only while** the state,
+a checkbox per field. A field checked there cannot change while a record is in
+that state: the edit form shows it disabled with "Read-only while the record
+is" the state, the server refuses a changed value with the same reason, and a
+change arriving through offline sync becomes a conflict the record's history
+keeps. Creating a record sets its fields whatever the initial state locks.
+Jurisdiction administrators are held to it too; to change a locked field, take
+a transition back to a state that leaves it open.
+
+Each transition has **Guard this transition with conditions on the record**.
+A guard is conditions on the record's fields, written as a board view's
+conditions are, and **The transition needs** every condition or any of them
+to hold. **Said when the guard refuses** replaces the plain list of unmet
+conditions with your own words. The record detail shows a guarded transition
+the record does not meet as unavailable, with "Not yet:" and the reason, and
+the server refuses it with the same reason. A transition that waits for
+approvals is checked again when its last approval would complete it, and
+refused then if the record no longer meets the guard; the approval is not
+recorded. A condition still being typed is left out of the guard until its
+value is complete, and the designer says so. The template stores these as
+`readOnlyFields` on a state and `guard` (`match`, `conditions`, `message`) on
+a transition.
+
 ## Restrict individual records
 
 The **Record access** tab limits who may read and who may edit each record,

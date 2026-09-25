@@ -240,6 +240,8 @@ export function BoardSurface(props: {
         canAct: board.data.canContribute,
         people: knownPeople(detail.data, session.me?.person ?? null),
         personId: session.me?.person.id ?? null,
+        record: detail.data.data,
+        fields: board.data.fields,
       },
       lifecycle: {
         canArchive: detail.data.canEdit && board.data.canContribute,
@@ -411,6 +413,7 @@ export function BoardSurface(props: {
           <RecordForm
             fields={b.fields}
             initial={detail.data.data}
+            readOnly={detail.data.readOnly ?? null}
             {...(b.inputLayout ? { layout: b.inputLayout } : {})}
             referenceOptions={resources.data?.referenceOptions ?? {}}
             {...(drafts.store && session.me && props.incidentId ? {

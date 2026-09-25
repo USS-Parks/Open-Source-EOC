@@ -70,7 +70,7 @@ const TIME_PRESETS: ReadonlyArray<{ value: string; label: string }> = [
 ];
 
 /** A condition as typed: raw text, so a half-typed number or time stays editable. */
-interface DraftCondition {
+export interface DraftCondition {
   readonly field: string;
   readonly op: Op;
   readonly value: string;
@@ -78,7 +78,7 @@ interface DraftCondition {
   readonly values: readonly string[];
 }
 
-function blankDraft(field: FieldDef): DraftCondition {
+export function blankDraft(field: FieldDef): DraftCondition {
   const time = field.type === "datetime";
   return { field: field.key, op: operatorsFor(field)[0]!, value: time ? "now-24h" : "", value2: time ? "now" : "", values: [] };
 }
@@ -88,7 +88,7 @@ export function enumValues(field: FieldDef): readonly string[] {
 }
 
 /** A draft as a condition the server accepts, or null while it is incomplete. */
-function draftCondition(draft: DraftCondition, field: FieldDef | undefined): ViewCondition | null {
+export function draftCondition(draft: DraftCondition, field: FieldDef | undefined): ViewCondition | null {
   if (!field) return null;
   const number = (text: string) => (text.trim() === "" ? Number.NaN : Number(text));
   let value: unknown;
@@ -110,7 +110,7 @@ function draftCondition(draft: DraftCondition, field: FieldDef | undefined): Vie
   return parsed.success && conditionFitsField(parsed.data, field) ? parsed.data : null;
 }
 
-function conditionDraft(condition: ViewCondition): DraftCondition {
+export function conditionDraft(condition: ViewCondition): DraftCondition {
   const value = condition.value;
   if (Array.isArray(value)) {
     return condition.op === "between"
@@ -185,21 +185,9 @@ export function ViewRefineControls(props: {
       <fieldset className="board-refine__group">
         <legend>Conditions</legend>
         {conditions.length === 0 ? <p>All records in the view. Every condition added must hold.</p> : null}
-        {conditions.map((draft, index) => {
-          const field = byKey.get(draft.field) ?? filterable[0]!;
-          const n = index + 1;
-          return <div className="board-refine__row" key={index}>
-            <Select label={`Condition ${n} field`} value={draft.field} options={fieldOptions(filterable)}
-              onChange={(key) => setCondition(index, blankDraft(byKey.get(key)!))} />
-            <Select label={`Condition ${n} operator`} value={draft.op}
-              options={operatorsFor(field).map((op) => ({ value: op, label: OP_LABEL[op] }))}
-              onChange={(op) => setCondition(index, { ...draft, op: op as Op })} />
-            <ConditionValue n={n} field={field} draft={draft} onChange={(next) => setCondition(index, next)} />
-            <ActionButton kind="quiet" onClick={() => setConditions(conditions.filter((_, itemIndex) => itemIndex !== index))}>
-              Remove condition {n}
-            </ActionButton>
-          </div>;
-        })}
+        {conditions.map((draft, index) => <ConditionRow key={index} n={index + 1} draft={draft} fields={filterable}
+          onChange={(next) => setCondition(index, next)}
+          onRemove={() => setConditions(conditions.filter((_, itemIndex) => itemIndex !== index))} />)}
         <div><ActionButton disabled={filterable.length === 0 || conditions.length >= 16}
           onClick={() => setConditions([...conditions, blankDraft(filterable[0]!)])}>Add condition</ActionButton></div>
       </fieldset>
@@ -234,6 +222,34 @@ export function ViewRefineControls(props: {
       </div>
     </div>
   </details>;
+}
+
+/**
+ * One condition as a row of controls: its field, an operator that fits the
+ * field's type, and a value control for both. Board view refinements and
+ * workflow guards use the same row.
+ */
+export function ConditionRow(props: {
+  readonly n: number;
+  readonly draft: DraftCondition;
+  /** The fields a condition may name. */
+  readonly fields: readonly FieldDef[];
+  readonly onChange: (next: DraftCondition) => void;
+  readonly onRemove: () => void;
+}) {
+  const { draft, n } = props;
+  const byKey = new Map(props.fields.map((field) => [field.key, field]));
+  const field = byKey.get(draft.field) ?? props.fields[0]!;
+  return <div className="board-refine__row">
+    <Select label={`Condition ${n} field`} value={draft.field}
+      options={props.fields.map((item) => ({ value: item.key, label: item.label }))}
+      onChange={(key) => props.onChange(blankDraft(byKey.get(key)!))} />
+    <Select label={`Condition ${n} operator`} value={draft.op}
+      options={operatorsFor(field).map((op) => ({ value: op, label: OP_LABEL[op] }))}
+      onChange={(op) => props.onChange({ ...draft, op: op as Op })} />
+    <ConditionValue n={n} field={field} draft={draft} onChange={props.onChange} />
+    <ActionButton kind="quiet" onClick={props.onRemove}>Remove condition {n}</ActionButton>
+  </div>;
 }
 
 function ConditionValue(props: { n: number; field: FieldDef; draft: DraftCondition; onChange: (next: DraftCondition) => void }) {

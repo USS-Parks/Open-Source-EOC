@@ -331,6 +331,8 @@ export interface BoardRecordDetailResponse {
   readonly updatedAt: string; readonly updatedBy: BoardRecordActor | null;
   readonly canEdit: boolean; readonly history: readonly BoardRecordHistoryEntry[];
   readonly archivedAt?: string | null;
+  /** Fields the record's workflow state keeps from changing, and that state. */
+  readonly readOnly?: { readonly state: string; readonly fields: readonly string[] } | null;
 }
 export interface ViewRecordsResponse {
   readonly view: string;

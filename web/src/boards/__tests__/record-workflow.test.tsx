@@ -247,6 +247,35 @@ describe("record workflow panel", () => {
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 
+  it("holds back a transition the record does not meet the guard of, and says why", async () => {
+    const guarded = BoardWorkflowSchema.parse({
+      initialState: "submitted",
+      states: [{ key: "submitted", label: "Submitted" }, { key: "closed", label: "Closed", terminal: true }],
+      transitions: [{
+        key: "close", label: "Close claim", from: "submitted", to: "closed", allowedActors: ["writer"],
+        guard: { conditions: [{ field: "amount", op: "gt", value: 0 }, { field: "note", op: "is_not_empty" }] },
+      }],
+    });
+    const client = {
+      getTemplateVersion: vi.fn().mockResolvedValue({ ...template, workflow: guarded }),
+      recordWorkflow: vi.fn().mockResolvedValue({ ...pendingRuntime, pendingTransition: null, history: [] }),
+      listPositions: vi.fn().mockResolvedValue([]),
+    };
+    const fields = [
+      { key: "amount", label: "Amount", type: "number" as const, required: false, read: "any" as const, write: "member" as const },
+      { key: "note", label: "Reviewer note", type: "text" as const, required: false, read: "any" as const, write: "member" as const },
+    ];
+    const view = render(<RecordWorkflowPanel source={{ ...source(client), record: { amount: 0, note: "Seen" }, fields }} />);
+    const close = await view.findByRole("button", { name: "Close claim" });
+    expect((close as HTMLButtonElement).disabled).toBe(true);
+    expect(close.getAttribute("aria-describedby")).toBeTruthy();
+    expect(view.getByText("Not yet: Amount is more than 0")).toBeTruthy();
+    cleanup();
+    const ready = render(<RecordWorkflowPanel source={{ ...source(client), record: { amount: 40, note: "Seen" }, fields }} />);
+    expect(((await ready.findByRole("button", { name: "Close claim" })) as HTMLButtonElement).disabled).toBe(false);
+    expect(ready.queryByText(/Not yet/)).toBeNull();
+  });
+
   it("stays out of the record detail when the board template has no workflow", async () => {
     const client = {
       getTemplateVersion: vi.fn().mockResolvedValue({ ...template, workflow: undefined }),

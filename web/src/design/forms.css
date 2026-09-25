@@ -67,6 +67,7 @@
 .eoc-form-checkbox input { width: 20px; height: 20px; margin: 0; accent-color: var(--eoc-brand-teal); }
 .eoc-form-inline-error { margin: 5px 0 0; color: var(--eoc-status-critical); font-size: 12px; font-weight: 650; }
 .eoc-form-inline-error::before { content: "! "; }
+.eoc-form-hint { margin: 5px 0 0; color: var(--eoc-text-muted); font-size: 12px; }
 .eoc-form-unavailable { min-height: 66px; padding: 9px; display: grid; align-content: center; gap: 4px; color: var(--eoc-text-muted); background: var(--eoc-surface-raised); border: 1px dashed var(--eoc-border-strong); border-radius: var(--eoc-radius-sm); }
 .eoc-form-unavailable strong { color: var(--eoc-text); font-size: 13px; }
 .eoc-form-unavailable span { font-size: 12px; line-height: 1.35; }

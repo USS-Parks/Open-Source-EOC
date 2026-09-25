@@ -21,10 +21,16 @@ export function RecordForm(props: {
   onSubmit: (data: Record<string, unknown>) => void | Promise<void>;
   /** Uploads a picked file and resolves its stored id (for attachment fields). */
   onUpload?: (file: File) => Promise<string>;
+  /** Fields the record's workflow state keeps from changing, and that state's label. */
+  readOnly?: { readonly state: string; readonly fields: readonly string[] } | null;
 }) {
+  const readOnly = props.readOnly?.fields.length
+    ? { fields: new Set(props.readOnly.fields), reason: `Read-only while the record is ${props.readOnly.state}.` }
+    : null;
   return (
     <SchemaForm
       fields={props.fields}
+      {...(readOnly ? { readOnly } : {})}
       {...(props.layout ? { layout: props.layout } : {})}
       {...(props.initial ? { initialValues: props.initial } : {})}
       {...(props.referenceOptions ? { referenceOptions: props.referenceOptions } : {})}

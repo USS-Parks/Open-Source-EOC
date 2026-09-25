@@ -72,6 +72,20 @@ describe("shared-schema form validation", () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ summary: "Generator request", quantity: 4 })));
   });
 
+  it("shows a field the record's state locks, disabled, with the reason, and still submits its value", async () => {
+    const onSubmit = vi.fn(async () => undefined);
+    const view = render(<Theme name="light"><SchemaForm fields={fields} initialValues={{ summary: "Generator request", quantity: 4 }}
+      readOnly={{ fields: new Set(["quantity"]), reason: "Read-only while the record is Submitted." }} onSubmit={onSubmit} /></Theme>);
+    const quantity = view.getByLabelText("Quantity") as HTMLInputElement;
+    expect(quantity.disabled).toBe(true);
+    const note = view.getByText("Read-only while the record is Submitted.");
+    expect(quantity.getAttribute("aria-describedby")).toBe(note.id);
+    expect((view.getByLabelText("Summary") as HTMLTextAreaElement).disabled).toBe(false);
+    fireEvent.change(view.getByLabelText("Summary"), { target: { value: "Two generators" } });
+    fireEvent.click(view.getByRole("button", { name: "Save record" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ summary: "Two generators", quantity: 4 })));
+  });
+
   it("shows and requires a conditional control only when its shared condition matches", async () => {
     const view = render(<Theme name="light"><SchemaForm fields={fields} onSubmit={async () => undefined} /></Theme>);
     expect(view.queryByLabelText("Priority")).toBeNull();

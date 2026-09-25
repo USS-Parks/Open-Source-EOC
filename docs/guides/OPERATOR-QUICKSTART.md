@@ -211,6 +211,11 @@ read the **Workflow** section of the record context.
   When a transition assigns work, choose the position or incident participant
   first. The server decides whether you may run it and shows its reason when
   it refuses.
+- A transition with a guard needs the record to meet conditions first, such
+  as an amount filled in. Until it does, its button is unavailable and
+  "Not yet:" says what is missing; edit the record and it becomes available.
+- A state may make some fields read-only. The edit form shows them disabled,
+  with "Read-only while the record is" the state.
 - A transition with approval rules does not move the record at once. The
   section shows it as awaiting approval, with each rule, its approver and the
   approvals counted so far. An approver selects **Approve** for the rule. The

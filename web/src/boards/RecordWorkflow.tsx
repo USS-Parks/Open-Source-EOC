@@ -1,5 +1,12 @@
 import { useState } from "react";
-import type { BoardWorkflow, IncidentParticipantGrant, WorkflowAssignmentRequest } from "@openeoc/shared";
+import {
+  guardRefusal,
+  unmetGuardConditions,
+  type BoardWorkflow,
+  type FieldDef,
+  type IncidentParticipantGrant,
+  type WorkflowAssignmentRequest,
+} from "@openeoc/shared";
 import { ownerOptions, type AarOwnerOption } from "../aar/model.js";
 import type { ApiClient, PositionRef } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
@@ -34,6 +41,9 @@ export interface RecordWorkflowSource {
   readonly people: Readonly<Record<string, string>>;
   /** The signed-in person, who may cancel a request of their own. */
   readonly personId?: string | null;
+  /** The record's values and the board's fields, so a transition's guard is shown before it is tried. */
+  readonly record?: Readonly<Record<string, unknown>>;
+  readonly fields?: readonly FieldDef[];
 }
 
 interface WorkflowData {
@@ -240,11 +250,16 @@ export function RecordWorkflowPanel(props: { readonly source: RecordWorkflowSour
           {model.transitions.map((transition) => {
             const key = `transition:${transition.key}`;
             const assignment = chosen(key, transition.assignment);
+            // The server decides; this only says beforehand why it would refuse.
+            const unmet = transition.guard && source.record
+              ? unmetGuardConditions(transition.guard, source.record, new Date()) : [];
+            const blocked = transition.guard && unmet.length ? guardRefusal(transition.guard, unmet, source.fields ?? []) : null;
             return (
               <div key={transition.key} className="board-workflow-action">
                 {assigneePicker(key, transition.label, transition.assignment)}
                 <ActionButton kind="secondary" loading={busy === key}
-                  disabled={busy !== null || Boolean(transition.assignment?.required && !assignment)}
+                  {...(blocked ? { "aria-describedby": `${key}-guard` } : {})}
+                  disabled={busy !== null || Boolean(blocked) || Boolean(transition.assignment?.required && !assignment)}
                   onClick={() => void run(key, (idempotencyKey) =>
                     source.client.requestWorkflowTransition(source.boardId, source.recordId, {
                       transitionKey: transition.key, ...(assignment ? { assignment } : {}), idempotencyKey,
@@ -257,6 +272,7 @@ export function RecordWorkflowPanel(props: { readonly source: RecordWorkflowSour
                     ? `. Needs approval: ${transition.approvals.map((rule) => rule.label).join(", ")}`
                     : ""}
                 </small>
+                {blocked ? <small id={`${key}-guard`} className="board-workflow-guard">Not yet: {blocked}</small> : null}
               </div>
             );
           })}

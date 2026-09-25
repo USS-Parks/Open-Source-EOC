@@ -11,7 +11,9 @@ import {
   getIncidentBoardReadShape,
   lockBoardMutation,
   checkFieldWrites,
+  readOnlyRefusal,
   readsEveryRecord,
+  stateReadOnlyFields,
   validateRecordReferences,
   visibleFields,
   type EffectiveBoard,
@@ -493,6 +495,15 @@ export class BoardSyncHub {
             ...(incidentId ? { incidentId } : {}),
           });
         };
+        // A field the record's workflow state makes read-only keeps its value.
+        if (existing) {
+          const locked = readOnlyRefusal(board, await stateReadOnlyFields(tx, board, recordId),
+            changedFieldKeys(existing.data as Record<string, unknown>, data));
+          if (locked) {
+            await conflict(locked);
+            continue;
+          }
+        }
         const parsed = schema.safeParse(data);
         if (!parsed.success) {
           if (relaxed.safeParse(data).success) continue; // pending, not conflict

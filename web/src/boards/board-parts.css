@@ -14,6 +14,7 @@
 .board-workflow-due { gap: 4px; }
 .board-workflow-history { margin: 0; padding-left: 18px; }
 .board-workflow-picker { width: 100%; }
+.board-workflow-guard { color: var(--eoc-text-muted); }
 
 /* A point field typed as longitude and latitude. */
 .board-point-legend { margin-bottom: 4px; }
