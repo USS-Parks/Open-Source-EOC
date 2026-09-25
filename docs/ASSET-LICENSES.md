@@ -49,9 +49,12 @@ does not establish the license of a separately sourced map, font, or symbol.
 
 The `0.9.0` Windows setup, staged by
 `deploy/windows/installer/Stage-Installer.ps1` with
-`-IncludeOptionalBasemaps`, ships the files below beside the application. Its
-only license files are the repository's `LICENSE` and `NOTICE`, apart from
-the one `COPYING` noted under the PostgreSQL runtime.
+`-IncludeOptionalBasemaps`, ships the files below beside the application,
+with the repository's `LICENSE` and `NOTICE`, `THIRD-PARTY-NOTICES.txt` and
+the runtimes' own license texts in `licenses/`. The setup built on 2026-09-24
+for the readiness plan is 1,613 MB; its SHA-256 is in the `.sha256` file
+beside it and in the ledger receipt "Readiness RD2 part two: the Windows
+setup".
 
 | Item | In the setup | Source and license as recorded | Evidence |
 |---|---|---|---|
@@ -59,8 +62,9 @@ the one `COPYING` noted under the PostgreSQL runtime.
 | Buildings archive | `web/public/basemap/buildings.pmtiles`, 343,283,882 bytes, with `buildings-overture.json` | OpenStreetMap footprints (ODbL-1.0) enriched with Overture buildings release 2026-08-19.0 subtypes (ODbL-1.0) by exact OSM-way match. | Project-recorded; the sidecar's SHA-256 matches the archive; no ODbL text in the setup |
 | Overlays archive | `web/public/basemap/overlays.pmtiles`, 85,793,945 bytes, with `overlays-manifest.json` | Caltrans State Highway Network; USDA Forest Service roads; BLM public motorized roads; NPS public roads; CAL FIRE public land ownership, compiled from CPAD, FWS, DOD and BIA data; Humboldt County GIS roads. The manifest records each source URL and attribution and states that the source services declare no reuse license, and that CAL FIRE's conditions of use warn third-party inputs may need permission before redistribution. | Project-recorded in the manifest and `tools/basemap/README.md` section 9; redistribution rights not reviewed |
 | Address search gazetteer | `tools/basemap/out/gazetteer.tsv`, 144,343,915 bytes | Built by `tools/basemap/build-gazetteer.mjs` from `california.pmtiles`: a derived OpenStreetMap database under ODbL-1.0. The basemap README asks that any distributed copy keep the OpenStreetMap attribution. | Project-recorded; no ODbL text or attribution file in the setup |
-| Node.js runtime | `runtime/node/`, copied from the build machine's `C:/Program Files/nodejs`, which holds Node.js v24.15.0 at this reconciliation | Node.js is published under the MIT license, with its bundled components' notices in the project's `LICENSE` file. The copied directory has no `LICENSE` file. It also carries npm (Artistic License 2.0, `node_modules/npm/LICENSE` present) and Corepack (MIT, `node_modules/corepack/LICENSE.md` present). | Node.js license text absent from the setup |
-| PostgreSQL and PostGIS runtime | `runtime/pgsql/`, copied from `deploy/test-runtime/out/pgsql` | PostgreSQL 16.15 (EDB Windows binaries), under the PostgreSQL License; its `server_license.txt` is in `postgresql-16.15-4.zip` but did not reach the unpacked `pgsql` directory. The PostGIS 3.6.2 Windows bundle adds PostGIS with GEOS, PROJ, GDAL, SFCGAL, CGAL and Boost, and extras including pgRouting, osm2pgrouting, h3-pg, MobilityDB, pgPointCloud, pg_sphere and ogr_fdw. The bundle carries an Apache-2.0 `LICENSE`, a GPL-2.0 `bin/COPYING` and per-component notices; it does not state PostGIS's own license, which the PostGIS project publishes as GPL-2.0-or-later. Only `bin/COPYING` reached the unpacked directory. | One GPL-2.0 `COPYING` in the setup; the other notices absent |
+| North Coast imagery and elevation | `web/public/basemap/north-coast-imagery.pmtiles` and `north-coast-terrain.pmtiles` | USDA NAIP imagery and USGS 3DEP elevation, both US government works in the public domain, credited on the map as recorded above. | Public domain; credited in the map attribution |
+| Node.js runtime | `runtime/node/`, the official `node-v24.15.0-win-x64.zip` from nodejs.org, its SHA-256 matched against the published `SHASUMS256.txt` | Node.js under the MIT license, with its bundled components' notices in its `LICENSE`, staged as `licenses/node-LICENSE.txt`. It also carries npm (Artistic License 2.0) and Corepack (MIT) with their license files. | License text in the setup |
+| PostgreSQL and PostGIS runtime | `runtime/pgsql/`, assembled from the EDB `postgresql-16.15-4.zip` (`bin`, `lib`, `share`, without pgAdmin, StackBuilder, headers or documentation) with the PostGIS 3.6.2 Windows bundle copied over it, the bundle's MD5 matched against its published checksum | PostgreSQL 16.15 under the PostgreSQL License (`server_license.txt`), with EDB's third-party license lists. The PostGIS 3.6.2 bundle adds PostGIS (GPL-2.0-or-later, per the PostGIS project) with GEOS, PROJ, GDAL, SFCGAL, CGAL and Boost, and extras including pgRouting, osm2pgrouting, h3-pg, MobilityDB, pgPointCloud, pg_sphere and ogr_fdw, with its Apache-2.0 `LICENSE`, GPL-2.0 `bin/COPYING` and per-component notices. The written source offer for the GPL components is in `THIRD-PARTY-NOTICES.txt`. | Every license file the stage requires is in `licenses/` |
 
 ## License work open before a setup is published
 

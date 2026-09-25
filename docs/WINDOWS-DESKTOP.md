@@ -70,7 +70,7 @@ $env:OPENEOC_ENABLE_ACCEPTANCE_PROFILE = '1'
 .\deploy\windows\Open-Source-EOC.ps1 -Action Setup -Profile acceptance
 ```
 
-Both synthetic profiles use `ensureDemoData`. Their demonstration administrator is `demo-admin@example.org` with password `correct-horse-battery`; on first sign-in it must enroll an authenticator app, as every administrator must. Never use either profile for real incident information.
+The demo profile loads the North Coast Storm exercise, the reference scenario the design frames show, written through the API as each of its people and placed on the scenario clock (09:42 on the most recent morning). Its accounts are the scenario's people, for example `jordan.lee@humboldt.example`, with password `north-coast-exercise`, and they sign in with a password alone; every screen is marked "Demonstration · Synthetic data". The acceptance profile uses `ensureDemoData`, whose administrator `demo-admin@example.org` (password `correct-horse-battery`) enrolls an authenticator app on first sign-in, as every production administrator must. Never use either profile for real incident information.
 
 For production:
 

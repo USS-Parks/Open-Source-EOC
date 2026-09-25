@@ -13,6 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createServer } from "node:net";
+import { Writable } from "node:stream";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
@@ -301,6 +302,19 @@ async function prepareDatabase(paths, config, { bootstrap = false, bootstrapInpu
     await incidents.ensureStandardIncidentTemplates(owner);
     await dashboards.ensureStandardDashboards(owner);
     if (!bootstrap) return null;
+    if (config.profile === "demo") {
+      // The seed runs the application, which keeps files and credentials as the served profile does.
+      process.env.OPENEOC_DATA_DIR = paths.blobs;
+      process.env.OPENEOC_SECRET_KEY ??= readFileSync(paths.secretKey, "utf8").trim();
+      const result = await seedReferenceScenario(owner, config, runtimePassword);
+      writeJsonAtomic(resolve(paths.root, "bootstrap.json"), {
+        profile: config.profile,
+        synthetic: true,
+        login: "jordan.lee@humboldt.example",
+        ...result,
+      });
+      return result;
+    }
     if (config.synthetic) {
       const { ensureDemoData } = await importServer("server/src/demo/seed.ts");
       const result = await ensureDemoData(owner);
@@ -327,6 +341,32 @@ async function prepareDatabase(paths, config, { bootstrap = false, bootstrapInpu
     return provisioned;
   } finally {
     await owner.end();
+  }
+}
+
+/**
+ * The demo profile's dataset: the North Coast Storm reference scenario the
+ * design frames show, written through the API as each of its people, then
+ * placed on the scenario clock (09:42 on the most recent morning).
+ */
+async function seedReferenceScenario(owner, config, runtimePassword) {
+  const [{ connect }, { buildApp }, { seedNorthCoast, placeOnScenarioClock }] = await Promise.all([
+    importServer("server/src/db/client.ts"),
+    importServer("server/src/app.ts"),
+    importServer("server/src/demo/north-coast.ts"),
+  ]);
+  const runtime = connect({ url: databaseUrl("app_runtime", runtimePassword, config) });
+  // Several hundred seeding requests are not the served profile's log.
+  const quiet = new Writable({ write(_chunk, _encoding, done) { done(); } });
+  const app = buildApp(runtime, { oidc: null, requireAdminMfa: false, logStream: quiet });
+  try {
+    await app.ready();
+    const scenario = await seedNorthCoast(app, owner);
+    await placeOnScenarioClock(owner, scenario);
+    return { jurisdictionId: scenario.jurisdictionId, incidentId: scenario.incidentId };
+  } finally {
+    await app.close();
+    await runtime.end();
   }
 }
 
@@ -579,7 +619,12 @@ async function serveProfile(args) {
   const runtime = connect({ url: runtimeUrl });
   // Refuses, with no override, if app_runtime could bypass row-level security.
   await checkRuntimeRole(runtime, { OPENEOC_RUNTIME_URL: runtimeUrl });
-  const app = buildApp(runtime, { oidc: null, logStream: rotatingLog(resolve(paths.logs, "server.log")) });
+  const app = buildApp(runtime, {
+    oidc: null,
+    logStream: rotatingLog(resolve(paths.logs, "server.log")),
+    // The demo's synthetic accounts sign in with a password alone; production keeps two-step sign-in for administrators.
+    ...(config.profile === "demo" ? { requireAdminMfa: false } : {}),
+  });
   const scheduler = new Scheduler(runtime, { lockUrl: runtimeUrl, logger: app.log });
   app.metrics.delivery = scheduler.delivery;
   app.metrics.scheduler = scheduler;

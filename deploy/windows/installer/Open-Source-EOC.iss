@@ -26,6 +26,7 @@ InfoBeforeFile=installer-notice.txt
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
+Name: "demodesktopicon"; Description: "Create a desktop shortcut for the North Coast Storm &demo"; GroupDescription: "Additional shortcuts:"
 
 [Files]
 Source: "{#StagedAppRoot}\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -35,6 +36,10 @@ Name: "{group}\Open Source EOC"; Filename: "{app}\app\deploy\windows\Open Source
 Name: "{group}\Open Source EOC Demo"; Filename: "{app}\app\deploy\windows\Open Source EOC.cmd"; Parameters: "-Action Launch -Profile demo"; WorkingDir: "{app}\app"
 Name: "{group}\Uninstall Open Source EOC"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\Open Source EOC"; Filename: "{app}\app\deploy\windows\Open Source EOC.cmd"; Parameters: "-Action Launch -Profile production"; WorkingDir: "{app}\app"; Tasks: desktopicon
+Name: "{autodesktop}\Open Source EOC Demo"; Filename: "{app}\app\deploy\windows\Open Source EOC.cmd"; Parameters: "-Action Launch -Profile demo"; WorkingDir: "{app}\app"; Tasks: demodesktopicon
+
+[Run]
+Filename: "{app}\app\deploy\windows\Open Source EOC.cmd"; Parameters: "-Action Launch -Profile demo"; WorkingDir: "{app}\app"; Description: "Open the North Coast Storm demo"; Flags: postinstall nowait skipifsilent runhidden
 
 [UninstallRun]
 Filename: "{app}\app\deploy\windows\Open Source EOC.cmd"; Parameters: "-Action Stop -Profile production"; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "OpenSourceEOCStopProduction"

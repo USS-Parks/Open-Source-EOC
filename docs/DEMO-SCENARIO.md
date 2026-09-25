@@ -1,5 +1,11 @@
 # Synthetic Incident Demonstration
 
+The installed Windows setup's demo loads a different synthetic exercise, the
+North Coast Storm reference scenario the design frames show; see
+[Try it on Windows](../TRY-IT-ON-WINDOWS.md). The scenario below is the
+acceptance fixture a source checkout's acceptance profile and the test suite
+use.
+
 This scenario is a guided tour of the current application. Every organization,
 incident, location, assessment, message, and request in the seeded dataset is
 synthetic. Do not treat it as live operational information.

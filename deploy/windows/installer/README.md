@@ -64,9 +64,11 @@ The default package includes the baseline offline PMTiles map,
 selected application build. Large California street, building, and overlay
 archives are excluded by default. Add `-IncludeOptionalBasemaps` only for a
 release whose size budget and source receipts cover those assets. With it, the
-stage requires all five archive files (`california.pmtiles`,
+stage requires all seven archive files (`california.pmtiles`,
 `buildings.pmtiles`, `buildings-overture.json`, `overlays.pmtiles`,
-`overlays-manifest.json`) from `-OptionalBasemapRoot`, default
+`overlays-manifest.json`, and the North Coast `north-coast-imagery.pmtiles`
+and `north-coast-terrain.pmtiles` the demo's maps show) from
+`-OptionalBasemapRoot`, default
 `web/public/basemap`, and the address search gazetteer at
 `tools/basemap/out/gazetteer.tsv` (built by `tools/basemap/build-gazetteer.mjs`
 from `california.pmtiles`); a missing file stops the stage. The static host
@@ -111,7 +113,19 @@ PostGIS version from `share/extension/postgis.control` and stops if the
 notices' source offer names another version. Of these files, the unpacked
 runtime in `deploy/test-runtime/out/pgsql` holds only `bin/COPYING`, and the
 MSI-installed Node directory holds no `LICENSE`, so a release stage needs
-inputs prepared from the official archives.
+inputs prepared from the official archives:
+
+- **Node:** unpack the official `node-v24.15.0-win-x64.zip` after checking it
+  against the `SHASUMS256.txt` published beside it on nodejs.org, and pass
+  the unpacked folder.
+- **PostgreSQL with PostGIS:** from the EDB `postgresql-16.15-4.zip`, copy
+  `pgsql/bin`, `pgsql/lib`, `pgsql/share` and its three license text files
+  into a new `pgsql` folder, leaving out pgAdmin, StackBuilder, the headers
+  and the documentation, which the application never runs. Then copy the
+  PostGIS bundle `postgis-bundle-pg16-3.6.2x64.zip` (checked against its
+  published MD5) over it, as the bundle's `README.txt` directs: its `bin`,
+  `gdal-data`, `lib`, `share` and `utils` folders and its top-level license
+  and version files. The result is about 400 MB.
 
 ## Stage and compile
 
@@ -205,9 +219,9 @@ On the target computer:
 5. Start **Open Source EOC Demo** from the Start Menu. The first launch creates
    the demo database and synthetic data. Record the time from the click to the
    sign-in page.
-6. Sign in as `demo-operator@example.org` with `correct-horse-battery`. This
-   synthetic member needs no authenticator app; the demo administrator does.
-   Screenshot the console.
+6. Sign in as `jordan.lee@humboldt.example` with `north-coast-exercise`; the
+   demo's synthetic accounts sign in with a password alone. Screenshot the
+   console.
 7. Open **Map** and zoom to Eureka until street names show. Screenshot the
    county view and the street view; the attribution should name
    OpenStreetMap.

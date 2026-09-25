@@ -9,18 +9,24 @@ upgrade in place, is in the [upgrade guide](docs/guides/UPGRADE.md).
 ## Unreleased
 
 Changes on `main` after the 0.9.0 entry was written. The packages still carry
-`0.9.0`. The Windows setup `Open-Source-EOC-Setup-0.9.0.exe` (SHA-256
-`dafddeb50fcdfdf9a85519d24a88e21ae1c87420357ad22d86927802b112a153`) was
-staged from `5875c2f`. It includes the side-by-side gap closures, the
-installable web app, the style consolidation, the security policy, the
-disaster recovery runbook and the installer fixes below. It predates the
-fixes from the integrated exercise, the visual and accessibility review,
-reduced motion and higher contrast, the write path change and the remaining
-interface findings. The setup is rebuilt from the release commit when the
-release is made.
+`0.9.0`. The Windows setup `Open-Source-EOC-Setup-0.9.0.exe` was rebuilt on
+2026-09-24 with everything below, the three frames' look and the North Coast
+Storm demo; its commit and SHA-256 are in the ledger receipt "Readiness RD2
+part two: the Windows setup". It is rebuilt again from the release commit
+when a release is made.
 
 ### Added
 
+- The Windows setup's demo is the North Coast Storm exercise the design
+  frames show, with a desktop shortcut and an option to open it when setup
+  finishes; its synthetic accounts sign in with a password, and every screen
+  is marked "Demonstration · Synthetic data". The setup carries the official
+  Node and PostgreSQL runtimes with their license texts and the North Coast
+  imagery and elevation.
+- The console's three dashboards match the canonical frames: solid glyphs,
+  the frames' twelve-section rail (every section one setting away), each
+  theme's brand mark, the light map's terrain, and the lifelines drawer as
+  drawn.
 - A board can be created from an already published template on the Templates
   screen, and a new board appears in Boards and in the rule and report pickers
   without a reload.

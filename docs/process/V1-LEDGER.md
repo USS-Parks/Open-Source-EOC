@@ -4842,3 +4842,50 @@ Receipts for its units follow here.
   installer tests pass 27 of 27.
 - **Evidence level:** unit, browser and the fidelity captures.
 - **Rollback:** revert the commit.
+- **Commit:** `65002a3`.
+
+## Readiness RD2 part two: the Windows setup
+
+- **What changed.** The demo profile now loads the North Coast Storm
+  reference scenario, written through the API as each of its people and
+  placed on the scenario clock, instead of the acceptance fixture (which the
+  acceptance profile keeps); its accounts sign in with a password and every
+  screen is marked synthetic. The stage carries the North Coast imagery and
+  elevation archives; the setup adds a desktop shortcut for the demo (on by
+  default) and an option to open the demo when it finishes. New
+  `TRY-IT-ON-WINDOWS.md` at the repository root. The desktop, installer and
+  demo guides, the asset inventory and the changelog describe it.
+- **Runtimes.** Node is the official `node-v24.15.0-win-x64.zip`, its SHA-256
+  matched against nodejs.org's `SHASUMS256.txt`. PostgreSQL is assembled from
+  the EDB `postgresql-16.15-4.zip` already on this machine (only `bin`, `lib`
+  and `share` with the license texts; pgAdmin, StackBuilder, headers and
+  documentation left out, 921 MB down to 401 MB) with the PostGIS 3.6.2
+  bundle copied over it, its MD5 matched against its published checksum.
+  Every license file the stage requires is present.
+- **Defaults and deviations.** Decision 6 deviates in one respect: the demo's
+  synthetic accounts sign in with a password alone, so a first sign-in cannot
+  stall on an authenticator app; production keeps two-step sign-in for
+  administrators. The signed-in person still chooses the ICS position to act
+  in, as a deliberate act; the guide says to choose Planning Section Chief.
+- **The setup.** `deploy/windows/out/installer/Open-Source-EOC-Setup-0.9.0.exe`,
+  1,613 MB, SHA-256
+  `e8cc187b9370f9dcc7d5cf4a4de320196dc0e629d32c4a3e71a5622636fbb897` (also in
+  the `.sha256` file beside it), compiled in 613 s by Inno Setup 6 from a
+  9,969-file stage. The web build in it is from `65002a3`, whose web sources
+  this commit leaves unchanged; the launcher and stage changes in it are this
+  commit's.
+- **Verification.** The installer tests pass 9 of 9 and the launcher tests 27
+  of 27. The setup was installed silently for the current user into a test
+  folder with no shortcuts (69 s), and the installed launcher run with its
+  own data folder: demo setup 19 s, then the server ready. A scripted browser
+  signed in as Jordan Lee and captured the light and dark overview and the
+  lifelines workspace: the frames' look, the aerial imagery in dark, the
+  terrain relief in light, no page errors, and no request to anything
+  outside the machine. The test copy was then removed with its own
+  uninstaller, which kept the data folder as designed; that folder was moved
+  out of the home folder. A first try into the long scratch path failed on
+  the Windows path length limit and rolled back cleanly; the default install
+  path is short enough.
+- **Evidence level:** an installed run on this Windows machine, scripted
+  browser captures, unit.
+- **Rollback:** revert the commit.

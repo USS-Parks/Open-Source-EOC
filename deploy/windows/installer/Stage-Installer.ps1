@@ -311,6 +311,11 @@ try {
     foreach ($file in @('california.pmtiles', 'buildings.pmtiles', 'buildings-overture.json', 'overlays.pmtiles', 'overlays-manifest.json')) {
       Copy-File (Join-Path $OptionalBasemapRoot $file) (Join-Path $appRoot "web/public/basemap/$file")
     }
+    # The North Coast imagery and elevation the reference scenario's maps show: the
+    # dark theme opens on the imagery and both themes shade the terrain.
+    foreach ($file in @('north-coast-imagery.pmtiles', 'north-coast-terrain.pmtiles')) {
+      Copy-File (Join-Path $OptionalBasemapRoot $file) (Join-Path $appRoot "web/public/basemap/$file")
+    }
     # Address search reads the gazetteer built from california.pmtiles. It keeps the
     # builder's output path, outside web/public, so the static host never serves it.
     Copy-File (Join-Path $RepoRoot 'tools/basemap/out/gazetteer.tsv') (Join-Path $appRoot 'tools/basemap/out/gazetteer.tsv')
