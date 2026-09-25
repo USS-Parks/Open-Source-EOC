@@ -7,10 +7,12 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)));
 const read = (name) => readFileSync(resolve(root, name), "utf8");
 
-test("Inno Setup installer is per-user and leaves operational data outside its uninstall tree", () => {
+test("Inno Setup installer is per-user by default and leaves operational data outside its uninstall tree", () => {
   const source = read("Open-Source-EOC.iss");
   assert.match(source, /^PrivilegesRequired=lowest$/m);
-  assert.match(source, /^DefaultDirName=\{localappdata\}\\Programs\\Open Source EOC$/m);
+  assert.match(source, /^PrivilegesRequiredOverridesAllowed=dialog$/m);
+  // {autopf} is the user's own programs folder per user and Program Files for all users.
+  assert.match(source, /^DefaultDirName=\{autopf\}\\Open Source EOC$/m);
   assert.match(source, /^\[UninstallRun\]$/m);
   assert.doesNotMatch(source, /^\[UninstallDelete\]$/m);
   assert.match(source, /Open Source EOC Demo/);
@@ -118,6 +120,8 @@ test("stage carries each runtime license text and the third-party notices that n
     "ogr_fdw-LICENSE.md": "PostgresRuntime 'ogrfdw_LICENSE.md'",
     "pointcloud-COPYRIGHT.txt": "PostgresRuntime 'pgpointcloud_COPYRIGHT'",
     "gdal-LICENSE.txt": "PostgresRuntime 'gdal-data/LICENSE.TXT'",
+    "caddy-LICENSE.txt": "CaddyRuntime 'LICENSE'",
+    "winsw-LICENSE.txt": "WinswRuntime 'LICENSE.txt'",
   };
   const staged = Object.fromEntries(
     [...stager.matchAll(/^ {2}'([^']+)' = Join-Path \$(\w+ '[^']+')$/gm)].map((m) => [m[1], m[2]]),
@@ -148,4 +152,29 @@ test("installer ships only operator-facing production and demo profiles", () => 
   assert.match(source, /RunOnceId: "OpenSourceEOCStopDemo"/);
   assert.doesNotMatch(source, /acceptance/i);
   assert.doesNotMatch(source, /RunOnceId: "OpenSourceEOCStopAcceptance"/);
+});
+
+test("installing for all users offers the network host, which the setup installs and the uninstaller removes", () => {
+  const source = read("Open-Source-EOC.iss");
+  assert.match(source, /^Name: "host"; .*Check: IsAdminInstallMode$/m);
+  assert.match(source, /^Name: "host\\production"; .*Flags: exclusive$/m);
+  assert.match(source, /^Name: "host\\demo"; .*Flags: exclusive unchecked$/m);
+  assert.match(source, /Parameters: "-Action HostInstall -Profile host -Pause"; .*Tasks: host\\production; Flags: waituntilterminated$/m);
+  assert.match(source, /Parameters: "-Action HostInstall -Profile host-demo -Pause"; .*Tasks: host\\demo; Flags: waituntilterminated$/m);
+  assert.match(source, /Test-OpenEOCHost\.ps1""".*Tasks: host; Flags: postinstall nowait skipifsilent$/m);
+  assert.match(source, /Parameters: "-Action HostRemove"; .*RunOnceId: "OpenSourceEOCHostRemove"$/m);
+  // An upgrade stops the host's services before it replaces their programs.
+  assert.match(source, /function PrepareToInstall[\s\S]+IsAdminInstallMode[\s\S]+Get-Service -Name ''OpenSourceEOC-\*''[\s\S]+Stop-Service -Force/);
+  // The per-user demo opens as the person who ran the setup, never elevated.
+  assert.match(source, /-Action Launch -Profile demo".*Tasks: not host; Flags: postinstall nowait skipifsilent runhidden runasoriginaluser$/m);
+
+  const stager = read("Stage-Installer.ps1");
+  assert.match(stager, /Copy-File \(Join-Path \$CaddyRuntime 'caddy\.exe'\) \(Join-Path \$appRoot 'runtime\/caddy\/caddy\.exe'\)/);
+  assert.match(stager, /Copy-File \(Join-Path \$WinswRuntime 'WinSW-x64\.exe'\) \(Join-Path \$appRoot 'runtime\/winsw\/WinSW-x64\.exe'\)/);
+  assert.match(stager, /'Open Source EOC\.cmd', 'Test-OpenEOCHost\.ps1'/);
+  const desktop = read("../desktop.mjs");
+  assert.match(desktop, /resolve\(repoRoot, "runtime\/caddy\/caddy\.exe"\)/);
+  assert.match(desktop, /resolve\(repoRoot, "runtime\/winsw\/WinSW-x64\.exe"\)/);
+  const launcher = read("../Open-Source-EOC.ps1");
+  assert.match(launcher, /Join-Path \$env:ProgramData 'Open Source EOC'/);
 });

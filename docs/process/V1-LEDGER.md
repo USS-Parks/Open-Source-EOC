@@ -4889,3 +4889,72 @@ Receipts for its units follow here.
 - **Evidence level:** an installed run on this Windows machine, scripted
   browser captures, unit.
 - **Rollback:** revert the commit.
+
+## Readiness RD3: the Windows network host
+
+- **What changed.** Installed for all users, the Windows setup offers **Host
+  for the network**, with a new operational database or the North Coast
+  Storm demonstration. `-Action HostInstall` sets up the `host` or
+  `host-demo` profile in `%ProgramData%\Open Source EOC` and installs three
+  services under LocalService: PostgreSQL through `pg_ctl register` (loopback
+  only, its port and log folder in an included settings file), the server
+  through WinSW (`desktop.mjs host-serve`, with its delivery queue and
+  scheduler, loopback only, `OPENEOC_TRUST_PROXY=127.0.0.1`), and Caddy
+  through WinSW (HTTPS on 443 for the computer name, DNS name and IPv4
+  addresses, a redirect on 80, and a certificate authority it creates on the
+  host). It adds a firewall rule for Caddy on 80 and 443, a daily backup task
+  at 02:30 under LocalService, and the authority to the host's trusted roots.
+  The sign-in page offers the authority as "Trust this server" with steps
+  for Windows and macOS. A service start migrates the database after the
+  existing pre-upgrade dump. `-Action HostRemove` (run by the uninstaller)
+  removes the services, rule, task and trust and keeps the data; the setup
+  stops the services before an upgrade replaces their programs.
+  `Test-OpenEOCHost.ps1` checks an installed host. New `lib/host.mjs` renders
+  every definition as text; new guide `docs/guides/NETWORK-HOST.md`.
+- **Runtimes.** Caddy 2.11.4 (`caddy_2.11.4_windows_amd64.zip`, SHA-512
+  matched against the release's `caddy_2.11.4_checksums.txt`) and WinSW
+  2.12.0 (`WinSW-x64.exe`, SHA-256
+  `05b82d46ad331cc16bdc00de5c6332c1ef818df8ceefcd49c726553209b3a0da`), both
+  from their GitHub releases, with their license texts in `licenses/`.
+- **Defaults and deviations.** One account, LocalService, for all three
+  services and the backup task. The firewall rule opens port 80 as well as
+  443, for the redirect, on every network profile, because a network with no
+  internet is usually classed Public; it is limited to `caddy.exe`. The
+  host's own browsers trust the authority through its trusted roots; other
+  devices use the download. The certificates name the addresses the host has
+  at setup; rerunning HostInstall adds new ones and keeps the authority. The
+  `host-demo` profile is an addition to the plan, so the demonstration can be
+  tried across several devices; its accounts sign in with a password as the
+  desktop demo's do. The setup now asks per user or all users, per user by
+  default and in the same folder as before.
+- **The setup.** `deploy/windows/out/installer/Open-Source-EOC-Setup-0.9.0.exe`,
+  1,630 MB, SHA-256
+  `a118fc6e424fd8827fa137d9118e34a2c1dd0c216df4d0d2f1cc3ba7b52f195e`, compiled
+  in 711 s from a 9,975-file stage; copied to `deploy/` for Basho. The web
+  build in it is this commit's web sources, built before the icon test fix
+  (`b37f677`), which changes no drawing.
+- **Verification.** Launcher and installer tests 32 of 32; `pnpm
+  check:static` green; the web tests 687 of 687. `deploy/windows/prove-host.mjs`
+  passed in 36 s: a host-demo profile set up in a temporary folder (17 s),
+  PostgreSQL started from the host settings file, the server and Caddy
+  started exactly as their generated service definitions say (as this user,
+  loopback only, spare ports), `caddy validate` accepting the production
+  Caddyfile for this machine's names, HTTPS verified against the host's root
+  by name and by address and refused without it, the download equal to the
+  root, the redirect, Chromium trusting the authority by its keys with no
+  change to the trust store (TLS 1.3, issuer "Open Source EOC fire-starter
+  Intermediate"), Jordan Lee signed in with the live socket over `wss://`, no
+  outside request and no page error, the backup task's command against the
+  live host, that backup restored into a new database with equal incident,
+  record and person counts (1, 72, 14), and a server restart on the same
+  data. Result in `deploy/test-runtime/out/rd3-proof/result.json`.
+- **Not run.** Installing the services, the firewall rule, the task and the
+  trusted root on a real machine changes system settings, which this session
+  does not do (decision 9); Basho runs the setup's host choice and
+  `Test-OpenEOCHost.ps1`. No silent install of this setup was run on this
+  machine, because Basho's own install of the previous setup is here and a
+  second install would take over its uninstall entry.
+- **Evidence level:** automated end-to-end run of the host without the
+  system changes, unit; the installed host is Basho's to run.
+- **Rollback:** revert the commit; `-Action HostRemove` takes an installed
+  host's services down and keeps its data.

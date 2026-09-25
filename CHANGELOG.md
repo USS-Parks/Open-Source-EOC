@@ -17,6 +17,15 @@ when a release is made.
 
 ### Added
 
+- The network host. Installed for all users, the Windows setup offers **Host
+  for the network**: PostgreSQL, the server and Caddy run as Windows
+  services, Caddy serves HTTPS with a certificate authority the host creates,
+  the sign-in page offers that authority for other devices to trust, a
+  firewall rule opens ports 80 and 443 to Caddy, and a scheduled task backs
+  the host up daily. The host holds a new operational database or the North
+  Coast Storm demonstration. `Test-OpenEOCHost.ps1` checks an installed host;
+  uninstalling removes the services, rule, task and trust and keeps the data.
+  See the [network host guide](docs/guides/NETWORK-HOST.md).
 - The Windows setup's demo is the North Coast Storm exercise the design
   frames show, with a desktop shortcut and an option to open it when setup
   finishes; its synthetic accounts sign in with a password, and every screen
@@ -61,6 +70,8 @@ when a release is made.
 - Inline styles moved into the design kit's classes. Polling keeps data on
   screen during a refresh, pauses while the page is hidden and backs off
   after failures.
+- The Windows setup asks whether to install for the current user or for all
+  users; per user remains the default and installs where it did before.
 - The Windows installer takes its version from the root package, stops when
   an archive it was asked to include is missing, ships the icons the service
   worker needs and the address search gazetteer, and leaves test sources out.

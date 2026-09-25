@@ -1,8 +1,10 @@
 import "./ts-loader.mjs";
-import { randomBytes, randomUUID } from "node:crypto";
+import { X509Certificate, randomBytes, randomUUID } from "node:crypto";
 import { execFileSync, spawn } from "node:child_process";
 import {
+  appendFileSync,
   closeSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   openSync,
@@ -12,7 +14,9 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { get as httpsGet } from "node:https";
 import { createServer } from "node:net";
+import { hostname, networkInterfaces } from "node:os";
 import { Writable } from "node:stream";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -29,6 +33,17 @@ import { desktopRuntimeConfig, registerStaticHost } from "./lib/static-host.mjs"
 import { desktopBuildSourceFingerprint } from "./lib/build-fingerprint.mjs";
 import { rotateIfLarger, rotatingLog } from "./lib/rotating-log.mjs";
 import { backupBeforeMigrate, scheduledBackup } from "./lib/pre-upgrade-backup.mjs";
+import {
+  BACKUP_TASK,
+  POSTGRES_INCLUDE,
+  SERVICES,
+  SID,
+  firewallCommands,
+  hostDefinitions,
+  hostNames,
+  hostPaths,
+  isHostProfile,
+} from "./lib/host.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = resolve(process.env.OPENEOC_DESKTOP_APP_ROOT ?? resolve(dirname(scriptPath), "../.."));
@@ -41,6 +56,10 @@ const publicRoot = resolve(process.env.OPENEOC_DESKTOP_PUBLIC_ROOT ?? resolve(re
 const pgDist = resolve(process.env.OPENEOC_PG_DIST ?? resolve(repoRoot, "deploy/test-runtime/out/pgsql"));
 const pgBin = resolve(pgDist, "bin");
 const powershell = "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe";
+const caddyExe = resolve(process.env.OPENEOC_CADDY ?? resolve(repoRoot, "runtime/caddy/caddy.exe"));
+const winswExe = resolve(process.env.OPENEOC_WINSW ?? resolve(repoRoot, "runtime/winsw/WinSW-x64.exe"));
+// The North Coast Storm reference scenario's profiles: seeded as its people, who sign in with a password alone.
+const NORTH_COAST_PROFILES = new Set(["demo", "host-demo"]);
 
 function parseArgs(values) {
   const result = { action: values[0] ?? "status" };
@@ -71,13 +90,25 @@ function currentIdentity() {
   return execFileSync("whoami.exe", { encoding: "utf8", windowsHide: true }).trim();
 }
 
-function secureDirectory(path) {
+function secureDirectory(path, grants = [`${currentIdentity()}:(OI)(CI)F`]) {
   ensureDirectory(path);
-  const identity = currentIdentity();
-  execFileSync("icacls.exe", [path, "/inheritance:r", "/grant:r", `${identity}:(OI)(CI)F`], {
+  execFileSync("icacls.exe", [path, "/inheritance:r", "/grant:r", ...grants], {
     stdio: "ignore",
     windowsHide: true,
   });
+}
+
+/**
+ * A host folder: SYSTEM, Administrators and the administrator who set it up in
+ * full, the services' LocalService account as given (M or RX), no one else.
+ */
+function hostGrants(localService) {
+  return [
+    `*${SID.system}:(OI)(CI)F`,
+    `*${SID.administrators}:(OI)(CI)F`,
+    `${currentIdentity()}:(OI)(CI)F`,
+    `*${SID.localService}:(OI)(CI)${localService}`,
+  ];
 }
 
 function randomPassword() {
@@ -184,12 +215,12 @@ function configuredPlans(extra) {
   return plans;
 }
 
-async function assertPortFree(port, label) {
+async function assertPortFree(port, label, host = "127.0.0.1") {
   await new Promise((resolvePromise, reject) => {
     const server = createServer();
     server.unref();
     server.once("error", () => reject(new Error(`${label} port ${port} is already in use; no process was stopped`)));
-    server.listen({ host: "127.0.0.1", port, exclusive: true }, () => server.close(resolvePromise));
+    server.listen({ host, port, exclusive: true }, () => server.close(resolvePromise));
   });
 }
 
@@ -302,7 +333,7 @@ async function prepareDatabase(paths, config, { bootstrap = false, bootstrapInpu
     await incidents.ensureStandardIncidentTemplates(owner);
     await dashboards.ensureStandardDashboards(owner);
     if (!bootstrap) return null;
-    if (config.profile === "demo") {
+    if (NORTH_COAST_PROFILES.has(config.profile)) {
       // The seed runs the application, which keeps files and credentials as the served profile does.
       process.env.OPENEOC_DATA_DIR = paths.blobs;
       process.env.OPENEOC_SECRET_KEY ??= readFileSync(paths.secretKey, "utf8").trim();
@@ -411,8 +442,10 @@ async function setupProfile(args) {
   const productionInput = config.synthetic ? null : await productionBootstrap(args);
 
   for (const path of [paths.root, paths.pgData, paths.blobs, paths.browser, paths.logs]) ensureDirectory(path);
-  secureDirectory(paths.secrets);
-  secureDirectory(paths.run);
+  // A host's services read the secrets as LocalService; a desktop profile's are its user's alone.
+  const secretGrants = isHostProfile(profile) ? hostGrants("RX") : undefined;
+  secureDirectory(paths.secrets, secretGrants);
+  secureDirectory(paths.run, secretGrants);
   writeFileSync(paths.ownerPassword, `${randomPassword()}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
   writeFileSync(paths.runtimePassword, `${randomPassword()}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
   ensureSecretKey(paths);
@@ -520,10 +553,16 @@ function openBrowser(paths, config) {
   return child.pid;
 }
 
+function refuseHostProfile(profile) {
+  if (isHostProfile(profile))
+    throw new Error(`Profile ${profile} runs as Windows services; set it up with -Action HostInstall and manage it in Services`);
+}
+
 async function startProfile(args) {
+  const profile = validateProfileName(String(args.profile ?? "production"));
+  refuseHostProfile(profile);
   requiredFiles("database");
   requireFreshBuild();
-  const profile = validateProfileName(String(args.profile ?? "production"));
   const { paths, config } = loadProfile(profile);
   if (!config) throw new Error(`Profile ${profile} is not configured; run Setup first`);
   if (config.state !== "ready") throw new Error(`Profile ${profile} is ${config.state}; it was not reset`);
@@ -586,18 +625,31 @@ function ensureSecretKey(paths) {
 /** Set up a new profile once, then open its loopback desktop application. */
 async function launchProfile(args) {
   const profile = validateProfileName(String(args.profile ?? "production"));
+  refuseHostProfile(profile);
   if (!loadProfile(profile).config) await setupProfile({ ...args, profile });
   await startProfile({ ...args, profile });
 }
 
-async function serveProfile(args) {
+/**
+ * Serve a ready profile on its loopback port. A desktop profile is started by
+ * Start, which migrated it, and stops through an owned token. A host profile
+ * is started by its service, so a service start is also the upgrade: the
+ * database is dumped and migrated here first, and the service stops it.
+ */
+async function serveProfile(args, { service = false } = {}) {
   const profile = validateProfileName(String(args.profile ?? ""));
+  if (service !== isHostProfile(profile))
+    throw new Error(service ? `Only a host profile is served as a service, not ${profile}` : `Profile ${profile} is served by its Windows service`);
   const { paths, config } = loadProfile(profile);
   if (!config || config.state !== "ready") throw new Error(`Profile ${profile} is not ready`);
   requireFreshBuild();
-  const token = process.env.OPENEOC_DESKTOP_TOKEN ?? "";
-  delete process.env.OPENEOC_DESKTOP_TOKEN;
-  if (!token) throw new Error("Desktop ownership token is missing");
+  let token = "";
+  if (!service) {
+    token = process.env.OPENEOC_DESKTOP_TOKEN ?? "";
+    delete process.env.OPENEOC_DESKTOP_TOKEN;
+    if (!token) throw new Error("Desktop ownership token is missing");
+  }
+  if (service) await prepareDatabase(paths, config);
   process.env.OPENEOC_DATA_DIR = paths.blobs;
   // Offline address search: the gazetteer at the builder's output path, in a
   // checkout and in an install alike. Absent, search reports unavailable.
@@ -623,7 +675,7 @@ async function serveProfile(args) {
     oidc: null,
     logStream: rotatingLog(resolve(paths.logs, "server.log")),
     // The demo's synthetic accounts sign in with a password alone; production keeps two-step sign-in for administrators.
-    ...(config.profile === "demo" ? { requireAdminMfa: false } : {}),
+    ...(NORTH_COAST_PROFILES.has(config.profile) ? { requireAdminMfa: false } : {}),
   });
   const scheduler = new Scheduler(runtime, { lockUrl: runtimeUrl, logger: app.log });
   app.metrics.delivery = scheduler.delivery;
@@ -638,14 +690,18 @@ async function serveProfile(args) {
     const record = readPid(paths.appPid);
     if (record?.pid === process.pid && existsSync(paths.appPid)) unlinkSync(paths.appPid);
   };
-  app.post("/__desktop/stop", async (request, reply) => {
-    if (request.headers["x-openeoc-desktop-token"] !== token) return reply.code(404).send("Missing");
-    void reply.send({ status: "stopping" });
-    globalThis.setImmediate(() => void close().then(() => process.exit(0)));
-  });
+  if (!service)
+    app.post("/__desktop/stop", async (request, reply) => {
+      if (request.headers["x-openeoc-desktop-token"] !== token) return reply.code(404).send("Missing");
+      void reply.send({ status: "stopping" });
+      globalThis.setImmediate(() => void close().then(() => process.exit(0)));
+    });
   const runtimeConfig = await desktopRuntimeConfig(publicRoot);
   // A synthetic profile says so on every screen, beside the handling marking.
   if (config.synthetic) runtimeConfig.OPENEOC_SYNTHETIC_DATA = "1";
+  // A host with its own certificate authority offers the root on the sign-in page.
+  if (service && process.env.OPENEOC_TRUST_CERTIFICATE_URL)
+    runtimeConfig.OPENEOC_TRUST_CERTIFICATE_URL = process.env.OPENEOC_TRUST_CERTIFICATE_URL;
   registerStaticHost(app, { distRoot, publicRoot, runtimeConfig });
   await app.listen({ host: "127.0.0.1", port: config.httpPort });
   scheduler.start();
@@ -704,6 +760,7 @@ async function stopOwnedApp(paths, config) {
 
 async function stopProfile(args) {
   const profile = validateProfileName(String(args.profile ?? "production"));
+  refuseHostProfile(profile);
   const { paths, config } = loadProfile(profile);
   if (!config) {
     console.log(`PROFILE_STOPPED configured=false profile=${profile} app=false postgres=false browser=false`);
@@ -736,6 +793,198 @@ async function backupProfile(args) {
   } finally {
     if (started) stopPostgres(paths);
   }
+}
+
+function elevated() {
+  try {
+    execFileSync("net.exe", ["session"], { stdio: "ignore", windowsHide: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function runPowerShell(command) {
+  return execFileSync(powershell, ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", `$ErrorActionPreference = 'Stop'; ${command}`], {
+    encoding: "utf8",
+    windowsHide: true,
+  });
+}
+
+function serviceExists(name) {
+  try {
+    execFileSync("sc.exe", ["query", name], { stdio: "ignore", windowsHide: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function deleteService(name) {
+  if (serviceExists(name)) execFileSync("sc.exe", ["delete", name], { stdio: "ignore", windowsHide: true });
+}
+
+function stopHostServices() {
+  // -Force also stops the server, which depends on PostgreSQL.
+  runPowerShell("Get-Service -Name 'OpenSourceEOC-*' -ErrorAction SilentlyContinue | Stop-Service -Force");
+}
+
+function computerDnsName() {
+  try {
+    return runPowerShell("[Console]::Out.Write([System.Net.Dns]::GetHostEntry('').HostName)").trim();
+  } catch {
+    return "";
+  }
+}
+
+function removeTrustedRoot(thumbprint) {
+  if (!/^[0-9A-F]{40}$/.test(String(thumbprint))) throw new Error(`Certificate thumbprint is invalid: ${thumbprint}`);
+  runPowerShell(`Remove-Item -LiteralPath 'Cert:\\LocalMachine\\Root\\${thumbprint}' -ErrorAction SilentlyContinue`);
+}
+
+function httpsReady(url, ca) {
+  return new Promise((resolvePromise) => {
+    const request = httpsGet(`${url}/api/v1/ready`, { ca, timeout: 2_000 }, (response) => {
+      response.resume();
+      resolvePromise(response.statusCode === 200);
+    });
+    request.on("timeout", () => request.destroy());
+    request.on("error", () => resolvePromise(false));
+  });
+}
+
+async function waitFor(check, timeoutMs, failure) {
+  const end = Date.now() + timeoutMs;
+  while (Date.now() < end) {
+    if (await check()) return;
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 500));
+  }
+  throw new Error(failure);
+}
+
+/**
+ * Set up this computer as the network host, or bring an existing host to this
+ * build: the profile once, then the services, firewall rule, backup task and
+ * trusted root, replaced on every run. The profile's data is never reset.
+ */
+async function hostInstall(args) {
+  if (!elevated()) throw new Error("Setting up the host needs an administrator: run the setup program for all users, or an elevated PowerShell");
+  requiredFiles("database");
+  for (const [path, label] of [[caddyExe, "Caddy"], [winswExe, "WinSW"]])
+    if (!existsSync(path)) throw new Error(`${label} is missing: ${path}`);
+  const profile = validateProfileName(String(args.profile ?? "host"));
+  if (!isHostProfile(profile)) throw new Error(`HostInstall takes the host or host-demo profile, not ${profile}`);
+  const host = hostPaths(outRoot);
+  const prior = existsSync(host.config) ? readJson(host.config) : null;
+  if (prior && prior.profile !== profile)
+    throw new Error(`This computer already hosts the ${prior.profile} profile; remove it with -Action HostRemove first`);
+  const certificate = args.certificate
+    ? { cert: resolve(String(args.certificate)), key: resolve(String(args["certificate-key"] ?? "")) }
+    : null;
+  if (certificate)
+    for (const path of [certificate.cert, certificate.key])
+      if (!existsSync(path)) throw new Error(`Certificate file is missing: ${path}`);
+
+  stopHostServices();
+  secureDirectory(outRoot, hostGrants("M"));
+  if (!loadProfile(profile).config) await setupProfile({ ...args, profile });
+  const { paths, config } = loadProfile(profile);
+  if (config.state !== "ready") throw new Error(`Profile ${profile} is ${config.state}; it was not reset`);
+  await assertPortFree(443, "HTTPS", "0.0.0.0");
+  await assertPortFree(80, "HTTP", "0.0.0.0");
+
+  const names = hostNames({
+    hostname: hostname(),
+    fqdn: computerDnsName(),
+    interfaces: networkInterfaces(),
+    extra: String(args["host-name"] ?? "").split(",").filter(Boolean),
+  });
+  const definitions = hostDefinitions({
+    appRoot: repoRoot,
+    dataRoot: outRoot,
+    profile,
+    profileRoot: paths.root,
+    pgData: paths.pgData,
+    pgPort: config.pgPort,
+    httpPort: config.httpPort,
+    names,
+    nodeExecutable: process.execPath,
+    caddyExecutable: caddyExe,
+    distRoot,
+    publicRoot,
+    pgDist,
+    certificate,
+    powershell,
+  });
+
+  // PostgreSQL reads its port, loopback address and log folder from one included file.
+  writeFileSync(resolve(paths.pgData, "openeoc-host.conf"), definitions.postgresSettings, "utf8");
+  const postgresConf = resolve(paths.pgData, "postgresql.conf");
+  if (!readFileSync(postgresConf, "utf8").includes(POSTGRES_INCLUDE)) appendFileSync(postgresConf, `\n${POSTGRES_INCLUDE}\n`, "utf8");
+  ensureDirectory(host.root);
+  writeFileSync(host.caddyfile, definitions.caddyfile, "utf8");
+  secureDirectory(host.services, hostGrants("RX"));
+
+  for (const id of Object.values(SERVICES)) deleteService(id);
+  execFileSync(pgExecutable("pg_ctl"), definitions.postgresRegister, { stdio: "ignore", windowsHide: true });
+  for (const [id, definition] of [[SERVICES.server, definitions.services.server], [SERVICES.caddy, definitions.services.caddy]]) {
+    const wrapper = resolve(host.services, `${id}.exe`);
+    copyFileSync(winswExe, wrapper);
+    writeFileSync(resolve(host.services, `${id}.xml`), definition, "utf8");
+    execFileSync(wrapper, ["install"], { stdio: "ignore", windowsHide: true });
+  }
+  runPowerShell(definitions.firewall.remove);
+  runPowerShell(definitions.firewall.add);
+  // Task Scheduler reads its definition as UTF-16.
+  writeFileSync(host.backupTask, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(definitions.backupTask, "utf16le")]));
+  execFileSync("schtasks.exe", ["/Create", "/TN", BACKUP_TASK, "/XML", host.backupTask, "/F"], { stdio: "ignore", windowsHide: true });
+
+  runPowerShell(Object.values(SERVICES).map((id) => `Start-Service -Name '${id}'`).join("; "));
+  await waitFor(() => ready(`http://127.0.0.1:${config.httpPort}`, 1_000), 180_000, `The host server did not become ready; see the logs in ${paths.logs}`);
+  let rootThumbprint = null;
+  if (!certificate) {
+    await waitFor(() => existsSync(host.rootCertificate), 60_000, `Caddy did not create the certificate authority; see caddy.log in ${paths.logs}`);
+    const root = readFileSync(host.rootCertificate);
+    rootThumbprint = new X509Certificate(root).fingerprint.replaceAll(":", "");
+    if (prior?.rootThumbprint && prior.rootThumbprint !== rootThumbprint) removeTrustedRoot(prior.rootThumbprint);
+    // The host's own browsers trust it; other computers use the download on the sign-in page.
+    runPowerShell(`Import-Certificate -FilePath '${host.rootCertificate.replaceAll("'", "''")}' -CertStoreLocation Cert:\\LocalMachine\\Root | Out-Null`);
+    await waitFor(() => httpsReady("https://localhost", root), 60_000, `HTTPS did not answer on this host; see caddy.log in ${paths.logs}`);
+  }
+  writeJsonAtomic(host.config, {
+    schema: 1,
+    profile,
+    names,
+    publicUrl: definitions.publicUrl,
+    certificate: certificate ? "agency" : "internal",
+    rootThumbprint,
+    appRoot: repoRoot,
+    installedAt: new Date().toISOString(),
+  });
+  console.log(`HOST_READY profile=${profile} url=${definitions.publicUrl}`);
+  for (const name of names.filter((name) => name !== "localhost" && name !== "127.0.0.1")) console.log(`HOST_ADDRESS https://${name}`);
+}
+
+/** Remove the host's services, firewall rule, backup task and trusted root. The data stays. */
+async function hostRemove() {
+  const host = hostPaths(outRoot);
+  if (!existsSync(host.config)) {
+    console.log("HOST_NOT_INSTALLED");
+    return;
+  }
+  if (!elevated()) throw new Error("Removing the host needs an administrator");
+  const record = readJson(host.config);
+  stopHostServices();
+  for (const id of Object.values(SERVICES)) deleteService(id);
+  runPowerShell(firewallCommands({ caddyExecutable: caddyExe }).remove);
+  try {
+    execFileSync("schtasks.exe", ["/Delete", "/TN", BACKUP_TASK, "/F"], { stdio: "ignore", windowsHide: true });
+  } catch {
+    // The task was already gone.
+  }
+  if (record.rootThumbprint) removeTrustedRoot(record.rootThumbprint);
+  renameSync(host.config, resolve(host.root, "host-removed.json"));
+  console.log(`HOST_REMOVED profile=${record.profile} data=${outRoot}`);
 }
 
 async function profileStatus(args) {
@@ -778,6 +1027,9 @@ async function main() {
   if (action === "start") return startProfile(args);
   if (action === "launch") return launchProfile(args);
   if (action === "serve") return serveProfile(args);
+  if (action === "host-serve") return serveProfile(args, { service: true });
+  if (action === "hostinstall") return hostInstall(args);
+  if (action === "hostremove") return hostRemove();
   if (action === "status") return profileStatus(args);
   if (action === "stop") return stopProfile(args);
   if (action === "backup") return backupProfile(args);

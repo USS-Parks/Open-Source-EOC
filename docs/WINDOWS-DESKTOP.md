@@ -23,6 +23,13 @@ The source launcher accepts two operator profiles. Their data never shares a dat
 | `production` | Persistent operator data | 55440 | 8080 | `openeoc` |
 | `demo` | Clearly labeled synthetic demonstration | 55441 | 8081 | `openeoc_demo` |
 
+Two more profiles belong to the network host and run only as its Windows
+services, never through Start, Launch or Stop: `host` (PostgreSQL 55443, HTTP
+8083 on the loopback address behind Caddy, database `openeoc_host`) and
+`host-demo` (55444, 8084, `openeoc_host_demo`, the North Coast Storm
+demonstration). `-Action HostInstall` sets one up and `-Action HostRemove`
+takes its services down; see the [network host guide](guides/NETWORK-HOST.md).
+
 The project test harness can additionally expose an isolated synthetic
 `acceptance` profile on PostgreSQL 55442, HTTP 8082 and database
 `openeoc_acceptance` by setting `OPENEOC_ENABLE_ACCEPTANCE_PROFILE=1` in a

@@ -5,3 +5,6 @@
 .sign-in-lead { margin-top: 0; }
 .sign-in-code { font-family: var(--eoc-font-mono, monospace); overflow-wrap: anywhere; }
 .sign-in-codes { columns: 2; margin: 0 0 16px; }
+.sign-in-trust { font-size: 13px; }
+.sign-in-trust summary { cursor: pointer; }
+.sign-in-trust p { margin: 8px 0 0; }

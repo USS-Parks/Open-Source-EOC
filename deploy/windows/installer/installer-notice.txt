@@ -1,4 +1,4 @@
-Open Source EOC installs a loopback-only desktop application for the current Windows user.
+Open Source EOC installs for the current Windows user by default: a desktop application that only this computer can reach.
 
 Production opens a one-time setup prompt for your administrator account and jurisdiction. The installer does not supply production credentials.
 
@@ -6,6 +6,8 @@ Open Source EOC Demo creates clearly labeled synthetic exercise data. Do not use
 
 Application data, PostgreSQL data, secrets, logs, attachments, and browser state live in %LOCALAPPDATA%\Open Source EOC. Uninstall removes the application files and leaves that data intact for a later reinstall, backup, or deliberate administrator-managed removal.
 
-The installer includes the portable Node and PostgreSQL/PostGIS runtime and its selected local map assets. It does not install a Windows service or contact external network services while running.
+Installing for all users (the first question, which needs an administrator) also offers "Host for the network". The host serves Open Source EOC to the other computers and phones on this computer's network over HTTPS, with no internet connection needed. It installs three Windows services (PostgreSQL, the server, and Caddy for HTTPS), a firewall rule for ports 80 and 443, a daily backup task, and a certificate authority that this computer trusts. Its data lives in %ProgramData%\Open Source EOC. Uninstall removes the services, the rule, the task and the trust, and leaves the data.
+
+The installer includes the portable Node, PostgreSQL/PostGIS, Caddy and WinSW programs and the local map assets. It does not contact external network services while running.
 
 Their licenses, the OpenStreetMap attribution for the map data, and a written offer for the source code of the GPL-licensed PostGIS components are in THIRD-PARTY-NOTICES.txt and the licenses folder of the installed app.

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet('Build', 'Setup', 'Start', 'Status', 'Stop', 'Launch', 'Backup')]
+  [ValidateSet('Build', 'Setup', 'Start', 'Status', 'Stop', 'Launch', 'Backup', 'HostInstall', 'HostRemove')]
   [string]$Action = 'Launch',
   [string]$Profile = 'production',
   [ValidateRange(1024, 65535)]
@@ -13,7 +13,13 @@ param(
   [string]$AdminEmail,
   [string]$AdminName,
   [string]$JurisdictionSlug,
-  [string]$JurisdictionName
+  [string]$JurisdictionName,
+  # HostInstall: more names other computers use for this host, and an agency certificate in place of the host's own authority.
+  [string[]]$HostName,
+  [string]$Certificate,
+  [string]$CertificateKey,
+  # Keep the window open at the end, for a run the setup program opens.
+  [switch]$Pause
 )
 
 $ErrorActionPreference = 'Stop'
@@ -23,25 +29,34 @@ $entry = Join-Path $scriptRoot 'desktop.mjs'
 $installedMarker = Join-Path $repoRoot 'desktop-install.json'
 $profileDataRoot = Join-Path $scriptRoot 'out'
 $installed = Test-Path -LiteralPath $installedMarker
-$allowedProfiles = @('production', 'demo')
+$hostProfiles = @('host', 'host-demo')
+$allowedProfiles = @('production', 'demo') + $hostProfiles
 if (-not $installed -and $env:OPENEOC_ENABLE_ACCEPTANCE_PROFILE -eq '1') {
   $allowedProfiles += 'acceptance'
 }
 if ($Action -ne 'Build' -and $Profile -notin $allowedProfiles) {
   throw "Profile must be one of: $($allowedProfiles -join ', ')"
 }
+# The network host keeps its data for the whole computer; every other profile, for its Windows user.
+$hostData = $Action -in @('HostInstall', 'HostRemove') -or $Profile -in $hostProfiles
 if ($installed) {
   $bundledNode = Join-Path $repoRoot 'runtime/node/node.exe'
   if (-not (Test-Path -LiteralPath $bundledNode)) { throw "Installed Node runtime is missing: $bundledNode" }
-  if (-not $env:LOCALAPPDATA) { throw 'LOCALAPPDATA is required for installed Open Source EOC data.' }
   $env:OPENEOC_DESKTOP_PREBUILT = '1'
-  $env:OPENEOC_DESKTOP_DATA_ROOT = Join-Path $env:LOCALAPPDATA 'Open Source EOC'
+  if ($hostData) {
+    if (-not $env:ProgramData) { throw 'ProgramData is required for the Open Source EOC host data.' }
+    $env:OPENEOC_DESKTOP_DATA_ROOT = Join-Path $env:ProgramData 'Open Source EOC'
+  } else {
+    if (-not $env:LOCALAPPDATA) { throw 'LOCALAPPDATA is required for installed Open Source EOC data.' }
+    $env:OPENEOC_DESKTOP_DATA_ROOT = Join-Path $env:LOCALAPPDATA 'Open Source EOC'
+  }
   $env:OPENEOC_DESKTOP_DIST_ROOT = Join-Path $repoRoot 'web/dist'
   $env:OPENEOC_DESKTOP_PUBLIC_ROOT = Join-Path $repoRoot 'web/public'
   $env:OPENEOC_PG_DIST = Join-Path $repoRoot 'runtime/pgsql'
   $profileDataRoot = $env:OPENEOC_DESKTOP_DATA_ROOT
   $node = $bundledNode
 } else {
+  if ($env:OPENEOC_DESKTOP_DATA_ROOT) { $profileDataRoot = $env:OPENEOC_DESKTOP_DATA_ROOT }
   $node = (Get-Command node.exe -ErrorAction Stop).Source
 }
 Set-Location -LiteralPath $repoRoot
@@ -62,12 +77,22 @@ if ($Action -eq 'Backup' -and $PSBoundParameters.ContainsKey('KeepDays')) {
 if (($Action -eq 'Start' -or $Action -eq 'Launch') -and $NoBrowser) {
   $arguments += '--no-browser'
 }
+if ($Action -eq 'HostInstall') {
+  if ($HostName) { $arguments += "--host-name=$($HostName -join ',')" }
+  if ($Certificate) {
+    if (-not $CertificateKey) { throw 'An agency certificate needs its key: -CertificateKey' }
+    $arguments += "--certificate=$Certificate"
+    $arguments += "--certificate-key=$CertificateKey"
+  }
+}
 
 $secretPointer = [IntPtr]::Zero
 $plainPassword = $null
+$commandExit = 1
 try {
-  if (($Action -eq 'Setup' -or $Action -eq 'Launch') -and $Profile -eq 'production') {
-    $profileConfig = Join-Path $profileDataRoot 'profiles/production/profile.json'
+  $firstAdministrator = (($Action -eq 'Setup' -or $Action -eq 'Launch') -and $Profile -eq 'production') -or ($Action -eq 'HostInstall' -and $Profile -eq 'host')
+  if ($firstAdministrator) {
+    $profileConfig = Join-Path $profileDataRoot "profiles/$Profile/profile.json"
     $profileRoot = Split-Path -Parent $profileConfig
     $emptyProfile = -not (Test-Path -LiteralPath $profileRoot) -or @((Get-ChildItem -LiteralPath $profileRoot -Force -ErrorAction SilentlyContinue)).Count -eq 0
     if (-not (Test-Path -LiteralPath $profileConfig) -and $emptyProfile) {
@@ -89,6 +114,9 @@ try {
 
   & $node @arguments
   $commandExit = $LASTEXITCODE
+} catch {
+  if (-not $Pause) { throw }
+  Write-Host $_ -ForegroundColor Red
 } finally {
   Remove-Item Env:OPENEOC_BOOTSTRAP_PASSWORD -ErrorAction SilentlyContinue
   $plainPassword = $null
@@ -97,4 +125,8 @@ try {
   }
 }
 
+if ($Pause) {
+  Write-Host ''
+  Read-Host 'Press Enter to close this window' | Out-Null
+}
 if ($commandExit -ne 0) { exit $commandExit }

@@ -58,6 +58,12 @@ reviewed inputs:
    the installed application launcher remains compatible with Windows
    PowerShell 5.1.
 6. Inno Setup 6, which supplies `iscc.exe`, to compile the final executable.
+7. The network host's two programs, unpacked from their official releases:
+   a folder holding `caddy.exe` and Caddy's `LICENSE`, from
+   `caddy_2.11.4_windows_amd64.zip` checked against the SHA-512 in
+   `caddy_2.11.4_checksums.txt` on the Caddy release page; and a folder
+   holding `WinSW-x64.exe` from the WinSW 2.12.0 release with its
+   `LICENSE.txt` beside it.
 
 The default package includes the baseline offline PMTiles map,
 `ca_counties.geojson`, local fonts, NAPSG assets, the install icons, and the
@@ -106,6 +112,8 @@ files:
 | `<pgsql>/ogrfdw_LICENSE.md` | `ogr_fdw-LICENSE.md` | PostGIS bundle root |
 | `<pgsql>/pgpointcloud_COPYRIGHT` | `pointcloud-COPYRIGHT.txt` | PostGIS bundle root |
 | `<pgsql>/gdal-data/LICENSE.TXT` | `gdal-LICENSE.txt` | PostGIS bundle |
+| `<caddy>/LICENSE` | `caddy-LICENSE.txt` | Caddy release zip |
+| `<winsw>/LICENSE.txt` | `winsw-LICENSE.txt` | WinSW repository at the release tag |
 
 The bundle's files land at those paths when the bundle is copied over the
 PostgreSQL directory, as its `README.txt` directs. The stage also reads the
@@ -138,10 +146,13 @@ $repo = 'C:/Users/17076/Documents/Open Source EOC'
 # Both runtimes must carry the license files listed under License notices.
 $nodeRuntime = 'C:/runtimes/node-win-x64' # the official Node Windows zip, unpacked
 $postgresRuntime = "$repo/deploy/test-runtime/out/pgsql"
+$hostTools = 'C:/runtimes/host-tools' # caddy/ and winsw/, unpacked as in step 7
 & pwsh.exe -NoLogo -NoProfile -File "$repo/deploy/windows/installer/Stage-Installer.ps1" `
   -RepoRoot $repo `
   -NodeRuntime $nodeRuntime `
   -PostgresRuntime $postgresRuntime `
+  -CaddyRuntime "$hostTools/caddy" `
+  -WinswRuntime "$hostTools/winsw" `
   -DesktopBuildRoot "$repo/deploy/windows/out/build/app-dist" `
   -IncludeOptionalBasemaps `
   -Clean

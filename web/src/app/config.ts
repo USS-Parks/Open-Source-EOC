@@ -51,6 +51,8 @@ interface RuntimeConfig {
   readonly OPENEOC_TERRAIN_ATTRIBUTION?: string;
   /** "1" when the deployment serves a synthetic demonstration dataset. */
   readonly OPENEOC_SYNTHETIC_DATA?: string;
+  /** Where a host with its own certificate authority serves the authority's root certificate. */
+  readonly OPENEOC_TRUST_CERTIFICATE_URL?: string;
 }
 
 export interface StreetBasemapSettings {
@@ -67,6 +69,11 @@ function runtime(): RuntimeConfig {
 /** Whether this deployment serves a synthetic demonstration dataset, which every screen then marks. */
 export function syntheticData(): boolean {
   return runtime().OPENEOC_SYNTHETIC_DATA === "1";
+}
+
+/** The host's root certificate, which a browser is told to trust once, when the host made its own. */
+export function trustCertificateUrl(): string | undefined {
+  return runtime().OPENEOC_TRUST_CERTIFICATE_URL || undefined;
 }
 
 /** A deployment's own basemap style URL, if configured. */

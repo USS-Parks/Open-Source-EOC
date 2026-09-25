@@ -7,6 +7,11 @@ param(
   [string]$NodeRuntime,
   [Parameter(Mandatory)]
   [string]$PostgresRuntime,
+  # The network host's HTTPS front end and service wrapper: the unpacked official releases.
+  [Parameter(Mandatory)]
+  [string]$CaddyRuntime,
+  [Parameter(Mandatory)]
+  [string]$WinswRuntime,
   [string]$DesktopBuildRoot = (Join-Path $RepoRoot 'deploy/windows/out/build/app-dist'),
   [string]$Pnpm = 'pnpm.cmd',
   # The release version is the root package version unless a release names another.
@@ -179,6 +184,8 @@ $RepoRoot = AbsolutePath $RepoRoot
 $StageRoot = AbsolutePath $StageRoot
 $NodeRuntime = AbsolutePath $NodeRuntime
 $PostgresRuntime = AbsolutePath $PostgresRuntime
+$CaddyRuntime = AbsolutePath $CaddyRuntime
+$WinswRuntime = AbsolutePath $WinswRuntime
 $DesktopBuildRoot = AbsolutePath $DesktopBuildRoot
 $OptionalBasemapRoot = AbsolutePath $OptionalBasemapRoot
 $Pnpm = (Get-Command $Pnpm -CommandType Application -ErrorAction Stop | Select-Object -First 1).Path
@@ -196,6 +203,8 @@ foreach ($binary in @('createdb.exe', 'initdb.exe', 'pg_ctl.exe', 'pg_isready.ex
   Require-File (Join-Path $PostgresRuntime "bin/$binary") 'PostgreSQL runtime binary'
 }
 Require-File (Join-Path $PostgresRuntime 'share/extension/postgis.control') 'PostGIS extension control file'
+Require-File (Join-Path $CaddyRuntime 'caddy.exe') 'Caddy binary'
+Require-File (Join-Path $WinswRuntime 'WinSW-x64.exe') 'WinSW service wrapper'
 
 # The stage takes only the PostgreSQL distribution, never the parent test-runtime
 # directory or its cluster, password, logs, browser state, or other user data.
@@ -222,6 +231,8 @@ $runtimeLicenses = [ordered]@{
   'ogr_fdw-LICENSE.md' = Join-Path $PostgresRuntime 'ogrfdw_LICENSE.md'
   'pointcloud-COPYRIGHT.txt' = Join-Path $PostgresRuntime 'pgpointcloud_COPYRIGHT'
   'gdal-LICENSE.txt' = Join-Path $PostgresRuntime 'gdal-data/LICENSE.TXT'
+  'caddy-LICENSE.txt' = Join-Path $CaddyRuntime 'LICENSE'
+  'winsw-LICENSE.txt' = Join-Path $WinswRuntime 'LICENSE.txt'
 }
 foreach ($license in $runtimeLicenses.GetEnumerator()) {
   if (-not (Test-Path -LiteralPath $license.Value -PathType Leaf)) {
@@ -261,7 +272,7 @@ try {
   foreach ($license in $runtimeLicenses.GetEnumerator()) {
     Copy-File $license.Value (Join-Path $appRoot "licenses/$($license.Key)")
   }
-  foreach ($file in @('desktop.mjs', 'ts-loader.mjs', 'Open-Source-EOC.ps1', 'Open Source EOC.cmd')) {
+  foreach ($file in @('desktop.mjs', 'ts-loader.mjs', 'Open-Source-EOC.ps1', 'Open Source EOC.cmd', 'Test-OpenEOCHost.ps1')) {
     Copy-File (Join-Path $windowsRoot $file) (Join-Path $appRoot "deploy/windows/$file")
   }
   Copy-Tree (Join-Path $windowsRoot 'lib') (Join-Path $appRoot 'deploy/windows/lib')
@@ -323,6 +334,8 @@ try {
 
   Copy-Tree $NodeRuntime (Join-Path $appRoot 'runtime/node')
   Copy-Tree $PostgresRuntime (Join-Path $appRoot 'runtime/pgsql')
+  Copy-File (Join-Path $CaddyRuntime 'caddy.exe') (Join-Path $appRoot 'runtime/caddy/caddy.exe')
+  Copy-File (Join-Path $WinswRuntime 'WinSW-x64.exe') (Join-Path $appRoot 'runtime/winsw/WinSW-x64.exe')
   Assert-NoReparsePoints $appRoot
   [ordered]@{ schema = 1; version = $Version; prebuilt = $true } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $appRoot 'desktop-install.json') -Encoding utf8NoBOM
@@ -335,6 +348,8 @@ try {
     createdAt = [DateTime]::UtcNow.ToString('o')
     nodeRuntime = 'runtime/node/node.exe'
     postgresRuntime = 'runtime/pgsql'
+    caddyRuntime = 'runtime/caddy/caddy.exe'
+    winswRuntime = 'runtime/winsw/WinSW-x64.exe'
     optionalBasemapsBundled = [bool]$IncludeOptionalBasemaps
     source = $buildProvenance.source
     build = $buildProvenance.build

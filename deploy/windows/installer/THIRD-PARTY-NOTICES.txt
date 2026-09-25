@@ -5,7 +5,8 @@ Open Source EOC is licensed under the Apache License 2.0; see LICENSE and
 NOTICE beside this file. That license does not cover the third-party
 software and data listed here, which keep their own terms. Paths are
 relative to the folder that holds this file, the app folder of the
-installation (by default %LOCALAPPDATA%\Programs\Open Source EOC\app).
+installation (by default %LOCALAPPDATA%\Programs\Open Source EOC\app, or
+Program Files\Open Source EOC\app when installed for all users).
 Items marked "when included" ship only in a setup staged with the optional
 map archives.
 
@@ -47,6 +48,18 @@ PostGIS and the PostGIS Windows bundle
   GNU Readline, MobilityDB and other libraries in runtime/pgsql/bin and
   runtime/pgsql/lib, each under its own project's license. The bundle does
   not include their license texts.
+
+Caddy
+  runtime/caddy/caddy.exe, the official Caddy 2.11.4 Windows x64 release,
+  which serves the network host over HTTPS. Apache License 2.0:
+  licenses/caddy-LICENSE.txt. Caddy is built from Go modules under their
+  own licenses, mostly Apache 2.0, BSD and MIT; "caddy.exe build-info"
+  lists each module and version.
+
+WinSW
+  runtime/winsw/WinSW-x64.exe, WinSW 2.12.0, which runs the network host's
+  server and Caddy as Windows services. MIT License:
+  licenses/winsw-LICENSE.txt.
 
 TypeScript
   node_modules/typescript, which runs the server's TypeScript sources.

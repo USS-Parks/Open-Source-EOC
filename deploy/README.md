@@ -13,13 +13,11 @@ There is no Linux or Docker deployment. See
 | Machine | How it runs | Status |
 |---|---|---|
 | Windows workstation | The setup in [`windows/installer`](windows/installer/README.md) installs Node, PostgreSQL with PostGIS, the web application and the offline map archives for the signed-in user. The server listens on `127.0.0.1` only. | Built |
-| Windows host | One Windows computer serving every other person and agency over HTTPS | Not built yet |
+| Windows host | The same setup, installed for all users with **Host for the network**: PostgreSQL, the server and Caddy run as Windows services, and every other computer and phone on the network reaches the host over HTTPS with the host's own certificate authority. See the [network host guide](../docs/guides/NETWORK-HOST.md). | Built; the scripted check on a real install is Basho's to run |
 | macOS workstation and host | The same, on a Mac | Not built yet |
 
-The host and macOS work is scheduled in
-[the readiness plan](../docs/process/READINESS-PSPR-2026-09-24.md). Until the
-host exists, organizations on separate machines share an incident through
-federation between workstations, with federation's known limits.
+The macOS work is scheduled in
+[the readiness plan](../docs/process/READINESS-PSPR-2026-09-24.md).
 
 The [Windows desktop guide](../docs/WINDOWS-DESKTOP.md) covers the launcher's
 profiles, setup, start, stop and status from a source checkout, and the
@@ -147,15 +145,20 @@ Nothing in the running system calls out: the API talks only to its own
 PostgreSQL, the map, fonts and icons are served from local files, and no
 update check, telemetry or tile fetch exists. The setup carries every runtime
 it needs, so it installs on a machine that has never had a network
-connection. The proof (a recorded run of every connection the installed system
-makes, and a run with the network unplugged) is scheduled in
+connection. A network host serves a building or a site over its own local
+network, a switch or a Wi-Fi router with no internet line, with its own
+certificate authority in place of a public one. The proof (a recorded run of
+every connection the installed system makes, and a run with the network
+unplugged) is scheduled in
 [the readiness plan](../docs/process/READINESS-PSPR-2026-09-24.md).
 
 ## Backup and restore
 
 On Windows, `-Action Backup -Profile production` dumps the running profile's
 database and copies its file store into the profile's `backups` directory,
-keeping 14 days by default. The
+keeping 14 days by default. A network host runs the same backup for its
+`host` or `host-demo` profile every day at 02:30 from its own scheduled task.
+The
 [disaster recovery runbook](../docs/guides/DISASTER-RECOVERY.md) covers the
 recovery targets, the scheduled task, copies off the machine, restores and
 the quarterly restore test.

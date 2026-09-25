@@ -5,6 +5,9 @@ const acceptanceProfile = Object.freeze({ pgPort: 55442, httpPort: 8082, databas
 export const PROFILE_DEFAULTS = Object.freeze({
   production: Object.freeze({ pgPort: 55440, httpPort: 8080, database: "openeoc", synthetic: false }),
   demo: Object.freeze({ pgPort: 55441, httpPort: 8081, database: "openeoc_demo", synthetic: true }),
+  // The network host's profiles, run as services; the HTTP port is loopback only, behind Caddy.
+  host: Object.freeze({ pgPort: 55443, httpPort: 8083, database: "openeoc_host", synthetic: false }),
+  "host-demo": Object.freeze({ pgPort: 55444, httpPort: 8084, database: "openeoc_host_demo", synthetic: true }),
   ...(process.env.OPENEOC_ENABLE_ACCEPTANCE_PROFILE === "1" ? { acceptance: acceptanceProfile } : {}),
 });
 

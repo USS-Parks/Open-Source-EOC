@@ -57,8 +57,18 @@ for you.
 - Uninstall from Windows **Settings > Apps**. Your demonstration data stays in
   `%LOCALAPPDATA%\Open Source EOC` until you delete that folder yourself.
 
+## Try it across several devices
+
+To have other computers and phones on your network use the demonstration,
+run the setup again and choose **Install for all users**, then tick **Host
+for the network** and **With the North Coast Storm demonstration**. The
+setup installs the host's services, shows the addresses the other devices
+open, and checks itself. Each device trusts the host's certificate once,
+from **Trust this server** on the sign-in page. The internet is not needed:
+a Wi-Fi router with its internet line unplugged will do. The
+[network host guide](docs/guides/NETWORK-HOST.md) has every step.
+
 ## What this build does not do yet
 
-It serves one computer. Letting other machines and agencies connect to one
-host, macOS, and the proofs for 150 users and for running disconnected are
-the next units of [the readiness plan](docs/process/READINESS-PSPR-2026-09-24.md).
+macOS, and the proofs for 150 users and for running disconnected, are the
+next units of [the readiness plan](docs/process/READINESS-PSPR-2026-09-24.md).

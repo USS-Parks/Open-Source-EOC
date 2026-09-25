@@ -27,6 +27,7 @@ import {
 } from "./lib/static-host.mjs";
 import { rotateIfLarger, rotatingLog } from "./lib/rotating-log.mjs";
 import { backupBeforeMigrate, scheduledBackup } from "./lib/pre-upgrade-backup.mjs";
+import { caddyfile, commandLine, hostDefinitions, hostNames, parseWinswService } from "./lib/host.mjs";
 
 function fixture() {
   const root = mkdtempSync(resolve(tmpdir(), "openeoc-windows-"));
@@ -183,9 +184,9 @@ test("shipped desktop profiles have separate default ports, databases, and stora
     root: profilePaths(root, profile).root,
   }));
   assert.equal(validateProfilePlans(plans), true);
-  assert.deepEqual(Object.keys(PROFILE_DEFAULTS), ["production", "demo"]);
-  assert.equal(new Set(plans.flatMap((plan) => [plan.pgPort, plan.httpPort])).size, 4);
-  assert.equal(new Set(Object.values(PROFILE_DEFAULTS).map((item) => item.database)).size, 2);
+  assert.deepEqual(Object.keys(PROFILE_DEFAULTS), ["production", "demo", "host", "host-demo"]);
+  assert.equal(new Set(plans.flatMap((plan) => [plan.pgPort, plan.httpPort])).size, 8);
+  assert.equal(new Set(Object.values(PROFILE_DEFAULTS).map((item) => item.database)).size, 4);
   assert.notEqual(profilePaths(root, "demo").pgData, profilePaths(root, "production").pgData);
   assert.throws(() => profilePaths(root, "acceptance"), /Profile must be one of/);
 });
@@ -355,5 +356,125 @@ test("server and launcher logs rotate by size and keep a bounded history", () =>
     assert.equal(readFileSync(`${launcher}.1`, "utf8"), "larger than ten bytes");
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the host is reached by its computer name, DNS name, added names and IPv4 addresses", () => {
+  const interfaces = {
+    Ethernet: [{ family: "IPv4", address: "192.168.1.20", internal: false }, { family: "IPv6", address: "fe80::1", internal: false }],
+    "Wi-Fi": [{ family: "IPv4", address: "169.254.10.4", internal: false }, { family: "IPv4", address: "10.0.0.7", internal: false }],
+    Loopback: [{ family: "IPv4", address: "127.0.0.1", internal: true }],
+  };
+  assert.deepEqual(
+    hostNames({ hostname: "EOC-HOST", fqdn: "eoc-host.county.local", interfaces, extra: ["eoc.county.gov"] }),
+    ["eoc-host", "eoc-host.county.local", "eoc.county.gov", "192.168.1.20", "10.0.0.7", "localhost", "127.0.0.1"],
+  );
+  assert.deepEqual(hostNames({ hostname: "EOC_HOST", fqdn: "EOC_HOST", interfaces: {} }), ["localhost", "127.0.0.1"]);
+  assert.throws(() => hostNames({ hostname: "eoc", extra: ["eoc.county.gov { respond hi }"] }), /not a host name/);
+});
+
+test("host definitions run PostgreSQL, the server and Caddy as LocalService behind HTTPS with the host's own authority", () => {
+  const input = {
+    appRoot: "C:\\Program Files\\Open Source EOC\\app",
+    dataRoot: "C:\\ProgramData\\Open Source EOC",
+    profile: "host",
+    profileRoot: "C:\\ProgramData\\Open Source EOC\\profiles\\host",
+    pgData: "C:\\ProgramData\\Open Source EOC\\profiles\\host\\pgdata",
+    pgPort: 55443,
+    httpPort: 8083,
+    names: ["eoc-host", "192.168.1.20", "localhost", "127.0.0.1"],
+    nodeExecutable: "C:\\Program Files\\Open Source EOC\\app\\runtime\\node\\node.exe",
+    caddyExecutable: "C:\\Program Files\\Open Source EOC\\app\\runtime\\caddy\\caddy.exe",
+    distRoot: "C:\\Program Files\\Open Source EOC\\app\\web\\dist",
+    publicRoot: "C:\\Program Files\\Open Source EOC\\app\\web\\public",
+    pgDist: "C:\\Program Files\\Open Source EOC\\app\\runtime\\pgsql",
+    powershell: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+  };
+  const host = hostDefinitions(input);
+  assert.equal(host.publicUrl, "https://eoc-host");
+
+  const server = parseWinswService(host.services.server);
+  assert.equal(server.id, "OpenSourceEOC-Server");
+  assert.equal(server.executable, input.nodeExecutable);
+  assert.equal(server.arguments, '"C:\\Program Files\\Open Source EOC\\app\\deploy\\windows\\desktop.mjs" host-serve --profile=host');
+  assert.equal(server.workingDirectory, input.appRoot);
+  assert.deepEqual(server.env, {
+    OPENEOC_DESKTOP_PREBUILT: "1",
+    OPENEOC_DESKTOP_DATA_ROOT: input.dataRoot,
+    OPENEOC_DESKTOP_DIST_ROOT: input.distRoot,
+    OPENEOC_DESKTOP_PUBLIC_ROOT: input.publicRoot,
+    OPENEOC_PG_DIST: input.pgDist,
+    OPENEOC_TRUST_PROXY: "127.0.0.1",
+    OPENEOC_PUBLIC_URL: "https://eoc-host",
+    OPENEOC_TRUST_CERTIFICATE_URL: "/trust/openeoc-root.crt",
+  });
+  for (const definition of [host.services.server, host.services.caddy]) {
+    assert.match(definition, /<serviceaccount>\s*<domain>NT AUTHORITY<\/domain>\s*<user>LocalService<\/user>\s*<\/serviceaccount>/);
+    assert.match(definition, /<startmode>Automatic<\/startmode>/);
+    assert.match(definition, /<onfailure action="restart" delay="10 sec" \/>/);
+    assert.match(definition, /<logpath>C:\\ProgramData\\Open Source EOC\\profiles\\host\\logs<\/logpath>/);
+  }
+  assert.match(host.services.server, /<depend>OpenSourceEOC-PostgreSQL<\/depend>/);
+  const caddy = parseWinswService(host.services.caddy);
+  assert.equal(caddy.executable, input.caddyExecutable);
+  assert.equal(caddy.arguments, 'run --config "C:\\ProgramData\\Open Source EOC\\host\\Caddyfile" --adapter caddyfile');
+  assert.equal(caddy.env.XDG_DATA_HOME, "C:\\ProgramData\\Open Source EOC\\host\\caddy");
+
+  const sites = host.caddyfile.split("\n").find((line) => line.startsWith("https://"));
+  assert.equal(sites, "https://eoc-host, https://192.168.1.20, https://localhost, https://127.0.0.1 {");
+  for (const line of ["admin off", "persist_config off", "skip_install_trust", "tls internal", "reverse_proxy 127.0.0.1:8083",
+    "handle /trust/openeoc-root.crt {", "rewrite * /pki/authorities/local/root.crt", 'root "C:/ProgramData/Open Source EOC/host/caddy"'])
+    assert.ok(host.caddyfile.includes(line), line);
+  assert.doesNotMatch(host.caddyfile, /default_bind/);
+
+  assert.match(host.backupTask, /<UserId>S-1-5-19<\/UserId>/);
+  assert.match(host.backupTask, /<DaysInterval>1<\/DaysInterval>/);
+  assert.ok(host.backupTask.replaceAll("&quot;", '"').includes('-File "C:\\Program Files\\Open Source EOC\\app\\deploy\\windows\\Open-Source-EOC.ps1" -Action Backup -Profile host'));
+  assert.match(host.firewall.add, /-Direction Inbound -Action Allow -Protocol TCP -LocalPort 80,443 -Program 'C:\\Program Files\\Open Source EOC\\app\\runtime\\caddy\\caddy\.exe' -Profile Any/);
+  assert.match(host.firewall.remove, /Get-NetFirewallRule -Name 'OpenSourceEOC-Host'/);
+  assert.deepEqual(host.postgresRegister, ["register", "-N", "OpenSourceEOC-PostgreSQL", "-U", "NT AUTHORITY\\LocalService", "-D", input.pgData, "-S", "auto", "-w", "-t", "120"]);
+  assert.match(host.postgresSettings, /^listen_addresses = '127\.0\.0\.1'$/m);
+  assert.match(host.postgresSettings, /^port = 55443$/m);
+  assert.match(host.postgresSettings, /^log_directory = 'C:\/ProgramData\/Open Source EOC\/profiles\/host\/logs'$/m);
+
+  const agency = hostDefinitions({ ...input, certificate: { cert: "C:\\certs\\eoc.pem", key: "C:\\certs\\eoc.key" } });
+  assert.ok(agency.caddyfile.includes('tls "C:/certs/eoc.pem" "C:/certs/eoc.key"'));
+  assert.doesNotMatch(agency.caddyfile, /tls internal|\/trust\//);
+  assert.equal(parseWinswService(agency.services.server).env.OPENEOC_TRUST_CERTIFICATE_URL, undefined);
+  assert.throws(() => hostDefinitions({ ...input, profile: "production" }), /Not a host profile/);
+});
+
+test("host definitions refuse values that would change their meaning", () => {
+  assert.throws(() => commandLine(['a"b']), /cannot contain a quote/);
+  assert.equal(commandLine(["run", "C:\\a b\\c", ""]), 'run "C:\\a b\\c" ""');
+  const base = { names: ["localhost"], upstreamPort: 8083, storage: "C:/s", logFile: "C:/l/caddy.log", caName: "Open Source EOC localhost" };
+  assert.throws(() => caddyfile({ ...base, storage: 'C:/s" }' }), /cannot contain quotes, braces or line breaks/);
+  const loopback = caddyfile({ ...base, httpsPort: 9443, httpPort: 9080, bind: "127.0.0.1" });
+  assert.match(loopback, /^\tdefault_bind 127\.0\.0\.1$/m);
+  assert.match(loopback, /^https:\/\/localhost:9443 \{$/m);
+  const escaped = hostDefinitions({
+    appRoot: "C:\\R&D\\app", dataRoot: "C:\\data", profile: "host-demo", profileRoot: "C:\\data\\profiles\\host-demo", pgData: "C:\\p",
+    pgPort: 55444, httpPort: 8084, names: ["localhost"], nodeExecutable: "C:\\R&D\\app\\node.exe", caddyExecutable: "C:\\c.exe",
+    distRoot: "C:\\d", publicRoot: "C:\\u", pgDist: "C:\\g", powershell: "C:\\ps.exe",
+  });
+  assert.match(escaped.services.server, /<executable>C:\\R&amp;D\\app\\node\.exe<\/executable>/);
+  assert.equal(parseWinswService(escaped.services.server).executable, "C:\\R&D\\app\\node.exe");
+});
+
+test("a host profile is never started or stopped as a desktop profile, and removing no host changes nothing", { skip: process.platform !== "win32" }, () => {
+  const dataRoot = mkdtempSync(resolve(tmpdir(), "openeoc-host-"));
+  const launcher = fileURLToPath(new URL("./desktop.mjs", import.meta.url));
+  try {
+    for (const action of ["start", "stop", "launch"]) {
+      const result = spawnSync(process.execPath, [launcher, action, "--profile=host"], { encoding: "utf8", env: { ...process.env, OPENEOC_DESKTOP_DATA_ROOT: dataRoot } });
+      assert.equal(result.status, 1, action);
+      assert.match(result.stderr, /runs as Windows services; set it up with -Action HostInstall/);
+    }
+    const removed = spawnSync(process.execPath, [launcher, "hostremove"], { encoding: "utf8", env: { ...process.env, OPENEOC_DESKTOP_DATA_ROOT: dataRoot } });
+    assert.equal(removed.status, 0, removed.stderr);
+    assert.match(removed.stdout, /HOST_NOT_INSTALLED/);
+    assert.deepEqual(readdirSync(dataRoot), []);
+  } finally {
+    rmSync(dataRoot, { recursive: true, force: true });
   }
 });
