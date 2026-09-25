@@ -19,7 +19,9 @@ pg_app_url="https://github.com/PostgresApp/PostgresApp/releases/download/v2.9.6/
 pg_app_sha256="2689dc64d6a02e0a66e4585616919060d8fbf5bb06886fccc05b7f87638bf081"
 pg_prefix="/Applications/Postgres.app/Contents/Versions/16"
 
-work="$(mktemp -d)"
+# mktemp's folder sits under /var, a link to /private/var; pnpm's relative
+# store paths need the one real spelling or they land at /Users/var.
+work="$(cd "$(mktemp -d)" && pwd -P)"
 app="$out/Open Source EOC.app"
 res="$app/Contents/Resources/app"
 rm -rf "$app"
