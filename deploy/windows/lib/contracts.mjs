@@ -91,13 +91,21 @@ export function parseWindowsCommandLine(commandLine) {
   return args;
 }
 
+// macOS's ps prints a process's arguments joined by spaces, so a path with a
+// space in it cannot be split back out; there the exact arguments the launcher
+// spawned are found as text.
 export function matchesOwnedAppCommand(commandLine, { scriptPath, profile }) {
+  if (process.platform === "darwin") return String(commandLine ?? "").includes(`${scriptPath} serve --profile=${profile}`);
   const args = parseWindowsCommandLine(commandLine).map(normalizeCommand);
   const script = normalizeCommandPath(scriptPath);
   return args.includes(script) && args.includes("serve") && args.includes(`--profile=${profile.toLowerCase()}`);
 }
 
 export function matchesOwnedBrowserCommand(commandLine, { userDataDir, url }) {
+  if (process.platform === "darwin") {
+    const text = String(commandLine ?? "");
+    return text.includes(`--app=${url}`) && text.includes(`--user-data-dir=${userDataDir}`);
+  }
   const args = parseWindowsCommandLine(commandLine).map(normalizeCommand);
   const expectedDirectory = normalizeCommandPath(userDataDir);
   return args.includes(`--app=${normalizeCommand(url)}`) && args.includes(`--user-data-dir=${expectedDirectory}`);

@@ -1,0 +1,31 @@
+name: macOS demo
+
+# Builds the North Coast Storm demo for macOS as a disk image on a Mac, opens
+# it on the runner to prove the demo starts, and keeps the image as the run's
+# artifact for download.
+on:
+  workflow_dispatch:
+
+jobs:
+  dmg:
+    name: macOS demo disk image
+    runs-on: macos-14
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: bash deploy/macos/build-app.sh "$RUNNER_TEMP/out"
+      - run: bash deploy/macos/smoke.sh "$RUNNER_TEMP/out"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: open-source-eoc-macos
+          path: |
+            ${{ runner.temp }}/out/*.dmg
+            ${{ runner.temp }}/out/*.dmg.sha256
+          retention-days: 7
+          compression-level: 0

@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+# Build the North Coast Storm demo for macOS as "Open Source EOC.app" in a disk
+# image. Runs on a Mac (a GitHub Actions macOS runner) from the repository
+# root after `pnpm install`. The app carries Node for Apple silicon and Intel
+# and PostgreSQL 16 with PostGIS from Postgres.app, each checked against its
+# pinned checksum, and the same server, web build and public files as the
+# Windows setup.
+#
+#   deploy/macos/build-app.sh <output directory>
+set -euo pipefail
+
+out="${1:?give the output directory}"
+root="$(pwd)"
+version="$(node -p 'require("./package.json").version')"
+node_version="v24.15.0"
+node_arm64_sha256="372331b969779ab5d15b949884fc6eaf88d5afe87bde8ba881d6400b9100ffc4"
+node_x64_sha256="ffd5ee293467927f3ee731a553eb88fd1f48cf74eebc2d74a6babe4af228673b"
+pg_app_url="https://github.com/PostgresApp/PostgresApp/releases/download/v2.9.6/Postgres-2.9.6-16.dmg"
+pg_app_sha256="2689dc64d6a02e0a66e4585616919060d8fbf5bb06886fccc05b7f87638bf081"
+pg_prefix="/Applications/Postgres.app/Contents/Versions/16"
+
+work="$(mktemp -d)"
+app="$out/Open Source EOC.app"
+res="$app/Contents/Resources/app"
+rm -rf "$app"
+mkdir -p "$app/Contents/MacOS" "$res/runtime"
+
+fetch() { # url file sha256
+  curl -fsSL -o "$2" "$1"
+  echo "$3  $2" | shasum -a 256 -c - >/dev/null || { echo "$1 does not match its pinned checksum" >&2; exit 1; }
+}
+
+echo "== web build"
+node deploy/windows/desktop.mjs build
+
+echo "== Node"
+for arch in arm64 x64; do
+  sha="node_${arch}_sha256"
+  fetch "https://nodejs.org/dist/$node_version/node-$node_version-darwin-$arch.tar.gz" "$work/node-$arch.tar.gz" "${!sha}"
+  tar -xzf "$work/node-$arch.tar.gz" -C "$work"
+  mv "$work/node-$node_version-darwin-$arch" "$res/runtime/node-$arch"
+done
+
+echo "== PostgreSQL with PostGIS"
+fetch "$pg_app_url" "$work/postgres.dmg" "$pg_app_sha256"
+hdiutil attach -nobrowse -readonly -mountpoint "$work/pgmount" "$work/postgres.dmg" >/dev/null
+ditto "$work/pgmount/Postgres.app/Contents/Versions/16" "$res/runtime/pgsql"
+hdiutil detach "$work/pgmount" >/dev/null
+ls "$res/runtime/pgsql" "$res/runtime/pgsql/share"
+
+# Postgres.app expects its own place in /Applications. Any library path that
+# names it is rewritten relative to the file that loads it, and each changed
+# file is signed again (ad hoc), so the runtime works from inside the app.
+pg="$res/runtime/pgsql"
+relocated=0
+while IFS= read -r -d '' file; do
+  file -b "$file" | grep -q "Mach-O" || continue
+  changed=0
+  id="$(otool -D "$file" | sed -n 2p)"
+  if [[ "$id" == "$pg_prefix"/* ]]; then
+    install_name_tool -id "@loader_path/$(basename "$id")" "$file" 2>/dev/null
+    changed=1
+  fi
+  while IFS= read -r dep; do
+    [[ "$dep" == "$pg_prefix"/* ]] || continue
+    target="$pg/${dep#"$pg_prefix"/}"
+    rel="$(python3 -c 'import os,sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))' "$target" "$(dirname "$file")")"
+    install_name_tool -change "$dep" "@loader_path/$rel" "$file" 2>/dev/null
+    changed=1
+  done < <(otool -L "$file" | tail -n +2 | awk '{print $1}')
+  if [ "$changed" = 1 ]; then
+    codesign --force --sign - "$file" 2>/dev/null
+    relocated=$((relocated + 1))
+  fi
+done < <(find "$pg" -type f -print0)
+echo "relocated $relocated files"
+left="$(find "$pg" -type f -print0 | xargs -0 file | grep Mach-O | cut -d: -f1 | while IFS= read -r f; do otool -L "$f" | tail -n +2 | awk '{print $1}' | grep -v '^@\|^/usr/lib/\|^/System/' | sed "s|^|$f: |"; done || true)"
+if [ -n "$left" ]; then echo "Library paths outside the app remain:"; echo "$left" | head -40; exit 1; fi
+
+echo "== the app"
+cp package.json LICENSE NOTICE "$res/"
+cp deploy/windows/installer/THIRD-PARTY-NOTICES.txt "$res/"
+mkdir -p "$res/deploy/windows"
+cp deploy/windows/desktop.mjs deploy/windows/ts-loader.mjs "$res/deploy/windows/"
+cp -R deploy/windows/lib "$res/deploy/windows/lib"
+mkdir -p "$res/server"
+cp server/package.json "$res/server/"
+cp -R server/src "$res/server/src"
+# Test sources carry synthetic fixture accounts; the app keeps only the demo's.
+find "$res/server/src" -type d -name __tests__ -prune -exec rm -rf {} +
+cp -R server/migrations "$res/server/migrations"
+pnpm --filter=@openeoc/server deploy --prod --legacy --node-linker=hoisted "$work/resolved-server"
+cp -R "$work/resolved-server/node_modules" "$res/server/node_modules"
+mkdir -p "$res/node_modules"
+cp -RL node_modules/typescript "$res/node_modules/typescript"
+mkdir -p "$res/web"
+cp -R deploy/windows/out/build/app-dist "$res/web/dist"
+mkdir -p "$res/web/public"
+find web/public -maxdepth 1 -type f -exec cp {} "$res/web/public/" \;
+for dir in fonts napsg icons basemap; do
+  [ -d "web/public/$dir" ] && cp -R "web/public/$dir" "$res/web/public/$dir"
+done
+printf '{\n  "schema": 1,\n  "version": "%s",\n  "prebuilt": true\n}\n' "$version" > "$res/desktop-install.json"
+
+cp deploy/macos/launcher.sh "$app/Contents/MacOS/Open Source EOC"
+chmod 755 "$app/Contents/MacOS/Open Source EOC"
+sed "s/@VERSION@/$version/g" deploy/macos/Info.plist > "$app/Contents/Info.plist"
+codesign --force --sign - "$app"
+
+echo "== disk image"
+stage="$work/dmg"
+mkdir -p "$stage"
+ditto "$app" "$stage/Open Source EOC.app"
+ln -s /Applications "$stage/Applications"
+cp deploy/macos/READ-ME-FIRST.txt "$stage/"
+dmg="$out/Open-Source-EOC-$version-macOS.dmg"
+rm -f "$dmg"
+hdiutil create -volname "Open Source EOC $version" -srcfolder "$stage" -ov -format UDZO "$dmg" >/dev/null
+shasum -a 256 "$dmg" | cut -d' ' -f1 | tr -d '\n' > "$dmg.sha256"
+echo "DMG_READY file=$dmg bytes=$(stat -f %z "$dmg") sha256=$(cat "$dmg.sha256")"

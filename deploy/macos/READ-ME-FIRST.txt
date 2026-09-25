@@ -1,0 +1,22 @@
+Open Source EOC for macOS: the North Coast Storm demo
+macOS 13 or later, Apple silicon or Intel. Synthetic data only.
+
+1. Drag "Open Source EOC" into Applications.
+
+2. The app is not yet signed by an Apple developer, so macOS asks before
+   the first open. In Applications, Control-click "Open Source EOC", choose
+   Open, then choose Open again. On macOS 15 and later, if there is no Open
+   button: open it once, then in System Settings, Privacy & Security, choose
+   "Open Anyway".
+
+3. The first open sets up the demo, about two minutes, then opens it in
+   Chrome or Edge as an app window, or in your default browser. Later opens
+   take seconds. Sign in with the demo accounts listed in
+   TRY-IT-ON-WINDOWS.md in the repository; the demo is the same.
+
+4. To stop the demo, run this in Terminal:
+   "/Applications/Open Source EOC.app/Contents/MacOS/Open Source EOC" stop
+
+Data lives in ~/Library/Application Support/Open Source EOC and the log in
+~/Library/Logs/Open Source EOC. The network host runs on Windows; Macs
+reach a host with Safari or Chrome.

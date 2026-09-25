@@ -3,6 +3,7 @@ import { X509Certificate, randomBytes, randomUUID } from "node:crypto";
 import { execFileSync, spawn } from "node:child_process";
 import {
   appendFileSync,
+  chmodSync,
   closeSync,
   copyFileSync,
   existsSync,
@@ -18,7 +19,7 @@ import { get as httpsGet } from "node:https";
 import { createServer } from "node:net";
 import { hostname, networkInterfaces } from "node:os";
 import { Writable } from "node:stream";
-import { dirname, resolve } from "node:path";
+import { delimiter, dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   PROFILE_DEFAULTS,
@@ -48,6 +49,9 @@ import {
 } from "./lib/host.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
+// The workstation and the demo run on Windows and macOS; the network host runs on Windows.
+const onMac = process.platform === "darwin";
+const EXE = onMac ? "" : ".exe";
 const repoRoot = resolve(process.env.OPENEOC_DESKTOP_APP_ROOT ?? resolve(dirname(scriptPath), "../.."));
 const prebuiltDesktop = process.env.OPENEOC_DESKTOP_PREBUILT === "1";
 const outRoot = resolve(process.env.OPENEOC_DESKTOP_DATA_ROOT ?? resolve(repoRoot, "deploy/windows/out"));
@@ -92,9 +96,14 @@ function currentIdentity() {
   return execFileSync("whoami.exe", { encoding: "utf8", windowsHide: true }).trim();
 }
 
-function secureDirectory(path, grants = [`${currentIdentity()}:(OI)(CI)F`]) {
+function secureDirectory(path, grants) {
   ensureDirectory(path);
-  execFileSync("icacls.exe", [path, "/inheritance:r", "/grant:r", ...grants], {
+  // On a Mac the folder is its user's alone.
+  if (onMac) {
+    chmodSync(path, 0o700);
+    return;
+  }
+  execFileSync("icacls.exe", [path, "/inheritance:r", "/grant:r", ...(grants ?? [`${currentIdentity()}:(OI)(CI)F`])], {
     stdio: "ignore",
     windowsHide: true,
   });
@@ -125,9 +134,11 @@ function requiredFiles(kind) {
   ];
   if (!prebuiltDesktop) files.push(resolve(repoRoot, "web/node_modules/vite/dist/node/index.js"));
   if (kind === "database") {
-    for (const executable of ["createdb.exe", "initdb.exe", "pg_ctl.exe", "pg_isready.exe"])
-      files.push(resolve(pgBin, executable));
-    files.push(resolve(pgDist, "share/extension/postgis.control"));
+    for (const executable of ["createdb", "initdb", "pg_ctl", "pg_isready"])
+      files.push(resolve(pgBin, `${executable}${EXE}`));
+    // Postgres.app on a Mac keeps its extensions under share/postgresql.
+    const postgis = ["share/extension/postgis.control", "share/postgresql/extension/postgis.control"].map((path) => resolve(pgDist, path));
+    files.push(postgis.find((path) => existsSync(path)) ?? postgis[0]);
   }
   const missing = files.filter((path) => !existsSync(path));
   if (missing.length > 0)
@@ -140,7 +151,7 @@ function sourceFingerprint() {
 
 function gitRevision() {
   try {
-    return execFileSync("git.exe", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8", windowsHide: true }).trim();
+    return execFileSync(onMac ? "git" : "git.exe", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8", windowsHide: true }).trim();
   } catch {
     return "unavailable";
   }
@@ -227,13 +238,15 @@ async function assertPortFree(port, label, host = "127.0.0.1") {
 }
 
 function pgExecutable(name) {
-  return resolve(pgBin, `${name}.exe`);
+  return resolve(pgBin, `${name}${EXE}`);
 }
 
 function pgEnvironment(password, config) {
   return {
     ...process.env,
-    PATH: `${pgBin};${process.env.PATH ?? ""}`,
+    PATH: `${pgBin}${delimiter}${process.env.PATH ?? ""}`,
+    // PostGIS on a Mac finds its projection data beside the runtime.
+    ...(onMac && existsSync(resolve(pgDist, "share/proj")) ? { PROJ_DATA: resolve(pgDist, "share/proj"), PROJ_LIB: resolve(pgDist, "share/proj") } : {}),
     PGHOST: "127.0.0.1",
     PGPORT: String(config.pgPort),
     PGUSER: "postgres",
@@ -490,6 +503,13 @@ async function setupProfile(args) {
 
 function processCommandLine(pid) {
   if (!Number.isSafeInteger(pid) || pid <= 0) return null;
+  if (onMac) {
+    try {
+      return execFileSync("ps", ["-ww", "-o", "command=", "-p", String(pid)], { encoding: "utf8" }).trim() || null;
+    } catch {
+      return null;
+    }
+  }
   try {
     const command = `$p=Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}" -ErrorAction Stop; [Console]::Out.Write($p.CommandLine)`;
     return execFileSync(powershell, ["-NoLogo", "-NoProfile", "-Command", command], {
@@ -549,13 +569,22 @@ function openAppWindow(url, userDataDir, pidPath) {
     if (!commandLine) removeOwnedStalePid(paths.browserPid, existing.pid);
     else throw new Error("Browser PID file does not own the running process; it was not stopped or replaced");
   }
-  const candidates = [
+  const candidates = onMac ? [
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+  ] : [
     "C:/Program Files/Google/Chrome/Application/chrome.exe",
     "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
     "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
     "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
   ];
   const executable = candidates.find((candidate) => existsSync(candidate));
+  if (!executable && onMac) {
+    // Without Chrome or Edge, the Mac's default browser opens the address.
+    spawn("open", [url], { detached: true, stdio: "ignore" }).unref();
+    return null;
+  }
   if (!executable) throw new Error("Chrome or Edge is required to open the desktop window; use -NoBrowser for headless operation");
   const child = spawn(executable, [`--app=${url}`, `--user-data-dir=${paths.browser}`, "--no-first-run"], {
     cwd: repoRoot,
@@ -771,7 +800,8 @@ async function stopOwnedBrowser(paths, url) {
   }
   if (!matchesOwnedBrowserCommand(commandLine, { userDataDir: paths.browser, url }))
     throw new Error("Browser PID file does not own the running process; it was not stopped");
-  execFileSync("taskkill.exe", ["/PID", String(record.pid), "/T"], { stdio: "ignore", windowsHide: true });
+  if (onMac) process.kill(record.pid);
+  else execFileSync("taskkill.exe", ["/PID", String(record.pid), "/T"], { stdio: "ignore", windowsHide: true });
   if (existsSync(paths.browserPid)) unlinkSync(paths.browserPid);
   return true;
 }
@@ -1082,9 +1112,11 @@ async function profileStatus(args) {
 }
 
 async function main() {
-  if (process.platform !== "win32") throw new Error("The desktop launcher supports Windows only");
+  if (process.platform !== "win32" && !onMac) throw new Error("The desktop launcher supports Windows and macOS");
   const args = parseArgs(process.argv.slice(2));
   const action = String(args.action).toLowerCase();
+  if (onMac && ["host-serve", "hostinstall", "hostremove"].includes(action))
+    throw new Error("The network host runs on Windows; on a Mac, open the workstation or the demo");
   if (action === "build") return buildWeb();
   if (action === "setup") return setupProfile(args);
   if (action === "start") return startProfile(args);
