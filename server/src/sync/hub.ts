@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import * as Y from "yjs";
 import { buildRecordSchema } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
@@ -314,6 +315,7 @@ export class BoardSyncHub {
       committed: Array<{ recordId: string; existing: boolean }>;
       result: ApplyResult;
       replay: boolean;
+      effective: Uint8Array | null;
     };
     try {
       outcome = await withPerson(this.sql, actor.person.id, async (tx) => {
@@ -351,6 +353,7 @@ export class BoardSyncHub {
                 exact: true,
               },
               replay: true,
+              effective: null,
             };
           }
           if (!authority.canContribute) throw new AuthError(403, "incident contribution required");
@@ -360,14 +363,17 @@ export class BoardSyncHub {
         const hydrated = await hydrateBoardDoc(tx, boardId, incidentId, board);
         const doc = hydrated.doc;
         const before = snapshotRecords(doc);
-        if (incidentId) {
-          for (const [recordId, data] of await loadBoardRows(tx, boardId, incidentId, board)) {
+        const effective = applyEffective(doc, update);
+        const after = snapshotRecords(doc);
+        // The records this update changed in the doc. An incident doc holds
+        // only the fields that passed through its log, so the stored row is
+        // each changed record's prior state, read for those records alone.
+        const changed = changedRecordIds(before, after);
+        if (incidentId && changed.length > 0) {
+          for (const [recordId, data] of await loadBoardRows(tx, boardId, incidentId, board, changed)) {
             before.set(recordId, data);
           }
         }
-        Y.applyUpdate(doc, update);
-        const after = snapshotRecords(doc);
-        const changed = changedRecordIds(before, after);
         const checkpoint = changed.length > 0
           ? await this.checkpoint(tx, actor, board, changed, after, before, incidentId)
           : { conflicts: 0, committed: [] };
@@ -375,7 +381,7 @@ export class BoardSyncHub {
           insert into sync_updates
             (board_id, update_data, origin_person, origin_position,
              incident_id, operation_id, request_digest, conflicts)
-          values (${boardId}, ${Buffer.from(update)}, ${actor.person.id},
+          values (${boardId}, ${Buffer.from(effective ?? EMPTY_UPDATE)}, ${actor.person.id},
                   ${actor.position?.id ?? null}, ${context?.incidentId ?? null},
                   ${context?.operationId ?? null}, ${digest},
                   ${context ? checkpoint.conflicts : null})
@@ -383,11 +389,11 @@ export class BoardSyncHub {
         // A jurisdiction-wide update to a shared board queues for every peer
         // that may read it, in this transaction, never back to the peer it came
         // from. Incident-scoped docs are not federated.
-        if (!incidentId) {
+        if (!incidentId && effective) {
           const fromPeer = originSession.startsWith(FEDERATION_ORIGIN)
             ? originSession.slice(FEDERATION_ORIGIN.length)
             : null;
-          await tx`select queue_federation(${boardId}::uuid, ${Buffer.from(update)}, ${fromPeer}::uuid)`;
+          await tx`select queue_federation(${boardId}::uuid, ${Buffer.from(effective)}, ${fromPeer}::uuid)`;
         }
         // Notifications queue in this transaction; the outbox worker sends them.
         for (const c of checkpoint.committed) {
@@ -411,6 +417,7 @@ export class BoardSyncHub {
             exact: context !== null,
           },
           replay: false,
+          effective,
         };
       });
     } catch (error) {
@@ -433,7 +440,8 @@ export class BoardSyncHub {
     if (entry.sinceSnapshot >= this.snapshotThreshold) {
       await this.writeSnapshot(actor, boardId, incidentId, entry);
     }
-    for (const fn of entry.subscribers) fn(update, originSession);
+    const relayed = outcome.effective;
+    if (relayed) for (const fn of entry.subscribers) fn(relayed, originSession);
     for (const c of outcome.committed) {
       publishBoardEvent(boardEventFor(outcome.board, c, outcome.before, outcome.after));
     }
@@ -709,11 +717,13 @@ async function loadBoardRows(
   boardId: string,
   incidentId: string | null,
   board: EffectiveBoard,
+  ids: readonly string[] | null = null,
 ): Promise<Map<string, Record<string, unknown>>> {
   const rows = await sql`
     select id, data from board_records
     where board_id = ${boardId}
-      and (${incidentId}::uuid is null or incident_id = ${incidentId})`;
+      and (${incidentId}::uuid is null or incident_id = ${incidentId})
+      and (${ids === null} or id = any(${ids ?? []}::uuid[]))`;
   const readable = incidentId ? new Set(visibleFields(board).map((field) => field.key)) : null;
   const result = new Map<string, Record<string, unknown>>();
   for (const row of rows) {
@@ -767,10 +777,35 @@ function changedRecordIds(
 ): string[] {
   const changed: string[] = [];
   for (const [id, data] of after) {
-    const prev = before.get(id);
-    if (!prev || JSON.stringify(prev) !== JSON.stringify(data)) changed.push(id);
+    // Deep equality, not serialized text: key order carries no meaning.
+    if (!isDeepStrictEqual(before.get(id), data)) changed.push(id);
   }
   return changed;
+}
+
+/** An update that changes nothing, stored when a sync brought nothing new. */
+const EMPTY_UPDATE = Y.encodeStateAsUpdate(new Y.Doc());
+
+/**
+ * Apply an update and return what it changed in the document, or null when
+ * it changed nothing. A field client syncs its whole document, so storing and
+ * relaying an update as sent would grow the log and every open board's
+ * traffic with the document's size. Structs Yjs cannot place yet, waiting on
+ * ones it has not seen, stay in the update as sent so a later replay can
+ * complete them.
+ */
+function applyEffective(doc: Y.Doc, update: Uint8Array): Uint8Array | null {
+  const vector = Y.encodeStateVector(doc);
+  const applied: Uint8Array[] = [];
+  const capture = (change: Uint8Array) => { applied.push(change); };
+  doc.on("update", capture);
+  try {
+    Y.applyUpdate(doc, update);
+  } finally {
+    doc.off("update", capture);
+  }
+  if (doc.store.pendingStructs || doc.store.pendingDs) return Y.diffUpdate(update, vector);
+  return applied.length ? Y.mergeUpdates(applied) : null;
 }
 
 function changedFieldKeys(

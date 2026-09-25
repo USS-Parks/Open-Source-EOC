@@ -41,10 +41,56 @@ function serverClientId(): number {
 }
 
 /**
- * Append a REST write to its board's sync log. Each field is set as a fresh
- * root entry from a client id of its own, so the update needs none of the
- * log's history: it applies as it is to every open document, a later replay
- * and a federation peer, and it follows every edit made without seeing it.
+ * The writer of an unfederated scope's REST writes, one per scope in this
+ * process. Its updates continue its own clock, so a document gains one writer
+ * per process rather than one per write: Yjs does work in proportion to a
+ * document's writers on every update it applies, and a busy board's document
+ * would otherwise slow every open copy of it, write by write. A scope's REST
+ * writes are serialized by a transaction lock, so the log holds a writer's
+ * updates in clock order. A write that rolled back takes its writer with it,
+ * since later updates would wait on clocks the log never received; so does a
+ * write not yet known to have committed, unless its row is in the log.
+ */
+interface Writer {
+  readonly doc: Y.Doc;
+  /** The log row of the writer's last update, once inserted. */
+  lastSeq: number | null;
+  /** Whether that update is known to have committed. */
+  confirmed: boolean;
+}
+
+const writers = new Map<string, Writer>();
+
+async function writerFor(tx: Sql, scope: string): Promise<Writer> {
+  await tx`select pg_advisory_xact_lock(hashtextextended(${`sync-writer:${scope}`}, 0))`;
+  let writer = writers.get(scope);
+  if (writer && !writer.confirmed) {
+    const [kept] = writer.lastSeq === null ? [] : await tx`
+      select exists (select 1 from sync_updates where seq = ${writer.lastSeq}) as kept`;
+    if (kept?.kept) writer.confirmed = true;
+    else {
+      writer.doc.destroy();
+      writers.delete(scope);
+      writer = undefined;
+    }
+  }
+  if (!writer) {
+    const doc = new Y.Doc();
+    doc.clientID = serverClientId();
+    writer = { doc, lastSeq: null, confirmed: true };
+    writers.set(scope, writer);
+  }
+  return writer;
+}
+
+/**
+ * Append a REST write to its board's sync log. A record of an incident is
+ * written by its scope's continuing writer (above); its updates are never
+ * federated, and every copy of its documents is built from the whole log. A
+ * jurisdiction record's board-wide updates are federated, so each field is
+ * set as a fresh root entry from a client id of its own: the update needs
+ * none of the log's history and applies as it is to a peer. Either way it
+ * follows every edit made without seeing it.
  *
  * A record of an incident goes under that incident, limited to
  * `incidentFields`, the fields its documents project. Any other field goes
@@ -63,8 +109,8 @@ export async function appendRecordWrite(
   const fields = Object.entries(values).filter(([, value]) => value !== undefined);
   const scoped = incidentId ? fields.filter(([key]) => incidentFields.has(key)) : fields;
   const boardWide = incidentId ? fields.filter(([key]) => !incidentFields.has(key)) : [];
-  await append(tx, boardId, recordId, incidentId, scoped);
-  await append(tx, boardId, recordId, null, boardWide);
+  await append(tx, boardId, recordId, incidentId, scoped, incidentId !== null);
+  await append(tx, boardId, recordId, null, boardWide, incidentId !== null);
 }
 
 async function append(
@@ -73,17 +119,41 @@ async function append(
   recordId: string,
   incidentId: string | null,
   fields: ReadonlyArray<readonly [string, unknown]>,
+  continuing: boolean,
 ): Promise<void> {
   if (fields.length === 0) return;
-  const doc = new Y.Doc();
-  doc.clientID = serverClientId();
-  const records = doc.getMap<unknown>("records");
-  doc.transact(() => {
-    for (const [key, value] of fields) records.set(`${recordId}/${key}`, value);
-  });
-  const update = Y.encodeStateAsUpdate(doc);
-  doc.destroy();
-  await tx`select append_board_record_write(${recordId}, ${Buffer.from(update)}, ${incidentId === null})`;
+  const set = (doc: Y.Doc) => {
+    const records = doc.getMap<unknown>("records");
+    doc.transact(() => {
+      for (const [key, value] of fields) records.set(`${recordId}/${key}`, value);
+    });
+  };
+  let update: Uint8Array;
+  let writer: Writer | null = null;
+  if (continuing) {
+    writer = await writerFor(tx, `${boardId}:${incidentId ?? "board"}`);
+    // Unconfirmed from here until this write is known to have committed.
+    writer.confirmed = false;
+    writer.lastSeq = null;
+    const parts: Uint8Array[] = [];
+    const capture = (part: Uint8Array) => { parts.push(part); };
+    writer.doc.on("update", capture);
+    set(writer.doc);
+    writer.doc.off("update", capture);
+    update = parts.length === 1 ? parts[0]! : Y.mergeUpdates(parts);
+  } else {
+    const doc = new Y.Doc();
+    doc.clientID = serverClientId();
+    set(doc);
+    update = Y.encodeStateAsUpdate(doc);
+    doc.destroy();
+  }
+  const [row] = await tx`select append_board_record_write(${recordId}, ${Buffer.from(update)}, ${incidentId === null}) as seq`;
+  if (writer) {
+    const confirmedWriter = writer;
+    confirmedWriter.lastSeq = Number(row!.seq);
+    afterCommit(tx, () => { confirmedWriter.confirmed = true; });
+  }
   afterCommit(tx, () => {
     for (const fn of listeners) {
       try {

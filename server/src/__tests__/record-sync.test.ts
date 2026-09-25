@@ -5,8 +5,10 @@ import * as Y from "yjs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { principalForPerson } from "../auth/service.js";
+import { appendRecordWrite } from "../boards/record-sync.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import { withPerson } from "../db/context.js";
 import { DeliveryWorker } from "../notify/outbox.js";
 import { BoardSyncHub } from "../sync/hub.js";
 import { auth, freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
@@ -271,14 +273,19 @@ describe("REST record writes in the sync log", () => {
     expect(boardWide.record(id)).toEqual({ entry: "incident note", secret: "still admins only" });
 
     // The incident's log holds what its members read; the rest is board-wide only.
+    // An incident record's updates continue their writer's clock, so each
+    // scope's document is built from its whole log, as every copy is.
     const logged = await county.admin`
       select incident_id, operation_id, update_data from sync_updates
-      where board_id = ${county.boardId} order by seq desc limit 3`;
-    const written = logged.reverse().map((entry) => {
-      const doc = new Y.Doc();
+      where board_id = ${county.boardId} order by seq`;
+    const scopes = new Map<string, Y.Doc>();
+    const written = logged.map((entry) => {
+      const scope = (entry.incident_id as string | null) ?? "board";
+      if (!scopes.has(scope)) scopes.set(scope, new Y.Doc());
+      const doc = scopes.get(scope)!;
       Y.applyUpdate(doc, new Uint8Array(entry.update_data as Buffer));
-      return { incidentId: entry.incident_id, receipt: entry.operation_id !== null, data: records(doc)[id] };
-    });
+      return { incidentId: entry.incident_id, receipt: entry.operation_id !== null, data: { ...records(doc)[id] } };
+    }).slice(-3);
     expect(written).toEqual([
       { incidentId, receipt: true, data: { entry: "incident note" } },
       { incidentId: null, receipt: false, data: { secret: "admins only" } },
@@ -288,6 +295,30 @@ describe("REST record writes in the sync log", () => {
     expect((await rebuilt(county))[id]).toEqual(await row(county, id));
     scoped.close();
     boardWide.close();
+  });
+
+  it("writes an incident record's REST edits from one writer, and a write that rolled back strands none after it", async () => {
+    const incidentId = (await rest(county, "POST", `/api/v1/jurisdictions/${county.jurisdictionId}/incidents`,
+      { templateKey: "daily_ops", name: "Writer incident" })).json().incidentId as string;
+    await county.admin`insert into incident_boards (incident_id, board_id) values (${incidentId}, ${county.boardId})`;
+    const id = await create(county, { entry: "writer 0" }, county.boardId, `?incidentId=${incidentId}`);
+    for (let i = 1; i <= 20; i += 1) await patch(county, id, { entry: `writer ${i}` });
+    // A write inside a transaction that rolls back takes its writer with it.
+    await expect(withPerson(county.runtime, county.adminId, async (tx) => {
+      await appendRecordWrite(tx, county.boardId, id, incidentId, { entry: "rolled back" }, new Set(["entry"]));
+      throw new Error("roll back");
+    })).rejects.toThrow("roll back");
+    await patch(county, id, { entry: "after the rollback" });
+
+    const logged = await county.admin`
+      select update_data from sync_updates where board_id = ${county.boardId} and incident_id = ${incidentId} order by seq`;
+    const doc = new Y.Doc();
+    for (const entry of logged) Y.applyUpdate(doc, new Uint8Array(entry.update_data as Buffer));
+    expect(doc.store.pendingStructs).toBeNull();
+    expect(records(doc)[id]).toEqual({ entry: "after the rollback" });
+    // Twenty-two writes: one writer before the rollback, a new one after it.
+    expect(Y.decodeStateVector(Y.encodeStateVector(doc)).size).toBe(2);
+    expect((await rebuilt(county))[id]).toMatchObject({ entry: "after the rollback" });
   });
 
   it("shows imported rows on a live socket", async () => {

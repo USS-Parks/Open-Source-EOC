@@ -1,15 +1,14 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { X509Certificate, createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { get as httpGet } from "node:http";
 import { get as httpsGet } from "node:https";
 import { createRequire } from "node:module";
-import { createServer } from "node:net";
 import { hostname, networkInterfaces, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { parseWindowsCommandLine } from "./lib/contracts.mjs";
-import { POSTGRES_INCLUDE, hostDefinitions, hostNames, hostPaths, parseWinswService } from "./lib/host.mjs";
+import { hostDefinitions, hostNames } from "./lib/host.mjs";
+import { request, startLoopbackHost, stopChild, until } from "./lib/loopback-host.mjs";
 
 /**
  * The network host without the system changes the setup program makes. A
@@ -45,99 +44,22 @@ const { chromium } = requireServer("playwright-core");
 const dataRoot = mkdtempSync(resolve(tmpdir(), "oeh-"));
 const launcher = resolve(root, "deploy/windows/desktop.mjs");
 const profile = "host-demo";
-const children = [];
 const result = { status: "running", dataRoot, startedAt: new Date().toISOString() };
-
-async function freePort() {
-  return await new Promise((resolvePromise) => {
-    const server = createServer();
-    server.listen(0, "127.0.0.1", () => {
-      const { port } = server.address();
-      server.close(() => resolvePromise(port));
-    });
-  });
-}
-
-const sleep = (ms) => new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
-
-async function until(check, timeoutMs, failure) {
-  const end = Date.now() + timeoutMs;
-  while (Date.now() < end) {
-    if (await check()) return;
-    await sleep(500);
-  }
-  throw new Error(failure);
-}
-
-function request(get, url, options = {}) {
-  return new Promise((resolvePromise, reject) => {
-    const call = get(url, { timeout: 5_000, ...options }, (response) => {
-      const chunks = [];
-      response.on("data", (chunk) => chunks.push(chunk));
-      response.on("end", () => resolvePromise({ status: response.statusCode, headers: response.headers, body: Buffer.concat(chunks) }));
-    });
-    call.on("timeout", () => call.destroy(new Error("timeout")));
-    call.on("error", reject);
-  });
-}
-
-/** Start a process exactly as its WinSW definition says: executable, arguments, working folder and environment. */
-function startService(definition, name) {
-  const service = parseWinswService(definition);
-  const log = resolve(out, `${name}.log`);
-  writeFileSync(log, "");
-  const child = spawn(service.executable, parseWindowsCommandLine(service.arguments), {
-    cwd: service.workingDirectory,
-    env: { ...process.env, ...service.env },
-    stdio: ["ignore", "pipe", "pipe"],
-    windowsHide: true,
-  });
-  child.stdout.on("data", (chunk) => appendFileSync(log, chunk));
-  child.stderr.on("data", (chunk) => appendFileSync(log, chunk));
-  children.push(child);
-  return child;
-}
-
-async function stop(child) {
-  if (child.exitCode !== null) return;
-  const exited = new Promise((resolvePromise) => child.once("exit", resolvePromise));
-  child.kill();
-  await exited;
-}
+let host = null;
 
 function spki(pem) {
   const der = new X509Certificate(pem).publicKey.export({ type: "spki", format: "der" });
   return createHash("sha256").update(der).digest("base64");
 }
 
-const pgCtl = resolve(pgDist, "bin/pg_ctl.exe");
-let pgData;
 try {
-  const pgPort = await freePort();
-  const httpPort = await freePort();
-  const httpsPort = await freePort();
-  const redirectPort = await freePort();
-  const env = {
-    ...process.env,
-    OPENEOC_DESKTOP_DATA_ROOT: dataRoot,
-    OPENEOC_DESKTOP_PREBUILT: "1",
-    OPENEOC_DESKTOP_DIST_ROOT: distRoot,
-    OPENEOC_DESKTOP_PUBLIC_ROOT: publicRoot,
-    OPENEOC_PG_DIST: pgDist,
-  };
-  const setupStarted = Date.now();
-  const setup = execFileSync(process.execPath, [launcher, "setup", `--profile=${profile}`, `--pg-port=${pgPort}`, `--http-port=${httpPort}`], { cwd: root, env, encoding: "utf8" });
-  assert.match(setup, /PROFILE_READY profile=host-demo synthetic=true/);
-  result.setupSeconds = Math.round((Date.now() - setupStarted) / 1000);
-  const profileRoot = resolve(dataRoot, "profiles", profile);
-  pgData = resolve(profileRoot, "pgdata");
+  host = await startLoopbackHost({ root, dataRoot, out, distRoot, publicRoot, pgDist, caddyExe, profile });
+  const { common, env, httpsPort, paths, pgPort, profileRoot, redirectPort, rootPem, https } = host;
+  assert.match(host.setup, /PROFILE_READY profile=host-demo synthetic=true/);
+  result.setupSeconds = host.setupSeconds;
+  assert.ok(readdirSync(resolve(profileRoot, "logs")).some((name) => /^postgres-\w+\.log$/.test(name)), "PostgreSQL logs to the profile's folder");
 
   // The definitions setup renders, for this machine's names as the host would use them.
-  const common = {
-    appRoot: root, dataRoot, profile, profileRoot, pgData, pgPort, httpPort,
-    nodeExecutable: process.execPath, caddyExecutable: caddyExe, distRoot, publicRoot, pgDist,
-    powershell: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-  };
   const production = hostDefinitions({ ...common, names: hostNames({ hostname: hostname(), interfaces: networkInterfaces() }) });
   writeFileSync(resolve(out, "Caddyfile.production"), production.caddyfile);
   writeFileSync(resolve(out, "OpenSourceEOC-Server.xml"), production.services.server);
@@ -150,27 +72,9 @@ try {
   result.productionCaddyfileValid = true;
   result.productionNames = production.names;
 
-  // The proof's own run: loopback only and spare ports, so nothing listens on the network.
-  const host = hostDefinitions({ ...common, names: ["localhost", "127.0.0.1"], httpsPort, redirectPort, bind: "127.0.0.1" });
-  const paths = hostPaths(dataRoot);
-  mkdirSync(paths.root, { recursive: true });
-  writeFileSync(paths.caddyfile, host.caddyfile);
-  writeFileSync(resolve(pgData, "openeoc-host.conf"), host.postgresSettings);
-  appendFileSync(resolve(pgData, "postgresql.conf"), `\n${POSTGRES_INCLUDE}\n`);
-  // As the PostgreSQL service starts it: the data folder alone, every setting from the file.
-  execFileSync(pgCtl, ["start", "-D", pgData, "-w", "-t", "60"], { stdio: "ignore", windowsHide: true });
-  assert.ok(readdirSync(resolve(profileRoot, "logs")).some((name) => /^postgres-\w+\.log$/.test(name)), "PostgreSQL logs to the profile's folder");
-
-  let server = startService(host.services.server, "server");
-  const caddy = startService(host.services.caddy, "caddy");
-  await until(async () => (await request(httpGet, `http://127.0.0.1:${httpPort}/api/v1/ready`).catch(() => ({}))).status === 200, 180_000, "The server did not become ready");
-  await until(() => existsSync(paths.rootCertificate) && existsSync(paths.intermediateCertificate), 60_000, "Caddy did not create its certificate authority");
-  const rootPem = readFileSync(paths.rootCertificate);
   const rootCertificate = new X509Certificate(rootPem);
   result.authority = { subject: rootCertificate.subject, validTo: rootCertificate.validTo, sha256: rootCertificate.fingerprint256 };
 
-  const https = `https://localhost:${httpsPort}`;
-  await until(async () => (await request(httpsGet, `${https}/api/v1/ready`, { ca: rootPem }).catch(() => ({}))).status === 200, 60_000, "HTTPS did not answer");
   // Verified against the host's root, by name and by address (no server name sent), and refused without it.
   for (const url of [`${https}/api/v1/ready`, `https://127.0.0.1:${httpsPort}/api/v1/ready`]) {
     const response = await request(httpsGet, url, { ca: rootPem });
@@ -224,7 +128,7 @@ try {
     await page.getByLabel("Password").fill("north-coast-exercise");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await page.getByRole("button", { name: "Account menu" }).waitFor();
-    await page.getByText("North Coast", { exact: false }).first().waitFor();
+    await page.getByText("North Coast", { exact: false }).filter({ visible: true }).first().waitFor();
     await until(() => sockets.some((url) => url.startsWith(`wss://localhost:${httpsPort}/`)), 30_000, "No live sync socket through HTTPS");
     await page.screenshot({ path: join(out, "console-over-https.png") });
     assert.deepEqual(external, []);
@@ -258,22 +162,19 @@ try {
   result.backup = { database: dump[1], files: dump[2], restoredCounts: restored };
 
   // A service restart: the server migrates on start and keeps the data.
-  await stop(server);
-  server = startService(host.services.server, "server-restart");
+  await stopChild(host.server);
+  host.startServer("server-restart");
   await until(async () => (await request(httpsGet, `${https}/api/v1/ready`, { ca: rootPem }).catch(() => ({}))).status === 200, 180_000, "The server did not come back");
   assert.deepEqual(await count("openeoc_host_demo"), live);
   result.restartKeptData = true;
 
-  await stop(server);
-  await stop(caddy);
   result.status = "passed";
 } catch (error) {
   result.status = "failed";
   result.error = String(error?.stack ?? error);
   process.exitCode = 1;
 } finally {
-  for (const child of children) if (child.exitCode === null) child.kill();
-  if (pgData && existsSync(resolve(pgData, "postmaster.pid"))) execFileSync(pgCtl, ["stop", "-D", pgData, "-m", "fast", "-w"], { stdio: "ignore" });
+  if (host) await host.stop();
   result.finishedAt = new Date().toISOString();
   writeFileSync(resolve(out, "result.json"), `${JSON.stringify(result, null, 2)}\n`);
   console.log(JSON.stringify(result, null, 2));

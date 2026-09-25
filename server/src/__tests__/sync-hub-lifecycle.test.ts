@@ -177,6 +177,73 @@ describe("sync hub lifecycle", () => {
     }
   });
 
+  it("checkpoints only the records an update changes", async () => {
+    const quiet = new BoardSyncHub(runtime, { idleEvictMs: EVICT_MS });
+    try {
+      // One client writes in turn, so each write follows the last and wins.
+      const doc = new Y.Doc();
+      const write = (fields: Record<string, string>) => {
+        const before = Y.encodeStateVector(doc);
+        for (const [key, value] of Object.entries(fields)) doc.getMap("records").set(key, value);
+        return quiet.apply(actor, boardId, Y.encodeStateAsUpdate(doc, before), randomUUID(), { operationId: randomUUID(), incidentId });
+      };
+      const [first, second] = [randomUUID(), randomUUID()];
+      for (const id of [first, second]) {
+        await write({ [`${id}/summary`]: "before", [`${id}/occurred_at`]: "2026-09-23T00:00:00.000Z", [`${id}/severity`]: "normal" });
+      }
+      await write({ [`${first}/summary`]: "after" });
+      // The stored rows list their keys in the database's own order, not the
+      // doc's; the untouched record must not be rewritten or audited again.
+      const audits = await admin`
+        select subject_id, count(*)::int as n from audit_events
+        where category = 'board.record.updated' and subject_id in (${first}, ${second})
+        group by subject_id`;
+      expect(audits.map((row) => [row.subject_id, row.n])).toEqual([[first, 1]]);
+    } finally {
+      quiet.close();
+    }
+  });
+
+  it("stores and relays only what a whole-document sync changed", async () => {
+    const quiet = new BoardSyncHub(runtime, { idleEvictMs: EVICT_MS });
+    const relayed: Uint8Array[] = [];
+    try {
+      // A field client holds the board's document and syncs all of it.
+      const field = new Y.Doc();
+      const records = field.getMap("records");
+      const ids = Array.from({ length: 30 }, () => randomUUID());
+      for (const id of ids) {
+        records.set(`${id}/summary`, `Culvert check ${id} `.repeat(8));
+        records.set(`${id}/occurred_at`, "2026-09-23T00:00:00.000Z");
+        records.set(`${id}/severity`, "normal");
+      }
+      const sync = () => quiet.apply(actor, boardId, Y.encodeStateAsUpdate(field), randomUUID(), { operationId: randomUUID(), incidentId });
+      await sync();
+      const peer = new Y.Doc();
+      Y.applyUpdate(peer, Y.encodeStateAsUpdate(field));
+      await quiet.open(actor, boardId, incidentId);
+      const release = quiet.subscribe(boardId, incidentId, (update) => { relayed.push(update); });
+
+      records.set(`${ids[0]}/summary`, "Culvert clear");
+      const whole = Y.encodeStateAsUpdate(field).length;
+      const { operationId } = await sync();
+      // Other boards receive the one change, and the log keeps the one change.
+      expect(relayed).toHaveLength(1);
+      expect(relayed[0]!.length).toBeLessThan(whole / 10);
+      const [row] = await admin`select octet_length(update_data) as n from sync_updates where operation_id = ${operationId}`;
+      expect(Number(row!.n)).toBeLessThan(whole / 10);
+      Y.applyUpdate(peer, relayed[0]!);
+      expect(peer.getMap("records").toJSON()).toEqual(records.toJSON());
+
+      // The same document again brings nothing new and relays nothing.
+      await sync();
+      expect(relayed).toHaveLength(1);
+      release();
+    } finally {
+      quiet.close();
+    }
+  });
+
   it("holds a bounded number of documents across many open and close cycles", async () => {
     const boards: string[] = [];
     for (let i = 0; i < 50; i += 1) {

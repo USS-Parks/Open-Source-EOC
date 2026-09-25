@@ -5086,3 +5086,137 @@ The version is set to `0.9.1` in `88d1430`, so this setup stands beside the
 - **Evidence level:** static installer tests on the stage; checksums.
 - **Rollback:** remove the `0.9.1` setup and its checksum from `deploy/`;
   the `0.9.0` setup is untouched.
+
+## Readiness RD4: 150 people at once
+
+Operator Trust PSPR unit RD4 (Readiness decision 7).
+
+- **What changed.**
+  - **The load proof,** `deploy/windows/prove-load.mjs`. It starts the
+    network host profile with the North Coast Storm demo exactly as its
+    service definitions say (PostgreSQL from the host settings file, the
+    server with its delivery queue and scheduler, Caddy with the host's own
+    certificate authority) on the loopback address with spare ports, adds
+    150 synthetic members to Humboldt County OES, and runs each from their
+    own loopback address (127.0.0.2 upward), so the server's per-address
+    flood and sign-in limits see separate clients behind Caddy as they would
+    on a network (the RD3 note on `OPENEOC_TRUST_PROXY`). Each person signs
+    in; holds the Field Reports board's live socket and the notification
+    stream through HTTPS; visits a screen about every 30 seconds; edits
+    their own field report over REST about every 30 seconds, as the console
+    does, with every other person receiving it on the live socket; makes
+    another REST write about every two minutes (a thread post, a request
+    submitted or moved on); renews the session every ten minutes and, like
+    the web client, renews and retries once when a request meets the access
+    token a renewal has just replaced. One person in ten is a field user
+    whose queued offline edit syncs over the board socket about every five
+    minutes, sending the whole document as the field client does. It records
+    each request's time, each edit's time to every other person, the
+    server's heap and resident memory, and its own event-loop delay, and
+    writes `LOAD-TEST-REPORT.md` and `LOAD-TEST-SAMPLES.jsonl` at the
+    repository root.
+  - **The host start, shared.** `deploy/windows/lib/loopback-host.mjs`
+    holds the loopback host start that `prove-host.mjs` had inline; both
+    proofs use it. Stopping a child now checks its signal code as well as
+    its exit code (the first extraction hung on a child already ended by a
+    signal); the HTTPS port is chosen free for UDP too, because Caddy's
+    HTTP/3 listener binds it and Windows refused one in an excluded range;
+    and the host proof's sign-in check waits for visible scenario text, as
+    the incident list's option is hidden in the new customizable list.
+  - **The defect the first run found.** At minute four of the first run
+    reads and writes waited 30 seconds. Nine of eleven database connections
+    were queued on the board's mutation lock, and the audit log showed why:
+    866 live edits had written 28,480 "record updated via sync" entries,
+    27,771 of them with an empty change. For an incident board the sync hub
+    compared the document's view of each record with its stored row using
+    `JSON.stringify`, which is sensitive to key order, and jsonb stores keys
+    in its own order, so every record looked changed on every edit and was
+    rewritten, audited and run through the notification rules under the
+    board lock. The hub now finds the records an update changed by comparing
+    the document before and after it with order-insensitive deep equality,
+    and reads the stored rows of those records alone. Each live edit writes
+    one record again, and record histories stop filling with empty sync
+    entries (those already written stay; the audit log is append-only). A
+    new check in `sync-hub-lifecycle.test.ts` fails on the old comparison.
+  - **The defect the second run found.** The next two-hour run held every
+    threshold for 24 minutes and then slowed; by minute 34 reads took 1.9
+    seconds and writes 3.1 seconds at the 95th percentile, four requests had
+    failed, and the run was abandoned. The hub relayed each incoming sync
+    update to every open copy of the board exactly as it arrived, and stored
+    it in the log the same way. A field client syncs its whole document, and
+    the document grows with every write, so each field sync sent a frame the
+    size of the whole board document to the 149 other people and added a row
+    that size to the log every rebuild replays. The hub now stores and relays
+    only what the update changed (the transaction's own update from Yjs), and
+    relays nothing when a sync brings nothing new; parts Yjs cannot place
+    yet, because they depend on changes it has not seen, stay in the stored
+    update so a later replay completes them. A second new check in
+    `sync-hub-lifecycle.test.ts` fails on the old relay.
+  - **The defect the third run found.** The third run's times rose steadily
+    from minute 13; writes passed their threshold at minute 32 and requests
+    began to fail at minute 34. Each REST write was made by a Yjs client of
+    its own, so the board's live document gained a writer with every edit,
+    and Yjs does work in proportion to a document's writers on every update
+    it applies, in the server and in every open copy. Measured apart from
+    the product, applying one such write took 0.1 ms with 1,000 writers
+    before it, 1.3 ms with 8,000 and 7.5 ms with 24,000, and the document
+    grew to 1.1 MB; the same writes from one continuing writer took 0.008 ms
+    throughout and the document stayed at 256 KB. The server now keeps one
+    writer for each incident board in each process, continuing its own
+    clock. A board's REST writes take a transaction lock, so the log holds
+    them in clock order, and a write that rolled back, or is not known to
+    have committed and has no row in the log, retires its writer, so no
+    later update waits on a change the log never received. A jurisdiction
+    record's board-wide update still comes from a writer of its own: it is
+    federated, and a peer must apply it without the log's history. A new
+    check in `record-sync.test.ts` makes 21 writes and one that rolls back,
+    and fails if the log leaves anything pending or holds more than two
+    writers.
+  - **Ending a run early.** A file named `STOP` left in the run's output
+    folder ends the run at the next five-second check; the report is still
+    written, says where the run stopped, and the run does not pass.
+- **Defaults and deviations.** The mix is heavier than a working EOC, as a
+  margin: about 300 record edits a minute on one board, each delivered to
+  149 people, on top of the other writes and the screen reads. The harness
+  was corrected three times before the run below, each for modelling the
+  product wrongly, never to pass: it now retries a refused token once as
+  the web client does (two such 401s had counted as errors); console edits
+  go over REST as the console sends them (the first model had every person
+  sending edits over the board socket twice a minute, which the product's
+  field client does only when it syncs queued work); and only the field
+  users keep a copy of the board's document (with all 150 keeping one, the
+  generator itself ran at 86 percent of a core and its own delay, not the
+  server's, set the times). The locks were left as they were.
+- **A limit recorded, not fixed.** Edits sent over the board socket are
+  applied one at a time per board, each rebuilding the board's document
+  from its latest snapshot and the log since. In the first model, with
+  every person syncing over the socket twice a minute (about five a second
+  on one board), the board's queue grew from minute 27 until requests timed
+  out. The field client's own rate is far below that; a board shared by
+  many offline field users syncing at once would meet the same ceiling.
+  Edits to jurisdiction records still add a writer each to the board-wide
+  document, for the federation reason above; those boards see far fewer
+  writes than an incident board. Both are listed for RD9.
+- **The run.** The fourth run, 2026-09-25 from 11:04Z, 150 people for 120
+  minutes after the ten-minute warm-up, on the tree of this commit: **PASS**,
+  every threshold met. Errors 0; reads at the 95th percentile 245 ms
+  (longest 1,224 ms), writes 33 ms, a live edit reaching the other people
+  32 ms; server heap growth after the warm-up 8.4 percent (161 MB to
+  175 MB); all 150 signed in. 123,023 reads, 46,390 writes and 5,324,817
+  live deliveries; 1,650 renewals with no request sent on a replaced token.
+  `LOAD-TEST-REPORT.md` and `LOAD-TEST-SAMPLES.jsonl` at the repository root
+  are this run's. One trend is recorded, not fixed: the minute's read time at
+  the 95th percentile rose steadily through the run, from 127 ms at minute
+  10 to 399 ms at minute 120, as the run added about 35,000 edits, 2,900
+  messages and 3,000 requests to one incident, while writes and live
+  delivery stayed flat near 32 ms. At that rate reads would pass their
+  threshold after about six hours of this load; which reads grow was not
+  isolated. It goes to the release decision's open items (RD12).
+- **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
+- **Not run.** The run used this machine's host profile, not an installed
+  host: installing the services changes this computer's settings, and the
+  measured path (PostgreSQL, the server and Caddy as the services start
+  them) is the same. The load generator shared the machine with the host.
+- **Evidence level:** measured two-hour run with raw samples; unit and
+  real-database tests for the fix.
+- **Rollback:** revert the commit; no schema or data change.
