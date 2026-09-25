@@ -52,19 +52,30 @@ const RulePatch = z.object({
 const RuleParams = z.object({ ruleId: z.string().uuid() });
 
 /**
- * Refuse a channel whose destination is off the jurisdiction's allowlist, or
- * an email or SMS channel the jurisdiction has not configured.
+ * Refuse a channel whose destination is off the jurisdiction's allowlist, an
+ * email or SMS channel the jurisdiction has not configured, or a group or
+ * position that is not the jurisdiction's.
  */
 async function checkChannels(tx: Sql, jurisdictionId: string, channels: readonly Channel[]): Promise<void> {
   const [list] = await tx`
     select entries from notification_allowlists where jurisdiction_id = ${jurisdictionId}`;
   const configured = await tx`
     select kind from notification_channels where jurisdiction_id = ${jurisdictionId}`;
+  const needConfigured = (kind: "email" | "sms") => {
+    if (!configured.some((c) => c.kind === kind))
+      throw new AuthError(422, `configure the ${kind === "email" ? "email" : "SMS"} channel before adding a rule that uses it`);
+  };
   for (const channel of channels) {
     if ((channel.kind === "webhook" || channel.kind === "ntfy") && !admittedBy((list?.entries as string[]) ?? [], channel.url))
       throw new AuthError(422, `${channel.url} is not on this jurisdiction's notification allowlist`);
-    if ((channel.kind === "email" || channel.kind === "sms") && !configured.some((c) => c.kind === channel.kind))
-      throw new AuthError(422, `configure the ${channel.kind === "email" ? "email" : "SMS"} channel before adding a rule that uses it`);
+    if (channel.kind === "email" || channel.kind === "sms") needConfigured(channel.kind);
+    if (channel.kind === "group" || channel.kind === "position") {
+      for (const kind of channel.via) if (kind !== "inapp") needConfigured(kind);
+      const [found] = channel.kind === "group"
+        ? await tx`select 1 from contact_groups where id = ${channel.groupId} and jurisdiction_id = ${jurisdictionId}`
+        : await tx`select 1 from positions where id = ${channel.positionId} and jurisdiction_id = ${jurisdictionId}`;
+      if (!found) throw new AuthError(422, `the rule's ${channel.kind === "group" ? "contact group" : "position"} is not one of this jurisdiction's`);
+    }
   }
 }
 

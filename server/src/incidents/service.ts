@@ -15,6 +15,7 @@ import { AuthError, requireAdmin, requireMember, type Principal } from "../auth/
 import { recordAudit } from "../audit/service.js";
 import { STANDARD_TITLES } from "../auth/authz.js";
 import { createBoard } from "../boards/service.js";
+import { sendMassNotificationIn, type ActivationNotice } from "../notify/mass.js";
 import { getIncidentAuthority, lockIncidentMutation } from "./participation.js";
 import { completeLegacyChecklistItem } from "./tasks.js";
 
@@ -169,6 +170,8 @@ export interface ActivationResult {
   readonly boards: number;
   readonly checklistItems: number;
   readonly libraries: number;
+  /** The activation notice, when one was asked for: its send and how many it reached. */
+  readonly notice?: { readonly massNotificationId: string; readonly recipients: number };
 }
 
 /**
@@ -176,6 +179,12 @@ export interface ActivationResult {
  * chart, its board set, per-position checklists, and its scenario
  * libraries. Daily-ops incidents run the same machinery under a flag
  * (F17), so the skills never go stale.
+ *
+ * Activation may notify (VA7): a broadcast to chosen contact groups, the
+ * holders of positions and whoever is on call, sent in the same transaction,
+ * so the incident and its notice commit together. A notice that reaches no
+ * one stops the activation with the reason, rather than letting anyone
+ * believe people were told. Acknowledgement links point at `linkBase`.
  */
 export async function activateIncident(
   sql: Sql,
@@ -185,7 +194,9 @@ export async function activateIncident(
     templateKey: string;
     name: string;
     kind?: "incident" | "daily_ops" | "planned_event" | "exercise" | undefined;
+    notify?: ActivationNotice | undefined;
   },
+  linkBase = "",
 ): Promise<ActivationResult> {
   requireAdmin(actor, jurisdictionId);
   const [templateRow] = await sql`
@@ -286,12 +297,25 @@ export async function activateIncident(
     },
   });
 
+  let notice: ActivationResult["notice"];
+  if (input.notify) {
+    const { message, ...reach } = input.notify;
+    const sent = await sendMassNotificationIn(sql, actor, jurisdictionId, {
+      ...reach,
+      subject: `Activated: ${input.name}`.slice(0, 200),
+      message: message ?? `${input.name} is activated. Check in with the EOC and stand by for your assignment.`,
+      mode: "broadcast",
+    }, linkBase, { incidentId });
+    notice = { massNotificationId: sent.id, recipients: sent.recipients };
+  }
+
   return {
     incidentId,
     positions: positionIds.size,
     boards: boardCount,
     checklistItems: itemCount,
     libraries: attached.length,
+    ...(notice ? { notice } : {}),
   };
 }
 

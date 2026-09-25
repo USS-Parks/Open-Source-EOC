@@ -107,6 +107,7 @@ import type {
   ContactImportResult,
   ContactInput,
   ContactsPage,
+  ActivationNotice,
   ImportMapping,
   MassNotificationDetail,
   MassNotificationsPage,
@@ -1228,9 +1229,15 @@ export class ApiClient {
   }
   activateIncident(
     jurisdictionId: string,
-    body: { templateKey: string; name: string; kind?: "incident" | "daily_ops" | "planned_event" | "exercise" },
-  ): Promise<{ incidentId: string }> {
-    return this.request<{ incidentId: string }>(
+    body: {
+      templateKey: string;
+      name: string;
+      kind?: "incident" | "daily_ops" | "planned_event" | "exercise";
+      /** Whom the activation notifies, and how; the incident and its notice commit together. */
+      notify?: ActivationNotice;
+    },
+  ): Promise<{ incidentId: string; notice?: { massNotificationId: string; recipients: number } }> {
+    return this.request<{ incidentId: string; notice?: { massNotificationId: string; recipients: number } }>(
       "POST",
       `/api/v1/jurisdictions/${jurisdictionId}/incidents`,
       body as unknown as Record<string, unknown>,
@@ -2740,7 +2747,11 @@ export type NotificationChannel =
   | { readonly kind: "webhook"; readonly url: string }
   | { readonly kind: "ntfy"; readonly url: string; readonly topic: string }
   | { readonly kind: "email"; readonly to: readonly string[] }
-  | { readonly kind: "sms"; readonly to: readonly string[] };
+  | { readonly kind: "sms"; readonly to: readonly string[] }
+  | { readonly kind: "group"; readonly groupId: string; readonly via: readonly ReachVia[] }
+  | { readonly kind: "position"; readonly positionId: string; readonly reach: "holders" | "on_call"; readonly via: readonly ReachVia[] };
+/** How a group or position channel reaches each person. */
+export type ReachVia = "inapp" | "email" | "sms";
 export interface NotificationRuleInput {
   readonly boardId: string | null;
   readonly event: "record.created" | "record.updated" | "scheduled";

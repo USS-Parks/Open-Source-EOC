@@ -408,7 +408,7 @@ describe("WebEOC side-by-side evaluation, internal run", () => {
     await page.getByRole("button", { name: "Mass Notification", exact: true }).click();
     await page.getByLabel("Subject").fill("Shelter capacity check");
     await page.getByLabel("Message", { exact: true }).fill("Report open spaces at each shelter by 1800.");
-    await page.getByLabel("Contact group").selectOption({ label: "Shelter managers (2)" });
+    await page.getByRole("checkbox", { name: "Shelter managers (2)" }).check();
     await page.getByRole("button", { name: "Send notification" }).click();
     await page.getByText("Shelter capacity check sent.").waitFor();
     const receipts = page.getByRole("region", { name: "Receipts: Shelter capacity check" });

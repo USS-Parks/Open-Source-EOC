@@ -13,6 +13,10 @@ import type {
   ApiClient, IncidentArchiveFilter, IncidentOverviewPage, IncidentOverviewRow, LibraryKind, Membership,
 } from "../api/client.js";
 import { formatTime } from "../../datasets/format.js";
+import {
+  AudiencePicker, DEFAULT_DELIVERY, DeliveryChoice, NO_AUDIENCE, deliveryOf, type AudienceParts, type DeliveryChoiceValue,
+} from "../../contacts/Audience.js";
+import { audienceOf } from "../../contacts/model.js";
 import { IncidentTemplatesPanel } from "../../incidents/IncidentTemplatesPanel.js";
 import { IncidentCollaboration } from "../../integrations/collab.js";
 import { IncidentMeetings } from "../../integrations/meetings.js";
@@ -68,6 +72,14 @@ export function IncidentsSurface(props: {
   const [templateKey, setTemplateKey] = useState("");
   const [kind, setKind] = useState<"incident" | "daily_ops" | "planned_event" | "exercise">("incident");
   const [name, setName] = useState("");
+  // The activation notice: whom it reaches and how, sent with the activation.
+  const [notifying, setNotifying] = useState(false);
+  const [notifyAudience, setNotifyAudience] = useState<AudienceParts>(NO_AUDIENCE);
+  // In the app as well by default: a holder or person on shift with no contact card has no other way in.
+  const [notifyDelivery, setNotifyDelivery] = useState<DeliveryChoiceValue>({
+    ...DEFAULT_DELIVERY, channels: new Set(["email", "sms", "inapp"] as const),
+  });
+  const [notifyMessage, setNotifyMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
@@ -101,12 +113,18 @@ export function IncidentsSurface(props: {
   const activate = () =>
     run(async () => {
       if (!activeTpl || !name.trim()) throw new Error("Pick a template and enter an incident name.");
+      const reach = notifying ? audienceOf(notifyAudience) : null;
+      if (notifying && !reach) throw new Error("Choose whom the activation notifies: a contact group, a position or who is on call.");
       const activated = await props.client.activateIncident(props.jurisdictionId, {
         templateKey: activeTpl,
         name: name.trim(),
         kind,
+        ...(reach ? {
+          notify: { ...reach, ...deliveryOf(notifyDelivery, true), ...(notifyMessage.trim() ? { message: notifyMessage.trim() } : {}) },
+        } : {}),
       });
       setName("");
+      setNotifying(false); setNotifyAudience(NO_AUDIENCE); setNotifyMessage("");
       setSelectedIncident(activated.incidentId);
       await props.onActivated?.(activated.incidentId);
     });
@@ -147,6 +165,22 @@ export function IncidentsSurface(props: {
                 onChange={(value) => setKind(value as typeof kind)}
                 labels={KIND_LABELS} />
             </div>
+            <label className="contacts-check">
+              <input type="checkbox" checked={notifying} onChange={(event) => setNotifying(event.target.checked)} />
+              Notify people when it activates
+            </label>
+            {notifying ? (
+              <fieldset className="d21-form-grid incidents-notify" aria-label="Activation notice">
+                <AudiencePicker client={props.client} jurisdictionId={props.jurisdictionId}
+                  value={notifyAudience} onChange={setNotifyAudience} />
+                <DeliveryChoice value={notifyDelivery} onChange={setNotifyDelivery} allowFallback />
+                <label className="incidents-field d21-form-grid-wide">Message (optional)
+                  <textarea rows={2} value={notifyMessage} onChange={(event) => setNotifyMessage(event.target.value)}
+                    placeholder="Without one, the notice says the incident is activated and asks people to check in." />
+                </label>
+                <p className="eoc-flush eoc-muted d21-form-grid-wide">The notice goes with the activation, as one step: if it would reach no one, nothing is activated. Follow who acknowledged under Mass Notification.</p>
+              </fieldset>
+            ) : null}
             <div className="eoc-space-above">
               <Button kind="primary" onClick={activate} disabled={busy}>
                 Activate

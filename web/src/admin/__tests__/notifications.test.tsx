@@ -18,6 +18,13 @@ function setup(overrides: Record<string, unknown> = {}) {
     listNotificationRules: vi.fn().mockResolvedValue([]),
     updateNotificationRule: vi.fn(),
     removeNotificationRule: vi.fn(),
+    listContactGroups: vi.fn().mockResolvedValue({
+      groups: [{ id: "g1", name: "Duty officers", members: [], updatedAt: "2026-09-25T10:00:00Z" }], nextCursor: null,
+    }),
+    listPositions: vi.fn().mockResolvedValue([
+      { id: "p2", key: "duty_officer", title: "Duty Officer" },
+      { id: "p1", key: "logistics_section_chief", title: "Logistics Section Chief" },
+    ]),
     ...overrides,
   };
   render(<Notifications client={client as unknown as ApiClient} jurisdictionId="j1" boards={boards} />);
@@ -133,4 +140,33 @@ it("lists the rules and pauses, changes and removes one", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Confirm removal" }));
   await screen.findByText("Rule removed. What it already sent stays in the notification log.");
   expect(client.removeNotificationRule).toHaveBeenCalledWith("r1");
+});
+
+it("addresses a rule to whoever is on call in a position and to a contact group, and names them in the list", async () => {
+  const saved = {
+    id: "r3", boardId: null, boardTitle: null, event: "record.created", condition: { op: "any" },
+    channels: [
+      { kind: "position", positionId: "p2", reach: "on_call", via: ["inapp", "email"] },
+      { kind: "group", groupId: "g1", via: ["inapp"] },
+    ],
+    scheduleIntervalMinutes: null, rateLimit: { max: 60, windowMinutes: 10 }, enabled: true, createdAt: "2026-09-25T10:00:00Z",
+  };
+  const client = setup({
+    createNotificationRule: vi.fn().mockResolvedValue({ id: "r3", webhookSecret: null }),
+    listNotificationRules: vi.fn().mockResolvedValueOnce([]).mockResolvedValue([saved]),
+  });
+  await screen.findByLabelText("Allowed destinations");
+  fireEvent.change(screen.getByLabelText("Channel kind"), { target: { value: "position" } });
+  // Positions are offered by title; the first is chosen until another is.
+  await waitFor(() => expect((screen.getByLabelText("Position") as HTMLSelectElement).value).toBe("p2"));
+  fireEvent.change(screen.getByLabelText("Reach"), { target: { value: "on_call" } });
+  fireEvent.change(screen.getByLabelText("Reach each by"), { target: { value: "inapp,email" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add channel" }));
+  fireEvent.change(screen.getByLabelText("Channel kind, channel 2"), { target: { value: "group" } });
+  fireEvent.click(screen.getByRole("button", { name: "Create rule" }));
+  await screen.findByText("Notification rule created.");
+  expect(client.createNotificationRule).toHaveBeenCalledWith("j1", expect.objectContaining({ channels: saved.channels }));
+  await screen.findByRole("listitem", {
+    name: "Rule: Any board · A record is created · On call as Duty Officer by in-app notice and email; Group Duty officers by in-app notice",
+  });
 });

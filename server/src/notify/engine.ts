@@ -3,7 +3,8 @@ import { z } from "zod";
 import { BoardTemplateSchema, choiceLabel, effectiveFields, type FieldDef } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
-import type { Principal } from "../auth/service.js";
+import { AuthError, type Principal } from "../auth/service.js";
+import { audienceLabel, resolveAudience } from "../contacts/reach.js";
 import { E164 } from "./channels.js";
 
 /**
@@ -21,12 +22,23 @@ export const ConditionSchema = z.object({
 });
 export type Condition = z.infer<typeof ConditionSchema>;
 
+/** How a group or position channel reaches each person: in the app, by email, by SMS. */
+const Via = z.array(z.enum(["inapp", "email", "sms"])).min(1).max(3);
+
 export const ChannelSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("inapp"), target: z.enum(["requesting_position"]) }),
   z.object({ kind: z.literal("webhook"), url: z.string().url() }),
   z.object({ kind: z.literal("ntfy"), url: z.string().url(), topic: z.string().min(1) }),
   z.object({ kind: z.literal("email"), to: z.array(z.email()).min(1).max(50) }),
   z.object({ kind: z.literal("sms"), to: z.array(E164).min(1).max(50) }),
+  // People by where they sit, resolved when the rule fires (contacts/reach.ts).
+  z.object({ kind: z.literal("group"), groupId: z.string().uuid(), via: Via }),
+  z.object({
+    kind: z.literal("position"),
+    positionId: z.string().uuid(),
+    reach: z.enum(["holders", "on_call"]).default("holders"),
+    via: Via,
+  }),
 ]);
 export type Channel = z.infer<typeof ChannelSchema>;
 
@@ -157,6 +169,10 @@ async function enqueue(
     }
     return;
   }
+  if (channel.kind === "group" || channel.kind === "position") {
+    await enqueueReach(tx, ruleId, channel, event, message);
+    return;
+  }
   let target: string;
   let headers: Record<string, string>;
   let body: string;
@@ -184,6 +200,59 @@ async function enqueue(
     detail = { topic: channel.topic, title };
   }
   await queue(tx, event, ruleId, channel.kind, target, headers, body, detail, text);
+}
+
+/**
+ * A group or position channel: resolve who it reaches now, then give each
+ * person an in-app notice, an email and an SMS as the channel asks, each by
+ * the address their contact card has. A person with no address for a way is
+ * skipped on it. When the channel reaches no one, because the group is empty
+ * or gone or the position has no holder, a failed notification says so in the
+ * log instead of the rule going quiet.
+ */
+async function enqueueReach(
+  tx: Sql,
+  ruleId: string,
+  channel: Extract<Channel, { kind: "group" | "position" }>,
+  event: BoardEvent,
+  message: Message,
+): Promise<void> {
+  const { title, body: text } = message;
+  const via = [...new Set(channel.via)];
+  const input = channel.kind === "group" ? { groupIds: [channel.groupId] }
+    : channel.reach === "on_call" ? { onCallPositionIds: [channel.positionId] }
+    : { positionIds: [channel.positionId] };
+  let reached;
+  try {
+    reached = await resolveAudience(tx, event.jurisdictionId, input);
+  } catch (err) {
+    if (!(err instanceof AuthError)) throw err;
+    await log(tx, event, ruleId, via[0]!, "failed", text, { title, error: `No one to reach: ${err.message}` });
+    return;
+  }
+  if (reached.recipients.length === 0) {
+    const error = `No one to reach: ${audienceLabel(reached.audience, null)}`;
+    await log(tx, event, ruleId, via[0]!, "failed", text, { title, error });
+    return;
+  }
+  for (const person of reached.recipients) {
+    for (const kind of via) {
+      if (kind === "inapp") {
+        if (!person.personId && !person.positionId) continue;
+        await log(tx, event, ruleId, "inapp", "delivered", text, {
+          title,
+          personId: person.personId,
+          positionId: person.personId ? null : person.positionId,
+          reachedThrough: person.through,
+        });
+        continue;
+      }
+      const to = kind === "email" ? person.email : person.phone;
+      if (!to) continue;
+      const headers = kind === "email" ? { subject: title } : {};
+      await queue(tx, event, ruleId, kind, to, headers, text, { to, title, reachedThrough: person.through }, text);
+    }
+  }
 }
 
 /**
@@ -216,19 +285,20 @@ async function log(
   event: BoardEvent,
   ruleId: string,
   channel: string,
-  status: "pending" | "delivered",
+  status: "pending" | "delivered" | "failed",
   body: string,
   detail: Record<string, unknown>,
 ): Promise<string> {
+  const personId = detail.personId as string | null | undefined;
   const positionId = detail.positionId as string | null | undefined;
   // The id is chosen here, not returned: the acting member may write a
   // notification that row-level security does not let them read back.
   const id = randomUUID();
   await tx`
     insert into notifications
-      (id, jurisdiction_id, rule_id, position_id, channel, title, body, status, detail)
+      (id, jurisdiction_id, rule_id, person_id, position_id, channel, title, body, status, detail)
     values
-      (${id}, ${event.jurisdictionId}, ${ruleId}, ${positionId ?? null}, ${channel},
+      (${id}, ${event.jurisdictionId}, ${ruleId}, ${personId ?? null}, ${positionId ?? null}, ${channel},
        ${(detail.title as string) ?? event.event}, ${body}, ${status},
        ${tx.json(detail as never)})`;
   return id;

@@ -310,6 +310,19 @@ followed by the HMAC-SHA256 of the request body with that secret. A
 destination off the allowlist is refused with the server's reason, and the
 draft is kept.
 
+A channel may address people by where they sit rather than by address.
+**Contact group** reaches the group's active contacts; **Position** reaches
+**Whoever holds it now** (the position's own contact card and each holder,
+through the holder's card) or **Whoever is on shift in it now** (Staffing's
+shifts, or the holders when no one is on shift). **Reach each by** chooses the
+in-app notice, email, SMS or a mix; each person's first email address and
+first phone number are used, and a holder with no contact card is reached in
+the app only. Who that is gets worked out each time the rule fires, so the
+rule follows reassignments and shift changes. A group or position that
+reaches no one when the rule fires leaves a failed notification saying so,
+which admins see with the other notifications; the rate cap counts each
+email and SMS.
+
 **Notification rules** on the same tab lists the jurisdiction's rules, each
 with its board, when it fires, its condition and where it sends, and whether
 it is active or paused. **Pause** stops a rule sending until **Resume**.
@@ -447,9 +460,14 @@ Each contact and channel becomes its own notification and, for email and SMS,
 its own delivery through the jurisdiction's relay and provider, retried and
 receipted like any other; each send is audited as `notification.mass_sent`.
 A mass send is not a notification rule and no rule rate cap applies to it. It
-is bounded instead by its size, at most 500 contacts, all from the directory
-administrators keep. The scheduler advances call-downs every 30 seconds
-(`OPENEOC_SCHEDULER_CALLDOWNS_MS`), as a jurisdiction administrator.
+is bounded instead by its size, at most 500 people, and its outside addresses
+all come from the directory administrators keep. The scheduler advances
+call-downs every 30 seconds (`OPENEOC_SCHEDULER_CALLDOWNS_MS`), as a
+jurisdiction administrator. A broadcast's fallback needs no scheduler: the
+later device's delivery is queued to fall due after the wait, held for its
+window from then, and withdrawn with its notification when the recipient
+acknowledges first. An activation's notice is a mass send that names its
+incident.
 
 **Acknowledgement links.** Each email and SMS carries a link with a random
 token for that one recipient of that one send; only a hash of the token is

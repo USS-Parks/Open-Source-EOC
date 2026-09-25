@@ -7463,3 +7463,109 @@ the repository public and the runs resumed.
 - **Evidence level:** component and browser tests; the Windows run on the
   landed head is the check that matters.
 - **Rollback:** revert the commit.
+
+## Veoci and air gap VA7: activation notifies; people reached by group, position and shift
+
+Veoci Integration and Air Gap PSPR unit VA7 (VC-02 with VC-15).
+
+- **What the code did before.** Activation built the incident, its org chart,
+  boards, checklists and libraries, and told no one. A mass notification went
+  to one contact group or to chosen contacts, every channel at once. A rule
+  sent to literal email addresses and phone numbers, a webhook, a push topic,
+  or an in-app notice to the requesting position.
+- **What changed.**
+  - **Reach** (`server/src/contacts/reach.ts`). A send or a rule may name
+    contact groups, chosen contacts, positions and on-call positions, in any
+    mix. A position reaches its own contact cards and each person who holds it
+    now, through that person's contact card when the directory has one. On
+    call reaches the person whose shift covers now; when no one's does, the
+    position's holders, and the send records that. Everyone is reached once,
+    in the order groups, contacts, positions, on call.
+  - **Mass notification.** The send records what it was addressed to and how
+    many each part reached, and each recipient how it was found ("Group: Duty
+    officers", "Holds Logistics Section Chief", "On shift as Duty Officer").
+    A send that reaches no one is refused; the 500 cap counts people.
+  - **Fallback to the next device.** A broadcast with SMS and email may try
+    them in the order chosen: the first goes now, the second is queued to fall
+    due after the fallback minutes, by the database's clock, and its hold
+    window runs from then. When the recipient acknowledges, by the link or in
+    the app, a database trigger withdraws the fallback not yet sent, its
+    delivery and its notification. The receipts read **Falls back if not
+    acknowledged** with the time, or **Not needed: acknowledged before the
+    fallback**.
+  - **Activation notifies.** Activation takes an optional notice: whom it
+    reaches, the channels, a fallback and a message (by default, that the
+    incident is activated and people should check in). It is a broadcast
+    titled "Activated:" and the incident's name, sent in the activation's
+    transaction, so the two commit together. It names the incident: its
+    in-app notices open the incident, its audit event carries it, and the
+    incident chronology shows it as a significant event.
+  - **Rules** gain a **Contact group** channel and a **Position** channel
+    (holders or on call), each reaching people in the app, by email, by SMS or
+    a mix. Who that is gets worked out when the rule fires, so a rule follows
+    reassignments and shift changes. The group or position must be the
+    jurisdiction's when the rule is saved; one that reaches no one when the
+    rule fires leaves a failed notification saying so.
+  - **Migration** `0151_reach.sql`: the send's incident, audience and fallback
+    minutes, the recipient's `reached_through`, the withdrawal trigger, the
+    hold stamped from when a delivery falls due, and the receipts function
+    with each delivery's due time.
+  - **The screens.** **Mass Notification**'s compose form ticks groups,
+    contacts, positions and on-call positions, and offers the fallback for a
+    broadcast; its receipts say what the send was addressed to and how each
+    person was found. **Incident Setup**'s activation panel gains **Notify
+    people when it activates**, in the app ticked by default. The rule screen
+    offers the two new channels with their choices.
+  - `docs/guides/OPERATOR-QUICKSTART.md` and `docs/guides/ADMIN.md` describe
+    them.
+- **Decisions, by the plan's defaults.**
+  - A holder or person on shift with no contact card is reached in the app
+    only: the directory administrators keep stays the only source of outside
+    addresses, and a sign-in address is not used as one.
+  - The fallback is for broadcasts; a call-down already moves to the next
+    person.
+  - A withdrawn fallback is removed rather than given a new status, so the
+    delivery states, the queue metrics and the retention rules stay as they
+    are; the send keeps its fallback minutes and each recipient's addresses,
+    from which the receipts explain it.
+  - An activation whose notice would reach no one is refused whole, rather
+    than activating an incident people believe they were told of.
+  - While someone holds a position, its own card sends no in-app notice to
+    the position, which the holder would see twice.
+- **Files outside the "Owns" cell.** `server/src/notify/mass.ts` and
+  `routes.ts`, `server/src/incidents/service.ts` and `routes.ts`,
+  `web/src/contacts/**`, `web/src/app/surfaces/IncidentsSurface.tsx` and
+  `incidents.css`, `web/src/app/api/client.ts`, `web/src/audit/chronology.ts`,
+  and one line each of the mass notification and WebEOC side-by-side browser
+  tests, which now tick the group.
+- **Air-gap behavior (decision 9).** Reach, fallback timing and withdrawal
+  run in the host's database; SMS and email still go only through the
+  jurisdiction's configured relay and provider, and hold through an outage as
+  VA1 set.
+- **Tests.** `reach.test.ts` (10, real database): a position's card and holder;
+  the person on shift, and the holders when no one is; each person once
+  across two groups and two positions, one reaching no one; refusals; SMS
+  first with the email scheduled, held from its due time, withdrawn for the
+  contact who answered the text and sent to the one who did not; a contact
+  with no phone going straight to email; rules to a position's holders, the
+  person on call, a group, and a position with no one; rules refused for a
+  group or position outside the jurisdiction; an activation notice to a group
+  and the person on call, naming the incident; activation without a notice,
+  and refused whole when the notice reaches no one.
+  `mass-notification.test.ts` now expects a group and contacts together to be
+  one send, and adds the fallback refusals. `notifications.test.tsx` adds a
+  rule to the person on call and a group; `incidents-surface.test.tsx` an
+  activation with a notice and fallback. `activation-notice-browser.test.ts`
+  at 1586 by 992, 1534 by 790 and 390: activation with the notice, then its
+  receipts, with the email waiting and then withdrawn after the text is
+  acknowledged.
+- **Verification.** On the Linux test bed (decision 19): `pnpm check:static`
+  exit 0; `docs/API.md` unchanged, as no route was added. Every test file
+  except the browser, end-to-end and load files (Vitest, two workers): 1,631
+  passed in 241 files. Browser tests: activation notice, mass notification,
+  notification rules and the WebEOC side-by-side walk, green.
+- **Not run.** The Windows setup (decision 18).
+- **Evidence level:** real-database, component and browser tests.
+- **Rollback:** revert the commit; migration `0151` adds three columns to the
+  sends and one to the recipients, a trigger, and restates the hold stamp and
+  the receipts function from `0143`.

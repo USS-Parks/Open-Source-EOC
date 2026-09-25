@@ -3,32 +3,35 @@ import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../design/com
 import { Icon } from "../design/icons/index.js";
 import "../datasets/datasets.css";
 import "./contacts.css";
-import { readAllPages, type ApiClient } from "../app/api/client.js";
-import { useAsync, usePolled } from "../app/data/hooks.js";
+import type { ApiClient } from "../app/api/client.js";
+import { usePolled } from "../app/data/hooks.js";
 import { ErrorNote, Loading, Scroll, SurfaceHeader } from "../app/screens/parts.js";
 import { formatTime } from "../datasets/format.js";
+import { AudiencePicker, DEFAULT_DELIVERY, DeliveryChoice, NO_AUDIENCE, deliveryOf, type AudienceParts } from "./Audience.js";
 import {
   CHANNEL_LABELS,
   DELIVERY_LABELS,
+  audienceOf,
   deliveryDetail,
   stateLabel,
   stateStatus,
   type MassChannel,
+  type MassNotificationDetail,
   type MassNotificationSummary,
+  type MassRecipient,
 } from "./model.js";
 
-const CHANNELS: readonly MassChannel[] = ["email", "sms", "inapp"];
 const MODES = ["broadcast", "calldown"] as const;
 const MODE_LABELS = { broadcast: "Everyone at once", calldown: "Call-down, one contact at a time" };
-const TARGETS = ["group", "contacts"] as const;
-const TARGET_LABELS = { group: "A contact group", contacts: "Chosen contacts" };
 /** How often an open receipt view refreshes itself. */
 const RECEIPT_REFRESH_MS = 10_000;
 
 /**
- * Mass notification: send one message to a contact group or chosen contacts
- * by email, SMS and in-app notice, to everyone at once or as a call-down, and
- * follow each contact's delivery receipts and acknowledgement. Members and
+ * Mass notification: send one message to contact groups, chosen contacts,
+ * the holders of positions and whoever is on call, by email, SMS and in-app
+ * notice, to everyone at once or as a call-down, and follow each contact's
+ * delivery receipts and acknowledgement. A broadcast may fall back from one
+ * device to the next when a contact does not acknowledge. Members and
  * administrators send; viewers follow the sends.
  */
 export function MassNotificationSurface(props: { client: ApiClient; jurisdictionId: string; canSend: boolean }) {
@@ -51,7 +54,7 @@ export function MassNotificationSurface(props: { client: ApiClient; jurisdiction
           <Icon name="alerts" size={32} decorative />
           <div>
             <strong>Reach contacts and track who acknowledged</strong>
-            <span>A broadcast notifies everyone at once. A call-down notifies one contact at a time in group order and moves to the next when the current one has not acknowledged in time. Email and SMS carry a link the recipient opens to acknowledge.</span>
+            <span>A broadcast notifies everyone at once, and can try each contact's next device when they do not acknowledge. A call-down notifies one contact at a time in order and moves to the next when the current one has not acknowledged in time. Positions reach whoever holds them now; on call reaches whoever is on shift. Email and SMS carry a link the recipient opens to acknowledge.</span>
           </div>
         </div>
         {props.canSend ? (
@@ -72,7 +75,7 @@ export function MassNotificationSurface(props: { client: ApiClient; jurisdiction
                 <div className="d21-readiness-title">
                   <div>
                     <strong>{m.subject}</strong>
-                    <span>{m.sentBy} · {formatTime(m.createdAt)} · {m.groupName ?? "Chosen contacts"} · {m.channels.map((c) => CHANNEL_LABELS[c]).join(", ")}</span>
+                    <span>{m.sentBy} · {formatTime(m.createdAt)} · {m.audience} · {m.channels.map((c) => CHANNEL_LABELS[c]).join(", ")}</span>
                   </div>
                 </div>
                 <span className="d21-readiness-badge"><StatusBadge status={stateStatus(m.state)}>{stateLabel(m)}</StatusBadge></span>
@@ -97,37 +100,24 @@ export function MassNotificationSurface(props: { client: ApiClient; jurisdiction
 
 function Compose(props: { client: ApiClient; jurisdictionId: string; onSent: (id: string) => void }) {
   const { client, jurisdictionId } = props;
-  const groups = useAsync(
-    () => readAllPages((page) => client.listContactGroups(jurisdictionId, page).then((r) => ({ items: r.groups, nextCursor: r.nextCursor }))),
-    [jurisdictionId],
-  );
-  const contacts = useAsync(
-    () => readAllPages((page) => client.listContacts(jurisdictionId, "", page).then((r) => ({ items: r.contacts, nextCursor: r.nextCursor }))),
-    [jurisdictionId],
-  );
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
-  const [target, setTarget] = useState<string>("group");
-  const [groupId, setGroupId] = useState("");
-  const [chosen, setChosen] = useState<string[]>([]);
-  const [channels, setChannels] = useState<Set<MassChannel>>(new Set(["email", "sms"]));
+  const [audience, setAudience] = useState<AudienceParts>(NO_AUDIENCE);
+  const [delivery, setDelivery] = useState(DEFAULT_DELIVERY);
   const [mode, setMode] = useState<string>("broadcast");
   const [waitMinutes, setWaitMinutes] = useState("10");
   const [needed, setNeeded] = useState("1");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
-  const groupList = groups.data ?? [];
-  const group = groupList.some((g) => g.id === groupId) ? groupId : (groupList[0]?.id ?? "");
-  const active = (contacts.data ?? []).filter((c) => c.active);
 
   const send = async () => {
     setBusy(true); setError(null); setNotice("");
     try {
       if (!subject.trim() || !message.trim()) throw new Error("Enter a subject and a message.");
-      if (channels.size === 0) throw new Error("Choose at least one channel.");
-      if (target === "group" && !group) throw new Error("Choose a contact group, or add one under Contacts.");
-      if (target === "contacts" && chosen.length === 0) throw new Error("Choose at least one contact.");
+      const to = audienceOf(audience);
+      if (!to) throw new Error("Choose whom to notify: a contact group, contacts, a position or who is on call.");
+      const how = deliveryOf(delivery, mode === "broadcast");
       const minutes = Number(waitMinutes);
       const acknowledgements = Number(needed);
       if (mode === "calldown" && !(Number.isInteger(minutes) && minutes >= 1 && minutes <= 1440))
@@ -137,13 +127,13 @@ function Compose(props: { client: ApiClient; jurisdictionId: string; onSent: (id
       const sent = await client.sendMassNotification(jurisdictionId, {
         subject: subject.trim(),
         message: message.trim(),
-        ...(target === "group" ? { groupId: group } : { contactIds: chosen }),
-        channels: CHANNELS.filter((c) => channels.has(c)),
+        ...to,
+        ...how,
         mode: mode as "broadcast" | "calldown",
         ...(mode === "calldown" ? { intervalMinutes: minutes, acknowledgementsNeeded: acknowledgements } : {}),
       });
       setNotice(`${subject.trim()} sent.`);
-      setSubject(""); setMessage(""); setChosen([]);
+      setSubject(""); setMessage(""); setAudience(NO_AUDIENCE);
       props.onSent(sent.id);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The notification was not sent.");
@@ -157,37 +147,9 @@ function Compose(props: { client: ApiClient; jurisdictionId: string; onSent: (id
       <fieldset disabled={busy} className="d21-form-grid">
         <div className="d21-form-grid-wide"><TextField label="Subject" value={subject} onChange={setSubject} required /></div>
         <label className="contacts-field d21-form-grid-wide">Message<textarea rows={4} value={message} onChange={(e) => setMessage(e.target.value)} /></label>
-        <EnumSelect label="Send to" values={TARGETS} labels={TARGET_LABELS} value={target} onChange={setTarget} />
-        {target === "group" ? (
-          <EnumSelect label="Contact group" values={groupList.map((g) => g.id)}
-            labels={Object.fromEntries(groupList.map((g) => [g.id, `${g.name} (${g.members.length})`]))}
-            value={group} onChange={setGroupId} />
-        ) : (
-          <fieldset className="contacts-checks d21-form-grid-wide">
-            <legend>Contacts, notified in the order chosen</legend>
-            {active.map((c) => (
-              <label key={c.id} className="contacts-check">
-                <input type="checkbox" checked={chosen.includes(c.id)}
-                  onChange={(e) => setChosen((list) => e.target.checked ? [...list, c.id] : list.filter((x) => x !== c.id))} />
-                {c.name}
-              </label>
-            ))}
-          </fieldset>
-        )}
-        <fieldset className="contacts-checks d21-form-grid-wide">
-          <legend>Channels</legend>
-          {CHANNELS.map((c) => (
-            <label key={c} className="contacts-check">
-              <input type="checkbox" checked={channels.has(c)} onChange={(e) => setChannels((set) => {
-                const next = new Set(set);
-                if (e.target.checked) next.add(c); else next.delete(c);
-                return next;
-              })} />
-              {CHANNEL_LABELS[c]}
-            </label>
-          ))}
-        </fieldset>
+        <AudiencePicker client={client} jurisdictionId={jurisdictionId} value={audience} onChange={setAudience} contacts />
         <EnumSelect label="Mode" values={MODES} labels={MODE_LABELS} value={mode} onChange={setMode} />
+        <DeliveryChoice value={delivery} onChange={setDelivery} allowFallback={mode === "broadcast"} />
         {mode === "calldown" ? (
           <>
             <TextField label="Minutes to wait for each acknowledgement" value={waitMinutes} onChange={setWaitMinutes} />
@@ -198,11 +160,29 @@ function Compose(props: { client: ApiClient; jurisdictionId: string; onSent: (id
       {error ? <p className="d21-error" role="alert">{error}</p> : null}
       {notice ? <p role="status">{notice}</p> : null}
       <div className="d21-toolbar">
-        <span className="d21-muted">In-app notices reach contacts linked to an account or position. A contact without an address for a channel is skipped on that channel.</span>
+        <span className="d21-muted">In-app notices reach contacts linked to an account or position. A contact without an address for a channel is skipped on that channel, and a position holder with no contact card is reached in the app only.</span>
         <Button kind="primary" disabled={busy} onClick={() => void send()}>Send notification</Button>
       </div>
     </Panel>
   );
+}
+
+function modeText(m: MassNotificationDetail): string {
+  if (m.mode === "calldown") return `Call-down, ${m.intervalMinutes} min per contact`;
+  return m.fallbackMinutes
+    ? `Everyone at once; the next device after ${m.fallbackMinutes} min without an acknowledgement`
+    : "Everyone at once";
+}
+
+/**
+ * Why a channel has no delivery for a recipient: no address for it, or, with
+ * a fallback, an acknowledgement that came first and withdrew it unsent.
+ */
+function notSent(m: MassNotificationDetail, r: MassRecipient, channel: MassChannel): string {
+  if (channel === "inapp") return "No linked account or position";
+  const address = channel === "email" ? r.email : r.phone;
+  if (m.fallbackMinutes && r.acknowledgedAt && address) return "Not needed: acknowledged before the fallback";
+  return `No ${CHANNEL_LABELS[channel].toLowerCase()} address`;
 }
 
 /** One send's receipts. A refresh here also refreshes the list of sends, so both agree. */
@@ -220,9 +200,9 @@ function Receipts(props: { client: ApiClient; id: string; nonce: number; onRefre
             <StatusBadge status={stateStatus(m.state)}>{stateLabel(m)}</StatusBadge>
           </div>
           <dl className="d21-metrics">
-            <div><dt>Mode</dt><dd>{m.mode === "calldown" ? `Call-down, ${m.intervalMinutes} min per contact` : "Everyone at once"}</dd></div>
+            <div><dt>Mode</dt><dd>{modeText(m)}</dd></div>
             <div><dt>Sent</dt><dd>{m.sentBy} · {formatTime(m.createdAt)}</dd></div>
-            <div><dt>To</dt><dd>{m.groupName ?? "Chosen contacts"}</dd></div>
+            <div><dt>To</dt><dd>{m.audience}</dd></div>
           </dl>
           <p className="contacts-message">{m.message}</p>
           <ol className="contacts-receipts">
@@ -231,6 +211,7 @@ function Receipts(props: { client: ApiClient; id: string; nonce: number; onRefre
                 <div className="d21-card-header">
                   <div>
                     <strong>{r.priority}. {r.name}</strong>
+                    {r.reachedThrough ? <span>{r.reachedThrough}</span> : null}
                     <span>{r.notifiedAt ? `Notified ${formatTime(r.notifiedAt)}` : "Not called"}</span>
                   </div>
                   {r.acknowledgedAt ? (
@@ -246,9 +227,9 @@ function Receipts(props: { client: ApiClient; id: string; nonce: number; onRefre
                           <strong>{CHANNEL_LABELS[channel]}</strong>
                           {d ? <>
                             <span>{d.address ?? ""}</span>
-                            <StatusBadge status={d.state === "failed" || d.state === "expired" ? "critical" : d.state === "retrying" ? "warning" : d.state === "queued" ? "unknown" : "success"}>{DELIVERY_LABELS[d.state]}</StatusBadge>
-                            <span className="d21-muted">{deliveryDetail(d)}</span>
-                          </> : <span className="d21-muted">{channel === "inapp" ? "No linked account or position" : `No ${CHANNEL_LABELS[channel].toLowerCase()} address`}</span>}
+                            <StatusBadge status={d.state === "failed" || d.state === "expired" ? "critical" : d.state === "retrying" ? "warning" : d.state === "queued" || d.state === "scheduled" ? "unknown" : "success"}>{DELIVERY_LABELS[d.state]}</StatusBadge>
+                            <span className="d21-muted">{d.state === "scheduled" && d.dueAt ? `Goes at ${formatTime(d.dueAt)}` : deliveryDetail(d)}</span>
+                          </> : <span className="d21-muted">{notSent(m, r, channel)}</span>}
                         </li>
                       );
                     })}

@@ -10,6 +10,7 @@ import {
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import { splitPageQuery } from "../db/cursor.js";
+import { ActivationNoticeSchema, ackLinkBase } from "../notify/mass.js";
 import { closeWithdrawnGuestSockets } from "../sync/routes.js";
 import { getIncidentArea, listIncidentAreaHistory, reviseIncidentArea } from "./area.js";
 import { incidentParticipationRoutes } from "./participation-routes.js";
@@ -50,6 +51,8 @@ const ActivateBody = z.object({
   templateKey: z.string().min(1),
   name: z.string().min(1),
   kind: z.enum(["incident", "daily_ops", "planned_event", "exercise"]).optional(),
+  /** Whom the activation notifies, and how; omitted, it notifies no one. */
+  notify: ActivationNoticeSchema.optional(),
 });
 
 const LibraryBody = z.object({
@@ -82,7 +85,7 @@ export function incidentRoutes(
       const { jurisdictionId } = req.params as { jurisdictionId: string };
       const body = ActivateBody.parse(req.body);
       const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        activateIncident(tx, req.principal, jurisdictionId, body),
+        activateIncident(tx, req.principal, jurisdictionId, body, ackLinkBase(req)),
       );
       // Provision the collaboration space when a backend is enabled, once the
       // activation has committed and outside any transaction; best-effort, so

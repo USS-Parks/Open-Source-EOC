@@ -7,18 +7,27 @@ import { CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, cutPage, decodeCursor, pageQuery 
 import { AuthError, requireMember, requireWriter, type Principal } from "../auth/service.js";
 import { hashToken } from "../auth/tokens.js";
 import { recordAudit } from "../audit/service.js";
+import { audienceLabel, resolveAudience, type AudienceRecord } from "../contacts/reach.js";
 import { rateLimit } from "../security/rate-limit.js";
 
 /**
- * Mass notification: one message to a contact group or a list of contacts,
- * by email, SMS and in-app notice. Each contact and channel becomes one
- * notification and, for email and SMS, one row in the delivery queue, so the
- * worker's retries, dead letters and receipts apply unchanged.
+ * Mass notification: one message to contact groups, chosen contacts, the
+ * holders of positions and whoever is on call in a position (see
+ * contacts/reach.ts), by email, SMS and in-app notice. Each recipient and
+ * channel becomes one notification and, for email and SMS, one row in the
+ * delivery queue, so the worker's retries, dead letters and receipts apply
+ * unchanged.
  *
  * A broadcast notifies every contact at once. A call-down notifies them one
  * at a time in order: when the current contact has not acknowledged within
  * the interval the scheduler notifies the next, and the call-down stops once
  * enough contacts have acknowledged or no one is left to call.
+ *
+ * A broadcast may fall back from one device to the next: its SMS and email
+ * go in the order chosen, each later one queued to go once the fallback
+ * minutes have passed on the one before, and withdrawn by the database when
+ * the recipient acknowledges first. A recipient with no address for a channel
+ * moves straight on to the next. In-app notices go at once.
  *
  * Email and SMS carry a link with a per-recipient token that acknowledges for
  * that recipient only, for ACK_TTL_HOURS after it is sent. The link opens a
@@ -37,17 +46,37 @@ const ACK_TOKEN = /^[A-Za-z0-9_-]{22}$/;
 const ACK_PER_MINUTE = 30;
 
 const Channel = z.enum(["email", "sms", "inapp"]);
-const SendBody = z.object({
+const Ids = (max: number) => z.array(z.string().uuid()).min(1).max(max);
+/** Whom a send reaches: any of these parts, together. */
+export const AudienceSchema = z.object({
+  groupIds: Ids(20).optional(),
+  contactIds: Ids(MAX_RECIPIENTS).optional(),
+  positionIds: Ids(50).optional(),
+  onCallPositionIds: Ids(50).optional(),
+});
+const Fallback = z.number().int().min(1).max(1440);
+const SendBody = AudienceSchema.extend({
   subject: z.string().trim().min(1).max(200),
   message: z.string().trim().min(1).max(2000),
+  /** One contact group, as sends named it before they took several. */
   groupId: z.string().uuid().optional(),
-  contactIds: z.array(z.string().uuid()).min(1).max(MAX_RECIPIENTS).optional(),
+  /** In order; with a fallback, the order SMS and email are tried in. */
   channels: z.array(Channel).min(1).max(3),
   mode: z.enum(["broadcast", "calldown"]),
   intervalMinutes: z.number().int().min(1).max(1440).optional(),
+  /** A broadcast's minutes to wait for an acknowledgement before the next device. */
+  fallbackMinutes: Fallback.optional(),
   acknowledgementsNeeded: z.number().int().min(1).max(MAX_RECIPIENTS).default(1),
 });
 export type MassSend = z.input<typeof SendBody>;
+
+/** The notice an activation sends: whom it reaches, how, and optionally its words. */
+export const ActivationNoticeSchema = AudienceSchema.extend({
+  channels: z.array(Channel).min(1).max(3),
+  message: z.string().trim().min(1).max(2000).optional(),
+  fallbackMinutes: Fallback.optional(),
+});
+export type ActivationNotice = z.infer<typeof ActivationNoticeSchema>;
 
 type Row = Record<string, unknown>;
 
@@ -58,12 +87,22 @@ interface Mass {
   readonly message: string;
   readonly channels: string[];
   readonly link_base: string;
+  readonly incident_id: string | null;
+  readonly fallback_minutes: number | null;
+}
+
+/** Where acknowledgement links point: OPENEOC_PUBLIC_URL when set, else the address the sender reached. */
+export function ackLinkBase(req: FastifyRequest): string {
+  return (process.env.OPENEOC_PUBLIC_URL || `${req.protocol}://${req.host}`).replace(/\/+$/, "");
 }
 
 /**
  * Notify one recipient: issue its acknowledgement token and write its
  * notifications, with a queued delivery for each email and SMS. A channel
  * the contact has no address for is skipped; the receipts show it as such.
+ * With a fallback, each email or SMS after the first is queued to go that
+ * many minutes after the one before, by the database's clock, and marked so
+ * the recipient's acknowledgement withdraws it.
  */
 async function notifyRecipient(tx: Sql, mass: Mass, recipient: Row, now: Date): Promise<void> {
   const token = randomBytes(16).toString("base64url");
@@ -73,6 +112,9 @@ async function notifyRecipient(tx: Sql, mass: Mass, recipient: Row, now: Date): 
         token_expires_at = ${new Date(now.getTime() + ACK_TTL_HOURS * 3_600_000)}
     where id = ${recipient.id as string}`;
   const link = `${mass.link_base}/api/v1/ack/${token}`;
+  // An in-app notice of an incident's send opens that incident.
+  const about = { massNotificationId: mass.id, ...(mass.incident_id ? { incidentId: mass.incident_id } : {}) };
+  let wait = 0;
   for (const channel of mass.channels) {
     const personId = (recipient.person_id as string | null) ?? null;
     const positionId = personId ? null : ((recipient.position_id as string | null) ?? null);
@@ -83,25 +125,32 @@ async function notifyRecipient(tx: Sql, mass: Mass, recipient: Row, now: Date): 
           (jurisdiction_id, person_id, position_id, channel, title, body, status, detail, mass_recipient_id)
         values
           (${mass.jurisdiction_id}, ${personId}, ${positionId}, 'inapp', ${mass.subject}, ${mass.message},
-           'delivered', ${tx.json({ massNotificationId: mass.id } as never)}, ${recipient.id as string})`;
+           'delivered', ${tx.json(about as never)}, ${recipient.id as string})`;
       continue;
     }
     const to = (channel === "email" ? recipient.email : recipient.phone) as string | null;
     if (!to) continue;
+    const after = wait;
+    wait += mass.fallback_minutes ?? 0;
     // Chosen here, not returned: a member may write a notification it may not read back.
     const notificationId = randomUUID();
+    const detail = tx.json({ to, title: mass.subject, ...about } as never);
     await tx`
       insert into notifications (id, jurisdiction_id, channel, title, body, status, detail, mass_recipient_id)
       values
         (${notificationId}, ${mass.jurisdiction_id}, ${channel}, ${mass.subject}, ${mass.message}, 'pending',
-         ${tx.json({ to, title: mass.subject, massNotificationId: mass.id } as never)}, ${recipient.id as string})`;
+         ${after > 0
+           ? tx`${detail}::jsonb || jsonb_build_object('fallbackAt', now() + make_interval(mins => ${after}))`
+           : detail},
+         ${recipient.id as string})`;
     const body = channel === "email"
       ? `${mass.message}\n\nAcknowledge that you received this message:\n${link}\n`
       : `${mass.subject}: ${mass.message} Acknowledge: ${link}`;
     const headers = channel === "email" ? { subject: mass.subject } : {};
     await tx`
-      insert into delivery_outbox (jurisdiction_id, notification_id, kind, target, headers, body)
-      values (${mass.jurisdiction_id}, ${notificationId}, ${channel}, ${to}, ${tx.json(headers as never)}, ${body})`;
+      insert into delivery_outbox (jurisdiction_id, notification_id, kind, target, headers, body, next_attempt_at)
+      values (${mass.jurisdiction_id}, ${notificationId}, ${channel}, ${to}, ${tx.json(headers as never)}, ${body},
+              now() + make_interval(mins => ${after}))`;
   }
 }
 
@@ -119,72 +168,93 @@ export async function sendMassNotification(
 ): Promise<{ id: string }> {
   requireWriter(actor, jurisdictionId);
   const body = SendBody.parse(input);
-  if ((body.groupId === undefined) === (body.contactIds === undefined))
-    throw new AuthError(422, "send to a contact group or to a list of contacts");
+  const { id } = await withPerson(sql, actor.person.id, (tx) =>
+    sendMassNotificationIn(tx, actor, jurisdictionId, body, linkBase, { now }));
+  return { id };
+}
+
+/**
+ * Send inside the caller's transaction, so an activation and its notice
+ * commit together. Returns the send and how many recipients it reached.
+ */
+export async function sendMassNotificationIn(
+  tx: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+  input: MassSend,
+  linkBase: string,
+  options: { readonly now?: Date; readonly incidentId?: string } = {},
+): Promise<{ id: string; recipients: number }> {
+  requireWriter(actor, jurisdictionId);
+  const body = SendBody.parse(input);
+  const now = options.now ?? new Date();
+  if (body.groupId && body.groupIds) throw new AuthError(422, "name one contact group or a list of groups, not both");
+  const groupIds = body.groupId ? [body.groupId] : body.groupIds;
+  if (!groupIds && !body.contactIds && !body.positionIds && !body.onCallPositionIds)
+    throw new AuthError(422, "send to a contact group, chosen contacts, a position or whoever is on call");
   if (body.mode === "calldown" && body.intervalMinutes === undefined)
     throw new AuthError(422, "a call-down needs the minutes to wait for each acknowledgement");
   const channels = [...new Set(body.channels)];
-  return withPerson(sql, actor.person.id, async (tx) => {
-    let groupName: string | null = null;
-    let contacts: Row[];
-    if (body.groupId) {
-      const [group] = await tx`
-        select name from contact_groups where id = ${body.groupId} and jurisdiction_id = ${jurisdictionId}`;
-      if (!group) throw new AuthError(404, "contact group not found");
-      groupName = group.name as string;
-      contacts = await tx`
-        select c.id, c.name, c.emails, c.phones, c.person_id, c.position_id
-        from contact_group_members m join contacts c on c.id = m.contact_id
-        where m.group_id = ${body.groupId} and c.active
-        order by m.priority`;
-    } else {
-      const ids = [...new Set(body.contactIds)];
-      const found = await tx`
-        select id, name, emails, phones, person_id, position_id from contacts
-        where jurisdiction_id = ${jurisdictionId} and active and id = any(${ids}::uuid[])`;
-      const byId = new Map(found.map((c) => [c.id as string, c]));
-      if (byId.size !== ids.length) throw new AuthError(422, "every contact must be an active contact in this jurisdiction");
-      contacts = ids.map((id) => byId.get(id)!);
-    }
-    if (contacts.length === 0) throw new AuthError(422, "the group has no active contacts");
-    if (contacts.length > MAX_RECIPIENTS) throw new AuthError(422, `send to at most ${MAX_RECIPIENTS} contacts at once`);
-    const [row] = await tx`
-      insert into mass_notifications
-        (jurisdiction_id, subject, message, group_id, group_name, channels, mode, interval_minutes,
-         acknowledgements_needed, link_base, sent_by, created_at)
-      values
-        (${jurisdictionId}, ${body.subject}, ${body.message}, ${body.groupId ?? null}, ${groupName},
-         ${channels}::text[], ${body.mode}, ${body.mode === "calldown" ? body.intervalMinutes! : null},
-         ${body.acknowledgementsNeeded}, ${linkBase}, ${actor.person.id}, ${now})
-      returning id`;
-    const mass: Mass = {
-      id: row!.id as string,
-      jurisdiction_id: jurisdictionId,
-      subject: body.subject,
-      message: body.message,
-      channels,
-      link_base: linkBase,
-    };
-    const recipients = await tx`
-      insert into mass_notification_recipients
-        (mass_notification_id, jurisdiction_id, priority, contact_id, name, email, phone, person_id, position_id)
-      select ${mass.id}, ${jurisdictionId}, x.priority, x.id, c.name, c.emails[1], c.phones[1],
-             c.person_id, c.position_id
-      from unnest(${contacts.map((c) => c.id as string)}::uuid[]) with ordinality as x(id, priority)
-      join contacts c on c.id = x.id
-      returning id, priority, email, phone, person_id, position_id`;
-    for (const recipient of recipients) {
-      if (body.mode === "broadcast" || Number(recipient.priority) === 1) await notifyRecipient(tx, mass, recipient, now);
-    }
-    await recordAudit(tx, actor, {
-      jurisdictionId,
-      category: "notification.mass_sent",
-      subjectTable: "mass_notifications",
-      subjectId: mass.id,
-      payload: { mode: body.mode, channels, recipients: contacts.length, groupId: body.groupId ?? null },
-    });
-    return { id: mass.id };
+  if (body.fallbackMinutes !== undefined && body.mode !== "broadcast")
+    throw new AuthError(422, "a fallback applies to a broadcast; a call-down moves on to the next contact instead");
+  if (body.fallbackMinutes !== undefined && channels.filter((c) => c !== "inapp").length < 2)
+    throw new AuthError(422, "a fallback needs both SMS and email, in the order to try them");
+  const { recipients: reached, audience } = await resolveAudience(tx, jurisdictionId, {
+    groupIds, contactIds: body.contactIds, positionIds: body.positionIds, onCallPositionIds: body.onCallPositionIds,
+  }, now);
+  if (reached.length === 0)
+    throw new AuthError(422, "no one to notify: what was chosen has no active contact, holder or person on shift");
+  if (reached.length > MAX_RECIPIENTS) throw new AuthError(422, `send to at most ${MAX_RECIPIENTS} contacts at once`);
+  // One group alone is also recorded as the send's group, as sends were before audiences.
+  const soleGroup = audience.groups.length === 1 ? audience.groups[0]! : null;
+  const [row] = await tx`
+    insert into mass_notifications
+      (jurisdiction_id, subject, message, group_id, group_name, channels, mode, interval_minutes,
+       acknowledgements_needed, link_base, sent_by, created_at, incident_id, audience, fallback_minutes)
+    values
+      (${jurisdictionId}, ${body.subject}, ${body.message}, ${soleGroup?.id ?? null}, ${soleGroup?.name ?? null},
+       ${channels}::text[], ${body.mode}, ${body.mode === "calldown" ? body.intervalMinutes! : null},
+       ${body.acknowledgementsNeeded}, ${linkBase}, ${actor.person.id}, ${now}, ${options.incidentId ?? null},
+       ${tx.json(audience as never)}, ${body.fallbackMinutes ?? null})
+    returning id`;
+  const mass: Mass = {
+    id: row!.id as string,
+    jurisdiction_id: jurisdictionId,
+    subject: body.subject,
+    message: body.message,
+    channels,
+    link_base: linkBase,
+    incident_id: options.incidentId ?? null,
+    fallback_minutes: body.fallbackMinutes ?? null,
+  };
+  const column = <K extends keyof (typeof reached)[number]>(key: K) => reached.map((r) => r[key]);
+  const recipients = await tx`
+    insert into mass_notification_recipients
+      (mass_notification_id, jurisdiction_id, priority, contact_id, name, email, phone, person_id, position_id,
+       reached_through)
+    select ${mass.id}, ${jurisdictionId}, x.priority, x.contact_id, x.name, x.email, x.phone, x.person_id,
+           x.position_id, x.through
+    from unnest(${column("contactId") as string[]}::uuid[], ${column("name")}::text[],
+                ${column("email") as string[]}::text[], ${column("phone") as string[]}::text[],
+                ${column("personId") as string[]}::uuid[], ${column("positionId") as string[]}::uuid[],
+                ${column("through")}::text[])
+      with ordinality as x(contact_id, name, email, phone, person_id, position_id, through, priority)
+    returning id, priority, email, phone, person_id, position_id`;
+  for (const recipient of recipients) {
+    if (body.mode === "broadcast" || Number(recipient.priority) === 1) await notifyRecipient(tx, mass, recipient, now);
+  }
+  await recordAudit(tx, actor, {
+    jurisdictionId,
+    ...(options.incidentId ? { incidentId: options.incidentId } : {}),
+    category: "notification.mass_sent",
+    subjectTable: "mass_notifications",
+    subjectId: mass.id,
+    payload: {
+      mode: body.mode, channels, recipients: reached.length, groupId: soleGroup?.id ?? null,
+      audience: audienceLabel(audience, null), fallbackMinutes: body.fallbackMinutes ?? null,
+    },
   });
+  return { id: mass.id, recipients: reached.length };
 }
 
 /**
@@ -204,7 +274,7 @@ export async function runDueCalldowns(
     // The row lock keeps an overlapping run during a leader handover from calling twice.
     const open = await tx`
       select id, jurisdiction_id, subject, message, channels, link_base, interval_minutes,
-        acknowledgements_needed
+        acknowledgements_needed, incident_id, fallback_minutes
       from mass_notifications
       where jurisdiction_id = ${jurisdictionId} and mode = 'calldown' and completed_at is null
       order by created_at
@@ -247,7 +317,10 @@ function summaryView(r: Row) {
     mode: r.mode as "broadcast" | "calldown",
     channels: r.channels as string[],
     groupName: r.group_name as string | null,
+    audience: audienceLabel(r.audience as Partial<AudienceRecord> | null, r.group_name as string | null),
+    incidentId: r.incident_id as string | null,
     intervalMinutes: r.interval_minutes as number | null,
+    fallbackMinutes: r.fallback_minutes as number | null,
     acknowledgementsNeeded: r.acknowledgements_needed as number,
     sentBy: r.sent_by_name as string,
     createdAt: (r.created_at as Date).toISOString(),
@@ -266,6 +339,7 @@ async function readSummaries(
   return tx`
     select m.id, m.subject, m.message, m.mode, m.channels, m.group_name, m.interval_minutes,
       m.acknowledgements_needed, m.created_at, m.completed_at, m.jurisdiction_id,
+      m.audience, m.incident_id, m.fallback_minutes,
       p.display_name as sent_by_name,
       to_char(m.created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at,
       (select count(*) from mass_notification_recipients r where r.mass_notification_id = m.id) as recipients,
@@ -282,16 +356,18 @@ async function readSummaries(
 }
 
 /**
- * A delivery's state in plain terms: queued; retrying, which the screen calls
- * waiting for a route; sent; failed, when refused; expired, when held past
- * its window with no route; or, in the app, delivered.
+ * A delivery's state in plain terms: scheduled, a fallback waiting its turn;
+ * queued; retrying, which the screen calls waiting for a route; sent; failed,
+ * when refused; expired, when held past its window with no route; or, in the
+ * app, delivered.
  */
-function deliveryState(d: Row): "queued" | "retrying" | "sent" | "failed" | "expired" | "delivered" {
+function deliveryState(d: Row, now: Date): "scheduled" | "queued" | "retrying" | "sent" | "failed" | "expired" | "delivered" {
   if (d.channel === "inapp") return "delivered";
   if (d.status === "delivered") return "sent";
   if (d.status === "expired") return "expired";
   if (d.status === "dead" || d.status === "failed") return "failed";
-  return d.error ? "retrying" : "queued";
+  if (d.error) return "retrying";
+  return Number(d.attempts) === 0 && d.due_at && (d.due_at as Date).getTime() > now.getTime() ? "scheduled" : "queued";
 }
 
 /** The public link's pages: plain HTML, no data beyond what the page says. */
@@ -343,8 +419,7 @@ export function massNotificationRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { jurisdictionId } = z.object({ jurisdictionId: z.string().uuid() }).parse(req.params);
-      const linkBase = (process.env.OPENEOC_PUBLIC_URL || `${req.protocol}://${req.host}`).replace(/\/+$/, "");
-      const sent = await sendMassNotification(sql, req.principal, jurisdictionId, req.body as MassSend, linkBase);
+      const sent = await sendMassNotification(sql, req.principal, jurisdictionId, req.body as MassSend, ackLinkBase(req));
       return reply.status(201).send(sent);
     },
   );
@@ -357,10 +432,12 @@ export function massNotificationRoutes(
       requireMember(req.principal, mass.jurisdiction_id as string);
       const recipients = await tx`
         select id, priority, contact_id, name, email, phone, person_id, position_id,
-          notified_at, token_expires_at, acknowledged_at, acknowledged_via
+          notified_at, token_expires_at, acknowledged_at, acknowledged_via, reached_through
         from mass_notification_recipients where mass_notification_id = ${massNotificationId}
         order by priority`;
       const deliveries = await tx`select * from mass_notification_deliveries(${massNotificationId})`;
+      const [clock] = await tx`select now() as now`;
+      const now = clock!.now as Date;
       return {
         ...summaryView(mass),
         message: mass.message as string,
@@ -372,6 +449,7 @@ export function massNotificationRoutes(
           email: r.email as string | null,
           phone: r.phone as string | null,
           inApp: Boolean(r.person_id || r.position_id),
+          reachedThrough: r.reached_through as string | null,
           notifiedAt: r.notified_at ? (r.notified_at as Date).toISOString() : null,
           linkExpiresAt: r.token_expires_at ? (r.token_expires_at as Date).toISOString() : null,
           acknowledgedAt: r.acknowledged_at ? (r.acknowledged_at as Date).toISOString() : null,
@@ -381,11 +459,12 @@ export function massNotificationRoutes(
             .map((d) => ({
               channel: d.channel as "email" | "sms" | "inapp",
               address: d.address as string | null,
-              state: deliveryState(d),
+              state: deliveryState(d, now),
               attempts: Number(d.attempts),
               error: d.error as string | null,
               receipt: d.receipt as Record<string, unknown> | null,
               at: (d.updated_at as Date).toISOString(),
+              dueAt: d.due_at ? (d.due_at as Date).toISOString() : null,
             })),
         })),
       };

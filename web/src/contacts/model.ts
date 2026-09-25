@@ -72,15 +72,40 @@ export interface ContactImportResult {
 export type MassChannel = "email" | "sms" | "inapp";
 export type MassState = "sent" | "calling" | "acknowledged" | "unacknowledged";
 
-export interface MassSendInput {
+/** Whom a send reaches: any of these, together; everyone is reached once. */
+export interface Audience {
+  readonly groupIds?: readonly string[];
+  readonly contactIds?: readonly string[];
+  /** Whoever holds each position now. */
+  readonly positionIds?: readonly string[];
+  /** Whoever is on shift in each position now, or its holders when no one is. */
+  readonly onCallPositionIds?: readonly string[];
+}
+
+export interface MassSendInput extends Audience {
   readonly subject: string;
   readonly message: string;
   readonly groupId?: string;
-  readonly contactIds?: readonly string[];
+  /** In order; with a fallback, the order SMS and email are tried in. */
   readonly channels: readonly MassChannel[];
   readonly mode: "broadcast" | "calldown";
   readonly intervalMinutes?: number;
+  /** A broadcast's minutes to wait for an acknowledgement before the next device. */
+  readonly fallbackMinutes?: number;
   readonly acknowledgementsNeeded?: number;
+}
+
+/** The notice an activation sends; without a message it says the incident is activated. */
+export interface ActivationNotice extends Audience {
+  readonly channels: readonly MassChannel[];
+  readonly message?: string;
+  readonly fallbackMinutes?: number;
+}
+
+/** An audience with its empty parts left out, or null when it names no one. */
+export function audienceOf(parts: { readonly [K in keyof Audience]-?: readonly string[] }): Audience | null {
+  const audience = Object.fromEntries(Object.entries(parts).filter(([, ids]) => ids.length > 0)) as Audience;
+  return Object.keys(audience).length > 0 ? audience : null;
 }
 
 export interface MassNotificationSummary {
@@ -89,7 +114,11 @@ export interface MassNotificationSummary {
   readonly mode: "broadcast" | "calldown";
   readonly channels: readonly MassChannel[];
   readonly groupName: string | null;
+  /** What the send was addressed to, in one line, with any part that reached no one. */
+  readonly audience: string;
+  readonly incidentId: string | null;
   readonly intervalMinutes: number | null;
+  readonly fallbackMinutes: number | null;
   readonly acknowledgementsNeeded: number;
   readonly sentBy: string;
   readonly createdAt: string;
@@ -108,11 +137,13 @@ export interface MassNotificationsPage {
 export interface MassDelivery {
   readonly channel: MassChannel;
   readonly address: string | null;
-  readonly state: "queued" | "retrying" | "sent" | "failed" | "expired" | "delivered";
+  readonly state: "scheduled" | "queued" | "retrying" | "sent" | "failed" | "expired" | "delivered";
   readonly attempts: number;
   readonly error: string | null;
   readonly receipt: Readonly<Record<string, unknown>> | null;
   readonly at: string;
+  /** When a queued delivery falls due; a scheduled fallback goes then unless acknowledged first. */
+  readonly dueAt: string | null;
 }
 
 export interface MassRecipient {
@@ -123,6 +154,8 @@ export interface MassRecipient {
   readonly email: string | null;
   readonly phone: string | null;
   readonly inApp: boolean;
+  /** How the send found this person: a group, a position held, a shift. */
+  readonly reachedThrough: string | null;
   readonly notifiedAt: string | null;
   readonly linkExpiresAt: string | null;
   readonly acknowledgedAt: string | null;
@@ -172,6 +205,7 @@ export function deliveryDetail(d: MassDelivery): string {
 }
 
 export const DELIVERY_LABELS: Readonly<Record<MassDelivery["state"], string>> = {
+  scheduled: "Falls back if not acknowledged",
   queued: "Queued",
   retrying: "Waiting for a route",
   sent: "Sent",

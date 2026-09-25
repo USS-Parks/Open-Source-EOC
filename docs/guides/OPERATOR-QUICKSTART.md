@@ -316,29 +316,60 @@ Administrators add, change and delete contacts, import them from a CSV file,
 and keep **Groups**: named lists of contacts in call-down order. An inactive
 contact stays in the directory but is skipped by every send.
 
-**Coordination / Mass Notification** sends one message to a group or to chosen
-contacts. Members and administrators send; viewers follow the sends.
+**Coordination / Mass Notification** sends one message to contact groups,
+chosen contacts, positions and whoever is on call. Members and administrators
+send; viewers follow the sends.
 
 1. Enter a **Subject** and a **Message**.
-2. Under **Send to**, choose **A contact group** or **Chosen contacts**. Chosen
-   contacts are notified in the order you tick them.
-3. Tick the **Channels**: Email, SMS and In app. In-app notices reach contacts
-   linked to an account or position. A contact without an address for a
-   channel is skipped on that channel, and the receipts say so.
-4. Choose the **Mode**. **Everyone at once** notifies every contact now.
+2. Tick whom to reach, in any mix: **Contact groups**; **Contacts**, notified
+   in the order you tick them; **Positions: whoever holds each now**; and
+   **On call: whoever is on shift in each now**. A position reaches its own
+   contact card, such as a desk phone, and each person who holds it, through
+   that person's contact card when the directory has one. On call reaches the
+   person on shift in the position (Staffing's shifts); when no one is on
+   shift, it reaches the position's holders instead, and the receipts say
+   so. Everyone is reached once, however many of your choices name them.
+3. Choose the **Mode**. **Everyone at once** notifies everyone now.
    **Call-down, one contact at a time** notifies the first contact, and when
    that contact has not acknowledged within **Minutes to wait for each
    acknowledgement**, the next one. It stops when **Acknowledgements that end
    the call-down** have come in, or after the last contact's wait.
-5. Select **Send notification**. The receipts open.
+4. Tick the **Channels**: Email, SMS and In app. In-app notices reach
+   contacts linked to an account or position, and people reached through a
+   position or shift. A contact without an address for a channel is skipped
+   on that channel, and the receipts say so; a holder with no contact card is
+   reached in the app only.
+5. For everyone at once with both SMS and email, you may tick **If someone
+   does not acknowledge, try their next device**, choose the **Order** (SMS
+   first, then email, or the reverse) and the **Minutes to wait before the
+   next device**. The first device goes now; the second waits that long and
+   goes only to people who have not acknowledged. In-app notices go at once.
+6. Select **Send notification**. The receipts open. A send that would reach
+   no one is refused with the reason.
 
-The receipts list each contact in order: when it was notified or **Not
-called**, whether and how it acknowledged, and for each channel **Queued**,
-**Retrying**, **Sent** or **Failed** with the relay's or provider's answer or
-the error, or **Delivered** for an in-app notice. They refresh while open, and
-**Refresh receipts** refreshes them at once. The list of sends shows each
-send's state: **Sent** for a broadcast, **Calling down**, **Acknowledged**, or
-**Call-down ended without an acknowledgement**.
+The receipts say what the send was addressed to (a position or shift that
+reached no one is marked so) and list each person in order: how the send
+found them (their group, the position they hold, their shift), when they were
+notified or **Not called**, whether and how they acknowledged, and for each
+channel **Queued**, **Retrying**, **Sent** or **Failed** with the relay's or
+provider's answer or the error, or **Delivered** for an in-app notice. A
+fallback waiting its turn reads **Falls back if not acknowledged** with the
+time it goes, and one withdrawn by an acknowledgement reads **Not needed:
+acknowledged before the fallback**. They refresh while open, and **Refresh
+receipts** refreshes them at once. The list of sends shows each send's state:
+**Sent** for a broadcast, **Calling down**, **Acknowledged**, or **Call-down
+ended without an acknowledgement**.
+
+**Notify when an incident activates.** Under **Incident Setup**, **Activate an
+incident** has **Notify people when it activates**. Tick it, then tick the
+groups, positions and on-call positions to reach, the channels (in the app is
+ticked by default, since a person on shift may have no contact card) and any
+fallback, and optionally write the message; without one, the notice says the
+incident is activated and asks people to check in. The notice is sent with
+the activation, as one step: a notice that would reach no one stops the
+activation with the reason. The notice appears under Mass Notification as
+**Activated:** and the incident's name, its in-app notices open the incident,
+and the incident's chronology records it.
 
 Email and SMS carry an acknowledgement link for that one recipient. Opening it
 shows an **Acknowledge** button; the acknowledgement is recorded when the

@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../design/components.js";
-import type { ApiClient, BoardListItem, NotificationChannel, NotificationRule, NotificationRuleInput } from "../app/api/client.js";
+import {
+  readAllPages,
+  type ApiClient, type BoardListItem, type NotificationChannel, type NotificationRule, type NotificationRuleInput, type ReachVia,
+} from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import { ErrorNote, Loading } from "../app/screens/parts.js";
 import "./admin.css";
@@ -11,14 +14,33 @@ type Draft = Readonly<Record<string, string>>;
 const trimmed = (value: string | undefined) => (value ?? "").trim();
 const listed = (value: string | undefined) => trimmed(value).split(/[\s,;]+/).filter(Boolean);
 
+/** How a group or position channel reaches each person, as one choice. */
+export const VIA_LABELS: Readonly<Record<string, string>> = {
+  inapp: "In-app notice",
+  email: "Email",
+  sms: "SMS",
+  "inapp,email": "In-app notice and email",
+  "inapp,sms": "In-app notice and SMS",
+  "email,sms": "Email and SMS",
+  "inapp,email,sms": "In-app notice, email and SMS",
+};
+const REACH_LABELS: Readonly<Record<string, string>> = {
+  holders: "Whoever holds it now",
+  on_call: "Whoever is on shift in it now",
+};
+const via = (d: Draft) => (listed(d.via).length ? listed(d.via) : ["inapp"]) as ReachVia[];
+
+/** Where a field's choices come from: the jurisdiction's groups or positions, or a fixed list. */
+type Choices = "groups" | "positions" | Readonly<Record<string, string>>;
+
 /**
  * The channel kinds a rule can use: a label, the fields an administrator
  * fills, and how they become the channel the server accepts. A new kind is
- * one entry here.
+ * one entry here. A field with choices is a list to pick from.
  */
 export const CHANNEL_KINDS: Readonly<Record<ChannelKind, {
   readonly label: string;
-  readonly fields: ReadonlyArray<{ readonly key: string; readonly label: string }>;
+  readonly fields: ReadonlyArray<{ readonly key: string; readonly label: string; readonly choices?: Choices }>;
   readonly build: (draft: Draft) => NotificationChannel;
 }>> = {
   inapp: {
@@ -46,6 +68,22 @@ export const CHANNEL_KINDS: Readonly<Record<ChannelKind, {
     fields: [{ key: "to", label: "Phone numbers in E.164 form, separated by commas" }],
     build: (d) => ({ kind: "sms", to: listed(d.to) }),
   },
+  group: {
+    label: "Contact group",
+    fields: [{ key: "groupId", label: "Group", choices: "groups" }, { key: "via", label: "Reach each by", choices: VIA_LABELS }],
+    build: (d) => ({ kind: "group", groupId: trimmed(d.groupId), via: via(d) }),
+  },
+  position: {
+    label: "Position",
+    fields: [
+      { key: "positionId", label: "Position", choices: "positions" },
+      { key: "reach", label: "Reach", choices: REACH_LABELS },
+      { key: "via", label: "Reach each by", choices: VIA_LABELS },
+    ],
+    build: (d) => ({
+      kind: "position", positionId: trimmed(d.positionId), reach: d.reach === "on_call" ? "on_call" : "holders", via: via(d),
+    }),
+  },
 };
 
 const EVENT_LABELS: Readonly<Record<NotificationRuleInput["event"], string>> = {
@@ -68,13 +106,28 @@ function wholeNumber(text: string, label: string, min: number, max: number): num
 const draftOf = (channel: NotificationChannel): Draft => Object.fromEntries(Object.entries(channel)
   .filter(([key]) => key !== "kind").map(([key, value]) => [key, Array.isArray(value) ? value.join(", ") : String(value)]));
 
+/** One line saying where a channel sends, naming groups and positions by the names given. */
+function channelSummary(c: NotificationChannel, names: ReadonlyMap<string, string>): string {
+  const by = (list: readonly ReachVia[]) => (VIA_LABELS[list.join(",")] ?? list.join(", ")).toLowerCase();
+  switch (c.kind) {
+    case "email": case "sms": return `${CHANNEL_KINDS[c.kind].label} to ${c.to.join(", ")}`;
+    case "webhook": return `Webhook to ${c.url}`;
+    case "ntfy": return `Push to ${c.topic}`;
+    case "group": return `Group ${names.get(c.groupId) ?? "(removed)"} by ${by(c.via)}`;
+    case "position": {
+      const title = names.get(c.positionId) ?? "(removed)";
+      return `${c.reach === "on_call" ? `On call as ${title}` : `Holders of ${title}`} by ${by(c.via)}`;
+    }
+    default: return CHANNEL_KINDS[c.kind].label;
+  }
+}
+
 /** One line saying what a rule watches and where it sends. */
-function ruleSummary(rule: NotificationRule): string {
+function ruleSummary(rule: NotificationRule, names: ReadonlyMap<string, string>): string {
   const when = rule.event === "scheduled" ? `Every ${rule.scheduleIntervalMinutes ?? "?"} minutes` : EVENT_LABELS[rule.event];
   const condition = rule.condition.op === "any" || !rule.condition.field ? ""
     : `, when ${rule.condition.field} ${rule.condition.op === "eq" ? "equals" : "changes to"} ${String(rule.condition.value ?? "")}`;
-  const channels = rule.channels.map((c) => c.kind === "email" || c.kind === "sms" ? `${CHANNEL_KINDS[c.kind].label} to ${c.to.join(", ")}`
-    : c.kind === "webhook" ? `Webhook to ${c.url}` : c.kind === "ntfy" ? `Push to ${c.topic}` : CHANNEL_KINDS[c.kind].label);
+  const channels = rule.channels.map((c) => channelSummary(c, names));
   return `${rule.boardTitle ?? "Any board"} · ${when}${condition} · ${channels.join("; ")}`;
 }
 
@@ -103,6 +156,26 @@ export function Notifications(props: { client: ApiClient; jurisdictionId: string
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const rules = useAsync(() => props.client.listNotificationRules(props.jurisdictionId), [props.jurisdictionId]);
+  const groups = useAsync(() => readAllPages((page) => props.client.listContactGroups(props.jurisdictionId, page)
+    .then((r) => ({ items: r.groups, nextCursor: r.nextCursor }))), [props.jurisdictionId]);
+  const positions = useAsync(() => props.client.listPositions(props.jurisdictionId), [props.jurisdictionId]);
+  const names = new Map<string, string>([
+    ...(groups.data ?? []).map((g) => [g.id, g.name] as const),
+    ...(positions.data ?? []).map((p) => [p.id, p.title] as const),
+  ]);
+  /** A field's choices as value and label, in the order offered. */
+  const optionsFor = (choices: Choices): Record<string, string> => choices === "groups"
+    ? Object.fromEntries((groups.data ?? []).map((g) => [g.id, g.name]))
+    : choices === "positions"
+      ? Object.fromEntries([...(positions.data ?? [])].sort((a, b) => a.title.localeCompare(b.title)).map((p) => [p.id, p.title]))
+      : { ...choices };
+  /** A choice field left as it opened holds the first choice it shows. */
+  const chosen = (field: { key: string; choices?: Choices }, draft: Draft): string => {
+    if (!field.choices) return draft[field.key] ?? "";
+    const options = Object.keys(optionsFor(field.choices));
+    const value = field.key === "via" ? listed(draft.via).join(",") : draft[field.key] ?? "";
+    return options.includes(value) ? value : options[0] ?? "";
+  };
   // The rule the form is changing, and the rule awaiting a confirmed removal.
   const [editing, setEditing] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
@@ -138,7 +211,13 @@ export function Notifications(props: { client: ApiClient; jurisdictionId: string
       boardId: boardId || null,
       event,
       condition: op === "any" ? { op } : { op, field: field.trim(), value },
-      channels: channels.map((channel) => CHANNEL_KINDS[channel.kind].build(channel.draft)),
+      channels: channels.map((channel) => {
+        const kind = CHANNEL_KINDS[channel.kind];
+        const draft = Object.fromEntries(kind.fields.map((f) => [f.key, chosen(f, channel.draft)]));
+        if (kind.fields.some((f) => f.choices && !draft[f.key]))
+          throw new Error(channel.kind === "group" ? "Add a contact group under Contacts first." : "The jurisdiction has no positions to choose.");
+        return kind.build(draft);
+      }),
       ...(event === "scheduled" ? { scheduleIntervalMinutes: wholeNumber(every, "Run every", 1, 10080) } : {}),
       rateLimit: {
         max: wholeNumber(rateMax, "Most deliveries per window", 1, 600),
@@ -207,7 +286,7 @@ export function Notifications(props: { client: ApiClient; jurisdictionId: string
         {rules.data && rules.data.length === 0 ? <p className="d21-muted">No notification rules yet.</p> : null}
         {rules.data?.length ? <ul className="admin-list">
           {rules.data.map((rule) => {
-            const summary = ruleSummary(rule);
+            const summary = ruleSummary(rule, names);
             return (
               <li key={rule.id} aria-label={`Rule: ${summary}`} className="d21-toolbar">
                 <span className="admin-wrap">
@@ -253,7 +332,11 @@ export function Notifications(props: { client: ApiClient; jurisdictionId: string
                   <EnumSelect label={`Channel kind${suffix}`} values={Object.keys(CHANNEL_KINDS)} value={channel.kind}
                     labels={Object.fromEntries(Object.entries(CHANNEL_KINDS).map(([k, v]) => [k, v.label]))}
                     onChange={(v) => editChannel(index, { kind: v as ChannelKind })} />
-                  {CHANNEL_KINDS[channel.kind].fields.map((f) => (
+                  {CHANNEL_KINDS[channel.kind].fields.map((f) => f.choices ? (
+                    <EnumSelect key={f.key} label={`${f.label}${suffix}`} values={Object.keys(optionsFor(f.choices))}
+                      labels={optionsFor(f.choices)} value={chosen(f, channel.draft)}
+                      onChange={(v) => editChannel(index, { key: f.key, value: v })} />
+                  ) : (
                     <TextField key={f.key} label={`${f.label}${suffix}`} value={channel.draft[f.key] ?? ""}
                       onChange={(v) => editChannel(index, { key: f.key, value: v })} />
                   ))}

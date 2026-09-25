@@ -114,6 +114,7 @@ export const CATEGORY_LABELS: Readonly<Record<string, string>> = {
   "mfa.verification_failed": "Two-step sign-in failed",
   "notification.acknowledged": "Notification acknowledged",
   "notification.allowlist_updated": "Notification allowlist updated",
+  "notification.mass_sent": "Mass notification sent",
   "operational.relationship.created": "Operational link created",
   "retention.policy.updated": "Retention policy updated",
   "retention.purged": "Expired records purged",
@@ -138,6 +139,8 @@ export const CATEGORY_LABELS: Readonly<Record<string, string>> = {
  */
 export const SIGNIFICANT_CATEGORIES: readonly string[] = [
   "incident.activated",
+  // The activation notice, or any mass notification sent for the incident.
+  "notification.mass_sent",
   "incident.closed",
   "incident.area.revised",
   "rr.submitted",

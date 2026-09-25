@@ -207,8 +207,15 @@ describe("broadcast", () => {
     const body = { subject: "S", message: "M", groupId, channels: ["email"], mode: "broadcast" };
     const url = `/api/v1/jurisdictions/${seed.jurisdictionId}/mass-notifications`;
     expect((await call("POST", url, viewerToken, body)).statusCode).toBe(403);
-    expect((await call("POST", url, memberToken, { ...body, contactIds: [contact.a] })).statusCode).toBe(422);
+    const { groupId: _group, ...nobody } = body;
+    expect((await call("POST", url, memberToken, nobody)).json().error).toMatch(/send to a contact group, chosen contacts/);
+    expect((await call("POST", url, memberToken, { ...body, groupIds: [groupId] })).statusCode).toBe(422);
     expect((await call("POST", url, memberToken, { ...body, mode: "calldown" })).statusCode).toBe(422);
+    const fallback = { ...body, channels: ["sms", "email"], fallbackMinutes: 5 };
+    expect((await call("POST", url, memberToken, { ...fallback, mode: "calldown", intervalMinutes: 5 })).json().error)
+      .toMatch(/applies to a broadcast/);
+    expect((await call("POST", url, memberToken, { ...fallback, channels: ["sms", "inapp"] })).json().error)
+      .toMatch(/needs both SMS and email/);
     expect((await call("POST", url, memberToken, { ...body, channels: ["fax"] })).statusCode).toBe(400);
     const listed = await call("GET", url, viewerToken);
     expect(listed.statusCode).toBe(200);

@@ -32,6 +32,11 @@ function setup(options: { isAdmin?: boolean; positionKey?: string | null; detail
     listIncidentParticipants: vi.fn().mockResolvedValue([]),
     createLibrary: vi.fn().mockResolvedValue({ id: "lib-1" }),
     completeChecklistItem: vi.fn().mockResolvedValue({ ok: true }),
+    listContactGroups: vi.fn().mockResolvedValue({
+      groups: [{ id: "g1", name: "Duty officers", members: [{ contactId: "c1", name: "Avery", active: true }, { contactId: "c2", name: "Blair", active: true }], updatedAt: "2026-09-25T10:00:00Z" }],
+      nextCursor: null,
+    }),
+    listPositions: vi.fn().mockResolvedValue([{ id: "p2", key: "duty_officer", title: "Duty Officer" }]),
   };
   render(<IncidentsSurface client={client as unknown as ApiClient} jurisdictionId="j1" isAdmin={options.isAdmin ?? true}
     theme="light" positionKey={options.positionKey ?? null}
@@ -75,6 +80,32 @@ it("offers checklist completion only on items of the signed-in position", async 
   fireEvent.click(within(mine).getByRole("button", { name: "Mark complete" }));
   await screen.findByText("Item c1 completed.");
   expect(client.completeChecklistItem).toHaveBeenCalledWith("c1");
+});
+
+it("activates with a notice to a contact group and whoever is on call, falling back from SMS to email", async () => {
+  const client = setup();
+  await screen.findByRole("button", { name: "Activate" });
+  fireEvent.change(screen.getByLabelText("Incident name"), { target: { value: "Klamath Flood" } });
+  fireEvent.click(screen.getByLabelText("Notify people when it activates"));
+  // A notice that names no one is refused before anything is activated.
+  fireEvent.click(screen.getByRole("button", { name: "Activate" }));
+  expect((await screen.findByRole("alert")).textContent).toContain("Choose whom the activation notifies");
+  expect(client.activateIncident).not.toHaveBeenCalled();
+
+  const notice = screen.getByRole("group", { name: "Activation notice" });
+  fireEvent.click(await within(notice).findByLabelText("Duty officers (2)"));
+  fireEvent.click(within(notice).getByLabelText("On call: Duty Officer"));
+  fireEvent.click(within(notice).getByLabelText("If someone does not acknowledge, try their next device"));
+  fireEvent.change(within(notice).getByLabelText("Minutes to wait before the next device"), { target: { value: "5" } });
+  fireEvent.change(within(notice).getByLabelText(/^Message/), { target: { value: "Report to the EOC by 1800." } });
+  fireEvent.click(screen.getByRole("button", { name: "Activate" }));
+  await waitFor(() => expect(client.activateIncident).toHaveBeenCalledWith("j1", {
+    templateKey: "wildfire", name: "Klamath Flood", kind: "incident",
+    notify: {
+      groupIds: ["g1"], onCallPositionIds: ["p2"], channels: ["sms", "email", "inapp"], fallbackMinutes: 5,
+      message: "Report to the EOC by 1800.",
+    },
+  }));
 });
 
 it("activates the selected incident type and presents explicit relationship context", async () => {

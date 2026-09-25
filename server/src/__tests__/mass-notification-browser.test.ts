@@ -115,7 +115,7 @@ describe("contacts and mass notification screens", () => {
     await page.getByRole("button", { name: "Mass Notification", exact: true }).click();
     await page.getByLabel("Subject").fill("Page the duty officer");
     await page.getByLabel("Message", { exact: true }).fill("Levee seepage at mile 4. Call the EOC.");
-    await page.getByLabel("Contact group").selectOption({ label: "Duty officers (3)" });
+    await page.getByRole("checkbox", { name: "Duty officers (3)" }).check();
     await page.getByLabel("Mode").selectOption("calldown");
     await page.getByLabel("Minutes to wait for each acknowledgement").fill("10");
     await page.getByRole("button", { name: "Send notification" }).click();
