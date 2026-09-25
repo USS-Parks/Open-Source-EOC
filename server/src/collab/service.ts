@@ -29,7 +29,17 @@ import {
  * transaction, call the backend with none open, and write in another. The
  * backend calls are idempotent, so a failure part way leaves nothing to undo
  * and the operation can run again.
+ *
+ * A backend that is configured but does not answer (the internet is out, or
+ * the server is down) degrades the same way: an announcement goes to the
+ * holders in-app rather than being lost, provisioning and membership report
+ * the backend's error and run again later, and archiving asks to be retried.
  */
+
+/** Why a backend call failed, for the result, the audit trail and the in-app notice. */
+function backendFailure(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
 
 export interface BackendStatus {
   readonly configured: boolean;
@@ -178,6 +188,8 @@ export interface ProvisionResult {
   readonly degraded: boolean;
   readonly backend: string | null;
   readonly channels: number;
+  /** The backend's failure, when one is configured and did not answer. */
+  readonly error?: string;
 }
 
 /**
@@ -199,12 +211,20 @@ export async function provisionForIncident(
   });
   if (!live) return { degraded: true, backend: null, channels: ctx.plan.channels.length };
 
-  const remoteSpaceId = await live.adapter.ensureSpace(ctx.plan.spaceName, ctx.plan.spaceDisplayName);
+  let remoteSpaceId: string;
   const remoteChannelIds: string[] = [];
-  for (const ch of ctx.plan.channels) {
-    const remoteChannelId = await live.adapter.ensureChannel(remoteSpaceId, ch.name, ch.displayName);
-    await live.adapter.setMembers(remoteChannelId, ch.memberEmails);
-    remoteChannelIds.push(remoteChannelId);
+  try {
+    remoteSpaceId = await live.adapter.ensureSpace(ctx.plan.spaceName, ctx.plan.spaceDisplayName);
+    for (const ch of ctx.plan.channels) {
+      const remoteChannelId = await live.adapter.ensureChannel(remoteSpaceId, ch.name, ch.displayName);
+      await live.adapter.setMembers(remoteChannelId, ch.memberEmails);
+      remoteChannelIds.push(remoteChannelId);
+    }
+  } catch (err) {
+    const error = backendFailure(err);
+    await withPerson(sql, actor.person.id, (tx) =>
+      degrade(tx, actor, ctx, `Collaboration space requested for ${ctx.name}; the ${live.adapter.kind} server did not answer, so it is set up when provisioning runs again.`, error));
+    return { degraded: true, backend: live.adapter.kind, channels: ctx.plan.channels.length, error };
   }
 
   await withPerson(sql, actor.person.id, async (tx) => {
@@ -242,6 +262,8 @@ export interface SyncResult {
   readonly degraded: boolean;
   readonly added: number;
   readonly removed: number;
+  /** The backend's failure, when one is configured and did not answer. */
+  readonly error?: string;
 }
 
 /**
@@ -267,8 +289,8 @@ export async function syncIncidentMembership(
   });
   if (!live || !space || (space.status as string) !== "active") {
     if (live && !space) {
-      await provisionForIncident(sql, actor, incidentId, transport);
-      return { degraded: false, added: 0, removed: 0 };
+      const provisioned = await provisionForIncident(sql, actor, incidentId, transport);
+      return { degraded: provisioned.degraded, added: 0, removed: 0, ...(provisioned.error ? { error: provisioned.error } : {}) };
     }
     return { degraded: true, added: 0, removed: 0 };
   }
@@ -277,16 +299,21 @@ export async function syncIncidentMembership(
   let removed = 0;
   const mirrored: Array<{ channelId: string; personIds: readonly string[] }> = [];
   const planBySection = new Map(ctx.plan.channels.map((c) => [c.section, c]));
-  for (const row of channels) {
-    const planned = planBySection.get(row.section as string);
-    if (!planned) continue;
-    const result = await live.adapter.setMembers(
-      row.remote_channel_id as string,
-      planned.memberEmails,
-    );
-    added += result.added.length;
-    removed += result.removed.length;
-    mirrored.push({ channelId: row.id as string, personIds: planned.memberPersonIds });
+  try {
+    for (const row of channels) {
+      const planned = planBySection.get(row.section as string);
+      if (!planned) continue;
+      const result = await live.adapter.setMembers(
+        row.remote_channel_id as string,
+        planned.memberEmails,
+      );
+      added += result.added.length;
+      removed += result.removed.length;
+      mirrored.push({ channelId: row.id as string, personIds: planned.memberPersonIds });
+    }
+  } catch (err) {
+    // The next assignment or sync reconciles from the backend's own lists.
+    return { degraded: true, added: 0, removed: 0, error: backendFailure(err) };
   }
   await withPerson(sql, actor.person.id, async (tx) => {
     for (const m of mirrored) await mirrorMembers(tx, m.channelId, m.personIds);
@@ -309,7 +336,7 @@ export async function postAnnouncement(
   section: string | null,
   text: string,
   transport: HttpTransport = httpTransport,
-): Promise<{ degraded: boolean }> {
+): Promise<{ degraded: boolean; error?: string }> {
   const target = section ?? "all";
   const planned = await withPerson(sql, actor.person.id, async (tx) => {
     const ctx = await loadIncidentContext(tx, incidentId);
@@ -328,7 +355,14 @@ export async function postAnnouncement(
     return { ctx, live, spaceId: space.id as string, remoteChannelId: channel.remote_channel_id as string };
   });
   if (!planned) return { degraded: true };
-  await planned.live.adapter.postAnnouncement(planned.remoteChannelId, text);
+  try {
+    await planned.live.adapter.postAnnouncement(planned.remoteChannelId, text);
+  } catch (err) {
+    // A configured backend that does not answer: the holders get the announcement in-app instead.
+    const error = backendFailure(err);
+    await withPerson(sql, actor.person.id, (tx) => degrade(tx, actor, planned.ctx, `${planned.ctx.name}: ${text}`, error));
+    return { degraded: true, error };
+  }
   await withPerson(sql, actor.person.id, (tx) =>
     recordAudit(tx, actor, {
       jurisdictionId: planned.ctx.jurisdictionId,
@@ -358,7 +392,13 @@ export async function archiveForIncident(
     return { ctx, live, spaceId: space.id as string, remoteSpaceId: space.remote_space_id as string };
   });
   if (!found) return { archived: false };
-  if (found.live) await found.live.adapter.archiveSpace(found.remoteSpaceId);
+  if (found.live) {
+    try {
+      await found.live.adapter.archiveSpace(found.remoteSpaceId);
+    } catch (err) {
+      throw new AuthError(503, `The ${found.live.adapter.kind} server did not answer (${backendFailure(err)}); archive the space again when it can be reached`);
+    }
+  }
   await withPerson(sql, actor.person.id, async (tx) => {
     await tx`
       update collab_spaces set status = 'archived', archived_at = now()
@@ -411,18 +451,23 @@ async function mirrorMembers(sql: Sql, channelId: string, personIds: readonly st
   }
 }
 
-/** The no-backend path: an in-app notification to each current holder. */
+/**
+ * The no-backend path, and the path when a configured backend does not
+ * answer (with its error): an in-app notification to each current holder.
+ */
 async function degrade(
   sql: Sql,
   actor: Principal,
   ctx: IncidentContext,
   message: string,
+  backendError: string | null = null,
 ): Promise<void> {
+  const detail = backendError ? { degraded: true, backendError } : { degraded: true };
   for (const personId of ctx.holderPersonIds) {
     await sql`
       insert into notifications (jurisdiction_id, person_id, channel, title, body, status, detail)
       values (${ctx.jurisdictionId}, ${personId}, 'collab', ${`Incident: ${ctx.name}`},
-              ${message}, 'delivered', ${sql.json({ degraded: true } as never)})`;
+              ${message}, 'delivered', ${sql.json(detail as never)})`;
   }
   await recordAudit(sql, actor, {
     jurisdictionId: ctx.jurisdictionId,
@@ -430,6 +475,6 @@ async function degrade(
     category: "collab.degraded",
     subjectTable: "incidents",
     subjectId: ctx.incidentId,
-    payload: { notified: ctx.holderPersonIds.length, message },
+    payload: { notified: ctx.holderPersonIds.length, message, ...(backendError ? { backendError } : {}) },
   });
 }

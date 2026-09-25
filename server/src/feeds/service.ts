@@ -17,8 +17,10 @@ import { parseFeed, type NormalizedItem } from "./parse.js";
  * Feed framework (F18). Poll feeds fetch external hazard sources
  * on an interval; push feeds accept authenticated position streams (CoT,
  * GeoJSON). Items are read-only COP layers with provenance and staleness.
- * A failing feed stays enabled and keeps alarming: the failure is a
- * notification and an audit event, never a silent stop.
+ * A failing feed stays enabled and keeps trying: the failure is a
+ * notification and an audit event, never a silent stop. It raises one alarm
+ * per outage rather than one per failed poll, and its last good items stay
+ * on the map, marked stale, until it answers again.
  */
 
 export const FeedSpecSchema = z
@@ -161,6 +163,7 @@ export async function pollFeed(
         set last_polled_at = ${now}, last_success_at = ${now}, last_error = null,
             consecutive_failures = 0
         where id = ${feedId}`;
+      await resolveAlarm(tx, actor, feed.jurisdiction_id as string, feedId, feed.name as string, now);
     });
     return { ok: true, items: items.length };
   } catch (err) {
@@ -171,7 +174,7 @@ export async function pollFeed(
         set last_polled_at = ${now}, last_error = ${message},
             consecutive_failures = consecutive_failures + 1
         where id = ${feedId}`;
-      await alarm(tx, actor, feed.jurisdiction_id as string, feedId, feed.name as string, message);
+      await alarm(tx, actor, feed.jurisdiction_id as string, feedId, feed.name as string, message, now);
     });
     return { ok: false, error: message };
   }
@@ -202,6 +205,7 @@ export async function ingestPush(
         update feeds set last_success_at = ${now}, last_error = null,
           consecutive_failures = 0
         where id = ${feedId}`;
+      await resolveAlarm(tx, creator, feed.jurisdiction_id as string, feedId, feed.name as string, now);
     });
     return { items: items.length };
   } catch (reason) {
@@ -218,6 +222,7 @@ export async function ingestPush(
         feedId,
         feed.name as string,
         message,
+        now,
       );
     });
     throw new AuthError(400, message);
@@ -287,6 +292,35 @@ async function landItems(
   }
 }
 
+/** The feed's alarm still open, if one is: raised by a failure and not yet resolved by a success. */
+async function openAlarm(sql: Sql, actor: Principal, jurisdictionId: string, feedId: string) {
+  const [open] = await sql`
+    select id, detail from notifications
+    where person_id = ${actor.person.id} and jurisdiction_id = ${jurisdictionId} and channel = 'feed'
+      and detail ->> 'feedId' = ${feedId} and not (detail ? 'resolvedAt')
+    order by created_at desc limit 1`;
+  return open ?? null;
+}
+
+/** A span of time in words, to the minute: "3 hours 10 minutes", "under a minute". */
+function spanWords(ms: number): string {
+  const minutes = Math.floor(Math.max(0, ms) / 60_000);
+  if (minutes === 0) return "under a minute";
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const rest = minutes % 60;
+  const unit = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  return [days ? unit(days, "day") : "", hours ? unit(hours, "hour") : "", !days && rest ? unit(rest, "minute") : ""]
+    .filter(Boolean).join(" ");
+}
+
+/**
+ * A failed poll or push. The first failure of an outage raises a "Feed
+ * failing" notification and a `feed.ingest.failed` audit event; each later
+ * one updates that notification's error and count instead of adding another,
+ * so a feed polled every five minutes through a day's outage raises one
+ * alarm, not 288. The feed row keeps the running count and the last error.
+ */
 async function alarm(
   sql: Sql,
   actor: Principal,
@@ -294,20 +328,66 @@ async function alarm(
   feedId: string,
   name: string,
   message: string,
+  now: Date,
 ): Promise<void> {
+  const open = await openAlarm(sql, actor, jurisdictionId, feedId);
+  if (open) {
+    const failures = Number((open.detail as { failures?: number }).failures ?? 1) + 1;
+    await sql`
+      update notifications
+      set body = ${message},
+          detail = detail || ${sql.json({ failures, lastFailedAt: now.toISOString(), lastError: message } as never)}
+      where id = ${open.id as string}`;
+    return;
+  }
+  const detail = { feedId, failures: 1, since: now.toISOString(), lastFailedAt: now.toISOString(), lastError: message };
   await sql`
     insert into notifications
       (jurisdiction_id, person_id, channel, title, body, status, detail)
     values
       (${jurisdictionId}, ${actor.person.id}, 'feed',
        ${`Feed failing: ${name}`}, ${message}, 'failed',
-       ${sql.json({ feedId } as never)})`;
+       ${sql.json(detail as never)})`;
   await recordAudit(sql, actor, {
     jurisdictionId,
     category: "feed.ingest.failed",
     subjectTable: "feeds",
     subjectId: feedId,
     payload: { name, error: message },
+  });
+}
+
+/**
+ * A success after an outage closes its alarm: the notification becomes the
+ * outage's record ("Feed recovered", how many failures from when to when) and
+ * `feed.ingest.recovered` is audited. Nothing happens when no alarm is open.
+ */
+async function resolveAlarm(
+  sql: Sql,
+  actor: Principal,
+  jurisdictionId: string,
+  feedId: string,
+  name: string,
+  now: Date,
+): Promise<void> {
+  const open = await openAlarm(sql, actor, jurisdictionId, feedId);
+  if (!open) return;
+  const detail = open.detail as { failures?: number; since?: string; lastError?: string };
+  const failures = Number(detail.failures ?? 1);
+  const since = detail.since ?? now.toISOString();
+  const body = `Answered again after ${failures} failed ${failures === 1 ? "try" : "tries"} over `
+    + `${spanWords(now.getTime() - Date.parse(since))}.` + (detail.lastError ? ` Last error: ${detail.lastError}` : "");
+  await sql`
+    update notifications
+    set title = ${`Feed recovered: ${name}`}, body = ${body}, status = 'delivered',
+        detail = detail || ${sql.json({ resolvedAt: now.toISOString() } as never)}
+    where id = ${open.id as string}`;
+  await recordAudit(sql, actor, {
+    jurisdictionId,
+    category: "feed.ingest.recovered",
+    subjectTable: "feeds",
+    subjectId: feedId,
+    payload: { name, failures, since },
   });
 }
 

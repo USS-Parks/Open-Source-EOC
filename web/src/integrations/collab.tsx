@@ -142,6 +142,7 @@ export function IncidentCollaboration(props: {
       if (!text.trim()) throw new Error("Enter the announcement.");
       const result = await client.announceCollab(incidentId, { section, text: text.trim() });
       setText("");
+      if (result.error) return `The chat server did not answer (${result.error}), so the announcement went to the position holders in the app.`;
       return result.degraded
         ? "No active channels, so the announcement went to the position holders in the app."
         : `Announcement posted to ${SECTION_LABELS[section]}.`;
@@ -159,6 +160,7 @@ export function IncidentCollaboration(props: {
             <ActionButton kind="primary" loading={busy === "provision"} loadingLabel="Setting up…" disabled={busy !== null}
               onClick={() => void run("provision", async () => {
                 const result = await client.provisionCollab(incidentId);
+                if (result.error) return `The chat server did not answer (${result.error}), so the position holders were notified in the app. Set up channels again when it can be reached.`;
                 return result.degraded
                   ? "No chat backend is in use, so the position holders were notified in the app."
                   : `${result.channels} channels are ready on ${BACKENDS[result.backend ?? ""] ?? "the chat backend"}.`;
@@ -166,6 +168,7 @@ export function IncidentCollaboration(props: {
             <ActionButton loading={busy === "sync"} loadingLabel="Updating…" disabled={busy !== null}
               onClick={() => void run("sync", async () => {
                 const result = await client.syncCollab(incidentId);
+                if (result.error) return `The chat server did not answer (${result.error}). Update membership again when it can be reached.`;
                 return result.degraded
                   ? "There are no active channels to update. Set up channels first."
                   : `Membership matches the position holders: ${result.added} added, ${result.removed} removed.`;

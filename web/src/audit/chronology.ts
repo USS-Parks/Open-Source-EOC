@@ -72,6 +72,7 @@ export const CATEGORY_LABELS: Readonly<Record<string, string>> = {
   "federation.received": "Federation update received",
   "feed.created": "Data feed created",
   "feed.ingest.failed": "Data feed ingest failed",
+  "feed.ingest.recovered": "Data feed answering again",
   "file.uploaded": "File uploaded",
   "form.imported": "Form imported",
   "form.submitted": "Form submitted",

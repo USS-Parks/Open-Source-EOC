@@ -6687,3 +6687,78 @@ Veoci Integration and Air Gap PSPR unit VA3 (AG-06). Landed on `main` after
   helper against a stand-in, unit and browser tests.
 - **Rollback:** revert the commit. A host set up with an authority file
   keeps `host\authorities.pem`, which nothing reads after the revert.
+
+## Veoci and air gap VA4: collaboration and feeds in an outage
+
+Veoci Integration and Air Gap PSPR unit VA4 (AG-08). Landed on `main` after
+"Veoci and air gap VA3: private authorities and time" and the exercise
+scenario and RD4 follow-up commits that reached `main` between them; its
+migration is `0146` because `0145` is RD4's.
+
+- **What changed.**
+  - **Collaboration with its backend unreachable.** A chat server that is
+    configured but does not answer no longer fails the action. An
+    announcement goes to the incident's position holders in the app (with
+    `backendError` on each notification and on `collab.degraded`) instead of
+    being lost. Setting up channels notifies the holders the same way and
+    answers `degraded` with the server's `error`, to run again later;
+    updating membership answers `degraded` with the error and leaves the
+    mirror for the next run; archiving answers 503 asking to be tried again,
+    and the space stays active. The collaboration screen names the error in
+    each case.
+  - **One alarm per feed outage.** A failed poll or push raises "Feed
+    failing" only when no alarm is open for that feed; later failures update
+    its count, last error and time. The next success turns it into "Feed
+    recovered" ("Answered again after 5 failed tries over 1 hour 25
+    minutes"), marks it resolved and audits `feed.ingest.recovered`; the
+    next outage opens a new alarm. Before, a feed polled every five minutes
+    raised a notification and an audit event on every failed poll, about 288
+    a day.
+  - **Retention keeps the last good picture.** Migration
+    `0146_outage_retention.sql`: the `feed_items` purge keeps the items of a
+    feed's last successful poll however old, so a feed unreachable for longer
+    than the period keeps its last good items (shown stale); items the source
+    stopped returning still go.
+  - **Two VA1 defects fixed in the same migration.** VA1's `resent_from`
+    reference had no delete rule, so purging a dead delivery whose resend was
+    newer broke the reference and aborted the whole retention pass for every
+    jurisdiction, every hour; it now clears on delete (the new retention test
+    fails with `delivery_outbox_resent_from_fkey` without this migration).
+    And the `deliveries` class now purges `expired` deliveries with the
+    delivered and dead ones; VA1 had left them to accumulate.
+  - `docs/guides/ADMIN.md`: the collaboration fallback, feed outage alarms,
+    and the retention table's two changed rows. The chronology labels
+    `feed.ingest.recovered`.
+- **Files outside the "Owns" cell.** `web/src/integrations/collab.tsx` and
+  the client's three collaboration result types (the error on screen),
+  `web/src/audit/chronology.ts` (one label), and `docs/guides/ADMIN.md`.
+- **Air-gap behavior (decision 9).** Scenario A: a chat server across the
+  internet no longer loses announcements; they reach the holders in the app,
+  and channel work resumes when it answers. Feeds from the internet show
+  their last good items for the whole outage, with one alarm. Scenario B:
+  the same with no end date. Scenarios C and D: not affected.
+- **Tests.** `collab.test.ts`: with the Mattermost backend configured and
+  the transport failing, the announcement reaches the three holders in the
+  app with the error, provisioning notifies them and returns the error,
+  membership returns degraded with the error, and archiving answers 503 with
+  the space left active. `feeds.test.ts`: five failed polls over twenty
+  minutes make one alarm with a count of five and one audit event; the next
+  success closes it as recovered over 1 hour 25 minutes and audits the
+  recovery; a later failure opens a new alarm. `retention.test.ts`: a feed
+  last successful 45 days ago keeps that poll's two items and loses a
+  60-day-old item it no longer returned; a dead delivery resent yesterday
+  and an expired delivery both purge, and the resend survives with its
+  link cleared.
+- **Verification.** On the Linux test bed (decision 19): `pnpm
+  check:static` exit 0; the feed, collaboration, retention, delivery hold,
+  migration and upgrade suites (42 tests) green; the integrations, dataset
+  and feed administration, chronology and JIC browser tests (7) green;
+  every test file except the browser, end-to-end and load files (Vitest,
+  three workers): 1,562 passed and 1 failed of 1,563 in 229 files, the
+  failure the base's own web incident-overview wording test.
+- **Not run.** A real Mattermost or Matrix server; the Windows setup
+  (decision 18).
+- **Evidence level:** real-database tests with a failing transport and
+  fetch.
+- **Rollback:** revert the commit and restore `retention_purge` from
+  `0110` in a new migration; the relaxed reference can stay.

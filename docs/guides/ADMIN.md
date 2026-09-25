@@ -223,7 +223,12 @@ incident, and use its **collaboration channels** section:
 - **Archive channels** (administrators) archives the incident's channels.
 
 With no backend in use, these actions notify the incident's position holders
-in the app instead, and the screen says so. The screen cannot show whether an
+in the app instead, and the screen says so. When the chat server is in use but
+does not answer (the internet is out, or the server is down), an announcement
+also goes to the position holders in the app rather than being lost, and so
+does notice of a channel setup that could not run; the screen names the
+server's error. Setting up channels and updating membership can be run again
+once it answers, and archiving asks to be tried again. The screen cannot show whether an
 incident's channels already exist, because the server reports only the
 backend's settings.
 
@@ -319,6 +324,14 @@ through the server's scheduler; no one has to trigger them. A scheduled rule
 or briefing runs under an enabled admin of its jurisdiction, so a jurisdiction
 with no enabled admin runs none. Intervals are in
 [the deployment guide](../../deploy/README.md#scheduler).
+
+A feed that cannot be reached stays enabled and keeps its last good items on
+the map, marked stale. Its creator gets one **Feed failing** notification per
+outage, which counts the failed tries and shows the latest error, rather than
+one per poll; when the feed answers again it becomes **Feed recovered** with
+the number of failures and how long the outage lasted. The audit trail records
+`feed.ingest.failed` when an outage starts and `feed.ingest.recovered` when it
+ends.
 
 - IPAWS setup: [IPAWS enablement](../IPAWS-ENABLEMENT.md)
 - Federation setup: [Federation setup](./FEDERATION-SETUP.md)
@@ -495,8 +508,8 @@ admin who last set the jurisdiction's policy.
 | Data class | Tables | A row expires when |
 |---|---|---|
 | `notifications` | `notifications` and their `delivery_outbox` rows | it was created before the period and is not pending |
-| `deliveries` | `delivery_outbox`, `federation_outbox` | a delivered or dead delivery was created before the period; a federation entry was received by the peer before the period |
-| `feed_items` | `feed_items` | its source has not returned it within the period |
+| `deliveries` | `delivery_outbox`, `federation_outbox` | a delivered, dead or expired delivery was created before the period (a resend of it stays and forgets which delivery it resent); a federation entry was received by the peer before the period |
+| `feed_items` | `feed_items` | its source has not returned it within the period; the items of a feed's last successful poll stay however old, so a feed that cannot be reached keeps its last good picture |
 | `tracking` | `tracked_objects`, `tracking_events` | the object's latest event is older than the period; the whole chain goes together |
 | `staff_checkins` | `staff_checkins` | it was checked out before the period; open check-ins stay |
 

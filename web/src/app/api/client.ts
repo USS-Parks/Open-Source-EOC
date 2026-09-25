@@ -2280,13 +2280,14 @@ export class ApiClient {
   configureCollab(jurisdictionId: string, input: CollabBackendInput): Promise<CollabStatus> {
     return this.request("PUT", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/collab/backend`, { ...input });
   }
-  provisionCollab(incidentId: string): Promise<{ degraded: boolean; backend: string | null; channels: number }> {
+  /** `error` names the chat server's failure when one is in use and did not answer. */
+  provisionCollab(incidentId: string): Promise<{ degraded: boolean; backend: string | null; channels: number; error?: string }> {
     return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/collab/provision`);
   }
-  syncCollab(incidentId: string): Promise<{ degraded: boolean; added: number; removed: number }> {
+  syncCollab(incidentId: string): Promise<{ degraded: boolean; added: number; removed: number; error?: string }> {
     return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/collab/sync`);
   }
-  announceCollab(incidentId: string, input: { section?: string; text: string }): Promise<{ degraded: boolean }> {
+  announceCollab(incidentId: string, input: { section?: string; text: string }): Promise<{ degraded: boolean; error?: string }> {
     return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/collab/announce`, { ...input });
   }
   archiveCollab(incidentId: string): Promise<{ archived: boolean }> {

@@ -348,6 +348,46 @@ describe("retention purge", () => {
       where jurisdiction_id = ${seed.jurisdictionId} order by checked_in_at`;
     expect(left.map((r) => r.open)).toEqual([true, false]);
   });
+
+  it("keeps a failing feed's last good items, and purges settled deliveries a resend points back to", async () => {
+    // A gauge feed last answered 45 days ago, past the 30-day period: its last poll's items stay.
+    const lastGood = ago(45);
+    const [feed] = await admin`
+      insert into feeds (jurisdiction_id, name, kind, url, created_by, last_success_at, consecutive_failures, last_error)
+      values (${seed.jurisdictionId}, 'Gauges', 'geojson', 'http://127.0.0.1:9/gauges', ${seed.adminId},
+              ${lastGood}, 12960, 'fetch failed') returning id`;
+    for (const [key, at] of [["gauge-a", lastGood], ["gauge-b", lastGood], ["gauge-retired", ago(60)]] as const) {
+      await admin`
+        insert into feed_items (feed_id, external_id, first_seen_at, fetched_at)
+        values (${feed!.id as string}, ${key}, ${at}, ${at})`;
+    }
+    // A dead delivery resent yesterday, and an expired one on a recent notification.
+    const delivery = async (notificationDays: number, status: string, days: number, resentFrom: string | null = null) => {
+      const [note] = await admin`
+        insert into notifications (jurisdiction_id, channel, title, status, created_at)
+        values (${seed.jurisdictionId}, 'webhook', 'Outage', 'failed', ${ago(notificationDays)}) returning id`;
+      const [row] = await admin`
+        insert into delivery_outbox (jurisdiction_id, notification_id, kind, target, body, status, created_at, resent_from)
+        values (${seed.jurisdictionId}, ${note!.id as string}, 'webhook', 'http://127.0.0.1:9/', '{}', ${status}, ${ago(days)}, ${resentFrom})
+        returning id, notification_id`;
+      return row!;
+    };
+    const dead = await delivery(40, "dead", 40);
+    const [resend] = await admin`
+      insert into delivery_outbox (jurisdiction_id, notification_id, kind, target, body, status, created_at, resent_from)
+      values (${seed.jurisdictionId}, ${dead.notification_id as string}, 'webhook', 'http://127.0.0.1:9/', '{}', 'pending', ${ago(1)}, ${dead.id as string})
+      returning id`;
+    const expired = await delivery(1, "expired", 40);
+
+    expect(await purgeExpired(runtime)).toEqual({
+      [seed.jurisdictionId]: expect.objectContaining({ feed_items: 1, delivery_outbox: 2 }),
+    });
+    const items = await admin`select external_id from feed_items where feed_id = ${feed!.id as string} order by 1`;
+    expect(items.map((i) => i.external_id)).toEqual(["gauge-a", "gauge-b"]);
+    const left = await admin`
+      select id, resent_from from delivery_outbox where id in (${dead.id as string}, ${resend!.id as string}, ${expired.id as string})`;
+    expect(left).toEqual([{ id: resend!.id, resent_from: null }]);
+  });
 });
 
 describe("audit export", () => {

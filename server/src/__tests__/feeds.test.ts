@@ -318,6 +318,48 @@ describe("ingestion failures alarm and never silently stop", () => {
   });
 });
 
+describe("an outage raises one alarm, not one per poll", () => {
+  it("counts failures on one open alarm, closes it on recovery, and opens a new one for the next outage", async () => {
+    const { id } = await newFeed({ name: "County gauges", kind: "geojson", url: "https://gauges.example.test/data.json" });
+    const unreachable: typeof fetch = (async () => { throw new TypeError("fetch failed"); }) as never;
+    const start = Date.parse("2026-09-25T06:00:00Z");
+    const at = (minutes: number) => new Date(start + minutes * 60_000);
+    for (const minutes of [0, 5, 10, 15, 20]) {
+      expect(await pollFeed(runtime, adminPrincipal, id, unreachable, at(minutes))).toEqual({ ok: false, error: "fetch failed" });
+    }
+    const alarms = () => admin`
+      select title, body, status, detail from notifications where detail ->> 'feedId' = ${id} order by created_at`;
+    const open = await alarms();
+    expect(open).toHaveLength(1);
+    expect(open[0]).toMatchObject({ title: "Feed failing: County gauges", body: "fetch failed", status: "failed" });
+    expect(open[0]!.detail).toEqual({
+      feedId: id, failures: 5, since: at(0).toISOString(), lastFailedAt: at(20).toISOString(), lastError: "fetch failed",
+    });
+    const audits = () => admin`
+      select category from audit_events where subject_id = ${id} and category like 'feed.ingest.%' order by seq`;
+    expect((await audits()).map((a) => a.category)).toEqual(["feed.ingest.failed"]);
+
+    const fc = JSON.stringify({ type: "FeatureCollection", features: [
+      { type: "Feature", id: "g1", geometry: { type: "Point", coordinates: [-124.0, 41.5] }, properties: { name: "Gauge 1" } },
+    ] });
+    expect(await pollFeed(runtime, adminPrincipal, id, fetchOk(fc, "application/json"), at(85))).toEqual({ ok: true, items: 1 });
+    const [closed] = await alarms();
+    expect(closed).toMatchObject({
+      title: "Feed recovered: County gauges",
+      body: "Answered again after 5 failed tries over 1 hour 25 minutes. Last error: fetch failed",
+      status: "delivered",
+    });
+    expect(closed!.detail).toMatchObject({ resolvedAt: at(85).toISOString() });
+    expect((await audits()).map((a) => a.category)).toEqual(["feed.ingest.failed", "feed.ingest.recovered"]);
+
+    // The next outage opens an alarm of its own.
+    await pollFeed(runtime, adminPrincipal, id, unreachable, at(90));
+    const both = await alarms();
+    expect(both.map((a) => a.title)).toEqual(["Feed recovered: County gauges", "Feed failing: County gauges"]);
+    expect(both[1]!.detail).toMatchObject({ failures: 1, since: at(90).toISOString() });
+  });
+});
+
 describe("the scheduler", () => {
   it("polls due feeds under their creator's authority and respects intervals", async () => {
     const [revokedCreatorRow] = await admin`

@@ -345,6 +345,40 @@ describe("Mattermost adapter", () => {
   });
 });
 
+describe("a configured backend that does not answer", () => {
+  // The Mattermost backend stays configured; the network to it is gone.
+  const unreachable: HttpTransport = async () => {
+    throw new TypeError("fetch failed");
+  };
+
+  it("sends an announcement to the holders in-app instead of losing it", async () => {
+    const res = await postAnnouncement(runtime, adminPrincipal, incidentId, "operations", "Fairgrounds shelter is full", unreachable);
+    expect(res).toEqual({ degraded: true, error: "fetch failed" });
+    const notes = await admin`
+      select n.detail, p.email from notifications n join persons p on p.id = n.person_id
+      where n.channel = 'collab' and n.body = 'Klamath Flood: Fairgrounds shelter is full' order by p.email`;
+    expect(notes.map((n) => n.email)).toEqual(["ic@example.org", "ops2@example.org", "plan@example.org"]);
+    expect(notes[0]!.detail).toEqual({ degraded: true, backendError: "fetch failed" });
+    const [audit] = await admin`
+      select payload from audit_events where category = 'collab.degraded' and payload ->> 'message' = 'Klamath Flood: Fairgrounds shelter is full'`;
+    expect(audit!.payload).toEqual({ notified: 3, message: "Klamath Flood: Fairgrounds shelter is full", backendError: "fetch failed" });
+  });
+
+  it("reports membership and provisioning failures for a later run, and asks for archiving again", async () => {
+    expect(await syncIncidentMembership(runtime, adminPrincipal, incidentId, unreachable))
+      .toEqual({ degraded: true, added: 0, removed: 0, error: "fetch failed" });
+    expect(await provisionForIncident(runtime, adminPrincipal, incidentId, unreachable))
+      .toMatchObject({ degraded: true, backend: "mattermost", error: "fetch failed" });
+    const [told] = await admin`
+      select count(*)::int as n from notifications
+      where channel = 'collab' and body like 'Collaboration space requested for Klamath Flood; the mattermost server did not answer%'`;
+    expect(told!.n).toBe(3);
+    await expect(archiveForIncident(runtime, adminPrincipal, incidentId, unreachable)).rejects.toMatchObject({ status: 503 });
+    const [space] = await admin`select status from collab_spaces where incident_id = ${incidentId}`;
+    expect(space!.status).toBe("active");
+  });
+});
+
 describe("Matrix adapter", () => {
   const mx = new FakeMatrix();
 
