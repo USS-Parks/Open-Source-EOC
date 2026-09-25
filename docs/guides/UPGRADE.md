@@ -88,9 +88,10 @@ the baseline, so only evaluation databases built from source before
 
 ## Upgrade on Windows
 
-1. Stop each profile you use, for example
+1. The setup program stops the production and demo profiles, and a host's
+   services, before it replaces their files. To stop a profile yourself, for
+   example to copy it in the next step, run
    `& "$env:LOCALAPPDATA\Programs\Open Source EOC\app\deploy\windows\Open Source EOC.cmd" -Action Stop -Profile production`.
-   The setup program does not stop a running profile.
 2. Copy the profile's whole directory,
    `%LOCALAPPDATA%\Open Source EOC\profiles\production`, somewhere safe. It
    holds the database, the uploaded files, the generated secrets and the

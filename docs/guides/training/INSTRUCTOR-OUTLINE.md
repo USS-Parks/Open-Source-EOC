@@ -13,7 +13,7 @@ synthetic demonstration incident. Read the [kit index](./README.md) and the
   plus a controller and at least one evaluator. With fewer players, one
   person holds two positions that share a section, such as Planning Section
   Chief and Situation Unit.
-- The demo profile binds to `127.0.0.1`, so a cell cannot be spread across
+- The acceptance profile binds to `127.0.0.1`, so a cell cannot be spread across
   computers. For a larger class, run one host computer per cell, each
   restored from the same golden copy. Cells do not see each other's data.
 - On one host, give each player a separate browser profile, or sign out
@@ -56,12 +56,18 @@ Do this the day before, on the host computer, from the repository root. The
 launcher commands are described in
 [Windows desktop setup](../../WINDOWS-DESKTOP.md).
 
-1. Build and create the demo profile:
-   `.\deploy\windows\Open-Source-EOC.ps1 -Action Build`, then
-   `-Action Setup -Profile demo`, then `-Action Start -Profile demo`.
-2. Sign in as `demo-admin@example.org` with the password given in the
-   demonstration guide. Enroll the instructor's authenticator app and keep
-   the recovery codes with the class materials.
+1. Build and create the acceptance profile, whose seed is this exercise's.
+   In PowerShell, set `$env:OPENEOC_ENABLE_ACCEPTANCE_PROFILE = '1'` first;
+   every launcher command below needs it. Then
+   `.\deploy\windows\Open-Source-EOC.ps1 -Action Build`,
+   `-Action Setup -Profile acceptance` and `-Action Start -Profile acceptance`.
+2. Sign in as `demo-admin@example.org` with the password
+   [Windows desktop setup](../../WINDOWS-DESKTOP.md) gives. The acceptance
+   profile requires two-step sign-in of its administrators, as production
+   does (the demo profile, whose North Coast accounts are synthetic, is the
+   one that signs administrators in with a password alone). Enroll the
+   instructor's authenticator app and keep the recovery codes with the class
+   materials.
 3. On **Administration > People**, create one admin account for the EOC
    Director and five member accounts: Planning Section Chief, Situation Unit,
    Logistics Section Chief, Public Information Officer and field user. Use
@@ -78,24 +84,23 @@ launcher commands are described in
    their account, and a group of all of them named `SYNTHETIC EOC staff`.
 7. Sign in as each account. Check that the Acting position list shows the
    right position, then sign out.
-8. Print a situation manual for every player, each job aid, inject cards and
-   rating sheets.
-9. Stop the profile with `-Action Stop -Profile demo`. Copy the whole profile
-   directory to a golden copy outside the repository. In a source checkout
-   it is `deploy\windows\out\profiles\demo`; in an installed copy,
-   `%LOCALAPPDATA%\Open Source EOC\profiles\demo`.
-10. Start the profile again and confirm it with `-Action Status -Profile demo`.
+8. Print a situation manual for every player, each job aid, the
+   [inject cards](./EXERCISE-INJECT-CARDS.md) and rating sheets.
+9. Stop the profile with `-Action Stop -Profile acceptance`. Copy the whole
+   profile directory, `deploy\windows\out\profiles\acceptance`, to a golden
+   copy outside the repository.
+10. Start the profile again and confirm it with `-Action Status -Profile acceptance`.
 
 ## Reset between classes
 
 OpenEOC has no reset inside the product. Records, history and the audit trail
 are append-only by design. Reset by restoring the golden copy:
 
-1. Stop the profile: `-Action Stop -Profile demo`.
-2. Move the used demo profile directory out of the profiles folder. Keep it
+1. Stop the profile: `-Action Stop -Profile acceptance`.
+2. Move the used acceptance profile directory out of the profiles folder. Keep it
    until the class's after-action report is final.
 3. Copy the golden copy into its place under the same directory name.
-4. Start the profile and check it with `-Action Status -Profile demo`.
+4. Start the profile and check it with `-Action Status -Profile acceptance`.
 
 Restore only under the Windows account that made the copy; its secrets
 directory is private to that account.
@@ -105,7 +110,7 @@ copy keeps them. On a later day, **OP SYNTHETIC 1** may already have ended and
 the seeded assessments will read older than the scenario says. Either let the
 controller announce the scenario time and carry on, or build a new golden
 copy: stop the profile, move its directory out, run
-`-Action Setup -Profile demo` again and repeat the setup checklist. A new
+`-Action Setup -Profile acceptance` again and repeat the setup checklist. A new
 setup needs new authenticator enrollment. After an interface change in the
 checkout, run `-Action Build` first; Start refuses a stale build.
 
@@ -114,6 +119,7 @@ checkout, run `-Action Build` first; Start refuses a stale build.
 - The [kit index](./README.md) and the eight job aids, one set per position.
 - The [situation manual](./EXERCISE-SITUATION-MANUAL.md) for every player.
 - The [facilitator guide](./EXERCISE-FACILITATOR-GUIDE.md) for staff, and
-  inject cards cut from the situation manual's module tables.
+  the [inject cards](./EXERCISE-INJECT-CARDS.md), cut from the situation
+  manual's module tables.
 - A projector for the guided tour, a visible clock for the scenario time, and
   the instructor's authenticator device.

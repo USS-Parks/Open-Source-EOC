@@ -63,7 +63,7 @@ Photos and audio can queue offline; map capture needs a connection.
 - A queued report is not received. Only synced is.
 - Task creation, assignment and edits need a connection; only completion
   queues offline.
-- The demo profile runs on one computer at `127.0.0.1`, so the field is
+- The acceptance profile runs on one computer at `127.0.0.1`, so the field is
   simulated at the host computer.
 
 ## Read next

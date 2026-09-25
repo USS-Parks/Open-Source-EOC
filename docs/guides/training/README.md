@@ -11,6 +11,7 @@ class. It has no video.
 |---|---|
 | [Exercise situation manual](./EXERCISE-SITUATION-MANUAL.md) | Scenario, objectives, modules and injects, handed to every player |
 | [Exercise facilitator guide](./EXERCISE-FACILITATOR-GUIDE.md) | Staff roles, pre-StartEx checklist, expected actions and evidence per inject, ratings, hotwash and after-action steps |
+| [Exercise inject cards](./EXERCISE-INJECT-CARDS.md) | One printable card per inject, cut from the situation manual, for controllers and simulators |
 | [Instructor outline](./INSTRUCTOR-OUTLINE.md) | Half-day and full-day agendas, setup checklist, reset between classes |
 
 ## Job aids
@@ -39,11 +40,15 @@ approve an IAP and record a new operational period.
 
 ## Ground rules
 
-1. **Synthetic data only.** Run the kit on the demo profile of the Windows
-   desktop launcher (`-Action Setup -Profile demo`, described in
-   [Windows desktop setup](../../WINDOWS-DESKTOP.md)). Never enter real
-   incident, person or contact information, and never exercise on a
-   production profile.
+1. **Synthetic data only.** Run the kit on the acceptance profile of the
+   Windows desktop launcher in a source checkout (set
+   `OPENEOC_ENABLE_ACCEPTANCE_PROFILE=1`, then `-Action Setup -Profile
+   acceptance`, described in [Windows desktop setup](../../WINDOWS-DESKTOP.md)).
+   Its seed is this exercise's: the SYNTHETIC Ridge Wildfire Exercise and its
+   `demo-admin`, `demo-operator` and `demo-viewer` accounts. The demo
+   profile, and the one the setup program installs, carry the North Coast
+   Storm instead and do not fit this kit. Never enter real incident, person
+   or contact information, and never exercise on a production profile.
 2. **Mark every entry.** Start every typed entry with `SYNTHETIC`: board
    records, notes, messages, releases, alert text, cost descriptions and
    observations.
@@ -60,7 +65,7 @@ approve an IAP and record a new operational period.
 
 ## Limits that shape the exercise
 
-- The demo profile binds to `127.0.0.1`, so players work at the host
+- The acceptance profile binds to `127.0.0.1`, so players work at the host
   computer. Each player signs in under their own account.
 - The demonstration seed creates one organization. Partner participation,
   escalation to another tier and review by another instance cannot be played.

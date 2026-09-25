@@ -70,13 +70,21 @@ begin
   end;
 end;
 
-{ An upgrade of a host stops its services before their programs are replaced;
-  the host setup that runs after the files starts them again. }
+{ An upgrade stops what runs from the files it replaces: the desktop profiles
+  the installed launcher started, through that launcher's own Stop, and a
+  host's services. A profile starts again when it is next opened; the host
+  setup that runs after the files starts the services again. }
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ResultCode: Integer;
+  Launcher: String;
 begin
   Result := '';
+  Launcher := ExpandConstant('{app}\app\deploy\windows\Open Source EOC.cmd');
+  if FileExists(Launcher) then begin
+    Exec(Launcher, '-Action Stop -Profile production', ExpandConstant('{app}\app'), SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(Launcher, '-Action Stop -Profile demo', ExpandConstant('{app}\app'), SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
   if IsAdminInstallMode then
     Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
       '-NoLogo -NoProfile -NonInteractive -Command "Get-Service -Name ''OpenSourceEOC-*'' -ErrorAction SilentlyContinue | Stop-Service -Force"',

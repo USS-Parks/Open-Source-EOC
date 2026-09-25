@@ -6093,3 +6093,71 @@ an agreement never reached the partner.
 - **Rollback:** revert the commit after the outbox's queued deletions are
   delivered or removed, since the earlier code expects every outbox entry to
   hold an update.
+
+## Readiness RD11: the remaining checks
+
+Operator Trust PSPR unit RD11, the remaining checks of the Readiness PSPR.
+
+- **What changed.**
+  - **Inject cards.** `docs/guides/training/EXERCISE-INJECT-CARDS.md` has one
+    printable card per inject of the situation manual (15), with the sender,
+    the recipient, the message and a line for when it was delivered and who
+    acknowledged it. The instructor outline and the kit index point to it.
+  - **The training kit's profile and two-step sign-in.** The kit told the
+    instructor to set up the demo profile and sign in as `demo-admin`, then
+    enroll authenticators. Since the demo profile became the North Coast
+    Storm it seeds neither the kit's Ridge Wildfire exercise nor those
+    accounts, and it signs administrators in with a password alone. The
+    kit's seed is the acceptance profile's, so the kit now runs there from a
+    source checkout (`OPENEOC_ENABLE_ACCEPTANCE_PROFILE=1`), where its
+    accounts exist and administrators enroll an authenticator as production
+    does; the instructor outline says which profile skips two-step sign-in
+    and why, and `docs/WINDOWS-DESKTOP.md` points the acceptance profile at
+    the kit.
+  - **The setup stops running profiles before it replaces files.** On an
+    upgrade, `PrepareToInstall` runs the installed launcher's Stop for the
+    production and demo profiles before the files are copied, beside the
+    host services it already stopped. The upgrade guide no longer tells the
+    reader to stop them first. The installer's static test checks it.
+  - **Hard links for file store copies.** A scheduled backup's copy of the
+    file store is made of hard links where the store's volume allows,
+    falling back to a copy per file. Stored files are named by their content
+    and never rewritten, so a link holds the bytes a copy would, and
+    fourteen days of backups no longer hold fourteen copies of the store.
+    The backup test checks the backup's file shares the stored file's
+    identity.
+  - **The worker crash (`0xC0000409`).** A crashed worker prints nothing,
+    and Windows keeps no crash report for it: the Application log of the
+    last six days has none for `node.exe`. Such an exit is how a Node
+    process ends on a fatal error or an abort, including an abort in a
+    native module. The workers load two native modules, rolldown (which
+    browser suites run to build the web app) and lightningcss, and the Vite
+    dev server that also stopped this way loads both, which makes them the
+    leading suspects, but no crash has been caught with its cause. Test
+    workers now write a Node diagnostic report on a fatal error
+    (`--report-on-fatalerror`, into `deploy/test-runtime/out/crash-reports`),
+    which names a V8 or Node fatal error; an abort from native code outside
+    V8 still leaves none. Catching that needs a crash dump, and turning on
+    Windows crash dumps for `node.exe` is a system setting this session did
+    not change. Not found at its root; the precedent of one isolated retry
+    stays.
+  - **The `esf-workspace-browser` wait** was found at its root and fixed in
+    "Partner sharing PS5: scenario, review and gate": a loose name match
+    clicked the incident's own board rows; nothing further here.
+  - **The scheduler in an installed profile.** Basho's installed demo
+    profile (`%LOCALAPPDATA%\Open Source EOC\profiles\demo`) logged at its
+    start, 2026-09-25T00:57:44Z, "scheduler leader elected" with its six jobs
+    (rules, feeds, outbox, calldowns, reports and retention). Job runs are not
+    logged at the information level, so this shows the scheduler running in
+    an installed profile, not each job's work; `scheduler.test.ts` covers the
+    work.
+- **Not done: coverage for gate 20.** No coverage provider is installed, and
+  adding one fetches a package from the npm registry; measuring at
+  `00deba5` needs that commit checked out beside `main`. Both need Basho's
+  word. Gate 20 stays open: close it by measuring, or by accepting the
+  assertion counts of "V1 W1.14: consolidate the server test suite".
+- **Verification.** `pnpm check:static` exit 0 on this unit's own state of the tree, with the API documentation regenerated there. The tests ran over every unit of this push together, and the failures they found were fixed in the units that caused them; see "Operator Trust landing: the full gate". Not run for this unit alone: `test:ci` and its phase gate.
+- **Evidence level:** static and unit tests for the setup and the backup;
+  documents checked against the launcher and seeds; the crash stated as
+  unresolved.
+- **Rollback:** revert the commit.

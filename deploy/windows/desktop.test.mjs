@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import test from "node:test";
@@ -326,6 +326,9 @@ test("a scheduled backup dumps the database and copies the file store, then remo
     const result = scheduledBackup({ backupsDir, blobsDir, dump, now });
     assert.equal(result.database, resolve(backupsDir, "openeoc-20260923T023000Z.sql"));
     assert.equal(readFileSync(resolve(result.files, "ab/abcdef"), "utf8"), "stored file");
+    // On the store's own volume the backup links the stored file rather than copying it.
+    assert.equal(statSync(resolve(result.files, "ab/abcdef")).ino, statSync(resolve(blobsDir, "ab/abcdef")).ino);
+    assert.equal(statSync(resolve(blobsDir, "ab/abcdef")).nlink, 2);
     assert.equal(existsSync(resolve(result.files, ".upload-in-progress")), false);
     assert.deepEqual(result.removed.sort(), ["openeoc-20260901T000000Z.blobs", "openeoc-20260901T000000Z.sql"]);
     assert.deepEqual(readdirSync(backupsDir).sort(), [

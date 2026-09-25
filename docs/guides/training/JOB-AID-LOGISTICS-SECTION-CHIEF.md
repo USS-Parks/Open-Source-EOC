@@ -58,7 +58,7 @@ record and export costs as well.
 - Submitted, triaged and assigned are not delivered. Do not report a resource
   as in place until the request is deployed.
 - **Escalate to another tier** needs a registered peer and its token. The
-  demo profile has none, so escalation cannot be exercised. Say so and record
+  acceptance profile has none, so escalation cannot be exercised. Say so and record
   it as an observation.
 - Only one organization exists in the seed, so a neighbouring county cannot
   accept an assignment in the product.

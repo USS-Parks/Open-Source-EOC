@@ -1,5 +1,5 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { copyFileSync, existsSync, linkSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 const utcStamp = (date) => date.toISOString().replace(/\.\d+Z$/, "Z").replaceAll(/[-:]/g, "");
 
@@ -62,11 +62,36 @@ export function writeUpgradeReport({ backup, applied, migrationsDir, profile, no
 }
 
 /**
+ * Copy a file store for a backup as hard links, which take no space of their
+ * own: stored files are named by their content and never rewritten, so a link
+ * holds the bytes a copy would. A file that cannot be linked (the backups on
+ * another volume, a file system without links) is copied. Uploads still in
+ * progress are left out.
+ */
+function linkStore(from, to) {
+  mkdirSync(to, { recursive: true });
+  for (const entry of readdirSync(from, { withFileTypes: true })) {
+    if (entry.name.startsWith(".upload-")) continue;
+    const source = resolve(from, entry.name);
+    const target = resolve(to, entry.name);
+    if (entry.isDirectory()) linkStore(source, target);
+    else if (entry.isFile()) {
+      try {
+        linkSync(source, target);
+      } catch {
+        copyFileSync(source, target);
+      }
+    }
+  }
+}
+
+/**
  * The scheduled backup of a profile: a dump of its database, made with the
  * supplied `dump(path)`, as `openeoc-<UTC>.sql`, then a copy of its file store
- * as the folder `openeoc-<UTC>.blobs`. Stored files are named by their content
- * and never rewritten, so a copy taken after the dump holds every file the
- * dump refers to; uploads still in progress are left out. Each is written
+ * as the folder `openeoc-<UTC>.blobs`, made of hard links where it can be.
+ * Stored files are named by their content and never rewritten, so a copy taken
+ * after the dump holds every file the dump refers to; uploads still in
+ * progress are left out. Each is written
  * under a .part name and renamed when complete. Only then are scheduled
  * backups older than `keepDays` removed; pre-upgrade dumps are never removed.
  */
@@ -81,8 +106,7 @@ export function scheduledBackup({ backupsDir, blobsDir, dump, keepDays = 14, now
     dump(`${database}.part`);
     if (!existsSync(`${database}.part`) || statSync(`${database}.part`).size === 0)
       throw new Error(`The database dump ${database}.part is missing or empty`);
-    // ponytail: a full copy per backup; hard links would save the space if the file store grows large.
-    cpSync(blobsDir, `${files}.part`, { recursive: true, filter: (source) => !basename(source).startsWith(".upload-") });
+    linkStore(blobsDir, `${files}.part`);
   } catch (error) {
     for (const partial of [`${database}.part`, `${files}.part`]) rmSync(partial, { recursive: true, force: true });
     throw new Error(`${String(error?.message ?? error)}; no backup was written and none was removed`, { cause: error });

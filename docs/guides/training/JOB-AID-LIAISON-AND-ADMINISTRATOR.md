@@ -63,7 +63,7 @@ staff in, keep accounts and positions right, and run the shift change.
 ## What the product does not do
 
 - Email and SMS need a relay or provider on **Administration > Channels**;
-  the demo profile has none, so use **In app** only.
+  the acceptance profile has none, so use **In app** only.
 - One organization in the seed: no partner participation, guest play or
   escalation to another tier.
 - **Reassign** does not end the outgoing person's session; they must sign

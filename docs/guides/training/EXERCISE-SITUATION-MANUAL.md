@@ -16,7 +16,7 @@ any other authority.
 | Incident in the product | SYNTHETIC Ridge Wildfire Exercise, Synthetic Demo County OES |
 | Hazard | Wildfire with power loss along a shelter corridor |
 | Mission area | Response |
-| Host | The demo profile of the Windows desktop launcher, on one computer |
+| Host | The acceptance profile of the Windows desktop launcher, on one computer |
 
 ## Objectives and core capabilities
 
@@ -58,10 +58,10 @@ any other authority.
 ## Assumptions and artificialities
 
 - Nothing leaves the host computer: no email, SMS, IPAWS, collaboration
-  channel or public website. The demo profile listens on `127.0.0.1` only.
+  channel or public website. The acceptance profile listens on `127.0.0.1` only.
 - The seed has one organization. Outside agencies exist only as the
   simulators' voices; they cannot join the incident in the product.
-- Seeded times date from when the demo profile was set up, so seeded
+- Seeded times date from when the acceptance profile was set up, so seeded
   assessment ages may not match the scenario clock. Use the controller's
   scenario time.
 

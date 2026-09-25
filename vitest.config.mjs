@@ -1,4 +1,5 @@
 import process from "node:process";
+import { URL, fileURLToPath } from "node:url";
 import { configDefaults, defineConfig } from "vitest/config";
 
 /**
@@ -24,6 +25,11 @@ export default defineConfig({
     // Suites sign in as a seeded admin with a password alone. Admin MFA is
     // on by default in a deployment; the MFA suites turn it on explicitly.
     env: { OPENEOC_REQUIRE_ADMIN_MFA: "0" },
+    // A worker that dies on a Node or V8 fatal error writes a diagnostic
+    // report here, naming the error and its stacks. A worker crash on
+    // Windows (exit 0xC0000409) prints nothing, so this is where its cause
+    // is looked for; an abort from native code outside V8 leaves no report.
+    execArgv: ["--report-on-fatalerror", `--report-directory=${fileURLToPath(new URL("./deploy/test-runtime/out/crash-reports", import.meta.url))}`],
     // After the whole run, drop the throwaway t_<random> databases freshDb()
     // creates per file (it never drops them), so the local cluster does not
     // accumulate dead databases and slow Postgres startup and recovery fsync.

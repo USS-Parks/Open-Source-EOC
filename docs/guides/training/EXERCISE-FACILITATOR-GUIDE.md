@@ -16,8 +16,8 @@ endorsed by FEMA or any other authority.
 
 ## Pre-StartEx checklist
 
-- [ ] The demo profile was restored from the golden copy and started with
-      `-Action Start -Profile demo`; `-Action Status -Profile demo` reports
+- [ ] The acceptance profile was restored from the golden copy and started with
+      `-Action Start -Profile acceptance`; `-Action Status -Profile acceptance` reports
       it ready. See the [instructor outline](./INSTRUCTOR-OUTLINE.md).
 - [ ] Every player account signs in. Both admin accounts pass the
       authenticator step.
