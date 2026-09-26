@@ -14887,3 +14887,20 @@ Map and Dashboard Parity PSPR unit MP5 (decision 3), built in lane
   84 captures reviewed by the lane.
 - **Full suite:** the second landing batch's run, recorded below.
 - **Rollback.** Revert the commit.
+
+## Map and dashboard parity: second landing batch, full suite
+
+The second batch (MP9, MP2, MP13, MP15A, the feed presets, the reference
+layers on the map, and the demo data) was run through `pnpm test:ci` on
+`main` at `2cbf8332` on this machine's throwaway cluster, while four lane
+agents ran their own tests beside it; MP14 and MP5 landed during the run.
+392 of 412 files passed, 2,389 tests passed and 122 skipped. 19 files
+failed, with one worker exit error: 16 whose `beforeAll` setup timed out
+at 60 or 120 s under the load, and three assertions
+(`federation-batches.test.ts`, the 24-hour partition drain;
+`feed-presets.test.ts`, a preset feed through the feed engine;
+`session.test.tsx`, the fifteen-minute lock). The 19 rerun alone on
+`main` at `ab788ccf`: 19 files, 154 tests passed. Because the first stage
+failed, `load.test.ts` did not run; it passed alone (4 tests), as did the
+test files MP14 and MP5 added after the run collected its files, with the
+`cop` tests they changed (6 files, 60 tests).
