@@ -1,0 +1,17 @@
+/* The device PIN: the offer above the console, the dock card, the settings section and the PIN screen. */
+.eoc-device-pin { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--eoc-border); border-top: 3px solid var(--eoc-brand-teal); border-radius: var(--eoc-radius-md); background: var(--eoc-surface); box-shadow: var(--eoc-shadow-sm); }
+.eoc-device-pin > header span { display: block; color: var(--eoc-brand-teal); font-size: 10px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.eoc-device-pin > header h2 { margin: 2px 0 0; color: var(--eoc-text-strong); font-size: 15px; }
+.eoc-device-pin > p { margin: 0; color: var(--eoc-text-muted); font-size: 12px; line-height: 1.4; }
+.eoc-device-pin .eoc-btn { min-height: 36px; padding: 5px 10px; font-size: 12px; }
+.eoc-device-pin .eoc-stack { gap: 8px; }
+.eoc-device-pin > .eoc-btn { justify-self: start; }
+.eoc-device-pin-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.eoc-device-pin-offer { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 22px 8px; padding: 8px 12px; border: 1px solid var(--eoc-border); border-left: 4px solid var(--eoc-brand-teal); border-radius: 4px; background: var(--eoc-surface); color: var(--eoc-text); font-size: 14px; }
+.eoc-device-pin-offer > p { flex: 1 1 320px; margin: 0; }
+.eoc-device-pin-offer .eoc-btn { min-height: 36px; padding: 5px 10px; }
+.eoc-device-pin-offer > .eoc-stack { flex: 1 1 100%; max-width: 420px; }
+.eoc-device-pin-settings > p { margin: 0 0 8px; }
+.eoc-device-pin-hint { color: var(--eoc-text-muted); font-size: 12px; line-height: 1.35; }
+.eoc-device-pin-erase { display: grid; gap: 8px; }
+@media (max-width: 760px) { .eoc-device-pin-offer { margin: 0 12px 8px; } }

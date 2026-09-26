@@ -13,6 +13,7 @@ import { useSession } from "../auth/session.js";
 
 /** A link to an incident the reader may not open: why, and whom to ask, without saying what it holds. */
 const LINK_REFUSED = "The linked incident is not open to your account. If a link brought you here, ask whoever sent it, or an administrator of the organization running the incident, for access.";
+import { readKept } from "../../offline/kept-board.js";
 import { useAsync, usePolled } from "../data/hooks.js";
 import { parseRouteHash, replaceRouteContext, surfaceHash, type Surface } from "../router.js";
 import { Icon } from "../../design/icons/index.js";
@@ -85,11 +86,15 @@ export function incidentLabel(i: IncidentSummary): string {
 }
 
 export function IncidentProvider(props: { children: ReactNode }) {
-  const { client, jurisdictionId } = useSession();
+  const { client, jurisdictionId, me } = useSession();
+  const personId = me?.person.id ?? "";
+  // Kept in the person's device store, so a console opened offline still selects the incident its queued work is for.
   const incidents = usePolled(
-    () => (jurisdictionId ? client.listIncidents(jurisdictionId) : Promise.resolve(EMPTY)),
+    () => (jurisdictionId
+      ? readKept(`incidents:${personId}:${jurisdictionId}`, () => client.listIncidents(jurisdictionId))
+      : Promise.resolve(EMPTY)),
     5000,
-    [jurisdictionId],
+    [jurisdictionId, personId],
   );
   const list = incidents.data ?? EMPTY;
   const [selectedId, setSelectedId] = useState<string | null>(null);

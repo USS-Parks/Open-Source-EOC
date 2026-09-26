@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ApiClient } from "../app/api/client.js";
+import { useSession } from "../app/auth/session.js";
 import { Button, StatusBadge, type Status } from "../design/components.js";
+import { DevicePinCard } from "./DevicePin.js";
 import { ConditionBadge } from "../design/feedback.js";
 import {
   ContinuityCoordinator,
@@ -171,6 +173,7 @@ export function ContinuityStateCard(props: ContinuityStateCardProps) {
 
 /** Shell-level adapter over the existing scoped offline engines. */
 export function ContinuityPanel(props: ContinuityPanelProps) {
+  const session = useSession();
   const scope = useMemo<ContinuityScope | null>(() => props.personId && props.incidentId
     ? { personId: props.personId, incidentId: props.incidentId }
     : null, [props.incidentId, props.personId]);
@@ -291,8 +294,12 @@ export function ContinuityPanel(props: ContinuityPanelProps) {
     } finally { setBusy(null); }
   }, [props.onRecoverSession, reconnect]);
 
-  if (!scope) return null;
-  return <ContinuityStateCard snapshot={snapshot} conflict={conflict} online={online}
-    storageError={storageError} busy={busy} onReconnect={() => void reconnect()}
-    onRecoverSession={() => void recoverSession()} onOpenBoards={props.onOpenBoards} />;
+  if (!props.personId) return null;
+  return <>
+    {scope ? <ContinuityStateCard snapshot={snapshot} conflict={conflict} online={online}
+      storageError={storageError} busy={busy} onReconnect={() => void reconnect()}
+      onRecoverSession={() => void recoverSession()} onOpenBoards={props.onOpenBoards} /> : null}
+    <DevicePinCard devicePin={session.devicePin} offer={session.pinOffer} onSet={session.setDevicePin}
+      onLock={session.lockDevice} onDismiss={session.dismissPinOffer} />
+  </>;
 }

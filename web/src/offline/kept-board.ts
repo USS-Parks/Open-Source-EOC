@@ -4,7 +4,10 @@ import { openOfflineStore } from "./store.js";
 /**
  * Read something through the server, keeping the answer on this device under
  * `key`; with no connection, answer from the kept copy instead. A board's
- * shape kept this way lets its form open offline (AG-07).
+ * shape kept this way lets its form open offline (AG-07), and the incident
+ * list lets a console opened offline select the incident its queued work is
+ * for. The copy sits in the person's device store, sealed under their device
+ * PIN when they have one (VC-27).
  */
 export async function readKept<T>(key: string, read: () => Promise<T>): Promise<T> {
   try {

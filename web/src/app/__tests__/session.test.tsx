@@ -1,17 +1,25 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { IDBFactory } from "fake-indexeddb";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { IDLE_LOCK_MS, latestSessionVault } from "../../offline/device-lock.js";
+import { CLEAR_DB, activeDevice, closeDevice, openOfflineStore } from "../../offline/store.js";
 import { ApiClient } from "../api/client.js";
 import { SessionProvider, useSession } from "../auth/session.js";
 
 /**
  * Session lifecycle in a real DOM: anonymous with no stored tokens,
  * authenticated after login (adopting the first jurisdiction), and revived
- * from a saved token pair on mount.
+ * from a saved token pair on mount; and the device PIN (VC-27), offered
+ * without it and sealing what the device keeps with it.
  */
 
 afterEach(() => {
   cleanup();
+  // A new page: nothing of the last one's device store is open.
+  closeDevice();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
   try {
     localStorage.clear();
   } catch {
@@ -19,8 +27,14 @@ afterEach(() => {
   }
 });
 
-function makeClient(onResume?: () => boolean | void, reachable: () => boolean = () => true): ApiClient {
-  const fetchImpl = (async (url: string) => {
+const officer = { id: "p", email: "e@x.org", displayName: "Duty Officer" };
+
+function fakeServer(
+  onResume?: () => boolean | void,
+  reachable: () => boolean = () => true,
+  who: () => { id: string; email: string; displayName: string } = () => officer,
+): typeof fetch {
+  return (async (url: string) => {
     if (!reachable()) throw new TypeError("Failed to fetch");
     const u = String(url);
     const res = (status: number, body: unknown) => ({
@@ -30,14 +44,15 @@ function makeClient(onResume?: () => boolean | void, reachable: () => boolean = 
       json: async () => body,
     });
     if (u.endsWith("/auth/login"))
-      return res(200, { accessToken: "A", resumeToken: "R", sessionId: "S" });
+      return res(200, { accessToken: `A-${who().id}`, resumeToken: `R-${who().id}`, sessionId: "S" });
+    if (u.endsWith("/auth/logout")) return res(200, { ok: true });
     if (u.endsWith("/auth/resume")) {
       if (onResume?.() === false) return res(401, { error: "expired" });
       return res(200, { accessToken: "A2", resumeToken: "R2", sessionId: "S" });
     }
     if (u.endsWith("/api/v1/me"))
       return res(200, {
-        person: { id: "p", email: "e@x.org", displayName: "Duty Officer" },
+        person: who(),
         position: null,
         memberships: [{ jurisdictionId: "j1", role: "member" }],
         guests: [],
@@ -45,7 +60,10 @@ function makeClient(onResume?: () => boolean | void, reachable: () => boolean = 
       });
     return res(404, { error: "nope" });
   }) as unknown as typeof fetch;
-  return new ApiClient({ fetchImpl });
+}
+
+function makeClient(onResume?: () => boolean | void, reachable: () => boolean = () => true): ApiClient {
+  return new ApiClient({ fetchImpl: fakeServer(onResume, reachable) });
 }
 
 function makePositionClient(): ApiClient {
@@ -78,6 +96,10 @@ function makePositionClient(): ApiClient {
   return new ApiClient({ fetchImpl });
 }
 
+const PIN = "480913";
+/** Each PIN derivation is 600,000 PBKDF2 rounds, which a loaded machine takes longer than the 1 s default over. */
+const WAIT = { timeout: 10_000 };
+
 function Probe() {
   const session = useSession();
   return (
@@ -95,6 +117,14 @@ function Probe() {
       <button type="button" onClick={() => session.setJurisdiction("foreign")}>foreign jurisdiction</button>
       <button type="button" onClick={() => void session.switchPosition("position-1")}>sign in position</button>
       <button type="button" onClick={() => void session.switchPosition(null)}>sign out position</button>
+      <span data-testid="device-pin">{String(session.devicePin)}</span>
+      <span data-testid="locked-for">{session.lockedFor ? `${session.lockedFor.label}${session.lockedFor.proven ? " (password)" : ""}` : ""}</span>
+      <button type="button" onClick={() => void session.setDevicePin(PIN).catch(() => undefined)}>set pin</button>
+      <button type="button" onClick={() => void session.unlockDevice(PIN)}>unlock</button>
+      <button type="button" onClick={() => void session.unlockDevice("000000")}>wrong pin</button>
+      <button type="button" onClick={() => void session.logout().catch(() => undefined)}>logout</button>
+      <span data-testid="pin-offer">{String(session.pinOffer)}</span>
+      <button type="button" onClick={session.dismissPinOffer}>not now</button>
     </div>
   );
 }
@@ -149,6 +179,48 @@ describe("SessionProvider", () => {
     expect(screen.getByTestId("error").textContent).toBe("");
   });
 
+  it("keeps no session or profile in the clear under a device PIN, and opens offline from the sealed profile after a restart", async () => {
+    vi.stubGlobal("indexedDB", new IDBFactory());
+    let reachable = true;
+    vi.stubGlobal("fetch", fakeServer(undefined, () => reachable));
+    const first = render(<SessionProvider><Probe /></SessionProvider>);
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("anon"), WAIT);
+    fireEvent.click(screen.getByText("login"));
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("authed"), WAIT);
+    // Without a PIN, kept as before: in the clear, and a PIN offered.
+    expect(localStorage.getItem("openeoc.tokens")).not.toBeNull();
+    expect(localStorage.getItem("openeoc.me")).not.toBeNull();
+    expect(screen.getByTestId("device-pin").textContent).toBe("false");
+    expect(screen.getByTestId("pin-offer").textContent).toBe("true");
+
+    fireEvent.click(screen.getByText("set pin"));
+    await waitFor(() => expect(screen.getByTestId("device-pin").textContent).toBe("true"), WAIT);
+    await waitFor(async () => expect(await latestSessionVault()).toMatchObject({ personId: "p", label: "Duty Officer" }), WAIT);
+    expect(localStorage.getItem("openeoc.tokens")).toBeNull();
+    expect(localStorage.getItem("openeoc.me")).toBeNull();
+    first.unmount();
+    closeDevice();
+
+    // A restart with the server out of reach asks for the PIN first.
+    reachable = false;
+    render(<SessionProvider><Probe /></SessionProvider>);
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("locked"), WAIT);
+    expect(screen.getByTestId("locked-for").textContent).toBe("Duty Officer");
+    expect(screen.getByTestId("who").textContent).toBe("");
+    fireEvent.click(screen.getByText("wrong pin"));
+    await waitFor(async () => expect((await latestSessionVault())?.failures).toBe(1), WAIT);
+    expect(screen.getByTestId("status").textContent).toBe("locked");
+    fireEvent.click(screen.getByText("unlock"));
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("authed"), WAIT);
+    expect(screen.getByTestId("offline").textContent).toBe("true");
+    expect(screen.getByTestId("who").textContent).toBe("Duty Officer");
+    expect(screen.getByTestId("jur").textContent).toBe("j1");
+    reachable = true;
+    window.dispatchEvent(new Event("online"));
+    await waitFor(() => expect(screen.getByTestId("offline").textContent).toBe("false"), WAIT);
+    expect(screen.getByTestId("error").textContent).toBe("");
+  });
+
   it("opens offline from the profile this computer saved, then resumes when the server answers", async () => {
     let reachable = true;
     const client = makeClient(undefined, () => reachable);
@@ -170,6 +242,89 @@ describe("SessionProvider", () => {
     window.dispatchEvent(new Event("online"));
     await waitFor(() => expect(screen.getByTestId("offline").textContent).toBe("false"));
     expect(screen.getByTestId("error").textContent).toBe("");
+  });
+
+  it("locks after fifteen minutes without use and opens again with the PIN", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ["setInterval", "clearInterval", "Date"] });
+    vi.stubGlobal("indexedDB", new IDBFactory());
+    vi.stubGlobal("fetch", fakeServer());
+    render(<SessionProvider><Probe /></SessionProvider>);
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("anon"), WAIT);
+    fireEvent.click(screen.getByText("login"));
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("authed"), WAIT);
+    fireEvent.click(screen.getByText("set pin"));
+    await waitFor(() => expect(screen.getByTestId("device-pin").textContent).toBe("true"), WAIT);
+    act(() => { vi.advanceTimersByTime(IDLE_LOCK_MS - 60_000); });
+    expect(screen.getByTestId("status").textContent).toBe("authed");
+    act(() => { vi.advanceTimersByTime(90_000); });
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("locked"), WAIT);
+    expect(screen.getByTestId("who").textContent).toBe("");
+    expect(activeDevice()).toBeNull();
+    fireEvent.click(screen.getByText("unlock"));
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("authed"), WAIT);
+    expect(screen.getByTestId("who").textContent).toBe("Duty Officer");
+  });
+
+  it("gives a second person on the device their own store, and the first person's opens only with their PIN", async () => {
+    vi.stubGlobal("indexedDB", new IDBFactory());
+    let who = officer;
+    vi.stubGlobal("fetch", fakeServer(undefined, () => true, () => who));
+    render(<SessionProvider><Probe /></SessionProvider>);
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("anon"), WAIT);
+    fireEvent.click(screen.getByText("login"));
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("authed"), WAIT);
+    fireEvent.click(screen.getByText("set pin"));
+    await waitFor(() => expect(screen.getByTestId("device-pin").textContent).toBe("true"), WAIT);
+    await (await openOfflineStore()).setMeta("field-outbox:p:i", ["the duty officer's unsent message"]);
+    fireEvent.click(screen.getByText("logout"));
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("anon"), WAIT);
+    expect(localStorage.getItem("openeoc.tokens")).toBeNull();
+
+    who = { id: "q", email: "lee@x.org", displayName: "Lee Moreno" };
+    fireEvent.click(screen.getByText("login"));
+    await waitFor(() => expect(screen.getByTestId("who").textContent).toBe("Lee Moreno"), WAIT);
+    expect(screen.getByTestId("device-pin").textContent).toBe("false");
+    expect(activeDevice()).toEqual({ personId: "q", sealed: false });
+    expect(await (await openOfflineStore()).getMeta("field-outbox:p:i")).toBeNull();
+    fireEvent.click(screen.getByText("logout"));
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("anon"), WAIT);
+
+    // The duty officer's password alone does not open the device copy.
+    who = officer;
+    fireEvent.click(screen.getByText("login"));
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("locked"), WAIT);
+    expect(screen.getByTestId("locked-for").textContent).toBe("Duty Officer (password)");
+    fireEvent.click(screen.getByText("unlock"));
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("authed"), WAIT);
+    expect(await (await openOfflineStore()).getMeta("field-outbox:p:i")).toEqual(["the duty officer's unsent message"]);
+  });
+
+  it("offers a PIN at sign-in without holding up the console, and a PIN set moves the clear copy into the sealed store", async () => {
+    const idb = new IDBFactory();
+    vi.stubGlobal("indexedDB", idb);
+    vi.stubGlobal("fetch", fakeServer());
+    render(<SessionProvider><Probe /></SessionProvider>);
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("anon"), WAIT);
+    fireEvent.click(screen.getByText("login"));
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("authed"), WAIT);
+    expect(screen.getByTestId("pin-offer").textContent).toBe("true");
+    fireEvent.click(screen.getByText("not now"));
+    await waitFor(() => expect(screen.getByTestId("pin-offer").textContent).toBe("false"), WAIT);
+    await (await openOfflineStore()).setMeta("field-outbox:p:i", [{ body: "queued without a PIN" }]);
+    expect((await idb.databases()).map((db) => db.name)).toContain(CLEAR_DB);
+
+    // Signing in again offers it again.
+    fireEvent.click(screen.getByText("logout"));
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("anon"), WAIT);
+    fireEvent.click(screen.getByText("login"));
+    await waitFor(() => expect(screen.getByTestId("pin-offer").textContent).toBe("true"), WAIT);
+    expect(await (await openOfflineStore()).getMeta("field-outbox:p:i")).toEqual([{ body: "queued without a PIN" }]);
+
+    fireEvent.click(screen.getByText("set pin"));
+    await waitFor(() => expect(screen.getByTestId("device-pin").textContent).toBe("true"), WAIT);
+    expect(screen.getByTestId("pin-offer").textContent).toBe("false");
+    expect(await (await openOfflineStore()).getMeta("field-outbox:p:i")).toEqual([{ body: "queued without a PIN" }]);
+    await waitFor(async () => expect((await idb.databases()).map((db) => db.name)).not.toContain(CLEAR_DB), WAIT);
   });
 
   it("renews a live session for offline-work recovery without changing its jurisdiction", async () => {

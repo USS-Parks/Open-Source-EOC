@@ -12819,3 +12819,292 @@ CI run 36216221581 on `055792e` failed 3 of 2,030 tests.
   screen remounting under the person while they type) instead of timing out
   on the button.
 - **Verification.** Both files green with `OPENEOC_TEST_DB_TAG=main`.
+
+## Veoci and air gap VA34: offline device PIN for shared devices
+
+Veoci Integration and Air Gap PSPR unit VA34 (VC-27; threat row B18).
+
+- **What the code did before.** Everything the web app kept for offline work
+  sat in the clear in one IndexedDB database, `openeoc-field`, shared by
+  every person who used the browser, each key naming its person: board sync
+  documents, queued board operations and their photo and audio bytes, task
+  completions, VA22's outbox (messages, new tasks) and late receipts,
+  retained conflicts, TP4's drafts and VA22's kept board forms. The token
+  pair (`openeoc.tokens`) and the last profile (`openeoc.me`) sat in the
+  clear in localStorage, and RD5's offline start opened the console from that
+  profile. Nothing offered to protect any of it on a shared device.
+- **What changed.**
+  - **Without a PIN, nothing changes** (`web/src/offline/store.ts`,
+    `web/src/app/auth/session.tsx`). The person's work stays in the clear
+    store `openeoc-field` and their session in localStorage, exactly as
+    before, so TP4's drafts through a reload, VA22's queue through a reload,
+    RD5's offline start and AG-01's hold all stand. Signing out and another
+    person signing in behave as before. What is new is that the app says the
+    copy is unprotected and offers a PIN.
+  - **The offer** (`web/src/offline/DevicePin.tsx`). After sign-in, a notice
+    above the console's screen (in the page's flow, like the clock notice, so
+    it covers nothing): "This device keeps your work unprotected. Anyone who
+    uses this device can read the drafts and queued work it keeps for you. A
+    device PIN encrypts them." with **Set device PIN** (the form opens in
+    place) and **Not now**. The side panel's **This device** card, under the
+    continuity panel, says the same ("Kept unprotected"). **Not now** hides
+    both until the person next signs in with a password. **Settings > This
+    computer** gains a **Device PIN** section that always offers **Set device
+    PIN** (with **Not now** only while the offer stands). Nothing blocks sign-in
+    or any screen.
+  - **Setting a PIN** takes a PIN of at least six digits or characters twice.
+    What the clear store holds for the person moves into their own sealed
+    database, `openeoc-field:<person>`, and is deleted from the clear store;
+    the clear store itself goes once no one's work is left in it. Every store
+    call waits for the move. The token pair and profile are sealed beside the
+    work and removed from localStorage. The card then reads **Kept under your
+    device PIN** with **Lock now**.
+  - **Encryption at rest under a PIN** (`web/src/offline/device-lock.ts`,
+    `store.ts`). Every value written is AES-GCM encrypted under a random
+    256-bit data key, with a fresh 96-bit IV and its store and key name as
+    associated data, so a value moved to another key does not open. Values
+    are tagged (JSON, a `Uint8Array`, or an `ArrayBuffer` for a queued file)
+    and sealed before the IndexedDB transaction opens. The data key rests on
+    the device only wrapped (AES-GCM, the person id as associated data) under
+    a key derived from the PIN: PBKDF2-SHA-256, 600,000 iterations, a 16-byte
+    salt made on the device, both kept per person in `openeoc-device`. A wrong
+    PIN fails the unwrap; the PIN is never stored. Every caller still calls
+    `openOfflineStore()`; it returns, once the database is open, a handle on
+    the open person's store that follows it from the clear store into a vault
+    and refuses (`DeviceLockedError`) once it is locked or another person's
+    is open.
+  - **The PIN screen** (`DeviceUnlock`, shown by the session gate in
+    `web/src/app/App.tsx`). At start, a vault holding a sealed session asks
+    for its person's PIN ("This device keeps work for Member. Enter the
+    device PIN to open it.") before anything it kept is read; the right PIN
+    resumes the session, or with no connection opens the console from the
+    sealed profile marked "No connection · working offline" and signs in for
+    real when the server answers. **Sign in with a password instead** leaves
+    it for the sign-in form.
+  - **Idle lock.** Under a PIN, 15 minutes without a pointer, key, wheel or
+    touch event locks the console: the key leaves the page, the console
+    unmounts, the PIN screen shows. The check also runs when a hidden page
+    comes back, since timers sleep there.
+  - **Wrong PINs.** Each try is counted in the vault before it runs, so
+    closing the page mid-try still counts. Two wrong PINs in a row cost
+    nothing more; from the third, a wait of 30 seconds that doubles each time
+    (30 s, 1, 2, 4, 8, 16, 32 minutes), kept in the vault so a reload does not
+    end it. The screen names the tries left and disables **Unlock** during the
+    wait. The tenth wrong PIN in a row erases the person's vault, then their
+    sealed database: everything the device kept for them, unsent work
+    included. The right PIN resets the count.
+  - **Sign-out and a second person, under a PIN.** Signing out clears the
+    sealed session and drops the key; the person's kept work stays sealed. A
+    different person signing in drops the previous person's key before
+    anything of theirs opens and works in their own store (sealed or clear).
+    A password sign-in by a person who has a PIN on the device still needs
+    the PIN; after a password sign-in the PIN screen also offers **Forgot the
+    PIN? Erase this device's copy** (confirmed; the person goes on without a
+    PIN) and **Sign in as someone else**.
+  - **The incident list is kept in the person's store**
+    (`web/src/app/incident/context.tsx`, through VA22's `readKept`), so a
+    console opened offline selects the incident its queued work is for,
+    with or without a PIN.
+  - **Docs.** `docs/guides/FIELD-USER.md` gains "Keep work on a shared
+    device": without a PIN the copy is unprotected and readable by anyone
+    with the device, which is why shared devices should set PINs; the offer
+    and **Not now**; setting a PIN and what moves; the start and idle lock,
+    wrong PINs and why unsent work is erased too, a forgotten PIN, a second
+    person, what is not encrypted; plus a line each in "Before leaving
+    connectivity", the install steps, the offline start, the update notice
+    and "Shift change". `docs/THREAT-MODEL.md` gains attacker class T7 and
+    row B18, which says plainly that the default is unmitigated.
+- **What the device keeps, and what is encrypted.**
+
+  | Where | What | Encrypted |
+  |---|---|---|
+  | IndexedDB `openeoc-field`, `docs` and `meta` | for each person without a PIN, as before: board sync documents, queued board operations with their Yjs updates, sync receipts, retained conflicts, queued photo and audio (metadata and bytes), task completions, the outbox (messages, new tasks), late receipts, continuity outcome, drafts (board records and the request intake), kept board forms, the kept incident list | no; readable by anyone with the device, which the console and the field guide say |
+  | IndexedDB `openeoc-field:<person>`, `docs` and `meta` | the same for a person with a PIN, plus the sealed session (token pair and profile) | yes, every value; the keys (which name person, incident, board or form) are not |
+  | IndexedDB `openeoc-device`, `vaults` | per person with a PIN: name, salt, iteration count, wrapped data key, wrong-PIN count and wait, whether a session is sealed | no: the wrapped key is ciphertext; the name shows on the PIN screen |
+  | localStorage `openeoc.tokens`, `openeoc.me` | token pair and last profile of a person without a PIN, as before | no; never written for a person with a PIN |
+  | localStorage `openeoc.theme`, `openeoc.preferences`, `openeoc.navigation.allSections`, `openeoc.map.layersOpen`, `openeoc.map.impactOpen` | viewer preferences | no; no incident records |
+  | localStorage `openeoc.cop.bookmarks` | named map views (a name, center and zoom) the viewer saved | no: see section 4 |
+  | localStorage `openeoc.damage.thresholds.<jurisdiction>` | declaration threshold figures typed on the damage screen (population and per-capita indicator inputs) | no: see section 4 |
+  | Cache Storage `openeoc-precache-<version>` | the app's own files, glyphs, symbols, the bundled basemap | no; the same for everyone |
+  | Cache Storage `openeoc-runtime` | same-origin map files read outside `/api/`, such as a self-hosted tile server's tiles, within 50 MB | no; the API, operational vector tiles (`/api/v1/tiles/...`) included, is never cached |
+  | sessionStorage | not used | not applicable |
+
+- **Files outside the "Owns" cell.** `web/src/app/App.tsx` (the gate shows
+  the PIN screen), `web/src/app/api/client.ts` (`heldTokens()`, so the pair
+  can be sealed), `web/src/app/incident/context.tsx` (the kept incident
+  list), `web/src/app/screens/Console.tsx` (the offer above the screen and
+  the settings props), `web/src/app/settings/SettingsSections.tsx` (the
+  **Device PIN** section), and the tests
+  `server/src/__tests__/device-pin-browser.test.ts` (new),
+  `server/src/__tests__/console-controls-browser.test.ts` (answers **Not now**
+  after sign-in; see decisions), `web/src/app/__tests__/session.test.tsx`,
+  `web/src/app/__tests__/tasks-surface.test.tsx` (opens the person's store).
+- **Decisions and deviations.**
+  - **Without a PIN the device keeps work unprotected, as before** (the
+    integrator's rework): no landed continuity guarantee changes. The cost
+    is stated in the field guide, the console and the threat model: on a
+    shared device, the copy of everyone who has not set a PIN is readable by
+    anyone with the device, and a restart opens the console as the last
+    person.
+  - **Each person sets their own PIN; no administrator policy was built.**
+    Whether a jurisdiction may require a PIN (a policy that makes the setup
+    mandatory at sign-in) is an open decision for Basho (section 4).
+  - **The offer stands in the page's flow, not over it.** An overlay would sit
+    over controls every sign-in walk clicks; in the flow, like the clock
+    notice, it pushes the screen down while it shows. **Not now** holds for
+    the page until the next password sign-in, so each sign-in offers again.
+    In Settings the section stays, since that is where a person goes to set
+    one; **Not now** appears there only while the offer stands.
+  - **Setting a PIN moves the person's clear entries in and deletes them**
+    (the move runs before any store call; a key the sealed store already
+    holds keeps its value), and removes the clear token pair and profile.
+    Other people's clear entries stay; the clear store goes once empty.
+  - **A wipe destroys unsent work.** Keeping it sealed would leave the work
+    and its wrapped key on a device that may be lost, where a six-digit PIN
+    can be guessed away from the app in minutes; it would also leave nothing
+    that opens it, since the tries are spent. The waits make ten wrong tries
+    take about an hour (63.5 minutes of waits), which no one reaches by
+    mistake; the screen counts the tries left and says unsent work goes too.
+    The cost: a determined guesser, or an owner who forgot the PIN, loses
+    reports that never reached the server.
+  - **Idle timeout of 15 minutes:** the session-lock period FedRAMP sets for
+    NIST SP 800-53 AC-11; long enough for a phone call or reading a board,
+    short enough that a device left between shifts locks before the next
+    person picks it up. **Lock now** covers a hand-over.
+  - **PBKDF2 at 600,000 iterations**, OWASP's 2023 figure for
+    PBKDF2-HMAC-SHA256; Argon2 is not in Web Crypto and would need a
+    dependency. The count is stored per vault, so a later raise leaves older
+    vaults readable.
+  - **A password sign-in reopens a sealed copy without the PIN only where
+    that person's PIN already opened it in the same page** (a session the
+    server ended mid-shift); another person's sign-in in between drops the
+    key.
+  - **One tab at a time sets a PIN.** Setting one when another tab already
+    did is refused with "Reload the app to enter it", since a second vault
+    would orphan what the first sealed. Each tab asks for the PIN on its own.
+  - **The PIN is a type="password" field with autocomplete off,** and the
+    guide says not to let the browser save it; a browser may still offer to.
+  - **`openOfflineStore()` resolves once the database is open,** as it did
+    before. A first cut returned the handle at once and opened the database
+    on first use; the tasks screen then enabled **Complete** before its store
+    was open, its first reconcile ran late and overlapped the click, and
+    `tasks-surface.test.tsx` failed 2 runs in 6 alone. Waiting for the open
+    restored the old order: 0 in 12.
+  - **`console-controls-browser` answers Not now after sign-in.** Its walk
+    measures that the map fills its screen (to within 60 px); the offer
+    standing above the screen took 66 px. The offer is the designed
+    behavior after sign-in, so the layout walk answers it first.
+- **Air-gap behavior (decision 9).** No network path is added or changed;
+  the PIN, the derived key and the data key never leave the device and are
+  never logged. Scenario A, internet cut with the LAN up: unchanged. Scenario
+  B, a permanent isolated enclave: unchanged, nothing new is contacted.
+  Scenario C, a device with no network: without a PIN, as before, the app
+  starts from the saved profile with its queued work and delivers on return;
+  with a PIN it asks for the PIN first, then does the same from the sealed
+  copy. Scenario D, data carried on media: not affected; the device store is
+  never exported, and VA20's exchange by file is unchanged.
+- **Schema, contract, dependencies.** None: no migration, no route, no
+  dependency. Web Crypto (PBKDF2, AES-GCM) and IndexedDB are the browser's.
+  `ApiClient.heldTokens()` is a client method, not a route.
+- **Tests.**
+  - `web/src/offline/__tests__/device-lock.test.ts` (10): the same PIN and
+    salt make the same key and another PIN or salt another; a random salt
+    and the iteration count per vault and no PIN kept; every kind of value
+    round-trips and only ciphertext is at rest (no report text, photo bytes
+    or field names in any stored byte); a value under another key, and a
+    value moved to another key, refuse to open; without a PIN the work sits
+    readable in the clear store, and a PIN moves it into the sealed store,
+    the handle following it, and the clear store goes; a locked store and
+    another person's handle refuse, and another person's clear store holds
+    nothing of the first's; wrong PINs counted before the try, waits of 0, 0,
+    30 s, 60 s, a wait refusing even the right PIN uncounted, the count and
+    wait read back as after a restart, the right PIN resetting it; the tenth
+    wrong PIN erases the vault and the database, unsent work with it, and
+    leaves another person's vault alone; one person's PIN moves only their
+    clear entries, the clear store going once no one's are left; dropping a
+    sealed store no vault opens.
+  - `web/src/offline/__tests__/device-pin.test.tsx` (7, axe on each
+    screen): the PIN screen names whose work it keeps and refuses a wrong
+    PIN with the tries left; a wait from before a reload holds **Unlock**;
+    erasing is offered only after a password sign-in and asks first; the
+    dock card says the copy is unprotected and the PIN form checks length
+    and match; the offer above the console goes on **Not now**, and so does
+    the card; Settings keeps **Set device PIN** with **Not now** only while
+    the offer stands; the sealed card locks on request and the offer is gone.
+  - `web/src/app/__tests__/session.test.tsx` (4 new; the original "opens
+    offline from the profile this computer saved" is kept unchanged): no
+    session or profile in the clear once a PIN is set, and an offline
+    restart asks for the PIN, refuses a wrong one, opens from the sealed
+    profile and resumes when the server answers; the idle lock at 15 minutes
+    (fake clock) and unlock; a second person gets their own store and the
+    first person's password alone asks for the PIN; the offer at sign-in,
+    **Not now**, the offer again at the next sign-in, and a PIN moving the
+    clear copy into the sealed store and deleting it.
+  - `server/src/__tests__/device-pin-browser.test.ts` (2), at 1586 by 992
+    and 1534 by 790 on the real build with its service worker. Without a
+    PIN: the member signs in and sees the offer and the "Kept unprotected"
+    card; a report queued offline is readable in what the origin keeps; a
+    restart offline opens straight into the console with "1 board draft
+    saved locally."; back online it reconciles and the record is the
+    member's. With a PIN, set from the offer: the offer goes, the clear copy
+    is deleted; a second report queued offline leaves no report text, email,
+    PIN or token anywhere the origin keeps; a restart offline asks for the
+    PIN; two wrong PINs are refused with the tries left, the third starts a
+    30-second wait with **Unlock** disabled, a reload keeps the wait; the
+    right PIN opens the console offline with the report queued; back online
+    it reconciles. A third report waits while the administrator signs in on
+    the same page, sees the offer, answers **Not now** (the offer and the
+    card go) and sees "No local changes are awaiting delivery."; the
+    member's password brings the PIN screen, the PIN opens the kept report
+    and it reconciles. Screenshots looked at: the offer and the unprotected
+    card with a report queued, the PIN wait, the console opened offline, the
+    sealed card.
+  - Unchanged and passing on the default again: `continuity-browser`,
+    `continuity-console-browser`, `pwa-browser`, `field-breadth-browser` and
+    the offline unit tests (`continuity`, `field-client`,
+    `task-completions`); `outbox.test.tsx` and `tasks-surface.test.tsx` open
+    the person's store without a PIN first, as the session now does.
+- **Verification.** On the Windows test bed (decision 19), with
+  `OPENEOC_TEST_DB_TAG=va34`:
+  - `pnpm check:static`: exit 0 (tsc, eslint, license scan 339 packages,
+    links 127 files).
+  - `rtk proxy npx vitest run web/src shared/src`: 131 files, 927 tests,
+    all passed in three full runs after the store fix; `tasks-surface.test.tsx`
+    alone 12 of 12 after it (2 of 6 failed before). One full run before the
+    fix also failed `standing-lifelines.test.tsx` once, which touches none
+    of this unit's code; alone it passed 10 of 10.
+  - Browser, the changed and restored files alone: `device-pin-browser` 2
+    of 2, and `console-controls`, `continuity-console`, `pwa`,
+    `field-breadth`, `continuity`: 5 files, 17 tests, all passed.
+  - Browser, every `*-browser` and `*-e2e` file together with
+    `--maxWorkers=4` (94 files), after the store fix: 93 files passed, 172
+    tests. The one red is `communications-workspace-browser` at its line
+    209, the `/messages` wait that has not matched since VA22 on this lane's
+    base and is fixed on main (section 4); it fails the same way without
+    this unit. The run before the fix had `console-controls-browser` red on
+    the offer's height (answered in its walk now, see decisions).
+  - `node scripts/bundle-budget.mjs`: first-load JavaScript 198.7 kB
+    gzipped of the 300 kB budget.
+- **Not run.** The Windows setup (decision 18); `test:ci` and `check:gate`;
+  the server suites (no server code changed); a real phone or tablet, and
+  Safari and Firefox (Web Crypto PBKDF2 and AES-GCM are in both; the walks
+  ran in Chromium).
+- **Evidence level:** unit, component (axe) and browser tests on the real
+  build with its service worker.
+- **Rollback:** revert the commit. People without a PIN are unaffected: the
+  clear store and localStorage are what the earlier code reads. Work queued
+  under a PIN sits in `openeoc-field:<person>`, which the earlier code does
+  not read: send it before rolling back.
+- **Landing.** Rebased onto "CI correction: a time zone named by its alias,
+  and a partner's message check". The only conflict was the threat model,
+  where VA32's service identities had taken row B17 on main; this unit's
+  row is B18, with the references in `web/src/offline/device-lock.ts` and
+  its test renumbered, and B16 keeps main's count of people per send. The
+  first cut made a person without a PIN keep nothing across a reload; the
+  integrator sent it back, since that would have taken away durable drafts,
+  the field queue through a reload, the offline start and "hold, do not
+  drop" from everyone without a PIN. This landing is the reworked default,
+  where the PIN is offered and nothing is lost without it. On main with
+  `OPENEOC_TEST_DB_TAG=va34`: `pnpm check:static` exit 0; the device PIN,
+  PWA, continuity, field breadth, console controls and messages browser
+  tests with every web and shared test, 143 files, 972 tests.

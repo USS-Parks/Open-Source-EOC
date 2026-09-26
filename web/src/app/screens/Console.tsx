@@ -14,6 +14,7 @@ import {
   type WorkspaceArrangement,
 } from "../layout/AppShell.js";
 import { ClockNotice } from "../layout/ClockNotice.js";
+import { DevicePinOffer } from "../../offline/DevicePin.js";
 import { OperationalPeriodControl, PositionControl, useWorkspaceContext, type OperationalPeriodChoice } from "../layout/context.js";
 import { parseRouteHash, sectionOf, surfaceHash, useSurface, type RouteContext, type Surface } from "../router.js";
 import { EmptyState, ErrorNote, LoadBoundary, Loading, NotFoundState } from "./parts.js";
@@ -368,6 +369,14 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
   const drawerless = ["lifelines", "lifeline", "esf", "dashboard", "overview", "briefing"].includes(surface.kind);
   const page = pageFor(surface, scope);
 
+  // A device PIN offered above the console and in settings while this person's work is kept unprotected (VC-27).
+  const devicePin = {
+    devicePin: session.devicePin,
+    offer: session.pinOffer,
+    onSet: session.setDevicePin,
+    onLock: session.lockDevice,
+    onDismiss: session.dismissPinOffer,
+  };
   const rail = railFor(
     Boolean(session.me?.isInstanceAdmin || session.me?.memberships.some((m) => m.role === "admin")),
     // A jurisdiction's administrators create boards from published templates; publishing also needs an instance admin.
@@ -402,6 +411,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         email: session.me?.person.email ?? "",
         displayName: session.me?.person.displayName ?? "",
         onLogout: () => void session.logout(),
+        devicePin,
       })}
       notifications={(close) => (
         <NotificationTray
@@ -421,6 +431,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       rightDock={dock}
     >
       <ClockNotice client={client} />
+      <DevicePinOffer {...devicePin} />
       {incident.selectedIncident?.lockedAt ? (
         <p className="eoc-lockdown-banner" role="status">
           <strong>{incident.selectedIncident.name}: guest access is locked.</strong> Guest grants cannot read its boards or records until an administrator lifts the lockdown; members and participating organizations keep their access.

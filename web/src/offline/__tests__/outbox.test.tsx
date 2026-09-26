@@ -4,12 +4,16 @@ import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NO_CONNECTION, type FieldOperation, type FieldOperationReceipt } from "../../app/api/client.js";
 import { lateReceipts, operationStamp, useFieldOutbox } from "../outbox.js";
-import { openOfflineStore } from "../store.js";
+import { openDeviceClear, openOfflineStore } from "../store.js";
 
 afterEach(cleanup);
-beforeEach(() => { vi.stubGlobal("indexedDB", new IDBFactory()); });
 
 const personId = "11111111-1111-4111-8111-111111111111";
+// Each test opens this person's store, without a device PIN, on a fresh browser store.
+beforeEach(() => {
+  vi.stubGlobal("indexedDB", new IDBFactory());
+  openDeviceClear(personId);
+});
 const incidentId = "22222222-2222-4222-8222-222222222222";
 
 describe("the device outbox", () => {

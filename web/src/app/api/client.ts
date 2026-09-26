@@ -822,6 +822,10 @@ export class ApiClient {
     this.resumeToken = null;
     this.onTokens?.(null);
   }
+  /** The pair this client holds, for sealing under a device PIN (VC-27); never send or log it. */
+  heldTokens(): Tokens | null {
+    return this.accessToken && this.resumeToken ? { accessToken: this.accessToken, resumeToken: this.resumeToken } : null;
+  }
   /** Current bearer for the transient WebSocket sync handshake. Never persist this value. */
   fieldSyncToken(): string {
     if (!this.accessToken) throw new SessionExpiredError();

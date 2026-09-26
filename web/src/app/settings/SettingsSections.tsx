@@ -4,6 +4,7 @@ import { syntheticData } from "../config.js";
 import { setPreferences, usePreferences } from "../preferences.js";
 import { desktopAlertsSupported, playAlertTone } from "../../notifications/alerting.js";
 import type { SettingsSection } from "../layout/ShellDialogs.js";
+import { DevicePinSettings, type DevicePinNoticeProps } from "../../offline/DevicePin.js";
 
 /** The console's own settings sections; the shell adds General (navigation and administration). */
 export function consoleSettingsSections(props: {
@@ -11,12 +12,14 @@ export function consoleSettingsSections(props: {
   readonly email: string;
   readonly displayName: string;
   readonly onLogout: () => void;
+  /** The device PIN (VC-27): set, offered, or one click away. */
+  readonly devicePin: DevicePinNoticeProps;
 }): readonly SettingsSection[] {
   return [
     { key: "account", title: "Account", content: <AccountSettings {...props} /> },
     { key: "notifications", title: "Notifications", content: <NotificationSettings /> },
     { key: "map", title: "Map", content: <MapSettings /> },
-    { key: "device", title: "This computer", content: <DeviceSettings /> },
+    { key: "device", title: "This computer", content: <DeviceSettings devicePin={props.devicePin} /> },
     { key: "about", title: "About", content: <AboutSettings client={props.client} /> },
   ];
 }
@@ -167,7 +170,7 @@ function useOnline(): boolean {
   return online;
 }
 
-function DeviceSettings() {
+function DeviceSettings(props: { readonly devicePin: DevicePinNoticeProps }) {
   const online = useOnline();
   const [installed, setInstalled] = useState<boolean | null>(null);
   const [usage, setUsage] = useState<string | null>(null);
@@ -196,6 +199,7 @@ function DeviceSettings() {
 
   return (
     <>
+      <DevicePinSettings {...props.devicePin} />
       <fieldset>
         <legend>Offline copy</legend>
         <dl className="eoc-shell-settings-facts">

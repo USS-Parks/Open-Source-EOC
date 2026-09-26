@@ -7,10 +7,13 @@ interruption, while distinguishing local queue state from server receipt.
 ## Before leaving connectivity
 
 1. Sign in and select the assigned incident and position.
-2. Open **Smart Forms** and load the assigned form and incident board.
-3. Open **My Tasks** and confirm the work assigned to your current position or
+2. On a device other people use, set a device PIN, as
+   [Keep work on a shared device](#keep-work-on-a-shared-device) describes.
+   Without one, the device keeps your work unprotected.
+3. Open **Smart Forms** and load the assigned form and incident board.
+4. Open **My Tasks** and confirm the work assigned to your current position or
    incident participation.
-4. Check the command-bar connection state. Cache preparation must finish before
+5. Check the command-bar connection state. Cache preparation must finish before
    you rely on a disconnected path.
 
 ## Install the app and work offline
@@ -31,7 +34,7 @@ Then, with a connection:
 4. Sign in, choose your incident and position, and open **Settings > This
    computer**. Wait until **Offline copy** reads "Kept on this computer". If
    **Kept when storage runs low** reads No, choose **Keep this computer's
-   copy**.
+   copy**. On a shared device, set a device PIN there too.
 
 The app opens in its own window. Installing has been tested in desktop
 Chrome; the phone and tablet steps have not yet been walked on a device.
@@ -46,9 +49,10 @@ facility symbols. Without a connection:
 - Signing in needs the connection, so sign in before you leave coverage. If the
   app is closed or reloaded while offline, it opens again from what it kept on
   the device, marked "No connection · working offline", and signs in for real
-  when the server answers; queued work stays on the device. This needs the
-  offline copy: **Settings > This computer** shows "Kept on this computer" once
-  it is installed, which happens on the first visit with a connection.
+  when the server answers; queued work stays on the device. With a device PIN
+  it asks for the PIN first. This needs the offline copy: **Settings > This
+  computer** shows "Kept on this computer" once it is installed, which happens
+  on the first visit with a connection.
 - The bundled basemap draws from the device copy. A street, buildings or
   overlay map hosted by your deployment is read from the server as you pan and
   needs the connection.
@@ -63,7 +67,68 @@ device runs low on space. The browser decides.
 
 When a new version is published, a notice reads **A new version is ready**.
 Choose **Reload** when it suits you; queued work stays on the device through
-the reload. **Later** hides the notice until the app next starts.
+the reload, and with a device PIN the app asks for it again. **Later** hides
+the notice until the app next starts.
+
+## Keep work on a shared device
+
+What the app keeps on the device for working offline (queued field reports
+and their photos and audio, queued messages, new tasks and task completions,
+drafts, the board forms and incident list kept for working offline, and your
+signed-in session) is kept one of two ways.
+
+- **Without a device PIN**, as it always has been: **unprotected**. Anyone
+  who uses the device, or has its storage, can read your drafts and queued
+  work, and a restart opens the console as you, from your saved session. This
+  is why a device that other people use should have a PIN for each person
+  who works on it. The console says so: after you sign in, a notice above
+  the screen reads "This device keeps your work unprotected", with **Set
+  device PIN** and **Not now**, and the side panel's **This device** card
+  says the same. **Not now** hides both until you next sign in. **Settings >
+  This computer** always has **Set device PIN**.
+- **With a device PIN**, encrypted. Choose **Set device PIN** in the notice,
+  the card or Settings, enter a PIN of at least six digits or characters
+  twice, and choose **Set device PIN** again. What the device already kept for
+  you moves under the PIN, and the unprotected copy is deleted. The card then
+  reads **Kept under your device PIN**. No one else's PIN, password or session
+  opens it, and the PIN never leaves the device. A longer PIN is harder to
+  guess from a copy of the device's storage. Do not let the browser save it.
+
+Under a device PIN:
+
+- **When the app starts**, and after 15 minutes without a touch, click or
+  key, it asks for the PIN before it shows anything it kept. **Lock now** on
+  the card locks it at once, for example before you hand the device over.
+- **Wrong PINs.** Two wrong PINs in a row cost nothing more. From the third,
+  each one makes the screen wait before the next try: 30 seconds, then a
+  minute, then two, doubling each time. Closing or reloading the app does not
+  end the wait. The tenth wrong PIN in a row erases everything the device
+  keeps for that person, **including work not yet sent**; the screen counts
+  the tries left.
+- **Why unsent work is erased too.** Erasing it means that someone who keeps
+  guessing, or an owner who forgot the PIN, loses reports that never reached
+  the server. Keeping it sealed instead would leave the work, and its key
+  wrapped under the PIN, on a device that may be lost, where it can be
+  guessed at away from the app, and a six-digit PIN does not hold out long
+  against that. The waits make ten wrong tries take about an hour, which no
+  one reaches by mistake. Send what you can before you hand a device over.
+- **Forgot the PIN?** Choose **Sign in with a password instead** and sign in.
+  The PIN screen then also offers **Forgot the PIN? Erase this device's
+  copy**, which erases what the device keeps for you, unsent work included,
+  and goes on without a PIN.
+- **Another person** on the same device signs you out (account menu, **Sign
+  out**) and signs in with their own account. They never get your key. Your
+  work stays on the device, sealed; signing in with your password alone does
+  not open it: the app asks for your PIN, or offers to erase it. Without a
+  PIN, your work stays in the unprotected copy as before, and the next person
+  sees only their own work on screen, but the copy itself is readable by
+  anyone with the device.
+
+Not encrypted either way, because they hold no incident records: the app's own
+files and map tiles in the offline copy, the device's list of whose PINs it
+holds (each person's name, the salt and the wrapped key, and the wrong-PIN
+count), and viewer preferences such as the theme, map units, map bookmarks and
+the figures typed into the damage screen's declaration thresholds.
 
 ## Queue a field report
 
@@ -186,3 +251,6 @@ workflow after connectivity returns.
 Finish synchronization where possible, report every remaining queued or
 conflicted item, then sign out of the position. The incoming responder should
 use their own account and position session so attribution remains accurate.
+On a shared device, sign out of the app too: under a device PIN, what it
+keeps for you stays sealed and opens again only when you sign in there with
+your password and PIN; without one, it stays unprotected on the device.

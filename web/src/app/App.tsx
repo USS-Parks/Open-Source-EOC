@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Theme } from "../design/components.js";
 import type { ThemeName } from "../design/tokens.js";
+import { DeviceUnlock } from "../offline/DevicePin.js";
 import { UpdateNotice } from "../offline/UpdateNotice.js";
 import { SessionProvider, useSession } from "./auth/session.js";
 import { IncidentProvider } from "./incident/context.js";
@@ -11,8 +12,9 @@ import { Loading } from "./screens/parts.js";
 
 /**
  * App root: theme at the top, then the session gate. Anonymous shows the
- * login; a live session shows the map-first console. The theme is a
- * per-viewer preference (guarded localStorage), not shared state.
+ * login; a device copy waiting for its PIN shows the PIN screen; a live
+ * session shows the map-first console. The theme is a per-viewer preference
+ * (guarded localStorage), not shared state.
  */
 
 const THEME_KEY = "openeoc.theme";
@@ -41,9 +43,14 @@ function WorkspaceConsole() {
 }
 
 function Gate(props: { theme: ThemeName; onThemeChange: (theme: ThemeName) => void }) {
-  const { status, error } = useSession();
+  const session = useSession();
+  const { status, error } = session;
   if (status === "loading") return <Loading label={error ?? "Starting…"} />;
   if (status === "anon") return <Login />;
+  if (status === "locked" && session.lockedFor) {
+    return <DeviceUnlock key={session.lockedFor.personId} lockedFor={session.lockedFor} error={error}
+      onUnlock={session.unlockDevice} onUsePassword={session.usePassword} onErase={session.eraseDevice} />;
+  }
   return (
     <IncidentProvider>
       <WorkspaceContextProvider theme={props.theme} onThemeChange={props.onThemeChange}>

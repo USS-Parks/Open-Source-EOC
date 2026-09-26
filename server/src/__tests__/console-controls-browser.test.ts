@@ -56,6 +56,8 @@ beforeAll(async () => {
   await page.getByLabel("Password").fill(NORTH_COAST_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.getByRole("button", { name: "Account menu" }).waitFor();
+  // The device PIN offer stands above every screen after sign-in until answered; these walks measure the screens.
+  await page.getByRole("region", { name: "Device PIN" }).getByRole("button", { name: "Not now" }).click();
 }, 240_000);
 
 afterAll(async () => {

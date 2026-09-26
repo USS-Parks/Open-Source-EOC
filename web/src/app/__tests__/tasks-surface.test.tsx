@@ -5,9 +5,14 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { IncidentTask, TaskCompletionReceipt, TaskListQuery, TaskMetadataPatch } from "@openeoc/shared";
 import { Theme } from "../../design/components.js";
 import { TasksSurface } from "../surfaces/TasksSurface.js";
+import { openDeviceClear } from "../../offline/store.js";
 
 afterEach(cleanup);
-beforeEach(() => { vi.stubGlobal("indexedDB", new IDBFactory()); });
+beforeEach(() => {
+  vi.stubGlobal("indexedDB", new IDBFactory());
+  // The person's store, without a device PIN, as the session opens it.
+  openDeviceClear("66666666-6666-4666-8666-666666666666");
+});
 const incidentId = "11111111-1111-4111-8111-111111111111";
 const task: IncidentTask = { id: "22222222-2222-4222-8222-222222222222", number: 204, incidentId, item: "Establish command", category: "command", status: "open", dueAt: "2026-09-22T10:00:00.000Z", revision: 1, assignment: { kind: "position", id: "33333333-3333-4333-8333-333333333333", organizationId: "44444444-4444-4444-8444-444444444444", organizationName: "Owner County", title: "Incident Commander", personId: null, personName: null }, dependencies: [], completedAt: null, completedBy: null };
 function response(tasks: readonly IncidentTask[]) { return { tasks, analytics: { total: tasks.length, byStatus: { open: tasks.filter((item) => item.status === "open").length, in_progress: 0, completed: 0 }, byCategory: { command: tasks.length }, overdue: 0, dueNext24Hours: 1, upcoming: 0, withoutDue: 0 }, filters: {} }; }
