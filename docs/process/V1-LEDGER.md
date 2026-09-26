@@ -9023,3 +9023,103 @@ Veoci Integration and Air Gap PSPR unit VA18 (VC-14).
   pages and ran `node scripts/check-links.mjs` on `main` with them staged:
   ok, 123 files. The trusted-publisher gap is carried to VA36.
 - **Rollback:** delete the three pages and revert the three index rows.
+
+## Veoci and air gap VA23: phones on a host's authority
+
+Veoci Integration and Air Gap PSPR unit VA23 (AG-09), a placeholder under
+amendment 4: the procedure is written; the walk is Basho's and gates
+nothing.
+
+- **What the documents said before.** `NETWORK-HOST.md` gave phones two
+  one-line bullets: on an iPhone, open the file, allow and install the
+  profile and turn on full trust; on Android, one Settings path whose names
+  "vary by maker". `FIELD-USER.md` said to install on an iPhone from
+  **Share**, **Add to Home Screen**, and that installing "has not yet been
+  tested on a phone or tablet". Nothing said how to compare the thumbprint
+  on a phone, that a phone may route around a Wi-Fi with no internet, or
+  that an iPhone's Home Screen app signs in apart from Safari. The parity
+  matrix's G-PWA row leaves "installing on a phone" to Basho.
+- **What changed.**
+  - `docs/guides/NETWORK-HOST.md`, new section **Phones and tablets**:
+    - **Before you start:** the host's numeric address (from the setup's
+      `HOST_ADDRESS` lines or the host check); the thumbprint from the host
+      check's "This computer trusts the host's certificate authority" line,
+      which a phone shows as the SHA-1 fingerprint, compared without
+      separators or case; the phone on the host's Wi-Fi with mobile data
+      off, and staying connected when Android says the network has no
+      internet; a screen lock.
+    - **iPhone and iPad:** in Safari, past the warning (**Show Details**,
+      **visit this website**, **Visit Website**); **Trust this server**,
+      **Download the certificate**, **Allow**; the profile under **Profile
+      Downloaded** or **General > VPN & Device Management**, named "Open
+      Source EOC", the host's name and "Root"; its SHA-1 fingerprint under
+      **More Details** compared before installing, or **Remove Downloaded
+      Profile**; **Install**; full trust under **General > About >
+      Certificate Trust Settings**; Safari restarted.
+    - **Android:** in Chrome, past the warning (**Advanced**, **Proceed
+      to**); the download, `open-source-eoc-root.crt`, which Android 11 and
+      later install only from Settings; **Install a certificate > CA
+      certificate** (a Settings search for "CA certificate", and Samsung's
+      **Install from device storage**); the SHA-1 fingerprint under
+      **Trusted credentials**, **User**, with **Remove** on a mismatch;
+      Chrome restarted. Firefox for Android does not use an authority
+      installed this way.
+    - **Install the app:** from Safari's **Share** menu or Chrome's
+      **Install app**, pointing to the field user guide, and signing in
+      again inside the iPhone's Home Screen app.
+    - A host on an agency certificate: the agency's root, by the same steps.
+    - **Record the phone walk:** a table with a column for an iPhone or iPad
+      and one for Android (the warning, the download prompt, where the
+      fingerprint showed and whether it matched, the menu path, the app
+      installed and signed in, the offline copy kept, an offline reopen, a
+      queued completion or report synced, the minutes taken, problems),
+      headed as Basho's walk, not yet happened.
+    - The step 3 bullets for iPhone and Android now point to the section.
+  - `docs/guides/FIELD-USER.md`, **Install the app and work offline**:
+    numbered steps for a computer, an iPhone or iPad and Android; the device
+    must trust the host first; sign in inside the iPhone's Home Screen app;
+    wait for **Settings > This computer** to read "Kept on this computer"
+    and choose **Keep this computer's copy** when **Kept when storage runs
+    low** reads No. It still says the phone steps have not been walked on a
+    device.
+- **Files outside the "Owns" cell.** None.
+- **Decisions and deviations (defaults taken, not asked).**
+  - The phone steps follow Apple's and Google's documented settings and are
+    marked in the guide as not yet walked; menu names vary by version and
+    maker, and the record asks for the path actually taken.
+  - The result template is in `NETWORK-HOST.md`, not `FIELD-USER.md`:
+    `FIELD-USER.md` is bundled into the console's **Help**
+    (`web/src/app/layout/ShellDialogs.tsx`), where a result template would
+    show to every field user. The field guide's new text keeps to what
+    Help's renderer draws: flat numbered lists, no nested lists or code.
+  - What was checked in the code: the host serves its root at
+    `/trust/openeoc-root.crt` as `application/x-x509-ca-cert` with the file
+    name `open-source-eoc-root.crt`, and names it "Open Source EOC <first
+    host name> Root" (`deploy/windows/lib/host.mjs`); the host check prints
+    the Windows thumbprint of that root (`Test-OpenEOCHost.ps1`); the Home
+    Screen name comes from the manifest's `short_name` ("OpenEOC"); the
+    Settings strings are `SettingsSections.tsx`'s.
+- **Finding, not changed (outside the cell).** The sign-in page's **Trust
+  this server** panel (`web/src/app/screens/Login.tsx`) gives steps for
+  Windows and macOS only; a person on a phone reading it finds none. The
+  guide covers phones.
+- **Air-gap behavior (decision 9).** Documentation only; no network path
+  changes. The walk runs on a network with no internet (scenario A), and
+  its record includes an offline reopen and a queued item synced on return
+  (scenario C).
+- **Schema, contract and dependencies.** None.
+- **Tests.** None; the unit is documents.
+- **Verification.** In the worktree: `node scripts/check-links.mjs` ok (120
+  files); the relative-link and anchor check over both guides, including
+  `#phones-and-tablets` and `#install-the-app-and-work-offline`: ok;
+  `pnpm check:static` exit 0 (`tsc` in every package, `eslint .`, license
+  scan 339 packages, links 120 files).
+- **Not run.** The phone walk on iOS and Android, which is Basho's, on his
+  phones and a host (decisions 12 and 14). Nothing was run on a phone.
+- **Evidence level:** documents checked against the host and web source; no
+  device walk.
+- **Landing.** Built in the fan-out lane `lane/docs` and landed on `main` by
+  the integrating session after VA18; `node scripts/check-links.mjs` on
+  `main`: ok. The sign-in page's trust panel, which names only Windows and
+  macOS, is carried to VA36.
+- **Rollback:** revert the two guides.

@@ -15,11 +15,26 @@ interruption, while distinguishing local queue state from server receipt.
 
 ## Install the app and work offline
 
-The console installs as an app. In Chrome or Edge, choose **Install** in the
-address bar or the browser menu; on an iPhone or iPad, choose **Share**, then
-**Add to Home Screen**. The app opens in its own window. Installing has been
-tested in desktop Chrome only; it has not yet been tested on a phone or
-tablet.
+The console installs as an app from the browser; there is no app store app.
+A phone or tablet must first trust your host's certificate authority, which
+an administrator sets up once per device, as the network host guide
+describes under [Phones and tablets](NETWORK-HOST.md#phones-and-tablets).
+Then, with a connection:
+
+1. On a computer, in Chrome or Edge, choose **Install** in the address bar or
+   the browser menu.
+2. On an iPhone or iPad, in Safari, choose **Share**, then **Add to Home
+   Screen**, then **Add**. Open the app from the Home Screen and sign in
+   inside it: it keeps its own sign-in, apart from Safari.
+3. On Android, in Chrome, open the menu and choose **Install app** or **Add to
+   Home screen**, then **Install**.
+4. Sign in, choose your incident and position, and open **Settings > This
+   computer**. Wait until **Offline copy** reads "Kept on this computer". If
+   **Kept when storage runs low** reads No, choose **Keep this computer's
+   copy**.
+
+The app opens in its own window. Installing has been tested in desktop
+Chrome; the phone and tablet steps have not yet been walked on a device.
 
 After one visit with a connection, the device keeps a copy of the app: the code
 for every screen, the bundled California basemap, the map labels and the

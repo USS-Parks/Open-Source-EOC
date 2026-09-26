@@ -85,12 +85,9 @@ Setup also:
    - **macOS:** open the file to add it to the System keychain, open it in
      Keychain Access, expand **Trust** and set **When using this certificate**
      to **Always Trust**.
-   - **iPhone and iPad:** open the file and allow the profile, install it in
-     **Settings**, then turn it on under **Settings > General > About >
-     Certificate Trust Settings**.
-   - **Android:** **Settings > Security > Encryption & credentials > Install
-     a certificate > CA certificate**, and choose the file. The menu names
-     vary by maker.
+   - **iPhone, iPad and Android:** follow
+     [Phones and tablets](#phones-and-tablets) below, which also installs
+     the app.
 4. Restart the browser. The address now opens with no warning, and the web
    app can be installed from the browser and opened without a connection
    after its first visit.
@@ -119,6 +116,119 @@ certificate does not carry, is explained the same way. Plain `http://` is
 refused except to this computer. `-Action Stop -Profile connect` closes the
 window. This has been checked on Windows with Edge and Chrome; the Mac app
 and Safari are not built or checked yet.
+
+## Phones and tablets
+
+A phone or tablet reaches the host through its browser. It trusts the
+host's authority once, then installs the console from the browser as an
+app; there is no app store app. Walk one phone of each kind the EOC uses
+before an event, and record each in [the phone walk](#record-the-phone-walk).
+
+These steps follow Apple's and Google's documented settings and have not
+yet been walked on a phone against a host. Menu names vary with the system
+version and, on Android, the maker.
+
+### Before you start
+
+- **The host's numeric address.** A phone on a network with no DNS server of
+  its own may not find the host by its computer name. The host setup's
+  `HOST_ADDRESS` lines, and the "HTTPS answers at" lines of
+  `Test-OpenEOCHost.ps1`, list every address.
+- **The thumbprint** `Test-OpenEOCHost.ps1` shows on its line "This computer
+  trusts the host's certificate authority". A phone shows the same value as
+  the certificate's SHA-1 fingerprint, in pairs separated by spaces or
+  colons: compare the characters and ignore the separators and letter case.
+- **The phone on the host's Wi-Fi, with mobile data off** for the walk. A
+  phone that finds no internet on the Wi-Fi may send its traffic over mobile
+  data instead, where the host cannot be reached. If Android asks whether to
+  stay connected to a network with no internet, stay connected.
+- **A screen lock.** Android installs an authority only on a phone with a PIN,
+  pattern or password, and an iPhone or iPad asks for its passcode.
+
+### iPhone and iPad
+
+Use Safari for the certificate.
+
+1. In Safari, open `https://` and the host's address, for example
+   `https://192.168.1.20`. Safari warns that the connection is not private:
+   choose **Show Details**, then **visit this website**, and confirm with
+   **Visit Website**.
+2. On the sign-in page, open **Trust this server** and choose **Download the
+   certificate**. When Safari asks whether to allow a configuration profile
+   to download, choose **Allow**, then **Close**.
+3. Open **Settings** and choose **Profile Downloaded** near the top, or
+   **General > VPN & Device Management** and the profile under **Downloaded
+   Profile**. It is named "Open Source EOC", the host's name, and "Root".
+4. Before installing, choose **More Details**, then the certificate, and
+   compare its SHA-1 fingerprint with the host check's thumbprint. If they
+   differ, go back, choose **Remove Downloaded Profile**, and stop.
+5. Choose **Install**, enter the passcode, choose **Install** again at each
+   warning, then **Done**.
+6. Turn on full trust: **Settings > General > About > Certificate Trust
+   Settings**, switch on the host's authority under **Enable full trust for
+   root certificates**, and choose **Continue**.
+7. Close Safari by swiping it away in the app switcher, open it, and open the
+   host's address again. The page opens with no warning.
+
+### Android
+
+Use Chrome. Firefox for Android keeps its own list of authorities and does
+not use one installed this way.
+
+1. In Chrome, open `https://` and the host's address. Chrome warns that the
+   connection is not private: choose **Advanced**, then **Proceed to** the
+   address.
+2. On the sign-in page, open **Trust this server** and choose **Download the
+   certificate**. The file, `open-source-eoc-root.crt`, goes to
+   **Downloads**. Opening it does not install it: Android 11 and later
+   install an authority only from Settings.
+3. Open **Settings** and search for "CA certificate", or go to **Security**
+   (or **Security and privacy**), then **More security settings** or
+   **Encryption & credentials**, then **Install a certificate > CA
+   certificate**. Samsung phones name it **Install from device storage > CA
+   certificate**. Choose **Install anyway**, confirm with the screen lock,
+   and choose `open-source-eoc-root.crt` from Downloads.
+4. Compare the thumbprint: under **Encryption & credentials > Trusted
+   credentials**, the **User** tab lists the authority. Open it and find its
+   SHA-1 fingerprint. If it differs from the host check's thumbprint, choose
+   **Remove** and stop.
+5. Close Chrome by swiping it away from the recent apps, open it, and open
+   the host's address again. The page opens with no warning.
+
+### Install the app
+
+With the authority trusted, install the console and check that it opens
+offline, as the [field user guide](FIELD-USER.md#install-the-app-and-work-offline)
+describes: on an iPhone or iPad from Safari's **Share** menu with **Add to
+Home Screen**; on Android from Chrome's menu with **Install app** or **Add to
+Home screen**. On an iPhone or iPad the Home Screen app keeps its own
+sign-in, apart from Safari, so sign in again inside it.
+
+A host set up with [an agency certificate](#an-agency-certificate) offers
+no download: install the agency's own root on each phone by the same steps,
+from the file the agency provides.
+
+### Record the phone walk
+
+One column per phone. The first walk is Basho Parks's, on phones he
+chooses. It has not happened yet; nothing below is a result.
+
+| Field | iPhone or iPad | Android |
+|---|---|---|
+| Date, the host's build, and the address used | | |
+| Model, system version and browser version | | |
+| The warning on the first visit, and how it was passed | | |
+| What the phone asked when the certificate downloaded | | |
+| Where the phone showed the SHA-1 fingerprint, and whether it matched | | |
+| The menu path taken to install and trust it, and any step that differed from this guide | | |
+| The address opens with no warning after the browser restarts | | |
+| The app installed, and its name on the home screen | | |
+| Signed in inside the app | | |
+| **Settings > This computer** reads "Kept on this computer" | | |
+| Wi-Fi off, app closed and opened: "No connection · working offline" | | |
+| A task completion or field report queued offline, and synced when Wi-Fi returned | | |
+| Minutes from the first visit to a trusted, installed app | | |
+| Problems, and what was done about each | | |
 
 ## When the address changes
 
