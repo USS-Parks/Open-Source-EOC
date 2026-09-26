@@ -129,7 +129,10 @@ describe("partner sharing on the North Coast Storm exercise", () => {
     await liaison.getByLabel("Thread title").fill("Utility restoration");
     await liaison.getByRole("button", { name: "Start thread" }).click();
     await liaison.locator(".d27-recipient-context").getByText("Everyone on the incident").waitFor();
-    await liaison.getByRole("textbox", { name: "Message" }).fill("Substation 4 back on line at 10:15.");
+    const composer = liaison.getByRole("textbox", { name: "Message" });
+    await composer.fill("Substation 4 back on line at 10:15.");
+    // Send is disabled only while busy or with an empty box: say which, rather than time out on the button.
+    expect(await composer.inputValue(), "the message box kept what was typed").toBe("Substation 4 back on line at 10:15.");
     await liaison.getByRole("button", { name: "Send" }).click();
     await liaison.getByRole("status").filter({ hasText: "Message stored" }).waitFor();
     await liaison.screenshot({ path: join(SHOTS, "liaison-messages.png") });

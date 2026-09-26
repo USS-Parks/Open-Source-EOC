@@ -24,8 +24,11 @@ const VIEWPORTS = [
 const DAY = 86_400_000;
 const now = Date.now();
 
-/** A zone where it is between 06:00 and 18:00 now, so its "today" holds while the file runs; the browser runs in it. */
-const zone = ["Pacific/Honolulu", "America/Los_Angeles", "America/New_York", "Europe/London", "Asia/Kolkata", "Asia/Tokyo"]
+/**
+ * A zone where it is between 06:00 and 18:00 now, so its "today" holds while the file runs; the browser runs in it.
+ * Each is its own canonical name: Chromium reports some zones under an older alias (Asia/Kolkata as Asia/Calcutta).
+ */
+const zone = ["Pacific/Honolulu", "America/Los_Angeles", "America/New_York", "Europe/London", "Asia/Karachi", "Asia/Tokyo"]
   .find((name) => {
     const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: name, hour: "numeric", hourCycle: "h23" }).format(now));
     return hour >= 6 && hour < 18;

@@ -12797,3 +12797,25 @@ Veoci Integration and Air Gap PSPR section 7 (the phase-end rerun of RD5's proof
   on the plan's final commit, and those runs are recorded in the plan-end
   gate's receipt. On main: `pnpm check:static` exit 0; `pnpm test:desktop`
   44 of 44.
+
+## CI correction: a time zone named by its alias, and a partner's message check
+
+CI run 36216221581 on `055792e` failed 3 of 2,030 tests.
+
+- **`board-conditions-browser.test.ts`, both widths.** The test runs the
+  browser in whichever of six zones is in daytime when it starts; at that
+  hour it chose `Asia/Kolkata`, which Chromium reports under its older alias
+  `Asia/Calcutta`, and the test compared the designer's filled-in zone to
+  the name it asked for. The same failure reproduced on the Windows test bed
+  at the same hour. The list now uses `Asia/Karachi`, whose canonical name
+  has no alias, and the six zones still cover every hour. The product
+  stores and accepts either name.
+- **`partner-sharing-browser.test.ts`.** The utility liaison's **Send**
+  stayed disabled for 90 seconds; it is disabled only while a request is
+  under way or while the message box is empty. It passed on the Windows
+  test bed and the cause was not found. The test now checks that the box
+  still holds the typed message before it presses **Send**, so a recurrence
+  names whether the text was lost (which would be a product defect: the
+  screen remounting under the person while they type) instead of timing out
+  on the button.
+- **Verification.** Both files green with `OPENEOC_TEST_DB_TAG=main`.
