@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { BoardTemplateSchema, effectiveFields, geometryFieldKey, type FieldDef } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import { CURSOR_AT_FORMAT, cutPage, decodeCursor, pageQuery } from "../db/cursor.js";
-import { getEffectiveBoard, visibleFields } from "../boards/service.js";
+import { featureServerRoutes } from "./featureserver.js";
+import { featureBoard, featureBoardList } from "./layers.js";
 import { tileRoutes } from "./tiles.js";
 
 /**
@@ -49,31 +49,13 @@ export function geoRoutes(
   );
 
   app.get("/api/v1/ogc/collections", { preHandler: authenticate }, async (req, reply) => {
-    const rows = await withPerson(sql, req.principal.person.id, (tx) => {
-      return tx`
-        select b.id, b.title, b.local_fields, t.definition
-        from boards b join board_templates t
-          on t.key = b.template_key and t.version = b.template_version
-        where b.archived_at is null`;
-    });
-    const collections = [];
-    for (const r of rows) {
-      const template = BoardTemplateSchema.parse(r.definition);
-      const { fields } = effectiveFields(template, (r.local_fields as FieldDef[]) ?? []);
-      if (!geometryFieldKey(fields)) continue;
-      collections.push({
-        id: r.id as string,
-        title: r.title as string,
-        itemType: "feature",
-        links: [
-          {
-            rel: "items",
-            href: `/api/v1/ogc/collections/${r.id as string}/items`,
-            type: "application/geo+json",
-          },
-        ],
-      });
-    }
+    const boards = await withPerson(sql, req.principal.person.id, (tx) => featureBoardList(tx, req.principal));
+    const collections = boards.map((b) => ({
+      id: b.id,
+      title: b.title,
+      itemType: "feature",
+      links: [{ rel: "items", href: `/api/v1/ogc/collections/${b.id}/items`, type: "application/geo+json" }],
+    }));
     return reply.send({ collections });
   });
 
@@ -84,10 +66,10 @@ export function geoRoutes(
       const { boardId } = req.params as { boardId: string };
       const query = ItemsQuery.parse(req.query);
       const result = await withPerson(sql, req.principal.person.id, async (tx) => {
-        const board = await getEffectiveBoard(tx, req.principal, boardId);
-        const geomKey = geometryFieldKey(board.fields);
-        if (!geomKey) return null;
-        const readable = new Set(visibleFields(board).map((f) => f.key));
+        const layer = await featureBoard(tx, req.principal, boardId);
+        if (!layer) return null;
+        const geomKey = layer.geometry.key;
+        const readable = new Set(layer.readable.map((f) => f.key));
         const bbox = query.bbox?.split(",").map(Number);
         const after = decodeCursor(query.cursor, ["at", "id"]);
         // Each feature also carries when its record last changed and who changed it,
@@ -111,7 +93,7 @@ export function geoRoutes(
             ...(r.changed_by ? { _updatedBy: r.changed_by as string } : {}),
           };
           for (const key of Object.keys(data)) {
-            if (key !== geomKey && readable.has(key)) properties[key] = data[key];
+            if (readable.has(key)) properties[key] = data[key];
           }
           return {
             type: "Feature" as const,
@@ -142,4 +124,5 @@ export function geoRoutes(
     },
   );
   tileRoutes(app, sql, authenticate);
+  featureServerRoutes(app, sql, authenticate);
 }

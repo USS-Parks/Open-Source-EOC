@@ -1145,7 +1145,7 @@ export async function listBoards(
   });
 }
 
-function roleFor(actor: Principal, jurisdictionId: string, boardId: string): BoardRole | null {
+export function roleFor(actor: Principal, jurisdictionId: string, boardId: string): BoardRole | null {
   const m = actor.memberships.find((x) => x.jurisdictionId === jurisdictionId);
   if (m) return m.role as BoardRole;
   const guest = actor.guests.find(

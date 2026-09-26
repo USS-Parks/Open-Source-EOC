@@ -75,6 +75,11 @@ GET /api/v1/dashboards/:dashboardId/data
 GET /api/v1/dashboards/:dashboardId/stream
 GET /api/v1/dashboards/:dashboardId/widgets/:widgetKey/records
 GET /api/v1/datasets/:datasetId/items
+GET /api/v1/esri/rest/services
+GET /api/v1/esri/rest/services/:boardId/FeatureServer
+GET /api/v1/esri/rest/services/:boardId/FeatureServer/:layerId
+GET /api/v1/esri/rest/services/:boardId/FeatureServer/:layerId/query
+GET /api/v1/esri/rest/services/:boardId/FeatureServer/layers
 GET /api/v1/feeds/:feedId/items
 GET /api/v1/files/:fileId
 GET /api/v1/files/:fileId/content
@@ -476,6 +481,12 @@ const machineRoutes = new Set([
   // OGC API Features landing and conformance pages, read by GIS clients.
   "GET /api/v1/ogc",
   "GET /api/v1/ogc/conformance",
+  // The read-only ArcGIS REST FeatureServer view, read by Esri and QGIS clients (VC-26).
+  "GET /api/v1/esri/rest/services",
+  "GET /api/v1/esri/rest/services/:boardId/FeatureServer",
+  "GET /api/v1/esri/rest/services/:boardId/FeatureServer/layers",
+  "GET /api/v1/esri/rest/services/:boardId/FeatureServer/:layerId",
+  "GET /api/v1/esri/rest/services/:boardId/FeatureServer/:layerId/query",
   // Live dashboard snapshots for wall displays and other external clients.
   "GET /api/v1/dashboards/:dashboardId/stream",
   // The identity-provider redirect pair: the browser is sent here, not called.
@@ -653,6 +664,8 @@ export function generateApiDocs(contract: ApiContract = API_CONTRACT): string {
     `GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.`,
     `Routes with auth bearer take a person's session token or a service identity`,
     `token, except those marked person only, which refuse a service identity. The`,
+    `routes under /api/v1/esri also take that token as a token query parameter or`,
+    `an X-Esri-Authorization: Bearer header, as Esri clients send it. The`,
     `same routes are described as OpenAPI 3.1 in docs/openapi.json and at`,
     `GET /api/v1/openapi.json.`,
     ``,

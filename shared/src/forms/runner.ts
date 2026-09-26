@@ -300,6 +300,8 @@ function scopeNodes(nodes: readonly FormNode[]): Array<FormField | FormContainer
 
 const GEOMETRY_KIND: Readonly<Record<GeoJsonGeometry["type"], string>> = {
   Point: "point", LineString: "linestring", Polygon: "polygon",
+  // A form answer is never multipart; only an "any" field would take a multipoint.
+  MultiPoint: "multipoint", MultiLineString: "linestring", MultiPolygon: "polygon",
 };
 
 /**

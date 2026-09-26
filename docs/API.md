@@ -10,6 +10,8 @@ The OIDC sign-in routes, GET /api/v1/auth/oidc/start and
 GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 Routes with auth bearer take a person's session token or a service identity
 token, except those marked person only, which refuse a service identity. The
+routes under /api/v1/esri also take that token as a token query parameter or
+an X-Esri-Authorization: Bearer header, as Esri clients send it. The
 same routes are described as OpenAPI 3.1 in docs/openapi.json and at
 GET /api/v1/openapi.json.
 
@@ -245,6 +247,14 @@ GET /api/v1/openapi.json.
 - `POST /api/v1/incidents/:incidentId/esf-assessments`: Run incidents esf assessments (auth: bearer; audience: operator)
 - `POST /api/v1/incidents/:incidentId/esf-assessments/:framework/:esf/decisions`: Run incidents esf assessments decisions (auth: bearer; audience: operator)
 - `GET /api/v1/incidents/:incidentId/esf-assessments/:framework/:esf/history`: Read incidents esf assessments history (auth: bearer; audience: operator)
+
+### esri
+
+- `GET /api/v1/esri/rest/services`: Read esri rest services (auth: bearer; audience: machine)
+- `GET /api/v1/esri/rest/services/:boardId/FeatureServer`: Read esri rest services FeatureServer (auth: bearer; audience: machine)
+- `GET /api/v1/esri/rest/services/:boardId/FeatureServer/:layerId`: Read esri rest services FeatureServer (auth: bearer; audience: machine)
+- `GET /api/v1/esri/rest/services/:boardId/FeatureServer/:layerId/query`: Read esri rest services FeatureServer query (auth: bearer; audience: machine)
+- `GET /api/v1/esri/rest/services/:boardId/FeatureServer/layers`: Read esri rest services FeatureServer layers (auth: bearer; audience: machine)
 
 ### export
 

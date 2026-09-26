@@ -15,7 +15,8 @@ const CONFIGURED = (process.env["OPENEOC_CORS_ORIGINS"] ?? "")
   .map((s) => s.trim())
   .filter(Boolean);
 
-const ALLOW_HEADERS = "authorization, content-type, x-peer-token, x-feed-token, x-intake-token";
+// x-esri-authorization carries the token an ArcGIS web client sends to the FeatureServer view (VC-26).
+const ALLOW_HEADERS = "authorization, content-type, x-peer-token, x-feed-token, x-intake-token, x-esri-authorization";
 const ALLOW_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
 
 export function corsOriginAllowed(origin: string, allowed: readonly string[] = CONFIGURED): boolean {

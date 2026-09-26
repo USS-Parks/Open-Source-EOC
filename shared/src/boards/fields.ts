@@ -48,22 +48,33 @@ export function signatureText(value: unknown): string | null {
 export const GEOMETRY_KINDS = ["any", "point", "linestring", "polygon"] as const;
 
 const position = z.tuple([z.number().finite(), z.number().finite()]);
+const line = z.array(position).min(2);
+const polygon = z.array(z.array(position).min(4)).min(1);
+// The multipart kinds carry features drawn in one piece elsewhere, such as a
+// county with islands from an Esri layer (VC-26).
 const GeoJsonGeometrySchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("Point"), coordinates: position }),
-  z.object({ type: z.literal("LineString"), coordinates: z.array(position).min(2) }),
-  z.object({
-    type: z.literal("Polygon"),
-    coordinates: z.array(z.array(position).min(4)).min(1),
-  }),
+  z.object({ type: z.literal("LineString"), coordinates: line }),
+  z.object({ type: z.literal("Polygon"), coordinates: polygon }),
+  z.object({ type: z.literal("MultiPoint"), coordinates: z.array(position).min(1) }),
+  z.object({ type: z.literal("MultiLineString"), coordinates: z.array(line).min(1) }),
+  z.object({ type: z.literal("MultiPolygon"), coordinates: z.array(polygon).min(1) }),
 ]);
 export type GeoJsonGeometry = z.infer<typeof GeoJsonGeometrySchema>;
 
+/** The GeoJSON types each geometry kind takes: a line or area in one part or several, a point in one. */
+const KIND_TYPES: Readonly<Record<(typeof GEOMETRY_KINDS)[number], readonly GeoJsonGeometry["type"][] | null>> = {
+  any: null,
+  point: ["Point"],
+  linestring: ["LineString", "MultiLineString"],
+  polygon: ["Polygon", "MultiPolygon"],
+};
+
 function geometrySchema(kind: (typeof GEOMETRY_KINDS)[number]): z.ZodType {
-  if (kind === "point") return GeoJsonGeometrySchema.refine((g) => g.type === "Point");
-  if (kind === "linestring")
-    return GeoJsonGeometrySchema.refine((g) => g.type === "LineString");
-  if (kind === "polygon") return GeoJsonGeometrySchema.refine((g) => g.type === "Polygon");
-  return GeoJsonGeometrySchema;
+  const types = KIND_TYPES[kind];
+  return types
+    ? GeoJsonGeometrySchema.refine((g) => types.includes(g.type), { message: `must be a ${kind === "linestring" ? "line" : kind}` })
+    : GeoJsonGeometrySchema;
 }
 
 /** Read visibility levels; write authority levels. Guests never write. */

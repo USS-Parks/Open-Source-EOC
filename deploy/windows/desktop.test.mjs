@@ -29,7 +29,7 @@ import {
 } from "./lib/static-host.mjs";
 import { rotateIfLarger, rotatingLog } from "./lib/rotating-log.mjs";
 import { backupBeforeMigrate, scheduledBackup, writeUpgradeReport } from "./lib/pre-upgrade-backup.mjs";
-import { authorityBundle, caddyfile, commandLine, hostDefinitions, hostNames, parseWinswService } from "./lib/host.mjs";
+import { authorityBundle, caddyfile, commandLine, CREDENTIAL_HEADERS, hostDefinitions, hostNames, parseWinswService, URI_REDACTIONS } from "./lib/host.mjs";
 import { connectionAdvice, hostAddress } from "./lib/connect.mjs";
 import { MAP_DATA_FILES, installMapData, packMapData, verifyMapData } from "./lib/map-data.mjs";
 
@@ -645,6 +645,26 @@ test("host definitions run PostgreSQL, the server and Caddy as LocalService behi
     "handle /trust/openeoc-root.crt {", "rewrite * /pki/authorities/local/root.crt", 'root "C:/ProgramData/Open Source EOC/host/caddy"'])
     assert.ok(host.caddyfile.includes(line), line);
   assert.doesNotMatch(host.caddyfile, /default_bind/);
+  // The log drops each credential a proxy error would otherwise write: the acknowledgement
+  // link's path token and the token parameter in the address, and every token header.
+  assert.ok(host.caddyfile.includes([
+    "\t\tformat filter {", "\t\t\twrap json", "\t\t\tfields {", "\t\t\t\trequest>uri multi_regexp {",
+    '\t\t\t\t\tregexp "^/api/v1/ack/[^/?#]+" "/api/v1/ack/REDACTED"',
+    '\t\t\t\t\tregexp "(?i)([?&])(?:t|%74)(?:o|%6f)(?:k|%6b)(?:e|%65)(?:n|%6e)=[^&#]*" "${1}token=REDACTED"',
+    "\t\t\t\t}", ""].join("\n")));
+  for (const header of ["X-Esri-Authorization", "X-Peer-Token", "X-Feed-Token", "X-Intake-Token", "X-Openeoc-Desktop-Token"])
+    assert.ok(host.caddyfile.includes(`\t\t\t\trequest>headers>${header} delete\n`), header);
+  assert.deepEqual(CREDENTIAL_HEADERS.map((name) => name.toLowerCase()).sort(),
+    ["x-esri-authorization", "x-feed-token", "x-intake-token", "x-openeoc-desktop-token", "x-peer-token"]);
+  // The address rules, read as JavaScript reads them (Go's (?i) as the i flag, ${1} as $1),
+  // keep the rest of the path and query; Caddy itself applies them with Go's regular expressions.
+  const redact = (uri) => URI_REDACTIONS.reduce((text, [pattern, value]) =>
+    text.replace(new RegExp(pattern.replace("(?i)", ""), pattern.startsWith("(?i)") ? "gi" : "g"), value.replace("${1}", "$1")), uri);
+  assert.equal(redact("/api/v1/ack/AbC_123?via=email"), "/api/v1/ack/REDACTED?via=email");
+  assert.equal(redact("/api/v1/esri/rest/services/b/FeatureServer/0/query?where=1%3D1&token=oeoc-svc.x.y&f=json"),
+    "/api/v1/esri/rest/services/b/FeatureServer/0/query?where=1%3D1&token=REDACTED&f=json");
+  assert.equal(redact("/api/v1/esri/rest/services?%74oken=s&f=json"), "/api/v1/esri/rest/services?token=REDACTED&f=json");
+  assert.equal(redact("/api/v1/acknowledged?tokens=1"), "/api/v1/acknowledged?tokens=1");
 
   assert.match(host.backupTask, /<UserId>S-1-5-19<\/UserId>/);
   assert.match(host.backupTask, /<DaysInterval>1<\/DaysInterval>/);

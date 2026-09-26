@@ -282,7 +282,7 @@ describe("board records in depth", () => {
     });
     await page.getByRole("button", { name: "Import records" }).click();
     const drawer = page.getByRole("dialog", { name: "Import Synthetic Depth Operations records" });
-    await drawer.getByLabel("Spreadsheet file").setInputFiles(file("many"));
+    await drawer.getByLabel("File to import").setInputFiles(file("many"));
     const itemName = drawer.getByLabel("Field for column Item name");
     await itemName.waitFor();
     expect(await itemName.inputValue()).toBe("");
@@ -295,7 +295,7 @@ describe("board records in depth", () => {
     expect(await drawer.getByRole("button", { name: "Import", exact: true }).isDisabled()).toBe(true);
     await page.screenshot({ path: join(SHOTS, "board-records-import-errors.png"), fullPage: false });
 
-    await drawer.getByLabel("Spreadsheet file").setInputFiles(file("3"));
+    await drawer.getByLabel("File to import").setInputFiles(file("3"));
     const importButton = drawer.getByRole("button", { name: `Import ${rows.length + 1} records` });
     await importButton.waitFor();
     expect(await itemName.inputValue()).toBe("summary");

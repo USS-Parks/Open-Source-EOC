@@ -12,11 +12,12 @@ export type ImportRun = (
 type Mapping = Readonly<Record<string, string | null>>;
 
 /**
- * Import a CSV or Excel file into a board in three steps: the server reads
- * the headings and proposes a field for each, the operator confirms or
- * changes the mapping, and a dry run lists every row error. Import is
- * offered only after a dry run of the current file and mapping is clean,
- * because a commit writes every row or none.
+ * Import a CSV or Excel file, or an Esri JSON feature set (VC-26), into a
+ * board in three steps: the server reads the headings (an Esri file's
+ * attribute names and its geometry) and proposes a field for each, the
+ * operator confirms or changes the mapping, and a dry run lists every row
+ * error. Import is offered only after a dry run of the current file and
+ * mapping is clean, because a commit writes every row or none.
  */
 export function BoardImport(props: {
   readonly fields: readonly FieldDef[];
@@ -96,8 +97,11 @@ export function BoardImport(props: {
       is never imported, because an import creates new records. Nothing is written until the check passes and you
       choose Import, and then every row is written or none is. To fix row errors, correct the file and choose it
       again; the column mapping is kept.</p>
-    <label className="board-refine__control"><span>Spreadsheet file</span>
-      <input type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    <p>An Esri JSON file, such as an ArcGIS layer&apos;s query saved with <code>f=json</code>, imports one record per
+      feature: each attribute is a column, and its shape, in WGS 84 (4326) or Web Mercator (3857), goes to the
+      board&apos;s map field as the <code>geometry</code> column. Its rows are numbered by feature, from 1.</p>
+    <label className="board-refine__control"><span>File to import</span>
+      <input type="file" accept=".csv,.xlsx,.json,text/csv,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         disabled={busy !== null} onChange={(event) => void choose(event.currentTarget)} />
     </label>
     {busy === "reading" ? <p role="status">Reading {file?.name}…</p> : null}

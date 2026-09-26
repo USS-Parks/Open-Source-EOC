@@ -6,6 +6,7 @@ import { AuthError, type Principal } from "../auth/service.js";
 import { csvCell } from "../audit/export.js";
 import { readFirstWorksheet } from "../forms/xlsx-import.js";
 import { writeImportReport } from "../data-packs/import-reports.js";
+import { esriToGeoJson, isEsriGeometry, readEsriFeatureSet } from "../geo/esri.js";
 import {
   insertRecord,
   listViewRecords,
@@ -153,6 +154,21 @@ export function parseCsv(text: string): string[][] {
   return rows;
 }
 
+/** Header-keyed rows of an import, with the column an Esri file's geometry is in. */
+export interface UploadedTable {
+  readonly headers: readonly string[];
+  readonly rows: ReadonlyArray<Record<string, string>>;
+  /** The column that goes to the board's geometry field unless mapped otherwise. */
+  readonly geometryHeader?: string;
+  /** The number reported for the first data row: 2 under a heading row, 1 for a feature list. */
+  readonly firstRow?: number;
+}
+
+/** A board import's file: an Esri JSON feature set (VC-26) when it opens with `{`, one row per feature, else a table. */
+export function readBoardImportFile(buffer: Buffer): UploadedTable {
+  return /^\s*\{/.test(buffer.subarray(0, 64).toString("utf8")) ? readEsriFeatureSet(buffer) : readUploadedTable(buffer);
+}
+
 /**
  * Header-keyed rows of an uploaded table. A zip signature means .xlsx (its
  * first sheet); anything else is read as UTF-8 CSV, where the export's
@@ -232,7 +248,7 @@ export async function importBoardRecords(
   sql: Sql,
   actor: Principal,
   boardId: string,
-  table: { headers: readonly string[]; rows: ReadonlyArray<Record<string, string>> },
+  table: UploadedTable,
   options: {
     dryRun: boolean; incidentId?: string | undefined; mapping?: Readonly<Record<string, string | null>> | undefined;
     sourceName?: string | undefined;
@@ -247,22 +263,25 @@ export async function importBoardRecords(
   }
   const mapping: Record<string, string> = {};
   const ignored: string[] = [];
+  const geometryKey = writable.find((field) => field.type === "geometry")?.key;
   for (const header of table.headers) {
     if (!header) continue;
     const explicit = options.mapping && Object.hasOwn(options.mapping, header) ? options.mapping[header] : undefined;
     if (explicit !== undefined && explicit !== null && !writable.some((field) => field.key === explicit))
       throw new AuthError(400, `mapping names unknown field ${explicit}`);
     const key = explicit === null ? undefined
-      : explicit ?? (header.toLowerCase() === "id" ? undefined : byName.get(header.toLowerCase())?.key);
+      : explicit ?? (header.toLowerCase() === "id" ? undefined
+        : header === table.geometryHeader ? geometryKey : byName.get(header.toLowerCase())?.key);
     if (key && !Object.values(mapping).includes(key)) mapping[header] = key;
     else ignored.push(header);
   }
   const fields = new Map(writable.map((field) => [field.key, field]));
   const rows = table.rows.flatMap((row, index) =>
-    Object.values(row).some((value) => value.trim() !== "") ? [{ row, rowNumber: index + 2 }] : []);
+    Object.values(row).some((value) => value.trim() !== "") ? [{ row, rowNumber: index + (table.firstRow ?? 2) }] : []);
   if (rows.length > MAX_IMPORT_ROWS) throw new AuthError(413, `import exceeds ${MAX_IMPORT_ROWS} rows`);
   const errors: ImportRowError[] = [];
   const valid: Array<Record<string, unknown>> = [];
+  const shapes: Array<{ row: number; field: FieldDef; geometry: string }> = [];
   for (const { row, rowNumber } of rows) {
     const data: Record<string, unknown> = {};
     const rowErrors: ImportRowError[] = [];
@@ -277,7 +296,11 @@ export async function importBoardRecords(
     }
     if (rowErrors.length === 0) {
       try {
-        valid.push(await validateNewRecord(sql, actor, board, data, options.incidentId));
+        const record = await validateNewRecord(sql, actor, board, data, options.incidentId);
+        valid.push(record);
+        for (const field of writable)
+          if (field.type === "geometry" && record[field.key] !== undefined)
+            shapes.push({ row: rowNumber, field, geometry: JSON.stringify(record[field.key]) });
       } catch (error) {
         if (error instanceof z.ZodError) {
           for (const issue of error.issues) {
@@ -292,6 +315,19 @@ export async function importBoardRecords(
       }
     }
     errors.push(...rowErrors);
+  }
+  // An imported shape must be a valid one (a ring that crosses itself, a hole
+  // outside its area): it is reported, never repaired. One query for the file.
+  if (shapes.length) {
+    const invalid = await sql`
+      select i::int as i, ST_IsValidReason(g) as reason
+      from (select i, ST_GeomFromGeoJSON(j) as g from unnest(${shapes.map((shape) => shape.geometry)}::text[]) with ordinality as t(j, i)) s
+      where not ST_IsValid(g)`;
+    for (const { i, reason } of invalid) {
+      const shape = shapes[(i as number) - 1]!;
+      errors.push({ row: shape.row, field: shape.field.key, message: `${shape.field.label} is not a valid shape: ${reason as string}` });
+    }
+    errors.sort((a, b) => a.row - b.row);
   }
   const created: Array<{ id: string; data: Record<string, unknown> }> = [];
   let reportId: string | undefined;
@@ -341,12 +377,21 @@ export function coerceCell(field: FieldDef, raw: string): unknown {
       if (["false", "no", "0"].includes(value)) return false;
       throw new Error(`${field.label} is not true or false`);
     }
-    case "geometry":
+    case "geometry": {
+      let value: unknown;
       try {
-        return JSON.parse(text) as unknown;
+        value = JSON.parse(text);
       } catch {
         throw new Error(`${field.label} is not GeoJSON`);
       }
+      // Esri JSON geometry, as an Esri feature set carries it (VC-26), becomes GeoJSON in WGS 84.
+      if (!isEsriGeometry(value)) return value;
+      try {
+        return esriToGeoJson(value);
+      } catch (error) {
+        throw new Error(`${field.label}: ${(error as Error).message}`, { cause: error });
+      }
+    }
     case "text":
       return raw;
     case "signature":

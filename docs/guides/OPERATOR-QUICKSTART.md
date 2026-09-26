@@ -330,6 +330,19 @@ Select a record to open it in the record context.
 - **Import** is available only after a check of the current file and mapping
   finds no errors. It writes every row or, if any row fails, none, and sends
   no notifications. The file limit is 10 MB and 10,000 rows.
+- The same step takes an **Esri JSON** file: a layer's features as ArcGIS
+  saves them from a query with `f=json`, or a feature collection with one
+  layer. Each feature is a row, numbered from 1; each attribute is a column
+  (a date attribute arrives as a date and time), and the feature's shape is
+  the `geometry` column, proposed for the board's map field. Points, lines
+  and areas import with their holes and parts, in WGS 84 (4326) or Web
+  Mercator (3857 or 102100), which is converted; a file in any other spatial
+  reference is refused whole. A curved shape, a coordinate past the edge of
+  the world, and a shape that is not valid (a ring that crosses itself, a
+  hole outside its area) are row errors with the reason; nothing is repaired.
+  An area goes only into a map field that takes areas or any shape. Any
+  imported shape, from Esri JSON or from GeoJSON in a spreadsheet, must be
+  valid.
 
 ### Reach contacts and page a duty officer
 

@@ -154,6 +154,7 @@ export function generateOpenApi(contract: ApiContract = API_CONTRACT): Record<st
         "Request bodies carry a schema only where the server validates the whole body with a published schema; responses and query strings are not described.",
         "Operations marked x-openeoc-integration are registered only when that name is in OPENEOC_INTEGRATIONS.",
         "The bearer scheme takes a person's session access token or a service identity token (oeoc-svc.<id>.<secret>) issued by a jurisdiction administrator; operations under the personSession scheme refuse a service identity token.",
+        "Operations under /api/v1/esri also take the bearer token as a token query parameter or an X-Esri-Authorization: Bearer header, as Esri clients send it.",
       ].join(" "),
     },
     security: [{ bearer: [] }],

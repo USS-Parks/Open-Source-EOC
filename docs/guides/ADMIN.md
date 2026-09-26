@@ -173,6 +173,71 @@ kept in the repository as `docs/openapi.json`. It describes every route; a
 request body is described only where the server checks it against a
 published schema, and responses are not described.
 
+### Esri and GIS clients
+
+The county GIS office can add any board that has a map field to ArcGIS Pro,
+ArcGIS Online, QGIS or another client that reads an ArcGIS REST feature
+service. Create a service identity for it (**Read only** is enough) and give
+it two things: the token, and the address of the services directory,
+`https://<server>/api/v1/esri/rest/services`. Each board is listed there by
+its id as a `FeatureServer`; the id is the one in the board's address in the
+console (`#/board/<id>`). A board's service has one layer per kind of shape
+its map field takes: a board that takes only points, lines or areas has one
+layer (0, 1 or 2), named after the board; a board that takes any shape has
+four, points (0), lines (1), areas (2) and multipoints (3).
+
+The client sends the token in whichever of three ways it supports:
+`Authorization: Bearer <token>`, `X-Esri-Authorization: Bearer <token>` (the
+header Esri's clients use), or a `token=<token>` parameter on the address.
+Use `Authorization` wherever the client allows it: every log on the way
+hides it. In QGIS, add an **ArcGIS REST Server** connection with the
+directory address and an **API Header** authentication that sets
+`Authorization` to `Bearer <token>`. In ArcGIS Pro or ArcGIS Online, add the
+layer's address with the token on the end, for example
+`https://<server>/api/v1/esri/rest/services/<board id>/FeatureServer/0?token=<token>`.
+There is no ArcGIS sign-in page on this server, so a client that asks for a
+user name and password is given the address with the token instead. Only a
+service identity's token is taken from `X-Esri-Authorization` or the
+address; a person's session token is taken from `Authorization` alone, so it
+never ends up in a GIS project file. A token in an address can be kept in the
+client's saved project, so use a read-only identity and revoke it when the
+office stops using it. Neither the server nor the host's Caddy writes a
+token into its log: the server logs no query string, and on a Windows host
+Caddy's log replaces the `token` parameter's value and the token in an
+acknowledgement link with `REDACTED` and drops every header that carries a
+token.
+
+The view is read only: there is no `applyEdits`, and edits made in ArcGIS or
+QGIS stay there. It shows exactly what the identity may read on the board:
+the fields its role may read (an admin-only field never appears) and only
+the records a record rule lets it read. A board with no map field, or whose
+map field the identity's role may not read, is not listed and has no layer,
+here or on the console's map. Archived records are left out, as the board's
+views leave them out. Each record has an `OBJECTID`, a number its board gives
+it when it is written (1, 2, 3 and on for each board) and that never
+changes, so a client can page, select and relate by it;
+`RecordID` is the record's id in the console, and `EditDate` and `Editor`
+say when it last changed and who changed it. Shapes are served in WGS 84
+(4326), or in Web Mercator (3857, also written 102100) when the client asks.
+A query answers `where=1=1` (any other `where` is refused), a list of object
+ids, an envelope (`xmin,ymin,xmax,ymax` or Esri JSON, in 4326 or 3857; one
+wider than the world takes the whole world, and one across the 180th
+meridian takes both sides) with the intersects or envelope-intersects
+relation, `outFields`, paging with
+`resultOffset` and `resultRecordCount` up to 1,000 records a page, a count or
+the ids alone, and `f=json` or `f=geojson`. Statistics, sorting, other shapes
+as filters and the `pbf` format are not offered, and each layer's
+metadata says so, so a client does not ask for them.
+
+ArcGIS Online runs in the browser, so it reaches the server only where the
+browser can: over HTTPS with a certificate the browser trusts, and with your
+organization's ArcGIS Online address in `OPENEOC_CORS_ORIGINS`. ArcGIS Pro
+and QGIS call the server directly, and on an isolated network they work as
+long as they can reach it; nothing leaves the server for them. The requests
+follow the shapes ArcGIS publishes for feature services, but no ArcGIS or
+QGIS client has been tried against this server yet, so add the layer in your
+own client and check it before an incident depends on it.
+
 ## Two-step sign-in (MFA)
 
 Local password accounts support a second factor: a time-based one-time code

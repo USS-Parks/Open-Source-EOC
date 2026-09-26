@@ -39,7 +39,7 @@ import {
   ImportMappingSchema,
   importBoardRecords,
   MAX_IMPORT_BYTES,
-  readUploadedTable,
+  readBoardImportFile,
   tableCsv,
   tableXlsx,
 } from "./transfer.js";
@@ -418,7 +418,7 @@ export function boardRoutes(
   );
 
   /**
-   * Import a CSV or .xlsx upload into a board: multipart with an optional
+   * Import a CSV, .xlsx or Esri JSON upload into a board: multipart with an optional
    * `mapping` field (JSON, header to field key or null) before one file
    * part. `dryRun=true` validates and writes nothing; otherwise every row is
    * written in one transaction, or none when any row fails (422).
@@ -451,7 +451,7 @@ export function boardRoutes(
         throw new AuthError(400, "mapping must be a JSON object of header to field key");
       }
     }
-    const table = readUploadedTable(buffer);
+    const table = readBoardImportFile(buffer);
     const dryRun = query.dryRun === "true";
     const outcome = await withPerson(sql, req.principal.person.id, (tx) =>
       importBoardRecords(tx, req.principal, boardId, table, { dryRun, incidentId: query.incidentId, mapping, sourceName: part.filename }));

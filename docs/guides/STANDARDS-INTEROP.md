@@ -33,6 +33,14 @@ Any board that carries geometry is served as an OGC API - Features collection
 in GeoJSON, so a GIS client reads the live operating picture as standard
 features.
 
+## Esri FeatureServer and Esri JSON
+
+The same boards are served as a read-only ArcGIS REST FeatureServer, so
+ArcGIS Pro, ArcGIS Online and QGIS add a board as a layer with a service
+identity's token, and a board imports an Esri JSON feature set. See
+[Esri and GIS clients](./ADMIN.md#esri-and-gis-clients) and the board import
+in the [operator quickstart](./OPERATOR-QUICKSTART.md#export-and-import-board-records).
+
 ## The frozen API contract
 
 The public REST, WebSocket, and webhook surface is a versioned contract, and a

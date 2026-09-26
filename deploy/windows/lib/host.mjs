@@ -100,6 +100,20 @@ export function hostNames({ hostname, fqdn = "", interfaces = {}, extra = [] }) 
   return names;
 }
 
+/** Request headers that carry a credential of their own, as Caddy's log names them. */
+export const CREDENTIAL_HEADERS = ["X-Esri-Authorization", "X-Peer-Token", "X-Feed-Token", "X-Intake-Token", "X-Openeoc-Desktop-Token"];
+
+/**
+ * Tokens in the logged address, as Go regular expressions and their
+ * replacements: the acknowledgement link's path token (`/api/v1/ack/<token>`),
+ * and the `token` query parameter, its name matched in any case or
+ * percent-encoding, as the server would decode it.
+ */
+export const URI_REDACTIONS = [
+  ["^/api/v1/ack/[^/?#]+", "/api/v1/ack/REDACTED"],
+  ["(?i)([?&])(?:t|%74)(?:o|%6f)(?:k|%6b)(?:e|%65)(?:n|%6e)=[^&#]*", "${1}token=REDACTED"],
+];
+
 function caddyString(value) {
   const text = String(value).replaceAll("\\", "/");
   if (/["\r\n{}]/.test(text)) throw new Error(`Caddyfile value cannot contain quotes, braces or line breaks: ${text}`);
@@ -151,6 +165,20 @@ export function caddyfile({ names, upstreamPort, storage, logFile, caName, https
     `\t\toutput file ${caddyString(logFile)} {`,
     "\t\t\troll_size 10MiB",
     "\t\t\troll_keep 5",
+    "\t\t}",
+    // A proxy error (a 502 while the server restarts) logs the whole request.
+    // Caddy already hides Authorization, Cookie and Proxy-Authorization; the
+    // other headers that carry a token are removed, and in the address the
+    // acknowledgement link's token and the token parameter are replaced.
+    // One field takes one filter, so both address rules are one multi_regexp.
+    "\t\tformat filter {",
+    "\t\t\twrap json",
+    "\t\t\tfields {",
+    "\t\t\t\trequest>uri multi_regexp {",
+    ...URI_REDACTIONS.map(([pattern, value]) => `\t\t\t\t\tregexp "${pattern}" "${value}"`),
+    "\t\t\t\t}",
+    ...CREDENTIAL_HEADERS.map((name) => `\t\t\t\trequest>headers>${name} delete`),
+    "\t\t\t}",
     "\t\t}",
     "\t}",
     "}",

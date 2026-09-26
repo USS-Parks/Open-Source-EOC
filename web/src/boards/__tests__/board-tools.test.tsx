@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import axe from "axe-core";
 import { STANDARD_TEMPLATES } from "@openeoc/shared";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -126,7 +127,7 @@ describe("board import mapping", () => {
     const onImported = vi.fn();
     render(<BoardImport fields={roads.fields} run={run} onImported={onImported} />);
     const file = new File(["id,Road,Status,Notes\n"], "roads.csv", { type: "text/csv" });
-    fireEvent.change(screen.getByLabelText("Spreadsheet file"), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText("File to import"), { target: { files: [file] } });
 
     await screen.findByRole("heading", { name: "Map columns to fields" });
     expect(run).toHaveBeenCalledWith(file, { dryRun: true });
@@ -158,7 +159,7 @@ describe("board import mapping", () => {
       .mockRejectedValueOnce(new Error("import has row errors"))
       .mockResolvedValueOnce(result({ mapping: { Item: "road" } }));
     render(<BoardImport fields={roads.fields} run={run} onImported={vi.fn()} />);
-    fireEvent.change(screen.getByLabelText("Spreadsheet file"), { target: { files: [new File(["Item\n"], "r.csv")] } });
+    fireEvent.change(screen.getByLabelText("File to import"), { target: { files: [new File(["Item\n"], "r.csv")] } });
     await screen.findByLabelText("Field for column Item");
     set("Field for column Item", "road");
     fireEvent.click(screen.getByRole("button", { name: "Check file" }));
@@ -168,9 +169,30 @@ describe("board import mapping", () => {
     expect((screen.getByRole("button", { name: "Import" }) as HTMLButtonElement).disabled).toBe(true);
 
     const corrected = new File(["Item\nSR-96\n"], "r.csv");
-    fireEvent.change(screen.getByLabelText("Spreadsheet file"), { target: { files: [corrected] } });
+    fireEvent.change(screen.getByLabelText("File to import"), { target: { files: [corrected] } });
     await screen.findByRole("button", { name: "Import 2 records" });
     expect(run).toHaveBeenLastCalledWith(corrected, { dryRun: true, mapping: { Item: "road" } });
+  });
+});
+
+describe("Esri JSON import", () => {
+  it("offers an Esri JSON file, maps its geometry column to the map field and reports rows by feature", async () => {
+    const run = vi.fn().mockResolvedValueOnce({
+      dryRun: true, rows: 2, created: 0, mapping: { road: "road", geometry: "location" }, ignored: ["OBJECTID"],
+      errorCount: 1, errors: [{ row: 2, field: "location", message: "Location: spatial reference 2227 is not supported" }],
+    } satisfies BoardImportResult);
+    const view = render(<BoardImport fields={roads.fields} run={run} onImported={vi.fn()} />);
+    const input = screen.getByLabelText("File to import") as HTMLInputElement;
+    expect(input.accept.split(",")).toEqual(expect.arrayContaining([".json", "application/json"]));
+    screen.getByText(/An Esri JSON file, such as an ArcGIS layer/);
+    const file = new File([JSON.stringify({ features: [] })], "closures.json", { type: "application/json" });
+    fireEvent.change(input, { target: { files: [file] } });
+    await screen.findByRole("heading", { name: "Map columns to fields" });
+    expect((screen.getByLabelText("Field for column geometry") as HTMLSelectElement).value).toBe("location");
+    expect((screen.getByLabelText("Field for column OBJECTID") as HTMLSelectElement).value).toBe("");
+    const errors = screen.getByRole("table", { name: "Row errors" });
+    expect(within(errors).getAllByRole("row")[1]!.textContent).toBe("2LocationLocation: spatial reference 2227 is not supported");
+    expect((await axe.run(view.container)).violations).toEqual([]);
   });
 });
 

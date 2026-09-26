@@ -13108,3 +13108,520 @@ Veoci Integration and Air Gap PSPR unit VA34 (VC-27; threat row B18).
   `OPENEOC_TEST_DB_TAG=va34`: `pnpm check:static` exit 0; the device PIN,
   PWA, continuity, field breadth, console controls and messages browser
   tests with every web and shared test, 143 files, 972 tests.
+
+## Veoci and air gap VA33: Esri interchange
+
+Veoci Integration and Air Gap PSPR unit VA33 (VC-26).
+
+- **What the code did before.** Boards with a geometry field were served as
+  OGC API Features collections (`server/src/geo/routes.ts`) and as vector
+  tiles (`server/src/geo/tiles.ts`), each with its own copy of the read
+  wall, and neither honoured the read level of the geometry field itself: a
+  member who could not read an admin-only location still got the point on
+  the map. There was no ArcGIS REST surface, so ArcGIS Pro, ArcGIS Online
+  and QGIS's ArcGIS REST provider could not add a board; records had only
+  UUIDs, and Esri clients address features by integer object ids. The board
+  record import read CSV and Excel only, and a board geometry field took a
+  single Point, LineString or Polygon, so a multipart area could not be
+  stored. A token could arrive only in the `Authorization` header, and the
+  Windows host's Caddy log would write the whole request of a proxy error,
+  including the `X-Peer-Token`, `X-Feed-Token` and `X-Intake-Token`
+  headers.
+- **What changed.**
+  - **One read wall for every map surface** (`server/src/geo/layers.ts`).
+    `featureBoard(tx, actor, boardId)` is the board as the caller may read
+    it: its board role (403 without one), its map field (the first geometry
+    field) only when that role may read it, and the other fields the role
+    may read. `featureBoardList(tx, actor)` is every unarchived board
+    row-level security shows the caller whose map field the caller's role
+    may read, ordered by title; a board seen without a board role (through
+    an incident the caller takes part in) is listed by its map field as
+    before, and its items answer for that access. The OGC collections and
+    items routes, the board vector tiles and the FeatureServer all use them,
+    so a board whose map field the caller may not read has no layer and is
+    not listed on any of the three. Records stay bounded by row-level
+    security, record rules included. `roleFor` in
+    `server/src/boards/service.ts` is exported for the list.
+  - **Object ids numbered per board** (migration `0168_esri_object_ids.sql`,
+    placeholder number). `board_records.object_id bigint not null`, unique
+    per `(board_id, object_id)`. Each board numbers its own records 1, 2, 3
+    and on, so an id says nothing about other boards' or jurisdictions'
+    writes. A `before insert or update of object_id, board_id` trigger,
+    `number_board_record()` (SECURITY DEFINER), takes the next number from
+    the board's row in `board_record_counters` on every insert, whatever
+    writes the record (REST, the sync hub, imports, federation, exchange by
+    file), overwrites any number an insert names, and keeps the number
+    through an update. The counters table is revoked from `app_runtime`, so
+    the application can neither read nor change it. The migration adds the
+    column with no default (no table rewrite), numbers existing records per
+    board in creation order (`created_at`, then `id`), fills the counters,
+    then sets the column not null and builds the index. The number is
+    stored, so it holds across restarts, and a `pg_dump` replay keeps it,
+    since pg_dump creates triggers after it loads the data.
+  - **The FeatureServer view** (`server/src/geo/featureserver.ts`),
+    implemented directly, five `GET` routes under
+    `/api/v1/esri/rest/services`:
+    - the services directory: `{ currentVersion, folders: [], services: [{ name: <board id>, type: "FeatureServer" }] }`
+      for every board `featureBoardList` returns;
+    - `/:boardId/FeatureServer`: the service, with `capabilities: "Query"`,
+      spatial reference 4326, the full extent of the unarchived records the
+      caller may read, `maxRecordCount` 1000 and its layers;
+    - `/:boardId/FeatureServer/layers` and `/:boardId/FeatureServer/:layerId`:
+      layer metadata. Layer ids name geometry kinds, so a layer keeps its id
+      whatever the board holds: 0 points, 1 lines, 2 areas, 3 multipoints. A
+      board whose field takes one kind has that one layer, named after the
+      board; an "any" board has all four, named "<title> (points)" and so
+      on. Each layer gives `geometryType`, `extent` (of the caller's
+      unarchived records of that kind, else the world) in 4326,
+      `objectIdField` `OBJECTID`, `uniqueIdField`, `displayField` (the first
+      readable text field), `editFieldsInfo`, `fields` with Esri types (text,
+      enum and references as `esriFieldTypeString`, number as
+      `esriFieldTypeDouble`, datetime as `esriFieldTypeDate`, boolean as
+      `esriFieldTypeSmallInteger` 0 or 1, signature as its text; then
+      `OBJECTID` as `esriFieldTypeOID`, `RecordID` the record's UUID,
+      `EditDate` and `Editor` its last change and who made it),
+      `capabilities: "Query"`, `maxRecordCount`,
+      `supportedQueryFormats: "JSON, geoJSON"` and
+      `advancedQueryCapabilities` with `supportsPagination: true` and
+      statistics, order by, distinct, quantization and true curves false;
+    - `/:boardId/FeatureServer/:layerId/query` with `where` (`1=1`, with
+      any spaces or parentheses, or absent; any other clause is refused),
+      `objectIds`, `outFields` (`*`, a list matched without case, or absent
+      for `OBJECTID` alone; a field the caller may not read is left out even
+      when named), `returnGeometry`, `geometry` as an envelope
+      (`xmin,ymin,xmax,ymax` or Esri JSON with its own spatial reference)
+      with `geometryType=esriGeometryEnvelope`, `spatialRel`
+      `esriSpatialRelIntersects` (exact `ST_Intersects`) or
+      `esriSpatialRelEnvelopeIntersects` (bounding box), `inSR` and `outSR`
+      (4326, or 3857 and 102100 for Web Mercator, as a wkid or Esri JSON),
+      `resultOffset` and `resultRecordCount` paging in `OBJECTID` order at
+      most 1000 a page with `exceededTransferLimit`, `returnCountOnly`,
+      `returnIdsOnly`, and `f=json`, `pjson` or `geojson`. Archived records
+      are left out, as the board's views leave them out.
+    - An envelope is turned into degrees in code (`envelopeBoxes`), never by
+      `ST_Transform`, which wraps longitudes: Web Mercator by the inverse
+      projection with latitude held to 85.06; a box 360 degrees wide or more
+      is the whole world; one that crosses the 180th meridian becomes two
+      boxes, one each side, tested as an `or`.
+    - Shapes come from PostGIS: `ST_ForcePolygonCW` gives Esri's clockwise
+      outer rings, a multipart area is one `rings` list with its holes, and
+      a Web Mercator answer clips at latitude 85.06 so a stray polar
+      coordinate cannot fail a page. `f=geojson` answers RFC 7946 GeoJSON in
+      WGS 84 from the stored geometry, with
+      `properties.exceededTransferLimit` when a page is cut. Calculated
+      fields are answered with their derived values. Statistics, distinct
+      values, extent-only, `f=pbf` and other shapes as filters are refused
+      with a plain reason (400).
+    - Nothing writes through the view: no `applyEdits` or other write route
+      exists, and every layer says `capabilities: "Query"`.
+  - **The token where Esri clients send it.** On these five routes only, a
+    request with no `Authorization` header has a service identity's token
+    taken from `X-Esri-Authorization` (`Bearer <token>`, trimmed) or from a
+    `token` query parameter, and is then authenticated by the same
+    `authenticate` as every route (VC-25: revocation, expiry, the creator
+    rule, the lockout). A person's session token is refused from those two
+    carriers (401, with the reason) and taken from `Authorization` alone, so
+    it never ends up in a GIS project file or an address. Every other route
+    takes the header only.
+  - **No token in the logs.** The server: a logged request object is now
+    serialized with its path only (`server/src/telemetry/logging.ts`), the
+    request log line already carried no query string, and
+    `X-Esri-Authorization` is redacted like `Authorization`. The Windows
+    host's Caddy (`deploy/windows/lib/host.mjs`): its global log now uses a
+    `format filter` (`wrap json`). On `request>uri`, one `multi_regexp`
+    filter applies the two rules in `URI_REDACTIONS`: the acknowledgement
+    link's path token (`^/api/v1/ack/[^/?#]+` becomes `/api/v1/ack/REDACTED`,
+    the rest of the path and query kept) and the `token` query parameter's
+    value (its name matched in any case or percent-encoding, as the server
+    would decode it, the value becoming `REDACTED`). Caddy 2.11.4 takes one
+    filter per field: a second filter on `request>uri` silently replaces the
+    first (checked with `caddy adapt`), so the two rules are one
+    `multi_regexp` rather than a `query` filter and a `regexp` filter. The
+    headers in `CREDENTIAL_HEADERS` are deleted: `X-Esri-Authorization`, and
+    the pre-existing `X-Peer-Token`, `X-Feed-Token`, `X-Intake-Token` and
+    `X-Openeoc-Desktop-Token`. Those headers and the acknowledgement link's
+    token are what a proxy error would have written before this unit (fixed
+    here). Caddy 2.11.4 already redacts `Authorization` and `Cookie`,
+    confirmed. The CORS allowed headers gain `x-esri-authorization`
+    (`server/src/security/cors.ts`).
+  - **Multipart geometry on boards** (`shared/src/boards/fields.ts`). A
+    geometry field now also takes `MultiPoint`, `MultiLineString` and
+    `MultiPolygon`: a `polygon` field takes a Polygon or MultiPolygon, a
+    `linestring` field a LineString or MultiLineString, an `any` field all
+    six, and a `point` field still only a Point. A shape of the wrong kind
+    is refused with "must be a point" (or line, or polygon) instead of
+    zod's "Invalid input". The form runner's kind table names the three new
+    types (`shared/src/forms/runner.ts`); a form answer is never multipart.
+  - **Esri JSON import** (`server/src/geo/esri.ts`,
+    `server/src/boards/transfer.ts`, the board import route). The board
+    import route reads a file that opens with `{` as Esri JSON
+    (`readBoardImportFile`); CSV and Excel are read as before, and the
+    WebEOC and people imports are untouched. It takes a feature set (what an
+    ArcGIS layer's `query?f=json` answers) or a feature collection with one
+    layer. Each feature is a row numbered from 1; each attribute is a column,
+    an `esriFieldTypeDate` value within a date's range becomes an ISO time
+    (one outside it stays a number and its row reports it is not a date);
+    the shape is the `geometry` column, which the import maps to the
+    board's geometry field unless the mapping says otherwise, and every
+    other column maps by field key or label as before. Rows then go through
+    the existing path unchanged: `coerceCell`, `validateNewRecord` with the
+    field write levels, the all-or-nothing commit and the VA17 import
+    report. `coerceCell` turns an Esri geometry into GeoJSON in WGS 84: a
+    point, a multipoint (one point becomes a Point), a polyline of one path
+    or several, or a polygon whose clockwise rings are outer rings and
+    counter-clockwise rings holes of the smallest outer ring that encloses
+    every vertex of the hole (inside or on it); with no clockwise ring,
+    every ring is an outer one; RFC 7946 orientation; Z and M dropped; Web
+    Mercator (3857 or 102100, `latestWkid` preferred) converted to degrees
+    at nine decimals. A coordinate past the edge of the world (a longitude
+    beyond 180, a latitude beyond 90, a Web Mercator x beyond 20,037,508 m)
+    is refused, never wrapped.
+  - **What an import refuses.** A file whose spatial reference is not 4326
+    or 3857, or that names none while a feature has a shape, fields that are
+    not a list, attributes that are not named values, and a feature nesting
+    deeper than Esri JSON does (eight levels, which leaves room for curve
+    JSON) are refused whole with the reason (400). A feature with its own
+    unsupported reference, a curved shape or an out-of-range coordinate is
+    a row error. Every imported shape, from Esri JSON or from GeoJSON in a
+    spreadsheet, must then pass PostGIS's `ST_IsValid`, checked for the
+    whole file in one query; one that fails is a row error with
+    `ST_IsValidReason` ("Site is not a valid shape: Self-intersection[...]"),
+    never repaired. Row errors are listed in row order.
+  - **Screen** (`web/src/boards/BoardImport.tsx`). The board's import drawer
+    takes `.json` beside `.csv` and `.xlsx`; its file control is now labelled
+    "File to import", and a paragraph says what an Esri JSON file imports,
+    in which spatial references, and that its rows are numbered by feature.
+  - **Documents.** `docs/guides/ADMIN.md` gains "Esri and GIS clients" (the
+    directory address, layers, the three ways to send a token and that
+    `Authorization` is the one to use where the client allows it, QGIS with
+    an API Header authentication setting `Authorization`, ArcGIS Pro and
+    ArcGIS Online, that a person's session is taken from `Authorization`
+    alone, the server's and Caddy's logs, per-board object ids, archived
+    records, what is and is not offered, CORS for ArcGIS Online, and that no
+    Esri client has been tried yet); `docs/guides/OPERATOR-QUICKSTART.md`
+    gains the Esri JSON bullet of the board import, with what is refused;
+    `docs/guides/STANDARDS-INTEROP.md` a short section linking both;
+    `docs/THREAT-MODEL.md` row B19. `docs/API.md` and `docs/openapi.json`
+    are regenerated with the five routes and a sentence on the two extra
+    token carriers.
+- **Files outside the "Owns" cell.** `shared/src/api/contract.ts` (five
+  routes, machine audience, and two header lines of the generated Markdown);
+  `shared/src/api/openapi.ts` (one sentence of the description);
+  `docs/API.md` and `docs/openapi.json` (generated);
+  `shared/src/boards/fields.ts` (multipart geometry kinds and the kind
+  message); `shared/src/forms/runner.ts` (three entries in the kind table);
+  `server/src/boards/service.ts` (`roleFor` exported, nothing else);
+  `server/src/telemetry/logging.ts` (request serializer, one redaction
+  pair); `server/src/security/cors.ts` (one allowed header);
+  `server/src/boards/routes.ts` (the import route reads through
+  `readBoardImportFile`); `deploy/windows/lib/host.mjs` (the Caddy log
+  filter, `CREDENTIAL_HEADERS` and `URI_REDACTIONS`); `deploy/windows/desktop.test.mjs` (its
+  assertions); `docs/THREAT-MODEL.md`; `docs/guides/ADMIN.md`;
+  `docs/guides/OPERATOR-QUICKSTART.md`; `docs/guides/STANDARDS-INTEROP.md`;
+  `web/src/boards/__tests__/board-tools.test.tsx` and
+  `server/src/__tests__/board-records-browser.test.ts` (the file control's
+  new label, and one new component test).
+- **Decisions and deviations (defaults taken, not asked).**
+  - **Implemented directly, not Koop.** Koop is its own server framework
+    (koop-core on Express, with a provider and output plugin model);
+    embedding it means a second HTTP framework beside Fastify and a provider
+    that would have to reproduce the read wall. The shape clients need is
+    five read routes, so no dependency was added, and `@terraformer/arcgis`
+    was not needed either.
+  - **A service per board, layers by geometry kind.** Esri layer ids are
+    integers and boards have UUIDs, so each board is its own service, named
+    by its id in the directory (the layer carries the board's title), and
+    its layer ids are fixed geometry kinds. An "any" board shows four
+    layers even when some are empty.
+  - **Object ids from a per-board counter** in a table of their own rather
+    than a column on `boards`, so the counter is out of the runtime role's
+    reach and its row lock never waits on a board edit. Inserts on one board
+    already serialize on the board's advisory lock
+    (`lockBoardMutation`, taken by the REST routes, imports, board actions,
+    the sync hub and federation), and the counter's row lock is taken under
+    it, so it adds no new lock order. The ids are per instance: federation,
+    exchange by file and the jurisdiction export do not carry them.
+  - **GET only.** A `POST` query (ArcGIS web clients switch to it above
+    about 2,000 characters of address) is not served: VA32 refuses a
+    read-only identity every method but GET and HEAD, and a form body would
+    need a parser.
+  - **No ArcGIS sign-in** (`rest/info`, `generateToken`): a client that
+    wants to prompt for a user name and password is given the address with
+    `?token=` instead; the guide says so.
+  - **Errors keep the product's shape** (`{ "error": "<reason>" }` with the
+    real HTTP status), which the OpenAPI document already describes.
+  - **Field names:** board field keys as they are (they cannot collide with
+    `OBJECTID`, `RecordID`, `EditDate` and `Editor`, since keys start with
+    a lower-case letter); `EditDate` and `Editor` follow Esri's
+    editor-tracking names.
+  - **Esri JSON is read only by the board import**, not by the WebEOC or
+    people imports, which share the table reader.
+  - **Multipart shapes were added to the board field** rather than splitting
+    a multipart feature into several records. A point field still takes one
+    point.
+  - **The validity check covers every imported shape**, including GeoJSON in
+    a spreadsheet column, since the check lives in the board import; before
+    this unit an invalid GeoJSON area in a CSV was stored.
+  - The OGC collections list is now ordered by title (it was unordered).
+- **Known limits.**
+  - No ArcGIS Pro, ArcGIS Online or QGIS client was available here. The
+    tests use the request shapes those clients publish and send. Adding the
+    layer in each client is Basho's check.
+  - A federation peer on an earlier release refuses a record with a
+    multipart shape (its field schema takes single parts only), so such a
+    record does not reach it until it is upgraded.
+  - A Road Closures board draws only lines and closed points on the map
+    (its template cartography in `web/src/cop/cartography.ts`), so areas
+    imported into one are stored and listed but not drawn; generic boards
+    draw them. Pre-existing, outside this unit's files.
+  - A hole that touches its area part-way along an edge (not at a corner)
+    may be taken as a separate part; the validity check then refuses the
+    row rather than storing a wrong shape.
+  - `where` takes only `1=1`; attribute filters, statistics, sorting and
+    `f=pbf` are not offered.
+- **Air-gap behavior (decision 9).** The unit adds an inbound read path for
+  GIS clients and a file format for the existing import; nothing leaves the
+  server. Internet cut with the LAN up: ArcGIS Pro and QGIS on the LAN keep
+  reading the FeatureServer with a token checked against the local database,
+  and Esri JSON files import through the console; ArcGIS Online, a cloud web
+  application, is not reachable without the internet. A permanent isolated
+  enclave: the same with no outside dependency; QGIS works entirely inside
+  it, and the server needs nothing from Esri. A device with no network: the
+  view and the import are server surfaces, as the CSV import is; nothing
+  here works in the browser offline. Data carried on media: an Esri JSON
+  file carried on media imports into a board, and this view's own `f=json`
+  answer, saved as a file, imports into another instance's board (tested);
+  object ids are per instance and do not travel. On a Windows host, Caddy's
+  log keeps no token from any of these requests.
+- **Schema, contract, dependencies.** Migration `0168_esri_object_ids.sql`
+  (placeholder number, for the integrator to renumber): table
+  `board_record_counters (board_id primary key references boards on delete
+  cascade, last_object_id)`, revoked from `app_runtime` and `public`;
+  column `board_records.object_id bigint not null`; unique index
+  `board_records_object_id (board_id, object_id)`; function
+  `number_board_record()` (SECURITY DEFINER, revoked from `public`) and
+  trigger `board_records_object_id`. **Upgrade cost:** the migration runs in
+  one transaction with the server stopped, as every migration does. Adding
+  the column with no default is a catalog change under an ACCESS EXCLUSIVE
+  lock on `board_records`, held until the migration commits, so nothing
+  else reads or writes records meanwhile. The backfill updates every record
+  once (a new row version per record and new entries in each of the
+  table's indexes; the old versions are dead until autovacuum reclaims
+  them, so the table briefly takes up to about twice its space); no data
+  file is rewritten. `set not null` scans the table once, and the unique
+  index is built once. Time grows with the record count; it is a single
+  pass over the table, the same order as an index build. The earlier draft
+  added an identity column, which rewrote the whole table. Five routes in
+  the contract and `docs/API.md`, all machine audience, tag `esri`:
+  `GET /api/v1/esri/rest/services`,
+  `GET /api/v1/esri/rest/services/:boardId/FeatureServer`,
+  `GET /api/v1/esri/rest/services/:boardId/FeatureServer/layers`,
+  `GET /api/v1/esri/rest/services/:boardId/FeatureServer/:layerId`,
+  `GET /api/v1/esri/rest/services/:boardId/FeatureServer/:layerId/query`.
+  No new dependency.
+- **Tests.**
+  - `esri-interchange.test.ts` (real database, 18, negative tests for row
+    B19):
+    - the directory lists the boards with a readable map field and not the
+      board without one (whose service is 404), and answers 401 to an
+      anonymous caller;
+    - service and layer metadata: layers 0 to 3 by kind for an "any" board
+      and one layer by title for a point board, Esri field types,
+      `OBJECTID`, extent, `maxRecordCount` 1000, pagination and `Query`; the
+      admin-only field is in the administrator's field list and not the
+      identity's; `/layers` lists all four;
+    - queries: `where=1=1&outFields=*` answers the five points with Esri
+      geometry and attributes, their `OBJECTID`s 1 to 5 (numbered per board,
+      though other boards were written in between) equal to the stored
+      ones; three pages of two with `exceededTransferLimit` true, true,
+      false; count, ids, an `objectIds` list, `f=geojson` with a cut page;
+    - envelopes: 4326 as text and 102100 as Esri JSON select the same three
+      records and `outSR=102100` answers Web Mercator coordinates within a
+      centimetre; `envelopeBoxes` gives the whole world for the reviewer's
+      box and for 1e300, two boxes across the antimeridian either way round,
+      and clamps latitude; on a world board, the reviewer's wide 102100 box,
+      a 1e300 box and a lopsided wide box return all four places, and boxes
+      across the antimeridian (in 4326 either way round, and in 102100 as
+      Esri JSON) return exactly the two places beside it;
+    - lines as `paths`, the multipart area as clockwise, counter-clockwise,
+      clockwise rings; the empty multipoint layer answers no features;
+    - a board whose location only administrators read: absent from the
+      directory and the member's OGC collections; its service, layers,
+      layer and query 404 for the identity; its OGC items and a tile 404 for
+      a member; for the administrator it is listed, counted, served as OGC
+      items and drawn in a tile;
+    - an archived record is left out of the count, the ids, a query by its
+      object id and the extent;
+    - refusals with their reasons (another `where`, `f=pbf`, `outSR=2227`,
+      a two-number envelope, a point filter, `esriSpatialRelWithin`,
+      `outStatistics`, a non-integer object id), and `POST`, `PUT`, `PATCH`,
+      `DELETE` to `applyEdits` are 404;
+    - an edited record keeps its object id, and a second app (a restart)
+      answers it by the same id;
+    - a creator-only record rule: the identity's query, count, extent and a
+      query by the hidden record's object id show only its own record (the
+      private board's ids are 1 and 2), the administrator sees both; the
+      admin-only field stays out even when named; a member's session reads
+      the view;
+    - tokens: `Authorization`, `X-Esri-Authorization` with a trailing space
+      and the query string work for the identity; a member's session is
+      refused from the query string and from `X-Esri-Authorization` (401,
+      "only a service identity's token ...") and works in `Authorization`;
+      the token is not accepted as a query parameter on the OGC route; after
+      revocation it is refused both ways; the log holds the route but no
+      token secret, no `oeoc-svc.`, no `token=` and not the member's session
+      token;
+    - Esri JSON import: points in 4326 after a dry run (mapping, a null
+      attribute left out, a Z value dropped, a date stored as an ISO time,
+      the report kept with rows 1 and 2); a Web Mercator polygon with two
+      outer rings and a hole becomes a MultiPolygon with 2 parts and 1 hole
+      in RFC 7946 orientation, two paths a MultiLineString; a feature
+      collection's layer imports, and this view's own `f=json` answer
+      imports back; fields as an object, attributes as a string and a
+      feature nested 50,000 levels deep are refused (400) with their
+      reasons, and a date of 1e20 is its row's error; a bow-tie ring, a hole
+      that runs outside its area and a longitude of 190 are row errors
+      (422, nothing written), the first two with PostGIS's reason, and a Web
+      Mercator x of 20,100,000 m is refused; a hole touching its area at a
+      corner stays a hole (a valid Polygon with one interior ring); a file in
+      2227, a file naming no spatial reference and a GeoJSON file are
+      refused whole; a curved shape and a feature in 27700 are row errors;
+      a polygon into a point field is "must be a point".
+  - `esri-object-ids-migration.test.ts` (real database, 3): on a database
+    migrated through `0167_service_identities.sql` with records written out
+    of creation order across two boards, the migration numbers each board's
+    records 1, 2, 3 in creation order; new records take the board's next
+    number (4 on one board, 2 on the other, 1 on a board that had none) even
+    when the insert names 999; an update setting `object_id` to 42 leaves
+    it; no record is left without a number; the runtime role is refused
+    reading and updating the counters.
+  - `esri-import-browser.test.ts` at 1586 by 992 and 1534 by 790 (2): an
+    administrator imports a county layer saved as Esri JSON in Web Mercator
+    (a slide area in two parts with a hole, and a bridge point) into a
+    hazard board, sees the mapping and a clean check, imports, sees both on
+    the board and in the database, finds the slide on the map by name and
+    opens it beside the map; the closed map shows both parts and the hole.
+    The screenshots were looked at.
+  - `web/src/boards/__tests__/board-tools.test.tsx` (components, 1 new, with
+    axe): the file control offers `.json`, the Esri paragraph shows, the
+    geometry column's proposed field is kept, a row error names the field by
+    label; no axe violation.
+  - `deploy/windows/desktop.test.mjs` (31, the host test extended): the
+    generated Caddyfile carries the `format filter` with `wrap json`, the
+    `multi_regexp` block on `request>uri` with both rules, and a delete for
+    each header in `CREDENTIAL_HEADERS`, and that list is the five headers;
+    the `URI_REDACTIONS` rules, read as JavaScript reads them, turn an
+    acknowledgement link into `/api/v1/ack/REDACTED?via=email`, a query's
+    `token` and a percent-encoded `%74oken` into `token=REDACTED` with the
+    rest of the query kept, and leave `/api/v1/acknowledged?tokens=1` alone.
+  - **Caddy, run.** With the shipped Caddy 2.11.4
+    (`deploy/windows/out/runtime-inputs/host-tools/caddy/caddy.exe`, read and
+    run only, nothing installed, no service): a Caddyfile generated by
+    `caddyfile()` for `localhost` on 127.0.0.1:9443 in front of the closed
+    port 59317 passes `caddy adapt` (the `logging.logs.default.encoder` is
+    the filter, `request>uri` a `multi_regexp` with its two operations, and
+    the five header deletes) and `caddy validate` ("Valid configuration").
+    Run on loopback, four requests each got 502 and an `http.log.error`
+    entry: a FeatureServer query carrying `?token=`, `Authorization`,
+    `Cookie`, `X-Esri-Authorization`, `X-Peer-Token`, `X-Feed-Token`,
+    `X-Intake-Token` and `X-Openeoc-Desktop-Token`; a `GET` of
+    `/api/v1/ack/<marker>?via=email`; a `POST` of `/api/v1/ack/<marker>`;
+    and a directory request with a percent-encoded `%74oken=<marker>`, eleven
+    marker secrets in all. The same file without the filter logged the query
+    token, both acknowledgement tokens, the encoded token and all five
+    headers in clear (Authorization and Cookie "REDACTED"). With the filter
+    the entries read `...&token=REDACTED&f=json` with only `Authorization`
+    and `Cookie` (both "REDACTED") left among the credential headers,
+    `/api/v1/ack/REDACTED?via=email`, `/api/v1/ack/REDACTED` and
+    `...?f=json&token=REDACTED`, and the log held none of the eleven
+    markers. Caddy was stopped after each run.
+  - The reviewer's proof tests, rerun from a copy: F1 now fails (the
+    member's query and OGC items are 404, the layer has no extent); the
+    areas board's ids are 1 and 2; the wide envelopes return all three
+    records; `fields: {}` is 400; the bow-tie import is 422 with PostGIS's
+    reason; no 500 remains.
+- **Verification.** Windows test bed, PostgreSQL 16.15 with PostGIS 3.6.2 on
+  127.0.0.1:55440, `OPENEOC_TEST_DB_TAG=va33`.
+  - `pnpm check:static`: exit 0 (tsc in every package, eslint, license scan
+    339 packages, links 127 files), after the last code change.
+  - `UPDATE_DOCS=1 rtk proxy npx vitest run server/src/__tests__/api-docs.test.ts`:
+    5 of 5 when the routes were added; the review fixes add no route, and
+    the docs test passes unchanged.
+  - After the review fixes, one run with the release `pg_dump` on PATH:
+    esri-interchange, esri-object-ids-migration, esri-import-browser, geo,
+    vector-tiles, vector-tiles-browser, cop-e2e, api-docs,
+    service-identities, service-identities-browser, security,
+    secure-default, observability, cors, identity-cache, board-engine,
+    boards, import-reports, import-reports-browser, board-records-browser,
+    webeoc-import, record-sync, export, migrate-baseline, upgrade,
+    upgrade-configuration, board-titles-migration, restore-drill,
+    federation, federation-file-exchange, cot, form-field-depth, forms,
+    field-breadth, scenario-map-records-browser, board-actions,
+    incident-board-scope and cross-boundary-browser: 38 files, 212 tests
+    passed, 0 failed.
+  - `shared/src`, `web/src/boards`, `web/src/app/__tests__` (route coverage
+    among them), `web/src/cop` and `web/src/forms`: 79 files, 534 tests
+    passed.
+  - `node --test deploy/windows/desktop.test.mjs`: 31 of 31.
+  - Reds met on the way and fixed at their cause: template registration
+    needs an instance administrator (the tests set the flag); a byte order
+    mark was written into two regular expressions as a literal character;
+    eslint's `preserve-caught-error` on the row error rethrow; the first
+    nesting limit (six) refused Esri curve JSON before it could be reported
+    as a curve, so the limit is eight.
+- **Not run.** `pnpm test:ci`, `pnpm check:gate`, the load benchmark, the
+  Windows setup, macOS, and any real ArcGIS Pro, ArcGIS Online or QGIS
+  client. Caddy was run on loopback from the build's runtime inputs, not as
+  the installed host service.
+- **Evidence level:** real-database tests, component (with axe) and browser
+  tests at both viewports, the host generator's test, a loopback run of the
+  shipped Caddy, and documents; request shapes from the published ArcGIS
+  REST forms, no Esri client.
+- **Rollback:** revert the commit; drop the trigger
+  `board_records_object_id`, the function `number_board_record()`, the
+  index `board_records_object_id`, the column `board_records.object_id` and
+  the table `board_record_counters`. Before reverting, look for records
+  whose geometry is multipart
+  (`select id from board_records where GeometryType(geom) like 'MULTI%'`):
+  the earlier schema refuses them on their next edit. The Caddyfile is
+  rewritten by the host setup on its next run.
+- **Review.** Before landing, an independent review of the lane found no
+  critical or high issue and three medium and five low ones, each fixed here
+  with a test. F1: a geometry field's own read level was ignored on every
+  map surface (the FeatureServer, and before this unit the OGC items and the
+  tiles), so a member got an admin-only location; the shared wall now gives
+  no layer when the caller may not read the map field, and such a board is
+  left out of the directory and the OGC collections. F2: a Web Mercator
+  envelope wider than the world or across the antimeridian collapsed under
+  `ST_Transform`; it is now converted in code, the whole world past 360
+  degrees and two boxes across the meridian. F3: a Caddy proxy error would
+  write the `token` parameter and `X-Esri-Authorization`, and, before this
+  unit, `X-Peer-Token`, `X-Feed-Token` and `X-Intake-Token`; the Caddy log
+  filter removes them and `X-Openeoc-Desktop-Token`, proved against the
+  shipped Caddy, and the guide says to send the token in `Authorization`.
+  At the integrator's request, the same filter also replaces the
+  acknowledgement link's path token (`/api/v1/ack/<token>`, B16), which a
+  proxy error logged before this unit; with the `token` parameter it is one
+  `multi_regexp` on `request>uri`, since Caddy keeps only one filter per
+  field, proved the same way.
+  F4: a person's session token was taken from the address and the Esri
+  header; only a service identity's is now. F5: object ids came from one
+  table-wide sequence, so gaps told other boards' write volume; each board
+  now numbers its own records through a trigger and a counter the runtime
+  role cannot reach, and the migration adds the column without a rewrite.
+  F6: a far-future date, `fields` as an object and a deeply nested geometry
+  answered 500; they are a row error or a 400. F7: the import stored invalid
+  areas (a bow-tie, a hole outside its area) and longitudes past 180; holes
+  are now placed by all their vertices, every imported shape must pass
+  `ST_IsValid` (reported, not repaired), and out-of-range coordinates are
+  refused. F8: archived records were served as live; they are left out.
+- **Landing.** Rebased onto "Veoci and air gap VA34: offline device PIN for
+  shared devices". The only conflict was the threat model, where VA34 had
+  taken row B18 on main; this unit's row is B19. The lane's placeholder
+  migration is `0168`. Its review ran before landing and every finding was
+  fixed here (see Review). On main with `OPENEOC_TEST_DB_TAG=va33`:
+  `pnpm check:static` exit 0; the Esri, geo, tiles and OGC tests, board
+  records browser, boards, import reports, service identities, security,
+  observability, migration baseline, upgrade, restore drill, federation,
+  sync actions, API docs, route coverage and every web and shared test,
+  153 files, 1,058 tests; `desktop.test.mjs` 31 of 31.

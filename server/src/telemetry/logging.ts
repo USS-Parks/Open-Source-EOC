@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage } from "node:http";
-import { LogController, type FastifyServerOptions } from "fastify";
+import { LogController, type FastifyRequest, type FastifyServerOptions } from "fastify";
 
 const LEVELS = ["fatal", "error", "warn", "info", "debug", "trace", "silent"] as const;
 export type LogLevel = (typeof LEVELS)[number];
@@ -38,10 +38,12 @@ const REDACT = [
   "req.headers.cookie",
   'req.headers["x-peer-token"]',
   'req.headers["x-openeoc-desktop-token"]',
+  'req.headers["x-esri-authorization"]',
   'res.headers["set-cookie"]',
   "headers.authorization",
   "headers.cookie",
   'headers["x-peer-token"]',
+  'headers["x-esri-authorization"]',
   "password",
   "token",
   "accessToken",
@@ -81,6 +83,11 @@ export function loggingOptions(
     logger: {
       level,
       redact: { paths: REDACT, censor: "[redacted]" },
+      // Esri clients may put a token in the query string (VC-26), so a logged
+      // request carries its path only.
+      serializers: {
+        req: (req: FastifyRequest) => ({ method: req.method, url: req.url.split("?")[0] ?? "", remoteAddress: req.ip }),
+      },
       ...(stream ? { stream } : {}),
     },
     genReqId: requestId,

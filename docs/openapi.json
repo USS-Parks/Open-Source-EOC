@@ -7,7 +7,7 @@
       "name": "Apache-2.0",
       "identifier": "Apache-2.0"
     },
-    "description": "Generated from the frozen API contract, as docs/API.md is. Every path is held to the server's route table by a contract test. Request bodies carry a schema only where the server validates the whole body with a published schema; responses and query strings are not described. Operations marked x-openeoc-integration are registered only when that name is in OPENEOC_INTEGRATIONS. The bearer scheme takes a person's session access token or a service identity token (oeoc-svc.<id>.<secret>) issued by a jurisdiction administrator; operations under the personSession scheme refuse a service identity token."
+    "description": "Generated from the frozen API contract, as docs/API.md is. Every path is held to the server's route table by a contract test. Request bodies carry a schema only where the server validates the whole body with a published schema; responses and query strings are not described. Operations marked x-openeoc-integration are registered only when that name is in OPENEOC_INTEGRATIONS. The bearer scheme takes a person's session access token or a service identity token (oeoc-svc.<id>.<secret>) issued by a jurisdiction administrator; operations under the personSession scheme refuse a service identity token. Operations under /api/v1/esri also take the bearer token as a token query parameter or an X-Esri-Authorization: Bearer header, as Esri clients send it."
   },
   "security": [
     {
@@ -86,6 +86,9 @@
     },
     {
       "name": "esf-assessments"
+    },
+    {
+      "name": "esri"
     },
     {
       "name": "export"
@@ -2370,6 +2373,177 @@
           }
         },
         "x-openeoc-audience": "operator"
+      }
+    },
+    "/api/v1/esri/rest/services": {
+      "get": {
+        "operationId": "getEsriRestServices",
+        "tags": [
+          "esri"
+        ],
+        "summary": "Read esri rest services",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "$ref": "#/components/responses/Unpublished"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Refused"
+          }
+        },
+        "x-openeoc-audience": "machine"
+      }
+    },
+    "/api/v1/esri/rest/services/{boardId}/FeatureServer": {
+      "get": {
+        "operationId": "getEsriRestServicesByBoardIdFeatureServer",
+        "tags": [
+          "esri"
+        ],
+        "summary": "Read esri rest services FeatureServer",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "boardId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "$ref": "#/components/responses/Unpublished"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Refused"
+          }
+        },
+        "x-openeoc-audience": "machine"
+      }
+    },
+    "/api/v1/esri/rest/services/{boardId}/FeatureServer/{layerId}": {
+      "get": {
+        "operationId": "getEsriRestServicesByBoardIdFeatureServerByLayerId",
+        "tags": [
+          "esri"
+        ],
+        "summary": "Read esri rest services FeatureServer",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "boardId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "layerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "$ref": "#/components/responses/Unpublished"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Refused"
+          }
+        },
+        "x-openeoc-audience": "machine"
+      }
+    },
+    "/api/v1/esri/rest/services/{boardId}/FeatureServer/{layerId}/query": {
+      "get": {
+        "operationId": "getEsriRestServicesByBoardIdFeatureServerByLayerIdQuery",
+        "tags": [
+          "esri"
+        ],
+        "summary": "Read esri rest services FeatureServer query",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "boardId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "layerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "$ref": "#/components/responses/Unpublished"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Refused"
+          }
+        },
+        "x-openeoc-audience": "machine"
+      }
+    },
+    "/api/v1/esri/rest/services/{boardId}/FeatureServer/layers": {
+      "get": {
+        "operationId": "getEsriRestServicesByBoardIdFeatureServerLayers",
+        "tags": [
+          "esri"
+        ],
+        "summary": "Read esri rest services FeatureServer layers",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "boardId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "$ref": "#/components/responses/Unpublished"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Refused"
+          }
+        },
+        "x-openeoc-audience": "machine"
       }
     },
     "/api/v1/facilities/{id}": {

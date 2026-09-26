@@ -1,11 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { geometryFieldKey } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import { AuthError } from "../auth/service.js";
-import { getEffectiveBoard, visibleFields } from "../boards/service.js";
 import { getIncidentAuthority } from "../incidents/participation.js";
+import { featureBoard } from "./layers.js";
 
 /**
  * Mapbox Vector Tiles for operational layers too large for one GeoJSON page.
@@ -100,10 +99,9 @@ export function tileRoutes(
   app.get("/api/v1/tiles/boards/:boardId/:z/:x/:y.mvt", { preHandler: authenticate }, async (req, reply) => {
     const t = BoardTile.parse(req.params);
     const mvt = await withPerson(sql, req.principal.person.id, async (tx) => {
-      const board = await getEffectiveBoard(tx, req.principal, t.boardId);
-      const geomKey = geometryFieldKey(board.fields);
-      if (!geomKey) return null;
-      const readable = visibleFields(board).map((f) => f.key).filter((key) => key !== geomKey);
+      const layer = await featureBoard(tx, req.principal, t.boardId);
+      if (!layer) return null;
+      const readable = layer.readable.map((f) => f.key);
       return renderTile(tx, t, (bounds) => tx`
         select r.id::text as fid,
           (select coalesce(jsonb_object_agg(p.key, p.value), '{}'::jsonb)
