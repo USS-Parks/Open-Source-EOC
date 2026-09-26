@@ -1,13 +1,21 @@
 # Release decision
 
 For Basho. Prepared on 2026-09-24 from `main` at `ec11af5`, the point at which
-every engineering unit of the Finish PSPR had landed, and brought up to date
-on 2026-09-25 for version `0.9.2`, after the Operator Trust PSPR landed
-("Operator Trust landing: the full gate"). Evidence is cited by
-receipt heading in the [V1 ledger](docs/process/V1-LEDGER.md). Capability
-status is in the [parity matrix](docs/VEOC-PARITY-MATRIX.md) and the
+every engineering unit of the Finish PSPR had landed; brought up to date on
+2026-09-25 for version `0.9.2`, after the Operator Trust PSPR landed
+("Operator Trust landing: the full gate"); and reconciled again on 2026-09-25
+through `ffe41de` ("Veoci and air gap VA39: job aids in the console") for the
+next release, planned as `v0.9.9` ("Veoci and
+air gap VA36: the documents reconciled"). Evidence is cited by receipt heading
+in the [V1 ledger](docs/process/V1-LEDGER.md). Capability status is in the
+[parity matrix](docs/VEOC-PARITY-MATRIX.md) and the
 [facet register](docs/FACET-STATUS.md), both reconciled to the receipts for
 this document.
+
+`v0.9.9` is planned for after the Veoci Integration and Air Gap PSPR's last
+units land. When this was written VA33 and VA34 had not landed; nothing
+below claims them. The plan-end gate and the builds run after
+they land, and their results go in section 6.
 
 ## 1. What was executed
 
@@ -38,12 +46,42 @@ this document.
   (RD8 to RD11), CI on Windows and macOS (RD12), and the reads that slowed
   under load ("Readiness RD4 follow-up: reads that slowed as the incident
   filled"). RD6, macOS, is not started ("Readiness RD6: macOS, not
-  started").
-- This reconciliation: every matrix and register row checked against the
-  receipts, eight rows added; README, ROADMAP, the design-to-capability
-  matrix, the [asset and license inventory](docs/ASSET-LICENSES.md), the
-  guides and the changelog updated; eleven
-  [final reference captures](docs/design/final-captures/README.md).
+  started"). RD12 part two's reconciliation folds into the Veoci roster's
+  VA36, this document's latest reconciliation.
+- The `0.9.2` builds: the Windows setup and a ZIP of its staged folder
+  ("Version 0.9.2: the Windows setup"), the map data packet ("Version 0.9.2:
+  the macOS build and its map data packet") and the macOS disk image built
+  on Windows ("Version 0.9.2: the macOS disk image, built on Windows").
+- The [Veoci Integration and Air Gap PSPR](docs/process/VEOCI-AIR-GAP-PSPR-2026-09-25.md),
+  approved 2026-09-25 ("V1 grant: Veoci integration and air gap"; "V1 grant:
+  the rest of the Veoci and air gap plan, local"): VA1 to VA32, VA35, VA37
+  (two parts), VA38 and VA39 have landed, each with its receipt,
+  with "Veoci and air gap VA11 follow-up: the imported packages on screen",
+  "Veoci and air gap VA13 and VA14 corrections: review findings", "Veoci and
+  air gap VA17 completion: board record import reports", "Veoci and air gap
+  follow-up: trusted package keys on a Windows install" and "Veoci and air
+  gap follow-up: the record pane keeps its tab through a save", and "Veoci
+  and air gap phase VA-A gate". VA33 and VA34 are in flight.
+- The [IPAWS Connector PSPR](docs/process/IPAWS-CONNECTOR-PSPR-2026-09-25.md),
+  IC1 to IC3, with "IPAWS connector IC1 correction: the postCAP secret
+  assertion".
+- The [Exercise Scenarios PSPR](docs/process/EXERCISE-SCENARIOS-PSPR-2026-09-25.md)
+  through "Exercise scenarios XS4 to XS7: the three exercises in the demo",
+  which are in the `0.9.2` builds; XS8, the review package, is not done.
+- The CI repairs recorded after the Actions runs resumed, from "CI repairs
+  after the Actions runs resumed" to "CI correction: a refused upload's
+  staging file, and a message test on the old route".
+- The reconciliations: every matrix and register row checked against the
+  receipts; on 2026-09-24 eight rows added, with README, ROADMAP, the
+  design-to-capability matrix, the
+  [asset and license inventory](docs/ASSET-LICENSES.md), the guides, the
+  changelog and eleven
+  [final reference captures](docs/design/final-captures/README.md); on
+  2026-09-25 for `v0.9.9`, four rows added (G-PLANS, G-PACKAGES,
+  G-VOLUNTEERS, G-SERVICE), G-MACOS moved to `partial`, and README, ROADMAP,
+  the evaluator's page, the deployment README, the threat model's B3 row,
+  ADR-0010's status, the rollout playbook and the training kit's limits
+  corrected where a receipt had made them untrue.
 
 ## 2. The gate list
 
@@ -53,64 +91,162 @@ No line carries a written waiver.
 
 | # | Gate | State | Receipt, or what is missing |
 |---|---|---|---|
-| 1 | `pnpm check` green, serial, gate tag, with route-table, secret and advisory scans | Open for `0.9.2` | Green on `ec11af5` in "V1 final milestone gate": every static gate, 273 of 273 files and 1,553 of 1,553 tests in one run, the load benchmark 4 of 4. `pnpm check` runs no secret scan itself: gitleaks runs in the pre-commit hook, which passed on every commit, and in hosted CI. For `0.9.2`: the Operator Trust units ran one full `test:ci` with its failures fixed ("Operator Trust landing: the full gate"); the serial `pnpm check:gate` was not run on the `0.9.2` commit. Hosted CI runs again since Basho raised the Actions budget on 2026-09-25, on Windows and macOS; it has not yet had a green run |
+| 1 | `pnpm check` green, serial, gate tag, with route-table, secret and advisory scans | Open for `v0.9.9` | Green on `ec11af5` in "V1 final milestone gate": every static gate, 273 of 273 files and 1,553 of 1,553 tests in one run, the load benchmark 4 of 4. `pnpm check` runs no secret scan itself: gitleaks runs in the pre-commit hook, which passed on every commit, and in hosted CI. For `0.9.2`: the Operator Trust units ran one full `test:ci` with its failures fixed ("Operator Trust landing: the full gate"); the serial `pnpm check:gate` was not run on the `0.9.2` commit. Since then: "Veoci and air gap phase VA-A gate" ran `pnpm check:gate` for VA1 to VA5 on the Linux bed, 1,686 of 1,691 tests with five browser tests that fail on that bed and the load test unexplained there; "IPAWS connector IC3: documents" ran it on Windows, exit 1 for a `node:test` file Vitest collected (since excluded) and two worker crashes whose files passed alone, then `pnpm check` on the rebased tree, 1,808 of 1,809 with the one red passing alone. Every later unit ran its own and neighbouring suites only. Hosted CI runs `pnpm check` on Windows on each push to `main`; the last recorded result is run 36211128703 on `78f9f37`, 3 tests failed, each fixed in "CI correction: a refused upload's staging file, and a message test on the old route", and no receipt records a green run. For `v0.9.9`: the plan-end gate, section 6 |
 | 2 | Single-node declaration | Green | "V1 W2.5: rate limiting and identity caching" |
-| 3 | Heap flat over two hours with 150 sockets; real-hardware run recorded | Green | "Readiness RD4: 150 people at once": 150 people with 300 sockets for two hours on Basho's Windows machine against the network host profile, 0 errors, reads 245 ms and writes 33 ms at the 95th percentile, heap growth 8.4%. The reads that rose during that run are flat since "Readiness RD4 follow-up: reads that slowed as the incident filled". Not run: the same against the installed host services |
+| 3 | Heap flat over two hours with 150 sockets; real-hardware run recorded | Green | "Readiness RD4: 150 people at once": 150 people with 300 sockets for two hours on Basho's Windows machine against the network host profile, 0 errors, reads 245 ms and writes 33 ms at the 95th percentile, heap growth 8.4%. The three reads that grew during that run are fixed and measured by probe at the run's full volume ("Readiness RD4 follow-up: reads that slowed as the incident filled"); the two-hour rerun with the fix was skipped at Basho's instruction ("Version 0.9.2: the Windows setup"). Not run: that rerun, and the same against the installed host services |
 | 4 | No network call inside a write path; outbox worker and scheduler in both deploy paths | Green | "V1 W2.12: network calls out of every write path"; "V1 W2.1: outbound delivery queue"; "V1 W2.2: scheduler", whose desktop path was checked by loading the module, not by running a profile |
 | 5 | Every list paginated; push replaces the notifications poll | Green | "V1 W2.3: pagination and push-down"; "V1 W2.11: remaining list pagination"; "V1 W2.4: WebSocket discipline". The templates catalogue stays unpaged, with the reason in the W2.12 receipt |
 | 6 | Logs, metrics and rotation in both paths; retention enforced | Green | "V1 W2.8: observability"; "V1 W2.9: retention and export" |
 | 7 | MFA for administrators; two-person IPAWS send; webhook allowlists | Green | "V1 W2.10: MFA"; "V1 W2.7: threat-model controls"; "V1 W3.5: IPAWS enablement and send" |
 | 8 | Refuse to serve with row-level security off | Green | "V1 W2.6: secure by default" |
-| 9 | Windows and macOS setups, each with a workstation and a network host with HTTPS; installer rebuilt with archives; backup scheduled; restore drill (restated by ADR-0010: the platforms are Windows and macOS, and the Docker install is removed) | Open | Windows: workstation, demo and network host in `Open-Source-EOC-Setup-0.9.2.exe` ("Readiness RD3: the Windows network host"; "Version 0.9.2: the Windows setup"), connecting to a host ("Readiness RD7: connecting to a host, on Windows"); drill recorded ("V1 W6.1: versioning and upgrade"). Missing: the macOS setup (RD6, not started), and Basho's first real run of the host install, its scripted check and its backup schedule |
+| 9 | Windows and macOS setups, each with a workstation and a network host with HTTPS; installer rebuilt with archives; backup scheduled; restore drill (restated by ADR-0010: the platforms are Windows and macOS, and the Docker install is removed) | Open | Windows: workstation, demo and network host in `Open-Source-EOC-Setup-0.9.2.exe` ("Readiness RD3: the Windows network host"; "Version 0.9.2: the Windows setup"), connecting to a host ("Readiness RD7: connecting to a host, on Windows"), the host's trust of agency authorities and its clock checks ("Veoci and air gap VA3: private authorities and time"); drill recorded ("V1 W6.1: versioning and upgrade"). macOS: the workstation and demo as an app, built on a Mac runner with its own PostgreSQL, whose smoke test started it ("CI repairs after the Actions runs resumed"), and as a disk image built on Windows that uses Postgres.app ("Version 0.9.2: the macOS disk image, built on Windows"). Missing: a Mac network host and RD6; any run by a person on a Mac; Basho's first real run of the Windows host install, its scripted check and its backup schedule. The `v0.9.9` builds go in section 6 |
 | 10 | Every operator route on a screen; no dead ends; administration without curl | Green | "V1 W3 milestone gate"; "V1 W3 route coverage: every operator route owes a screen"; "V1 W3.0: administration" |
-| 11 | Email and SMS with a contacts directory | Green | "V1 W4.0 part one: email and SMS channels"; "V1 W4.0 part two: contacts and mass notification", against a local relay and a fixture SMS provider |
+| 11 | Email and SMS with a contacts directory | Green | "V1 W4.0 part one: email and SMS channels"; "V1 W4.0 part two: contacts and mass notification", against a local relay and a fixture SMS provider. Since then: the delivery hold ("Veoci and air gap VA1: hold, do not drop"), groups, positions and shifts ("Veoci and air gap VA7: activation notifies; people reached by group, position and shift"), response options ("Veoci and air gap VA8: response options on mass sends") and SMS through a phone on the site network with replies read back ("Veoci and air gap VA21: local carriers"), against a fixture phone |
 | 12 | Board CSV and Excel import and export; WebEOC importer with a guide | Green | "V1 W4.1 part one: board engine depth"; "V1 W4.1 part two: board screen controls"; "V1 W4.4: WebEOC migration" |
 | 13 | Layers render past the feature cap | Green | "V1 W4.5: operational vector tiles" |
-| 14 | First-load JavaScript under 300 KB gzipped | Green | 159.8 kB in "V1 W5.0: code splitting", 161.0 kB in "V1 W5.3: remaining interface findings". The budget script is not part of `pnpm check` |
-| 15 | README, ROADMAP, register, matrix and API document agree | Green on this reconciliation | `docs/API.md` matches the contract route for route (the api-docs test), and its generated header says the OIDC sign-in routes register only when `OPENEOC_OIDC_ISSUER` is set |
+| 14 | First-load JavaScript under 300 KB gzipped | Green | 159.8 kB in "V1 W5.0: code splitting", 161.0 kB in "V1 W5.3: remaining interface findings", 184.6 kB in "Veoci and air gap VA9 part two: QR codes on badges and pool resources", 189.7 kB in "Veoci and air gap VA31: charts in reports and create-record tiles", 202.3 kB in "Veoci and air gap VA39: job aids in the console", whose aids are about 10.5 kB of it. The budget script is not part of `pnpm check` |
+| 15 | README, ROADMAP, register, matrix and API document agree | Green on this reconciliation, through `ffe41de` | `docs/API.md` and, since "Veoci and air gap VA32: OpenAPI document and scoped service identities", `docs/openapi.json` match the contract route for route (the api-docs test, which each unit that added a route ran with the documents regenerated), and the generated header says the OIDC sign-in routes register only when `OPENEOC_OIDC_ISSUER` is set. README, ROADMAP, the register and the matrix agree with the receipts through `ffe41de` ("Veoci and air gap VA36: the documents reconciled"). The rows VA33 and VA34 will change are updated when each lands, before the plan-end gate |
 | 16 | 79D+D33 and M5 green; A11Y-T1 done; D34 done or absence recorded; 86+D35 presented | External | The exercise, review, M5 and the D34 absence are receipted, and this document presents 86+D35. Missing: the NVDA and VoiceOver pass |
 | 17 | SECURITY.md, CHANGELOG.md, versioned packages; second maintainer or waiver | External | "V1 W6.3: project hygiene for adoption"; "V1 W6.1: versioning and upgrade". Missing: a second maintainer or Basho's written INV-10 waiver |
 | 18 | Basho's aesthetic and functional acceptance of the release candidate | External | Not recorded |
-| 19 | One roster; link checker green after the archive move | Green | "V1 W1.12: retire the roster stack"; link checker at 94 files in "V1 M5 milestone gate" |
+| 19 | One roster; link checker green after the archive move | Green | "V1 W1.12: retire the roster stack"; link checker at 94 files in "V1 M5 milestone gate", and at 127 files on this reconciliation. The Veoci roster and the exercise scenarios roster run side by side, each owning its own files, as `CLAUDE.md` records |
 | 20 | Test lines and assertions recorded before and after W1.14; coverage not lower than the W1.11 baseline | Open | Counts in "V1 W1.14: consolidate the server test suite". The measurement exists since `0.9.2` (`pnpm test:coverage`, the v8 provider over `server/src`) but has not been run to a result at `00deba5` and the release commit. Close by running it at both, or by Basho accepting the assertion counts in its place |
 | 21 | Each optional integration registers by default or is named in README with its variable | Green | "V1 W6.6: gated-module disposition"; README now names OIDC sign-in and its variables |
 
 ## 3. Acceptance scenarios 1 to 8
 
-The Operator Trust PSPR's scenarios, each a browser test on the North Coast
+The Operator Trust PSPR's scenarios (its Appendix A, section 7), which its
+RD12 reconciles "now including scenarios 1 to 8" and places nowhere else, so
+the table stays here. Scenarios 1 to 7 are browser tests on the North Coast
 Storm demonstration at 1586 by 992 and 1534 by 790, with no page errors and
-no request outside the machine. Automated tests are evidence, not Basho's
+no request outside the machine; scenario 8 is a real-database test of an
+upgrade across real migrations with a browser leg at both sizes. The last
+full run recorded with all of them is hosted CI run 36211128703 on
+`78f9f37`, which failed 3 tests, none of these ("CI correction: a refused
+upload's staging file, and a message test on the old route"). Before it, scenario 3 failed once under
+the parallel run of "IPAWS connector IC1: the connector to the Interface
+Design Guide" and passed alone. Automated tests are evidence, not Basho's
 acceptance (gate 18).
 
-| # | Scenario | Test | Receipt |
-|---|---|---|---|
-| 1 | An occasional operator returns and finds their own work | `scenario-occasional-operator-browser.test.ts` | "Operator trust TP2: my work" |
-| 2 | A request survives an interruption: navigation, a closed tab, an expired session | `scenario-request-interruption-browser.test.ts` | "Operator trust TP4: durable work and explicit state" |
-| 3 | A request is handed from receipt to acceptance to an owner, by number | `scenario-request-handoff-browser.test.ts` | "Operator trust TP1: request lifecycle and findability" |
-| 4 | A shift changes: the incoming operator reads what changed since their last shift | `scenario-shift-change-browser.test.ts` | "Operator trust TP3: shift handoff" |
-| 5 | A partner follows a link to what they were invited to, and is refused the rest with a reason | `scenario-partner-link-browser.test.ts` | "Operator trust TP6: partner invitations and recipient preview" |
-| 6 | The map and the records agree, and information says how old it is | `scenario-information-state-browser.test.ts`, `scenario-map-records-browser.test.ts` | "Operator trust TP5: information state you can read"; "Operator trust TP9: from the map to the action" |
-| 7 | An incident closes, says what stays active, and can be reopened | `scenario-incident-close-browser.test.ts` | "Operator trust TP7: incident close and reopen" |
-| 8 | Configuration moves forward through an upgrade | `upgrade-configuration.test.ts` | "Operator trust TP8: upgrades keep configuration" |
+| # | Scenario | Test | Receipt | Plan-end gate |
+|---|---|---|---|---|
+| 1 | An occasional operator returns and finds their own work | `scenario-occasional-operator-browser.test.ts` | "Operator trust TP2: my work" | To be filled (section 6) |
+| 2 | A request survives an interruption: navigation, a closed tab, an expired session | `scenario-request-interruption-browser.test.ts` | "Operator trust TP4: durable work and explicit state" | To be filled (section 6) |
+| 3 | A request is handed from receipt to acceptance to an owner, by number | `scenario-request-handoff-browser.test.ts` | "Operator trust TP1: request lifecycle and findability" | To be filled (section 6) |
+| 4 | A shift changes: the incoming operator reads what changed since their last shift | `scenario-shift-change-browser.test.ts` | "Operator trust TP3: shift handoff" | To be filled (section 6) |
+| 5 | A partner follows a link to what they were invited to, and is refused the rest with a reason | `scenario-partner-link-browser.test.ts` | "Operator trust TP6: partner invitations and recipient preview" | To be filled (section 6) |
+| 6 | The map and the records agree, and information says how old it is | `scenario-information-state-browser.test.ts`, `scenario-map-records-browser.test.ts` | "Operator trust TP5: information state you can read"; "Operator trust TP9: from the map to the action" | To be filled (section 6) |
+| 7 | An incident closes, says what stays active, and can be reopened | `scenario-incident-close-browser.test.ts` | "Operator trust TP7: incident close and reopen" | To be filled (section 6) |
+| 8 | Configuration moves forward through an upgrade | `upgrade-configuration.test.ts` | "Operator trust TP8: upgrades keep configuration" | To be filled (section 6) |
 
-## 4. What remains
+## 4. What v0.9.9 would hold, relative to 0.9.2
+
+The `0.9.2` builds came from `eb1277d`: the Operator Trust units, the read
+fix, the Veoci roster's VA1 to VA5 (the delivery hold, federation batch
+sizing, private authorities and time, collaboration and feeds in an outage,
+corrections) and the exercise scenarios. `v0.9.9` adds what landed after
+it, through `ffe41de` at this writing, and VA33 and VA34 once they land.
+
+| Area | What it adds | Receipts | Evidence level |
+|---|---|---|---|
+| Ready-made content and activation | Incident templates authored and versioned on screen; activation notifies chosen groups, positions and whoever is on shift, and opens the template's contact groups, reports, rules, dashboards, threads and file folders; signed solution packages, the small EOC starter pack and the hotline and shelter registration pack; publisher keys trusted from the profile folder on a Windows install | "Veoci and air gap VA6: incident templates as data"; "Veoci and air gap VA7: activation notifies; people reached by group, position and shift"; "Veoci and air gap VA11: signed solution packages" and its follow-up; "Veoci and air gap VA12: the small EOC starter pack"; "Veoci and air gap VA16: the incident room"; "Veoci and air gap VA29: hotline and shelter registration pack"; "Veoci and air gap follow-up: trusted package keys on a Windows install" | Real-database, component and browser tests; VA29 a real-database test; the trusted keys a unit test |
+| ICS forms and the IAP | Fifteen ICS forms as versioned components of an operational period; the IAP assembled and approved from them, a change after approval making a new revision; the ICS 213RR from a resource request | "Veoci and air gap VA37 part one: ICS forms as stored components"; "Veoci and air gap VA37 part two: the IAP assembled from its forms"; "Veoci and air gap VA38: the ICS 213RR as a form component" | Real-database, component and browser tests |
+| Notifications | Response options on mass sends; SMS through an Android phone on the site network with replies read back; printed call-down sheets; a radio and runner log | "Veoci and air gap VA8: response options on mass sends"; "Veoci and air gap VA21: local carriers" | Real-database, component and browser tests against a fixture phone |
+| Plans | Executable plans, recurring event plans, continuity of operations plans, and corrective actions linked to plans | "Veoci and air gap VA13: executable plans" and "Veoci and air gap VA13 and VA14 corrections: review findings"; "Veoci and air gap VA27: continuity of operations plans"; "Veoci and air gap VA30: corrective actions linked to plans" | Real-database, component and browser tests |
+| Cost recovery | Public Assistance force account with FEMA-format summaries | "Veoci and air gap VA14: Public Assistance force account" and its corrections | Real-database, unit, component and browser tests |
+| Boards, reports and dashboards | Signature fields; QR codes on badges and pool resource labels; workflow guards and per-state read-only fields; the declarative action catalog; all-or-any conditions with groups, day and text operators, and every view option in the designer; charts in reports; create-record tiles on saved dashboards; the record pane keeps its tab through a save | "Veoci and air gap VA9 part one: the signature field"; "Veoci and air gap VA9 part two: QR codes on badges and pool resources"; "Veoci and air gap VA15: workflow guards and per-state field permissions"; "Veoci and air gap VA25: declarative action catalog"; "Veoci and air gap VA26: all-or-any conditions, date and text functions, every view option in the designer"; "Veoci and air gap VA31: charts in reports and create-record tiles"; "Veoci and air gap follow-up: the record pane keeps its tab through a save" | Real-database, component and browser tests |
+| Integrations | Service identities scoped to one jurisdiction and a viewer or member role, revocable, expiring and tied to their creator; an OpenAPI 3.1 description of the API | "Veoci and air gap VA32: OpenAPI document and scoped service identities" | Real-database, component and browser tests; an independent adversarial review, its findings fixed |
+| Migration and people | A report for every import, signed off on screen; import templates; a people import | "Veoci and air gap VA17: validated migration"; "Veoci and air gap VA17 completion: board record import reports" | Real-database, component and browser tests |
+| Volunteers | A volunteer and CERT roster with credentials, deployments and hours | "Veoci and air gap VA28: volunteer and CERT roster" | Real-database, unit, component and browser tests |
+| Exchange across the gap | Signed peer identity and agreement revocation; exchange by file | "Veoci and air gap VA19: signed peer identity"; "Veoci and air gap VA20: exchange by file" | Two-instance real-database tests, VA20's with no network path between them; browser tests |
+| Field work offline | Map points, messages and new tasks queued offline; boards with record rules synced per record; late submissions to a closed incident | "Veoci and air gap VA22: field breadth" | Real-database, component and browser tests offline and back |
+| Maps | Region map packets for an area outside California | "Veoci and air gap VA35: region map packs" | Unit tests and a hand run with stand-in files |
+| Supply chain | The license gate | "Veoci and air gap VA10: the license gate" | Command tests |
+| IPAWS | The connector rebuilt to the IPAWS-OPEN Interface Design Guide | "IPAWS connector IC1: the connector to the Interface Design Guide"; "IPAWS connector IC2: the certificate on screen and each channel's answer"; "IPAWS connector IC3: documents" | Unit and real-database tests; a browser walk against a loopback stand-in |
+| Guides | A rollout playbook, self-paced modules and the timed onboarding procedure; phones on a host's authority; the disconnected drill and its report | "Veoci and air gap VA18: rollout playbook and timed onboarding"; "Veoci and air gap VA23: phones on a host's authority"; "Veoci and air gap VA24: the disconnected drill" | Documents checked against the source; none run |
+| Job aids | The acting position's job aid opened from the console's **Help**, with no connection needed; the eight aids rewritten to the screens as they are | "Veoci and air gap VA39: job aids in the console" | Unit, component and browser tests, with an offline reload |
+| Fixes found by CI | The console mounted once after sign-in; the dashboard's filter fields kept while typing; the map's feature link inside the feature panel; the QR reader's second try when a browser's detector finds nothing | "CI repairs after the Actions runs resumed"; "CI repairs: the macOS job's browser tests"; "CI repairs: the macOS job on e245e08" | Component and browser tests |
+
+Upgrading from `0.9.2` runs migrations `0147` to `0167` behind the forced
+backup. Case-blind conditions use PostgreSQL's ICU collation `und-x-icu`,
+which the Windows runtime and Postgres.app carry ("Veoci and air gap VA26:
+all-or-any conditions, date and text functions, every view option in the
+designer"). Two things change for an installed copy: a federation peering
+receives nothing until both administrators record each other's public keys
+("Veoci and air gap VA19: signed peer identity"), and an IPAWS PIN stored by
+an earlier build no longer configures IPAWS; the certificate must be entered
+([CHANGELOG.md](CHANGELOG.md), Unreleased).
+
+## 5. What has not been run
+
+Each of these is written as a procedure or named in a receipt, and none has
+happened. The Veoci roster's amendment 4 makes the drill and the phone walk
+placeholders that gate nothing; they gate no unit, and they are not proof.
+
+| Run | Whose | Procedure | Rows waiting on it |
+|---|---|---|---|
+| Part 1 of the disconnected drill: the unplugged run with a second device, and the setup installed from media on a disconnected second computer | Basho | [The disconnected drill](docs/guides/DISCONNECTED-DRILL.md), Part 1, recorded on [its report](docs/guides/DISCONNECTED-DRILL-REPORT.md) | AR7; INV-3 |
+| Part 2, the 72-hour drill against local stand-ins, with the day-2 exchange by file when a second host is set up | Basho, with an EOC's staff | The same, Part 2 | F3; F4; AR7 |
+| The phone walk on an iPhone or iPad and on Android | Basho, on his phones and a host | [Phones and tablets](docs/guides/NETWORK-HOST.md#phones-and-tablets), recorded under "Record the phone walk" | G-PWA; G-HOST; F7 |
+| A region map packet built and carried in to an EOC host | Basho | [Region map packs](docs/guides/REGION-MAP-PACKS.md) | AR7 |
+| The signed starter pack imported on an installed Windows computer, with the publisher's key in `trusted-template-keys.pem` | Basho | The [starter pack's README](deploy/packs/small-eoc-starter/README.md) and step 4 of the [rollout playbook](docs/guides/ROLLOUT-PLAYBOOK.md) | G-PACKAGES |
+| The Mac runs: the disk image opened, Gatekeeper's first-open prompt, the demo with Postgres.app, a map packet installed from Downloads | Basho, on a Mac | `deploy/macos/READ-ME-FIRST.txt` | G-MACOS; gate 9 |
+| The timed onboarding | Basho, with a person new to the product | [Timed onboarding](docs/guides/TIMED-ONBOARDING.md) | F16 |
+| SMS through a real Android phone running SMS Gateway for Android with a SIM | Basho | The [administration guide](docs/guides/ADMIN.md) | F4 |
+| The Windows host installed on a real machine with `Test-OpenEOCHost.ps1` and its clock lines; a first real upgrade and scheduled backup | Basho | The [network host guide](docs/guides/NETWORK-HOST.md) | G-HOST; G-DR; gate 9 |
+| The two-hour load with the read fix, and a load run against the installed host | Basho (the rerun was skipped at his instruction) | `deploy/windows/prove-load.mjs` | R1 |
+| A send to the IPAWS-OPEN test environment | Basho, after the developer MOA and a COG certificate | [IPAWS enablement](docs/IPAWS-ENABLEMENT.md) | R2 |
+| The starter pack's tabletop | Basho, with an EOC's staff | [The tabletop](deploy/packs/small-eoc-starter/TABLETOP.md) | G-PACKAGES |
+| The rollout playbook and the self-paced modules, walked by EOC staff | Basho, with an EOC's staff | The [rollout playbook](docs/guides/ROLLOUT-PLAYBOOK.md) and [self-paced training](docs/guides/SELF-PACED-TRAINING.md) | F17 |
+
+## 6. The plan-end gate and the builds (to be filled)
+
+The Veoci roster's section 7 and decision 18: after its last unit lands, the
+integrator runs these on the commit `v0.9.9` is built from and writes each
+result here, with the command, the counts, and every red named with its
+isolated rerun. The builds are made after the last document change, since
+the web build carries `docs/guides`. Nothing in this section has run yet.
+
+| Check | Command or procedure | Result |
+|---|---|---|
+| The serial gate | `pnpm check:gate` | To be filled: commit, exit code, test files and tests passed of the total, each red named, the load test |
+| Acceptance scenarios 1 to 8 | Within `pnpm check:gate` | To be filled in the last column of section 3 |
+| RD5's proof with every optional integration configured against local stand-ins | `deploy/windows/prove-airgap.mjs` on Windows, with the stand-ins | To be filled: connections outside the machine and its network (zero expected), and what queued, what expired and what reconciled |
+| Hosted CI on the release commit | The push to `main` | To be filled: run number and result |
+| Coverage (gate 20) | `pnpm test:coverage` at `00deba5` and at the release commit | To be filled, or Basho's acceptance of the assertion counts in its place |
+
+| Build | File | Bytes | SHA-256 |
+|---|---|---|---|
+| Windows setup, with `-IncludeOptionalBasemaps` | `deploy/Open-Source-EOC-Setup-0.9.9.exe` | To be filled | To be filled |
+| Portable ZIP of the same staged `app` folder | `deploy/Open-Source-EOC-0.9.9.zip` | To be filled | To be filled |
+| macOS disk image (say which: built on Windows, using Postgres.app, or by the "macOS demo" workflow, with its own PostgreSQL) | `deploy/Open-Source-EOC-0.9.9-macOS.dmg` | To be filled | To be filled |
+| Map data packet | `deploy/Open-Source-EOC-0.9.9-map-data.zip` | To be filled | To be filled |
+
+## 7. What remains
 
 ### Basho's external inputs
 
 | Input | What it unblocks |
 |---|---|
-| The two-hour load against the installed host services, if wanted beyond RD4's run on the host profile | R1; INV-8 |
-| The unplugged check, `deploy/windows/Test-OpenEOCAirGap.ps1`, with a second device on the same switch | AR7; INV-3 |
-| A Windows machine and a Mac to run the host setups and their scripted checks on, then a first real upgrade and scheduled backup on each | Gate 9; G-DR |
-| IPAWS-OPEN test credentials and the signed MOA | R2's live send |
+| The two-hour load with the read fix and against the installed host services, if wanted beyond RD4's run on the host profile | R1; INV-8 |
+| Part 1 of the disconnected drill: the unplugged check, `deploy/windows/Test-OpenEOCAirGap.ps1`, with a second device on the same switch, and the install from media on a disconnected second computer | AR7; INV-3 |
+| Part 2 of the drill, with a second host for the day-2 exchange by file | F3; F4; AR7 |
+| A Windows machine to run the host setup and its scripted check on, then a first real upgrade and scheduled backup | Gate 9; G-HOST; G-DR |
+| A Mac for the first Mac run, and an Apple Developer ID for a signed app | G-MACOS; gate 9 |
+| The IPAWS-OPEN developer MOA and a COG certificate | R2's send to the test environment, then live |
 | Representative operators, with licensed WebEOC access if possible | F14; F17; INV-8; D34 |
+| A person new to the product for the timed onboarding | F16 |
 | The NVDA and VoiceOver pass by the [accessibility guide's script](docs/guides/ACCESSIBILITY.md), recorded as "V1 A11Y-T1: screen-reader pass" | Gate 16; G-A11Y |
 | A second maintainer, or the written INV-10 waiver in the ledger | Gate 17; INV-10 |
 | Acceptance of the release candidate | Gate 18 |
 | A pilot jurisdiction | A 1.0 not marked evaluation-only |
 | Private vulnerability reporting switched on (the Actions budget was raised on 2026-09-25) | The security policy's first channel |
-| A phone or tablet to install the web app on; a code-signing certificate | G-PWA; a signed setup |
-| Live data: FEMA NFHL, a statewide shelter feed, ACS population, parcels beyond Humboldt, county address points, the full RTLT set, a live feed; a live SMTP relay and SMS provider | F9; F18; G-INGEST; G-CATALOG; G-IMPACT; G-PARCELS; G-FLOOD; address search; resource typing; live email and SMS |
+| A phone or tablet for the phone walk; a Windows code-signing certificate | G-PWA; a signed setup |
+| An Android phone with a SIM for SMS Gateway for Android | F4 |
+| The signed starter pack imported on an installed computer; the packs' content reviewed | G-PACKAGES |
+| A region's map build and carry-in, for an EOC outside California | AR7 |
+| FEMA's equipment rate schedule, a download (the Veoci roster's decision 11) | F8 |
+| Live data: FEMA NFHL, a statewide shelter feed, ACS population, parcels beyond Humboldt, county address points, the full RTLT set, a live feed; a live SMTP relay and SMS provider; a real Mattermost or Matrix server if collaboration is used | F9; F18; G-INGEST; G-CATALOG; G-IMPACT; G-PARCELS; G-FLOOD; address search; resource typing; live email and SMS; F15 |
 
 ### Basho's decisions, with the default in force
 
@@ -120,9 +256,22 @@ acceptance (gate 18).
 | Incident lockdown (G-INCLIFE) | Off by default; an administrator applies it per incident; it refuses guest reads only |
 | The version on `GET /api/v1/health` | Shown without sign-in, so an administrator's upgrade check can read it; the alternative is the metrics route only |
 | Visual review | The current design stands: dark primary buttons with a light fill and dark label; the review's input border rule and dark border token; D33 findings 15 (two primary button styles), 18 ("Unavailable" for an empty optional field), 21 (the board list's Open column at 390), 24 ("required" in the error color before input) and 25 (no product identity on sign-in) |
-| SAML (G-MFA; section 7 item 3) | TOTP for local accounts, OIDC available, no SAML until an identity provider needs it |
-| The product name (section 7 item 8) | "Open Source EOC", short name "OpenEOC", as the README, installer and web app manifest carry |
-| Federation of incident records (F3) | Not federated, stated as a known limit in the changelog |
+| SAML (G-MFA; the Finish PSPR's section 7 item 3) | TOTP for local accounts, OIDC available, no SAML until an identity provider needs it |
+| The product name (the Finish PSPR's section 7 item 8) | "Open Source EOC", short name "OpenEOC", as the README, installer and web app manifest carry |
+| Federation of incident records (F3; the Veoci roster's decision 3) | Not federated, by network or by file, stated as a known limit in the changelog; AG-13 waits on it |
+| Member-marked fields on an incident's board screen (G-PACKAGES) | Everyone who reads an incident reads the member-marked fields of its boards on the incident's board screen and in its sync documents, under the binary access model; the marks keep those fields out of notifications and out of views outside the incident. If the marks should hold on the incident screen too, the fix is the reader's own role in `listViewRecords` and the sync hub ("Veoci and air gap VA29: hotline and shelter registration pack") |
+| The first password of a people import (F16) | The accounts one import makes share the first password the administrator types, never read from the file and hashed once per run; the alternative is a password per account ("Veoci and air gap VA17: validated migration") |
+| Volunteer hours as Public Assistance donated resources (G-VOLUNTEERS) | Not built, and volunteer hours never enter the force account. The receipt leaves three questions: whether to credit volunteer labor on eligible work against the non-Federal share; at what rate (the applicant's own rate for similar work, or the local prevailing rate), confirmed against the PA guide edition below; and how hours count where one volunteer's roles overlapped, since merged hours no longer say which role ("Veoci and air gap VA28: volunteer and CERT roster") |
+| A volunteer's entry and credentials (G-VOLUNTEERS) | An entry is deactivated and its contact blanked, not deleted, and a credential is its current record without history, so renewing a card clears the warning on a past deployment it covers; the alternatives are deletion on a volunteer's request and a credential history ("Veoci and air gap VA28: volunteer and CERT roster") |
+| The "Legacy dashboard" line (G-DASH) | An activated incident's dashboard shows, when no saved view is chosen, under the Dashboards screen's existing line "Legacy dashboard · not a saved incident overview" ("Veoci and air gap VA16: the incident room") |
+| A GSM modem (F4; the Veoci roster's decision 6) | The local carrier is an Android phone running SMS Gateway for Android. A GSM modem needs a bridge that speaks the gateway's API or the HTTP provider's, and no maintained one does on Windows or macOS; pick a bridge, or accept the phone ("Veoci and air gap VA21: local carriers") |
+| The PA guide edition (F8; the Veoci roster's decision 10) | FP 104-009-2, Version 5.0 as amended, named in the dictionary for Basho to confirm ("Veoci and air gap VA14: Public Assistance force account") |
+| The packs' content (G-PACKAGES) | The starter pack and the hotline and shelter pack as shipped: their fields, checklists and CMIST labels are Basho's to judge |
+| A service identity reading a dashboard's live stream, for a wall display (G-SERVICE) | The WebSocket channels take a person's session only, so a wall display needs a person signed in ("Veoci and air gap VA32: OpenAPI document and scoped service identities", open for Basho) |
+| Job aids for the Safety Officer and the Finance/Admin Section Chief (F17) | None written; **Help** opens the nearest aid (the Planning Section Chief's, the Logistics Section Chief's) and says so ("Veoci and air gap VA39: job aids in the console") |
+| The macOS disk image for `v0.9.9` | Built on Windows, as `0.9.2`'s was, needing Postgres.app on the Mac; the alternative is the "macOS demo" workflow's image with its own PostgreSQL, started by hand on a Mac runner |
+| Public-facing work (the Veoci roster's decision 4) | Tabled until a date Basho sets: no public form, public dashboard, resident alerting, published snapshot or link for someone without an account |
+| Voice call-down and phone dial-in (the Veoci roster's decision 7) | Not built; a service across a process boundary once Basho names a carrier |
 
 Decided since: cross-organization sharing (R3, F5). Basho approved
 `docs/process/PARTNER-SHARING-PSPR-2026-09-24.md` on 2026-09-24: every
@@ -131,28 +280,42 @@ incident-wide threads; a partner requests from the incident's owner, who
 triages and assigns it; costs stay with the owning organization. The ledger
 receipts "Partner sharing PS1" to "Partner sharing PS5" carry it out.
 
-Also in force and unchanged here: single node (item 4); no patient-level data
-in tracking or facilities (item 5); the PA guide edition behind F8's
-categories; archiving the retired rosters (item 11); branch protection
-(item 9) and `work/d05` (item 10) left to Basho.
+Also in force and unchanged here, from the Finish PSPR's section 7: single
+node (item 4); no patient-level data in tracking or facilities (item 5);
+archiving the retired rosters (item 11); branch protection (item 9) and
+`work/d05` (item 10) left to Basho.
 
 ### Known product limits
 
 - One API process per database.
-- Federation: incident records are not federated, and the peer attributes a
-  batch to the sending instance. Deletes of other records and records made
-  before an agreement travel ("Readiness RD10: federation of record deletes
-  and earlier records").
-- No voice channel; Teams and Slack only as a generic webhook; no inbound SMS
-  acknowledgement.
+- Federation: incident records are not federated, by network or by file. A
+  batch received over the network is attributed to the sending instance, and
+  one imported by file to the administrator who imported it. The partner is
+  not told of a revocation; resource escalation and JIC approval deliveries
+  are not signed; batch files are signed, not encrypted. Deletes of other
+  records and records made before an agreement travel ("Readiness RD10:
+  federation of record deletes and earlier records").
+- No voice channel; Teams and Slack only as a generic webhook. Text replies
+  are read only through an SMS gateway on the site network, where "sent"
+  means the phone took the text.
 - The WebEOC importer moves records only: no value translation, coordinates,
   person, reference or attachment fields, incident tagging, updates or
   `prevdataid` links.
+- An offline edit synced later sets off no board action; a map point saved
+  online whose answer is lost arrives a second time on reconcile.
+- The report builder stays all-of and counts days in UTC; views, guards and
+  actions take any-of, groups and a stored time zone.
+- Service identities use REST only; the WebSocket channels take a person's
+  session. The OpenAPI description publishes 26 request schemas and no
+  response bodies or query strings.
+- Plans are not in the jurisdiction export, and a recurring event plan is
+  activated once per occurrence, not by a calendar. File folders are one
+  level, and a stored file does not move between them.
 - A guest socket that joins between a lockdown or revocation and its re-check
   stays open until it rejoins.
 - A desktop profile started while the Backup action holds its PostgreSQL is
   stopped with it.
-- No macOS setup: RD6 is not started.
+- No Mac network host; the Mac disk image built on Windows needs Postgres.app.
 - No training video. Tracking and facilities are not reviewed for
   patient-level data.
 
@@ -167,59 +330,78 @@ categories; archiving the retired rosters (item 11); branch protection
   of the bundle's other libraries, the web bundle's npm packages and the
   Liberation Sans glyphs; and the offered source kept for three years. See
   [the asset inventory](docs/ASSET-LICENSES.md#license-work-open-before-a-setup-is-published).
-- **Checks:** coverage at `00deba5` and the release commit (gate 20); the
-  serial `pnpm check:gate` on the release commit; hosted CI's first green
-  run on Windows, where three browser suites failed on the runner and are
-  not yet diagnosed (templates for a jurisdiction administrator, authorized
-  viewing, load retry), and on macOS.
-- **macOS:** RD6, the Mac launcher, runtime, package and host, open under
-  the Operator Trust PSPR.
+- **Checks:** the plan-end gate (section 6); coverage at `00deba5` and the
+  release commit (gate 20); hosted CI's first recorded green run. Of the
+  three browser suites that failed on the Windows runner at `0.9.2`, "CI
+  repairs: the macOS job's browser tests" fixes authorized viewing and load
+  retry; no receipt names the templates suite for a jurisdiction
+  administrator since. Two CI stalls have no known cause: the board records
+  sign-in ("CI repairs: two Windows stalls at a second sign-in") and the
+  partner sharing test ("CI repairs: the partner sharing stall, named when it
+  recurs"). The load test's 300 ms budget for a filtered view was missed on
+  the Linux bed and is unexplained there ("Veoci and air gap phase VA-A
+  gate").
+- **macOS:** RD6 and a Mac network host, open under the Operator Trust PSPR.
+- **Board actions from sync:** the sync hub does not call the action runner,
+  so an offline edit sets off no action ("Veoci and air gap VA25:
+  declarative action catalog", its landing note).
+- **Trust on a phone:** the sign-in page's **Trust this server** panel gives
+  steps for Windows and macOS only; the network host guide covers phones
+  ("Veoci and air gap VA23: phones on a host's authority").
+- **Federation:** a signed revocation notice and key rotation on screen
+  ("Veoci and air gap VA19: signed peer identity").
+- **SMS gateway:** the phone's later delivery state is not read back ("Veoci
+  and air gap VA21: local carriers").
 - **Address data:** house numbers by parcel containment and the containing
   city need county data (G-GEOCODE), an input only Basho can authorize.
 - **Test stability:** the intermittent Windows worker crash (`0xC0000409`),
   not found at its root ("Readiness RD11: the remaining checks").
 
-The [Veoci Integration and Air Gap PSPR](docs/process/VEOCI-AIR-GAP-PSPR-2026-09-25.md),
-approved 2026-09-25, is the live roster; its unit VA36 reconciles this
-document to its own receipts.
-
-## 5. The release decision
+## 8. The release decision
 
 The roster sets the release act as Basho's: "tag, release assets, installer,
 announcement text; the pilot jurisdiction named or the release marked
 evaluation-only". No pilot jurisdiction, second maintainer or waiver,
-operator comparison or screen-reader pass exists. Gate lines 1 (for
-`0.9.2`), 9, 16, 17, 18 and 20 are not green.
+operator comparison or screen-reader pass exists. Gate lines 1, 9, 16, 17,
+18 and 20 are not green; line 1 waits on the plan-end gate (section 6).
+`0.9.2` was never tagged.
 
-**Recommendation: tag the current build as an evaluation-only release,
-version `0.9.2`, the version every package already carries.** It claims no
-gate it has not met, so it needs no waiver. It requires, in order:
+**Recommendation: tag `v0.9.9` as an evaluation-only release, built in every
+install format, once the plan-end gate is green.** It claims no gate it has
+not met, so it needs no waiver. It requires, in order:
 
-1. The milestone gate green on the release commit, as "V1 final milestone
-   gate" was on `ec11af5`.
-2. The license work above done, since the setup is a release asset.
-3. The changelog's `0.9.2` entry, written and dated.
-4. The Windows setup built from the release commit with
-   `-IncludeOptionalBasemaps`: `deploy/Open-Source-EOC-Setup-0.9.2.exe`
-   ("Version 0.9.2: the Windows setup"). A later release commit needs it
-   rebuilt.
-5. The tag `v0.9.2` on the release commit.
-6. Release assets: the setup with its SHA-256.
-7. Announcement text that says evaluation-only and synthetic data only, and
-   points to the [evaluator's page](docs/EVALUATOR.md).
+1. The Veoci roster's last units landed (VA33 and VA34 at this writing),
+   with the matrix and register rows each one changes brought up to date.
+2. The version set to `0.9.9` in every package manifest (they carry
+   `0.9.2`), with a dated `0.9.9` changelog entry that takes in the
+   Unreleased entries and states the upgrade notes in section 4.
+3. The plan-end gate green on the release commit (section 6).
+4. The license work above done, since the builds are release assets.
+5. The four builds from the release commit, made after the last document
+   change, since `docs/guides` is a build input ("Veoci and air gap VA39: job
+   aids in the console", its landing), with their sizes and SHA-256 in
+   section 6: the Windows setup with `-IncludeOptionalBasemaps`; the
+   portable ZIP of the same staged `app` folder (the repository has no
+   script for it; `0.9.2`'s was made from the stage); the macOS disk image;
+   and the map data packet (`tools/basemap/pack-map-data.mjs`).
+6. The tag `v0.9.9` on the release commit.
+7. Release assets: the four files, each with its SHA-256.
+8. Announcement text that says evaluation-only and synthetic data only,
+   names what has not been run (section 5), and points to the
+   [evaluator's page](docs/EVALUATOR.md).
 
 Alternatives:
 
 - **`1.0.0` marked evaluation-only.** Needs Basho's written waiver in the
   ledger of every line not green (1, 9, 16, 17, 18 and 20), the version
-  changed in every package manifest with a
-  changelog entry, and then the same rebuild, tag, assets and announcement.
-  Under [the support statement](GOVERNANCE.md#releases-and-support), 1.0
-  starts security fixes for the latest minor version, so a 1.0 that is also
+  changed in every package manifest with a changelog entry, and then the
+  same builds, tag, assets and announcement. Under
+  [the support statement](GOVERNANCE.md#releases-and-support), 1.0 starts
+  security fixes for the latest minor version, so a 1.0 that is also
   evaluation-only makes two promises at once.
 - **No release now.** Leave the build untagged until the external inputs
   arrive, then tag `1.0.0` with the gates green. Until then the evaluation
   build is reachable only from source.
 
 Tagging, pushing the tag, publishing the release assets and the announcement
-are Basho's act. No session performs them.
+are Basho's act alone.

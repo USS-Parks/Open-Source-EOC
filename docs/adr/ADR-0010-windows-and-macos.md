@@ -2,6 +2,16 @@
 
 Status: accepted, 2026-09-24
 
+Status note, 2026-09-25 (Veoci and air gap VA36): the first consequence
+below is past. The Windows host is built ("Readiness RD3: the Windows
+network host"). The Mac app runs the workstation and the demo and is built
+as a disk image, not yet opened on a Mac ("Version 0.9.2: the macOS disk
+image, built on Windows"); a Mac host is not built, and RD6 stays open under
+the [Operator Trust PSPR](../process/OPERATOR-TRUST-PSPR-2026-09-24.md). CI
+runs on Windows on each push, and its macOS job when started by hand
+("Readiness RD12 part one: CI on Windows"; "Version 0.9.2: the Windows
+setup").
+
 Supersedes the deployment decision of [ADR-0007](./ADR-0007-deploy-targets.md)
 and the deployment paths recorded in
 [ADR-0004](./ADR-0004-plugin-sandbox.md). ADR-0004's extension model stands.

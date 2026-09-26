@@ -156,8 +156,9 @@ and **Open Administration** is on the same page.
 
 ## Step 4: an activation template and a tabletop
 
-1. **Choose what you activate from.** Every install has three incident
-   templates: **Wildfire**, **Severe Storm** and **Daily Operations**. The
+1. **Choose what you activate from.** Every install has four incident
+   templates: **Wildfire**, **Severe Storm**, **Continuity of Operations**
+   and **Daily Operations**. The
    [small EOC starter pack](../../deploy/packs/small-eoc-starter/README.md)
    adds **Small EOC activation (any hazard)** and **Tabletop exercise (small
    EOC)**, with a Community Liaison, welfare checks, contact groups, reports

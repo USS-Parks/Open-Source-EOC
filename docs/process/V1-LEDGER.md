@@ -12341,3 +12341,194 @@ Veoci Integration and Air Gap PSPR unit VA39 (Basho's amendment 1).
   with `OPENEOC_TEST_DB_TAG=va39`: `pnpm check:static` exit 0; the job aids,
   PWA and ICS components browser tests with every web and shared test, 138
   files, 942 tests; `pnpm test:desktop` 42 of 42.
+
+## Veoci and air gap VA36: the documents reconciled
+
+Veoci Integration and Air Gap PSPR unit VA36, with the Operator Trust PSPR's
+RD12 part two (the reconciliation), which folds into it. The phase gate
+named in VA36's row is the integrator's and is not part of this unit; its
+results have a place in `RELEASE-DECISION.md` section 6.
+
+- **What the documents said before.**
+  - The parity matrix and facet register were reconciled through `4ccad8e`
+    ("Operator Trust landing: the full gate"): no receipt of the Veoci
+    roster after it was cited. G-MACOS read `open`, "not started", though
+    the Mac app and its disk image exist ("Version 0.9.2: the macOS build
+    and its map data packet"; "Version 0.9.2: the macOS disk image, built on
+    Windows"). R1 kept "open engineering: the rising read time", which
+    "Readiness RD4 follow-up: reads that slowed as the incident filled"
+    found and fixed. F4 listed inbound SMS acknowledgement as not claimed
+    (VA21 reads text replies); F5 listed no objectives or ICS-208 on screen
+    and an empty ICS-205 (VA37 closes both); F7 listed no offline queueing
+    for boards with record rules (VA22 closes it on an incident); G-REPORT
+    listed no charts and no retry of a scheduled send (VA31 and VA1 close
+    them).
+  - `README.md` and `ROADMAP.md` named the Finish PSPR as the only live
+    roster and said the Windows host and macOS were scheduled in the
+    readiness plan; `ROADMAP.md` still named a Linux host for the first
+    real install. `docs/EVALUATOR.md` and `deploy/README.md` said the host
+    and macOS were scheduled, and `deploy/README.md` that the air-gap proof
+    was scheduled.
+  - `docs/THREAT-MODEL.md` B3 named "signature verification before parse"
+    and a "monotonic sequence per peer"; VA19's receipt says the sequence is
+    not built, and the body is parsed before the signature is checked.
+  - ADR-0010's first consequence said the Windows host and the Mac
+    workstation and host were scheduled.
+  - `docs/guides/ROLLOUT-PLAYBOOK.md` said every install has three incident
+    templates; VA27 added Continuity of Operations as a fourth
+    (`STANDARD_INCIDENT_TEMPLATES` in `server/src/incidents/service.ts`).
+  - `docs/guides/training/README.md`, "Limits that shape the exercise",
+    said the IAP has no screen field for the ICS-202 objectives or the
+    ICS-208 safety message (VA37 made them forms on **ICS Forms**) and that
+    **Tasks** cannot add a task (an owner administrator's **New task**,
+    "Veoci and air gap VA6: incident templates as data"), the two claims
+    VA39 found false in the aids.
+  - `RELEASE-DECISION.md` described `0.9.2` and left the reconciliation to
+    VA36.
+- **What changed.**
+  - `docs/VEOC-PARITY-MATRIX.md`: reconciled through `ffe41de`. A Veoci
+    reference key row. Evidence added, by receipt heading and with each
+    receipt's evidence level (real-database, component, browser, a
+    two-instance run, a unit test, or a procedure not yet run), to F1, F2,
+    F3, F4, F5, F7, F8, F9, F12, F13, F15, F16, F17, F18, R1, R2, R3, R4,
+    R5, R6, AR3, AR4, AR5, AR7, G-INGEST, G-BOARDROUTE, G-SHELL, G-DASH,
+    G-MIGRATE, G-INCLIFE, G-PWA, G-REPORT and G-HOST; not-claimed items
+    closed in F4, F5, F7 and G-REPORT and new bounds added where receipts
+    state them. G-MACOS moves from `open` to `partial`. New rows G-PLANS,
+    G-VOLUNTEERS and G-SERVICE (`verified`) and G-PACKAGES (`partial`). F4,
+    F8, F16 and G-DASH stay `verified` and now name an owner for a decision
+    or a run the receipts leave to Basho. The reconciliation notes say what
+    was checked, the status changes, the evidence level of this plan's work
+    (no phase gate after VA-A; the plan-end gate pending), and that a
+    `verified` row resting on this plan's units means their own suites
+    passed until that gate is recorded.
+  - `docs/FACET-STATUS.md`: the same evidence and boundaries for the F, R,
+    AR and INV rows (INV-2, INV-3, INV-6, INV-7 and INV-8 among them); no
+    register row changes status; a reconciliation bullet for this pass.
+  - `README.md`: status (`0.9.2` carried, `v0.9.9` planned in four install
+    formats, tagging Basho's), what is proven, what is still open (the
+    drill, the phone walk, the timed onboarding, the Mac runs), and the
+    governance list naming the live rosters as `CLAUDE.md` does.
+  - `RELEASE-DECISION.md`: brought to `v0.9.9`. Section 1 adds the `0.9.2`
+    builds, the Veoci roster's landed units with their follow-ups, the IPAWS
+    connector, the exercise scenarios, the CI repairs and corrections;
+    section 2 updates gates 1, 3, 9, 11, 14, 15 and 19; section 3 keeps the
+    acceptance scenarios table (below) and adds a plan-end gate column; new
+    section 4, what `v0.9.9` would hold relative to `0.9.2`, by area,
+    receipt and evidence level, with the upgrade notes (migrations `0147` to
+    `0167`, a federation peering silent until keys are recorded, an old
+    IPAWS PIN no longer configuring, the ICU collation); new section 5, what
+    has not been run, whose it is and which rows wait on it; new section 6,
+    the plan-end gate and the four builds, every result marked "To be
+    filled"; section 7, the external inputs, the decisions open for Basho
+    with the default in force (VA32's wall display and VA39's two missing
+    aids among them), the known limits and the open engineering work;
+    section 8, the recommendation to tag `v0.9.9` evaluation-only once the
+    plan-end gate is green, with its steps in order, the builds made after
+    the last document change.
+  - `ROADMAP.md`: the current program (live rosters), the deployment
+    boundary (the `0.9.2` setup, the host built and not installed on a real
+    machine, the Mac image not opened on a Mac), the W6 row and the
+    blockers without the removed Linux host, the decisions list, and a
+    delivered bullet for the Veoci roster.
+  - `docs/EVALUATOR.md`: the platform sentence.
+  - `deploy/README.md`: the macOS rows (workstation and demo built, not
+    opened on a Mac; no Mac host) and the air-gapped install paragraph
+    (RD5's recorded run; Part 1 of the drill not run).
+  - `docs/THREAT-MODEL.md`: B3 as built by VA19 and VA20.
+  - `docs/adr/ADR-0010-windows-and-macos.md`: a status note.
+  - `docs/guides/ROLLOUT-PLAYBOOK.md`: four standard incident templates.
+  - `docs/guides/training/README.md`: the limits on objectives, the ICS-208
+    and adding a task corrected; the ICS-205 bullet says to write its
+    channels on **ICS Forms**.
+- **Where the acceptance scenarios table goes.** The Operator Trust PSPR's
+  RD12 row asks for the documents "reconciled, now including scenarios 1
+  to 8" and names no place; Appendix A section 7 names none either. The
+  table was already in `RELEASE-DECISION.md` section 3 ("Version 0.9.2: the
+  Windows setup" put it there), so it stays there, with the last full run
+  whose receipt shows all eight passing (hosted CI run 36211128703 on
+  `78f9f37`, whose three failures were other tests) and a column for the
+  plan-end gate.
+- **Files outside the "Owns" cell.** The roster gives VA36 no cell. Every
+  file edited is a document: the four the row names, plus `ROADMAP.md`,
+  `docs/EVALUATOR.md`, `deploy/README.md`, `docs/THREAT-MODEL.md`,
+  `docs/adr/ADR-0010-windows-and-macos.md`,
+  `docs/guides/ROLLOUT-PLAYBOOK.md` and `docs/guides/training/README.md`,
+  each corrected only where a receipt had made a statement untrue. No
+  `docs/process/**` file, exercise scenario file or code was touched.
+- **Decisions and deviations (defaults taken, not asked).**
+  - The Veoci roster's new capabilities go into the existing rows where
+    they fit (ICS forms into F5, force account into F8, notifications into
+    F4, exchange into F3). Four have no row and get one, in the matrix
+    only, as the register's boundary note keeps assessed gaps there:
+    G-PLANS, G-PACKAGES, G-VOLUNTEERS and G-SERVICE, against a new Veoci
+    reference key.
+  - G-PACKAGES is `partial`: the signed starter pack has not been imported
+    on an installed computer, and the packs' content is Basho's to judge.
+  - F5 keeps one not-claimed item the forms did not close: VA37's prefill
+    reads the same boards as the IAP (`gatherContext` in
+    `server/src/iap/service.ts`: Sign In/Out and Resource Requests), so the
+    ICS-201, ICS-211 and ICS-215 still do not come from Resources requests
+    or Staffing check-ins. The training README says the same.
+  - "VA28's three questions": the receipt's donated-resources paragraph
+    leaves three open points (whether to credit volunteer labor, at what
+    rate against which PA guide edition, and how overlapping roles count);
+    they are worded that way.
+  - The example in the brief, `docs/guides/DISCONNECTED-DRILL.md` saying
+    the starter pack cannot be imported on an installed computer: the guide
+    does not say it. The statement is in VA24's receipt (the reason the
+    drill uses Severe Storm), which is the ledger's and not edited. The
+    drill's text is still true; nothing in it changed.
+  - `docs/THREAT-MODEL.md` B16 says "at most 500 contacts per send"; VA7
+    made the cap count people. Not changed here, because VA32 added B17 on
+    the line after B16 on `main`, and a change to B16 would conflict at the
+    rebase. See Landing.
+  - `TRY-IT-ON-WINDOWS.md` still says "macOS, and the proofs for 150 users
+    and for running disconnected, are the next units of the readiness
+    plan". The exercise scenario roster's XS7 owns that file, so it is not
+    edited; that session should correct it.
+  - `CHANGELOG.md` is not edited: the dated `0.9.9` entry is a release step
+    (section 8, step 2).
+  - B7 of the threat model says nothing of VA21's SMS gateway on the site
+    network; that is incomplete, not untrue, so it is left.
+- **Air-gap behavior (decision 9).** Documentation only; no network path
+  changes.
+- **Schema, contract and dependency changes.** None.
+- **Tests.** None; the unit is documents. Claims that rest on the code
+  rather than a receipt were read in the source: the four standard incident
+  templates (`server/src/incidents/service.ts`), the "Legacy dashboard ·
+  not a saved incident overview" line (`web/src/app/surfaces/DashboardSurface.tsx`),
+  the sync hub not calling `runBoardActions` (`server/src/sync/hub.ts`;
+  only `server/src/boards/routes.ts` and `actions.ts` call it), the sign-in
+  page's trust panel naming Windows and macOS only
+  (`web/src/app/screens/Login.tsx`), the IAP and form prefill reading the
+  Sign In/Out and Resource Requests boards (`server/src/iap/service.ts`,
+  `server/src/iap/components.ts`), the package manifests at `0.9.2`, and
+  the Mac `Info.plist` taking its version from the build.
+- **Verification.** In the worktree, with Node `v24.15.0`:
+  `node scripts/check-links.mjs`: "check-links: ok (127 markdown file(s)
+  scanned)". A scan of the eleven edited files: no em-dash, no en-dash, no
+  carriage return, each ends with a newline. Line counts after the edits:
+  `README.md` 128, `RELEASE-DECISION.md` 406, `ROADMAP.md` 141,
+  `docs/VEOC-PARITY-MATRIX.md` 237, `docs/FACET-STATUS.md` 138,
+  `docs/EVALUATOR.md` 165, `docs/THREAT-MODEL.md` 64,
+  `docs/adr/ADR-0010-windows-and-macos.md` 57,
+  `docs/guides/ROLLOUT-PLAYBOOK.md` 267, `deploy/README.md` 320,
+  `docs/guides/training/README.md` 96.
+- **Not run.** `pnpm check:static` (the brief asked for the link check,
+  which it includes, and no install was done in the lane). The plan-end
+  gate, RD5's proof with the stand-ins and the `v0.9.9` builds, which are
+  the integrator's after the last units land (`RELEASE-DECISION.md`
+  section 6).
+- **Evidence level:** documents checked against the receipts, and against
+  the source for the claims named under Tests; the link check.
+- **Rollback:** revert the commit.
+- **Landing.** Rebased onto "Veoci and air gap VA39: job aids in the
+  console" with no conflict. At landing the integrator corrected the
+  threat model's B16 to count people per send (after VA7 a send reaches
+  position holders and people on shift, not only contacts), which the lane
+  left to avoid VA32's new B17 line, and added VA28's two defaults (entries
+  deactivated rather than deleted, credentials without history) to the
+  release decision's open decisions, since VA28's lane named them as
+  questions for Basho. VA33 and VA34, still in flight, and the plan-end
+  gate's results are added when they land and run, under this unit.

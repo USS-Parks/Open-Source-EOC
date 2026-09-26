@@ -80,17 +80,22 @@ approve an IAP and record a new operational period.
   computer. Each player signs in under their own account.
 - The demonstration seed creates one organization. Partner participation,
   escalation to another tier and review by another instance cannot be played.
-- The IAP has no screen field for objectives (ICS-202) or the ICS-208 safety
-  message.
+- The objectives (ICS-202) and the safety message (ICS-208) are written as
+  the period's ICS forms, on **Planning > ICS Forms** under **ICS forms for
+  this period**, not in the IAP workspace. **Assemble the IAP from these
+  forms** then builds the period's IAP from the forms marked ready.
 - An incident has one current operational period. Recording a new one
   replaces the current one.
-- **Tasks** cannot add a task. Tasks come from the incident template's
-  checklists.
+- Only an administrator of the incident's organization adds a task, with
+  **New task** on **Tasks**. Every other task comes from the incident
+  template's checklists.
 - A JIC draft that was saved but not submitted is not listed on any screen.
 - The IAP's ICS-211 reads the Sign In/Out board, and its ICS-201 and ICS-215
-  resource lines read the Resource Requests board. Requests made on
-  **Resources** do not appear there. The ICS-205 needs a radio communications
-  board, which the Wildfire incident does not have.
+  resource lines read the Resource Requests board, whether the IAP is
+  assembled from the incident's records or its forms start from them.
+  Requests made on **Resources** do not appear there. The ICS-205 starts
+  from a radio communications board, which the Wildfire incident does not
+  have; write its channels on **ICS Forms** instead.
 
 ## Related guides
 

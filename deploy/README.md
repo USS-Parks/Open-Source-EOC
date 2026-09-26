@@ -14,10 +14,11 @@ There is no Linux or Docker deployment. See
 |---|---|---|
 | Windows workstation | The setup in [`windows/installer`](windows/installer/README.md) installs Node, PostgreSQL with PostGIS, the web application and the offline map archives for the signed-in user. The server listens on `127.0.0.1` only. | Built |
 | Windows host | The same setup, installed for all users with **Host for the network**: PostgreSQL, the server and Caddy run as Windows services, and every other computer and phone on the network reaches the host over HTTPS with the host's own certificate authority. See the [network host guide](../docs/guides/NETWORK-HOST.md). | Built; the scripted check on a real install is Basho's to run |
-| macOS workstation and host | The same, on a Mac | Not built yet |
+| macOS workstation and demo | `Open Source EOC.app` in a disk image ([`macos`](macos/READ-ME-FIRST.txt)): the launcher, the server and the web application with Node for Apple silicon and Intel. The image built on Windows (`macos/build-dmg-windows.mjs`) uses Postgres.app's PostgreSQL and PostGIS; one built on a Mac (`macos/build-app.sh`, the "macOS demo" workflow) carries its own. The maps come in the map data packet, which the app checks and installs. | Built; not yet opened on a Mac by a person |
+| macOS host | A Mac as the network host | Not built; the host runs on Windows |
 
-The macOS work is scheduled in
-[the readiness plan](../docs/process/READINESS-PSPR-2026-09-24.md).
+The rest of the macOS work (RD6) stays open under
+[the Operator Trust PSPR](../docs/process/OPERATOR-TRUST-PSPR-2026-09-24.md).
 
 The [Windows desktop guide](../docs/WINDOWS-DESKTOP.md) covers the launcher's
 profiles, setup, start, stop and status from a source checkout, and the
@@ -180,10 +181,13 @@ update check, telemetry or tile fetch exists. The setup carries every runtime
 it needs, so it installs on a machine that has never had a network
 connection. A network host serves a building or a site over its own local
 network, a switch or a Wi-Fi router with no internet line, with its own
-certificate authority in place of a public one. The proof (a recorded run of
-every connection the installed system makes, and a run with the network
-unplugged) is scheduled in
-[the readiness plan](../docs/process/READINESS-PSPR-2026-09-24.md).
+certificate authority in place of a public one. A recorded run of every
+connection the system makes, on the host profile of the machine that builds
+it, is in [AIR-GAP-REPORT.md](../AIR-GAP-REPORT.md) ("Readiness RD5: the air
+gap"). The run with the network unplugged, on two computers with the setup
+installed from media, is Part 1 of the
+[disconnected drill](../docs/guides/DISCONNECTED-DRILL.md) and has not been
+run.
 
 ## Backup and restore
 

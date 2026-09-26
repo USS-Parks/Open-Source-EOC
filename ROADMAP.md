@@ -2,11 +2,20 @@
 
 ## Current program
 
-The [Finish PSPR](./docs/process/FINISH-PSPR-2026-09-22.md) is the approved
-execution authority and the only live roster. It turns the current evaluation
-build into a county-deployable release. The rosters it supersedes, including
-the Master PSPR and the V1 PSPR whose unit identifiers it keeps, are in
-[`docs/process/archive/`](./docs/process/archive/).
+The [Veoci Integration and Air Gap PSPR](./docs/process/VEOCI-AIR-GAP-PSPR-2026-09-25.md)
+is the live roster, with the
+[Exercise Scenarios PSPR](./docs/process/EXERCISE-SCENARIOS-PSPR-2026-09-25.md)
+beside it. The [Operator Trust PSPR](./docs/process/OPERATOR-TRUST-PSPR-2026-09-24.md)
+is landed except RD6 (macOS), and the
+[IPAWS Connector PSPR](./docs/process/IPAWS-CONNECTOR-PSPR-2026-09-25.md) is
+landed. The [Finish PSPR](./docs/process/FINISH-PSPR-2026-09-22.md) remains
+the execution contract where the live roster does not supersede it; it turned
+the evaluation build toward a county-deployable release. The rosters these
+supersede, including the Master PSPR and the V1 PSPR whose unit identifiers
+the Finish PSPR keeps, are in
+[`docs/process/archive/`](./docs/process/archive/). The next release is
+planned as `v0.9.9`; [RELEASE-DECISION.md](./RELEASE-DECISION.md) says what
+it would hold.
 
 Waves W1 to W6 of the Finish PSPR are complete. W7 has run as far as it can
 without Basho's inputs: the integrated exercise and the visual and
@@ -25,16 +34,19 @@ Current capability truth is in the
 ## Current deployment boundary
 
 - A prepared Windows host has completed cold setup, local map use, runtime RLS,
-  offline work reconciliation and persistent restart. The `0.9.0` setup is
-  built with the California street, building and overlay archives and the
-  address search gazetteer.
+  offline work reconciliation and persistent restart. The `0.9.2` setup is
+  built with the California street, building and overlay archives, the North
+  Coast imagery and elevation and the address search gazetteer, and carries
+  the Windows network host ("Version 0.9.2: the Windows setup").
 - Installing that setup from media on a second, disconnected computer has not
-  been done.
+  been done; it is Part 1 of the
+  [disconnected drill](./docs/guides/DISCONNECTED-DRILL.md), Basho's to run.
 - Open Source EOC runs on Windows and macOS machines only
   ([ADR-0010](./docs/adr/ADR-0010-windows-and-macos.md)); the Docker path was
-  removed on 2026-09-24. The shared Windows host and the macOS workstation and
-  host are scheduled in
-  [the readiness plan](./docs/process/READINESS-PSPR-2026-09-24.md).
+  removed on 2026-09-24. The Windows network host is built; its services have
+  not been installed on a real machine. The Mac app runs the workstation and
+  demo and is built as a disk image that has not been opened on a Mac; a Mac
+  network host is not built (RD6).
 - The architecture is declared single-node for v1. Several runtime limiters,
   caches and live hubs are process-local.
 - Live IPAWS, live external data acquisition, real-hardware 150-user load and
@@ -53,7 +65,7 @@ version 1.0 release a county can install and operate unassisted.
 | W3 | Put an operator screen in front of delivered engines | Complete; "V1 W3 milestone gate" |
 | W4 | Add parity depth where engines or data are genuinely missing | Complete; "V1 W4 milestone gate" |
 | W5 | Reduce initial client weight and consolidate presentation | Complete; code splitting, style consolidation, asset delivery and the remaining interface findings are receipted |
-| W6 | Build the supported install, upgrade, recovery and adoption path | Complete to the external boundary; the first real Linux install, upgrade and scheduled backup, and the second-machine install, are Basho's |
+| W6 | Build the supported install, upgrade, recovery and adoption path | Complete to the external boundary; the first real install, upgrade and scheduled backup of an installed Windows copy, and the second-machine install, are Basho's (the Linux path was removed by ADR-0010) |
 | W7 | Run integrated, accessibility, operator, hardware and release acceptance | Executed to Basho's inputs; "V1 M5 milestone gate" green after a walk fix; the screen-reader pass, operators and real hardware are external; the release decision is presented |
 
 W1 lands before W2 and W3. The engine and presentation waves may fan out only
@@ -85,8 +97,20 @@ inputs into proof.
 - An installable web app with an offline shell; reduced motion and higher
   contrast.
 - Upgrade with a forced backup, a disaster recovery runbook with scheduled
-  backups, the `0.9.0` Windows setup,
-  a training kit, a security policy and a changelog.
+  backups, the `0.9.2` Windows setup with the network host, a Mac disk image
+  not yet opened on a Mac, a training kit, a security policy and a
+  changelog.
+- From the Veoci roster so far: a delivery hold through outages; signed
+  federation and exchange by file; SMS through a phone on the site network;
+  ICS forms as components of the IAP and the ICS 213RR; incident templates,
+  plans and signed packs that activate a small EOC with no configuration;
+  Public Assistance force account; workflow guards, declarative actions and
+  all-or-any conditions; import reports and a people import; a volunteer
+  roster; service identities and an OpenAPI description; field work queued
+  offline; region map packets; job aids in the console; and procedures for
+  the disconnected drill, the phone walk and a timed onboarding, none yet
+  run. The
+  [parity matrix](./docs/VEOC-PARITY-MATRIX.md) gives each with its evidence.
 
 ## What blocks version 1.0
 
@@ -95,13 +119,16 @@ The binding list is section 6 of the Finish PSPR, and
 remains:
 
 1. external inputs: real deployment hardware for the 150-user run, a second
-   computer for the setup transfer, a Linux host for the first real install,
-   upgrade and scheduled backup, IPAWS-OPEN credentials and the MOA,
+   computer for the setup transfer, a Windows host for the first real install,
+   upgrade and scheduled backup, a Mac for the first Mac run, the IPAWS-OPEN
+   developer MOA and a COG certificate,
    representative operators, the NVDA and VoiceOver pass, a second maintainer
    or a written waiver, and a pilot jurisdiction;
-2. Basho's decisions, each with a default in force: cross-organization
-   resource request ownership, the lockdown default, the version on the health
-   route, the visual review findings, SAML and the product name;
+2. Basho's decisions, each with a default in force: the lockdown default, the
+   version on the health route, the visual review findings, SAML, the product
+   name, and those the Veoci roster's receipts leave open, listed in
+   [RELEASE-DECISION.md](./RELEASE-DECISION.md) (cross-organization resource
+   request ownership is decided, by the partner sharing plan);
 3. license notices for the runtimes and map archives in the Windows setup,
    needed before any setup is published;
 4. Basho's aesthetic and functional acceptance of the release candidate.

@@ -21,9 +21,12 @@ and no release has been tagged.
   jurisdictions, and field forms that work offline.
 - A web application served by one Node process with one PostgreSQL and
   PostGIS database. It runs on Windows and macOS machines: today as a Windows
-  desktop application, with a shared Windows host and macOS scheduled in
-  [the readiness plan](process/READINESS-PSPR-2026-09-24.md). There is no
-  Linux or Docker deployment.
+  desktop application and a shared Windows network host, both in the
+  Windows setup ("Readiness RD3: the Windows network host"), whose host
+  services have not been installed on a real machine; and as a Mac app for
+  one computer, built as a disk image that has not been opened on a Mac
+  ("Version 0.9.2: the macOS disk image, built on Windows"). There is no Mac
+  network host, and no Linux or Docker deployment.
 - Open source under Apache-2.0. There are no seat licenses, and read-only
   viewers cost nothing.
 - Built on the standards an EOC exchanges: CAP, EDXL, CoT, HAVE and GeoJSON.

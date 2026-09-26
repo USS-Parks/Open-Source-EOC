@@ -6,28 +6,38 @@ and native CAP, EDXL, CoT, HAVE and GeoJSON interchange.
 
 ## Status
 
-Version `0.9.2`, an evaluation build. No release has been tagged. The Finish
-PSPR's waves W1 to W7 have been executed as far as they can go without
-Basho's inputs: every engineering unit has landed with a receipt in the
-[V1 ledger](./docs/process/V1-LEDGER.md), and the remaining blockers and the
-release decision are in [RELEASE-DECISION.md](./RELEASE-DECISION.md).
+Version `0.9.2`, an evaluation build, is the version every package carries.
+No release has been tagged. The next release is planned as `v0.9.9`, built as
+the Windows setup, a portable ZIP, a macOS disk image and a map data packet,
+once the Veoci Integration and Air Gap PSPR's last units land; tagging and
+publishing it are Basho's. What it would hold, its gates and the decisions
+open for Basho are in [RELEASE-DECISION.md](./RELEASE-DECISION.md). Every
+unit lands with a receipt in the [V1 ledger](./docs/process/V1-LEDGER.md).
 
 Proven on the project's own machines with synthetic data: boards, notifications
 and reports run through the WebEOC side-by-side script; an incident shared by
-two organizations across two instances; two-step sign-in, the two-person IPAWS
-send against a local stand-in, administration without the command line, and
-a 150-connection two-hour run on a development workstation. The
-[evaluator's page](./docs/EVALUATOR.md) states each claim with its evidence
-level.
+two organizations across two instances; signed board updates carried by file
+between two instances with no network path; messages held through an outage
+and resent; the ICS forms as components of the IAP, assembled and approved;
+plans that activate an incident and release its tasks; two-step sign-in, the
+two-person IPAWS send against a local stand-in, administration without the
+command line, and 150 people for two hours through HTTPS on the network host
+profile. The [evaluator's page](./docs/EVALUATOR.md) states each claim with
+its evidence level.
 
 Still open, and not in the project's hands:
 
-- the Windows setup is built with the map archives but has not been installed
-  from media on a second, disconnected computer;
-- the shared host for Windows and the macOS workstation and host are
-  scheduled in [the readiness plan](./docs/process/READINESS-PSPR-2026-09-24.md);
-- live IPAWS, real-hardware 150-user load, representative-operator comparison,
-  the manual screen-reader pass, a second maintainer and a pilot jurisdiction.
+- the Windows setup and network host are built, but no setup has been
+  installed from media on a second, disconnected computer, and the host's
+  services have not been installed on a real machine;
+- the Mac app and its disk image are built and have not been opened on a Mac;
+- the unplugged run and the 72-hour drill of the
+  [disconnected drill](./docs/guides/DISCONNECTED-DRILL.md), the phone walk,
+  and the timed onboarding with a person new to the product, each written as
+  a procedure and not yet run;
+- live IPAWS, a load run against an installed host, representative-operator
+  comparison, the manual screen-reader pass, a second maintainer and a pilot
+  jurisdiction.
 
 This is an installable evaluation build, not a version 1.0 release and not a
 commercial-parity certification. The known limits of the build are in
@@ -35,18 +45,26 @@ commercial-parity certification. The known limits of the build are in
 
 ## Governance and current truth
 
-- `docs/process/FINISH-PSPR-2026-09-22.md` is the current approved execution
-  roster and the only live one.
-- `docs/process/archive/` holds the rosters it supersedes, including the
-  completed technical roster and the acceptance work that carries forward.
+- `docs/process/VEOCI-AIR-GAP-PSPR-2026-09-25.md` is the live roster, with
+  `docs/process/EXERCISE-SCENARIOS-PSPR-2026-09-25.md` beside it for the
+  exercise scenarios. `docs/process/OPERATOR-TRUST-PSPR-2026-09-24.md` is
+  landed except RD6 (macOS), which stays open under it, and
+  `docs/process/IPAWS-CONNECTOR-PSPR-2026-09-25.md` is landed.
+  `docs/process/FINISH-PSPR-2026-09-22.md` remains the execution contract
+  (commit, ledger and landing discipline) where the live roster does not
+  supersede it.
+- `docs/process/archive/` holds the rosters those plans supersede, including
+  the completed technical roster and the acceptance work that carries
+  forward.
 - `docs/process/V1-LEDGER.md` contains unit receipts and evidence for the
-  current roster. `docs/process/VEOC-EXECUTION-LEDGER.md` is frozen and holds
-  the receipts that preceded it.
+  current rosters. `docs/process/VEOC-EXECUTION-LEDGER.md` is frozen and
+  holds the receipts that preceded it.
 - `docs/VEOC-PARITY-MATRIX.md` and `docs/FACET-STATUS.md` contain current
   capability status and explicit remaining boundaries, reconciled to the
-  receipts on 2026-09-24.
+  receipts on 2026-09-25 through the Veoci roster's landed units.
 - `RELEASE-DECISION.md` gives the state of each gate in the Finish PSPR's
-  section 6, the remaining blockers and the one release decision for Basho.
+  section 6, what the planned `v0.9.9` would hold, what has not been run,
+  the decisions open for Basho and the release decision.
 - `docs/design/canonical-references/` is the visual authority.
 - `docs/EVALUATOR.md` states scope, limits and evidence for a pilot decision.
 
