@@ -1,0 +1,542 @@
+/*
+ * Chart kit. Series colors are themed here: dark on light surfaces, bright on
+ * dark ones, each with an ink that reads on it (checked in the kit's tests).
+ * Charts draw no animation, so a reduced-motion preference has nothing to stop.
+ */
+.eoc-theme[data-theme="light"] {
+  --eoc-series-not-started: #5f6b7a;
+  --eoc-series-in-progress: #b45309;
+  --eoc-series-complete: #15803d;
+  --eoc-series-past-due: #c81e1e;
+  --eoc-series-in-approval: #0e7490;
+  --eoc-series-approved: #1d63d8;
+  --eoc-series-ink: #ffffff;
+}
+
+.eoc-theme[data-theme="dark"] {
+  --eoc-series-not-started: #8f9aa8;
+  --eoc-series-in-progress: #f28a2e;
+  --eoc-series-complete: #4cbb6c;
+  --eoc-series-past-due: #ef5159;
+  --eoc-series-in-approval: #2cc1d9;
+  --eoc-series-approved: #4b9cf5;
+  --eoc-series-ink: #0b1b2b;
+}
+
+/* Grid and card */
+.eoc-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  grid-auto-flow: dense;
+  gap: 12px;
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .eoc-chart-grid > [data-columns="2"] { grid-column: span 2; }
+  .eoc-chart-grid > [data-rows="2"] { grid-row: span 2; }
+  .eoc-chart-grid > [data-rows="3"] { grid-row: span 3; }
+}
+
+@media (min-width: 1200px) {
+  .eoc-chart-grid > [data-columns="3"] { grid-column: span 3; }
+}
+
+.eoc-chart-card {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px 14px 14px;
+  color: var(--eoc-text);
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border);
+  border-radius: var(--eoc-radius-md);
+  box-shadow: var(--eoc-shadow-sm);
+}
+
+.eoc-chart-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 32px;
+}
+
+.eoc-chart-card-header h3 {
+  margin: 0;
+  color: var(--eoc-text-strong);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.eoc-chart-card-body {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+}
+
+/* A ring sits in the middle of a card the grid has made taller than it. */
+.eoc-chart-card-body:has(> .eoc-donut) { align-content: center; }
+
+/* The kebab: the menu's own trigger, drawn as three dots; its text stays the accessible name. */
+.eoc-chart-card-menu .eoc-kit-menu-trigger {
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  color: transparent;
+  font-size: 0;
+  background: transparent;
+  border-color: transparent;
+}
+
+.eoc-chart-card-menu .eoc-kit-menu-trigger > span { display: none; }
+
+.eoc-chart-card-menu .eoc-kit-menu-trigger::before {
+  content: "";
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--eoc-status-info);
+  box-shadow: 0 -6px 0 var(--eoc-status-info), 0 6px 0 var(--eoc-status-info);
+}
+
+.eoc-chart-card-menu .eoc-kit-menu-trigger:hover,
+.eoc-chart-card-menu .eoc-kit-menu-trigger[aria-expanded="true"] { background: var(--eoc-surface-raised); }
+
+.eoc-chart-card-menu .eoc-kit-menu-popup { right: 0; left: auto; min-width: 170px; }
+
+.eoc-overlay-panel.eoc-modal:has(.eoc-chart-expanded) { width: min(1100px, 100%); }
+.eoc-chart-expanded { display: grid; padding: 8px; }
+
+/* Shared pieces */
+.eoc-chart { min-width: 0; margin: 0; }
+.eoc-chart [data-dim] { opacity: 0.4; }
+
+.eoc-chart-empty {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  min-height: 96px;
+  margin: 0;
+  padding: 12px;
+  color: var(--eoc-text-muted);
+  font-size: 13px;
+  text-align: center;
+  border: 1px dashed var(--eoc-border-strong);
+  border-radius: var(--eoc-radius-md);
+}
+
+.eoc-chart-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.eoc-chart-view {
+  min-height: 26px;
+  padding: 2px 4px;
+  color: var(--eoc-status-info);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.eoc-chart-view:hover { text-decoration: underline; }
+
+.eoc-chart-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.eoc-chart-table th,
+.eoc-chart-table td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--eoc-border);
+}
+
+.eoc-chart-table thead th {
+  color: var(--eoc-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.eoc-chart-table tbody th { font-weight: 500; }
+.eoc-chart-table :is(th, td):not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+
+.eoc-chart-table-select {
+  padding: 0;
+  color: var(--eoc-status-info);
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.eoc-chart-table-select[aria-pressed="true"] { font-weight: 700; }
+
+/* Donut */
+.eoc-donut {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 18px;
+  container-type: inline-size;
+}
+
+.eoc-donut-ring { flex: 0 0 auto; }
+
+/* A narrow card keeps the ring beside its legend by drawing it smaller; the viewBox scales the text with it. */
+@container (max-width: 350px) {
+  .eoc-donut-ring { width: 124px; height: 124px; }
+  .eoc-donut > .eoc-chart-empty { width: 124px !important; height: 124px !important; }
+}
+.eoc-donut-hole { fill: var(--eoc-bg); }
+.eoc-donut-slice { stroke: var(--eoc-surface); stroke-width: 1.5; }
+.eoc-donut-slice.is-clickable { cursor: pointer; }
+
+.eoc-donut-total {
+  fill: var(--eoc-text-strong);
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+}
+
+.eoc-donut-caption {
+  fill: var(--eoc-text-muted);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.eoc-donut-legend {
+  display: grid;
+  flex: 1 1 170px;
+  gap: 1px;
+  max-width: 340px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.eoc-donut-legend li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.eoc-donut-legend-item {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 26px;
+  padding: 2px 6px;
+  color: var(--eoc-text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--eoc-radius-sm);
+}
+
+button.eoc-donut-legend-item { cursor: pointer; }
+button.eoc-donut-legend-item:hover { background: var(--eoc-surface-raised); }
+.eoc-donut-legend-item[aria-pressed="true"] { background: var(--eoc-selection); border-color: var(--eoc-border-strong); }
+
+.eoc-donut-legend-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eoc-donut-legend-count {
+  color: var(--eoc-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Horizontal bars */
+.eoc-hbar-list {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: color-mix(in srgb, var(--eoc-bg) 55%, var(--eoc-surface));
+  border-radius: var(--eoc-radius-sm);
+}
+
+.eoc-hbar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 46%) minmax(0, 1fr) minmax(3ch, auto);
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 24px;
+  padding: 1px 6px;
+  color: var(--eoc-text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--eoc-radius-sm);
+}
+
+button.eoc-hbar-row { cursor: pointer; }
+button.eoc-hbar-row:hover { background: var(--eoc-surface-raised); }
+.eoc-hbar-row[aria-pressed="true"] { background: var(--eoc-selection); border-color: var(--eoc-border-strong); }
+
+.eoc-hbar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eoc-hbar-track { display: block; min-width: 0; height: 10px; }
+
+.eoc-hbar-bar {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--eoc-chart-color) 55%, transparent), var(--eoc-chart-color));
+  border-radius: var(--eoc-radius-pill);
+}
+
+.eoc-hbar-value {
+  color: var(--eoc-text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Vertical bars */
+.eoc-vbar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  column-gap: 10px;
+  padding-top: 8px;
+}
+
+.eoc-vbar-axis {
+  position: relative;
+  min-width: 2ch;
+  height: var(--eoc-vbar-height);
+  margin: 0;
+  padding: 0;
+  color: var(--eoc-text-muted);
+  font-size: 11px;
+  list-style: none;
+}
+
+.eoc-vbar-axis li {
+  position: absolute;
+  right: 0;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  transform: translateY(50%);
+}
+
+.eoc-vbar-plot {
+  position: relative;
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.eoc-vbar-grid {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: var(--eoc-vbar-height);
+  pointer-events: none;
+}
+
+.eoc-vbar-grid span {
+  position: absolute;
+  right: 0;
+  left: 0;
+  border-top: 1px dotted var(--eoc-border-strong);
+}
+
+.eoc-vbar-grid span:first-child { border-top-style: solid; border-top-color: var(--eoc-border); }
+
+.eoc-vbar-col {
+  position: relative;
+  display: grid;
+  grid-template-rows: var(--eoc-vbar-height) auto;
+  justify-items: center;
+  row-gap: 8px;
+  min-width: 0;
+  padding: 0 0 2px;
+  color: var(--eoc-text);
+  font: inherit;
+  background: none;
+  border: 0;
+  border-radius: var(--eoc-radius-sm);
+}
+
+button.eoc-vbar-col { cursor: pointer; }
+button.eoc-vbar-col:hover { background: color-mix(in srgb, var(--eoc-surface-raised) 60%, transparent); }
+.eoc-vbar-col[aria-pressed="true"] { background: var(--eoc-selection); }
+
+.eoc-vbar-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  width: 100%;
+  height: 100%;
+}
+
+.eoc-vbar-value {
+  margin-bottom: 4px;
+  color: var(--eoc-text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.eoc-vbar-bar {
+  display: block;
+  width: min(76%, 72px);
+  background: var(--eoc-chart-color);
+  border-radius: 3px 3px 0 0;
+}
+
+.eoc-vbar-label {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.eoc-vbar-col .eoc-vbar-label { color: var(--eoc-status-info); }
+
+/* Status tiles, chips and progress */
+.eoc-status-tiles,
+.eoc-status-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.eoc-status-tiles { gap: 8px; }
+.eoc-status-chips { gap: 4px 12px; }
+
+.eoc-status-tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  min-width: 124px;
+  min-height: 58px;
+  padding: 8px 14px;
+  color: var(--eoc-text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  background: color-mix(in srgb, var(--eoc-chart-color) 14%, var(--eoc-surface));
+  border: 1px solid color-mix(in srgb, var(--eoc-chart-color) 30%, transparent);
+  border-radius: var(--eoc-radius-sm);
+}
+
+.eoc-status-tile strong {
+  color: var(--eoc-chart-color);
+  font-size: 32px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+button.eoc-status-tile { cursor: pointer; }
+button.eoc-status-tile:hover { background: color-mix(in srgb, var(--eoc-chart-color) 22%, var(--eoc-surface)); }
+.eoc-status-tile[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--eoc-chart-color); }
+
+.eoc-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 2px 10px 2px 3px;
+  color: var(--eoc-text);
+  font: inherit;
+  font-size: 12.5px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--eoc-radius-pill);
+}
+
+.eoc-status-chip-count {
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  color: var(--eoc-series-ink);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--eoc-chart-color);
+  border-radius: var(--eoc-radius-pill);
+}
+
+button.eoc-status-chip { cursor: pointer; }
+button.eoc-status-chip:hover { background: var(--eoc-surface-raised); }
+.eoc-status-chip[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--eoc-chart-color) 16%, var(--eoc-surface));
+  border-color: var(--eoc-chart-color);
+}
+
+.eoc-progress {
+  display: grid;
+  grid-template-columns: auto 4ch minmax(48px, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.eoc-progress[data-compact] { grid-template-columns: minmax(0, 1fr); }
+.eoc-progress-count { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.eoc-progress-percent { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+
+.eoc-progress-track {
+  display: block;
+  height: 16px;
+  overflow: hidden;
+  background: var(--eoc-surface-sunken);
+  border: 1px solid var(--eoc-border);
+  border-radius: var(--eoc-radius-pill);
+}
+
+.eoc-progress[data-compact] .eoc-progress-track { height: 7px; }
+
+.eoc-progress-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--eoc-chart-color) 72%, var(--eoc-surface-sunken)), var(--eoc-chart-color));
+  border-radius: inherit;
+}

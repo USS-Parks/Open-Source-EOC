@@ -18,6 +18,7 @@ import type {
   TileResult,
   WidgetResult,
 } from "@openeoc/shared";
+import { DonutChart, HBarChart } from "../design/charts/index.js";
 import "./widgets.css";
 
 /**
@@ -149,148 +150,15 @@ function Tile(props: { widget: TileResult }) {
   );
 }
 
-// A small categorical set drawn from the status tokens, so the donut stays on
-// the design system's palette (color reserved for status, INV-8) while giving
-// the WebEOC ring-chart form.
-const DONUT_COLORS = [
-  "var(--eoc-status-info)",
-  "var(--eoc-status-warning)",
-  "var(--eoc-status-success)",
-  "var(--eoc-status-critical)",
-  "var(--eoc-status-unknown)",
-];
-
+// The kit's default category colors are the status tokens, so a chart stays on
+// the design system's palette (color reserved for status, INV-8).
 function Chart(props: { widget: ChartResult; onDrill?: Drill | undefined }) {
-  return props.widget.display === "donut" ? (
-    <Donut widget={props.widget} onDrill={props.onDrill} />
-  ) : (
-    <BarChart widget={props.widget} onDrill={props.onDrill} />
-  );
-}
-
-// A drill affordance for a chart group, when the chart exposes its group field.
-function drillOf(widget: ChartResult, onDrill?: Drill | undefined): ((value: string) => void) | null {
-  return onDrill && widget.field ? (value) => onDrill(widget.field!, value) : null;
-}
-
-function BarChart(props: { widget: ChartResult; onDrill?: Drill | undefined }) {
-  const max = Math.max(1, ...props.widget.groups.map((g) => g.count));
-  const drill = drillOf(props.widget, props.onDrill);
-  return (
-    <ul className="dash-bars">
-      {props.widget.groups.map((g) => {
-        const row = (
-          <span className="dash-bar-row">
-            <span>{g.value || "(none)"}</span>
-            <span
-              role="img"
-              aria-label={`${g.value}: ${g.count}`}
-              className="dash-bar"
-              style={{ width: `${Math.round((g.count / max) * 100)}%` }}
-            />
-            <span>{g.count}</span>
-          </span>
-        );
-        return (
-          <li key={g.value}>
-            {drill ? (
-              <button
-                type="button"
-                className="dash-drill"
-                aria-label={`Filter by ${g.value || "(none)"}`}
-                onClick={() => drill(g.value)}
-              >
-                {row}
-              </button>
-            ) : (
-              row
-            )}
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-/** WebEOC-style ring chart: a donut with the total in the center and a legend
- * of counts and percentages. */
-function Donut(props: { widget: ChartResult; onDrill?: Drill | undefined }) {
-  const groups = props.widget.groups;
-  const total = groups.reduce((s, g) => s + g.count, 0);
-  const drill = drillOf(props.widget, props.onDrill);
-  const R = 16;
-  const C = 2 * Math.PI * R;
-  let offset = 0;
-  return (
-    <div className="dash-donut">
-      <svg
-        width="96"
-        height="96"
-        viewBox="0 0 40 40"
-        role="img"
-        aria-label={`${props.widget.title}: ${total} total`}
-      >
-        <circle cx="20" cy="20" r={R} fill="none" stroke="var(--eoc-border)" strokeWidth="6" />
-        {total > 0
-          ? groups.map((g, i) => {
-              const dash = (g.count / total) * C;
-              const seg = (
-                <circle
-                  key={g.value}
-                  cx="20"
-                  cy="20"
-                  r={R}
-                  fill="none"
-                  stroke={DONUT_COLORS[i % DONUT_COLORS.length]}
-                  strokeWidth="6"
-                  strokeDasharray={`${dash} ${C - dash}`}
-                  strokeDashoffset={-offset}
-                  transform="rotate(-90 20 20)"
-                />
-              );
-              offset += dash;
-              return seg;
-            })
-          : null}
-        <text x="20" y="21.5" textAnchor="middle" fontSize="9" fontWeight="700" fill="var(--eoc-text)">
-          {total}
-        </text>
-      </svg>
-      <ul className="dash-bars is-legend">
-        {groups.map((g, i) => {
-          const legend = (
-            <span className="dash-legend-row">
-              <span
-                aria-hidden="true"
-                className="dash-swatch"
-                style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }}
-              />
-              <span className="dash-legend-label">{g.value || "(none)"}</span>
-              <span className="eoc-muted">
-                {g.count} ({total > 0 ? Math.round((g.count / total) * 100) : 0}%)
-              </span>
-            </span>
-          );
-          return (
-            <li key={g.value}>
-              {drill ? (
-                <button
-                  type="button"
-                  className="dash-drill"
-                  aria-label={`Filter by ${g.value || "(none)"}`}
-                  onClick={() => drill(g.value)}
-                >
-                  {legend}
-                </button>
-              ) : (
-                legend
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
+  const w = props.widget;
+  const onSelect = props.onDrill && w.field ? (value: string) => props.onDrill!(w.field!, value) : undefined;
+  const data = w.groups.map((g) => ({ key: g.value, label: g.value || "(none)", value: g.count }));
+  return w.display === "donut"
+    ? <DonutChart label={w.title} data={data} onSelect={onSelect} size={128} emptyLabel="No records yet" />
+    : <HBarChart label={w.title} data={data} onSelect={onSelect} emptyLabel="No records yet" />;
 }
 
 const LIFELINE_DOT: Record<string, string> = {

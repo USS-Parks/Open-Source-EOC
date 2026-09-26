@@ -55,7 +55,7 @@ describe("the dashboard renders a computed snapshot and nothing else", () => {
     expect(screen.getByText("Watch")).toBeTruthy();
     expect(screen.queryByText("warn")).toBeNull();
     expect(screen.getByText("+3 last 24h")).toBeTruthy();
-    expect(screen.getByLabelText("Shelters by status: 3 total")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Shelters by status: 3 total. normal 2 (67%), closed 1 (33%)." })).toBeTruthy();
     expect(screen.getByText("unstable")).toBeTruthy();
     expect(document.querySelector('svg[data-icon="energy"]')).toBeTruthy();
     expect(screen.getByText("SR-169")).toBeTruthy();
@@ -96,7 +96,7 @@ describe("the dashboard renders a computed snapshot and nothing else", () => {
         <Dashboard snapshot={drillSnap} onDrill={onDrill} />
       </Theme>,
     );
-    fireEvent.click(screen.getByLabelText("Filter by normal"));
+    fireEvent.click(screen.getByRole("button", { name: "normal: 2" }));
     expect(onDrill).toHaveBeenCalledWith("status", "normal");
   });
 
@@ -107,7 +107,7 @@ describe("the dashboard renders a computed snapshot and nothing else", () => {
       </Theme>,
     );
     // The seeded chart carries no field, so its groups are not buttons.
-    expect(screen.queryByLabelText("Filter by normal")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^normal/ })).toBeNull();
   });
 
   it("shows kanban column counts in order and the upcoming calendar items", () => {

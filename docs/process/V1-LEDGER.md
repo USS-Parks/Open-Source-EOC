@@ -13974,3 +13974,47 @@ Map and Dashboard Parity PSPR unit MP0.
     `scenario-partner-link-browser.test.ts` at 1534 by 790. Neither touches
     a file this unit changed; both files alone passed, 5/5.
 - **Rollback:** revert this commit.
+
+## Map and dashboard parity MP11: the chart kit
+
+Map and Dashboard Parity PSPR unit MP11, built in lane `lane/mp11`.
+
+- **What the code did before.** The EOC Status dashboard drew one small
+  donut and plain bars from `web/src/dashboards/Dashboard.tsx`; nothing
+  could draw WebEOC's dashboard charts (the After Action Review donuts and
+  capability bars, the Checklist donuts and chips, the IAP status tiles and
+  progress bars).
+- **What changed.** A chart kit in `web/src/design/charts/`: `DonutChart`
+  (thick ring, center total and caption, a legend of counts and shares with
+  VIEW actions), `HBarChart`, `VBarChart` (stepped y axis, dotted
+  gridlines), `StatusTiles`, `StatusChips`, `ProgressBar`, `ChartCard`
+  (a menu with Full screen and Show as table) and `DashboardGrid`, in SVG and
+  CSS with no new dependency. A default status palette (not started, in
+  progress, complete, past due, in approval, approved) is themed for light
+  and dark in `charts.css` until MP2's shared palette table replaces it. The
+  EOC Status dashboard's chart widgets, and the report builder's chart
+  preview through them, now draw with the kit; the old donut and bars and
+  their CSS are removed.
+- **Defaults taken and deviations.** Shares are whole percents by largest
+  remainder; a tiny real share reads "<1%". An all-zero chart shows its
+  empty message and no ring. A bar chart is a named `figure` with a named
+  image per bar ("Label: count") rather than one image, because each bar is
+  a button when the chart filters. The lane started before MP1 landed, a
+  deviation from the plan's section 5; it owns no file MP1 changes.
+- **Verification.**
+  - `pnpm check:static` green on the rebased lane.
+  - Vitest over the design, dashboards, reports, boards and the two
+    dashboard-rendering app suites: 29 files, 291 tests, including 26 kit
+    tests (percentages, clicks, keyboard reach, empty states, the data
+    table, axe in both themes, palette contrast).
+  - `board-views-browser.test.ts`, `report-chart-tiles-browser.test.ts` and
+    `dashboard-browser.test.ts` on the throwaway cluster: 3 files, 5 tests.
+  - A gallery of each component with data shaped like the WebEOC After
+    Action Review, Checklist and IAP dashboards, captured at 1586 by 992 and
+    1534 by 790 in dark and light and at 420 px, reviewed against the
+    reference shots.
+- **Full suite:** `pnpm test:ci` runs on `main` once per landing batch,
+  before the batch is pushed; its result is recorded in the batch's last
+  receipt.
+- **Rollback:** revert the commit; the dashboard widgets return to their
+  own donut and bars.
