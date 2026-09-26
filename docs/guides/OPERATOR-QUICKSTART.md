@@ -241,14 +241,18 @@ the open view when you choose **Apply**, are read on the server, and carry to
 designer defined it. A refinement never shows records or fields your account
 cannot read.
 
-- **Conditions**: choose a field, an operator and a value; every condition
-  must hold. Text and enumerations offer contains, starts with, is, is not, is
-  one of and is not one of; numbers offer comparisons and is between; dates
-  offer is after, is before and is between, each against a time such as
-  "24 hours ago" or a specific time. Every listed field also offers is empty
-  and is not empty; references, people and attachments offer only those two,
-  and geometry is not listed. A condition with no value is refused with its
-  number.
+- **Conditions**: choose a field, an operator and a value, and under
+  **Records need** whether every condition must hold or any one of them. Text
+  and enumerations offer contains, starts with, is, is not, is one of and is
+  not one of, and text also is (ignoring case); numbers offer comparisons and
+  is between; dates offer is after, is before, is on and is between, each
+  against a time such as "24 hours ago" or a specific time, or a day: today,
+  a number of days from today, or a date, counted in your own time zone; and
+  is within the last or next number of days. Every listed field also offers
+  is empty and is not empty; references, people and attachments offer only
+  those two, and geometry is not listed. A condition with no value is refused
+  with its number, and a refinement holds as well as the view's own
+  conditions.
 - **Sort**: add up to four sort keys, most significant first, each ascending
   or descending.
 - **Group by**: rows arrive in order of the chosen field, and the counts above

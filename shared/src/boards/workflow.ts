@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ViewConditionSchema } from "./conditions.js";
+import { CONDITION_MATCHES, ConditionItemSchema, TimeZoneSchema } from "./conditions.js";
 
 const WorkflowKeySchema = z.string().regex(/^[a-z][a-z0-9_]*$/, "snake_case keys only");
 
@@ -12,14 +12,16 @@ export const WorkflowStateSchema = z.object({
 }).strict();
 
 /**
- * A transition's guard: conditions on the record's fields, all or any of
- * which must hold for the transition to be requested and, after its
- * approvals, completed. The conditions are the board views' own language,
- * evaluated the same way on the server and in the browser.
+ * A transition's guard: conditions on the record's fields, and groups of
+ * them, all or any of which must hold for the transition to be requested
+ * and, after its approvals, completed. The conditions are the board views'
+ * own language, evaluated the same way on the server and in the browser.
  */
 export const WorkflowGuardSchema = z.object({
-  match: z.enum(["all", "any"]).default("all"),
-  conditions: z.array(ViewConditionSchema).min(1).max(16),
+  match: z.enum(CONDITION_MATCHES).default("all"),
+  conditions: z.array(ConditionItemSchema).min(1).max(16),
+  /** The time zone the conditions count days in (today, a date); UTC when absent. */
+  timeZone: TimeZoneSchema.optional(),
   /** Said when the guard refuses the transition; without one, the unmet conditions are named. */
   message: z.string().trim().min(1).max(200).optional(),
 }).strict();

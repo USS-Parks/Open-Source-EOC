@@ -6,15 +6,20 @@ import {
   deriveRecordValues,
   effectiveFields,
   geometryFieldKey,
+  isConditionGroup,
   LocalFieldSchema,
   referenceLabelKeys,
-  resolveTime,
   roleReadsEveryRecord,
   STANDARD_TEMPLATES,
+  timeBounds,
+  viewConditionSet,
   viewOrder,
+  withConditions,
   type ActionWrite,
   type BoardActionRun,
   type BoardTemplate,
+  type ConditionGroup,
+  type ConditionItem,
   type FieldDef,
   type FormLayout,
   type ViewCondition,
@@ -825,8 +830,8 @@ export interface ViewRecords {
 export interface ViewOptions extends PageRequest {
   /** Archived records: left out (the default), included, or the only ones listed. */
   readonly archived?: "exclude" | "include" | "only" | undefined;
-  /** Conditions ANDed with the view's own filters. */
-  readonly where?: readonly ViewCondition[] | undefined;
+  /** Conditions, and groups of them, that must hold as well as the view's own. */
+  readonly where?: readonly ConditionItem[] | undefined;
   /** Sort keys replacing the view's own. */
   readonly sorts?: readonly ViewSort[] | undefined;
   /** Group field replacing the view's own. */
@@ -868,10 +873,9 @@ export async function listViewRecords(
   }
   const declared = board.template.views.find((v) => v.key === viewKey);
   if (!declared) throw new AuthError(404, "view not found");
-  const { sort, sorts, ...rest } = declared;
+  const { sort, sorts, ...rest } = withConditions(declared, options.where ?? []);
   const view: ViewDef = {
     ...rest,
-    where: [...(declared.where ?? []), ...(options.where ?? [])],
     ...(options.sorts ? { sorts: [...options.sorts] } : sorts ? { sorts } : sort ? { sort } : {}),
     ...(options.groupBy ? { groupBy: options.groupBy } : {}),
   };
@@ -905,8 +909,7 @@ export async function listViewRecords(
   }
   const archived = options.archived === "include" ? sql``
     : options.archived === "only" ? sql`and archived_at is not null` : sql`and archived_at is null`;
-  const filters = [...view.filter, ...(view.where ?? [])].reduce(
-    (clauses, condition) => sql`${clauses} ${conditionSql(sql, condition, fields, readable, now)}`, sql``);
+  const filters = sql`and ${conditionSetSql(sql, viewConditionSet(view), fields, readable, now)}`;
   const scope = sql`board_id = ${boardId}
       and (${incidentId ?? null}::uuid is null or incident_id = ${incidentId ?? null})
       ${archived} ${filters}`;
@@ -986,12 +989,9 @@ function sortKeySql(sql: Sql, field: FieldDef): { expr: never; numeric: boolean 
 }
 
 /**
- * One view condition as a SQL predicate that admits every row applyView
- * keeps. An unreadable field is masked before applyView sees it, so it reads
- * as absent here too, decided once for the whole page. A calculated field
- * has no stored value; applyView alone decides it, which can leave a page
- * short. ponytail: `in` compares the stored value's text form, which differs
- * from applyView's String() only for objects and exotic numbers such as 1e21.
+ * One view condition as a SQL clause, `and` and a predicate that admits
+ * every row applyView keeps. Days count in the time zone given, UTC when
+ * none is.
  */
 export function conditionSql(
   sql: Sql,
@@ -999,53 +999,102 @@ export function conditionSql(
   fields: ReadonlyMap<string, FieldDef>,
   readable: ReadonlySet<string>,
   now: Date,
+  timeZone = "UTC",
+): never {
+  return sql`and ${conditionPredicate(sql, condition, fields, readable, now, timeZone)}` as never;
+}
+
+/**
+ * A condition set as one SQL predicate, its entries joined by `and` or `or`
+ * as it matches, a group by its own. Each entry admits every row applyView
+ * keeps, so the whole does too. Days count in the set's time zone, else the
+ * one given, else UTC.
+ */
+export function conditionSetSql(
+  sql: Sql,
+  set: ConditionGroup,
+  fields: ReadonlyMap<string, FieldDef>,
+  readable: ReadonlySet<string>,
+  now: Date,
+  timeZone = "UTC",
+): never {
+  const zone = set.timeZone ?? timeZone;
+  const parts = set.conditions.map((item: ConditionItem) => isConditionGroup(item)
+    ? conditionSetSql(sql, item, fields, readable, now, zone)
+    : conditionPredicate(sql, item, fields, readable, now, zone));
+  if (parts.length === 0) return sql`true` as never;
+  const join = set.match === "any" ? sql` or ` : sql` and `;
+  let whole = sql`(${parts[0]!})`;
+  for (const part of parts.slice(1)) whole = sql`${whole}${join}(${part})`;
+  return sql`(${whole})` as never;
+}
+
+/**
+ * One view condition as a SQL predicate that admits every row applyView
+ * keeps. An unreadable field is masked before applyView sees it, so it reads
+ * as absent here too, decided once for the whole page. A calculated field
+ * has no stored value; applyView alone decides it, which can leave a page
+ * short. Times compare against the bounds applyView uses (`timeBounds`).
+ * ponytail: `in` compares the stored value's text form, which differs from
+ * applyView's String() only for objects and exotic numbers such as 1e21.
+ */
+function conditionPredicate(
+  sql: Sql,
+  condition: ViewCondition,
+  fields: ReadonlyMap<string, FieldDef>,
+  readable: ReadonlySet<string>,
+  now: Date,
+  timeZone: string,
 ): never {
   const { field, op, value } = condition;
   const def = fields.get(field);
-  if (def?.calculation) return sql`` as never;
+  if (def?.calculation) return sql`true` as never;
   if (!def || !readable.has(field))
-    return (conditionHolds(condition, undefined, now) ? sql`` : sql`and false`) as never;
+    return (conditionHolds(condition, undefined, now, timeZone) ? sql`true` : sql`false`) as never;
   const json = sql`data -> ${field}`;
   const text = sql`data ->> ${field}`;
   const values = Array.isArray(value) ? value.map(String) : null;
-  const time = (bound: unknown) => {
-    const ms = resolveTime(bound, now);
-    return ms === null ? null : sql`${new Date(ms).toISOString()}::timestamptz`;
-  };
   const scalar = sql`jsonb_typeof(${json}) in ('string', 'number', 'boolean')`;
   switch (op) {
-    case "eq": return (values ? sql`and false` : sql`and ${json} = ${sql.json(value as never)}`) as never;
-    case "neq": return (values ? sql`` : sql`and ${json} is distinct from ${sql.json(value as never)}`) as never;
-    case "in": return (values?.length ? sql`and ${text} in ${sql(values)}` : sql`and false`) as never;
+    case "eq": return (values ? sql`false` : sql`${json} = ${sql.json(value as never)}`) as never;
+    case "neq": return (values ? sql`true` : sql`${json} is distinct from ${sql.json(value as never)}`) as never;
+    case "in": return (values?.length ? sql`${text} in ${sql(values)}` : sql`false`) as never;
     case "not_in":
-      return (values?.length ? sql`and (${text} is null or ${text} not in ${sql(values)})` : sql``) as never;
-    case "contains":
-      return sql`and ${scalar} and strpos(lower(${text}), lower(${String(value)})) > 0` as never;
-    case "starts_with":
-      return sql`and ${scalar} and starts_with(lower(${text}), lower(${String(value)}))` as never;
-    case "gt": return sql`and ${numberSql(sql, field)} > ${Number(value)}::float8` as never;
-    case "gte": return sql`and ${numberSql(sql, field)} >= ${Number(value)}::float8` as never;
-    case "lt": return sql`and ${numberSql(sql, field)} < ${Number(value)}::float8` as never;
-    case "lte": return sql`and ${numberSql(sql, field)} <= ${Number(value)}::float8` as never;
-    case "before": case "after": {
-      const bound = time(value);
-      if (!bound) return sql`and false` as never;
-      return (op === "before" ? sql`and ${timeSql(sql, field)} < ${bound}` : sql`and ${timeSql(sql, field)} > ${bound}`) as never;
+      return (values?.length ? sql`(${text} is null or ${text} not in ${sql(values)})` : sql`true`) as never;
+    case "contains": case "starts_with": case "eq_ignore_case": {
+      // Case folds by Unicode's rules whatever the database's collation, as
+      // the browser's toLowerCase does; the sought text is folded there.
+      const folded = sql`lower(${text} collate "und-x-icu")`;
+      const sought = String(value).toLowerCase();
+      const match = op === "contains" ? sql`strpos(${folded}, ${sought}) > 0`
+        : op === "starts_with" ? sql`starts_with(${folded}, ${sought})` : sql`${folded} = ${sought}`;
+      return sql`(${scalar} and ${match})` as never;
     }
-    case "between": {
-      const [lo, hi] = Array.isArray(value) ? value : [];
-      if (typeof lo === "number" && typeof hi === "number")
-        return sql`and ${numberSql(sql, field)} between ${lo}::float8 and ${hi}::float8` as never;
-      const from = time(lo);
-      const to = time(hi);
-      if (!from || !to) return sql`and false` as never;
-      return sql`and ${timeSql(sql, field)} between ${from} and ${to}` as never;
-    }
+    case "gt": return sql`${numberSql(sql, field)} > ${Number(value)}::float8` as never;
+    case "gte": return sql`${numberSql(sql, field)} >= ${Number(value)}::float8` as never;
+    case "lt": return sql`${numberSql(sql, field)} < ${Number(value)}::float8` as never;
+    case "lte": return sql`${numberSql(sql, field)} <= ${Number(value)}::float8` as never;
+    case "between":
+      if (Array.isArray(value) && typeof value[0] === "number" && typeof value[1] === "number")
+        return sql`${numberSql(sql, field)} between ${value[0]}::float8 and ${value[1]}::float8` as never;
+      return timeBoundsSql(sql, field, timeBounds(condition, now, timeZone));
+    case "before": case "after": case "on": case "within_last": case "within_next":
+      return timeBoundsSql(sql, field, timeBounds(condition, now, timeZone));
     case "is_empty":
-      return sql`and (${json} is null or ${json} = 'null'::jsonb or ${json} = '""'::jsonb)` as never;
+      return sql`(${json} is null or ${json} = 'null'::jsonb or ${json} = '""'::jsonb)` as never;
     case "is_not_empty":
-      return sql`and ${json} is not null and ${json} <> 'null'::jsonb and ${json} <> '""'::jsonb` as never;
+      return sql`(${json} is not null and ${json} <> 'null'::jsonb and ${json} <> '""'::jsonb)` as never;
   }
+}
+
+/** A stored time within bounds from (inclusive) to until (exclusive); a value that reads as no time is outside them. */
+function timeBoundsSql(sql: Sql, key: string, bounds: { from?: number; until?: number } | null): never {
+  if (!bounds) return sql`false` as never;
+  const at = timeSql(sql, key);
+  const instant = (ms: number) => sql`${new Date(ms).toISOString()}::timestamptz`;
+  const from = bounds.from === undefined ? sql`true` : sql`${at} >= ${instant(bounds.from)}`;
+  const until = bounds.until === undefined ? sql`true` : sql`${at} < ${instant(bounds.until)}`;
+  return sql`(${at} is not null and ${from} and ${until})` as never;
 }
 
 export interface BoardListItem {

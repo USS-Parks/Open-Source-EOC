@@ -54,6 +54,23 @@ describe("expression engine additions", () => {
     expect(() => evaluate("county = 'x'", {})).toThrow(/outside a choice filter/);
   });
 
+  it("runs contains() and starts-with() as ODK does, case and all, and imports forms that use them", () => {
+    expect(evaluate("contains(${road}, 'SR')", { road: "SR 299 at Blue Lake" })).toBe(true);
+    expect(evaluate("contains(${road}, 'sr')", { road: "SR 299 at Blue Lake" })).toBe(false);
+    expect(evaluate("starts-with(${road}, 'SR 2')", { road: "SR 299" })).toBe(true);
+    expect(evaluate("starts-with(${road}, '299')", { road: "SR 299" })).toBe(false);
+    expect(evaluateBool("contains(${road}, 'x')", {})).toBe(false);
+    expect(() => checkExpression("contains(${a}, 'b') and starts-with(${a}, 'c')")).not.toThrow();
+    const form = importXlsForm({
+      survey: [
+        { type: "text", name: "road", label: "Road" },
+        { type: "text", name: "detour", label: "Detour", relevant: "starts-with(${road}, 'SR')" },
+      ],
+      choices: [],
+    }, { key: "closure" });
+    expect(allFields(form.nodes)[1]).toMatchObject({ name: "detour", relevant: "starts-with(${road}, 'SR')" });
+  });
+
   it("refuses unsupported functions and stray names before anything runs", () => {
     expect(() => checkExpression("today() > 1")).toThrow(ExprError);
     expect(() => checkExpression("county = ${x}")).toThrow(/outside a choice filter/);

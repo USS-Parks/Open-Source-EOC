@@ -15,7 +15,7 @@ describe("workflow guards", () => {
     const all = WorkflowGuardSchema.parse({ conditions: [{ field: "amount", op: "gt", value: 0 }, { field: "note", op: "is_not_empty" }] });
     expect(all.match).toBe("all");
     expect(unmetGuardConditions(all, { amount: 5, note: "ok" }, now)).toEqual([]);
-    expect(unmetGuardConditions(all, { amount: 0, note: "" }, now).map((c) => c.field)).toEqual(["amount", "note"]);
+    expect(unmetGuardConditions(all, { amount: 0, note: "" }, now).map((c) => "field" in c ? c.field : null)).toEqual(["amount", "note"]);
     const any = WorkflowGuardSchema.parse({ match: "any", conditions: [{ field: "priority", op: "eq", value: "high" }, { field: "note", op: "is_not_empty" }] });
     expect(unmetGuardConditions(any, { priority: "low", note: "seen" }, now)).toEqual([]);
     expect(unmetGuardConditions(any, { priority: "low" }, now)).toHaveLength(2);

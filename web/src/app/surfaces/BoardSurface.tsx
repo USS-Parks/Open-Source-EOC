@@ -550,7 +550,7 @@ function BoardWorkspace(props: {
         value={props.viewKey} onChange={props.onSelectView} />
       <div role="tabpanel" id={`${tabsId}-${props.viewKey}-panel`} aria-labelledby={`${tabsId}-${props.viewKey}-tab`} className="board-surface">
       <div className="board-tools">
-        <ViewRefineControls fields={props.template.fields} value={props.refinement} onApply={props.onRefine} />
+        <ViewRefineControls fields={props.template.fields} value={props.refinement} onApply={props.onRefine} anyOf />
         {props.tools}
       </div>
       <BoardModeControls value={props.mode} fields={props.template.fields} onChange={props.onMode} />

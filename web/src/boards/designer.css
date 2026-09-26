@@ -335,3 +335,34 @@
     width: 100%;
   }
 }
+
+.board-designer__order {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.board-designer__order legend {
+  padding: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.board-designer__order ol {
+  display: grid;
+  gap: var(--eoc-space-1, 4px);
+  margin: var(--eoc-space-2, 8px) 0 0;
+  padding-left: 1.5rem;
+}
+
+.board-designer__order li > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--eoc-space-2, 8px);
+}
+
+.board-designer__order li span {
+  min-width: 10rem;
+}

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { ViewConditionSchema, WorkflowAssignmentRequestSchema } from "@openeoc/shared";
+import { ConditionItemSchema, WorkflowAssignmentRequestSchema } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import { pageQuery } from "../db/cursor.js";
@@ -101,12 +101,12 @@ function viewOptions(query: { archived?: ViewOptions["archived"]; where?: string
     try {
       where = JSON.parse(query.where);
     } catch {
-      throw new AuthError(400, "where must be a JSON array of conditions");
+      throw new AuthError(400, "where must be a JSON array of conditions and groups");
     }
   }
   return {
     archived: query.archived,
-    where: where === undefined ? undefined : z.array(ViewConditionSchema).max(16).parse(where),
+    where: where === undefined ? undefined : z.array(ConditionItemSchema).max(16).parse(where),
     sorts: query.sort?.split(",").map((pair) => {
       const [field, dir] = pair.split(":") as [string, "asc" | "desc"];
       return { field, dir };

@@ -136,18 +136,16 @@ describe("no-code board authoring", () => {
     // The view already holds one condition; the one added here is the second.
     const view = viewPage.locator("details.board-designer__field").filter({ hasText: "open:" });
     await view.locator("summary").first().click();
-    const refine = view.locator("details.board-refine");
-    await refine.locator("summary").click();
-    await refine.getByRole("button", { name: "Add condition" }).click();
-    await refine.getByLabel("Condition 2 field").selectOption("status");
-    await refine.getByLabel("Condition 2 operator").selectOption("eq");
-    await refine.getByLabel("Condition 2 value").selectOption("normal");
-    await refine.getByRole("button", { name: "Add sort key" }).click();
-    await refine.getByLabel("Sort 1 field").selectOption("occupancy");
-    await refine.getByLabel("Sort 1 direction").selectOption("desc");
-    await refine.getByLabel("Group by").selectOption("status");
-    expect(await refine.getByLabel("Archived records").count()).toBe(0);
-    await refine.getByRole("button", { name: "Save to view" }).click();
+    const conditions = view.getByRole("group", { name: "Conditions for view open" });
+    await conditions.getByRole("button", { name: "Add condition", exact: true }).click();
+    await conditions.getByLabel("Condition 2 field").selectOption("status");
+    await conditions.getByLabel("Condition 2 operator").selectOption("eq");
+    await conditions.getByLabel("Condition 2 value").selectOption("normal");
+    await view.getByRole("button", { name: "Add sort key" }).click();
+    await view.getByLabel("Sort 1 field").selectOption("occupancy");
+    await view.getByLabel("Sort 1 direction").selectOption("desc");
+    await view.getByLabel("Group by").selectOption("status");
+    expect(await view.getByLabel("Archived records").count()).toBe(0);
     const published = viewPage.waitForResponse((response) => response.request().method() === "POST"
       && response.url().endsWith("/api/v1/templates") && response.status() === 201);
     await viewPage.getByRole("button", { name: /^Publish and apply version \d+$/ }).click();

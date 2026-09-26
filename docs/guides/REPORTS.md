@@ -32,9 +32,11 @@ anything the board would not show them.
    the incident** to limit the report to that incident's records.
 4. Open **Filter, sort and group** to add conditions, sort keys and the first
    grouping, then select **Apply**. The conditions are the ones the board
-   screen uses: text contains or starts with, equals, one of, greater or less
-   than, between, before or after a time (including relative times such as 24
-   hours ago), and empty or not empty. Every condition must hold.
+   screen uses: text contains or starts with, equals, equals ignoring case,
+   one of, greater or less than, between, before or after a time (including
+   relative times such as 24 hours ago), within the last or next number of
+   days, and empty or not empty. Every condition must hold: a report's
+   conditions have no "any of" choice, and days are counted in UTC.
 5. Choose a second grouping under **Then group by**, if needed.
 6. Under **Totals**, add a sum, average, minimum or maximum of a number field.
    Every group and all records always get a count of records.

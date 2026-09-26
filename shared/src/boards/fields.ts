@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { allEnums } from "../dictionary/citations.js";
 import { BoardWorkflowSchema } from "./workflow.js";
-import { ViewConditionSchema, isTimeValue, type ViewCondition } from "./conditions.js";
+import {
+  CONDITION_MATCHES, ConditionItemSchema, TimeZoneSchema, isTimeValue, leafConditions, type ViewCondition,
+} from "./conditions.js";
 import { BoardActionSchema, SETTABLE_FIELD_TYPES } from "./actions.js";
 
 /**
@@ -125,7 +127,11 @@ export function referenceLabelKeys(field: { labelField?: string | undefined; lab
   return field.labelFields ? [...field.labelFields] : field.labelField ? [field.labelField] : [];
 }
 
-export { RELATIVE_TIME, VIEW_CONDITION_OPS, ViewConditionSchema, isTimeValue, type ViewCondition } from "./conditions.js";
+export {
+  ConditionItemSchema, RELATIVE_TIME, VIEW_CONDITION_OPS, ViewConditionSchema, countsDays, isCalendarDate,
+  isConditionGroup, isDayValue, isTimeValue, leafConditions,
+  type ConditionGroup, type ConditionItem, type ConditionMatch, type ViewCondition,
+} from "./conditions.js";
 
 export const ViewSortSchema = z.object({ field: z.string(), dir: z.enum(["asc", "desc"]) });
 export type ViewSort = z.infer<typeof ViewSortSchema>;
@@ -144,8 +150,16 @@ export const ViewDefSchema = z.object({
       }),
     )
     .default([]),
-  /** Further conditions, ANDed with `filter`, using the full operator set. */
-  where: z.array(ViewConditionSchema).max(16).optional(),
+  /**
+   * Further conditions with the full operator set, and groups of them, held
+   * together with `filter`. All of them must hold, or any one when `match`
+   * is `any`.
+   */
+  where: z.array(ConditionItemSchema).max(16).optional(),
+  /** Whether all of `where` must hold (the default) or any one of it. */
+  match: z.enum(CONDITION_MATCHES).optional(),
+  /** The time zone `where` counts days in (today, a date); UTC when absent. */
+  timeZone: TimeZoneSchema.optional(),
   sort: ViewSortSchema.optional(),
   /** Ordered sort keys; replaces `sort` when a view needs more than one. */
   sorts: z.array(ViewSortSchema).min(1).max(4).optional(),
@@ -237,7 +251,7 @@ export const BoardTemplateSchema = z
         if (!group || group.type === "geometry" || group.calculation)
           ctx.addIssue({ code: "custom", message: `view ${v.key} cannot group by ${v.groupBy}` });
       }
-      for (const condition of v.where ?? []) {
+      for (const condition of leafConditions(v.where ?? [])) {
         const field = fieldByKey.get(condition.field);
         if (!field) ctx.addIssue({ code: "custom", message: `view ${v.key} filters unknown field ${condition.field}` });
         else if (!conditionFitsField(condition, field))
@@ -257,7 +271,7 @@ export const BoardTemplateSchema = z
       }
     }
     for (const transition of t.workflow?.transitions ?? []) {
-      for (const condition of transition.guard?.conditions ?? []) {
+      for (const condition of leafConditions(transition.guard?.conditions ?? [])) {
         const field = fieldByKey.get(condition.field);
         if (!field) ctx.addIssue({ code: "custom", message: `transition ${transition.key} guards on unknown field ${condition.field}` });
         else if (!conditionFitsField(condition, field))
@@ -347,7 +361,7 @@ function checkActions(
       issue(`${name} watches unknown field ${trigger.field}`);
     if (trigger.kind === "state_entered" && !states.has(trigger.state))
       issue(`${name} waits for unknown workflow state ${trigger.state}`);
-    for (const condition of action.condition?.conditions ?? []) {
+    for (const condition of leafConditions(action.condition?.conditions ?? [])) {
       const field = fieldByKey.get(condition.field);
       if (!field) issue(`${name} tests unknown field ${condition.field}`);
       else if (!conditionFitsField(condition, field)) issue(`${name} cannot apply ${condition.op} to ${field.type} field ${field.key}`);
@@ -373,10 +387,10 @@ function checkActions(
 export function conditionFitsField(condition: ViewCondition, field: FieldDef): boolean {
   switch (condition.op) {
     case "gt": case "gte": case "lt": case "lte": return field.type === "number";
-    case "before": case "after": return field.type === "datetime";
+    case "before": case "after": case "on": case "within_last": case "within_next": return field.type === "datetime";
     case "between":
       return typeof (condition.value as unknown[])[0] === "number" ? field.type === "number" : field.type === "datetime";
-    case "contains": case "starts_with": return field.type === "text" || field.type === "enum";
+    case "contains": case "starts_with": case "eq_ignore_case": return field.type === "text" || field.type === "enum";
     default: return field.type !== "geometry";
   }
 }

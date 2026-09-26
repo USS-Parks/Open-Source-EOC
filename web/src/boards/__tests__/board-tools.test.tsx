@@ -41,7 +41,7 @@ describe("board view refinement", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add condition" }));
     set("Condition 3 field", "reopen_estimate");
     expect([...(screen.getByLabelText("Condition 3 operator") as HTMLSelectElement).options].map((option) => option.value))
-      .toEqual(["after", "before", "between", "is_empty", "is_not_empty"]);
+      .toEqual(["after", "before", "between", "within_last", "within_next", "is_empty", "is_not_empty"]);
     set("Condition 3 operator", "between");
     set("Condition 3 value from", "now-7d");
 
@@ -96,7 +96,8 @@ describe("board view refinement", () => {
     expect(refinementQuery(applied)).toEqual({ archived: "include", sorts: applied.sorts, groupBy: "status" });
     const view = refinedView({ ...roads.views[0]!, sort: { field: "road", dir: "asc" } }, applied);
     expect(view.sort).toBeUndefined();
-    expect(view).toMatchObject({ sorts: applied.sorts, groupBy: "status", filter: roads.views[0]!.filter, where: [] });
+    expect(view).toMatchObject({ sorts: applied.sorts, groupBy: "status", filter: roads.views[0]!.filter });
+    expect(view.where).toEqual(roads.views[0]!.where);
     expect(refinementQuery(NO_REFINEMENT)).toEqual({});
   });
 

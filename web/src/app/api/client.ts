@@ -1,6 +1,7 @@
 import type {
   BoardActionRun,
   ChartResult,
+  ConditionItem,
   FieldDef,
   ViewCondition,
   ViewDef,
@@ -2988,7 +2989,7 @@ export interface SmsRepliesRead {
 export interface BoardViewQuery {
   readonly incidentId?: string;
   readonly archived?: "exclude" | "include" | "only";
-  readonly where?: readonly ViewCondition[];
+  readonly where?: readonly ConditionItem[];
   readonly sorts?: ReadonlyArray<{ readonly field: string; readonly dir: "asc" | "desc" }>;
   readonly groupBy?: string;
 }

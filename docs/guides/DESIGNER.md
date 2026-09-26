@@ -174,30 +174,90 @@ jurisdiction administrator can add one. When a later template version adds a
 field with the same key without the prefix, the upgrade replaces the local
 field with the template's.
 
-## Template properties beyond the designer screen
+## Conditions: all or any, groups, days and text
 
-View conditions, sort keys and groups are part of the template definition and
-are validated when a version is registered or imported. The designer's view
-editor offers the `eq`, `neq` and `in` filters and one sort key; add the
-properties below to the template JSON of a new version.
+A view's conditions, a transition's guard and an action's conditions are
+written with the same controls. Each condition is a field, an operator that
+fits the field's type, and a value. **Add condition** adds one; the set's
+first choice says whether **Every condition to hold** or **Any condition to
+hold**. **Add group** adds a group of conditions with its own every-or-any
+choice, so a set can say "due today, or high priority and overdue". A group
+holds conditions only; groups do not nest further. A set holds up to 16
+conditions and groups, and a group up to 16 conditions. A condition still
+being typed is left out until its value is complete, and the designer says
+so.
 
-- `filter` keeps its `eq`, `neq` and `in` rules. `where` adds conditions with
-  more operators, all of which must hold: `not_in`, `contains` and
-  `starts_with` (text and enumerations, ignoring case), `gt`, `gte`, `lt`,
-  `lte` and `between` for numbers, `before`, `after` and `between` for
-  datetimes, and `is_empty` and `is_not_empty`. A datetime value is an ISO
-  timestamp with an offset or a relative time: `now`, or `now` plus or minus a
-  whole number of minutes, hours or days, such as `now-7d`.
-- `sorts` lists up to four sort keys, most significant first, and replaces
-  `sort`. Numbers sort by value and datetimes by instant; an empty value sorts
-  first in ascending order.
-- `groupBy` names one field. Rows arrive ordered by it, and the first page of
-  the view carries the record count of each group over every matching record.
-  A group field cannot be a geometry or calculated field.
+The operators, by the type of field:
 
-Operators refine a view for one read with the same conditions, sort keys and
-group field under **Filter, sort and group** on the board screen; a refinement
-never widens what the reader may see.
+- Text: contains, starts with, is, is (ignoring case), is not, is one of, is
+  not one of, is empty, is not empty. Contains, starts with and the
+  ignoring-case comparison ignore upper and lower case.
+- Enumerations: the same, without the ignoring-case comparison.
+- Numbers: is, is not, greater than, at least, less than, at most, between,
+  is empty, is not empty.
+- Dates and times: after, before, on, between, within the last N days,
+  within the next N days, is empty, is not empty.
+- Yes-or-no fields: is, is empty, is not empty; other fields: is empty, is
+  not empty.
+
+A date and time value is one of:
+
+- a time: now, a preset such as 24 hours ago, or a specific time;
+- a day: today, a number of days from today (negative for earlier days), or
+  a specific date. Before a day means before it starts; after a day means
+  after it ends; on a day and between days take the whole day.
+
+Within the last or next N days is a rolling window of N times 24 hours
+ending or starting now, so it depends on no time zone. A day depends on
+one: when a set names a day, **Days counted in time zone** appears, set to
+the author's own browser time zone, the zone the product reads dates in
+elsewhere. A saved view, guard or action keeps its zone, so every reader,
+the server and an offline device count the same days; a set with no zone
+counts days in UTC. An operator's refinement on the board screen counts
+days in the operator's own zone.
+
+The template stores a set as `match` (`all` or `any`), `conditions` (on a
+view, `where`) and `timeZone`; a group is an entry with its own `match`,
+`conditions` and optional `timeZone`. The operators are `eq`, `neq`, `in`,
+`not_in`, `contains`, `starts_with`, `eq_ignore_case`, `gt`, `gte`, `lt`,
+`lte`, `between`, `before`, `after`, `on`, `within_last`, `within_next`,
+`is_empty` and `is_not_empty`. A time value is an ISO timestamp with an
+offset, `now`, or `now` plus or minus whole minutes, hours or days, such as
+`now-7d`; a day value is `today`, `today` plus or minus whole days, such as
+`today-3d`, or a date that exists, such as `2026-09-30`; `within_last` and
+`within_next` take a whole number of days from 1 to 3650. A stored list
+without `match` holds when all of it does, as it always has. This is a
+fixed set of operators, not an expression language (ADR-0004).
+
+Smart Forms keep the XLSForm expression subset; it now also reads
+`contains()` and `starts-with()`, which compare case as ODK does. It does
+not read `today()`: a form is checked on the device and again on the
+server, and the two would have to agree on the day.
+
+## View options
+
+Every option of a view is set on the **Views** tab. **Add view** takes a
+key, a title and its columns. Opening a view shows:
+
+- its title and its columns, each moved up or down to set their order;
+- **Conditions for view**, written as above;
+- **Sort**, up to four sort keys, most significant first, each ascending or
+  descending. Numbers sort by value and datetimes by instant; an empty value
+  sorts first in ascending order. With none, the newest records come first;
+- **Group by**, one field. Rows arrive ordered by it, and the first page of
+  the view carries the record count of each group over every matching
+  record. A group field cannot be a geometry or calculated field;
+- the older filter rules (`filter`: equals, does not equal, is one of),
+  which hold as well as the conditions.
+
+The template stores these as `title`, `columns`, `where`, `match`,
+`timeZone`, `sorts` (which replaces the older single `sort`), `groupBy` and
+`filter`; each is validated when a version is registered or imported.
+
+Operators refine a view for one read under **Filter, sort and group** on the
+board screen, with conditions that must all hold or any one of them, sort
+keys and a group field. The refinement holds as well as the view's own
+conditions, so it never widens what the reader may see.
 
 ## Archive and delete
 

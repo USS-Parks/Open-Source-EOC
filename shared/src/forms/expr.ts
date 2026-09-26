@@ -249,6 +249,9 @@ const FUNCS: Record<string, (args: Scalar[]) => Scalar> = {
   },
   "count-selected": (a) => toStr(a[0] ?? null).split(/\s+/).filter(Boolean).length,
   "string-length": (a) => toStr(a[0] ?? null).length,
+  // As in ODK, both compare case and all: the board conditions' contains and starts with ignore case.
+  contains: (a) => toStr(a[0] ?? null).includes(toStr(a[1] ?? null)),
+  "starts-with": (a) => toStr(a[0] ?? null).startsWith(toStr(a[1] ?? null)),
   number: (a) => toNum(a[0] ?? null),
   int: (a) => Math.trunc(toNum(a[0] ?? null)),
   round: (a) => {

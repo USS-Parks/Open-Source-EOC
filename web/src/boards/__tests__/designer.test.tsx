@@ -125,7 +125,6 @@ describe("no-code designer (INV-6)", () => {
     setByLabel("open view title", "Available shelters");
     fireEvent.click(screen.getAllByRole("button", { name: "Add sort key" })[0]!);
     setByLabel("Sort 1 field", "capacity");
-    fireEvent.click(screen.getAllByRole("button", { name: "Save to view" })[0]!);
 
     fireEvent.click(screen.getByRole("tab", { name: "Layouts" }));
     fireEvent.click(screen.getAllByRole("button", { name: "Add section" })[0]!);

@@ -19,9 +19,12 @@ import {
   type BoardTemplate,
   type FieldDef,
   type FormLayout,
+  countsDays,
+  type ConditionItem,
+  type ConditionMatch,
   type RecordAccess,
-  type ViewCondition,
   type ViewDef,
+  type ViewSort,
 } from "@openeoc/shared";
 import { SOLUTION_PARTS, type ApiClient, type SolutionImportSummary } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
@@ -31,7 +34,8 @@ import { BoardView } from "./BoardView.js";
 import { RecordForm } from "./RecordForm.js";
 import { RecordAccessEditor } from "./record-access.js";
 import {
-  ConditionRow, ViewRefineControls, blankDraft, conditionDraft, draftCondition, enumValues, type DraftCondition,
+  ConditionEditor, SortKeys, TimeZoneSelect, blankDraft, draftConditions, draftSet, enumValues, incompleteNote,
+  viewerTimeZone, type DraftSet,
 } from "./ViewRefine.js";
 import "./designer.css";
 
@@ -194,6 +198,11 @@ export function Designer(props: {
   );
 }
 
+/**
+ * Every option of a template's view (VC-18): its title, its columns and their
+ * order, the older filter rules, conditions with all or any and groups, the
+ * time zone its days count in, sort keys and a group field.
+ */
 function ExistingViewEditor(props: {
   view: ViewDef;
   fields: readonly FieldDef[];
@@ -201,26 +210,40 @@ function ExistingViewEditor(props: {
   onRemove: () => void;
 }) {
   const view = props.view;
+  const filterable = props.fields.filter((field) => field.type !== "geometry");
+  const groupable = filterable.filter((field) => !field.calculation);
   const updateFilter = (index: number, patch: Partial<ViewDef["filter"][number]>) => props.onChange({
     ...view,
     filter: view.filter.map((filter, itemIndex) => itemIndex === index ? { ...filter, ...patch } : filter),
   });
+  const { sort: _sort, sorts: _sorts, ...unsorted } = view;
+  const { groupBy: _groupBy, ...ungrouped } = view;
+  // The view keeps ordered sort keys; a single older sort folds into them.
+  const setSorts = (sorts: ViewSort[]) => props.onChange({ ...unsorted, ...(sorts.length ? { sorts } : {}) });
+  const conditions = view.where?.length
+    ? { match: view.match ?? "all", conditions: [...view.where], ...(view.timeZone ? { timeZone: view.timeZone } : {}) } : undefined;
   return <details className="board-designer__field">
     <summary><span>{view.title}</span><code>{view.key}: {view.columns.length} columns</code></summary>
-    <Input label={`${view.key} view title`} value={view.title}
-      onChange={(title) => props.onChange({ ...view, title })} />
-    <CheckGroup label={`${view.key} view columns`} values={view.columns}
-      options={props.fields.map((field) => ({ value: field.key, label: field.label }))}
-      onChange={(columns) => props.onChange({ ...view, columns })} />
-    <ViewRefineControls fields={props.fields} forView
-      value={{ where: view.where ?? [], sorts: view.sorts ?? (view.sort ? [view.sort] : []), groupBy: view.groupBy ?? null, archived: "exclude" }}
-      onApply={(next) => {
-        // The view keeps its own conditions, ordered sort keys and grouping; a single legacy sort folds into the sort keys.
-        const { sort: _sort, sorts: _sorts, where: _where, groupBy: _groupBy, ...rest } = view;
-        props.onChange({ ...rest, ...(next.where.length ? { where: [...next.where] } : {}),
-          ...(next.sorts.length ? { sorts: [...next.sorts] } : {}), ...(next.groupBy ? { groupBy: next.groupBy } : {}) });
-      }} />
     <div className="board-designer__stack">
+      <Input label={`${view.key} view title`} value={view.title}
+        onChange={(title) => props.onChange({ ...view, title })} />
+      <CheckGroup label={`${view.key} view columns`} values={view.columns}
+        options={props.fields.map((field) => ({ value: field.key, label: field.label }))}
+        onChange={(columns) => props.onChange({ ...view, columns })} />
+      <ColumnOrder label={`${view.key} view column order`} columns={view.columns} fields={props.fields}
+        onChange={(columns) => props.onChange({ ...view, columns })} />
+      <ConditionSet label={`Conditions for view ${view.key}`} matchLabel="Records shown need" subject="the view"
+        fields={props.fields} value={conditions}
+        onChange={(set) => {
+          const { where: _where, match: _match, timeZone: _zone, ...rest } = view;
+          props.onChange(set ? { ...rest, where: set.conditions, ...(set.match === "any" ? { match: "any" as const } : {}),
+            ...(set.timeZone ? { timeZone: set.timeZone } : {}) } : rest);
+        }} />
+      <SortKeys fields={filterable} value={view.sorts ?? (view.sort ? [view.sort] : [])} onChange={setSorts}
+        empty="Newest first." />
+      <Select label="Group by" value={view.groupBy ?? ""}
+        options={[{ value: "", label: "No grouping" }, ...groupable.map((field) => ({ value: field.key, label: field.label }))]}
+        onChange={(groupBy) => props.onChange(groupBy ? { ...ungrouped, groupBy } : ungrouped)} />
       {view.filter.map((filter, index) => <div className="board-designer__rule" key={`${filter.field}-${index}`}>
         <Select label={`${view.key} filter ${index + 1} field`} value={filter.field}
           options={props.fields.map((field) => ({ value: field.key, label: field.label }))}
@@ -242,6 +265,30 @@ function ExistingViewEditor(props: {
       </div>
     </div>
   </details>;
+}
+
+/** The order a view shows its columns in, each moved up or down a place. */
+function ColumnOrder(props: {
+  label: string; columns: readonly string[]; fields: readonly FieldDef[]; onChange: (columns: string[]) => void;
+}) {
+  if (props.columns.length < 2) return null;
+  const labelOf = (key: string) => props.fields.find((field) => field.key === key)?.label ?? key;
+  const move = (index: number, by: number) => {
+    const next = [...props.columns];
+    [next[index], next[index + by]] = [next[index + by]!, next[index]!];
+    props.onChange(next);
+  };
+  return <fieldset className="board-designer__order"><legend>{props.label}</legend>
+    <ol>
+      {props.columns.map((key, index) => <li key={key}><div>
+        <span>{labelOf(key)}</span>
+        <ActionButton kind="quiet" disabled={index === 0} onClick={() => move(index, -1)}>Move {labelOf(key)} up</ActionButton>
+        <ActionButton kind="quiet" disabled={index === props.columns.length - 1} onClick={() => move(index, 1)}>
+          Move {labelOf(key)} down
+        </ActionButton>
+      </div></li>)}
+    </ol>
+  </fieldset>;
 }
 
 function ExistingFieldEditor(props: {
@@ -623,19 +670,23 @@ function GuardEditor(props: {
 }
 
 interface ConditionSetValue {
-  readonly match: "all" | "any";
-  readonly conditions: ViewCondition[];
+  readonly match: ConditionMatch;
+  readonly conditions: ConditionItem[];
+  readonly timeZone?: string | undefined;
   readonly message?: string | undefined;
 }
 
 /**
- * Conditions on the record, all or any of which must hold, for a transition's
- * guard or an action. A condition still being typed is left out until it is
- * complete, and says so.
+ * Conditions on the record, and groups of them, all or any of which must
+ * hold: a view's conditions, a transition's guard or an action's. A
+ * condition still being typed is left out until it is complete, and says
+ * so. When a condition names a day, the set carries the time zone its days
+ * count in, the author's own to begin with.
  */
 function ConditionSet<T extends ConditionSetValue>(props: {
   label: string;
-  toggle: string;
+  /** A checkbox that starts and clears the set; without one, its rows show at once. */
+  toggle?: string;
   matchLabel: string;
   /** What an incomplete condition is left out of, for the status line. */
   subject: string;
@@ -646,31 +697,33 @@ function ConditionSet<T extends ConditionSetValue>(props: {
   onChange: (value: T | undefined) => void;
 }) {
   const fields = props.fields.filter((field) => field.type !== "geometry");
-  const byKey = new Map(fields.map((field) => [field.key, field]));
-  const [drafts, setDrafts] = useState<DraftCondition[]>(() => (props.value?.conditions ?? []).map(conditionDraft));
-  const match = props.value?.match ?? "all";
+  const [draft, setDraft] = useState<DraftSet>(() => draftSet(props.value));
+  const [zone, setZone] = useState(() => props.value?.timeZone ?? viewerTimeZone());
   const message = props.value?.message ?? "";
-  const emit = (next: DraftCondition[], nextMatch: "all" | "any", nextMessage: string) => {
-    setDrafts(next);
-    const conditions = next.flatMap((draft) => draftCondition(draft, byKey.get(draft.field)) ?? []);
+  const emit = (next: DraftSet, nextZone: string, nextMessage: string) => {
+    setDraft(next);
+    setZone(nextZone);
+    const { conditions } = draftConditions(next, fields);
     const text = props.messageLabel ? nextMessage.trim() : "";
-    props.onChange(conditions.length ? { match: nextMatch, conditions, ...(text ? { message: text } : {}) } as T : undefined);
+    props.onChange(conditions.length ? {
+      match: next.match, conditions, ...(countsDays(conditions) ? { timeZone: nextZone } : {}), ...(text ? { message: text } : {}),
+    } as T : undefined);
   };
-  const incomplete = drafts.flatMap((draft, index) => draftCondition(draft, byKey.get(draft.field)) ? [] : [index + 1]);
+  const { conditions, incomplete } = draftConditions(draft, fields);
+  const note = incompleteNote(incomplete, props.subject);
+  const start = (field: FieldDef) => ({ ...blankDraft(field), op: "is_not_empty" as const });
+  const open = !props.toggle || draft.items.length > 0;
   return <div className="board-designer__nested" role="group" aria-label={props.label}>
-    <Check label={props.toggle} checked={drafts.length > 0} disabled={fields.length === 0}
-      onChange={(on) => emit(on ? [{ ...blankDraft(fields[0]!), op: "is_not_empty" }] : [], match, message)} />
-    {drafts.length ? <>
-      <Select label={props.matchLabel} value={match}
-        options={[{ value: "all", label: "Every condition to hold" }, { value: "any", label: "Any condition to hold" }]}
-        onChange={(next) => emit(drafts, next as "all" | "any", message)} />
-      {drafts.map((draft, index) => <ConditionRow key={index} n={index + 1} draft={draft} fields={fields}
-        onChange={(next) => emit(drafts.map((item, itemIndex) => itemIndex === index ? next : item), match, message)}
-        onRemove={() => emit(drafts.filter((_, itemIndex) => itemIndex !== index), match, message)} />)}
-      <div><ActionButton disabled={drafts.length >= 16}
-        onClick={() => emit([...drafts, { ...blankDraft(fields[0]!), op: "is_not_empty" }], match, message)}>Add condition</ActionButton></div>
-      {props.messageLabel ? <Input label={props.messageLabel} value={message} onChange={(next) => emit(drafts, match, next)} /> : null}
-      {incomplete.length ? <p role="status">Condition {incomplete.join(", ")} is left out of {props.subject} until its value is complete.</p> : null}
+    {props.toggle ? <Check label={props.toggle} checked={draft.items.length > 0} disabled={fields.length === 0}
+      onChange={(on) => emit({ match: draft.match, items: on ? [start(fields[0]!)] : [] }, zone, message)} /> : null}
+    {open ? <>
+      <ConditionEditor draft={draft} fields={fields} matchLabel={props.matchLabel} groups days start={start}
+        onChange={(next) => emit(next, zone, message)} />
+      {countsDays(conditions) ? <TimeZoneSelect label="Days counted in time zone" value={zone}
+        onChange={(next) => emit(draft, next, message)} /> : null}
+      {props.messageLabel && draft.items.length ? <Input label={props.messageLabel} value={message}
+        onChange={(next) => emit(draft, zone, next)} /> : null}
+      {note ? <p role="status">{note}</p> : null}
     </> : null}
   </div>;
 }
@@ -703,7 +756,7 @@ function ApprovalEditor(props: {
   const update = (index: number, next: Transition["approvals"][number]) =>
     props.onChange(props.value.map((item, itemIndex) => itemIndex === index ? next : item));
   return <div className="board-designer__nested board-designer__stack">
-    <div className="board-designer__section-heading"><h4>Approvals</h4>
+    <div className="board-designer__section-heading"><h3>Approvals</h3>
       <ActionButton onClick={() => props.onChange([...props.value, {
         key: uniqueKey("approval", props.value.map((item) => item.key)), label: "Approval",
         approver: { kind: "jurisdiction_admin" }, count: 1, allowSelfApproval: false,
@@ -740,7 +793,7 @@ function EscalationEditor(props: {
   const update = (index: number, next: Transition["escalations"][number]) =>
     props.onChange(props.value.map((item, itemIndex) => itemIndex === index ? next : item));
   return <div className="board-designer__nested board-designer__stack">
-    <div className="board-designer__section-heading"><h4>Escalations</h4>
+    <div className="board-designer__section-heading"><h3>Escalations</h3>
       <ActionButton onClick={() => props.onChange([...props.value, {
         key: uniqueKey("escalation", props.value.map((item) => item.key)), afterMinutes: 60, maxOccurrences: 1,
       }])}>Add escalation</ActionButton></div>

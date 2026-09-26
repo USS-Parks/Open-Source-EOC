@@ -11531,3 +11531,222 @@ buttons"); section 3's "Map to record" row points create-record tiles here.
   incident dashboard scope, the saved dashboard engine, incident room, API
   docs, route coverage, the report chart, reports and dashboard browser
   tests, and the reports, dashboards, app screen and shared tests).
+
+## Veoci and air gap VA26: all-or-any conditions, date and text functions, every view option in the designer
+
+Veoci Integration and Air Gap PSPR unit VA26 (the rest of VC-18), under
+decision 5 (no scripting, ADR-0004).
+
+- **What the code did before.** Workflow guards and action conditions could
+  hold on all or any of a flat list of conditions; a view's `where` held only
+  when all of it did, and nothing could say "this, or both of those". Dates
+  compared to instants and relative times (`now-7d`) only: no "today", no
+  calendar day, no "within the last N days". Text had contains and starts
+  with, but no case-blind equality. The designer's view editor offered
+  conditions, sort keys and a group field through the operator's refinement
+  panel with a **Save to view** button, but not column order, the time zone
+  days count in, or all-or-any; DESIGNER.md sent authors to template JSON for
+  the rest. The SQL a view pushed down folded case with the database's own
+  collation, so on a cluster with the C collation (the test bed's) an accented
+  record was dropped by SQL though the browser's evaluation kept it.
+- **What changed.**
+  - **Condition sets** (`shared/src/boards/conditions.ts`). A set is `match`
+    (`all` or `any`) over `conditions`, each a condition or a group; a group
+    has its own `match`, its conditions and an optional `timeZone`, and
+    stores one level deep (a group inside a group is refused). A view gains
+    `match` (absent means all, so every stored list keeps its meaning) and
+    `timeZone`; guards and action conditions gain `timeZone` and groups. The
+    template checks open groups (`leafConditions`), so a group naming a
+    missing field or an unfitting operator is refused as before.
+  - **Operators.** `eq_ignore_case` for text; `on`, `within_last` and
+    `within_next` for dates and times; `before`, `after` and `between` also
+    take a day. A day value is `today`, `today` plus or minus whole days
+    (`today-3d`), or a date that exists (`2026-02-30` is refused). Before a
+    day is before it starts, after a day is after it ends, on and between
+    take whole days. `within_last`/`within_next` take 1 to 3650 days and are a
+    rolling window of N times 24 hours from now, so they need no zone.
+  - **Evaluation** (`shared/src/boards/view.ts`): `setHolds` evaluates a set
+    recursively; `applyView` reads a view as one set (`viewConditionSet`:
+    the older `filter`, then `where` by `match`); `withConditions` adds an
+    operator's refinement as a set that must hold as well, keeping the view's
+    own match and zone as a group; `unmetGuardConditions`, `guardRefusal` and
+    `describeCondition` name unmet groups in words ("(Priority is high or
+    Name is, ignoring case, alpha)", "Due is before today plus 3 days").
+    Days are placed by `startOfDay`/`zonedDay` from `Intl` with the zone's own
+    rules, including a skipped or repeated midnight. `timeBounds` gives every
+    time operator its bounds, from (inclusive) and until (exclusive), and the
+    server's SQL reads the same bounds, so browser and server agree; a
+    condition's bounds are read once per clock and zone (1,000 records with
+    two day conditions: about 1 ms).
+  - **Server** (`server/src/boards/service.ts`, `routes.ts`).
+    `conditionSetSql` pushes a set down as one predicate, joined by `and` or
+    `or`, groups by their own match; `conditionSql` keeps its signature (the
+    report service calls it) with an optional zone. Case-blind operators fold
+    stored text with `lower(... collate "und-x-icu")` and the sought text in
+    JavaScript, so SQL and browser fold alike whatever the database's
+    collation. The view route's `where` parameter takes groups; a group inside
+    a group is a 400.
+  - **Time zone.** The product reads dates in the viewer's browser zone
+    (force account, volunteers, the board calendar pass it); there is no
+    jurisdiction zone. A stored set counts days in the zone stored with it,
+    which the designer fills from the author's browser zone and lets the
+    author change; a set without one counts days in UTC. An operator's
+    refinement counts days in the operator's own zone. So a saved view, a
+    guard and an action mean the same day on the server, in every browser and
+    offline.
+  - **The condition editor** (`web/src/boards/ViewRefine.tsx`):
+    `ConditionEditor` (rows, **Add condition**, **Add group**, each group's
+    **needs** every or any, **Add condition to group N**, **Remove group N**)
+    with `ConditionRow`, day choices (Today, a number of days from today, a
+    specific date) beside the time presets, a number of days for the within
+    operators, and `TimeZoneSelect`. The designer's `ConditionSet` uses it for
+    view conditions, guards and action conditions alike, with **Days counted
+    in time zone** shown when a set names a day. The board's **Filter, sort
+    and group** gains **Records need** every or any condition and day values
+    in the viewer's zone (flat, no groups); it is sent as one group.
+  - **Every view option on screen** (`web/src/boards/Designer.tsx`). Opening a
+    view on the **Views** tab shows its title, columns and their order (move
+    each up or down), its conditions as above, up to four sort keys, the
+    group field and the older filter rules; edits apply as they are made, as
+    in the other tabs (the **Save to view** step is gone). A single older
+    `sort` stays until the sort keys are changed, then folds into `sorts`.
+  - **Forms.** The XLSForm engine (`shared/src/forms/expr.ts`) now runs
+    `contains()` and `starts-with()`, case-sensitive as ODK defines them, so
+    the importer no longer refuses forms that use them.
+  - Heading levels on the **Routing** tab: **Approvals** and **Escalations**
+    are `h3` under the transition's `h2` (axe `heading-order` found the skip
+    while testing the guard editor).
+  - `docs/guides/DESIGNER.md` replaces "Template properties beyond the
+    designer screen" with **Conditions: all or any, groups, days and text**
+    and **View options**; `docs/guides/OPERATOR-QUICKSTART.md` describes the
+    refinement's every-or-any choice and day values.
+- **Files outside the "Owns" cell.** `web/src/app/api/client.ts`
+  (`BoardViewQuery.where` takes groups), `web/src/app/surfaces/BoardSurface.tsx`
+  (the board's refinement offers any-of and days), `docs/guides/DESIGNER.md`,
+  `docs/guides/OPERATOR-QUICKSTART.md`, and the tests
+  `server/src/__tests__/board-conditions.test.ts`,
+  `server/src/__tests__/board-conditions-browser.test.ts` and
+  `server/src/__tests__/boards-designer-browser.test.ts` (its view step now
+  uses the designer's own controls).
+- **Decisions and deviations.**
+  - Where the condition language is evaluated: view filters and refinements,
+    guards and actions (all through the shared evaluator), the server's SQL,
+    and the report service through `applyView` and `conditionSql`. Two other
+    languages are not this one and are unchanged: notification rules
+    (`server/src/notify`, `eq`, `changed_to`, `any`) and a field's own
+    visibility condition (`FieldConditionSchema`, one comparison). The offline
+    code evaluates no conditions of its own; it renders views through
+    `applyView`.
+  - Days count in a zone stored with the set, not the viewer's, so that a
+    guard or an action (which have no viewer) and a saved view mean one day
+    for everyone; the designer's default is the author's browser zone. Only
+    IANA names are taken; an offset such as `+05:30` is refused.
+  - The within operators are rolling windows, not calendar days; "the last 7
+    calendar days" is `between today-7d and today`.
+  - Groups store one level deep. The board's refinement stays flat (every or
+    any), because it is added to the view's own set as one group.
+  - The report builder (`web/src/reports`, lane va31) is left all-of: it
+    renders `ViewRefineControls` without the new `anyOf` prop, so it offers
+    neither any-of nor day values, since a saved report stores a flat
+    all-of list. It does offer the zone-free new operators (`eq_ignore_case`,
+    `within_last`, `within_next`), which the report service accepts and
+    evaluates correctly.
+  - `today()` is not added to the XLSForm engine: a form is checked on the
+    device and again on the server at submission, and the two would have to
+    agree on the day. `contains()` and `starts-with()` were the refused
+    functions that map to this unit's operators.
+- **Air-gap behavior (decision 9).** No network path is added or changed.
+  Conditions evaluate in the server's transaction, in the browser and on an
+  offline device from the same shared code, and the zone travels with the
+  template. Internet cut with the LAN up and a permanent isolated enclave:
+  unchanged. A device with no network: views, guards and actions evaluate
+  from the stored template and the device clock. Data carried on media:
+  templates with groups, days and zones travel in template JSON and signed
+  packages and are validated on import.
+- **Schema, contract and dependencies.** No migration. Template JSON gains
+  optional view `match` and `timeZone`, group entries in `where`, guard and
+  action conditions, `timeZone` on guards and action conditions, and the new
+  operators; every existing template parses and means what it did. No route
+  added; the view and export routes' `where` parameter accepts groups.
+  `docs/API.md` is unchanged (the API docs test passes). No dependency; the
+  SQL uses PostgreSQL's ICU collation `und-x-icu`, present in the EDB Windows
+  build (checked on the test bed) and in Postgres.app, which bundles ICU.
+- **Tests.** `shared/src/boards/__tests__/conditions.test.ts` (10, injected
+  clock): every new operator with Los Angeles and UTC giving different
+  "today"s at 23:30, rolling windows, case-blind text, day starts across the
+  Los Angeles clock changes, Chile's skipped midnight and Kolkata's half hour,
+  a 23-hour day, refused values (impossible dates, offsets as zones, out of
+  range days), all and any, groups and a group's own zone, a refinement that
+  leaves a view's any-of meaning alone, one level of groups stored and deeper
+  refused, template checks inside groups, and guard wording.
+  `field-depth.test.ts` gains `contains()` and `starts-with()` and an import
+  that uses them. `web/src/boards/__tests__/condition-editor.test.tsx` (5,
+  axe): a view built entirely on screen (title, columns, column order, any-of
+  with a day and a group, zone, sort, group) and published as the expected
+  JSON; a stored view read back into the controls and cleared; a guard with a
+  day from today and a group, and an action within the last days (no zone),
+  with the incomplete-condition notes; the refinement's any-of and viewer zone,
+  its query and its composition with the view, filtering the same rows; the
+  report builder's controls without any-of or days.
+  `server/src/__tests__/board-conditions.test.ts` (5, real database): for a
+  fixed clock, the SQL of every operator and of all/any sets with groups and
+  zones keeps exactly the records the shared evaluation keeps, including an
+  accented record on the C-collation cluster and a stored time with
+  sub-millisecond digits; a view's any-of set with a day operator, grouped and
+  sorted, returns what `applyView` over every record returns; an operator's
+  any-of refinement with a day operator on a plain and on an any-of view, and
+  a two-level group refused; a guard with an any-of set and a day operator
+  refusing with "Close cannot be taken: Due falls on today or Amount is more
+  than 100." and then allowing; an action whose any-of condition with a day
+  operator flags exactly the three records that meet it. Real-clock cases
+  pick a zone where it is between 06:00 and 18:00, so "today" cannot turn
+  over while they run. `board-conditions-browser.test.ts` at 1586 by 992 and
+  1534 by 790: an administrator adds a view, gives it columns, an any-of
+  filter (due today, or a group of high priority and due before today minus 3
+  days), a sort and a grouping on screen, publishes and applies it (the
+  stored view read back from the database), and the board shows "Overdue and
+  high" then "Due today" with the group counts High 1 and Low 1. Updated:
+  `board-tools.test.tsx` (the datetime operators, the refined view's own
+  `where`), `designer.test.tsx` (no Save to view step),
+  `workflow-guard.test.ts` (typing), `boards-designer-browser.test.ts`.
+- **Verification.** On the Windows test bed, `OPENEOC_TEST_DB_TAG=va26`:
+  `pnpm check:static` exit 0 (run last, after every change). With
+  `rtk proxy npx vitest run`: 101 files, 754 tests green (board conditions,
+  board actions, board authoring, board engine, board workflow, boards,
+  workflow guards, workflow runtime, reports, record sync, sync, continuity
+  sync, sync hub lifecycle, solution package, incident templates, incident
+  board scope, notify, API docs, forms, form field depth, table view, import
+  reports, dashboards, saved dashboard engine, all shared tests, and
+  `web/src/boards`, `web/src/app/__tests__`, `web/src/reports`,
+  `web/src/design`); serially (`--maxWorkers=1`) 10 browser files, 18 tests
+  green: board conditions, boards designer, board records, workflow guards,
+  board actions, reports, WebEOC side by side, board views, board workflow
+  and templates for a jurisdiction administrator. After those runs the case
+  folding moved to the ICU collation and the day bounds gained their cache;
+  since then: board conditions, reports, boards and board engine, 4 files,
+  41 tests green; board actions, workflow guards, incident board scope, table
+  view, dashboards, saved dashboard engine, import reports, authorized
+  viewing, all shared tests and `web/src/boards`, 43 files, 277 tests green.
+  The browser files were not rerun after those two changes; no browser test
+  uses a case-blind operator, and the day logic they exercise is unchanged.
+- **Not run.** The full `pnpm check`, left to CI on the push.
+- **Evidence level:** real-database, unit, component and browser tests.
+- **Rollback:** revert the commit. Templates using groups, `match`,
+  `timeZone` or the new operators then fail to parse under the earlier
+  schema, so publish versions without them first.
+- **Landing.** Rebased onto "Veoci and air gap VA31: charts in reports and
+  create-record tiles"; the only conflict was the type import list in
+  `web/src/app/api/client.ts`, where both are kept. The report builder, which
+  VA31 had just landed, offers the new text and day operators but no "any
+  of" choice and counts days in UTC; the integrator said so in
+  `docs/guides/REPORTS.md`. Case-blind conditions now need PostgreSQL's ICU
+  collation `und-x-icu`, which the Windows runtime and Postgres.app both
+  carry. No migration. On main with `OPENEOC_TEST_DB_TAG=va26`:
+  `pnpm check:static` exit 0. The first run of the server set together with
+  every web and shared test, beside three other lanes' test runs, failed 8
+  server files at the file level before any test ran (connections under
+  load); each passed when rerun: 15 server files, 98 tests (board
+  conditions, board actions, boards, board engine, the workflow tests,
+  reports, report charts, forms, form field depth, record sync, field
+  breadth, the saved dashboard engine, API docs, route coverage), and the
+  web and shared tests 133 files, 926 tests.

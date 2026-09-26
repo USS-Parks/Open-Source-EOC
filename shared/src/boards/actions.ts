@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ViewConditionSchema } from "./conditions.js";
+import { CONDITION_MATCHES, ConditionItemSchema, TimeZoneSchema } from "./conditions.js";
 
 /**
  * Board actions (VC-17): what a board does by itself when one of its records
@@ -58,8 +58,9 @@ export const BoardActionSchema = z.object({
   trigger: ActionTriggerSchema,
   /** Conditions on the record after the write, in the views' condition language. */
   condition: z.object({
-    match: z.enum(["all", "any"]).default("all"),
-    conditions: z.array(ViewConditionSchema).min(1).max(16),
+    match: z.enum(CONDITION_MATCHES).default("all"),
+    conditions: z.array(ConditionItemSchema).min(1).max(16),
+    timeZone: TimeZoneSchema.optional(),
   }).strict().optional(),
   step: ActionStepSchema,
 }).strict();
