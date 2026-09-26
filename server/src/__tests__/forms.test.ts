@@ -68,7 +68,8 @@ describe("importing a real XLSForm workbook", () => {
       payload: { key: "closure_report", boardTemplate: "road_closures", xlsxBase64 },
     });
     expect(res.statusCode).toBe(201);
-    expect(res.json()).toEqual({ key: "closure_report", version: 1 });
+    // The import keeps its report for sign-off (VC-13).
+    expect(res.json()).toEqual({ key: "closure_report", version: 1, reportId: expect.any(String) });
 
     const fetched = await app.inject({
       method: "GET",

@@ -22,7 +22,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
  * file (a dry run that reports every row), then imports: the valid rows are
  * written and the rejected rows come back as a report to fix and import again.
  */
-export function WebeocImport(props: { client: ApiClient; jurisdictionId: string }) {
+export function WebeocImport(props: { client: ApiClient; jurisdictionId: string; onImported?: () => void }) {
   const id = useId();
   const boards = useAsync(() => props.client.listBoards(props.jurisdictionId), [props.jurisdictionId]);
   const [boardId, setBoardId] = useState("");
@@ -35,7 +35,7 @@ export function WebeocImport(props: { client: ApiClient; jurisdictionId: string 
   const [columns, setColumns] = useState<readonly string[]>([]);
   const [checked, setChecked] = useState<{ key: string; report: WebeocImportReport } | null>(null);
   const [show, setShow] = useState<"all" | WebeocRowOutcome["outcome"]>("all");
-  const [busy, setBusy] = useState<"checking" | "saving" | "importing" | null>(null);
+  const [busy, setBusy] = useState<"checking" | "saving" | "importing" | "template" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
 
@@ -51,7 +51,7 @@ export function WebeocImport(props: { client: ApiClient; jurisdictionId: string 
   const current = checked && checked.key === keyOf(mapping, timeZone) ? checked.report : null;
   const importable = current !== null && current.dryRun && current.valid > 0;
 
-  const run = async (step: "checking" | "saving" | "importing", operation: () => Promise<string | void>) => {
+  const run = async (step: NonNullable<typeof busy>, operation: () => Promise<string | void>) => {
     setBusy(step); setError(null); setNotice("");
     try { setNotice((await operation()) ?? ""); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "The request failed."); }
@@ -84,7 +84,14 @@ export function WebeocImport(props: { client: ApiClient; jurisdictionId: string 
     if (!file) return;
     const report = await props.client.importWebeocRecords(boardId, file, { dryRun: false, mapping, timeZone });
     setChecked({ key: keyOf(mapping, timeZone), report });
-    return `Imported ${plural(report.created, "record")}. ${plural(report.rejected, "row")} rejected, ${report.skipped} already imported.`;
+    props.onImported?.();
+    return `Imported ${plural(report.created, "record")}. ${plural(report.rejected, "row")} rejected, ${report.skipped} already imported. The import report waits for sign-off below.`;
+  });
+  const template = () => run("template", async () => {
+    const board = target.data?.board;
+    if (!board) return;
+    saveFile(await props.client.boardImportTemplate(boardId), `${board.templateKey}-import-template.csv`);
+    return `Template for ${board.title} downloaded. Each choice field's allowed values are listed under its heading; replace them with records.`;
   });
   const download = (report: WebeocImportReport) =>
     saveFile(new Blob([report.rejectionCsv], { type: "text/csv" }), "webeoc-rejections.csv");
@@ -118,6 +125,10 @@ export function WebeocImport(props: { client: ApiClient; jurisdictionId: string 
               <input id={`${id}-file`} type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={busy !== null} className={FILL}
                 onChange={(event) => choose(event.currentTarget)} />
             </span>
+            <div className="admin-end">
+              <ActionButton loading={busy === "template"} loadingLabel="Downloading…" disabled={busy !== null} onClick={() => void template()}>
+                Download import template</ActionButton>
+            </div>
           </> : null}
         </div>
         {boardId && target.loading && !target.data ? <Loading label="Loading the board…" /> : null}

@@ -161,6 +161,17 @@ describe("signed solution packages", () => {
       expect(part.created).toEqual([]);
       expect(part.held).toHaveLength(1);
     }
+    // Each import keeps its report for sign-off (VC-13): every part and what became of it.
+    const kept = async (id: string) => (await app.inject({ method: "GET", url: `/api/v1/import-reports/${id}`, headers: auth(adminToken) })).json();
+    expect(await kept(first.json().reportId)).toMatchObject({
+      kind: "solution_package", subject: "Tribal EOC starter 2026.1 from Klamath River Test Region", read: 6, created: 6, skipped: 0,
+      rows: expect.arrayContaining([{ item: "Board template tribal_shelter_log version 1", outcome: "created" },
+        { item: "Form shelter_count version 1", outcome: "created" }]),
+    });
+    expect(await kept(again.json().reportId)).toMatchObject({
+      read: 6, created: 0, skipped: 6,
+      rows: expect.arrayContaining([{ item: "Incident template tribal_flood", outcome: "skipped", reason: "already on this instance" }]),
+    });
     const imports = await app.inject({ method: "GET", url: "/api/v1/solution-packages", headers: auth(adminToken) });
     expect(imports.json().packages.map((p: { name: string; importedBy: string }) => [p.name, p.importedBy]))
       .toEqual([["Tribal EOC starter", "Admin"], ["Tribal EOC starter", "Admin"]]);

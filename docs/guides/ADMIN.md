@@ -78,6 +78,22 @@ On the **People** tab:
 - **Add an existing account.** Choose "Add an existing account" and enter the
   account's email and the role. The person keeps their password and any access
   they hold elsewhere.
+- **Import people from a file.** Under **Import people**, select **Download
+  template** for a CSV with the columns `email`, `name`, `role` and
+  `positions`, the roles and this jurisdiction's position keys listed under
+  their headings. Replace them with a row per person; a person may hold
+  several positions, separated by semicolons, named by key or title. Choose
+  the file: it is checked at once and nothing changes. The check lists each
+  row as a new account, an update, skipped or refused with the reason. An
+  account the instance already has keeps its name and password and is added
+  here; the role of someone already a member here is never changed by a file.
+  When the file makes new accounts, enter a **First password for the new
+  accounts** of at least 12 characters, then select **Import**. Every new
+  account in the file gets that first password; give it to each person by a
+  separate channel and have them change it at their first sign-in. The file
+  never carries a password, and none is kept except as its hash. The import's
+  report waits for sign-off on the **Records** tab (see the
+  [migration guide](./MIGRATION.md)).
 - **Change a role, disable sign-in, reset two-step sign-in or remove a
   person.** Select the person's name in the table. Role changes and removals
   never leave the jurisdiction without an administrator. Removing a person also

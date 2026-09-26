@@ -17,6 +17,17 @@ administrators.
   outside plain ASCII. The first row must hold the column headings.
 - Find out which time zone the WebEOC server wrote its dates in.
 
+## The import template
+
+After choosing the **Target board**, select **Download import template**. The
+CSV has a column for each field a file can fill, headed by the field's key,
+which this screen and a board's own **Import** both match. Under the heading
+of each choice field it lists the values that field accepts: the product's
+dictionary values (such as `normal`, `warning`, `critical` and `unknown` for a
+severity) or the field's own list. Every other cell is blank. Replace the
+listed values with your records, one row each, before you check the file; a
+row left from the list is checked like any other.
+
 ## Map, check and import
 
 1. Open **Administration**, then the **Records** tab, and go to **WebEOC
@@ -64,6 +75,22 @@ sends no notifications for the records it writes.
 3. Choose the corrected file, check it and import it. The two added columns
    are not imported. A row whose `dataid` was imported in the meantime is
    skipped.
+
+## The import report and its sign-off
+
+Every import that writes keeps a report under **Administration > Records >
+Import reports**: the WebEOC migration, a people import (see the
+[Administrator guide](./ADMIN.md)), a parcel baseline import, a form import
+and a signed solution package import. A check writes no report. The list
+shows, newest first, what each import went into, the file, who ran it and
+when, and how many rows it read, created, updated, skipped and refused.
+
+Open a report to see the file column it used for each field and every row
+with its outcome and, for a refused or skipped row, the reason. An
+administrator of the jurisdiction who has checked the import selects **Sign
+off this report**, with an optional note. The sign-off records who and when,
+happens once, and is recorded in the audit trail. Only administrators of the
+jurisdiction read the reports.
 
 ## WebEOC bookkeeping columns
 

@@ -531,7 +531,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   incidentRoutes(app, sql, authenticate);
   planRoutes(app, sql, authenticate);
   volunteerRoutes(app, sql, authenticate);
-  dataPackRoutes(app, sql, authenticate, { trustedTemplateKeys });
+  dataPackRoutes(app, sql, authenticate, { trustedTemplateKeys, syncPosition: syncCollabForPosition });
   impactRoutes(app, sql, authenticate);
   savedStateRoutes(app, sql, authenticate);
   lifelineRoutes(app, sql, authenticate);

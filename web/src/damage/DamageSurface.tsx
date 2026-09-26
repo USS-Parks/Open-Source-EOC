@@ -125,16 +125,16 @@ function BaselinePanel(props: { client: ApiClient; jurisdictionId: string; onCha
     if (!file) throw new Error("Choose a CSV or JSON baseline file.");
     const rows = parseBaseline(await file.text(), file.name);
     if (rows.length === 0) throw new Error("The baseline file holds no parcels.");
-    const result = await props.client.importDamageBaseline(props.jurisdictionId, rows);
+    const result = await props.client.importDamageBaseline(props.jurisdictionId, rows, file.name);
     props.onChanged();
-    return `${result.imported} ${result.imported === 1 ? "parcel" : "parcels"} imported into the baseline.`;
+    return `${result.imported} ${result.imported === 1 ? "parcel" : "parcels"} imported into the baseline. Its import report waits for sign-off in Administration, on the Records tab.`;
   });
   return (
     <Panel title="Parcel baseline">
       <p className="d21-muted">
         The parcels field assessments are matched against. A CSV file needs a header row with parcelId, address, structureType
         and replacementValue, and may add lon and lat. A JSON file is an array of objects with those fields and an optional
-        location of lon and lat. A parcel ID already in the baseline is replaced.
+        location of lon and lat. A parcel ID already in the baseline is replaced; one the file lists twice is taken from its first row.
       </p>
       <label className="damage-field">Baseline file (CSV or JSON)
         <input type="file" accept=".csv,.json,text/csv,application/json" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />

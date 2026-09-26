@@ -2430,6 +2430,32 @@ export class ApiClient {
     return (await this.request<{ packages: ImportedSolutionPackage[] }>("GET", "/api/v1/solution-packages")).packages;
   }
 
+  // ---- Import reports and the people import ----
+
+  /** The jurisdiction's import reports, newest first, without their rows; administrators only. */
+  listImportReports(jurisdictionId: string, page: PageOptions = {}): Promise<{ reports: ImportReportSummary[]; nextCursor: string | null }> {
+    const params = pageParams(page);
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/import-reports${params.size ? `?${params}` : ""}`);
+  }
+  getImportReport(reportId: string): Promise<ImportReport> {
+    return this.request("GET", `/api/v1/import-reports/${encodeURIComponent(reportId)}`);
+  }
+  /** Sign a report off once, in the signed-in administrator's name. */
+  signOffImportReport(reportId: string, note: string): Promise<ImportReport> {
+    return this.request("POST", `/api/v1/import-reports/${encodeURIComponent(reportId)}/sign-off`, { note });
+  }
+  /** The people import's CSV template: its columns, the roles and the jurisdiction's positions. */
+  peopleImportTemplate(jurisdictionId: string): Promise<Blob> {
+    return this.requestBlob(`/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/people-import/template`);
+  }
+  /** Check (dryRun) or import a CSV or .xlsx file of people; the password is the new accounts' first password. */
+  importPeople(jurisdictionId: string, file: Blob, options: { dryRun: boolean; password?: string }): Promise<PeopleImportReport> {
+    const form = new FormData();
+    if (options.password) form.append("password", options.password);
+    form.append("file", file, file instanceof File ? file.name : "people.csv");
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/people-import?dryRun=${String(options.dryRun)}`, form);
+  }
+
   // ---- Notification channels (Administration) ----
   getNotificationChannel(jurisdictionId: string, kind: NotificationChannelKind): Promise<NotificationChannelView> {
     return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/notification-channels/${kind}`);
@@ -2502,6 +2528,10 @@ export class ApiClient {
     if (options.timeZone) form.append("timeZone", options.timeZone);
     form.append("file", file, file instanceof File ? file.name : "webeoc.csv");
     return this.request("POST", `/api/v1/boards/${encodeURIComponent(boardId)}/webeoc-import?dryRun=${String(options.dryRun)}`, form);
+  }
+  /** A CSV template for the board's records: a column per field, each choice field's allowed values beneath it. */
+  boardImportTemplate(boardId: string): Promise<Blob> {
+    return this.requestBlob(`/api/v1/boards/${encodeURIComponent(boardId)}/import-template`);
   }
   /** One page of a record's change history, oldest first. */
   boardRecordHistory(boardId: string, recordId: string, incidentId?: string | null, page: PageOptions = {}): Promise<{ entries: BoardRecordChange[]; nextCursor: string | null }> {
@@ -2656,8 +2686,8 @@ export class ApiClient {
     if (bbox) params.set("bbox", bbox.join(","));
     return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/impact/compare?${params}`);
   }
-  importDamageBaseline(jurisdictionId: string, rows: readonly DamageBaselineRow[]): Promise<{ imported: number }> {
-    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/damage/baseline`, { rows });
+  importDamageBaseline(jurisdictionId: string, rows: readonly DamageBaselineRow[], fileName?: string): Promise<{ imported: number; reportId: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/damage/baseline`, { rows, fileName });
   }
 
   // ---- Contacts and mass notification ----
@@ -2942,6 +2972,42 @@ export interface WebeocImportReport {
   readonly rejected: number;
   readonly outcomes: readonly WebeocRowOutcome[];
   readonly rejectionCsv: string;
+  /** The import report a commit kept. */
+  readonly reportId?: string;
+}
+
+export type ImportReportKind = "webeoc" | "board_records" | "solution_package" | "form" | "parcel_baseline" | "people";
+export type ImportRowOutcome = "created" | "updated" | "skipped" | "refused";
+/** An import as kept for sign-off: what it read and did, who ran it, and who signed it off. */
+export interface ImportReportSummary {
+  readonly id: string;
+  readonly kind: ImportReportKind;
+  readonly subject: string;
+  readonly sourceName: string | null;
+  readonly read: number;
+  readonly created: number;
+  readonly updated: number;
+  readonly skipped: number;
+  readonly refused: number;
+  readonly runBy: string;
+  readonly runAt: string;
+  readonly signOff: { readonly by: string; readonly at: string; readonly note: string | null } | null;
+}
+export interface ImportReport extends ImportReportSummary {
+  readonly mapping: ReadonlyArray<{ readonly field: string; readonly column: string }>;
+  readonly rows: ReadonlyArray<{ readonly row?: number; readonly item?: string; readonly outcome: ImportRowOutcome; readonly reason?: string }>;
+}
+export interface PeopleImportReport {
+  readonly dryRun: boolean;
+  readonly columns: readonly string[];
+  readonly dropped: readonly string[];
+  readonly rows: number;
+  readonly created: number;
+  readonly updated: number;
+  readonly skipped: number;
+  readonly refused: number;
+  readonly outcomes: ReadonlyArray<{ readonly row: number; readonly email: string | null; readonly outcome: ImportRowOutcome; readonly detail: string }>;
+  readonly reportId?: string;
 }
 
 

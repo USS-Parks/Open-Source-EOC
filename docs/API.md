@@ -76,6 +76,7 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 
 - `GET /api/v1/boards/:boardId`: Read boards (auth: bearer; audience: operator)
 - `POST /api/v1/boards/:boardId/import`: Run boards import (auth: bearer; audience: operator)
+- `GET /api/v1/boards/:boardId/import-template`: Read boards import template (auth: bearer; audience: operator)
 - `POST /api/v1/boards/:boardId/local-fields`: Run boards local fields (auth: bearer; audience: operator)
 - `GET /api/v1/boards/:boardId/record-references/:fieldKey`: Read boards record references (auth: bearer; audience: operator)
 - `POST /api/v1/boards/:boardId/records`: Run boards records (auth: bearer; audience: operator)
@@ -330,6 +331,14 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 - `GET /api/v1/incidents/:incidentId/impact`: Read incidents impact (auth: bearer; audience: operator)
 - `GET /api/v1/incidents/:incidentId/impact/compare`: Read incidents impact compare (auth: bearer; audience: operator)
 - `GET /api/v1/incidents/:incidentId/impact/sources/:datasetId/records`: Read incidents impact sources records (auth: bearer; audience: operator)
+
+### imports
+
+- `GET /api/v1/import-reports/:reportId`: Read import reports (auth: bearer; audience: operator)
+- `POST /api/v1/import-reports/:reportId/sign-off`: Run import reports sign off (auth: bearer; audience: operator)
+- `GET /api/v1/jurisdictions/:jurisdictionId/import-reports`: Read jurisdictions import reports (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/people-import`: Run jurisdictions people import (auth: bearer; audience: operator)
+- `GET /api/v1/jurisdictions/:jurisdictionId/people-import/template`: Read jurisdictions people import template (auth: bearer; audience: operator)
 
 ### incidents
 

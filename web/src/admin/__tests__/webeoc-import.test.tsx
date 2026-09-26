@@ -76,7 +76,7 @@ it("checks a WebEOC export with the saved mapping, imports the valid rows and do
   expect(client.saveWebeocMapping).toHaveBeenCalledWith("b1", { mapping: { summary: "Summary", severity: "sev" }, timeZone: "America/Chicago" });
 
   fireEvent.click(importButton);
-  await screen.findByText("Imported 1 record. 1 row rejected, 0 already imported.");
+  await screen.findByText("Imported 1 record. 1 row rejected, 0 already imported. The import report waits for sign-off below.");
   expect(client.importWebeocRecords).toHaveBeenLastCalledWith("b1", file,
     { dryRun: false, timeZone: "America/Chicago", mapping: { summary: "Summary", severity: "sev" } });
   screen.getByRole("heading", { name: "Import result" });

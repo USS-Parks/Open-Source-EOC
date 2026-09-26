@@ -24,6 +24,7 @@ import { hashToken, newToken } from "../auth/tokens.js";
 import { withPerson } from "../db/context.js";
 import { CURSOR_AT_FORMAT, DEFAULT_PAGE_LIMIT, cutPage, decodeCursor, type Page, type PageRequest } from "../db/cursor.js";
 import { recordAudit } from "../audit/service.js";
+import { writeImportReport, type ReportRow } from "../data-packs/import-reports.js";
 import { rateLimit } from "../security/rate-limit.js";
 
 /** Public self-reports accepted per jurisdiction per minute; a flood cannot bury moderators or the store. */
@@ -48,26 +49,47 @@ export interface BaselineInput {
   readonly location?: { lon: number; lat: number } | undefined;
 }
 
+/** The baseline's fields and the file columns the Damage screen reads them from. */
+const BASELINE_MAPPING = [
+  { field: "Parcel ID", column: "parcelId" },
+  { field: "Address", column: "address" },
+  { field: "Structure type", column: "structureType" },
+  { field: "Replacement value", column: "replacementValue" },
+  { field: "Location", column: "lon, lat" },
+];
+
 /**
  * Baseline import. The documented pipeline: a jurisdiction exports its
  * assessor parcel roll to CSV (parcel_id, address, structure_type,
  * replacement_value, lon, lat), a one-line converter maps it to these
  * rows, and this upserts them. Real GIS parcel ingestion is a pilot task;
- * the shape and the upsert semantics are fixed here.
+ * the shape and the upsert semantics are fixed here. A parcel the file
+ * lists twice is taken once, from its first row, and the import keeps a
+ * report of each parcel created, updated or refused (VC-13).
  */
 export async function importBaseline(
   sql: Sql,
   actor: Principal,
   jurisdictionId: string,
   rows: readonly BaselineInput[],
-): Promise<{ imported: number }> {
+  sourceName?: string,
+): Promise<{ imported: number; reportId: string }> {
   requireAdmin(actor, jurisdictionId);
   let imported = 0;
+  const report: ReportRow[] = [];
+  const seen = new Set<string>();
   for (const row of rows) {
+    const item = `parcel ${row.parcelId}`;
+    if (seen.has(row.parcelId)) {
+      report.push({ item, outcome: "refused", reason: "the file lists this parcel earlier; the first one is kept" });
+      continue;
+    }
+    seen.add(row.parcelId);
     const geom = row.location
       ? sql`ST_SetSRID(ST_MakePoint(${row.location.lon}, ${row.location.lat}), 4326)`
       : null;
-    const result = await sql`
+    // xmax is zero on a row this statement inserted, and set on one it updated.
+    const [result] = await sql`
       insert into damage_baselines
         (jurisdiction_id, parcel_id, address, structure_type, replacement_value, geom, imported_by)
       values
@@ -77,15 +99,20 @@ export async function importBaseline(
         address = excluded.address,
         structure_type = excluded.structure_type,
         replacement_value = excluded.replacement_value,
-        geom = excluded.geom`;
-    imported += result.count;
+        geom = excluded.geom
+      returning (xmax = 0) as inserted`;
+    report.push({ item, outcome: result!.inserted ? "created" : "updated" });
+    imported += 1;
   }
   await recordAudit(sql, actor, {
     jurisdictionId,
     category: "damage.baseline.imported",
     payload: { rows: rows.length },
   });
-  return { imported };
+  const reportId = await writeImportReport(sql, actor, {
+    jurisdictionId, kind: "parcel_baseline", subject: "Parcel baseline", sourceName, mapping: BASELINE_MAPPING, rows: report,
+  });
+  return { imported, reportId };
 }
 
 export interface AssessmentInput {

@@ -33,6 +33,8 @@ const BaselineImportBody = z.object({
       }),
     )
     .min(1),
+  /** The file the rows came from, named in the import report. */
+  fileName: z.string().max(255).optional(),
 });
 const AssessmentBody = z.object({
   baselineId: z.string().uuid().optional(),
@@ -92,7 +94,7 @@ export function damageRoutes(
       const { jurisdictionId } = req.params as { jurisdictionId: string };
       const body = BaselineImportBody.parse(req.body);
       const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        importBaseline(tx, req.principal, jurisdictionId, body.rows),
+        importBaseline(tx, req.principal, jurisdictionId, body.rows, body.fileName),
       );
       return reply.status(201).send(result);
     },

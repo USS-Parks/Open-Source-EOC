@@ -4,12 +4,14 @@ import type { ApiClient, SignedAuditPage } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import { ErrorNote, Loading } from "../app/screens/parts.js";
 import { DATA_CLASS_LABELS, saveFile } from "./labels.js";
+import { ImportReports } from "./ImportReports.js";
 import { WebeocImport } from "./WebeocImport.js";
 import "./admin.css";
 
 /**
  * Records retention per data class, the audit trail export and the
- * jurisdiction export, and board records brought in from WebEOC. Nothing is
+ * jurisdiction export, board records brought in from WebEOC, and the report
+ * each import keeps for sign-off. Nothing is
  * purged until a period is set; the audit trail itself is never purged and
  * leaves only by export.
  */
@@ -23,6 +25,8 @@ export function Records(props: { client: ApiClient; jurisdictionId: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
+  // Bumped by an import on this tab so the report list reads again.
+  const [imports, setImports] = useState(0);
 
   const run = async (operation: () => Promise<string>) => {
     setBusy(true); setError(null); setNotice("");
@@ -117,7 +121,8 @@ export function Records(props: { client: ApiClient; jurisdictionId: string }) {
           <Button disabled={busy} onClick={() => void exportJurisdiction()}>Export jurisdiction</Button>
         </div>
       </Panel>
-      <WebeocImport client={props.client} jurisdictionId={props.jurisdictionId} />
+      <WebeocImport client={props.client} jurisdictionId={props.jurisdictionId} onImported={() => setImports((n) => n + 1)} />
+      <ImportReports client={props.client} jurisdictionId={props.jurisdictionId} revision={imports} />
     </div>
   );
 }

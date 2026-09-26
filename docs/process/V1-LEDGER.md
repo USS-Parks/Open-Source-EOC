@@ -10395,3 +10395,225 @@ Veoci Integration and Air Gap PSPR unit VA28 (VC-20).
   file exchange, migration baseline, upgrade, restore drill, API docs, route
   coverage, security, audit, incident participation, all shared tests, the
   Volunteers screen, the router and the web client).
+
+## Veoci and air gap VA17: validated migration
+
+Veoci Integration and Air Gap PSPR unit VA17 (VC-13 remainder), after VA11.
+
+- **What the code did before.** The WebEOC migration ("V1 W4.4: WebEOC
+  migration") returned a dry-run and commit report with a rejection CSV to
+  the screen and kept nothing afterwards but the records and their audit
+  entries. The signed package import ("Veoci and air gap VA11: signed
+  solution packages") kept a summary row per package, for instance
+  administrators only. The parcel baseline import answered only a count, and
+  the form imports only the key and version. No import kept a report of what
+  it read, did and refused, and nothing was signed off. There was no import
+  template and no people import: accounts were made one at a time on the
+  People tab. `damage_baselines` had no update policy, so importing a parcel
+  already in the baseline failed under row-level security with a 500, though
+  the screen said such a parcel is replaced.
+- **What changed.**
+  - **Import reports** (`server/src/data-packs/import-reports.ts`, migration
+    `0164`, table `import_reports`). Every import that writes keeps, in its
+    own transaction, a report: kind, what it went into, the file name, who ran
+    it and when, counts read, created, updated, skipped and refused, the
+    mapping of fields to file columns, and every row or part with its outcome
+    and, for a refusal or skip, the reason. A dry run keeps none.
+    Administrators of the jurisdiction list them newest first
+    (`GET /api/v1/jurisdictions/:id/import-reports`, keyset paged), open one
+    (`GET /api/v1/import-reports/:id`) and sign it off once with an optional
+    note (`POST /api/v1/import-reports/:id/sign-off`); the sign-off names who
+    and when and is audited as `import.report.signed_off` with the kind and
+    subject only. The database holds the rule too: an administrator reads, a
+    writer inserts in their own name, and the only update is the sign-off
+    columns, once, by an administrator in their own name (table update
+    privilege revoked, column privilege on the three sign-off columns).
+  - **Imports that keep a report now:** the WebEOC migration (each row with
+    its dataid, the field-to-column mapping by field label, the file name);
+    a signed solution package (each part created, or skipped as already here
+    or kept as edited here); the parcel baseline (each parcel created or
+    updated, from the upsert itself, and a parcel the file lists twice refused
+    after its first row, where before the later row silently replaced the
+    earlier and both were counted); the two form imports, XLSForm workbook
+    and form JSON; and the people import.
+  - **People import** (`server/src/data-packs/people-import.ts`,
+    `POST /api/v1/jurisdictions/:id/people-import?dryRun=`, administrators of
+    the jurisdiction). A CSV or .xlsx with `email`, `name`, `role` and
+    `positions` (heading spellings such as "Email address" or "Display name"
+    are accepted; other columns are listed as not read). At most 1,000 rows
+    and 10 MB. Every cell is checked before anything is written: an email
+    address up to 254 characters, not repeated in the file (case ignored); a
+    role of admin, member or viewer (or "administrator"); each position, by
+    key or title, one of this jurisdiction's; for a new account a name up to
+    200 characters with no control characters. A row that fails is refused
+    with every reason and the rest go in. An account the instance already
+    has keeps its name and password and is added here; an existing member's
+    role is never changed by a file (refused, "change a role on the People
+    tab"); positions already held are not assigned twice; a row with nothing
+    to change is skipped. A dry run writes nothing. A commit that makes
+    accounts needs the first password the administrator types (at least 12
+    characters, as "Add a person"), sent as a multipart field, never read
+    from the file, never in the report, the audit trail or the response, and
+    kept only as its scrypt hash. Accounts, memberships and assignments go
+    through the same writes and audit entries as the People and Positions
+    tabs (`membership.added`, `position.assigned`); after the commit the
+    changed people's cached principals are dropped and collaboration
+    membership follows each assigned position, as the Positions tab does.
+  - **Fixed-taxonomy templates.** `GET /api/v1/boards/:id/import-template`
+    (writers of the board): a CSV with a column per field a file can fill,
+    headed by the field key, which the WebEOC and board imports both match,
+    and each enumerated field's allowed values listed beneath its heading,
+    from the product dictionary it names (for example `symbology.status`) or
+    its own list. `GET /api/v1/jurisdictions/:id/people-import/template`
+    (administrators): the four columns with the roles and this
+    jurisdiction's position keys (the ICS dictionary's set from provisioning
+    and any added) beneath their headings. Both go through the board CSV
+    writer, so a cell that starts like a formula is escaped.
+  - **Screens.** Administration, People: **Import people** (download
+    template, choose a file, check result with every row, the first password
+    field when the file makes accounts, **Import N people**, a Show filter),
+    and the People list reads again after an import. Administration,
+    Records: **Download import template** in WebEOC migration, and **Import
+    reports** (the list with counts and sign-off state, a report's mapping
+    and rows with a Show filter, the sign-off note and **Sign off this
+    report**); the list reads again after a WebEOC import on the same tab.
+    The Damage screen's baseline import sends its file name and points to
+    the report.
+  - `docs/guides/MIGRATION.md` gains "The import template" and "The import
+    report and its sign-off"; `docs/guides/ADMIN.md` gains "Import people
+    from a file".
+- **Files outside the "Owns" cell.** `server/migrations/0164_import_reports.sql`;
+  `server/src/app.ts` (the collaboration sync passed to the data-pack
+  routes); `server/src/damage/service.ts` and `routes.ts` (the baseline
+  report, created or updated per parcel, the duplicate refusal, an optional
+  `fileName`); `server/src/forms/routes.ts` (the form import reports);
+  `shared/src/api/contract.ts` and the regenerated `docs/API.md` (six
+  routes, tag aliases `import-reports` and `people-import` to `imports`);
+  `web/src/app/api/client.ts`; `web/src/damage/DamageSurface.tsx`; the two
+  guides; tests `server/src/__tests__/forms.test.ts` and
+  `solution-package.test.ts` (report assertions added).
+- **Decisions and deviations (defaults taken, not asked).**
+  - A report is kept for an import that commits, including one that refuses
+    some rows. A file refused whole (a package refused, a form version that
+    exists) changes nothing and keeps no report, like a dry run.
+  - Any administrator of the jurisdiction may sign off, the one who ran the
+    import included; a sign-off happens once and is not undone.
+  - People import passwords: the run's new accounts share the first
+    password the administrator types, following "Add a person". The file
+    never carries one (a password column would leave clear passwords in
+    files) and none is generated and shown (printing). The password is hashed
+    once per run: the accounts share it, so separate salts would not slow
+    anyone who learned it, and one hash keeps a large file from holding the
+    event loop on a scrypt per row. See the open question in section 4.
+  - An existing member's role is never changed by a file; the row is refused
+    with the reason. Adding an existing account from another jurisdiction is
+    allowed, as "Add an existing account" allows it.
+  - The template lists allowed values down beneath each enumerated heading;
+    a row left from the list is checked like any other row.
+  - "Jurisdiction definition import" was read as the designer's Import tab.
+    Its jurisdiction imports (the XLSForm and form JSON imports, and signed
+    packages) keep reports. Its instance-wide imports (a board template JSON
+    through the publish route, a version 1 template package, a dashboard
+    template) have no jurisdiction to keep a report under and keep none;
+    their version history and audit entries record them.
+  - Not in the named set and left as they are: dataset loads (a feed
+    refresh, run by pollers, with its own received, accepted and rejected
+    tally), the contacts, RTLT resource kind and EDXL imports.
+  - **The board record import keeps no report yet.** Its report has to be
+    written in `server/src/boards/transfer.ts` and `routes.ts`, which lane
+    va25 owns; per the brief the lane stopped there. The patch is in section
+    4, unapplied. The table and the screen already take kind
+    `board_records`.
+- **Air-gap behavior (decision 9).** No network path is added. Every import
+  reads a file uploaded to the local server and writes the local database;
+  templates and reports are served by it. Internet cut with the LAN up, and
+  a permanent isolated enclave: everything works over the LAN. A device with
+  no network: the Administration screens need the server, as before. Data
+  carried on media: the CSV, workbook or signed package is the medium, and
+  the report names the file. The collaboration membership sync after a
+  people import's position assignment is the Positions tab's existing
+  best-effort path, and its failure never fails the import.
+- **Schema, contract, dependencies.** Migration `0164_import_reports.sql`
+  (placeholder number): table `import_reports` with row-level security and
+  column privileges as above, and policy `baselines_update` on
+  `damage_baselines` for its administrators. Six routes in the contract and
+  `docs/API.md`, each called by the web client. No dependency.
+- **Tests.**
+  - `import-reports.test.ts` (real database, 9): a WebEOC check keeps no
+    report and a member's import keeps one with the mapping and each row,
+    two refused with their reasons; a parcel baseline import reports created,
+    updated and a repeated parcel refused, the first row kept; a form import
+    reports; the list is newest first and paged, administrators only; a
+    member or another jurisdiction's administrator cannot sign off (404); an
+    administrator signs off once (409 after) and the audit entry carries kind
+    and subject; the application role cannot change a report's counts
+    (permission denied); the board template lists the severity dictionary
+    under its heading and other jurisdictions get 404. People: the template
+    lists roles and positions; a check of a ten-line file (one blank) gives
+    two new accounts, two updates and five refusals with their reasons (bad
+    email, a repeated email in other case, an unknown position, a bad role
+    with an empty name, an administrator's role change) and writes nothing;
+    a commit without the first password, with a short one or by a member is
+    refused and writes nothing; a file with no email column is refused; the
+    commit makes the two accounts, adds the other jurisdiction's person as a
+    viewer keeping their name and password, assigns only the position not
+    held, the new account signs in with the first password, and the password
+    appears in no report, audit payload or hash; the same file again
+    changes nothing.
+  - `solution-package.test.ts`: the first import's report has six parts
+    created; the second's six skipped as already on this instance.
+  - `forms.test.ts`: the XLSForm import answers its report id.
+  - `import-reports.test.tsx` and `people-import.test.tsx` (components, with
+    axe): the report list, a report's mapping and filtered rows, sign-off
+    with a trimmed note, a refused sign-off in the server's words, load
+    more; the people check, the password asked before anything is sent, the
+    import, the list refreshed, the template downloaded, a refused file.
+  - `import-reports-browser.test.ts`, at 1586 by 992 and 1534 by 790: the
+    people template downloads with its roles and position; a people file is
+    checked (one row refused), imported with the first password, and the new
+    person is on the People tab with the position; the board template
+    downloads with the severity values; a WebEOC file imports; the people
+    import's report opens from Records, its refused row filtered, and is
+    signed off with a note; no page error, no outside request, no sideways
+    scroll. The screenshots were looked at; the sign-off badge wrapped at
+    1534 and now keeps one line.
+- **Verification.** Windows test bed, PostgreSQL 16.15 with PostGIS 3.6.2
+  on 127.0.0.1:55440, `OPENEOC_TEST_DB_TAG=va17`.
+  - `pnpm check:static`: exit 0 (license scan 339 packages, links 125 files),
+    run last after every change.
+  - `UPDATE_DOCS=1 rtk proxy npx vitest run server/src/__tests__/api-docs.test.ts`:
+    3 of 3, `docs/API.md` regenerated.
+  - `rtk proxy npx vitest run` over import-reports, import-reports-browser,
+    webeoc-import, webeoc-import-browser, webeoc-side-by-side-browser,
+    solution-package, solution-package-browser, damage, damage-browser,
+    operator-screens-browser, forms, form-field-depth, admin, admin-browser,
+    api-docs, export-import-browser, starter-pack, app-e2e and the shared
+    contract test: 19 files, 83 tests passed, 0 failed.
+  - `rtk proxy npx vitest run web/src/admin web/src/app/__tests__ web/src/damage web/src/boards/__tests__/designer.test.tsx`:
+    38 files, 241 tests passed, 0 failed (route coverage and the client
+    test among them).
+  - After the last two changes (the badge's one line, the template helper
+    moved to its own file): import-reports, webeoc-import,
+    solution-package, import-reports-browser and the five `web/src/admin`
+    files, 9 files, 35 tests passed.
+  - Reds met on the way and fixed at their cause: the second baseline import
+    of a parcel failed with 500 (the missing update policy, fixed); the
+    report's column privilege did not hold because the schema's default
+    privileges grant update on every column (revoked first, now proven).
+- **Not run.** `pnpm test:ci`, `pnpm check:gate`, the Windows setup and
+  macOS. The board record import patch below is not applied or tested.
+- **Evidence level:** real-database, component (with axe) and browser tests
+  at both viewports, and document.
+- **Rollback:** revert the commit; drop `import_reports` and the policy
+  `baselines_update` (without it, re-importing a parcel fails again as it
+  did before).
+- **Landing.** Rebased onto "Veoci and air gap VA28: volunteer and CERT
+  roster"; the lane's placeholder migration is `0164`, and the only conflict
+  was the route registration in `server/src/app.ts`, where both are kept.
+  The board record import's report waits on VA25, which owns
+  `server/src/boards/transfer.ts`; it is added when VA25 lands. On main:
+  `pnpm check:static` exit 0; 47 files, 249 tests green with
+  `OPENEOC_TEST_DB_TAG=va17` (import reports and their browser test, forms,
+  solution packages, damage, the WebEOC tests, volunteers, migration
+  baseline, upgrade, restore drill, API docs, route coverage, security, all
+  shared tests, the administration and damage screens and the web client).

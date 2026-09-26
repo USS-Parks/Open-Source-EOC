@@ -56,6 +56,7 @@ GET /api/v1/ack/:token
 GET /api/v1/auth/oidc/callback
 GET /api/v1/auth/oidc/start
 GET /api/v1/boards/:boardId
+GET /api/v1/boards/:boardId/import-template
 GET /api/v1/boards/:boardId/record-references/:fieldKey
 GET /api/v1/boards/:boardId/records/:recordId/detail
 GET /api/v1/boards/:boardId/records/:recordId/history
@@ -84,6 +85,7 @@ GET /api/v1/iap/:iapId/revisions/:revision/pdf
 GET /api/v1/ics-components/:componentId
 GET /api/v1/ics-components/:componentId/pdf
 GET /api/v1/ics-components/:componentId/versions
+GET /api/v1/import-reports/:reportId
 GET /api/v1/incident-templates
 GET /api/v1/incident-templates/:key
 GET /api/v1/incident-templates/:key/versions
@@ -149,6 +151,7 @@ GET /api/v1/jurisdictions/:jurisdictionId/files
 GET /api/v1/jurisdictions/:jurisdictionId/forms
 GET /api/v1/jurisdictions/:jurisdictionId/forms/:key
 GET /api/v1/jurisdictions/:jurisdictionId/guests
+GET /api/v1/jurisdictions/:jurisdictionId/import-reports
 GET /api/v1/jurisdictions/:jurisdictionId/incidents
 GET /api/v1/jurisdictions/:jurisdictionId/incidents/overview
 GET /api/v1/jurisdictions/:jurisdictionId/ipaws
@@ -164,6 +167,7 @@ GET /api/v1/jurisdictions/:jurisdictionId/notification-allowlist
 GET /api/v1/jurisdictions/:jurisdictionId/notification-channels/:kind
 GET /api/v1/jurisdictions/:jurisdictionId/notification-rules
 GET /api/v1/jurisdictions/:jurisdictionId/pa-rates
+GET /api/v1/jurisdictions/:jurisdictionId/people-import/template
 GET /api/v1/jurisdictions/:jurisdictionId/plans
 GET /api/v1/jurisdictions/:jurisdictionId/position-assignments
 GET /api/v1/jurisdictions/:jurisdictionId/positions
@@ -261,6 +265,7 @@ POST /api/v1/iap/:iapId/complete
 POST /api/v1/iap/:iapId/forms/refresh
 POST /api/v1/iap/:iapId/revisions
 POST /api/v1/iap/:iapId/submit
+POST /api/v1/import-reports/:reportId/sign-off
 POST /api/v1/incidents/:incidentId/aar
 POST /api/v1/incidents/:incidentId/aar/observations
 POST /api/v1/incidents/:incidentId/archive
@@ -341,6 +346,7 @@ POST /api/v1/jurisdictions/:jurisdictionId/notification-rules
 POST /api/v1/jurisdictions/:jurisdictionId/notifications/run-scheduled
 POST /api/v1/jurisdictions/:jurisdictionId/pa-equipment-rates
 POST /api/v1/jurisdictions/:jurisdictionId/peers
+POST /api/v1/jurisdictions/:jurisdictionId/people-import
 POST /api/v1/jurisdictions/:jurisdictionId/plans
 POST /api/v1/jurisdictions/:jurisdictionId/positions
 POST /api/v1/jurisdictions/:jurisdictionId/reports
@@ -491,6 +497,7 @@ const tagAliases: Readonly<Record<string, string>> = {
   "data-packs": "datasets",
   "guests": "auth",
   "ics-components": "ics-forms",
+  "import-reports": "imports",
   "incident-templates": "incidents",
   "integrations": "auth",
   "lockdown": "incidents",
@@ -501,6 +508,7 @@ const tagAliases: Readonly<Record<string, string>> = {
   "pa-equipment-rates": "damage",
   "pa-labor-rates": "damage",
   "pa-rates": "damage",
+  "people-import": "imports",
   "plan": "plans",
   "persons": "auth",
   "position-assignments": "auth",

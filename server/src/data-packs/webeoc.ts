@@ -5,6 +5,8 @@ import { AuthError, type Principal } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
 import { insertRecord, validateNewRecord, writableBoard, type EffectiveBoard } from "../boards/service.js";
 import { coerceCell, MAX_IMPORT_ROWS, tableCsv } from "../boards/transfer.js";
+import { writeImportReport } from "./import-reports.js";
+import { taxonomyTemplateCsv } from "./import-template.js";
 
 /**
  * WebEOC board migration, records only. A WebEOC board export is a CSV of the
@@ -66,6 +68,8 @@ export interface WebeocImportReport {
   readonly outcomes: readonly WebeocRowOutcome[];
   /** Every rejected row as CSV: its row number, the reasons, then its original cells. Empty when none. */
   readonly rejectionCsv: string;
+  /** The import report a commit kept (VC-13); absent on a dry run. */
+  readonly reportId?: string;
 }
 
 export interface SavedWebeocMapping {
@@ -129,6 +133,21 @@ export async function saveWebeocMapping(
 }
 
 /**
+ * A fixed-taxonomy import template for a board (VC-13): a column per field a
+ * file can fill, headed by the field key, which the WebEOC and board imports
+ * both match. An enumerated field's column lists its allowed values: the
+ * product dictionary it names, or its own list. Only a writer of the board
+ * reads it.
+ */
+export async function boardImportTemplate(sql: Sql, actor: Principal, boardId: string): Promise<{ csv: string; fileName: string }> {
+  const board = await writableBoard(sql, actor, boardId);
+  const fields = writableFields(board).filter((field) => field.type !== "signature" && field.type !== "attachment");
+  const values = Object.fromEntries(fields.filter((field) => field.type === "enum")
+    .map((field) => [field.key, (field.enumId ? dictionaryValues(field.enumId) : field.values) ?? []]));
+  return { csv: taxonomyTemplateCsv(fields.map((field) => field.key), values), fileName: `${board.template.key}-import-template.csv` };
+}
+
+/**
  * Dry-run or commit a WebEOC export into a board. The mapping is the one
  * given, else the board's saved mapping, else each field matched to a column
  * of the same key or label. A commit writes the valid rows in the caller's
@@ -139,7 +158,7 @@ export async function importWebeocRecords(
   actor: Principal,
   boardId: string,
   table: { headers: readonly string[]; rows: ReadonlyArray<Record<string, string>> },
-  options: { dryRun: boolean; mapping?: WebeocMapping | undefined; timeZone?: string | undefined },
+  options: { dryRun: boolean; mapping?: WebeocMapping | undefined; timeZone?: string | undefined; sourceName?: string | undefined },
 ): Promise<{ report: WebeocImportReport; created: Array<{ id: string; data: Record<string, unknown> }>; boardKey: string; jurisdictionId: string }> {
   // A caller may import only into a board they write; no jurisdiction is taken from the request.
   const board = await writableBoard(sql, actor, boardId);
@@ -235,6 +254,7 @@ export async function importWebeocRecords(
   }
 
   const created: Array<{ id: string; data: Record<string, unknown> }> = [];
+  let reportId: string | undefined;
   if (!options.dryRun) {
     for (const item of valid) {
       const id = await insertRecord(sql, actor, board, item.data, undefined, "import", item.source);
@@ -246,6 +266,19 @@ export async function importWebeocRecords(
       outcomes[item.index] = { ...outcomes[item.index]!, recordId: id };
       created.push({ id, data: item.data });
     }
+    reportId = await writeImportReport(sql, actor, {
+      jurisdictionId: board.jurisdictionId,
+      kind: "webeoc",
+      subject: board.title,
+      sourceName: options.sourceName,
+      mapping: fields.filter((field) => mapping[field.key]).map((field) => ({ field: field.label, column: mapping[field.key]! })),
+      rows: outcomes.map((o) => ({
+        row: o.row,
+        ...(o.dataid ? { item: `dataid ${o.dataid}` } : {}),
+        outcome: o.outcome === "create" ? "created" : o.outcome === "skip" ? "skipped" : "refused",
+        ...(o.reasons.length ? { reason: o.reasons.join("; ") } : {}),
+      })),
+    });
   }
 
   const rejectedRows = rows.flatMap(({ row, rowNumber }, i) => outcomes[i]!.outcome !== "reject" ? []
@@ -266,6 +299,7 @@ export async function importWebeocRecords(
       rejected: rejectedRows.length,
       outcomes,
       rejectionCsv,
+      ...(reportId ? { reportId } : {}),
     },
     created,
     boardKey: board.template.key,

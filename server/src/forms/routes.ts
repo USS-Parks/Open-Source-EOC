@@ -1,8 +1,9 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { FormDefinitionSchema, type AnswerRecord, type FormDefinition } from "@openeoc/shared";
-import { AuthError } from "../auth/service.js";
+import { AuthError, type Principal } from "../auth/service.js";
 import type { Sql } from "../db/client.js";
+import { writeImportReport } from "../data-packs/import-reports.js";
 import { withPerson } from "../db/context.js";
 import { uploadLimitsFromEnv, type BlobStore } from "../files/service.js";
 import { importXlsFormWorkbook } from "./xlsx-import.js";
@@ -25,6 +26,16 @@ const MediaFields = z.object({
   name: z.string().min(1).max(255),
   question: z.string().regex(/^[A-Za-z_][A-Za-z0-9_.[\]-]*$/).max(200),
 });
+
+/** Store an imported form and keep the import's report (VC-13). */
+async function importForm(tx: Sql, actor: Principal, jurisdictionId: string, def: FormDefinition) {
+  const result = await storeForm(tx, actor, jurisdictionId, def);
+  const reportId = await writeImportReport(tx, actor, {
+    jurisdictionId, kind: "form", subject: "Forms",
+    rows: [{ item: `Form ${def.title} (${result.key}), version ${result.version}`, outcome: "created" }],
+  });
+  return { ...result, reportId };
+}
 
 export function formRoutes(
   app: FastifyInstance,
@@ -53,7 +64,7 @@ export function formRoutes(
         throw new AuthError(400, err instanceof Error ? err.message : "unreadable XLSForm workbook");
       }
       const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        storeForm(tx, req.principal, jurisdictionId, def),
+        importForm(tx, req.principal, jurisdictionId, def),
       );
       return reply.status(201).send(result);
     },
@@ -67,7 +78,7 @@ export function formRoutes(
       const { jurisdictionId } = req.params as { jurisdictionId: string };
       const def = FormDefinitionSchema.parse(req.body);
       const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        storeForm(tx, req.principal, jurisdictionId, def),
+        importForm(tx, req.principal, jurisdictionId, def),
       );
       return reply.status(201).send(result);
     },

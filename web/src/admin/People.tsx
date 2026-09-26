@@ -9,6 +9,7 @@ import {
 import type { AdminMember, ApiClient, MemberRole, MembersPage } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import { ROLE_LABELS } from "./labels.js";
+import { PeopleImport } from "./PeopleImport.js";
 import "./admin.css";
 
 const ROLES = ["admin", "member", "viewer"] as const;
@@ -16,7 +17,7 @@ const ROLES = ["admin", "member", "viewer"] as const;
 /**
  * People of one jurisdiction: create an account or add an existing one, and
  * for each person change the role, disable or enable sign-in, reset the
- * second factor, or remove the membership. The server decides every change;
+ * second factor, or remove the membership; or bring many in from a file. The server decides every change;
  * this screen reports its answer.
  */
 export function People(props: { client: ApiClient; jurisdictionId: string; actorId: string }) {
@@ -107,6 +108,7 @@ export function People(props: { client: ApiClient; jurisdictionId: string; actor
           return `${selected.displayName} was removed from this jurisdiction.`;
         })} /> : null}
       <AddPerson client={props.client} jurisdictionId={props.jurisdictionId} busy={busy} run={run} />
+      <PeopleImport client={props.client} jurisdictionId={props.jurisdictionId} onImported={first.reload} />
     </div>
   );
 }

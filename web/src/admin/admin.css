@@ -5,6 +5,7 @@
 .admin-input.is-fill { width: 100%; min-width: 0; box-sizing: border-box; }
 .admin-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .admin-wrap { min-width: 0; overflow-wrap: anywhere; }
+.admin-nowrap { white-space: nowrap; }
 .admin-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .admin-pair { display: flex; gap: 8px; }
 .admin-end { align-self: end; }

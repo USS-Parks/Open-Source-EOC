@@ -9,6 +9,7 @@ import { IncidentTemplateSchema } from "../incidents/service.js";
 import { saveIncidentTemplate } from "../incidents/templates.js";
 import { PackageRefused, PART_KINDS, verifySolutionPackage, type PartKind } from "./solution.js";
 import { ReportTemplateSchema, RuleTemplateSchema } from "./templates.js";
+import { writeImportReport } from "./import-reports.js";
 
 /**
  * Import a signed solution package (VA11) into an instance, in one
@@ -44,6 +45,8 @@ export interface ImportSummary {
   readonly publishedAt: string;
   readonly keyFingerprint: string;
   readonly parts: Readonly<Record<PartKind, PartResult>>;
+  /** The import report kept for this import (VC-13). */
+  readonly reportId: string;
 }
 
 /** The parts kept by key and version, each in its own instance-wide table. */
@@ -183,8 +186,30 @@ export async function importSolutionPackage(
       created: Object.fromEntries(PART_KINDS.map((kind) => [kind, parts[kind].created.length])),
     },
   });
-  return { id, publisher: pkg.publisher, name: pkg.name, version: pkg.version, publishedAt: pkg.publishedAt, keyFingerprint: verified.keyFingerprint, parts };
+  const reportId = await writeImportReport(sql, actor, {
+    jurisdictionId,
+    kind: "solution_package",
+    subject: `${pkg.name} ${pkg.version} from ${pkg.publisher}`,
+    rows: PART_KINDS.flatMap((kind) => {
+      const what = PART_NAMES[kind];
+      return [
+        ...parts[kind].created.map((item) => ({ item: `${what} ${item}`, outcome: "created" as const })),
+        ...parts[kind].held.map((item) => ({ item: `${what} ${item}`, outcome: "skipped" as const, reason: "already on this instance" })),
+        ...parts[kind].kept.map((item) => ({ item: `${what} ${item}`, outcome: "skipped" as const, reason: "kept as edited on this instance" })),
+      ];
+    }),
+  });
+  return { id, publisher: pkg.publisher, name: pkg.name, version: pkg.version, publishedAt: pkg.publishedAt, keyFingerprint: verified.keyFingerprint, parts, reportId };
 }
+
+const PART_NAMES: Readonly<Record<PartKind, string>> = {
+  boardTemplates: "Board template",
+  incidentTemplates: "Incident template",
+  forms: "Form",
+  dashboardTemplates: "Dashboard template",
+  reportTemplates: "Report template",
+  ruleTemplates: "Rule template",
+};
 
 export interface ImportedPackage {
   readonly id: string;
