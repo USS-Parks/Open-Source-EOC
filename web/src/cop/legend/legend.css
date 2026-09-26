@@ -1,0 +1,32 @@
+/* The map legend and layer list. Patch colors are the map's own; everything else follows the theme tokens. */
+.eoc-legend,
+.eoc-layer-list { color: var(--eoc-text); font-size: 0.9em; }
+.eoc-legend-layer + .eoc-legend-layer,
+.eoc-layer-group + .eoc-layer-group { margin-top: 10px; }
+.eoc-legend-layer > summary,
+.eoc-layer-group > summary { cursor: pointer; color: var(--eoc-text-strong); font-weight: 600; }
+.eoc-legend-layer ul,
+.eoc-layer-group ul { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.eoc-legend-layer li { display: flex; align-items: center; gap: 8px; font-size: 0.95em; }
+.eoc-legend-patch-box { flex: none; display: inline-flex; align-items: center; justify-content: center; }
+.eoc-legend-patch { display: block; }
+.eoc-legend-empty,
+.eoc-legend-source,
+.eoc-layer-note { margin: 4px 0 0; color: var(--eoc-text-muted); font-size: 0.85em; }
+.eoc-layer-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 8px; }
+.eoc-layer-row > label { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.eoc-layer-row.is-out-of-scale > label { color: var(--eoc-text-muted); }
+.eoc-layer-row .eoc-layer-note { grid-column: 1 / -1; margin: 0 0 0 24px; }
+.eoc-layer-row .eoc-layer-opacity { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin-left: 24px; font-size: 0.85em; color: var(--eoc-text-muted); }
+.eoc-layer-row .eoc-layer-opacity input { flex: 1; min-width: 0; }
+.eoc-layer-row button {
+  min-height: 24px;
+  padding: 2px 8px;
+  color: var(--eoc-text);
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.85em;
+  cursor: pointer;
+}

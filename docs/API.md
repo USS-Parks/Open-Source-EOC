@@ -184,6 +184,7 @@ GET /api/v1/openapi.json.
 - `GET /api/v1/jurisdictions/:jurisdictionId/contacts`: Read jurisdictions contacts (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/contacts`: Run jurisdictions contacts (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/contacts/import`: Run jurisdictions contacts import (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/contacts/in-area`: Run jurisdictions contacts in area (auth: bearer; audience: operator)
 
 ### cot
 

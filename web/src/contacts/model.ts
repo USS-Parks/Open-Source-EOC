@@ -1,5 +1,7 @@
 /** Contacts, groups and mass notifications as the web client reads them, and their display helpers. */
 
+import type { GeoPoint } from "@openeoc/shared";
+
 export interface Contact {
   readonly id: string;
   readonly name: string;
@@ -13,6 +15,12 @@ export interface Contact {
   readonly positionTitle: string | null;
   readonly notes: string | null;
   readonly active: boolean;
+  /** A street address, placed by the offline gazetteer when saved. Null for a viewer, as are both points. */
+  readonly address: string | null;
+  /** A map point set on the contact; the area search uses it before the address. */
+  readonly location: GeoPoint | null;
+  /** Where the address placed when saved; null when it did not place. */
+  readonly addressPoint: GeoPoint | null;
   readonly updatedAt: string;
 }
 
@@ -26,6 +34,10 @@ export interface ContactInput {
   readonly positionId: string | null;
   readonly notes: string | null;
   readonly active: boolean;
+  /** Null clears it; left out, the stored one stays. */
+  readonly address?: string | null;
+  /** Null clears it; left out, the stored one stays. */
+  readonly location?: GeoPoint | null;
 }
 
 export interface ContactsPage {

@@ -327,6 +327,7 @@ POST /api/v1/jurisdictions/:jurisdictionId/checkins/scan
 POST /api/v1/jurisdictions/:jurisdictionId/contact-groups
 POST /api/v1/jurisdictions/:jurisdictionId/contacts
 POST /api/v1/jurisdictions/:jurisdictionId/contacts/import
+POST /api/v1/jurisdictions/:jurisdictionId/contacts/in-area
 POST /api/v1/jurisdictions/:jurisdictionId/corrective-actions
 POST /api/v1/jurisdictions/:jurisdictionId/cot/ingest
 POST /api/v1/jurisdictions/:jurisdictionId/damage/assessments

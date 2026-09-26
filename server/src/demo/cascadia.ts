@@ -122,6 +122,24 @@ export async function seedCascadia(app: FastifyInstance, sql: Sql, clock = casca
   await api("delgado", at("08:38", -1), "POST", `/api/v1/positions/${information}/assignments`, { personId: people["fraser"]!.id });
   await api("delgado", at("07:35"), "POST", `/api/v1/positions/${planning}/sign-in`);
 
+  // The county's call-down directory. Each contact is placed at the public post
+  // they work from in this exercise, never at a home, so the map's area tool finds them.
+  const redwoodAcres = [-124.1268, 40.7793];
+  const contacts = [
+    { name: "A. Delgado", title: "Planning Section Chief", personId: people["delgado"]!.id, emails: ["a.delgado@humboldt.example"], phones: ["+17075550141"], at: redwoodAcres },
+    { name: "K. Osei", title: "Operations Section Chief", personId: people["osei"]!.id, emails: ["k.osei@humboldt.example"], phones: ["+17075550142"], at: redwoodAcres },
+    { name: "P. Lindgren", title: "Logistics Section Chief", personId: people["lindgren"]!.id, emails: ["p.lindgren@humboldt.example"], phones: ["+17075550143"], at: [-124.1079, 40.97665] },
+    { name: "N. Fraser", title: "Public Information Officer", personId: people["fraser"]!.id, emails: ["n.fraser@humboldt.example"], phones: ["+17075550144"], at: redwoodAcres },
+    { name: "R. Castaneda", title: "Shelter manager, Winship Junior High School", phones: ["+17075550145"], at: [-124.13846, 40.76491] },
+    { name: "T. Marlow", title: "Shelter manager, Cal Poly Humboldt", phones: ["+17075550146"], at: [-124.08, 40.8765] },
+    { name: "County duty officer", title: "After-hours duty line", phones: ["+17075550140"] },
+  ];
+  for (const { at: point, ...contact } of contacts) {
+    await api("delgado", at("08:39", -1), "POST", `/api/v1/jurisdictions/${jurisdictionId}/contacts`, {
+      organization: OWNER.name, ...contact, ...(point ? { location: { type: "Point", coordinates: point } } : {}),
+    });
+  }
+
   const participants: Record<string, string> = {};
   const grantExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   for (const person of CASCADIA_PEOPLE.filter((candidate) => candidate.incidentPositionTitle)) {

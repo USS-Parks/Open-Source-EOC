@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { CONTACT_ADDRESS_MAX } from "@openeoc/shared";
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../design/components.js";
 import { Icon } from "../design/icons/index.js";
 import "../datasets/datasets.css";
@@ -13,6 +14,7 @@ import {
   type Contact,
   type ContactGroup,
   type ContactImportResult,
+  type ContactInput,
   type ImportField,
   type ImportMapping,
 } from "./model.js";
@@ -91,6 +93,8 @@ export function ContactsSurface(props: { client: ApiClient; jurisdictionId: stri
             people={people} positions={positions} busy={action.busy}
             onCancel={() => setEditing(null)}
             onSave={(input) => action.run(async () => {
+              if ((input.address ?? "").length > CONTACT_ADDRESS_MAX)
+                throw new Error(`Enter an address of at most ${CONTACT_ADDRESS_MAX} characters.`);
               if (editing === "new") await client.createContact(jurisdictionId, input);
               else await client.updateContact(editing.id, input);
               setEditing(null); refresh();
@@ -122,6 +126,10 @@ export function ContactsSurface(props: { client: ApiClient; jurisdictionId: stri
                   <div><dt>Phone</dt><dd>{contact.phones.join(", ") || "None"}</dd></div>
                   <div><dt>Account</dt><dd>{contact.personName ?? "Not linked"}</dd></div>
                   <div><dt>Position</dt><dd>{contact.positionTitle ?? "Not linked"}</dd></div>
+                  {/* Only writers are sent where a contact is; a viewer sees neither row. */}
+                  {isAdmin || contact.address ? <div><dt>Address</dt><dd>{contact.address ?? "None"}</dd></div> : null}
+                  {isAdmin || contact.location || contact.addressPoint
+                    ? <div><dt>Map point</dt><dd>{areaPointLabel(contact.location !== null, contact.address, contact.addressPoint !== null)}</dd></div> : null}
                   {contact.notes ? <div className="d21-form-grid-wide"><dt>Notes</dt><dd>{contact.notes}</dd></div> : null}
                 </dl>
                 {isAdmin ? (
@@ -202,19 +210,39 @@ function ConfirmDelete(props: { label: string; question: string; busy: boolean; 
   </>;
 }
 
+/** Which point the map's area search finds a contact at, in a word or two. */
+function areaPointLabel(hasLocation: boolean, address: string | null, hasAddressPoint: boolean): string {
+  if (hasLocation) return "Set on the contact";
+  if (hasAddressPoint) return "From the address";
+  return address ? "Address not placed" : "None";
+}
+
+/** What the area search will do with the contact as the form stands. */
+function areaPointNote(c: Contact | null, address: string, clearing: boolean): string {
+  const cleared = clearing ? "The set map point is cleared when you save. " : "";
+  if (c?.location && !clearing) return "The area search finds this contact at the map point set on it, whatever the address.";
+  const typed = address.trim();
+  if (!typed) return `${cleared}With no map point and no address, the area search cannot find this contact.`;
+  if (typed !== (c?.address ?? "")) {
+    return `${cleared}The address is placed when you save, if the offline address search finds that house number once in this jurisdiction's area.`;
+  }
+  return c?.addressPoint
+    ? `${cleared}The area search finds this contact where the address placed.`
+    : `${cleared}The address did not place on the map, so the area search counts this contact as unplaced.`;
+}
+
 function ContactForm(props: {
   initial: Contact | null;
   people: ReadonlyArray<{ personId: string; displayName: string }>;
   positions: ReadonlyArray<{ id: string; title: string }>;
   busy: boolean;
-  onSave: (input: {
-    name: string; organization: string | null; title: string | null; emails: string[]; phones: string[];
-    personId: string | null; positionId: string | null; notes: string | null; active: boolean;
-  }) => Promise<void>;
+  onSave: (input: ContactInput) => Promise<void>;
   onCancel: () => void;
 }) {
   const c = props.initial;
   const [name, setName] = useState(c?.name ?? "");
+  const [address, setAddress] = useState(c?.address ?? "");
+  const [clearPoint, setClearPoint] = useState(false);
   const [organization, setOrganization] = useState(c?.organization ?? "");
   const [title, setTitle] = useState(c?.title ?? "");
   const [emails, setEmails] = useState(c?.emails.join(", ") ?? "");
@@ -231,6 +259,15 @@ function ContactForm(props: {
         <TextField label="Title or role" value={title} onChange={setTitle} />
         <TextField label="Email addresses" value={emails} onChange={setEmails} />
         <TextField label="Phone numbers" value={phones} onChange={setPhones} />
+        <TextField label="Address (house number, street, town)" value={address} onChange={setAddress} />
+        <div className="d21-form-grid-wide">
+          <p className="d21-muted" data-testid="contact-map-point">{areaPointNote(c, address, clearPoint)}</p>
+          {c?.location ? (
+            <Button onClick={() => setClearPoint((on) => !on)}>
+              {clearPoint ? "Keep the stored map point" : "Clear the stored map point"}
+            </Button>
+          ) : null}
+        </div>
         <EnumSelect label="Linked account" values={["", ...props.people.map((p) => p.personId)]}
           labels={{ "": "None", ...Object.fromEntries(props.people.map((p) => [p.personId, p.displayName])) }}
           value={personId} onChange={setPersonId} />
@@ -241,7 +278,7 @@ function ContactForm(props: {
         <label className="contacts-field d21-form-grid-wide">Notes<textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
       </fieldset>
       <div className="d21-toolbar">
-        <span className="d21-muted">Separate several addresses or numbers with commas. Phone numbers need the country code, for example +1 707 555 0100. A linked account or position also gets in-app notices.</span>
+        <span className="d21-muted">Separate several email addresses or phone numbers with commas. Phone numbers need the country code, for example +1 707 555 0100. A linked account or position also gets in-app notices.</span>
         <div className="d21-card-actions">
           <Button onClick={props.onCancel}>Cancel</Button>
           <Button kind="primary" disabled={props.busy} onClick={() => void props.onSave({
@@ -254,6 +291,9 @@ function ContactForm(props: {
             positionId: positionId || null,
             notes: notes.trim() || null,
             active,
+            address: address.trim() || null,
+            // A set map point stays unless cleared here; it is not placed from this form.
+            ...(clearPoint ? { location: null } : {}),
           })}>Save contact</Button>
         </div>
       </div>

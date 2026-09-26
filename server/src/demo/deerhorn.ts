@@ -118,6 +118,24 @@ export async function seedDeerhorn(app: FastifyInstance, sql: Sql, clock = deerh
   await api("morgan", at("21:14", -2), "POST", `/api/v1/positions/${information}/assignments`, { personId: people["rowe"]!.id });
   await api("morgan", at("06:35"), "POST", `/api/v1/positions/${command}/sign-in`);
 
+  // The Tribe's call-down directory. Each contact is placed at the public post
+  // they work from in this exercise, never at a home, so the map's area tool finds them.
+  const tribalEoc = [-123.6857, 41.064];
+  const contacts = [
+    { name: "Casey Morgan", title: "Incident Commander", personId: people["morgan"]!.id, emails: ["casey.morgan@hoopa.example"], phones: ["+17075550181"], at: tribalEoc },
+    { name: "R. Bennett", title: "Operations Section Chief", personId: people["bennett"]!.id, emails: ["r.bennett@hoopa.example"], phones: ["+17075550182"], at: [-123.67, 41.048] },
+    { name: "J. Ellis", title: "Logistics Section Chief", personId: people["ellis"]!.id, emails: ["j.ellis@hoopa.example"], phones: ["+17075550183"], at: tribalEoc },
+    { name: "M. Rowe", title: "Public Information Officer", personId: people["rowe"]!.id, emails: ["m.rowe@hoopa.example"], phones: ["+17075550184"], at: tribalEoc },
+    { name: "A. Vasquez", title: "Shelter manager, Hoopa Valley Elementary School", phones: ["+17075550185"], at: [-123.67645, 41.05013] },
+    { name: "L. Pratt", title: "Willow Creek staging area manager", phones: ["+17075550186"], at: [-123.627, 40.944] },
+    { name: "Tribal duty officer", title: "After-hours duty line", phones: ["+17075550180"] },
+  ];
+  for (const { at: point, ...contact } of contacts) {
+    await api("morgan", at("21:15", -2), "POST", `/api/v1/jurisdictions/${jurisdictionId}/contacts`, {
+      organization: OWNER.name, ...contact, ...(point ? { location: { type: "Point", coordinates: point } } : {}),
+    });
+  }
+
   // Yurok Tribe OES joins in unified command as a coordinator; the others contribute.
   const participants: Record<string, string> = {};
   const grantExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();

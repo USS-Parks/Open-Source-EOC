@@ -64,6 +64,7 @@ import { notifyRoutes } from "./notify/routes.js";
 import { massNotificationRoutes } from "./notify/mass.js";
 import { carrierRoutes } from "./contacts/carriers.js";
 import { contactRoutes } from "./contacts/routes.js";
+import { areaContactRoutes } from "./contacts/area.js";
 import { reportRoutes } from "./reports/routes.js";
 import { resourceRoutes } from "./resource/routes.js";
 import { BoardSyncHub } from "./sync/hub.js";
@@ -570,15 +571,18 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   operationalRelationshipRoutes(app, sql, authenticate);
   notifyRoutes(app, sql, authenticate);
   massNotificationRoutes(app, sql, authenticate);
-  contactRoutes(app, sql, authenticate);
+  const gazetteer = loadGazetteer(
+    options.gazetteerPath === undefined ? process.env.OPENEOC_GAZETTEER_PATH : options.gazetteerPath ?? undefined,
+    app.log,
+  );
+  // Contacts place their addresses with the gazetteer when saved; the area search reads the stored points.
+  contactRoutes(app, sql, authenticate, gazetteer);
+  areaContactRoutes(app, sql, authenticate);
   carrierRoutes(app, sql, authenticate);
   reportRoutes(app, sql, authenticate);
   messagingRoutes(app, sql, authenticate);
   geoRoutes(app, sql, authenticate);
-  geocodeRoutes(app, authenticate, loadGazetteer(
-    options.gazetteerPath === undefined ? process.env.OPENEOC_GAZETTEER_PATH : options.gazetteerPath ?? undefined,
-    app.log,
-  ));
+  geocodeRoutes(app, authenticate, gazetteer);
   const blobs = new BlobStore(process.env.OPENEOC_DATA_DIR ?? "./data/blobs");
   exportRoutes(app, sql, blobs, authenticate);
   fileRoutes(app, sql, blobs, authenticate);

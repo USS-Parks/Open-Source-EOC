@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ServiceIdentityCreateSchema } from "../auth/service-identities.js";
+import { ContactAreaQuerySchema, ContactInputSchema } from "../contacts/contract.js";
 import {
   EquipmentHoursSchema,
   EquipmentRateImportSchema,
@@ -47,6 +48,8 @@ const REQUEST_SCHEMAS: Readonly<Record<string, readonly [name: string, schema: z
   "POST /api/v1/incidents/:incidentId/tasks": ["TaskCreate", TaskCreateSchema],
   "POST /api/v1/incidents/:incidentId/tasks/:taskId/complete": ["TaskCompletionRequest", TaskCompletionRequestSchema],
   "POST /api/v1/incidents/:incidentId/volunteers": ["Volunteer", VolunteerSchema],
+  "POST /api/v1/jurisdictions/:jurisdictionId/contacts": ["ContactInput", ContactInputSchema],
+  "POST /api/v1/jurisdictions/:jurisdictionId/contacts/in-area": ["ContactAreaQuery", ContactAreaQuerySchema],
   "POST /api/v1/jurisdictions/:jurisdictionId/forms": ["FormDefinition", FormDefinitionSchema],
   "POST /api/v1/jurisdictions/:jurisdictionId/pa-equipment-rates": ["EquipmentRateImport", EquipmentRateImportSchema],
   "POST /api/v1/jurisdictions/:jurisdictionId/plans": ["PlanSave", PlanSaveSchema],
@@ -55,6 +58,7 @@ const REQUEST_SCHEMAS: Readonly<Record<string, readonly [name: string, schema: z
   "POST /api/v1/plans/:planId/activate": ["PlanActivate", PlanActivateSchema],
   "POST /api/v1/volunteers/:volunteerId/deployments": ["VolunteerDeployment", VolunteerDeploymentSchema],
   "PATCH /api/v1/incidents/:incidentId/tasks/:taskId": ["TaskMetadataPatch", TaskMetadataPatchSchema],
+  "PUT /api/v1/contacts/:contactId": ["ContactInput", ContactInputSchema],
   "PUT /api/v1/incidents/:incidentId/operational-area": ["IncidentAreaUpdate", IncidentAreaUpdateSchema],
   "PUT /api/v1/jurisdictions/:jurisdictionId/pa-labor-rates/:personId": ["LaborRate", LaborRateSchema],
   "PUT /api/v1/plans/:planId": ["PlanSave", PlanSaveSchema],

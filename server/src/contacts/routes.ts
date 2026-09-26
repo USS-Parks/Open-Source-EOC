@@ -1,35 +1,33 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { ContactInputSchema as ContactBody, type ContactInputBody as ContactInput } from "@openeoc/shared";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import { DEFAULT_PAGE_LIMIT, cutPage, decodeCursor, pageQuery } from "../db/cursor.js";
 import { AuthError, requireAdmin, requireMember } from "../auth/service.js";
 import { recordAudit } from "../audit/service.js";
-import { E164 } from "../notify/channels.js";
+import type { Gazetteer } from "../geocode/gazetteer.js";
 import { IMPORT_FIELDS, guessMapping, parseCsv, readRows, type ImportMapping } from "./csv.js";
+import { placeAddress } from "./placement.js";
 
 /**
  * The contacts directory: people to reach during an incident, whether or not
  * they hold an account, and named groups of them in call-down order. Members
  * of the jurisdiction read it; its admins maintain it. Row-level security
- * holds the same line in the database.
+ * holds the same line in the database. Where a contact is (its address, its
+ * set map point and the point its address placed at) is read only by the
+ * jurisdiction's writers, who may notify it, as volunteers' reach details
+ * are; viewers read those as null, and group lists and the map's area
+ * search never carry them.
  */
 
-const optionalText = (max: number) =>
-  z.string().trim().max(max).nullish().transform((v) => v || null);
+/** A stored point: a PostGIS point from [longitude, latitude], or null. */
+function pointOf(tx: Sql, coordinates: readonly [number, number] | null | undefined) {
+  return coordinates ? tx`ST_SetSRID(ST_MakePoint(${coordinates[0]}, ${coordinates[1]}), 4326)` : null;
+}
 
-const ContactBody = z.object({
-  name: z.string().trim().min(1).max(200),
-  organization: optionalText(200),
-  title: optionalText(200),
-  emails: z.array(z.email()).max(5).default([]),
-  phones: z.array(E164).max(5).default([]),
-  personId: z.string().uuid().nullable().default(null),
-  positionId: z.string().uuid().nullable().default(null),
-  notes: optionalText(2000),
-  active: z.boolean().default(true),
-});
-type ContactInput = z.infer<typeof ContactBody>;
+const pointView = (lon: unknown, lat: unknown) =>
+  (lon === null ? null : { type: "Point" as const, coordinates: [lon as number, lat as number] as [number, number] });
 
 const GroupBody = z.object({
   name: z.string().trim().min(1).max(200),
@@ -60,8 +58,13 @@ async function readContacts(
   return tx`
     select c.id, c.name, c.organization, c.title, c.emails, c.phones, c.person_id,
       p.display_name as person_name, c.position_id, pos.title as position_title,
-      c.notes, c.active, c.updated_at
+      c.notes, c.active, c.updated_at,
+      case when writer.yes then c.address end as address,
+      case when writer.yes then ST_X(c.location) end as lon, case when writer.yes then ST_Y(c.location) end as lat,
+      case when writer.yes then ST_X(c.address_point) end as address_lon,
+      case when writer.yes then ST_Y(c.address_point) end as address_lat
     from contacts c
+    cross join lateral (select public.is_writer_of(c.jurisdiction_id) as yes) writer
     left join persons p on p.id = c.person_id
     left join positions pos on pos.id = c.position_id
     where c.jurisdiction_id = ${jurisdictionId}
@@ -86,6 +89,10 @@ function contactView(r: Row) {
     positionTitle: r.position_title as string | null,
     notes: r.notes as string | null,
     active: r.active as boolean,
+    address: r.address as string | null,
+    location: pointView(r.lon, r.lat),
+    /** Where the address placed; the area search uses it when no point is set. */
+    addressPoint: pointView(r.address_lon, r.address_lat),
     updatedAt: (r.updated_at as Date).toISOString(),
   };
 }
@@ -161,6 +168,7 @@ export function contactRoutes(
   app: FastifyInstance,
   sql: Sql,
   authenticate: (req: FastifyRequest) => Promise<void>,
+  gazetteer: Gazetteer | null = null,
 ): void {
   app.get("/api/v1/jurisdictions/:jurisdictionId/contacts", { preHandler: authenticate }, async (req, reply) => {
     const { jurisdictionId } = JurisdictionParams.parse(req.params);
@@ -181,14 +189,16 @@ export function contactRoutes(
     const input = ContactBody.parse(req.body);
     const view = await withPerson(sql, req.principal.person.id, async (tx) => {
       await checkLinks(tx, jurisdictionId, input);
+      const addressPoint = await placeAddress(tx, gazetteer, jurisdictionId, input.address ?? null);
       const [row] = await tx`
         insert into contacts
           (jurisdiction_id, name, organization, title, emails, phones, person_id, position_id,
-           notes, active, updated_by)
+           notes, active, address, location, address_point, updated_by)
         values
           (${jurisdictionId}, ${input.name}, ${input.organization}, ${input.title},
            ${input.emails}::text[], ${input.phones}::text[], ${input.personId}, ${input.positionId},
-           ${input.notes}, ${input.active}, ${req.principal.person.id})
+           ${input.notes}, ${input.active}, ${input.address ?? null}, ${pointOf(tx, input.location?.coordinates)},
+           ${pointOf(tx, addressPoint)}, ${req.principal.person.id})
         returning id`;
       const id = row!.id as string;
       await recordAudit(tx, req.principal, {
@@ -213,12 +223,16 @@ export function contactRoutes(
       requireAdmin(req.principal, jurisdictionId);
       await checkLinks(tx, jurisdictionId, input);
       const [before] = await tx`select phones, person_id from contacts where id = ${contactId}`;
+      // A sent address is placed again, so saving it once more retries a placement that failed.
+      const addressPoint = input.address === undefined ? undefined : await placeAddress(tx, gazetteer, jurisdictionId, input.address);
       await tx`
         update contacts set
           name = ${input.name}, organization = ${input.organization}, title = ${input.title},
           emails = ${input.emails}::text[], phones = ${input.phones}::text[],
           person_id = ${input.personId}, position_id = ${input.positionId}, notes = ${input.notes},
           active = ${input.active}, updated_by = ${req.principal.person.id}, updated_at = now()
+          ${addressPoint === undefined ? tx`` : tx`, address = ${input.address ?? null}, address_point = ${pointOf(tx, addressPoint)}`}
+          ${input.location === undefined ? tx`` : tx`, location = ${pointOf(tx, input.location?.coordinates)}`}
         where id = ${contactId}`;
       await recordAudit(tx, req.principal, {
         jurisdictionId,

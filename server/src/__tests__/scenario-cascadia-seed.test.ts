@@ -63,6 +63,14 @@ describe("the Cascadia Earthquake and Tsunami seed", () => {
     }
   });
 
+  it("places the county's contacts at their posts in Humboldt County, so the area tool finds them", async () => {
+    const located = await admin`
+      select name, ST_X(location) as lon, ST_Y(location) as lat from contacts
+      where jurisdiction_id = ${scenario.jurisdictionId} and location is not null`;
+    expect(located.length).toBeGreaterThanOrEqual(6);
+    for (const row of located) expect(countyOf([row.lon as number, row.lat as number]), row.name as string).toBe("Humboldt");
+  });
+
   it("draws the exercise layers from the basemap: synthetic, valid and in Humboldt County", async () => {
     const datasets = await admin`
       select d.key, d.item_count from data_pack_datasets d join data_packs p on p.id = d.pack_id

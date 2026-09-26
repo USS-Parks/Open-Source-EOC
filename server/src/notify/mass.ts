@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { MASS_SEND_MAX_RECIPIENTS } from "@openeoc/shared";
 import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
@@ -42,7 +43,7 @@ import { rateLimit } from "../security/rate-limit.js";
  * directory admins maintain, and by the delivery worker's pace.
  */
 
-export const MAX_RECIPIENTS = 500;
+export const MAX_RECIPIENTS = MASS_SEND_MAX_RECIPIENTS;
 export const ACK_TTL_HOURS = 24;
 const ACK_TOKEN = /^[A-Za-z0-9_-]{22}$/;
 /** Link visits per source address per minute. */
@@ -76,6 +77,12 @@ const SendBody = AudienceSchema.extend({
   responseOptions: ResponseOptions.optional(),
 });
 export type MassSend = z.input<typeof SendBody>;
+
+/** Too many chosen contacts is refused in words, before the schema's own bound answers a bare 400. */
+function refuseOversize(input: MassSend): void {
+  if (Array.isArray(input.contactIds) && input.contactIds.length > MAX_RECIPIENTS)
+    throw new AuthError(422, `send to at most ${MAX_RECIPIENTS} contacts at once; ${input.contactIds.length} were chosen`);
+}
 
 /** The notice an activation sends: whom it reaches, how, and optionally its words and answers. */
 export const ActivationNoticeSchema = AudienceSchema.extend({
@@ -202,6 +209,7 @@ export async function sendMassNotification(
   now = new Date(),
 ): Promise<{ id: string }> {
   requireWriter(actor, jurisdictionId);
+  refuseOversize(input);
   const body = SendBody.parse(input);
   const { id } = await withPerson(sql, actor.person.id, (tx) =>
     sendMassNotificationIn(tx, actor, jurisdictionId, body, linkBase, { now }));
@@ -221,6 +229,7 @@ export async function sendMassNotificationIn(
   options: { readonly now?: Date; readonly incidentId?: string } = {},
 ): Promise<{ id: string; recipients: number }> {
   requireWriter(actor, jurisdictionId);
+  refuseOversize(input);
   const body = SendBody.parse(input);
   const now = options.now ?? new Date();
   if (body.groupId && body.groupIds) throw new AuthError(422, "name one contact group or a list of groups, not both");

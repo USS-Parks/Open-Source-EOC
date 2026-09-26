@@ -15043,3 +15043,84 @@ public-domain download grant, built in lane `lane/mp5b`.
 - **Rollback.** Revert the commit and restore the previous
   `buildings.pmtiles` (343,283,882 bytes, SHA-256 `13c9430a...`) beside
   the reverted sidecar.
+
+## Map and dashboard parity MP8 part one: legend, layer list, USNG grid and area notification
+
+Map and Dashboard Parity PSPR unit MP8, its components and server half
+(decisions 7 and 8, amendment 1's notify-in-area tool), built in lane
+`lane/mp8a`. The Map screen wiring is MP8 part two.
+
+- **What there was before.** The map legend listed every section whether
+  its layer was on or not, there was no layer list model with groups,
+  opacity or scale ranges, no USNG grid, and no way to reach the people in
+  an area; contacts had no address or location.
+- **What changed.**
+  - `web/src/cop/legend/` (`MapLegend.tsx`, `LayerList.tsx`,
+    `legend.css`): a legend that lists only layers switched on and in
+    scale, grouped and collapsible, with area, hatch, cased line, icon,
+    square and graduated circle patches (`legendLayer`, `feedLegendLayer`,
+    `referenceLegendLayer`, `visibleLegend`); a pure layer list model
+    (`LAYER_GROUPS`, `switchLayer` with an exclusive basemap group,
+    `setLayerOpacity`, `visibleLayerIds`, `scaleZoom`) and panel with
+    zoom-to and out-of-scale greying.
+  - `web/src/cop/usng-grid.ts`: a USNG grid computed on the client, 100 km
+    from z6, 10 km from z9, 1 km from z12, 100 m from z15, split at the
+    120W zone boundary.
+  - Migration `0172_contact_locations.sql`: `contacts.address`,
+    `location` and `address_point`. Create and update place the address
+    once, through the offline gazetteer, inside the jurisdiction's known
+    extent (`server/src/contacts/placement.ts`); an ambiguous or
+    out-of-extent address stays unplaced. `address`, `location` and
+    `address_point` are returned only to writers (`is_writer_of` in SQL).
+    Shapes in the new `shared/src/contacts/contract.ts`; the phone rule is
+    shared with `notify/channels.ts`.
+  - `POST /api/v1/jurisdictions/:jurisdictionId/contacts/in-area`
+    (`server/src/contacts/area.ts`): writers only; validates the polygon
+    (at most 2,000 vertices, 20 polygons of 20 rings, a valid shape or
+    422) and returns names and channels of contacts whose set point or
+    placed address lies inside, and a count of those not placed.
+  - `web/src/cop/area-notify.ts` and `MassNotificationSurface.tsx`
+    `prefill`: the composer opens with the area's people selected and a
+    note; nothing is sent until the person presses Send. The prefill warns
+    when an area holds more than the send limit (500, now
+    `MASS_SEND_MAX_RECIPIENTS` in `shared/`); a send over it is refused
+    with a 422 naming the cap.
+  - The contact form edits the address ("house number, street, town"),
+    can clear a set point, and says which point the area search uses.
+  - The Cascadia, Del Norte and Deerhorn seeds give seven contacts each a
+    set point at a public post in their own county; no synthetic person is
+    put at a real street address.
+- **Review.** An adversarial audit verified the access claims (viewer 403,
+  anonymous 401, another jurisdiction's admin 403, row-level security
+  returning nothing with the guard bypassed, no other read path returning
+  the new fields) and found three high, four medium and five low
+  findings, all fixed before landing: the area geometry was re-parsed per
+  contact under a generic plan (about 9 s for 2,000 contacts and a
+  2,000-vertex area; now an InitPlan, 77 ms under `force_generic_plan`);
+  every search ran a synchronous gazetteer lookup per address inside the
+  transaction (now placed once at write time); an address without a town
+  was placed at the same house number elsewhere in the state (now refused
+  when ambiguous or outside the extent); ordinary "town, CA ZIP" addresses
+  never placed; viewers could read every contact's address and point; a
+  set point could not be cleared from the form; the 500 cap failed with a
+  bare 400; and five smaller items (control characters, the invalid-shape
+  message, an unused index, longitudes past 180, the composer resetting on
+  an equal prefill).
+- **Defaults taken and deviations.** Where a contact is, is writers only,
+  following the `volunteer_contacts` precedent (migration 0163); Basho may
+  widen it. A jurisdiction has no boundary in the schema, so its known
+  extent (its incidents' operational areas and its contacts' set points,
+  widened by 0.25 degrees) bounds placement; with neither, no address
+  places. North Coast Storm's seed is unchanged (plan section 9); it
+  shares Humboldt County OES's directory with Cascadia. The UTM math in
+  `usng-grid.ts` duplicates `mgrs.ts` (a `ponytail:` comment names it).
+  The lane's migration 9008 was renumbered 0172.
+- **Verification.** `pnpm check:static` green; `contacts`,
+  `contacts-area` (9 tests, including the generic-plan bound and the
+  ambiguous and out-of-extent addresses), `contact-form`, `area-notify`,
+  `route-coverage`, `api-docs`, `mass-notification` and the three exercise
+  seed tests pass; the legend and USNG grid unit tests pass. Nothing is on
+  the Map screen yet, so there are no captures.
+- **Full suite:** with the next landing batch.
+- **Rollback.** Revert the commit; migration 0172 only adds nullable
+  columns.

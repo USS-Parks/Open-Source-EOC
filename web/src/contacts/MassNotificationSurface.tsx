@@ -29,6 +29,12 @@ const MODE_LABELS = { broadcast: "Everyone at once", calldown: "Call-down, one c
 /** How often an open receipt view refreshes itself. */
 const RECEIPT_REFRESH_MS = 10_000;
 
+/** Contacts to start the composer with, chosen elsewhere (the map's area search), and a line saying how they were chosen. */
+export interface ComposerPrefill {
+  readonly contactIds: readonly string[];
+  readonly note: string;
+}
+
 /**
  * Mass notification: send one message to contact groups, chosen contacts,
  * the holders of positions and whoever is on call, by email, SMS and in-app
@@ -37,7 +43,7 @@ const RECEIPT_REFRESH_MS = 10_000;
  * device to the next when a contact does not acknowledge. Members and
  * administrators send; viewers follow the sends.
  */
-export function MassNotificationSurface(props: { client: ApiClient; jurisdictionId: string; canSend: boolean }) {
+export function MassNotificationSurface(props: { client: ApiClient; jurisdictionId: string; canSend: boolean; prefill?: ComposerPrefill | undefined }) {
   const { client, jurisdictionId } = props;
   const [nonce, setNonce] = useState(0);
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
@@ -61,7 +67,7 @@ export function MassNotificationSurface(props: { client: ApiClient; jurisdiction
           </div>
         </div>
         {props.canSend ? (
-          <Compose client={client} jurisdictionId={jurisdictionId}
+          <Compose client={client} jurisdictionId={jurisdictionId} prefill={props.prefill}
             onSent={(id) => { setSelected(id); refresh(); }} />
         ) : null}
         {selected ? (
@@ -101,12 +107,22 @@ export function MassNotificationSurface(props: { client: ApiClient; jurisdiction
   );
 }
 
-function Compose(props: { client: ApiClient; jurisdictionId: string; onSent: (id: string) => void }) {
-  const { client, jurisdictionId } = props;
+function Compose(props: { client: ApiClient; jurisdictionId: string; prefill?: ComposerPrefill | undefined; onSent: (id: string) => void }) {
+  const { client, jurisdictionId, prefill } = props;
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [answers, setAnswers] = useState("");
   const [audience, setAudience] = useState<AudienceParts>(NO_AUDIENCE);
+  const [prefillNote, setPrefillNote] = useState("");
+  // A prefill selects its contacts and nothing else; the person still writes the message and sends.
+  // It applies when its content changes, not whenever a parent hands over an equal copy.
+  const prefillKey = prefill ? JSON.stringify([prefill.contactIds, prefill.note]) : "";
+  useEffect(() => {
+    if (!prefillKey) return;
+    const [contactIds, note] = JSON.parse(prefillKey) as [string[], string];
+    setAudience({ ...NO_AUDIENCE, contactIds });
+    setPrefillNote(note);
+  }, [prefillKey]);
   const [delivery, setDelivery] = useState(DEFAULT_DELIVERY);
   const [mode, setMode] = useState<string>("broadcast");
   const [waitMinutes, setWaitMinutes] = useState("10");
@@ -139,7 +155,7 @@ function Compose(props: { client: ApiClient; jurisdictionId: string; onSent: (id
         ...(mode === "calldown" ? { intervalMinutes: minutes, acknowledgementsNeeded: acknowledgements } : {}),
       });
       setNotice(`${subject.trim()} sent.`);
-      setSubject(""); setMessage(""); setAnswers(""); setAudience(NO_AUDIENCE);
+      setSubject(""); setMessage(""); setAnswers(""); setAudience(NO_AUDIENCE); setPrefillNote("");
       props.onSent(sent.id);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The notification was not sent.");
@@ -150,6 +166,7 @@ function Compose(props: { client: ApiClient; jurisdictionId: string; onSent: (id
 
   return (
     <Panel title="Compose">
+      {prefillNote ? <p className="d21-muted" data-testid="compose-prefill">{prefillNote}</p> : null}
       <fieldset disabled={busy} className="d21-form-grid">
         <div className="d21-form-grid-wide"><TextField label="Subject" value={subject} onChange={setSubject} required /></div>
         <label className="contacts-field d21-form-grid-wide">Message<textarea rows={4} value={message} onChange={(e) => setMessage(e.target.value)} /></label>

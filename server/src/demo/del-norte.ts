@@ -128,6 +128,24 @@ export async function seedDelNorte(app: FastifyInstance, sql: Sql, clock = delNo
   await api("rivera", at("05:04", -6), "POST", `/api/v1/positions/${information}/assignments`, { personId: people["whitfield"]!.id });
   await api("rivera", at("05:35"), "POST", `/api/v1/positions/${planning}/sign-in`);
 
+  // The county's call-down directory. Each contact is placed at the public post
+  // they work from in this exercise, never at a home, so the map's area tool finds them.
+  const countyEoc = [-124.2005, 41.7535];
+  const contacts = [
+    { name: "Alex Rivera", title: "Planning Section Chief", personId: people["rivera"]!.id, emails: ["alex.rivera@delnorte.example"], phones: ["+17075550161"], at: countyEoc },
+    { name: "S. Holt", title: "Operations Section Chief", personId: people["holt"]!.id, emails: ["s.holt@delnorte.example"], phones: ["+17075550162"], at: countyEoc },
+    { name: "L. Brennan", title: "Logistics Section Chief", personId: people["brennan"]!.id, emails: ["l.brennan@delnorte.example"], phones: ["+17075550163"], at: [-124.23806, 41.78192] },
+    { name: "J. Whitfield", title: "Public Information Officer", personId: people["whitfield"]!.id, emails: ["j.whitfield@delnorte.example"], phones: ["+17075550164"], at: countyEoc },
+    { name: "P. Ochoa", title: "Shelter manager, Del Norte County Fairgrounds", phones: ["+17075550165"], at: [-124.19505, 41.76022] },
+    { name: "G. Tolliver", title: "Klamath staging area manager", phones: ["+17075550166"], at: [-124.036, 41.53] },
+    { name: "County duty officer", title: "After-hours duty line", phones: ["+17075550160"] },
+  ];
+  for (const { at: point, ...contact } of contacts) {
+    await api("rivera", at("05:05", -6), "POST", `/api/v1/jurisdictions/${jurisdictionId}/contacts`, {
+      organization: OWNER.name, ...contact, ...(point ? { location: { type: "Point", coordinates: point } } : {}),
+    });
+  }
+
   const participants: Record<string, string> = {};
   const grantExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   for (const person of DEL_NORTE_PEOPLE.filter((candidate) => candidate.incidentPositionTitle)) {

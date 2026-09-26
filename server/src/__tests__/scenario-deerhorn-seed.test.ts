@@ -81,6 +81,14 @@ describe("the Deerhorn Lightning Complex seed", () => {
     }
   });
 
+  it("places the Tribe's contacts at their posts in the Hoopa Valley and Willow Creek, so the area tool finds them", async () => {
+    const located = await admin`
+      select name, ST_X(location) as lon, ST_Y(location) as lat from contacts
+      where jurisdiction_id = ${scenario.jurisdictionId} and location is not null`;
+    expect(located.length).toBeGreaterThanOrEqual(6);
+    for (const row of located) expect(countyOf([row.lon as number, row.lat as number]), row.name as string).toBe("Humboldt");
+  });
+
   it("keeps each government's alerts under its own authority", async () => {
     const alerts = await admin`
       select j.slug, a.incident_id, a.status from cap_alerts a join jurisdictions j on j.id = a.jurisdiction_id

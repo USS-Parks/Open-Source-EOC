@@ -98,6 +98,7 @@ import type {
   VolunteerRoster,
 } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
+import type { AreaPolygon, ContactsInArea } from "../../cop/area-notify.js";
 import type {
   IpawsConfigInput,
   IpawsSendKind,
@@ -2862,6 +2863,10 @@ export class ApiClient {
   sendMassNotification(jurisdictionId: string, input: MassSendInput): Promise<{ id: string }> {
     return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/mass-notifications`,
       input as unknown as Record<string, unknown>);
+  }
+  /** Active contacts whose known location lies in a drawn area, with names and channels only; for senders. */
+  contactsInArea(jurisdictionId: string, area: AreaPolygon): Promise<ContactsInArea> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/contacts/in-area`, { area });
   }
   getMassNotification(massNotificationId: string): Promise<MassNotificationDetail> {
     return this.request("GET", `/api/v1/mass-notifications/${encodeURIComponent(massNotificationId)}`);

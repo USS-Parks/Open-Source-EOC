@@ -208,6 +208,72 @@ describe("contact groups", () => {
   });
 });
 
+describe("a contact's address and map point", () => {
+  const point = (lng: unknown, lat: unknown) => ({ type: "Point", coordinates: [lng, lat] });
+  const eurekaEoc = point(-124.1664, 40.8021);
+
+  it("lets an admin set, keep, clear and correct both, and refuses bad values", async () => {
+    const created = await call("POST", contactsUrl(), adminToken, {
+      name: "Lane Located", address: "  County Operations Center, Eureka  ", location: eurekaEoc,
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json()).toMatchObject({ address: "County Operations Center, Eureka", location: eurekaEoc });
+    const id = created.json().id as string;
+    const put = (body: Record<string, unknown>, token = adminToken) => call("PUT", `/api/v1/contacts/${id}`, token, { name: "Lane Located", ...body });
+
+    // Left out, both stay as they are while the rest of the contact changes.
+    expect((await put({ title: "Duty officer" })).json()).toMatchObject({ title: "Duty officer", address: "County Operations Center, Eureka", location: eurekaEoc });
+    // A blank address clears it; a new point replaces the old one.
+    expect((await put({ address: "   ", location: point(-124.0829, 40.8687) })).json())
+      .toMatchObject({ address: null, location: point(-124.0829, 40.8687) });
+    expect((await put({ address: "Arcata City Hall", location: null })).json()).toMatchObject({ address: "Arcata City Hall", location: null });
+    expect((await put({ address: null })).json()).toMatchObject({ address: null, location: null });
+
+    const refused = [
+      { location: point(-190, 40) }, { location: point(-124, 91) }, { location: point("-124", 40) },
+      { location: { type: "LineString", coordinates: [[-124, 40], [-123, 41]] } }, { location: [-124, 40] },
+      { address: "x".repeat(301) }, { address: 42 }, { address: "816 3rd St\u0000" }, { address: "816 3rd\nSt" },
+    ];
+    for (const bad of refused) {
+      expect((await call("POST", contactsUrl(), adminToken, { name: "Bad Place", ...bad })).statusCode, JSON.stringify(bad)).toBe(400);
+      expect((await put(bad)).statusCode, JSON.stringify(bad)).toBe(400);
+    }
+    expect((await put({ address: "x".repeat(300) })).statusCode).toBe(200);
+    expect((await put({ location: eurekaEoc }, memberToken)).statusCode).toBe(403);
+    const [stored] = await admin`select address, ST_AsText(location) as location from contacts where id = ${id}`;
+    expect(stored).toEqual({ address: "x".repeat(300), location: null });
+  });
+
+  it("shows them to writers only: never to a viewer, another jurisdiction, a group list or the area search", async () => {
+    const created = await call("POST", contactsUrl(), adminToken, {
+      name: "Morgan Mapped", phones: ["+17075550150"], address: "County Operations Center, Eureka", location: eurekaEoc,
+    });
+    const id = created.json().id as string;
+    const listed = async (token: string) =>
+      ((await call("GET", `${contactsUrl()}?q=Morgan`, token)).json().contacts as Array<Record<string, unknown>>)[0];
+    // A member may notify the contact, so reads where it is.
+    expect(await listed(memberToken)).toMatchObject({ address: "County Operations Center, Eureka", location: eurekaEoc, addressPoint: null });
+    // A viewer reads the directory's channels but never where anyone is.
+    const viewed = await listed(viewerToken);
+    expect(viewed).toMatchObject({ phones: ["+17075550150"], address: null, location: null, addressPoint: null });
+    expect(JSON.stringify(viewed)).not.toMatch(/County Operations Center|-124\.1664/);
+
+    expect((await call("GET", contactsUrl(), outsiderToken)).statusCode).toBe(403);
+    const seen = await withPerson(runtime, outsiderId, (tx) => tx`select address, location from contacts where id = ${id}`);
+    expect(seen).toHaveLength(0);
+
+    const group = await call("POST", groupsUrl(), adminToken, { name: "Mapped", contactIds: [id] });
+    expect(Object.keys(group.json().members[0]).sort()).toEqual(["active", "contactId", "name"]);
+    const groups = await call("GET", groupsUrl(), viewerToken);
+    expect(groups.body).not.toMatch(/County Operations Center|-124\.1664/);
+
+    const area = { type: "Polygon", coordinates: [[[-124.2, 40.78], [-124.14, 40.78], [-124.14, 40.82], [-124.2, 40.82], [-124.2, 40.78]]] };
+    const found = await call("POST", `${contactsUrl()}/in-area`, memberToken, { area });
+    expect(found.json().contacts.map((c: { name: string }) => c.name)).toContain("Morgan Mapped");
+    expect(found.body).not.toMatch(/County Operations Center|-124\.1664|\+1707/);
+  });
+});
+
 describe("CSV import", () => {
   const importUrl = () => `${contactsUrl()}/import`;
   const csv = [

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { ConnectionOptions } from "node:tls";
+import { E164PhoneSchema } from "@openeoc/shared";
 import { z } from "zod";
 import { decryptSecret } from "../secrets/envelope.js";
 import { destinationRefusal, isInternalAddress, type Resolve } from "./allowlist.js";
@@ -25,9 +26,7 @@ import { sendMail, type MailAttachment } from "./smtp.js";
  * so tests and the Administration screen can show what would have gone out.
  */
 
-export const E164 = z
-  .string()
-  .regex(/^\+[1-9]\d{1,14}$/, "phone numbers use E.164 form, for example +17075551234");
+export const E164 = E164PhoneSchema;
 
 export const EmailSettings = z.object({
   host: z
