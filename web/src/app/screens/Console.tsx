@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import { BoardList } from "../../design/layout.js";
 import { Button } from "../../design/components.js";
+import { openOnDashboard } from "../../design/controls.js";
 import type { ThemeName } from "../../design/tokens.js";
 import type { ApiClient, BoardListItem, DashboardListItem, CollectionRef, FeedHealth, Me, Membership } from "../api/client.js";
 import { useSession } from "../auth/session.js";
@@ -25,6 +26,7 @@ import { BoardsIndex } from "../surfaces/lists.js";
 import { NotificationTray } from "../../notifications/NotificationTray.js";
 import { useArrivalAlerts } from "../../notifications/alerting.js";
 import { consoleSettingsSections } from "../settings/SettingsSections.js";
+import { demoAllSections } from "../config.js";
 
 /**
  * Every surface, the map with MapLibre and PMTiles, and the Yjs offline tree
@@ -153,8 +155,11 @@ function coreRail(rail: readonly NavGroup[], active: string): readonly NavGroup[
     .filter((group) => group.items.length > 0);
 }
 
-function readAllSections(): boolean {
-  try { return localStorage.getItem(ALL_SECTIONS_KEY) === "1"; } catch { return false; }
+/** The person's own choice, saved on this computer; until they make one, a demonstration lists every section. */
+export function readAllSections(): boolean {
+  let saved: string | null = null;
+  try { saved = localStorage.getItem(ALL_SECTIONS_KEY); } catch { /* no storage: the default */ }
+  return saved === null ? demoAllSections() : saved === "1";
 }
 
 function saveAllSections(value: boolean): void {
@@ -719,7 +724,24 @@ function Center(props: {
         s.filterField && s.filterEquals !== undefined
           ? { field: s.filterField, equals: s.filterEquals }
           : null;
-      return (
+      const shelters = props.boardsInView.find((board) => board.templateKey === "shelters");
+      // The Dashboard tab on each screen, by the id its tabs carry; saved dashboards stay listed below.
+      const screens: readonly (readonly [string, string, Surface])[] = [
+        ["Tasks", "task-view", { kind: "tasks" }],
+        ["IAP", "iap-view", { kind: "iap" }],
+        ["Resources", "resources-view", { kind: "resources" }],
+        ["AAR", "aar-view", { kind: "aar" }],
+        ...(shelters ? [["Shelters", "board-shelters-views", { kind: "board", id: shelters.id }] as const] : []),
+        ["Damage Assessment", "damage-screen", { kind: "damage" }],
+      ];
+      return (<>
+        <nav className="p-dash-toolbar" aria-label="Screen dashboards" style={{ flex: "none", alignItems: "center", padding: "16px 32px 0" }}>
+          <strong>Screen dashboards</strong>
+          {screens.map(([label, tablist, target]) => (
+            <Button key={tablist} kind="quiet" label={`${label} dashboard`}
+              onClick={() => { openOnDashboard(tablist); props.onNavigate(target); }}>{label}</Button>
+          ))}
+        </nav>
         <DashboardSurface
           client={props.client}
           {...(id ? { dashboardId: id } : {})}
@@ -750,7 +772,7 @@ function Center(props: {
           incidentId={props.incidentId}
           onFilter={(f) => props.onDashboardFilter(id ?? "", f ? { field: f.field, equals: String(f.equals) } : null)}
         />
-      );
+      </>);
     }
     case "boards":
       return <BoardsIndex boards={props.boardsInView} onOpen={props.onOpenBoard} />;

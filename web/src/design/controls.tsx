@@ -58,9 +58,38 @@ interface TabsProps {
   readonly className?: string;
 }
 
+/** Whether a screen's tabs were left on its Dashboard, kept for this browser tab's session. */
+const DASHBOARD_MEMORY = "openeoc.dashboardTab.";
+
+function leftOnDashboard(tablistId: string): boolean {
+  try { return sessionStorage.getItem(DASHBOARD_MEMORY + tablistId) === "1"; } catch { return false; }
+}
+
+/** Open these tabs on their Dashboard the next time they show, as if the person had left them there. */
+export function openOnDashboard(tablistId: string, open = true): void {
+  try {
+    if (open) sessionStorage.setItem(DASHBOARD_MEMORY + tablistId, "1");
+    else sessionStorage.removeItem(DASHBOARD_MEMORY + tablistId);
+  } catch { /* a convenience only */ }
+}
+
 export function Tabs({ id, label, tabs, value, onChange, className }: TabsProps) {
   const refs = useRef(new Map<string, HTMLButtonElement>());
   const enabled = tabs.filter((tab) => !tab.disabled);
+  // A screen offering a Dashboard tab reopens on it when the person left it there.
+  const dashboardTab = enabled.find((tab) => tab.label === "Dashboard")?.id;
+  const restored = useRef(false);
+  useEffect(() => {
+    if (!dashboardTab) return;
+    if (!restored.current) {
+      restored.current = true;
+      if (value !== dashboardTab && leftOnDashboard(id)) {
+        onChange(dashboardTab);
+        return;
+      }
+    }
+    openOnDashboard(id, value === dashboardTab);
+  }, [dashboardTab, id, value]);
 
   function move(currentId: string, direction: "next" | "previous" | "first" | "last") {
     if (enabled.length === 0) return;

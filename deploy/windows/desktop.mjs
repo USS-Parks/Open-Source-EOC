@@ -798,6 +798,8 @@ async function serveProfile(args, { service = false } = {}) {
     runtimeConfig.OPENEOC_DEMO_EMAIL = NORTH_COAST_DIRECTOR;
     runtimeConfig.OPENEOC_DEMO_PASSWORD = NORTH_COAST_PASSWORD;
     runtimeConfig.OPENEOC_DEMO_INCIDENT = NORTH_COAST_INCIDENT;
+    // Every section, dashboards, AAR and reports among them, until the person chooses otherwise in Settings.
+    runtimeConfig.OPENEOC_DEMO_ALL_SECTIONS = "1";
   }
   // A host with its own certificate authority offers the root on the sign-in page.
   if (service && process.env.OPENEOC_TRUST_CERTIFICATE_URL)

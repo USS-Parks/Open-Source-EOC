@@ -358,6 +358,15 @@ test("shipped desktop profiles have separate default ports, databases, and stora
   assert.throws(() => profilePaths(root, "acceptance"), /Profile must be one of/);
 });
 
+test("only the desktop demonstration lists every section by default, never a host", () => {
+  const source = readFileSync(fileURLToPath(new URL("./desktop.mjs", import.meta.url)), "utf8");
+  const demoOnly = /\n {2}if \(profile === "demo" && !service\) \{\r?\n[\s\S]*?\n {2}\}\r?\n/.exec(source)?.[0];
+  assert.ok(demoOnly, "the demo-only runtime branch is present");
+  assert.match(demoOnly, /runtimeConfig\.OPENEOC_DEMO_ALL_SECTIONS = "1";/);
+  // Set in that branch and nowhere else, so no other profile and no host turns it on.
+  assert.equal(source.split("OPENEOC_DEMO_ALL_SECTIONS").length - 1, 1);
+});
+
 test("acceptance profile requires the explicit test-runtime switch", () => {
   const contractsUrl = new URL("./lib/contracts.mjs", import.meta.url).href;
   const result = spawnSync(process.execPath, [

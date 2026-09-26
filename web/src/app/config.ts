@@ -65,6 +65,8 @@ interface RuntimeConfig {
   readonly OPENEOC_DEMO_PASSWORD?: string;
   /** The incident the desktop demonstration opens on a person's first sign-in. */
   readonly OPENEOC_DEMO_INCIDENT?: string;
+  /** "1" when the desktop demonstration lists every section until the person chooses otherwise. */
+  readonly OPENEOC_DEMO_ALL_SECTIONS?: string;
   /** Where a host with its own certificate authority serves the authority's root certificate. */
   readonly OPENEOC_TRUST_CERTIFICATE_URL?: string;
 }
@@ -94,6 +96,11 @@ export function demoSignIn(): { readonly email: string; readonly password: strin
 /** The incident, by name, that the demonstration opens before the person has chosen one. */
 export function demoIncident(): string | undefined {
   return syntheticData() ? runtime().OPENEOC_DEMO_INCIDENT || undefined : undefined;
+}
+
+/** Whether the demonstration lists every section before the person has chosen in Settings. */
+export function demoAllSections(): boolean {
+  return syntheticData() && runtime().OPENEOC_DEMO_ALL_SECTIONS === "1";
 }
 
 /** Signing out of the demonstration keeps this tab on the sign-in page instead of signing in again. */
