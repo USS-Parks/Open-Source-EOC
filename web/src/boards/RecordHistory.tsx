@@ -47,7 +47,8 @@ export function RecordHistory(props: { readonly load: HistoryPageLoader; readonl
     {entries.length ? <ol className="board-history" aria-label="Record history">
       {entries.map((entry) => <li key={entry.id}>
         <strong>{entry.run ? `Action: ${entry.run.action.label}` : ACTIONS[entry.category] ?? entry.category.replaceAll(".", " ")}
-          {entry.corrects ? " (correction)" : ""}{entry.action ? ` by action ${entry.action.label}` : ""}</strong>
+          {entry.corrects ? " (correction)" : ""}{entry.action ? ` by action ${entry.action.label}` : ""}
+          {entry.via === "sms" ? " by text message" : ""}</strong>
         {" · "}{new Date(entry.at).toLocaleString()}
         {" · "}{entry.actor.displayName}{entry.actor.positionTitle || entry.actor.organizationName
           ? ` (${[entry.actor.positionTitle, entry.actor.organizationName].filter(Boolean).join(" · ")})` : ""}

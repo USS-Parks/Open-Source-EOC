@@ -130,12 +130,13 @@ function readableData(data: Record<string, unknown>, readable: ReadonlySet<strin
 async function gatherActivityLog(sql: Sql, board?: ReadableIapBoard): Promise<ActivityLogEntry[]> {
   if (!board) return [];
   const rows = await sql`
-    select data, created_at from board_records where board_id = ${board.id} order by created_at limit 200`;
+    select data, created_at, received_via from board_records where board_id = ${board.id} order by created_at limit 200`;
   return rows.map((r) => {
     const data = readableData(r.data as Record<string, unknown>, board.readable);
     return {
       time: (r.created_at as Date).toISOString().slice(11, 16),
-      entry: String(data.entry ?? ""),
+      // A texted entry's sender number can be forged; the printed 214 says how it came in.
+      entry: `${String(data.entry ?? "")}${r.received_via === "sms" ? " (by text)" : ""}`,
     };
   });
 }

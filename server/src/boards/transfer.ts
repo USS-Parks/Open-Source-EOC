@@ -43,16 +43,22 @@ export async function exportViewTable(
   options: ViewOptions,
 ): Promise<BoardTable> {
   const rows: unknown[][] = [];
+  const vias: unknown[] = [];
   let headers: string[];
   let cursor: string | undefined;
   do {
     const page = await listViewRecords(sql, actor, boardId, viewKey, incidentId, { ...options, cursor, limit: 500 });
     headers = ["id", ...page.columns];
-    for (const record of page.records) rows.push(headers.map((key) => record[key]));
+    for (const record of page.records) {
+      rows.push(headers.map((key) => record[key]));
+      vias.push(record.receivedVia ?? "");
+    }
     if (rows.length > MAX_EXPORT_ROWS)
       throw new AuthError(413, `export exceeds ${MAX_EXPORT_ROWS} rows; narrow the view`);
     cursor = page.nextCursor ?? undefined;
   } while (cursor);
+  // A texted record's sender number can be forged, so an export holding one says which came in by text.
+  if (vias.some(Boolean)) return { headers: [...headers, "received_via"], rows: rows.map((row, i) => [...row, vias[i]]) };
   return { headers, rows };
 }
 

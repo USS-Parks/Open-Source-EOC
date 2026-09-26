@@ -6,6 +6,7 @@ import type {
   DeliveryHoldKind,
   NotificationChannelKind,
   NotificationChannelView,
+  SmsRefusal,
   SmsReply,
 } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
@@ -192,6 +193,22 @@ const REPLY_OUTCOMES: Readonly<Record<SmsReply["outcome"], { text: string; statu
   answered: { text: "Answered", status: "success" },
   not_an_answer: { text: "Not one of the answers", status: "warning" },
   unmatched: { text: "No send to this number", status: "unknown" },
+  logged: { text: "Filed on the activity log", status: "success" },
+  refused: { text: "Not filed", status: "warning" },
+};
+
+/** Why an activity text was not filed, as the list says it. */
+const REFUSALS: Readonly<Record<SmsRefusal, string>> = {
+  keyword: "carrier keyword",
+  echo: "OpenEOC's own text coming back",
+  rate_limited: "over the hourly limit for this number",
+  shared_number: "number on more than one directory entry",
+  too_long: "entry too long",
+  empty: "no entry",
+  no_assignment: "no current assignment",
+  choose_incident: "incident not picked",
+  refused_by_log: "the log refused it",
+  failed: "the text could not be read",
 };
 
 function SmsPanel(props: { client: ApiClient; jurisdictionId: string; view: NotificationChannelView; onChanged: () => void }) {
@@ -201,12 +218,13 @@ function SmsPanel(props: { client: ApiClient; jurisdictionId: string; view: Noti
   const [username, setUsername] = useState(text(saved.username));
   const [token, setToken] = useState("");
   const [from, setFrom] = useState(text(saved.from));
+  const [activityLog, setActivityLog] = useState(saved.activityLog === true);
   const action = useAction();
   const save = () => action.run(async () => {
     const settings = provider === "fixture"
       ? { provider }
       : provider === "gateway"
-        ? { provider, url: url.trim(), username: username.trim() }
+        ? { provider, url: url.trim(), username: username.trim(), ...(activityLog ? { activityLog } : {}) }
         : { provider, url: url.trim(), username: username.trim(), from: from.trim() };
     await props.client.saveNotificationChannel(props.jurisdictionId, "sms", { settings, ...(token ? { secret: token } : {}) });
     setToken("");
@@ -218,7 +236,8 @@ function SmsPanel(props: { client: ApiClient; jurisdictionId: string; view: Noti
     props.onChanged();
     return read.read === 0
       ? "No new replies on the gateway."
-      : `Read ${read.read} new ${read.read === 1 ? "reply" : "replies"}: ${read.acknowledged + read.answered} recorded, ${read.notAnAnswer} not one of the answers, ${read.unmatched} with no send to the number.`;
+      : `Read ${read.read} new ${read.read === 1 ? "reply" : "replies"}: ${read.acknowledged + read.answered} recorded, ${read.notAnAnswer} not one of the answers, ${read.unmatched} with no send to the number.${
+        read.logged + read.refused > 0 ? ` ${read.logged} filed on an activity log, ${read.refused} not filed.` : ""}`;
   });
   const recorded = props.view.fixtureMessages ?? [];
   const replies = props.view.replies ?? [];
@@ -241,6 +260,18 @@ function SmsPanel(props: { client: ApiClient; jurisdictionId: string; view: Noti
             <TextField label="Gateway password" type="password" value={token} onChange={setToken} />
           </> : null}
         </div>
+        {provider === "gateway" ? <label className="eoc-check">
+          <input type="checkbox" checked={activityLog} onChange={(event) => setActivityLog(event.target.checked)} />
+          File texted activity on the ICS 214 activity log
+        </label> : null}
+        {provider === "gateway" && activityLog ? <p className="d21-muted">
+          A responder texts LOG and what they did from a number on their contacts directory entry, once they have confirmed
+          it under Settings, Account with a code texted to it, and it is filed as them on the activity log of the open
+          incident they hold a position on, marked as texted. When on more than one incident, add # and the start of its
+          name, for example: LOG #north Arrived at staging. A text without LOG or # is never filed, and a number not
+          registered and confirmed gets no answer.
+          {props.view.activityLogSince ? ` On since ${new Date(props.view.activityLogSince).toLocaleString()}.` : " Texts read from when you save are filed."}
+        </p> : null}
         {provider !== "fixture" ? <Fingerprint view={props.view} what={provider === "gateway" ? "password" : "token"} /> : null}
         {action.status}
         <div className="d21-toolbar">
@@ -265,7 +296,8 @@ function SmsPanel(props: { client: ApiClient; jurisdictionId: string; view: Noti
               <div className="d21-readiness-title">
                 <div>
                   <strong>{reply.recipient ? `${reply.recipient} (${reply.sender})` : reply.sender}</strong>
-                  <span>“{reply.body}”{reply.subject ? ` to ${reply.subject}` : ""}</span>
+                  <span>“{reply.body}”{reply.subject ? ` to ${reply.subject}` : ""}{reply.incident ? ` on ${reply.incident}` : ""}
+                    {reply.refusal ? `: ${REFUSALS[reply.refusal]}` : ""}</span>
                 </div>
               </div>
               <span className="d21-readiness-badge">

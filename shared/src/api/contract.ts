@@ -196,6 +196,7 @@ GET /api/v1/jurisdictions/:jurisdictionId/threads
 GET /api/v1/jurisdictions/:jurisdictionId/volunteers
 GET /api/v1/mass-notifications/:massNotificationId
 GET /api/v1/me
+GET /api/v1/me/sms-numbers
 GET /api/v1/metrics
 GET /api/v1/notifications
 GET /api/v1/notifications/stream
@@ -381,6 +382,8 @@ POST /api/v1/jurisdictions/:jurisdictionId/volunteers
 POST /api/v1/late-submissions/:lateSubmissionId/accept
 POST /api/v1/late-submissions/:lateSubmissionId/refuse
 POST /api/v1/mass-notifications/:massNotificationId/acknowledgements
+POST /api/v1/me/sms-numbers/code
+POST /api/v1/me/sms-numbers/confirm
 POST /api/v1/notifications/:notificationId/acknowledge
 POST /api/v1/notifications/:notificationId/read
 POST /api/v1/notifications/:notificationId/resend

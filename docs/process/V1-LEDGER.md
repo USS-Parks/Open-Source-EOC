@@ -14526,3 +14526,90 @@ incidents, built in lane `lane/mp13`.
   against the WebEOC shot.
 - **Full suite:** as MP11, once per landing batch before the push.
 - **Rollback.** Revert the commit.
+
+## Map and dashboard parity MP15A: field activity by text message
+
+Map and Dashboard Parity PSPR unit MP15A, added by amendment 1 (Juvare's
+ICS 214 by SMS), built in lane `lane/mp15a`.
+
+- **What the code did before.** The site-network SMS gateway read replies to
+  mass sends (VA21); a text could not add anything to an incident.
+- **What changed.**
+  - An administrator may turn on "File texted activity on the ICS 214
+    activity log" for the SMS gateway; it is off by default, and only texts
+    the server first reads after it was turned on are filed.
+  - A text starting with `LOG` or `#` (`LOG [#incident] entry`) is filed as
+    the person on the activity log of the open incident they hold a position
+    on. The number must be on an active contacts entry linked to them, and
+    they must have confirmed it while signed in (Settings, Account, "Activity
+    by text message") with a six-digit code texted to it. An unmarked text is
+    never filed; it goes to an open send or does nothing.
+  - The entry is written as the person inside `withPerson` through the board
+    rules, marked on screen ("By text"), in its history and audit (`via:
+    "sms"`), as "(by text)" on the printed ICS 214 and in a `received_via`
+    export column. The person gets a confirmation text and an in-app notice.
+  - Refusals with no reply: carrier keywords (with or without LOG), the
+    product's own echoes, unregistered or unconfirmed numbers, short codes,
+    rate-limited and unreadable texts. Refusals answered to the registered
+    number only: a shared number, an entry too long or empty, no assignment,
+    no incident picked, the log refusing the person.
+  - Limits: 20 texts a number an hour, counting only texts filed or answered;
+    300 answers and codes a gateway an hour; 5 codes a number and a person a
+    day; five wrong codes lock a number for a day.
+  - Each text is filed once, by gateway id, in its own transaction under a
+    per-jurisdiction lock, on one connection, with transient errors
+    (40001, 40P01, 55P03) retried.
+  - Contacts audit now records phones and the person link, with previous
+    values.
+  - Migration `0169_sms_activity_log.sql` (renumbered from the lane's 9001):
+    `notification_channels.activity_log_since`; `board_records.received_via`
+    (its CHECK added `NOT VALID`, then validated); `sms_replies` refusal,
+    person, record and reply columns, a unique index on `record_id`,
+    tightened insert and read policies; `sms_activity_numbers` and
+    `sms_activity_codes` with no application write and no read of the code;
+    the SECURITY DEFINER functions `issue_sms_activity_code` and
+    `confirm_sms_activity_number` (search path pinned); a contacts trigger
+    that clears confirmations when phones, the person link or the active
+    flag change or the contact is deleted; `sms_activity_logging(jid)` and
+    `sms_filed_record`.
+- **Review.** Two adversarial audits.
+  - First: a text with a NUL or a lone surrogate wedged the reader (text is
+    now cleaned and each text isolated); an administrator could file as any
+    member, and a recycled number as its old owner (numbers now need their
+    person's own code confirmation, cleared by any contact change, with the
+    audit and the in-app notice); auto-replies and echoes were filed (LOG or
+    # now required, echoes dropped); the logged-row policy was too broad; the
+    mark stopped at the screen; the rate limits counted silent refusals, were
+    per read and replied after a concurrent keep; the phone's clock decided
+    the cutoff. All fixed.
+  - Second, of the new pieces: a person could write their own code hash and
+    confirm without the texted code, and reset the lock (codes are now issued
+    and checked only by the definer functions, with no application write or
+    code read); the resend interval could be raced and codes had no cap
+    (atomic issue, daily caps, codes counted in the gateway budget, attempts
+    never reset); a null code confirmed and a null expiry never expired
+    (refused); the reader held locks for the whole batch on a second
+    connection and kept transient errors as failed (one transaction per
+    text, retries); every member could read logged entries (administrators
+    and the person only); reactivating a contact kept its confirmation
+    (cleared). All fixed and tested. Noted without change: a deleted
+    contact's numbers stay in the append-only contacts audit, read by the
+    people who read contacts.
+- **Decisions.** Numbers match whole, not on their last ten digits.
+  Positions only; incident participants cannot be linked to contacts. Code
+  columns are hidden from the application roles rather than keyed hashes.
+  Replies and codes are best effort. Remaining risks: a number recycled after
+  confirmation files as the old owner until the in-app notice is acted on,
+  and a person can be talked into entering a code for someone else.
+- **Verification.** Before the rebase: server suites (`sms-activity` 23
+  tests, `local-carriers`, `boards`, `reports`, `contacts`, `iap`,
+  `api-docs`, `service-identities`, exports) 87 of 87 and `board-engine` 19
+  of 19; web suites 91 of 92 in the combined run, the one failure
+  (`condition-editor` timing out at 5.1 s, untouched here) 5 of 5 alone.
+  After the rebase onto MP13: `api-docs`, `sms-activity`, `aar-rollup`,
+  `local-carriers`, `contacts`, the web admin suites and
+  `text-activity-numbers`: 12 files, 68 tests; `pnpm check:static` pass.
+  API docs regenerated.
+- **Full suite:** as MP11, once per landing batch before the push.
+- **Rollback.** Revert the commit; migration 0169 is forward-only, so a
+  rollback leaves its columns and tables unused.

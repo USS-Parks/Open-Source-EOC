@@ -102,14 +102,19 @@ const TEST_BODY = "This is a test message from OpenEOC. The channel is working."
 
 async function channelView(tx: Sql, jurisdictionId: string, kind: MessageKind) {
   const [row] = await tx`
-    select settings, secret_fingerprint, updated_at from notification_channels
+    select settings, secret_fingerprint, updated_at, activity_log_since from notification_channels
     where jurisdiction_id = ${jurisdictionId} and kind = ${kind}`;
-  // The last texts read from an SMS gateway, with the send and person each reached.
+  // The last texts read from an SMS gateway, with the send and person each
+  // reached, or the person and incident log an activity text was filed as.
   const replies = kind === "sms" ? await tx`
-    select s.id, s.sender, s.body, s.received_at, s.read_at, s.outcome, r.name, m.subject
+    select s.id, s.sender, s.body, s.received_at, s.read_at, s.outcome, s.refusal, r.name, m.subject,
+           p.display_name as person_name, i.name as incident_name
     from sms_replies s
     left join mass_notification_recipients r on r.id = s.recipient_id
     left join mass_notifications m on m.id = r.mass_notification_id
+    left join persons p on p.id = s.person_id
+    left join board_records br on br.id = s.record_id
+    left join incidents i on i.id = br.incident_id
     where s.jurisdiction_id = ${jurisdictionId}
     order by s.read_at desc, s.received_at desc limit 20` : [];
   return {
@@ -120,6 +125,8 @@ async function channelView(tx: Sql, jurisdictionId: string, kind: MessageKind) {
     secretStorageAvailable: hasSecretKey(),
     ...(kind === "sms" ? {
       fixtureMessages: fixtureMessages(jurisdictionId).slice(0, 20),
+      /** When texted activity logging was turned on; null while it is off. */
+      activityLogSince: row?.activity_log_since ? (row.activity_log_since as Date).toISOString() : null,
       replies: replies.map((s) => ({
         id: s.id as string,
         sender: s.sender as string,
@@ -127,8 +134,10 @@ async function channelView(tx: Sql, jurisdictionId: string, kind: MessageKind) {
         receivedAt: (s.received_at as Date).toISOString(),
         readAt: (s.read_at as Date).toISOString(),
         outcome: s.outcome as string,
-        recipient: (s.name as string | null) ?? null,
+        refusal: (s.refusal as string | null) ?? null,
+        recipient: (s.name as string | null) ?? (s.person_name as string | null) ?? null,
         subject: (s.subject as string | null) ?? null,
+        incident: (s.incident_name as string | null) ?? null,
       })),
     } : {}),
   };
@@ -390,16 +399,20 @@ export function notifyRoutes(
           : fresh
             ? fingerprint(body.secret!)
             : ((existing?.secret_fingerprint as string | null | undefined) ?? null);
+        // Texted activity logging files only what the phone received after it was turned on.
+        const activityLog = "provider" in settings && settings.provider === "gateway" && settings.activityLog === true;
         await tx`
           insert into notification_channels
-            (jurisdiction_id, kind, settings, secret_envelope, secret_fingerprint, updated_by)
+            (jurisdiction_id, kind, settings, secret_envelope, secret_fingerprint, updated_by, activity_log_since)
           values
             (${jurisdictionId}, ${kind}, ${tx.json(settings as never)}, ${envelope}, ${print},
-             ${req.principal.person.id})
+             ${req.principal.person.id}, ${activityLog ? new Date() : null})
           on conflict (jurisdiction_id, kind) do update set
             settings = excluded.settings, secret_envelope = excluded.secret_envelope,
             secret_fingerprint = excluded.secret_fingerprint,
-            updated_by = excluded.updated_by, updated_at = now()`;
+            updated_by = excluded.updated_by, updated_at = now(),
+            activity_log_since = case when excluded.activity_log_since is null then null
+              else coalesce(notification_channels.activity_log_since, excluded.activity_log_since) end`;
         await recordAudit(tx, req.principal, {
           jurisdictionId,
           category: "notification.channel_configured",

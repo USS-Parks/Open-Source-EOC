@@ -11774,6 +11774,81 @@
         "x-openeoc-audience": "operator"
       }
     },
+    "/api/v1/me/sms-numbers": {
+      "get": {
+        "operationId": "getMeSmsNumbers",
+        "tags": [
+          "auth"
+        ],
+        "summary": "Read me sms numbers",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "$ref": "#/components/responses/Unpublished"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Refused"
+          }
+        },
+        "x-openeoc-audience": "operator"
+      }
+    },
+    "/api/v1/me/sms-numbers/code": {
+      "post": {
+        "operationId": "postMeSmsNumbersCode",
+        "tags": [
+          "auth"
+        ],
+        "summary": "Run me sms numbers code",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Unpublished"
+        },
+        "responses": {
+          "2XX": {
+            "$ref": "#/components/responses/Unpublished"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Refused"
+          }
+        },
+        "x-openeoc-audience": "operator"
+      }
+    },
+    "/api/v1/me/sms-numbers/confirm": {
+      "post": {
+        "operationId": "postMeSmsNumbersConfirm",
+        "tags": [
+          "auth"
+        ],
+        "summary": "Run me sms numbers confirm",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Unpublished"
+        },
+        "responses": {
+          "2XX": {
+            "$ref": "#/components/responses/Unpublished"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Refused"
+          }
+        },
+        "x-openeoc-audience": "operator"
+      }
+    },
     "/api/v1/metrics": {
       "get": {
         "operationId": "getMetrics",

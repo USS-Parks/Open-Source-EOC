@@ -344,6 +344,8 @@ export interface BoardRecordDetailResponse {
   readonly updatedAt: string; readonly updatedBy: BoardRecordActor | null;
   readonly canEdit: boolean; readonly history: readonly BoardRecordHistoryEntry[];
   readonly archivedAt?: string | null;
+  /** "sms" when the record came in by text message, whose sender number can be forged. */
+  readonly receivedVia?: "sms" | null;
   /** Fields the record's workflow state keeps from changing, and that state. */
   readonly readOnly?: { readonly state: string; readonly fields: readonly string[] } | null;
 }
@@ -2582,6 +2584,18 @@ export class ApiClient {
   readSmsReplies(jurisdictionId: string): Promise<SmsRepliesRead> {
     return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/sms-replies/read`);
   }
+  /** The caller's numbers that may log activity by text, and whether each is confirmed. */
+  mySmsNumbers(): Promise<{ numbers: readonly SmsActivityNumber[] }> {
+    return this.request("GET", "/api/v1/me/sms-numbers");
+  }
+  /** Texts a code to one of the caller's registered numbers. */
+  sendSmsNumberCode(jurisdictionId: string, phone: string): Promise<{ expiresAt: string }> {
+    return this.request("POST", "/api/v1/me/sms-numbers/code", { jurisdictionId, phone });
+  }
+  /** Confirms the number with the code texted to it; only then does it file activity. */
+  confirmSmsNumber(jurisdictionId: string, phone: string, code: string): Promise<{ confirmed: true }> {
+    return this.request("POST", "/api/v1/me/sms-numbers/confirm", { jurisdictionId, phone, code });
+  }
   /** How long each kind of outbound delivery waits for a route before it expires. */
   getDeliveryHolds(jurisdictionId: string): Promise<{ holds: readonly DeliveryHold[] }> {
     return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/delivery-holds`);
@@ -3003,6 +3017,20 @@ export interface NotificationChannelView {
   readonly fixtureMessages?: ReadonlyArray<{ readonly messageId: string; readonly to: string; readonly body: string; readonly at: string }>;
   /** SMS only: the last texts read from an SMS gateway, newest first, with what each recorded. */
   readonly replies?: readonly SmsReply[];
+  /** SMS only: when texted activity logging was turned on; null while it is off. */
+  readonly activityLogSince?: string | null;
+}
+/** Why an activity text was not filed. */
+export type SmsRefusal =
+  | "keyword" | "echo" | "rate_limited" | "shared_number" | "too_long" | "empty"
+  | "no_assignment" | "choose_incident" | "refused_by_log" | "failed";
+/** A number on a contacts entry linked to the caller, where texted activity logging is on. */
+export interface SmsActivityNumber {
+  readonly jurisdictionId: string;
+  readonly jurisdictionName: string;
+  readonly phone: string;
+  readonly confirmedAt: string | null;
+  readonly codeExpiresAt: string | null;
 }
 export interface SmsReply {
   readonly id: string;
@@ -3010,10 +3038,13 @@ export interface SmsReply {
   readonly body: string;
   readonly receivedAt: string;
   readonly readAt: string;
-  readonly outcome: "acknowledged" | "answered" | "not_an_answer" | "unmatched";
-  /** Whom it answered, and the send; null when it matched no one. */
+  readonly outcome: "acknowledged" | "answered" | "not_an_answer" | "unmatched" | "logged" | "refused";
+  readonly refusal?: SmsRefusal | null;
+  /** Whom it answered, or the person an activity text was from; null when it matched no one. */
   readonly recipient: string | null;
   readonly subject: string | null;
+  /** The incident whose activity log a text was filed on. */
+  readonly incident?: string | null;
 }
 export interface SmsRepliesRead {
   readonly read: number;
@@ -3021,6 +3052,8 @@ export interface SmsRepliesRead {
   readonly answered: number;
   readonly notAnAnswer: number;
   readonly unmatched: number;
+  readonly logged: number;
+  readonly refused: number;
 }
 
 
@@ -3051,6 +3084,8 @@ export interface BoardRecordChange {
   readonly action?: { readonly key: string; readonly label: string } | null;
   /** A board action's run, on a `board.action.run` entry. */
   readonly run?: BoardActionRun | null;
+  /** "sms" on a creation that came in by text message. */
+  readonly via?: "sms";
 }
 export interface BoardImportResult {
   readonly dryRun: boolean;

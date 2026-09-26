@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import type { ApiClient } from "../api/client.js";
+import type { ApiClient, SmsActivityNumber } from "../api/client.js";
 import { syntheticData } from "../config.js";
 import { setPreferences, usePreferences } from "../preferences.js";
 import { desktopAlertsSupported, playAlertTone } from "../../notifications/alerting.js";
@@ -75,7 +75,61 @@ function AccountSettings(props: { readonly client: ApiClient; readonly email: st
           <button type="submit" className="eoc-kit-button is-primary" disabled={busy}>{busy ? "Changing…" : "Change password"}</button>
         </fieldset>
       </form>
+      <TextActivityNumbers client={props.client} />
     </>
+  );
+}
+
+/**
+ * The numbers on contacts entries linked to the person where texted activity
+ * logging is on. A number files activity only once the person confirms it
+ * here with a code texted to it; nothing shows while there is none.
+ */
+export function TextActivityNumbers(props: { readonly client: ApiClient }) {
+  const [numbers, setNumbers] = useState<readonly SmsActivityNumber[]>([]);
+  const [codes, setCodes] = useState<Readonly<Record<string, string>>>({});
+  const [message, setMessage] = useState<{ readonly kind: "error" | "done"; readonly text: string } | null>(null);
+  const load = () => props.client.mySmsNumbers().then((result) => setNumbers(result.numbers), () => setNumbers([]));
+  useEffect(() => { void load(); }, [props.client]);
+  if (numbers.length === 0) return null;
+  const key = (n: SmsActivityNumber) => `${n.jurisdictionId} ${n.phone}`;
+  async function act(run: () => Promise<unknown>, done: string) {
+    setMessage(null);
+    try {
+      await run();
+      setMessage({ kind: "done", text: done });
+      await load();
+    } catch (cause) {
+      setMessage({ kind: "error", text: cause instanceof Error ? cause.message : "That did not work." });
+    }
+  }
+  return (
+    <fieldset>
+      <legend>Activity by text message</legend>
+      <p>From a confirmed number, text LOG and what you did to file it on your incident&apos;s activity log.</p>
+      <ul>
+        {numbers.map((n) => (
+          <li key={key(n)}>
+            <strong>{n.phone}</strong> ({n.jurisdictionName}): {n.confirmedAt ? "confirmed" : "not confirmed"}
+            {n.confirmedAt ? null : <>
+              <button type="button" className="eoc-kit-button"
+                onClick={() => void act(() => props.client.sendSmsNumberCode(n.jurisdictionId, n.phone), `A code was texted to ${n.phone}.`)}>
+                Text me a code
+              </button>
+              <label className="is-field">Code for {n.phone}
+                <input inputMode="numeric" autoComplete="one-time-code" value={codes[key(n)] ?? ""}
+                  onChange={(event) => setCodes({ ...codes, [key(n)]: event.target.value })} />
+              </label>
+              <button type="button" className="eoc-kit-button is-primary"
+                onClick={() => void act(() => props.client.confirmSmsNumber(n.jurisdictionId, n.phone, codes[key(n)] ?? ""), `${n.phone} is confirmed.`)}>
+                Confirm {n.phone}
+              </button>
+            </>}
+          </li>
+        ))}
+      </ul>
+      {message ? <p role={message.kind === "error" ? "alert" : "status"} className={message.kind === "error" ? "eoc-text-critical" : "eoc-text-success"}>{message.text}</p> : null}
+    </fieldset>
   );
 }
 

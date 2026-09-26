@@ -15,8 +15,8 @@ export interface FixtureGateway {
   readonly password: string;
   /** Each text the phone was asked to send, oldest first. */
   readonly sent: Array<{ id: string; to: string; text: string }>;
-  /** A text arriving at the phone; returns its inbox id. */
-  reply(sender: string, text: string, at?: Date): string;
+  /** A text arriving at the phone; returns its inbox id. An id given again lists the text twice, as a replay. */
+  reply(sender: string, text: string, at?: Date, id?: string): string;
   /** While true the phone answers 503, as one that is off or out of reach. */
   down: boolean;
   close(): Promise<void>;
@@ -65,9 +65,9 @@ export async function fixtureGateway(username = "sms", password = "gateway-passw
     username,
     password,
     sent,
-    reply(sender: string, text: string, at = new Date()) {
+    reply(sender: string, text: string, at = new Date(), given?: string) {
       seq += 1;
-      const id = `in-${seq}`;
+      const id = given ?? `in-${seq}`;
       inbox.push({ id, type: "SMS", sender, recipient: "+17075550199", simNumber: 1, contentPreview: text, createdAt: phoneTime(at) });
       return id;
     },

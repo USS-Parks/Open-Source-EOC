@@ -715,6 +715,9 @@ export function BoardRecordDetailPane(props: {
       <section aria-labelledby="record-attribution-title">
         <h3 id="record-attribution-title" className="board-record-heading">Attribution</h3>
         <p>Created {formatDate(context.detail.createdAt)} by {actorLabel(context.detail.createdBy)}.</p>
+        {context.detail.receivedVia === "sms"
+          ? <p role="note">Filed by text message from a number registered to them. A sender&apos;s number can be forged, so confirm anything that matters.</p>
+          : null}
         {context.detail.updatedBy ? <p>Updated {formatDate(context.detail.updatedAt)} by {actorLabel(context.detail.updatedBy)}.</p> : null}
       </section>
       <section aria-labelledby="record-history-title">

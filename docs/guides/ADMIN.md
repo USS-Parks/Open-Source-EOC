@@ -730,6 +730,59 @@ the phone's clock, so keep the phone's clock right. Anyone who knows a
 recipient's number can text the phone as them; the link is the stronger
 proof.
 
+**Activity by text message.** With **File texted activity on the ICS 214
+activity log** ticked on the gateway, a responder texts what they did and it
+is filed on the activity log of the open incident they hold a position on,
+as them. The entry is marked **By text** in the log, on the record's
+attribution and history (`board.record.created` carries `via: "sms"`), as
+"(by text)" on the printed ICS 214, and in a `received_via` column of a view
+exported with one. The phone texts back what was filed, and the person gets
+an in-app notice for each entry. It is off by default, and only texts the
+server first reads after it is turned on are filed.
+
+A number files activity only when it is on a contacts directory entry linked
+to the person (**Person** on the contact, which only an administrator sets)
+and the person has confirmed it: under **Settings**, **Account**, **Activity
+by text message**, **Text me a code** texts a six-digit code to the number
+through the gateway, and the person enters it while signed in. A code lasts
+15 minutes; a new one can be sent every five minutes, and at most five a day
+to one number or to one person. Five wrong codes lock the number for a day
+(a new code does not give more tries), after which it has five more. Codes
+are issued and checked only inside the database, and no application account
+can read a code. Any change to a contact's numbers, person link or active
+flag clears what it confirmed, and `contact.created` and `contact.updated`
+record the numbers and person link before and after; those numbers stay in
+the audit trail after the contact is deleted, read by the same people who
+read contacts. What a text says:
+
+- `LOG Arrived at staging` is an entry. A text without LOG or # is never an
+  entry: it answers a send to the number that can still be answered, as
+  above, or does nothing, so an automatic reply is never filed.
+- `#north Arrived at staging` or `LOG #north Arrived at staging` picks the
+  incident whose name starts with those letters and digits (North Coast
+  Storm). It is needed only by someone holding positions on more than one
+  open incident; without it the phone answers with the choices.
+
+Nothing is filed, and the phone answers the registered number saying why,
+for a number on more than one directory entry, an entry over 1000 characters
+or empty, a person with no position on an open incident with an activity log,
+an incident not picked, or an entry the log refuses them (a viewer, a closed
+incident). Nothing is filed and nothing is answered for a number not
+registered to and confirmed by an enabled person, a short code, a carrier
+keyword (STOP, HELP and the like), OpenEOC's own text coming back, or a text
+the server cannot read (kept as failed; the rest are still read). One number
+gets at most 20 texts an hour filed or answered, and past that its texts are
+kept without either; texts refused without an answer do not count, so no one
+can lock a number out by forging it. A gateway sends at most 300 answers and
+codes an hour; past that it still files. A number matches whole, not on its
+last ten digits, and every answer goes to the number on the directory entry.
+Each text is filed once, by the gateway's id, in its own transaction; a text
+that meets a deadlock is tried again, and one that keeps meeting it is left
+for the next read. Members read the replies to sends; an activity text,
+which holds the entry, is read only by administrators and its person. A sender's number can be forged, which is why the entry is
+marked and the person is told by text and in the app: a person told of an
+entry they did not send should tell the EOC.
+
 **Call-down sheets.** Any send's receipts print a call-down sheet: the
 message, its answers, and each person in order with their number and blank
 columns for the time reached, the answer and who called. Whoever runs the

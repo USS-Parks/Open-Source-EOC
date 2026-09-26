@@ -161,7 +161,7 @@ describe("an SMS gateway on the site network", () => {
     expect((await readReplies(memberToken)).statusCode).toBe(403);
     const read = await readReplies();
     expect(read.statusCode, read.body).toBe(200);
-    expect(read.json()).toEqual({ read: 4, acknowledged: 0, answered: 2, notAnAnswer: 1, unmatched: 1 });
+    expect(read.json()).toEqual({ read: 4, acknowledged: 0, answered: 2, notAnAnswer: 1, unmatched: 1, logged: 0, refused: 0 });
     // Each text is read once.
     expect((await readReplies()).json()).toMatchObject({ read: 0 });
 

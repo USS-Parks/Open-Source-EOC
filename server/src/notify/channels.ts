@@ -54,6 +54,8 @@ export const SmsSettings = z.discriminatedUnion("provider", [
     provider: z.literal("gateway"),
     url: z.url({ protocol: /^https?$/ }),
     username: z.string().min(1).max(200),
+    /** File texted activity on the ICS 214 activity log (contacts/sms-activity.ts); off unless set. */
+    activityLog: z.boolean().optional(),
   }),
 ]);
 export type SmsSettings = z.infer<typeof SmsSettings>;
@@ -83,7 +85,8 @@ export interface InboundSms {
 }
 
 const InboxEntry = z.object({
-  id: z.string().min(1).max(200),
+  // Printable ASCII: the id is kept as sent and is what makes a text read once.
+  id: z.string().regex(/^[!-~]{1,200}$/),
   sender: z.string().min(1).max(40),
   contentPreview: z.string(),
   createdAt: z.string().refine((at) => !Number.isNaN(Date.parse(at))),
@@ -110,10 +113,21 @@ export async function readGatewayInbox(stored: StoredChannel, since: Date, optio
   // An entry this server cannot read is left on the phone rather than holding back the rest.
   return z.array(z.unknown()).parse(await res.json()).flatMap((entry) => {
     const m = InboxEntry.safeParse(entry);
-    return m.success
-      ? [{ id: m.data.id, sender: m.data.sender, text: m.data.contentPreview.slice(0, 1600), receivedAt: new Date(m.data.createdAt) }]
+    const sender = m.success ? storableText(m.data.sender).trim() : "";
+    return m.success && sender
+      ? [{ id: m.data.id, sender, text: storableText(m.data.contentPreview).slice(0, 1600), receivedAt: new Date(m.data.createdAt) }]
       : [];
   });
+}
+
+/**
+ * Text as the database keeps it: no control characters but tab and newline
+ * (PostgreSQL refuses NUL in text and JSON), and no unpaired surrogate, which
+ * becomes U+FFFD.
+ */
+export function storableText(text: string): string {
+  const kept = text.replace(/\p{Cc}/gu, (c) => (c === "\n" || c === "\t" ? c : ""));
+  return (kept as string & { toWellFormed(): string }).toWellFormed();
 }
 
 export type MessageKind = "email" | "sms";

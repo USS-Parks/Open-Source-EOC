@@ -196,7 +196,8 @@ export function contactRoutes(
         category: "contact.created",
         subjectTable: "contacts",
         subjectId: id,
-        payload: { name: input.name },
+        // The numbers and person link decide who a text files activity as.
+        payload: { name: input.name, phones: input.phones, personId: input.personId },
       });
       const [created] = await readContacts(tx, jurisdictionId, { id });
       return contactView(created!);
@@ -211,6 +212,7 @@ export function contactRoutes(
       const jurisdictionId = await ownerOf(tx, "contacts", contactId);
       requireAdmin(req.principal, jurisdictionId);
       await checkLinks(tx, jurisdictionId, input);
+      const [before] = await tx`select phones, person_id from contacts where id = ${contactId}`;
       await tx`
         update contacts set
           name = ${input.name}, organization = ${input.organization}, title = ${input.title},
@@ -223,7 +225,11 @@ export function contactRoutes(
         category: "contact.updated",
         subjectTable: "contacts",
         subjectId: contactId,
-        payload: { name: input.name, active: input.active },
+        // A change of numbers or person link also clears their texted-activity confirmations (a trigger).
+        payload: {
+          name: input.name, active: input.active, phones: input.phones, personId: input.personId,
+          previous: { phones: (before?.phones as string[] | undefined) ?? [], personId: (before?.person_id as string | null | undefined) ?? null },
+        },
       });
       const [updated] = await readContacts(tx, jurisdictionId, { id: contactId });
       return contactView(updated!);

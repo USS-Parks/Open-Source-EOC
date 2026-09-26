@@ -43,7 +43,9 @@ function ResolvedBoardView(props: Parameters<typeof BoardView>[0] & {
     header: fields.get(key)?.label ?? key,
     value: (record) => formatCell(record[key], fields.get(key)?.type),
     render: (record) => <span title={formatCell(record[key], fields.get(key)?.type)}>{formatCell(record[key], fields.get(key)?.type)}
-      {index === 0 && record.archivedAt ? <span className="board-archived-tag">Archived</span> : null}</span>,
+      {index === 0 && record.archivedAt ? <span className="board-archived-tag">Archived</span> : null}
+      {index === 0 && record.receivedVia === "sms"
+        ? <span className="board-archived-tag" title="Filed by text message; a sender's number can be forged">By text</span> : null}</span>,
     sortable: true,
     filterable: true,
     missingLabel: "Unavailable",

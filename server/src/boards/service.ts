@@ -380,8 +380,9 @@ export async function insertRecord(
   board: EffectiveBoard,
   parsed: Record<string, unknown>,
   incidentId?: string,
-  via?: "import",
-  /** Where an imported record came from, kept on its creation event. */
+  /** An import, or a text message, whose sender number can be forged; a text is marked on the record. */
+  via?: "import" | "sms",
+  /** Where an imported or texted record came from, kept on its creation event. */
   source?: Readonly<Record<string, string>>,
   /** The board action that wrote the record, named on its creation event (VC-17). */
   action?: ActionWrite,
@@ -389,10 +390,10 @@ export async function insertRecord(
   const id = randomUUID();
   await sql`
     insert into board_records
-      (id, board_id, data, created_by, created_by_position, geom, incident_id)
+      (id, board_id, data, created_by, created_by_position, geom, incident_id, received_via)
     values (${id}, ${board.id}, ${sql.json(parsed as never)}, ${actor.person.id},
             ${actor.position?.id ?? null}, ${geomExpr(sql, board.fields, parsed)},
-            ${incidentId ?? null})`;
+            ${incidentId ?? null}, ${via === "sms" ? "sms" : null})`;
   await recordAudit(sql, actor, {
     jurisdictionId: board.jurisdictionId,
     ...(incidentId ? { incidentId } : {}),
@@ -597,6 +598,8 @@ export async function getBoardRecordDetail(
       positionId: latestUpdate?.actor.positionId ?? null, positionTitle: latestUpdate?.actor.positionTitle ?? null,
       organizationName: latestUpdate?.actor.organizationName ?? null } : null,
     archivedAt: row.archived_at ? new Date(row.archived_at as string).toISOString() : null,
+    /** "sms" when the record came in by text message, whose sender number can be forged. */
+    receivedVia: (row.received_via as "sms" | null) ?? null,
     canEdit: shape.canContribute && Boolean(row.can_edit),
     /** The fields the record's workflow state keeps from changing, and that state; none when nothing is locked. */
     readOnly: locked ? { state: locked.state, fields: [...locked.fields].filter((key) => readable.has(key)) } : null,
@@ -717,6 +720,8 @@ export interface RecordHistoryEntry {
   readonly action: { readonly key: string; readonly label: string } | null;
   /** A board action's run, for a `board.action.run` entry. */
   readonly run: BoardActionRun | null;
+  /** "sms" on a creation that came in by text message, whose sender number can be forged. */
+  readonly via?: "sms";
 }
 
 /**
@@ -777,6 +782,7 @@ export async function listRecordHistory(
       ...(row.category === "board.action.run"
         ? { action: null, run: runOf(row.payload as BoardActionRun, readable) }
         : { action: actionOf(row.payload as Record<string, unknown>), run: null }),
+      ...((row.payload as { via?: unknown }).via === "sms" ? { via: "sms" as const } : {}),
     })),
   };
 }
@@ -917,7 +923,7 @@ export async function listViewRecords(
   const orderBy = keys.reduce((clauses, key) =>
     sql`${clauses} ${key.expr} ${key.dir === "asc" ? sql`asc` : sql`desc`},`, sql``);
   const rows = await sql`
-    select id, data, archived_at, created_at,
+    select id, data, archived_at, created_at, received_via,
            (select p.display_name from persons p where p.id = board_records.created_by) as creator_name,
            to_char(created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at ${keyColumns}
     from board_records
@@ -934,6 +940,7 @@ export async function listViewRecords(
     // When and by whom, as the record's detail shows them to the same readers.
     out.createdAt = new Date(r.created_at as string).toISOString();
     if (r.creator_name) out.createdByName = r.creator_name as string;
+    if (r.received_via) out.receivedVia = r.received_via as string;
     return out;
   });
   // One view semantics for server and browser (shared applyView): the SQL
