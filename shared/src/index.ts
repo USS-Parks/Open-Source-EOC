@@ -9,6 +9,7 @@ export * from "./boards/workflow.js";
 export * from "./boards/standard.js";
 export * from "./boards/view.js";
 export * from "./boards/diff.js";
+export * from "./boards/actions.js";
 export * from "./dashboards/def.js";
 export * from "./sitreps/def.js";
 export * from "./forms/expr.js";

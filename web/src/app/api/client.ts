@@ -1,4 +1,5 @@
 import type {
+  BoardActionRun,
   FieldDef,
   ViewCondition,
   ViewDef,
@@ -2937,6 +2938,10 @@ export interface BoardRecordChange {
   readonly seq: number; readonly id: string; readonly at: string; readonly category: string;
   readonly corrects: string | null; readonly actor: BoardRecordActor;
   readonly changes: ReadonlyArray<{ readonly field: string; readonly before: unknown; readonly after: unknown }>;
+  /** The board action that made this write, when one did. */
+  readonly action?: { readonly key: string; readonly label: string } | null;
+  /** A board action's run, on a `board.action.run` entry. */
+  readonly run?: BoardActionRun | null;
 }
 export interface BoardImportResult {
   readonly dryRun: boolean;

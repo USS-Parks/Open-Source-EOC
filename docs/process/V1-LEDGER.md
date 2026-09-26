@@ -10698,3 +10698,186 @@ Veoci Integration and Air Gap PSPR unit VA35 (AG-12).
 - **Rollback:** revert the commit; a region packet installed meanwhile
   still verifies under the old code only if its region field is dropped, so
   reinstall the California packet first.
+
+## Veoci and air gap VA25: declarative action catalog
+
+Veoci Integration and Air Gap PSPR unit VA25 (VC-17), under decision 5
+(scripting rejected, ADR-0004).
+
+- **What the code did before.** A board could notify on a record's creation
+  or update through notification rules (`server/src/notify/engine.ts`), but
+  could do nothing else by itself: no field set when another changed, no
+  record opened on another board, no transition requested. Veoci's Custom
+  Actions (form to workflow, field mapping into a new record) had no
+  counterpart.
+- **What changed.**
+  - **The catalog** (`shared/src/boards/actions.ts`). A board template may
+    carry `actions`, each a `key`, a `label`, a `trigger` (a record created,
+    a named field changed, a named workflow state entered), an optional
+    `condition` in the views' condition language (`match` all or any, up to
+    16 conditions, evaluated with the guards' `unmetGuardConditions`), and
+    one `step`: `set_field` (a literal value; a datetime value may be `now`
+    or `now` plus a time), `create_record` (the board of the same incident
+    made from template `board`, its record_ref field `link` pointed back at
+    the record, and `mapping` of target field from source field),
+    `transition` (a transition key) or `notify` (an in-app notice to the
+    record's creator or the holders of a position by key, with a message).
+    `BoardTemplateSchema` refuses an action naming a field, state or
+    transition the template lacks, a set value the field cannot hold, a
+    condition operator that does not fit its field, a mapping from a field
+    the template lacks, a target field filled twice, and a repeated key. At
+    most 50 actions per template.
+  - **The runner** (`server/src/boards/actions.ts`). After a person's REST
+    create, REST edit, workflow request or approval (the board routes), the
+    actions that write sets off run in the same transaction, as that person.
+    Each step goes through the service call a person's own action would
+    (`updateRecord`, `createRecord`, `requestWorkflowTransition`, and for a
+    notice a membership check and the notifications table), so it holds the
+    person's authority and no more: field write levels, record-level edit
+    rules, incident contribution, per-state read-only fields and guards all
+    apply, and `create_record` copies only fields the person may read. Each
+    step runs in a savepoint (`withSavepoint`, new in
+    `server/src/db/context.ts`, which also keeps the step's after-commit
+    announcements only if it is released): a refused step rolls back alone,
+    the person's write stands, and the run is recorded as refused with the
+    service's reason. An action's write reaches the notification rules and
+    live views as any write does, and sets off further actions in one chain.
+    A chain stops an action that already ran in it ("already ran in this
+    chain; running it again would loop") and any action deeper than five
+    ("The chain reached its limit of 5 actions, each set off by the one
+    before"), and records the stop.
+  - **Audit and history.** Each run is a `board.action.run` audit event on
+    the record whose write set it off, recorded as the person, with the
+    action, the trigger (and the action that set it off, if any), the chain
+    and depth, the step, the outcome (done, refused, stopped), the reason and
+    what the step did; no field values. An action's own writes carry
+    `action` (key, label, chain) in their `board.record.created` and
+    `board.record.updated` payloads. The record history route returns
+    `action` on each write and `run` on each run, naming a field only when
+    the reader may read it. The **Change history** tab shows "Updated by
+    action" and the action's name on its writes, and each run as a sentence:
+    "When Status changed: created a linked record on Follow-ups.", "When the
+    record entered Closed: refused. Summary cannot change while the record
+    is Closed".
+  - **Designer.** A new **Actions** tab (`web/src/boards/Designer.tsx`)
+    writes actions with selects, checkboxes and plain text inputs only: runs
+    when, the field or state, **Run only when conditions on the record
+    hold** (the guard editor's condition rows, now shared as `ConditionSet`
+    by the guard and the action), **does**, and each step's controls. A
+    linked record's board, its reference back and the fields copied into it
+    are chosen from the published templates when the designer can read
+    them. **Review & preview** counts the actions.
+  - `docs/guides/DESIGNER.md` gains **Add actions to a board**;
+    `docs/guides/OPERATOR-QUICKSTART.md` describes actions in the change
+    history.
+- **Files outside the "Owns" cell.** `shared/src/index.ts` (export),
+  `server/src/db/context.ts` (`withSavepoint`),
+  `server/migrations/0165_board_actions.sql`, `web/src/app/api/client.ts`
+  (the history entry type), the two guides, and the tests
+  `server/src/__tests__/board-actions.test.ts` and
+  `server/src/__tests__/board-actions-browser.test.ts`.
+- **Decisions and deviations.**
+  - `notify` is an in-app notice only. Email, SMS, push and webhooks stay
+    with notification rules, which fire on an action's writes as on any
+    write; this keeps every outbound path behind the existing outbox and its
+    rate caps and adds no network path.
+  - A notice needs a membership in the board's jurisdiction; a partner
+    participant's write that sets one off is refused with that reason (the
+    notifications insert policy requires a membership, and the action does
+    not reach past it).
+  - A chain lets each action run once. Two different paths reaching the same
+    action in one chain run it once and record the second as stopped.
+  - An action's condition is evaluated on the record as the write that set
+    it off left it, before sibling actions run; a sibling's change sets off
+    its own `field_changed` actions.
+  - `create_record` needs the record to be part of an incident (record
+    references are incident-scoped) and the incident to use exactly one
+    board made from the target template; otherwise it is refused, naming
+    which.
+  - A record the person may not read (a record-level read rule) sets nothing
+    off, since its actions would read it for them.
+  - Sources that do not set actions off: offline edits through sync
+    (`server/src/sync/hub.ts` belongs to lane va22; see Landing), form
+    submissions and imports (neither fires notification rules either),
+    federation ingestion, the demo seed.
+- **Air-gap behavior (decision 9).** No network path is added or changed.
+  Actions run inside the server's write transaction and a notice is an
+  in-app row. Internet cut with the LAN up, and a permanent isolated
+  enclave: actions run and notices reach holders on the LAN; the rules an
+  action's write sets off queue in the outbox as before. A device with no
+  network: the desktop install's local server runs actions on its own
+  writes; field edits made offline and synced later do not set actions off
+  (see Landing). Data carried on media: templates with actions travel in
+  template JSON and signed packages and are validated on import; records
+  imported from a file do not set actions off.
+- **Schema, contract and dependencies.** Migration `0165_board_actions.sql`
+  (placeholder number) adds two `audit_events` policies so an incident
+  participant who is not a member may append and read `board.action.run`
+  events on the incident's records, as the incident record policies allow
+  for record writes; `audit_board_record_scope` still applies the record's
+  read rule. Template JSON gains optional `actions`, so every existing
+  template parses as before. No route added; the record history response
+  gains `action` and `run`. No dependency.
+- **Tests.** `board-actions.test.ts` (5, real database): templates refused
+  for an unknown watched field, an unknown state, an enum and a datetime
+  value the field cannot hold, an unknown transition, a mapping from an
+  unknown field, an unfitting condition and a repeated key; a member's
+  status change stamps a time and opens a follow-up on the incident's other
+  board with the summary copied, the admin-only note left behind and the
+  reference back, the follow-up's own action running one step deeper in the
+  same chain, every run recorded as the member, the history naming the
+  action on its write and listing each run, the creator notified in the
+  app, and the actions' writes announced to live views and the sync log
+  after commit; a transition refused by its guard with the step rolled back
+  whole (no workflow row) and the member's write kept, then taken, with the
+  state entered notifying the Planning Chief's holder, and a replayed
+  request setting nothing off again; a member's change refused a write to
+  an admin-only field while an administrator's is done, a set refused by a
+  state's read-only field, a partner contributor's notice refused for want
+  of a membership with the run recorded as the partner and readable in the
+  history, and a linked record refused on a record with no incident; a
+  ping-pong chain stopped when an action would run twice, and a six-action
+  chain stopped at depth six. `web/src/boards/__tests__/board-actions.test.tsx`
+  (3, with axe): the designer writes each step of the catalog and publishes
+  a template that parses, choosing the linked board, reference and copied
+  field from the published templates, with no textarea, editable region or
+  expression input; removing an action keeps the rest; the history names an
+  action's write and says what each run did, was refused or was stopped.
+  `board-actions-browser.test.ts` at 1586 by 992 and 1534 by 790: an
+  administrator adds a linked-record action in the Actions tab and publishes
+  and applies it (read back at the second width), a member confirms a report
+  in the edit drawer, and the Change history shows the stamped time by
+  action and both runs, with the follow-up and the time in the database.
+- **Verification.** On the Windows test bed, `OPENEOC_TEST_DB_TAG=va25`:
+  `pnpm check:static` exit 0; 31 files, 207 tests green: the new server and
+  component tests with workflow guards, board workflow, workflow runtime,
+  boards, board engine, board authoring, record sync, sync, sync hub
+  lifecycle, continuity sync, notify, notification inbox, audit, incident
+  board scope, API docs, solution package and incident templates tests, the
+  shared board tests, every web board test, route coverage and the
+  templates surface; and serially (`--maxWorkers=1`), 6 browser files, 12
+  tests green: board actions, workflow guards, boards designer, board
+  records, board workflow and templates for a jurisdiction administrator.
+  The board actions browser file failed twice in seventeen runs before its
+  fix, at the history: after a save, the record pane reloads and briefly
+  unmounts (its resources reload with the new detail), which resets its tab
+  to Record if **Change history** was chosen in that moment. The test now
+  waits for the reloaded pane's attribution before choosing the tab; six
+  runs since (five alone, one in the serial group), all green. One parallel run lost its worker to the known
+  Windows fast-fail (exit 3221226505) and passed alone and serially.
+- **Not run.** The full `pnpm check`, left to CI on the push.
+- **Evidence level:** real-database, unit, component and browser tests.
+- **Rollback:** revert the commit; remove the migration's two policies
+  first if the database has run it. Templates holding `actions` then fail to
+  parse under the earlier schema, so publish versions without them first.
+- **Landing.** Rebased onto "Veoci and air gap VA35: region map packs" with
+  no conflict; the lane's placeholder migration is `0165`. Offline edits
+  through sync start no action until, after VA22 lands, the sync hub's loop
+  over committed changes (where it calls `notifyBoardEvent`) also calls
+  `runBoardActions` from `server/src/boards/actions.ts`, with its own test.
+  On main: `pnpm check:static` exit 0; 50 files, 320 tests green with
+  `OPENEOC_TEST_DB_TAG=va25` (board actions, boards, the workflow, sync,
+  notify and audit tests, migration baseline, upgrade, restore drill, API
+  docs, route coverage, import reports, volunteers, all shared tests, the
+  board screens and the web client), and the board actions browser test 2
+  of 2.

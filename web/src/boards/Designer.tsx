@@ -1,5 +1,6 @@
 import { useId, useMemo, useState } from "react";
 import {
+  ACTION_CHAIN_DEPTH,
   allEnums,
   BoardTemplateSchema,
   DashboardTemplateSchema,
@@ -11,11 +12,15 @@ import {
   templateDiff,
   WRITE_LEVELS,
   GEOMETRY_KINDS,
+  SETTABLE_FIELD_TYPES,
+  type ActionStep,
+  type BoardAction,
   type BoardWorkflow,
   type BoardTemplate,
   type FieldDef,
   type FormLayout,
   type RecordAccess,
+  type ViewCondition,
   type ViewDef,
 } from "@openeoc/shared";
 import { SOLUTION_PARTS, type ApiClient, type SolutionImportSummary } from "../app/api/client.js";
@@ -25,7 +30,9 @@ import { Button, EnumSelect, Panel, TextField } from "../design/components.js";
 import { BoardView } from "./BoardView.js";
 import { RecordForm } from "./RecordForm.js";
 import { RecordAccessEditor } from "./record-access.js";
-import { ConditionRow, ViewRefineControls, blankDraft, conditionDraft, draftCondition, type DraftCondition } from "./ViewRefine.js";
+import {
+  ConditionRow, ViewRefineControls, blankDraft, conditionDraft, draftCondition, enumValues, type DraftCondition,
+} from "./ViewRefine.js";
 import "./designer.css";
 
 export interface DesignerPositionOption {
@@ -63,6 +70,7 @@ export function Designer(props: {
   const [detailLayout, setDetailLayout] = useState<FormLayout | undefined>(props.base?.detailLayout);
   const [workflow, setWorkflow] = useState<BoardWorkflow | undefined>(props.base?.workflow);
   const [recordAccess, setRecordAccess] = useState<RecordAccess | undefined>(props.base?.recordAccess);
+  const [actions, setActions] = useState<BoardAction[]>(props.base?.actions ? [...props.base.actions] : []);
   const [tab, setTab] = useState("fields");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -78,6 +86,7 @@ export function Designer(props: {
     ...(detailLayout ? { detailLayout } : {}),
     ...(workflow ? { workflow } : {}),
     ...(recordAccess ? { recordAccess } : {}),
+    ...(actions.length ? { actions } : {}),
   });
 
   async function save() {
@@ -99,7 +108,7 @@ export function Designer(props: {
   }
 
   const parsedDraft = useMemo(() => BoardTemplateSchema.safeParse(draft()),
-    [description, detailLayout, fields, inputLayout, key, recordAccess, title, views, workflow]);
+    [actions, description, detailLayout, fields, inputLayout, key, recordAccess, title, views, workflow]);
   const diff =
     props.base && parsedDraft.success ? templateDiff(props.base, parsedDraft.data) : null;
 
@@ -117,7 +126,7 @@ export function Designer(props: {
       <Tabs id="board-designer" label="Board configuration" value={tab} onChange={setTab}
         tabs={[{ id: "fields", label: "Fields" }, { id: "layouts", label: "Layouts" },
           { id: "views", label: "Views" }, { id: "routing", label: "Routing" },
-          { id: "access", label: "Record access" },
+          { id: "actions", label: "Actions" }, { id: "access", label: "Record access" },
           { id: "preview", label: "Review & preview" },
           ...(localBoard ? [{ id: "local", label: "Local fields" }] : []),
           ...(importer ? [{ id: "import", label: "Import" }] : [])]} />
@@ -156,6 +165,9 @@ export function Designer(props: {
 
       {tab === "routing" ? <WorkflowEditor workflow={workflow} fields={fields}
         positions={props.positions ?? []} onChange={setWorkflow} /> : null}
+
+      {tab === "actions" ? <ActionsEditor actions={actions} fields={fields} workflow={workflow} boardKey={key}
+        positions={props.positions ?? []} client={props.client} onChange={setActions} /> : null}
 
       {tab === "preview" ? <DesignerPreview template={parsedDraft.success ? parsedDraft.data : null}
         error={parsedDraft.success ? null : describeIssues(parsedDraft.error.issues, "board")} diff={diff} /> : null}
@@ -598,16 +610,40 @@ function TransitionEditor(props: {
   </Panel>;
 }
 
-/**
- * A transition's guard: conditions on the record, all or any of which must
- * hold, and what to say when they do not. A condition still being typed is
- * left out of the saved guard until it is complete, and says so.
- */
+/** A transition's guard: conditions on the record, and what to say when they do not hold. */
 function GuardEditor(props: {
   n: number;
   fields: readonly FieldDef[];
   value: Transition["guard"];
   onChange: (guard: Transition["guard"]) => void;
+}) {
+  return <ConditionSet label={`Guard for transition ${props.n}`} toggle="Guard this transition with conditions on the record"
+    matchLabel="The transition needs" subject="the guard" messageLabel="Said when the guard refuses (optional)"
+    fields={props.fields} value={props.value} onChange={props.onChange} />;
+}
+
+interface ConditionSetValue {
+  readonly match: "all" | "any";
+  readonly conditions: ViewCondition[];
+  readonly message?: string | undefined;
+}
+
+/**
+ * Conditions on the record, all or any of which must hold, for a transition's
+ * guard or an action. A condition still being typed is left out until it is
+ * complete, and says so.
+ */
+function ConditionSet<T extends ConditionSetValue>(props: {
+  label: string;
+  toggle: string;
+  matchLabel: string;
+  /** What an incomplete condition is left out of, for the status line. */
+  subject: string;
+  /** Offered for a guard's refusal message; an action has none. */
+  messageLabel?: string;
+  fields: readonly FieldDef[];
+  value: T | undefined;
+  onChange: (value: T | undefined) => void;
 }) {
   const fields = props.fields.filter((field) => field.type !== "geometry");
   const byKey = new Map(fields.map((field) => [field.key, field]));
@@ -617,16 +653,15 @@ function GuardEditor(props: {
   const emit = (next: DraftCondition[], nextMatch: "all" | "any", nextMessage: string) => {
     setDrafts(next);
     const conditions = next.flatMap((draft) => draftCondition(draft, byKey.get(draft.field)) ?? []);
-    props.onChange(conditions.length ? {
-      match: nextMatch, conditions, ...(nextMessage.trim() ? { message: nextMessage.trim() } : {}),
-    } : undefined);
+    const text = props.messageLabel ? nextMessage.trim() : "";
+    props.onChange(conditions.length ? { match: nextMatch, conditions, ...(text ? { message: text } : {}) } as T : undefined);
   };
   const incomplete = drafts.flatMap((draft, index) => draftCondition(draft, byKey.get(draft.field)) ? [] : [index + 1]);
-  return <div className="board-designer__nested" role="group" aria-label={`Guard for transition ${props.n}`}>
-    <Check label="Guard this transition with conditions on the record" checked={drafts.length > 0} disabled={fields.length === 0}
+  return <div className="board-designer__nested" role="group" aria-label={props.label}>
+    <Check label={props.toggle} checked={drafts.length > 0} disabled={fields.length === 0}
       onChange={(on) => emit(on ? [{ ...blankDraft(fields[0]!), op: "is_not_empty" }] : [], match, message)} />
     {drafts.length ? <>
-      <Select label="The transition needs" value={match}
+      <Select label={props.matchLabel} value={match}
         options={[{ value: "all", label: "Every condition to hold" }, { value: "any", label: "Any condition to hold" }]}
         onChange={(next) => emit(drafts, next as "all" | "any", message)} />
       {drafts.map((draft, index) => <ConditionRow key={index} n={index + 1} draft={draft} fields={fields}
@@ -634,8 +669,8 @@ function GuardEditor(props: {
         onRemove={() => emit(drafts.filter((_, itemIndex) => itemIndex !== index), match, message)} />)}
       <div><ActionButton disabled={drafts.length >= 16}
         onClick={() => emit([...drafts, { ...blankDraft(fields[0]!), op: "is_not_empty" }], match, message)}>Add condition</ActionButton></div>
-      <Input label="Said when the guard refuses (optional)" value={message} onChange={(next) => emit(drafts, match, next)} />
-      {incomplete.length ? <p role="status">Condition {incomplete.join(", ")} is left out of the guard until its value is complete.</p> : null}
+      {props.messageLabel ? <Input label={props.messageLabel} value={message} onChange={(next) => emit(drafts, match, next)} /> : null}
+      {incomplete.length ? <p role="status">Condition {incomplete.join(", ")} is left out of {props.subject} until its value is complete.</p> : null}
     </> : null}
   </div>;
 }
@@ -727,6 +762,224 @@ function EscalationEditor(props: {
   </div>;
 }
 
+const TIME_VALUES: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "now", label: "When the action runs" },
+  { value: "now+1h", label: "An hour after it runs" },
+  { value: "now+24h", label: "A day after it runs" },
+];
+
+type TemplateChoice = { readonly key: string; readonly version: number; readonly title: string };
+
+/**
+ * Board actions (VC-17), each built from a trigger, optional conditions and
+ * one step of the catalog, every part a structured control: there is no
+ * expression or script input.
+ */
+function ActionsEditor(props: {
+  actions: readonly BoardAction[];
+  fields: readonly FieldDef[];
+  workflow: BoardWorkflow | undefined;
+  boardKey: string;
+  positions: readonly DesignerPositionOption[];
+  client: ApiClient | undefined;
+  onChange: (actions: BoardAction[]) => void;
+}) {
+  const client = props.client;
+  const templates = useAsync(() => client ? client.listTemplates() : Promise.resolve([]), [client]);
+  return <div className="board-designer__stack">
+    <Panel title="Actions">
+      <p>An action runs by itself when a record is created, a field changes or the record enters a workflow state.
+        It runs as the person whose change set it off, with that person&apos;s authority and no more, and the
+        record&apos;s change history shows each run. A chain of actions stops before an action runs twice or
+        goes more than {ACTION_CHAIN_DEPTH} actions deep.</p>
+      {props.actions.length === 0 ? <p>This board has no actions.</p> : null}
+      <div><ActionButton disabled={props.fields.length === 0} onClick={() => props.onChange([...props.actions, {
+        key: uniqueKey("action", props.actions.map((action) => action.key)), label: "New action",
+        trigger: { kind: "record_created" }, step: starterStep("notify", props.fields),
+      }])}>Add action</ActionButton></div>
+    </Panel>
+    {props.actions.map((action, index) => <ActionEditor key={index} n={index + 1} action={action} fields={props.fields}
+      workflow={props.workflow} boardKey={props.boardKey} positions={props.positions} client={client}
+      templates={templates.data ?? []}
+      onChange={(next) => props.onChange(props.actions.map((item, itemIndex) => itemIndex === index ? next : item))}
+      onRemove={() => props.onChange(props.actions.filter((_, itemIndex) => itemIndex !== index))} />)}
+  </div>;
+}
+
+interface StepProps {
+  readonly n: number;
+  readonly action: BoardAction;
+  readonly fields: readonly FieldDef[];
+  readonly workflow: BoardWorkflow | undefined;
+  readonly boardKey: string;
+  readonly positions: readonly DesignerPositionOption[];
+  readonly client: ApiClient | undefined;
+  readonly templates: readonly TemplateChoice[];
+}
+
+function ActionEditor(props: StepProps & { onChange: (action: BoardAction) => void; onRemove: () => void }) {
+  const { action, n } = props;
+  const set = (patch: Partial<BoardAction>) => props.onChange({ ...action, ...patch });
+  const states = props.workflow?.states ?? [];
+  const transitions = props.workflow?.transitions ?? [];
+  const watched = props.fields.filter((field) => !field.calculation);
+  const trigger = action.trigger;
+  return <Panel title={`Action ${n}: ${action.label}`}><div className="board-designer__stack">
+    <div className="board-designer__grid board-designer__grid--2">
+      <Input label={`Action ${n} key`} value={action.key} onChange={(key) => set({ key })} />
+      <Input label={`Action ${n} label`} value={action.label} onChange={(label) => set({ label })} />
+      <Select label={`Action ${n} runs when`} value={trigger.kind}
+        options={[{ value: "record_created", label: "A record is created" },
+          ...(watched.length ? [{ value: "field_changed", label: "A field changes" }] : []),
+          ...(states.length ? [{ value: "state_entered", label: "The record enters a workflow state" }] : [])]}
+        onChange={(kind) => set({ trigger: kind === "field_changed" ? { kind, field: watched[0]!.key }
+          : kind === "state_entered" ? { kind, state: states[0]!.key } : { kind: "record_created" } })} />
+      {trigger.kind === "field_changed" ? <Select label={`Action ${n} field that changes`} value={trigger.field}
+        options={watched.map((field) => ({ value: field.key, label: field.label }))}
+        onChange={(field) => set({ trigger: { kind: "field_changed", field } })} /> : null}
+      {trigger.kind === "state_entered" ? <Select label={`Action ${n} state entered`} value={trigger.state}
+        options={states.map((state) => ({ value: state.key, label: state.label }))}
+        onChange={(state) => set({ trigger: { kind: "state_entered", state } })} /> : null}
+    </div>
+    <ConditionSet label={`Conditions for action ${n}`} toggle="Run only when conditions on the record hold"
+      matchLabel="The action needs" subject="the action's conditions" fields={props.fields} value={action.condition}
+      onChange={(condition) => {
+        const { condition: _dropped, ...rest } = action;
+        props.onChange(condition ? { ...rest, condition } : rest);
+      }} />
+    <Select label={`Action ${n} does`} value={action.step.kind}
+      options={[{ value: "set_field", label: "Set a field" },
+        { value: "create_record", label: "Create a linked record on another board" },
+        ...(transitions.length ? [{ value: "transition", label: "Request a workflow transition" }] : []),
+        { value: "notify", label: "Send a notice in the app" }]}
+      onChange={(kind) => set({ step: starterStep(kind as ActionStep["kind"], props.fields, transitions[0]?.key) })} />
+    <StepEditor {...props} onStep={(step) => set({ step })} />
+    <div><ActionButton kind="danger" onClick={props.onRemove}>Remove action {n}</ActionButton></div>
+  </div></Panel>;
+}
+
+function StepEditor(props: StepProps & { onStep: (step: ActionStep) => void }) {
+  const { n } = props;
+  const step = props.action.step;
+  if (step.kind === "set_field") {
+    const settable = settableFields(props.fields);
+    const field = settable.find((item) => item.key === step.field);
+    return <div className="board-designer__grid board-designer__grid--2">
+      <Select label={`Action ${n} field to set`} value={step.field}
+        options={settable.map((item) => ({ value: item.key, label: item.label }))}
+        onChange={(key) => props.onStep({ kind: "set_field", field: key, value: firstValue(settable.find((item) => item.key === key)) })} />
+      {field ? <SetValue label={`Action ${n} value`} field={field} value={step.value}
+        onChange={(value) => props.onStep({ ...step, value })} /> : null}
+    </div>;
+  }
+  if (step.kind === "create_record") return <CreateRecordStep {...props} step={step} />;
+  if (step.kind === "transition") {
+    return <Select label={`Action ${n} transition`} value={step.transition}
+      options={(props.workflow?.transitions ?? []).map((transition) => ({ value: transition.key, label: transition.label }))}
+      onChange={(transition) => props.onStep({ kind: "transition", transition })} />;
+  }
+  const target = step.to;
+  const positions = target.kind === "position" && !props.positions.some((position) => position.key === target.positionKey)
+    ? [...props.positions, { key: target.positionKey, title: target.positionKey }] : props.positions;
+  return <div className="board-designer__grid board-designer__grid--2">
+    <Select label={`Action ${n} notifies`} value={target.kind === "creator" ? "creator" : `position:${target.positionKey}`}
+      options={[{ value: "creator", label: "The record's creator" },
+        ...positions.map((position) => ({ value: `position:${position.key}`, label: `Holders of ${position.title}` }))]}
+      onChange={(value) => props.onStep({ ...step, to: value === "creator" ? { kind: "creator" }
+        : { kind: "position", positionKey: value.slice("position:".length) } })} />
+    <Input label={`Action ${n} message`} value={step.message} onChange={(message) => props.onStep({ ...step, message })} />
+  </div>;
+}
+
+/**
+ * A linked record: the board it goes on, chosen from the published templates
+ * when the designer can read them; its reference back to this board; and the
+ * fields copied into it.
+ */
+function CreateRecordStep(props: StepProps & {
+  step: Extract<ActionStep, { kind: "create_record" }>;
+  onStep: (step: ActionStep) => void;
+}) {
+  const { n, step, client } = props;
+  const summary = props.templates.find((item) => item.key === step.board);
+  const target = useAsync(() => client && summary ? client.getTemplateVersion(summary.key, summary.version)
+    : Promise.resolve(null), [client, summary?.key, summary?.version]);
+  const targetFields = target.data?.fields ?? null;
+  const links = targetFields?.filter((field) => field.type === "record_ref" && field.targetBoardKey === props.boardKey) ?? null;
+  const into = targetFields?.filter((field) => !field.calculation && field.type !== "record_ref") ?? null;
+  const options = (list: readonly FieldDef[]) => list.map((field) => ({ value: field.key, label: field.label }));
+  const choose = (list: readonly FieldDef[], value: string, prompt: string) =>
+    [...(list.some((field) => field.key === value) ? [] : [{ value, label: value || prompt }]), ...options(list)];
+  const set = (patch: Partial<typeof step>) => props.onStep({ ...step, ...patch });
+  const setCopy = (index: number, patch: Partial<(typeof step.mapping)[number]>) =>
+    set({ mapping: step.mapping.map((entry, entryIndex) => entryIndex === index ? { ...entry, ...patch } : entry) });
+  return <div className="board-designer__stack">
+    <div className="board-designer__grid board-designer__grid--2">
+      {props.templates.length ? <Select label={`Action ${n} board to add the record to`} value={step.board}
+        options={[...(summary ? [] : [{ value: step.board, label: step.board || "Choose a board" }]),
+          ...props.templates.map((item) => ({ value: item.key, label: item.title }))]}
+        onChange={(board) => set({ board, link: "", mapping: [] })} />
+        : <Input label={`Action ${n} board template key`} value={step.board} onChange={(board) => set({ board })} />}
+      {links ? <Select label={`Action ${n} reference back to this record`} value={step.link}
+        options={choose(links, step.link, "Choose a reference field")} onChange={(link) => set({ link })} />
+        : <Input label={`Action ${n} reference field key`} value={step.link} onChange={(link) => set({ link })} />}
+    </div>
+    {links && links.length === 0 ? <p role="status">That board has no reference field to this board, so it cannot link back.</p> : null}
+    {step.mapping.map((item, index) => <div className="board-designer__rule" key={index}>
+      {into ? <Select label={`Action ${n} copy ${index + 1} into`} value={item.to}
+        options={choose(into, item.to, "Choose a field")} onChange={(to) => setCopy(index, { to })} />
+        : <Input label={`Action ${n} copy ${index + 1} into field key`} value={item.to} onChange={(to) => setCopy(index, { to })} />}
+      <Select label={`Action ${n} copy ${index + 1} from`} value={item.from} options={options(props.fields)}
+        onChange={(from) => setCopy(index, { from })} />
+      <ActionButton kind="quiet" onClick={() => set({ mapping: step.mapping.filter((_, entryIndex) => entryIndex !== index) })}>
+        Remove copy {index + 1}
+      </ActionButton>
+    </div>)}
+    <div><ActionButton disabled={props.fields.length === 0} onClick={() => set({ mapping: [...step.mapping,
+      { to: into?.[0]?.key ?? "", from: props.fields[0]!.key }] })}>Copy a field into the new record</ActionButton></div>
+  </div>;
+}
+
+function SetValue(props: {
+  label: string; field: FieldDef; value: string | number | boolean;
+  onChange: (value: string | number | boolean) => void;
+}) {
+  const { field, label } = props;
+  if (field.type === "boolean") return <Select label={label} value={String(props.value)}
+    options={[{ value: "true", label: "Yes" }, { value: "false", label: "No" }]} onChange={(value) => props.onChange(value === "true")} />;
+  if (field.type === "enum") return <Select label={label} value={String(props.value)}
+    options={enumValues(field).map((value) => ({ value, label: value }))} onChange={props.onChange} />;
+  if (field.type === "datetime") return <Select label={label} value={String(props.value)} options={TIME_VALUES} onChange={props.onChange} />;
+  if (field.type === "number") return <label className="board-designer__control"><span>{label}</span>
+    <input type="number" value={typeof props.value === "number" ? props.value : ""}
+      onChange={(event) => props.onChange(event.target.value === "" ? "" : Number(event.target.value))} />
+  </label>;
+  return <Input label={label} value={String(props.value)} onChange={props.onChange} />;
+}
+
+function settableFields(fields: readonly FieldDef[]): FieldDef[] {
+  return fields.filter((field) => !field.calculation && (SETTABLE_FIELD_TYPES as readonly string[]).includes(field.type));
+}
+
+/** A value a field can hold, to start its set-field step with. */
+function firstValue(field: FieldDef | undefined): string | number | boolean {
+  if (field?.type === "boolean") return true;
+  if (field?.type === "number") return 0;
+  if (field?.type === "datetime") return "now";
+  if (field?.type === "enum") return enumValues(field)[0] ?? "";
+  return "";
+}
+
+function starterStep(kind: ActionStep["kind"], fields: readonly FieldDef[], transition?: string): ActionStep {
+  if (kind === "set_field") {
+    const field = settableFields(fields)[0];
+    return { kind, field: field?.key ?? "", value: firstValue(field) };
+  }
+  if (kind === "create_record") return { kind, board: "", link: "", mapping: [] };
+  if (kind === "transition") return { kind, transition: transition ?? "" };
+  return { kind: "notify", to: { kind: "creator" }, message: "A record needs your attention." };
+}
+
 function DesignerPreview(props: {
   template: BoardTemplate | null;
   error: string | null;
@@ -742,6 +995,7 @@ function DesignerPreview(props: {
       {props.diff ? <p data-testid="diff">added: {props.diff.addedFields.join(", ") || "none"}; removed: {props.diff.removedFields.join(", ") || "none"}; changed: {props.diff.changedFields.join(", ") || "none"}</p>
         : <p>New template with {template.fields.length} fields and {template.views.length} views.</p>}
       <p>{template.workflow ? `${template.workflow.states.length} states and ${template.workflow.transitions.length} transitions configured.` : "No workflow routing configured."}</p>
+      <p>{template.actions?.length ? `${template.actions.length} ${template.actions.length === 1 ? "action" : "actions"} configured.` : "No actions configured."}</p>
     </Panel>
     <Panel title="Operator preview">
       <p>Preview data is synthetic and never saved.</p>

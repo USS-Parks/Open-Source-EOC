@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { allEnums } from "../dictionary/citations.js";
 import { BoardWorkflowSchema } from "./workflow.js";
-import { ViewConditionSchema, type ViewCondition } from "./conditions.js";
+import { ViewConditionSchema, isTimeValue, type ViewCondition } from "./conditions.js";
+import { BoardActionSchema, SETTABLE_FIELD_TYPES } from "./actions.js";
 
 /**
  * Board field model (F1). A board template is data, never code: fields,
@@ -209,6 +210,8 @@ export const BoardTemplateSchema = z
     workflow: BoardWorkflowSchema.optional(),
     /** Record-level read and edit rules; absent, every board reader reads every record. */
     recordAccess: RecordAccessSchema.optional(),
+    /** What the board does by itself when a record is created, changes or enters a state (VC-17). */
+    actions: z.array(BoardActionSchema).max(50).optional(),
   })
   .superRefine((t, ctx) => {
     const keys = new Set<string>();
@@ -261,6 +264,7 @@ export const BoardTemplateSchema = z
           ctx.addIssue({ code: "custom", message: `transition ${transition.key} cannot apply ${condition.op} to ${field.type} field ${field.key}` });
       }
     }
+    checkActions(t, fieldByKey, (message) => ctx.addIssue({ code: "custom", message }));
     for (const state of t.workflow?.states ?? []) {
       for (const key of state.readOnlyFields ?? [])
         if (!keys.has(key)) ctx.addIssue({ code: "custom", message: `state ${state.key} makes unknown field ${key} read-only` });
@@ -324,6 +328,46 @@ export const BoardTemplateSchema = z
   });
 
 export type BoardTemplate = z.infer<typeof BoardTemplateSchema>;
+
+/** Each action names only fields, states and transitions the template has, and sets a field only to a value it holds. */
+function checkActions(
+  t: { actions?: z.infer<typeof BoardActionSchema>[] | undefined; workflow?: z.infer<typeof BoardWorkflowSchema> | undefined },
+  fieldByKey: ReadonlyMap<string, FieldDef>,
+  issue: (message: string) => void,
+): void {
+  const states = new Set((t.workflow?.states ?? []).map((state) => state.key));
+  const transitions = new Set((t.workflow?.transitions ?? []).map((transition) => transition.key));
+  const seen = new Set<string>();
+  for (const action of t.actions ?? []) {
+    const name = `action ${action.key}`;
+    if (seen.has(action.key)) issue(`duplicate action ${action.key}`);
+    seen.add(action.key);
+    const { trigger, step } = action;
+    if (trigger.kind === "field_changed" && !fieldByKey.has(trigger.field))
+      issue(`${name} watches unknown field ${trigger.field}`);
+    if (trigger.kind === "state_entered" && !states.has(trigger.state))
+      issue(`${name} waits for unknown workflow state ${trigger.state}`);
+    for (const condition of action.condition?.conditions ?? []) {
+      const field = fieldByKey.get(condition.field);
+      if (!field) issue(`${name} tests unknown field ${condition.field}`);
+      else if (!conditionFitsField(condition, field)) issue(`${name} cannot apply ${condition.op} to ${field.type} field ${field.key}`);
+    }
+    if (step.kind === "set_field") {
+      const field = fieldByKey.get(step.field);
+      if (!field || field.calculation || !(SETTABLE_FIELD_TYPES as readonly string[]).includes(field.type))
+        issue(`${name} cannot set field ${step.field}`);
+      else if (!(field.type === "datetime" ? isTimeValue(step.value) : fieldValueSchema(field).safeParse(step.value).success))
+        issue(`${name} sets ${field.key} to a value it cannot hold`);
+    }
+    if (step.kind === "create_record") {
+      for (const { from } of step.mapping) if (!fieldByKey.has(from)) issue(`${name} copies unknown field ${from}`);
+      const targets = [step.link, ...step.mapping.map((item) => item.to)];
+      if (new Set(targets).size !== targets.length) issue(`${name} fills a field of the new record twice`);
+    }
+    if (step.kind === "transition" && !transitions.has(step.transition))
+      issue(`${name} requests unknown transition ${step.transition}`);
+  }
+}
 
 /** Whether a condition's operator suits the type of the field it tests. */
 export function conditionFitsField(condition: ViewCondition, field: FieldDef): boolean {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { choiceLabel, signatureText, type FieldDef } from "@openeoc/shared";
+import { choiceLabel, signatureText, type BoardActionRun, type FieldDef } from "@openeoc/shared";
 import type { BoardRecordChange, PageOptions } from "../app/api/client.js";
 import { ActionButton } from "../design/controls.js";
 import "./board-tools.css";
@@ -16,7 +16,9 @@ const ACTIONS: Readonly<Record<string, string>> = {
 
 /**
  * A record's change history, oldest first, a page at a time: who, in which
- * position, when, and each field changed with its value before and after.
+ * position, when, and each field changed with its value before and after. A
+ * write a board action made names the action, and each action run says what
+ * set it off and what it did, or why it was refused or stopped.
  */
 export function RecordHistory(props: { readonly load: HistoryPageLoader; readonly fields: readonly FieldDef[] }) {
   const [entries, setEntries] = useState<BoardRecordChange[]>([]);
@@ -44,10 +46,12 @@ export function RecordHistory(props: { readonly load: HistoryPageLoader; readonl
   return <div className="board-history-panel">
     {entries.length ? <ol className="board-history" aria-label="Record history">
       {entries.map((entry) => <li key={entry.id}>
-        <strong>{ACTIONS[entry.category] ?? entry.category.replaceAll(".", " ")}{entry.corrects ? " (correction)" : ""}</strong>
+        <strong>{entry.run ? `Action: ${entry.run.action.label}` : ACTIONS[entry.category] ?? entry.category.replaceAll(".", " ")}
+          {entry.corrects ? " (correction)" : ""}{entry.action ? ` by action ${entry.action.label}` : ""}</strong>
         {" · "}{new Date(entry.at).toLocaleString()}
         {" · "}{entry.actor.displayName}{entry.actor.positionTitle || entry.actor.organizationName
           ? ` (${[entry.actor.positionTitle, entry.actor.organizationName].filter(Boolean).join(" · ")})` : ""}
+        {entry.run ? <p className="board-history__run" data-outcome={entry.run.outcome}>{runText(entry.run, labels)}</p> : null}
         {entry.changes.length ? <dl>{entry.changes.map((change) => <div key={change.field}>
           <dt>{labels.get(change.field) ?? change.field}</dt>
           <dd>{historyValue(change.before, types.get(change.field))} → {historyValue(change.after, types.get(change.field))}</dd>
@@ -58,6 +62,22 @@ export function RecordHistory(props: { readonly load: HistoryPageLoader; readonl
     {error ? <p role="alert">{error}</p> : null}
     {cursor && !loading ? <ActionButton kind="quiet" onClick={() => void read(cursor, false)}>Load more history</ActionButton> : null}
   </div>;
+}
+
+/** An action run in words: what set it off, then what it did or why it did not. */
+function runText(run: BoardActionRun, labels: ReadonlyMap<string, string>): string {
+  const field = (key: string | null | undefined) => key ? labels.get(key) ?? key : null;
+  const trigger = run.trigger.kind === "record_created" ? "When the record was created"
+    : run.trigger.kind === "field_changed" ? `When ${field(run.trigger.field) ?? "a field"} changed`
+    : `When the record entered ${run.trigger.state ?? "a state"}`;
+  const cause = run.trigger.byAction ? `${trigger}, by action ${run.trigger.byAction}` : trigger;
+  if (run.outcome !== "done") return `${cause}: ${run.outcome === "refused" ? "refused" : "stopped"}. ${run.reason ?? ""}`.trim();
+  const result = run.result ?? {};
+  const did = run.step === "set_field" ? `set ${field(result.field) ?? "a field"}`
+    : run.step === "create_record" ? `created a linked record on ${result.board ?? "another board"}`
+    : run.step === "transition" ? run.reason ? "requested a transition" : `moved the record to ${result.state ?? "its next state"}`
+    : `notified ${result.to ?? "its recipients"}`;
+  return `${cause}: ${did}.${run.reason ? ` ${run.reason}` : ""}`;
 }
 
 function historyValue(value: unknown, type: FieldDef["type"] | undefined): string {

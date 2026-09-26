@@ -193,6 +193,11 @@
   overflow-wrap: anywhere;
 }
 
+.board-history__run {
+  margin: var(--eoc-space-1, 4px) 0 0;
+  overflow-wrap: anywhere;
+}
+
 .board-record-actions {
   display: flex;
   flex-wrap: wrap;

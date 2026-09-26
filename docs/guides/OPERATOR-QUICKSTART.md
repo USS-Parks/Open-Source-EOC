@@ -302,7 +302,11 @@ Select a record to open it in the record context.
 - **Change history** lists the record's changes oldest first: what happened,
   when, who and in which position, and each field changed with its value
   before and after. **Load more history** reads the next page. An update
-  recorded before this history existed shows no earlier value.
+  recorded before this history existed shows no earlier value. When the
+  board has actions, a change a board action made reads "by action" and its
+  name, and each action's run says what set it off and what it did, or why
+  it was refused or stopped. An action runs as you, so it can do only what
+  you may do.
 
 ### Export and import board records
 

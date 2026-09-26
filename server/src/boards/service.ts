@@ -12,6 +12,8 @@ import {
   roleReadsEveryRecord,
   STANDARD_TEMPLATES,
   viewOrder,
+  type ActionWrite,
+  type BoardActionRun,
   type BoardTemplate,
   type FieldDef,
   type FormLayout,
@@ -376,6 +378,8 @@ export async function insertRecord(
   via?: "import",
   /** Where an imported record came from, kept on its creation event. */
   source?: Readonly<Record<string, string>>,
+  /** The board action that wrote the record, named on its creation event (VC-17). */
+  action?: ActionWrite,
 ): Promise<string> {
   const id = randomUUID();
   await sql`
@@ -390,7 +394,8 @@ export async function insertRecord(
     category: "board.record.created",
     subjectTable: "board_records",
     subjectId: id,
-    payload: { board: board.template.key, data: parsed, ...(via ? { via } : {}), ...(source ? { source } : {}) },
+    payload: { board: board.template.key, data: parsed, ...(via ? { via } : {}), ...(source ? { source } : {}),
+      ...(action ? { action } : {}) },
   });
   await appendRecordWrite(sql, board.id, id, incidentId ?? null, parsed, incidentFields(board));
   return id;
@@ -407,10 +412,11 @@ export async function createRecord(
   boardId: string,
   data: Record<string, unknown>,
   incidentId?: string,
+  action?: ActionWrite,
 ): Promise<RecordWriteResult> {
   const board = await writableBoard(sql, actor, boardId, incidentId);
   const parsed = await validateNewRecord(sql, actor, board, data, incidentId);
-  const id = await insertRecord(sql, actor, board, parsed, incidentId);
+  const id = await insertRecord(sql, actor, board, parsed, incidentId, undefined, undefined, action);
   return { id, data: parsed, boardKey: board.template.key,
     jurisdictionId: board.jurisdictionId, changed: true };
 }
@@ -422,6 +428,8 @@ export async function updateRecord(
   recordId: string,
   patch: Record<string, unknown>,
   incidentId?: string,
+  /** The board action making the edit, named on its audit entry (VC-17). */
+  action?: ActionWrite,
 ): Promise<RecordWriteResult> {
   const [scope] = await sql`
     select incident_id from board_records where id = ${recordId} and board_id = ${boardId}
@@ -488,6 +496,7 @@ export async function updateRecord(
       board: board.template.key,
       patch: actualPatch,
       previous: Object.fromEntries(Object.keys(actualPatch).map((key) => [key, previous[key] ?? null])),
+      ...(action ? { action } : {}),
     },
   });
   await appendRecordWrite(sql, boardId, recordId, recordIncidentId, actualPatch, incidentFields(board));
@@ -699,6 +708,10 @@ export interface RecordHistoryEntry {
   };
   /** Fields this entry changed, each with its value before and after. */
   readonly changes: ReadonlyArray<{ readonly field: string; readonly before: unknown; readonly after: unknown }>;
+  /** The board action that made this write, when one did (VC-17). */
+  readonly action: { readonly key: string; readonly label: string } | null;
+  /** A board action's run, for a `board.action.run` entry. */
+  readonly run: BoardActionRun | null;
 }
 
 /**
@@ -756,7 +769,26 @@ export async function listRecordHistory(
         organizationName: (row.organization_name as string | null) ?? null,
       },
       changes: historyChanges(row.payload as Record<string, unknown>).filter((change) => readable.has(change.field)),
+      ...(row.category === "board.action.run"
+        ? { action: null, run: runOf(row.payload as BoardActionRun, readable) }
+        : { action: actionOf(row.payload as Record<string, unknown>), run: null }),
     })),
+  };
+}
+
+function actionOf(payload: Record<string, unknown>): RecordHistoryEntry["action"] {
+  const action = payload.action as { key?: unknown; label?: unknown } | undefined;
+  return typeof action?.key === "string" && typeof action.label === "string" ? { key: action.key, label: action.label } : null;
+}
+
+/** An action run as a reader sees it: a field they may not read is not named. */
+function runOf(run: BoardActionRun, readable: ReadonlySet<string>): BoardActionRun {
+  const field = run.trigger.field && readable.has(run.trigger.field) ? run.trigger.field : null;
+  const { field: written, ...rest } = run.result ?? {};
+  const result = run.result ? { ...rest, ...(written && readable.has(written) ? { field: written } : {}) } : null;
+  return {
+    action: run.action, trigger: { ...run.trigger, field }, step: run.step, outcome: run.outcome,
+    reason: run.reason, chain: run.chain, depth: run.depth, result,
   };
 }
 

@@ -10,6 +10,7 @@ import { publishBoardEvent } from "../events/bus.js";
 import { appendRecordRemoval } from "../sync/hub.js";
 import { publishRecordRemoved } from "./removals.js";
 import { queueRecordDeletion } from "../federation/service.js";
+import { changedFields, runAfterTransition, runBoardActions, workflowState } from "./actions.js";
 import {
   addLocalField,
   createBoard,
@@ -251,6 +252,7 @@ export function boardRoutes(
         record: result.data,
       };
       await notifyBoardEvent(tx, req.principal, event);
+      await runBoardActions(tx, req.principal, { kind: "record_created", boardId, recordId: result.id });
       return { result, event };
     });
     publishBoardEvent(event);
@@ -284,6 +286,8 @@ export function boardRoutes(
           previous: result.previous,
         };
         await notifyBoardEvent(tx, req.principal, event);
+        await runBoardActions(tx, req.principal,
+          { kind: "field_changed", boardId, recordId, fields: changedFields(result.previous ?? {}, result.data) });
         return event;
       });
       if (event) publishBoardEvent(event);
@@ -308,8 +312,12 @@ export function boardRoutes(
     async (req, reply) => {
       const { boardId, recordId } = req.params as { boardId: string; recordId: string };
       const body = TransitionBody.parse(req.body);
-      const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        requestWorkflowTransition(tx, req.principal, boardId, recordId, body));
+      const result = await withPerson(sql, req.principal.person.id, async (tx) => {
+        const before = await workflowState(tx, recordId);
+        const result = await requestWorkflowTransition(tx, req.principal, boardId, recordId, body);
+        await runAfterTransition(tx, req.principal, boardId, recordId, before);
+        return result;
+      });
       return reply.send(result);
     },
   );
@@ -320,8 +328,12 @@ export function boardRoutes(
     async (req, reply) => {
       const { boardId, recordId } = req.params as { boardId: string; recordId: string };
       const body = ApprovalBody.parse(req.body);
-      const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        approveWorkflowTransition(tx, req.principal, boardId, recordId, body));
+      const result = await withPerson(sql, req.principal.person.id, async (tx) => {
+        const before = await workflowState(tx, recordId);
+        const result = await approveWorkflowTransition(tx, req.principal, boardId, recordId, body);
+        await runAfterTransition(tx, req.principal, boardId, recordId, before);
+        return result;
+      });
       return reply.send(result);
     },
   );

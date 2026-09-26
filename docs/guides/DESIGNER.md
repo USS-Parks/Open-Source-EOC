@@ -87,6 +87,42 @@ value is complete, and the designer says so. The template stores these as
 `readOnlyFields` on a state and `guard` (`match`, `conditions`, `message`) on
 a transition.
 
+## Add actions to a board
+
+The **Actions** tab gives a board things it does by itself. **Add action**
+starts one; each has a key, a label, **runs when** (a record is created, a
+field changes, or the record enters a workflow state), optional **Run only
+when conditions on the record hold**, written as a guard's conditions are,
+and one step it **does**:
+
+- **Set a field** to a value: text, a number, yes or no, one of an
+  enumeration's values, or for a date and time, when the action runs or an
+  hour or a day after.
+- **Create a linked record on another board**: a board of the same incident,
+  chosen by its template, with **reference back to this record** naming its
+  reference field to this board, and **Copy a field into the new record** for
+  each field copied across. The record must be part of an incident, and the
+  incident must use exactly one board made from that template.
+- **Request a workflow transition**, as pressing its button would. A
+  transition that needs approvals waits for them.
+- **Send a notice in the app** to the record's creator or to the holders of a
+  position. Email, SMS and push stay with notification rules, which fire on
+  an action's writes as on anyone's.
+
+An action runs as the person whose change set it off, with that person's
+authority and no more: a field they may not write, a record they may not
+edit, a field their record's state keeps read-only and a transition whose
+guard the record does not meet are refused, and a field they may not read is
+not copied. A refused step changes nothing and leaves the person's own change
+in place. An action's write can set off other actions, on this board or the
+one it wrote to; that chain stops an action that already ran in it, and any
+action more than five deep. The record's **Change history** names the action
+on each write it made and records every run, done, refused or stopped, with
+the reason. Offline edits that arrive through sync, form submissions and
+imports do not set actions off. The template stores these as `actions`, each
+with `key`, `label`, `trigger`, an optional `condition` (`match`,
+`conditions`) and `step`.
+
 ## Restrict individual records
 
 The **Record access** tab limits who may read and who may edit each record,

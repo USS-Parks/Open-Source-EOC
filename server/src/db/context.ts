@@ -1,3 +1,4 @@
+import type postgres from "postgres";
 import type { Sql } from "./client.js";
 
 const commitHooks = new WeakMap<object, Array<() => void>>();
@@ -39,5 +40,21 @@ export async function withPerson<T>(
       // The transaction has committed; a listener failure must not undo that.
     }
   }
+  return result;
+}
+
+/**
+ * Run `fn` in a savepoint of the withPerson transaction `tx`, so a failure
+ * rolls back `fn`'s writes alone. What `fn` schedules with afterCommit runs
+ * once the transaction commits if the savepoint was released, and never if
+ * it rolled back.
+ */
+export async function withSavepoint<T>(tx: Sql, fn: (sp: Sql) => Promise<T>): Promise<T> {
+  const hooks: Array<() => void> = [];
+  const result = (await (tx as unknown as postgres.TransactionSql).savepoint(async (sp) => {
+    commitHooks.set(sp, hooks);
+    return fn(sp as unknown as Sql);
+  })) as T;
+  commitHooks.get(tx)?.push(...hooks);
   return result;
 }
