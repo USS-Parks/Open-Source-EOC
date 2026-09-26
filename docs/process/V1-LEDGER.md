@@ -14156,3 +14156,15 @@ moderated public damage reports outside the protected system. The last two
 change the Operator Trust plan's decision 9 (AI parked) and the standing
 no-public-facet decision; they get their own PSPR for approval and are not
 built under this plan.
+
+## Local AI and public page grant
+
+Basho, 2026-09-26: "I approve of the new Local AI and public page PSPR. When
+complete, we will work on a new PSPR Dashboard Aesthetics that will make the
+Open Source EOC its own unique presentation value and design, not simple
+parity. That custom tailoring will happen after AP12 is complete." It covers
+every unit of `LOCAL-AI-AND-PUBLIC-PAGE-PSPR-2026-09-26.md`, AP0 to AP12,
+with commit, landing and push authority under the plan's gate, run after the
+map and dashboard plan's 1.0.0 release (its decision 12 default). Each model
+download is confirmed with Basho by file, source and size when AP1 reaches
+it. Tagging, publishing and hosting the public page stay Basho's.

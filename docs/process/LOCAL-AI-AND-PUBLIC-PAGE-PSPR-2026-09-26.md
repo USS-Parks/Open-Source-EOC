@@ -1,8 +1,12 @@
 # Local AI and Public Page PSPR
 
 Plan date: September 26, 2026
-Approval state: **DRAFT, awaiting Basho's approval.** Nothing in it runs
-until he approves it and answers section 10.
+Approval state: **APPROVED 2026-09-26.** Basho: "I approve of the new Local
+AI and public page PSPR." Section 10's defaults stand where he gave no other
+answer: the plan runs after the map plan's 1.0.0 release (decision 12), and
+each model download is confirmed with him, by file, source and size, when AP1
+reaches it. After AP12 a separate Dashboard Aesthetics PSPR follows, to give
+Open Source EOC its own presentation and design rather than parity.
 Author of record: Basho Parks.
 
 ## 1. Purpose
