@@ -593,6 +593,17 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 - `POST /api/v1/jurisdictions/:jurisdictionId/tracked-objects/scan`: Run jurisdictions tracked objects scan (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=tracking)
 - `GET /api/v1/tracked-objects/:id`: Read tracked objects (auth: bearer; audience: operator; integration: OPENEOC_INTEGRATIONS=tracking)
 
+### volunteers
+
+- `GET /api/v1/incidents/:incidentId/volunteers`: Read incidents volunteers (auth: bearer; audience: operator)
+- `POST /api/v1/incidents/:incidentId/volunteers`: Run incidents volunteers (auth: bearer; audience: operator)
+- `GET /api/v1/jurisdictions/:jurisdictionId/volunteers`: Read jurisdictions volunteers (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/volunteers`: Run jurisdictions volunteers (auth: bearer; audience: operator)
+- `DELETE /api/v1/volunteer-deployments/:deploymentId`: Delete volunteer deployments (auth: bearer; audience: operator)
+- `PUT /api/v1/volunteer-deployments/:deploymentId`: Set volunteer deployments (auth: bearer; audience: operator)
+- `PUT /api/v1/volunteers/:volunteerId`: Set volunteers (auth: bearer; audience: operator)
+- `POST /api/v1/volunteers/:volunteerId/deployments`: Run volunteers deployments (auth: bearer; audience: operator)
+
 ### workspace
 
 - `GET /api/v1/incidents/:incidentId/saved-state`: Read incidents saved state (auth: bearer; audience: operator)

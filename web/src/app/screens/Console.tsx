@@ -72,6 +72,7 @@ const EsfSurface = onDemand(() => import("../surfaces/EsfSurface.js").then((m) =
 const ContinuityPanel = onDemand(() => import("../../offline/ContinuityPanel.js").then((m) => m.ContinuityPanel));
 const ChronologySurface = onDemand(() => import("../../audit/ChronologySurface.js").then((m) => m.ChronologySurface));
 const StaffingSurface = onDemand(() => import("../../staffing/StaffingSurface.js").then((m) => m.StaffingSurface));
+const VolunteersSurface = onDemand(() => import("../../volunteers/VolunteersSurface.js").then((m) => m.VolunteersSurface));
 const FederationSurface = onDemand(() => import("../../federation/FederationSurface.js").then((m) => m.FederationSurface));
 const ContactsSurface = onDemand(() => import("../../contacts/ContactsSurface.js").then((m) => m.ContactsSurface));
 const MassNotificationSurface = onDemand(() => import("../../contacts/MassNotificationSurface.js").then((m) => m.MassNotificationSurface));
@@ -96,6 +97,7 @@ const NAV: readonly NavGroup[] = [
     { key: "tracking", label: "Tracking", icon: "tracking" },
     { key: "damage", label: "Damage Assessment", icon: "fieldReports" },
     { key: "staffing", label: "Staffing", icon: "participants" },
+    { key: "volunteers", label: "Volunteers", icon: "participants" },
     { key: "facilities", label: "Facilities", icon: "lifelines" },
   ] },
   { key: "planning", label: "Planning", items: [
@@ -546,6 +548,8 @@ function sectionForNav(key: string): Surface {
       return { kind: "damage" };
     case "staffing":
       return { kind: "staffing" };
+    case "volunteers":
+      return { kind: "volunteers" };
     case "facilities":
       return { kind: "facilities" };
     case "fieldReports":
@@ -847,6 +851,10 @@ function Center(props: {
       // Staffing writes need the admin-or-member role that alert authoring checks.
       return <StaffingSurface client={props.client} jurisdictionId={props.jurisdictionId} personId={props.personId}
         incidentId={props.incidentId} incidentName={props.incidentName} isAdmin={props.isAdmin} canWrite={props.canAuthorAlerts} />;
+    case "volunteers":
+      // A partner organization on the selected incident reads it as the incident's; the screen asks the server who may write.
+      return <VolunteersSurface client={props.client} jurisdictionId={props.jurisdictionId}
+        incidentId={props.incidentId} incidentName={props.incidentName} />;
     case "facilities":
       return props.facilitiesEnabled === null ? <Loading label="Checking facilities…" />
         : props.facilitiesEnabled ? <FacilitiesSurface client={props.client} jurisdictionId={props.jurisdictionId} theme={props.theme} canWrite={props.canAuthorAlerts} />
@@ -992,6 +1000,7 @@ function pageFor(surface: Surface, scope: string): { readonly page: ShellPage; r
     case "tracking": return result("Operations", "Tracking", "boards");
     case "damage": return result("Operations", "Damage Assessment", "boards");
     case "staffing": return result("Operations", "Staffing", "boards");
+    case "volunteers": return result("Operations", "Volunteers", "boards");
     case "facilities": return result("Operations", "Facilities", "boards");
     case "periods": return result("Planning", "Operational Periods", "planning");
     case "forms": return result("Planning", "ICS Forms", "planning");

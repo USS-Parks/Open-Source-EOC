@@ -50,6 +50,7 @@ DELETE /api/v1/notification-rules/:ruleId
 DELETE /api/v1/peers/:peerId/agreements/:agreementId
 DELETE /api/v1/positions/:positionId/assignments/:personId
 DELETE /api/v1/reports/:reportId
+DELETE /api/v1/volunteer-deployments/:deploymentId
 GET /api/v1/aar/:aarId/pdf
 GET /api/v1/ack/:token
 GET /api/v1/auth/oidc/callback
@@ -123,6 +124,7 @@ GET /api/v1/incidents/:incidentId/saved-state/:kind/:key
 GET /api/v1/incidents/:incidentId/summary
 GET /api/v1/incidents/:incidentId/tasks
 GET /api/v1/incidents/:incidentId/threads
+GET /api/v1/incidents/:incidentId/volunteers
 GET /api/v1/integrations
 GET /api/v1/jurisdictions/:jurisdictionId/audit/export
 GET /api/v1/jurisdictions/:jurisdictionId/badges
@@ -176,6 +178,7 @@ GET /api/v1/jurisdictions/:jurisdictionId/sitreps
 GET /api/v1/jurisdictions/:jurisdictionId/staffing
 GET /api/v1/jurisdictions/:jurisdictionId/status-queries
 GET /api/v1/jurisdictions/:jurisdictionId/threads
+GET /api/v1/jurisdictions/:jurisdictionId/volunteers
 GET /api/v1/mass-notifications/:massNotificationId
 GET /api/v1/me
 GET /api/v1/metrics
@@ -286,6 +289,7 @@ POST /api/v1/incidents/:incidentId/reopen
 POST /api/v1/incidents/:incidentId/tasks
 POST /api/v1/incidents/:incidentId/tasks/:taskId/complete
 POST /api/v1/incidents/:incidentId/unarchive
+POST /api/v1/incidents/:incidentId/volunteers
 POST /api/v1/jic/approvals/receive
 POST /api/v1/jic/inquiries/:inquiryId/answer
 POST /api/v1/jic/inquiries/:inquiryId/assign
@@ -353,6 +357,7 @@ POST /api/v1/jurisdictions/:jurisdictionId/status-queries
 POST /api/v1/jurisdictions/:jurisdictionId/threads
 POST /api/v1/jurisdictions/:jurisdictionId/tracked-objects
 POST /api/v1/jurisdictions/:jurisdictionId/tracked-objects/scan
+POST /api/v1/jurisdictions/:jurisdictionId/volunteers
 POST /api/v1/mass-notifications/:massNotificationId/acknowledgements
 POST /api/v1/notifications/:notificationId/acknowledge
 POST /api/v1/notifications/:notificationId/read
@@ -380,6 +385,7 @@ POST /api/v1/resources/:resourceId/transition
 POST /api/v1/templates
 POST /api/v1/templates/import
 POST /api/v1/threads/:threadId/messages
+POST /api/v1/volunteers/:volunteerId/deployments
 PUT /api/v1/boards/:boardId/webeoc-mapping
 PUT /api/v1/contact-groups/:groupId
 PUT /api/v1/contacts/:contactId
@@ -406,6 +412,8 @@ PUT /api/v1/peers/:peerId/key
 PUT /api/v1/peers/:peerId/link
 PUT /api/v1/plans/:planId
 PUT /api/v1/reports/:reportId
+PUT /api/v1/volunteer-deployments/:deploymentId
+PUT /api/v1/volunteers/:volunteerId
 `
   .trim()
   .split("\n");
@@ -505,6 +513,7 @@ const tagAliases: Readonly<Record<string, string>> = {
   "templates": "boards",
   "tracked-objects": "tracking",
   "unarchive": "incidents",
+  "volunteer-deployments": "volunteers",
 };
 
 function routeTag(path: string): string {

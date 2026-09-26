@@ -37,6 +37,7 @@ describe("surface hash routing", () => {
     { kind: "mass-notification" },
     { kind: "reports" },
     { kind: "damage" },
+    { kind: "volunteers" },
     { kind: "facilities" },
     { kind: "admin" },
     { kind: "federation" },

@@ -41,6 +41,7 @@ import { collabRoutes } from "./collab/routes.js";
 import { syncPositionIncidents } from "./collab/service.js";
 import { incidentRoutes } from "./incidents/routes.js";
 import { planRoutes } from "./plans/routes.js";
+import { volunteerRoutes } from "./volunteers/routes.js";
 import { dataPackRoutes } from "./data-packs/routes.js";
 import { iapRoutes } from "./iap/routes.js";
 import { ipawsRoutes } from "./ipaws/routes.js";
@@ -529,6 +530,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   if (integrations.has("tracking")) trackingRoutes(app, sql, authenticate);
   incidentRoutes(app, sql, authenticate);
   planRoutes(app, sql, authenticate);
+  volunteerRoutes(app, sql, authenticate);
   dataPackRoutes(app, sql, authenticate, { trustedTemplateKeys });
   impactRoutes(app, sql, authenticate);
   savedStateRoutes(app, sql, authenticate);

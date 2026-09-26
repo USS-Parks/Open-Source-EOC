@@ -86,6 +86,10 @@ import type {
   PlanSave,
   PlanSummary,
   PlanVersion,
+  VolunteerDeploymentInput,
+  VolunteerDeploymentUpdate,
+  VolunteerInput,
+  VolunteerRoster,
 } from "@openeoc/shared";
 import type { CopFeatureCollection } from "../../cop/layers.js";
 import type {
@@ -2747,6 +2751,35 @@ export class ApiClient {
   }
   async removeEquipmentHours(hoursId: string): Promise<void> {
     await this.request("DELETE", `/api/v1/equipment-hours/${encodeURIComponent(hoursId)}`);
+  }
+
+  // ---- Volunteer and CERT roster (VC-20) ----
+  /** The jurisdiction's roster, with every deployment and the hours across incidents. */
+  volunteerRoster(jurisdictionId: string, timeZone: string): Promise<VolunteerRoster> {
+    return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/volunteers?timeZone=${encodeURIComponent(timeZone)}`);
+  }
+  /** The roster as read for an incident: its deployments and hours, and a partner's own volunteers only. */
+  incidentVolunteerRoster(incidentId: string, timeZone: string): Promise<VolunteerRoster> {
+    return this.request("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/volunteers?timeZone=${encodeURIComponent(timeZone)}`);
+  }
+  createVolunteer(jurisdictionId: string, input: VolunteerInput): Promise<{ id: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/volunteers`, { ...input });
+  }
+  /** A partner organization's own volunteer, entered for the incident it takes part in. */
+  createIncidentVolunteer(incidentId: string, input: VolunteerInput): Promise<{ id: string }> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/volunteers`, { ...input });
+  }
+  updateVolunteer(volunteerId: string, input: VolunteerInput): Promise<{ id: string }> {
+    return this.request("PUT", `/api/v1/volunteers/${encodeURIComponent(volunteerId)}`, { ...input });
+  }
+  deployVolunteer(volunteerId: string, input: VolunteerDeploymentInput): Promise<{ id: string }> {
+    return this.request("POST", `/api/v1/volunteers/${encodeURIComponent(volunteerId)}/deployments`, { ...input });
+  }
+  updateVolunteerDeployment(deploymentId: string, input: VolunteerDeploymentUpdate): Promise<{ id: string }> {
+    return this.request("PUT", `/api/v1/volunteer-deployments/${encodeURIComponent(deploymentId)}`, { ...input });
+  }
+  async removeVolunteerDeployment(deploymentId: string): Promise<void> {
+    await this.request("DELETE", `/api/v1/volunteer-deployments/${encodeURIComponent(deploymentId)}`);
   }
 
   // ---- Reports ----

@@ -10202,3 +10202,196 @@ gap VA19: signed peer identity".
   `OPENEOC_TEST_DB_TAG=va20` (all federation files, migration baseline,
   upgrade, restore drill, API docs, route coverage, security, plans, the
   shared contract tests, the federation screen and the web client).
+
+## Veoci and air gap VA28: volunteer and CERT roster
+
+Veoci Integration and Air Gap PSPR unit VA28 (VC-20).
+
+- **What the code did before.** There was no volunteer module. "Volunteer"
+  appeared only as ESF 17 in the dictionary. Staff check-ins and shifts
+  record people with accounts; incident participation grants give partner
+  organizations' account holders access to an incident; the resource pool
+  holds typed teams and equipment. None of them could hold a CERT member or a
+  faith group's volunteer who has no account, their credentials, or the hours
+  they served.
+- **What changed.**
+  - **Roster** (migration `0163_volunteers.sql`). `volunteers`: a person who
+    is not an account, with an affiliation (CERT team, faith group, partner
+    organization, community group, other) and the team's name, skills,
+    credentials (name, issuer, issued and expiry dates, as a JSON list), notes
+    and an active flag. An entry made by a partner organization carries the
+    organization and the incident it was entered for. How to reach the
+    volunteer (phone, email) is kept apart in `volunteer_contacts`.
+  - **Who reads and writes, held by row-level security.** A jurisdiction's
+    members read its roster; admins and members enter and edit it. A partner
+    organization whose person holds a live contributor or coordinator grant on
+    one of the jurisdiction's incidents enters its own volunteers for that
+    incident and edits them; a viewer grant reads them. Partners read only
+    their own organization's entries for that incident, and only while a
+    grant lasts. Contacts are read by the jurisdiction's writers and the
+    entering organization's contributors, never by viewers, partner viewers or
+    guests. Guests read no part of the roster. Four definer functions carry the
+    rules (`is_volunteer_partner`, `can_read_volunteer`, `can_write_volunteer`,
+    `can_deploy_volunteer`); two policies on `audit_events` let a partner
+    append and read back its own `volunteer.*` events.
+  - **Deployments.** `volunteer_deployments` puts a volunteer on an incident of
+    their jurisdiction in a role, from a start to an end (none while under
+    way), naming the credentials the role needs, with a note. A partner's
+    volunteer is deployed only on the incident it was entered for; an inactive
+    volunteer is not deployed (409). Times are kept to the minute; a time with
+    seconds is refused.
+  - **Credentials and warnings** (`shared/src/volunteers/contract.ts`,
+    `deploymentWarnings`). A credential is expired when its expiry date is
+    before the roster's day in the reader's time zone; it is valid through its
+    expiry day. A deployment warns for each need the volunteer does not hold
+    ("No Ham license on record") or holds only expired before the
+    deployment's last local day ("CPR expired 2020-03-01"). The deployment is
+    kept and the roster carries the warning; the screen stops the first
+    submit with the warning and saves only on **Deploy anyway**, then repeats
+    the warning in its notice and shows it on the row.
+  - **Hours** (`server/src/volunteers/service.ts`). One row per volunteer per
+    local day in the time zone asked for: each volunteer's ended deployments
+    are merged where they overlap (two roles at once are one stretch of work,
+    as the force account now merges check-ins) and cut at local midnight.
+    Deployments still under way are left out and listed as under way. Minutes
+    are exact integers, shown as h:mm, so a volunteer's days add up to their
+    total as shown.
+  - **Routes** (8, in the contract and `docs/API.md`, tag `volunteers`):
+    `GET` and `POST /api/v1/jurisdictions/:jurisdictionId/volunteers` (the
+    roster, with every deployment and hours across incidents; staff entry),
+    `GET` and `POST /api/v1/incidents/:incidentId/volunteers` (for a member,
+    the whole roster to deploy from with that incident's deployments and
+    hours; for a partner, its own; partner entry),
+    `PUT /api/v1/volunteers/:volunteerId`,
+    `POST /api/v1/volunteers/:volunteerId/deployments`,
+    `PUT` and `DELETE /api/v1/volunteer-deployments/:deploymentId`. The read
+    takes `timeZone`, a name the database knows (an offset such as `+05:30`
+    is refused, as in the force account).
+  - **Audit.** `volunteer.saved`, `volunteer.deployment.saved` and
+    `volunteer.deployment.removed`, about the volunteer, with the incident
+    where there is one. Payloads hold the name, affiliation, active flag,
+    credential names and expiries, and deployment role, times and needs; never
+    a phone number or email address.
+  - **The screen** (`web/src/volunteers/VolunteersSurface.tsx`). **Volunteers**
+    joins the console rail under Operations, after Staffing (route
+    `#/volunteers`). Tabs **Roster** (add or edit a volunteer with credentials
+    rows; the roster with **Expired** marks, contacts for those who may see
+    them, and who entered each), **Deployments** (deploy on the selected
+    incident, with the credentials the role needs as checkboxes; the list
+    with warnings; edit, end and remove) and **Hours** (by day and by
+    volunteer, with the under-way note). A partner on the selected incident
+    sees its own volunteers and adds to them; a viewer sees no forms and no
+    contacts.
+- **Decisions taken by default.**
+  1. Contacts live in their own table so the database, not only the service,
+     keeps them from viewers and guests. A partner viewer grant reads its
+     organization's entries without contacts.
+  2. Credentials are the current record, without history: a warning on a past
+     deployment is judged against the credentials on record now, so renewing
+     a card clears the warning on deployments it covers.
+  3. Hours count only deployments that have ended, as the force account
+     counts only closed check-ins.
+  4. Staff add volunteers on the jurisdiction's roster, not for one incident;
+     the incident route is a partner's (403 for staff, with the reason).
+  5. Entries are deactivated, not deleted.
+- **Public Assistance donated resources (not built; for Basho).** Volunteer
+  hours should not enter the force account, which costs the applicant's own
+  paid labor. They fit Public Assistance's donated resources: volunteer labor
+  on eligible emergency work can be credited against the non-Federal share,
+  valued at the rate the applicant pays its own employees for similar work
+  (or the local prevailing rate), documented by each volunteer's name, dates,
+  hours, location and the work done. To be confirmed against the Public
+  Assistance guide edition of decision 10. A later unit could read this
+  unit's hours for an incident (ended deployments, merged, per day), take a
+  rate per deployment role, name the role and incident as the work done, and
+  roll the value into a line item as a non-Federal share credit, a new field
+  beside `estimated_cost_cents`, not into it. Overlapping roles would need a
+  rule, since merged hours no longer say which role the time was in.
+- **Files outside the "Owns" cell.** `server/src/app.ts` (route
+  registration), `shared/src/index.ts` (export), `shared/src/api/contract.ts`
+  (8 routes, the `volunteer-deployments` tag alias), `web/src/app/api/client.ts`
+  (8 methods), `web/src/app/screens/Console.tsx` (the screen, its rail entry,
+  navigation case and page title), `web/src/app/router.tsx` (the `volunteers`
+  surface), `web/src/app/__tests__/router.test.ts` (its round trip),
+  `docs/API.md` (regenerated), and the tests
+  `server/src/__tests__/volunteers.test.ts` and
+  `server/src/__tests__/volunteers-browser.test.ts`. The migration adds two
+  policies to `audit_events`. Read, not changed: `getIncidentAuthority` in
+  `server/src/incidents/participation.ts`; `instant` and `icsDateTime` in
+  `web/src/staffing/model.ts`.
+- **Air-gap behavior (decision 9).** No network path is added or changed:
+  the routes are the existing API on the LAN, and nothing leaves the host.
+  The screen needs the server; it is not in the offline outbox.
+- **Schema, contract and dependency changes.** Migration `0163` (three
+  tables, four functions, RLS policies, two `audit_events` policies, grants to
+  `app_runtime`); 8 routes; no new dependency.
+- **Tests.** `volunteers.test.ts` (4, real database): a member enters a CERT
+  member with a current and an expired credential, a viewer is refused, a
+  viewer reads the roster without contacts and `volunteer_contacts` returns no
+  rows to the viewer or a guest, a guest gets 403 and 404, the audit payload
+  holds no contact, and an impossible date, an expiry before issue, a repeated
+  credential, a bad email and an offset time zone are refused; a partner
+  contributor enters and edits its own volunteer for the incident, reads only
+  it with its contact, a partner viewer reads it without and cannot write,
+  staff are refused the incident route and a partner the roster route, the
+  partner cannot reach staff entries, its volunteer cannot be deployed on
+  another incident by anyone, staff read the partner's entry with its
+  contact, and the partner's audit lands in the jurisdiction with the
+  incident; hand-worked hours in the Pacific time zone: 08:00 to 12:00 and
+  10:00 to 14:00 merge to 6 hours, 22:00 to 02:00 splits 2 and 2, the
+  partner's 09:00 to 11:30 is 150 minutes, another incident's 13:00 to 15:00
+  joins the 20th only on the jurisdiction's roster (7 hours), UTC cuts the
+  night watch into one day, Ana's days reconcile to her merged deployments
+  (600 minutes), the open deployment is under way and uncounted until ended
+  (then 90 more minutes), warnings for an expired and a missing credential
+  and none for a case-different name, seconds and an end before start
+  refused, a viewer refused a deployment, removal audited with what it was,
+  and an inactive volunteer not deployed; a revoked grant ends the partner's
+  reach. `shared/src/volunteers/__tests__/contract.test.ts` (2): warnings
+  through the expiry day, a missing credential, the latest of two expired
+  copies; impossible dates, seconds and an end before start refused.
+  `volunteers-surface.test.tsx` (5, axe on three): the draft round trip and
+  h:mm; the roster with **Expired**, contacts and entered-by, and adding a
+  volunteer with a credential; the warning shown before deploying, nothing
+  sent until **Deploy anyway**, then the deployment and its warning listed;
+  a viewer with no forms and no contact column and the hours by volunteer;
+  a partner adding through the incident route. `volunteers-browser.test.ts`
+  at 1586 by 992 and 1534 by 790 in the Pacific time zone: Volunteers opened
+  from the rail, a CERT member added with an expired CPR card, deployed as
+  Shelter support needing CPR (warned, deployed anyway), deployed again as
+  Radio operator over an overlapping stretch, the warning on the row, and
+  6:30 hours on the 20th; screenshots looked at, and the contact cell and
+  the totals row corrected.
+- **Verification.** On the Windows test bed, with
+  `OPENEOC_DATABASE_URL=postgres://postgres@127.0.0.1:55440/openeoc_test` and
+  `OPENEOC_TEST_DB_TAG=va28`:
+  - `pnpm check:static` exit 0 (tsc for every package, eslint, license scan
+    ok for 339 packages, links ok for 125 files). After the last test edit
+    (a partner edit case in `volunteers.test.ts`), eslint on the unit's files
+    and the server's `tsc --noEmit` were rerun, both exit 0.
+  - `UPDATE_DOCS=1 rtk proxy npx vitest run server/src/__tests__/api-docs.test.ts`:
+    3 passed; `docs/API.md` regenerated.
+  - `rtk proxy npx vitest run server/src/__tests__/volunteers.test.ts shared/src/volunteers`:
+    2 files, 6 tests green.
+  - `rtk proxy npx vitest run server/src/__tests__/volunteers-browser.test.ts web/src/volunteers`:
+    2 files, 7 tests green.
+  - Neighbouring suites, with the release `pgsql/bin` on PATH for the restore
+    drill: `rtk proxy npx vitest run web/src/app/__tests__/route-coverage.test.ts web/src/app/__tests__/router.test.ts shared/src/api/__tests__/contract.test.ts server/src/__tests__/api-docs.test.ts server/src/__tests__/audit.test.ts server/src/__tests__/authorized-viewing.test.ts server/src/__tests__/incident-participation.test.ts server/src/__tests__/migrate-baseline.test.ts server/src/__tests__/restore-drill.test.ts server/src/__tests__/secure-default.test.ts server/src/__tests__/upgrade.test.ts server/src/__tests__/staffing.test.ts server/src/__tests__/force-account.test.ts`:
+    13 files, 59 tests green.
+  - In all: the unit's 4 files and 13 tests, and 13 neighbouring files with
+    59 tests, green. No red was seen.
+- **Not run.** The full `pnpm check` and `pnpm check:gate`; the other browser
+  suites that walk the rail with every section shown (they find entries by
+  exact name, so the new entry should not move them); macOS.
+- **Evidence level:** real-database, unit, component (with axe) and browser
+  tests at both viewports.
+- **Rollback:** revert the commit. Migration `0163` only adds tables,
+  functions and policies that earlier code ignores.
+- **Landing.** Rebased onto "Veoci and air gap VA20: exchange by file"; the
+  lane's placeholder migration is `0163`, and the only conflict was the
+  export line in `shared/src/index.ts`, where both are kept. On main:
+  `pnpm check:static` exit 0; 38 files, 211 tests green with
+  `OPENEOC_TEST_DB_TAG=va28` (volunteers and its browser test, federation
+  file exchange, migration baseline, upgrade, restore drill, API docs, route
+  coverage, security, audit, incident participation, all shared tests, the
+  Volunteers screen, the router and the web client).
