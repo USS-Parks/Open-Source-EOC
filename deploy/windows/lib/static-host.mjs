@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, extname, isAbsolute, relative, resolve } from "node:path";
+import { installedRegion } from "./map-data.mjs";
 
 const TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -65,14 +66,15 @@ export function selectStaticFile({ rawPath, distRoot, publicRoot, mapDataRoot = 
   const distFile = resolveInside(distRoot, requested);
   if (existsSync(distFile) && statSync(distFile).isFile())
     return { file: distFile, relativePath: requested, index: requested === "index.html", fromDist: true };
-  const publicFile = resolveInside(publicRoot, requested);
-  if (existsSync(publicFile) && statSync(publicFile).isFile())
-    return { file: publicFile, relativePath: requested, index: false, fromDist: false };
+  // An installed packet's maps come before the ones the setup carries: installing one is choosing it.
   if (mapDataRoot && requested.startsWith("basemap/")) {
     const mapFile = resolveInside(mapDataRoot, requested);
     if (existsSync(mapFile) && statSync(mapFile).isFile())
       return { file: mapFile, relativePath: requested, index: false, fromDist: false };
   }
+  const publicFile = resolveInside(publicRoot, requested);
+  if (existsSync(publicFile) && statSync(publicFile).isFile())
+    return { file: publicFile, relativePath: requested, index: false, fromDist: false };
   if (acceptsHtml && extname(requested) === "") {
     const indexFile = resolveInside(distRoot, "index.html");
     if (existsSync(indexFile) && statSync(indexFile).isFile())
@@ -177,9 +179,12 @@ async function verifiedBuildingsRelease(archivePath, sidecarPath, diagnostic) {
 
 export async function desktopRuntimeConfig(publicRoot, { diagnostic = (message) => console.warn(message), mapDataRoot = null } = {}) {
   const config = {};
-  // A map file in the public files, or else in an installed map data packet.
-  const located = (relativePath) => [publicRoot, mapDataRoot].filter(Boolean)
+  // A map file in an installed map data packet, or else in the public files. A
+  // region packet's maps are the only ones: the setup's cover another area.
+  const region = mapDataRoot ? installedRegion(mapDataRoot) : null;
+  const located = (relativePath) => (region ? [mapDataRoot] : [mapDataRoot, publicRoot]).filter(Boolean)
     .map((root) => resolve(root, relativePath)).find((path) => existsSync(path)) ?? null;
+  if (region) config.OPENEOC_MAP_BOUNDS = region.bounds.join(",");
   const optional = [
     ["OPENEOC_BASEMAP_PMTILES_URL", "basemap/california.pmtiles"],
     ["OPENEOC_BUILDINGS_PMTILES_URL", "basemap/buildings.pmtiles"],

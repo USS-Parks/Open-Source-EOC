@@ -10617,3 +10617,84 @@ Veoci Integration and Air Gap PSPR unit VA17 (VC-13 remainder), after VA11.
   solution packages, damage, the WebEOC tests, volunteers, migration
   baseline, upgrade, restore drill, API docs, route coverage, security, all
   shared tests, the administration and damage screens and the web client).
+
+## Veoci and air gap VA35: region map packs
+
+Veoci Integration and Air Gap PSPR unit VA35 (AG-12).
+
+- **What the code did before.** The map data came for California only: the
+  Windows setup and the map data packet carried California's street map,
+  buildings, overlays, North Coast imagery and elevation and address index,
+  and the map opened over California. The tools could build another area's
+  street map only by editing `generate-california.sh`; the packer refused a
+  packet without every California file; an installed packet's maps were
+  looked up after the setup's own, so on a Windows install a packet could
+  not replace them; and the launcher script had no way to install a packet
+  without setting its data folder by hand. The audit's gap 11.
+- **What changed.**
+  - **Region packets** (`deploy/windows/lib/map-data.mjs`): a packet may
+    name a region, a lowercase name and its bounds (west, south, east,
+    north, within the range the map accepts), in its manifest. A region
+    packet carries the files built for its area, its street map at least; a
+    full packet still needs every file. Verification checks the region as it
+    checks each file.
+  - **An installed packet comes first** (`deploy/windows/lib/static-host.mjs`,
+    `deploy/windows/desktop.mjs`): the static host serves a packet's map
+    files before the setup's, and the runtime settings and the address
+    index come from the packet. A region packet's are the only ones used, so
+    the setup's California imagery, overlays and index are not offered for
+    another area, and its bounds become `OPENEOC_MAP_BOUNDS`, where every
+    map opens.
+  - **Building one** (`tools/basemap/generate-california.sh`,
+    `tools/basemap/pack-map-data.mjs`): `OPENEOC_MAP_AREA` names the
+    Geofabrik extract to build (default `us/california`); the street map
+    keeps the file name the packet carries it under. `--region` and
+    `--bounds` pack a region packet from the folder its maps were built
+    into, which `--basemap` must name, so the California files cannot go
+    into one; it writes `Open-Source-EOC-<version>-map-data-<region>.zip`
+    and its SHA-256.
+  - **Installing one** (`deploy/windows/Open-Source-EOC.ps1`): the action
+    `InstallMapData -From <zip or folder>`, with `-Profile host` for a
+    network host, runs the launcher's existing checked install into the
+    right data folder.
+  - **The procedure** (`docs/guides/REGION-MAP-PACKS.md`): build on a
+    computer with the internet, write the SHA-256 down apart from the media,
+    carry the packet in, check it with `Get-FileHash` against the record,
+    install, restart and check the map; with a result table for the first
+    run. The network host guide, the basemap toolchain README and the
+    packet's READ-ME point to it.
+- **Decisions.** The street map keeps the name `california.pmtiles` in any
+  packet: the install contract, the static host and the setup all read that
+  path, and renaming it is larger than this unit. The low-detail map the app
+  bundles stays California's; outside California the street map shows at
+  every zoom. Imagery, elevation and the overlays have no build for other
+  areas here; a region packet leaves them out.
+- **Files outside the "Owns" cell.** None; the unit had none in the roster
+  (phase VA-D), and these are the map data tools and the launcher.
+- **Air-gap behavior (decision 9).** No network path is added. The build
+  needs the internet; the packet is carried on media and checked by SHA-256
+  against a record kept apart from it, which is scenario D's use; on an
+  isolated enclave or a device with no network, the installed packet serves
+  the map and search with nothing outside the host.
+- **Schema, contract and dependencies.** The map data manifest gains an
+  optional `region`; no migration, route or dependency.
+- **Tests.** `deploy/windows/desktop.test.mjs` gains a case (31 tests): a
+  region packet packs only its present files and records its region; one
+  without a street map, a full packet missing files, flipped bounds and a
+  bad region name are refused; installed, its street map is served before
+  the setup's, its bounds set, and the setup's imagery not offered, while
+  without it the setup's maps and the default view return. By hand: a
+  stand-in region packet packed by `pack-map-data.mjs` (refused without
+  `--basemap`), and installed through `Open-Source-EOC.ps1 -Action
+  InstallMapData` into a throwaway data folder, which printed
+  `MAP_DATA_INSTALLED files=1`; the launcher script parses with no errors.
+- **Verification.** `pnpm check:static` exit 0; `pnpm test:desktop` 42 of 42.
+- **Not run.** A real region build (it downloads an OpenStreetMap extract
+  and takes Java and several GB) and the carry-in on an EOC host; the
+  procedure's result table waits for that run, which is Basho's and gates
+  nothing (decision 14).
+- **Evidence level:** unit tests and a hand run of the packer and launcher
+  with stand-in files.
+- **Rollback:** revert the commit; a region packet installed meanwhile
+  still verifies under the old code only if its region field is dropped, so
+  reinstall the California packet first.

@@ -199,6 +199,58 @@ test("a map data packet installs only when every file matches its manifest, from
   }
 });
 
+test("a region map packet carries its area's maps, opens the map over it and replaces the setup's maps", async () => {
+  const root = mkdtempSync(resolve(tmpdir(), "openeoc-region-"));
+  try {
+    const stand = (path) => {
+      const source = resolve(root, "sources", path);
+      mkdirSync(resolve(source, ".."), { recursive: true });
+      writeFileSync(source, `montana ${path}`);
+      return source;
+    };
+    const region = { name: "montana", bounds: [-116.1, 44.3, -104, 49.1] };
+    const sources = { "basemap/california.pmtiles": stand("basemap/california.pmtiles"), "gazetteer.tsv": stand("gazetteer.tsv") };
+    const folder = resolve(root, "packet");
+    const manifest = await packMapData({ sources, folder, version: "0.0.0-test", region });
+    assert.deepEqual(manifest.files.map((entry) => entry.path), ["basemap/california.pmtiles", "gazetteer.tsv"]);
+    assert.deepEqual((await verifyMapData(folder)).region, region);
+    // A region packet needs its street map; a full packet still needs every file.
+    await assert.rejects(packMapData({ sources: { "gazetteer.tsv": sources["gazetteer.tsv"] }, folder: resolve(root, "bare"), version: "0", region }),
+      /Map data file is missing: basemap\/california\.pmtiles/);
+    await assert.rejects(packMapData({ sources, folder: resolve(root, "full"), version: "0" }), /Map data file is missing/);
+    await assert.rejects(packMapData({ sources, folder: resolve(root, "flipped"), version: "0", region: { name: "montana", bounds: [-104, 44.3, -116.1, 49.1] } }),
+      /west below east/);
+    const edited = JSON.parse(readFileSync(resolve(folder, "map-data.json"), "utf8"));
+    writeFileSync(resolve(folder, "map-data.json"), JSON.stringify({ ...edited, region: { name: "Montana!", bounds: region.bounds } }));
+    await assert.rejects(verifyMapData(folder), /lowercase name/);
+    writeFileSync(resolve(folder, "map-data.json"), JSON.stringify(edited));
+
+    // Installed, its street map is served before the setup's and the setup's imagery is not offered.
+    const files = fixture();
+    try {
+      const target = resolve(files.root, "map-data");
+      await installMapData({ from: folder, target, unzip: () => assert.fail("a folder is not unzipped") });
+      mkdirSync(resolve(files.publicRoot, "basemap"), { recursive: true });
+      writeFileSync(resolve(files.publicRoot, "basemap/california.pmtiles"), "california");
+      writeFileSync(resolve(files.publicRoot, "basemap/north-coast-imagery.pmtiles"), "imagery");
+      assert.equal(selectStaticFile({ rawPath: "basemap/california.pmtiles", ...files, mapDataRoot: target }).file,
+        resolve(target, "basemap/california.pmtiles"));
+      const config = await desktopRuntimeConfig(files.publicRoot, { mapDataRoot: target });
+      assert.equal(config.OPENEOC_MAP_BOUNDS, "-116.1,44.3,-104,49.1");
+      assert.equal(config.OPENEOC_BASEMAP_PMTILES_URL, "/basemap/california.pmtiles");
+      assert.equal(config.OPENEOC_IMAGERY_TILE_URL, undefined);
+      // Without the packet, the setup's maps are offered again and the map opens where it always has.
+      const setup = await desktopRuntimeConfig(files.publicRoot);
+      assert.equal(setup.OPENEOC_IMAGERY_TILE_URL, "pmtiles:///basemap/north-coast-imagery.pmtiles");
+      assert.equal(setup.OPENEOC_MAP_BOUNDS, undefined);
+    } finally {
+      rmSync(files.root, { recursive: true, force: true });
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("desktop building attribution requires metadata matching the installed archive", async (t) => {
   await t.test("matching metadata exposes the verified Overture release", async () => {
     const files = fixture();

@@ -29,20 +29,46 @@ async function sha256Of(path) {
   return hash.digest("hex");
 }
 
-/** Write a packet folder from its source files: { "basemap/california.pmtiles": "C:/...", ... }. */
-export async function packMapData({ sources, folder, version, notices = [] }) {
+/** The street map every packet names by this path, whatever area it covers. */
+const STREET_MAP = "basemap/california.pmtiles";
+
+/**
+ * A region packet (AG-12) carries the maps built for one area elsewhere than
+ * the setup's own: a name and the area's bounds, west, south, east and north
+ * in degrees, within the range the map accepts.
+ */
+function checkRegion(region) {
+  const bounds = region?.bounds;
+  if (typeof region?.name !== "string" || !/^[a-z0-9][a-z0-9-]{0,62}$/.test(region.name)
+    || !Array.isArray(bounds) || bounds.length !== 4 || !bounds.every(Number.isFinite))
+    throw new Error("A map data region needs a lowercase name and bounds west,south,east,north");
+  const [west, south, east, north] = bounds;
+  if (!(west >= -180 && east <= 180 && south >= -85 && north <= 85 && west < east && south < north))
+    throw new Error("A map data region's bounds must be west,south,east,north with west below east and south below north");
+  return { name: region.name, bounds: [west, south, east, north] };
+}
+
+/**
+ * Write a packet folder from its source files: { "basemap/california.pmtiles": "C:/...", ... }.
+ * A full packet carries every file; a region packet carries the files built
+ * for its area, its street map at least.
+ */
+export async function packMapData({ sources, folder, version, notices = [], region = null }) {
   if (existsSync(folder)) throw new Error(`Packet folder already exists: ${folder}`);
+  if (region) region = checkRegion(region);
   const files = [];
   for (const path of MAP_DATA_FILES) {
     const source = sources[path];
-    if (!source || !existsSync(source)) throw new Error(`Map data file is missing: ${path} (${source ?? "no source"})`);
+    const present = Boolean(source) && existsSync(source);
+    if (!present && region && path !== STREET_MAP) continue;
+    if (!present) throw new Error(`Map data file is missing: ${path} (${source ?? "no source"})`);
     const target = resolve(folder, path);
     mkdirSync(dirname(target), { recursive: true });
     copyFileSync(source, target);
     files.push({ path, bytes: statSync(target).size, sha256: await sha256Of(target) });
   }
   for (const notice of notices) copyFileSync(notice, resolve(folder, notice.split(/[\\/]/).at(-1)));
-  const manifest = { schema: 1, product: "Open Source EOC", version, createdAt: new Date().toISOString(), files };
+  const manifest = { schema: 1, product: "Open Source EOC", version, createdAt: new Date().toISOString(), files, ...(region ? { region } : {}) };
   writeFileSync(resolve(folder, MAP_DATA_MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`);
   return manifest;
 }
@@ -54,6 +80,7 @@ export async function verifyMapData(folder) {
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
   if (manifest?.schema !== 1 || !Array.isArray(manifest.files) || manifest.files.length === 0)
     throw new Error("The map data manifest is not a schema 1 packet");
+  if (manifest.region !== undefined) checkRegion(manifest.region);
   const seen = new Set();
   for (const entry of manifest.files) {
     if (!MAP_DATA_FILES.includes(entry?.path) || seen.has(entry.path))
@@ -67,6 +94,16 @@ export async function verifyMapData(folder) {
     if (await sha256Of(file) !== entry.sha256) throw new Error(`${entry.path} does not match its manifest's SHA-256`);
   }
   return manifest;
+}
+
+/** The region an installed packet covers, or null for the setup's own area. */
+export function installedRegion(root) {
+  try {
+    const region = JSON.parse(readFileSync(resolve(root, MAP_DATA_MANIFEST), "utf8")).region;
+    return region ? checkRegion(region) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** The folder inside an unpacked download that holds the manifest: the folder itself or its one subfolder. */

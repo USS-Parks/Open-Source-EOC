@@ -13,6 +13,11 @@
 # Usage:
 #   tools/basemap/generate-california.sh [output_dir]
 #
+# For another region set OPENEOC_MAP_AREA to its Geofabrik path, such as
+# us/montana or canada/british-columbia (docs/guides/REGION-MAP-PACKS.md).
+# The street map keeps the name california.pmtiles, the path a map data
+# packet carries it under, whatever area it covers.
+#
 # The default output directory, tools/basemap/out, is gitignored: the tiles
 # are a deploy artifact, never a committed file.
 #
@@ -23,6 +28,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUT_DIR="${1:-${HERE}/out}"
+AREA="${OPENEOC_MAP_AREA:-us/california}"
 PLANETILER_VERSION="0.9.0"
 PLANETILER_JAR="planetiler-${PLANETILER_VERSION}.jar"
 PLANETILER_URL="https://github.com/onthegomap/planetiler/releases/download/v${PLANETILER_VERSION}/planetiler.jar"
@@ -47,7 +53,7 @@ fi
 echo "Building california.pmtiles (this takes several minutes)..."
 java -Xmx4g -jar "${PLANETILER_JAR}" \
   --download \
-  --area=us/california \
+  --area="${AREA}" \
   --output=california.pmtiles \
   --force
 
@@ -61,7 +67,7 @@ if [ "${OPENEOC_SKIP_BUILDINGS:-0}" != "1" ]; then
   # first build downloaded (the custom runner expects a different filename).
   java -Xmx4g -jar "${PLANETILER_JAR}" generate-custom \
     --schema="${HERE}/buildings-schema.yml" \
-    --osm_path=data/sources/us_california.osm.pbf \
+    --osm_path="data/sources/${AREA//\//_}.osm.pbf" \
     --output=buildings.pmtiles \
     --force
 fi

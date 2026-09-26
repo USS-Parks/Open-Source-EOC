@@ -21,6 +21,10 @@ with no third-party tile provider:
    the ODbL. The rest of this document covers it. The style is
    `web/src/cop/streetstyle.ts`.
 
+For an area other than California, [region map packets](../../docs/guides/REGION-MAP-PACKS.md)
+build the street map, buildings and address search index for that area and
+carry them to an EOC with no internet, checked by SHA-256.
+
 ## Why the street tiles are not built in CI
 
 Generating statewide OpenStreetMap tiles downloads a roughly 1 GB extract and

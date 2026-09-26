@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet('Build', 'Setup', 'Start', 'Status', 'Stop', 'Launch', 'Backup', 'HostInstall', 'HostRemove', 'Connect')]
+  [ValidateSet('Build', 'Setup', 'Start', 'Status', 'Stop', 'Launch', 'Backup', 'HostInstall', 'HostRemove', 'Connect', 'InstallMapData')]
   [string]$Action = 'Launch',
   [string]$Profile = 'production',
   [ValidateRange(1024, 65535)]
@@ -22,6 +22,8 @@ param(
   [string]$AuthorityFile,
   # Connect: the network host's address, kept for later opens.
   [string]$Url,
+  # InstallMapData: the map data packet, a .zip or its unpacked folder.
+  [string]$From,
   # Keep the window open at the end, for a run the setup program opens.
   [switch]$Pause
 )
@@ -67,7 +69,8 @@ if ($installed) {
 }
 Set-Location -LiteralPath $repoRoot
 
-$arguments = @($entry, $Action.ToLowerInvariant())
+$command = if ($Action -eq 'InstallMapData') { 'install-map-data' } else { $Action.ToLowerInvariant() }
+$arguments = @($entry, $command)
 if ($Action -eq 'Connect') {
   # The connection is checked as the browser will check it, against this computer's trust store.
   $arguments = @('--use-system-ca') + $arguments
@@ -90,6 +93,10 @@ if ($Action -eq 'Backup' -and $PSBoundParameters.ContainsKey('KeepDays')) {
 }
 if (($Action -eq 'Start' -or $Action -eq 'Launch') -and $NoBrowser) {
   $arguments += '--no-browser'
+}
+if ($Action -eq 'InstallMapData') {
+  if (-not $From) { throw 'Give the map data packet: -From <the .zip or its folder>' }
+  $arguments += "--from=$From"
 }
 if ($Action -eq 'HostInstall') {
   if ($HostName) { $arguments += "--host-name=$($HostName -join ',')" }

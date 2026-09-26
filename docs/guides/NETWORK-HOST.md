@@ -331,7 +331,8 @@ for its channel's window, 72 hours unless an administrator changed it under
 **Administration > Channels**; a message still not sent then reads "Expired,
 not sent" and an administrator can resend it. Federation waits for as long as
 the partition lasts. The maps cover what the setup carries: California
-streets, and imagery and elevation for the North Coast.
+streets, and imagery and elevation for the North Coast. For an EOC elsewhere,
+build and carry in a [region map packet](REGION-MAP-PACKS.md).
 
 To check a computer with the internet unplugged, run **Check Open Source EOC
 with no internet** from the Start menu (`Test-OpenEOCAirGap.ps1`).

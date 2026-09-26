@@ -35,7 +35,7 @@ import { desktopBuildSourceFingerprint } from "./lib/build-fingerprint.mjs";
 import { rotateIfLarger, rotatingLog } from "./lib/rotating-log.mjs";
 import { backupBeforeMigrate, scheduledBackup, writeUpgradeReport } from "./lib/pre-upgrade-backup.mjs";
 import { connectionAdvice, hostAddress } from "./lib/connect.mjs";
-import { MAP_DATA_MANIFEST, installMapData } from "./lib/map-data.mjs";
+import { MAP_DATA_MANIFEST, installMapData, installedRegion } from "./lib/map-data.mjs";
 import {
   BACKUP_TASK,
   POSTGRES_INCLUDE,
@@ -735,10 +735,15 @@ async function serveProfile(args, { service = false } = {}) {
   }
   if (service) await prepareDatabase(paths, config);
   process.env.OPENEOC_DATA_DIR = paths.blobs;
-  // Offline address search: the gazetteer at the builder's output path, in a
-  // checkout and in an install alike. Absent, search reports unavailable.
-  const gazetteer = [resolve(repoRoot, "tools/basemap/out/gazetteer.tsv"), ...(installedMapData() ? [resolve(mapDataRoot, "gazetteer.tsv")] : [])]
-    .find((path) => existsSync(path));
+  // Offline address search: an installed packet's gazetteer, or the one at the
+  // builder's output path, in a checkout and in an install alike; a region
+  // packet's alone, since the setup's covers another area. Absent, search
+  // reports unavailable.
+  const packet = installedMapData();
+  const gazetteer = [
+    ...(packet ? [resolve(packet, "gazetteer.tsv")] : []),
+    ...(packet && installedRegion(packet) ? [] : [resolve(repoRoot, "tools/basemap/out/gazetteer.tsv")]),
+  ].find((path) => existsSync(path));
   if (!process.env.OPENEOC_GAZETTEER_PATH && gazetteer) process.env.OPENEOC_GAZETTEER_PATH = gazetteer;
   // Credentials at rest (MFA secrets, connector credentials) are encrypted
   // with this profile's own key. Profiles created before the key existed get
