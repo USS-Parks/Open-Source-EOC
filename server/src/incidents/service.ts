@@ -175,6 +175,33 @@ export const STANDARD_INCIDENT_TEMPLATES: readonly IncidentTemplate[] = [
     ],
   },
   {
+    // Opened by a continuity plan (VC-19); the plan adds a task per essential function.
+    key: "continuity_of_operations",
+    title: "Continuity of Operations",
+    positions: [
+      "incident_commander", "public_information_officer", "liaison_officer",
+      "planning_section_chief", "logistics_section_chief", "finance_admin_section_chief",
+    ],
+    boards: ["significant_events", "activity_log", "resource_request"],
+    checklists: [
+      {
+        position: "incident_commander",
+        items: [
+          "Confirm who holds authority under the order of succession",
+          "Choose and open the recovery location",
+        ],
+      },
+      {
+        position: "logistics_section_chief",
+        items: ["Move the vital records and equipment each essential function needs to the recovery location"],
+      },
+      {
+        position: "public_information_officer",
+        items: ["Tell staff and the public where services continue"],
+      },
+    ],
+  },
+  {
     key: "daily_ops",
     title: "Daily Operations",
     positions: ["operations_section_chief"],

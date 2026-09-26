@@ -45,3 +45,4 @@ export * from "./esf/contract.js";
 export * from "./relationships/contract.js";
 export * from "./tasks/contract.js";
 export * from "./plans/contract.js";
+export * from "./plans/continuity-template.js";

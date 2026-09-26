@@ -141,6 +141,9 @@ async function checkAgainstTemplate(sql: Sql, jurisdictionId: string, plan: Plan
   for (const [index, task] of plan.tasks.entries()) {
     if (!positions.has(task.position)) refuse(`tasks.${index}.position`, "position", task.position);
   }
+  for (const [index, fn] of (plan.continuity?.essentialFunctions ?? []).entries()) {
+    if (!positions.has(fn.position)) refuse(`continuity.essentialFunctions.${index}.position`, "position", fn.position);
+  }
   if (plan.notice) {
     for (const key of plan.notice.positions) if (!positions.has(key)) refuse("notice.positions", "position", key);
     for (const key of plan.notice.onCallPositions) if (!positions.has(key)) refuse("notice.onCallPositions", "position", key);
@@ -239,8 +242,8 @@ export async function activatePlan(
   if (plan.kind === "recurring_event" && !input.eventAt) {
     throw new AuthError(400, "eventAt: a recurring event plan is activated for an occurrence; give its start");
   }
-  if (plan.kind === "incident_response" && input.eventAt) {
-    throw new AuthError(400, "eventAt: an incident response plan times its tasks from activation and takes no event start");
+  if (plan.kind !== "recurring_event" && input.eventAt) {
+    throw new AuthError(400, "eventAt: only a recurring event plan takes an event start; this plan times its tasks from activation");
   }
 
   const opened = await activateIncident(sql, actor, jurisdictionId, {
@@ -259,6 +262,7 @@ export async function activatePlan(
   const anchor = eventAt ?? now;
   const keys = [...new Set([
     ...plan.tasks.map((task) => task.position),
+    ...(plan.continuity?.essentialFunctions ?? []).map((fn) => fn.position),
     ...(plan.notice?.positions ?? []),
     ...(plan.notice?.onCallPositions ?? []),
   ])];
@@ -275,6 +279,13 @@ export async function activatePlan(
 
   let tasksReleased = 0;
   let tasksScheduled = 0;
+  // A continuity plan's essential functions come first, by priority, each due within its recovery time.
+  const functions = [...(plan.continuity?.essentialFunctions ?? [])].sort((a, b) => a.priority - b.priority);
+  for (const fn of functions) {
+    await insertTask(sql, incidentId, positionId(fn.position), `Restore essential function: ${fn.name}`.slice(0, 500),
+      "continuity", new Date(now.getTime() + fn.recoveryHours * 60 * MINUTE));
+    tasksReleased += 1;
+  }
   for (const task of plan.tasks) {
     const releaseAt = new Date(anchor.getTime() + task.releaseMinutes * MINUTE);
     if (releaseAt.getTime() <= now.getTime()) {
@@ -341,6 +352,7 @@ export async function getIncidentPlan(sql: Sql, incidentId: string): Promise<Inc
     version: incident.plan_version as number,
     eventAt: isoOrNull(incident.plan_event_at),
     sections: plan.sections,
+    continuity: plan.continuity ?? null,
     scheduled: scheduled.map((task) => ({
       item: task.item as string, positionTitle: task.title as string, releaseAt: iso(task.release_at),
     })),

@@ -10,7 +10,12 @@ import { z } from "zod";
  * An incident response plan times its tasks from activation. A recurring
  * event plan (a fire season, a fair, a holiday weekend) is activated for each
  * occurrence with the event's start, and times its tasks from that start,
- * before it as well as after.
+ * before it as well as after. A continuity plan (VC-19) keeps a government's
+ * essential functions running when its offices, people or systems are lost:
+ * each function with the time it must be restored within and the position
+ * that restores it, the recovery locations, the orders of succession and the
+ * delegations of authority. Activating one opens a task per essential
+ * function, due within its recovery time.
  */
 
 const KeySchema = z.string().trim().regex(/^[a-z][a-z0-9_]*$/).max(80);
@@ -21,7 +26,7 @@ const unique = <T extends z.ZodTypeAny>(schema: T, max: number, what: string) =>
     `each ${what} is listed once`,
   );
 
-export const PLAN_KINDS = ["incident_response", "recurring_event"] as const;
+export const PLAN_KINDS = ["incident_response", "recurring_event", "continuity"] as const;
 export type PlanKind = (typeof PLAN_KINDS)[number];
 
 /** A year either side of the anchor, in minutes. */
@@ -63,6 +68,51 @@ export const PlanNoticeSchema = z.object({
   "the notice needs a contact group, a position or an on-call position",
 );
 
+const Line = (max: number) => z.string().trim().min(1).max(max);
+
+/** A function the government must keep performing, and how fast it must come back. */
+export const EssentialFunctionSchema = z.object({
+  name: Line(200),
+  description: z.string().max(2000).default(""),
+  /** 1 is restored first. */
+  priority: z.number().int().min(1).max(99),
+  /** Hours within which the function must be performing again: its recovery time objective. */
+  recoveryHours: z.number().int().min(1).max(8760),
+  /** The template position that restores and performs it. */
+  position: KeySchema,
+  resources: unique(Line(200), 30, "resource"),
+  vitalRecords: unique(Line(200), 30, "vital record"),
+}).strict();
+
+export const RecoveryLocationSchema = z.object({
+  name: Line(200),
+  address: z.string().trim().max(300).default(""),
+  /** How many staff it seats; none when not known. */
+  capacity: z.number().int().min(1).max(10_000).optional(),
+  notes: z.string().max(1000).default(""),
+}).strict();
+
+/** Who acts when the holder of a leadership role cannot, in order. */
+export const SuccessionSchema = z.object({
+  role: Line(200),
+  successors: z.array(Line(200)).min(1).max(10),
+}).strict();
+
+export const DelegationSchema = z.object({
+  authority: Line(300),
+  delegatedTo: Line(200),
+  /** When the delegation takes effect. */
+  when: z.string().trim().max(500).default(""),
+  limits: z.string().trim().max(500).default(""),
+}).strict();
+
+export const ContinuitySchema = z.object({
+  essentialFunctions: z.array(EssentialFunctionSchema).min(1).max(50),
+  recoveryLocations: z.array(RecoveryLocationSchema).max(20).default([]),
+  succession: z.array(SuccessionSchema).max(30).default([]),
+  delegations: z.array(DelegationSchema).max(30).default([]),
+}).strict();
+
 export const PlanDefinitionSchema = z.object({
   kind: z.enum(PLAN_KINDS),
   /** The incident template activation opens: positions, boards, checklists, groups, reports and rules. */
@@ -73,13 +123,21 @@ export const PlanDefinitionSchema = z.object({
   notice: PlanNoticeSchema.optional(),
   /** Days between reviews; the scheduler reminds the jurisdiction's administrators when one is due. */
   reviewEveryDays: z.number().int().min(1).max(1095).optional(),
+  /** A continuity plan's functions, locations, succession and delegations; only a continuity plan has them. */
+  continuity: ContinuitySchema.optional(),
 }).strict().superRefine((plan, ctx) => {
-  if (plan.kind !== "incident_response") return;
+  if (plan.kind === "continuity" && !plan.continuity) {
+    ctx.addIssue({ code: "custom", path: ["continuity"], message: "a continuity plan names its essential functions" });
+  }
+  if (plan.kind !== "continuity" && plan.continuity) {
+    ctx.addIssue({ code: "custom", path: ["continuity"], message: "only a continuity plan has essential functions" });
+  }
+  if (plan.kind === "recurring_event") return;
   for (const [index, task] of plan.tasks.entries()) {
     if (task.releaseMinutes < 0) {
       ctx.addIssue({
         code: "custom", path: ["tasks", index, "releaseMinutes"],
-        message: "an incident response plan releases a task at activation or after it",
+        message: "a plan without an event releases a task at activation or after it",
       });
     }
   }
@@ -101,6 +159,8 @@ export const PlanActivateSchema = z.object({
 export type PlanSection = z.infer<typeof PlanSectionSchema>;
 export type PlanTask = z.infer<typeof PlanTaskSchema>;
 export type PlanNotice = z.infer<typeof PlanNoticeSchema>;
+export type EssentialFunction = z.infer<typeof EssentialFunctionSchema>;
+export type Continuity = z.infer<typeof ContinuitySchema>;
 export type PlanDefinition = z.infer<typeof PlanDefinitionSchema>;
 export type PlanDefinitionInput = z.input<typeof PlanDefinitionSchema>;
 export type PlanSave = z.input<typeof PlanSaveSchema>;
@@ -151,6 +211,8 @@ export interface IncidentPlan {
   readonly version: number;
   readonly eventAt: string | null;
   readonly sections: readonly PlanSection[];
+  /** A continuity plan's functions, locations, succession and delegations. */
+  readonly continuity: Continuity | null;
   /** Tasks the plan has not released yet, soonest first. */
   readonly scheduled: ReadonlyArray<{
     readonly item: string;

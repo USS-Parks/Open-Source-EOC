@@ -47,3 +47,28 @@
 .plans-tasks {
   padding-left: 1.25rem;
 }
+
+.plans-table {
+  border-collapse: collapse;
+  margin: 12px 0;
+  width: 100%;
+}
+
+.plans-table caption {
+  font-weight: 600;
+  padding-bottom: 6px;
+  text-align: left;
+}
+
+.plans-table th,
+.plans-table td {
+  border-bottom: 1px solid var(--eoc-border);
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.plans-table th {
+  color: var(--eoc-text-muted);
+  font-size: 0.84rem;
+}

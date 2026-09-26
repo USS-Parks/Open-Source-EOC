@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  CONTINUITY_PLAN_TEMPLATE,
   ICS_POSITION_TITLES,
+  PlanDefinitionSchema,
   type PlanDefinitionInput,
   type PlanDetail,
   type PlanKind,
@@ -12,6 +14,14 @@ import type { ApiClient, IncidentTemplateDefinition, IncidentTemplateOption } fr
 import { useAsync } from "../app/data/hooks.js";
 import { ErrorNote, Loading } from "../app/screens/parts.js";
 import { formatTime } from "../datasets/format.js";
+import {
+  ContinuityEditor,
+  ContinuityView,
+  continuityDraftFrom,
+  continuityFrom,
+  emptyContinuity,
+  type ContinuityDraft,
+} from "./ContinuityParts.js";
 import "./plans.css";
 
 /**
@@ -31,6 +41,7 @@ type PlanClient = Pick<ApiClient,
 const KIND_LABELS: Readonly<Record<PlanKind, string>> = {
   incident_response: "Incident response",
   recurring_event: "Recurring event",
+  continuity: "Continuity of operations",
 };
 const INCIDENT_KINDS = ["", "incident", "planned_event", "exercise", "daily_ops"] as const;
 const INCIDENT_KIND_LABELS: Readonly<Record<string, string>> = {
@@ -74,6 +85,8 @@ export interface PlanDraft {
   readonly noticeOnCall: readonly string[];
   readonly noticeChannels: readonly string[];
   readonly noticeMessage: string;
+  /** A continuity plan's essential functions, locations, succession and delegations. */
+  readonly continuity: ContinuityDraft | null;
 }
 
 const EMPTY_SECTION: SectionDraft = { title: "", body: "", positions: [], boards: [], contactGroups: [], rules: [] };
@@ -83,14 +96,14 @@ export function emptyDraft(templateKey: string): PlanDraft {
   return {
     planId: null, expectedVersion: 0, title: "", kind: "incident_response", templateKey, incidentKind: "",
     reviewEveryDays: "365", sections: [], tasks: [], notifying: false, noticeGroups: [], noticePositions: [],
-    noticeOnCall: [], noticeChannels: ["email", "sms", "inapp"], noticeMessage: "",
+    noticeOnCall: [], noticeChannels: ["email", "sms", "inapp"], noticeMessage: "", continuity: null,
   };
 }
 
 const hours = (minutes: number): string => String(Math.round((minutes / 60) * 100) / 100);
 
 /** A saved plan, or one of its versions, in the editor over the current version. */
-export function draftFrom(plan: { title: string; definition: PlanDetail["definition"] }, planId: string, expectedVersion: number): PlanDraft {
+export function draftFrom(plan: { title: string; definition: PlanDetail["definition"] }, planId: string | null, expectedVersion: number): PlanDraft {
   const d = plan.definition;
   return {
     planId, expectedVersion, title: plan.title, kind: d.kind, templateKey: d.templateKey,
@@ -107,7 +120,13 @@ export function draftFrom(plan: { title: string; definition: PlanDetail["definit
     noticeOnCall: d.notice?.onCallPositions ?? [],
     noticeChannels: d.notice?.channels ?? ["email", "sms", "inapp"],
     noticeMessage: d.notice?.message ?? "",
+    continuity: d.continuity ? continuityDraftFrom(d.continuity) : null,
   };
+}
+
+/** The continuity plan to start from, in the editor as a new plan. */
+export function continuityTemplateDraft(): PlanDraft {
+  return draftFrom({ title: CONTINUITY_PLAN_TEMPLATE.title, definition: PlanDefinitionSchema.parse(CONTINUITY_PLAN_TEMPLATE.definition) }, null, 0);
 }
 
 function minutesOf(text: string, what: string): number {
@@ -152,6 +171,7 @@ export function definitionFrom(draft: PlanDraft): PlanDefinitionInput {
       },
     } : {}),
     ...(review ? { reviewEveryDays: Math.round(Number(review)) } : {}),
+    ...(draft.kind === "continuity" ? { continuity: continuityFrom(draft.continuity ?? emptyContinuity()) } : {}),
   };
 }
 
@@ -374,6 +394,11 @@ export function PlansPanel(props: {
         <div className="eoc-space-above">
           <Button disabled={busy || props.templates.length === 0}
             onClick={() => { close(); setDraft(emptyDraft(props.templates[0]?.key ?? "")); setNotice(""); setError(null); }}>New plan</Button>
+          {props.templates.some((option) => option.key === CONTINUITY_PLAN_TEMPLATE.definition.templateKey) ? (
+            <Button disabled={busy} onClick={() => { close(); setDraft(continuityTemplateDraft()); setNotice(""); setError(null); }}>
+              Start from the continuity template
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
@@ -408,6 +433,7 @@ export function PlansPanel(props: {
           <h3>{reading.title}, version {reading.version}</h3>
           <p className="eoc-muted">{KIND_LABELS[reading.kind]} plan. Activates {templateTitle(reading.templateKey)}.</p>
           <PlanSections sections={reading.definition.sections} positionTitle={positionTitle} boardTitle={boardTitle} />
+          {reading.definition.continuity ? <ContinuityView continuity={reading.definition.continuity} positionTitle={positionTitle} /> : null}
           {reading.definition.tasks.length ? (
             <>
               <h4>Timed tasks</h4>
@@ -449,8 +475,11 @@ export function PlansPanel(props: {
           <h3>{draft.planId ? `Edit ${draft.title}, version ${draft.expectedVersion}` : "New plan"}</h3>
           <div className="incidents-form-row">
             <TextField label="Plan title" value={draft.title} required onChange={(title) => update({ title })} />
-            <EnumSelect label="Kind of plan" values={["incident_response", "recurring_event"]} value={draft.kind}
-              onChange={(kind) => update({ kind: kind as PlanKind })} labels={KIND_LABELS} />
+            <EnumSelect label="Kind of plan" values={["incident_response", "recurring_event", "continuity"]} value={draft.kind}
+              onChange={(kind) => update({
+                kind: kind as PlanKind,
+                continuity: kind === "continuity" ? draft.continuity ?? emptyContinuity() : null,
+              })} labels={KIND_LABELS} />
             <EnumSelect label="Incident template it activates" values={props.templates.map((option) => option.key)} value={draft.templateKey}
               onChange={(templateKey) => update({ templateKey })}
               labels={Object.fromEntries(props.templates.map((option) => [option.key, option.title]))} />
@@ -459,6 +488,11 @@ export function PlansPanel(props: {
             <TextField label="Review every (days)" value={draft.reviewEveryDays} onChange={(reviewEveryDays) => update({ reviewEveryDays })} />
           </div>
           {template.error ? <ErrorNote message={template.error} /> : null}
+
+          {draft.kind === "continuity" && draft.continuity ? (
+            <ContinuityEditor draft={draft.continuity} onChange={(continuity) => update({ continuity })}
+              positions={(t?.positions ?? []).map((key) => ({ key, title: positionTitle(key) }))} />
+          ) : null}
 
           <fieldset className="incidents-fieldset">
             <legend>Sections</legend>
@@ -615,6 +649,7 @@ export function IncidentPlanSection(props: {
       <h3 className="incidents-first">Plan: {p.title}, version {p.version}</h3>
       {p.eventAt ? <p className="eoc-muted">Event starts {formatTime(p.eventAt)}.</p> : null}
       <PlanSections sections={p.sections} positionTitle={positionTitle} boardTitle={boardTitle} />
+      {p.continuity ? <ContinuityView continuity={p.continuity} positionTitle={positionTitle} /> : null}
       <h4>Tasks the plan has still to release</h4>
       {p.scheduled.length ? (
         <ul className="plans-tasks">

@@ -9816,3 +9816,90 @@ spells "pin" in any case now and then. The test now asserts what it meant:
 no `PRIVATE KEY` block, no element or attribute named for a PIN, and no
 40-character stretch of the private key's body. `ipaws.test.ts` passed 30 of
 30 three times running on the Windows test bed. No product code changed.
+
+## Veoci and air gap VA27: continuity of operations plans
+
+Veoci Integration and Air Gap PSPR unit VA27 (VC-19), on VA13's plans.
+
+- **What the code did before.** A plan could be an incident response or a
+  recurring event plan. Nothing held a government's essential functions,
+  its recovery locations, orders of succession or delegations of authority,
+  and "continuity" in the product meant offline continuity only, as the
+  Veoci research found.
+- **What changed.**
+  - **A third kind of plan** (`shared/src/plans/contract.ts`): a continuity
+    plan carries `continuity`: its essential functions (name, description,
+    priority, the hours it must be restored within, the template position
+    that restores it, resources and vital records), recovery locations
+    (name, address, staff it seats, notes), orders of succession (a role and
+    its successors in order) and delegations of authority (the authority,
+    who holds it, when it takes effect, its limits). Only a continuity plan
+    has them, and it must name at least one function. Migration
+    `0160_continuity_plans.sql` lets the plan's kind be `continuity`.
+  - **Saving** refuses a function whose position the plan's template does
+    not open, as it does for tasks and sections.
+  - **Activation** opens, before the timed tasks, a task per essential
+    function in priority order ("Restore essential function: ..."), for its
+    position, in the category `continuity`, due within its recovery hours.
+    A continuity plan, like an incident response plan, takes no event start.
+    The incident's plan read-out carries the continuity parts.
+  - **A standard incident template, Continuity of Operations**
+    (`STANDARD_INCIDENT_TEMPLATES`): the command staff without the safety
+    officer, the planning, logistics and finance chiefs, three boards, and
+    checklists for confirming who holds authority, opening the recovery
+    location, moving vital records and telling staff and the public where
+    services continue. Seeded at server start, so existing installs get it.
+  - **A continuity plan to start from** (`CONTINUITY_PLAN_TEMPLATE` in
+    `shared/src/plans/continuity-template.ts`): eight essential functions a
+    small tribal or rural government commonly keeps (the EOC, public safety
+    coordination, water and wastewater, the health clinic, communications
+    and IT, leadership and the governing body, social services and elder
+    care, payroll and finance) with recovery times from 12 hours to 7 days,
+    an alternate and a devolution site, succession for the emergency manager
+    and the governing body's chair, and two delegations, with four sections
+    (purpose, the three phases, succession and delegations, vital records).
+    It names no place, person or scenario.
+  - **The screen** (`web/src/plans/ContinuityParts.tsx`, `PlansPanel.tsx`):
+    **Start from the continuity template**, shown when the Continuity of
+    Operations template exists; the kind **Continuity of operations**; the
+    editor's **Essential functions**, **Recovery locations**, **Orders of
+    succession** and **Delegations of authority**; and a reader and incident
+    setup view with the functions as a table in priority order.
+  - `docs/guides/ADMIN.md` describes continuity plans.
+- **Decisions.** Recovery locations are text, not map features; the plan
+  does not activate itself, and the business impact analysis and risk
+  scoring of VC-30 stay out, as the plan's section 8 says.
+- **Files outside the "Owns" cell.** `server/src/incidents/service.ts` (the
+  standard template), `shared/src/index.ts`, `docs/guides/ADMIN.md`.
+- **Air-gap behavior (decision 9).** No network path.
+- **Schema, contract and dependencies.** Migration `0160`; no route; the
+  plan JSON gains `continuity`; no dependency.
+- **Tests.** `plans.test.ts` gains a case (5 tests): a function on a
+  position the template lacks refused, a continuity plan without functions
+  refused, the template saved and activated with eight tasks in priority
+  order, each due within its recovery hours, the template's checklists
+  with them, an event start refused, and the incident's plan carrying the
+  continuity parts. `contract.test.ts` (shared, 2): the template parses and
+  the kind rules. `plans-panel.test.tsx` gains two (9): the template in the
+  editor, a function edited and saved with its parts, a function without a
+  position refused, and a saved plan's functions shown in priority order
+  with succession and delegations. `continuity-plan-browser.test.ts` at
+  1586 by 992 and 1534 by 790: the template started, a recovery time set,
+  saved, activated (8 tasks released), switched to, and the first function's
+  task, the functions table and the succession in the incident's setup, the
+  task due 8 hours after activation.
+- **Verification.** On the Windows test bed with `OPENEOC_TEST_DB_TAG=main`:
+  `pnpm check:static` exit 0; 14 files, 53 tests green (the plans, plans
+  browser and continuity browser tests, incident templates and their browser
+  test, incident room, starter pack, migration baseline, upgrade, demo, the
+  shared plan contract, the plans panel, the incident screen and incident
+  template panel). The first run of that set reported 13 of 14 files with no
+  failure named while five lane agents were loading the machine; the rerun
+  was 14 of 14.
+- **Correction to "IPAWS connector IC1 correction: the postCAP secret
+  assertion".** It says CI failed "one test of 1,8xx"; the run's count was 1
+  failed of 1,850.
+- **Evidence level:** real-database, component and browser tests.
+- **Rollback:** revert the commit; migration `0160` only widens a check, and
+  a continuity plan saved meanwhile would no longer parse, so remove those
+  plans first.

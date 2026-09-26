@@ -150,6 +150,69 @@ describe("executable plans on screen", () => {
     await again.findByText(/Coast Storm is activated from Severe Storm Plan, version 2/);
   });
 
+  it("starts a continuity plan from the template, edits a function and saves it with its continuity parts", async () => {
+    const api = client();
+    const coop: IncidentTemplateDefinition = {
+      key: "continuity_of_operations", title: "Continuity of Operations",
+      positions: ["incident_commander", "public_information_officer", "liaison_officer", "planning_section_chief", "logistics_section_chief", "finance_admin_section_chief"],
+      boards: ["activity_log"], checklists: [],
+    };
+    api.getIncidentTemplate.mockResolvedValue({ template: coop, version: 1, updatedAt: "2026-09-25T17:00:00Z" });
+    const withCoop = [...templates, { ...templates[0]!, key: "continuity_of_operations", title: "Continuity of Operations" }];
+    const view = render(<PlansPanel client={api} jurisdictionId="j1" isAdmin templates={withCoop} />);
+    fireEvent.click(await view.findByRole("button", { name: "Start from the continuity template" }));
+    const form = await view.findByRole("form", { name: "New plan" });
+    expect((within(form).getByLabelText("Kind of plan") as HTMLSelectElement).value).toBe("continuity");
+    const first = within(form).getByRole("group", { name: "Essential function 1" });
+    expect((within(first).getByLabelText("Function 1 name") as HTMLInputElement).value).toBe("Emergency management and the EOC");
+    fireEvent.change(within(first).getByLabelText("Function 1 restore within (hours)"), { target: { value: "8" } });
+    await within(first).findByRole("option", { name: "Liaison Officer" });
+    expect((await axe.run(view.container)).violations).toEqual([]);
+    fireEvent.click(within(form).getByRole("button", { name: "Save plan" }));
+    await view.findByText("Saved Severe Storm Plan as version 3.");
+    const saved = api.savePlan.mock.calls[0]![2];
+    expect(saved).toMatchObject({ title: "Continuity of Operations Plan", expectedVersion: 0 });
+    expect(saved.definition.kind).toBe("continuity");
+    expect(saved.definition.continuity.essentialFunctions[0]).toMatchObject({ name: "Emergency management and the EOC", recoveryHours: 8, position: "incident_commander" });
+    expect(saved.definition.continuity.succession).toContainEqual({ role: "Emergency manager", successors: ["Deputy emergency manager", "Planning section chief"] });
+  });
+
+  it("refuses a continuity plan whose function has no position, and shows a saved one's functions in priority order", async () => {
+    const api = client();
+    const view = render(<PlansPanel client={api} jurisdictionId="j1" isAdmin templates={templates} />);
+    fireEvent.click(await view.findByRole("button", { name: "New plan" }));
+    const form = await view.findByRole("form", { name: "New plan" });
+    fireEvent.change(within(form).getByLabelText("Plan title"), { target: { value: "COOP" } });
+    fireEvent.change(within(form).getByLabelText("Kind of plan"), { target: { value: "continuity" } });
+    fireEvent.change(within(form).getByLabelText("Function 1 name"), { target: { value: "Water" } });
+    fireEvent.click(within(form).getByRole("button", { name: "Save plan" }));
+    await view.findByText("Essential function 1: choose the position that restores it.");
+    expect(api.savePlan).not.toHaveBeenCalled();
+    cleanup();
+
+    const coop = { ...plan, title: "COOP", kind: "continuity" as const, definition: {
+      ...plan.definition, kind: "continuity" as const, tasks: [],
+      continuity: {
+        essentialFunctions: [
+          { name: "Payroll", description: "", priority: 2, recoveryHours: 168, position: "incident_commander", resources: [], vitalRecords: ["Payroll register"] },
+          { name: "Water", description: "Keep water safe", priority: 1, recoveryHours: 24, position: "operations_section_chief", resources: ["Generator"], vitalRecords: [] },
+        ],
+        recoveryLocations: [{ name: "Community center", address: "", notes: "Key with the emergency manager" }],
+        succession: [{ role: "Emergency manager", successors: ["Deputy", "Planning chief"] }],
+        delegations: [{ authority: "Declare an emergency", delegatedTo: "Vice chair", when: "The chair cannot be reached.", limits: "" }],
+      },
+    } };
+    const reader = render(<PlansPanel client={{ ...client(), getPlan: vi.fn().mockResolvedValue(coop) }} jurisdictionId="j1" isAdmin={false} templates={[]} />);
+    fireEvent.click(await reader.findByRole("button", { name: "Read Severe Storm Plan" }));
+    const table = await reader.findByRole("table", { name: "Essential functions" });
+    expect(within(table).getAllByRole("row").slice(1).map((row) => row.textContent)).toEqual([
+      "1WaterKeep water safe1 dayOperations Section ChiefGenerator",
+      "2Payroll7 daysIncident CommanderPayroll register",
+    ]);
+    expect(reader.getByText(/Emergency manager/).closest("li")!.textContent).toBe("Emergency manager: Deputy, then Planning chief");
+    expect(reader.getByText(/Declare an emergency/).closest("li")!.textContent).toBe("Declare an emergency to Vice chair. Takes effect: The chair cannot be reached.");
+  });
+
   it("lets a member read plans but not change them", async () => {
     const api = client();
     const view = render(<PlansPanel client={api} jurisdictionId="j1" isAdmin={false} templates={[]} />);

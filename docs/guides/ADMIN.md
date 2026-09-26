@@ -225,6 +225,21 @@ Other preparation happens on the screens that use it:
   incident is reopened. When a plan's review falls due, the jurisdiction's
   administrators get one notification; **Mark reviewed** starts the next
   interval.
+- **Continuity of operations plans.** A plan of the kind **Continuity of
+  operations** keeps the government's essential functions running when its
+  offices, staff, systems or communications are lost. Besides sections and
+  timed tasks it names each essential function with its priority, the hours
+  it must be restored within, the position that restores it, and its
+  resources and vital records (one per line); the recovery locations with
+  how many staff each seats; the orders of succession, each role with its
+  successors in order; and the delegations of authority with when each takes
+  effect and its limits. **Start from the continuity template** opens a plan
+  written for a small tribal or rural government, to edit into the
+  jurisdiction's own; it activates the standard **Continuity of Operations**
+  incident template. Activating a continuity plan opens a task for each
+  essential function, in priority order, for its position, due within its
+  recovery hours, and the incident's setup shows the functions, locations,
+  succession and delegations.
 - **Libraries.** On **Incident Setup**, **Add a library** (administrators)
   stores a scenario, plan or reference text. A library attached to a template
   is linked to each incident activated from that template afterwards; the

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { CONTINUITY_PLAN_TEMPLATE } from "@openeoc/shared";
 import { addMembership, createJurisdiction, createPerson, principalForPerson } from "../auth/service.js";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
@@ -241,5 +242,48 @@ describe("executable plans", () => {
     expect(await runPlans(inTwoDays)).toMatchObject({ reminded: 1 });
     const [audit] = await admin`select category from audit_events where subject_id = ${annexId} and category = 'plan.reviewed'`;
     expect(audit).toBeDefined();
+  });
+
+  it("opens a continuity plan's essential functions as tasks due within their recovery times, by priority", async () => {
+    const wrongPosition = structuredClone(CONTINUITY_PLAN_TEMPLATE.definition) as { continuity: { essentialFunctions: Array<{ position: string }> } };
+    wrongPosition.continuity.essentialFunctions[0]!.position = "safety_officer";
+    const refused = await call(adminToken, "POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/plans`,
+      { title: "Continuity", definition: wrongPosition, expectedVersion: 0 });
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json().error).toContain("continuity.essentialFunctions.0.position: position safety_officer is not one the Continuity of Operations template opens");
+    const bare = await call(adminToken, "POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/plans`,
+      { title: "No functions", definition: { kind: "continuity", templateKey: "continuity_of_operations" }, expectedVersion: 0 });
+    expect(bare.statusCode).toBe(400);
+
+    const created = await call(adminToken, "POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/plans`,
+      { title: CONTINUITY_PLAN_TEMPLATE.title, definition: CONTINUITY_PLAN_TEMPLATE.definition, expectedVersion: 0 });
+    expect(created.statusCode, created.body).toBe(201);
+    expect(created.json()).toMatchObject({ kind: "continuity", templateKey: "continuity_of_operations", reviewEveryDays: 365 });
+    const planId = created.json().id as string;
+    expect((await call(adminToken, "POST", `/api/v1/plans/${planId}/activate`,
+      { name: "Offices flooded", eventAt: new Date().toISOString() })).statusCode).toBe(400);
+
+    const before = Date.now();
+    const res = await call(adminToken, "POST", `/api/v1/plans/${planId}/activate`, { name: "Offices flooded" });
+    expect(res.statusCode, res.body).toBe(201);
+    expect(res.json()).toMatchObject({ tasksReleased: 8, tasksScheduled: 0 });
+    const incidentId = res.json().incidentId as string;
+    const tasks = await admin`
+      select c.item, c.category, c.due_at, p.key from checklist_items c join positions p on p.id = c.position_id
+      where c.incident_id = ${incidentId} and c.category = 'continuity' order by c.sort_order`;
+    const functions = [...CONTINUITY_PLAN_TEMPLATE.definition.continuity!.essentialFunctions].sort((a, b) => a.priority - b.priority);
+    expect(tasks.map((task) => [task.item, task.key])).toEqual(functions.map((fn) => [`Restore essential function: ${fn.name}`, fn.position]));
+    for (const [index, fn] of functions.entries()) {
+      const due = new Date(tasks[index]!.due_at as string).getTime();
+      expect(due).toBeGreaterThanOrEqual(before + fn.recoveryHours * 3_600_000 - 60_000);
+      expect(due).toBeLessThanOrEqual(Date.now() + fn.recoveryHours * 3_600_000);
+    }
+    // The template's own checklists come with it.
+    expect(await admin`select 1 from checklist_items where incident_id = ${incidentId} and item = 'Choose and open the recovery location'`).toHaveLength(1);
+    const plan = await call(memberToken, "GET", `/api/v1/incidents/${incidentId}/plan`);
+    expect(plan.json().plan.continuity).toMatchObject({
+      essentialFunctions: expect.arrayContaining([expect.objectContaining({ name: "Drinking water and wastewater", recoveryHours: 24 })]),
+      succession: expect.arrayContaining([expect.objectContaining({ role: "Emergency manager" })]),
+    });
   });
 });
