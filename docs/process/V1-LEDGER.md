@@ -11362,3 +11362,13 @@ Veoci Integration and Air Gap PSPR unit VA22 (AG-07; the audit's gap 4).
   actions, tasks and messaging tests, migration baseline, upgrade, restore
   drill, retention, API docs, route coverage). The field breadth and
   cross-boundary browser tests passed 5 of 5.
+
+## CI correction: the call-down group read before the directory refreshed
+
+CI run 36208574990 on `763e270` failed 1 of 1,928 tests:
+`mass-notification-browser.test.ts` read the new group's members
+(`allTextContents`) as soon as "Group Duty officers saved." showed and got
+none. The contacts screen returns that notice and then reads the directory
+again (`web/src/contacts/ContactsSurface.tsx`), so on a loaded runner the
+list is still the old one. The test now polls until the members are there.
+It passed on the Windows test bed after the change. No product code changed.

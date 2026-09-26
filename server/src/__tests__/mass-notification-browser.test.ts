@@ -108,7 +108,8 @@ describe("contacts and mass notification screens", () => {
     await editor.getByRole("button", { name: "Save group" }).click();
     await page.getByText("Group Duty officers saved.").waitFor();
     const group = page.getByRole("listitem", { name: "Group Duty officers" });
-    expect(await group.locator("ol li").allTextContents()).toEqual(["Avery First", "Bailey Second", "Cameron Third"]);
+    // The saved notice shows before the directory is read again, so wait for the group's members.
+    await expect.poll(() => group.locator("ol li").allTextContents()).toEqual(["Avery First", "Bailey Second", "Cameron Third"]);
     await page.screenshot({ path: join(SHOTS, "contacts-light-1440.png"), fullPage: false });
 
     // A call-down by email and SMS, ten minutes per contact.
