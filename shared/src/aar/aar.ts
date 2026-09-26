@@ -77,6 +77,39 @@ export interface AarAnalytics {
   readonly byCapability: readonly AarAnalyticsBucket[];
 }
 
+/** An incident in a reader's cross-incident rollup: one they may read, active at some time in the range. */
+export interface AarRollupIncident {
+  readonly id: string;
+  readonly name: string;
+  readonly jurisdictionId: string;
+  readonly activatedAt: string;
+  readonly closedAt: string | null;
+}
+
+/** A corrective action as the cross-incident rollup lists it. */
+export interface AarRollupAction {
+  readonly id: string;
+  readonly incidentId: string;
+  /** The organization that recorded the action. */
+  readonly organizationId: string;
+  readonly organizationName: string | null;
+  readonly capability: string;
+  readonly capabilityElement: string;
+  readonly recommendation: string;
+  readonly priority: AarActionPriority;
+  readonly status: AarActionStatus;
+  readonly dueDate: string | null;
+  readonly owner: string | null;
+  /** The responsible organization: the owner's. Null while no owner is assigned. */
+  readonly ownerOrganization: { readonly id: string; readonly name: string } | null;
+  readonly createdAt: string;
+}
+
+export interface AarRollup {
+  readonly incidents: readonly AarRollupIncident[];
+  readonly correctiveActions: readonly AarRollupAction[];
+}
+
 export interface AarOperationalPeriod {
   readonly revision: number;
   readonly label: string;

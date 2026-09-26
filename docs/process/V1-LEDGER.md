@@ -14463,3 +14463,66 @@ Map and Dashboard Parity PSPR unit MP2 (decision 5), built in lane
   palette rendered and reviewed.
 - **Full suite:** as MP11, once per landing batch before the push.
 - **Rollback.** Revert the commit.
+
+## Map and dashboard parity MP13: AAR, shelter and damage dashboards
+
+Map and Dashboard Parity PSPR unit MP13 with amendment 1's rollup across
+incidents, built in lane `lane/mp13`.
+
+- **What the code did before.** The AAR workspace showed priority, status
+  and capability counts as number tiles; shelters and damage assessment had
+  lists only. Nothing drew WebEOC's After Action Reviews dashboard.
+- **What changed.**
+  - **AAR** (`web/src/aar/AarDashboard.tsx`, `dashboard.ts`): a Dashboard
+    tab beside Records with priority, status and improvement plan donuts
+    (the last split by follow-through: complete, on schedule, past due, no
+    due date), core capability bars over all 32 FEMA core capabilities and
+    capability element bars. One rule drives every chart and the list under
+    it, so counts always equal the list; VIEW opens Records with that filter,
+    which gained element and improvement plan filters. **Amendment 1:** a
+    switch between This incident and All incidents with a date range, adding
+    a responsible organization chart, served by
+    `GET /api/v1/aar/rollup?from&to` (`server/src/aar/rollup.ts`), which runs
+    under the reader's row-level security: an incident appears if the reader
+    is a member of its organization or an active participant and it was
+    active in the range; an action appears if the reader may read it.
+  - **Shelters** (`web/src/dashboards/incident/`, mounted on the Shelters
+    board through an optional `dashboard` tab in `BoardSurface.tsx`): status
+    tiles, total occupancy against capacity and a gauge per shelter,
+    yes-or-no donuts (pets), and occupancy at the end of each operational
+    period replayed from record history.
+  - **Damage Assessment** (`web/src/damage/DamageDashboard.tsx`, a new
+    Assessment and Dashboard tab strip): intake, accepted, rejected and
+    Public Assistance line item tiles; accepted reports by FEMA degree and by
+    structure type; PA items by category A to G and by status.
+  - Colors come from MP2's palette tables (`palettes.tsx` emits their CSS
+    variables); the palette's Unaffected, category E and category F entries
+    gained dark values so they read on the dark theme (integrator's edit).
+  - Additive: one AAR route, rollup types in `shared/src/aar/aar.ts`, one
+    contract key, `getAarRollup` in the client, and the regenerated
+    `docs/API.md` and `docs/openapi.json`.
+- **Defaults taken and deviations.** The improvement plan donut is
+  follow-through by due date; capability counts are records per incident and
+  corrective actions across incidents. Accessibility is not a shelter board
+  field and damage reports hold no area, so those charts are absent and the
+  screens say so. Evacuating and Closed shelters share the palette's red.
+  The AAR workspace still refuses non-members of the owning organization, so
+  the demo director cannot open Del Norte's or Deerhorn's per-incident AAR;
+  their corrective actions recorded by a participant show under All
+  incidents. The demo data these dashboards need follows in the demo data
+  step.
+- **Verification.** `aar-rollup.test.ts` (another organization's incident
+  never appears; a participant sees the incident and only its own and
+  assigned actions). Web suites for AAR, dashboards, damage, the surface,
+  boards, route coverage, the chart kit, `shared/src/api` and the palette:
+  19 files, 146 tests, axe in both themes; after the dark values, the
+  palette, damage and dashboard suites again: 5 files, 41 tests. Server and
+  browser neighbours (`aar`, `damage`, `api-docs`, `aar-workspace-browser`,
+  `damage-browser`, `board-views-browser`, `boards-workspace-browser`,
+  `scenario-map-records-browser`): 9 files, 30 tests.
+  `incident-dashboards-browser.test.ts` at 1586 by 992 and 1534 by 790 in
+  light and dark, clicking charts to filter: no page errors, no outside
+  requests. `pnpm check:static` pass on the rebased lane. Captures reviewed
+  against the WebEOC shot.
+- **Full suite:** as MP11, once per landing batch before the push.
+- **Rollback.** Revert the commit.

@@ -86,7 +86,7 @@ export const DAMAGE_DEGREE_PALETTE = definePalette({
     minor: entry("Minor damage", "#e89d00"),
     affected: entry("Affected", "#ffd700"),
     inaccessible: entry("Inaccessible", "#007ac2"),
-    unaffected: entry("Unaffected", "#58595b"),
+    unaffected: entry("Unaffected", "#58595b", "#9aa0a6"),
   },
 });
 
@@ -100,8 +100,8 @@ export const PA_CATEGORY_PALETTE = definePalette({
     b_emergency_protective_measures: entry(PA_CATEGORY_LABELS["b_emergency_protective_measures"]!, "#fb7d81"),
     c_roads_and_bridges: entry(PA_CATEGORY_LABELS["c_roads_and_bridges"]!, "#b2b2b2"),
     d_water_control_facilities: entry(PA_CATEGORY_LABELS["d_water_control_facilities"]!, "#1f7ac0"),
-    e_buildings_and_equipment: entry(PA_CATEGORY_LABELS["e_buildings_and_equipment"]!, "#875a46"),
-    f_utilities: entry(PA_CATEGORY_LABELS["f_utilities"]!, "#58595b"),
+    e_buildings_and_equipment: entry(PA_CATEGORY_LABELS["e_buildings_and_equipment"]!, "#875a46", "#b5876f"),
+    f_utilities: entry(PA_CATEGORY_LABELS["f_utilities"]!, "#58595b", "#8a9bb0"),
     g_parks_recreational_other: entry(PA_CATEGORY_LABELS["g_parks_recreational_other"]!, "#71d56e"),
   },
 });

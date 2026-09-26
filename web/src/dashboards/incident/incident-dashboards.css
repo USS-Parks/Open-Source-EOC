@@ -1,0 +1,214 @@
+/*
+ * Incident dashboards: the After Action, Shelters and Damage Assessment
+ * Dashboard tabs, built from the chart kit. Each list row carries its
+ * category in a colored bar (--eoc-dash-row-color) and in words. Colors come
+ * from the shared palette tables (palettes.tsx and the kit's work status).
+ */
+
+.eoc-dash {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.eoc-dash-state { margin: 0; padding: 12px 0; color: var(--eoc-text-muted); }
+.eoc-dash-state.is-error { color: var(--eoc-status-critical); }
+
+.eoc-dash-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  min-width: 0;
+}
+
+.eoc-dash-summary { margin: 0; color: var(--eoc-text-muted); font-size: 13px; }
+
+.eoc-dash-note {
+  margin: 8px 0 0;
+  color: var(--eoc-text-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.eoc-dash-link {
+  padding: 0;
+  color: var(--eoc-status-info);
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+/* This incident or all incidents: two radio buttons drawn as one segmented control. */
+.eoc-dash .eoc-dash-scope {
+  display: inline-flex;
+  margin: 0;
+  padding: 2px;
+  background: var(--eoc-surface-sunken);
+  border: 1px solid var(--eoc-border);
+  border-radius: var(--eoc-radius-md);
+}
+
+.eoc-dash .eoc-dash-scope-option {
+  position: relative;
+  display: block;
+  color: var(--eoc-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.eoc-dash .eoc-dash-scope-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+}
+
+.eoc-dash .eoc-dash-scope-option span {
+  display: block;
+  padding: 6px 14px;
+  border-radius: calc(var(--eoc-radius-md) - 2px);
+  cursor: pointer;
+}
+
+.eoc-dash .eoc-dash-scope-option input:checked + span {
+  color: var(--eoc-text-strong);
+  background: var(--eoc-surface);
+  box-shadow: var(--eoc-shadow-sm), inset 0 0 0 1px var(--eoc-border-strong);
+}
+
+.eoc-dash .eoc-dash-scope-option input:focus-visible + span { outline: 3px solid var(--eoc-focus); outline-offset: 1px; }
+
+.eoc-dash .eoc-dash-range { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.eoc-dash .eoc-dash-range label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--eoc-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.eoc-dash .eoc-dash-range input { width: auto; min-height: 34px; padding: 4px 8px; }
+
+/* Card grids */
+/* Cards in a row share its height; three cards sit in one row, four in two. */
+.eoc-dash-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+@container (min-width: 640px) {
+  .eoc-dash-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@container (min-width: 820px) {
+  .eoc-dash-grid.is-trio { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.eoc-aar-dash-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.eoc-aar-dash-column { display: grid; align-content: start; gap: 12px; min-width: 0; }
+
+@container (min-width: 760px) {
+  .eoc-aar-dash-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .eoc-aar-dash-grid > .eoc-aar-dash-column:last-child { grid-column: 1 / -1; }
+}
+
+/* Wide: the three donuts across the top, capabilities and elements side by side under them. */
+@container (min-width: 1200px) {
+  .eoc-aar-dash-grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+  .eoc-aar-dash-grid > .eoc-aar-dash-column:first-child { grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .eoc-aar-dash-grid > .eoc-aar-dash-column:last-child { grid-column: auto; }
+}
+
+/* Thirty-two core capabilities fit one card, as WebEOC's list does. */
+.eoc-aar-dash .eoc-hbar-row { min-height: 20px; font-size: 12px; }
+
+/* Shelter occupancy */
+.eoc-shelter-total { display: grid; gap: 10px; }
+.eoc-shelter-total p { margin: 0; color: var(--eoc-text-muted); font-size: 13px; }
+
+.eoc-shelter-total p strong {
+  display: block;
+  color: var(--eoc-text-strong);
+  font-size: 36px;
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.eoc-shelter-total dl { display: flex; gap: 24px; margin: 0; }
+.eoc-shelter-total dt { color: var(--eoc-text-muted); font-size: 12px; }
+.eoc-shelter-total dd { margin: 0; color: var(--eoc-text-strong); font-size: 18px; font-variant-numeric: tabular-nums; }
+
+.eoc-shelter-gauge { display: grid; gap: 4px; min-width: 0; font-size: 12.5px; }
+
+/* Filtered list */
+.eoc-dash-list {
+  min-width: 0;
+  padding: 10px 12px 12px;
+  color: var(--eoc-text);
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border);
+  border-radius: var(--eoc-radius-md);
+  box-shadow: var(--eoc-shadow-sm);
+}
+
+.eoc-dash-list:focus-visible { outline: 3px solid var(--eoc-focus); outline-offset: 2px; }
+
+.eoc-dash-list > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 2px 2px 10px;
+}
+
+.eoc-dash-list h3 { margin: 0; color: var(--eoc-text-strong); font-size: 15px; font-weight: 600; }
+.eoc-dash-count { color: var(--eoc-text-muted); font-size: 13px; font-weight: 400; }
+.eoc-dash-list-tools { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; }
+.eoc-dash-empty { margin: 0; padding: 10px 2px; color: var(--eoc-text-muted); }
+
+.eoc-dash-rows { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+
+.eoc-dash-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px 16px;
+  padding: 8px 12px 8px 12px;
+  background: color-mix(in srgb, var(--eoc-bg) 45%, var(--eoc-surface));
+  border: 1px solid var(--eoc-border);
+  border-left: 4px solid var(--eoc-dash-row-color, var(--eoc-border-strong));
+  border-radius: var(--eoc-radius-sm);
+}
+
+@container (min-width: 700px) {
+  .eoc-dash-row { grid-template-columns: minmax(0, 1fr) minmax(220px, 0.45fr); align-items: center; }
+}
+
+.eoc-dash-row-main,
+.eoc-dash-row-facts { display: grid; gap: 2px; min-width: 0; }
+.eoc-dash-row-main strong,
+.eoc-dash-row-title { color: var(--eoc-text-strong); font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+.eoc-dash-row-title { justify-self: start; }
+.eoc-dash-row-facts { font-size: 12.5px; }
+.eoc-dash-muted { color: var(--eoc-text-muted); font-size: 12.5px; }
+.eoc-dash-pill { color: var(--eoc-status-critical); font-size: 12.5px; font-weight: 600; }

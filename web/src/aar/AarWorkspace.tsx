@@ -14,7 +14,7 @@ import {
 } from "@openeoc/shared";
 import type { AarAnalyticsResponse, ApiClient, CorrectiveAction } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
-import { ActionButton } from "../design/controls.js";
+import { ActionButton, Tabs } from "../design/controls.js";
 import { ConditionBadge, EmptyState, ErrorState, LoadingState } from "../design/feedback.js";
 import { Icon } from "../design/icons/index.js";
 import type { OperationalState } from "../design/tokens.js";
@@ -30,6 +30,7 @@ import {
   type AarFilter,
   type AarOwnerOption,
 } from "./model.js";
+import { AarDashboard } from "./AarDashboard.js";
 import "./aar-workspace.css";
 
 const CAPABILITIES = CORE_CAPABILITIES.values;
@@ -355,6 +356,10 @@ export function AarWorkspace(props: AarWorkspaceProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [tab, setTab] = useState<"records" | "dashboard">("records");
+  // A dashboard VIEW opens the records list filtered, and focus follows to it.
+  const [focusDrill, setFocusDrill] = useState(false);
+  const drill = useRef<HTMLElement>(null);
   // Single actions read fresh from the server, newer than the analytics response.
   const [latest, setLatest] = useState<Readonly<Record<string, CorrectiveAction>>>({});
   const periodRevision = period ? Number(period) : undefined;
@@ -372,6 +377,16 @@ export function AarWorkspace(props: AarWorkspaceProps) {
     participants.data ?? [],
   ), [participants.data, positions.data, props.incidentId]);
   useEffect(() => setFilter(EMPTY_FILTER), [period]);
+  useEffect(() => {
+    if (!focusDrill || tab !== "records") return;
+    drill.current?.focus();
+    setFocusDrill(false);
+  }, [focusDrill, tab]);
+  const openRecords = (next: AarFilter) => {
+    setFilter(next);
+    setTab("records");
+    setFocusDrill(true);
+  };
 
   const execute = async (key: string, work: () => Promise<void>): Promise<boolean> => {
     setBusy(key); setError(null); setMessage(null);
@@ -439,9 +454,16 @@ export function AarWorkspace(props: AarWorkspaceProps) {
         <label>Operational period<select value={period} onChange={(event) => setPeriod(event.target.value)}>
           <option value="">All periods</option>{revisions.map((revision) => <option key={revision.revision} value={revision.revision}>{periodLabel(revision)}</option>)}</select></label>
       </header>
+      <Tabs id="aar-view" label="After-action views" value={tab} onChange={(next) => setTab(next as typeof tab)}
+        tabs={[{ id: "records", label: "Records" }, { id: "dashboard", label: "Dashboard" }]} />
       {analytics.error ? <p className="eoc-aar-warning" role="status">Refresh failed. Showing the last authoritative response.</p> : null}
       {error ? <p className="eoc-aar-error" role="alert">{error}</p> : null}
       {message ? <p className="eoc-aar-message" role="status">{message}</p> : null}
+      <div role="tabpanel" id={`aar-view-${tab}-panel`} aria-labelledby={`aar-view-${tab}-tab`} className="eoc-aar-tabpanel">
+      {tab === "dashboard" ? (
+        <AarDashboard client={props.client} data={analytics.data} onView={openRecords}
+          periodLabel={revisions.find((revision) => String(revision.revision) === period)?.operationalPeriod?.label ?? null} />
+      ) : <>
       <AnalyticsPanel data={analytics.data} filter={filter} onFilter={setFilter} />
       <div className="eoc-aar-entry-grid">
         <ObservationForm periodRevision={periodRevision} busy={busy === "observation"} onSave={saveObservation} />
@@ -449,7 +471,7 @@ export function AarWorkspace(props: AarWorkspaceProps) {
           periodRevision={periodRevision} busy={busy === "action"}
           onCancelSource={() => setSource(null)} onSave={saveAction} />
       </div>
-      <section className="eoc-aar-drill" aria-labelledby="eoc-aar-drill-title">
+      <section className="eoc-aar-drill" aria-labelledby="eoc-aar-drill-title" ref={drill} tabIndex={-1}>
         <header><div><span className="eoc-aar-eyebrow">Aggregate drilldown</span><h2 id="eoc-aar-drill-title">{filterLabel(filter)}</h2></div>
           <strong>{ids.count} record{ids.count === 1 ? "" : "s"}</strong></header>
         <div className="eoc-aar-record-columns">
@@ -472,6 +494,8 @@ export function AarWorkspace(props: AarWorkspaceProps) {
         </div>
       </section>
       <PdfPanel busy={busy === "pdf"} onCompose={async (overview, objectives) => { await compose(overview, objectives); }} />
+      </>}
+      </div>
     </section>
   );
 }

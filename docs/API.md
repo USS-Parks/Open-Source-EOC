@@ -20,6 +20,7 @@ GET /api/v1/openapi.json.
 ### aar
 
 - `GET /api/v1/aar/:aarId/pdf`: Read aar pdf (auth: bearer; audience: operator)
+- `GET /api/v1/aar/rollup`: Read aar rollup (auth: bearer; audience: operator)
 - `GET /api/v1/corrective-actions/:id`: Read corrective actions (auth: bearer; audience: operator)
 - `PATCH /api/v1/corrective-actions/:id`: Update corrective actions (auth: bearer; audience: operator)
 - `POST /api/v1/corrective-actions/:id/status`: Run corrective actions status (auth: bearer; audience: operator)

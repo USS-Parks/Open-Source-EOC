@@ -32,6 +32,7 @@ import {
   type OperationalTableViewState,
 } from "../../design/table.js";
 import { OperationalTableSavedViews, useOperationalTableViews } from "../../design/table-saved-views.js";
+import { ShelterDashboard } from "../../dashboards/incident/ShelterDashboard.js";
 import { useDraftStore } from "../../offline/draft-store.js";
 import type {
   ApiClient,
@@ -372,6 +373,10 @@ export function BoardSurface(props: {
           canWrite={canWrite}
           workflow={workflow.loading && !workflow.data ? undefined : workflow.data}
           onMove={moveRecord}
+          dashboard={b.templateKey === "shelters" ? (
+            <ShelterDashboard client={props.client} boardId={props.boardId} incidentId={incidentViewId ?? null}
+              fields={b.fields} views={b.views} onOpenRecord={navigateRecord} />
+          ) : undefined}
           tools={<>
             <ActionButton onClick={() => void exportView("csv")}>Export CSV</ActionButton>
             <ActionButton onClick={() => void exportView("xlsx")}>Export Excel</ActionButton>
@@ -521,8 +526,12 @@ function BoardWorkspace(props: {
   readonly canWrite: boolean;
   readonly workflow: BoardModeBodyProps["workflow"];
   readonly onMove: BoardModeBodyProps["onMove"];
+  /** A Dashboard tab beside the views, for boards that have one. */
+  readonly dashboard?: ReactNode;
 }) {
   const view = props.template.views.find((candidate) => candidate.key === props.viewKey)!;
+  const [dashboard, setDashboard] = useState(false);
+  const showDashboard = dashboard && props.dashboard !== undefined;
   const initial = useMemo(() => tableState(view.columns), [view.columns]);
   const routeFilters = useMemo(() => decodeFilters(view.columns, props.routeFilter), [props.routeFilter, view.columns]);
   const [viewState, setViewState] = useState(() => ({ ...initial, filters: routeFilters }));
@@ -543,11 +552,20 @@ function BoardWorkspace(props: {
   }, [props.onFilter]);
 
   const tabsId = `board-${props.template.key}-views`;
+  // A view key never contains a hyphen, so the Dashboard tab's id cannot meet one.
+  const DASHBOARD_TAB = "eoc-dashboard";
   return (
     <div className="board-surface">
       <Tabs id={tabsId} label="Board views"
-        tabs={props.template.views.map((candidate) => ({ id: candidate.key, label: candidate.title }))}
-        value={props.viewKey} onChange={props.onSelectView} />
+        tabs={[...props.template.views.map((candidate) => ({ id: candidate.key, label: candidate.title })),
+          ...(props.dashboard !== undefined ? [{ id: DASHBOARD_TAB, label: "Dashboard" }] : [])]}
+        value={showDashboard ? DASHBOARD_TAB : props.viewKey} onChange={(next) => {
+          setDashboard(next === DASHBOARD_TAB);
+          if (next !== DASHBOARD_TAB) props.onSelectView(next);
+        }} />
+      {showDashboard ? (
+        <div role="tabpanel" id={`${tabsId}-${DASHBOARD_TAB}-panel`} aria-labelledby={`${tabsId}-${DASHBOARD_TAB}-tab`}>{props.dashboard}</div>
+      ) : (
       <div role="tabpanel" id={`${tabsId}-${props.viewKey}-panel`} aria-labelledby={`${tabsId}-${props.viewKey}-tab`} className="board-surface">
       <div className="board-tools">
         <ViewRefineControls fields={props.template.fields} value={props.refinement} onApply={props.onRefine} anyOf />
@@ -589,6 +607,7 @@ function BoardWorkspace(props: {
         />
       </>}
       </div>
+      )}
     </div>
   );
 }

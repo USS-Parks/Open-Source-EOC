@@ -11,6 +11,10 @@
 .eoc-aar h3,
 .eoc-aar p { margin-block-start: 0; }
 
+/* The Records and Dashboard tabs; each panel keeps the workspace's rhythm. */
+.eoc-aar-tabpanel { display: grid; gap: 16px; min-width: 0; }
+.eoc-aar-drill:focus-visible { outline: 3px solid var(--eoc-focus); outline-offset: 2px; }
+
 .eoc-aar-heading,
 .eoc-aar-analytics > header,
 .eoc-aar-drill > header,

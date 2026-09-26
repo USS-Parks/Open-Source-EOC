@@ -22,6 +22,7 @@ import {
   setCorrectiveActionStatus,
   updateCorrectiveAction,
 } from "./service.js";
+import { aarRollup } from "./rollup.js";
 
 /**
  * Capability is one of the 32 National Preparedness Goal Core Capabilities;
@@ -136,6 +137,12 @@ export function aarRoutes(
     return reply.send(await withPerson(sql, req.principal.person.id, (tx) =>
       getAarAnalytics(tx, req.principal, incidentId, query),
     ));
+  });
+
+  // Corrective actions across every incident the reader may read, active in the range.
+  app.get("/api/v1/aar/rollup", { preHandler: authenticate }, async (req, reply) => {
+    const query = z.object({ from: z.iso.datetime().optional(), to: z.iso.datetime().optional() }).parse(req.query);
+    return reply.send(await withPerson(sql, req.principal.person.id, (tx) => aarRollup(tx, query)));
   });
 
   app.post("/api/v1/incidents/:incidentId/aar", { preHandler: authenticate }, async (req, reply) => {

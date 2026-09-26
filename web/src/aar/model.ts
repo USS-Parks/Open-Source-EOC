@@ -10,8 +10,10 @@ import {
   type WorkflowAssignmentRequest,
 } from "@openeoc/shared";
 import type { PositionRef } from "../app/api/client.js";
+import { FOLLOW_THROUGH_CATEGORIES, chartKey, localToday } from "./dashboard.js";
 
-export type AarFilterDimension = "all" | "priority" | "status" | "capability";
+/** A drilldown of the records list: server buckets for priority, status and capability; the dashboard's rule for the rest. */
+export type AarFilterDimension = "all" | "priority" | "status" | "capability" | "element" | "followThrough";
 export interface AarFilter {
   readonly dimension: AarFilterDimension;
   readonly key: string;
@@ -46,14 +48,25 @@ export function humanLabel(value: string): string {
 
 export function filterLabel(filter: AarFilter): string {
   if (filter.dimension === "all") return "All records";
+  if (filter.dimension === "element") return `Element: ${elementLabel(filter.key)}`;
+  if (filter.dimension === "followThrough")
+    return `Improvement plan: ${FOLLOW_THROUGH_CATEGORIES.find((item) => item.key === filter.key)?.label ?? humanLabel(filter.key)}`;
   return `${humanLabel(filter.dimension)}: ${filter.dimension === "capability" ? capabilityLabel(filter.key) : humanLabel(filter.key)}`;
 }
 
-export function recordIds(data: AarWorkspaceData, filter: AarFilter): {
+export function recordIds(data: AarWorkspaceData, filter: AarFilter, today = localToday()): {
   readonly observationIds: ReadonlySet<string>;
   readonly actionIds: ReadonlySet<string>;
   readonly count: number;
 } {
+  if (filter.dimension === "element" || filter.dimension === "followThrough") {
+    const chart = filter.dimension;
+    const ids = (items: readonly (AarObservation | AarWorkspaceData["correctiveActions"][number])[]) =>
+      new Set(items.filter((item) => chartKey(chart, item, today) === filter.key).map((item) => item.id));
+    const observationIds = ids(data.observations);
+    const actionIds = ids(data.correctiveActions);
+    return { observationIds, actionIds, count: observationIds.size + actionIds.size };
+  }
   if (filter.dimension === "all") {
     return {
       observationIds: new Set(data.observations.map((item) => item.id)),

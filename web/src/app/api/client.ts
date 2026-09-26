@@ -65,6 +65,7 @@ import type {
   AarCorrectiveAction,
   AarActionPriority,
   AarActionStatus,
+  AarRollup,
   WorkflowAssignmentRequest,
   BoardTemplate,
   ResourceRequestAssignment as ResourceRequestAssignmentContract,
@@ -1634,6 +1635,13 @@ export class ApiClient {
   }
   downloadAarPdf(aarId: string): Promise<Blob> {
     return this.requestBlob(`/api/v1/aar/${aarId}/pdf`);
+  }
+  /** Corrective actions across every incident the reader may read that was active in the range. */
+  getAarRollup(range: { readonly from?: string; readonly to?: string } = {}): Promise<AarRollup> {
+    const query = new URLSearchParams();
+    if (range.from) query.set("from", range.from);
+    if (range.to) query.set("to", range.to);
+    return this.request("GET", `/api/v1/aar/rollup${query.size ? `?${query}` : ""}`);
   }
   async listCorrectiveActions(
     jurisdictionId: string,

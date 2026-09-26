@@ -55,6 +55,7 @@ DELETE /api/v1/reports/:reportId
 DELETE /api/v1/service-identities/:identityId
 DELETE /api/v1/volunteer-deployments/:deploymentId
 GET /api/v1/aar/:aarId/pdf
+GET /api/v1/aar/rollup
 GET /api/v1/ack/:token
 GET /api/v1/auth/oidc/callback
 GET /api/v1/auth/oidc/start

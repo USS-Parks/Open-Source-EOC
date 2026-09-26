@@ -30,6 +30,7 @@ import { saveFile } from "../admin/labels.js";
 import { formatTime } from "../datasets/format.js";
 import "../datasets/datasets.css";
 import "./damage.css";
+import { DamageDashboard } from "./DamageDashboard.js";
 import { ForceAccountPanel } from "./ForceAccountPanel.js";
 import {
   DEFAULT_DRAFT,
@@ -83,11 +84,18 @@ export function DamageSurface(props: {
   const [revision, setRevision] = useState(0);
   const changed = useCallback(() => setRevision((n) => n + 1), []);
   const [tab, setTab] = useState<string>("submitted");
+  const [screen, setScreen] = useState<string>("assessment");
   const common = { client: props.client, jurisdictionId: props.jurisdictionId, revision };
   const figures = useFigures(props.client, props.jurisdictionId, revision);
   return (
     <Scroll>
       <SurfaceHeader title="Damage assessment" />
+      <Tabs id="damage-screen" label="Damage assessment views" value={screen} onChange={setScreen}
+        tabs={[{ id: "assessment", label: "Assessment" }, { id: "dashboard", label: "Dashboard" }]} />
+      <div role="tabpanel" id={`damage-screen-${screen}-panel`} aria-labelledby={`damage-screen-${screen}-tab`}>
+      {screen === "dashboard" ? (
+        <div className="d21-workspace"><DamageDashboard client={props.client} jurisdictionId={props.jurisdictionId} revision={revision} /></div>
+      ) : (
       <div className="d21-workspace">
         <div className="d21-workspace-intro">
           <Icon name="fieldReports" size={32} decorative />
@@ -113,6 +121,8 @@ export function DamageSurface(props: {
         {props.canWrite ? <FieldAssessmentPanel client={props.client} jurisdictionId={props.jurisdictionId} onChanged={changed} /> : null}
         {props.isAdmin ? <IntakePanel client={props.client} jurisdictionId={props.jurisdictionId} /> : null}
         {props.isAdmin ? <BaselinePanel client={props.client} jurisdictionId={props.jurisdictionId} onChanged={changed} /> : null}
+      </div>
+      )}
       </div>
     </Scroll>
   );

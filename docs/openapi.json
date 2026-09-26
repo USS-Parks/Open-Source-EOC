@@ -284,6 +284,29 @@
         "x-openeoc-audience": "operator"
       }
     },
+    "/api/v1/aar/rollup": {
+      "get": {
+        "operationId": "getAarRollup",
+        "tags": [
+          "aar"
+        ],
+        "summary": "Read aar rollup",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "$ref": "#/components/responses/Unpublished"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Refused"
+          }
+        },
+        "x-openeoc-audience": "operator"
+      }
+    },
     "/api/v1/ack/{token}": {
       "get": {
         "operationId": "getAckByToken",
