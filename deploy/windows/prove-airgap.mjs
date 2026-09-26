@@ -8,6 +8,7 @@ import { release, tmpdir } from "node:os";
 import { extname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { startLoopbackHost } from "./lib/loopback-host.mjs";
+import { standInsReport, startStandIns } from "./lib/stand-ins.mjs";
 
 /**
  * The system opens no connection outside this computer and its local
@@ -19,9 +20,9 @@ import { startLoopbackHost } from "./lib/loopback-host.mjs";
  * - every Node process the system starts (the setup step, the server, the
  *   backup) loads lib/net-recorder.mjs through NODE_OPTIONS and writes each
  *   TCP, TLS, DNS and UDP destination it asks for;
- * - a sampler lists, twice a second, the TCP connections of every process
- *   descended from this proof and of the PostgreSQL server, which covers
- *   PostgreSQL and Caddy;
+ * - a sampler lists, half a second after each sample ends, the TCP
+ *   connections of every process descended from this proof and of the
+ *   PostgreSQL server, which covers PostgreSQL and Caddy;
  * - Chromium writes its own network log of every request, with who started
  *   it: a page's requests are counted, and the browser's own services'
  *   requests are listed apart as the browser's;
@@ -31,14 +32,25 @@ import { startLoopbackHost } from "./lib/loopback-host.mjs";
  * addresses. Writes AIR-GAP-REPORT.md at the repository root and exits
  * non-zero on any connection outside the machine and its local network.
  *
- *   node deploy/windows/prove-airgap.mjs
+ *   node deploy/windows/prove-airgap.mjs [--stand-ins]
+ *
+ * With --stand-ins, every optional integration the host can reach is also
+ * configured through its own API against a stand-in on this computer (an
+ * SMTP relay, an HTTP SMS provider and then a gateway phone, webhook and ntfy
+ * receivers, a GeoJSON feed server, and a second network host for
+ * federation), taken through an outage and back around the walk, and the
+ * report records what queued, what was delivered when its route returned,
+ * what expired, what was resent and what reconciled. One webhook is left to
+ * expire at the end of the shortest window the product allows, an hour, so
+ * that run takes a little over an hour.
  *
  * Needs what prove-host.mjs needs: the desktop build, the PostgreSQL runtime
  * and Caddy.
  */
 
 const root = process.cwd();
-const out = resolve(root, "deploy/test-runtime/out/rd5-airgap");
+const standIns = process.argv.includes("--stand-ins");
+const out = resolve(root, `deploy/test-runtime/out/rd5-airgap${standIns ? "-stand-ins" : ""}`);
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 const distRoot = resolve(root, "deploy/windows/out/build/app-dist");
@@ -75,19 +87,23 @@ const mark = (name) => phases.push({ name, at: new Date().toISOString() });
 const phaseAt = (at) => phases.filter((entry) => entry.at <= at).at(-1)?.name ?? phases[0]?.name;
 
 const dataRoot = mkdtempSync(resolve(tmpdir(), "oea-"));
+// The federation partner, a second network host profile beside the first.
+const partnerRoot = standIns ? mkdtempSync(resolve(tmpdir(), "oep-")) : null;
 
 // The sampler: a PowerShell loop, on its own timer so it keeps sampling while
-// the setup step blocks this process, listing twice a second the TCP
-// connections of this proof's process tree and of the PostgreSQL server named
-// in postmaster.pid.
-const sampledRows = [];
+// the setup step blocks this process, listing half a second after each sample ends the TCP
+// connections of this proof's process tree and of each PostgreSQL server
+// named in a postmaster.pid.
+const sampled = new Map();
+const pidFiles = [dataRoot, partnerRoot].filter(Boolean)
+  .map((dir) => `'${resolve(dir, "profiles", "host-demo", "pgdata", "postmaster.pid").replaceAll("'", "''")}'`);
 const samplerScript = `
 $ErrorActionPreference = 'SilentlyContinue'
-$pidFile = '${resolve(dataRoot, "profiles", "host-demo", "pgdata", "postmaster.pid").replaceAll("'", "''")}'
+$pidFiles = @(${pidFiles.join(", ")})
 while ($true) {
   $procs = Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,Name
   $roots = @(${process.pid})
-  if (Test-Path -LiteralPath $pidFile) { $roots += [int](Get-Content -LiteralPath $pidFile -TotalCount 1) }
+  foreach ($pidFile in $pidFiles) { if (Test-Path -LiteralPath $pidFile) { $roots += [int](Get-Content -LiteralPath $pidFile -TotalCount 1) } }
   $ours = New-Object 'System.Collections.Generic.HashSet[int]'
   foreach ($r in $roots) { [void]$ours.Add($r) }
   do {
@@ -116,7 +132,14 @@ sampler.stdout.on("data", (chunk) => {
     const sample = JSON.parse(line);
     samples += 1;
     processesWatched = Math.max(processesWatched, sample.processes);
-    for (const row of [].concat(sample.rows ?? [])) sampledRows.push({ ...row, t: sample.t });
+    // One row per process and destination, with the phases it was seen in, kept as the samples come.
+    for (const row of [].concat(sample.rows ?? [])) {
+      const key = `${row.name} ${row.remote}:${row.port}`;
+      const seen = sampled.get(key) ?? { ...row, phases: new Set(), count: 0 };
+      seen.phases.add(phaseAt(sample.t));
+      seen.count += 1;
+      sampled.set(key, seen);
+    }
   }
 });
 
@@ -124,9 +147,21 @@ const result = { status: "running", startedAt: new Date().toISOString() };
 const pageRequests = new Map();
 const pageErrors = [];
 let host = null;
+let partner = null;
+let drill = null;
 let visited = [];
 try {
   host = await startLoopbackHost({ root, dataRoot, out, distRoot, publicRoot, pgDist, caddyExe });
+  if (standIns) {
+    const partnerOut = resolve(out, "partner");
+    mkdirSync(partnerOut, { recursive: true });
+    partner = await startLoopbackHost({ root, dataRoot: partnerRoot, out: partnerOut, distRoot, publicRoot, pgDist, caddyExe });
+    mark("stand-ins set up");
+    drill = await startStandIns({ root, host, partner });
+    await drill.configure();
+    mark("the cut");
+    await drill.cut();
+  }
   mark("idle");
   await new Promise((resolvePromise) => setTimeout(resolvePromise, 10_000));
 
@@ -175,7 +210,13 @@ try {
     await page.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "Map", exact: true }).click();
     const map = page.getByTestId("cop-map");
     await map.waitFor();
-    const box = await map.boundingBox();
+    // The section change can replace the map element just after it shows; read its box once it holds still.
+    let box = null;
+    for (let tries = 0; !box && tries < 40; tries += 1) {
+      box = await map.boundingBox();
+      if (!box) await page.waitForTimeout(250);
+    }
+    assert.ok(box, "The map did not show");
     for (const delta of [-600, -600, 600, 600]) {
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await page.mouse.wheel(0, delta);
@@ -196,17 +237,16 @@ try {
   const backup = execFileSync(process.execPath, [resolve(root, "deploy/windows/desktop.mjs"), "backup", "--profile=host-demo"], { cwd: root, env: host.env, encoding: "utf8" });
   assert.match(backup, /BACKUP_WRITTEN profile=host-demo/);
   await new Promise((resolvePromise) => setTimeout(resolvePromise, 2_000));
-  mark("done");
-
-  // The sampler's rows, one per process and destination, with the phases they were seen in.
-  const sampled = new Map();
-  for (const row of sampledRows) {
-    const key = `${row.name} ${row.remote}:${row.port}`;
-    const seen = sampled.get(key) ?? { ...row, phases: new Set(), count: 0 };
-    seen.phases.add(phaseAt(row.t));
-    seen.count += 1;
-    sampled.set(key, seen);
+  if (drill) {
+    mark("routes return");
+    await drill.restore();
+    mark("SMS gateway");
+    await drill.gateway();
+    mark("webhook expiry and resend");
+    await drill.expire();
   }
+  mark("done");
+  const integrations = drill ? await drill.summary() : null;
 
   // Chromium's own log: every request, by who started it. A page's request
   // names the page's origin as its initiator. The browser's own services
@@ -250,8 +290,9 @@ try {
     samples, processesWatched, sampledConnections: sampled.size,
     browserHosts: Object.fromEntries(browserHosts), vendorHosts: Object.fromEntries(vendorHosts), pageRequests: Object.fromEntries(pageRequests),
     scan: scan.summary,
+    ...(integrations ? { integrations } : {}),
   });
-  writeReport({ result, nodeTargets, sampled, browserHosts, vendorHosts, vendorSockets, pageRequests, scan, outside });
+  writeReport({ result, nodeTargets, sampled, browserHosts, vendorHosts, vendorSockets, pageRequests, scan, outside, integrations });
   if (result.status !== "passed") process.exitCode = 1;
 } catch (error) {
   result.status = "failed";
@@ -259,11 +300,13 @@ try {
   process.exitCode = 1;
 } finally {
   sampler.kill();
+  if (drill) await drill.close();
+  if (partner) await partner.stop();
   if (host) await host.stop();
   result.finishedAt = new Date().toISOString();
   writeFileSync(resolve(out, "result.json"), `${JSON.stringify(result, null, 2)}\n`);
   console.log(JSON.stringify({ status: result.status, outside: result.outside, error: result.error, pageErrors: result.pageErrors }, null, 2));
-  if (result.status === "passed") rmSync(dataRoot, { recursive: true, force: true });
+  if (result.status === "passed") for (const dir of [dataRoot, partnerRoot].filter(Boolean)) rmSync(dir, { recursive: true, force: true });
 }
 
 /** The URL requests in a Chromium network log, each with its initiator. */
@@ -309,31 +352,44 @@ function scanForOutsideAddresses(roots) {
   };
 }
 
-function writeReport({ result, nodeTargets, sampled, browserHosts, vendorHosts, vendorSockets, pageRequests, scan, outside }) {
+function writeReport({ result, nodeTargets, sampled, browserHosts, vendorHosts, vendorSockets, pageRequests, scan, outside, integrations }) {
   const commit = (() => { try { return execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: root, encoding: "utf8" }).trim(); } catch { return "unknown"; } })();
   const dirty = (() => { try { return execFileSync("git", ["status", "--porcelain", "--untracked-files=no"], { cwd: root, encoding: "utf8" }).trim() ? " with uncommitted changes" : ""; } catch { return ""; } })();
   const table = (rows) => rows.length ? rows : ["| (none) | | |"];
+  const steps = [
+    `**Set up and first start:** the step the setup program runs after copying files (\`desktop.mjs setup\`), which creates a PostgreSQL cluster, migrates it and seeds the scenario; then PostgreSQL from the host settings file, the server with its delivery queue and scheduler, and Caddy with the host's own certificate authority, each started as its generated service definition says, on the loopback address with spare ports.${integrations ? " A second host profile, the federation partner, was set up and started beside it the same way." : ""}`,
+    ...(integrations ? [
+      "**Stand-ins set up:** each optional integration pointed at a stand-in on this computer through the host's own API, and one record sent with every route up (see [Integrations on local stand-ins](#integrations-on-local-stand-ins)).",
+      "**The cut:** every stand-in and the partner host's server stopped; then a mass notification and a record that fires a rule, so email, SMS, a webhook, a push and a federation update wait for their routes.",
+    ] : []),
+    "**Idle:** ten seconds with nobody signed in, while the scheduler and delivery queue run.",
+    `**North Coast walk:** Chromium over HTTPS, trusting the host's authority by its keys: Jordan Lee signs in and opens every section in the rail (${result.visited.length}: ${result.visited.join(", ")}), zooms the map in and out, opens the notifications panel and the account menu.`,
+    "**Backup:** the scheduled backup task's command against the running host.",
+    ...(integrations ? [
+      "**Routes return:** the relay, the SMS provider, the push receiver, the feed server and the partner host come back; the webhook receiver stays down.",
+      "**SMS gateway:** SMS switched to a gateway phone on the site network that is off, a send, the phone on, and replies read back from it.",
+      "**Webhook expiry and resend:** the webhook queued at the cut expires at the end of its window, its receiver comes back, and the administrator resends it.",
+    ] : []),
+  ];
   const lines = [
     "# Air gap: connections the system makes",
     "",
-    `Run ${result.startedAt}, from commit \`${commit}\`${dirty}, on Windows ${release()}. Written by \`deploy/windows/prove-airgap.mjs\`; the raw records are in \`deploy/test-runtime/out/rd5-airgap/\`.`,
+    `Run ${result.startedAt}, from commit \`${commit}\`${dirty}, on Windows ${release()}. Written by \`deploy/windows/prove-airgap.mjs${integrations ? " --stand-ins" : ""}\`; the raw records are in \`${relative(root, out).replaceAll("\\", "/")}/\`.`,
     `Result: **${result.status === "passed" ? "PASS" : "FAIL"}**, ${outside.length === 0 ? "no connection outside this computer and its local network" : `${outside.length} destinations outside this computer and its local network`}, and ${result.pageErrors.length} page errors.`,
     "",
     "## What ran",
     "",
     "The network host profile with the North Coast Storm demo (`host-demo`), in phases:",
     "",
-    "1. **Set up and first start:** the step the setup program runs after copying files (`desktop.mjs setup`), which creates a PostgreSQL cluster, migrates it and seeds the scenario; then PostgreSQL from the host settings file, the server with its delivery queue and scheduler, and Caddy with the host's own certificate authority, each started as its generated service definition says, on the loopback address with spare ports.",
-    "2. **Idle:** ten seconds with nobody signed in, while the scheduler and delivery queue run.",
-    `3. **North Coast walk:** Chromium over HTTPS, trusting the host's authority by its keys: Jordan Lee signs in and opens every section in the rail (${result.visited.length}: ${result.visited.join(", ")}), zooms the map in and out, opens the notifications panel and the account menu.`,
-    "4. **Backup:** the scheduled backup task's command against the running host.",
+    ...steps.map((step, index) => `${index + 1}. ${step}`),
     "",
     "Installing with the setup program was not part of the run: its file copy has no network step, and the services, firewall rule and trusted root it adds change this computer's settings, which a session does not do. Basho's unplugged run covers the installed system.",
     "",
+    ...(integrations ? standInsReport(integrations) : []),
     "## The recorders",
     "",
     `- **Node processes** (the setup step, the server, the backup): every TCP and TLS connection, name lookup and UDP datagram they asked for, recorded inside each process through \`lib/net-recorder.mjs\`. ${result.nodeRecords} records from ${result.nodeProcesses} processes.`,
-    `- **Connection sampler:** twice a second, the TCP connections of every process descended from the proof (the Node processes, Caddy, Chromium) and of the PostgreSQL server and its backends. ${result.samples} samples, up to ${result.processesWatched} processes at once.`,
+    `- **Connection sampler:** half a second after each sample ends, the TCP connections of every process descended from the proof (the Node processes, Caddy, Chromium${integrations ? ", the proof itself with its stand-ins" : ""}) and of the PostgreSQL server${integrations ? "s and their" : " and its"} backends. ${result.samples} samples, up to ${result.processesWatched} processes at once.`,
     "- **Chromium's network log:** every request the browser made, with who started it. A request a page started names the page's origin, and every one is counted. The browser's own services (updates, autofill, account sign-in) start theirs with no origin; they belong to the browser, not to this system, an agency's own browser policy governs them, and they are listed apart below. The flags that switch those services off were set and do not stop them all.",
     "- **The page:** every request the console made.",
     "",
@@ -352,7 +408,7 @@ function writeReport({ result, nodeTargets, sampled, browserHosts, vendorHosts, 
     "",
     "## Outside addresses written in the code",
     "",
-    "None is contacted in the run above. Each is text: documentation and attribution links a person may follow, schema and namespace identifiers, example values in help text, error messages from bundled libraries, and addresses of optional integrations and catalog sources an administrator must configure and switch on (IPAWS, feeds, catalog data sources, federation peers). With none configured, as here, none is contacted; on an air-gapped network any that is configured fails without affecting the rest.",
+    `None is contacted in the run above. Each is text: documentation and attribution links a person may follow, schema and namespace identifiers, example values in help text, error messages from bundled libraries, and addresses of optional integrations and catalog sources an administrator must configure and switch on (IPAWS, feeds, catalog data sources, federation peers). ${integrations ? "Here the integrations point at stand-ins on this computer and none of these addresses is configured, so none is contacted" : "With none configured, as here, none is contacted"}; on an air-gapped network any that is configured fails without affecting the rest.`,
     "",
     "| Host | Where |",
     "|---|---|",
