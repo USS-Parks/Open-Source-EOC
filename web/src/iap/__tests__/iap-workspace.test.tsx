@@ -377,3 +377,38 @@ it("uses the selected content revision for draft replacement and exports the exa
   fireEvent.change(screen.getByLabelText("Operational period"), { target: { value: "" } });
   expect(within(screen.getByLabelText("IAP workspace context")).getByText("All operational periods")).toBeTruthy();
 });
+
+it("keeps an unsaved ICS-204 draft under the Dashboard tab, whose tiles count its rows and whose row opens a plan", async () => {
+  const approved: IapWorkspaceItem = { ...otherWorkspaceItem, id: "00000000-0000-4000-8000-000000000016", status: "approved", approvedBy: "Command Admin" };
+  const queryIapWorkspace = vi.fn().mockResolvedValue({
+    iaps: [workspaceItem, approved],
+    query: { view: "all", periodRevision: 4 },
+    summary: { total: 2, byState: { not_started: 0, in_progress: 1, in_approval: 0, approved: 1, complete: 0 }, completedForms: 2, requiredForms: 2 },
+    facets: { organizations: [], roles: [] },
+  });
+  const client = {
+    queryIapWorkspace,
+    getIncidentArea: vi.fn().mockResolvedValue(area),
+    incidentAreaHistory: vi.fn().mockResolvedValue([]),
+    listPositions: vi.fn().mockResolvedValue([]),
+    listIncidentParticipants: vi.fn().mockResolvedValue([]),
+    getIap: vi.fn().mockResolvedValue({ id: workspaceItem.id, status: "draft", operationalPeriod: workspaceItem.operationalPeriod, content: document }),
+    listIapRevisions: vi.fn().mockResolvedValue([]),
+  } as unknown as ApiClient;
+  render(<IapSurface client={client} jurisdictionId={participant.organizationId} incidentId={INCIDENT_ID} periodRevision={4} isAdmin />);
+  fireEvent.click(await screen.findByRole("button", { name: /Operational Period 4.*Prepared by Taylor Morgan/i }));
+  fireEvent.change(await screen.findByLabelText("Assignment 1 name"), { target: { value: "Planning Group" } });
+
+  fireEvent.click(screen.getByRole("tab", { name: "Dashboard" }));
+  const plans = await screen.findByRole("region", { name: "Plans" });
+  expect(within(plans).getAllByRole("listitem")).toHaveLength(2);
+  fireEvent.click(screen.getByRole("button", { name: "1 Approved" }));
+  expect(within(plans).getAllByRole("listitem")).toHaveLength(1);
+  expect(within(plans).getByText("Command Admin")).toBeTruthy();
+  fireEvent.click(within(plans).getByRole("button", { name: /^Open Operational Period 4/ }));
+
+  expect(screen.getByRole("tab", { name: "Plans" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByRole("alertdialog", { name: "Unsaved ICS-204 changes" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
+  expect((screen.getByLabelText("Assignment 1 name") as HTMLInputElement).value).toBe("Planning Group");
+});

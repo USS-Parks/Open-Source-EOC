@@ -351,3 +351,18 @@ it("totals recorded costs by kind and shows catalog changes to administrators on
   expect(await screen.findByText("Added Sandbag Machine to the catalog.")).toBeTruthy();
   expect(client.listResourceKinds).toHaveBeenCalledTimes(2);
 });
+
+it("opens a Dashboard tab whose tiles filter its request list and whose Open returns to the request", async () => {
+  const closed = { ...request, id: "12121212-1212-4121-8121-121212121212", number: 1028, item: "Sandbags", state: "closed", costCents: null };
+  const client = setup({}, [request, closed]);
+  await screen.findAllByText(/sent to Receiving County$/);
+  fireEvent.click(screen.getByRole("tab", { name: "Dashboard" }));
+  const list = await screen.findByRole("region", { name: "Requests" });
+  expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+  expect(screen.getByRole("button", { name: /\$5,400 Recorded cost/ })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /^1 Ended$/ }));
+  expect(within(list).getAllByRole("listitem")).toHaveLength(1);
+  fireEvent.click(within(list).getByRole("button", { name: "Open REQ-1028" }));
+  expect(screen.getByRole("tab", { name: "Requests" }).getAttribute("aria-selected")).toBe("true");
+  await waitFor(() => expect(client.getResourceRequest).toHaveBeenCalledWith(closed.id));
+});

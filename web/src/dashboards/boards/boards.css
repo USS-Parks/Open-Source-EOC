@@ -1,0 +1,288 @@
+/*
+ * Board dashboards: the Checklist, IAP and Requests dashboards built from
+ * the chart kit. Each list row carries its status in a colored bar or block
+ * (--eoc-board-color) and in words, so color is never the only carrier.
+ */
+.eoc-board {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.eoc-board-state { margin: 0; padding: 12px 0; color: var(--eoc-text-muted); }
+.eoc-board-state.is-error { color: var(--eoc-status-critical); }
+
+.eoc-board-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  min-width: 0;
+}
+
+.eoc-board-toolbar.is-tiles { flex-wrap: nowrap; align-items: stretch; gap: 8px; }
+
+/* Seven counted tiles: one even row when there is room, else four over three rather than a lone tile. */
+.eoc-board-toolbar.is-tiles > .eoc-status-tiles {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.eoc-board-toolbar.is-tiles .eoc-status-tile { width: 100%; height: 100%; min-width: 0; }
+
+@container (min-width: 1240px) {
+  .eoc-board-toolbar.is-tiles > .eoc-status-tiles { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+}
+
+.eoc-board-title { display: grid; gap: 2px; }
+
+.eoc-board-title h3 {
+  margin: 0;
+  color: var(--eoc-text-strong);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.eoc-board-filter { margin: 0; color: var(--eoc-text-muted); font-size: 13px; }
+.eoc-board-panel-note { padding: 0 2px 8px; }
+
+.eoc-board-link {
+  padding: 0;
+  color: var(--eoc-status-info);
+  font: inherit;
+  text-decoration: underline;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+/*
+ * The list beside its charts, as WebEOC lays a dashboard out, when there is
+ * room for both; narrower, the charts sit over the list they filter.
+ */
+.eoc-board-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.eoc-board-split > :not(.eoc-board-panel) { order: -1; }
+.eoc-board-split > .eoc-chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@container (min-width: 820px) {
+  .eoc-board-split { grid-template-columns: minmax(0, 9fr) minmax(0, 11fr); }
+  .eoc-board-split > :not(.eoc-board-panel) { order: 0; }
+}
+
+@container (min-width: 1180px) {
+  .eoc-board-split { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
+}
+
+/* Beside the charts in a middling width, a list row leaves its categories to the category chart. */
+@container (min-width: 820px) and (max-width: 1179px) {
+  .eoc-board .eoc-board-checklist-grid { grid-template-columns: minmax(0, 1fr) minmax(84px, auto) 40px; }
+  .eoc-board .eoc-board-checklist-grid > :nth-child(2) { display: none; }
+}
+
+/* A card too narrow for a ring beside its legend puts the legend under a centered ring. */
+.eoc-board .eoc-donut { justify-content: center; }
+
+@container (min-width: 820px) {
+  .eoc-board-split.is-chart-right { grid-template-columns: minmax(0, 1fr) minmax(300px, 340px); }
+  .eoc-board-split.is-chart-right > :not(.eoc-board-panel) { order: 0; }
+}
+
+@container (max-width: 640px) {
+  .eoc-board-split > .eoc-chart-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+.eoc-board-panel {
+  min-width: 0;
+  padding: 10px 12px 12px;
+  color: var(--eoc-text);
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border);
+  border-radius: var(--eoc-radius-md);
+  box-shadow: var(--eoc-shadow-sm);
+}
+
+.eoc-board-head {
+  align-items: end;
+  gap: 10px;
+  padding: 2px 10px 8px 14px;
+  color: var(--eoc-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.eoc-board-head > span:first-child { color: var(--eoc-text-strong); font-size: 14px; }
+
+.eoc-board-rows {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.eoc-board-row {
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 7px 10px 7px 12px;
+  font-size: 13px;
+  background: color-mix(in srgb, var(--eoc-bg) 55%, var(--eoc-surface));
+  border: 1px solid var(--eoc-border);
+  border-left: 4px solid var(--eoc-board-color);
+  border-radius: var(--eoc-radius-sm);
+}
+
+.eoc-board-checklist-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(60px, 0.4fr) minmax(92px, 0.5fr) 40px; }
+.eoc-board-request-grid { display: grid; grid-template-columns: minmax(0, 1fr) 72px minmax(92px, auto) 44px; }
+.eoc-board-iap-grid {
+  display: grid;
+  grid-template-columns: 64px minmax(140px, 1fr) minmax(210px, 1.5fr) minmax(112px, 0.7fr) minmax(0, 1fr) minmax(0, 0.7fr);
+}
+
+.eoc-board-head.eoc-board-iap-grid { padding-left: 0; }
+.eoc-board-head.eoc-board-iap-grid > span:first-child { color: var(--eoc-text-muted); font-size: 12px; }
+.eoc-board-head.eoc-board-iap-grid > span:nth-child(2) { color: var(--eoc-text-strong); font-size: 14px; }
+
+/* An IAP row leads with a square status block instead of a bar. */
+.eoc-board-row.is-blocked {
+  gap: 14px;
+  min-height: 64px;
+  padding: 0 12px 0 0;
+  border-left: 1px solid var(--eoc-border);
+  overflow: hidden;
+}
+
+.eoc-board-block {
+  display: grid;
+  place-items: center;
+  align-self: stretch;
+  background: var(--eoc-board-color);
+}
+
+.eoc-board-block > span {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: var(--eoc-board-color);
+  background: #ffffff;
+  border-radius: 50%;
+}
+
+.eoc-board-main { display: grid; gap: 3px; min-width: 0; }
+
+.eoc-board-main > strong,
+.eoc-board-main > .eoc-board-muted,
+.eoc-board-cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eoc-board-main > strong { color: var(--eoc-text-strong); font-weight: 600; }
+.eoc-board-muted { color: var(--eoc-text-muted); font-size: 12px; font-weight: 400; }
+.eoc-board-status { color: var(--eoc-board-color); font-size: 12.5px; font-weight: 600; }
+.eoc-board-muted > .eoc-board-status { font-size: inherit; }
+
+.eoc-board-open {
+  justify-self: start;
+  max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  color: var(--eoc-text-strong);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.eoc-board-open:hover { color: var(--eoc-status-info); text-decoration: underline; }
+
+.eoc-board-progress {
+  display: grid;
+  grid-template-columns: minmax(56px, 110px) minmax(0, auto);
+  align-items: center;
+  gap: 8px;
+  color: var(--eoc-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.eoc-board-progress > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.eoc-board-due {
+  display: grid;
+  justify-items: start;
+  gap: 3px;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.eoc-board-pill {
+  padding: 1px 8px;
+  color: var(--eoc-series-past-due);
+  font-size: 11.5px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--eoc-series-past-due) 14%, transparent);
+  border-radius: var(--eoc-radius-pill);
+}
+
+.eoc-board-period { display: grid; gap: 2px; font-variant-numeric: tabular-nums; }
+.eoc-board-period > span:last-child { color: var(--eoc-text-muted); }
+
+.eoc-board-chips { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+
+.eoc-board-chip {
+  max-width: 100%;
+  padding: 2px 8px;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--eoc-border-strong);
+  border-radius: var(--eoc-radius-pill);
+}
+
+.eoc-board-empty {
+  margin: 4px 0 0;
+  padding: 18px 12px;
+  color: var(--eoc-text-muted);
+  font-size: 13px;
+  text-align: center;
+  border: 1px dashed var(--eoc-border-strong);
+  border-radius: var(--eoc-radius-md);
+}
+
+.eoc-board-cost strong { font-size: 26px; }
+
+/* Each IAP row in two columns on a narrow screen. */
+@container (max-width: 760px) {
+  .eoc-board-iap-grid { grid-template-columns: 64px minmax(0, 1fr); }
+  .eoc-board-head.eoc-board-iap-grid { display: none; }
+  .eoc-board-row.is-blocked { padding-block: 0 10px; }
+  .eoc-board-iap-grid > .eoc-board-block { grid-row: span 5; }
+  .eoc-board-iap-grid > :nth-child(n + 3) { grid-column: 2; }
+}
+
+@container (max-width: 520px) {
+  .eoc-board-checklist-grid,
+  .eoc-board-request-grid { grid-template-columns: minmax(0, 1fr) auto; }
+  .eoc-board-head:is(.eoc-board-checklist-grid, .eoc-board-request-grid) > span:not(:first-child) { display: none; }
+}

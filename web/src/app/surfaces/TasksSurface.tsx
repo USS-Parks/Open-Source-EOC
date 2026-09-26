@@ -19,6 +19,7 @@ import {
 import { readAllPages, type ApiClient, type Me, type PositionRef } from "../api/client.js";
 import { useAsync } from "../data/hooks.js";
 import { operationStamp, useFieldOutbox } from "../../offline/outbox.js";
+import { ChecklistDashboard, type TaskListView } from "../../dashboards/boards/ChecklistDashboard.js";
 import { MyWork } from "./MyWork.js";
 import { useTaskContinuity } from "./task-continuity.js";
 import "./tasks-surface.css";
@@ -97,6 +98,10 @@ export function TasksSurface(props: {
   readonly onActAs?: (positionId: string) => Promise<unknown>;
 }) {
   const [view, setView] = useState<TaskView>("mine");
+  // The Dashboard tab sits beside My Tasks and Team Tasks; the list view keeps its filters under it.
+  const [dashboard, setDashboard] = useState(false);
+  /** One checklist the dashboard's VIEW opened: the team list narrowed to one assignee. */
+  const [assignee, setAssignee] = useState<{ readonly key: string; readonly name: string } | null>(null);
   const [status, setStatus] = useState<(typeof STATUS_VALUES)[number]>("all");
   const [due, setDue] = useState<(typeof DUE_VALUES)[number]>("all");
   const [category, setCategory] = useState("all");
@@ -115,11 +120,11 @@ export function TasksSurface(props: {
   const continuity = useTaskContinuity(props.client, props.incidentId, props.personId);
 
   const query = useMemo<TaskListQuery>(() => ({
-    ...(view === "mine" ? { assignment: "mine" } : {}),
+    ...(view === "mine" ? { assignment: "mine" } : assignee ? { assignment: assignee.key } : {}),
     ...(status === "all" ? {} : { status }),
     ...(due === "all" ? {} : { due }),
     ...(category === "all" ? {} : { category }),
-  }), [category, due, status, view]);
+  }), [assignee, category, due, status, view]);
   const response = useAsync(
     () => props.incidentId ? props.client.listIncidentTasks(props.incidentId, query) : Promise.resolve(EMPTY_RESPONSE),
     [props.incidentId, query],
@@ -248,6 +253,12 @@ export function TasksSurface(props: {
       setActionError(error instanceof Error ? error.message : String(error));
     } finally { setBusyTaskId(null); }
   };
+  // VIEW on the dashboard opens the team list narrowed as its chart or list row was.
+  const viewTasks = (target: TaskListView) => {
+    setDashboard(false); setView("team"); setSelected(new Set());
+    setStatus(target.status ?? "all"); setCategory(target.category ?? "all"); setDue("all");
+    setAssignee(target.assignment ?? null);
+  };
   const taskActionsEnabled = view === "mine" && !props.closed;
   const taskEditingEnabled = props.canManage && !props.closed;
   const columns = useMemo<readonly OperationalTableColumn<IncidentTask>[]>(() => [
@@ -271,18 +282,19 @@ export function TasksSurface(props: {
 
   return <main className="eoc-tasks-surface">
     <header className="eoc-tasks-header"><div><p className="eoc-tasks-eyebrow">Incident task coordination</p><h2 className="eoc-visually-hidden">Tasks</h2><p>Assigned work, due actions, and authoritative completion receipts for the active incident.</p></div><div className="eoc-tasks-template-note"><strong>Incident templates</strong><p>Activate a template to create its assigned checklist work.</p><Button onClick={props.onOpenTemplates}>Open incident templates</Button>{taskEditingEnabled ? <Button kind="primary" onClick={() => { setEditingTaskId(NEW_TASK); setDraft(newTaskDraft()); }}>New task</Button> : null}</div></header>
-    <section className="eoc-tasks-summary" aria-label="Task analytics"><Panel title="Current view">{response.data ? <div className="eoc-tasks-counts"><TaskMetric label="Tasks" value={data.analytics.total} /><TaskMetric label="Overdue" value={data.analytics.overdue} /><TaskMetric label="Due next 24 hours" value={data.analytics.dueNext24Hours} /><TaskMetric label="Without due date" value={data.analytics.withoutDue} /></div> : <p className="eoc-tasks-analytics-state" role={response.error ? "alert" : "status"}>{response.error ? "Task analytics are unavailable." : "Loading task analytics…"}</p>}</Panel></section>
-    <section className="eoc-tasks-controls" aria-label="Task views and filters"><Tabs id="task-view" label="Task view" value={view} onChange={(next) => { setView(next as TaskView); setSelected(new Set()); }} tabs={[{ id: "mine", label: "My Tasks" }, { id: "team", label: "Team Tasks" }]} /><div className="eoc-tasks-filters"><EnumSelect label="Status" values={STATUS_VALUES} value={status} onChange={(value) => setStatus(value as typeof status)} labels={{ all: "All statuses", in_progress: "In progress" }} /><EnumSelect label="Due" values={DUE_VALUES} value={due} onChange={(value) => setDue(value as typeof due)} labels={{ all: "All due dates", next_24_hours: "Next 24 hours", none: "No due date" }} /><EnumSelect label="Category" values={categories} value={categories.includes(category) ? category : "all"} onChange={setCategory} labels={{ all: "All categories" }} /></div></section>
+    {dashboard ? null : <section className="eoc-tasks-summary" aria-label="Task analytics"><Panel title="Current view">{response.data ? <div className="eoc-tasks-counts"><TaskMetric label="Tasks" value={data.analytics.total} /><TaskMetric label="Overdue" value={data.analytics.overdue} /><TaskMetric label="Due next 24 hours" value={data.analytics.dueNext24Hours} /><TaskMetric label="Without due date" value={data.analytics.withoutDue} /></div> : <p className="eoc-tasks-analytics-state" role={response.error ? "alert" : "status"}>{response.error ? "Task analytics are unavailable." : "Loading task analytics…"}</p>}</Panel></section>}
+    <section className="eoc-tasks-controls" aria-label="Task views and filters"><Tabs id="task-view" label="Task view" value={dashboard ? "dashboard" : view} onChange={(next) => { if (next === "dashboard") { setDashboard(true); return; } setDashboard(false); setView(next as TaskView); setSelected(new Set()); }} tabs={[{ id: "mine", label: "My Tasks" }, { id: "team", label: "Team Tasks" }, { id: "dashboard", label: "Dashboard" }]} />{dashboard ? null : <><div className="eoc-tasks-filters"><EnumSelect label="Status" values={STATUS_VALUES} value={status} onChange={(value) => setStatus(value as typeof status)} labels={{ all: "All statuses", in_progress: "In progress" }} /><EnumSelect label="Due" values={DUE_VALUES} value={due} onChange={(value) => setDue(value as typeof due)} labels={{ all: "All due dates", next_24_hours: "Next 24 hours", none: "No due date" }} /><EnumSelect label="Category" values={categories} value={categories.includes(category) ? category : "all"} onChange={setCategory} labels={{ all: "All categories" }} /></div>{view === "team" && assignee ? <p className="eoc-tasks-assignee" role="status">Showing the {assignee.name} list only. <button type="button" onClick={() => setAssignee(null)}>Show every list</button></p> : null}</>}</section>
     {continuity.pendingCount ? <p className="eoc-tasks-notice" role="status">{continuity.pendingCount} completion{continuity.pendingCount === 1 ? "" : "s"} queued locally. <button type="button" onClick={() => void continuity.reconcile()}>Reconcile queued work</button></p> : null}
     {keptTasks.length ? <section className="eoc-tasks-kept" aria-label="New tasks kept on this device"><h3>New tasks kept on this device</h3><ul>{keptTasks.map((item) => <li key={item.operationId}><strong>{item.task.item}</strong> {item.refused ? <><span role="alert">Refused by the server: {item.refused}</span> <Button onClick={() => void outbox.discard(item.operationId)}>Discard {item.task.item}</Button></> : <span>Waiting for the connection</span>}</li>)}</ul></section> : null}
     {keptAt && keptTasks.length ? <WorkStateLine state={{ kind: "queued", savedAt: keptAt }} /> : null}
     {notice ? <p className="eoc-tasks-notice" role="status">{notice}</p> : null}{actionError || continuity.error || outbox.error ? <p className="eoc-tasks-notice is-error" role="alert">{actionError ?? continuity.error ?? outbox.error}</p> : null}
     {(editing || creating) && draft ? <Panel title={creating ? "New task" : "Task details"}><form className="eoc-tasks-editor" onSubmit={(event) => { event.preventDefault(); void saveDraft(); }}><label>Task name<input required maxLength={500} value={draft.item} onChange={(event) => setDraft({ ...draft, item: event.target.value })} /></label><label>Category<input required pattern="[a-z][a-z0-9_]*" maxLength={80} value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} /></label><label>Due date<input type="datetime-local" value={draft.dueAt} onChange={(event) => setDraft({ ...draft, dueAt: event.target.value })} /></label><label>Assigned to<select value={draft.assignment} onChange={(event) => setDraft({ ...draft, assignment: event.target.value })}><option value="">Unassigned</option><optgroup label="Positions">{(positions.data ?? []).map((position) => <option key={position.id} value={`position:${position.id}`}>{position.title}</option>)}</optgroup><optgroup label="Incident participants">{(participants.data ?? []).filter((participant) => !participant.revokedAt).map((participant) => <option key={participant.id} value={`participant:${participant.id}`}>{participant.personName} · {participant.incidentPositionTitle}</option>)}</optgroup></select></label><label>Prerequisites<select multiple value={draft.dependencyIds as string[]} onChange={(event) => setDraft({ ...draft, dependencyIds: [...event.currentTarget.selectedOptions].map((option) => option.value) })}>{(allTasks.data ?? data.tasks).filter((candidate) => candidate.id !== editing?.id).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.status === "completed" ? "Complete" : "Open"} · {candidate.item}</option>)}</select><small>Completion stays blocked until every selected prerequisite has an authoritative receipt.</small></label><div className="eoc-tasks-editor-actions"><Button type="submit" kind="primary" disabled={busyTaskId === draft.taskId}>{busyTaskId === draft.taskId ? "Saving…" : creating ? "Add task" : "Save task details"}</Button><Button disabled={busyTaskId === draft.taskId} onClick={() => { setEditingTaskId(null); setDraft(null); }}>Cancel</Button></div></form></Panel> : null}
-    <div role="tabpanel" id={`task-view-${view}-panel`} aria-labelledby={`task-view-${view}-tab`} className="eoc-tasks-panel">{props.me && props.jurisdictionId ? <MyWork client={props.client} incidentId={props.incidentId} jurisdictionId={props.jurisdictionId} me={props.me} closed={Boolean(props.closed)} team={view === "team"} revision={workRevision}
+    {dashboard ? <div role="tabpanel" id="task-view-dashboard-panel" aria-labelledby="task-view-dashboard-tab" className="eoc-tasks-panel"><ChecklistDashboard tasks={allTasks.data ?? null} error={allTasks.error} onView={viewTasks} /></div>
+      : <div role="tabpanel" id={`task-view-${view}-panel`} aria-labelledby={`task-view-${view}-tab`} className="eoc-tasks-panel">{props.me && props.jurisdictionId ? <MyWork client={props.client} incidentId={props.incidentId} jurisdictionId={props.jurisdictionId} me={props.me} closed={Boolean(props.closed)} team={view === "team"} revision={workRevision}
       onStartTask={(task) => action(task, () => props.client.updateIncidentTask(props.incidentId!, task.id, { expectedRevision: task.revision, status: "in_progress" }))}
       onCompleteTask={complete}
       onOpenTask={(task) => { setCategory("all"); setStatus("all"); setDue("all"); setNotice(`TASK-${task.number} ${task.item} is in the table below.`); }}
       onOpenRequest={(id) => props.onOpenRequest?.(id)}
-      onActAs={async (positionId) => { await props.onActAs?.(positionId); refresh(); }} /> : null}<OperationalTable tableId="incident-tasks" caption={view === "mine" ? "My incident tasks" : "Incident team tasks"} columns={columns} rows={loaded?.tasks ?? data.tasks} rowId={(task) => task.id} datasetKey={`${props.incidentId}:${JSON.stringify(query)}`} status={tableStatus} errorMessage={response.error ?? "Tasks could not be loaded."} onRetry={response.reload} emptyTitle={view === "mine" ? "No assigned tasks match these filters" : "No team tasks match these filters"} emptyDescription="Adjust a filter or confirm the selected incident template includes checklist tasks." viewState={tableState} onViewStateChange={setTableState} totalRows={data.analytics.total} hasPreviousPage={false} hasNextPage={false} selectedIds={selected} onSelectionChange={setSelected} toolbar={<span className="eoc-tasks-table-scope">{view === "mine" ? "Current position and participant assignments" : "Authorized incident task list"}</span>} {...(loadMore ? { onLoadMore: loadMore } : {})} /></div>
+      onActAs={async (positionId) => { await props.onActAs?.(positionId); refresh(); }} /> : null}<OperationalTable tableId="incident-tasks" caption={view === "mine" ? "My incident tasks" : "Incident team tasks"} columns={columns} rows={loaded?.tasks ?? data.tasks} rowId={(task) => task.id} datasetKey={`${props.incidentId}:${JSON.stringify(query)}`} status={tableStatus} errorMessage={response.error ?? "Tasks could not be loaded."} onRetry={response.reload} emptyTitle={view === "mine" ? "No assigned tasks match these filters" : "No team tasks match these filters"} emptyDescription="Adjust a filter or confirm the selected incident template includes checklist tasks." viewState={tableState} onViewStateChange={setTableState} totalRows={data.analytics.total} hasPreviousPage={false} hasNextPage={false} selectedIds={selected} onSelectionChange={setSelected} toolbar={<span className="eoc-tasks-table-scope">{view === "mine" ? "Current position and participant assignments" : "Authorized incident task list"}</span>} {...(loadMore ? { onLoadMore: loadMore } : {})} /></div>}
   </main>;
 }

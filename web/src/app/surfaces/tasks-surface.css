@@ -38,6 +38,8 @@
 }
 .eoc-tasks-number { color: var(--eoc-text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .eoc-tasks-template-note > .eoc-btn + .eoc-btn { margin-left: 8px; }
+.eoc-tasks-assignee { margin: 0; color: var(--eoc-text-muted); font-size: .86rem; }
+.eoc-tasks-assignee button { padding: 0; color: var(--eoc-status-info); font: inherit; text-decoration: underline; background: none; border: 0; cursor: pointer; }
 
 /* My work: the acting person's tasks and requests, above the task table. */
 .eoc-mywork { display: grid; gap: 12px; margin-bottom: 16px; min-width: 0; }

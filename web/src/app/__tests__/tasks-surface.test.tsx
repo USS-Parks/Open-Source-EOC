@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { IncidentTask, TaskCompletionReceipt, TaskListQuery, TaskMetadataPatch } from "@openeoc/shared";
 import { Theme } from "../../design/components.js";
 import { TasksSurface } from "../surfaces/TasksSurface.js";
@@ -116,6 +116,24 @@ describe("tasks surface", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save task details" }));
     await waitFor(() => expect(client.updateIncidentTask).toHaveBeenCalledTimes(1));
     expect(updateInputs[0]?.dueAt).toBe(task.dueAt);
+  });
+  it("opens a Dashboard tab beside My Tasks and Team Tasks whose VIEW lands on the filtered team list", async () => {
+    const { listIncidentTasks } = renderSurface();
+    await screen.findByText("Establish command");
+    const tab = screen.getByRole("tab", { name: "Dashboard" });
+    fireEvent.click(tab);
+    expect(document.getElementById(tab.getAttribute("aria-controls")!)?.getAttribute("aria-labelledby")).toBe(tab.id);
+    const lists = await screen.findByRole("region", { name: "Checklists" });
+    expect(within(lists).getAllByRole("listitem")).toHaveLength(1);
+    expect(within(lists).getByText("Incident Commander")).toBeTruthy();
+    fireEvent.click(within(screen.getByRole("list", { name: "Tasks by status legend" })).getByRole("button", { name: "View Open" }));
+    expect(screen.getByRole("tab", { name: "Team Tasks" }).getAttribute("aria-selected")).toBe("true");
+    await waitFor(() => expect(listIncidentTasks).toHaveBeenLastCalledWith(incidentId, { status: "open" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Dashboard" }));
+    fireEvent.click(await screen.findByRole("button", { name: "View the Incident Commander tasks" }));
+    await waitFor(() => expect(listIncidentTasks).toHaveBeenLastCalledWith(incidentId, { assignment: task.assignment!.id }));
+    fireEvent.click(await screen.findByRole("button", { name: "Show every list" }));
+    await waitFor(() => expect(listIncidentTasks).toHaveBeenLastCalledWith(incidentId, {}));
   });
   it("states when no incident is selected", () => {
     render(<Theme name="dark"><TasksSurface client={{} as never} incidentId={null} personId={null} jurisdictionId={null} canManage={false} onOpenTemplates={() => undefined} /></Theme>);

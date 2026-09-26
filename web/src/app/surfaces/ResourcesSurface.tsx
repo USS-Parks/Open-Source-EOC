@@ -16,6 +16,8 @@ import {
   type ResourceRequestAssignment,
 } from "@openeoc/shared";
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../../design/components.js";
+import { Tabs } from "../../design/controls.js";
+import { RequestDashboard } from "../../dashboards/boards/RequestDashboard.js";
 import { Icon } from "../../design/icons/Icon.js";
 import { canReadCodes, QrCode, readCodeFromImage } from "../../design/qr.js";
 import { WorkStateLine, type WorkState } from "../../design/work-state.js";
@@ -773,6 +775,7 @@ export function ResourcesSurface(props: {
   closed?: boolean;
 }) {
   // Every filter narrows the server's answer and is named above the list, so nothing is hidden unsaid.
+  const [tab, setTab] = useState<"requests" | "dashboard">("requests");
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<{ q: string; status: "open" | "ended" | "all"; mine: boolean }>({ q: "", status: "all", mine: false });
   const requests = useAsync(
@@ -931,7 +934,17 @@ export function ResourcesSurface(props: {
   return (
     <Scroll>
       <SurfaceHeader title="Resource coordination" />
-      <div className="resources-page">
+      <Tabs id="resources-view" label="Resources view" className="resources-tabs" value={tab} onChange={(next) => setTab(next as typeof tab)}
+        tabs={[{ id: "requests", label: "Requests" }, { id: "dashboard", label: "Dashboard" }]} />
+      <div role="tabpanel" id="resources-view-dashboard-panel" aria-labelledby="resources-view-dashboard-tab" className="resources-page" hidden={tab !== "dashboard"}>
+        {tab === "dashboard" ? (
+          <RequestDashboard requests={filtered ? everything.data ?? null : requests.data ?? null}
+            error={filtered ? everything.error : requests.error}
+            onOpen={(id) => { setTab("requests"); selectRequest(id); }} />
+        ) : null}
+      </div>
+      {/* The request page stays mounted under the dashboard, so half-written notes and reasons survive the switch. */}
+      <div role="tabpanel" id="resources-view-requests-panel" aria-labelledby="resources-view-requests-tab" className="resources-page" hidden={tab !== "requests"}>
         <Panel title="Request intake">
           <div className="resources-kicker"><Icon name="resources" decorative size={20} /><strong>ICS 213RR coordination</strong></div>
           <p className="resources-first eoc-muted">The receiving organization owns the request. A supplier is named only when an authorized position or incident participant accepts the assignment.</p>

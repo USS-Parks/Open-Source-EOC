@@ -8,12 +8,15 @@ import type {
   IncidentAreaRevision,
 } from "@openeoc/shared";
 import { Button, Panel, StatusBadge, type Status } from "../../design/components.js";
-import type {
-  ApiClient,
-  IapResult,
-  IapRevisionSummary,
-  Ics204AssignmentInput,
-  PositionRef,
+import { Tabs } from "../../design/controls.js";
+import { IapDashboard } from "../../dashboards/boards/IapDashboard.js";
+import {
+  readAllPages,
+  type ApiClient,
+  type IapResult,
+  type IapRevisionSummary,
+  type Ics204AssignmentInput,
+  type PositionRef,
 } from "../api/client.js";
 import { useAsync } from "../data/hooks.js";
 import { EmptyState, Loading, Scroll, SurfaceHeader } from "../screens/parts.js";
@@ -158,6 +161,7 @@ export interface IapSurfaceProps {
 
 export function IapSurface(props: IapSurfaceProps) {
   const [query, setQuery] = useState<IapWorkspaceQuery>({ view: "all" });
+  const [tab, setTab] = useState<"plans" | "dashboard">("plans");
   const [selectedId, setSelectedId] = useState<string | null>(props.initialIapId ?? null);
   const [selectedForm, setSelectedForm] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
@@ -217,6 +221,16 @@ export function IapSurface(props: IapSurfaceProps) {
   const workspace = useAsync(
     () => active ? props.client.queryIapWorkspace(active, query) : Promise.resolve(emptyWorkspace(query)),
     [active, query.view, query.organizationId, query.periodRevision, query.role, reload],
+  );
+  // The dashboard lists every plan in view, past the workspace's first page, so its tiles count its rows.
+  const board = useAsync(
+    () => active && tab === "dashboard"
+      ? readAllPages(async (page) => {
+        const result = await props.client.queryIapWorkspace(active, query, page);
+        return { items: result.iaps, nextCursor: result.nextCursor };
+      })
+      : Promise.resolve(null),
+    [active, tab, query.view, query.organizationId, query.periodRevision, query.role, reload],
   );
   const periods = useAsync(async () => {
     if (!active) return [] as PeriodChoice[];
@@ -363,10 +377,12 @@ export function IapSurface(props: IapSurfaceProps) {
       <div className="iap-workspace">
         <div className="iap-context" aria-label="IAP workspace context">
           <strong>{props.incidentName ?? "Selected incident"}</strong>
-          <span>Incident {active}</span>
           <span>{periodLabel}</span>
           {query.periodRevision ? <span>Area revision {query.periodRevision}</span> : null}
         </div>
+
+        <Tabs id="iap-view" label="IAP view" value={tab} onChange={(next) => setTab(next as typeof tab)}
+          tabs={[{ id: "plans", label: "Plans" }, { id: "dashboard", label: "Dashboard" }]} />
 
         {pendingChange && assignmentsDirty ? (
           <section role="alertdialog" aria-label="Unsaved ICS-204 changes" className="iap-callout">
@@ -435,6 +451,15 @@ export function IapSurface(props: IapSurfaceProps) {
           </div>
         </Panel>
 
+        <div role="tabpanel" id="iap-view-dashboard-panel" aria-labelledby="iap-view-dashboard-tab" hidden={tab !== "dashboard"}>
+          {tab === "dashboard" ? (
+            <IapDashboard items={board.data ?? null} error={board.error} scope={`${query.view === "all" ? "All plans" : query.view === "working" ? "Working plans" : "Published plans"}, ${query.periodRevision === undefined ? "every operational period" : periodLabel}`}
+              onOpen={(id) => { setTab("plans"); requestSelection(id); }} />
+          ) : null}
+        </div>
+
+        {/* The plans stay mounted under the dashboard, so an unsaved ICS-204 draft survives the switch. */}
+        <div role="tabpanel" id="iap-view-plans-panel" aria-labelledby="iap-view-plans-tab" className="iap-plans" hidden={tab !== "plans"}>
         {workspace.data ? (
           <section className="iap-summary" aria-label="Plan status totals">
             <article><strong>{summary.total}</strong><span>Plans in view</span></article>
@@ -641,6 +666,7 @@ export function IapSurface(props: IapSurfaceProps) {
             ) : null}
             {error ? <p role="alert" className="iap-error">{error}</p> : null}
           </Panel>
+        </div>
         </div>
       </div>
     </Scroll>

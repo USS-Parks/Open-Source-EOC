@@ -1,5 +1,7 @@
 /* Resource coordination: requests, costs, the pool and the typing catalog. */
 .resources-page { container-type: inline-size; display: grid; gap: 16px; max-width: 1200px; min-width: 0; width: min(100%, 1200px); }
+.resources-page[hidden] { display: none; }
+.resources-tabs { max-width: 1200px; margin-bottom: 16px; }
 .resources-kicker { align-items: center; color: var(--eoc-brand-teal); display: flex; gap: 8px; margin-bottom: 12px; }
 .resources-first { margin-top: 0; }
 .resources-last { margin-bottom: 0; }

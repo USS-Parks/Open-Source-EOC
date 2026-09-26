@@ -10,8 +10,13 @@
   container-type: inline-size;
 }
 
+/* The Plans tab's panel, beside the Dashboard tab's. */
+.iap-plans { display: grid; gap: 16px; }
+.iap-plans[hidden] { display: none; }
+
 .iap-workspace > *,
 .iap-forms-workspace > *,
+.iap-plans > *,
 .iap-split > *,
 .iap-detail > *,
 .iap-filter-grid > *,

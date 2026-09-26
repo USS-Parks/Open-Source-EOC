@@ -14250,3 +14250,46 @@ Map and Dashboard Parity PSPR unit MP1, built in lane `lane/mp1`.
   alone 4 of 4.
 - **Full suite:** as MP11, once per landing batch before the push.
 - **Rollback.** Revert the commit; no migration or data change.
+
+## Map and dashboard parity MP12: checklist, IAP and resource dashboards
+
+Map and Dashboard Parity PSPR unit MP12, built in lane `lane/mp12`.
+
+- **What the code did before.** Tasks, IAP and Resources had lists and
+  plain totals but no chart dashboards; nothing drew WebEOC's Checklist,
+  IAP or Requests/Tasks dashboards. The IAP header showed the raw incident
+  id.
+- **What changed.** A Dashboard tab on each of the three screens, beside
+  their existing views, built from the MP11 kit in
+  `web/src/dashboards/boards/`. Tasks: status chips, Lists by status, Tasks
+  by status, Pace and Tasks by category donuts, and a checklist list with
+  status bars, progress, next due and Past due pills; VIEW opens Team Tasks
+  filtered by status, category or one checklist. IAP: five status tiles and
+  a row per plan with a status block and icon, forms "x of y" and a progress
+  bar, the period's dates and who prepared and approved it; the Plans tab
+  stays mounted under the dashboard so an unsaved ICS 204 draft survives the
+  switch. Resources: total, active, overdue, deployed, ended, new and ended
+  in 24 hours, and recorded cost when any exists, with requests by stage.
+  Every chart filters the list beside it to exactly its count. The IAP
+  header no longer shows the raw incident id (integrator's fix).
+- **Defaults taken and deviations.** A checklist is the tasks one position
+  or participant holds, since the database keeps no list id; unassigned
+  tasks are one list. Past due and overdue follow the rules the task list
+  and My work already use; active and ended follow the request list's own
+  filters. The IAP plan filters apply to both tabs. No endpoint was added:
+  the list endpoints return complete sets through their pages. No "+N more"
+  chips, since a plan names one preparer and one organization. The lane
+  also edited the IAP and Resources screens' own CSS and the IAP workspace
+  test, which no other lane held. North Coast Storm has no plans or costs,
+  so the walk creates six plans through the API; demo data for the
+  dashboards follows MP9.
+- **Verification.** `pnpm check:static` green on the rebased lane. Vitest
+  over the web dashboards, app, IAP, design and resources suites: 57 files,
+  488 tests; after the header fix, the IAP and app suites again: 33 files,
+  218 tests. `board-dashboards-browser.test.ts` and the thirteen existing
+  browser suites of the three screens: 14 files, 36 tests, the list count
+  checked after every chart click. Captures at 1586 by 992 and 1534 by 790
+  in both themes reviewed against the WebEOC shots.
+- **Full suite:** as MP11, once per landing batch before the push.
+- **Rollback.** Revert the commit; the three screens return to their lists
+  without the Dashboard tab.
