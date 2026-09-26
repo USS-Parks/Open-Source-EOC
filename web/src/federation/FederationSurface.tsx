@@ -7,7 +7,11 @@ import type { ApiClient, BoardListItem } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import { EmptyState, ErrorNote, Loading, Scroll, SurfaceHeader } from "../app/screens/parts.js";
 import { formatTime } from "../datasets/format.js";
-import { accessLabel, linkLabel, waitedFor, type InstanceIdentity, type PeerStatus, type SharedBoardStatus } from "./model.js";
+import { saveFile } from "../admin/labels.js";
+import {
+  accessLabel, count, fileSlug, importSummary, linkLabel, waitedFor,
+  type InstanceIdentity, type PeerStatus, type SharedBoardStatus,
+} from "./model.js";
 
 type Run = (operation: () => Promise<string>) => Promise<void>;
 
@@ -18,9 +22,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /**
  * Federation with partner instances: hand this instance's public key to
  * partners, register a partner and hand over its token once, record its
- * public key, link it for push delivery, share boards with it or revoke a
- * share, and watch the outbox and what partners have sent. Administrators
- * only; the server refuses these routes to anyone else regardless.
+ * public key, link it for push delivery or exchange with it by file, share
+ * boards with it or revoke a share, and watch the outbox and what partners
+ * have sent. Administrators only; the server refuses these routes to anyone
+ * else regardless.
  */
 export function FederationSurface(props: {
   client: ApiClient;
@@ -125,7 +130,7 @@ function Federation(props: { client: ApiClient; jurisdictionId: string; boards: 
             {(status.data?.received ?? []).map((batch) => (
               <li key={`${batch.at}-${batch.boardId}`} className="d21-readiness-row" aria-label={`Received from ${batch.peer}`}>
                 <div className="d21-readiness-title">
-                  <div><strong>{batch.boardTitle ?? "A board no longer listed"}</strong><span>From {batch.peer} · {formatTime(batch.at)}</span></div>
+                  <div><strong>{batch.boardTitle ?? "A board no longer listed"}</strong><span>From {batch.peer}{batch.byFile ? " by file" : ""} · {formatTime(batch.at)}</span></div>
                 </div>
                 <span>{batch.updates === 1 ? "1 update" : `${batch.updates} updates`}{batch.deletes ? `, ${batch.deletes} deleted` : ""}{batch.conflicts ? `, ${batch.conflicts} conflicts reconciled` : ""}</span>
               </li>
@@ -245,8 +250,101 @@ function PeerCard(props: { peer: PeerStatus; client: ApiClient; boards: readonly
             </div>
           </>}
         </details>
+        <FileExchange peer={peer} waiting={waiting} client={props.client} run={props.run} />
       </fieldset>
     </li>
+  );
+}
+
+/** A file's JSON, or a plain error naming what was expected. */
+async function readJson(file: File | null, what: string): Promise<unknown> {
+  if (!file) throw new Error(`Choose the ${what} first.`);
+  try {
+    return JSON.parse(await file.text());
+  } catch {
+    throw new Error(`That file is not a ${what}.`);
+  }
+}
+
+/** Minutes precision, UTC, for file names: 2026-09-25-14-30. */
+const stamp = () => new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
+
+/**
+ * Exchange by file (AG-04), for a partner no network path reaches: export
+ * what waits for it as a signed file, import the file it sends, give back
+ * the receipt for that file, and import the receipt it gives back.
+ */
+function FileExchange(props: { peer: PeerStatus; waiting: number; client: ApiClient; run: Run }) {
+  const { peer } = props;
+  const batchField = useId();
+  const receiptField = useId();
+  const [batchFile, setBatchFile] = useState<File | null>(null);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  // Remounting a file input is the one way to clear it.
+  const [inputs, setInputs] = useState(0);
+  const [receipt, setReceipt] = useState<unknown>(null);
+  const slug = fileSlug(peer.name);
+  const refused = (prefix: string) => (cause: unknown): never => {
+    throw new Error(`${prefix}: ${cause instanceof Error ? cause.message : "the request failed"}.`);
+  };
+
+  return (
+    <details>
+      <summary>Exchange by file</summary>
+      <p className="d21-muted federation-fields">
+        When no network reaches {peer.name}, carry updates on removable media. Export what is waiting here and import it on {peer.name}'s
+        Federation screen, then import the receipt it gives back here. Updates stay waiting until their receipt is imported.
+      </p>
+      <div className="d21-toolbar">
+        <span className="d21-muted">{count(props.waiting, "update")} waiting for {peer.name}.</span>
+        <Button onClick={() => void props.run(async () => {
+          const result = await props.client.exportBatchFile(peer.id);
+          const name = `openeoc-batches-for-${slug}-${stamp()}.json`;
+          saveFile(new Blob([JSON.stringify(result.file)], { type: "application/json" }), name);
+          const rest = result.remaining
+            ? ` ${result.remaining} more ${result.remaining === 1 ? "update stays" : "updates stay"} waiting: past the file's size, or on a board with no receiving board set.`
+            : "";
+          return `Exported ${count(result.entries, "update")} for ${peer.name} as ${name}. Carry it to ${peer.name} and import it there.${rest}`;
+        })}>Export waiting updates</Button>
+      </div>
+      <div className="d21-form-grid federation-fields">
+        <p className="eoc-input-field">
+          <label htmlFor={batchField}>Batch file from {peer.name}</label>
+          <input key={`batch-${inputs}`} id={batchField} className="eoc-input" type="file" accept=".json,application/json"
+            onChange={(event) => setBatchFile(event.currentTarget.files?.[0] ?? null)} />
+        </p>
+        <p className="eoc-input-field">
+          <label htmlFor={receiptField}>Receipt from {peer.name}</label>
+          <input key={`receipt-${inputs}`} id={receiptField} className="eoc-input" type="file" accept=".json,application/json"
+            onChange={(event) => setReceiptFile(event.currentTarget.files?.[0] ?? null)} />
+        </p>
+      </div>
+      <div className="d21-card-actions is-start">
+        <Button onClick={() => void props.run(async () => {
+          const body = await readJson(batchFile, "batch file");
+          const result = await props.client.importBatchFile(peer.id, body).catch(refused("Nothing was imported"));
+          setReceipt(result.receipt);
+          setBatchFile(null);
+          setInputs((n) => n + 1);
+          return importSummary(peer.name, result);
+        })}>Import batch file</Button>
+        {receipt ? (
+          <Button kind="primary" onClick={() => void props.run(async () => {
+            const name = `openeoc-receipt-for-${slug}-${stamp()}.json`;
+            saveFile(new Blob([JSON.stringify(receipt)], { type: "application/json" }), name);
+            return `Receipt saved as ${name}. Carry it to ${peer.name} and import it there to mark those updates delivered.`;
+          })}>Export receipt</Button>
+        ) : null}
+        <Button onClick={() => void props.run(async () => {
+          const body = await readJson(receiptFile, "receipt");
+          const result = await props.client.importReceipt(peer.id, body).catch(refused("Nothing was marked delivered"));
+          setReceiptFile(null);
+          setInputs((n) => n + 1);
+          if (result.delivered === 0) return `This receipt from ${peer.name} changed nothing: its updates were already marked delivered.`;
+          return `Receipt from ${peer.name} imported: ${count(result.delivered, "update")} marked delivered.`;
+        })}>Import receipt</Button>
+      </div>
+    </details>
   );
 }
 
@@ -274,7 +372,7 @@ function SharedBoard(props: { board: SharedBoardStatus; peer: PeerStatus; linked
   const { board, peer } = props;
   const [confirming, setConfirming] = useState(false);
   const next = board.pending === 0 ? "Nothing waiting"
-    : !props.linked ? "Held until the partner is linked"
+    : !props.linked ? "Held for a push link or a file"
       : !board.remoteBoardId ? "Held until a receiving board is set"
         : board.nextAttemptAt ? formatTime(board.nextAttemptAt) : "Next pass";
   return (

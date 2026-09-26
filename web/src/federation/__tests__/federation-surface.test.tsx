@@ -26,8 +26,11 @@ const status: FederationStatus = {
       nextAttemptAt: "2026-09-22T10:05:00.000Z", lastError: "peer responded 503", lastDeliveredAt: null,
     }],
   }],
-  received: [{ at: "2026-09-22T11:00:00.000Z", peer: "State OES", boardId: "b2", boardTitle: "Shelters", updates: 3, deletes: 2, conflicts: 1 }],
+  received: [{ at: "2026-09-22T11:00:00.000Z", peer: "State OES", boardId: "b2", boardTitle: "Shelters", updates: 3, deletes: 2, conflicts: 1, byFile: true }],
 };
+
+const BATCH_FILE = { format: "openeoc-federation-batches", version: 1, batches: [{ boardId: "rb", updates: ["AA=="], deletes: [], signature: "sig" }] };
+const RECEIPT = { format: "openeoc-federation-receipt", version: 1, batches: ["ab".repeat(32)], signature: "receipt-sig" };
 
 function client(): ApiClient {
   return {
@@ -37,7 +40,25 @@ function client(): ApiClient {
     createSharingAgreement: vi.fn().mockResolvedValue({ id: "a2" }),
     setPeerKey: vi.fn().mockResolvedValue({ fingerprint: "cd".repeat(32) }),
     revokeSharingAgreement: vi.fn().mockResolvedValue({ dropped: 2 }),
+    exportBatchFile: vi.fn().mockResolvedValue({ file: BATCH_FILE, entries: 2, remaining: 1 }),
+    importBatchFile: vi.fn().mockResolvedValue({ batches: 1, alreadyImported: 0, updates: 3, deleted: 1, conflicts: 0, receipt: RECEIPT }),
+    importReceipt: vi.fn().mockResolvedValue({ batches: 1, delivered: 2, alreadyDelivered: 0 }),
   } as unknown as ApiClient;
+}
+
+/** Catch the browser download: each saved file's name and text. */
+function catchDownloads(): Array<{ name: string; blob: Blob }> {
+  const saved: Array<{ name: string; blob: Blob }> = [];
+  const blobs: Blob[] = [];
+  Object.assign(URL, { createObjectURL: (blob: Blob) => { blobs.push(blob); return "blob:saved"; }, revokeObjectURL: vi.fn() });
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+    saved.push({ name: this.download, blob: blobs.at(-1)! });
+  });
+  return saved;
+}
+
+function choose(input: HTMLElement, content: string, name: string): void {
+  fireEvent.change(input, { target: { files: [new File([content], name, { type: "application/json" })] } });
 }
 
 describe("federation screen", () => {
@@ -51,6 +72,7 @@ describe("federation screen", () => {
     expect(within(shared).getByText("Held until a receiving board is set")).toBeTruthy();
     const batch = screen.getByRole("listitem", { name: "Received from State OES" });
     expect(batch.textContent).toContain("3 updates, 2 deleted, 1 conflicts reconciled");
+    expect(batch.textContent).toContain("From State OES by file");
     expect(screen.getByText(/Resource escalation keeps no stored targets/)).toBeTruthy();
   });
 
@@ -128,6 +150,78 @@ describe("federation screen", () => {
     await screen.findByText("Activity log is no longer shared with State OES.");
     expect(api.revokeSharingAgreement).toHaveBeenCalledWith("p1", "a1");
     expect((await axe.run(view.container)).violations).toEqual([]);
+  });
+
+  it("exchanges by file: exports the waiting batch, imports a batch file and exports its receipt, imports a receipt", async () => {
+    const api = client();
+    const saved = catchDownloads();
+    const view = render(<FederationSurface client={api} jurisdictionId="j" isAdmin boards={boards} />);
+    const peer = await screen.findByRole("listitem", { name: "Partner State OES" });
+    expect(within(peer).getByText("2 updates waiting for State OES.")).toBeTruthy();
+
+    // Export: the file is saved and the notice says what it holds and what stays.
+    fireEvent.click(within(peer).getByRole("button", { name: "Export waiting updates" }));
+    const exported = await screen.findByText(/^Exported 2 updates for State OES as openeoc-batches-for-state-oes-/);
+    expect(exported.textContent).toContain("Carry it to State OES and import it there. 1 more update stays waiting");
+    expect(api.exportBatchFile).toHaveBeenCalledWith("p1");
+    expect(saved[0]!.name).toMatch(/^openeoc-batches-for-state-oes-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}\.json$/);
+    expect(JSON.parse(await saved[0]!.blob.text())).toEqual(BATCH_FILE);
+
+    // Import a batch file: refused without a file, then applied, and the receipt offered.
+    expect(within(peer).queryByRole("button", { name: "Export receipt" })).toBeNull();
+    fireEvent.click(within(peer).getByRole("button", { name: "Import batch file" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Choose the batch file first.");
+    choose(within(peer).getByLabelText("Batch file from State OES"), JSON.stringify(BATCH_FILE), "batches.json");
+    fireEvent.click(within(peer).getByRole("button", { name: "Import batch file" }));
+    await screen.findByText("Imported 1 batch from State OES: 3 updates, 1 deleted. Export the receipt and carry it back to State OES.");
+    expect(api.importBatchFile).toHaveBeenCalledWith("p1", BATCH_FILE);
+
+    // Export the receipt for that file.
+    fireEvent.click(within(peer).getByRole("button", { name: "Export receipt" }));
+    await screen.findByText(/^Receipt saved as openeoc-receipt-for-state-oes-.*\. Carry it to State OES and import it there/);
+    expect(JSON.parse(await saved[1]!.blob.text())).toEqual(RECEIPT);
+
+    // Import a receipt: the updates it names are marked delivered.
+    choose(within(peer).getByLabelText("Receipt from State OES"), JSON.stringify(RECEIPT), "receipt.json");
+    fireEvent.click(within(peer).getByRole("button", { name: "Import receipt" }));
+    await screen.findByText("Receipt from State OES imported: 2 updates marked delivered.");
+    expect(api.importReceipt).toHaveBeenCalledWith("p1", RECEIPT);
+    expect((await axe.run(view.container)).violations).toEqual([]);
+  });
+
+  it("says when a file changed nothing, and when a file or receipt is refused, that nothing was applied", async () => {
+    const api = client();
+    (api.importBatchFile as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ batches: 2, alreadyImported: 2, updates: 0, deleted: 0, conflicts: 0, receipt: RECEIPT })
+      .mockRejectedValueOnce(new Error("the batch signature does not verify under this peer's key"));
+    (api.importReceipt as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(new Error("the receipt names a batch this instance never sent to State OES"))
+      .mockResolvedValueOnce({ batches: 1, delivered: 0, alreadyDelivered: 2 });
+    render(<FederationSurface client={api} jurisdictionId="j" isAdmin boards={boards} />);
+    const peer = await screen.findByRole("listitem", { name: "Partner State OES" });
+
+    choose(within(peer).getByLabelText("Batch file from State OES"), JSON.stringify(BATCH_FILE), "batches.json");
+    fireEvent.click(within(peer).getByRole("button", { name: "Import batch file" }));
+    await screen.findByText("This file from State OES was imported before; nothing changed. Export the receipt again if State OES did not get it.");
+    expect(within(peer).getByRole("button", { name: "Export receipt" })).toBeTruthy();
+
+    choose(within(peer).getByLabelText("Batch file from State OES"), JSON.stringify(BATCH_FILE), "tampered.json");
+    fireEvent.click(within(peer).getByRole("button", { name: "Import batch file" }));
+    expect((await screen.findByRole("alert")).textContent)
+      .toBe("Nothing was imported: the batch signature does not verify under this peer's key.");
+
+    choose(within(peer).getByLabelText("Batch file from State OES"), "not json", "notes.txt");
+    fireEvent.click(within(peer).getByRole("button", { name: "Import batch file" }));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("That file is not a batch file."));
+    expect(api.importBatchFile).toHaveBeenCalledTimes(2);
+
+    choose(within(peer).getByLabelText("Receipt from State OES"), JSON.stringify(RECEIPT), "receipt.json");
+    fireEvent.click(within(peer).getByRole("button", { name: "Import receipt" }));
+    await waitFor(() => expect(screen.getByRole("alert").textContent)
+      .toBe("Nothing was marked delivered: the receipt names a batch this instance never sent to State OES."));
+    choose(within(peer).getByLabelText("Receipt from State OES"), JSON.stringify(RECEIPT), "receipt.json");
+    fireEvent.click(within(peer).getByRole("button", { name: "Import receipt" }));
+    await screen.findByText("This receipt from State OES changed nothing: its updates were already marked delivered.");
   });
 
   it("says why there is no instance key when the server cannot keep one", async () => {

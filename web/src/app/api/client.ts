@@ -97,7 +97,7 @@ import type {
   IpawsTrailEntry,
 } from "../../ipaws/model.js";
 import type { ChronologyFilters, ChronologyPage } from "../../audit/chronology.js";
-import type { FederationStatus } from "../../federation/model.js";
+import type { BatchExport, BatchImport, FederationStatus, ReceiptImport } from "../../federation/model.js";
 import type {
   RecordWorkflow,
   WorkflowApprovalCommand,
@@ -2257,6 +2257,18 @@ export class ApiClient {
   /** Revoke a sharing agreement: the board stops flowing to and from the partner, and what was waiting for it is dropped. */
   revokeSharingAgreement(peerId: string, agreementId: string): Promise<{ dropped: number }> {
     return this.request("DELETE", `/api/v1/peers/${encodeURIComponent(peerId)}/agreements/${encodeURIComponent(agreementId)}`);
+  }
+  /** Export what waits for the partner as a file of signed batches; the entries stay waiting until its receipt is imported. */
+  exportBatchFile(peerId: string): Promise<BatchExport> {
+    return this.request("POST", `/api/v1/peers/${encodeURIComponent(peerId)}/exchange/export`);
+  }
+  /** Import the partner's batch file through the receive lane; the result carries this instance's signed receipt. */
+  importBatchFile(peerId: string, file: unknown): Promise<BatchImport> {
+    return this.request("POST", `/api/v1/peers/${encodeURIComponent(peerId)}/exchange/import`, file as Body);
+  }
+  /** Import the partner's receipt, which marks the batches it names delivered. */
+  importReceipt(peerId: string, receipt: unknown): Promise<ReceiptImport> {
+    return this.request("POST", `/api/v1/peers/${encodeURIComponent(peerId)}/exchange/receipt`, receipt as Body);
   }
 
   // ---- JIC review, publication and media inquiries; resource costs and escalation ----

@@ -61,6 +61,55 @@ in the audit trail ("federation.agreement_revoked", with the peer, the access
 it had and the number of waiting entries dropped). Sharing the board again
 makes a new agreement, which sends the board's records as they stand.
 
+## Exchange by file
+
+Where no network path reaches a partner, such as an isolated enclave or a
+site whose link is down for days, the two instances carry a shared board's
+updates on removable media instead. Keys and agreements are set up as above,
+each agreement with its receiving board; no push link is needed.
+
+1. **Export.** On the sending instance,
+   `POST /api/v1/peers/:peerId/exchange/export` returns what waits for the
+   partner as a file of signed batches: the batches the delivery worker would
+   push, signed with the same key, sized the same way (768 KB and 5,000
+   entries each) and in the same queue order per receiving board. The file
+   holds the batches and nothing else: no token, address or key. A file
+   holds up to 32 MB of batches; what is past that, and what waits on a board
+   with no receiving board set, stays out, and the export says how many. The
+   exported entries stay waiting: for a push if a link returns, or for a
+   later file. With nothing to export the route answers 409.
+2. **Import.** On the receiving instance, an administrator imports the file
+   for the partner that sent it with
+   `POST /api/v1/peers/:peerId/exchange/import`. Every batch is checked as
+   the receive lane checks a push, under the key recorded for that partner,
+   before any is applied, so a file is taken whole or not at all. A batch
+   that is unsigned or changed after signing, or a file signed by another
+   partner, refuses the file with 422; a batch for a board the partner may
+   not write (never shared, shared without write, or its agreement revoked)
+   refuses it with 403; a file that is not a batch file gets 400. A batch
+   that verifies is applied through the same lane as a push, attributed to
+   the partner, and recorded as "federation.received" with `via` "file". A
+   batch imported before is not applied again, so importing the same file
+   twice changes nothing.
+3. **Receipt.** The import returns a receipt, signed with the receiving
+   instance's key, naming every batch in the file by digest: the SHA-256 of
+   what the batch's signature covers. Importing the same file again returns
+   the same receipt, which is how a lost receipt is made again.
+4. **Mark delivered.** On the sending instance,
+   `POST /api/v1/peers/:peerId/exchange/receipt` checks the receipt's
+   signature under the partner's recorded key (422 if it does not verify)
+   and that it names only batches this instance put in a file for that
+   partner (409 if not); either way nothing is marked. The entries of the
+   named batches that are still waiting are then marked delivered. A receipt
+   imported twice marks nothing more.
+
+Each direction works the same way: each instance exports its own waiting
+updates and imports the other's file. The audit trail records each export
+("federation.file_exported", with the number of batches and entries) and
+each receipt ("federation.receipt_imported", with the number marked
+delivered). Records that belong to an incident stay on their home instance
+by file as by network.
+
 ## The Federation screen
 
 Jurisdiction administrators set all of this up from **Federation** under Data
@@ -101,9 +150,20 @@ the jurisdiction.
    first, saying that nothing more is sent to or accepted from the partner for
    the board and how many waiting updates are dropped; **Revoke agreement**
    revokes it and the board leaves the card.
-8. **Received from partners.** The ten latest batches partners pushed to this
-   instance, read from the audit trail: the board, the partner, the time, the
-   number of updates and any conflicts reconciled.
+8. **Exchange by file.** Open **Exchange by file** on the partner's card.
+   **Export waiting updates** saves the file for the partner and says how
+   many updates it holds and how many stay out. On the partner, choose the
+   file under **Batch file from** and the sender's name and select **Import
+   batch file**; the screen says how many batches, updates and deletions were
+   applied, or that the file was imported before and nothing changed, or,
+   when a file is refused, "Nothing was imported" and why. **Export receipt**
+   then saves the receipt for that file. Back on the sender, choose it under
+   **Receipt from** and select **Import receipt**; the screen says how many
+   updates were marked delivered, and the waiting count drops.
+9. **Received from partners.** The ten latest batches partners pushed to this
+   instance or it imported from their files, read from the audit trail: the
+   board, the partner, "by file" for an imported one, the time, the number of
+   updates and any conflicts reconciled.
 
 The screen also states how resource escalation chooses its target: it keeps
 no stored targets. Whoever escalates a request supplies the higher tier's
@@ -188,7 +248,11 @@ Rotating `OPENEOC_SECRET_KEY` re-encrypts the instance's private key with the
 other stored secrets. The instance key itself is not rotated from the
 console; a replaced key means every partner records the new one. Signatures
 do not carry a time: a batch replayed later changes nothing, because updates
-merge and a deleted record stays deleted.
+merge and a deleted record stays deleted. That is also why a file carried for
+days still applies. A carried file has no channel to trust at all: its
+batches are trusted by the sender's signature and its receipt by the
+receiver's. The file is not encrypted, so whoever holds the media can read
+the board updates in it; carry it as the board's contents deserve.
 
 Resource escalation and JIC approval deliveries, the other lanes a peer token
 opens, are not signed; they rest on the token alone.

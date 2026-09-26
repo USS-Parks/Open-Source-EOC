@@ -14,6 +14,8 @@ import { decryptSecret, encryptSecret, hasSecretKey } from "../secrets/envelope.
 
 /** Keeps a batch signature from being read as a signature over anything else the key signs. */
 const BATCH_CONTEXT = "openeoc-federation-batch-v1\n";
+/** The same for a receipt, which names the batches a partner applied from a file (AG-04). */
+const RECEIPT_CONTEXT = "openeoc-federation-receipt-v1\n";
 
 export interface SignedBatch {
   readonly boardId: string;
@@ -85,6 +87,19 @@ export async function instancePublicKey(sql: Sql): Promise<{ publicKey: string; 
   return { publicKey: identity.publicKey, fingerprint: pemFingerprint(identity.publicKey) };
 }
 
+async function signBytes(sql: Sql, bytes: Buffer): Promise<string> {
+  const identity = await ensureIdentity(sql);
+  return sign(null, bytes, createPrivateKey(decryptSecret(identity.envelope))).toString("base64");
+}
+
+function verifies(publicKeyPem: string, bytes: Buffer, signature: string): boolean {
+  try {
+    return verify(null, bytes, createPublicKey(publicKeyPem), Buffer.from(signature, "base64"));
+  } catch {
+    return false;
+  }
+}
+
 /** Sign a batch for a partner's receiving board with this instance's key. */
 export async function signBatch(
   sql: Sql,
@@ -92,10 +107,7 @@ export async function signBatch(
   updates: readonly string[],
   deletes: readonly string[],
 ): Promise<SignedBatch> {
-  const identity = await ensureIdentity(sql);
-  const privateKey = createPrivateKey(decryptSecret(identity.envelope));
-  const signature = sign(null, batchBytes(boardId, updates, deletes), privateKey).toString("base64");
-  return { boardId, updates, deletes, signature };
+  return { boardId, updates, deletes, signature: await signBytes(sql, batchBytes(boardId, updates, deletes)) };
 }
 
 /** Whether a batch's signature verifies under a partner's recorded public key. */
@@ -106,9 +118,20 @@ export function batchVerifies(
   deletes: readonly string[],
   signature: string,
 ): boolean {
-  try {
-    return verify(null, batchBytes(boardId, updates, deletes), createPublicKey(publicKeyPem), Buffer.from(signature, "base64"));
-  } catch {
-    return false;
-  }
+  return verifies(publicKeyPem, batchBytes(boardId, updates, deletes), signature);
+}
+
+/** A batch's identity in a receipt: the SHA-256, in hex, of the bytes its signature covers. */
+export function batchDigest(boardId: string, updates: readonly string[], deletes: readonly string[]): string {
+  return createHash("sha256").update(batchBytes(boardId, updates, deletes)).digest("hex");
+}
+
+/** Sign a receipt naming the batches, by digest, that this instance applied from a partner's file. */
+export async function signReceipt(sql: Sql, digests: readonly string[]): Promise<string> {
+  return signBytes(sql, Buffer.from(RECEIPT_CONTEXT + JSON.stringify(digests)));
+}
+
+/** Whether a receipt's signature verifies under the partner's recorded public key. */
+export function receiptVerifies(publicKeyPem: string, digests: readonly string[], signature: string): boolean {
+  return verifies(publicKeyPem, Buffer.from(RECEIPT_CONTEXT + JSON.stringify(digests)), signature);
 }

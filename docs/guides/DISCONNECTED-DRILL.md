@@ -21,11 +21,15 @@ been run yet; the first runs are Basho Parks's.
 | The internet is cut and the building's network stays up | Steps 4 to 10 | The whole drill |
 | A network that never touches the internet: install, certificates and time | Steps 1 to 5 | The clock checks |
 | A device with no network, which catches up when it rejoins | Step 9 | The field play on day 1 |
-| Data carried to another instance on removable media | Step 11, a backup copy only | Day 3, a backup copy only |
+| Data carried to another instance on removable media | Step 11, a backup copy | Day 2, a shared board's updates by file, with a second host; day 3, a backup copy |
 
-This build has no way to carry incident records to another instance on
-media: federation needs a network path, and the jurisdiction export has no
-import. Both parts record only that a backup reaches removable media.
+A shared board's updates travel between two hosts on media by
+[exchange by file](FEDERATION-SETUP.md#exchange-by-file), which Part 2 plays
+on day 2 when a second host is set up. Part 1 has one host, so it records
+only that a backup reaches removable media. Records that belong to an
+incident stay on their home instance, by file as by network, and the
+jurisdiction export has no import, so neither part carries incident records
+to another instance.
 
 ## Part 1: the unplugged run
 
@@ -165,7 +169,7 @@ Set-Content -Path C:\OSEOC-drill\feed\drill.geojson -Encoding ascii -Value '{"ty
 | Text messages | Caddy on port 8083 | First, on **Administration > Notifications**, put `http://127.0.0.1:8082` and `http://127.0.0.1:8083` under **Allowed destinations** and **Save allowlist**. Then on **Channels**, **SMS**: **SMS provider** "HTTP provider", **Provider URL** `http://127.0.0.1:8083/sms`, **Provider account** and **Provider token** `drill`, and a **From number** such as `+15555550100` |
 | Webhook | Caddy on port 8082 | Once the drill incident is open (see below), on **Notifications**, **Add a notification rule** on its significant events board: **When** "A record is created", **Condition** "Every record", **Channel kind** Webhook, **Webhook URL** `http://127.0.0.1:8082/drill`, then **Create rule** and store the signing secret it shows once |
 | Feed | Caddy on port 8084 | **Feeds**, **Add a feed**: a **Feed name**, **Format** geojson, **Delivery** "Poll an upstream URL", **Source URL** `http://127.0.0.1:8084/drill.geojson`, **Poll interval** 5 minutes, **Freshness window** 15 minutes |
-| Federation, if you have a second computer | A second host, set up as in Part 1 on another computer on the same switch | Each host trusts the other's authority ([Connections out through an agency authority](NETWORK-HOST.md#connections-out-through-an-agency-authority)); then each registers the other, sets the push link and shares one board on **Federation** ([Federation setup](FEDERATION-SETUP.md)) |
+| Federation, if you have a second computer | A second host, set up as in Part 1 on another computer on the same switch | Each host trusts the other's authority ([Connections out through an agency authority](NETWORK-HOST.md#connections-out-through-an-agency-authority)); then each registers the other, records the other's public key, sets the push link and shares one board, with its receiving board, on **Federation** ([Federation setup](FEDERATION-SETUP.md)) |
 | IPAWS | None: an alert needs FEMA's servers | Leave it off, and record "not configured" |
 
 Collaboration channels and meetings are left out: they need their
@@ -209,6 +213,7 @@ event in the report's log.
 | 0 to 2 | Evaluator | One "Feed failing" notification for the feed, its count rising with each failed poll rather than a new notice each time; the feed's item stays on the map, marked stale | The count |
 | 8 | Controller | Start the email relay again | When each waiting email arrived on the relay's page |
 | 24 to 26 | Staff | **Day 2 play**, and the day's clock check: run **Check Open Source EOC with no internet** | The clock line |
+| 24 to 26 | Administrators of both hosts, if federated | With the partner host still unplugged, carry the shared board by file. On **Federation**, open **Exchange by file** on the partner's card and choose **Export waiting updates**; copy the file to the USB drive. On the partner host, choose it under **Batch file from**, **Import batch file**, then **Export receipt** and copy the receipt to the drive. Back on this host, choose it under **Receipt from** and **Import receipt**. Then the same from the partner host to this one. Import one of the files a second time | What each import and receipt said; the waiting count after each receipt; that the second import said nothing changed; the batch listed "by file" under **Received from partners** |
 | 24 | Evaluator | The webhooks queued at hour 0 read "Expired, not sent" | Count and time |
 | 26 | Controller and administrator | Start the webhook stand-in; the administrator opens each expired webhook in the notification center and chooses **Resend** | Each resend's result |
 | 30 | Controller | Restart the host computer, as a power loss would | Services back; waiting SMS still waiting |

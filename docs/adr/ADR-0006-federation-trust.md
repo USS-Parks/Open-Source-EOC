@@ -19,6 +19,10 @@ told: its pushes are refused with 403 until its administrator revokes its own
 side. Resource escalation and JIC approval deliveries are not signed.
 [Federation setup](../guides/FEDERATION-SETUP.md) describes the exchange.
 
+Status note, 2026-09-25 (Veoci and air gap VA20): batches also travel by file
+between instances with no network path, verified the same way before any is
+applied, with a receipt signed by the receiver marking them delivered.
+
 ## Decision
 
 - Each instance holds a long-lived Ed25519 identity keypair; peering is a

@@ -95,7 +95,8 @@ One row per service. Times are hours from the cut.
 | Clock line, day 2 | |
 | Clock line, day 3 | |
 | Backup copied to media and verified (day 3) | |
-| Incident records carried to another instance on media | No path in this build |
+| A shared board's updates carried to the partner host by file and back (day 2): what each import and receipt said, the waiting count after each receipt, and the second import | |
+| Incident records carried to another instance | Not carried: they stay on their home instance |
 | IPAWS | Not configured |
 
 ### Event log

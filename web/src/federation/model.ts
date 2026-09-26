@@ -34,6 +34,54 @@ export interface ReceivedBatch {
   /** Records the batch deleted; batches received before deletions travelled carry 0. */
   readonly deletes: number;
   readonly conflicts: number;
+  /** Imported from a batch file rather than pushed. */
+  readonly byFile: boolean;
+}
+
+/** A file of signed batches for a partner with no network path (AG-04), and what it holds. */
+export interface BatchExport {
+  readonly file: unknown;
+  readonly entries: number;
+  /** Updates still waiting that are not in the file: past its size, or on a board with no receiving board. */
+  readonly remaining: number;
+}
+
+/** What importing a partner's batch file did, with the receipt to carry back. */
+export interface BatchImport {
+  readonly batches: number;
+  readonly alreadyImported: number;
+  readonly updates: number;
+  readonly deleted: number;
+  readonly conflicts: number;
+  readonly receipt: unknown;
+}
+
+/** What importing a partner's receipt did. */
+export interface ReceiptImport {
+  readonly batches: number;
+  readonly delivered: number;
+  readonly alreadyDelivered: number;
+}
+
+/** A plural in words: "1 update", "3 updates". */
+export function count(n: number, one: string, many = `${one}s`): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/** What a batch file import did, in words. */
+export function importSummary(peer: string, result: BatchImport): string {
+  const applied = result.batches - result.alreadyImported;
+  if (applied === 0) return `This file from ${peer} was imported before; nothing changed. Export the receipt again if ${peer} did not get it.`;
+  const parts = [count(result.updates, "update")];
+  if (result.deleted) parts.push(`${result.deleted} deleted`);
+  if (result.conflicts) parts.push(`${count(result.conflicts, "conflict")} reconciled`);
+  const before = result.alreadyImported ? ` ${count(result.alreadyImported, "batch", "batches")} in it had been imported before.` : "";
+  return `Imported ${count(applied, "batch", "batches")} from ${peer}: ${parts.join(", ")}.${before} Export the receipt and carry it back to ${peer}.`;
+}
+
+/** A name safe in a file name: letters and digits, the rest as single hyphens. */
+export function fileSlug(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "partner";
 }
 
 /** This instance's public key; null while the server has no secret key to keep its private half. */
@@ -60,7 +108,7 @@ export function waitedFor(since: string, now = Date.now()): string {
 /** The push link in words, never the token. */
 export function linkLabel(peer: Pick<PeerStatus, "endpointUrl" | "tokenStored">): string {
   if (peer.endpointUrl && peer.tokenStored) return `Pushing to ${peer.endpointUrl}`;
-  return "Not linked; updates wait in the outbox";
+  return "Not linked; updates wait in the outbox or go by file";
 }
 
 export function accessLabel(board: Pick<SharedBoardStatus, "canRead" | "canWrite">): string {

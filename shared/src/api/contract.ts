@@ -358,6 +358,9 @@ POST /api/v1/notifications/:notificationId/acknowledge
 POST /api/v1/notifications/:notificationId/read
 POST /api/v1/notifications/:notificationId/resend
 POST /api/v1/peers/:peerId/agreements
+POST /api/v1/peers/:peerId/exchange/export
+POST /api/v1/peers/:peerId/exchange/import
+POST /api/v1/peers/:peerId/exchange/receipt
 POST /api/v1/peers/:peerId/queue
 POST /api/v1/persons
 POST /api/v1/plans/:planId/activate

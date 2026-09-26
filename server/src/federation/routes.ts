@@ -3,10 +3,17 @@ import { z } from "zod";
 import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import type { BoardSyncHub } from "../sync/hub.js";
+import { AuthError } from "../auth/service.js";
 import {
+  BATCH_FILE_FORMAT,
   FEDERATION_BODY_LIMIT,
+  FEDERATION_FILE_LIMIT,
+  RECEIPT_FORMAT,
   createAgreement,
+  exportBatchFile,
   federationStatus,
+  importBatchFile,
+  importReceipt,
   isPeerToken,
   pending,
   queueOutbound,
@@ -33,6 +40,24 @@ const ReceiveBody = z.object({
   deletes: z.array(z.string().uuid()).max(10_000).default([]),
   signature: z.string().max(200).optional(),
 });
+const BatchFileBody = z.object({
+  format: z.literal(BATCH_FILE_FORMAT),
+  version: z.literal(1),
+  batches: z.array(ReceiveBody).min(1).max(10_000),
+});
+const ReceiptBody = z.object({
+  format: z.literal(RECEIPT_FORMAT),
+  version: z.literal(1),
+  batches: z.array(z.string().regex(/^[0-9a-f]{64}$/)).min(1).max(10_000),
+  signature: z.string().min(1).max(200),
+});
+
+/** Read a carried file, saying plainly when it is not the kind asked for. */
+function parseFile<T>(schema: z.ZodType<T>, body: unknown, what: string): T {
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) throw new AuthError(400, `the file is not ${what} from Open Source EOC`);
+  return parsed.data;
+}
 
 export function federationRoutes(
   app: FastifyInstance,
@@ -100,6 +125,38 @@ export function federationRoutes(
     const { peerId, agreementId } = req.params as { peerId: string; agreementId: string };
     const result = await withPerson(sql, req.principal.person.id, (tx) =>
       revokeAgreement(tx, req.principal, peerId, agreementId),
+    );
+    return reply.send(result);
+  });
+
+  // Exchange by file (AG-04): the waiting batch out as a file, a partner's
+  // file in through the receive lane, and the partner's receipt back.
+  app.post("/api/v1/peers/:peerId/exchange/export", { preHandler: authenticate }, async (req, reply) => {
+    const { peerId } = req.params as { peerId: string };
+    const result = await withPerson(sql, req.principal.person.id, (tx) =>
+      exportBatchFile(tx, req.principal, peerId),
+    );
+    return reply.send(result);
+  });
+
+  // Signed in before the body is read, so only a session can send a body up to the file limit.
+  app.post(
+    "/api/v1/peers/:peerId/exchange/import",
+    { onRequest: authenticate, bodyLimit: FEDERATION_FILE_LIMIT },
+    async (req, reply) => {
+      const { peerId } = req.params as { peerId: string };
+      const file = parseFile(BatchFileBody, req.body, "a federation batch file");
+      // Not in one transaction: each update applies through the sync hub, as a push does.
+      const result = await importBatchFile(sql, hub, req.principal, peerId, file.batches);
+      return reply.send(result);
+    },
+  );
+
+  app.post("/api/v1/peers/:peerId/exchange/receipt", { preHandler: authenticate }, async (req, reply) => {
+    const { peerId } = req.params as { peerId: string };
+    const receipt = parseFile(ReceiptBody, req.body, "a federation receipt");
+    const result = await withPerson(sql, req.principal.person.id, (tx) =>
+      importReceipt(tx, req.principal, peerId, receipt),
     );
     return reply.send(result);
   });

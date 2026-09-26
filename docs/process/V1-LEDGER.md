@@ -9988,3 +9988,217 @@ Veoci Integration and Air Gap PSPR unit VA30 (VC-22), on VA13's plans.
 - **Rollback:** revert the commit; migration `0161` adds columns and a table
   that nothing else reads, and restoring `scheduler_due` from `0155` drops
   the reminder branch.
+
+## Veoci and air gap VA20: exchange by file
+
+Veoci Integration and Air Gap PSPR unit VA20 (AG-04). After "Veoci and air
+gap VA19: signed peer identity".
+
+- **What the code did before.** Federation moved only over the network: the
+  delivery worker pushed each linked peer's batches to its receive lane.
+  Batches were signed (VA19), but nothing could write them to a file or read
+  one back, so two instances with no network path between them could not
+  share a board at all. The disconnected drill documents said carrying data
+  to another instance on media had "no path in this build".
+- **What changed.**
+  - **Export** (`POST /api/v1/peers/:peerId/exchange/export`,
+    administrators of the peer's jurisdiction). What waits for the partner,
+    on boards with a receiving board set, is returned as a file of signed
+    batches: the batches the delivery worker would push, signed with the
+    same key, cut the same way (768 KiB of JSON and 5,000 entries each) and
+    in queue order per receiving board. The file is
+    `{ format: "openeoc-federation-batches", version: 1, batches }` and each
+    batch has exactly `boardId`, `updates`, `deletes` and `signature`: no
+    token, address or key. A file holds up to 32 MiB of batch data
+    (`FEDERATION_FILE_BYTES`); the response gives `entries` and `remaining`
+    (waiting entries past the size or on a board with no receiving board).
+    Each exported batch is recorded by digest with its outbox entry ids in
+    `federation_file_exports`. The entries stay waiting until a receipt, or
+    a push, delivers them. Nothing waiting is 409. Audited
+    "federation.file_exported" with the batch and entry counts.
+  - **Import** (`POST /api/v1/peers/:peerId/exchange/import`, the partner
+    chosen by the administrator). Every batch is checked by the receive
+    lane's own check, now one function (`checkBatch`) the network route and
+    the file share: a recorded key (403), signed and verifying under it,
+    and an agreement letting the partner write the board (403 when missing,
+    revoked or read-only). All batches are checked before any is applied,
+    so a file is taken whole or not at all. A signature failure is 422 on
+    this route, not 401 (see decisions). Batches that pass apply through
+    the same `applyBatch` the network lane uses, audited
+    "federation.received" with `via: "file"`. Each applied batch's digest
+    goes into `federation_file_imports`; a batch already there is skipped,
+    so importing a file again changes nothing, not even the sync log or the
+    audit trail. The response carries the counts and a receipt,
+    `{ format: "openeoc-federation-receipt", version: 1, batches, signature }`,
+    naming every batch in the file by digest (SHA-256 of the bytes its
+    signature covers) and signed with this instance's key under its own
+    context string (`openeoc-federation-receipt-v1`). Importing the file
+    again returns the same receipt. The route authenticates in `onRequest`,
+    before its 40 MiB body (`FEDERATION_FILE_LIMIT`) is read.
+  - **Receipt** (`POST /api/v1/peers/:peerId/exchange/receipt`). The
+    receipt must verify under the partner's recorded key (422) and name only
+    batches this instance exported to that partner (409, "the receipt names
+    a batch this instance never sent to ..."); otherwise nothing is marked.
+    The named batches' entries still waiting are marked delivered; the
+    response gives `delivered` and `alreadyDelivered`. Audited
+    "federation.receipt_imported". A file or receipt of the wrong kind is
+    400 "the file is not a federation batch file (receipt) from Open Source
+    EOC".
+  - `server/src/federation/identity.ts` gains `batchDigest`, `signReceipt`
+    and `receiptVerifies`; signing and verifying share two private helpers.
+  - The federation status marks each received batch `byFile`.
+  - **The screen** (`web/src/federation/FederationSurface.tsx`). Each partner
+    card gains **Exchange by file**: the waiting count, **Export waiting
+    updates** (saves `openeoc-batches-for-<partner>-<time>.json` and says how
+    many updates it holds and how many stay out), **Batch file from
+    <partner>** with **Import batch file** (says how many batches, updates,
+    deletions and conflicts were applied, or "This file from ... was imported
+    before; nothing changed", or "Nothing was imported: <reason>"), **Export
+    receipt** (saves `openeoc-receipt-for-<partner>-<time>.json`), and
+    **Receipt from <partner>** with **Import receipt** ("... N updates marked
+    delivered", "changed nothing", or "Nothing was marked delivered:
+    <reason>"). **Received from partners** says "by file". An unlinked
+    partner reads "Not linked; updates wait in the outbox or go by file",
+    and a held board "Held for a push link or a file".
+  - Docs: `docs/guides/FEDERATION-SETUP.md` gains "Exchange by file", a
+    screen step and a trust note (the file is signed, not encrypted).
+    `docs/guides/DISCONNECTED-DRILL.md`: the media row and paragraph now
+    name exchange by file, Part 2 gains a day-2 row carrying the shared
+    board both ways on the USB drive with a repeated import, and the
+    federation stand-in row adds recording the other host's key and the
+    receiving board. `docs/guides/DISCONNECTED-DRILL-REPORT.md`: the "No
+    path in this build" row becomes the day-2 exchange row, and a row says
+    incident records are not carried.
+- **Files outside the "Owns" cell.** `shared/src/api/contract.ts` (three
+  routes), `web/src/app/api/client.ts` (`exportBatchFile`,
+  `importBatchFile`, `importReceipt`), `docs/API.md` (regenerated),
+  `server/migrations/0162_federation_file_exchange.sql`, the three guides
+  above, and two new test files. `FederationSurface.tsx` imports `saveFile`
+  from `web/src/admin/labels.ts` (lane va17's area) without editing it.
+- **Decisions and deviations.**
+  - The receipt names batches by digest, and the sender keeps digest to
+    entries, so the file carries only what signed batches carry and a
+    receipt can mark only entries this instance put in a file for that
+    partner. A tampered entry list is impossible because there is none.
+  - The receipt is signed by the receiver (ADR-0006: every federated payload
+    is signed), so a forged receipt cannot mark entries delivered.
+  - The receipt comes back with the import response; there is no separate
+    receipt route. A lost receipt is made again by importing the file
+    again, which changes nothing.
+  - A signature failure on the file routes is 422, not the network lane's
+    401: the web client treats a 401 as an expired session, renews it and
+    could sign the administrator out. The messages are the lane's.
+  - The receiver's digest ledger makes a repeat apply nothing at all. Yjs
+    merges and deletion-wins already made a repeat change no records; the
+    ledger also keeps the sync log and audit trail unchanged and lets the
+    screen say so.
+  - A file import applies as the importing administrator, not as the peer's
+    registrar as the network lane does, so the checkpoints and the audit
+    name the person who imported it.
+  - Exported entries stay waiting until a receipt or a push delivers them;
+    both paths are idempotent, so a partner reached both ways converges.
+  - Files are signed, not encrypted. The guide says to carry them as the
+    board's contents deserve.
+  - `federation_file_exports` rows are never purged (one small row per batch
+    per export); a `ponytail:` note in the migration names the upgrade.
+  - Not edited, outside this lane's files: ADR-0006's status note (one
+    sentence would say file exchange is built),
+    `docs/THREAT-MODEL.md` and the air-gap audit's scenario D rows.
+- **Air-gap behavior (decision 9).** Adds a path on media, no network path.
+  Scenario A (internet cut, LAN up): a partner across the internet can be
+  reached by file while the link is down; its entries also stay queued for
+  the push, and whichever arrives first applies while the other changes
+  nothing. Scenario B (isolated enclave): an enclave host and an outside
+  partner share boards by file, trusted by keys exchanged by hand (VA19),
+  with no outside service. Scenario C (no network): not affected; export and
+  import run on the host's screen. Scenario D (media): this is the path.
+  A shared board's edits and deletes cross in both directions on removable
+  media, verified before anything applies; incident records stay home
+  (AG-13, not built).
+- **Schema, contract and dependency changes.** Migration
+  `0162_federation_file_exchange.sql`: tables
+  `federation_file_exports` (id, peer, digest, entry ids, created) with an
+  index on peer and digest, and `federation_file_imports` (peer and digest
+  as key, created), both with RLS limiting every command to administrators
+  of the peer's jurisdiction and select and insert granted to the runtime
+  role. Contract: `POST /api/v1/peers/:peerId/exchange/export`,
+  `.../exchange/import` and `.../exchange/receipt` (tag `peers`, bearer,
+  operator, each called from the screen). The status response gains
+  `received[].byFile`; the "federation.received" payload gains `via: "file"`
+  for file imports. No dependency added.
+- **Tests.**
+  - New `federation-file-exchange.test.ts` (5), two instances on separate
+    databases with no network path (neither listens on a port, no push link
+    on either side), every file written to and read back from a temporary
+    folder standing in for media: the county's creates, an edit and a
+    delete go to the state by file (the file holds only format, version and
+    batches of exactly boardId, updates, deletes and signature, and not the
+    private envelope), the entries stay waiting until the receipt, the
+    state holds the edited record and not the deleted one, the import is
+    audited `via: "file"` and listed `byFile`; a repeated import changes
+    nothing (records, sync log, outbox and audit counts unchanged) and
+    returns the same receipt; the receipt marks every entry delivered and a
+    second one marks nothing more; nothing waiting is 409. The state's
+    edit, create and delete of a county record go back the same way, are
+    not queued back to the state, repeat without change, and the boards end
+    equal. Refused whole with nothing changed: a tampered update (422), an
+    unsigned batch (422), the county's file imported on another partner's
+    card (422), a genuine batch followed by one for an unshared board (403),
+    a receipt where a batch file belongs and a non-file (400), no session
+    (401), a member on all three routes (403); the genuine file then
+    applies. Receipts refused with nothing marked: one genuinely signed by
+    the state naming a batch the county never exported (409), a digest list
+    changed after signing (422), the genuine receipt on another partner's
+    card (422), a batch file where a receipt belongs (400); the genuine
+    receipt then marks them. A file for a revoked agreement is refused (403)
+    with nothing changed, and after the sender revokes, nothing is exported.
+  - New `federation-file-browser.test.ts` (1): the county's screen against
+    a state instance that never listens. Export downloads the file and says
+    so; the state imports it by route and holds the county's entry without
+    the deleted one; the state's file imported on screen applies and says
+    "Imported 1 batch from State OES: 1 update."; **Export receipt**
+    downloads it and it marks the state's entries delivered; the state's
+    receipt imported on screen says how many were marked and the waiting
+    count reads 0; a repeated import says nothing changed; a tampered file
+    shows "Nothing was imported: the batch signature does not verify under
+    this peer's key." and changes no record; **Received from partners**
+    reads "by file". Shots at 1586 by 992
+    (`federation-file-export-1586.png`) and 1534 by 790
+    (`federation-file-import-1534.png`) with no horizontal scroll, no page
+    errors and no outside requests. I looked at both; the file inputs ran
+    into their labels, so they now take the design's input style.
+  - `federation-surface.test.tsx` (8, two new, one with axe): export saves
+    the file under its name and says what stays; import refused without a
+    file, then applied with its summary; the receipt saved; a receipt
+    imported; a repeat says nothing changed; refusals say "Nothing was
+    imported" and "Nothing was marked delivered" with the server's reason;
+    a non-JSON file is refused on screen; "by file" in the received list.
+- **Verification.** Windows test bed (decision 19), PostgreSQL 16.15 and
+  PostGIS 3.6.2 on 127.0.0.1:55440, `OPENEOC_TEST_DB_TAG=va20`, the release
+  build's `pgsql/bin` on PATH. `pnpm check:static` exit 0 (tsc in every
+  package, eslint, license scan 339 packages, link check 125 files);
+  `docs/API.md` regenerated with `UPDATE_DOCS=1`; 21 files, 131 tests green:
+  `federation-file-exchange`, `federation-file-browser`,
+  `federation-identity`, `federation`, `federation-batches`,
+  `federation-browser`, `cross-boundary`, `cross-boundary-legs`,
+  `delivery-outbox`, `delivery-hold`, `record-sync`, `api-docs`,
+  `migrate-baseline`, `upgrade`, `secure-default`, `retention`,
+  `restore-drill`, the shared contract test, the web route coverage and
+  client tests, and `federation-surface`. After moving the import route's
+  sign-in to `onRequest`: `federation-file-exchange`, `security` and
+  `federation` 3 files, 22 tests green; `federation-file-browser` and
+  `federation-browser` 2 files, 3 tests green; `pnpm check:static` exit 0.
+- **Not run.** The full `pnpm check` and the browser suites beyond the two
+  federation ones; the Windows setup (decision 18); the drill's day-2
+  exchange on two real hosts, which is Basho's run.
+- **Evidence level:** two-instance real-database tests with no network path
+  between them, component tests with axe, browser test at both viewports.
+- **Rollback:** revert the commit; the migration adds two tables the earlier
+  code never reads.
+- **Landing.** Rebased onto "Veoci and air gap VA30: corrective actions
+  linked to plans"; the lane's placeholder migration is `0162`. The
+  integrator added the ADR-0006 status note for file exchange. On main:
+  `pnpm check:static` exit 0; 14 files, 64 tests green with
+  `OPENEOC_TEST_DB_TAG=va20` (all federation files, migration baseline,
+  upgrade, restore drill, API docs, route coverage, security, plans, the
+  shared contract tests, the federation screen and the web client).

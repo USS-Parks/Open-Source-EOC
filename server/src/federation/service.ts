@@ -10,7 +10,17 @@ import { hashToken, newToken } from "../auth/tokens.js";
 import { withPerson } from "../db/context.js";
 import { recordAudit } from "../audit/service.js";
 import { encryptSecret, hasSecretKey } from "../secrets/envelope.js";
-import { batchVerifies, instancePublicKey, parsePeerKey, pemFingerprint } from "./identity.js";
+import {
+  batchDigest,
+  batchVerifies,
+  instancePublicKey,
+  parsePeerKey,
+  pemFingerprint,
+  receiptVerifies,
+  signBatch,
+  signReceipt,
+  type SignedBatch,
+} from "./identity.js";
 import { FEDERATION_ORIGIN, appendRecordRemoval, type BoardSyncHub } from "../sync/hub.js";
 import { recordsUpdate } from "../boards/record-sync.js";
 import { publishRecordRemoved } from "../boards/removals.js";
@@ -279,6 +289,8 @@ export interface ReceivedBatch {
   readonly updates: number;
   readonly deletes: number;
   readonly conflicts: number;
+  /** Imported from a batch file rather than pushed. */
+  readonly byFile: boolean;
 }
 
 const iso = (value: unknown): string | null => (value ? new Date(value as string).toISOString() : null);
@@ -346,7 +358,7 @@ export async function federationStatus(
         })),
     })),
     received: received.map((r) => {
-      const payload = r.payload as { peer?: string; updates?: number; deletes?: number; conflicts?: number };
+      const payload = r.payload as { peer?: string; updates?: number; deletes?: number; conflicts?: number; via?: string };
       return {
         at: iso(r.created_at)!,
         peer: payload.peer ?? "",
@@ -355,6 +367,7 @@ export async function federationStatus(
         updates: Number(payload.updates ?? 0),
         deletes: Number(payload.deletes ?? 0),
         conflicts: Number(payload.conflicts ?? 0),
+        byFile: payload.via === "file",
       };
     }),
   };
@@ -471,13 +484,100 @@ export async function isPeerToken(sql: Sql, peerToken: string): Promise<boolean>
   return Boolean(peer);
 }
 
+/** A peer as the receive lane reads it. */
+interface SendingPeer {
+  readonly id: string;
+  readonly jurisdictionId: string;
+  readonly name: string;
+  readonly publicKey: string | null;
+}
+
+/** A batch as it arrives, over the network or in a file. */
+export interface IncomingBatch {
+  readonly boardId: string;
+  readonly updates: readonly string[];
+  readonly deletes: readonly string[];
+  readonly signature?: string | undefined;
+}
+
+function sendingPeer(row: Record<string, unknown>): SendingPeer {
+  return {
+    id: row.id as string,
+    jurisdictionId: row.jurisdiction_id as string,
+    name: row.name as string,
+    publicKey: (row.public_key as string | null) ?? null,
+  };
+}
+
+/**
+ * The receive lane's checks, before anything in a batch is read or applied:
+ * the peer has a recorded key, the batch is signed and verifies under it,
+ * and an agreement lets the peer write the board. A batch that fails to
+ * verify is refused with `unverified` (401 on the network lane).
+ */
+async function checkBatch(sql: Sql, peer: SendingPeer, batch: IncomingBatch, unverified = 401): Promise<void> {
+  if (!peer.publicKey) throw new AuthError(403, "no public key is recorded for this peer; record its key before it delivers");
+  if (!batch.signature) throw new AuthError(unverified, "the batch is not signed");
+  if (!batchVerifies(peer.publicKey, batch.boardId, batch.updates, batch.deletes, batch.signature)) {
+    throw new AuthError(unverified, "the batch signature does not verify under this peer's key");
+  }
+  const [agreement] = await sql`
+    select can_write from sharing_agreements
+    where peer_id = ${peer.id} and board_id = ${batch.boardId}`;
+  if (!agreement) throw new AuthError(403, "no sharing agreement for that board");
+  if (!(agreement.can_write as boolean))
+    throw new AuthError(403, "agreement does not permit writes to that board");
+}
+
+/**
+ * Apply a checked batch to its board as `actor`: each update merges through
+ * the sync hub (reconciliation + checkpoint), then each deletion, and the
+ * convergence is attributed to the peer in the audit trail.
+ */
+async function applyBatch(
+  sql: Sql,
+  hub: BoardSyncHub,
+  actor: Principal,
+  peer: SendingPeer,
+  batch: IncomingBatch,
+  via?: "file",
+): Promise<{ applied: number; conflicts: number; deleted: number }> {
+  let conflicts = 0;
+  for (const u of batch.updates) {
+    const result = await hub.apply(
+      actor,
+      batch.boardId,
+      new Uint8Array(Buffer.from(u, "base64")),
+      `${FEDERATION_ORIGIN}${peer.id}`,
+    );
+    conflicts += result.conflicts;
+  }
+  // Deletions after updates: a record deleted and edited in one batch is deleted.
+  let deleted = 0;
+  for (const recordId of batch.deletes) {
+    const removed = await withPerson(sql, actor.person.id, (tx) =>
+      deleteFederatedRecord(tx, actor, batch.boardId, recordId, peer));
+    if (!removed) continue;
+    deleted += 1;
+    publishRecordRemoved({ boardId: batch.boardId, recordId, incidentId: null });
+  }
+  await withPerson(sql, actor.person.id, (tx) =>
+    recordAudit(tx, actor, {
+      jurisdictionId: peer.jurisdictionId,
+      category: "federation.received",
+      subjectTable: "boards",
+      subjectId: batch.boardId,
+      payload: { peer: peer.name, updates: batch.updates.length, deletes: deleted, conflicts, ...(via ? { via } : {}) },
+    }),
+  );
+  return { applied: batch.updates.length, conflicts, deleted };
+}
+
 /**
  * Receive a signed batch of forwarded updates from an authenticated peer and
  * apply them to a local board the agreement lets that peer write. The
  * signature is checked against the peer's recorded key before anything else
- * is read from the batch. Each update merges through the sync hub
- * (reconciliation + checkpoint), and the convergence is attributed to the
- * peer in the audit trail.
+ * is read from the batch.
  */
 export async function receiveUpdates(
   sql: Sql,
@@ -488,51 +588,220 @@ export async function receiveUpdates(
   deletes: readonly string[],
   signature: string | undefined,
 ): Promise<{ applied: number; conflicts: number; deleted: number }> {
-  const [peer] = await sql`
+  const [row] = await sql`
     select id, jurisdiction_id, name, created_by, public_key from peers where token_hash = ${hashToken(peerToken)}`;
-  if (!peer) throw new AuthError(401, "unknown peer");
-  if (!peer.public_key) throw new AuthError(403, "no public key is recorded for this peer; record its key before it delivers");
-  if (!signature) throw new AuthError(401, "the batch is not signed");
-  if (!batchVerifies(peer.public_key as string, targetBoardId, updatesBase64, deletes, signature)) {
-    throw new AuthError(401, "the batch signature does not verify under this peer's key");
-  }
-  const [agreement] = await sql`
-    select can_write from sharing_agreements
-    where peer_id = ${peer.id as string} and board_id = ${targetBoardId}`;
-  if (!agreement) throw new AuthError(403, "no sharing agreement for that board");
-  if (!(agreement.can_write as boolean))
-    throw new AuthError(403, "agreement does not permit writes to that board");
-
+  if (!row) throw new AuthError(401, "unknown peer");
+  const peer = sendingPeer(row);
+  const batch = { boardId: targetBoardId, updates: updatesBase64, deletes, signature };
+  await checkBatch(sql, peer, batch);
   // Apply under a local admin's authority (the peer's registrar), so RLS
   // and checkpoint attribution stay within the receiving jurisdiction.
-  const localAdmin = await principalForPerson(sql, peer.created_by as string);
-  let conflicts = 0;
-  for (const u of updatesBase64) {
-    const result = await hub.apply(
-      localAdmin,
-      targetBoardId,
-      new Uint8Array(Buffer.from(u, "base64")),
-      `${FEDERATION_ORIGIN}${peer.id as string}`,
-    );
+  const localAdmin = await principalForPerson(sql, row.created_by as string);
+  return applyBatch(sql, hub, localAdmin, peer, batch);
+}
+
+// ---- Exchange by file (AG-04) ----
+//
+// Where no network path reaches a partner, an administrator exports what
+// waits for it as a file of the same signed batches the delivery worker
+// pushes, sized the same way. The partner's administrator imports the file
+// through the receive lane, which checks every batch as it checks a push,
+// and exports a receipt signed with the partner's key naming the batches, by
+// digest, that it applied. Imported here, the receipt marks the entries of
+// those batches delivered. The file carries the batches and nothing else: no
+// token, address or key.
+
+export const BATCH_FILE_FORMAT = "openeoc-federation-batches";
+export const RECEIPT_FORMAT = "openeoc-federation-receipt";
+
+/** The most batch data a file holds, so the import route takes it whole. */
+export const FEDERATION_FILE_BYTES = 32 * 1024 * 1024;
+/** The import route's request limit: a full file and one entry larger than the batch size. */
+export const FEDERATION_FILE_LIMIT = FEDERATION_FILE_BYTES + FEDERATION_BODY_LIMIT;
+
+/** The largest number of entries in one batch, as the delivery worker's claim. */
+const BATCH_ENTRIES = 5000;
+
+export interface BatchFile {
+  readonly format: typeof BATCH_FILE_FORMAT;
+  readonly version: 1;
+  readonly batches: readonly SignedBatch[];
+}
+
+export interface Receipt {
+  readonly format: typeof RECEIPT_FORMAT;
+  readonly version: 1;
+  /** The digests of the batches applied, as `batchDigest` computes them. */
+  readonly batches: readonly string[];
+  readonly signature: string;
+}
+
+async function peerForAdmin(sql: Sql, actor: Principal, peerId: string): Promise<SendingPeer> {
+  const [row] = await sql`select id, jurisdiction_id, name, public_key from peers where id = ${peerId}`;
+  if (!row) throw new AuthError(404, "peer not found");
+  requireAdmin(actor, row.jurisdiction_id as string);
+  return sendingPeer(row);
+}
+
+/**
+ * Export what waits for a partner as a file of signed batches, in queue
+ * order per receiving board, up to FEDERATION_FILE_BYTES. The entries stay
+ * waiting, for the network or a later file, until a receipt marks them
+ * delivered; each batch is recorded with its entries so that receipt can.
+ * Entries on a board with no receiving board set stay out, as they do from a
+ * push.
+ */
+export async function exportBatchFile(
+  tx: Sql,
+  actor: Principal,
+  peerId: string,
+): Promise<{ file: BatchFile; entries: number; remaining: number }> {
+  const peer = await peerForAdmin(tx, actor, peerId);
+  // Counted as the delivery worker's claim counts the JSON a push sends.
+  const rows = await tx`
+    with queued as (
+      select o.id, o.created_at, o.update_data, o.deleted_record, a.remote_board_id,
+             row_number() over queue as n,
+             sum(case when o.update_data is null then 39
+                      else 4 * ((octet_length(o.update_data) + 2) / 3) + 3 end) over queue as wire
+      from federation_outbox o
+      join sharing_agreements a on a.peer_id = o.peer_id and a.board_id = o.board_id
+      where o.peer_id = ${peerId} and o.delivered_at is null and a.remote_board_id is not null
+      window queue as (order by o.created_at, o.id rows between unbounded preceding and current row))
+    select id, update_data, deleted_record, remote_board_id from queued
+    where n = 1 or wire <= ${FEDERATION_FILE_BYTES}
+    order by created_at, id`;
+  if (rows.length === 0) {
+    throw new AuthError(409, `nothing is waiting for ${peer.name} on a shared board with a receiving board set`);
+  }
+  const [waiting] = await tx`
+    select count(*)::integer as n from federation_outbox where peer_id = ${peerId} and delivered_at is null`;
+
+  interface Cut { boardId: string; ids: string[]; updates: string[]; deletes: string[]; bytes: number }
+  const cuts: Cut[] = [];
+  const open = new Map<string, Cut>();
+  for (const row of rows) {
+    const boardId = row.remote_board_id as string;
+    const update = row.update_data ? Buffer.from(row.update_data as Buffer).toString("base64") : null;
+    const size = update === null ? 39 : update.length + 3;
+    let cut = open.get(boardId);
+    if (!cut || (cut.ids.length > 0 && (cut.bytes + size > FEDERATION_BATCH_BYTES || cut.ids.length >= BATCH_ENTRIES))) {
+      cut = { boardId, ids: [], updates: [], deletes: [], bytes: 0 };
+      cuts.push(cut);
+      open.set(boardId, cut);
+    }
+    cut.ids.push(row.id as string);
+    cut.bytes += size;
+    if (update === null) cut.deletes.push(row.deleted_record as string);
+    else cut.updates.push(update);
+  }
+
+  const batches: SignedBatch[] = [];
+  for (const cut of cuts) {
+    batches.push(await signBatch(tx, cut.boardId, cut.updates, cut.deletes));
+    await tx`
+      insert into federation_file_exports (peer_id, digest, entry_ids)
+      values (${peerId}, ${batchDigest(cut.boardId, cut.updates, cut.deletes)}, ${cut.ids}::uuid[])`;
+  }
+  await recordAudit(tx, actor, {
+    jurisdictionId: peer.jurisdictionId,
+    category: "federation.file_exported",
+    subjectTable: "peers",
+    subjectId: peerId,
+    payload: { peer: peer.name, batches: batches.length, entries: rows.length },
+  });
+  return {
+    file: { format: BATCH_FILE_FORMAT, version: 1, batches },
+    entries: rows.length,
+    remaining: (waiting!.n as number) - rows.length,
+  };
+}
+
+/**
+ * Import a partner's batch file through the receive lane. Every batch is
+ * checked as the lane checks a push, under the key recorded for the partner
+ * the administrator chose, before any is applied, so a file is taken whole or
+ * not at all. A batch imported before is not applied again. The receipt,
+ * signed with this instance's key, names every batch in the file, so
+ * importing a file again yields its receipt again.
+ */
+export async function importBatchFile(
+  sql: Sql,
+  hub: BoardSyncHub,
+  actor: Principal,
+  peerId: string,
+  batches: readonly IncomingBatch[],
+): Promise<{ batches: number; alreadyImported: number; updates: number; deleted: number; conflicts: number; receipt: Receipt }> {
+  const peer = await peerForAdmin(sql, actor, peerId);
+  // A file has no channel to authenticate, so a batch that does not verify is
+  // refused as unprocessable rather than unauthenticated.
+  for (const batch of batches) await checkBatch(sql, peer, batch, 422);
+  const digests = batches.map((b) => batchDigest(b.boardId, b.updates, b.deletes));
+  const imported = new Set((await withPerson(sql, actor.person.id, (tx) => tx`
+    select digest from federation_file_imports where peer_id = ${peerId} and digest = any(${digests}::text[])`))
+    .map((r) => r.digest as string));
+  let alreadyImported = 0, updates = 0, deleted = 0, conflicts = 0;
+  for (const [i, batch] of batches.entries()) {
+    const digest = digests[i]!;
+    if (imported.has(digest)) {
+      alreadyImported += 1;
+      continue;
+    }
+    const result = await applyBatch(sql, hub, actor, peer, batch, "file");
+    updates += result.applied;
+    deleted += result.deleted;
     conflicts += result.conflicts;
+    await withPerson(sql, actor.person.id, (tx) => tx`
+      insert into federation_file_imports (peer_id, digest) values (${peerId}, ${digest}) on conflict do nothing`);
+    imported.add(digest);
   }
-  // Deletions after updates: a record deleted and edited in one batch is deleted.
-  let deleted = 0;
-  for (const recordId of deletes) {
-    const removed = await withPerson(sql, localAdmin.person.id, (tx) =>
-      deleteFederatedRecord(tx, localAdmin, targetBoardId, recordId, { id: peer.id as string, name: peer.name as string }));
-    if (!removed) continue;
-    deleted += 1;
-    publishRecordRemoved({ boardId: targetBoardId, recordId, incidentId: null });
+  const named = [...new Set(digests)];
+  return {
+    batches: batches.length,
+    alreadyImported,
+    updates,
+    deleted,
+    conflicts,
+    receipt: { format: RECEIPT_FORMAT, version: 1, batches: named, signature: await signReceipt(sql, named) },
+  };
+}
+
+/**
+ * Import a partner's receipt: it must verify under the partner's recorded
+ * key and name only batches this instance put in a file for that partner;
+ * otherwise nothing is marked. The entries of the named batches still
+ * waiting are marked delivered.
+ */
+export async function importReceipt(
+  tx: Sql,
+  actor: Principal,
+  peerId: string,
+  receipt: { readonly batches: readonly string[]; readonly signature: string },
+): Promise<{ batches: number; delivered: number; alreadyDelivered: number }> {
+  const peer = await peerForAdmin(tx, actor, peerId);
+  if (!peer.publicKey) throw new AuthError(403, "no public key is recorded for this peer; record its key before it delivers");
+  if (!receiptVerifies(peer.publicKey, receipt.batches, receipt.signature)) {
+    throw new AuthError(422, "the receipt signature does not verify under this peer's key");
   }
-  await withPerson(sql, localAdmin.person.id, (tx) =>
-    recordAudit(tx, localAdmin, {
-      jurisdictionId: peer.jurisdiction_id as string,
-      category: "federation.received",
-      subjectTable: "boards",
-      subjectId: targetBoardId,
-      payload: { peer: peer.name as string, updates: updatesBase64.length, deletes: deleted, conflicts },
-    }),
-  );
-  return { applied: updatesBase64.length, conflicts, deleted };
+  const sent = await tx`
+    select digest, entry_ids from federation_file_exports
+    where peer_id = ${peerId} and digest = any(${receipt.batches as string[]}::text[])`;
+  const known = new Set(sent.map((r) => r.digest as string));
+  const unknown = receipt.batches.filter((digest) => !known.has(digest)).length;
+  if (unknown > 0) {
+    throw new AuthError(409, `the receipt names ${unknown === 1 ? "a batch" : `${unknown} batches`} this instance never sent to ${peer.name}`);
+  }
+  const ids = [...new Set(sent.flatMap((r) => r.entry_ids as string[]))];
+  const marked = await tx`
+    update federation_outbox set delivered_at = now()
+    where peer_id = ${peerId} and id = any(${ids}::uuid[]) and delivered_at is null
+    returning id`;
+  await recordAudit(tx, actor, {
+    jurisdictionId: peer.jurisdictionId,
+    category: "federation.receipt_imported",
+    subjectTable: "peers",
+    subjectId: peerId,
+    payload: { peer: peer.name, batches: receipt.batches.length, delivered: marked.length },
+  });
+  return { batches: receipt.batches.length, delivered: marked.length, alreadyDelivered: ids.length - marked.length };
 }
