@@ -1,6 +1,7 @@
 import type { JurisdictionOverlays } from "../cop/overlays.js";
 import { BUNDLED_FONT_STACK } from "../cop/bundledbasemap.js";
 import type { BuildingsConfig, RasterBasemap, TerrainSource } from "../cop/layers.js";
+import type { ReferenceArchive, ReferenceLayersConfig } from "../cop/reference-layers.js";
 
 /**
  * Runtime deployment config. A host can inject `window.OPENEOC = { ... }`
@@ -33,6 +34,14 @@ interface RuntimeConfig {
   /** Overture release carried by an H14-enriched buildings archive. Omit for
    * a plain OSM archive so attribution never claims enrichment that is absent. */
   readonly OPENEOC_BUILDINGS_OVERTURE_RELEASE?: string;
+  /** The statewide reference archives (tools/basemap): critical facilities,
+   * boundaries and risk, each with the manifest naming its sources. */
+  readonly OPENEOC_FACILITIES_PMTILES_URL?: string;
+  readonly OPENEOC_FACILITIES_MANIFEST_URL?: string;
+  readonly OPENEOC_BOUNDARIES_PMTILES_URL?: string;
+  readonly OPENEOC_BOUNDARIES_MANIFEST_URL?: string;
+  readonly OPENEOC_RISK_PMTILES_URL?: string;
+  readonly OPENEOC_RISK_MANIFEST_URL?: string;
   /** Raster XYZ tile templates offered in the basemap gallery beside the
    * vector map: aerial imagery, a topographic map, and a hydrography overlay.
    * The deployment provides each (self-hosted keeps the COP offline; a public
@@ -151,6 +160,20 @@ export function buildingsSource(): BuildingsConfig | undefined {
   if (!pmtilesUrl) return undefined;
   const overtureRelease = setting(r.OPENEOC_BUILDINGS_OVERTURE_RELEASE);
   return { pmtilesUrl, ...(overtureRelease ? { overtureRelease } : {}) };
+}
+
+/** The reference archives the deployment configured; each is left out when absent. */
+export function referenceLayers(): ReferenceLayersConfig {
+  const r = runtime();
+  const archive = (pmtiles: string | undefined, manifest: string | undefined): ReferenceArchive | undefined => {
+    const pmtilesUrl = setting(pmtiles);
+    return pmtilesUrl ? { pmtilesUrl, manifestUrl: setting(manifest) } : undefined;
+  };
+  return {
+    facilities: archive(r.OPENEOC_FACILITIES_PMTILES_URL, r.OPENEOC_FACILITIES_MANIFEST_URL),
+    boundaries: archive(r.OPENEOC_BOUNDARIES_PMTILES_URL, r.OPENEOC_BOUNDARIES_MANIFEST_URL),
+    risk: archive(r.OPENEOC_RISK_PMTILES_URL, r.OPENEOC_RISK_MANIFEST_URL),
+  };
 }
 
 /** The DEM tile set for hillshade and 3D terrain, if the deployment configured one. */

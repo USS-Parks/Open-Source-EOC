@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { buildingsSource, rasterBasemaps, streetBasemap, terrainSource } from "../config.js";
+import { buildingsSource, rasterBasemaps, referenceLayers, streetBasemap, terrainSource } from "../config.js";
 
 type Runtime = { OPENEOC?: Record<string, string> };
 const g = globalThis as unknown as Runtime;
@@ -65,6 +65,20 @@ describe("basemap gallery runtime config", () => {
     expect(buildingsSource()).toBeUndefined();
     g.OPENEOC = { OPENEOC_BUILDINGS_PMTILES_URL: "https://tiles/buildings.pmtiles" };
     expect(buildingsSource()).toEqual({ pmtilesUrl: "https://tiles/buildings.pmtiles" });
+  });
+
+  it("reads each reference archive and its manifest when configured", () => {
+    expect(referenceLayers()).toEqual({ facilities: undefined, boundaries: undefined, risk: undefined });
+    g.OPENEOC = {
+      OPENEOC_FACILITIES_PMTILES_URL: "/basemap/facilities.pmtiles",
+      OPENEOC_FACILITIES_MANIFEST_URL: "/basemap/facilities-manifest.json",
+      OPENEOC_RISK_PMTILES_URL: "/basemap/risk.pmtiles",
+    };
+    expect(referenceLayers()).toEqual({
+      facilities: { pmtilesUrl: "/basemap/facilities.pmtiles", manifestUrl: "/basemap/facilities-manifest.json" },
+      boundaries: undefined,
+      risk: { pmtilesUrl: "/basemap/risk.pmtiles", manifestUrl: undefined },
+    });
   });
 
   it("reads the terrain DEM with terrarium encoding by default", () => {

@@ -11,7 +11,8 @@ export interface CopInspection {
   readonly title: string;
   readonly kind: string;
   readonly source: string;
-  readonly status: SymbolStatus;
+  /** A record's operational status; reference data has none. */
+  readonly status?: SymbolStatus | undefined;
   readonly facilityType?: string | undefined;
   readonly freshness?: string | undefined;
   readonly coverage?: string | undefined;
@@ -88,7 +89,7 @@ export function CopFeatureInspector(props: {
     ["Source", props.selection.source, "source"],
   ];
   if (props.selection.facilityType) meta.push(["Facility type", props.selection.facilityType, "map"]);
-  meta.push(["Operational status", statusLabel(props.selection.status), "clock"]);
+  if (props.selection.status) meta.push(["Operational status", statusLabel(props.selection.status), "clock"]);
   if (props.selection.observed) meta.push(["Observed", props.selection.observed, "clock"]);
   if (props.selection.updated) meta.push(["Last updated", props.selection.updated, "clock"]);
   else meta.push(["Freshness", props.selection.freshness ?? "Freshness unknown", "clock"]);
@@ -117,9 +118,11 @@ export function CopFeatureInspector(props: {
         </button>
       </header>
 
-      <span className="eoc-cop-status" data-status={props.selection.status}>
-        {statusLabel(props.selection.status)}
-      </span>
+      {props.selection.status ? (
+        <span className="eoc-cop-status" data-status={props.selection.status}>
+          {statusLabel(props.selection.status)}
+        </span>
+      ) : null}
 
       <dl className="eoc-cop-inspection-meta">
         {meta.map(([label, value, icon]) => (

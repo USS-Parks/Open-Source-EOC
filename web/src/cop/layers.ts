@@ -601,6 +601,8 @@ const GROUP_BY_LAYER: Readonly<Record<string, BasemapGroup>> = {
   "water-label-line": "labels",
   "peak-label": "labels",
   "facility-label": "facilities",
+  // The basemap's other places once the facilities archive draws the critical ones (reference-layers.ts).
+  "poi-label": "labels",
   // Fallback GeoJSON canvas.
   "ne-land": "land",
   "ne-coast": "land",

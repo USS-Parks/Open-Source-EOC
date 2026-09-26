@@ -50,9 +50,12 @@
 .eoc-cop-empty-filter { order: 2; }
 .eoc-cop-find { order: 3; }
 .eoc-cop-section.is-operational { order: 4; }
-.eoc-cop-section.is-reference { order: 5; }
-.eoc-cop-section.is-legends { order: 6; }
-.eoc-cop-section.is-tools { order: 7; }
+.eoc-cop-section.is-facilities { order: 5; }
+.eoc-cop-section.is-boundaries { order: 6; }
+.eoc-cop-section.is-risk { order: 7; }
+.eoc-cop-section.is-reference { order: 8; }
+.eoc-cop-section.is-legends { order: 9; }
+.eoc-cop-section.is-tools { order: 10; }
 
 .eoc-cop-layers > header {
   display: flex;
@@ -422,6 +425,23 @@
 .eoc-cop-layers .eoc-cop-facility-key > li { display: flex; align-items: center; gap: 6px; font-size: 0.8em; }
 .eoc-cop-layers .eoc-cop-facility-key img { object-fit: contain; }
 .eoc-cop-layers .eoc-cop-buttons { display: flex; flex-wrap: wrap; gap: 4px; }
+/* Reference layer patches in the patch's own color: an icon square, an area, a line. */
+.eoc-cop-layers .eoc-cop-patch { flex: none; display: inline-block; width: 14px; height: 14px; box-sizing: border-box; }
+.eoc-cop-layers .eoc-cop-patch.is-square { background: currentColor; border-radius: 3px; }
+.eoc-cop-layers .eoc-cop-patch.is-area { background: color-mix(in srgb, currentColor 55%, transparent); border: 1.5px solid currentColor; border-radius: 2px; }
+.eoc-cop-layers .eoc-cop-patch.is-line { height: 0; border-top: 2px solid currentColor; }
+.eoc-cop-layers select.eoc-cop-select {
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  color: var(--eoc-text);
+  background: var(--eoc-surface);
+  border: 1px solid var(--eoc-border);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.9em;
+}
+.eoc-cop-layers label.eoc-cop-heading { display: block; }
 
 /* Tool buttons; a pressed one is a filled chip. */
 .eoc-cop-layers .eoc-cop-tool {

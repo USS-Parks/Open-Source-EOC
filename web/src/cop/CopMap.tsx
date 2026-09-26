@@ -50,6 +50,8 @@ import {
 import { statusColor, symbolStatusFor, type SymbolStatus } from "./symbology.js";
 import { toMgrs, toUsng } from "./mgrs.js";
 import {
+  FEED_PRESET_BY_KIND,
+  FEED_PRESET_ICONS,
   feedLayerSpecs,
   feedSourceId,
   formatAge,
@@ -90,6 +92,33 @@ import {
   WEATHER_LAYER_SUFFIX,
 } from "./cartography.js";
 import { CardOverlays, type CardToggle } from "./CardOverlays.js";
+import { LIFELINE_CATEGORY_PALETTE, paletteLegend } from "@openeoc/shared";
+import {
+  applyReferenceSpecs,
+  BIA_NOTE,
+  BOUNDARIES_ATTRIBUTION,
+  BOUNDARY_TOGGLES,
+  DEFAULT_REFERENCE_STATE,
+  FACILITIES_ATTRIBUTION,
+  FACILITY_ICONS,
+  readBoundariesManifest,
+  readFacilitiesManifest,
+  referenceCredits,
+  referenceInspection,
+  referenceLegends,
+  referenceSpecs,
+  REFERENCE_CLUSTER_LAYERS,
+  REFERENCE_INSPECTABLE,
+  RISK_ATTRIBUTION,
+  RISK_LAYERS,
+  withReferenceLayers,
+  type Lifeline,
+  type ReferenceInfo,
+  type ReferenceLayersConfig,
+  type ReferenceState,
+  type RiskLayerId,
+} from "./reference-layers.js";
+import { ensureIconImages } from "./symbols/register.js";
 import {
   CopFeatureInspector,
   EmptyLayerSearch,
@@ -215,6 +244,8 @@ export interface CopMapProps {
    * records that fall inside them. */
   readonly buildings?: BuildingsConfig | undefined;
   readonly jurisdictionOverlays?: JurisdictionOverlays | undefined;
+  /** Statewide reference archives: critical facilities, boundaries, risk and vulnerability. */
+  readonly referenceLayers?: ReferenceLayersConfig | undefined;
   readonly pollMs?: number | undefined;
   readonly center?: [number, number] | undefined;
   readonly zoom?: number | undefined;
@@ -296,8 +327,17 @@ interface FindResult {
 
 /** A rendered operational or jurisdiction feature (inspectable). */
 function isCopLayerId(id: string): boolean {
-  return id === "facility-label" || id === BUILDING_USE_LAYER_ID || id.startsWith(sourceId("")) || id.startsWith(feedSourceId("")) || id.startsWith("overlay-");
+  return id === "facility-label" || id === BUILDING_USE_LAYER_ID || id.startsWith(sourceId("")) || id.startsWith(feedSourceId("")) || id.startsWith("overlay-")
+    || REFERENCE_INSPECTABLE.has(id);
 }
+
+/**
+ * Operational layers draw in bands, bottom to top: area feeds (warnings,
+ * perimeters, outage counties, shaking), then point feeds and datasets, then
+ * the incident's boards. Each band is an empty marker layer, added over the
+ * basemap and reference layers at load; a band's layers mount just under it.
+ */
+const BANDS = { areaFeeds: "band-area-feeds", pointFeeds: "band-point-feeds", boards: "band-boards" } as const;
 
 /** The id of the layer drawn just above the given one, if any. */
 function nextLayerId(map: maplibregl.Map, id: string): string | null {
@@ -425,6 +465,37 @@ export function CopMap(props: CopMapProps) {
     }).catch(() => { /* Unknown coverage remains explicit. */ });
     return () => abort.abort();
   }, [vectors?.manifestUrl]);
+  // The statewide reference layers, on the Map screen's own styles only.
+  const reference = props.basemapStyleUrl ? undefined : props.referenceLayers;
+  const [refState, setRefState] = useState(DEFAULT_REFERENCE_STATE);
+  const refStateRef = useRef(refState);
+  refStateRef.current = refState;
+  const [refInfo, setRefInfo] = useState<ReferenceInfo>({});
+  const refInfoRef = useRef(refInfo);
+  refInfoRef.current = refInfo;
+  /** A layer list choice. Like a drag, it folds the map's credits behind their button (the risk index's run long). */
+  const changeReference = (update: (state: ReferenceState) => ReferenceState) => {
+    setRefState(update);
+    for (const credits of container.current?.querySelectorAll(".maplibregl-ctrl-attrib") ?? []) {
+      credits.classList.remove("maplibregl-compact-show");
+      credits.removeAttribute("open");
+    }
+  };
+  // The facility icons draw once their images are on the map.
+  const iconsReadyRef = useRef(false);
+  useEffect(() => {
+    const abort = new AbortController();
+    const read = (url: string | undefined, parse: (value: unknown) => ReferenceInfo) => {
+      if (!url) return;
+      void fetch(url, { signal: abort.signal })
+        .then((response) => (response.ok ? response.json() as Promise<unknown> : Promise.reject(new Error("Manifest unavailable"))))
+        .then((value) => setRefInfo((current) => ({ ...current, ...parse(value) })))
+        .catch(() => { /* The layers draw without their manifests' notes. */ });
+    };
+    read(reference?.facilities?.manifestUrl, readFacilitiesManifest);
+    read(reference?.boundaries?.manifestUrl, readBoundariesManifest);
+    return () => abort.abort();
+  }, [reference?.facilities?.manifestUrl, reference?.boundaries?.manifestUrl]);
   const [hillshade, setHillshade] = useState(!!terrain);
   const [areaOn, setAreaOn] = useState(true);
   const [weatherOn, setWeatherOn] = useState(!card);
@@ -535,6 +606,12 @@ export function CopMap(props: CopMapProps) {
     featureStatus?: unknown,
     featureId?: string | number,
   ) => {
+    const referenceFeature = referenceInspection(layerId, properties, refStateRef.current, refInfoRef.current);
+    if (referenceFeature) {
+      setSelection(referenceFeature);
+      onInspectFeatureRef.current?.(null);
+      return;
+    }
     const board = boardsRef.current.find((candidate) => sourceKey === sourceId(candidate.id));
     const feed = feedsRef.current.find((candidate) => sourceKey === feedSourceId(candidate.id));
     const health = feed ? feedHealthRef.current[feed.id] : undefined;
@@ -680,11 +757,12 @@ export function CopMap(props: CopMapProps) {
     const map = new maplibregl.Map({
       container: container.current,
       style: (props.basemapStyleUrl ??
-        withJurisdictionOverlays(props.streetBasemap
+        withReferenceLayers(withJurisdictionOverlays(props.streetBasemap
           ? buildStreetStyle(props.streetBasemap, props.theme, rasters, terrain, buildings)
           : props.bundledBasemap
             ? buildBundledVectorStyle(props.bundledBasemap, props.theme, rasters, terrain, buildings)
-            : buildCopStyle(props.theme, props.basemap, rasters, terrain), vectors, props.theme)) as never,
+            : buildCopStyle(props.theme, props.basemap, rasters, terrain), vectors, props.theme),
+        reference, props.theme, labelFont, refStateRef.current)) as never,
       center: home.center,
       zoom: home.zoom,
       ...(props.initialBounds ? { bounds: props.initialBounds, fitBoundsOptions: { padding: 24 } } : {}),
@@ -844,8 +922,8 @@ export function CopMap(props: CopMapProps) {
         onInspectFeatureRef.current?.(null);
         return;
       }
-      // A server-side cluster opens by zooming in toward its records.
-      if (hit.sourceLayer === TILE_CLUSTERS_LAYER) {
+      // A cluster opens by zooming in toward its records or facilities.
+      if (hit.sourceLayer === TILE_CLUSTERS_LAYER || REFERENCE_CLUSTER_LAYERS.has(hit.layer.id)) {
         map.easeTo({ center: e.lngLat, zoom: map.getZoom() + 2 });
         return;
       }
@@ -900,6 +978,8 @@ export function CopMap(props: CopMapProps) {
       tiles: string | undefined,
       stale: boolean,
       shown: boolean,
+      /** The band the layers draw in: they mount just under its marker (BANDS). */
+      band: string,
       // A board whose template arrives later is redrawn with its template's layers.
       variant = "",
     ) => {
@@ -928,7 +1008,7 @@ export function CopMap(props: CopMapProps) {
           ...s,
           paint: { ...s.paint, ...opacityPaint(spec, opacityRef.current[key] ?? 1) },
           layout: { ...s.layout, visibility: layerShown(s.id, shown) ? "visible" : "none" },
-        } as never);
+        } as never, map.getLayer(band) ? band : undefined);
       }
     };
 
@@ -942,13 +1022,15 @@ export function CopMap(props: CopMapProps) {
         reads += 1;
         try {
           const raw = await props.fetchItems(board.id);
+          // A read that lands after the map was removed (the screen changed incident) has nowhere to draw.
+          if (!active) return;
           const fc = tagFeatures(raw);
           dataRef.current[sourceId(board.id)] = fc;
           const pastPage = raw.links?.some((link) => link.rel === "next") ?? false;
           mount(sourceId(board.id), fc,
             cartographyLayerSpecs(board.id, board.templateKey, props.theme, labelFont) ?? boardLayerSpecs(board.id, props.theme, labelFont),
             pastPage ? tileTemplate("board", board.id) : undefined, false, visibleRef.current[board.id] ?? boardDefault(board),
-            board.templateKey);
+            BANDS.boards, board.templateKey);
           const wanted = requestedRecordRef.current;
           const wantedKey = wanted ? `board/${wanted.boardId}/${wanted.recordId}` : "";
           if (wanted?.boardId === board.id && openedRequestedFeatureRef.current !== wantedKey) {
@@ -968,6 +1050,7 @@ export function CopMap(props: CopMapProps) {
           reads += 1;
           try {
             const res = await props.fetchFeedItems(feed.id);
+            if (!active) return;
             const fc = feed.kind === "fema-flood"
               ? tagFloodFeatures(res, res.feed)
               : tagFeedFeatures(res, res.feed);
@@ -976,8 +1059,10 @@ export function CopMap(props: CopMapProps) {
             // expressions cannot do, so flood references stay GeoJSON.
             const tiles = feed.kind !== "fema-flood" && (res.feed.incomplete || res.feed.tiled)
               ? tileTemplate("feed", feed.id) : undefined;
+            // Area feeds (warnings, perimeters, outage counties, shaking) under point feeds and datasets.
+            const area = feed.kind === "fema-flood" || FEED_PRESET_BY_KIND.get(res.feed.kind ?? "")?.shape === "area";
             mount(feedSourceId(feed.id), fc, feedLayerSpecs(feed.id, props.theme, labelFont, feed.kind),
-              tiles, res.feed.stale, feedVisibleRef.current[feed.id] ?? true);
+              tiles, res.feed.stale, feedVisibleRef.current[feed.id] ?? true, area ? BANDS.areaFeeds : BANDS.pointFeeds);
             // Tiles carry every feature, so a layer drawn from them is not incomplete on the map.
             setFeedHealth((current) => ({ ...current, [feed.id]: { ...res.feed, tiled: Boolean(tiles) } }));
             const requested = requestedFeatureRef.current;
@@ -1001,12 +1086,30 @@ export function CopMap(props: CopMapProps) {
 
     map.on("load", async () => {
       ensureHazardPatterns(map, props.theme);
+      // The icon suite's images decode beside the others: the reference facilities'
+      // and the feed presets' (a wildfire incident's pictogram). A map removed
+      // meanwhile (the screen changed incident) takes no image: it has no style.
+      const suiteImages = {
+        hasImage: (id: string) => !active || map.hasImage(id),
+        addImage: (id: string, image: HTMLImageElement, options: { pixelRatio: number }) => active && map.addImage(id, image, options),
+      };
+      const facilityIcons = reference?.facilities
+        ? ensureIconImages(suiteImages, FACILITY_ICONS).then(() => { iconsReadyRef.current = active; }, () => {
+            // Without its icons the facility layer stays hidden; clusters still draw.
+          })
+        : undefined;
       try {
-        await Promise.all([ensureFacilityImages(map, facilityAssetBase), ensureCartographyImages(map, props.theme)]);
+        await Promise.all([
+          ensureFacilityImages(map, facilityAssetBase),
+          ensureCartographyImages(map, props.theme),
+          ...((props.feeds ?? []).length > 0 ? [ensureIconImages(suiteImages, FEED_PRESET_ICONS)] : []),
+        ]);
       } catch {
         // A missing packaged icon must not prevent operational records loading.
       }
+      await facilityIcons;
       if (!active) return;
+      if (reference) applyReferenceSpecs(map, referenceSpecs(reference, props.theme, labelFont, refStateRef.current, iconsReadyRef.current));
       styleReady = true;
       // The card keeps its credits behind the attribution button rather than across its legend and scale.
       if (card) {
@@ -1048,6 +1151,9 @@ export function CopMap(props: CopMapProps) {
           filter: ["==", ["geometry-type"], "Point"],
           paint: { "circle-radius": 4, "circle-color": ink },
         });
+      }
+      for (const band of Object.values(BANDS)) {
+        if (!map.getLayer(band)) map.addLayer({ id: band, type: "background", layout: { visibility: "none" }, paint: {} });
       }
       const present = new Set(map.getStyle().layers.map((l) => basemapGroupOf(l)));
       setGroups(BASEMAP_GROUPS.filter((g) => present.has(g.id)));
@@ -1200,6 +1306,7 @@ export function CopMap(props: CopMapProps) {
     for (const overlay of VECTOR_OVERLAYS.filter((candidate) => vectorOn[candidate.id])) {
       references.push(`${overlay.title}: ${coverage[overlay.id]?.attribution ?? "configured jurisdiction GIS; coverage attribution unavailable"}`);
     }
+    references.push(...referenceCredits(reference, refState));
     if (hillshade && terrain) references.push(`Hillshade: ${terrain.attribution ?? "configured elevation source; attribution not supplied"}`);
     if (buildings) references.push(buildings.overtureRelease
       ? `Buildings: © OpenStreetMap contributors (ODbL); enrichment: © Overture Maps Foundation (ODbL, ${buildings.overtureRelease})`
@@ -1384,6 +1491,13 @@ export function CopMap(props: CopMapProps) {
 
   useEffect(() => {
     const map = mapRef.current;
+    // Layers not yet on the map are skipped: the style and the load handler carry the state to them.
+    if (!map || !reference) return;
+    applyReferenceSpecs(map, referenceSpecs(reference, props.theme, labelFont, refState, iconsReadyRef.current));
+  }, [refState]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
     for (const layer of map.getStyle().layers) {
       const g = basemapGroupOf(layer);
@@ -1478,9 +1592,18 @@ export function CopMap(props: CopMapProps) {
   const shownGroups = groups.filter((group) => layerMatches(group.title));
   const shownBasemaps = [{ id: "vector", title: "Map" }, ...rasterBases]
     .filter((basemap) => layerMatches(basemap.title));
+  const lifelineRows = reference?.facilities
+    ? paletteLegend(LIFELINE_CATEGORY_PALETTE, props.theme).filter((row) => layerMatches(row.label) || layerMatches("Critical facilities"))
+    : [];
+  const boundaryRows = reference?.boundaries
+    ? BOUNDARY_TOGGLES.filter((row) => layerMatches(row.title) || layerMatches("Boundaries"))
+    : [];
+  const riskShown = !!reference?.risk
+    && (layerMatches("Risk and vulnerability") || RISK_LAYERS.some((layer) => layerMatches(layer.title)));
   const noLayerMatches = !!layerNeedle
     && shownBoards.length + shownFeeds.length + shownVectors.length + shownRasters.length
-      + shownGroups.length + shownBasemaps.length === 0
+      + shownGroups.length + shownBasemaps.length + lifelineRows.length + boundaryRows.length === 0
+    && !riskShown
     && !(terrain && layerMatches("Hillshade"));
 
   return (
@@ -1737,6 +1860,68 @@ export function CopMap(props: CopMapProps) {
           </div>
         ) : null}
         </WorkspaceSection>
+        {lifelineRows.length > 0 ? (
+          <WorkspaceSection title="Critical facilities" icon="lifelines" className="is-facilities" defaultOpen
+            forceOpen={!!layerNeedle} testId="facility-layer-group">
+            <ul className="eoc-cop-options">
+              {lifelineRows.map((row) => {
+                const lifeline = row.key as Lifeline;
+                const held = !refInfo.lifelines || refInfo.lifelines.includes(lifeline);
+                return (
+                  <li key={lifeline}>
+                    <label className="eoc-cop-check">
+                      <input type="checkbox" disabled={!held} checked={held && refState.lifelines[lifeline]}
+                        onChange={() => changeReference((s) => ({ ...s, lifelines: { ...s.lifelines, [lifeline]: !s.lifelines[lifeline] } }))} />
+                      <span aria-hidden="true" className="eoc-cop-patch is-square" style={{ color: row.color }} />
+                      {row.label}
+                    </label>
+                    {held ? null : <small className="eoc-cop-note">None in this layer</small>}
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="eoc-cop-fine">Grouped below zoom 12, symbols from 12, names from 14. Reference data, not an authoritative inventory.</p>
+            <details className="eoc-cop-source"><summary>Source</summary>{FACILITIES_ATTRIBUTION}</details>
+          </WorkspaceSection>
+        ) : null}
+        {boundaryRows.length > 0 ? (
+          <WorkspaceSection title="Boundaries" icon="layers" className="is-boundaries" defaultOpen
+            forceOpen={!!layerNeedle} testId="boundary-layer-group">
+            <ul className="eoc-cop-options">
+              {boundaryRows.map((row) => (
+                <li key={row.key}>
+                  <label className="eoc-cop-check">
+                    <input type="checkbox" checked={refState[row.key]}
+                      onChange={() => changeReference((s) => ({ ...s, [row.key]: !s[row.key] }))} />
+                    {row.title}
+                  </label>
+                  {row.key === "bia" ? (
+                    <details className="eoc-cop-source"><summary>About this layer</summary>{refInfo.biaDisclaimer ?? BIA_NOTE}</details>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+            <details className="eoc-cop-source"><summary>Source</summary>{BOUNDARIES_ATTRIBUTION}</details>
+          </WorkspaceSection>
+        ) : null}
+        {riskShown ? (
+          <WorkspaceSection title="Risk and vulnerability" icon="alertCircle" className="is-risk" defaultOpen
+            forceOpen={!!layerNeedle} testId="risk-layer-group">
+            <label className="eoc-cop-heading" htmlFor="cop-risk-layer">Show one risk layer</label>
+            <select id="cop-risk-layer" className="eoc-cop-select" value={refState.risk ?? ""}
+              onChange={(event) => changeReference((s) => ({ ...s, risk: (event.target.value || null) as RiskLayerId | null }))}>
+              <option value="">None</option>
+              <optgroup label="FEMA National Risk Index">
+                {RISK_LAYERS.filter((layer) => layer.id !== "svi").map((layer) => <option key={layer.id} value={layer.id}>{layer.title}</option>)}
+              </optgroup>
+              <optgroup label="CDC/ATSDR Social Vulnerability Index">
+                <option value="svi">Overall vulnerability</option>
+              </optgroup>
+            </select>
+            <p className="eoc-cop-fine">Census tracts from zoom 8, counties below. For planning, not a local risk assessment.</p>
+            <details className="eoc-cop-source"><summary>Source</summary>{RISK_ATTRIBUTION}</details>
+          </WorkspaceSection>
+        ) : null}
         <WorkspaceSection title="Legends" icon="source" className="is-legends" defaultOpen testId="map-legends">
         {(props.feeds ?? []).some((feed) => feed.kind === "fema-flood") ? (
           <div className="eoc-cop-below">
@@ -1757,6 +1942,19 @@ export function CopMap(props: CopMapProps) {
             </details>
           </div>
         ) : null}
+        {referenceLegends(reference, refState, props.theme, refInfo).map((legend) => (
+          <div key={legend.id} className="eoc-cop-below" data-testid={`reference-legend-${legend.id}`}>
+            <h3 className="eoc-cop-heading">{legend.title}</h3>
+            <ul className="eoc-cop-options">
+              {legend.rows.map((row) => (
+                <li key={row.key} className="eoc-cop-key">
+                  <span aria-hidden="true" className={`eoc-cop-patch is-${legend.patch}`} style={{ color: row.color }} />
+                  {row.label}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
         <div className="eoc-cop-below">
           <details data-testid="facility-legend">
             <summary className="eoc-cop-heading">Facility types (NAPSG)</summary>

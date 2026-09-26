@@ -31,6 +31,7 @@ import {
   jurisdictionOverlays,
   jurisdictionMapBounds,
   rasterBasemaps,
+  referenceLayers,
   streetBasemap,
   terrainSource,
 } from "../config.js";
@@ -552,6 +553,7 @@ export function MapSurface(props: {
           terrain={terrainSource()}
           buildings={buildingsSource()}
           jurisdictionOverlays={jurisdictionOverlays()}
+          referenceLayers={referenceLayers()}
           initialBounds={areaBbox ?? jurisdictionMapBounds()}
           inspectionMode="workspace"
           requestedFeature={props.focusDatasetId && props.focusFeatureId

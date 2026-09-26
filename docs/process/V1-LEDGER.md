@@ -14677,3 +14677,61 @@ amendment 1's power outage preset), built in lane `lane/mpf`.
 - **Full suite:** as MP11, once per landing batch before the push.
 - **Rollback.** Revert the commit; migration 0170 only widens a check
   constraint.
+
+## Map and dashboard parity MP4, MP6 and MP10 part two: reference layers on the map
+
+Map and Dashboard Parity PSPR units MP4, MP6 and MP10, their map halves
+(decisions 1 to 4, 9 and 12), built in lane `lane/mpa`.
+
+- **What there was before.** The facilities, boundaries and risk archives
+  (part one) were served but drawn nowhere; the Map screen showed OSM
+  facility icons from z14 only and the basemap's tribal line.
+- **What changed.** `web/src/cop/reference-layers.ts`, wired in
+  `CopMap.tsx`, `MapSurface.tsx` and `config.ts` (the six runtime URLs):
+  - **Critical facilities.** Below z12, quiet rings in the dominant
+    lifeline's color with a count that adds only the lifelines switched on;
+    from z12, the MP3 icons on squares colored by lifeline category (the 24
+    critical images registered at device pixel ratio), pharmacies and towers
+    from z13, bridges and hazmat sites from z14. Hospitals, EOCs, fire, law
+    enforcement and EMS always draw; the rest yield by priority; names from
+    z14 on a free side of the icon. Eight lifeline toggles, on by default.
+    With the archive present, the basemap's facility icons are removed and
+    its facility labels kept only for places the archive does not cover.
+    The inspector shows Esri's critical infrastructure fields, the source per
+    record and the manifest's coverage note.
+  - **Tribal lands and boundaries.** Census AIANNH areas on by default, a
+    class-colored fill at 15 to 18 percent with a dashed class-colored
+    outline and names from z8; MP1's basemap tribal line is removed when the
+    archive is present. BIA Land Area Representations, counties and places
+    are off by default; BIA's full disclaimer is under "About this layer".
+  - **Risk and vulnerability.** One exclusive choice, none by default: the
+    National Risk Index composite, eight hazard ratings, or SVI; counties
+    below z8, tracts from z8; the palette's opacity (0.65 NRI, 0.7 SVI) with
+    a 25 percent black hairline; unrated areas left blank. The inspector
+    shows the chosen rating, the score and the other ratings.
+  - **Credits.** The map credits and image export carry FEMA's
+    non-endorsement statement word for word (tested against the manifest)
+    and the CDC credit.
+  - **Feeds.** The live feed preset icons are registered, and layers mount
+    in bands: area feeds, then point feeds and datasets, then incident
+    boards, so incident symbols draw above dataset fills. A feed poll that
+    finished after an incident switch no longer touches the removed map.
+  - The Overview COP card is unchanged; the fidelity test now configures the
+    reference archives as the desktop host does.
+- **Defaults taken and deviations.** The zoom rules and key-facility drawing
+  above; the Esri AIANNH and NRI and SVI palettes from MP2; unrated tracts
+  undrawn; the credits line folds on a layer change. Left for MP8: FCC tower
+  names that are only registration numbers label the map; the legend still
+  has a "Facility types (NAPSG)" section and the credits still name NAPSG
+  symbols where the new suite now draws.
+- **Verification.** On the rebased lane: `pnpm check:static` pass; the
+  reference layer unit tests, `web/src/cop`, the config test,
+  `reference-layers-browser.test.ts` (1586 by 992 and 1534 by 790, light and
+  dark: Eureka clusters, icons, names and inspector, Crescent City at z14,
+  Deerhorn tribal areas, NRI tsunami along the coast, SVI) and
+  `fidelity-browser.test.ts`: 20 files, 348 tests; no page errors, MapLibre
+  warnings or requests off the host; the Overview map pixel-identical to
+  before. 44 captures reviewed by the lane, and Crescent City and Deerhorn
+  by the integrator.
+- **Full suite:** as MP11, once per landing batch before the push.
+- **Rollback.** Revert the commit; the archives stay served but undrawn.

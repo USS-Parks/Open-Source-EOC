@@ -49,6 +49,11 @@ function runtimeConfig(): Record<string, string> {
       OPENEOC_TERRAIN_TILE_URL: "pmtiles:///app/basemap/north-coast-terrain.pmtiles",
       OPENEOC_TERRAIN_ATTRIBUTION: "Elevation: USGS 3DEP",
     } : {}),
+    // The Map screen's reference layers, which the Overview card leaves out.
+    ...Object.fromEntries(["facilities", "boundaries", "risk"].filter((name) => has(`${name}.pmtiles`)).flatMap((name) => [
+      [`OPENEOC_${name.toUpperCase()}_PMTILES_URL`, `/app/basemap/${name}.pmtiles`],
+      [`OPENEOC_${name.toUpperCase()}_MANIFEST_URL`, `/app/basemap/${name}-manifest.json`],
+    ])),
   };
 }
 
