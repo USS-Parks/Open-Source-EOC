@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it } from "vitest";
 import { ApiClient } from "../api/client.js";
 import { SessionProvider } from "../auth/session.js";
-import { boardsInScope, IncidentProvider, IncidentSwitcher, useIncident } from "../incident/context.js";
+import { boardsInScope, defaultIncident, IncidentProvider, IncidentSwitcher, useIncident } from "../incident/context.js";
 
 /**
  * The shared incident context (VEOC-79B): one selection for the whole
@@ -170,5 +170,17 @@ describe("boardsInScope", () => {
 
   it("keeps every board when no incident is selected", () => {
     expect(boardsInScope(boards, null)).toEqual(boards);
+  });
+});
+
+describe("defaultIncident", () => {
+  const list = INCIDENTS as unknown as Parameters<typeof defaultIncident>[0];
+
+  it("opens the incident this person last chose, then the demonstration's, then the first open one", () => {
+    expect(defaultIncident(list, "open-2", "Bald Hills Fire").id).toBe("open-2");
+    expect(defaultIncident(list, null, "River Rescue").id).toBe("open-2");
+    expect(defaultIncident(list, "gone", undefined).id).toBe("open-1");
+    // A closed incident is never the demonstration's opening choice.
+    expect(defaultIncident(list, null, "Old Flood").id).toBe("open-1");
   });
 });

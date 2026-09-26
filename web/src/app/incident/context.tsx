@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { IncidentBoardRef, IncidentSummary } from "../api/client.js";
 import { useSession } from "../auth/session.js";
+import { demoIncident } from "../config.js";
 
 /** A link to an incident the reader may not open: why, and whom to ask, without saying what it holds. */
 const LINK_REFUSED = "The linked incident is not open to your account. If a link brought you here, ask whoever sent it, or an administrator of the organization running the incident, for access.";
@@ -30,6 +31,20 @@ import { Icon } from "../../design/icons/index.js";
 const EMPTY: readonly IncidentSummary[] = [];
 const EMPTY_IDS: readonly string[] = [];
 const EMPTY_BOARDS: readonly IncidentBoardRef[] = [];
+
+/** Where this device remembers the incident a person last chose in a jurisdiction. */
+const lastChoiceKey = (personId: string, jurisdictionId: string) => `openeoc.incident.last:${personId}:${jurisdictionId}`;
+
+/**
+ * The incident to open when no link or choice names one: the one this person
+ * last chose here, then the demonstration's own, then the first open one.
+ */
+export function defaultIncident(list: readonly IncidentSummary[], remembered: string | null, demoName?: string): IncidentSummary {
+  return list.find((incident) => incident.id === remembered)
+    ?? (demoName ? list.find((incident) => incident.name === demoName && !incident.closedAt) : undefined)
+    ?? list.find((incident) => !incident.closedAt)
+    ?? list[0]!;
+}
 
 export interface IncidentValue {
   readonly incidents: readonly IncidentSummary[];
@@ -98,6 +113,10 @@ export function IncidentProvider(props: { children: ReactNode }) {
   );
   const list = incidents.data ?? EMPTY;
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const remembered = useCallback((): string | null => {
+    try { return jurisdictionId ? localStorage.getItem(lastChoiceKey(personId, jurisdictionId)) : null; } catch { return null; }
+  }, [personId, jurisdictionId]);
+  const fallbackId = useCallback(() => defaultIncident(list, remembered(), demoIncident()).id, [list, remembered]);
   const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const noticeIncident = useRef<string | null>(null);
 
@@ -122,7 +141,7 @@ export function IncidentProvider(props: { children: ReactNode }) {
     if (requested && list.length > 0) {
       const fallback = selectedId && list.some((incident) => incident.id === selectedId)
         ? selectedId
-        : (list.find((incident) => !incident.closedAt) ?? list[0]!).id;
+        : fallbackId();
       replaceRouteContext({ incidentId: fallback });
       noticeIncident.current = fallback;
       setSelectedId(fallback);
@@ -134,10 +153,10 @@ export function IncidentProvider(props: { children: ReactNode }) {
       setSelectedId(null);
       return;
     }
-    const fallback = (list.find((incident) => !incident.closedAt) ?? list[0]!).id;
+    const fallback = fallbackId();
     replaceRouteContext({ incidentId: fallback });
     setSelectedId(fallback);
-  }, [list, selectedId]);
+  }, [list, selectedId, fallbackId]);
 
   useEffect(() => {
     const onHashChange = () => {
@@ -165,8 +184,10 @@ export function IncidentProvider(props: { children: ReactNode }) {
     noticeIncident.current = null;
     setSelectionNotice(null);
     setSelectedId(id);
+    // The console reopens on this incident next time on this device.
+    try { if (jurisdictionId) localStorage.setItem(lastChoiceKey(personId, jurisdictionId), id); } catch { /* no storage */ }
     location.hash = surfaceHash(surface, { incidentId: id });
-  }, [list]);
+  }, [list, personId, jurisdictionId]);
 
   // A selection waiting for the next list read: selected if the server lists
   // it, dropped if a newer list still does not. The caller learns either way.

@@ -27,6 +27,7 @@ import {
   openOfflineStore,
 } from "../../offline/store.js";
 import { ApiClient, ApiError, NO_CONNECTION, SessionExpiredError, type Me, type MfaChallenge, type Tokens } from "../api/client.js";
+import { DEMO_SIGNED_OUT, demoSignIn, syntheticData } from "../config.js";
 
 /**
  * Session state for the shell, and what this device keeps for the person
@@ -517,7 +518,9 @@ export function SessionProvider(props: { client?: ApiClient; children: ReactNode
   }, [client]);
 
   const personId = me?.person.id ?? null;
-  const pinOffer = status === "authed" && !devicePin && personId !== null && offerDismissedFor !== personId && hasIndexedDb();
+  // The demonstration's data is synthetic, so it is not offered a device PIN (Settings still has it).
+  const pinOffer = status === "authed" && !devicePin && personId !== null && offerDismissedFor !== personId && hasIndexedDb()
+    && !syntheticData();
 
   const value = useMemo<SessionValue>(
     () => ({
@@ -587,6 +590,10 @@ export function SessionProvider(props: { client?: ApiClient; children: ReactNode
       },
       logout: async () => {
         leaving.current = true;
+        // A demonstration that signs itself in stays signed out in this tab once the person signs out.
+        if (demoSignIn()) {
+          try { sessionStorage.setItem(DEMO_SIGNED_OUT, "1"); } catch { /* no storage */ }
+        }
         try {
           await client.logout();
         } finally {

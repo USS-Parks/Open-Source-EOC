@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Panel, TextField } from "../../design/components.js";
 import type { MfaChallenge } from "../api/client.js";
 import { MfaStep } from "../auth/MfaStep.js";
 import { useSession } from "../auth/session.js";
-import { trustCertificateUrl } from "../config.js";
+import { DEMO_SIGNED_OUT, demoSignIn, trustCertificateUrl } from "../config.js";
 import "../auth/sign-in.css";
 
 /** How to trust a host's own certificate authority, once per computer. */
@@ -44,16 +44,29 @@ export function Login() {
   const [challenge, setChallenge] = useState<MfaChallenge | null>(null);
   const trustUrl = trustCertificateUrl();
 
-  async function submit() {
+  async function submit(asEmail = email, asPassword = password) {
     setBusy(true);
     try {
-      setChallenge(await login(email, password));
+      setChallenge(await login(asEmail, asPassword));
     } catch {
       // The failure message is surfaced from session state below.
     } finally {
       setBusy(false);
     }
   }
+
+  // The desktop demonstration signs in as its director by itself, once per
+  // page, unless the person signed out of it in this tab.
+  const demoTried = useRef(false);
+  useEffect(() => {
+    const demo = demoSignIn();
+    if (!demo || demoTried.current) return;
+    let signedOut = false;
+    try { signedOut = sessionStorage.getItem(DEMO_SIGNED_OUT) === "1"; } catch { /* no storage: sign in */ }
+    if (signedOut) return;
+    demoTried.current = true;
+    void submit(demo.email, demo.password);
+  }, []);
 
   if (challenge) {
     return (

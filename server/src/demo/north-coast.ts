@@ -29,6 +29,10 @@ export type { ScenarioPerson, ScenarioWindow } from "./scenario-kit.js";
  */
 
 export const NORTH_COAST_PASSWORD = "north-coast-exercise";
+/** The exercise director, whose one sign-in reaches all four exercises. */
+export const NORTH_COAST_DIRECTOR = "jordan.lee@humboldt.example";
+/** The reference scenario's incident, which the desktop demonstration opens first. */
+export const NORTH_COAST_INCIDENT = "North Coast Storm";
 export const NORTH_COAST_TIME_ZONE = SCENARIO_TIME_ZONE;
 
 export type NorthCoastScenario = ScenarioRun;
@@ -45,7 +49,7 @@ const PARTNERS = [
 ] as const;
 
 export const NORTH_COAST_PEOPLE: readonly ScenarioPerson[] = [
-  { key: "lee", displayName: "Jordan Lee", email: "jordan.lee@humboldt.example", organization: OWNER.slug },
+  { key: "lee", displayName: "Jordan Lee", email: NORTH_COAST_DIRECTOR, organization: OWNER.slug },
   { key: "kim", displayName: "Taylor Kim", email: "taylor.kim@humboldt.example", organization: OWNER.slug },
   { key: "moreno", displayName: "L. Moreno", email: "l.moreno@humboldt.example", organization: OWNER.slug },
   { key: "nguyen", displayName: "D. Nguyen", email: "d.nguyen@humboldt.example", organization: OWNER.slug },
@@ -88,7 +92,7 @@ export async function seedNorthCoast(
   // Activation the evening before, as an exercise on the severe storm template.
   const activation = await api<{ incidentId: string }>("lee", at("17:05", -1), "POST",
     `/api/v1/jurisdictions/${jurisdictionId}/incidents`,
-    { templateKey: "severe_storm", name: "North Coast Storm", kind: "exercise" });
+    { templateKey: "severe_storm", name: NORTH_COAST_INCIDENT, kind: "exercise" });
   const incidentId = activation.incidentId;
 
   // Operational periods: OP 01 and OP 02 behind, OP 03 current.

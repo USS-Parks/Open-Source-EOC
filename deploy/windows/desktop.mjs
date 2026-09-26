@@ -791,6 +791,14 @@ async function serveProfile(args, { service = false } = {}) {
   const runtimeConfig = await desktopRuntimeConfig(publicRoot, { mapDataRoot: installedMapData() });
   // A synthetic profile says so on every screen, beside the handling marking.
   if (config.synthetic) runtimeConfig.OPENEOC_SYNTHETIC_DATA = "1";
+  // The desktop demonstration opens signed in as its director: synthetic data,
+  // served on this computer alone. No other profile, and no host, gets this.
+  if (profile === "demo" && !service) {
+    const { NORTH_COAST_DIRECTOR, NORTH_COAST_INCIDENT, NORTH_COAST_PASSWORD } = await importServer("server/src/demo/north-coast.ts");
+    runtimeConfig.OPENEOC_DEMO_EMAIL = NORTH_COAST_DIRECTOR;
+    runtimeConfig.OPENEOC_DEMO_PASSWORD = NORTH_COAST_PASSWORD;
+    runtimeConfig.OPENEOC_DEMO_INCIDENT = NORTH_COAST_INCIDENT;
+  }
   // A host with its own certificate authority offers the root on the sign-in page.
   if (service && process.env.OPENEOC_TRUST_CERTIFICATE_URL)
     runtimeConfig.OPENEOC_TRUST_CERTIFICATE_URL = process.env.OPENEOC_TRUST_CERTIFICATE_URL;

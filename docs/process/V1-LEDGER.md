@@ -13919,3 +13919,58 @@ there." It covers every unit of `MAP-DASHBOARD-PARITY-PSPR-2026-09-26.md`,
 MP0 to MP16, with commit, landing and push authority under the plan's gate,
 lanes under the standing fan-out grant, and the public-domain downloads its
 units need. Tagging, publishing and bucketing stay Basho's.
+
+## Map and dashboard parity MP0: a demo that opens and reads right
+
+Map and Dashboard Parity PSPR unit MP0.
+
+- **What the code did before.** The installed demo's shortcut opened a
+  PowerShell window and a sign-in page; the person had to know the
+  director's address and the exercise password. A synthetic demo offered a
+  device PIN in a banner above every screen and a card in the Context panel.
+  The console opened on the alphabetically first exercise (Cascadia), not
+  North Coast Storm, which the exercise scenarios plan's decision 1 kept as
+  the demo's opening incident.
+- **What changed.**
+  - **Sign-in.** The desktop launcher's `demo` profile (and no other, and
+    never a host) puts the director's address, the exercise password and the
+    reference incident's name in the runtime configuration
+    (`deploy/windows/desktop.mjs`, from `NORTH_COAST_DIRECTOR`,
+    `NORTH_COAST_PASSWORD` and the new `NORTH_COAST_INCIDENT` in
+    `server/src/demo/north-coast.ts`). `demoSignIn()` in
+    `web/src/app/config.ts` returns them only on synthetic data; the sign-in
+    screen submits them once by itself. Signing out sets a per-tab flag so
+    the tab stays on the sign-in page.
+  - **Shortcut.** The two demo shortcuts in the setup start minimized
+    (`Open-Source-EOC.iss`), so one click opens only the app window.
+  - **No PIN offer on synthetic data** (`web/src/app/auth/session.tsx`):
+    `pinOffer` is false, which hides both the banner and the Context card.
+    Settings still offers the PIN.
+  - **Opening incident** (`web/src/app/incident/context.tsx`,
+    `defaultIncident`): a link's incident first, as before; then the
+    incident this person last chose in this jurisdiction on this device
+    (remembered in local storage when chosen); then the demo's reference
+    incident, by name, if open; then the first open incident.
+- **Defaults taken.** The remembered choice is per device (local storage),
+  a convenience, not state the server keeps.
+- **Verification.**
+  - `pnpm check:static`: pass.
+  - `web/src/app/__tests__/demo-sign-in.test.tsx` (new: signs in with no
+    typing; stays out after signing out; never signs in on data that is not
+    synthetic), `incident-context.test.tsx` (new `defaultIncident` case),
+    `session.test.tsx`, `device-pin.test.tsx`: 36 tests. In the combined run
+    `session.test.tsx`'s idle-lock case timed out (PBKDF2 under load, the
+    known case); the file alone passed 15/15.
+  - `pnpm test:desktop`: 44/44.
+  - The checkout's demo profile built and launched on scratch ports
+    (`--pg-port=55451 --http-port=8091`, data root outside the repository)
+    and walked in Chrome at 1586 by 992 and 1534 by 790: signed in with no
+    step, North Coast Storm selected, no PIN banner or card, Cascadia chosen
+    then reloaded came back as Cascadia, signing out stayed on the sign-in
+    page, no page errors.
+  - `pnpm test:ci` on this machine's throwaway cluster (port 55460), run
+    while four lane agents worked beside it: 2,079 of 2,082 passed, 2
+    failed: `federation-batches.test.ts` (the 24-hour partition drain) and
+    `scenario-partner-link-browser.test.ts` at 1534 by 790. Neither touches
+    a file this unit changed; both files alone passed, 5/5.
+- **Rollback:** revert this commit.

@@ -51,6 +51,11 @@ interface RuntimeConfig {
   readonly OPENEOC_TERRAIN_ATTRIBUTION?: string;
   /** "1" when the deployment serves a synthetic demonstration dataset. */
   readonly OPENEOC_SYNTHETIC_DATA?: string;
+  /** The desktop demonstration's director, whom the console signs in by itself. */
+  readonly OPENEOC_DEMO_EMAIL?: string;
+  readonly OPENEOC_DEMO_PASSWORD?: string;
+  /** The incident the desktop demonstration opens on a person's first sign-in. */
+  readonly OPENEOC_DEMO_INCIDENT?: string;
   /** Where a host with its own certificate authority serves the authority's root certificate. */
   readonly OPENEOC_TRUST_CERTIFICATE_URL?: string;
 }
@@ -70,6 +75,20 @@ function runtime(): RuntimeConfig {
 export function syntheticData(): boolean {
   return runtime().OPENEOC_SYNTHETIC_DATA === "1";
 }
+
+/** The desktop demonstration's director, set only by the demo launcher on its synthetic data. */
+export function demoSignIn(): { readonly email: string; readonly password: string } | null {
+  const { OPENEOC_DEMO_EMAIL: email, OPENEOC_DEMO_PASSWORD: password } = runtime();
+  return email && password && syntheticData() ? { email, password } : null;
+}
+
+/** The incident, by name, that the demonstration opens before the person has chosen one. */
+export function demoIncident(): string | undefined {
+  return syntheticData() ? runtime().OPENEOC_DEMO_INCIDENT || undefined : undefined;
+}
+
+/** Signing out of the demonstration keeps this tab on the sign-in page instead of signing in again. */
+export const DEMO_SIGNED_OUT = "openeoc.demo.signed-out";
 
 /** The host's root certificate, which a browser is told to trust once, when the host made its own. */
 export function trustCertificateUrl(): string | undefined {
