@@ -16,6 +16,8 @@ export interface RestEndpoint {
   readonly auth: "bearer" | "peer-token" | "feed-token" | "intake-token" | "metrics-token" | "none";
   readonly audience: "operator" | "machine" | "system";
   readonly integration?: "collab" | "facilities" | "meetings" | "tracking";
+  /** A bearer route that takes only a person's session token, never a service identity's. */
+  readonly personOnly?: true;
 }
 
 export interface WsChannel {
@@ -50,6 +52,7 @@ DELETE /api/v1/notification-rules/:ruleId
 DELETE /api/v1/peers/:peerId/agreements/:agreementId
 DELETE /api/v1/positions/:positionId/assignments/:personId
 DELETE /api/v1/reports/:reportId
+DELETE /api/v1/service-identities/:identityId
 DELETE /api/v1/volunteer-deployments/:deploymentId
 GET /api/v1/aar/:aarId/pdf
 GET /api/v1/ack/:token
@@ -179,6 +182,7 @@ GET /api/v1/jurisdictions/:jurisdictionId/resources/kinds
 GET /api/v1/jurisdictions/:jurisdictionId/retention
 GET /api/v1/jurisdictions/:jurisdictionId/reunification
 GET /api/v1/jurisdictions/:jurisdictionId/search
+GET /api/v1/jurisdictions/:jurisdictionId/service-identities
 GET /api/v1/jurisdictions/:jurisdictionId/sitreps
 GET /api/v1/jurisdictions/:jurisdictionId/staffing
 GET /api/v1/jurisdictions/:jurisdictionId/status-queries
@@ -193,6 +197,7 @@ GET /api/v1/ogc
 GET /api/v1/ogc/collections
 GET /api/v1/ogc/collections/:boardId/items
 GET /api/v1/ogc/conformance
+GET /api/v1/openapi.json
 GET /api/v1/peers/:peerId/pending
 GET /api/v1/persons
 GET /api/v1/plans/:planId
@@ -357,6 +362,7 @@ POST /api/v1/jurisdictions/:jurisdictionId/resource-requests
 POST /api/v1/jurisdictions/:jurisdictionId/resources
 POST /api/v1/jurisdictions/:jurisdictionId/resources/kinds
 POST /api/v1/jurisdictions/:jurisdictionId/resources/kinds/import
+POST /api/v1/jurisdictions/:jurisdictionId/service-identities
 POST /api/v1/jurisdictions/:jurisdictionId/shifts
 POST /api/v1/jurisdictions/:jurisdictionId/sitreps
 POST /api/v1/jurisdictions/:jurisdictionId/sms-replies/read
@@ -489,6 +495,27 @@ for (const key of machineRoutes) {
   if (!routeKeys.includes(key)) throw new Error(`machine route is not in the contract: ${key}`);
 }
 
+/**
+ * Bearer routes that refuse a service identity (VC-25): a person's own
+ * session, position and password, the WebSocket channels, which sign in with
+ * a session token, and the management of service identities themselves.
+ */
+const personOnlyRoutes = new Set([
+  "POST /api/v1/auth/logout",
+  "POST /api/v1/auth/password",
+  "POST /api/v1/positions/:positionId/sign-in",
+  "POST /api/v1/positions/sign-out",
+  "GET /api/v1/dashboards/:dashboardId/stream",
+  "GET /api/v1/notifications/stream",
+  "GET /api/v1/sync/boards/:boardId",
+  "GET /api/v1/jurisdictions/:jurisdictionId/service-identities",
+  "POST /api/v1/jurisdictions/:jurisdictionId/service-identities",
+  "DELETE /api/v1/service-identities/:identityId",
+]);
+for (const key of personOnlyRoutes) {
+  if (!routeKeys.includes(key)) throw new Error(`person-only route is not in the contract: ${key}`);
+}
+
 const tagAliases: Readonly<Record<string, string>> = {
   "ack": "mass-notifications",
   "archive": "incidents",
@@ -509,6 +536,7 @@ const tagAliases: Readonly<Record<string, string>> = {
   "lockdown": "incidents",
   "me": "auth",
   "members": "auth",
+  "openapi.json": "openapi",
   "operational-area": "incidents",
   "operational-relationships": "incidents",
   "pa-equipment-rates": "damage",
@@ -522,6 +550,7 @@ const tagAliases: Readonly<Record<string, string>> = {
   "provision": "auth",
   "resource-requests": "resources",
   "saved-state": "workspace",
+  "service-identities": "auth",
   "sms-replies": "mass-notifications",
   "status-queries": "facilities",
   "templates": "boards",
@@ -592,6 +621,7 @@ const rest: RestEndpoint[] = routeKeys.map((key) => {
     auth,
     audience,
     ...(integration ? { integration } : {}),
+    ...(personOnlyRoutes.has(key) ? { personOnly: true as const } : {}),
   };
 });
 
@@ -621,6 +651,10 @@ export function generateApiDocs(contract: ApiContract = API_CONTRACT): string {
     `set, and then require that value as a bearer token.`,
     `The OIDC sign-in routes, GET /api/v1/auth/oidc/start and`,
     `GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.`,
+    `Routes with auth bearer take a person's session token or a service identity`,
+    `token, except those marked person only, which refuse a service identity. The`,
+    `same routes are described as OpenAPI 3.1 in docs/openapi.json and at`,
+    `GET /api/v1/openapi.json.`,
     ``,
     `## REST`,
     ``,
@@ -638,7 +672,7 @@ export function generateApiDocs(contract: ApiContract = API_CONTRACT): string {
     for (const e of endpoints) {
       const integration = e.integration ? `; integration: OPENEOC_INTEGRATIONS=${e.integration}` : "";
       lines.push(
-        `- \`${e.method} ${e.path}\`: ${e.summary} (auth: ${e.auth}; audience: ${e.audience}${integration})`,
+        `- \`${e.method} ${e.path}\`: ${e.summary} (auth: ${e.auth}${e.personOnly ? ", person only" : ""}; audience: ${e.audience}${integration})`,
       );
     }
     lines.push(``);

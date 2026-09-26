@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import websocket from "@fastify/websocket";
 import { z } from "zod";
+import { generateOpenApi } from "@openeoc/shared";
 import type { Sql } from "./db/client.js";
 import {
   addMembership,
@@ -25,6 +26,7 @@ import { hashToken } from "./auth/tokens.js";
 import { activateEnrollment, beginEnrollment, passwordLogin, verifyMfa } from "./auth/mfa.js";
 import { createGuestGrant, listPositions, provisionJurisdiction, revokeGuestGrant } from "./auth/authz.js";
 import { adminRoutes } from "./auth/admin-routes.js";
+import { authenticateServiceToken, isServiceToken, serviceIdentityRoutes } from "./auth/service-identities.js";
 import { recordAudit } from "./audit/service.js";
 import { OidcClient, oidcSettingsFromEnv, type OidcSettings } from "./auth/oidc.js";
 import { aarRoutes } from "./aar/routes.js";
@@ -242,6 +244,12 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof AuthError) return reply.status(err.status).send({ error: err.message });
     if (err instanceof z.ZodError) return reply.status(400).send({ error: "invalid request" });
+    // A database guard on a service identity's backing row (VC-25) refused the
+    // change: its message is written for the operator.
+    const database = err as { code?: unknown; message?: unknown };
+    if (database.code === "42501" && typeof database.message === "string" && database.message.startsWith("a service identity ")) {
+      return reply.status(403).send({ error: database.message });
+    }
     // Fastify's own request errors, such as a body over the route's limit, keep their 4xx status.
     const status = (err as { statusCode?: unknown }).statusCode;
     if (typeof status === "number" && status >= 400 && status < 500) return reply.status(status).send({ error: (err as Error).message });
@@ -259,8 +267,20 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
     const header = req.headers.authorization ?? "";
     const token = header.startsWith("Bearer ") ? header.slice(7) : "";
     if (!token) throw new AuthError(401, "not authenticated");
+    // A service identity's token (VC-25) is resolved on every request, never
+    // cached, so a revocation or an expiry holds from the next request on.
+    if (isServiceToken(token)) {
+      req.principal = await authenticateServiceToken(sql, token, req);
+      return;
+    }
     const accessHash = hashToken(token);
     req.principal = await cachedPrincipal(accessHash, () => sessionPrincipal(sql, accessHash));
+  }
+
+  /** For acts only a signed-in person may take: a service identity is refused. */
+  async function authenticatePerson(req: FastifyRequest): Promise<void> {
+    await authenticate(req);
+    if (req.principal.service) throw new AuthError(403, "a service identity cannot do this");
   }
 
   /**
@@ -317,7 +337,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   // Identity changes below forget the affected cached principals only after
   // withPerson has committed, so a concurrent request cannot re-cache the
   // state from before the change.
-  app.post("/api/v1/auth/logout", { preHandler: authenticate }, async (req, reply) => {
+  app.post("/api/v1/auth/logout", { preHandler: authenticatePerson }, async (req, reply) => {
     await withPerson(sql, req.principal.person.id, (tx) => logout(tx, req.principal.sessionId));
     forgetSession(req.principal.sessionId);
     return reply.send({ ok: true });
@@ -326,7 +346,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   // Changing one's own password. Wrong current passwords count toward the
   // same backoff as sign-in, keyed on the person, so a left-open session
   // cannot be used to guess the password.
-  app.post("/api/v1/auth/password", { preHandler: authenticate }, async (req, reply) => {
+  app.post("/api/v1/auth/password", { preHandler: authenticatePerson }, async (req, reply) => {
     const body = PasswordChangeBody.parse(req.body);
     const key = `password:${req.principal.person.id}`;
     if (!checkAllowed(key)) return reply.code(429).send({ error: "too many attempts; wait a moment and try again" });
@@ -359,8 +379,17 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   }
 
   app.get("/api/v1/me", { preHandler: authenticate }, async (req, reply) => {
-    const { person, position, memberships, sessionId, isInstanceAdmin } = req.principal;
-    return reply.send({ person, position, memberships, sessionId, isInstanceAdmin });
+    const { person, position, memberships, sessionId, isInstanceAdmin, service } = req.principal;
+    return reply.send({ person, position, memberships, sessionId, isInstanceAdmin, ...(service ? { service } : {}) });
+  });
+
+  // The API described as OpenAPI 3.1, generated from the frozen contract.
+  // Any signed-in person or service identity may read it; like every data
+  // route it is not served to an anonymous caller (no public surface).
+  let openapi: object | undefined;
+  app.get("/api/v1/openapi.json", { preHandler: authenticate }, async (_req, reply) => {
+    openapi ??= generateOpenApi();
+    return reply.send(openapi);
   });
 
   app.post(
@@ -460,7 +489,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
 
   app.post(
     "/api/v1/positions/:positionId/sign-in",
-    { preHandler: authenticate },
+    { preHandler: authenticatePerson },
     async (req, reply) => {
       const { positionId } = req.params as { positionId: string };
       await withPerson(sql, req.principal.person.id, (tx) =>
@@ -471,7 +500,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
     },
   );
 
-  app.post("/api/v1/positions/sign-out", { preHandler: authenticate }, async (req, reply) => {
+  app.post("/api/v1/positions/sign-out", { preHandler: authenticatePerson }, async (req, reply) => {
     await withPerson(sql, req.principal.person.id, (tx) => signOutPosition(tx, req.principal));
     forgetSession(req.principal.sessionId);
     return reply.send({ ok: true });
@@ -506,6 +535,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
     });
   });
   adminRoutes(app, sql, authenticate);
+  serviceIdentityRoutes(app, sql, authenticatePerson);
 
   // One trusted key bundle for both signed package formats: board templates (v1) and solution packages (v2).
   const trustedTemplateKeys = options.trustedTemplateKeys ?? trustedTemplateKeysFromEnv();

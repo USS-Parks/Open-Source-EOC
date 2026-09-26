@@ -12,7 +12,9 @@ import { AuthError, requireAdmin, type Principal } from "./service.js";
 /**
  * Jurisdiction administration behind the operator screen: people and their
  * roles, account disable, second-factor reset, guest grants and position
- * holders. Every function runs inside withPerson; row-level security and the
+ * holders. Service identities are not people: they are left out of the
+ * member list and the lookup by email, and managed on their own screen.
+ * Every function runs inside withPerson; row-level security and the
  * functions of migration 0113 repeat each check underneath. Routes forget the
  * affected person's cached principals after the transaction commits.
  */
@@ -47,7 +49,7 @@ export async function listMembers(
     select p.id, p.display_name, p.email, p.disabled, p.is_instance_admin, m.role,
       p.id in (select members_with_mfa(${jurisdictionId})) as mfa_enrolled
     from jurisdiction_memberships m join persons p on p.id = m.person_id
-    where m.jurisdiction_id = ${jurisdictionId}
+    where m.jurisdiction_id = ${jurisdictionId} and not p.service_identity
       ${after ? sql`and (p.display_name, p.id) > (${after[0]!}, ${after[1]!}::uuid)` : sql``}
     order by p.display_name, p.id
     limit ${limit + 1}`;
@@ -81,7 +83,7 @@ export async function findPerson(
   if (!actor.isInstanceAdmin && !actor.memberships.some((m) => m.role === "admin"))
     throw new AuthError(403, "requires an administrator");
   const [row] = await sql`
-    select id, display_name, email from persons where lower(email) = lower(${email})`;
+    select id, display_name, email from persons where lower(email) = lower(${email}) and not service_identity`;
   if (!row) throw new AuthError(404, "no account uses that email");
   return { id: row.id as string, displayName: row.display_name as string, email: row.email as string };
 }
@@ -115,8 +117,9 @@ export async function setMemberRole(
   role: Role,
 ): Promise<void> {
   requireAdmin(actor, jurisdictionId);
-  const [person] = await sql`select id from persons where id = ${personId}`;
+  const [person] = await sql`select id, service_identity from persons where id = ${personId}`;
   if (!person) throw new AuthError(404, "person not found");
+  if (person.service_identity) throw new AuthError(409, "a service identity keeps the role it was created with; revoke it and create another");
   if (role !== "admin") await keepAnAdmin(sql, jurisdictionId, personId);
   const previous = await currentRole(sql, jurisdictionId, personId);
   if (previous === role) return;

@@ -11776,3 +11776,386 @@ CI run 36211128703 on `78f9f37` failed 3 of the Windows job's tests.
 - **Verification.** `pnpm check:static` exit 0; `files.test.ts`,
   `blob-stage.test.ts` and the messages browser test green with
   `OPENEOC_TEST_DB_TAG=main`.
+
+## Veoci and air gap VA32: OpenAPI document and scoped service identities
+
+Veoci Integration and Air Gap PSPR unit VA32 (VC-25).
+
+- **What the code did before.** The API was described only by `docs/API.md`,
+  a Markdown list generated from `shared/src/api/contract.ts`: no
+  machine-readable description, no request schemas. Every bearer token was a
+  person's session token (`server/src/auth/tokens.ts`); an integration had to
+  ride a person's account, session and second factor, and its writes were
+  audited under that person. There were no API keys or service accounts.
+- **What changed.**
+  - **OpenAPI 3.1** (`shared/src/api/openapi.ts`, `generateOpenApi`). Built
+    from the same `API_CONTRACT` as `docs/API.md`: every contract route as an
+    operation with an operation id, tag, summary, path parameters, its
+    security scheme (bearer, `personSession`, `x-peer-token`, `x-feed-token`,
+    `x-intake-token`, metrics bearer, or none), `x-openeoc-audience`, and
+    `x-openeoc-integration` for routes an `OPENEOC_INTEGRATIONS` value
+    registers. A request body has a schema only where the server validates
+    the whole body with a schema `@openeoc/shared` exports: 26 routes
+    (plans, tasks, volunteers, force account, ESF and lifeline assessments,
+    participants, operational area and relationships, forms, dashboard
+    templates, service identities), converted with zod's own
+    `z.toJSONSchema` (JSON Schema 2020-12, input side) into named
+    components; a form's recursive node tree is `FormNode` and `FormField`.
+    Every other body is the shared component "does not publish a schema for
+    this route's request body, if it takes one"; every success response is
+    "does not publish a schema for the response body"; 4XX is the `Error`
+    object (`{ error: string }`) the error handler sends. Query strings are
+    not described. Checked in as `docs/openapi.json` (16,642 lines),
+    regenerated with `UPDATE_DOCS=1` by the same test as `docs/API.md`, and
+    served at `GET /api/v1/openapi.json`.
+  - **Person-only routes in the contract.** `RestEndpoint` gains an optional
+    `personOnly`, set for ten bearer routes that refuse a service identity:
+    sign-out, password change, position sign-in and sign-out, the three
+    WebSocket channels (board sync, dashboard stream, notification stream,
+    which sign in with a session token), and the three service identity
+    routes. `docs/API.md` shows them as "auth: bearer, person only" and its
+    header says bearer routes take a service identity token except those;
+    the OpenAPI document puts them under the `personSession` scheme.
+  - **Service identities** (`server/src/auth/service-identities.ts`,
+    migration `0167_service_identities.sql`, `shared/src/auth/service-identities.ts`).
+    A jurisdiction administrator creates one with a name (1 to 120
+    characters, no control, format, separator or Hangul filler characters,
+    unique among the jurisdiction's live identities, case ignored), an
+    access level (viewer, read only; or member, read and write) and an
+    expiry (required, future, at most 366 days). The answer carries the
+    token once, `oeoc-svc.<identity id>.<43-character secret>` (256 random
+    bits), with `cache-control: no-store`. Only the secret's SHA-256 is
+    stored, in a column the application role has no select privilege on.
+    `GET .../service-identities` lists name, access, created and by whom,
+    expiry, last use (kept to the minute), revocation and by whom, and why it
+    is stopped, if it is; `DELETE /api/v1/service-identities/:id` revokes.
+    Both are audited (`service_identity.created` with name, role and expiry;
+    `service_identity.revoked` with the name) under the administrator.
+  - **How a request authenticates.** A bearer token with the `oeoc-svc.`
+    prefix is resolved on every request and never cached. The server hashes
+    the presented secret and the SECURITY DEFINER function
+    `service_identity_credential(id, hash)` matches it, answering nothing
+    for a wrong one and never a stored hash; the comparison is between
+    SHA-256 digests the caller cannot steer, as for session tokens. A
+    matching identity that may not act is refused with 401 and the reason
+    (revoked, expired, disabled, or stopped because its creator no longer
+    administers its jurisdiction). The token is checked before any lockout:
+    a valid token always passes, and only failed tokens count against the
+    source address with the sign-in backoff; after five, that address's
+    failures answer 429 for 30 seconds. The shared flood limiter bounds load
+    either way. An identity with the viewer role is refused (403) every
+    request that is not GET or HEAD. `GET /api/v1/me` answers with a
+    `service` object for one.
+  - **How the scope is held (the design).** Every row-level security policy
+    asks `current_person()` and that person's memberships. Each identity
+    therefore acts through a backing row in `persons`, flagged by the new
+    column `persons.service_identity`, named "<name> (service identity)",
+    with an unusable password hash and an unroutable email
+    (`<id>@service-identity.invalid`), and exactly one membership: the
+    identity's jurisdiction at the identity's role. `withPerson`,
+    `current_person()`, `is_member_of`, `is_writer_of` and every existing
+    policy then hold the identity exactly as they hold a person with that
+    membership, with no policy changed. Database triggers keep the backing
+    row from anything a person holds (a session, a second factor, a
+    position, a guest grant, an incident participation) and from any
+    membership other than the one its identity names; the error handler
+    answers those guards with 403 and their plain message. Password sign-in,
+    OIDC, the people import and incident participation by email never find a
+    backing row; the People tab's member list and email lookup leave it out,
+    and a role change for one is refused (409). Its writes land under the
+    backing row's id, so the audit trail and chronology name the identity,
+    never a person.
+  - **When an identity may act.** `service_identity_stopped(person)` is the
+    one rule: not revoked, not expired, and the administrator who created it
+    still an enabled administrator of its jurisdiction. It is checked on
+    every request, by `principalForPerson` (every background actor path:
+    scheduled reports, feed polls, scheduler work, peer deliveries, damage
+    intake) and by `reports_due`, which now skips such owners. The other
+    scheduler selections (`scheduler_due`, `sms_reply_readers`) act only as a
+    jurisdiction administrator, which a backing row never is; their
+    `created_by` columns only prefer an administrator who made the item.
+    Revocation (`revoke_service_identity`) also disables the backing row, and
+    `set_person_disabled` now refuses to enable the backing row of an
+    identity that is revoked, expired or without its creator. The list shows
+    who created each identity and marks one stopped for its creator.
+  - **Person-only acts.** `authenticatePerson` refuses a service identity
+    (403) on the person-only routes, so an identity can never create, list or
+    revoke identities whatever its role.
+  - **Screen.** Administration gains a **Service identities** tab
+    (`web/src/admin/ServiceIdentities.tsx`): create with name, access and
+    expiry day (the end of that local day; the time zone is named); the
+    token appears once, above the form, in a read-only field with **Copy
+    token** and **I have stored the token**; the list shows each identity's
+    access, state (Active, Expired, Revoked, Stopped, Disabled), creator,
+    expiry or revocation, and last use, with **Refresh**; a stopped one says
+    its creator no longer administers the jurisdiction and that another
+    administrator creates a replacement; **Revoke** (on any identity not yet
+    revoked) asks for a confirmation first. **Download the API description**
+    saves the served OpenAPI document, which is the route's screen caller.
+  - `docs/guides/ADMIN.md` gains the tab in the screen table and a "Service
+    identities" section; `docs/THREAT-MODEL.md` gains row B17.
+- **Files outside the "Owns" cell.** `shared/src/api/contract.ts` (four
+  routes, the `personOnly` field and its ten routes, tag aliases
+  `service-identities` to `auth` and `openapi.json` to `openapi`, the header
+  lines of the generated Markdown); `shared/src/index.ts` (two exports);
+  `shared/src/auth/service-identities.ts` (new: the create schema and
+  types); `server/src/app.ts` (service tokens in `authenticate`,
+  `authenticatePerson` on four existing routes, the `service` object on
+  `/me`, the OpenAPI route, the 403 answer for the service identity guards,
+  route registration); `server/src/auth/admin.ts` and
+  `server/src/auth/service.ts` (inside `server/src/auth/**`, service identity
+  parts only: the member list and email lookup skip backing rows, a role
+  change for one is refused, the optional `service` field on `Principal`,
+  and `principalForPerson` refusing an identity that may not act);
+  `server/src/data-packs/people-import.ts` (a row whose email is a backing
+  row's is refused with its reason); `server/src/incidents/participation.ts`
+  (the lookup by email skips backing rows); `web/src/app/api/client.ts`
+  (four methods); `web/src/app/surfaces/AdminSurface.tsx` (the tab);
+  `docs/API.md` and `docs/openapi.json` (generated); `docs/guides/ADMIN.md`;
+  `docs/THREAT-MODEL.md`; `server/src/__tests__/api-docs.test.ts`.
+- **Decisions and deviations (defaults taken, not asked).**
+  - **Scope model: one jurisdiction and a role, viewer or member, never
+    admin.** It is the smallest model both walls already enforce: the
+    service layer's `requireMember`/`requireWriter` and row-level security's
+    `is_member_of`/`is_writer_of` both read the membership, so the scope
+    holds even where a route forgets its check. Route groups were not
+    built: no policy can see which route a query came from, so a route-group
+    scope would be one wall, not two. Admin is excluded because admin acts
+    (people, roles, guest grants, retention, channels, identities) are not an
+    integration's work and would let it widen its own access; "no higher than
+    the administrator's own" then holds for every creator. Read only is
+    held twice more for viewers: the role, and a server refusal of every
+    method but GET and HEAD.
+  - **Tied to the creator.** An identity works only while its creator is an
+    enabled administrator of its jurisdiction, so a departed or disabled
+    administrator's identities stop at once; it resumes if that person is an
+    administrator here again. Password change, second-factor reset and
+    session end do not stop it. The product has no step-up re-authentication
+    for sensitive acts (B11's "re-auth" is session resume), so creation asks
+    for an administrator's session like every other administration act, and
+    none was invented.
+  - **Hash matched in the database.** The brief asked for a constant-time
+    comparison. To return no stored hash to the application role (review
+    L1), the match moved into the definer function as an equality of
+    SHA-256 digests, the way session tokens are matched; a timing difference
+    there tells a caller only about the digest of its own guess, which it
+    cannot steer toward the stored one. The server no longer calls
+    `timingSafeEqual`.
+  - **The OpenAPI route needs authentication.** Any signed-in person or
+    service identity may read it; an anonymous caller gets 401. The product
+    has no public surface (FOUO; decision 4), an integrator already holds a
+    token, and the same document is in the repository as
+    `docs/openapi.json` for anyone with the source. It is the full contract,
+    optional integrations marked, not filtered to what this deployment
+    registers.
+  - **Service tokens are not cached**, unlike session principals, so a
+    revocation, an expiry or the creator's loss of administration holds from
+    the next request without a cache invalidation. The cost is one definer
+    call and one membership read per request.
+  - Backoff is keyed on the source address and counts only failed tokens,
+    so neither a stranger guessing secrets for a known id nor junk from a
+    shared address (NAT, a proxy without `OPENEOC_TRUST_PROXY`) can lock a
+    valid integration out.
+  - The backing row's display name carries " (service identity)" so a
+    reader of the chronology or an audit export sees at once that no person
+    made the change.
+  - The error handler maps SQLSTATE 42501 to 403 only when the message is
+    one of this unit's guards ("a service identity ..."); other 42501 errors
+    (row-level security, permission) keep their present handling.
+  - The list is not paged (a `ponytail:` comment names it): a jurisdiction
+    keeps a handful of integrations.
+  - `find_person_by_email`, `set_person_disabled` and `reports_due`, earlier
+    migrations' functions, are replaced with the same bodies plus the
+    service identity checks.
+- **Known limits.**
+  - Service identities use REST only. The WebSocket channels still take a
+    session token; a wall display on the dashboard stream needs a person's
+    session. Changing that touches `server/src/sync/**` and
+    `server/src/dashboards/**`, owned by lanes va22 and va31.
+  - Work an identity started that the scheduler continues as an
+    administrator (a call-down it sent) is the jurisdiction's work and runs
+    on after the identity stops; work that runs as the identity (a report it
+    scheduled) stops.
+  - Validation paths that take a person by id (an after-action owner, a
+    contact's linked person, a thread member, a labor rate) accept a backing
+    row that is a member, as they accept any member; no screen offers one,
+    since the only person picker is the People list, which leaves them out.
+  - The OpenAPI document publishes 26 request schemas; other bodies,
+    responses and query strings are marked unpublished rather than
+    described.
+- **Air-gap behavior (decision 9).** No outbound path is added; the unit
+  adds an inbound credential for the existing REST API and a document the
+  server generates from its own code. Internet cut with the LAN up: an
+  integration on the LAN keeps calling with its token; creation, listing,
+  revocation and the document are served by the local server, and the token
+  is checked against the local database only. A permanent isolated enclave:
+  the same, with no outside dependency; the checked-in `docs/openapi.json`
+  and the download let an integrator work with no network to the project.
+  A device with no network: nothing here works offline in the browser, as
+  with every administration screen; the token itself is data the operator
+  can carry. Data carried on media: a token can be carried to the other
+  system on media and is shown only once, so it is copied at creation;
+  identities do not travel between instances, and each instance issues its
+  own.
+- **Schema, contract, dependencies.** Migration `0167_service_identities.sql`
+  (placeholder number): column `persons.service_identity`; table
+  `service_identities` with row-level security (administrators of the
+  jurisdiction read and insert, in their own name, over a flagged row),
+  table privileges revoked from `app_runtime` and granted as insert plus
+  select on every column but `token_hash`; functions
+  `service_identity_stopped`, `service_identity_credential(uuid, text)`,
+  `revoke_service_identity`, `refuse_service_identity_person` (five
+  triggers) and `check_service_identity_membership` (one trigger); and
+  `find_person_by_email`, `set_person_disabled` and `reports_due` replaced.
+  Four routes in the contract and `docs/API.md`, each with a web caller:
+  `GET` and `POST /api/v1/jurisdictions/:jurisdictionId/service-identities`,
+  `DELETE /api/v1/service-identities/:identityId`, `GET /api/v1/openapi.json`;
+  the `personOnly` field on ten routes. No new dependency: zod 4 (MIT,
+  already present) generates the JSON Schema.
+- **Tests.**
+  - `service-identities.test.ts` (real database, 14, negative tests for
+    row B17):
+    - creation answers the token once with `no-store`; the stored hash is
+      the secret's SHA-256; the backing row is flagged with one member
+      membership; the audit entry is the administrator's with no token or
+      hash; the list shows neither; the application role is denied
+      `token_hash`, and the resolution function answers nothing for a wrong
+      hash and no hash column for the right one;
+    - a name with a bidirectional override, a zero-width space, a Hangul
+      filler, a bell or a line separator is refused (400, plain message);
+      an admin role, a past expiry, an expiry 400 days out and a duplicate
+      live name in other case are refused, and a member and another
+      jurisdiction's administrator are refused;
+    - a member identity reads and writes its own jurisdiction's volunteer
+      roster, is refused the other jurisdiction's read and write (403), its
+      write is audited under "Roster sync (service identity)" in the audit
+      table and the chronology, and its last use shows on the list;
+    - row-level security alone, with the identity's context and no route
+      check, shows none of the other jurisdiction's volunteers or audit
+      events and refuses an insert there;
+    - a viewer identity reads and is refused a write ("may only read"), and a
+      member identity is refused creating or listing identities, sign-out,
+      password change and position sign-out;
+    - the backing row cannot sign in, is not found by `find_person_by_email`,
+      and the triggers refuse it a session, a second factor, a position, a
+      guest grant, a membership in the other jurisdiction and a role change,
+      while the People routes leave it out and refuse its promotion (409);
+    - revocation refuses the next request ("was revoked"), a second
+      revocation is 409 and another jurisdiction's administrator gets 404,
+      the backing row is disabled and the revocation audited; expiry refuses
+      the next request; disabling the backing row refuses it;
+    - background work: an identity's scheduled report is due and
+      `principalForPerson` resolves it; once expired, `principalForPerson`
+      refuses it, `reports_due` skips it and enabling its backing row is
+      refused (403); once revoked, enabling is refused with the plain
+      message, the flag stays set, and even with the flag cleared behind the
+      routes `principalForPerson` and `reports_due` still refuse it;
+    - the creator rule: an identity a second administrator created works and
+      is due; when that administrator is made a member it is refused at its
+      next request with the reason, refused by `principalForPerson`, skipped
+      by `reports_due` and listed as stopped with its creator; restored, it
+      works; the creator disabled, it stops; enabled, it works;
+    - the people import refuses a row with a backing row's email ("belongs to
+      a service identity, not a person") while the rest of the file goes in;
+      an incident participation by a backing row's email is 404; a position
+      assignment and a guest grant naming one by id answer 403 with "a
+      service identity cannot hold a position" and "... a guest grant";
+    - every route the contract marks person only refuses a member identity
+      (403 on the seven REST routes; `principalFromToken`, which the three
+      WebSocket channels use, refuses the token), and the OpenAPI document
+      puts each under `personSession`;
+    - the OpenAPI route answers 401 anonymous and the generated document to
+      a service identity and a member;
+    - a forged secret, a malformed token and an unknown id are 401 "not
+      authenticated"; after five failures the address's failures answer
+      429 while a valid token from the same address still answers 200; no
+      log line holds a token.
+  - `api-docs.test.ts` (5, 2 new): `docs/openapi.json` is current with the
+    generator; the document has every contract route and no other, unique
+    operation ids, every published request schema names a contract route,
+    and every `$ref` resolves.
+  - `web/src/admin/__tests__/service-identities.test.tsx` (components, with
+    axe, 2): the list's access, states (Active, Expired, Revoked, Stopped
+    with its creator named), last use and revoker; creation with a trimmed
+    name and the end-of-day expiry; the token once in a read-only field,
+    copied, and gone after "I have stored the token"; revoke only after the
+    confirmation, the list reading again; a refused creation in the
+    server's words; the API description saved as JSON.
+  - `service-identities-browser.test.ts`, at 1586 by 992 and 1534 by 790
+    (3): an administrator creates an identity, copies its token (read back
+    from the clipboard), stores it and the token leaves the page; an
+    integration reads with it, and after Refresh the row shows its last use;
+    the API description downloads as OpenAPI 3.1 with the new route in it;
+    the identity is revoked after the confirmation and its token is then
+    refused ("was revoked"); no sideways scroll, no page error, no outside
+    request. The screenshots were looked at: the token panel sat below the
+    form, off the first screen at 1534 by 790, and now comes first, with
+    its field spaced from the text; after the review changes the revoked
+    list at 1534 was looked at again.
+  - The independent reviewer's three proof tests (kept outside the
+    repository), which assert
+    the defects, now fail all three: P1 at `principalForPerson` ("person
+    unavailable"), P2 because `service_identity_credential(uuid)` no longer
+    exists, P3 because the valid token answers 200, not 429.
+- **Verification.** Windows test bed, PostgreSQL 16.15 with PostGIS 3.6.2 on
+  127.0.0.1:55440, `OPENEOC_TEST_DB_TAG=va32`.
+  - `pnpm check:static`: exit 0 (tsc in every package, eslint, license scan
+    339 packages, links 125 files), after every code change.
+  - `UPDATE_DOCS=1 rtk proxy npx vitest run server/src/__tests__/api-docs.test.ts`:
+    5 of 5, `docs/API.md` and `docs/openapi.json` regenerated.
+  - After every review change, one run with the release `pg_dump` on PATH:
+    service-identities, service-identities-browser, api-docs, the component
+    test, route coverage, the shared API tests, admin, admin-browser, auth,
+    authz, mfa, oidc, password-change, identity-cache, security,
+    secure-default, migrate-baseline, upgrade, upgrade-configuration,
+    restore-drill, import-reports, import-reports-browser,
+    incident-participation, reports, scheduler, feeds, volunteers,
+    observability, ipaws, app-e2e, staffing, data-packs and `web/src/admin`:
+    37 files, 225 tests passed, 0 failed. Then `web/src/app/__tests__`,
+    sockets and sync-guest-withdrawal: 32 files, 203 tests passed.
+  - Reds met on the way and fixed at their cause: zod's registry put the
+    form's recursive node under a `__shared` entry with a reference no
+    OpenAPI reader resolves (the node and field schemas are now named
+    components); two component-test names were ambiguous (the token panel's
+    title matched the field label; "Revoked" was both badge and term).
+- **Not run.** `pnpm test:ci`, `pnpm check:gate`, the load benchmark, the
+  Windows setup and macOS.
+- **Evidence level:** real-database, component (with axe) and browser tests
+  at both viewports, and document.
+- **Rollback:** revert the commit; drop the table `service_identities`, the
+  column `persons.service_identity` (and the backing rows it flags, after
+  their audit events are no longer needed), the five new functions and six
+  triggers, and restore `find_person_by_email`, `set_person_disabled` and
+  `reports_due` to their earlier bodies. Tokens issued stop working with the
+  revert.
+- **Review.** Before landing, an independent adversarial review of the lane
+  found no critical or high issue and three medium and five low ones, each
+  fixed here with a test: the per-address lockout refused valid tokens
+  (a valid token now always passes and only failures count); expiry, and
+  revocation followed by re-enabling, did not stop background work (a
+  database check, `service_identity_stopped`, now gates `principalForPerson`
+  and `reports_due`, and `set_person_disabled` refuses to re-enable a
+  stopped identity); an identity outlived the administrator who made it (it
+  now stops when its creator is no longer an enabled administrator of the
+  jurisdiction; the product has no step-up re-authentication, so none was
+  added to creation); `service_identity_credential` returned the stored
+  hash to the application role (it now matches the hash inside the
+  database and returns none); two email lookups reached the backing row and
+  answered 500 (they skip it, and these guards' refusals answer 403); names
+  took control and format characters (refused); and the OpenAPI document
+  said every bearer route takes a service token (ten person-only routes are
+  now marked `personSession`). The migration's placeholder number was
+  renumbered at landing.
+- **Open for Basho.** Whether a wall display should read a dashboard's live
+  stream with a service identity: the WebSocket channels take a person's
+  session only.
+- **Landing.** Rebased onto "CI correction: a refused upload's staging file,
+  and a message test on the old route" with no conflict; the lane's
+  placeholder migration is `0167`; `docs/openapi.json` regenerated on main,
+  where VA22's routes had landed after the lane began. On main with
+  `OPENEOC_TEST_DB_TAG=va32`: `pnpm check:static` exit 0; 52 files, 306
+  tests green (service identities and their browser test, API docs, route
+  coverage, admin, auth, authz, MFA, security, secure default, migration
+  baseline, upgrade, restore drill, import reports, incident
+  participation, reports, scheduler, volunteers, field breadth, board
+  conditions, the administration screens and every shared test).

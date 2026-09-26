@@ -112,8 +112,12 @@ export async function importPeople(
   }
   const emails = rows.map(({ row }) => cell(row, "email").toLowerCase()).filter(Boolean);
   const accounts = new Map<string, string>();
-  for (const p of emails.length ? await sql`select id, lower(email) as email from persons where lower(email) = any(${emails})` : [])
-    accounts.set(p.email as string, p.id as string);
+  // A service identity's backing row (VC-25) is not a person a file can add.
+  const services = new Set<string>();
+  for (const p of emails.length ? await sql`select id, lower(email) as email, service_identity from persons where lower(email) = any(${emails})` : []) {
+    if (p.service_identity) services.add(p.email as string);
+    else accounts.set(p.email as string, p.id as string);
+  }
   const ids = [...accounts.values()];
   const memberships = new Map<string, Role>();
   const held = new Set<string>();
@@ -139,6 +143,7 @@ export async function importPeople(
     if (!email) reasons.push("email is empty");
     else if (!EMAIL.safeParse(email).success) reasons.push(`email ${quoted(email)} is not an email address`);
     else if (firstRow.has(key)) reasons.push(`email repeats row ${firstRow.get(key)!}`);
+    else if (services.has(key)) reasons.push("email belongs to a service identity, not a person");
     else firstRow.set(key, rowNumber);
     const role = ROLES.find((r) => r === roleText.toLowerCase() || ROLE_NAMES[r] === roleText.toLowerCase());
     if (!roleText) reasons.push("role is empty");

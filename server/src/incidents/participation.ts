@@ -127,7 +127,7 @@ export async function grantIncidentParticipant(
     select j.id as organization_id, p.id as person_id
     from jurisdictions j, persons p
     where j.slug = ${input.organizationSlug}
-      and lower(p.email) = lower(${input.personEmail}) and not p.disabled`;
+      and lower(p.email) = lower(${input.personEmail}) and not p.disabled and not p.service_identity`;
   if (!target) throw new AuthError(404, "organization or person not found");
   const [eligible] = await sql`
     select eligible_incident_person(${target.person_id as string},

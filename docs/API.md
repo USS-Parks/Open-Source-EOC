@@ -8,6 +8,10 @@ Routes with auth metrics-token answer 404 unless OPENEOC_METRICS_TOKEN is
 set, and then require that value as a bearer token.
 The OIDC sign-in routes, GET /api/v1/auth/oidc/start and
 GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
+Routes with auth bearer take a person's session token or a service identity
+token, except those marked person only, which refuse a service identity. The
+same routes are described as OpenAPI 3.1 in docs/openapi.json and at
+GET /api/v1/openapi.json.
 
 ## REST
 
@@ -36,13 +40,13 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 ### auth
 
 - `POST /api/v1/auth/login`: Run auth login (auth: none; audience: operator)
-- `POST /api/v1/auth/logout`: Run auth logout (auth: bearer; audience: operator)
+- `POST /api/v1/auth/logout`: Run auth logout (auth: bearer, person only; audience: operator)
 - `POST /api/v1/auth/mfa/activate`: Run auth mfa activate (auth: none; audience: operator)
 - `POST /api/v1/auth/mfa/enroll`: Run auth mfa enroll (auth: none; audience: operator)
 - `POST /api/v1/auth/mfa/verify`: Run auth mfa verify (auth: none; audience: operator)
 - `GET /api/v1/auth/oidc/callback`: Read auth oidc callback (auth: none; audience: machine)
 - `GET /api/v1/auth/oidc/start`: Read auth oidc start (auth: none; audience: machine)
-- `POST /api/v1/auth/password`: Run auth password (auth: bearer; audience: operator)
+- `POST /api/v1/auth/password`: Run auth password (auth: bearer, person only; audience: operator)
 - `POST /api/v1/auth/resume`: Run auth resume (auth: none; audience: operator)
 - `DELETE /api/v1/guests/:grantId`: Delete guests (auth: bearer; audience: operator)
 - `GET /api/v1/integrations`: Read integrations (auth: bearer; audience: operator)
@@ -56,15 +60,18 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 - `GET /api/v1/jurisdictions/:jurisdictionId/position-assignments`: Read jurisdictions position assignments (auth: bearer; audience: operator)
 - `GET /api/v1/jurisdictions/:jurisdictionId/positions`: Read jurisdictions positions (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/positions`: Run jurisdictions positions (auth: bearer; audience: operator)
+- `GET /api/v1/jurisdictions/:jurisdictionId/service-identities`: Read jurisdictions service identities (auth: bearer, person only; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/service-identities`: Run jurisdictions service identities (auth: bearer, person only; audience: operator)
 - `GET /api/v1/me`: Read me (auth: bearer; audience: operator)
 - `GET /api/v1/persons`: Read persons (auth: bearer; audience: operator)
 - `POST /api/v1/persons`: Run persons (auth: bearer; audience: operator)
 - `POST /api/v1/positions/:positionId/assignments`: Run positions assignments (auth: bearer; audience: operator)
 - `DELETE /api/v1/positions/:positionId/assignments/:personId`: Delete positions assignments (auth: bearer; audience: operator)
 - `POST /api/v1/positions/:positionId/reassignments`: Run positions reassignments (auth: bearer; audience: operator)
-- `POST /api/v1/positions/:positionId/sign-in`: Run positions sign in (auth: bearer; audience: operator)
-- `POST /api/v1/positions/sign-out`: Run positions sign out (auth: bearer; audience: operator)
+- `POST /api/v1/positions/:positionId/sign-in`: Run positions sign in (auth: bearer, person only; audience: operator)
+- `POST /api/v1/positions/sign-out`: Run positions sign out (auth: bearer, person only; audience: operator)
 - `POST /api/v1/provision/jurisdictions`: Run provision jurisdictions (auth: bearer; audience: operator)
+- `DELETE /api/v1/service-identities/:identityId`: Delete service identities (auth: bearer, person only; audience: operator)
 
 ### badges
 
@@ -206,7 +213,7 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 
 - `GET /api/v1/dashboards/:dashboardId`: Read dashboards (auth: bearer; audience: operator)
 - `GET /api/v1/dashboards/:dashboardId/data`: Read dashboards data (auth: bearer; audience: operator)
-- `GET /api/v1/dashboards/:dashboardId/stream`: Read dashboards stream (auth: bearer; audience: machine)
+- `GET /api/v1/dashboards/:dashboardId/stream`: Read dashboards stream (auth: bearer, person only; audience: machine)
 - `GET /api/v1/dashboards/:dashboardId/widgets/:widgetKey/records`: Read dashboards widgets records (auth: bearer; audience: operator)
 - `GET /api/v1/incidents/:incidentId/dashboard-configs`: Read incidents dashboard configs (auth: bearer; audience: operator)
 - `DELETE /api/v1/incidents/:incidentId/dashboard-configs/:key`: Delete incidents dashboard configs (auth: bearer; audience: operator)
@@ -458,7 +465,7 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 - `POST /api/v1/notifications/:notificationId/acknowledge`: Run notifications acknowledge (auth: bearer; audience: operator)
 - `POST /api/v1/notifications/:notificationId/read`: Run notifications read (auth: bearer; audience: operator)
 - `POST /api/v1/notifications/:notificationId/resend`: Run notifications resend (auth: bearer; audience: operator)
-- `GET /api/v1/notifications/stream`: Read notifications stream (auth: bearer; audience: operator)
+- `GET /api/v1/notifications/stream`: Read notifications stream (auth: bearer, person only; audience: operator)
 
 ### ogc
 
@@ -466,6 +473,10 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 - `GET /api/v1/ogc/collections`: Read ogc collections (auth: bearer; audience: operator)
 - `GET /api/v1/ogc/collections/:boardId/items`: Read ogc collections items (auth: bearer; audience: operator)
 - `GET /api/v1/ogc/conformance`: Read ogc conformance (auth: bearer; audience: machine)
+
+### openapi
+
+- `GET /api/v1/openapi.json`: Read openapi.json (auth: bearer; audience: operator)
 
 ### participants
 
@@ -580,7 +591,7 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 
 ### sync
 
-- `GET /api/v1/sync/boards/:boardId`: Read sync boards (auth: bearer; audience: operator)
+- `GET /api/v1/sync/boards/:boardId`: Read sync boards (auth: bearer, person only; audience: operator)
 
 ### tasks
 

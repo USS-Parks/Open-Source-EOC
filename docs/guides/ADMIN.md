@@ -44,6 +44,7 @@ screen shows. The screen acts on the jurisdiction selected in the console.
 | People | Create accounts, add existing accounts, change roles, disable sign-in, reset two-step sign-in, remove people from the jurisdiction |
 | Positions | Add positions; assign, reassign and revoke their holders |
 | Guest access | Grant and revoke time-boxed read access for mutual-aid accounts |
+| Service identities | Create an integration's identity and copy its token, shown once; see each identity's access, expiry and last use; revoke it; download the API description |
 | Notifications | Set the webhook and push allowlist; add notification rules and copy a webhook rule's signing secret, shown once; list, pause, change and remove rules |
 | Records | Set retention periods; download the audit trail; export the jurisdiction; move records from a WebEOC board export in the WebEOC migration panel |
 | Channels | Configure the email relay and SMS provider notification rules send through; send a test message |
@@ -124,6 +125,53 @@ may read (positions, or individual boards) and when access ends, and select
 **Grant access**. The guest signs in with their own account. **Revoke access**
 ends a grant before it expires. Ended grants stay listed with their state.
 A board the guest has open live under a revoked grant is closed at once.
+
+### Service identities
+
+A service identity is how another system (a CAD bridge, a GIS script, a
+nightly export) calls the REST API without borrowing a person's account,
+session or second factor. On the **Service identities** tab, enter a name,
+choose **Read only** or **Read and write**, choose the day it expires (at
+most a year out), and select **Create identity**. The token appears once,
+above the form: select **Copy token**, give it to the other system, and
+select **I have stored the token**. The server keeps only a hash of it; a
+lost token is replaced by revoking the identity and creating another.
+
+The other system sends the token as `Authorization: Bearer <token>`. It acts
+as a member (read and write) or a viewer (read only) of this jurisdiction and
+nothing else: it cannot be given a position, a guest grant, an incident
+participation or a membership elsewhere, cannot sign in to the console, and
+cannot create identities. A read-only identity is refused every request that
+is not a read. It uses REST only: the live channels (board sync, the
+dashboard stream a wall display watches, the notification stream), sign-out,
+password change and position sign-in refuse its token, and the API
+description marks those routes `personSession`. Each change it makes is
+recorded in the audit trail under its own name, marked "(service identity)".
+Identities are not listed on the People tab, and the people import and
+incident participation do not accept their addresses.
+
+An identity works only while it is not revoked, not expired, and the
+administrator who created it is still an enabled administrator of this
+jurisdiction. When that administrator is removed, made a member or viewer, or
+disabled, each identity they created stops at its next request, and so does
+any scheduled work it set up, such as a scheduled report; the list marks it
+**Stopped** and names who created it. It works again only if that person is
+an administrator here again, so when someone leaves, another administrator
+creates new identities for the systems that used theirs and revokes the old
+ones. Expiry and revocation stop scheduled work the same way.
+
+The list shows who created each identity, when it expires and when it was
+last used, to the minute; **Refresh** reads it again. **Revoke** asks for a
+confirmation and then refuses the identity's next request. Revocation is
+final: the identity cannot be enabled again from the People routes, and
+neither can an expired or stopped one. Ended identities stay listed with
+their state. Repeated wrong tokens from one address are answered with "too
+many attempts" for a while; a valid token from that address still works.
+**Download the API description** saves the OpenAPI 3.1 document of the API,
+the same one served at `GET /api/v1/openapi.json` to any signed-in caller and
+kept in the repository as `docs/openapi.json`. It describes every route; a
+request body is described only where the server checks it against a
+published schema, and responses are not described.
 
 ## Two-step sign-in (MFA)
 

@@ -89,6 +89,8 @@ import type {
   PlanSave,
   PlanSummary,
   PlanVersion,
+  ServiceIdentity,
+  ServiceIdentityCreate,
   VolunteerDeploymentInput,
   VolunteerDeploymentUpdate,
   VolunteerInput,
@@ -2178,6 +2180,23 @@ export class ApiClient {
   }
   async revokeGuestGrant(grantId: string): Promise<void> {
     await this.request("DELETE", `/api/v1/guests/${encodeURIComponent(grantId)}`);
+  }
+  async listServiceIdentities(jurisdictionId: string): Promise<ServiceIdentity[]> {
+    const result = await this.request<{ identities: ServiceIdentity[] }>(
+      "GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/service-identities`,
+    );
+    return result.identities;
+  }
+  /** The token in the result is shown once; the server keeps only its hash. */
+  createServiceIdentity(jurisdictionId: string, input: ServiceIdentityCreate): Promise<{ identity: ServiceIdentity; token: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/service-identities`, input);
+  }
+  async revokeServiceIdentity(identityId: string): Promise<void> {
+    await this.request("DELETE", `/api/v1/service-identities/${encodeURIComponent(identityId)}`);
+  }
+  /** The API described as OpenAPI 3.1, for whoever sets up an integration. */
+  openApiDocument(): Promise<unknown> {
+    return this.request("GET", "/api/v1/openapi.json");
   }
   createPosition(jurisdictionId: string, input: { key: string; title: string }): Promise<{ id: string }> {
     return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/positions`, input);

@@ -11,11 +11,13 @@ import { Notifications } from "../../admin/Notifications.js";
 import { People } from "../../admin/People.js";
 import { Positions } from "../../admin/Positions.js";
 import { Records } from "../../admin/Records.js";
+import { ServiceIdentities } from "../../admin/ServiceIdentities.js";
 
 const JURISDICTION_TABS = [
   { id: "people", label: "People" },
   { id: "positions", label: "Positions" },
   { id: "guests", label: "Guest access" },
+  { id: "service-identities", label: "Service identities" },
   { id: "notifications", label: "Notifications" },
   { id: "records", label: "Records" },
   { id: "channels", label: "Channels" },
@@ -57,6 +59,7 @@ export function AdminSurface(props: {
           {tab === "people" ? <People client={props.client} jurisdictionId={props.jurisdictionId} actorId={props.personId ?? ""} /> : null}
           {tab === "positions" ? <Positions client={props.client} jurisdictionId={props.jurisdictionId} /> : null}
           {tab === "guests" ? <Guests client={props.client} jurisdictionId={props.jurisdictionId} boards={props.boards} /> : null}
+          {tab === "service-identities" ? <ServiceIdentities client={props.client} jurisdictionId={props.jurisdictionId} /> : null}
           {tab === "notifications" ? <Notifications client={props.client} jurisdictionId={props.jurisdictionId} boards={props.boards} /> : null}
           {tab === "records" ? <Records client={props.client} jurisdictionId={props.jurisdictionId} /> : null}
           {tab === "channels" ? <Channels client={props.client} jurisdictionId={props.jurisdictionId} /> : null}

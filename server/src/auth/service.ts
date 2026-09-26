@@ -26,6 +26,8 @@ export interface Principal {
     scopes: readonly string[];
     expiresAt: Date;
   }>;
+  /** Present when the caller is a service identity (VC-25); `person` is then its backing row. */
+  readonly service?: { readonly id: string; readonly name: string; readonly expiresAt: Date };
 }
 
 export interface LoginResult {
@@ -231,9 +233,11 @@ export async function principalForPerson(sql: Sql, personId: string): Promise<Pr
   return sql.begin(async (tx) => {
     await tx`select set_config('app.person_id', ${personId}, true)`;
     const [person] = await tx`
-      select id, email, display_name, disabled, is_instance_admin
+      select id, email, display_name, disabled, is_instance_admin,
+        service_identity_stopped(id) as service_stopped
       from persons where id = ${personId}`;
-    if (!person || person.disabled) throw new AuthError(401, "person unavailable");
+    // A service identity's backing row (VC-25) acts only while the identity may.
+    if (!person || person.disabled || person.service_stopped) throw new AuthError(401, "person unavailable");
     const memberships = await tx`
       select jurisdiction_id, role from jurisdiction_memberships
       where person_id = ${personId}`;

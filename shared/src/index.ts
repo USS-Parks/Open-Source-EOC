@@ -24,6 +24,8 @@ export * from "./edxl/edxl.js";
 export * from "./have/have.js";
 export * from "./cot/cot.js";
 export * from "./api/contract.js";
+export * from "./api/openapi.js";
+export * from "./auth/service-identities.js";
 export * from "./collab/plan.js";
 export * from "./ics/forms.js";
 export * from "./ics/components.js";
