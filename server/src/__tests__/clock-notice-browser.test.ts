@@ -106,6 +106,6 @@ describe("the clock notice", () => {
       await context.close();
       expect(pageErrors).toEqual([]);
       expect(externalRequests).toEqual([]);
-    });
+    }, 180_000);
   }
 });

@@ -12731,3 +12731,12 @@ Found by "Veoci and air gap follow-up: sync edits set board actions off".
   sync actions, board conditions, resource typing).
 - **Evidence level:** real-database test.
 - **Rollback:** revert the commit.
+
+## CI correction: the clock notice walk's time budget
+
+CI run 36213840730 on `bba9817` failed 1 of 1,993 tests:
+`clock-notice-browser.test.ts` at 1534 by 790 ran out of Vitest's default
+30 seconds, after the same walk at 1586 by 992 took 16 seconds on the loaded
+runner. The walk had no time budget of its own; the repository's other
+browser walks give each case 180 seconds, and it now does too. It passed 2
+runs of 2 on the Windows test bed before and after. No product code changed.
