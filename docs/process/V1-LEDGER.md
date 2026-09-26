@@ -14354,3 +14354,6 @@ Map and Dashboard Parity PSPR units MP6 and MP10, their data halves
   `pnpm test:desktop`: 45 passed. `pnpm check:static`: pass.
 - **Full suite:** as MP11, once per landing batch before the push.
 - **Rollback.** Revert the commit; the archives are untracked build outputs.
+- **Basho's review, 2026-09-26:** "I accept the FEMA terms for risk-index
+  and data usage." The National Risk Index ships in the risk archive under
+  those terms, with the non-endorsement statement.
