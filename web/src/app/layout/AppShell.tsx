@@ -56,6 +56,8 @@ export interface AppShellProps {
   readonly context: ReactNode;
   readonly periodLabel: string;
   readonly positionLabel: string;
+  /** The acting position, whose job aid Help opens first. */
+  readonly actingPosition?: { readonly key: string; readonly title: string } | null;
   readonly periodControl?: ReactNode;
   readonly positionControl?: ReactNode;
   readonly nav: readonly NavGroup[];
@@ -524,7 +526,7 @@ export function AppShell(props: AppShellProps) {
         {...(props.onAllSections ? { allSections: props.allSections ?? false, onAllSections: props.onAllSections } : {})}
         onOpenAdministration={administration ? () => { setDialog(null); props.onNavigate("admin"); } : undefined}
         onClose={() => setDialog(null)} />
-      <HelpDialog open={dialog === "help"} onClose={() => setDialog(null)} />
+      <HelpDialog open={dialog === "help"} position={props.actingPosition ?? null} onClose={() => setDialog(null)} />
     </div>
   );
 }

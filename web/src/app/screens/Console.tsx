@@ -383,6 +383,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
       context={<IncidentSwitcher />}
       periodLabel={workspace.selectedPeriodDisplay}
       positionLabel={session.me?.position?.title ?? "No acting position"}
+      actingPosition={session.me?.position ?? null}
       periodControl={<OperationalPeriodControl />}
       positionControl={<PositionControl />}
       nav={allSections ? rail : coreRail(rail, sectionOf(surface))}

@@ -3,6 +3,8 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
 export const DESKTOP_BUILD_SOURCE_INPUTS = [
+  // Help bundles the user guides and the position job aids.
+  "docs/guides",
   "pnpm-lock.yaml",
   "shared/package.json",
   "shared/src",

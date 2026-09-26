@@ -515,7 +515,9 @@
   .eoc-shell-settings-nav { display: flex; overflow-x: auto; padding: 0 0 8px; border-right: 0; border-bottom: 1px solid var(--eoc-border); }
   .eoc-shell-settings-facts > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 }
+.eoc-modal:has(.eoc-shell-help) { width: min(860px, 100%); }
 .eoc-shell-help { display: grid; gap: 16px; }
+.eoc-shell-help-note { margin: 0 0 6px; color: var(--eoc-text-muted); font-size: 13px; }
 .eoc-shell-help h3 { margin: 0 0 6px; color: var(--eoc-text-strong); font-size: 16px; }
 .eoc-shell-help ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; line-height: 1.4; }
 .eoc-shell-help-tabs { margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--eoc-border); }

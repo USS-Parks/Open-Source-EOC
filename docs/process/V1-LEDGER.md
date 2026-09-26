@@ -12159,3 +12159,185 @@ Veoci Integration and Air Gap PSPR unit VA32 (VC-25).
   baseline, upgrade, restore drill, import reports, incident
   participation, reports, scheduler, volunteers, field breadth, board
   conditions, the administration screens and every shared test).
+
+## Veoci and air gap VA39: job aids in the console
+
+Veoci Integration and Air Gap PSPR unit VA39 (Basho's amendment 1).
+
+- **What the code did before.** The eight position job aids lived only as
+  Markdown in `docs/guides/training/`, for printing. The console's **Help**
+  (the foot of the section rail) showed keyboard basics and four user
+  guides, loaded on demand; it knew nothing of the acting position. The aids
+  named the Ridge Wildfire seed and described screens as they were before
+  this plan: "the IAP has no screen field for objectives (ICS-202) or the
+  ICS-208 safety message", "**Tasks** cannot add a task", local alerts from
+  "the right-dock Notifications section", a mass notification to "**A
+  contact group**", and none of the plan's features.
+- **What changed.**
+  - **The aids in the console.** `web/src/help/job-aids.ts` bundles every
+    `docs/guides/training/JOB-AID-*.md` into the web build
+    (`import.meta.glob` with `?raw`, eager), so the Markdown files stay the
+    single source and Help reads them with no request. Each aid is titled
+    from its heading (`# Job Aid: <title>`). `web/src/help/JobAids.tsx`
+    lists every aid as a tab, the acting position's first and open, with a
+    line saying which aid it is. Help gains **Job aids** between Keyboard
+    and Guides; the help dialog is as wide as Settings (860 px) so an aid's
+    tables read whole.
+  - **Positions to aids** (`POSITION_AIDS`): Incident Commander to the EOC
+    Director's, the Planning, Operations and Logistics Section Chiefs and the
+    Public Information and Liaison Officers to their own, Situation Unit
+    Leader to the Situation Unit's. Positions with no aid of their own get
+    the nearest, and Help says so ("No job aid is written for Safety
+    Officer; the nearest is Planning Section Chief."): Safety Officer to
+    Planning (the ICS 208 is written on ICS Forms), Finance/Admin Section
+    Chief to Logistics (costs and the force account), Community Liaison to
+    Liaison, Hotline Supervisor to the Public Information Officer (the
+    hotline log), Mass Care Coordinator to Operations (shelters and
+    registrations). A position a jurisdiction made under its own short code
+    is matched by its title ("Situation Unit Leader" reads as
+    `situation_unit_leader`); any other position, or none, opens no aid and
+    lists them all. The training kit README's list of aids says the same.
+  - **Rendering.** The guides' Markdown subset renderer moved unchanged from
+    `ShellDialogs.tsx` to `web/src/help/GuideText.tsx`, which both use: every
+    piece becomes a React element or text, links show their text only, and
+    nothing in a file is read as HTML. No dependency added.
+  - **The aids rewritten to the screens as they are**, each checked label by
+    label against the web source, and written to work with any scenario
+    (amendment 5): "mark every entry as the exercise's rules of play say",
+    the incident and period of the assignment rather than the Ridge Wildfire
+    seed, and a line on **Show every section** for screens off the core
+    rail. What each gained:
+    - Planning Section Chief: the period's ICS forms as components
+      (**Form to start**, **Start form**, **Save as draft**, **Save and mark
+      ready**, **Versions**, **Print version**), the 213RR from a
+      **Resource request**, assembling the IAP from ready forms with the
+      default set, **Forms in this plan**, a changed form starting the next
+      revision, the incident's plan on Incident Setup, corrective actions
+      linked to a plan (**Plan to update**, **Plan section**), report charts.
+    - EOC Director: approving an IAP assembled from forms, local alerts from
+      the **Notifications** bell and **Open center**, **Late submissions**
+      (refuse, or reopen and accept), activating a plan (**Activate**,
+      **Activate the plan**, **Switch to**) including a continuity plan's
+      essential function tasks.
+    - Operations Section Chief: map points offline (**Add point**),
+      messages **Queued on this device**, the Shelter Registrations board and
+      its views, the Radio and Runner Log (**Awaiting receipt**), writing the
+      ICS 204s as forms, board actions in **Change history**.
+    - Logistics Section Chief: **Print ICS 213RR**, the volunteer roster
+      (**Roster**, **Deployments**, **Deploy anyway**, **Hours**), and the
+      force account (**Force account**, **Record equipment hours**, the two
+      FEMA summaries), for a seat with no Finance/Admin Section Chief.
+    - Public Information Officer: the Hotline and Inquiry Log (**Needs
+      follow-up**, **Rumors**) and the escalation rule.
+    - Situation Unit: the ICS 209 as a form, report charts, create-record
+      tiles on a saved dashboard (**Configure view**, **Create-record
+      tiles**, **Save view**).
+    - Liaison Officer and system administrator: importing a signed package
+      such as the starter pack, keeping plans (**New plan**, **Start from the
+      continuity template**, **Mark reviewed**), the mass notification
+      audience and **Answers to ask for**, the call-down sheet (**Print
+      call-down sheet**, **Enter from the call-down sheet**), the delivery
+      hold and **Resend**, the SMS gateway's **Read replies now**, exchange
+      by file on the partner's card, **Add participant**.
+    - Field user: working without a connection (map points, messages, new
+      tasks, **Reconnect and reconcile**) and late submissions.
+- **Files outside the "Owns" cell.** `web/src/app/layout/ShellDialogs.tsx`
+  (Help gains the section and the position; the renderer moved out),
+  `web/src/app/layout/AppShell.tsx` (an `actingPosition` prop passed to
+  Help), `web/src/app/screens/Console.tsx` (one line passing
+  `session.me.position`), `web/src/app/layout/shell.css` (two lines: the
+  help dialog's width and the note), `server/src/__tests__/browser.ts` and
+  `deploy/windows/lib/build-fingerprint.mjs` (each adds `docs/guides` to the
+  inputs whose hash says a web build is current, since the build now carries
+  the aids, and already carried the four guides; without it the tests' shared
+  build and the installer's staleness check miss a changed aid), and the
+  tests below.
+- **Decisions and deviations (defaults taken, recorded, not asked).**
+  - The aids are in the shell's bundle, not a chunk loaded on demand, so an
+    open page reads them with no request even where no service worker runs
+    (a browser gives none to a plain `http` address other than localhost).
+    First-load JavaScript is 202.3 kB gzipped of the 300 kB budget; the aids
+    are about 10.5 kB of it.
+  - No new aid for Safety Officer or Finance/Admin Section Chief: the nearest
+    aid instead, since the exercise has neither seat and the instructor
+    outline counts eight aids. Writing either is a content decision for
+    Basho.
+  - The aids grew from 72 to 83 lines to 81 to 100: one to two printed
+    pages, as the training kit README says.
+  - With no acting position, Help opens no aid rather than guessing the
+    field user's.
+- **Air-gap behavior (decision 9).** No network path is added; the aids are
+  part of the web bundle. Internet cut with the LAN up, and a permanent
+  isolated enclave: Help reads the aids from the loaded bundle with no
+  request. A device with no network: an open console reads them from memory,
+  and a console restarted offline is served by the service worker's
+  precache, which lists the file that holds them (the browser test reloads
+  offline and reads the aid). Data carried on media: not affected; the aids
+  travel inside the setup's web build.
+- **Schema, contract and dependency changes.** None: no migration, no route,
+  no package. `docs/API.md` unchanged.
+- **Tests.**
+  - `web/src/help/__tests__/job-aids-panel.test.tsx` (5, with axe on Help):
+    acting as Planning Section Chief, the aid is the first tab, selected and
+    open with its sections, every aid is listed, the guides still load, and
+    another aid opens on its tab; an aid renders tables and lists with no
+    `**`, link syntax, links, scripts or images; Safety Officer gets
+    Planning's aid with the nearest note; a short code "sitl" titled
+    Situation Unit Leader gets the Situation Unit's; no position, and an
+    unmatched one, list every aid with none open.
+  - `server/src/__tests__/job-aids.test.ts` (2): the bundled aids are exactly
+    the `JOB-AID-*.md` files, byte for byte, each titled from its heading;
+    every position `STANDARD_INCIDENT_TEMPLATES` and the shipped packs open
+    maps to an aid, every mapping names an aid that exists, and every aid but
+    the field user's is reached from a position.
+  - `server/src/__tests__/job-aids-browser.test.ts` (3) at 1586 by 992 and
+    1534 by 790: every aid's heading is in a built script the service worker
+    precaches; a member acting as Planning Section Chief opens **Help** from
+    the rail and reads that aid, first and open, with no sideways scroll;
+    the test reads the bold labels of two of its steps from the page, then
+    follows them on the screen they name: the rail's **Planning** section,
+    **ICS Forms**, **Operational period revision**, **ICS forms for this
+    period**, **Form to start** and **Start form**, which opens the form's
+    version 1 draft; then, with the service worker in control, the browser
+    goes offline, the page reloads from the worker, the console reads "No
+    connection · working offline", and **Help** opens the same aid. No page
+    errors, no outside requests. Screenshots looked at: the aid at 1534 and
+    the offline aid at 1586; nothing needed fixing.
+- **Verification.** On the Windows test bed, PostgreSQL 16.15 with PostGIS
+  3.6.2 on 127.0.0.1:55440, `OPENEOC_TEST_DB_TAG=va39`:
+  - `pnpm check:static`: exit 0 (tsc in every package, eslint, license scan
+    339 packages, links 127 files).
+  - `rtk proxy npx vitest run web/src shared/src`: 132 files, 915 tests
+    passed.
+  - `rtk proxy npx vitest run server/src/__tests__/job-aids.test.ts
+    server/src/__tests__/job-aids-browser.test.ts
+    server/src/__tests__/pwa-browser.test.ts
+    server/src/__tests__/fidelity-browser.test.ts
+    server/src/__tests__/ics-components-browser.test.ts`: 5 files, 14 tests
+    passed.
+  - `pnpm test:desktop`: 42 of 42.
+  - `node scripts/bundle-budget.mjs`: first-load JavaScript 202.3 kB
+    gzipped of 300 kB.
+  - Every bold label in the eight aids was matched against the web, shared
+    and pack sources by a script outside the repository; the only phrases
+    not found are the aids' own emphasis ("Account role: Member", step
+    leads), option texts the screen composes ("ICS 204: Assignment List",
+    "ICS 209: Incident Status Summary") and the Situation Unit Leader
+    position an instructor adds.
+- **Red seen.** The first browser run failed at 1534: the 1586 walk had
+  already started the period's ICS 202, so the button read "Open the
+  period's ICS 202" instead of **Start form**. Each width now starts its own
+  form (202 and 208). Green since.
+- **Not run.** The full `pnpm check` and `pnpm check:gate`; the Windows
+  setup (phase end); the other aids' steps walked in a browser (their labels
+  were checked against the source, their flows read from it).
+- **Evidence level:** unit, component (with axe) and browser tests at both
+  viewports, including an offline reload.
+- **Rollback:** revert the commit; no migration. Help returns to the
+  keyboard and the four guides, and the aids to their earlier text.
+- **Landing.** Rebased onto "Veoci and air gap VA32: OpenAPI document and
+  scoped service identities" with no conflict. With `docs/guides` now a build
+  input, the release build is made after the last document change. On main
+  with `OPENEOC_TEST_DB_TAG=va39`: `pnpm check:static` exit 0; the job aids,
+  PWA and ICS components browser tests with every web and shared test, 138
+  files, 942 tests; `pnpm test:desktop` 42 of 42.

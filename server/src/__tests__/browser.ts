@@ -61,6 +61,8 @@ export function shotDir(name: string): string {
 const BUNDLE_INPUTS = ["pnpm-lock.yaml", "shared/package.json", "shared/src", "web/index.html", "web/package.json", "web/src", "web/vite.config.ts"];
 // The build writes the service worker from web/public/sw.js and precaches the manifest and icons.
 BUNDLE_INPUTS.push("web/public/sw.js", "web/public/manifest.webmanifest", "web/public/icons");
+// Help bundles the user guides and the position job aids from docs/guides.
+BUNDLE_INPUTS.push("docs/guides");
 
 function collectFiles(path: string): string[] {
   if (!existsSync(path)) throw new Error(`Build input is missing: ${path}`);

@@ -19,7 +19,18 @@ class. It has no video.
 Each job aid fits on one or two pages: the account role and acting position,
 what the position does in OpenEOC, the first 15 minutes, the work of every
 operational period, the screens used, what the product does not do, and the
-guide sections to read.
+guide sections to read. The aids name no scenario, so they serve any exercise
+and a real activation alike.
+
+The console carries every aid. **Help**, at the foot of the section rail,
+lists them all and opens the acting position's aid first, with no connection
+needed. A position without an aid of its own opens the nearest: Safety
+Officer the Planning Section Chief's (the ICS 208), Finance/Admin Section
+Chief the Logistics Section Chief's (costs and the force account), Community
+Liaison the Liaison Officer's, Hotline Supervisor the Public Information
+Officer's (the hotline log) and Mass Care Coordinator the Operations Section
+Chief's (shelters). A position made under another short code is matched by
+its title; any other opens none, and Help lists the aids to choose from.
 
 | Position | Account role | Acting position | Job aid |
 |---|---|---|---|
