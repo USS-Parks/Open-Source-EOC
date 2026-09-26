@@ -8,7 +8,6 @@ import { featureHtml } from "../CopMap.js";
 import {
   ensureFacilityImages,
   FACILITY_SYMBOLS,
-  facilityIconExpression,
   facilityTypeFor,
   streetFacilityIconExpression,
 } from "../facilities.js";
@@ -67,7 +66,7 @@ describe("licensed NAPSG facility registry", () => {
     const icon = specs.find((layer) => layer.id === "board-facilities-facility-icon")!;
     expect(JSON.stringify(circle)).toContain("_symbolStatus");
     expect(JSON.stringify(circle)).toContain("_facilityType");
-    expect((icon.layout as Record<string, unknown>)["icon-image"]).toEqual(facilityIconExpression());
+    expect(JSON.stringify((icon.layout as Record<string, unknown>)["icon-image"])).toContain("eoc-sym-hospital-");
     for (const layer of specs) {
       const style = {
         version: 8,

@@ -6,6 +6,7 @@ import {
   EVACUATION_PALETTE,
   FACILITY_OPERATING_STATUS,
   HAZARD_PALETTE,
+  INCIDENT_FACILITY_PALETTE,
   INCIDENT_FAMILY_PALETTE,
   INCIDENT_TYPE_PALETTE,
   LIFELINE_CATEGORY_PALETTE,
@@ -18,7 +19,9 @@ import {
   ROAD_CLOSURE_PALETTE,
   SHELTER_STATUS_PALETTE,
   STANDARD_TEMPLATES,
+  STATUS_FRAME_PALETTE,
   SVI_QUARTILE_PALETTE,
+  SYMBOL_STATUS,
   TaskStatusSchema,
   WORK_STATUS_PALETTE,
   paletteCssVariables,
@@ -112,19 +115,24 @@ describe("the palette table", () => {
     resolves(ROAD_CLOSURE_PALETTE, "values" in closures ? (closures.values as readonly string[]) : []);
     resolves(WORK_STATUS_PALETTE, TaskStatusSchema.options);
     resolves(HAZARD_PALETTE, [
-      "Fire perimeter", "Evacuation order", "Evacuation warning", "Flood extent", "Tsunami inundation", "Liquefaction",
+      "Fire perimeter", "Evacuation order", "Evacuation warning", "Shelter in place", "Flood extent", "Tsunami inundation", "Liquefaction",
       "Power outage", "Damage area", "Road disruption", "Spot fire", "Slide", "Structure fire", "Gas leak",
       "Bridge damage", "Hazardous materials", "Road block",
     ]);
     expect(keys(INCIDENT_TYPE_PALETTE)).toHaveLength(23);
+    const facilities = STANDARD_TEMPLATES.find((t) => t.key === "incident_facilities")!.fields.find((f) => f.key === "kind")!;
+    const kinds = ("values" in facilities ? (facilities.values as readonly string[]) : []).filter((kind) => paletteKey(INCIDENT_FACILITY_PALETTE, kind));
+    expect(kinds).toEqual(["incident_command_post", "helibase", "helispot", "staging_area", "base", "camp", "hospital"]);
+    expect(keys(STATUS_FRAME_PALETTE).sort()).toEqual([...SYMBOL_STATUS.values].sort());
   });
 
-  it("keeps white pictograms at 3:1 on lifeline and hazard icon colors, in both themes", () => {
+  it("keeps white pictograms at 3:1 on lifeline, hazard and incident facility icon colors, in both themes", () => {
     const pictogram: [string, PaletteEntry][] = [
       ...entries(LIFELINE_CATEGORY_PALETTE),
       ...entries(HAZARD_PALETTE).filter(([, entry]) => entry.icon),
+      ...entries(INCIDENT_FACILITY_PALETTE),
     ];
-    expect(pictogram.length).toBe(15);
+    expect(pictogram.length).toBe(22);
     for (const [key, entry] of pictogram) {
       for (const theme of THEMES) expect(contrast("#ffffff", entry[theme]), `${key} ${theme}`).toBeGreaterThanOrEqual(3);
     }
@@ -143,8 +151,8 @@ describe("the palette table", () => {
   it("keeps every entry in a palette distinguishable from the others", () => {
     for (const theme of THEMES) {
       for (const palette of PALETTES) {
-        // Incident types and hazard points take their family's color; the pictogram tells them apart.
-        if (palette === INCIDENT_TYPE_PALETTE) continue;
+        // Incident types, incident facilities and hazard points take a family's color; the pictogram tells them apart.
+        if (palette === INCIDENT_TYPE_PALETTE || palette === INCIDENT_FACILITY_PALETTE) continue;
         const list = entries(palette)
           .filter(([, entry]) => palette !== HAZARD_PALETTE || entry.polygon)
           .map(([key, entry]) => [key, entry[theme]] as const);

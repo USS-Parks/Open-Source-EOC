@@ -15,7 +15,7 @@ import {
   type PolygonStyle,
 } from "@openeoc/shared";
 import { themes, type ThemeName } from "../design/tokens.js";
-import { boardLayerSpecs } from "./layers.js";
+import { byTier, hazardLayerSpecs, inTier, IS_HAZARD, statusLayerSpecs, TIER } from "./hazard-styles.js";
 import { symbolStatusFor } from "./symbology.js";
 import type { CopFeatureCollection } from "./layers.js";
 import { floodLayerIds, floodLayerSpecs } from "./hazards.js";
@@ -73,18 +73,15 @@ export function feedSourceId(feedId: string): string {
 
 export function feedLayerIds(feedId: string, kind: "standard" | "fema-flood" = "standard"): string[] {
   if (kind === "fema-flood") return floodLayerIds(feedId);
-  const src = feedSourceId(feedId);
-  return [
-    `${src}-fill`, `${src}-hatch`, `${src}-line`, `${src}-point`, `${src}-facility-icon`, `${src}-label`,
-    ...PRESET_LAYERS.map((layer) => `${src}-preset-${layer}`),
-  ];
+  return feedLayerSpecs(feedId, "light", "ids").map((spec) => (spec as { id: string }).id);
 }
 
 /**
- * Same layer shape as boards, under the feed's own source id, for features
- * without a preset; then the preset layers, which draw each tagged feature
- * with the paint presetTags put on it. The map mounts one spec list per feed
- * before it knows the feed's kind, so both sets are always present.
+ * A feed's layers under its own source id, in tier order: a data pack's
+ * hazards by category (hazard-styles.ts); a preset's features with the paint
+ * presetTags put on them; every other feature in the status style. The map
+ * mounts one spec list per feed before it knows the feed's kind, so every
+ * set is always present.
  */
 export function feedLayerSpecs(
   feedId: string,
@@ -92,14 +89,18 @@ export function feedLayerSpecs(
   labelFont?: string,
   kind: "standard" | "fema-flood" = "standard",
 ): unknown[] {
-  if (kind === "fema-flood") return floodLayerSpecs(feedId, theme, labelFont);
-  const standard = boardLayerSpecs(feedId, theme, labelFont).map((spec) => {
-    const s = spec as Record<string, unknown>;
-    const id = (s.id as string).replace(/^board-/, "feed-");
-    const notPreset = ["!", ["has", "_preset"]];
-    return { ...s, id, source: feedSourceId(feedId), filter: s.filter ? ["all", notPreset, s.filter] : notPreset };
-  });
-  return [...standard, ...presetLayerSpecs(feedId, theme, labelFont)];
+  if (kind === "fema-flood") {
+    // A flood reference is a reference area, under every incident layer.
+    return floodLayerSpecs(feedId, theme, labelFont).map((spec) =>
+      ({ ...(spec as object), ...inTier((spec as { type: string }).type === "symbol" ? TIER.label : TIER.area) }));
+  }
+  const src = feedSourceId(feedId);
+  const plain = ["all", ["!", ["has", "_preset"]], ["!", IS_HAZARD]];
+  return byTier([
+    ...statusLayerSpecs(src, theme, labelFont, plain),
+    ...hazardLayerSpecs(src, theme, labelFont),
+    ...presetLayerSpecs(feedId, theme, labelFont),
+  ]);
 }
 
 /** Human age for the provenance line: "live", "4m ago", "2h ago", "never". */
@@ -329,7 +330,6 @@ const STALE_COLOR = "#8d99ae";
 /** A class the table does not list, such as a rare NWS product: NWS's silver. */
 const OTHER_COLOR = "#c0c0c0";
 const DEFAULT_AREA: PolygonStyle = { fillOpacity: 0.5, outlineWidth: 1 };
-const PRESET_LAYERS = ["fill", "line", "circle", "icon", "label"] as const;
 
 function rgba(hex: string, alpha: number): string {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
@@ -386,6 +386,7 @@ export const FEED_PRESET_ICONS: readonly IconRequest[] = [
   { id: "wildfire", color: WILDFIRE_INCIDENT_PALETTE.entries.prescribed.light },
 ];
 
+/** Preset areas and contours are reference areas, under every incident layer; preset points draw with the others. */
 function presetLayerSpecs(feedId: string, theme: ThemeName, labelFont?: string): unknown[] {
   const src = feedSourceId(feedId);
   const t = themes[theme];
@@ -395,6 +396,7 @@ function presetLayerSpecs(feedId: string, theme: ThemeName, labelFont?: string):
       id: `${src}-preset-fill`,
       type: "fill",
       source: src,
+      ...inTier(TIER.area),
       filter: on("Polygon", "MultiPolygon"),
       paint: { "fill-color": ["get", "_presetFill"], "fill-opacity": 1 },
     },
@@ -402,6 +404,7 @@ function presetLayerSpecs(feedId: string, theme: ThemeName, labelFont?: string):
       id: `${src}-preset-line`,
       type: "line",
       source: src,
+      ...inTier(TIER.area),
       filter: ["all", on("Polygon", "MultiPolygon", "LineString", "MultiLineString"), ["has", "_presetLine"]],
       layout: { "line-join": "round" },
       paint: { "line-color": ["get", "_presetLine"], "line-width": ["get", "_presetLineWidth"], "line-opacity": 1 },
@@ -410,6 +413,7 @@ function presetLayerSpecs(feedId: string, theme: ThemeName, labelFont?: string):
       id: `${src}-preset-circle`,
       type: "circle",
       source: src,
+      ...inTier(TIER.point),
       filter: on("Point", "MultiPoint"),
       paint: {
         "circle-color": ["get", "_presetColor"],
@@ -423,6 +427,7 @@ function presetLayerSpecs(feedId: string, theme: ThemeName, labelFont?: string):
       id: `${src}-preset-icon`,
       type: "symbol",
       source: src,
+      ...inTier(TIER.point),
       filter: ["all", on("Point", "MultiPoint"), ["has", "_presetIcon"]],
       layout: {
         "icon-image": ["get", "_presetIcon"],
@@ -437,6 +442,7 @@ function presetLayerSpecs(feedId: string, theme: ThemeName, labelFont?: string):
       id: `${src}-preset-label`,
       type: "symbol",
       source: src,
+      ...inTier(TIER.label),
       filter: ["has", "_presetLabel"],
       layout: {
         "text-field": ["get", "_presetLabel"],

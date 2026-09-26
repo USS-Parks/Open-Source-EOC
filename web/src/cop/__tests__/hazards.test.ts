@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { validateStyleMin } from "@maplibre/maplibre-gl-style-spec";
 import { femaFloodHazardFor } from "@openeoc/shared";
-import { boardLayerSpecs } from "../layers.js";
 import { feedLayerIds, feedLayerSpecs } from "../feeds.js";
 import {
   FEMA_NFHL_ATTRIBUTION,
@@ -11,30 +10,7 @@ import {
   tagFloodFeatures,
 } from "../hazards.js";
 
-describe("operational hazard polygon hatching", () => {
-  it.each(["light", "dark"] as const)("adds a valid status hatch over the solid fill in %s", (theme) => {
-    const layers = boardLayerSpecs("hazards", theme) as Array<{
-      id: string;
-      type: string;
-      paint: Record<string, unknown>;
-    }>;
-    expect(layers.map((layer) => layer.id).slice(0, 3)).toEqual([
-      "board-hazards-fill",
-      "board-hazards-hatch",
-      "board-hazards-line",
-    ]);
-    expect(layers[0]!.paint["fill-opacity"]).toBe(0.25);
-    expect(JSON.stringify(layers[1]!.paint["fill-pattern"])).toContain("_symbolStatus");
-    for (const layer of layers) {
-      const style = {
-        version: 8,
-        sources: { "board-hazards": { type: "geojson", data: { type: "FeatureCollection", features: [] } } },
-        layers: [layer],
-      };
-      expect(validateStyleMin(style as never).map((error) => error.message)).toEqual([]);
-    }
-  });
-
+describe("hazard hatching", () => {
   it("generates a transparent local hatch tile without an asset or network request", () => {
     const image = hatchImage("#123456", "cross");
     expect(image).toMatchObject({ width: 8, height: 8 });
@@ -55,10 +31,10 @@ describe("FEMA static flood reference", () => {
     expect(femaFloodHazardFor({})).toBe("unknown");
   });
 
-  it("keeps every standard feed hatch inside its visibility toggle", () => {
+  it("keeps every feed hatch inside its visibility toggle", () => {
     const ids = feedLayerIds("alerts");
     const specs = feedLayerSpecs("alerts", "light") as Array<{ id: string }>;
-    expect(ids).toContain("feed-alerts-hatch");
+    expect(ids).toContain("feed-alerts-hazard-impact-hatch");
     expect(specs.every((spec) => ids.includes(spec.id))).toBe(true);
   });
 

@@ -140,19 +140,66 @@ export const ROAD_CLOSURE_PALETTE = definePalette({
 });
 
 /**
+ * Incident facilities as Esri's templates draw them: white ICS letters on a
+ * dark grey disc, the command post the ICS square split diagonally, a point
+ * of distribution on a black disc, a hospital on its lifeline's color. The
+ * pictogram tells the kinds apart. Keys and aliases are the incident
+ * facility board's kinds.
+ */
+export const INCIDENT_FACILITY_PALETTE = definePalette({
+  id: "incident_facility",
+  title: "Incident facility",
+  source: "Esri Emergency Management Operations, Incident Facilities and Distribution Sites",
+  entries: {
+    incident_command_post: entry("Incident command post", "#1f4e9c", "#1f4e9c", { icon: "command_post" }),
+    staging_area: entry("Staging area", "#58595b", "#58595b", { icon: "staging_area" }),
+    base: entry("Incident base", "#58595b", "#58595b", { icon: "incident_base" }),
+    camp: entry("Camp", "#58595b", "#58595b", { icon: "camp" }),
+    helibase: entry("Helibase", "#58595b", "#58595b", { icon: "helibase" }),
+    distribution_point: entry("Point of distribution", "#1f1f1f", "#1f1f1f", { icon: "distribution_point" }),
+    hospital: entry("Hospital", "#ad1457", "#ad1457", { icon: "hospital" }),
+  },
+  aliases: { helispot: "helibase", point_of_distribution: "distribution_point" },
+});
+
+/**
+ * The status frame a record with no map meaning of its own draws in, in the
+ * lifeline status shades of FEMA's red, yellow, green and grey: an area under
+ * Esri's crisp same-hue outline, a small disc for a point.
+ */
+const STATUS_AREA: PolygonStyle = { fillOpacity: 0.35, outlineWidth: 2 };
+const status = (label: string, shade: PaletteEntry) => area(label, shade.light, shade.dark, STATUS_AREA);
+
+export const STATUS_FRAME_PALETTE = definePalette({
+  id: "status_frame",
+  title: "Status",
+  source: "NAPSG status frames, in the product's lifeline status shades",
+  entries: {
+    critical: status("Critical", LIFELINE_STATUS_PALETTE.entries.unstable),
+    warning: status("Warning", LIFELINE_STATUS_PALETTE.entries.stabilizing),
+    normal: status("Normal", LIFELINE_STATUS_PALETTE.entries.stable),
+    unknown: status("Unknown", LIFELINE_STATUS_PALETTE.entries.unknown),
+  },
+});
+
+/**
  * Hazard kinds in the exercise data packs. Areas take Esri's conventions (a
  * half-opaque status fill, a hollow impact area, a hatch only for road
  * disruption); points take Esri's family colors, the icon telling the kind.
+ * An impact area that covers whole towns (a flood, inundation, liquefaction
+ * or an outage) fills lighter, so the streets and places under it still read.
  * Each kind's label reads as its key, since data packs store the label.
  */
+const IMPACT: PolygonStyle = { fillOpacity: 0.35, outlineWidth: 1.5 };
 const HAZARD_ENTRIES = {
   fire_perimeter: area("Fire perimeter", "#f7ada4", "#f7ada4", { ...AREA, outline: "#e60c0c" }),
   evacuation_order: { ...EVACUATION_PALETTE.entries.level_3_order, label: "Evacuation order" },
   evacuation_warning: { ...EVACUATION_PALETTE.entries.level_2_warning, label: "Evacuation warning" },
-  flood_extent: area("Flood extent", "#1f7ac0", "#4ea3e8"),
-  tsunami_inundation: area("Tsunami inundation", "#00897b", "#26b3a0"),
-  liquefaction: area("Liquefaction", "#8c5a2b", "#c08a55"),
-  power_outage: area("Power outage", "#3f51b5", "#7986cb"),
+  shelter_in_place: EVACUATION_PALETTE.entries.shelter_in_place,
+  flood_extent: area("Flood extent", "#1f7ac0", "#4ea3e8", IMPACT),
+  tsunami_inundation: area("Tsunami inundation", "#00897b", "#26b3a0", IMPACT),
+  liquefaction: area("Liquefaction", "#8c5a2b", "#c08a55", IMPACT),
+  power_outage: area("Power outage", "#3f51b5", "#7986cb", IMPACT),
   damage_area: area("Damage area", "#8335a8", "#b36ad6", { fillOpacity: 0, outlineWidth: 4 }),
   road_disruption: area("Road disruption", "#c9202c", "#ff4f6d", { fillOpacity: 0.5, outlineWidth: 1.5, hatch: true }),
   spot_fire: entry("Spot fire", "#c93100", "#c93100", { icon: "wildfire" }),
@@ -369,6 +416,8 @@ export const PALETTES = [
   PA_CATEGORY_PALETTE,
   SHELTER_STATUS_PALETTE,
   ROAD_CLOSURE_PALETTE,
+  INCIDENT_FACILITY_PALETTE,
+  STATUS_FRAME_PALETTE,
   HAZARD_PALETTE,
   INCIDENT_FAMILY_PALETTE,
   INCIDENT_TYPE_PALETTE,

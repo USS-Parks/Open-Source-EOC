@@ -1,9 +1,9 @@
 import { themes, type ThemeName } from "../design/tokens.js";
-import { statusColorExpression, symbolStatusExpression, symbolStatusFor } from "./symbology.js";
+import { symbolStatusExpression, symbolStatusFor } from "./symbology.js";
 import { basemapBackground, naturalEarthLayers, naturalEarthSources } from "./basemap.js";
 import { labelExpression, labelFor } from "./tools.js";
-import { statusPatternExpression } from "./hazards.js";
-import { facilityIconExpression, facilityTypeExpression, facilityTypeFor } from "./facilities.js";
+import { facilityTypeExpression, facilityTypeFor } from "./facilities.js";
+import { statusLayerSpecs } from "./hazard-styles.js";
 
 /**
  * COP layer construction: pure functions from board data to MapLibre
@@ -51,99 +51,17 @@ export function sourceId(boardId: string): string {
 }
 
 export function boardLayerIds(boardId: string): string[] {
-  const src = sourceId(boardId);
-  return [`${src}-fill`, `${src}-hatch`, `${src}-line`, `${src}-point`, `${src}-facility-icon`, `${src}-label`];
+  // Any font name yields the label layer's id; the ids do not depend on the theme.
+  return statusLayerSpecs(sourceId(boardId), "light", "ids").map((spec) => (spec as { id: string }).id);
 }
 
 /**
- * The layers for one board. The label layer needs a glyph stack, which the
- * active basemap style provides; with no font (an external style whose
- * fonts are unknown) the label layer is left out and the map stays quiet
- * rather than logging a glyph error per tile.
+ * The layers for a board with no template of its own: the status style. The
+ * label layer needs a glyph stack, which the active basemap style provides;
+ * with no font (an external style whose fonts are unknown) it is left out.
  */
 export function boardLayerSpecs(boardId: string, theme: ThemeName, labelFont?: string): unknown[] {
-  const src = sourceId(boardId);
-  const color = statusColorExpression(theme);
-  const label = labelFont
-    ? [
-        {
-          id: `${src}-label`,
-          type: "symbol",
-          source: src,
-          minzoom: 9,
-          layout: {
-            "text-field": ["get", "_label"],
-            "text-font": [labelFont],
-            "text-size": 11,
-            "text-anchor": "top",
-            "text-offset": [
-              "case",
-              ["has", "_facilityType"],
-              ["literal", [0, 2.2]],
-              ["literal", [0, 0.9]],
-            ],
-            "text-optional": true,
-          },
-          paint: {
-            "text-color": themes[theme].text,
-            "text-halo-color": themes[theme].surface,
-            "text-halo-width": 1.2,
-          },
-        },
-      ]
-    : [];
-  return [
-    {
-      id: `${src}-fill`,
-      type: "fill",
-      source: src,
-      filter: ["==", ["geometry-type"], "Polygon"],
-      paint: { "fill-color": color, "fill-opacity": 0.25 },
-    },
-    {
-      id: `${src}-hatch`,
-      type: "fill",
-      source: src,
-      filter: ["==", ["geometry-type"], "Polygon"],
-      paint: { "fill-pattern": statusPatternExpression(theme), "fill-opacity": 0.75 },
-    },
-    {
-      id: `${src}-line`,
-      type: "line",
-      source: src,
-      filter: ["in", ["geometry-type"], ["literal", ["LineString", "Polygon"]]],
-      paint: { "line-color": color, "line-width": 3 },
-    },
-    {
-      id: `${src}-point`,
-      type: "circle",
-      source: src,
-      filter: ["==", ["geometry-type"], "Point"],
-      paint: {
-        "circle-color": color,
-        "circle-radius": ["case", ["has", "_facilityType"], 18, 7],
-        "circle-stroke-width": 2,
-        "circle-stroke-color": themes[theme].surface,
-      },
-    },
-    {
-      id: `${src}-facility-icon`,
-      type: "symbol",
-      source: src,
-      filter: [
-        "all",
-        ["==", ["geometry-type"], "Point"],
-        ["has", "_facilityType"],
-      ],
-      layout: {
-        "icon-image": facilityIconExpression(),
-        "icon-size": 0.25,
-        "icon-allow-overlap": true,
-        "icon-ignore-placement": true,
-      },
-    },
-    ...label,
-  ];
+  return statusLayerSpecs(sourceId(boardId), theme, labelFont);
 }
 
 /** Source layers in an operational vector tile (server/src/geo/tiles.ts). */

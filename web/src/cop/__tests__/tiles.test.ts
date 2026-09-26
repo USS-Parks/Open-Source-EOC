@@ -64,9 +64,8 @@ describe("vector tile layers", () => {
   });
 
   it("scales each layer's own opacity by the operator setting", () => {
-    const [fill, hatch, line, point] = boardLayerSpecs("b1", "light");
-    expect(opacityPaint(fill, 0.5)).toEqual({ "fill-opacity": 0.125 });
-    expect(opacityPaint(hatch, 0.5)).toEqual({ "fill-opacity": 0.375 });
+    const [fill, line, point] = boardLayerSpecs("b1", "light");
+    expect(opacityPaint(fill, 0.5)).toEqual({ "fill-opacity": 0.5 });
     expect(opacityPaint(line, 0.5)).toEqual({ "line-opacity": 0.5 });
     expect(opacityPaint(point, 0)).toEqual({ "circle-opacity": 0, "circle-stroke-opacity": 0 });
   });

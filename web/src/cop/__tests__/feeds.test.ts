@@ -40,19 +40,27 @@ describe("feed layers carry provenance and staleness", () => {
     for (const s of specs) expect(s.source).toBe(feedSourceId("f1"));
   });
 
-  it("names the feed layer ids for visibility toggling", () => {
+  it("names the feed layer ids for visibility toggling, in the order they draw", () => {
     expect(feedLayerIds("f1")).toEqual([
       "feed-f1-fill",
-      "feed-f1-hatch",
-      "feed-f1-line",
-      "feed-f1-point",
-      "feed-f1-facility-icon",
-      "feed-f1-label",
       "feed-f1-preset-fill",
       "feed-f1-preset-line",
+      "feed-f1-hazard-impact-fill",
+      "feed-f1-hazard-impact-hatch",
+      "feed-f1-hazard-impact-line",
+      "feed-f1-hazard-evacuation-fill",
+      "feed-f1-hazard-evacuation-line",
+      "feed-f1-hazard-perimeter-fill",
+      "feed-f1-hazard-perimeter-line",
+      "feed-f1-line",
+      "feed-f1-label",
+      "feed-f1-hazard-label",
+      "feed-f1-preset-label",
+      "feed-f1-point",
+      "feed-f1-facility-icon",
+      "feed-f1-hazard-point",
       "feed-f1-preset-circle",
       "feed-f1-preset-icon",
-      "feed-f1-preset-label",
     ]);
   });
 

@@ -14904,3 +14904,68 @@ at 60 or 120 s under the load, and three assertions
 failed, `load.test.ts` did not run; it passed alone (4 tests), as did the
 test files MP14 and MP5 added after the run collected its files, with the
 `cop` tests they changed (6 files, 60 tests).
+
+## Map and dashboard parity MP7: incident and hazard cartography
+
+Map and Dashboard Parity PSPR unit MP7 (decisions 5 and 6), built in lane
+`lane/mp7`; the Map screen integration was applied by the integrator.
+
+- **What there was before.** Data packs and boards drew a generic 0.75
+  status hatch with 3 px lines and 7 px dots; the Map screen used the
+  Overview card's symbols; facility labels hid their own icons at z13 to
+  z15.
+- **What changed.** New `web/src/cop/hazard-styles.ts`; edits to
+  `cartography.ts`, `feeds.ts`, `hazards.ts` and the palette tables:
+  - **Data-pack hazards by category**, in three tiers: impact areas
+    (outage, flood, inundation, liquefaction, damage, road disruption),
+    then evacuation (warning, shelter in place, order), then fire
+    perimeters. Each area is a fill with an outline in its own hue; damage
+    areas are hollow; only road disruption is hatched; stale data draws
+    grey. Evacuation areas carry the zone name, fires their name in
+    capitals. Points use the MP3 icons on discs, sorted by severity. Impact
+    areas fill at 35 percent so the towns under them stay readable.
+  - **Board cartography on the Map screen** (`cartographyLayerSpecs(...,
+    "map")`): closures as palette lines over a white casing, with direction
+    arrows where a record has a `direction`, orange detours and no-entry
+    discs; shelters by status with "42 of 150" occupancy from z14; damage
+    by FEMA degree, Destroyed drawn first; incident facilities as ICS
+    symbols. The Overview card keeps its own symbols; its facility labels
+    now draw under the icons.
+  - **Status style** for boards without a template (`statusLayerSpecs`,
+    which `boardLayerSpecs` in `layers.ts` now returns): a 35 percent
+    status fill with a 2 px outline, no hatch, 5 px discs with a white
+    halo, and the suite icon in its lifeline color for records typed as
+    facilities. The status hatch patterns are removed from `hazards.ts`.
+  - **Draw order:** every layer carries a tier, and `tieredBeforeId` places
+    it within lane A's bands on the Map screen (`CopMap.tsx` mount). Labels
+    sit a tier below icons with variable anchors, so an icon always wins
+    over its label.
+  - **Palettes:** `shelter_in_place` added to `HAZARD_PALETTE`; new
+    `INCIDENT_FACILITY_PALETTE` and `STATUS_FRAME_PALETTE`. Opacity rides
+    in the rgba colors and every `*-opacity` is a number, because
+    `opacityPaint` treats a non-numeric opacity as 1; a test enforces it.
+  - `styleLegend(key, theme, present?)` gives palette rows for MP8.
+- **Defaults taken and deviations.** Arrows draw only where a record has a
+  `direction`, and no seeded record has one. The lane could not edit
+  `CopMap.tsx` or `layers.ts` (lane A's files); it proved the walk on a
+  bundle with the two integration changes applied in memory, and the
+  integrator applied them in the lane. The integrator updated `tiles.test.ts`,
+  `facilities.test.ts` and `hazards.test.ts` for the status style, and
+  `reference-layers-browser.test.ts`: at Saint Joseph Hospital the
+  incident's own record now draws above the reference facility and takes
+  the click, so the walk asserts that record there and reads the critical
+  facility inspector at Sutter Coast Hospital. Showing every feature under
+  a click, one at a time, belongs to the map inspector work in MP8 part
+  two. Known and left for that unit: a basemap choice pressed while tiles
+  load is lost (`map.once("load", apply)` fires once).
+- **Verification.** On the rebased lane with the integration applied:
+  `web/src/cop` and `shared/src/palette` unit tests, 20 files, 383 tests;
+  `pnpm check:static` green; `incident-cartography-browser.test.ts` (four
+  exercises, both viewports and themes, street map and imagery; no page
+  errors, MapLibre warnings or off-host requests), `fidelity-browser.test.ts`
+  (the Overview pixel-identical to the baseline but for the clock text),
+  `buildings-browser.test.ts` and `reference-layers-browser.test.ts`: 15
+  tests. 48 lane captures reviewed by the lane; Crescent City and Deerhorn
+  by the integrator.
+- **Full suite:** with the next landing batch.
+- **Rollback.** Revert the commit.

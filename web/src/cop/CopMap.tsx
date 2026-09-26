@@ -104,6 +104,7 @@ import {
   incidentAreaSpecs,
   WEATHER_LAYER_SUFFIX,
 } from "./cartography.js";
+import { tieredBeforeId } from "./hazard-styles.js";
 import { CardOverlays, type CardToggle } from "./CardOverlays.js";
 import { LIFELINE_CATEGORY_PALETTE, paletteLegend } from "@openeoc/shared";
 import {
@@ -1062,7 +1063,7 @@ export function CopMap(props: CopMapProps) {
           ...s,
           paint: { ...s.paint, ...opacityPaint(spec, opacityRef.current[key] ?? 1) },
           layout: { ...s.layout, visibility: layerShown(s.id, shown) ? "visible" : "none" },
-        } as never, map.getLayer(band) ? band : undefined);
+        } as never, card ? (map.getLayer(band) ? band : undefined) : tieredBeforeId(map, s, band));
       }
     };
 
@@ -1082,7 +1083,7 @@ export function CopMap(props: CopMapProps) {
           dataRef.current[sourceId(board.id)] = fc;
           const pastPage = raw.links?.some((link) => link.rel === "next") ?? false;
           mount(sourceId(board.id), fc,
-            cartographyLayerSpecs(board.id, board.templateKey, props.theme, labelFont) ?? boardLayerSpecs(board.id, props.theme, labelFont),
+            cartographyLayerSpecs(board.id, board.templateKey, props.theme, labelFont, card ? "card" : "map") ?? boardLayerSpecs(board.id, props.theme, labelFont),
             pastPage ? tileTemplate("board", board.id) : undefined, false, visibleRef.current[board.id] ?? boardDefault(board),
             BANDS.boards, board.templateKey);
           const wanted = requestedRecordRef.current;

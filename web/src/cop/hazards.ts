@@ -1,9 +1,7 @@
 import { femaFloodHazardFor, type FemaFloodHazard } from "@openeoc/shared";
 import { themes, type ThemeName } from "../design/tokens.js";
 import type { CopFeatureCollection } from "./layers.js";
-import { statusColor, type SymbolStatus } from "./symbology.js";
 
-const STATUS_VALUES: readonly SymbolStatus[] = ["critical", "warning", "normal", "unknown"];
 const FLOOD_VALUES: readonly FemaFloodHazard[] = ["high", "moderate", "unknown"];
 
 export const FEMA_NFHL_DATASET_KEY = "fema_nfhl_flood";
@@ -22,26 +20,8 @@ export function floodColor(category: FemaFloodHazard, theme: ThemeName): string 
   return themes[theme].statusUnknown;
 }
 
-function statusPatternId(status: SymbolStatus, theme: ThemeName): string {
-  return `hazard-status-${theme}-${status}`;
-}
-
 function floodPatternId(category: FemaFloodHazard, theme: ThemeName): string {
   return `flood-reference-${theme}-${category}`;
-}
-
-export function statusPatternExpression(theme: ThemeName): unknown[] {
-  return [
-    "match",
-    ["get", "_symbolStatus"],
-    "critical",
-    statusPatternId("critical", theme),
-    "warning",
-    statusPatternId("warning", theme),
-    "normal",
-    statusPatternId("normal", theme),
-    statusPatternId("unknown", theme),
-  ];
 }
 
 export function floodPatternExpression(theme: ThemeName): unknown[] {
@@ -77,16 +57,20 @@ function rgba(hex: string): [number, number, number, number] {
   ];
 }
 
-/** Small transparent hatch tile generated locally at runtime. */
-export function hatchImage(color: string, direction: "forward" | "back" | "cross" = "forward") {
-  const width = 8;
-  const height = 8;
+/**
+ * Small transparent hatch tile generated locally at runtime: an 8 pixel
+ * repeat of 2 pixel lines, drawn `scale` times larger for a pixel ratio of
+ * `scale`, so the hatch stays crisp on a scaled display.
+ */
+export function hatchImage(color: string, direction: "forward" | "back" | "cross" = "forward", scale = 1) {
+  const width = 8 * scale;
+  const height = 8 * scale;
   const data = new Uint8Array(width * height * 4);
   const ink = rgba(color);
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      const forward = (x + y) % 8 < 2;
-      const back = (x - y + 8) % 8 < 2;
+      const forward = (x + y) % width < 2 * scale;
+      const back = (x - y + width) % width < 2 * scale;
       if ((direction === "forward" && forward) || (direction === "back" && back) || (direction === "cross" && (forward || back))) {
         const offset = (y * width + x) * 4;
         data.set(ink, offset);
@@ -101,10 +85,6 @@ export function ensureHazardPatterns(
   map: { hasImage: (id: string) => boolean; addImage: (id: string, image: { width: number; height: number; data: Uint8Array }) => void },
   theme: ThemeName,
 ): void {
-  for (const status of STATUS_VALUES) {
-    const id = statusPatternId(status, theme);
-    if (!map.hasImage(id)) map.addImage(id, hatchImage(statusColor(status, theme), "forward"));
-  }
   for (const category of FLOOD_VALUES) {
     const id = floodPatternId(category, theme);
     const direction = category === "high" ? "cross" : category === "moderate" ? "back" : "forward";

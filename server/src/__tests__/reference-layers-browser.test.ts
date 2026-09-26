@@ -168,16 +168,19 @@ describe.skipIf(!ready)("the Map screen's reference layers", () => {
         await shot("eureka-z13-icons");
         await go("Saint Joseph Hospital z15");
         await shot("eureka-z15-names");
+        // The incident's own record of the hospital draws above the reference facility.
         const hospital = await inspectCenter();
-        expect(hospital.toLowerCase()).toContain("critical facility");
-        expect(hospital).toContain("Providence Saint Joseph Hospital Eureka");
-        expect(hospital).toContain("Health & Medical");
-        expect(hospital).not.toContain("Operational status");
+        expect(hospital.toLowerCase()).toContain("operational record");
+        expect(hospital).toContain("St. Joseph Hospital");
         await shot("eureka-z15-inspector");
         await inspector.getByRole("button", { name: "Close selected map feature" }).click();
-        // Crescent City's hospital, clear of Del Norte's incident areas, which draw above it.
+        // Crescent City's hospital, clear of Del Norte's incident areas and records, which draw above it.
         await go("Sutter Coast Hospital z14");
-        expect(await inspectCenter()).toContain("Sutter Coast Hospital");
+        const sutter = await inspectCenter();
+        expect(sutter.toLowerCase()).toContain("critical facility");
+        expect(sutter).toContain("Sutter Coast Hospital");
+        expect(sutter).toContain("Health & Medical");
+        expect(sutter).not.toContain("Operational status");
         await inspector.getByRole("button", { name: "Close selected map feature" }).click();
         await go("Crescent City z14");
         await shot("crescent-city-z14-reference");

@@ -1,16 +1,45 @@
+import {
+  DAMAGE_DEGREE_PALETTE,
+  INCIDENT_FACILITY_PALETTE,
+  ROAD_CLOSURE_PALETTE,
+  SHELTER_STATUS_PALETTE,
+  STATUS_FRAME_PALETTE,
+  paletteMatch,
+} from "@openeoc/shared";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { themes, type ThemeName } from "../design/tokens.js";
+import {
+  arrowImageId,
+  byEntry,
+  byTier,
+  ensureStyleImages,
+  ICON_OVERLAP,
+  ICON_SIZE,
+  inTier,
+  labelPaint,
+  LINE,
+  noEntryImageId,
+  paletteOrder,
+  POINT,
+  TIER,
+} from "./hazard-styles.js";
 import { sourceId } from "./layers.js";
+import { iconImageId } from "./symbols/register.js";
 
 /**
  * Incident cartography: the boards whose records carry a map meaning of
  * their own (road closures, shelters, incident facilities) draw as the
  * incident map symbols rather than generic status markers, and the incident
- * area draws as a dashed boundary. Symbols are small SVGs registered as map
- * images; the legends show the same SVGs, so map and legend never disagree.
+ * area draws as a dashed boundary. The Overview card keeps the canonical
+ * frames' small SVGs, which its legend shows; the Map screen draws Esri's
+ * emergency management symbols from the icon suite and the palette table,
+ * damage assessments included.
  */
 
 export const CARTOGRAPHY_TEMPLATES: ReadonlySet<string> = new Set(["road_closures", "shelters", "incident_facilities"]);
+
+/** The boards the Map screen draws with incident cartography. */
+export const MAP_CARTOGRAPHY_TEMPLATES: ReadonlySet<string> = new Set([...CARTOGRAPHY_TEMPLATES, "damage_assessment"]);
 
 export const INCIDENT_AREA_SOURCE = "incident-area";
 export const INCIDENT_AREA_LAYERS = [`${INCIDENT_AREA_SOURCE}-fill`, `${INCIDENT_AREA_SOURCE}-line`] as const;
@@ -70,15 +99,22 @@ export function symbolDataUrl(theme: ThemeName, id: SymbolId): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(symbolSvgs(theme)[id])}`;
 }
 
-/** Register the theme's symbols as map images (drawn at twice their 28 px size). */
+/**
+ * Register the theme's symbols as map images (drawn at twice their 28 px
+ * size), and the icon suite images, closure symbols and hatches the Map
+ * screen's styles name (hazard-styles.ts).
+ */
 export async function ensureCartographyImages(map: MapLibreMap, theme: ThemeName): Promise<void> {
-  await Promise.all((Object.keys(symbolSvgs(theme)) as SymbolId[]).map(async (id) => {
-    if (map.hasImage(symbolImageId(id))) return;
-    const image = new Image(56, 56);
-    image.src = symbolDataUrl(theme, id);
-    await image.decode();
-    if (!map.hasImage(symbolImageId(id))) map.addImage(symbolImageId(id), image, { pixelRatio: 2 });
-  }));
+  await Promise.all([
+    ...(Object.keys(symbolSvgs(theme)) as SymbolId[]).map(async (id) => {
+      if (map.hasImage(symbolImageId(id))) return;
+      const image = new Image(56, 56);
+      image.src = symbolDataUrl(theme, id);
+      await image.decode();
+      if (!map.hasImage(symbolImageId(id))) map.addImage(symbolImageId(id), image, { pixelRatio: 2 });
+    }),
+    ensureStyleImages(map, theme),
+  ]);
 }
 
 /** The facility kind's symbol. Dark reads hospitals and key sites as key facilities; light tells them apart. */
@@ -98,14 +134,18 @@ const ICON_LAYOUT = { "icon-size": ["interpolate", ["linear"], ["zoom"], 8, 0.7,
 
 /**
  * The incident cartography layers for a board, or undefined when its
- * template has none (the board then draws as generic status markers).
+ * template has none (the board then draws as generic status markers). The
+ * Overview card draws the canonical frames' symbols; the Map screen
+ * ("map") draws Esri's emergency management symbols.
  */
 export function cartographyLayerSpecs(
   boardId: string,
   templateKey: string | undefined,
   theme: ThemeName,
   labelFont?: string,
+  layout: "card" | "map" = "card",
 ): unknown[] | undefined {
+  if (layout === "map") return mapCartographySpecs(sourceId(boardId), templateKey, theme, labelFont);
   if (!templateKey || !CARTOGRAPHY_TEMPLATES.has(templateKey)) return undefined;
   const src = sourceId(boardId);
   const t = themes[theme];
@@ -178,7 +218,14 @@ export function cartographyLayerSpecs(
         paint: { "text-color": t.text, "text-halo-color": t.surface, "text-halo-width": 1.4 },
       }]
     : [];
+  // Labels go under the facilities, so the map places each icon before its
+  // label and the label finds a side the icon leaves free, never hiding it.
+  const facilityLabel = label(["all", point, ["!=", ["get", "kind"], "incident_command_post"]]).map((spec) => {
+    const { "text-anchor": _anchor, "text-offset": _offset, ...rest } = spec.layout;
+    return { ...spec, layout: { ...rest, "text-variable-anchor": ["top", "bottom", "right", "left"], "text-radial-offset": 1.5 } };
+  });
   return [
+    ...facilityLabel,
     {
       // Facilities close together yield by rank at a wide zoom: command post, air base, hospital, the rest.
       id: `${src}-facility`,
@@ -201,8 +248,112 @@ export function cartographyLayerSpecs(
       layout: { ...ICON_LAYOUT, "icon-image": symbolImageId("weather") },
     },
     ...command,
-    ...label(["all", point, ["!=", ["get", "kind"], "incident_command_post"]]),
   ];
+}
+
+/** A closure's direction: Esri's Road Closures domain, or plain words. */
+const ONE_WAY = ["one_direction", "One Direction", "one_way"];
+const BOTH_WAYS = ["both_directions", "Both Directions", "both"];
+
+/**
+ * The Map screen's incident cartography, after Esri's emergency management
+ * templates: a closure as a red line over a white casing with arrows for its
+ * direction and a no-entry disc, a detour orange over white; shelters and
+ * damage assessments as the icon suite's symbols in their status and FEMA
+ * degree colors; incident facilities as the ICS symbols. Labels sit under
+ * the symbols and give way to them.
+ */
+function mapCartographySpecs(src: string, templateKey: string | undefined, theme: ThemeName, labelFont?: string): unknown[] | undefined {
+  if (!templateKey || !MAP_CARTOGRAPHY_TEMPLATES.has(templateKey)) return undefined;
+  const grey = STATUS_FRAME_PALETTE.entries.unknown[theme];
+  const labelLayout = labelFont ? { "text-font": [labelFont], "text-size": 11, "text-max-width": 10 } : undefined;
+  const label = (filter: unknown, layout: Record<string, unknown>) => labelLayout
+    ? [{ id: `${src}-label`, type: "symbol", source: src, ...inTier(TIER.label), minzoom: 12, filter, layout: { ...labelLayout, ...layout }, paint: labelPaint(theme) }]
+    : [];
+  const beside = { "text-variable-anchor": ["top", "bottom", "right", "left"], "text-radial-offset": 1.3 };
+  const symbol = (id: string, filter: unknown, layout: Record<string, unknown>) =>
+    ({ id: `${src}${id}`, type: "symbol", source: src, ...inTier(TIER.point), filter, layout: { "icon-size": ICON_SIZE, "icon-overlap": ICON_OVERLAP, ...layout } });
+
+  if (templateKey === "road_closures") {
+    const closed = ROAD_CLOSURE_PALETTE.entries.closed[theme];
+    const image = (name: (color: string) => string) => paletteMatch(ROAD_CLOSURE_PALETTE, "status", (entry) => name(entry[theme]), name(closed));
+    const direction = ["match", ["get", "direction"], ONE_WAY, "one", BOTH_WAYS, "both", ""];
+    const width = (base: number) => ["interpolate", ["linear"], ["zoom"], 8, base, 12, base + 1.5, 16, base + 4];
+    const line = (id: string, paint: Record<string, unknown>) =>
+      ({ id: `${src}${id}`, type: "line", source: src, ...inTier(TIER.line), filter: LINE, layout: { "line-cap": "round", "line-join": "round" }, paint });
+    return byTier([
+      line("-casing", { "line-color": "#ffffff", "line-width": width(4.5), "line-opacity": 0.9 }),
+      line("-line", { "line-color": paletteMatch(ROAD_CLOSURE_PALETTE, "status", theme, closed), "line-width": width(2) }),
+      {
+        id: `${src}-arrow`,
+        type: "symbol",
+        source: src,
+        ...inTier(TIER.line),
+        filter: ["all", LINE, ["!=", direction, ""]],
+        layout: {
+          "symbol-placement": "line",
+          "symbol-spacing": 90,
+          "icon-image": ["case", ["==", direction, "both"], image((color) => arrowImageId(color, true)), image((color) => arrowImageId(color))],
+          "icon-rotation-alignment": "map",
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 8, 0.7, 14, 1],
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
+      },
+      ...label(LINE, { "symbol-placement": "line", "text-field": ["get", "_label"], "text-offset": [0, 1.2], "text-max-angle": 30 }),
+      // Always drawn, and labels give way to it.
+      symbol("-closure", ["all", LINE, ["==", ["get", "status"], "closed"]], {
+        "symbol-placement": "line-center",
+        "icon-image": noEntryImageId(closed),
+        "icon-overlap": "always",
+      }),
+      symbol("-closure-point", POINT, { "icon-image": image(noEntryImageId), "symbol-sort-key": paletteOrder(ROAD_CLOSURE_PALETTE, "status") }),
+    ]);
+  }
+
+  if (templateKey === "shelters") {
+    const shelter = (color: string) => iconImageId("shelter", color);
+    const planned = ["==", ["get", "planned"], true];
+    const known = (field: string) => ["==", ["typeof", ["get", field]], "number"];
+    const count = (field: string) => ["to-string", ["get", field]];
+    const name = ["get", "_label"];
+    // At street zoom a shelter's label adds its occupancy against capacity.
+    const text = ["step", ["zoom"], name, 14, [
+      "case",
+      ["all", known("occupancy"), known("capacity")], ["concat", name, "\n", count("occupancy"), " of ", count("capacity")],
+      known("capacity"), ["concat", name, "\nCapacity ", count("capacity")],
+      name,
+    ]];
+    return byTier([
+      ...label(POINT, { ...beside, "text-field": text }),
+      symbol("-shelter", POINT, {
+        "icon-image": ["case", planned, shelter(SHELTER_STATUS_PALETTE.entries.planned[theme]),
+          paletteMatch(SHELTER_STATUS_PALETTE, "status", (entry) => shelter(entry[theme]), shelter(SHELTER_STATUS_PALETTE.entries.unknown[theme]))],
+        "symbol-sort-key": ["case", planned, Object.keys(SHELTER_STATUS_PALETTE.entries).indexOf("planned"), paletteOrder(SHELTER_STATUS_PALETTE, "status")],
+      }),
+    ]);
+  }
+
+  if (templateKey === "damage_assessment") {
+    return [symbol("-damage", POINT, {
+      "icon-image": paletteMatch(DAMAGE_DEGREE_PALETTE, "degree", (entry) => iconImageId("damage_report", entry[theme]), iconImageId("damage_report", grey)),
+      "symbol-sort-key": paletteOrder(DAMAGE_DEGREE_PALETTE, "degree"),
+    })];
+  }
+
+  const kind = ["get", "kind"];
+  const weather = ["==", kind, "weather_station"];
+  const others = ["match", kind, "camera", symbolImageId("camera"), symbolImageId("key-facility")];
+  return byTier([
+    ...label(["all", POINT, ["!", weather]], { ...beside, "text-field": ["get", "_label"] }),
+    symbol("-facility", ["all", POINT, ["!", weather]], {
+      "icon-image": byEntry(INCIDENT_FACILITY_PALETTE, "kind", Object.keys(INCIDENT_FACILITY_PALETTE.entries),
+        (entry) => iconImageId(entry.icon!, entry[theme]), others),
+      // Command post, air base, hospital, the rest.
+      "symbol-sort-key": ["match", kind, "incident_command_post", 0, ["helibase", "helispot"], 1, "hospital", 2, 3],
+    }),
+    symbol(WEATHER_LAYER_SUFFIX, ["all", POINT, weather], { "icon-image": symbolImageId("weather") }),
+  ]);
 }
 
 /** The incident area as a dashed boundary; light fills it faintly, dark leaves the imagery clear. */

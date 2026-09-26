@@ -24,10 +24,11 @@ export interface PolygonStyle {
   readonly hatch?: boolean;
 }
 
-/** The map icon suite's hazard and field icons a point entry draws with. */
+/** The map icon suite's hazard, field and incident facility icons a point entry draws with. */
 export type PaletteIcon =
   | "wildfire" | "structure_fire" | "landslide" | "flooding" | "hazmat_release"
-  | "earthquake" | "tsunami" | "road_block" | "damage_report";
+  | "earthquake" | "tsunami" | "road_block" | "damage_report"
+  | "command_post" | "staging_area" | "incident_base" | "camp" | "helibase" | "distribution_point" | "shelter" | "hospital";
 
 export interface PaletteEntry {
   /** The domain label: legend text, pick-list text and chart label alike. */
