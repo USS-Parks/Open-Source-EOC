@@ -14018,3 +14018,51 @@ Map and Dashboard Parity PSPR unit MP11, built in lane `lane/mp11`.
   receipt.
 - **Rollback:** revert the commit; the dashboard widgets return to their
   own donut and bars.
+
+## Map and dashboard parity MP3: the icon suite
+
+Map and Dashboard Parity PSPR unit MP3 (decision 1: an original set of 40),
+built in lane `lane/mp3`.
+
+- **What the code did before.** The Map screen drew critical facilities
+  with nine NAPSG PNGs at 128 px scaled to a quarter, which looked soft, and
+  the incident cartography drew a handful of ad hoc SVGs
+  (`web/src/cop/cartography.ts`). Most facility and hazard kinds had no
+  symbol.
+- **What changed.**
+  - An original suite of 40 map icons under Apache-2.0
+    (`web/src/cop/symbols/glyphs.ts`): 24 critical facilities, each keyed to
+    its Community Lifeline; 7 incident facilities; 9 hazards and field
+    reports, with the ids the plan names. Each is a one-color pictogram on a
+    24 unit grid, drawn for the pixel grid with features of about 2 units or
+    more; the ICS letters S, B, C and H are paths, not text.
+  - Composition (`compose.ts`) follows Esri's EM convention: white
+    pictograms on a disc for operational symbols, on a rounded square for
+    reference facilities, and the ICS split square for the incident command
+    post; every shape carries a white halo inside a 28 percent black edge.
+    Colors are parameters, validated as `#rrggbb`.
+  - Registration (`register.ts`): `ensureIconImages` adds map images named
+    `eoc-sym-<id>-<hex>`, rasterized at the larger of 2 and the device pixel
+    ratio, so they are crisp at 100, 125 and 200 percent; idempotent.
+    `symbolDataUrl` and `SymbolPatch` give legends and inspectors the same
+    SVG.
+  - `tools/icons/contact-sheet.mjs` renders every icon at 20, 24 and 32 px
+    on light, dark and imagery backgrounds and captures it with Chrome at
+    device scale factors 1, 1.25 and 2.
+- **Defaults taken and deviations.** Glyph scale 0.72 on discs and 0.76 on
+  squares; the square is a unit smaller than the disc so both read as one
+  size. Nothing is wired into the map in this unit (MP4's map layer and MP7
+  do that); the provisional colors live only in the contact sheet until MP2's
+  palette. The lane started before MP1 landed, a deviation from the plan's
+  section 5; it adds only new files.
+- **Verification.** `symbols.test.tsx`: 167 passed (the 40 ids in order;
+  every glyph parses, has no external reference, script, image or font text
+  and stays on the grid; every shape composes; registration is idempotent).
+  `tsc --noEmit` and eslint clean; license scan ok. The contact sheet was
+  reviewed by eye over three passes at 1x, 1.25x and 2x, redrawing the fire
+  station, dialysis, school, heliport, landslide, tsunami, distribution
+  point, hazmat site, bridge and wildfire pictograms, and by the integrator
+  on light, dark and imagery backgrounds.
+- **Full suite:** as MP11, once per landing batch before the push.
+- **Rollback.** Delete `web/src/cop/symbols/` and `tools/icons/`; nothing
+  else refers to them yet.
