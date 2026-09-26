@@ -15124,3 +15124,19 @@ Map and Dashboard Parity PSPR unit MP8, its components and server half
 - **Full suite:** with the next landing batch.
 - **Rollback.** Revert the commit; migration 0172 only adds nullable
   columns.
+
+## Map and dashboard parity: third landing batch, full suite
+
+The third batch (MP7, MP5 part two, MP8 part one) was run through
+`pnpm test:ci` on `main` at `6854397b` on this machine's throwaway
+cluster, with two lane agents working beside it. 420 of 424 files passed,
+2,605 tests passed and 11 skipped; `load.test.ts` passed (4 tests). Two
+worker processes exited with a Windows stack-overrun code while running
+`delivery-outbox.test.ts` and `mass-notification.test.ts`; both passed
+rerun alone. Two map walks failed on MP7's status style, not on the
+product: `facility-symbols-browser.test.ts` sampled the canvas before
+facility symbols finished MapLibre's placement fade (facility points now
+draw only as symbols), and `vector-tiles-browser.test.ts` expected the old
+0.25 fill opacity scaled by the 40 percent setting, where the fill's
+translucency now rides in its color. `84e9ab05` fits both walks; with it
+both pass (2 files, 2 tests).
