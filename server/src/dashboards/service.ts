@@ -160,10 +160,15 @@ export async function listDashboards(
   if (incidentId) await sql`select set_config('app.incident_id', ${incidentId}, true)`;
   if (!incidentId && !actor.memberships.some((m) => m.jurisdictionId === jurisdictionId))
     throw new AuthError(403, "no access to this jurisdiction");
+  // For an incident, the dashboards activation made for it come first, and
+  // those made for other incidents are left out (VC-12).
   const rows = await sql`
-    select id, title, template_key from dashboards
-    where jurisdiction_id = ${jurisdictionId} and archived_at is null
-    order by title`;
+    select d.id, d.title, d.template_key from dashboards d
+    left join incident_dashboards own on own.dashboard_id = d.id and own.incident_id = ${incidentId ?? null}
+    where d.jurisdiction_id = ${jurisdictionId} and d.archived_at is null
+      ${incidentId ? sql`and (own.incident_id is not null
+        or not exists (select 1 from incident_dashboards other where other.dashboard_id = d.id))` : sql``}
+    order by own.incident_id is null, d.title`;
   return rows.map((r) => ({
     id: r.id as string,
     title: r.title as string,

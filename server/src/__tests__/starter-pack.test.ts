@@ -69,7 +69,9 @@ describe("the small EOC starter pack", () => {
 
     const opened = await activate("small_eoc_activation", "Winter storm");
     expect(opened.statusCode, opened.body).toBe(201);
-    expect(opened.json()).toMatchObject({ positions: 9, boards: 7, checklistItems: 29, contactGroups: 2, reports: 3, rules: 2 });
+    expect(opened.json()).toMatchObject({
+      positions: 9, boards: 7, checklistItems: 29, contactGroups: 2, reports: 3, rules: 2, dashboards: 1, threads: 2, fileFolders: 4,
+    });
     const incidentId = opened.json().incidentId as string;
 
     const positions = await admin`
@@ -114,6 +116,14 @@ describe("the small EOC starter pack", () => {
     const [outreach] = await admin`select id from contact_groups where jurisdiction_id = ${jurisdictionId} and name = 'Community outreach'`;
     expect(rules[1]!.channels).toContainEqual({ kind: "group", groupId: outreach!.id, via: ["inapp"] });
     expect(await admin`select 1 from form_definitions where jurisdiction_id = ${jurisdictionId} and key = 'welfare_check'`).toHaveLength(1);
+    // The incident room (VC-12): the overview dashboard, two threads and four folders.
+    const [dashboard] = await admin`
+      select d.title from incident_dashboards x join dashboards d on d.id = x.dashboard_id where x.incident_id = ${incidentId}`;
+    expect(dashboard!.title).toBe("Winter storm: Small EOC overview");
+    const threads = await admin`select title, audience from threads where incident_id = ${incidentId} order by title`;
+    expect(threads.map((row) => [row.title, row.audience])).toEqual([["EOC coordination", "incident"], ["Public information", "members"]]);
+    const folders = await admin`select name from file_folders where incident_id = ${incidentId} order by sort_order`;
+    expect(folders.map((row) => row.name)).toEqual(["Situation reports", "Maps and plans", "Public messages", "Cost recovery"]);
   });
 
   it("fills a new contact group with the jurisdiction's contacts at its positions, in order, and uses one it already has", async () => {

@@ -9237,3 +9237,185 @@ it is run.
   `node scripts/check-links.mjs` on `main` with the pages staged: ok. The
   drill's media row waits on VA20.
 - **Rollback:** delete the two pages and the index row.
+
+## Veoci and air gap VA16: the incident room
+
+Veoci Integration and Air Gap PSPR unit VA16 (VC-12), on VA6's templates as
+data and VA12's activation parts.
+
+- **What the code did before.** Activation opened an incident's positions,
+  boards and checklists, and (VA12) its contact groups, reports and rules.
+  Its dashboards, message threads and files were made by hand afterward:
+  dashboards were jurisdiction-wide, with every dashboard listed for every
+  incident; threads were started one by one; files could be attached to an
+  incident but had no folders. VA12's starter pack said its dashboard was
+  made by hand "until VA16 makes them at activation".
+- **What changed.**
+  - **An incident template may name the room's parts**
+    (`IncidentTemplateSchema`, all optional, so every existing template is
+    unchanged): `dashboards`, dashboard template keys; `threads`, each a
+    title and optional positions; `fileFolders`, folder names.
+  - **Activation makes them in its transaction** (`openActivationParts`):
+    each dashboard from its template's latest version, titled with the
+    incident's name ("Winter storm: Small EOC overview"), linked to the
+    incident in `incident_dashboards`; each thread with no positions as an
+    incident-wide thread (read by everyone who can read the incident, through
+    the existing `create_incident_thread`), and each with positions as a
+    group thread of those positions (the activating administrator is its
+    first member, as `createThread` makes every creator); each folder, empty,
+    in the template's order. The activation result counts `dashboards`,
+    `threads` and `fileFolders`. A plan's activation (VA13) gets them the
+    same way, through `activateIncident`.
+  - **Saving is held to what activation can make** (`checkActivationParts`):
+    a dashboard template must exist and be listed once; a thread's positions
+    must be the template's, and a title is listed once; a folder is named
+    once. A refusal names the part and the reason.
+  - **Dashboards for an incident.** `listDashboards` with an incident lists
+    the dashboards made for it first and leaves out those made for other
+    incidents; jurisdiction-wide dashboards follow. Without an incident the
+    list is as before. On **Dashboards**, with no saved view chosen, the
+    screen shows the first listed dashboard, so an activated incident opens on
+    its own.
+  - **File folders** (`server/src/files/`). `file_folders` holds an
+    incident's folders; `files.folder_id` files a stored file in one. A file
+    in a folder is attached to the folder's incident and stays in its
+    jurisdiction: the upload sets the attachment from the folder and refuses
+    another ("a file in a folder is attached to the folder's incident") or an
+    unknown folder ("folder not found in this jurisdiction"), and two
+    composite foreign keys and a check hold the same in the database, whatever
+    path writes the row. `GET /api/v1/incidents/:incidentId/file-folders`
+    lists an incident's folders with their file counts to the owner's members
+    (as files are read); the upload takes `folderId`; the file list takes a
+    `folderId` filter; file details carry `folderId` and `folderName`. The
+    jurisdiction export carries `folder_name` on each file row.
+  - **Files screen.** With an incident selected, **File into folder** files
+    an upload in one of its folders ("Stored levee-map.txt in Maps as version
+    1."), **Show folder** lists one folder's files with each folder's count,
+    and each file shows its folder in the list and the preview's context line.
+  - **The template editor keeps them.** As for VA12's parts, the editor has
+    no controls for dashboards, threads or folders; it carries them through a
+    save, and its note lists them ("Activation also opens dashboards …;
+    threads …; file folders …").
+  - **The starter pack** (`deploy/packs/small-eoc-starter/`, version
+    2026.2): **Small EOC activation** now opens the **Small EOC overview**
+    dashboard, an incident-wide **EOC coordination** thread, a **Public
+    information** thread for the Public Information Officer and the Community
+    Liaison, and folders **Situation reports**, **Maps and plans**, **Public
+    messages** and **Cost recovery**. Its README and `docs/guides/ADMIN.md`
+    ("The incident room") say so.
+- **Files outside the "Owns" cell.** `server/src/incidents/templates.ts`
+  (the save checks), `server/src/dashboards/service.ts` (the incident's
+  dashboards first), `server/src/export/service.ts` (the folder name in the
+  export), `shared/src/api/contract.ts` (the route and a `file-folders` tag
+  alias), `web/src/app/api/client.ts`, `web/src/coordination/FilesWorkspace.tsx`,
+  `web/src/incidents/IncidentTemplatesPanel.tsx`,
+  `deploy/packs/small-eoc-starter/package.json` and `README.md`,
+  `docs/guides/ADMIN.md`, `docs/API.md` (regenerated), the migration and the
+  tests below.
+- **Decisions and deviations (defaults taken, recorded, not asked).**
+  - A dashboard is made per incident, as boards are, rather than one shared
+    per template: its title carries the incident's name and it lists first
+    for its incident. Other incidents' dashboards are left out of an
+    incident's list, since they would compute this incident's numbers under
+    another incident's name.
+  - Saved dashboard views are per person (`saved_states`), so activation does
+    not make one; the incident's dashboard shows when no saved view is chosen,
+    under the screen's existing line "Legacy dashboard · not a saved incident
+    overview". That wording is the Dashboards screen's, not changed here.
+  - Folders are one level, made at activation. There is no on-screen folder
+    create, rename or delete, and a stored file does not move between folders
+    (file rows have no update path); the folder is chosen at upload, and a new
+    version is filed where its upload names.
+  - Threads of one activation share a creation time, so the Messages list
+    does not keep the template's order.
+- **Air-gap behavior (decision 9).** No network path is added or changed.
+  Activation, the dashboards, threads and folders, and the file store run on
+  the host; files stay in the local content-addressed store. The four
+  scenarios behave as before.
+- **Schema, contract and dependencies.** Migration `0157_incident_room.sql`
+  (placeholder number): `incident_dashboards` and `file_folders` with row
+  level security (links read with the incident, written by its owner's
+  administrators; folders read by the owner's members, written by its
+  administrators), `files.folder_id` with two composite foreign keys, a check
+  and an index, and grants to `app_runtime`. One route,
+  `GET /api/v1/incidents/:incidentId/file-folders`; the upload's `folderId`
+  field and the list's `folderId` query; the activation result's three
+  counts. No dependency added.
+- **Tests.**
+  - `incident-room.test.ts` (2, real database): saves refused for an unknown
+    or repeated dashboard template, a thread position the template does not
+    open, a repeated thread title and a repeated folder, with nothing
+    written; a template with all three parts round-trips. Activation counts 1
+    dashboard, 2 threads and 2 folders; the incident's dashboard lists first
+    for it, a second incident's is left out, and the unscoped list has all;
+    the member reads the incident-wide thread and the Operations thread with
+    its holder; folders list in order; an upload filed in **Maps** is attached
+    to the incident with the folder's name, the folder filter lists only it,
+    the count moves to 1; another attachment and an unknown folder are
+    refused; a direct insert pairing a folder with another incident is
+    refused by `files_folder_incident`.
+  - `starter-pack.test.ts`: activation of the pack also opens the overview
+    dashboard titled with the incident, both threads with their audiences and
+    the four folders in order.
+  - `workspace.test.tsx` (with axe): the folder list and counts, the folder
+    in a file's row and context line, the folder filter's request, and an
+    upload filed in a folder with its report; the two earlier file tests gain
+    the folder call on their stub client.
+  - `incident-templates-panel.test.tsx` (with axe): an edit keeps the
+    dashboards, threads and folders, and the note lists them.
+  - `incident-room-browser.test.ts` at 1586 by 992 and 1534 by 790: an
+    administrator activates **River Flood** on **Incident Setup**, then finds
+    the incident's dashboard shown and alone in its list on **Dashboards**,
+    both threads on **Messages**, the **Flood command** group on
+    **Contacts**, and the two folders on **Files**, files an upload into
+    **Maps** and lists that folder. Screenshots looked at: the Files screen
+    at 1534, the Dashboards screen at 1534 and Messages at 1586.
+- **Verification.** On the Windows test bed (decision 19), in the lane
+  worktree:
+  - `pnpm check:static`: exit 0 (licenses 339 packages, links 120 files).
+  - `UPDATE_DOCS=1 rtk proxy npx vitest run server/src/__tests__/api-docs.test.ts`:
+    the API document regenerated (one line).
+  - Server, real database, 27 files, 133 tests green: api-docs, contract,
+    dashboards, demo, export, files, incident-area, incident-board-scope,
+    incident-dashboard-scope, incident-lifecycle, incident-overview,
+    incident-participation, incident-position-sharing,
+    incident-request-sharing, incident-room, incident-templates,
+    incident-thread-sharing, incidents, messaging, migrate-baseline, plans,
+    reach, saved-dashboard-engine, scenario-demo-seed, solution-package,
+    starter-pack, upgrade, upgrade-configuration. After the export change:
+    export and export-import-browser, 2 files, 5 tests green.
+  - Web, 11 files, 83 tests green: client, dashboard-surface-incident,
+    incidents-surface, route-coverage, the four dashboards files,
+    the coordination workspace, the incident templates panel and the plans
+    panel.
+  - Browser: incident-room, incident-templates, plans, dashboard,
+    incident-activation and activation-notice, 6 files, 10 tests, green twice
+    running (41 s and 50 s); communications-workspace-browser 1 of 1.
+  - Red seen and not caused here, said as red: one earlier run of those six
+    browser files, taking 139 s while other lanes ran on the machine and the
+    shared cluster, failed incident-room-browser and incident-templates-browser
+    on 30-second waits at sign-in and 60-second `afterAll` closes; the two
+    runs after it were green. One earlier combined server run failed five
+    upgrade-configuration tests at sign-in (login not 200); that file passed
+    alone, 6 of 6, and in the next combined run. No cause in this unit's code
+    was found for either; both look like load on the shared machine.
+- **Not run.** `restore-drill.test.ts`: it fails with `spawnSync pg_dump
+  ENOENT` in the lane, since `pg_dump` is not on the lane's PATH and the only
+  copy is in the canonical checkout, which lanes do not touch. The full `pnpm
+  check` and `pnpm check:gate`; the Windows setup (phase end).
+- **Evidence level:** real-database, component (with axe) and browser tests
+  at both viewports.
+- **Landing.** Built in the fan-out lane `lane/va16` (a lane agent, git
+  read-only), committed there by the integrating session, rebased onto
+  `main` cleanly, the migration numbered `0157` (placeholder `9016`), and
+  gated again before `main` was fast-forwarded to it: `pnpm check:static`
+  exit 0; 18 files, 93 tests green on the rebased tree (the unit's tests,
+  incident templates, plans, files, dashboards, export, the restore drill
+  with `pg_dump` from the release runtime, migration baseline, upgrade, API
+  document, messaging, route coverage, the contract, and the web
+  coordination, incident template and incident screen tests).
+- **Rollback:** revert the commit. Migration `0157` adds two tables, a
+  nullable column, constraints that pass for every row the earlier code
+  writes (no folder), and policies the earlier code does not use. A template
+  saved with the new parts still loads after a revert: the older schema drops
+  the parts it does not know, and activation opens what it did before.

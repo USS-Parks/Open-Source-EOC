@@ -137,6 +137,8 @@ export interface UploadInput {
   readonly attachedKind?: "none" | "board" | "record" | "incident" | "library" | undefined;
   readonly attachedId?: string | undefined;
   readonly supersedes?: string | undefined;
+  /** An incident's folder (VC-12); the file is attached to that incident. */
+  readonly folderId?: string | undefined;
 }
 
 /** Namespace of the per-jurisdiction quota lock, in the two-key advisory lock space. */
@@ -173,7 +175,18 @@ export async function uploadFile(
           409,
           `jurisdiction file quota exceeded: ${used} of ${limits.quotaBytes} bytes in use, this file is ${staged.size} bytes`,
         );
-      await assertAttachmentTarget(tx, input.jurisdictionId, input.attachedKind ?? "none", input.attachedId);
+      let attachedKind = input.attachedKind ?? "none";
+      let attachedId = input.attachedId;
+      if (input.folderId) {
+        const [folder] = await tx`
+          select incident_id from file_folders where id = ${input.folderId} and jurisdiction_id = ${input.jurisdictionId}`;
+        if (!folder) throw new AuthError(400, "folder not found in this jurisdiction");
+        if (input.attachedKind !== undefined && (attachedKind !== "incident" || attachedId !== folder.incident_id))
+          throw new AuthError(400, "a file in a folder is attached to the folder's incident");
+        attachedKind = "incident";
+        attachedId = folder.incident_id as string;
+      }
+      await assertAttachmentTarget(tx, input.jurisdictionId, attachedKind, attachedId);
 
       let version = 1;
       if (input.supersedes) {
@@ -188,11 +201,11 @@ export async function uploadFile(
       const [row] = await tx`
         insert into files
           (jurisdiction_id, name, content_type, size, sha256, version, supersedes,
-           attached_kind, attached_id, uploaded_by, uploaded_by_position)
+           attached_kind, attached_id, folder_id, uploaded_by, uploaded_by_position)
         values
           (${input.jurisdictionId}, ${input.name}, ${input.contentType}, ${staged.size}, ${staged.sha256},
-           ${version}, ${input.supersedes ?? null}, ${input.attachedKind ?? "none"},
-           ${input.attachedId ?? null}, ${actor.person.id}, ${actor.position?.id ?? null})
+           ${version}, ${input.supersedes ?? null}, ${attachedKind},
+           ${attachedId ?? null}, ${input.folderId ?? null}, ${actor.person.id}, ${actor.position?.id ?? null})
         returning id`;
       const id = row!.id as string;
       await recordAudit(tx, actor, {
@@ -226,6 +239,8 @@ export interface FileMeta {
   readonly attachedId: string | null;
   readonly attachedBoardId: string | null;
   readonly attachedIncidentId: string | null;
+  readonly folderId: string | null;
+  readonly folderName: string | null;
   readonly createdAt: string;
   readonly uploadedBy: { readonly personId: string; readonly displayName: string; readonly positionTitle: string | null };
 }
@@ -239,6 +254,7 @@ export async function getFileMeta(sql: Sql, fileId: string): Promise<FileMeta> {
     select f.id, f.name, f.content_type, f.size, f.sha256, f.version, f.supersedes,
            f.attached_kind, f.attached_id, f.created_at, f.uploaded_by,
            p.display_name as uploaded_by_name, pos.title as uploaded_by_position,
+           f.folder_id, folder.name as folder_name,
            case when f.attached_kind = 'record' then br.board_id
                 when f.attached_kind = 'board' then f.attached_id else null end as attached_board_id,
            case when f.attached_kind = 'record' then br.incident_id
@@ -246,28 +262,11 @@ export async function getFileMeta(sql: Sql, fileId: string): Promise<FileMeta> {
     from files f
     join persons p on p.id = f.uploaded_by
     left join positions pos on pos.id = f.uploaded_by_position
+    left join file_folders folder on folder.id = f.folder_id
     left join board_records br on f.attached_kind = 'record' and br.id = f.attached_id
     where f.id = ${fileId} and is_member_of(f.jurisdiction_id)`;
   if (!row) throw new AuthError(404, "file not found");
-  return {
-    id: row.id as string,
-    name: row.name as string,
-    contentType: row.content_type as string,
-    size: Number(row.size),
-    sha256: row.sha256 as string,
-    version: row.version as number,
-    supersedes: (row.supersedes as string | null) ?? null,
-    attachedKind: row.attached_kind as FileAttachmentKind,
-    attachedId: (row.attached_id as string | null) ?? null,
-    attachedBoardId: (row.attached_board_id as string | null) ?? null,
-    attachedIncidentId: (row.attached_incident_id as string | null) ?? null,
-    createdAt: new Date(row.created_at as Date | string).toISOString(),
-    uploadedBy: {
-      personId: row.uploaded_by as string,
-      displayName: row.uploaded_by_name as string,
-      positionTitle: (row.uploaded_by_position as string | null) ?? null,
-    },
-  };
+  return fileMetaFromRow(row);
 }
 
 export interface FilePage {
@@ -279,7 +278,13 @@ export async function listFiles(
   sql: Sql,
   actor: Principal,
   jurisdictionId: string,
-  options: { readonly attachedKind?: FileAttachmentKind | undefined; readonly attachedId?: string | undefined; readonly cursor?: string | undefined; readonly limit: number },
+  options: {
+    readonly attachedKind?: FileAttachmentKind | undefined;
+    readonly attachedId?: string | undefined;
+    readonly folderId?: string | undefined;
+    readonly cursor?: string | undefined;
+    readonly limit: number;
+  },
 ): Promise<FilePage> {
   requireReader(actor, jurisdictionId);
   const after = decodeCursor(options.cursor, ["at", "id"]);
@@ -294,6 +299,7 @@ export async function listFiles(
     select f.id, f.name, f.content_type, f.size, f.sha256, f.version, f.supersedes,
            f.attached_kind, f.attached_id, f.created_at, f.uploaded_by,
            p.display_name as uploaded_by_name, pos.title as uploaded_by_position,
+           f.folder_id, folder.name as folder_name,
            case when f.attached_kind = 'record' then br.board_id
                 when f.attached_kind = 'board' then f.attached_id else null end as attached_board_id,
            case when f.attached_kind = 'record' then br.incident_id
@@ -302,15 +308,36 @@ export async function listFiles(
     from files f
     join persons p on p.id = f.uploaded_by
     left join positions pos on pos.id = f.uploaded_by_position
+    left join file_folders folder on folder.id = f.folder_id
     left join board_records br on f.attached_kind = 'record' and br.id = f.attached_id
     where f.jurisdiction_id = ${jurisdictionId}
       and (${options.attachedKind ?? null}::text is null or f.attached_kind = ${options.attachedKind ?? null})
       and (${options.attachedId ?? null}::uuid is null or f.attached_id = ${options.attachedId ?? null})
+      and (${options.folderId ?? null}::uuid is null or f.folder_id = ${options.folderId ?? null})
       ${after ? sql`and (f.created_at, f.id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : sql``}
     order by f.created_at desc, f.id desc
     limit ${limit + 1}`;
   const { items, nextCursor } = cutPage(rows, limit, (row) => [row.page_at as string, row.id as string]);
   return { files: items.map(fileMetaFromRow), nextCursor };
+}
+
+export interface FileFolder {
+  readonly id: string;
+  readonly name: string;
+  /** Stored files filed in it, every version counted. */
+  readonly files: number;
+}
+
+/** An incident's file folders (VC-12), in the order its template listed them, for the owner's members. */
+export async function listFileFolders(sql: Sql, actor: Principal, incidentId: string): Promise<FileFolder[]> {
+  const [incident] = await sql`select jurisdiction_id from incidents where id = ${incidentId}`;
+  if (!incident) throw new AuthError(404, "incident not found");
+  requireReader(actor, incident.jurisdiction_id as string);
+  const rows = await sql`
+    select f.id, f.name, (select count(*)::int from files x where x.folder_id = f.id) as files
+    from file_folders f where f.incident_id = ${incidentId}
+    order by f.sort_order, f.name`;
+  return rows.map((row) => ({ id: row.id as string, name: row.name as string, files: row.files as number }));
 }
 
 export interface SearchHit {
@@ -392,6 +419,8 @@ function fileMetaFromRow(row: Record<string, unknown>): FileMeta {
     attachedId: (row.attached_id as string | null) ?? null,
     attachedBoardId: (row.attached_board_id as string | null) ?? null,
     attachedIncidentId: (row.attached_incident_id as string | null) ?? null,
+    folderId: (row.folder_id as string | null) ?? null,
+    folderName: (row.folder_name as string | null) ?? null,
     createdAt: new Date(row.created_at as Date | string).toISOString(),
     uploadedBy: {
       personId: row.uploaded_by as string,

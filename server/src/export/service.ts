@@ -179,8 +179,9 @@ async function writeDocument(
   const blobs = new Set<string>();
   await section("files");
   await writeRows(write, sql`
-    select to_jsonb(f) || jsonb_build_object('archive_path', 'files/' || f.sha256) as row
-    from files f where f.jurisdiction_id = ${jurisdictionId}
+    select to_jsonb(f) || jsonb_build_object('archive_path', 'files/' || f.sha256, 'folder_name', folder.name) as row
+    from files f left join file_folders folder on folder.id = f.folder_id
+    where f.jurisdiction_id = ${jurisdictionId}
     order by f.created_at, f.id`.cursor(PAGE_ROWS), (row) => blobs.add(row.sha256 as string));
 
   await write("}");

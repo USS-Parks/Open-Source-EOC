@@ -1,7 +1,7 @@
 {
   "publisher": "Open Source EOC",
   "name": "Small EOC starter",
-  "version": "2026.1",
+  "version": "2026.2",
   "description": "Day-one content for a small tribal or rural EOC: an all-hazards activation and a tabletop exercise, with their positions, boards, checklists, contact groups, reports, notification rules, a welfare check board and field form, and an overview dashboard. It names no hazard and no place, so it serves any exercise scenario.",
   "contents": {
     "boardTemplates": [
@@ -172,7 +172,13 @@
           { "name": "Community outreach", "positions": ["community_liaison", "public_information_officer"] }
         ],
         "reports": ["shelter_census", "open_resource_requests", "welfare_follow_up"],
-        "rules": ["immediate_resource_request", "welfare_needs_help"]
+        "rules": ["immediate_resource_request", "welfare_needs_help"],
+        "dashboards": ["small_eoc_overview"],
+        "threads": [
+          { "title": "EOC coordination" },
+          { "title": "Public information", "positions": ["public_information_officer", "community_liaison"] }
+        ],
+        "fileFolders": ["Situation reports", "Maps and plans", "Public messages", "Cost recovery"]
       },
       {
         "key": "small_eoc_tabletop",

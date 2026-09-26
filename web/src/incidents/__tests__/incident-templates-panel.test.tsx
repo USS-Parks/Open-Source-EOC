@@ -102,6 +102,33 @@ describe("incident templates on screen", () => {
     }), 3);
   });
 
+  it("keeps the incident room's dashboards, threads and file folders through an edit, and says so (VC-12)", async () => {
+    const api = client();
+    const room: IncidentTemplateDefinition = {
+      ...flood,
+      dashboards: ["small_eoc_overview"],
+      threads: [{ title: "EOC coordination", positions: [] }, { title: "Tribal outreach", positions: ["tribal_liaison"] }],
+      fileFolders: ["Situation reports", "Maps"],
+    };
+    api.getIncidentTemplate.mockResolvedValue({ template: room, version: 3, updatedAt: "2026-09-25T17:00:00Z" });
+    const view = render(<IncidentTemplatesPanel client={api} jurisdictionId="j1" />);
+    await view.findByText("1 checklist item");
+    fireEvent.click(view.getByRole("button", { name: "Edit River Flood" }));
+    const form = await view.findByRole("form", { name: "Edit River Flood" });
+    expect(form.querySelector("[role=note]")?.textContent).toBe("Activation also opens dashboards small_eoc_overview; "
+      + "threads EOC coordination, Tribal outreach; file folders Situation reports, Maps. They are kept when you save.");
+    expect((await axe.run(view.container)).violations).toEqual([]);
+    fireEvent.change(view.getByLabelText("Template title"), { target: { value: "River Flood (room)" } });
+    fireEvent.click(view.getByRole("button", { name: "Save template" }));
+    await view.findByText("Saved River Flood (room) as version 4.");
+    expect(api.saveIncidentTemplate).toHaveBeenCalledWith("river_flood", expect.objectContaining({
+      title: "River Flood (room)",
+      dashboards: ["small_eoc_overview"],
+      threads: [{ title: "EOC coordination", positions: [] }, { title: "Tribal outreach", positions: ["tribal_liaison"] }],
+      fileFolders: ["Situation reports", "Maps"],
+    }), 3);
+  });
+
   it("starts a new template at version 0 with a key from its title, and shows a refusal", async () => {
     const api = client();
     api.saveIncidentTemplate.mockRejectedValueOnce(new Error("boards: no board template levee_gauges"));

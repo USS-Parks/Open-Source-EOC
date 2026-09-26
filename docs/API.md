@@ -271,6 +271,7 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 
 - `GET /api/v1/files/:fileId`: Read files (auth: bearer; audience: operator)
 - `GET /api/v1/files/:fileId/content`: Read files content (auth: bearer; audience: operator)
+- `GET /api/v1/incidents/:incidentId/file-folders`: Read incidents file folders (auth: bearer; audience: operator)
 - `GET /api/v1/jurisdictions/:jurisdictionId/files`: Read jurisdictions files (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/files`: Run jurisdictions files (auth: bearer; audience: operator)
 

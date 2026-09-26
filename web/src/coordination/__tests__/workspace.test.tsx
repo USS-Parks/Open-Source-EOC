@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import axe from "axe-core";
 import type { ApiClient, FileMetaRef, Thread } from "../../app/api/client.js";
 import { FilesWorkspace } from "../FilesWorkspace.js";
 import { MessagesWorkspace } from "../MessagesWorkspace.js";
@@ -194,6 +195,7 @@ describe("files workspace", () => {
         { kind: "record", id: recordId, boardId, incidentId, title: "Evacuation route record" },
       ]),
       uploadFile,
+      listFileFolders: vi.fn(async () => []),
     } as unknown as ApiClient;
 
     render(
@@ -246,6 +248,7 @@ describe("files workspace", () => {
     const client = {
       listFiles: vi.fn(async () => ({ files: [incidentFile], nextCursor: null })),
       downloadFile: vi.fn(async () => new Blob(["Incident briefing"], { type: "text/plain" })),
+      listFileFolders: vi.fn(async () => []),
     } as unknown as ApiClient;
 
     render(
@@ -260,5 +263,45 @@ describe("files workspace", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Open incident" }));
     expect(onOpenIncident).toHaveBeenCalledWith(sourceIncidentId);
+  });
+
+  it("shows the incident's folders, lists one folder's files and files an upload in a folder (VC-12)", async () => {
+    const filed: FileMetaRef = {
+      ...recordFile, id: "file-2", name: "sitrep-1.txt", attachedKind: "incident", attachedId: incidentId,
+      attachedBoardId: null, attachedIncidentId: null, folderId: "folder-1", folderName: "Situation reports",
+    };
+    const listFiles = vi.fn(async () => ({ files: [filed], nextCursor: null }));
+    const uploadFile = vi.fn(async () => ({ id: "file-3", sha256: "def", version: 1 }));
+    const listFileFolders = vi.fn(async () => [
+      { id: "folder-1", name: "Situation reports", files: 1 },
+      { id: "folder-2", name: "Maps", files: 0 },
+    ]);
+    const client = {
+      listFiles,
+      listFileFolders,
+      uploadFile,
+      downloadFile: vi.fn(async () => new Blob(["Situation report 1"], { type: "text/plain" })),
+      fileMeta: vi.fn(async () => filed),
+    } as unknown as ApiClient;
+
+    const view = render(<FilesWorkspace client={client} jurisdictionId={jurisdictionId} incidentId={incidentId} incidentName="Redwood Fire" />);
+    const library = await screen.findByRole("region", { name: "File library" });
+    expect(within(library).getByRole("button", { name: /sitrep-1\.txt/ }).textContent).toContain("Incident - Situation reports");
+    const shown = await within(library).findByLabelText("Show folder") as HTMLSelectElement;
+    expect([...shown.options].map((option) => option.textContent)).toEqual(["All folders", "Situation reports (1)", "Maps (0)"]);
+    expect(await screen.findByText(/Context: Incident, folder Situation reports\./)).toBeTruthy();
+    expect((await axe.run(view.container)).violations).toEqual([]);
+
+    fireEvent.change(shown, { target: { value: "folder-1" } });
+    await waitFor(() => expect(listFiles).toHaveBeenLastCalledWith(jurisdictionId,
+      { attachedKind: "incident", attachedId: incidentId, folderId: "folder-1", limit: 40 }));
+
+    fireEvent.change(screen.getByLabelText("File into folder"), { target: { value: "folder-2" } });
+    fireEvent.change(screen.getByLabelText("File"), { target: { files: [new File(["levee"], "levee-map.txt", { type: "text/plain" })] } });
+    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+    await waitFor(() => expect(uploadFile).toHaveBeenCalledWith(jurisdictionId,
+      expect.objectContaining({ attachedKind: "incident", attachedId: incidentId, folderId: "folder-2" })));
+    expect((await screen.findByRole("status")).textContent).toBe("Stored levee-map.txt in Maps as version 1.");
+    await waitFor(() => expect(listFileFolders).toHaveBeenCalledTimes(2));
   });
 });

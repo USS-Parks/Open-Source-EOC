@@ -71,6 +71,9 @@ export function alsoOpens(template: IncidentTemplateDefinition | null): string |
     ...(template?.contactGroups?.length ? [`contact groups ${template.contactGroups.map((group) => group.name).join(", ")}`] : []),
     ...(template?.reports?.length ? [`reports ${template.reports.join(", ")}`] : []),
     ...(template?.rules?.length ? [`notification rules ${template.rules.join(", ")}`] : []),
+    ...(template?.dashboards?.length ? [`dashboards ${template.dashboards.join(", ")}`] : []),
+    ...(template?.threads?.length ? [`threads ${template.threads.map((thread) => thread.title).join(", ")}`] : []),
+    ...(template?.fileFolders?.length ? [`file folders ${template.fileFolders.join(", ")}`] : []),
   ];
   return parts.length ? `Activation also opens ${parts.join("; ")}. They are kept when you save.` : null;
 }
@@ -91,10 +94,10 @@ export function definitionFrom(draft: Draft): Omit<IncidentTemplateDefinition, "
     }))
     .filter((list) => list.items.length > 0);
   const titles = Object.fromEntries(Object.entries(draft.positionTitles).filter(([key]) => draft.positions.includes(key)));
-  // Contact groups, reports and rules have no controls here; they are kept as
-  // the template had them, so an edit on screen never drops what a package
-  // put in. The server refuses a save that leaves one without its position
-  // or board, and says which.
+  // Contact groups, reports, rules, dashboards, threads and file folders have
+  // no controls here; they are kept as the template had them, so an edit on
+  // screen never drops what a package put in. The server refuses a save that
+  // leaves one without its position or board, and says which.
   const original = draft.original;
   return {
     title: draft.title.trim(),
@@ -105,6 +108,9 @@ export function definitionFrom(draft: Draft): Omit<IncidentTemplateDefinition, "
     ...(original?.contactGroups ? { contactGroups: original.contactGroups } : {}),
     ...(original?.reports ? { reports: original.reports } : {}),
     ...(original?.rules ? { rules: original.rules } : {}),
+    ...(original?.dashboards ? { dashboards: original.dashboards } : {}),
+    ...(original?.threads ? { threads: original.threads } : {}),
+    ...(original?.fileFolders ? { fileFolders: original.fileFolders } : {}),
   };
 }
 

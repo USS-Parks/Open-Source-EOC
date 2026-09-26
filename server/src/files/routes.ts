@@ -7,6 +7,7 @@ import { withPerson } from "../db/context.js";
 import {
   BlobStore,
   getFileMeta,
+  listFileFolders,
   listFiles,
   search,
   uploadFile,
@@ -19,12 +20,14 @@ const UploadFields = z.object({
   attachedKind: z.enum(["none", "board", "record", "incident", "library"]).optional(),
   attachedId: z.string().uuid().optional(),
   supersedes: z.string().uuid().optional(),
+  folderId: z.string().uuid().optional(),
 });
 
 const SearchQuery = z.object({ q: z.string().min(2).max(200) });
 const FileListQuery = z.object({
   attachedKind: z.enum(["none", "board", "record", "incident", "library"]).optional(),
   attachedId: z.string().uuid().optional(),
+  folderId: z.string().uuid().optional(),
   cursor: z.string().max(512).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
@@ -93,6 +96,7 @@ export function fileRoutes(
           attachedKind: body.attachedKind,
           attachedId: body.attachedId,
           supersedes: body.supersedes,
+          folderId: body.folderId,
         },
         limits,
       );
@@ -112,6 +116,14 @@ export function fileRoutes(
       return reply.send(page);
     },
   );
+
+  app.get("/api/v1/incidents/:incidentId/file-folders", { preHandler: authenticate }, async (req, reply) => {
+    const { incidentId } = z.object({ incidentId: z.string().uuid() }).parse(req.params);
+    const folders = await withPerson(sql, req.principal.person.id, (tx) =>
+      listFileFolders(tx, req.principal, incidentId),
+    );
+    return reply.send({ folders });
+  });
 
   app.get("/api/v1/files/:fileId", { preHandler: authenticate }, async (req, reply) => {
     const { fileId } = req.params as { fileId: string };

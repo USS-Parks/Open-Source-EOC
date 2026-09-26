@@ -80,7 +80,8 @@ export async function listIncidentTemplateVersions(sql: Sql, key: string): Promi
  * What activation opens beyond positions, boards and checklists (VA12) must
  * be something it can make: contact groups of the template's own positions,
  * and reports and rules from templates that exist, on boards the template
- * opens, reaching its positions and its contact groups.
+ * opens, reaching its positions and its contact groups; dashboards from
+ * templates that exist, and threads of the template's positions.
  */
 async function checkActivationParts(sql: Sql, template: IncidentTemplate, positions: ReadonlySet<string>, boards: readonly string[]): Promise<void> {
   const groupNames = new Set<string>();
@@ -112,6 +113,23 @@ async function checkActivationParts(sql: Sql, template: IncidentTemplate, positi
       }
     }
   }
+  // The incident room (VC-12): dashboards from templates that exist, threads of the template's positions, folders named once.
+  const dashboards = template.dashboards ?? [];
+  if (new Set(dashboards).size !== dashboards.length) throw new AuthError(400, "dashboards: a dashboard template is listed twice");
+  const knownDashboards = dashboards.length ? await sql`select distinct key from dashboard_templates where key = any(${dashboards})` : [];
+  const missing = dashboards.filter((key) => !knownDashboards.some((row) => row.key === key));
+  if (missing.length) throw new AuthError(400, `dashboards: no dashboard template ${missing.join(", ")}`);
+  const threadTitles = new Set<string>();
+  for (const thread of template.threads ?? []) {
+    if (threadTitles.has(thread.title)) throw new AuthError(400, `threads: ${thread.title} is listed twice`);
+    threadTitles.add(thread.title);
+    for (const position of thread.positions) {
+      if (!positions.has(position)) throw new AuthError(400, `threads: ${position} in ${thread.title} is not one of the template's positions`);
+    }
+  }
+  const folders = template.fileFolders ?? [];
+  const folder = folders.find((name, index) => folders.indexOf(name) !== index);
+  if (folder) throw new AuthError(400, `fileFolders: ${folder} is listed twice`);
 }
 
 /**

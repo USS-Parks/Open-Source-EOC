@@ -3,6 +3,7 @@ import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../design/com
 import type {
   ApiClient,
   FileAttachmentKind,
+  FileFolder,
   FileMetaRef,
   SearchHit,
 } from "../app/api/client.js";
@@ -52,15 +53,19 @@ function listOptions(
   scope: FileScope,
   incidentId: string | null | undefined,
   record: RecordFileContext | null | undefined,
+  folder: string,
 ) {
   if (scope === "record" && record) {
     return { attachedKind: "record" as const, attachedId: record.recordId, limit: 40 };
   }
   if (scope === "incident" && incidentId) {
-    return { attachedKind: "incident" as const, attachedId: incidentId, limit: 40 };
+    return { attachedKind: "incident" as const, attachedId: incidentId, ...(folder !== ALL_FOLDERS ? { folderId: folder } : {}), limit: 40 };
   }
   return { limit: 40 };
 }
+
+const ALL_FOLDERS = "all";
+const NO_FOLDER = "none";
 
 export function FilesWorkspace(props: FilesWorkspaceProps) {
   const [scope, setScope] = useState<FileScope>(props.recordContext ? "record" : props.incidentId ? "incident" : "all");
@@ -79,6 +84,10 @@ export function FilesWorkspace(props: FilesWorkspaceProps) {
   const [hits, setHits] = useState<readonly SearchHit[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The incident's folders (VC-12): one shown in the library, and one an upload is filed in.
+  const [folders, setFolders] = useState<readonly FileFolder[]>([]);
+  const [folder, setFolder] = useState(ALL_FOLDERS);
+  const [uploadFolder, setUploadFolder] = useState(NO_FOLDER);
 
   const scopeValues = useMemo(() => [
     "all",
@@ -98,9 +107,24 @@ export function FilesWorkspace(props: FilesWorkspaceProps) {
 
   useEffect(() => {
     let active = true;
+    setFolder(ALL_FOLDERS);
+    setUploadFolder(NO_FOLDER);
+    setFolders([]);
+    if (props.incidentId) {
+      props.client.listFileFolders(props.incidentId)
+        .then((list) => { if (active) setFolders(list); })
+        .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : String(reason)); });
+    }
+    return () => { active = false; };
+  }, [props.client, props.incidentId]);
+
+  const folderLabels = Object.fromEntries(folders.map((item) => [item.id, item.name]));
+
+  useEffect(() => {
+    let active = true;
     setLibraryLoading(true);
     setLibraryError(null);
-    props.client.listFiles(props.jurisdictionId, listOptions(scope, props.incidentId, props.recordContext))
+    props.client.listFiles(props.jurisdictionId, listOptions(scope, props.incidentId, props.recordContext, folder))
       .then((page) => {
         if (!active) return;
         setFiles(page.files);
@@ -116,7 +140,7 @@ export function FilesWorkspace(props: FilesWorkspaceProps) {
     return () => {
       active = false;
     };
-  }, [props.client, props.incidentId, props.jurisdictionId, props.recordContext, reload, scope]);
+  }, [folder, props.client, props.incidentId, props.jurisdictionId, props.recordContext, reload, scope]);
 
   useEffect(() => {
     let active = true;
@@ -174,17 +198,23 @@ export function FilesWorkspace(props: FilesWorkspaceProps) {
     const attachment = target === "record" && props.recordContext
       ? { attachedKind: "record" as FileAttachmentKind, attachedId: props.recordContext.recordId }
       : target === "incident" && props.incidentId
-        ? { attachedKind: "incident" as FileAttachmentKind, attachedId: props.incidentId }
+        ? {
+            attachedKind: "incident" as FileAttachmentKind,
+            attachedId: props.incidentId,
+            ...(uploadFolder !== NO_FOLDER ? { folderId: uploadFolder } : {}),
+          }
         : {};
+    const filedIn = target === "incident" ? folderLabels[uploadFolder] : undefined;
     const result = await props.client.uploadFile(props.jurisdictionId, {
       name: file.name,
       contentType: file.type || "application/octet-stream",
       file,
       ...attachment,
     });
-    setUploadMessage(`Stored ${file.name} as version ${result.version}.`);
+    setUploadMessage(`Stored ${file.name}${filedIn ? ` in ${filedIn}` : ""} as version ${result.version}.`);
     setFile(null);
     setReload((value) => value + 1);
+    if (filedIn && props.incidentId) setFolders(await props.client.listFileFolders(props.incidentId));
     const meta = await props.client.fileMeta(result.id);
     setSelected(meta);
   });
@@ -214,7 +244,7 @@ export function FilesWorkspace(props: FilesWorkspaceProps) {
   const loadMore = () => void run(async () => {
     if (!cursor) return;
     const page = await props.client.listFiles(props.jurisdictionId, {
-      ...listOptions(scope, props.incidentId, props.recordContext),
+      ...listOptions(scope, props.incidentId, props.recordContext, folder),
       cursor,
     });
     setFiles((current) => [...current, ...page.files]);
@@ -246,6 +276,15 @@ export function FilesWorkspace(props: FilesWorkspaceProps) {
                 onChange={(value) => setTarget(value as FileScope)}
                 labels={{ ...scopeLabels, all: "Jurisdiction file library" }}
               />
+              {target === "incident" && folders.length > 0 ? (
+                <EnumSelect
+                  label="File into folder"
+                  values={[NO_FOLDER, ...folders.map((item) => item.id)]}
+                  value={uploadFolder}
+                  onChange={setUploadFolder}
+                  labels={{ [NO_FOLDER]: "No folder", ...folderLabels }}
+                />
+              ) : null}
               <label className="d27-file-input">
                 <span>File</span>
                 <input type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
@@ -288,6 +327,18 @@ export function FilesWorkspace(props: FilesWorkspaceProps) {
               onChange={(value) => setScope(value as FileScope)}
               labels={scopeLabels}
             />
+            {scope === "incident" && folders.length > 0 ? (
+              <EnumSelect
+                label="Show folder"
+                values={[ALL_FOLDERS, ...folders.map((item) => item.id)]}
+                value={folder}
+                onChange={setFolder}
+                labels={{
+                  [ALL_FOLDERS]: "All folders",
+                  ...Object.fromEntries(folders.map((item) => [item.id, `${item.name} (${item.files})`])),
+                }}
+              />
+            ) : null}
             <span>{files.length} loaded</span>
           </div>
           {libraryLoading ? <Loading label="Loading files..." /> : null}
@@ -304,7 +355,7 @@ export function FilesWorkspace(props: FilesWorkspaceProps) {
                     onClick={() => setSelected(item)}
                   >
                     <strong>{item.name}</strong>
-                    <span>{contextLabel(item)} - {fileSize(item.size)} - version {item.version}</span>
+                    <span>{contextLabel(item)}{item.folderName ? ` - ${item.folderName}` : ""} - {fileSize(item.size)} - version {item.version}</span>
                   </button>
                 </li>
               ))}
@@ -337,7 +388,7 @@ export function FilesWorkspace(props: FilesWorkspaceProps) {
                   Uploaded by {selected.uploadedBy.displayName}
                   {selected.uploadedBy.positionTitle ? ` (${selected.uploadedBy.positionTitle})` : ""}
                   {selected.createdAt ? ` on ${new Date(selected.createdAt).toLocaleString()}` : ""}
-                  . Context: {contextLabel(selected)}.
+                  . Context: {contextLabel(selected)}{selected.folderName ? `, folder ${selected.folderName}` : ""}.
                 </p>
               ) : null}
               {previewLoading ? <Loading label="Loading preview..." /> : null}

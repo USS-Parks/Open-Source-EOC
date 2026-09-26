@@ -490,6 +490,10 @@ export interface IncidentTemplateDefinition {
   readonly contactGroups?: ReadonlyArray<{ readonly name: string; readonly positions: readonly string[] }>;
   readonly reports?: readonly string[];
   readonly rules?: readonly string[];
+  /** The incident room (VC-12): dashboards by template key, threads incident-wide or of positions, and file folders. */
+  readonly dashboards?: readonly string[];
+  readonly threads?: ReadonlyArray<{ readonly title: string; readonly positions: readonly string[] }>;
+  readonly fileFolders?: readonly string[];
 }
 export interface IncidentTemplateVersionEntry {
   readonly version: number;
@@ -649,12 +653,20 @@ export interface FileMetaRef {
   readonly attachedId?: string | null;
   readonly attachedBoardId?: string | null;
   readonly attachedIncidentId?: string | null;
+  /** The incident folder it is filed in (VC-12). */
+  readonly folderId?: string | null;
+  readonly folderName?: string | null;
   readonly createdAt?: string;
   readonly uploadedBy?: {
     readonly personId: string;
     readonly displayName: string;
     readonly positionTitle: string | null;
   };
+}
+export interface FileFolder {
+  readonly id: string;
+  readonly name: string;
+  readonly files: number;
 }
 export interface FilePage {
   readonly files: readonly FileMetaRef[];
@@ -1834,25 +1846,32 @@ export class ApiClient {
       file: Blob;
       attachedKind?: FileAttachmentKind;
       attachedId?: string;
+      folderId?: string;
     },
   ): Promise<UploadResult> {
     const form = new FormData();
     form.append("name", body.name);
     if (body.attachedKind !== undefined) form.append("attachedKind", body.attachedKind);
     if (body.attachedId !== undefined) form.append("attachedId", body.attachedId);
+    if (body.folderId !== undefined) form.append("folderId", body.folderId);
     form.append("file", new Blob([body.file], { type: body.contentType }), body.name);
     return this.request<UploadResult>("POST", `/api/v1/jurisdictions/${jurisdictionId}/files`, form);
+  }
+  async listFileFolders(incidentId: string): Promise<readonly FileFolder[]> {
+    const r = await this.request<{ folders: FileFolder[] }>("GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/file-folders`);
+    return r.folders;
   }
   fileMeta(fileId: string): Promise<FileMetaRef> {
     return this.request<FileMetaRef>("GET", `/api/v1/files/${fileId}`);
   }
   listFiles(
     jurisdictionId: string,
-    options: { attachedKind?: FileAttachmentKind; attachedId?: string; cursor?: string; limit?: number } = {},
+    options: { attachedKind?: FileAttachmentKind; attachedId?: string; folderId?: string; cursor?: string; limit?: number } = {},
   ): Promise<FilePage> {
     const query = new URLSearchParams();
     if (options.attachedKind !== undefined) query.set("attachedKind", options.attachedKind);
     if (options.attachedId !== undefined) query.set("attachedId", options.attachedId);
+    if (options.folderId !== undefined) query.set("folderId", options.folderId);
     if (options.cursor !== undefined) query.set("cursor", options.cursor);
     if (options.limit !== undefined) query.set("limit", String(options.limit));
     const suffix = query.size > 0 ? `?${query.toString()}` : "";

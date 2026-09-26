@@ -10,7 +10,7 @@ before an instance will take it.
 
 | Part | Contents |
 |---|---|
-| Incident template **Small EOC activation (any hazard)** | The eight ICS Command and General Staff positions and a **Community Liaison**; seven boards; 29 activation checklist items, five of them due 30 to 120 minutes after activation; two contact groups; three reports; two notification rules |
+| Incident template **Small EOC activation (any hazard)** | The eight ICS Command and General Staff positions and a **Community Liaison**; seven boards; 29 activation checklist items, five of them due 30 to 120 minutes after activation; two contact groups; three reports; two notification rules; the overview dashboard; two message threads; four file folders |
 | Incident template **Tabletop exercise (small EOC)** | Six positions, five boards, exercise checklists, an **Exercise players** contact group and the welfare follow-up report; see [TABLETOP.md](TABLETOP.md) |
 | Board template **Welfare Checks** | One record per household that may need help: elders, people whose medical equipment needs power, people without transport. Directions and notes are read by members only |
 | Form **Welfare check** | The same questions for field staff in **Smart Forms**, queued offline and filed on the welfare checks board |
@@ -39,7 +39,14 @@ imported the pack opens, with no other setup:
 - the three reports, on this incident's boards. A scheduled report stores its
   file with the incident; add recipients on **Reports** if it should also be
   sent;
-- the two notification rules, on this incident's boards.
+- the two notification rules, on this incident's boards;
+- the **Small EOC overview** dashboard, titled with the incident's name, first
+  on **Dashboards** while the incident is selected;
+- two message threads on **Messages**: **EOC coordination**, read by everyone
+  on the incident, and **Public information**, for the Public Information
+  Officer and the Community Liaison;
+- four folders on **Files**: **Situation reports**, **Maps and plans**,
+  **Public messages** and **Cost recovery**.
 
 ## Import it
 
@@ -60,8 +67,8 @@ edited on screen is kept as you left it.
 ## Adapting it
 
 Edit the incident templates on **Incident Setup**: positions, boards and
-checklists change on screen, and the contact groups, reports and rules are
-kept through the edit. To change those, or the welfare checks board, edit
+checklists change on screen, and the contact groups, reports, rules,
+dashboard, threads and folders are kept through the edit. To change those, or the welfare checks board, edit
 `package.json`, raise the version of what changed (a board, report, rule or
 dashboard template is refused if its key and version are already on the
 instance with other content), and sign and import it again.

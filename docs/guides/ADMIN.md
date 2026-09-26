@@ -185,7 +185,17 @@ Other preparation happens on the screens that use it:
   incident's board, reaching the positions and contact groups it names. A
   save is refused, with the reason, when a report or rule runs on a board the
   template does not open, or reaches a position or contact group it does not
-  name. The [small EOC starter pack](../../deploy/packs/small-eoc-starter/README.md)
+  name.
+- **The incident room.** A packaged template may also name dashboard
+  templates, message threads and file folders. On activation each dashboard
+  is made for the incident, titled with its name; while the incident is
+  selected, **Dashboards** lists its own first and leaves out other
+  incidents'. A thread with no positions is incident-wide, read by everyone
+  on the incident; one with positions reaches their holders. Each folder
+  appears on **Files** under the incident, where **File into folder** files
+  an upload in it and **Show folder** lists one folder's files. A save is
+  refused when it names a dashboard template the instance lacks or a thread
+  position the template does not open. The [small EOC starter pack](../../deploy/packs/small-eoc-starter/README.md)
   is one such package.
 - **Plans.** A plan is the jurisdiction's emergency plan as something the
   product runs. On **Incident Setup**, **Plans** lists them for every member;

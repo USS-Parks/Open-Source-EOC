@@ -98,6 +98,7 @@ GET /api/v1/incidents/:incidentId/dashboard-configs/:key/data
 GET /api/v1/incidents/:incidentId/datasets
 GET /api/v1/incidents/:incidentId/esf-assessments
 GET /api/v1/incidents/:incidentId/esf-assessments/:framework/:esf/history
+GET /api/v1/incidents/:incidentId/file-folders
 GET /api/v1/incidents/:incidentId/force-account
 GET /api/v1/incidents/:incidentId/handoff
 GET /api/v1/incidents/:incidentId/iaps
@@ -470,6 +471,7 @@ const tagAliases: Readonly<Record<string, string>> = {
   "corrective-actions": "aar",
   "dashboard-configs": "dashboards",
   "equipment-hours": "damage",
+  "file-folders": "files",
   "force-account": "damage",
   "data-packs": "datasets",
   "guests": "auth",

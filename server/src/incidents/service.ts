@@ -15,6 +15,8 @@ import { AuthError, requireAdmin, requireMember, type Principal } from "../auth/
 import { recordAudit } from "../audit/service.js";
 import { STANDARD_TITLES } from "../auth/authz.js";
 import { createBoard } from "../boards/service.js";
+import { createDashboard } from "../dashboards/service.js";
+import { createThread } from "../messaging/service.js";
 import { ReportTemplateSchema, RuleTemplateSchema } from "../data-packs/templates.js";
 import { createReport } from "../reports/service.js";
 import { sendMassNotificationIn, type ActivationNotice } from "../notify/mass.js";
@@ -44,6 +46,19 @@ export const IncidentTemplateSchema = z.object({
   reports: z.array(z.string().regex(/^[a-z][a-z0-9_]*$/)).max(30).optional(),
   /** Rule templates made into notification rules on the incident's boards at activation (VA12). */
   rules: z.array(z.string().regex(/^[a-z][a-z0-9_]*$/)).max(30).optional(),
+  /** Dashboard templates made into the incident's own dashboards at activation (VC-12). */
+  dashboards: z.array(z.string().regex(/^[a-z][a-z0-9_]*$/)).max(20).optional(),
+  /**
+   * Message threads the incident opens with (VC-12). A thread with no
+   * positions is incident-wide, read by everyone who can read the incident;
+   * one with positions is a group thread of their holders.
+   */
+  threads: z.array(z.object({
+    title: z.string().trim().min(1).max(200),
+    positions: z.array(z.string().min(1)).max(30).default([]),
+  }).strict()).max(20).optional(),
+  /** The folders the incident's files are filed in (VC-12). */
+  fileFolders: z.array(z.string().trim().min(1).max(120)).max(20).optional(),
 }).superRefine((template, ctx) => {
   const keyed = new Map<string, [number, number]>();
   for (const [listIndex, list] of template.checklists.entries()) {
@@ -189,6 +204,10 @@ export interface ActivationResult {
   readonly contactGroups: number;
   readonly reports: number;
   readonly rules: number;
+  /** The incident's dashboards, message threads and file folders (VC-12). */
+  readonly dashboards: number;
+  readonly threads: number;
+  readonly fileFolders: number;
   /** The activation notice, when one was asked for: its send and how many it reached. */
   readonly notice?: { readonly massNotificationId: string; readonly recipients: number };
 }
@@ -355,7 +374,11 @@ export async function activateIncident(
  *   board of that template, scoped to the incident; a scheduled one stores
  *   its file, and recipients are added to it by hand;
  * - each rule comes from its template's latest version, on the incident's
- *   board, reaching positions and contact groups by their ids here.
+ *   board, reaching positions and contact groups by their ids here;
+ * - each dashboard is made from its template's latest version for this
+ *   incident, titled with its name (VC-12);
+ * - each thread is incident-wide, or a group thread of its positions;
+ * - each file folder is made empty, in the template's order.
  */
 async function openActivationParts(
   sql: Sql,
@@ -366,7 +389,7 @@ async function openActivationParts(
   template: IncidentTemplate,
   positionIds: ReadonlyMap<string, string>,
   boardIds: ReadonlyMap<string, string>,
-): Promise<{ contactGroups: number; reports: number; rules: number }> {
+): Promise<{ contactGroups: number; reports: number; rules: number; dashboards: number; threads: number; fileFolders: number }> {
   const groupIds = new Map<string, string>();
   let contactGroups = 0;
   for (const group of template.contactGroups ?? []) {
@@ -442,7 +465,35 @@ async function openActivationParts(
     });
     rules += 1;
   }
-  return { contactGroups, reports, rules };
+
+  for (const key of template.dashboards ?? []) {
+    const [row] = await sql`select title from dashboard_templates where key = ${key} order by version desc limit 1`;
+    const dashboardId = await createDashboard(sql, actor, jurisdictionId, key, undefined, `${incidentName}: ${row!.title as string}`);
+    await sql`insert into incident_dashboards (incident_id, dashboard_id) values (${incidentId}, ${dashboardId})`;
+  }
+
+  for (const thread of template.threads ?? []) {
+    await createThread(sql, actor, {
+      jurisdictionId,
+      kind: "group",
+      title: thread.title,
+      incidentId,
+      audience: thread.positions.length ? "members" : "incident",
+      members: thread.positions.map((key) => ({ kind: "position" as const, id: positionIds.get(key)! })),
+    });
+  }
+
+  for (const [index, name] of (template.fileFolders ?? []).entries()) {
+    await sql`
+      insert into file_folders (jurisdiction_id, incident_id, name, sort_order, created_by)
+      values (${jurisdictionId}, ${incidentId}, ${name}, ${index}, ${actor.person.id})`;
+  }
+  return {
+    contactGroups, reports, rules,
+    dashboards: template.dashboards?.length ?? 0,
+    threads: template.threads?.length ?? 0,
+    fileFolders: template.fileFolders?.length ?? 0,
+  };
 }
 
 export interface IncidentDetail {
