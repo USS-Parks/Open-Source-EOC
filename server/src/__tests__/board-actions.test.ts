@@ -5,9 +5,10 @@ import type { BoardActionRun } from "@openeoc/shared";
 import { addMembership, createJurisdiction, createPerson } from "../auth/service.js";
 import { buildApp } from "../app.js";
 import { onRecordWritten } from "../boards/record-sync.js";
-import { ensureStandardTemplates } from "../boards/service.js";
+import { ensureStandardTemplates, lockBoardMutation } from "../boards/service.js";
 import { onBoardEvent } from "../events/bus.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
+import { lockIncidentMutation } from "../incidents/participation.js";
 import { auth, freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
 /**
@@ -352,5 +353,30 @@ describe("board actions", () => {
     const data = await dataOf(record);
     expect(data).toMatchObject({ f6: 5 });
     expect(data).not.toHaveProperty("f7");
+  });
+
+  it("takes the incident's lock before the board's, so a transition beside a record write cannot deadlock", async () => {
+    // Costed, the record moves itself to review; closing it enters a state whose action writes the record.
+    const id = await create(reports, memberToken, { summary: "Lock order check" }, incidentId);
+    await patch(reports, id, memberToken, { cost: 5 }, incidentId);
+    const [state] = await admin`select state_key from board_workflow_instances where record_id = ${id}`;
+    expect(state!.state_key).toBe("review");
+    const waiting = async () => (await admin`
+      select count(*)::int as n from pg_locks where locktype = 'advisory' and not granted`)[0]!.n as number;
+    let closing: ReturnType<typeof call> | undefined;
+    // Another write holds the incident and then wants the board, as a record write does.
+    await admin.begin(async (tx) => {
+      await lockIncidentMutation(tx as unknown as Sql, incidentId);
+      closing = call("POST", `/api/v1/boards/${reports}/records/${id}/workflow/transitions`, memberToken,
+        { transitionKey: "close", idempotencyKey: randomUUID() });
+      await expect.poll(waiting, { timeout: 10_000 }).toBeGreaterThan(0);
+      await tx`set local lock_timeout = '5s'`;
+      // Taken at once when the transition waits on the incident first; a deadlock if it held the board.
+      await lockBoardMutation(tx as unknown as Sql, reports);
+    });
+    const closed = await closing!;
+    expect(closed.statusCode, closed.body).toBe(200);
+    const [after] = await admin`select state_key from board_workflow_instances where record_id = ${id}`;
+    expect(after!.state_key).toBe("closed");
   });
 });

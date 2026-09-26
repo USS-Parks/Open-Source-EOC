@@ -12705,3 +12705,29 @@ Landing left the sync hub's loop over committed changes to call
   tests green (sync actions, sync, the hub's lifecycle, guest withdrawal,
   record sync, continuity sync, field breadth, board actions, board
   conditions, board engine, workflow guards, federation).
+
+## Veoci and air gap follow-up: a workflow transition's lock order
+
+Found by "Veoci and air gap follow-up: sync edits set board actions off".
+
+- **What the code did before.** A workflow transition
+  (`loadWorkflowForWrite` in `server/src/boards/workflow-runtime.ts`) took
+  the board's lock and then, when an action on the entered state wrote the
+  record, the incident's lock inside that write. A record write and the sync
+  hub take the incident's lock first and then the board's. A transition and
+  a write on the same incident at the same moment could therefore each hold
+  one lock and wait for the other; PostgreSQL found the deadlock and aborted
+  one, and the person saw an internal error.
+- **What changed.** The transition takes the record's incident lock before
+  the board's, the order the other writers use.
+- **Tests.** `board-actions.test.ts` gains a case (6 tests): while another
+  transaction holds the incident's lock, a transition that enters a state
+  whose action writes the record is started; the other transaction then
+  takes the board's lock, which it gets at once because the transition waits
+  on the incident first, and the transition completes. On the old code the
+  same test deadlocks and the transition answers 500.
+- **Verification.** `pnpm check:static` exit 0; 7 files, 41 tests green
+  (board actions, the workflow runtime, workflow guards, board workflow,
+  sync actions, board conditions, resource typing).
+- **Evidence level:** real-database test.
+- **Rollback:** revert the commit.

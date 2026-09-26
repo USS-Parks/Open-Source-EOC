@@ -12,7 +12,7 @@ import {
 } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
-import { getIncidentAuthority, type IncidentAuthority } from "../incidents/participation.js";
+import { getIncidentAuthority, lockIncidentMutation, type IncidentAuthority } from "../incidents/participation.js";
 import { getEffectiveBoard, getIncidentBoardReadShape, lockBoardMutation } from "./service.js";
 import { resolveWorkflowAssignment, type ResolvedWorkflowAssignment } from "./workflow.js";
 
@@ -378,6 +378,11 @@ async function loadWorkflowForWrite(
   boardId: string,
   recordId: string,
 ): Promise<LoadedWorkflow> {
+  // The incident's lock before the board's, the order record writes and the
+  // sync hub take them: an action's write takes the incident's, and the
+  // reverse order would deadlock against a record write on the same incident.
+  const [record] = await sql`select incident_id from board_records where id = ${recordId} and board_id = ${boardId}`;
+  if (record?.incident_id) await lockIncidentMutation(sql, record.incident_id as string);
   await lockBoardMutation(sql, boardId);
   const context = await loadRecordContext(sql, actor, boardId, recordId, true);
   const [found] = await sql`
