@@ -1,0 +1,13 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature", "id": 90211, "geometry": { "type": "Point", "coordinates": [-123.6052, 41.2511] },
+      "properties": { "OBJECTID": 90211, "IncidentName": "Bluff Creek", "IncidentTypeCategory": "WF", "IncidentSize": 12480, "DailyAcres": 12480, "PercentContained": 35, "POOState": "US-CA", "POOCounty": "Humboldt", "UniqueFireIdentifier": "2026-CASRF-001234", "IrwinID": "{3F2A1B0C-9D8E-4F7A-8B6C-5D4E3F2A1B0C}", "FireDiscoveryDateTime": 1789891200000, "ModifiedOnDateTime_dt": 1790409600000 } },
+    { "type": "Feature", "id": 90245, "geometry": { "type": "Point", "coordinates": [-123.4071, 41.6208] },
+      "properties": { "OBJECTID": 90245, "IncidentName": "Panther", "IncidentTypeCategory": "WF", "IncidentSize": 452, "PercentContained": 70, "POOState": "US-CA", "POOCounty": "Siskiyou", "UniqueFireIdentifier": "2026-CAKNF-000877", "IrwinID": "{0A1B2C3D-4E5F-4061-8273-94A5B6C7D8E9}", "FireDiscoveryDateTime": 1790150400000 } },
+    { "type": "Feature", "id": 90250, "geometry": { "type": "Point", "coordinates": [-123.2104, 40.5602] },
+      "properties": { "OBJECTID": 90250, "IncidentName": "South Fork Complex", "IncidentTypeCategory": "CX", "IncidentSize": 64210, "PercentContained": 12, "POOState": "US-CA", "POOCounty": "Trinity", "UniqueFireIdentifier": "2026-CASHF-002011", "IrwinID": "{11223344-5566-4778-899A-ABBCCDDEEFF0}", "FireDiscoveryDateTime": 1789632000000 } },
+    { "type": "Feature", "id": 90262, "geometry": { "type": "Point", "coordinates": [-123.9496, 40.9508] },
+      "properties": { "OBJECTID": 90262, "IncidentName": "Redwood Valley Rx", "IncidentTypeCategory": "RX", "IncidentSize": 80, "PercentContained": 100, "POOState": "US-CA", "POOCounty": "Humboldt", "UniqueFireIdentifier": "2026-CASRF-001301", "IrwinID": "{7C6B5A49-3827-4165-A0B9-C8D7E6F5A4B3}", "FireDiscoveryDateTime": 1790316000000 } }
+  ]
+}

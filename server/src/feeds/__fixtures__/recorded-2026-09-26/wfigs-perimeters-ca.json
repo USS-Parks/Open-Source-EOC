@@ -1,0 +1,832 @@
+{
+ "type": "FeatureCollection",
+ "properties": {
+  "exceededTransferLimit": true
+ },
+ "features": [
+  {
+   "type": "Feature",
+   "id": 58728,
+   "geometry": {
+    "type": "MultiPolygon",
+    "coordinates": [
+     [
+      [
+       [
+        -121.32619,
+        35.87344
+       ],
+       [
+        -121.32186,
+        35.86883
+       ],
+       [
+        -121.34212,
+        35.8665
+       ],
+       [
+        -121.36407,
+        35.87506
+       ],
+       [
+        -121.37145,
+        35.87588
+       ],
+       [
+        -121.37485,
+        35.87394
+       ],
+       [
+        -121.37815,
+        35.87376
+       ],
+       [
+        -121.37834,
+        35.87276
+       ],
+       [
+        -121.38422,
+        35.87295
+       ],
+       [
+        -121.38122,
+        35.87502
+       ],
+       [
+        -121.3862,
+        35.87512
+       ],
+       [
+        -121.39079,
+        35.87436
+       ],
+       [
+        -121.39196,
+        35.87786
+       ],
+       [
+        -121.39521,
+        35.88624
+       ],
+       [
+        -121.40342,
+        35.88782
+       ],
+       [
+        -121.41886,
+        35.88396
+       ],
+       [
+        -121.42736,
+        35.88949
+       ],
+       [
+        -121.43015,
+        35.89811
+       ],
+       [
+        -121.43676,
+        35.898
+       ],
+       [
+        -121.4423,
+        35.89573
+       ],
+       [
+        -121.44851,
+        35.89396
+       ],
+       [
+        -121.46212,
+        35.91021
+       ],
+       [
+        -121.46067,
+        35.92502
+       ],
+       [
+        -121.46807,
+        35.93534
+       ],
+       [
+        -121.46608,
+        35.94662
+       ],
+       [
+        -121.44176,
+        35.9719
+       ],
+       [
+        -121.42091,
+        35.96157
+       ],
+       [
+        -121.4046,
+        35.96658
+       ],
+       [
+        -121.37545,
+        35.96734
+       ],
+       [
+        -121.3469,
+        35.95783
+       ],
+       [
+        -121.31372,
+        35.96077
+       ],
+       [
+        -121.3089,
+        35.95831
+       ],
+       [
+        -121.30211,
+        35.95177
+       ],
+       [
+        -121.31108,
+        35.94919
+       ],
+       [
+        -121.3177,
+        35.93404
+       ],
+       [
+        -121.32673,
+        35.91767
+       ],
+       [
+        -121.31328,
+        35.91153
+       ],
+       [
+        -121.30522,
+        35.91165
+       ],
+       [
+        -121.3201,
+        35.90813
+       ],
+       [
+        -121.32828,
+        35.89067
+       ],
+       [
+        -121.32619,
+        35.87344
+       ]
+      ]
+     ],
+     [
+      [
+       [
+        -121.37911,
+        35.96164
+       ],
+       [
+        -121.38025,
+        35.96222
+       ],
+       [
+        -121.38078,
+        35.96316
+       ],
+       [
+        -121.382,
+        35.96363
+       ],
+       [
+        -121.38389,
+        35.96463
+       ],
+       [
+        -121.38526,
+        35.96408
+       ],
+       [
+        -121.38646,
+        35.96441
+       ],
+       [
+        -121.38727,
+        35.96515
+       ],
+       [
+        -121.38756,
+        35.9644
+       ],
+       [
+        -121.38836,
+        35.96288
+       ],
+       [
+        -121.38803,
+        35.9611
+       ],
+       [
+        -121.38713,
+        35.96103
+       ],
+       [
+        -121.38562,
+        35.96252
+       ],
+       [
+        -121.38565,
+        35.96406
+       ],
+       [
+        -121.38486,
+        35.96358
+       ],
+       [
+        -121.38404,
+        35.96244
+       ],
+       [
+        -121.38233,
+        35.96181
+       ],
+       [
+        -121.38157,
+        35.96081
+       ],
+       [
+        -121.37977,
+        35.96004
+       ],
+       [
+        -121.37894,
+        35.95998
+       ],
+       [
+        -121.37755,
+        35.95874
+       ],
+       [
+        -121.37672,
+        35.95767
+       ],
+       [
+        -121.37572,
+        35.95673
+       ],
+       [
+        -121.37394,
+        35.95708
+       ],
+       [
+        -121.3692,
+        35.95827
+       ],
+       [
+        -121.36782,
+        35.95879
+       ],
+       [
+        -121.36754,
+        35.96012
+       ],
+       [
+        -121.36786,
+        35.96031
+       ],
+       [
+        -121.36778,
+        35.96052
+       ],
+       [
+        -121.36826,
+        35.96074
+       ],
+       [
+        -121.36868,
+        35.96067
+       ],
+       [
+        -121.37086,
+        35.9611
+       ],
+       [
+        -121.37246,
+        35.96103
+       ],
+       [
+        -121.37332,
+        35.95993
+       ],
+       [
+        -121.37485,
+        35.95999
+       ],
+       [
+        -121.37712,
+        35.96025
+       ],
+       [
+        -121.37853,
+        35.96067
+       ],
+       [
+        -121.37911,
+        35.96164
+       ]
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "OBJECTID": 58728,
+    "poly_SourceOID": 47597,
+    "poly_IncidentName": "Plaskett",
+    "poly_FeatureCategory": "Wildfire Daily Fire Perimeter",
+    "poly_MapMethod": "IR Image Interpretation",
+    "poly_GISAcres": 29992.93039659393,
+    "poly_DeleteThis": "No",
+    "poly_FeatureAccess": "Public",
+    "poly_FeatureStatus": "Approved",
+    "poly_IsVisible": "Yes",
+    "poly_CreateDate": 1788645146000,
+    "poly_DateCurrent": 1789483412000,
+    "poly_PolygonDateTime": 1789418640000,
+    "poly_IRWINID": "{C257FBA6-F90E-431F-9464-067E8FBF79D7}",
+    "poly_FORID": null,
+    "poly_Acres_AutoCalc": 29992.816827842627,
+    "poly_SourceGlobalID": "{DFB7555B-65B1-4D1E-999F-2642288FAA6E}",
+    "poly_Source": "2026 NIFS",
+    "attr_SourceOID": 43315468,
+    "attr_ABCDMisc": null,
+    "attr_ADSPermissionState": "ICS209",
+    "attr_CalculatedAcres": null,
+    "attr_ContainmentDateTime": null,
+    "attr_ControlDateTime": null,
+    "attr_CreatedBySystem": "wildcade",
+    "attr_IncidentSize": 29993,
+    "attr_DiscoveryAcres": 0.1,
+    "attr_DispatchCenterID": "CALPCC",
+    "attr_EstimatedCostToDate": 71056000,
+    "attr_FinalAcres": null,
+    "attr_FFReportApprovedByTitle": null,
+    "attr_FFReportApprovedByUnit": null,
+    "attr_FFReportApprovedDate": null,
+    "attr_FireBehaviorGeneral": "Minimal",
+    "attr_FireBehaviorGeneral1": "Creeping",
+    "attr_FireBehaviorGeneral2": "Backing",
+    "attr_FireBehaviorGeneral3": "Smoldering",
+    "attr_FireCause": "Undetermined",
+    "attr_FireCauseGeneral": null,
+    "attr_FireCauseSpecific": null,
+    "attr_FireCode": "SY3X",
+    "attr_FireDepartmentID": null,
+    "attr_FireDiscoveryDateTime": 1787761560000,
+    "attr_FireMgmtComplexity": null,
+    "attr_FireOutDateTime": null,
+    "attr_FireStrategyConfinePercent": 0,
+    "attr_FireStrategyFullSuppPrcnt": 100,
+    "attr_FireStrategyMonitorPercent": 0,
+    "attr_FireStrategyPointZonePrcnt": 0,
+    "attr_FSJobCode": "P5",
+    "attr_FSOverrideCode": "0507",
+    "attr_GACC": "OSCC",
+    "attr_ICS209ReportDateTime": 1790381570000,
+    "attr_ICS209RptForTimePeriodFrom": 1790341200000,
+    "attr_ICS209RptForTimePeriodTo": 1790380800000,
+    "attr_ICS209ReportStatus": "U",
+    "attr_IncidentManagementOrg": "Complex Incident Management Team",
+    "attr_IncidentName": "Plaskett",
+    "attr_IncidentShortDescription": "34 Miles SW from Big Sur, CA",
+    "attr_IncidentTypeCategory": "WF",
+    "attr_IncidentTypeKind": "FI",
+    "attr_InitialLatitude": 35.9197,
+    "attr_InitialLongitude": -121.467,
+    "attr_InitialResponseAcres": null,
+    "attr_InitialResponseDateTime": null,
+    "attr_IrwinID": "{C257FBA6-F90E-431F-9464-067E8FBF79D7}",
+    "attr_IsFireCauseInvestigated": null,
+    "attr_IsFireCodeRequested": 0,
+    "attr_IsFSAssisted": 1,
+    "attr_IsMultiJurisdictional": 1,
+    "attr_IsReimbursable": 1,
+    "attr_IsTrespass": 0,
+    "attr_IsUnifiedCommand": 1,
+    "attr_LocalIncidentIdentifier": "002475",
+    "attr_ModifiedBySystem": "ics209",
+    "attr_PercentContained": 98,
+    "attr_PercentPerimToBeContained": 100,
+    "attr_POOCity": "Big Sur",
+    "attr_POOCounty": "Monterey",
+    "attr_POODispatchCenterID": "CALPCC",
+    "attr_POOFips": "06053",
+    "attr_POOJurisdictionalAgency": "USFS",
+    "attr_POOJurisdictionalUnit": "CALPF",
+    "attr_POOJurisdictUnitParentUnit": null,
+    "attr_POOLandownerCategory": "USFS",
+    "attr_POOLandownerKind": "Federal",
+    "attr_POOLegalDescPrincipalMerid": null,
+    "attr_POOLegalDescQtr": null,
+    "attr_POOLegalDescQtrQtr": null,
+    "attr_POOLegalDescRange": null,
+    "attr_POOLegalDescSection": null,
+    "attr_POOLegalDescTownship": null,
+    "attr_POOPredictiveServiceAreaID": "SC07",
+    "attr_POOProtectingAgency": "USFS",
+    "attr_POOProtectingUnit": "CALPF",
+    "attr_POOState": "US-CA",
+    "attr_PredominantFuelGroup": null,
+    "attr_PredominantFuelModel": null,
+    "attr_PrimaryFuelModel": "Chaparral (6 feet)",
+    "attr_SecondaryFuelModel": "Tall Grass (2.5 feet)",
+    "attr_TotalIncidentPersonnel": 431,
+    "attr_UniqueFireIdentifier": "2026-CALPF-002475",
+    "attr_FORID": null,
+    "attr_WFDSSDecisionStatus": "Approved Decision",
+    "attr_EstimatedFinalCost": 90000000,
+    "attr_OrganizationalAssessment": "Complex Incident Manageme",
+    "attr_StratDecisionPublishDate": 1789937602000,
+    "attr_CreatedOnDateTime_dt": 1787762780123,
+    "attr_ModifiedOnDateTime_dt": 1790381571083,
+    "attr_Source": "IRWIN",
+    "attr_ActiveFireCandidate": 1,
+    "attr_IsCpxChild": 0,
+    "attr_CpxName": null,
+    "attr_CpxID": null,
+    "attr_SourceGlobalID": "{025A48CB-F107-4E68-9257-CB9FC74C84BC}",
+    "GlobalID": "637f941a-efd6-4e02-aea3-43cf9165e265",
+    "Shape__Area": 0.012120729817979736,
+    "Shape__Length": 1.0120532382587573,
+    "attr_IncidentComplexityLevel": "Type 2 Incident"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 57467,
+   "geometry": {
+    "type": "MultiPolygon",
+    "coordinates": [
+     [
+      [
+       [
+        -121.70285,
+        36.30916
+       ],
+       [
+        -121.69698,
+        36.29662
+       ],
+       [
+        -121.68814,
+        36.29139
+       ],
+       [
+        -121.67474,
+        36.28249
+       ],
+       [
+        -121.66487,
+        36.26973
+       ],
+       [
+        -121.6472,
+        36.2575
+       ],
+       [
+        -121.62888,
+        36.25065
+       ],
+       [
+        -121.63148,
+        36.2322
+       ],
+       [
+        -121.6253,
+        36.21195
+       ],
+       [
+        -121.65094,
+        36.20941
+       ],
+       [
+        -121.67696,
+        36.21458
+       ],
+       [
+        -121.69016,
+        36.21802
+       ],
+       [
+        -121.68781,
+        36.21464
+       ],
+       [
+        -121.68653,
+        36.2103
+       ],
+       [
+        -121.69858,
+        36.19858
+       ],
+       [
+        -121.70289,
+        36.19895
+       ],
+       [
+        -121.70352,
+        36.19488
+       ],
+       [
+        -121.70825,
+        36.194
+       ],
+       [
+        -121.71391,
+        36.19831
+       ],
+       [
+        -121.71986,
+        36.20304
+       ],
+       [
+        -121.732,
+        36.20842
+       ],
+       [
+        -121.73827,
+        36.21303
+       ],
+       [
+        -121.74118,
+        36.21594
+       ],
+       [
+        -121.74457,
+        36.21923
+       ],
+       [
+        -121.74498,
+        36.22019
+       ],
+       [
+        -121.74779,
+        36.22509
+       ],
+       [
+        -121.75336,
+        36.22567
+       ],
+       [
+        -121.75342,
+        36.23095
+       ],
+       [
+        -121.75552,
+        36.23446
+       ],
+       [
+        -121.76065,
+        36.24152
+       ],
+       [
+        -121.76803,
+        36.24647
+       ],
+       [
+        -121.78225,
+        36.2515
+       ],
+       [
+        -121.78793,
+        36.25709
+       ],
+       [
+        -121.77397,
+        36.26899
+       ],
+       [
+        -121.7765,
+        36.29124
+       ],
+       [
+        -121.75672,
+        36.28739
+       ],
+       [
+        -121.75654,
+        36.28837
+       ],
+       [
+        -121.75517,
+        36.28784
+       ],
+       [
+        -121.73425,
+        36.29363
+       ],
+       [
+        -121.71888,
+        36.29436
+       ],
+       [
+        -121.70285,
+        36.30916
+       ]
+      ]
+     ],
+     [
+      [
+       [
+        -121.67438,
+        36.2917
+       ],
+       [
+        -121.67434,
+        36.29167
+       ],
+       [
+        -121.6743,
+        36.29169
+       ],
+       [
+        -121.67422,
+        36.29167
+       ],
+       [
+        -121.67418,
+        36.2916
+       ],
+       [
+        -121.67426,
+        36.29155
+       ],
+       [
+        -121.6743,
+        36.29153
+       ],
+       [
+        -121.6743,
+        36.29153
+       ],
+       [
+        -121.67434,
+        36.2915
+       ],
+       [
+        -121.67441,
+        36.29152
+       ],
+       [
+        -121.6744,
+        36.29155
+       ],
+       [
+        -121.6744,
+        36.29155
+       ],
+       [
+        -121.67448,
+        36.29156
+       ],
+       [
+        -121.67449,
+        36.29163
+       ],
+       [
+        -121.67446,
+        36.29165
+       ],
+       [
+        -121.67446,
+        36.29167
+       ],
+       [
+        -121.67438,
+        36.2917
+       ]
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "OBJECTID": 57467,
+    "poly_SourceOID": 50325,
+    "poly_IncidentName": "Timber",
+    "poly_FeatureCategory": "Wildfire Daily Fire Perimeter",
+    "poly_MapMethod": "Mixed Methods",
+    "poly_GISAcres": 25345.644222602834,
+    "poly_DeleteThis": "No",
+    "poly_FeatureAccess": "Public",
+    "poly_FeatureStatus": "Approved",
+    "poly_IsVisible": "Yes",
+    "poly_CreateDate": 1789252027000,
+    "poly_DateCurrent": 1790425505000,
+    "poly_PolygonDateTime": 1789518000000,
+    "poly_IRWINID": "{51374D2C-D96B-40F7-940B-6CB8E0A483A2}",
+    "poly_FORID": null,
+    "poly_Acres_AutoCalc": 25345.54814685193,
+    "poly_SourceGlobalID": "{39B98B6E-B3CA-48EB-A779-F77128A0FD09}",
+    "poly_Source": "2026 NIFS",
+    "attr_SourceOID": 43309834,
+    "attr_ABCDMisc": null,
+    "attr_ADSPermissionState": "ICS209",
+    "attr_CalculatedAcres": 25406.77897459,
+    "attr_ContainmentDateTime": null,
+    "attr_ControlDateTime": null,
+    "attr_CreatedBySystem": "wildcade",
+    "attr_IncidentSize": 25341,
+    "attr_DiscoveryAcres": 0.01,
+    "attr_DispatchCenterID": "CALPCC",
+    "attr_EstimatedCostToDate": 178120108,
+    "attr_FinalAcres": null,
+    "attr_FFReportApprovedByTitle": null,
+    "attr_FFReportApprovedByUnit": null,
+    "attr_FFReportApprovedDate": null,
+    "attr_FireBehaviorGeneral": "Moderate",
+    "attr_FireBehaviorGeneral1": "Backing",
+    "attr_FireBehaviorGeneral2": "Backing",
+    "attr_FireBehaviorGeneral3": "Uphill Runs",
+    "attr_FireCause": "Undetermined",
+    "attr_FireCauseGeneral": null,
+    "attr_FireCauseSpecific": null,
+    "attr_FireCode": "SWED",
+    "attr_FireDepartmentID": null,
+    "attr_FireDiscoveryDateTime": 1786246500000,
+    "attr_FireMgmtComplexity": null,
+    "attr_FireOutDateTime": null,
+    "attr_FireStrategyConfinePercent": 0,
+    "attr_FireStrategyFullSuppPrcnt": 100,
+    "attr_FireStrategyMonitorPercent": 0,
+    "attr_FireStrategyPointZonePrcnt": 0,
+    "attr_FSJobCode": "P5",
+    "attr_FSOverrideCode": "0507",
+    "attr_GACC": "OSCC",
+    "attr_ICS209ReportDateTime": 1790381333000,
+    "attr_ICS209RptForTimePeriodFrom": 1790341200000,
+    "attr_ICS209RptForTimePeriodTo": 1790380800000,
+    "attr_ICS209ReportStatus": "U",
+    "attr_IncidentManagementOrg": "Complex Incident Management Team",
+    "attr_IncidentName": "Timber",
+    "attr_IncidentShortDescription": "4 Miles SE from Big Sur, CA",
+    "attr_IncidentTypeCategory": "WF",
+    "attr_IncidentTypeKind": "FI",
+    "attr_InitialLatitude": 35.929352,
+    "attr_InitialLongitude": -121.383821,
+    "attr_InitialResponseAcres": null,
+    "attr_InitialResponseDateTime": null,
+    "attr_IrwinID": "{51374D2C-D96B-40F7-940B-6CB8E0A483A2}",
+    "attr_IsFireCauseInvestigated": null,
+    "attr_IsFireCodeRequested": 0,
+    "attr_IsFSAssisted": 1,
+    "attr_IsMultiJurisdictional": 1,
+    "attr_IsReimbursable": 1,
+    "attr_IsTrespass": 0,
+    "attr_IsUnifiedCommand": 0,
+    "attr_LocalIncidentIdentifier": "002271",
+    "attr_ModifiedBySystem": "ics209",
+    "attr_PercentContained": 59,
+    "attr_PercentPerimToBeContained": 100,
+    "attr_POOCity": "Big Sur",
+    "attr_POOCounty": "Monterey",
+    "attr_POODispatchCenterID": "CALPCC",
+    "attr_POOFips": "06053",
+    "attr_POOJurisdictionalAgency": "USFS",
+    "attr_POOJurisdictionalUnit": "CALPF",
+    "attr_POOJurisdictUnitParentUnit": null,
+    "attr_POOLandownerCategory": "USFS",
+    "attr_POOLandownerKind": "Federal",
+    "attr_POOLegalDescPrincipalMerid": null,
+    "attr_POOLegalDescQtr": null,
+    "attr_POOLegalDescQtrQtr": null,
+    "attr_POOLegalDescRange": null,
+    "attr_POOLegalDescSection": null,
+    "attr_POOLegalDescTownship": null,
+    "attr_POOPredictiveServiceAreaID": "SC07",
+    "attr_POOProtectingAgency": "USFS",
+    "attr_POOProtectingUnit": "CALPF",
+    "attr_POOState": "US-CA",
+    "attr_PredominantFuelGroup": null,
+    "attr_PredominantFuelModel": null,
+    "attr_PrimaryFuelModel": "Tall Grass (2.5 feet)",
+    "attr_SecondaryFuelModel": "Timber (Grass and Understory)",
+    "attr_TotalIncidentPersonnel": 907,
+    "attr_UniqueFireIdentifier": "2026-CALPF-002271",
+    "attr_FORID": null,
+    "attr_WFDSSDecisionStatus": "Approved Decision",
+    "attr_EstimatedFinalCost": 200000000,
+    "attr_OrganizationalAssessment": "Complex Incident Manageme",
+    "attr_StratDecisionPublishDate": 1789685770000,
+    "attr_CreatedOnDateTime_dt": 1786250201820,
+    "attr_ModifiedOnDateTime_dt": 1790381333540,
+    "attr_Source": "IRWIN",
+    "attr_ActiveFireCandidate": 1,
+    "attr_IsCpxChild": 0,
+    "attr_CpxName": null,
+    "attr_CpxID": null,
+    "attr_SourceGlobalID": "{02104F62-3D5E-4D7A-BF5D-C790D684FF6D}",
+    "GlobalID": "d41f6a8f-4439-48fb-b96c-3586f939b704",
+    "Shape__Area": 0.010284597377449245,
+    "Shape__Length": 1.1319069892832987,
+    "attr_IncidentComplexityLevel": "Type 1 Incident"
+   }
+  }
+ ]
+}

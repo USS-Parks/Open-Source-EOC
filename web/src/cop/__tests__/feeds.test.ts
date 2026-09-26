@@ -48,6 +48,11 @@ describe("feed layers carry provenance and staleness", () => {
       "feed-f1-point",
       "feed-f1-facility-icon",
       "feed-f1-label",
+      "feed-f1-preset-fill",
+      "feed-f1-preset-line",
+      "feed-f1-preset-circle",
+      "feed-f1-preset-icon",
+      "feed-f1-preset-label",
     ]);
   });
 

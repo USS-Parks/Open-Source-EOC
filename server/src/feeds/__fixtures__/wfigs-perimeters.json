@@ -1,0 +1,11 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature", "id": 48213,
+      "geometry": { "type": "Polygon", "coordinates": [[[-123.66, 41.22], [-123.63, 41.2], [-123.58, 41.205], [-123.55, 41.23], [-123.545, 41.265], [-123.57, 41.29], [-123.61, 41.3], [-123.645, 41.285], [-123.665, 41.255], [-123.66, 41.22]]] },
+      "properties": { "OBJECTID": 48213, "poly_SourceOID": 912, "poly_IncidentName": "Bluff Creek", "poly_FeatureCategory": "Wildfire Daily Fire Perimeter", "poly_MapMethod": "Infrared Image", "poly_GISAcres": 12480.6, "poly_DateCurrent": 1790409600000, "poly_PolygonDateTime": 1790402400000, "poly_IRWINID": "{3F2A1B0C-9D8E-4F7A-8B6C-5D4E3F2A1B0C}", "attr_IncidentName": "Bluff Creek", "attr_IncidentTypeCategory": "WF", "attr_IncidentSize": 12480, "attr_PercentContained": 35, "attr_POOState": "US-CA", "attr_POOCounty": "Humboldt", "attr_UniqueFireIdentifier": "2026-CASRF-001234", "attr_FireDiscoveryDateTime": 1789891200000, "attr_IrwinID": "{3F2A1B0C-9D8E-4F7A-8B6C-5D4E3F2A1B0C}" } },
+    { "type": "Feature", "id": 48260,
+      "geometry": { "type": "Polygon", "coordinates": [[[-123.97, 40.94], [-123.94, 40.935], [-123.925, 40.95], [-123.935, 40.965], [-123.96, 40.965], [-123.97, 40.94]]] },
+      "properties": { "OBJECTID": 48260, "poly_IncidentName": "Redwood Valley Rx", "poly_FeatureCategory": "Prescribed Fire Burn Unit", "poly_GISAcres": 81.2, "poly_DateCurrent": 1790323200000, "poly_IRWINID": "{7C6B5A49-3827-4165-A0B9-C8D7E6F5A4B3}", "attr_IncidentName": "Redwood Valley Rx", "attr_IncidentTypeCategory": "RX", "attr_IncidentSize": 80, "attr_PercentContained": 100, "attr_POOState": "US-CA", "attr_UniqueFireIdentifier": "2026-CASRF-001301", "attr_FireDiscoveryDateTime": 1790316000000, "attr_IrwinID": "{7C6B5A49-3827-4165-A0B9-C8D7E6F5A4B3}" } }
+  ]
+}

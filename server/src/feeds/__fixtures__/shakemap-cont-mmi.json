@@ -1,0 +1,11 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature", "properties": { "value": 3.0, "units": "mmi", "color": "#80ffbf", "weight": 4 }, "geometry": { "type": "MultiLineString", "coordinates": [[[-124.1, 40.7], [-124.39, 41.34], [-125.1, 41.6], [-125.81, 41.34], [-126.1, 40.7], [-125.81, 40.06], [-125.1, 39.8], [-124.39, 40.06], [-124.1, 40.7]]] } },
+    { "type": "Feature", "properties": { "value": 4.0, "units": "mmi", "color": "#80ffff", "weight": 4 }, "geometry": { "type": "MultiLineString", "coordinates": [[[-124.4, 40.7], [-124.6, 41.14], [-125.1, 41.3], [-125.6, 41.14], [-125.8, 40.7], [-125.6, 40.26], [-125.1, 40.1], [-124.6, 40.26], [-124.4, 40.7]]] } },
+    { "type": "Feature", "properties": { "value": 4.5, "units": "mmi", "color": "#7efbdf", "weight": 2 }, "geometry": { "type": "MultiLineString", "coordinates": [[[-124.55, 40.7], [-124.71, 41.04], [-125.1, 41.17], [-125.49, 41.04], [-125.65, 40.7], [-125.49, 40.36], [-125.1, 40.23], [-124.71, 40.36], [-124.55, 40.7]]] } },
+    { "type": "Feature", "properties": { "value": 5.0, "units": "mmi", "color": "#7af892", "weight": 4 }, "geometry": { "type": "MultiLineString", "coordinates": [[[-124.7, 40.7], [-124.82, 40.95], [-125.1, 41.05], [-125.38, 40.95], [-125.5, 40.7], [-125.38, 40.45], [-125.1, 40.35], [-124.82, 40.45], [-124.7, 40.7]]] } },
+    { "type": "Feature", "properties": { "value": 6.0, "units": "mmi", "color": "#ffff00", "weight": 4 }, "geometry": { "type": "MultiLineString", "coordinates": [[[-124.9, 40.7], [-124.96, 40.83], [-125.1, 40.88], [-125.24, 40.83], [-125.3, 40.7], [-125.24, 40.57], [-125.1, 40.52], [-124.96, 40.57], [-124.9, 40.7]]] } },
+    { "type": "Feature", "properties": { "value": 7.0, "units": "mmi", "color": "#ffc800", "weight": 4 }, "geometry": { "type": "MultiLineString", "coordinates": [[[-125.02, 40.7], [-125.04, 40.75], [-125.1, 40.77], [-125.16, 40.75], [-125.18, 40.7], [-125.16, 40.65], [-125.1, 40.63], [-125.04, 40.65], [-125.02, 40.7]]] } }
+  ]
+}

@@ -14613,3 +14613,67 @@ ICS 214 by SMS), built in lane `lane/mp15a`.
 - **Full suite:** as MP11, once per landing batch before the push.
 - **Rollback.** Revert the commit; migration 0169 is forward-only, so a
   rollback leaves its columns and tables unused.
+
+## Map and dashboard parity MP10 part two: live feed presets
+
+Map and Dashboard Parity PSPR unit MP10, its live feed half (decision 8,
+amendment 1's power outage preset), built in lane `lane/mpf`.
+
+- **What there was before.** The feed engine took CAP, GeoRSS, CoT and
+  GeoJSON feeds an administrator configured by hand, drawn in the generic
+  status style; no preset reached the federal hazard sources Esri's EM maps
+  show.
+- **What changed.** Eight presets an administrator adds in one step, each
+  showing its source, terms, update interval and stale time
+  (`server/src/feeds/presets.ts`, `web/src/cop/feeds.ts`, the "Add a live
+  hazard feed" panel on the Feeds screen):
+  - NWS watches, warnings and advisories from api.weather.gov by state or
+    zone (GeoJSON), about 50 events in the official NWS hazard colors, 25
+    percent fill and outline; alerts that name zones take their zones'
+    boundaries, fetched only from the feed's own host and cached.
+  - NIFC WFIGS current perimeters (wildfire and prescribed, Esri's colors)
+    and incidents by size class with uppercase names, from NIFC's own
+    service.
+  - USGS earthquakes (past day, or past week at 2.5 and up) as circles by
+    magnitude class, and ShakeMap intensity contours for an event an
+    administrator names.
+  - NOAA NWPS gauges by observed flood category.
+  - A generic utility outage feed, and ORNL ODIN county outages drawn by
+    meters out (not customers), which Basho chose to offer on 2026-09-26
+    although ODIN publishes no terms of use.
+  - Each preset poll replaces the feed's items, so an expired warning
+    leaves the map; an ArcGIS response flagged as truncated fails the poll,
+    keeping the last complete snapshot; a stale feed keeps its last snapshot
+    grey and labeled with its age. Every poll sends the product's
+    User-Agent. Seven feed palettes and the official NWS color table join the
+    shared palette (`FEED_PALETTES`), and legend rows are exported for MP8.
+  - Migration `0170_feed_presets.sql` (renumbered from the lane's 9110)
+    widens the feed kind check constraint.
+- **Verification against the sources.** On 2026-09-26, with Basho's
+  authorization for public-domain downloads, one GET per source with the
+  product's User-Agent, no sign-in: every URL, parameter, field name and
+  format the presets use worked, and all 53 NWS colors match the official
+  table. The check corrected the fixtures (nonexistent zones replaced by
+  real ones, a mislabeled gauge) and the parsing (NWPS no-value markers,
+  truncated ArcGIS pages, a perimeter update time, USGS event types).
+  Trimmed real samples are recorded in
+  `server/src/feeds/__fixtures__/recorded-2026-09-26/` with `SOURCES.txt`.
+  The NWPS test's four expected values were updated by the integrator at
+  Basho's direction after the auto-mode classifier blocked the agent's edit.
+  DOE's EAGLE-I requires a sign-in for live data.
+- **Defaults taken and deviations.** NWS as GeoJSON only; gauges as circles,
+  not Esri's squares; the ODIN preset takes a state FIPS code; the wildfire
+  incident pictogram waits on the map registering the preset icons, and
+  area feeds should draw below point feeds (both for MP7 and MP8). Still
+  unverified: what NWPS reports for a gauge actually in flood (none were on
+  the sample day), NWS rate limits on a first poll of up to 200 zones, any
+  real utility's outage feed format, and ODIN at other scales.
+- **Verification.** Before the rebase: preset and existing feed tests, 21
+  files, 222 tests; the browser capture test at 1586 by 992 in both themes
+  and an offline walk, 4 of 4, no page errors, no requests off the host.
+  After the rebase: the preset, feed, browser and palette tests, 5 files, 81
+  tests; `pnpm check:static` pass. Two comments that the pre-commit hook read
+  as roster identifiers ("M1.2", "M7.5") were reworded.
+- **Full suite:** as MP11, once per landing batch before the push.
+- **Rollback.** Revert the commit; migration 0170 only widens a check
+  constraint.

@@ -1,0 +1,324 @@
+{
+ "gauges": [
+  {
+   "lid": "ARCC1",
+   "name": "Mad River near Arcata",
+   "rfc": {
+    "abbreviation": "CNRFC",
+    "name": "California Nevada River Forecast Center"
+   },
+   "wfo": {
+    "abbreviation": "EKA",
+    "name": "Eureka"
+   },
+   "state": {
+    "abbreviation": "CA",
+    "name": "California"
+   },
+   "latitude": 40.9098217,
+   "longitude": -124.06058,
+   "pedts": {
+    "observed": "HGIRG",
+    "forecast": "HGIFE"
+   },
+   "status": {
+    "observed": {
+     "primary": 5.67,
+     "primaryUnit": "ft",
+     "secondary": 0.036,
+     "secondaryUnit": "kcfs",
+     "floodCategory": "no_flooding",
+     "validTime": "2026-09-26T15:45:00Z"
+    },
+    "forecast": {
+     "primary": 5.64,
+     "primaryUnit": "ft",
+     "secondary": 0.033,
+     "secondaryUnit": "kcfs",
+     "floodCategory": "no_flooding",
+     "validTime": "2026-09-26T17:00:00Z"
+    }
+   }
+  },
+  {
+   "lid": "BLKC1",
+   "name": "Redwood Creek near Blue Lake",
+   "rfc": {
+    "abbreviation": "CNRFC",
+    "name": "California Nevada River Forecast Center"
+   },
+   "wfo": {
+    "abbreviation": "EKA",
+    "name": "Eureka"
+   },
+   "state": {
+    "abbreviation": "CA",
+    "name": "California"
+   },
+   "latitude": 40.90596479,
+   "longitude": -123.815335,
+   "pedts": {
+    "observed": "HGIRG",
+    "forecast": "HGIFZ"
+   },
+   "status": {
+    "observed": {
+     "primary": 1.04,
+     "primaryUnit": "ft",
+     "secondary": 0.005,
+     "secondaryUnit": "kcfs",
+     "floodCategory": "not_defined",
+     "validTime": "2026-09-26T15:45:00Z"
+    },
+    "forecast": {
+     "primary": 1.04,
+     "primaryUnit": "ft",
+     "secondary": 0.005,
+     "secondaryUnit": "kcfs",
+     "floodCategory": "not_defined",
+     "validTime": "2026-09-26T17:00:00Z"
+    }
+   }
+  },
+  {
+   "lid": "BRGC1",
+   "name": "Van Duzen River near Bridgeville",
+   "rfc": {
+    "abbreviation": "CNRFC",
+    "name": "California Nevada River Forecast Center"
+   },
+   "wfo": {
+    "abbreviation": "EKA",
+    "name": "Eureka"
+   },
+   "state": {
+    "abbreviation": "CA",
+    "name": "California"
+   },
+   "latitude": 40.480385,
+   "longitude": -123.8908461,
+   "pedts": {
+    "observed": "HGIRG",
+    "forecast": "HGIFE"
+   },
+   "status": {
+    "observed": {
+     "primary": -0.35,
+     "primaryUnit": "ft",
+     "secondary": -999,
+     "secondaryUnit": "kcfs",
+     "floodCategory": "no_flooding",
+     "validTime": "2026-09-26T15:15:00Z"
+    },
+    "forecast": {
+     "primary": -0.35,
+     "primaryUnit": "ft",
+     "secondary": -999,
+     "secondaryUnit": "kcfs",
+     "floodCategory": "no_flooding",
+     "validTime": "2026-09-26T17:00:00Z"
+    }
+   }
+  },
+  {
+   "lid": "FRNC1",
+   "name": "Eel River (CA) at Fernbridge",
+   "rfc": {
+    "abbreviation": "CNRFC",
+    "name": "California Nevada River Forecast Center"
+   },
+   "wfo": {
+    "abbreviation": "EKA",
+    "name": "Eureka"
+   },
+   "state": {
+    "abbreviation": "CA",
+    "name": "California"
+   },
+   "latitude": 40.61583333,
+   "longitude": -124.2016667,
+   "pedts": {
+    "observed": "HGIRG",
+    "forecast": "HGIFE"
+   },
+   "status": {
+    "observed": {
+     "primary": -0.5,
+     "primaryUnit": "ft",
+     "secondary": -999,
+     "secondaryUnit": "kcfs",
+     "floodCategory": "no_flooding",
+     "validTime": "2026-09-26T15:15:00Z"
+    },
+    "forecast": {
+     "primary": 0.24,
+     "primaryUnit": "ft",
+     "secondary": 3.81,
+     "secondaryUnit": "kcfs",
+     "floodCategory": "no_flooding",
+     "validTime": "2026-09-26T17:00:00Z"
+    }
+   }
+  },
+  {
+   "lid": "FTDC1",
+   "name": "Smith River at Dr Fine Bridge",
+   "rfc": {
+    "abbreviation": "CNRFC",
+    "name": "California Nevada River Forecast Center"
+   },
+   "wfo": {
+    "abbreviation": "EKA",
+    "name": "Eureka"
+   },
+   "state": {
+    "abbreviation": "CA",
+    "name": "California"
+   },
+   "latitude": 41.8806419,
+   "longitude": -124.1364325,
+   "pedts": {
+    "observed": "HGIRG",
+    "forecast": "HGIFE"
+   },
+   "status": {
+    "observed": {
+     "primary": 11.37,
+     "primaryUnit": "ft",
+     "secondary": 0.0989,
+     "secondaryUnit": "kcfs",
+     "floodCategory": "no_flooding",
+     "validTime": "2026-09-26T15:15:00Z"
+    },
+    "forecast": {
+     "primary": 11.31,
+     "primaryUnit": "ft",
+     "secondary": 0.0805,
+     "secondaryUnit": "kcfs",
+     "floodCategory": "no_flooding",
+     "validTime": "2026-09-26T17:00:00Z"
+    }
+   }
+  },
+  {
+   "lid": "HOOC1",
+   "name": "Trinity River at Hoopa",
+   "rfc": {
+    "abbreviation": "CNRFC",
+    "name": "California Nevada River Forecast Center"
+   },
+   "wfo": {
+    "abbreviation": "EKA",
+    "name": "Eureka"
+   },
+   "state": {
+    "abbreviation": "CA",
+    "name": "California"
+   },
+   "latitude": 41.0498236,
+   "longitude": -123.6736278,
+   "pedts": {
+    "observed": "HGIRG",
+    "forecast": "HGIFE"
+   },
+   "status": {
+    "observed": {
+     "primary": 11.33,
+     "primaryUnit": "ft",
+     "secondary": 0.708,
+     "secondaryUnit": "kcfs",
+     "floodCategory": "no_flooding",
+     "validTime": "2026-09-26T15:00:00Z"
+    },
+    "forecast": {
+     "primary": 11.32,
+     "primaryUnit": "ft",
+     "secondary": 0.703,
+     "secondaryUnit": "kcfs",
+     "floodCategory": "no_flooding",
+     "validTime": "2026-09-26T17:00:00Z"
+    }
+   }
+  },
+  {
+   "lid": "KLMC1",
+   "name": "Klamath River near Klamath",
+   "rfc": {
+    "abbreviation": "CNRFC",
+    "name": "California Nevada River Forecast Center"
+   },
+   "wfo": {
+    "abbreviation": "EKA",
+    "name": "Eureka"
+   },
+   "state": {
+    "abbreviation": "CA",
+    "name": "California"
+   },
+   "latitude": 41.51092575,
+   "longitude": -123.9794772,
+   "pedts": {
+    "observed": "HGIRG",
+    "forecast": "HGIFE"
+   },
+   "status": {
+    "observed": {
+     "primary": 7.87,
+     "primaryUnit": "ft",
+     "secondary": 2.58,
+     "secondaryUnit": "kcfs",
+     "floodCategory": "no_flooding",
+     "validTime": "2026-09-26T15:30:00Z"
+    },
+    "forecast": {
+     "primary": 7.87,
+     "primaryUnit": "ft",
+     "secondary": 2.58,
+     "secondaryUnit": "kcfs",
+     "floodCategory": "no_flooding",
+     "validTime": "2026-09-26T17:00:00Z"
+    }
+   }
+  },
+  {
+   "lid": "EFDC1",
+   "name": "Lake Earl near Crescent City",
+   "rfc": {
+    "abbreviation": "CNRFC",
+    "name": "California Nevada River Forecast Center"
+   },
+   "wfo": {
+    "abbreviation": "EKA",
+    "name": "Eureka"
+   },
+   "state": {
+    "abbreviation": "CA",
+    "name": "California"
+   },
+   "latitude": 41.8428,
+   "longitude": -124.1886,
+   "pedts": {
+    "observed": "HGIRG",
+    "forecast": ""
+   },
+   "status": {
+    "observed": {
+     "primary": 3.42,
+     "primaryUnit": "ft",
+     "secondary": -999,
+     "secondaryUnit": "kcfs",
+     "floodCategory": "no_flooding",
+     "validTime": "2026-09-26T15:30:00Z"
+    },
+    "forecast": {
+     "primary": -999,
+     "primaryUnit": "",
+     "secondary": -999,
+     "secondaryUnit": "",
+     "floodCategory": "fcst_not_current",
+     "validTime": "0001-01-01T00:00:00Z"
+    }
+   }
+  }
+ ]
+}

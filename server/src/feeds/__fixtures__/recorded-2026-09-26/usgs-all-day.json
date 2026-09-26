@@ -1,0 +1,221 @@
+{
+ "type": "FeatureCollection",
+ "metadata": {
+  "generated": 1790440440000,
+  "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson",
+  "title": "USGS All Earthquakes, Past Day",
+  "status": 200,
+  "api": "2.7.0",
+  "count": 5
+ },
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 6.6,
+    "place": "80 km ENE of Tadine, New Caledonia",
+    "time": 1790371383309,
+    "updated": 1790430083040,
+    "tz": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000txpi",
+    "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000txpi.geojson",
+    "felt": 11,
+    "cdi": 6.9,
+    "mmi": 5.672,
+    "alert": "green",
+    "status": "reviewed",
+    "tsunami": 0,
+    "sig": 678,
+    "net": "us",
+    "code": "6000txpi",
+    "ids": ",pt26268000,us6000txpi,",
+    "sources": ",pt,us,",
+    "types": ",dyfi,ground-failure,losspager,moment-tensor,origin,phase-data,shakemap,",
+    "nst": 102,
+    "dmin": 1.696,
+    "rms": 0.82,
+    "gap": 35,
+    "magType": "mww",
+    "type": "earthquake",
+    "title": "M 6.6 - 80 km ENE of Tadine, New Caledonia"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     168.61,
+     -21.2982,
+     10
+    ]
+   },
+   "id": "us6000txpi"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 1.02,
+    "place": "7 km W of Cobb, CA",
+    "time": 1790431437770,
+    "updated": 1790431533813,
+    "tz": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75442392",
+    "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/nc75442392.geojson",
+    "felt": null,
+    "cdi": null,
+    "mmi": null,
+    "alert": null,
+    "status": "automatic",
+    "tsunami": 0,
+    "sig": 16,
+    "net": "nc",
+    "code": "75442392",
+    "ids": ",nc75442392,",
+    "sources": ",nc,",
+    "types": ",nearby-cities,origin,phase-data,",
+    "nst": 16,
+    "dmin": 0.01004,
+    "rms": 0.01,
+    "gap": 73,
+    "magType": "md",
+    "type": "earthquake",
+    "title": "M 1.0 - 7 km W of Cobb, CA"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -122.799003601074,
+     38.828498840332,
+     1.98000001907349
+    ]
+   },
+   "id": "nc75442392"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 1.22,
+    "place": "23 km N of Ridgecrest, CA",
+    "time": 1790428955680,
+    "updated": 1790429154767,
+    "tz": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/ci41339487",
+    "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/ci41339487.geojson",
+    "felt": null,
+    "cdi": null,
+    "mmi": null,
+    "alert": null,
+    "status": "automatic",
+    "tsunami": 0,
+    "sig": 23,
+    "net": "ci",
+    "code": "41339487",
+    "ids": ",ci41339487,",
+    "sources": ",ci,",
+    "types": ",nearby-cities,origin,phase-data,",
+    "nst": 23,
+    "dmin": 0.07646,
+    "rms": 0.15,
+    "gap": 49,
+    "magType": "ml",
+    "type": "earthquake",
+    "title": "M 1.2 - 23 km N of Ridgecrest, CA"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -117.673833333333,
+     35.8278333333333,
+     6.66
+    ]
+   },
+   "id": "ci41339487"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 1.6,
+    "place": "7 km S of Owasso, Oklahoma",
+    "time": 1790359549969,
+    "updated": 1790359922459,
+    "tz": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/ok2026svfd",
+    "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/ok2026svfd.geojson",
+    "felt": null,
+    "cdi": null,
+    "mmi": null,
+    "alert": null,
+    "status": "reviewed",
+    "tsunami": 0,
+    "sig": 39,
+    "net": "ok",
+    "code": "2026svfd",
+    "ids": ",ok2026svfd,",
+    "sources": ",ok,",
+    "types": ",origin,phase-data,",
+    "nst": 74,
+    "dmin": 0.2960419065,
+    "rms": 0.53,
+    "gap": 106,
+    "magType": "ml",
+    "type": "quarry blast",
+    "title": "M 1.6 Quarry Blast - 7 km S of Owasso, Oklahoma"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -95.843,
+     36.204,
+     0
+    ]
+   },
+   "id": "ok2026svfd"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 2.01,
+    "place": "16 km N of Pāhala, Hawaii",
+    "time": 1790438558290,
+    "updated": 1790438766660,
+    "tz": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/hv75043947",
+    "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/hv75043947.geojson",
+    "felt": null,
+    "cdi": null,
+    "mmi": null,
+    "alert": null,
+    "status": "automatic",
+    "tsunami": 0,
+    "sig": 62,
+    "net": "hv",
+    "code": "75043947",
+    "ids": ",hv75043947,",
+    "sources": ",hv,",
+    "types": ",origin,phase-data,",
+    "nst": 26,
+    "dmin": 0.03793,
+    "rms": 0.25999999,
+    "gap": 125,
+    "magType": "md",
+    "type": "earthquake",
+    "title": "M 2.0 - 16 km N of Pāhala, Hawaii"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -155.493499755859,
+     19.3556671142578,
+     5.32999992370605
+    ]
+   },
+   "id": "hv75043947"
+  }
+ ],
+ "bbox": [
+  -179.9919,
+  -24.0533,
+  -0.85000002384186,
+  168.6325,
+  68.8565,
+  482.813
+ ]
+}

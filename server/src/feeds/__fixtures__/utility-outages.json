@@ -1,0 +1,11 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature", "id": "OUT-24117", "geometry": { "type": "Point", "coordinates": [-124.2636, 40.5765] }, "properties": { "name": "Ferndale", "customersOut": 42, "customersServed": 1560, "cause": "Tree on line", "crewStatus": "Crew assigned", "estimatedRestoration": "2026-09-26T18:00:00-07:00", "lastUpdated": "2026-09-26T06:10:00-07:00" } },
+    { "type": "Feature", "id": "OUT-24118", "geometry": { "type": "Point", "coordinates": [-124.1573, 40.5982] }, "properties": { "name": "Fortuna", "customersOut": 356, "customersServed": 6120, "cause": "Under investigation", "crewStatus": "Crew en route", "lastUpdated": "2026-09-26T06:12:00-07:00" } },
+    { "type": "Feature", "id": "OUT-24121", "geometry": { "type": "Point", "coordinates": [-124.0828, 40.8665] }, "properties": { "name": "Arcata", "CUSTOMERS_AFFECTED": "2140", "cause": "Weather", "lastUpdated": "2026-09-26T06:15:00-07:00" } },
+    { "type": "Feature", "id": "OUT-24125", "geometry": { "type": "Polygon", "coordinates": [[[-124.2, 40.76], [-124.12, 40.76], [-124.1, 40.82], [-124.18, 40.83], [-124.2, 40.76]]] }, "properties": { "name": "Eureka", "customersOut": 7810, "cause": "Substation", "lastUpdated": "2026-09-26T06:20:00-07:00" } },
+    { "type": "Feature", "id": "OUT-24130", "geometry": { "type": "Point", "coordinates": [-124.2026, 41.7558] }, "properties": { "name": "Crescent City", "customersOut": 25310, "cause": "Transmission line", "lastUpdated": "2026-09-26T06:22:00-07:00" } },
+    { "type": "Feature", "id": "OUT-24131", "geometry": { "type": "Point", "coordinates": [-123.6801, 41.0507] }, "properties": { "name": "Hoopa", "customersOut": 0, "cause": "Restored", "lastUpdated": "2026-09-26T06:25:00-07:00" } }
+  ]
+}

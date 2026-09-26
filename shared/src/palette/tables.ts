@@ -379,3 +379,220 @@ export const PALETTES = [
   BUILDING_OCCUPANCY_PALETTE,
   BUILDING_ROLE_PALETTE,
 ] as const;
+
+/** An NWS product area: a quarter-opaque fill under an outline of the same color. */
+const WATCH_AREA: PolygonStyle = { fillOpacity: 0.25, outlineWidth: 1.5 };
+const nws = (label: string, color: string) => entry(label, color, color, { polygon: WATCH_AREA });
+
+/**
+ * NWS watches, warnings and advisories an EOC on the North Coast sees, in
+ * the official colors of the NWS map color table. NWS gives some products
+ * one color (Flood Watch and Flash Flood Watch are both sea green), so this
+ * table is not held to the palette table's distinguishable-colors rule.
+ */
+const NWS_HAZARD_ENTRIES = {
+  tsunami_warning: nws("Tsunami Warning", "#fd6347"),
+  tsunami_advisory: nws("Tsunami Advisory", "#d2691e"),
+  tsunami_watch: nws("Tsunami Watch", "#ff00ff"),
+  tornado_warning: nws("Tornado Warning", "#ff0000"),
+  tornado_watch: nws("Tornado Watch", "#ffff00"),
+  severe_thunderstorm_warning: nws("Severe Thunderstorm Warning", "#ffa500"),
+  severe_thunderstorm_watch: nws("Severe Thunderstorm Watch", "#db7093"),
+  flash_flood_warning: nws("Flash Flood Warning", "#8b0000"),
+  flash_flood_watch: nws("Flash Flood Watch", "#2e8b57"),
+  flood_warning: nws("Flood Warning", "#00ff00"),
+  flood_watch: nws("Flood Watch", "#2e8b57"),
+  flood_advisory: nws("Flood Advisory", "#00ff7f"),
+  coastal_flood_warning: nws("Coastal Flood Warning", "#228b22"),
+  coastal_flood_watch: nws("Coastal Flood Watch", "#66cdaa"),
+  coastal_flood_advisory: nws("Coastal Flood Advisory", "#7cfc00"),
+  coastal_flood_statement: nws("Coastal Flood Statement", "#6b8e23"),
+  high_surf_warning: nws("High Surf Warning", "#228b22"),
+  high_surf_advisory: nws("High Surf Advisory", "#ba55d3"),
+  beach_hazards_statement: nws("Beach Hazards Statement", "#40e0d0"),
+  rip_current_statement: nws("Rip Current Statement", "#40e0d0"),
+  high_wind_warning: nws("High Wind Warning", "#daa520"),
+  high_wind_watch: nws("High Wind Watch", "#b8860b"),
+  wind_advisory: nws("Wind Advisory", "#d2b48c"),
+  winter_storm_warning: nws("Winter Storm Warning", "#ff69b4"),
+  winter_storm_watch: nws("Winter Storm Watch", "#4682b4"),
+  winter_weather_advisory: nws("Winter Weather Advisory", "#7b68ee"),
+  blizzard_warning: nws("Blizzard Warning", "#ff4500"),
+  ice_storm_warning: nws("Ice Storm Warning", "#8b008b"),
+  red_flag_warning: nws("Red Flag Warning", "#ff1493"),
+  fire_weather_watch: nws("Fire Weather Watch", "#ffdead"),
+  extreme_heat_warning: nws("Extreme Heat Warning", "#c71585"),
+  extreme_heat_watch: nws("Extreme Heat Watch", "#800000"),
+  heat_advisory: nws("Heat Advisory", "#ff7f50"),
+  air_quality_alert: nws("Air Quality Alert", "#808080"),
+  dense_smoke_advisory: nws("Dense Smoke Advisory", "#f0e68c"),
+  dense_fog_advisory: nws("Dense Fog Advisory", "#708090"),
+  freeze_warning: nws("Freeze Warning", "#483d8b"),
+  frost_advisory: nws("Frost Advisory", "#6495ed"),
+  extreme_cold_warning: nws("Extreme Cold Warning", "#0000ff"),
+  cold_weather_advisory: nws("Cold Weather Advisory", "#afeeee"),
+  gale_warning: nws("Gale Warning", "#dda0dd"),
+  storm_warning: nws("Storm Warning", "#9400d3"),
+  hazardous_seas_warning: nws("Hazardous Seas Warning", "#d8bfd8"),
+  small_craft_advisory: nws("Small Craft Advisory", "#d8bfd8"),
+  special_marine_warning: nws("Special Marine Warning", "#ffa500"),
+  special_weather_statement: nws("Special Weather Statement", "#ffe4b5"),
+  avalanche_warning: nws("Avalanche Warning", "#1e90ff"),
+  earthquake_warning: nws("Earthquake Warning", "#8b4513"),
+  civil_danger_warning: nws("Civil Danger Warning", "#ffb6c1"),
+  evacuation_immediate: nws("Evacuation Immediate", "#7fff00"),
+  shelter_in_place_warning: nws("Shelter In Place Warning", "#fa8072"),
+  hydrologic_outlook: nws("Hydrologic Outlook", "#90ee90"),
+  hazardous_weather_outlook: nws("Hazardous Weather Outlook", "#eee8aa"),
+};
+
+/** Keyed by product; the aliases are the NWS event names, the 2025 renames' old names included. */
+export const NWS_HAZARD_PALETTE = definePalette({
+  id: "nws_hazard",
+  title: "NWS watches, warnings and advisories",
+  source: "National Weather Service map color table (weather.gov/help-map)",
+  entries: NWS_HAZARD_ENTRIES,
+  aliases: {
+    ...Object.fromEntries(
+      Object.entries(NWS_HAZARD_ENTRIES).map(([key, value]) => [value.label, key as keyof typeof NWS_HAZARD_ENTRIES]),
+    ),
+    "Excessive Heat Warning": "extreme_heat_warning",
+    "Excessive Heat Watch": "extreme_heat_watch",
+    "Wind Chill Warning": "extreme_cold_warning",
+    "Wind Chill Advisory": "cold_weather_advisory",
+  },
+});
+
+/** NIFC WFIGS interagency perimeters, as Esri's USA Current Wildfires draws them. */
+export const WILDFIRE_PERIMETER_PALETTE = definePalette({
+  id: "wildfire_perimeter",
+  title: "Wildfire perimeter",
+  source: "NIFC WFIGS current perimeters; Esri USA Current Wildfires colors",
+  entries: {
+    wildfire: entry("Wildfire", "#f7ada4", "#f7ada4", { polygon: { fillOpacity: 0.54, outlineWidth: 1, outline: "#e60c0c" } }),
+    prescribed: entry("Prescribed fire", "#e8bd71", "#e8bd71", { polygon: { fillOpacity: 0.54, outlineWidth: 1, outline: "#e5a53e" } }),
+  },
+  aliases: { WF: "wildfire", RX: "prescribed" },
+});
+
+const fireSize = (label: string, min: number) => entry(label, "#c93100", "#c93100", { icon: "wildfire", min });
+
+/** NIFC WFIGS incident points by size class in acres; the marker grows with the class. */
+export const WILDFIRE_INCIDENT_PALETTE = definePalette({
+  id: "wildfire_incident",
+  title: "Wildfire incident size",
+  source: "NIFC WFIGS incident locations; Esri USA Current Wildfires size classes",
+  entries: {
+    under_1k: fireSize("Under 1,000 acres", 0),
+    ac_1k: fireSize("1,000 to 9,999 acres", 1000),
+    ac_10k: fireSize("10,000 to 49,999 acres", 10000),
+    ac_50k: fireSize("50,000 to 99,999 acres", 50000),
+    ac_100k: fireSize("100,000 to 299,999 acres", 100000),
+    ac_300k: fireSize("300,000 acres and over", 300000),
+    prescribed: entry("Prescribed fire", "#b36b00", "#b36b00", { icon: "wildfire" }),
+  },
+});
+
+/** USGS earthquakes by magnitude class, in Esri's colors. */
+export const EARTHQUAKE_MAGNITUDE_PALETTE = definePalette({
+  id: "earthquake_magnitude",
+  title: "Earthquake magnitude",
+  source: "USGS earthquake summary feeds; Esri USGS Recent Earthquakes colors",
+  entries: {
+    under_3: entry("Under 3.0", "#a8a8a8", "#a8a8a8", { min: -10 }),
+    m3: entry("3.0 to 4.4", "#6ceae6", "#6ceae6", { min: 3 }),
+    m4_5: entry("4.5 to 5.9", "#f2e643", "#f2e643", { min: 4.5 }),
+    m6: entry("6.0 to 7.4", "#fc0316", "#fc0316", { min: 6 }),
+    m7_5: entry("7.5 and over", "#242424", "#242424", { min: 7.5 }),
+  },
+});
+
+const shaking = (label: string, color: string, min: number, fillOpacity = 0.6) =>
+  entry(label, color, color, { min, polygon: { fillOpacity, outlineWidth: 0 } });
+
+/** USGS ShakeMap instrumental intensity (MMI); I to III draw nothing, as Esri's layer. */
+export const SHAKEMAP_MMI_PALETTE = definePalette({
+  id: "shakemap_mmi",
+  title: "Shaking intensity (MMI)",
+  source: "USGS ShakeMap; Esri USGS Shake Intensity colors",
+  entries: {
+    mmi_1_3: shaking("I to III: not felt to weak", "#ffffff", 1, 0),
+    mmi_4: shaking("IV: light", "#f7bfc5", 4),
+    mmi_5: shaking("V: moderate", "#f5a0a6", 5),
+    mmi_6_7: shaking("VI to VII: strong to very strong", "#f06167", 6),
+    mmi_8: shaking("VIII: severe", "#ed4147", 8),
+    mmi_9: shaking("IX: violent", "#eb2128", 9),
+    mmi_10: shaking("X and over: extreme", "#e80208", 10),
+  },
+});
+
+/** River gauges by NWPS flood category, in Esri's Live Stream Gauges colors. */
+export const RIVER_GAUGE_PALETTE = definePalette({
+  id: "river_gauge",
+  title: "River gauge flood category",
+  source: "NOAA National Water Prediction Service; Esri Live Stream Gauges colors",
+  entries: {
+    major: entry("Major flooding", "#b50000"),
+    moderate: entry("Moderate flooding", "#f73500"),
+    minor: entry("Minor flooding", "#ff8b00"),
+    action: entry("Action stage", "#f2ca00"),
+    no_flooding: entry("No flooding", "#ffffff"),
+    low: entry("Low water", "#c1976f"),
+    unknown: entry("Unknown or not current", "#72d2e8"),
+  },
+  aliases: {
+    low_threshold: "low",
+    obs_not_current: "unknown",
+    fcst_not_current: "unknown",
+    out_of_service: "unknown",
+    not_defined: "unknown",
+  },
+});
+
+const outage = (label: string, color: string, min: number) =>
+  entry(label, color, color, { min, polygon: { fillOpacity: 0.5, outlineWidth: 1 } });
+
+/** Customers out of power, graduated; Open Source EOC's yellow to red ramp. */
+export const OUTAGE_CUSTOMERS_PALETTE = definePalette({
+  id: "outage_customers",
+  title: "Customers without power",
+  source: "Open Source EOC; utility outage feeds assign no colors",
+  entries: {
+    none: outage("None reported", "#bdbdbd", 0),
+    c1: outage("1 to 99", "#ffffb2", 1),
+    c100: outage("100 to 999", "#fecc5c", 100),
+    c1k: outage("1,000 to 4,999", "#fd8d3c", 1000),
+    c5k: outage("5,000 to 19,999", "#f03b20", 5000),
+    c20k: outage("20,000 and over", "#bd0026", 20000),
+  },
+});
+
+/**
+ * ORNL ODIN's county outages count electric meters, not customers, so they
+ * read in their own unit: the same ramp and bounds, labeled in meters.
+ */
+export const OUTAGE_METERS_PALETTE = definePalette({
+  id: "outage_meters",
+  title: "Electric meters without power (ODIN)",
+  source: "Open Source EOC; ORNL ODIN assigns no colors",
+  entries: {
+    none: outage("No meters reported out", "#bdbdbd", 0),
+    m1: outage("1 to 99 meters out", "#ffffb2", 1),
+    m100: outage("100 to 999 meters out", "#fecc5c", 100),
+    m1k: outage("1,000 to 4,999 meters out", "#fd8d3c", 1000),
+    m5k: outage("5,000 to 19,999 meters out", "#f03b20", 5000),
+    m20k: outage("20,000 meters out and over", "#bd0026", 20000),
+  },
+});
+
+/** The live feed presets' palettes, kept out of PALETTES: NWS and Esri set these colors, not the product. */
+export const FEED_PALETTES = [
+  NWS_HAZARD_PALETTE,
+  WILDFIRE_PERIMETER_PALETTE,
+  WILDFIRE_INCIDENT_PALETTE,
+  EARTHQUAKE_MAGNITUDE_PALETTE,
+  SHAKEMAP_MMI_PALETTE,
+  RIVER_GAUGE_PALETTE,
+  OUTAGE_CUSTOMERS_PALETTE,
+  OUTAGE_METERS_PALETTE,
+] as const;

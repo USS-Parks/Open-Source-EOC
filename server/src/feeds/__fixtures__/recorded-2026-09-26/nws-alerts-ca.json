@@ -1,0 +1,285 @@
+{
+ "@context": [
+  "https://geojson.org/geojson-ld/geojson-context.jsonld",
+  {
+   "@version": "1.1",
+   "wx": "https://api.weather.gov/ontology#",
+   "@vocab": "https://api.weather.gov/ontology#"
+  }
+ ],
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.2deb0edd9c16682367045a24a1816760067c55f5.001.1",
+   "type": "Feature",
+   "geometry": null,
+   "properties": {
+    "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.2deb0edd9c16682367045a24a1816760067c55f5.001.1",
+    "@type": "wx:Alert",
+    "id": "urn:oid:2.49.0.1.840.0.2deb0edd9c16682367045a24a1816760067c55f5.001.1",
+    "areaDesc": "San Diego County Coastal Areas; Orange County Coastal",
+    "geocode": {
+     "SAME": [
+      "006073",
+      "006059"
+     ],
+     "UGC": [
+      "CAZ043",
+      "CAZ552"
+     ]
+    },
+    "affectedZones": [
+     "https://api.weather.gov/zones/forecast/CAZ043",
+     "https://api.weather.gov/zones/forecast/CAZ552"
+    ],
+    "references": [
+     {
+      "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.938bcefd626428b5e32c55f657bdd9d7e0ee1437.001.1",
+      "identifier": "urn:oid:2.49.0.1.840.0.938bcefd626428b5e32c55f657bdd9d7e0ee1437.001.1",
+      "sender": "w-nws.webmaster@noaa.gov",
+      "sent": "2026-09-25T20:48:00-07:00"
+     }
+    ],
+    "sent": "2026-09-26T05:36:00-07:00",
+    "effective": "2026-09-26T05:36:00-07:00",
+    "onset": "2026-09-26T05:36:00-07:00",
+    "expires": "2026-09-26T14:15:00-07:00",
+    "ends": "2026-09-30T16:00:00-07:00",
+    "status": "Actual",
+    "messageType": "Update",
+    "category": "Met",
+    "severity": "Moderate",
+    "certainty": "Likely",
+    "urgency": "Expected",
+    "event": "Beach Hazards Statement",
+    "sender": "w-nws.webmaster@noaa.gov",
+    "senderName": "NWS San Diego CA",
+    "headline": "Beach Hazards Statement issued September 26 at 5:36AM PDT until September 30 at 4:00PM PDT by NWS San Diego CA",
+    "description": "* WHAT...Elevated surf of 3-5 feet with sets up to 6 feet\nthrough next Tuesday. Astronomical tides of 6.0-6.5 feet\nthrough Sunday, rising to 6.5-7.0 feet Monday through\nWednesday leading to minor tidal overflow.\n\n* WHERE...Beaches of Orange and San Diego Counties.\n\n* WHEN...Through Wednesday afternoon.\n\n* IMPACTS...Minor tidal overflow and minor coastal erosion\nexpected during high tides. Additionally, elevated surf will\nlead to strong rip currents.\n\n* ADDITIONAL DETAILS...High tides will approach 7.0 feet each\nmorning Monday through Wednesday. These water levels in\ncombination with elevated surf provides a window for moderate\ncoastal flooding on Monday and Tuesday, especially along south\nand southwest-facing beaches.",
+    "instruction": "Remain out of the water to avoid hazardous swimming conditions.",
+    "response": "Avoid",
+    "note": null,
+    "parameters": {
+     "AWIPSidentifier": [
+      "CFWSGX"
+     ],
+     "WMOidentifier": [
+      "WHUS46 KSGX 261236"
+     ],
+     "NWSheadline": [
+      "BEACH HAZARDS STATEMENT REMAINS IN EFFECT THROUGH WEDNESDAY AFTERNOON"
+     ],
+     "BLOCKCHANNEL": [
+      "EAS",
+      "NWEM",
+      "CMAS"
+     ],
+     "VTEC": [
+      "/O.CON.KSGX.BH.S.0011.000000T0000Z-260930T2300Z/"
+     ],
+     "eventEndingTime": [
+      "2026-09-30T16:00:00-07:00"
+     ],
+     "expiredReferences": [
+      "w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.24372c605ae8832f67db2b71ef264403b7ed0b92.001.1,2026-09-25T12:55:00-07:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.e1c187f3d5e4f931e549212512f724895672b263.001.1,2026-09-25T03:37:00-07:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.ea717861dfaf62c1cfe654fcea635f4260821951.001.1,2026-09-24T21:58:00-07:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.829335e047be36dcc97db06f88ee1c5b512ed1ed.001.1,2026-09-24T12:38:00-07:00"
+     ]
+    },
+    "scope": "Public",
+    "code": "IPAWSv1.0",
+    "language": "en-US",
+    "web": "http://www.weather.gov",
+    "eventCode": {
+     "SAME": [
+      "NWS"
+     ],
+     "NationalWeatherService": [
+      "BHS"
+     ]
+    }
+   }
+  },
+  {
+   "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.db92e993339a971841588aa59775c68630de35d5.001.1",
+   "type": "Feature",
+   "geometry": null,
+   "properties": {
+    "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.db92e993339a971841588aa59775c68630de35d5.001.1",
+    "@type": "wx:Alert",
+    "id": "urn:oid:2.49.0.1.840.0.db92e993339a971841588aa59775c68630de35d5.001.1",
+    "areaDesc": "Catalina and Santa Barbara Islands; Malibu Coast; Los Angeles County Beaches",
+    "geocode": {
+     "SAME": [
+      "006037"
+     ],
+     "UGC": [
+      "CAZ087",
+      "CAZ362",
+      "CAZ366"
+     ]
+    },
+    "affectedZones": [
+     "https://api.weather.gov/zones/forecast/CAZ087",
+     "https://api.weather.gov/zones/forecast/CAZ362",
+     "https://api.weather.gov/zones/forecast/CAZ366"
+    ],
+    "references": [
+     {
+      "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.88ef76e90ae7d09083a23682be8cc00cfcbee705.001.1",
+      "identifier": "urn:oid:2.49.0.1.840.0.88ef76e90ae7d09083a23682be8cc00cfcbee705.001.1",
+      "sender": "w-nws.webmaster@noaa.gov",
+      "sent": "2026-09-25T21:23:00-07:00"
+     }
+    ],
+    "sent": "2026-09-26T01:53:00-07:00",
+    "effective": "2026-09-26T01:53:00-07:00",
+    "onset": "2026-09-26T01:53:00-07:00",
+    "expires": "2026-09-26T15:00:00-07:00",
+    "ends": "2026-09-30T16:00:00-07:00",
+    "status": "Actual",
+    "messageType": "Update",
+    "category": "Met",
+    "severity": "Moderate",
+    "certainty": "Likely",
+    "urgency": "Expected",
+    "event": "Beach Hazards Statement",
+    "sender": "w-nws.webmaster@noaa.gov",
+    "senderName": "NWS Los Angeles/Oxnard CA",
+    "headline": "Beach Hazards Statement issued September 26 at 1:53AM PDT until September 30 at 4:00PM PDT by NWS Los Angeles/Oxnard CA",
+    "description": "* WHAT...Dangerous rip currents and breaking waves due to\nelevated surf. There is a risk of moderate coastal flooding\nespecially Monday and Tuesday.\n\n* WHERE...Catalina and Santa Barbara Islands, Malibu Coast and\nLos Angeles County Beaches.\n\n* WHEN...Through Wednesday afternoon.\n\n* IMPACTS...There is an increased risk of ocean drowning. Rip\ncurrents can pull swimmers and surfers out to sea. Waves can\nwash people off beaches and rocks, and capsize small boats\nnearshore. Moderate flooding of sea water is possibly over\nsome vulnerable low-lying coastal areas, especially around the\nlate morning high tide, including over beach parking lots,\nbike paths, and harbor walkways. Moderate beach erosion is\nlikely. Isolated damage is possible.\n\n* ADDITIONAL DETAILS...Coastal Flood Advisory products will\nlikely be needed for Monday and Tuesday.",
+    "instruction": "Remain out of the water due to hazardous swimming conditions, or\nstay near occupied lifeguard towers. Rock jetties can be deadly\nin such conditions, stay off the rocks.",
+    "response": "Avoid",
+    "note": null,
+    "parameters": {
+     "AWIPSidentifier": [
+      "CFWLOX"
+     ],
+     "WMOidentifier": [
+      "WHUS46 KLOX 260853"
+     ],
+     "NWSheadline": [
+      "BEACH HAZARDS STATEMENT REMAINS IN EFFECT THROUGH WEDNESDAY AFTERNOON"
+     ],
+     "BLOCKCHANNEL": [
+      "EAS",
+      "NWEM",
+      "CMAS"
+     ],
+     "VTEC": [
+      "/O.CON.KLOX.BH.S.0018.000000T0000Z-260930T2300Z/"
+     ],
+     "eventEndingTime": [
+      "2026-09-30T16:00:00-07:00"
+     ],
+     "expiredReferences": [
+      "w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.2a6c91dc906763bb535d9611ef537423dba40b64.001.1,2026-09-25T11:20:00-07:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.c82048193c67429e92ac4f11b3ce8378d22cefac.001.1,2026-09-25T10:58:00-07:00"
+     ]
+    },
+    "scope": "Public",
+    "code": "IPAWSv1.0",
+    "language": "en-US",
+    "web": "http://www.weather.gov",
+    "eventCode": {
+     "SAME": [
+      "NWS"
+     ],
+     "NationalWeatherService": [
+      "BHS"
+     ]
+    }
+   }
+  },
+  {
+   "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.db92e993339a971841588aa59775c68630de35d5.002.1",
+   "type": "Feature",
+   "geometry": null,
+   "properties": {
+    "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.db92e993339a971841588aa59775c68630de35d5.002.1",
+    "@type": "wx:Alert",
+    "id": "urn:oid:2.49.0.1.840.0.db92e993339a971841588aa59775c68630de35d5.002.1",
+    "areaDesc": "Santa Barbara County Southwestern Coast; Santa Barbara County Southeastern Coast; Ventura County Beaches",
+    "geocode": {
+     "SAME": [
+      "006083",
+      "006111"
+     ],
+     "UGC": [
+      "CAZ349",
+      "CAZ350",
+      "CAZ354"
+     ]
+    },
+    "affectedZones": [
+     "https://api.weather.gov/zones/forecast/CAZ349",
+     "https://api.weather.gov/zones/forecast/CAZ350",
+     "https://api.weather.gov/zones/forecast/CAZ354"
+    ],
+    "references": [
+     {
+      "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.88ef76e90ae7d09083a23682be8cc00cfcbee705.002.1",
+      "identifier": "urn:oid:2.49.0.1.840.0.88ef76e90ae7d09083a23682be8cc00cfcbee705.002.1",
+      "sender": "w-nws.webmaster@noaa.gov",
+      "sent": "2026-09-25T21:23:00-07:00"
+     }
+    ],
+    "sent": "2026-09-26T01:53:00-07:00",
+    "effective": "2026-09-26T01:53:00-07:00",
+    "onset": "2026-09-26T01:53:00-07:00",
+    "expires": "2026-09-26T15:00:00-07:00",
+    "ends": "2026-09-30T16:00:00-07:00",
+    "status": "Actual",
+    "messageType": "Update",
+    "category": "Met",
+    "severity": "Moderate",
+    "certainty": "Likely",
+    "urgency": "Expected",
+    "event": "Beach Hazards Statement",
+    "sender": "w-nws.webmaster@noaa.gov",
+    "senderName": "NWS Los Angeles/Oxnard CA",
+    "headline": "Beach Hazards Statement issued September 26 at 1:53AM PDT until September 30 at 4:00PM PDT by NWS Los Angeles/Oxnard CA",
+    "description": "* WHAT...Dangerous rip currents and breaking waves due to\nelevated surf. Minor tidal overflows possible especially\nMonday and Tuesday.\n\n* WHERE...Santa Barbara County Southwestern Coast, Santa Barbara\nCounty Southeastern Coast and Ventura County Beaches.\n\n* WHEN...Through Wednesday afternoon.\n\n* IMPACTS...There is an increased risk of ocean drowning. Rip\ncurrents can pull swimmers and surfers out to sea. Waves can\nwash people off beaches and rocks, and capsize small boats\nnearshore. Pooling of sea water is possible around high tide at\nbeach and harbor areas (including Santa Barbara Harbor).\nEnhanced beach erosion is also possible. No significant damage\nis expected.",
+    "instruction": "Remain out of the water due to hazardous swimming conditions, or\nstay near occupied lifeguard towers. Rock jetties can be deadly\nin such conditions, stay off the rocks.",
+    "response": "Avoid",
+    "note": null,
+    "parameters": {
+     "AWIPSidentifier": [
+      "CFWLOX"
+     ],
+     "WMOidentifier": [
+      "WHUS46 KLOX 260853"
+     ],
+     "NWSheadline": [
+      "BEACH HAZARDS STATEMENT REMAINS IN EFFECT THROUGH WEDNESDAY AFTERNOON"
+     ],
+     "BLOCKCHANNEL": [
+      "EAS",
+      "NWEM",
+      "CMAS"
+     ],
+     "VTEC": [
+      "/O.CON.KLOX.BH.S.0018.000000T0000Z-260930T2300Z/"
+     ],
+     "eventEndingTime": [
+      "2026-09-30T16:00:00-07:00"
+     ],
+     "expiredReferences": [
+      "w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.2a6c91dc906763bb535d9611ef537423dba40b64.002.1,2026-09-25T11:20:00-07:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.c82048193c67429e92ac4f11b3ce8378d22cefac.002.1,2026-09-25T10:58:00-07:00"
+     ]
+    },
+    "scope": "Public",
+    "code": "IPAWSv1.0",
+    "language": "en-US",
+    "web": "http://www.weather.gov",
+    "eventCode": {
+     "SAME": [
+      "NWS"
+     ],
+     "NationalWeatherService": [
+      "BHS"
+     ]
+    }
+   }
+  }
+ ],
+ "title": "Current watches, warnings, and advisories for California",
+ "updated": "2026-09-26T16:26:28+00:00"
+}

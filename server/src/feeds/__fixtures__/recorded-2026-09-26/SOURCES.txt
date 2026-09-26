@@ -1,0 +1,47 @@
+Recorded samples of the live feed presets' public sources, retrieved
+2026-09-26 (about 16:30 UTC) with the product's User-Agent, one GET each,
+no account or key. All but odin-map-ca.json are U.S. Government works in
+the public domain; that one is ORNL ODIN's, which publishes no terms.
+They are trimmed to a few features; nothing else is changed except where
+noted.
+
+nws-alerts-ca.json
+  https://api.weather.gov/alerts/active?area=CA (as received)
+nws-zone-CAZ103.json
+  https://api.weather.gov/zones/forecast/CAZ103 (boundary decimated to
+  about 60 vertices, coordinates rounded to five decimals)
+wfigs-perimeters-ca.json
+  https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/
+  WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query
+  ?where=attr_POOState='US-CA'&outFields=*&f=geojson
+  (sampled with resultRecordCount=4, so the service marked it
+  exceededTransferLimit; two features kept, boundaries decimated)
+wfigs-incidents-ca.json
+  .../WFIGS_Incident_Locations_Current/FeatureServer/0/query
+  ?where=POOState='US-CA'&outFields=*&f=geojson
+  (sampled with resultRecordCount=6, marked exceededTransferLimit; four kept)
+usgs-all-day.json
+  https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson
+  (five of 203 events: the day's largest, three in California or Hawaii,
+  and one quarry blast; metadata.count set to five)
+shakemap-cont-mmi-us6000txpi.json
+  https://earthquake.usgs.gov/pdl/products/urn:usgs-product:us:shakemap:
+  us6000txpi:1790378838309/contents/download/cont_mmi.json
+  (M 6.6, 80 km ENE of Tadine, New Caledonia; as received)
+nwps-gauges.json
+  https://api.water.noaa.gov/nwps/v1/gauges?bbox.xmin=-124.5&bbox.ymin=39.9
+  &bbox.xmax=-123.3&bbox.ymax=42&srid=EPSG_4326 (eight of 26 gauges)
+odin-map-ca.json
+  https://odin.ornl.gov/odi/map?stateCd=06&scale=COUNTY (ORNL ODIN's
+  public county-level current outages, no token; three of eight counties
+  kept, boundaries decimated). ODIN publishes no terms of use; Basho chose
+  to offer the ODIN preset on 2026-09-26.
+nws-map-colors.json
+  https://www.weather.gov/help-map, the NWS hazard map color table
+  (all 111 rows: event, priority, color name, hex), read from the page
+
+The files one level up are hand-written for the North Coast map walk,
+in these formats: the zone boundaries in nws-zones.json are the real
+zones' boundaries, decimated; the gauge ids, names and positions are the
+real gauges'; the alerts, fires, earthquakes, contours and outages are
+invented for the scene.

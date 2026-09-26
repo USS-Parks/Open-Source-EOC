@@ -12,6 +12,7 @@ import { hashToken, newToken } from "../auth/tokens.js";
 import { recordAudit } from "../audit/service.js";
 import { CURSOR_AT_FORMAT, cutPage, decodeCursor, type PageRequest } from "../db/cursor.js";
 import { parseFeed, type NormalizedItem } from "./parse.js";
+import { FEED_USER_AGENT, PRESET_ATTRIBUTION, isPresetKind, resolveNwsZones } from "./presets.js";
 
 /**
  * Feed framework (F18). Poll feeds fetch external hazard sources
@@ -26,7 +27,11 @@ import { parseFeed, type NormalizedItem } from "./parse.js";
 export const FeedSpecSchema = z
   .object({
     name: z.string().min(1).max(200),
-    kind: z.enum(["cap", "geojson", "georss", "cot"]),
+    // The presets (presets.ts) are poll feeds of one public source's format each.
+    kind: z.enum([
+      "cap", "geojson", "georss", "cot", "nws_alerts", "wfigs_perimeters", "wfigs_incidents",
+      "usgs_earthquakes", "usgs_shakemap", "nwps_gauges", "utility_outages", "odin_outages",
+    ]),
     url: z.string().url().optional(),
     pollIntervalSeconds: z.number().int().min(30).max(86400).optional(),
     staleAfterSeconds: z.number().int().min(60).max(604800).default(900),
@@ -51,6 +56,8 @@ export interface FeedHealth {
   readonly ingestAuthorized: boolean;
   /** Current persisted last-good items. Null when the caller did not request a count. */
   readonly currentItemCount: number | null;
+  /** A preset's source credit, for the map's inspector and export. */
+  readonly attribution?: string;
 }
 
 const FETCH_TIMEOUT_MS = 10000;
@@ -111,10 +118,12 @@ function healthOf(r: Record<string, unknown>, now: Date): FeedHealth {
   const lastSuccess = r.last_success_at ? new Date(r.last_success_at as string) : null;
   const age = lastSuccess ? Math.floor((now.getTime() - lastSuccess.getTime()) / 1000) : null;
   const staleAfter = r.stale_after_seconds as number;
+  const kind = r.kind as string;
   return {
+    ...(isPresetKind(kind) ? { attribution: PRESET_ATTRIBUTION[kind] } : {}),
     id: r.id as string,
     name: r.name as string,
-    kind: r.kind as string,
+    kind,
     mode: r.url ? "poll" : "push",
     enabled: Boolean(r.enabled),
     staleAfterSeconds: staleAfter,
@@ -152,12 +161,22 @@ export async function pollFeed(
   });
   try {
     const res = await fetchImpl(feed.url as string, {
+      headers: { "user-agent": FEED_USER_AGENT },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`feed responded ${res.status}`);
-    const items = parseFeed(feed.kind as string, await res.text());
+    const kind = feed.kind as string;
+    const parsed = parseFeed(kind, await res.text());
+    const items = kind === "nws_alerts" ? await resolveNwsZones(parsed, feed.url as string, fetchImpl) : parsed;
     await withPerson(sql, actor.person.id, async (tx) => {
       await landItems(tx, feedId, items, now);
+      // A preset's poll is its source's whole current picture: what the
+      // source stopped returning (an expired warning, a contained fire) goes.
+      if (isPresetKind(kind)) {
+        await tx`
+          delete from feed_items
+          where feed_id = ${feedId} and external_id <> all(${items.map((item) => item.externalId)}::text[])`;
+      }
       await tx`
         update feeds
         set last_polled_at = ${now}, last_success_at = ${now}, last_error = null,

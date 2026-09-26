@@ -1,4 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
+import { isPresetKind, parsePreset } from "./presets.js";
 
 /**
  * Feed parsers. Each format normalizes to the same item shape;
@@ -174,5 +175,6 @@ export function parseFeed(kind: string, text: string): NormalizedItem[] {
   if (kind === "georss") return parseGeoRss(text);
   if (kind === "cot") return parseCot(text);
   if (kind === "geojson") return parseGeoJsonFeed(text);
+  if (isPresetKind(kind)) return parsePreset(kind, text);
   throw new Error(`unknown feed kind: ${kind}`);
 }

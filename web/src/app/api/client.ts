@@ -1286,7 +1286,8 @@ export class ApiClient {
     jurisdictionId: string,
     spec: {
       name: string;
-      kind: "cap" | "geojson" | "georss" | "cot";
+      /** A general format, or a preset's kind (cop/feeds.ts FEED_PRESETS). */
+      kind: string;
       url?: string;
       pollIntervalSeconds?: number;
       staleAfterSeconds?: number;

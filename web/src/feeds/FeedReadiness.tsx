@@ -2,6 +2,7 @@ import { Button, StatusBadge } from "../design/components.js";
 import { Icon } from "../design/icons/index.js";
 import type { FeedHealth } from "../app/api/client.js";
 import { formatTime } from "../datasets/format.js";
+import { FEED_PRESET_BY_KIND } from "../cop/feeds.js";
 
 export function FeedReadiness(props: {
   readonly feeds: readonly FeedHealth[];
@@ -26,7 +27,7 @@ export function FeedReadiness(props: {
           ? (failed ? "critical" : "info") : failed || feed.stale ? "warning" : "success";
         return (
           <li className="d21-readiness-row" data-feed-state={state.toLowerCase().replaceAll(" ", "-")} key={feed.id}>
-            <div className="d21-readiness-title"><Icon name="feeds" size={20} decorative /><div><strong>{feed.name}</strong><span>{feed.kind.toUpperCase()} · {feed.mode}</span></div></div>
+            <div className="d21-readiness-title"><Icon name="feeds" size={20} decorative /><div><strong>{feed.name}</strong><span>{FEED_PRESET_BY_KIND.get(feed.kind)?.title ?? feed.kind.toUpperCase()} · {feed.mode}</span></div></div>
             <StatusBadge status={tone}>{state}</StatusBadge>
             <dl className="d21-metrics">
               <div><dt>Stored items</dt><dd>{hasLastGood ? (feed.currentItemCount ?? "—") : "—"}</dd></div>
