@@ -138,7 +138,7 @@ test("an installed map data packet serves its map folder alone and fills in the 
     writeFileSync(resolve(mapDataRoot, "gazetteer.tsv"), "index");
     const selected = selectStaticFile({ rawPath: "basemap/california.pmtiles", ...files, mapDataRoot });
     assert.equal(selected.file, resolve(mapDataRoot, "basemap/california.pmtiles"));
-    // The public files come first, and the address index is never served.
+    // A map file only the public files hold is still served, and the address index never is.
     assert.equal(selectStaticFile({ rawPath: "basemap/map.pmtiles", ...files, mapDataRoot }).file, resolve(files.publicRoot, "basemap/map.pmtiles"));
     assert.equal(selectStaticFile({ rawPath: "gazetteer.tsv", ...files, mapDataRoot }), null);
     assert.throws(() => selectStaticFile({ rawPath: "basemap/../gazetteer.tsv", ...files, mapDataRoot }), /invalid path segment/);
@@ -329,6 +329,7 @@ test("shipped desktop profiles have separate default ports, databases, and stora
   assert.equal(new Set(plans.flatMap((plan) => [plan.pgPort, plan.httpPort])).size, 8);
   assert.equal(new Set(Object.values(PROFILE_DEFAULTS).map((item) => item.database)).size, 4);
   assert.notEqual(profilePaths(root, "demo").pgData, profilePaths(root, "production").pgData);
+  assert.equal(profilePaths(root, "host").trustedTemplateKeys, resolve(root, "profiles", "host", "trusted-template-keys.pem"));
   assert.throws(() => profilePaths(root, "acceptance"), /Profile must be one of/);
 });
 

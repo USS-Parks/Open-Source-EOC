@@ -36,6 +36,8 @@ export function profilePaths(outRoot, profile) {
     ownerPassword: resolve(root, "secrets", "postgres.password"),
     runtimePassword: resolve(root, "secrets", "app_runtime.password"),
     secretKey: resolve(root, "secrets", "envelope.key"),
+    // The publishers of signed packages this profile trusts, as a PEM bundle an administrator puts here.
+    trustedTemplateKeys: resolve(root, "trusted-template-keys.pem"),
     browser: resolve(root, "browser"),
     logs: resolve(root, "logs"),
     run: resolve(root, "run"),

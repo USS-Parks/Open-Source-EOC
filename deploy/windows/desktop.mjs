@@ -745,6 +745,8 @@ async function serveProfile(args, { service = false } = {}) {
     ...(packet && installedRegion(packet) ? [] : [resolve(repoRoot, "tools/basemap/out/gazetteer.tsv")]),
   ].find((path) => existsSync(path));
   if (!process.env.OPENEOC_GAZETTEER_PATH && gazetteer) process.env.OPENEOC_GAZETTEER_PATH = gazetteer;
+  if (!process.env.OPENEOC_TRUSTED_TEMPLATE_KEYS && existsSync(paths.trustedTemplateKeys))
+    process.env.OPENEOC_TRUSTED_TEMPLATE_KEYS = paths.trustedTemplateKeys;
   // Credentials at rest (MFA secrets, connector credentials) are encrypted
   // with this profile's own key. Profiles created before the key existed get
   // one here.

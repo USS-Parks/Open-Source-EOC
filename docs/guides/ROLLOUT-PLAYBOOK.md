@@ -164,11 +164,11 @@ and **Open Administration** is on the same page.
    and notification rules. Importing it needs the server to trust the key it
    was signed with (`OPENEOC_TRUSTED_TEMPLATE_KEYS`, under
    [Signing solution packages](../../deploy/README.md#signing-solution-packages)).
-   The Windows setup has no option that sets that, and setting it by hand on
-   an installed computer has not been tried. Until that is settled, build the
-   template you need under **Incident Setup > Incident templates**
-   ([Prepare an incident](ADMIN.md#prepare-an-incident)), using the pack's
-   README as a list of what a small EOC activation opens.
+   On a Windows install, put the publisher's public key in
+   `trusted-template-keys.pem` in the profile folder that section names, and
+   restart. Without it, build the template you need under **Incident Setup >
+   Incident templates** ([Prepare an incident](ADMIN.md#prepare-an-incident)),
+   using the pack's README as a list of what a small EOC activation opens.
 2. **Put the emergency plan in the product.** Under **Incident Setup >
    Plans**, write the plan's sections, the template it activates, the tasks
    it releases to positions after activation, and whom it notifies

@@ -55,7 +55,10 @@ imported the pack opens, with no other setup:
 2. Sign the pack:
    `node server/dist/main.js sign-package --key publisher.key.pem --in deploy/packs/small-eoc-starter/package.json --out small-eoc-starter.signed.json`
 3. Put `publisher.pub.pem` in the PEM bundle that `OPENEOC_TRUSTED_TEMPLATE_KEYS`
-   names, and restart the server.
+   names, and restart the server. On a Windows install, that is
+   `trusted-template-keys.pem` in the profile folder
+   ([Signing solution packages](../../README.md#signing-solution-packages)
+   gives the folders).
 4. As an instance administrator who administers the jurisdiction, open
    **Templates**, **Create template**, the **Import** tab, and choose the
    signed file under **Signed solution package**. The form joins that

@@ -152,7 +152,12 @@ prints the key's fingerprint. `package.json` holds `publisher`, `name`,
 
 An instance trusts a publisher once the public key file is in the PEM bundle
 `OPENEOC_TRUSTED_TEMPLATE_KEYS` names; the same bundle serves signed board
-template packages. The import is in the board designer's **Import** tab; see
+template packages. A Windows install reads the bundle from
+`trusted-template-keys.pem` in its profile folder, when the variable is not
+set otherwise: `%LOCALAPPDATA%\Open Source EOC\profiles\production` on a
+single computer, `%ProgramData%\Open Source EOC\profiles\host` on a network
+host. Copy the publisher's `.pub.pem` file there under that name (or append
+it to the file already there) and restart Open Source EOC. The import is in the board designer's **Import** tab; see
 [the designer guide](../docs/guides/DESIGNER.md#import-definitions).
 `deploy/packs/` holds packages ready to sign, starting with the
 [small EOC starter pack](packs/small-eoc-starter/README.md).

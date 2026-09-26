@@ -10910,3 +10910,32 @@ the board record import's report for after VA25, which owned
   sync, boards, resource typing, contacts).
 - **Evidence level:** real-database tests.
 - **Rollback:** revert the commit.
+
+## Veoci and air gap follow-up: trusted package keys on a Windows install
+
+Carried from "Veoci and air gap VA12" and the rollout playbook, which said
+the Windows setup had no way to trust a package publisher's key.
+
+- **What the code did before.** The server trusts signed solution packages
+  and board template packages from the publisher keys in the PEM bundle
+  `OPENEOC_TRUSTED_TEMPLATE_KEYS` names. The Windows launcher and the host's
+  service never set it, so an installed computer trusted no publisher and
+  refused the signed starter pack, and the playbook told administrators to
+  rebuild its templates by hand.
+- **What changed.** The launcher (`deploy/windows/desktop.mjs`, with the path
+  in `deploy/windows/lib/contracts.mjs`) points the variable at
+  `trusted-template-keys.pem` in the profile folder when that file exists
+  and the variable is not already set, for the desktop app and the network
+  host's service alike. `deploy/README.md` names the folders
+  (`%LOCALAPPDATA%\Open Source EOC\profiles\production`,
+  `%ProgramData%\Open Source EOC\profiles\host`); the starter pack's README
+  and the rollout playbook say to put the publisher's key there. A test
+  comment that VA35 left stale (the public files no longer come first for
+  maps) is corrected.
+- **Tests.** `desktop.test.mjs` asserts the profile's bundle path (31 tests).
+- **Verification.** `node --test deploy/windows/desktop.test.mjs` 31 of 31;
+  `scripts/check-links.mjs` ok.
+- **Not run.** Importing the signed starter pack on an installed Windows
+  computer with the key in place; that walk is Basho's.
+- **Evidence level:** unit test.
+- **Rollback:** revert the commit.
