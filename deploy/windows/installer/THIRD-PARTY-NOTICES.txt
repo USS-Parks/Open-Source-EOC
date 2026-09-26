@@ -111,6 +111,15 @@ Overture Maps buildings (when included)
   web/public/basemap/buildings-overture.json, matched to OpenStreetMap
   ways. © Overture Maps Foundation. Open Database License 1.0, as above.
 
+FEMA USA Structures occupancy (when included)
+  web/public/basemap/buildings.pmtiles carries the occupancy class and
+  primary occupancy of the FEMA and Oak Ridge National Laboratory USA
+  Structures inventory, joined to the OpenStreetMap footprints that hold a
+  structure's point, in the counties and edition named in
+  web/public/basemap/buildings-overture.json. A United States Government
+  work in the public domain; tools/basemap/build-building-occupancy.mjs
+  builds it.
+
 California road jurisdiction and public land overlays (when included)
   web/public/basemap/overlays.pmtiles is compiled from public agency map
   services: the Caltrans State Highway Network; USDA Forest Service roads;

@@ -88,8 +88,8 @@ export function tileIdToZxy(id) {
   return { z, x, y };
 }
 
-/** Every tile of one zoom level in an archive: {z, x, y, data} with data decompressed. */
-export function* archiveTiles(path, zoom) {
+/** Every tile of one zoom level in an archive: {z, x, y, data}, data decompressed unless raw. */
+export function* archiveTiles(path, zoom, { raw = false } = {}) {
   const fd = openSync(path, "r");
   try {
     const read = (offset, length) => {
@@ -117,7 +117,8 @@ export function* archiveTiles(path, zoom) {
         const from = Math.max(entry.tileId, first);
         const to = Math.min(entry.tileId + entry.runLength, last);
         if (from >= to) continue;
-        const data = decompress(read(dataOffset + entry.offset, entry.length), tileCompression);
+        const stored = read(dataOffset + entry.offset, entry.length);
+        const data = raw ? stored : decompress(stored, tileCompression);
         for (let id = from; id < to; id += 1) yield { ...tileIdToZxy(id), data };
       }
     }

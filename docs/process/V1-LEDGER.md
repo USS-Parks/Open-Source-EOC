@@ -14969,3 +14969,77 @@ Map and Dashboard Parity PSPR unit MP7 (decisions 5 and 6), built in lane
   by the integrator.
 - **Full suite:** with the next landing batch.
 - **Rollback.** Revert the commit.
+
+## Map and dashboard parity MP5 part two: USA Structures occupancy
+
+Map and Dashboard Parity PSPR decision 3's alternative, under the plan's
+public-domain download grant, built in lane `lane/mp5b`.
+
+- **What there was before.** MP5 drew footprints by use and by role, but
+  only about 11 percent carried a use class (163 of 1,461 at Eureka z15):
+  85 percent of Eureka's footprints are plain OSM `building=yes` with no
+  Overture subtype, so the use theme was mostly unclassified grey and the
+  role theme mostly private by default.
+- **What changed.**
+  - New `tools/basemap/build-building-occupancy.mjs` (Node only) reads
+    FEMA Region 9's USA Structures point layer for Del Norte, Humboldt,
+    Siskiyou and Trinity counties and adds `occ` (`OCC_CLS`) and
+    `occ_prim` (`PRIM_OCC`) to each footprint holding a structure's point.
+    It re-encodes only the tiles holding such a footprint, with the vt-pbf
+    encoder MapLibre already carries, and copies every other tile byte for
+    byte. The archive's metadata names the source, edition, counties, rule
+    and license. `arcgisQuery` gains a fields option and `archiveTiles` a
+    raw mode.
+  - `buildings-overture.json` gains a `usa_structures` block; the Windows
+    launcher verifies it with the archive hash and passes
+    `OPENEOC_BUILDINGS_USA_STRUCTURES`, which `config.ts` reads.
+  - `building-styles.ts`: a footprint's use is its OSM tag where the tag
+    names a use, else its USA Structures class, else (for `building=yes`)
+    its Overture subtype, else Unclassified, in both the code and the
+    MapLibre expression. By role, government, education and assembly count
+    as public; the facilities join still marks critical infrastructure.
+    The inspector adds "Use from" and "USA Structures occupancy" rows. The
+    credit "occupancy: FEMA USA Structures (public domain, edition)" rides
+    the buildings source, so it shows only while buildings draw, and in
+    exports.
+  - `ASSET-LICENSES.md`, the setup's third-party notices and the basemap
+    README section 8 record the source.
+  - The rebuilt `buildings.pmtiles` (343,522,896 bytes, SHA-256
+    `50b1fa6570388abd0414d2c9dc96c76835ddc235d83f9c53acecb240c8408a43`)
+    replaces the served archive with this commit; the archive is not
+    tracked, and its sidecar hash is.
+- **Source.** `services.arcgis.com/XG15cJAlne2vxtgt/.../USAStructures_Region9_Point/FeatureServer/0`,
+  owned by FEMA Region 9 in FEMA's own ArcGIS organization; query
+  `FIPS IN ('06015','06023','06093','06105')`, 61 pages of 2,000:
+  120,764 points, 27,578,167 bytes (estimated about 25 MB beforehand),
+  retrieved 2026-09-26, data edited 2026-01-23, anonymous, no key. A US
+  Government work (FEMA with ORNL) with no access or use constraints; ORNL's
+  deposit of the California file is CC0 1.0. The widely linked
+  `USA_Structures_View` service is an Esri-hosted copy
+  (Esri_US_Federal_Data) and was not used.
+- **Defaults taken and deviations.** The California statewide file is
+  2,190,645,592 bytes (the Figshare copy 3,764,091,406), over the plan's
+  1 GB line, so it was not downloaded and is raised with Basho; the rest
+  of California keeps its footprints as they were. Siskiyou is included
+  because Deerhorn reaches Somes Bar, Trinity because the fire sits at the
+  Klamath and Trinity confluence. Join rule: the structure point inside
+  the footprint (even-odd over its rings in z14 tile coordinates), the
+  largest by square feet where there are several, then the lowest
+  OBJECTID; Unclassified structures (4,605) are left out. 38,106 of 55,598
+  footprints in the four counties (68.5 percent) took a class; 38,574 of
+  116,159 classified structures lie inside an OSM footprint, the rest have
+  none drawn. The header minzoom now reads 13, where the first tiles are.
+- **Verification.** The rebuilt archive keeps all 38,107 tiles: 36,451
+  byte-identical, 1,656 rewritten with every id, geometry and attribute
+  kept. `build-building-occupancy.test.mjs` 6 pass; the style and tool
+  tests, 6 files, 53 tests; `buildings-browser.test.ts` 4 of 4 at both
+  viewports and themes, street map and imagery: classified at Eureka z15
+  163 to 1,074 of 1,461, Crescent City z15 50 to 310 of 466; the credit
+  shows while buildings draw and is gone when off; the retail inspector
+  reads "FEMA USA Structures occupancy". `fidelity-browser.test.ts` 3 of 3;
+  `pnpm test:desktop` 47 of 47; `pnpm check:static` green. 84 captures
+  reviewed by the lane.
+- **Full suite:** with the next landing batch.
+- **Rollback.** Revert the commit and restore the previous
+  `buildings.pmtiles` (343,283,882 bytes, SHA-256 `13c9430a...`) beside
+  the reverted sidecar.

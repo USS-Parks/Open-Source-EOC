@@ -54,18 +54,35 @@ describe("building use (USA Structures occupancy classes)", () => {
     expect(buildingUse("constructor")).toBe("unclassified");
   });
 
+  it("takes a tag that names a use first, then the USA Structures class, then the Overture subtype", () => {
+    // A specific OpenStreetMap tag wins over the structure inside the footprint.
+    expect(buildingUse("house", undefined, "Commercial")).toBe("residential");
+    // building=yes, or a tag that names no use, takes the USA Structures class.
+    expect(buildingUse("yes", "religious", "Government")).toBe("government");
+    expect(buildingUse("yes", undefined, "Agriculture")).toBe("agriculture");
+    expect(buildingUse("construction", undefined, "Education")).toBe("education");
+    expect(buildingUse("yes", undefined, "Utility and Misc")).toBe("utility_misc");
+    // An Unclassified structure says nothing, so the subtype still reads.
+    expect(buildingUse("yes", "religious", "Unclassified")).toBe("assembly");
+    expect(buildingUse("yes", undefined, "Unclassified")).toBe("unclassified");
+  });
+
   it("colors a footprint on the map exactly as buildingUse classes it, in both themes and over imagery", () => {
-    const samples: [unknown, unknown][] = [
+    const samples: [unknown, unknown, unknown?][] = [
       ["house", undefined], ["church", undefined], ["civic", undefined], ["school", undefined], ["garage", undefined],
       ["barn", undefined], ["yes", "commercial"], ["yes", "civic"], ["yes", "medical"], ["yes", undefined], ["hut", "civic"],
       ["custom_typed_value", "civic"], [undefined, undefined],
+      ["yes", undefined, "Residential"], ["yes", "commercial", "Industrial"], ["house", undefined, "Commercial"],
+      ["construction", "civic", "Education"], ["yes", "religious", "Unclassified"], ["yes", undefined, "Utility and Misc"],
+      [undefined, undefined, "Assembly"],
     ];
-    for (const [cls, subtype] of samples) {
-      const properties = { class: cls, overture_subtype: subtype };
-      const key = buildingUse(cls, subtype);
-      expect(fillColor("use", properties), `${cls}/${subtype}`).toBe(rgba(use[key].light));
-      expect(fillColor("use", properties, {}, false, "dark"), `${cls}/${subtype}`).toBe(rgba(use[key].dark));
-      expect(fillColor("use", properties, {}, true), `${cls}/${subtype}`).toBe(rgba(use[key].dark));
+    for (const [cls, subtype, occ] of samples) {
+      const properties = { class: cls, overture_subtype: subtype, occ };
+      const key = buildingUse(cls, subtype, occ);
+      const name = `${cls}/${subtype}/${occ}`;
+      expect(fillColor("use", properties), name).toBe(rgba(use[key].light));
+      expect(fillColor("use", properties, {}, false, "dark"), name).toBe(rgba(use[key].dark));
+      expect(fillColor("use", properties, {}, true), name).toBe(rgba(use[key].dark));
     }
   });
 });
@@ -84,6 +101,8 @@ describe("building role", () => {
     expect(fillColor("role", { class: "school" })).toBe(rgba(role.public.light));
     expect(fillColor("role", { class: "yes", overture_subtype: "religious" })).toBe(rgba(role.public.light));
     expect(fillColor("role", { class: "house" })).toBe(rgba(role.private.light));
+    expect(fillColor("role", { class: "yes", occ: "Education" })).toBe(rgba(role.public.light));
+    expect(fillColor("role", { class: "yes", occ: "Commercial" })).toBe(rgba(role.private.light));
     expect(fillColor("role", { class: "hotel" }, { facilityType: "hospital", facility: "Saint Joseph" }))
       .toBe(rgba(role.critical_infrastructure.light));
   });
@@ -196,6 +215,7 @@ describe("the inspector", () => {
     expect(inspection.attribution).toContain("Overture Maps Foundation");
     expect(Object.fromEntries(inspection.rows.map((row) => [row.label, row.value]))).toEqual({
       Use: "Commercial",
+      "Use from": "Overture subtype",
       Role: "Critical infrastructure",
       "OpenStreetMap building tag": "yes",
       "Overture subtype": "medical",
@@ -203,6 +223,21 @@ describe("the inspector", () => {
       "Facility type": "Hospital",
       "OpenStreetMap id": "123",
     });
+  });
+
+  it("shows the USA Structures occupancy a footprint's use comes from, and credits it only when the archive carries it", () => {
+    const config = { pmtilesUrl: "/b.pmtiles", overtureRelease: "2026-08-19.0", usaStructures: "2026-01-23" };
+    const inspection = buildingInspection({ class: "yes", occ: "Commercial", occ_prim: "Hospital", osm_id: 7 }, {}, config);
+    const rows = Object.fromEntries(inspection.rows.map((row) => [row.label, row.value]));
+    expect(inspection.title).toBe("Commercial building");
+    expect(rows).toMatchObject({ Use: "Commercial", "Use from": "FEMA USA Structures occupancy", "USA Structures occupancy": "Commercial: Hospital" });
+    expect(inspection.attribution).toBe(
+      "Buildings: © OpenStreetMap contributors (ODbL); enrichment: © Overture Maps Foundation (ODbL, 2026-08-19.0); occupancy: FEMA USA Structures (public domain, 2026-01-23)");
+    expect(buildingSpecs(config, "light").sources.buildings).toMatchObject({ attribution: inspection.attribution });
+    expect(buildingSpecs({ pmtilesUrl: "/b.pmtiles" }, "light").sources.buildings).toMatchObject({ attribution: "Buildings: © OpenStreetMap contributors (ODbL)" });
+    // A tag that names a use keeps it; the structure's class still shows.
+    const house = Object.fromEntries(buildingInspection({ class: "house", occ: "Commercial" }, {}, config).rows.map((row) => [row.label, row.value]));
+    expect(house).toMatchObject({ Use: "Residential", "Use from": "OpenStreetMap building tag", "USA Structures occupancy": "Commercial" });
   });
 
   it("names an unjoined footprint by its use and claims no status", () => {

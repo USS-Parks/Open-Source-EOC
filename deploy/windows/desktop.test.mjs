@@ -291,7 +291,27 @@ test("desktop building attribution requires metadata matching the installed arch
       const config = await desktopRuntimeConfig(files.publicRoot, { diagnostic: (message) => diagnostics.push(message) });
       assert.equal(config.OPENEOC_BUILDINGS_PMTILES_URL, "/basemap/buildings.pmtiles");
       assert.equal(config.OPENEOC_BUILDINGS_OVERTURE_RELEASE, "2026-08-19.0");
+      assert.equal(config.OPENEOC_BUILDINGS_USA_STRUCTURES, undefined);
       assert.deepEqual(diagnostics, []);
+    } finally {
+      rmSync(files.root, { recursive: true, force: true });
+    }
+  });
+
+  await t.test("matching metadata exposes the USA Structures edition the archive carries", async () => {
+    const files = fixture();
+    try {
+      const archive = Buffer.from("verified-occupancy-buildings");
+      writeFileSync(resolve(files.publicRoot, "basemap/buildings.pmtiles"), archive);
+      writeFileSync(resolve(files.publicRoot, "basemap/buildings-overture.json"), JSON.stringify({
+        release: "2026-08-19.0",
+        archive_sha256: createHash("sha256").update(archive).digest("hex"),
+        archive_bytes: archive.length,
+        usa_structures: { edition: "2026-01-23", coverage: "Del Norte, Humboldt, Siskiyou, Trinity counties, California" },
+      }));
+      const config = await desktopRuntimeConfig(files.publicRoot, { diagnostic: () => {} });
+      assert.equal(config.OPENEOC_BUILDINGS_OVERTURE_RELEASE, "2026-08-19.0");
+      assert.equal(config.OPENEOC_BUILDINGS_USA_STRUCTURES, "2026-01-23");
     } finally {
       rmSync(files.root, { recursive: true, force: true });
     }
@@ -320,11 +340,13 @@ test("desktop building attribution requires metadata matching the installed arch
         release: "2026-08-19.0",
         archive_sha256: "0".repeat(64),
         archive_bytes: archive.length,
+        usa_structures: { edition: "2026-01-23" },
       }));
       const diagnostics = [];
       const config = await desktopRuntimeConfig(files.publicRoot, { diagnostic: (message) => diagnostics.push(message) });
       assert.equal(config.OPENEOC_BUILDINGS_PMTILES_URL, "/basemap/buildings.pmtiles");
       assert.equal(config.OPENEOC_BUILDINGS_OVERTURE_RELEASE, undefined);
+      assert.equal(config.OPENEOC_BUILDINGS_USA_STRUCTURES, undefined);
       assert.equal(diagnostics.length, 1);
       assert.match(diagnostics[0], /BUILDINGS_OVERTURE_METADATA_STALE reason=archive_sha256/);
     } finally {

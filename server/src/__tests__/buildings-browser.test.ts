@@ -14,6 +14,8 @@ import { freshDb, type Sql } from "./helpers.js";
  * map and imagery, in both themes at the frames' size and a 125%-scaled
  * laptop's, in downtown Eureka and Crescent City. The hospitals' and fire
  * stations' footprints read as critical infrastructure in the role theme.
+ * Footprints the OpenStreetMap tag leaves untyped take their FEMA USA
+ * Structures occupancy, credited while buildings draw.
  */
 
 const DIST = buildDir("buildings-app");
@@ -32,6 +34,8 @@ const VIEWS = [
   { name: "Eureka Fire Station 1 z16", center: [-124.16876, 40.80099], zoom: 16 },
   { name: "Crescent City Fire z16", center: [-124.19871, 41.75408], zoom: 16 },
   { name: "Sutter Coast Hospital z16", center: [-124.19232, 41.774], zoom: 16 },
+  // An untyped OpenStreetMap footprint (building=yes) holding a USA Structures retail store.
+  { name: "Eureka retail z17", center: [-124.16322, 40.80205], zoom: 17 },
 ] as const;
 
 /** Footprints the role theme must mark, each clicked at its facility's point. */
@@ -53,6 +57,7 @@ function runtimeConfig(): Record<string, string> {
     OPENEOC_BASEMAP_PMTILES_URL: "/app/basemap/california.pmtiles",
     OPENEOC_BUILDINGS_PMTILES_URL: "/app/basemap/buildings.pmtiles",
     OPENEOC_BUILDINGS_OVERTURE_RELEASE: "2026-08-19.0",
+    OPENEOC_BUILDINGS_USA_STRUCTURES: "2026-01-23",
     OPENEOC_FACILITIES_PMTILES_URL: "/app/basemap/facilities.pmtiles",
     OPENEOC_FACILITIES_MANIFEST_URL: "/app/basemap/facilities-manifest.json",
     OPENEOC_IMAGERY_TILE_URL: "pmtiles:///app/basemap/north-coast-imagery.pmtiles",
@@ -110,15 +115,19 @@ function renderedFootprints(page: Page) {
       }
     }
     const footprints = new Map(map!.queryRenderedFeatures({ layers: ["building-use"] }).map((f) => [f.id, f]));
+    // Classified before USA Structures: a tag other than building=yes, or an Overture subtype.
+    let classifiedBefore = 0;
     let classified = 0;
     let critical = 0;
     let status = 0;
     for (const f of footprints.values()) {
-      if (f.properties.class !== "yes" || f.properties.overture_subtype) classified += 1;
+      const before = f.properties.class !== "yes" || Boolean(f.properties.overture_subtype);
+      if (before) classifiedBefore += 1;
+      if (before || f.properties.occ) classified += 1;
       if (f.state?.facilityType) critical += 1;
       if (f.state?.status) status += 1;
     }
-    return { footprints: footprints.size, classified, critical, status };
+    return { footprints: footprints.size, classifiedBefore, classified, critical, status };
   });
 }
 
@@ -175,6 +184,7 @@ describe.skipIf(!ready)("building footprints by use and role", () => {
           await page.getByRole("button", { name, exact: true }).click();
           await quiet(page, () => inFlight);
         };
+        const credits = () => page.locator(".maplibregl-ctrl-attrib").first().textContent();
         const capture = async (name: string) => {
           counts[name] = await renderedFootprints(page);
           await page.screenshot({ path: join(SHOTS, `${name}-${size}.png`) });
@@ -191,6 +201,7 @@ describe.skipIf(!ready)("building footprints by use and role", () => {
           await choose("use");
           await go("Eureka z15");
           await capture(`eureka-z15-use-${tag}`);
+          expect(await credits(), tag).toContain("FEMA USA Structures");
           await go("Eureka z16");
           await capture(`eureka-z16-use-${tag}`);
           await go("Crescent City z15");
@@ -223,6 +234,17 @@ describe.skipIf(!ready)("building footprints by use and role", () => {
           await inspector.getByRole("button", { name: "Close selected map feature" }).click();
         }
 
+        // An untyped footprint shows the USA Structures class its use comes from.
+        await choose("use");
+        await go("Eureka retail z17");
+        await page.getByTestId("cop-map").click();
+        await inspector.waitFor();
+        const retail = await inspector.innerText();
+        expect(retail).toContain("FEMA USA Structures occupancy");
+        expect(retail).toContain("Commercial: Retail Trade");
+        await capture("eureka-retail-z17-use-inspector");
+        await inspector.getByRole("button", { name: "Close selected map feature" }).click();
+
         // Off draws nothing and drops the legend; plain draws one color.
         await choose("plain");
         await go("Eureka z16");
@@ -231,6 +253,7 @@ describe.skipIf(!ready)("building footprints by use and role", () => {
         await quiet(page, () => inFlight);
         expect((await renderedFootprints(page)).footprints).toBe(0);
         expect(await page.getByTestId("building-legend").count()).toBe(0);
+        expect(await credits()).not.toContain("FEMA USA Structures");
 
         writeFileSync(join(SHOTS, `counts-${size}.json`), `${JSON.stringify(counts, null, 2)}\n`);
         for (const [name, count] of Object.entries(counts)) {
@@ -238,6 +261,12 @@ describe.skipIf(!ready)("building footprints by use and role", () => {
         }
         for (const name of ["eureka-z16-role-street", "sutter-coast-hospital-z16-role-street", "crescent-city-z16-role-street"]) {
           expect((counts[name] as { critical: number }).critical, name).toBeGreaterThan(0);
+        }
+        // USA Structures classes most of the footprints the tags leave untyped.
+        for (const name of ["eureka-z15-use-street", "crescent-city-z15-use-street"]) {
+          const { footprints, classified, classifiedBefore } = counts[name] as { footprints: number; classified: number; classifiedBefore: number };
+          expect(classified / footprints, name).toBeGreaterThan(0.5);
+          expect(classified, name).toBeGreaterThan(2 * classifiedBefore);
         }
         await context.close();
         expect(problems).toEqual([]);

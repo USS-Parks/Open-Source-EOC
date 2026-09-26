@@ -712,13 +712,13 @@ async function fetchFile(url, target) {
 }
 
 /** Every feature an ArcGIS layer query returns, paged in object id order, as one GeoJSON file. */
-export function arcgisQuery(oidField, pageSize = 1000) {
+export function arcgisQuery(oidField, pageSize = 1000, outFields = "*") {
   return async (url, target) => {
     const count = (await (await request(`${url}&returnCountOnly=true&f=json`)).json()).count;
     if (!Number.isInteger(count)) throw new Error(`No feature count from ${url}`);
     const features = [];
     for (let offset = 0; offset < count; offset += pageSize) {
-      const page = await (await request(`${url}&outFields=*&outSR=4326&orderByFields=${oidField}&resultOffset=${offset}&resultRecordCount=${pageSize}&f=geojson`)).json();
+      const page = await (await request(`${url}&outFields=${outFields}&outSR=4326&orderByFields=${oidField}&resultOffset=${offset}&resultRecordCount=${pageSize}&f=geojson`)).json();
       if (!Array.isArray(page.features)) throw new Error(`Bad page at ${offset} from ${url}`);
       features.push(...page.features);
     }

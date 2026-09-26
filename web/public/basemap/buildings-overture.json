@@ -1,5 +1,9 @@
 {
   "release": "2026-08-19.0",
-  "archive_bytes": 343283882,
-  "archive_sha256": "13c9430acbd361cd226c10d7b13f1d650c201742a8ec21d2c2c9e8bfa7ae1ea7"
+  "archive_bytes": 343522896,
+  "archive_sha256": "50b1fa6570388abd0414d2c9dc96c76835ddc235d83f9c53acecb240c8408a43",
+  "usa_structures": {
+    "edition": "2026-01-23",
+    "coverage": "Del Norte, Humboldt, Siskiyou, Trinity counties, California"
+  }
 }

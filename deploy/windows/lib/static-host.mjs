@@ -170,7 +170,9 @@ async function verifiedBuildingsRelease(archivePath, sidecarPath, diagnostic) {
       diagnostic(`BUILDINGS_OVERTURE_METADATA_STALE reason=archive_sha256 expected=${expectedHash} actual=${actual.sha256}`);
       return undefined;
     }
-    return release;
+    // The FEMA USA Structures edition, when the verified archive carries its occupancy classes.
+    const edition = metadata.usa_structures?.edition;
+    return { release, ...(/^\d{4}-\d{2}-\d{2}$/.test(edition) ? { usaStructures: edition } : {}) };
   } catch (error) {
     diagnostic(`BUILDINGS_OVERTURE_METADATA_INVALID reason=${String(error?.message ?? error)}`);
     return undefined;
@@ -213,12 +215,13 @@ export async function desktopRuntimeConfig(publicRoot, { diagnostic = (message) 
   const buildings = located("basemap/buildings.pmtiles");
   if (buildings) {
     // The release file beside the archive it describes.
-    const release = await verifiedBuildingsRelease(
+    const verified = await verifiedBuildingsRelease(
       buildings,
       resolve(dirname(buildings), "buildings-overture.json"),
       diagnostic,
     );
-    if (release) config.OPENEOC_BUILDINGS_OVERTURE_RELEASE = release;
+    if (verified) config.OPENEOC_BUILDINGS_OVERTURE_RELEASE = verified.release;
+    if (verified?.usaStructures) config.OPENEOC_BUILDINGS_USA_STRUCTURES = verified.usaStructures;
   }
   if (existsSync(resolve(publicRoot, "fonts"))) config.OPENEOC_BASEMAP_GLYPHS_URL = "/fonts/{fontstack}/{range}.pbf";
   return config;

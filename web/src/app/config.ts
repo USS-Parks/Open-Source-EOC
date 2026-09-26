@@ -34,6 +34,9 @@ interface RuntimeConfig {
   /** Overture release carried by an H14-enriched buildings archive. Omit for
    * a plain OSM archive so attribution never claims enrichment that is absent. */
   readonly OPENEOC_BUILDINGS_OVERTURE_RELEASE?: string;
+  /** FEMA USA Structures edition carried by a buildings archive with
+   * occupancy classes. Omit when the archive has none. */
+  readonly OPENEOC_BUILDINGS_USA_STRUCTURES?: string;
   /** The statewide reference archives (tools/basemap): critical facilities,
    * boundaries and risk, each with the manifest naming its sources. */
   readonly OPENEOC_FACILITIES_PMTILES_URL?: string;
@@ -166,7 +169,8 @@ export function buildingsSource(): BuildingsConfig | undefined {
   const pmtilesUrl = setting(r.OPENEOC_BUILDINGS_PMTILES_URL);
   if (!pmtilesUrl) return undefined;
   const overtureRelease = setting(r.OPENEOC_BUILDINGS_OVERTURE_RELEASE);
-  return { pmtilesUrl, ...(overtureRelease ? { overtureRelease } : {}) };
+  const usaStructures = setting(r.OPENEOC_BUILDINGS_USA_STRUCTURES);
+  return { pmtilesUrl, ...(overtureRelease ? { overtureRelease } : {}), ...(usaStructures ? { usaStructures } : {}) };
 }
 
 /** The reference archives the deployment configured; each is left out when absent. */

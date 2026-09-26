@@ -276,21 +276,69 @@ sidecar beside `buildings.pmtiles`:
 {
   "release": "2026-08-19.0",
   "archive_sha256": "<sha256 of the installed buildings.pmtiles>",
-  "archive_bytes": 343283882
+  "archive_bytes": 343522896,
+  "usa_structures": { "edition": "2026-01-23", "coverage": "<counties>" }
 }
 ```
 
 A plain OSM archive needs no sidecar and makes no Overture attribution claim.
 If a sidecar is malformed or no longer matches the archive, the launcher logs
 a diagnostic, omits the release claim, and continues serving the archive.
+`usa_structures` is present only for an archive with USA Structures
+occupancy (below); the launcher passes its edition on as
+`OPENEOC_BUILDINGS_USA_STRUCTURES` under the same check.
 
-The COP then draws footprints colored by use (residential, commercial,
-industrial, civic, religious, agricultural; untyped footprints neutral) from
-zoom 13, with a Building use legend, and colors any footprint by the status
-of the point record that falls inside it (a damage assessment, a field
-report), the way the commercial COPs show impacted structures. Untyped
-footprints remain neutral when no verified exact-way enrichment exists or the
-source subtype is outside the documented crosswalk.
+### FEMA USA Structures occupancy
+
+Most OpenStreetMap footprints say only `building=yes` (85 percent of
+Eureka's), and the Overture subtype names few of them.
+`build-building-occupancy.mjs` adds the occupancy class of the FEMA and Oak
+Ridge National Laboratory USA Structures inventory with Node only:
+
+```
+node tools/basemap/build-building-occupancy.mjs [outDir]
+  [--archive web/public/basemap/buildings.pmtiles] [--cache <dir>] [--refresh]
+```
+
+It reads FEMA Region 9's structure point layer (one point inside each
+structure's footprint, published by FEMA's own ArcGIS organization, no
+account or key) for Del Norte, Humboldt, Siskiyou and Trinity counties, the
+counties the demo exercises draw in: about 120,000 points, 26 MB of GeoJSON
+in pages of 2,000. The California statewide file is 2.19 GB, over the 1 GB
+limit, so the rest of the state keeps its footprints as they were. Downloads
+are cached with receipts as in section 11 (cache default
+`<outDir>/occupancy-cache`).
+
+A footprint takes the class of the USA Structures point inside it (even-odd
+rule over its rings in the z14 tile), the largest structure by square feet
+where it holds several; structures classed Unclassified are left out. The
+class is written as `occ` (`OCC_CLS`: Residential, Commercial, Industrial,
+Government, Education, Assembly, Agriculture, Utility and Misc) and
+`occ_prim` (`PRIM_OCC`, such as Hospital or Single Family Dwelling) to
+every z13 and z14 tile of that footprint by its feature id. Tiles with no
+match are copied byte for byte; every other attribute, footprint and tile is
+kept. The archive's metadata names the source, edition, counties and rule.
+The output folder (default `tools/basemap/out/`) gets `buildings.pmtiles`,
+its `buildings-overture.json` sidecar and `buildings-occupancy.json`, the
+receipt with the match counts; copy the first two to `web/public/basemap/`.
+
+The 2026-09-26 build: 116,159 classified structures, 38,574 of them inside an
+OpenStreetMap footprint (the rest have none drawn); 38,106 of the 55,598
+footprints in the four counties (68.5 percent) took a class, 19 of them from
+structures of more than one class. `build-building-occupancy.test.mjs`
+covers the reader, the rule and the archive on small fixtures.
+
+USA Structures is a United States Government work: FEMA's metadata sets no
+access or use constraints and ORNL's Figshare deposit is CC0 1.0. The map
+credits "FEMA USA Structures" while buildings draw.
+
+The COP draws footprints from zoom 14 by use or by role, with a legend, and
+colors any footprint by the status of the point record that falls inside it
+(a damage assessment, a field report), the way the commercial COPs show
+impacted structures. A footprint's use is its OpenStreetMap tag where the
+tag names a use, else its USA Structures class, else its Overture subtype
+where the tag says only `building=yes`; a footprint with none is
+Unclassified.
 
 ### Verify the local buildings archive
 

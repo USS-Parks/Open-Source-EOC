@@ -19,7 +19,8 @@ import type { CopInspection } from "./workspace.js";
  * 2. in the role theme, critical infrastructure: a facility of the facilities
  *    archive inside it or beside it (feature state `facilityType`, CopMap's
  *    facility join);
- * 3. the use or role its class reads as.
+ * 3. the use or role it reads as: its OSM tag, else its FEMA USA Structures
+ *    occupancy, else its Overture subtype (classify).
  */
 
 export type BuildingTheme = "use" | "role" | "plain" | "off";
@@ -44,6 +45,8 @@ export interface BuildingsConfig {
   readonly pmtilesUrl: string;
   /** Present only when this archive carries the exact-way H14 enrichment. */
   readonly overtureRelease?: string | undefined;
+  /** The FEMA USA Structures edition, present only when this archive carries its occupancy classes. */
+  readonly usaStructures?: string | undefined;
 }
 
 export const BUILDINGS_SOURCE_ID = "buildings";
@@ -52,9 +55,11 @@ export const BUILDING_USE_LAYER_ID = "building-use";
 export const BUILDING_OUTLINE_LAYER_ID = "building-outline";
 
 export function buildingsAttribution(config: BuildingsConfig): string {
-  return config.overtureRelease
-    ? `Buildings: © OpenStreetMap contributors (ODbL); enrichment: © Overture Maps Foundation (ODbL, ${config.overtureRelease})`
-    : "Buildings: © OpenStreetMap contributors (ODbL)";
+  return [
+    "Buildings: © OpenStreetMap contributors (ODbL)",
+    ...(config.overtureRelease ? [`enrichment: © Overture Maps Foundation (ODbL, ${config.overtureRelease})`] : []),
+    ...(config.usaStructures ? [`occupancy: FEMA USA Structures (public domain, ${config.usaStructures})`] : []),
+  ].join("; ");
 }
 
 /**
@@ -86,11 +91,37 @@ const USE_VALUE = new Map<string, string>(Object.entries({
   train_station: "utility_misc", transportation: "utility_misc",
 }));
 
-/** The use a footprint reads as: its OSM tag, or for an untyped building=yes its Overture subtype. */
-export function buildingUse(cls: unknown, subtype?: unknown): BuildingUse {
-  const value = cls === "yes" ? subtype : cls;
-  if (typeof value !== "string") return "unclassified";
-  return paletteKey(BUILDING_OCCUPANCY_PALETTE, USE_VALUE.get(value) ?? value) ?? "unclassified";
+/** Where a footprint's use comes from, highest first. */
+const USE_SOURCES = {
+  tag: "OpenStreetMap building tag",
+  occ: "FEMA USA Structures occupancy",
+  subtype: "Overture subtype",
+} as const;
+
+/** The use one value names: an OSM tag, a USA Structures class or an Overture subtype; undefined when it names none. */
+function useOf(value: unknown): BuildingUse | undefined {
+  if (typeof value !== "string") return undefined;
+  const use = paletteKey(BUILDING_OCCUPANCY_PALETTE, USE_VALUE.get(value) ?? value);
+  return use === "unclassified" ? undefined : use;
+}
+
+/**
+ * The use a footprint reads as and where it comes from: its OSM tag where the
+ * tag names a use, else the occupancy class of the USA Structures structure
+ * inside it, else, for an untyped building=yes, its Overture subtype.
+ */
+function classify(cls: unknown, subtype?: unknown, occ?: unknown): { use: BuildingUse; from?: keyof typeof USE_SOURCES } {
+  const tag = useOf(cls);
+  if (tag) return { use: tag, from: "tag" };
+  const fema = useOf(occ);
+  if (fema) return { use: fema, from: "occ" };
+  const overture = cls === "yes" ? useOf(subtype) : undefined;
+  return overture ? { use: overture, from: "subtype" } : { use: "unclassified" };
+}
+
+/** The use a footprint reads as, from its `class`, `overture_subtype` and `occ` (see classify). */
+export function buildingUse(cls: unknown, subtype?: unknown, occ?: unknown): BuildingUse {
+  return classify(cls, subtype, occ).use;
 }
 
 const PUBLIC_USES: readonly BuildingUse[] = ["government", "education", "assembly"];
@@ -101,17 +132,19 @@ export function buildingRole(use: BuildingUse, facility?: unknown): BuildingRole
   return PUBLIC_USES.includes(use) ? "public" : "private";
 }
 
-/** buildingUse as a MapLibre expression over the archive's `class` and `overture_subtype`. */
+/** buildingUse as a MapLibre expression over the archive's `class`, `occ` and `overture_subtype`. */
 function useExpression(): unknown[] {
   const palette = BUILDING_OCCUPANCY_PALETTE;
   const values = new Set([...USE_VALUE.keys(), ...Object.keys(palette.entries), ...Object.keys(palette.aliases ?? {})]);
   const byUse = new Map<BuildingUse, string[]>();
   for (const value of values) {
-    const use = buildingUse(value);
-    if (use !== "unclassified") byUse.set(use, [...(byUse.get(use) ?? []), value]);
+    const use = useOf(value);
+    if (use) byUse.set(use, [...(byUse.get(use) ?? []), value]);
   }
-  const value = ["to-string", ["case", ["==", ["get", "class"], "yes"], ["get", "overture_subtype"], ["get", "class"]]];
-  return ["match", value, ...[...byUse].flatMap(([use, list]) => [list, use]), "unclassified"];
+  const branches = [...byUse].flatMap(([use, list]) => [list, use]);
+  const match = (property: string, fallback: unknown) => ["match", ["to-string", ["get", property]], ...branches, fallback];
+  const subtype = ["case", ["==", ["get", "class"], "yes"], match("overture_subtype", "unclassified"), "unclassified"];
+  return match("class", match("occ", subtype));
 }
 
 const USE = useExpression();
@@ -306,15 +339,19 @@ export function buildingInspection(
   state: Record<string, unknown>,
   config: BuildingsConfig | undefined,
 ): CopInspection {
-  const use = buildingUse(properties.class, properties.overture_subtype);
+  const { use, from } = classify(properties.class, properties.overture_subtype, properties.occ);
   const role = buildingRole(use, state.facilityType);
   const facility = text(state.facility);
   const facilityType = isIconId(state.facilityType) ? GLYPHS[state.facilityType].title : text(state.facilityType);
   const status = text(state.status);
+  const occ = text(properties.occ);
+  const occPrimary = text(properties.occ_prim);
   const rows = [
     ["Use", BUILDING_OCCUPANCY_PALETTE.entries[use].label],
+    ["Use from", from ? USE_SOURCES[from] : undefined],
     ["Role", BUILDING_ROLE_PALETTE.entries[role].label],
     ["OpenStreetMap building tag", text(properties.class)],
+    ["USA Structures occupancy", occ && occPrimary ? `${occ}: ${occPrimary}` : occ],
     ["Overture subtype", text(properties.overture_subtype)],
     ["Facility inside", facility],
     ["Facility type", facilityType],
@@ -328,7 +365,7 @@ export function buildingInspection(
     ...(status === "critical" || status === "warning" || status === "normal" ? { status } : {}),
     ...(facilityType ? { facilityType } : {}),
     freshness: "Static reference data",
-    coverage: "Use comes from the building's OpenStreetMap tag, or its Overture subtype where the tag says only building; a footprint with neither is Unclassified.",
+    coverage: "Use comes from the building's OpenStreetMap tag where it names a use, else from the FEMA USA Structures occupancy of the structure inside it where the archive carries one, else from its Overture subtype where the tag says only building; a footprint with none is Unclassified.",
     ...(config ? { attribution: buildingsAttribution(config) } : {}),
     rows: rows.flatMap(([label, value]) => (value ? [{ label, value }] : [])),
   };
