@@ -8909,3 +8909,117 @@ plans" and "Veoci and air gap VA14: Public Assistance force account".
   `OPENEOC_TEST_DB_TAG`, since an untagged run's teardown drops other runs'
   test databases.
 - **Rollback:** revert the commit.
+
+## Veoci and air gap VA18: rollout playbook and timed onboarding
+
+Veoci Integration and Air Gap PSPR unit VA18 (VC-14).
+
+- **What the documents said before.** The six-step playbook existed only as
+  a proposal in the Veoci research ("The five implementation phrases are
+  services"), and its first step still named a Docker host, which ADR-0010
+  removed. The training kit is instructor-led and runs on the acceptance
+  profile, which needs a source checkout; nothing let a staff member learn
+  alone on the installed product. Nothing measured an install or a first
+  activation: the parity matrix's F16 row says the ten-minute path "has not
+  been timed", and the research's "Efficient timeline" row asks for a timed
+  run with a new person before any claim of speed.
+- **What changed.**
+  - `docs/guides/ROLLOUT-PLAYBOOK.md`: the six steps for a small tribal or
+    rural EOC, each with its work, an exit check and a row on a sign-off
+    sheet: (1) install from media on one computer or a network host, the
+    host and unplugged checks, two administrators with two-step sign-in and
+    sealed recovery codes, one clock, every device trusting the host, and a
+    backup restored on a second computer; (2) accounts, positions, contacts,
+    call-down groups, channels and a test call-down with answers;
+    (3) a week of daily operations on the Daily Operations template;
+    (4) the activation template, the plan in the product, the self-paced
+    modules and the starter pack's tabletop; (5) partner participants,
+    guest access, federation with a county instance and a written agreement;
+    (6) IPAWS only with the MOA and COG certificate, and force account cost
+    capture. Roles are sized for two to six people, with a second
+    administrator so one absence never locks the EOC out.
+  - `docs/guides/SELF-PACED-TRAINING.md`: eight modules of 15 to 30 minutes
+    (find your way, read the situation, records and requests, field work
+    without a connection, reach people, plan the period, activate and close,
+    keep it running), a table of which role takes which, steps on the real
+    screen and button names, questions with answers to check yourself, the
+    guide to read next, and a training record. They run on the demonstration
+    the setup installs for one account; module 4 needs a network host,
+    because the demonstration's server runs on the same computer and cannot
+    lose its connection. They name no scenario (amendment 5).
+  - `docs/guides/TIMED-ONBOARDING.md`: the procedure for timing a person new
+    to the product: participant and observer, a computer that has never had
+    the product and is off the internet, the setup on USB, a printed task
+    card (install for the building, become the first administrator, open a
+    severe storm exercise named "Timed onboarding", show its checklists),
+    marks M0 to M9 with install, first sign-in, first activation and total
+    durations, the one-help-after-five-minutes rule, a 90-minute stop,
+    debrief questions, and a result sheet that says the first run is Basho's
+    and has not happened.
+  - `docs/guides/README.md`: rows for the three pages.
+- **Files outside the "Owns" cell.** None.
+- **Decisions and deviations (defaults taken, not asked).**
+  - The research's "Windows desktop or Docker host" is now "one computer or
+    the network host" (ADR-0010: Windows and macOS only).
+  - Step 4's starter pack: importing it needs the server to trust the
+    publisher key through `OPENEOC_TRUSTED_TEMPLATE_KEYS`, and the Windows
+    setup has no option that sets it (no parameter in
+    `Open-Source-EOC.ps1`, no entry in the host service definition in
+    `deploy/windows/lib/host.mjs`). The playbook says so plainly, says a
+    manual setting on an installed computer has not been tried, and routes
+    the reader to building the template on **Incident Setup** meanwhile.
+  - The timed run uses the network host path (the playbook's choice for an
+    EOC with more than one seat), disconnected, with a one-computer variant,
+    and the **Severe Storm** template, which every install carries
+    (`ensureStandardIncidentTemplates` runs at server start).
+  - The training kit's README (`docs/guides/training/README.md`) is not
+    edited: the exercise scenario roster's XS7 owns it. The self-paced page
+    links to the kit, and the guides index lists the new pages.
+- **Findings on the screens, not changed (outside the cell).**
+  - A new administrator's rail lists only the core sections: **Incident
+    Setup**, **Contacts**, **Mass Notification**, **Templates** and
+    **Administration** appear only after **Settings > General > Show every
+    section** (Incident Setup is also reached from **Tasks**, **Open
+    incident templates**). On a fresh install with no incident, **Overview**
+    says only "Choose an incident in the command bar". The playbook and the
+    modules say where to look; the timed run will measure how long a new
+    person takes to find it, and the procedure tells the observer not to
+    help.
+  - The demonstration has no field form, so **Smart Forms** says "No field
+    forms available" there; module 4 uses a queued task completion and
+    queues a report only where the organization has a form.
+- **Air-gap behavior (decision 9).** Documentation only; no network path
+  changes. The playbook and the timed run install from removable media with
+  the internet unplugged.
+- **Schema, contract and dependencies.** None.
+- **Tests.** None; the unit is documents. Every screen and button name was
+  checked against the source: `Login.tsx` (Trust this server),
+  `ShellDialogs.tsx` (Show every section, Open Administration, Help's
+  guides), `Console.tsx` (the rail and its core sections),
+  `IncidentsSurface.tsx` (Activate an incident, Incident type labels,
+  Notify people when it activates, Close incident, Confirm closeout),
+  `IncidentParticipants.tsx` (Add participant and its fields),
+  `TasksSurface.tsx` (My Tasks, Team Tasks, Reconcile queued work, Open
+  incident templates), `FormComponents.tsx` (Form to start, Start form, Save
+  and mark ready, Review it in the IAP workspace), `ResourcesSurface.tsx`,
+  `MapSurface.tsx` (Add point), `BoardSurface.tsx` (New record),
+  `SettingsSections.tsx`, `AlertsSurface.tsx` (Acknowledge notification,
+  Resend), `SmartFormsSurface.tsx`, the setup's `.iss` task labels and the
+  launcher's prompts in `Open-Source-EOC.ps1`.
+- **Verification.** In the worktree: `node scripts/check-links.mjs` ok (120
+  tracked Markdown files; the new pages are untracked, so it checks the
+  links into them, not theirs); a relative-link and anchor check over the
+  three new pages, the edited index and the pages they link: ok, and it
+  reports a broken anchor when given one; `pnpm check:static` exit 0 (`tsc`
+  in every package, `eslint .`, license scan 339 packages with 3 reviewed
+  copyleft, links 120 files). No em-dashes or carriage returns in the files.
+- **Not run.** The timed onboarding, which needs a person new to the product
+  and is Basho's (section 9); the modules and the playbook have not been
+  walked by EOC staff; the starter pack import on an installed computer.
+- **Evidence level:** documents checked against the source and the link
+  checks; no user has run them.
+- **Landing.** Built in the fan-out lane `lane/docs` (a lane agent, git
+  read-only) and landed on `main` by the integrating session, which read the
+  pages and ran `node scripts/check-links.mjs` on `main` with them staged:
+  ok, 123 files. The trusted-publisher gap is carried to VA36.
+- **Rollback:** delete the three pages and revert the three index rows.

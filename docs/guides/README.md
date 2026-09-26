@@ -30,7 +30,10 @@ substitute. Re-select context before acting.
 | Track facility and shelter status, hospital beds and shelter capacity | [Facilities and shelters](./FACILITIES.md) |
 | Build, run, download and schedule reports over boards | [Reports](./REPORTS.md) |
 | Use the console by keyboard, screen reader, zoom, reduced motion or higher contrast, and run the screen-reader check | [Accessibility](./ACCESSIBILITY.md) |
+| Roll the product out in a small EOC, one step at a time | [Rollout playbook](./ROLLOUT-PLAYBOOK.md) |
 | Train staff with job aids and a tabletop exercise | [Training kit](./training/README.md) |
+| Learn the console alone, in short modules | [Self-paced training](./SELF-PACED-TRAINING.md) |
+| Time a new person's install and first incident | [Timed onboarding](./TIMED-ONBOARDING.md) |
 | Create or revise board schemas | [Board designer guide](./DESIGNER.md) |
 | Move records from WebEOC | [WebEOC migration](./MIGRATION.md) |
 | Configure federation | [Federation setup](./FEDERATION-SETUP.md) |
