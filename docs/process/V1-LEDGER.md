@@ -9123,3 +9123,117 @@ nothing.
   `main`: ok. The sign-in page's trust panel, which names only Windows and
   macOS, is carried to VA36.
 - **Rollback:** revert the two guides.
+
+## Veoci and air gap VA24: the disconnected drill
+
+Veoci Integration and Air Gap PSPR unit VA24 (AG-10), a placeholder under
+amendment 4: the procedures and the report template are written; both runs
+are Basho's and gate nothing. AR7 and INV-3 close on Part 1's record when
+it is run.
+
+- **What the documents said before.** "Readiness RD5: the air gap" left
+  `Test-OpenEOCAirGap.ps1`, which prints its next steps, and the installer
+  README's second-machine transfer check; AR7 and INV-3 in
+  `docs/FACET-STATUS.md` wait on "Basho's unplugged run with a second
+  device" and "the install from media on a disconnected second computer".
+  No single procedure joined them, and nothing described running for days
+  with the optional integrations configured against local stand-ins and
+  recording what queued, expired and reconciled (air-gap audit, AG-10 and
+  section 10).
+- **What changed.**
+  - `docs/guides/DISCONNECTED-DRILL.md`:
+    - a table of the four situations and which steps cover each, and the
+      plain statement that this build has no way to carry incident records
+      to another instance on media, so both parts record only a backup copy
+      reaching removable media;
+    - **Part 1, the unplugged run**, in eleven steps on two computers and a
+      switch with no internet line: computer B through the installer's
+      second-machine transfer check; computer A installed from media as a
+      network host with a new operational database; `HOST CHECK PASSED`;
+      `AIR-GAP CHECK PASSED`; sign-in with two-step codes and an activation
+      from **Severe Storm** as an exercise; a walk of the screens the check
+      names, with a map point and a board record kept through a browser
+      restart; B trusting the host and editing live both ways; B reopened
+      offline and signing in again on return; A restarted unplugged; a
+      backup copied to USB and verified. It says when Part 1 passes;
+    - **Part 2, the 72-hour drill**: who plays, where (never on a host
+      whose channels reach real people), three two-hour periods of play on
+      three days; the stand-ins, three of them from the Caddy the setup
+      installs for the host (`caddy respond` as the text message provider
+      and the webhook receiver, `caddy file-server` serving a GeoJSON feed
+      file the page shows how to make), an SMTP test relay carried in on
+      media (Mailpit, MIT, named as one), an optional second host for
+      federation, IPAWS left off; the allowlist, channel, rule and feed
+      settings with their on-screen names; what to set up before the cut,
+      including a 24-hour webhook window so an expiry falls inside the
+      drill; and a timeline from hour 0 to 72 (the cut, a mass notification
+      that waits, a field device offline for an hour, the feed's single
+      "Feed failing" notice, the relay back at hour 8, webhooks expiring at
+      24 and resent at 26, a host restart at 30, the partner back at 48,
+      SMS expiring at 72 and resent, the feed's "Feed recovered", the
+      hotwash), with what to record at each.
+  - `docs/guides/DISCONNECTED-DRILL-REPORT.md`: Part 1's run details, a row
+    per step with result, time and what was seen, blocks for the two
+    checks' output, and a verdict; Part 2's details, baseline, a row per
+    service (waited, delivered when the route returned and how long after,
+    expired, resent), devices, restart and clock checks, the media and
+    IPAWS rows, an event log, the hotwash and a verdict. Its header says
+    neither part has been run, that the first runs are Basho's, and that
+    Part 1's record is what AR7 and INV-3 wait on.
+  - `docs/guides/README.md`: one row for the drill.
+- **Files outside the "Owns" cell.** `docs/guides/README.md` (one row, in
+  the index that lists the guides).
+- **Decisions and deviations (defaults taken, not asked).**
+  - The two new pages sit in `docs/guides/` beside the network host guide.
+  - The stand-ins listen on the host's loopback address: the notification
+    allowlist admits plain `http` only for a loopback origin named exactly
+    (`server/src/notify/allowlist.ts`), and webhooks and the HTTP SMS
+    provider are checked against it; feeds are not. The HTTP SMS provider
+    takes any 2xx answer, reading a message id only when the body is JSON
+    (`server/src/notify/channels.ts`), so `caddy respond` with an empty body
+    serves, and no JSON body is passed on the command line, which Windows
+    PowerShell 5.1 would strip of its quotes.
+  - Checked here: Caddy 2.11.4, from a per-user install on this machine,
+    ran `respond` on one loopback port and `file-server` on another side by
+    side (each disables its admin endpoint, so they do not clash), answered
+    a form POST with 200 and served the GeoJSON file; both processes were
+    stopped afterwards. The feed file parses as the GeoJSON feed parser
+    expects (`server/src/feeds/parse.ts`).
+  - No SMTP stand-in ships with the product, so the drill names Mailpit
+    (MIT) as one option, by its documented default ports, or the agency's
+    own relay. It was not downloaded or run here, and the page gives no
+    command for it.
+  - Email and SMS keep the 72-hour default window; webhooks are set to 24
+    hours so one expiry and a resend happen inside the drill; the text
+    stand-in stays down all 72 hours, so SMS expire at the end; the relay
+    returns at hour 8, so email catches up.
+  - Collaboration channels and meetings are left out: they need
+    `OPENEOC_INTEGRATIONS` in the server's environment, which the Windows
+    setup does not set.
+  - The drill uses the **Severe Storm** template (it opens a field reports
+    board) rather than the starter pack, which cannot be imported on an
+    installed computer while the setup does not set
+    `OPENEOC_TRUSTED_TEMPLATE_KEYS` (see VA18's receipt).
+- **Air-gap behavior (decision 9).** Documentation only; no network path
+  changes. The drill exercises scenarios A (the whole of both parts), B
+  (install from media, certificates, the clock lines), C (Part 1 step 9 and
+  the day 1 field play) and D only as a backup copied to removable media,
+  since this build has no exchange of incident data by file.
+- **Schema, contract and dependencies.** None.
+- **Tests.** None; the unit is documents.
+- **Verification.** In the worktree: `node scripts/check-links.mjs` ok (120
+  tracked files; the new pages are untracked); the relative-link and anchor
+  check over both pages, including the installer README's
+  `#second-machine-transfer-check`, the network host guide's
+  `#record-the-phone-walk` and the runbook's `#verify-a-copy`: ok;
+  `pnpm check:static` exit 0 (`tsc` in every package, `eslint .`, license
+  scan 339 packages, links 120 files); the Caddy stand-ins as above.
+- **Not run.** Part 1 and Part 2, which are Basho's (decisions 12 and 14);
+  Mailpit.
+- **Evidence level:** documents checked against the source, and the Caddy
+  stand-ins run on this machine; no drill run.
+- **Landing.** Built in the fan-out lane `lane/docs` and landed on `main` by
+  the integrating session after VA23, whose phone walk it links;
+  `node scripts/check-links.mjs` on `main` with the pages staged: ok. The
+  drill's media row waits on VA20.
+- **Rollback:** delete the two pages and the index row.

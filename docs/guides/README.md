@@ -23,6 +23,7 @@ substitute. Re-select context before acting.
 | Coordinate incident work | [Operator quickstart](./OPERATOR-QUICKSTART.md) |
 | Configure people, incidents, and integrations | [Administrator guide](./ADMIN.md) |
 | Serve a building or site from one Windows computer, with no internet | [Network host](./NETWORK-HOST.md) |
+| Prove it works unplugged, then run a 72-hour disconnected drill | [Disconnected drill](./DISCONNECTED-DRILL.md) |
 | Upgrade the server or desktop, and go back | [Upgrade guide](./UPGRADE.md) |
 | Schedule backups, keep copies off the host, and restore after a failure | [Disaster recovery runbook](./DISASTER-RECOVERY.md) |
 | Capture field reports and assigned completions | [Field user guide](./FIELD-USER.md) |
