@@ -319,7 +319,7 @@ try {
   }
   if ($IncludeOptionalBasemaps) {
     # A release that asks for the archives gets every one or fails; Copy-File refuses a missing input.
-    foreach ($file in @('california.pmtiles', 'buildings.pmtiles', 'buildings-overture.json', 'overlays.pmtiles', 'overlays-manifest.json')) {
+    foreach ($file in @('california.pmtiles', 'buildings.pmtiles', 'buildings-overture.json', 'overlays.pmtiles', 'overlays-manifest.json', 'facilities.pmtiles', 'facilities-manifest.json')) {
       Copy-File (Join-Path $OptionalBasemapRoot $file) (Join-Path $appRoot "web/public/basemap/$file")
     }
     # The North Coast imagery and elevation the reference scenario's maps show: the

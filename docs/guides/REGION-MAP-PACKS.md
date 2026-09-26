@@ -2,7 +2,8 @@
 
 The Windows setup and the map data packet carry California: the statewide
 street map, building footprints, road jurisdiction and public land overlays,
-North Coast imagery and elevation, and the offline address search index. An
+the critical facilities layer, North Coast imagery and elevation, and the
+offline address search index. An
 EOC anywhere else builds a **region map packet** for its own area on a
 computer with the internet, carries it to the EOC on a USB drive or other
 media, checks it, and installs it. After that the EOC works in that area with
@@ -18,8 +19,9 @@ and address search finds its places.
 | Address search index | `tools/basemap/build-gazetteer.mjs` | No, but search is unavailable without it |
 | The area's bounds | you choose them | Yes |
 
-The California overlays, imagery and elevation are built from California and
-USGS sources for the North Coast; a region packet leaves them out, and the
+The California overlays and critical facilities, and the imagery and
+elevation built from USGS sources for the North Coast, cover California only;
+a region packet leaves them out, and the
 map does not offer them while it is installed. The low-detail map the app
 carries for zoomed-out views covers California only, so outside California
 the street map is what shows at every zoom.

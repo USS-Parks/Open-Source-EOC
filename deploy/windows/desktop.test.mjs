@@ -114,6 +114,26 @@ test("desktop configures the offline imagery and elevation archives it finds", a
   }
 });
 
+test("desktop configures the critical facilities layer it finds, and its manifest only beside it", async () => {
+  const files = fixture();
+  try {
+    writeFileSync(resolve(files.publicRoot, "basemap/facilities-manifest.json"), "{}");
+    let config = await desktopRuntimeConfig(files.publicRoot);
+    assert.equal(config.OPENEOC_FACILITIES_PMTILES_URL, undefined);
+    assert.equal(config.OPENEOC_FACILITIES_MANIFEST_URL, undefined);
+    // An installed packet's layer is found the same way as the public files'.
+    const mapDataRoot = resolve(files.root, "map-data");
+    mkdirSync(resolve(mapDataRoot, "basemap"), { recursive: true });
+    writeFileSync(resolve(mapDataRoot, "basemap/facilities.pmtiles"), "facilities");
+    config = await desktopRuntimeConfig(files.publicRoot, { mapDataRoot });
+    assert.equal(config.OPENEOC_FACILITIES_PMTILES_URL, "/basemap/facilities.pmtiles");
+    assert.equal(config.OPENEOC_FACILITIES_MANIFEST_URL, "/basemap/facilities-manifest.json");
+    assert.equal(selectStaticFile({ rawPath: "basemap/facilities.pmtiles", ...files, mapDataRoot }).file, resolve(mapDataRoot, "basemap/facilities.pmtiles"));
+  } finally {
+    rmSync(files.root, { recursive: true, force: true });
+  }
+});
+
 /** A map data packet folder with a small stand-in for every file a packet carries. */
 async function packetFixture(root, name = "packet") {
   const sources = {};
@@ -192,7 +212,7 @@ test("a map data packet installs only when every file matches its manifest, from
       env: { ...process.env, OPENEOC_DESKTOP_DATA_ROOT: dataRoot },
     });
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /MAP_DATA_INSTALLED files=8 /);
+    assert.match(result.stdout, new RegExp(`MAP_DATA_INSTALLED files=${MAP_DATA_FILES.length} `));
     assert.equal(existsSync(resolve(dataRoot, "map-data", "map-data.json")), true);
   } finally {
     rmSync(root, { recursive: true, force: true });

@@ -193,6 +193,11 @@ export async function desktopRuntimeConfig(publicRoot, { diagnostic = (message) 
   ];
   for (const [key, relativePath] of optional)
     if (located(relativePath)) config[key] = `/${relativePath.replaceAll("\\", "/")}`;
+  // The critical facilities layer, with the manifest naming its sources when it is there too.
+  if (located("basemap/facilities.pmtiles")) {
+    config.OPENEOC_FACILITIES_PMTILES_URL = "/basemap/facilities.pmtiles";
+    if (located("basemap/facilities-manifest.json")) config.OPENEOC_FACILITIES_MANIFEST_URL = "/basemap/facilities-manifest.json";
+  }
   // Offline raster archives: the map reads their zoom range and bounds from each archive's header.
   const rasters = [
     ["OPENEOC_IMAGERY", "basemap/north-coast-imagery.pmtiles", "Imagery: USDA NAIP via USGS The National Map"],

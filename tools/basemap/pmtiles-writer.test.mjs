@@ -1,7 +1,8 @@
+import { gzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { PMTiles, zxyToTileId as libraryTileId } from "../../web/node_modules/pmtiles/dist/esm/index.js";
 import { tilesFor } from "./build-north-coast-rasters.mjs";
-import { TILE_TYPE, writePmtiles, zxyToTileId } from "./pmtiles-writer.mjs";
+import { COMPRESSION, TILE_TYPE, writePmtiles, zxyToTileId } from "./pmtiles-writer.mjs";
 
 /** An in-memory source the pmtiles reader can open. */
 function source(bytes) {
@@ -37,5 +38,13 @@ describe("PMTiles writer", () => {
       expect(Buffer.from(found.data).toString()).toBe(tile.data.toString());
     }
     expect(await archive.getZxy(16, 0, 0)).toBeUndefined();
+  });
+
+  it("names vector tiles and their gzip compression in the header, so the reader inflates them", async () => {
+    const bytes = writePmtiles([{ z: 12, x: 655, y: 1540, data: gzipSync(Buffer.from("vector tile")) }],
+      { tileType: TILE_TYPE.mvt, tileCompression: COMPRESSION.gzip, bounds: [-124.3, 40.6, -124.0, 40.9], metadata: { vector_layers: [] } });
+    const archive = new PMTiles(source(bytes));
+    expect(await archive.getHeader()).toMatchObject({ tileType: 1, tileCompression: 2, minZoom: 12, maxZoom: 12 });
+    expect(Buffer.from((await archive.getZxy(12, 655, 1540)).data).toString()).toBe("vector tile");
   });
 });

@@ -17,6 +17,8 @@ export const MAP_DATA_FILES = Object.freeze([
   "basemap/buildings-overture.json",
   "basemap/overlays.pmtiles",
   "basemap/overlays-manifest.json",
+  "basemap/facilities.pmtiles",
+  "basemap/facilities-manifest.json",
   "basemap/north-coast-imagery.pmtiles",
   "basemap/north-coast-terrain.pmtiles",
   "gazetteer.tsv",

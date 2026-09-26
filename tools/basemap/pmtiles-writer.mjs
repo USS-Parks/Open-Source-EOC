@@ -1,13 +1,14 @@
-// A PMTiles v3 writer for raster archives: tiles are stored as given (JPEG
-// or PNG), directories and metadata are gzip-compressed, and a root
-// directory larger than the spec's first 16 KiB is split into leaves.
+// A PMTiles v3 writer: tiles are stored as given (JPEG or PNG, or vector
+// tiles the caller has already compressed and names with tileCompression),
+// directories and metadata are gzip-compressed, and a root directory larger
+// than the spec's first 16 KiB is split into leaves.
 // Specification: https://github.com/protomaps/PMTiles/blob/main/spec/v3/spec.md
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 
-export const TILE_TYPE = { png: 2, jpeg: 3, webp: 4 };
-const GZIP = 2;
-const NONE = 1;
+export const TILE_TYPE = { mvt: 1, png: 2, jpeg: 3, webp: 4 };
+export const COMPRESSION = { none: 1, gzip: 2 };
+const GZIP = COMPRESSION.gzip;
 const HEADER_BYTES = 127;
 const ROOT_LIMIT = 16384 - HEADER_BYTES;
 
@@ -67,7 +68,7 @@ function directory(entries) {
  * Build an archive from tiles: [{ z, x, y, data }]. Identical tiles are
  * stored once. Returns the archive bytes.
  */
-export function writePmtiles(tiles, { tileType, bounds, metadata }) {
+export function writePmtiles(tiles, { tileType, bounds, metadata, tileCompression = COMPRESSION.none }) {
   const sorted = tiles.map((tile) => ({ ...tile, tileId: zxyToTileId(tile.z, tile.x, tile.y) }))
     .sort((a, b) => a.tileId - b.tileId);
   const seen = new Map();
@@ -105,7 +106,8 @@ export function writePmtiles(tiles, { tileType, bounds, metadata }) {
   }
 
   const meta = gzipSync(Buffer.from(JSON.stringify(metadata)));
-  const zooms = sorted.map((tile) => tile.z);
+  // Tile ids grow with zoom, so the first and last tiles hold the zoom range.
+  const [minZoom, maxZoom] = [sorted[0].z, sorted.at(-1).z];
   const header = Buffer.alloc(HEADER_BYTES);
   header.write("PMTiles", 0, "latin1");
   header[7] = 3;
@@ -121,14 +123,14 @@ export function writePmtiles(tiles, { tileType, bounds, metadata }) {
   u64(sorted.length, 72); u64(entries.length, 80); u64(chunks.length, 88);
   header[96] = 1; // clustered: tile data is in tile id order
   header[97] = GZIP;
-  header[98] = NONE;
+  header[98] = tileCompression;
   header[99] = tileType;
-  header[100] = Math.min(...zooms);
-  header[101] = Math.max(...zooms);
+  header[100] = minZoom;
+  header[101] = maxZoom;
   const [west, south, east, north] = bounds;
   const e7 = (value, at) => header.writeInt32LE(Math.round(value * 1e7), at);
   e7(west, 102); e7(south, 106); e7(east, 110); e7(north, 114);
-  header[118] = Math.round((Math.min(...zooms) + Math.max(...zooms)) / 2);
+  header[118] = Math.round((minZoom + maxZoom) / 2);
   e7((west + east) / 2, 119); e7((south + north) / 2, 123);
   return Buffer.concat([header, root, meta, leaves, ...chunks]);
 }

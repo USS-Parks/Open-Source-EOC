@@ -14066,3 +14066,79 @@ built in lane `lane/mp3`.
 - **Full suite:** as MP11, once per landing batch before the push.
 - **Rollback.** Delete `web/src/cop/symbols/` and `tools/icons/`; nothing
   else refers to them yet.
+
+## Map and dashboard parity MP4 part one: the critical facilities data
+
+Map and Dashboard Parity PSPR unit MP4, its data half (decision 2), built in
+lane `lane/mp4`. Part two, drawing the layer on the map with the MP3 icons,
+follows MP1 and MP2.
+
+- **What there was before.** No facility layer: the only critical facility
+  symbols came from OpenStreetMap points in the street archive, drawn from
+  z14 with names required.
+- **What changed.**
+  - `tools/basemap/build-facilities.mjs` (Node only; no Java or GDAL)
+    downloads into a cache outside the repository, normalizes every source
+    to points with `type`, `lifeline`, `sector` (CISA), `name`, `subtype`,
+    `source`, `source_id`, `address`, `city`, `county`, `phone`,
+    `operator`, `capacity` and `capacity_unit`, keeps California (county
+    polygons), deduplicates, and writes `facilities.pmtiles` (gzip vector
+    tiles: `facilities` at z12 to z14, `facility_clusters` at z6 to z11, a
+    grid of 8 cells a tile side with the count, the dominant lifeline and a
+    count per lifeline) and `facilities-manifest.json` (every source's URL,
+    license, retrieval time, size and SHA-256, counts per type, per source
+    and for Humboldt and Del Norte, coverage gaps, the dedupe rule, the ODbL
+    attribution, the archive's SHA-256).
+  - Sources, all U.S. Government works except the last, all read by plain
+    GET with no account or key, none from HIFLD or an Esri-hosted copy:
+    the USGS National Structures Dataset from USGS's structures service;
+    FEMA State EOCs; CMS nursing homes and dialysis facilities, placed with
+    Census TIGER/Line 2025 address ranges (55 county files) because CMS
+    gives addresses (dialysis) or rounded longitudes (nursing homes); EIA-860
+    2025 power plants; EPA FRS (POTWs, water treatment plants, RCRA TSDs and
+    large quantity generators); FCC antenna structures; FAA NASR airports and
+    heliports (2026-09-03 cycle); the USACE National Inventory of Dams; the
+    FHWA National Bridge Inventory 2025; BTS principal ports; and the
+    street archive's OpenStreetMap points (ODbL) where no federal source
+    exists or a federal layer misses a place.
+  - `pmtiles-writer.mjs` writes vector tiles with gzip tile compression, and
+    takes the zoom range from the first and last tile instead of spreading
+    every tile into `Math.min`.
+  - The desktop host sets `OPENEOC_FACILITIES_PMTILES_URL` and
+    `OPENEOC_FACILITIES_MANIFEST_URL` when the files are present, in a map
+    data packet or the public files; the packet and the
+    `-IncludeOptionalBasemaps` stage carry both files; `.gitignore` covers the
+    public copies. The setup's third-party notices, the installer README
+    (nine archive files), `docs/ASSET-LICENSES.md`,
+    `docs/WINDOWS-DESKTOP.md`, the packet read-me, the region pack guide and
+    the basemap README (section 11) name the layer.
+- **Result.** 73,472 facilities in 23 of the 24 types: Humboldt 768, Del
+  Norte 169. The archive is 27,166,921 bytes, SHA-256
+  `bcb8279b11fe224662c1b0df82756fe0174b697b33838284dbfdfef6b5371755`.
+- **Defaults taken and deviations.**
+  - The USGS structures came from USGS's own service because the staged
+    California download is 2.3 GB, over the plan's 1 GB line.
+  - The TIGER address ranges (192 MB, public domain) were added to place the
+    CMS records.
+  - Gaps, recorded in the manifest: no public source for electric
+    substations (the street archive has none either); ports cover only the
+    principal ports, so Humboldt Bay and Crescent City harbors are missing;
+    county EOCs have no public source beyond Cal OES and six named in
+    OpenStreetMap. Nothing was invented.
+  - Dedupe: same type within 150 m, or within 1 km with similar names;
+    federal records win; records of one federal source never merge with each
+    other.
+  - The lane started before MP1 landed, a deviation from the plan's section
+    5; it touches no file MP1 changes.
+- **Verification.**
+  - `pmtiles-writer.test.mjs` and `build-facilities.test.mjs` (normalizers,
+    NBI coordinates, CSV quoting, the CMS address locator, OSM typing, the
+    California check, dedupe, clusters, and the archive read back through the
+    web app's `pmtiles` reader): 11 passed.
+  - `pnpm test:desktop`: 45 passed.
+  - `pnpm check:static`: pass.
+  - The archive read back: tile type 1, gzip, z6 to z14; a z12 tile over
+    Eureka holds 68 facilities of 15 types, one over Crescent City 32.
+- **Full suite:** as MP11, once per landing batch before the push. Browser
+  captures follow part two.
+- **Rollback.** Revert the commit; the archives are untracked build outputs.

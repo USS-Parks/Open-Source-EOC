@@ -70,9 +70,10 @@ The default package includes the baseline offline PMTiles map,
 selected application build. Large California street, building, and overlay
 archives are excluded by default. Add `-IncludeOptionalBasemaps` only for a
 release whose size budget and source receipts cover those assets. With it, the
-stage requires all seven archive files (`california.pmtiles`,
+stage requires all nine archive files (`california.pmtiles`,
 `buildings.pmtiles`, `buildings-overture.json`, `overlays.pmtiles`,
-`overlays-manifest.json`, and the North Coast `north-coast-imagery.pmtiles`
+`overlays-manifest.json`, `facilities.pmtiles`, `facilities-manifest.json`,
+and the North Coast `north-coast-imagery.pmtiles`
 and `north-coast-terrain.pmtiles` the demo's maps show) from
 `-OptionalBasemapRoot`, default
 `web/public/basemap`, and the address search gazetteer at

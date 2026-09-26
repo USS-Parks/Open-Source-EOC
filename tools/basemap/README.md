@@ -464,6 +464,73 @@ The gazetteer is a derived OpenStreetMap database under the ODbL, like the
 street tiles: keep it a deployment artifact and keep the OpenStreetMap
 attribution with any copy you distribute.
 
+## 11. California critical facilities
+
+`build-facilities.mjs` builds the statewide critical facilities layer with
+Node only (no Java, no GDAL): `facilities.pmtiles` and
+`facilities-manifest.json`. It needs the street basemap of step 1, whose
+OpenStreetMap points fill the types no federal source covers.
+
+```
+node tools/basemap/build-facilities.mjs [outDir] --cache <folder outside the repository>
+```
+
+The output lands in `tools/basemap/out/` unless a directory is given; copy
+both files to `web/public/basemap/` (they are not tracked). Downloads go to
+the cache folder (default `<outDir>/facilities-cache`, or
+`OPENEOC_FACILITIES_CACHE`), each with a receipt naming its URL, retrieval
+time, byte size and SHA-256. A rerun reuses every cached file that still
+matches its receipt, so an interrupted build resumes where it stopped;
+`--refresh` fetches everything again. No
+download needs an account or a key, and the builder refuses any single file
+over 1 GB. The source URLs, several of which name a release (the CMS monthly
+files, the FAA 28-day cycle, the EIA and NBI years), are in the `SOURCES`
+list and `readSources`; update them there for a newer release.
+
+| Types | Source | License |
+|---|---|---|
+| Hospitals, ambulance services, fire and EMS stations, police, prisons, schools, colleges, town halls, courthouses, State Capitol | USGS National Structures Dataset, through The National Map structures service | Public domain |
+| State EOC | FEMA State Emergency Operations Centers | Public domain |
+| Nursing homes; dialysis facilities | CMS Provider Data Catalog, placed along Census TIGER/Line address ranges (CMS gives dialysis addresses only and rounds nursing home longitudes) | Public domain |
+| Power plants | EIA-860 | Public domain |
+| Wastewater (POTW), drinking water treatment plants, RCRA hazardous waste handlers | EPA Facility Registry Service | Public domain |
+| Communications towers | FCC Antenna Structure Registration | Public domain |
+| Airports, heliports | FAA NASR | Public domain |
+| Dams | USACE National Inventory of Dams | Public domain |
+| Bridges | FHWA National Bridge Inventory | Public domain |
+| Ports | BTS principal ports | Public domain |
+| Pharmacies, urgent care, and places the federal layers miss | OpenStreetMap points in the street basemap | ODbL |
+
+HIFLD Open is gone and Esri-hosted copies are not used. Substations have no
+usable source and are left out; the manifest says so, with each type's
+coverage and gaps, the counts per type and source, and the counts for
+Humboldt and Del Norte counties.
+
+Every facility carries `type` (one of 24), its FEMA Community `lifeline`,
+CISA `sector`, `name`, `subtype`, `source`, `source_id`, and where the
+source has them `address`, `city`, `county`, `phone`, `operator`, `capacity`
+and `capacity_unit`. A facility of the same type from another source within
+150 m, or within 1 km with the same name, is a duplicate: federal records
+are kept whole and the OpenStreetMap point that repeats one is dropped.
+Records of one federal source never merge with each other.
+
+The archive has two layers: `facilities` (every point, zooms 12 to 14) and
+`facility_clusters` (zooms 6 to 11: a grid of 8 cells per tile side, each
+cluster with its `count`, dominant `lifeline` and a count per lifeline), so
+the map can show density before icons. Tiles are gzip-compressed MVT.
+
+The Windows launcher sets `OPENEOC_FACILITIES_PMTILES_URL` when
+`basemap/facilities.pmtiles` is installed, from a map data packet or the
+setup's public files, and `OPENEOC_FACILITIES_MANIFEST_URL` when the
+manifest is beside it. The setup's optional basemaps and the map data packet
+carry both files.
+
+The federal records are public domain; the OpenStreetMap records are ODbL,
+so the archive is a derivative database of OpenStreetMap and keeps the
+OpenStreetMap attribution. The layer is reference data, not an
+authoritative inventory. `build-facilities.test.mjs` covers the source
+readers, duplicates, clusters and the archive on small fixtures.
+
 ## Attribution
 
 OpenStreetMap data is ODbL: the map must display "© OpenStreetMap contributors".

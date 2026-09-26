@@ -123,6 +123,17 @@ California road jurisdiction and public land overlays (when included)
   license, and the terms for redistributing this compilation are under
   review.
 
+California critical facilities (when included)
+  web/public/basemap/facilities.pmtiles is compiled from United States
+  Government public domain data (the USGS National Structures Dataset, FEMA,
+  CMS, Census TIGER/Line, EIA, EPA, FCC, FAA, USACE, FHWA and BTS) and from
+  OpenStreetMap points in the street basemap. The OpenStreetMap part makes it
+  a database derived from OpenStreetMap, conveyed under the Open Database
+  License 1.0 with the attribution above.
+  web/public/basemap/facilities-manifest.json records each source's address,
+  license, retrieval date, size and SHA-256. tools/basemap/build-facilities.mjs
+  builds it.
+
 Bundled basemap
   web/public/basemap/basemap.pmtiles and ca_counties.geojson come from
   Natural Earth and US Census boundaries, both in the public domain.
