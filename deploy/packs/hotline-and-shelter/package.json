@@ -1,0 +1,245 @@
+{
+  "publisher": "Open Source EOC",
+  "name": "Hotline and shelter registration",
+  "version": "2026.1",
+  "description": "A public hotline and inquiry log and an evacuee shelter registration board, entered by staff, with their views, reports, escalation rules, an overview dashboard and an evacuation and sheltering activation. It names no hazard and no place. Registrations are read by members and the incident's participants only; callers' and evacuees' personal details are never in a notification.",
+  "contents": {
+    "boardTemplates": [
+      {
+        "key": "hotline_log",
+        "version": 1,
+        "title": "Hotline and Inquiry Log",
+        "description": "One record per call, email, text or walk-in question from the public to the EOC or its call center. The caller, their contact, the question and the answer are read by members only. Media calls belong in the JIC's media inquiries.",
+        "fields": [
+          { "key": "received_at", "label": "Received", "type": "datetime", "required": true },
+          { "key": "channel", "label": "Came in by", "type": "enum", "values": ["phone", "email", "text_message", "walk_in", "other"], "required": true },
+          { "key": "caller_name", "label": "Caller", "type": "text", "read": "member" },
+          { "key": "caller_contact", "label": "Caller's phone or email", "type": "text", "read": "member" },
+          { "key": "area", "label": "Community or area", "type": "text" },
+          { "key": "category", "label": "Topic", "type": "enum", "values": ["evacuation", "shelter", "reunification", "road_closure", "utilities", "health", "animals", "damage", "assistance", "donations_and_volunteers", "rumor", "other"], "required": true },
+          { "key": "question", "label": "Question or report", "type": "text", "required": true, "read": "member" },
+          { "key": "answer", "label": "Answer given", "type": "text", "read": "member" },
+          { "key": "referred_to", "label": "Referred to (agency or section)", "type": "text" },
+          { "key": "status", "label": "Status", "type": "enum", "values": ["answered", "follow_up", "escalated", "closed"], "required": true },
+          { "key": "follow_up_by", "label": "Follow-up by", "type": "text" },
+          { "key": "follow_up_due", "label": "Follow-up due", "type": "datetime" }
+        ],
+        "views": [
+          { "key": "follow_up", "title": "Needs follow-up", "columns": ["received_at", "category", "question", "follow_up_by", "follow_up_due", "status"], "filter": [{ "field": "status", "op": "in", "value": ["follow_up", "escalated"] }], "sorts": [{ "field": "follow_up_due", "dir": "asc" }] },
+          { "key": "all", "title": "All inquiries", "columns": ["received_at", "channel", "category", "area", "question", "status"], "sorts": [{ "field": "received_at", "dir": "desc" }] },
+          { "key": "by_topic", "title": "By topic", "columns": ["received_at", "category", "question", "answer", "status"], "groupBy": "category" },
+          { "key": "rumors", "title": "Rumors", "columns": ["received_at", "area", "question", "answer", "status"], "filter": [{ "field": "category", "op": "eq", "value": "rumor" }], "sorts": [{ "field": "received_at", "dir": "desc" }] }
+        ],
+        "inputLayout": {
+          "sections": [
+            { "key": "call", "title": "Call", "fields": ["received_at", "channel", "caller_name", "caller_contact", "area", "category", "question"] },
+            { "key": "answer", "title": "Answer and follow-up", "fields": ["answer", "referred_to", "status", "follow_up_by", "follow_up_due"] }
+          ]
+        }
+      },
+      {
+        "key": "shelter_registrations",
+        "version": 1,
+        "title": "Shelter Registrations",
+        "description": "One record per household registered at a shelter, entered by shelter staff. Members of the jurisdiction and the incident's participants read registrations; viewers and guests read none. Record what the shelter must provide, never a diagnosis or health history.",
+        "fields": [
+          { "key": "arrived_at", "label": "Arrived", "type": "datetime", "required": true },
+          { "key": "shelter", "label": "Shelter", "type": "text", "required": true },
+          { "key": "space", "label": "Bed, cot or area", "type": "text" },
+          { "key": "household_head", "label": "Head of household", "type": "text", "required": true, "read": "member" },
+          { "key": "members", "label": "Other household members, with ages", "type": "text", "read": "member" },
+          { "key": "people", "label": "People in household", "type": "number", "required": true },
+          { "key": "children", "label": "Children under 18", "type": "number" },
+          { "key": "contact", "label": "Phone or other contact", "type": "text", "read": "member" },
+          { "key": "home_area", "label": "Home address or area", "type": "text", "read": "member" },
+          { "key": "needs_communication", "label": "Communication (interpreter, hearing, vision)", "type": "boolean", "read": "member" },
+          { "key": "needs_health", "label": "Health (medication, power, oxygen, diet)", "type": "boolean", "read": "member" },
+          { "key": "needs_independence", "label": "Independence (mobility aid, service animal, daily care)", "type": "boolean", "read": "member" },
+          { "key": "needs_support", "label": "Support and safety (supervision, behavioral health)", "type": "boolean", "read": "member" },
+          { "key": "needs_transport", "label": "Transportation", "type": "boolean", "read": "member" },
+          { "key": "needs_detail", "label": "What the shelter must provide (not a diagnosis)", "type": "text", "read": "member" },
+          { "key": "referral", "label": "Referred for care", "type": "enum", "values": ["none", "shelter_health_staff", "medical_needs_shelter", "hospital", "other"], "read": "member" },
+          { "key": "pets", "label": "Pets (not service animals)", "type": "number" },
+          { "key": "pet_details", "label": "Pet kinds and where they are kept", "type": "text" },
+          { "key": "share_consent", "label": "Agrees their shelter may be told to family who ask", "type": "boolean", "read": "member" },
+          { "key": "reunification", "label": "Reunification", "type": "enum", "values": ["none", "looking_for_someone", "reunited"] },
+          { "key": "looking_for", "label": "Looking for (names, ages, last known place)", "type": "text", "read": "member" },
+          { "key": "status", "label": "Status", "type": "enum", "values": ["in_shelter", "departed", "transferred"], "required": true },
+          { "key": "departed_at", "label": "Left the shelter", "type": "datetime", "condition": { "field": "status", "op": "neq", "value": "in_shelter" } },
+          { "key": "departed_to", "label": "Went to", "type": "text", "read": "member", "condition": { "field": "status", "op": "neq", "value": "in_shelter" } },
+          { "key": "notes", "label": "Notes", "type": "text", "read": "member" }
+        ],
+        "views": [
+          { "key": "in_shelter", "title": "In shelter", "columns": ["shelter", "household_head", "people", "space", "arrived_at"], "filter": [{ "field": "status", "op": "eq", "value": "in_shelter" }], "groupBy": "shelter", "sorts": [{ "field": "shelter", "dir": "asc" }, { "field": "household_head", "dir": "asc" }] },
+          { "key": "needs", "title": "Needs", "columns": ["shelter", "household_head", "space", "needs_communication", "needs_health", "needs_independence", "needs_support", "needs_transport", "referral"], "filter": [{ "field": "status", "op": "eq", "value": "in_shelter" }], "sorts": [{ "field": "shelter", "dir": "asc" }] },
+          { "key": "reunification", "title": "Reunification", "columns": ["shelter", "household_head", "looking_for", "share_consent", "reunification"], "filter": [{ "field": "reunification", "op": "eq", "value": "looking_for_someone" }] },
+          { "key": "all", "title": "All registrations", "columns": ["arrived_at", "shelter", "household_head", "people", "status"], "sorts": [{ "field": "arrived_at", "dir": "desc" }] }
+        ],
+        "inputLayout": {
+          "sections": [
+            { "key": "household", "title": "Household", "fields": ["arrived_at", "shelter", "space", "household_head", "members", "people", "children", "contact", "home_area"] },
+            { "key": "needs", "title": "Medical, functional and access needs", "fields": ["needs_communication", "needs_health", "needs_independence", "needs_support", "needs_transport", "needs_detail", "referral"] },
+            { "key": "pets", "title": "Pets", "fields": ["pets", "pet_details"] },
+            { "key": "reunification", "title": "Reunification and consent", "fields": ["share_consent", "reunification", "looking_for"] },
+            { "key": "stay", "title": "Status", "fields": ["status", "departed_at", "departed_to", "notes"] }
+          ]
+        },
+        "recordAccess": {
+          "read": [{ "kind": "role", "roles": ["member"] }],
+          "edit": [{ "kind": "role", "roles": ["member"] }]
+        }
+      }
+    ],
+    "reportTemplates": [
+      {
+        "key": "hotline_follow_up",
+        "version": 1,
+        "title": "Hotline follow-up",
+        "board": "hotline_log",
+        "definition": {
+          "columns": ["received_at", "caller_name", "caller_contact", "category", "question", "follow_up_by", "follow_up_due", "status"],
+          "where": [{ "field": "status", "op": "in", "value": ["follow_up", "escalated"] }],
+          "sorts": [{ "field": "follow_up_due", "dir": "asc" }]
+        }
+      },
+      {
+        "key": "hotline_topics",
+        "version": 1,
+        "title": "Hotline topics",
+        "board": "hotline_log",
+        "definition": {
+          "columns": ["received_at", "category", "area", "question", "answer", "status"],
+          "groupBy": ["category"],
+          "sorts": [{ "field": "received_at", "dir": "desc" }]
+        }
+      },
+      {
+        "key": "shelter_roster",
+        "version": 1,
+        "title": "Shelter roster",
+        "board": "shelter_registrations",
+        "definition": {
+          "columns": ["shelter", "household_head", "people", "children", "pets", "space", "arrived_at"],
+          "where": [{ "field": "status", "op": "eq", "value": "in_shelter" }],
+          "groupBy": ["shelter"],
+          "totals": [{ "field": "people", "fn": "sum" }, { "field": "children", "fn": "sum" }, { "field": "pets", "fn": "sum" }],
+          "sorts": [{ "field": "household_head", "dir": "asc" }]
+        }
+      },
+      {
+        "key": "shelter_needs",
+        "version": 1,
+        "title": "Shelter needs",
+        "board": "shelter_registrations",
+        "definition": {
+          "columns": ["shelter", "household_head", "space", "needs_communication", "needs_health", "needs_independence", "needs_support", "needs_transport", "needs_detail", "referral"],
+          "where": [{ "field": "status", "op": "eq", "value": "in_shelter" }],
+          "groupBy": ["shelter"],
+          "sorts": [{ "field": "household_head", "dir": "asc" }]
+        }
+      }
+    ],
+    "ruleTemplates": [
+      {
+        "key": "hotline_escalated_new",
+        "version": 1,
+        "title": "A hotline call is logged as escalated",
+        "board": "hotline_log",
+        "event": "record.created",
+        "condition": { "field": "status", "op": "eq", "value": "escalated" },
+        "channels": [{ "kind": "position", "position": "operations_section_chief", "via": ["inapp", "email"] }]
+      },
+      {
+        "key": "hotline_escalated",
+        "version": 1,
+        "title": "A hotline call is escalated to Operations",
+        "board": "hotline_log",
+        "event": "record.updated",
+        "condition": { "field": "status", "op": "changed_to", "value": "escalated" },
+        "channels": [{ "kind": "position", "position": "operations_section_chief", "via": ["inapp", "email"] }]
+      }
+    ],
+    "dashboardTemplates": [
+      {
+        "key": "hotline_and_shelter_overview",
+        "version": 1,
+        "title": "Hotline and shelter overview",
+        "description": "Hotline calls waiting on follow-up or escalated, what callers ask about, households in shelters and reunification requests.",
+        "widgets": [
+          { "kind": "tile", "key": "calls_follow_up", "title": "Hotline calls needing follow-up", "board": "hotline_log", "filter": { "field": "status", "equals": "follow_up" }, "thresholds": { "warn": 5, "critical": 15 } },
+          { "kind": "tile", "key": "calls_escalated", "title": "Hotline calls escalated to Operations", "board": "hotline_log", "filter": { "field": "status", "equals": "escalated" }, "thresholds": { "warn": 1, "critical": 3 } },
+          { "kind": "chart", "key": "calls_by_topic", "title": "Hotline calls by topic", "board": "hotline_log", "groupBy": "category", "display": "bar" },
+          { "kind": "tile", "key": "households_in_shelter", "title": "Households in shelters", "board": "shelter_registrations", "filter": { "field": "status", "equals": "in_shelter" } },
+          { "kind": "chart", "key": "households_by_shelter", "title": "Households by shelter", "board": "shelter_registrations", "filter": { "field": "status", "equals": "in_shelter" }, "groupBy": "shelter", "display": "bar" },
+          { "kind": "tile", "key": "looking_for_someone", "title": "Households looking for someone", "board": "shelter_registrations", "filter": { "field": "reunification", "equals": "looking_for_someone" }, "thresholds": { "warn": 1, "critical": 5 } },
+          { "kind": "list", "key": "shelters", "title": "Shelters", "board": "shelters", "columns": ["name", "status", "capacity", "occupancy"], "limit": 10 }
+        ]
+      }
+    ],
+    "incidentTemplates": [
+      {
+        "key": "evacuation_and_sheltering",
+        "title": "Evacuation and sheltering (any hazard)",
+        "positions": [
+          "incident_commander", "public_information_officer", "liaison_officer", "safety_officer",
+          "operations_section_chief", "planning_section_chief", "logistics_section_chief", "finance_admin_section_chief",
+          "hotline_supervisor", "mass_care_coordinator"
+        ],
+        "positionTitles": { "hotline_supervisor": "Hotline Supervisor", "mass_care_coordinator": "Mass Care Coordinator" },
+        "boards": ["activity_log", "significant_events", "situation_report", "resource_request", "shelters", "road_closures", "hotline_log", "shelter_registrations"],
+        "checklists": [
+          { "position": "incident_commander", "items": [
+            { "item": "Decide which areas evacuate and which shelters open, and log each decision", "due": { "kind": "relative", "minutes": 30, "anchor": "created" } },
+            "Approve the hotline's number and hours with the Public Information Officer"
+          ] },
+          { "position": "public_information_officer", "items": [
+            { "item": "Publish the hotline number and hours with the first evacuation message", "due": { "kind": "relative", "minutes": 60, "anchor": "created" } },
+            "Post the answers call-takers may give in the Hotline answers thread, and update them with each release",
+            "Read the hotline log's Rumors and By topic views before each release, and answer what callers keep asking"
+          ] },
+          { "position": "liaison_officer", "items": [
+            "Confirm who runs each shelter and who registers its evacuees, with a contact for each"
+          ] },
+          { "position": "safety_officer", "items": [
+            "Check each shelter site for hazards before it opens, and again each operational period"
+          ] },
+          { "position": "operations_section_chief", "items": [
+            "Act on each escalated hotline call (a welfare check, a ride or a rescue request), then mark the call closed"
+          ] },
+          { "position": "planning_section_chief", "items": [
+            "Put shelter population, hotline volume and the top hotline topics in each situation report"
+          ] },
+          { "position": "logistics_section_chief", "items": [
+            "Source cots, food, water and medical equipment for each shelter from the Shelter needs report, on the resource requests board",
+            "Arrange a ride for each household whose registration or hotline call needs transportation"
+          ] },
+          { "position": "finance_admin_section_chief", "items": [
+            "Record shelter staff hours, supplies and facility costs from the first hour for cost recovery"
+          ] },
+          { "position": "hotline_supervisor", "items": [
+            { "key": "open_hotline", "item": "Open the hotline: phones, call-takers and the hotline log board", "due": { "kind": "relative", "minutes": 60, "anchor": "created" } },
+            { "item": "Brief each call-taker: log every call, give only the approved answers, and escalate anyone who cannot get out to Operations", "dependsOn": ["open_hotline"] },
+            "Never confirm that someone is at a shelter unless their registration says they agree; log the caller as looking for them instead",
+            "Work the Needs follow-up view until each call is closed, and hand the open calls to the next shift"
+          ] },
+          { "position": "mass_care_coordinator", "items": [
+            { "item": "Post each shelter's opening, capacity and occupancy on the shelters board", "due": { "kind": "relative", "minutes": 120, "anchor": "created" } },
+            "Register every household on arrival on the shelter registrations board: record what the shelter must provide, never a diagnosis",
+            "Update each shelter's occupancy on the shelters board from the Shelter roster report each operational period",
+            "Arrange care a shelter cannot give (a medical needs shelter, power, oxygen) and record the referral",
+            "Work the Reunification view with the Hotline Supervisor, sharing a household's shelter only with its consent"
+          ] }
+        ],
+        "reports": ["hotline_follow_up", "hotline_topics", "shelter_roster", "shelter_needs"],
+        "rules": ["hotline_escalated_new", "hotline_escalated"],
+        "dashboards": ["hotline_and_shelter_overview"],
+        "threads": [
+          { "title": "EOC coordination" },
+          { "title": "Hotline answers", "positions": ["public_information_officer", "hotline_supervisor"] },
+          { "title": "Shelter operations", "positions": ["mass_care_coordinator", "operations_section_chief", "logistics_section_chief"] }
+        ],
+        "fileFolders": ["Public messages", "Hotline answers"]
+      }
+    ]
+  }
+}

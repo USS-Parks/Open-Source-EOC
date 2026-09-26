@@ -159,8 +159,9 @@ single computer, `%ProgramData%\Open Source EOC\profiles\host` on a network
 host. Copy the publisher's `.pub.pem` file there under that name (or append
 it to the file already there) and restart Open Source EOC. The import is in the board designer's **Import** tab; see
 [the designer guide](../docs/guides/DESIGNER.md#import-definitions).
-`deploy/packs/` holds packages ready to sign, starting with the
-[small EOC starter pack](packs/small-eoc-starter/README.md).
+`deploy/packs/` holds packages ready to sign: the
+[small EOC starter pack](packs/small-eoc-starter/README.md) and the
+[hotline and shelter registration pack](packs/hotline-and-shelter/README.md).
 
 ## Map archives
 

@@ -10939,3 +10939,155 @@ the Windows setup had no way to trust a package publisher's key.
   computer with the key in place; that walk is Basho's.
 - **Evidence level:** unit test.
 - **Rollback:** revert the commit.
+
+## Veoci and air gap VA29: hotline and shelter registration pack
+
+Veoci Integration and Air Gap PSPR unit VA29 (VC-21), as a VA11 signed
+package.
+
+- **What the code did before.** Media calls had the JIC's media inquiries;
+  calls and emails from the public had nowhere but the activity log. Shelters
+  had a status and occupancy board and a census report, and no evacuee
+  registration. Research verdicts: the call tracker "Adopt (as a template)",
+  shelter registration "Adapt", staff-entered with per-field read levels and
+  the patient-level exclusion kept.
+- **What changed.** A new pack, `deploy/packs/hotline-and-shelter/`:
+  `package.json`, the unsigned VA11 package, and `README.md` (what it holds,
+  privacy, what activation opens, how to sign, import, use and adapt it). It
+  names no hazard and no place (amendment 5). It holds:
+  - **Hotline and Inquiry Log** board template: received, came in by, caller
+    and contact, community or area, topic (twelve values including rumor and
+    reunification), question or report, answer given, referred to, status
+    (answered, follow up, escalated, closed), follow-up by and due. Views
+    Needs follow-up, All inquiries, By topic, Rumors; an input layout in two
+    sections.
+  - **Shelter Registrations** board template: arrived, shelter, bed or area,
+    head of household, other members with ages, people, children, contact,
+    home area; the five CMIST need areas as yes or no fields with a line of
+    what the shelter must provide and the referral for care; pets and their
+    details; consent to tell family, reunification and who they are looking
+    for; status (in shelter, departed, transferred) with departure time and
+    destination shown once the household is no longer in the shelter. Views
+    In shelter (grouped by shelter), Needs, Reunification, All
+    registrations; an input layout in five sections.
+  - **Evacuation and sheltering (any hazard)** incident template: the eight
+    Command and General Staff positions, a Hotline Supervisor and a Mass Care
+    Coordinator; eight boards; 21 checklist items, four due 30 to 120 minutes
+    after activation and one waiting on a prerequisite; the four reports, the
+    two rules and the dashboard; threads EOC coordination, Hotline answers
+    and Shelter operations; folders Public messages and Hotline answers.
+  - Report templates **Hotline follow-up**, **Hotline topics**, **Shelter
+    roster** (people, children and pets totalled per shelter) and **Shelter
+    needs**, all on demand; rule templates for a call logged as escalated and
+    a call changed to escalated, each reaching the Operations Section Chief
+    in the app and by email; dashboard template **Hotline and shelter
+    overview**.
+  - `docs/guides/ADMIN.md` describes the pack under "Prepare an incident";
+    `deploy/README.md` lists it beside the starter pack.
+- **Privacy.**
+  - Shelter registrations carry the board engine's record access rule
+    (`recordAccess` read and edit to the member role), which the database
+    enforces on every read: jurisdiction members, administrators and the
+    incident's participants read them; viewers and guests read none. No
+    earlier template used it; the engine has carried it since migration
+    0119.
+  - Personal fields on both boards are `read: "member"`, the starter pack's
+    welfare check pattern: the caller, contact, question and answer; the
+    household's names, contact, home, needs, referral, consent, who they are
+    looking for, where they went and notes. A notification spells out only
+    fields every board reader may see, so an escalation carries the area,
+    topic and status and never the caller or the question; a viewer's report
+    leaves the marked fields out.
+  - The patient-level exclusion holds: needs are recorded as what the
+    shelter must provide in the CMIST areas and where the household was
+    referred, with no place for a diagnosis, condition, medication or
+    history; the field label and the README say so.
+  - No report is scheduled: a scheduled report runs as its owner and stores
+    a file outside the registrations' record rule.
+  - No public surface (decision 4): staff enter both boards.
+- **Defaults taken (recorded, not asked).**
+  - One pack, not two: the activation opens both boards, and a part naming a
+    board template the instance lacks refuses the whole package, so two
+    packs would make one depend on the other's import.
+  - Status is a field, not a workflow: reports, dashboards and notification
+    rules read fields and cannot see a workflow's state, so a workflow would
+    hold the status where the census and follow-up views cannot.
+  - The registration names its shelter in text: a record reference shows as
+    an id in reports and cannot be filled outside an incident.
+  - No Smart Forms form: a form files its record without the incident
+    (`submitForm` passes no incident) and has no yes or no answer type for
+    the need fields.
+  - Hotline records keep no record rule, so viewers see call volume and
+    topics; only the caller's details are marked for members.
+- **Files outside the "Owns" cell.** `deploy/README.md` (one line naming
+  the pack).
+- **Found, not fixed (outside this lane).** A jurisdiction viewer reading an
+  incident's board through the incident-scoped view reads member-marked
+  fields: `listViewRecords` in `server/src/boards/service.ts` (the
+  `incidentId` branch) sets the field role to member for everyone who can
+  read the incident, where `getIncidentBoardReadShape` in the same file uses
+  the caller's own jurisdiction role; the sync hub
+  (`server/src/sync/hub.ts`, both `getIncidentBoardReadShape(...)` calls with
+  `role: "member"`) does the same for incident documents. It exposes the
+  hotline caller details here and the starter pack's welfare check
+  directions and notes to viewers on the incident's board screen. The
+  registrations' record rule is not affected: the viewer read none. Lanes
+  va25 and va22 own those files.
+- **Air-gap behavior (decision 9).** No network path is added or changed.
+  The pack is a file; signing and importing make no request. The escalation
+  rule's email goes through the existing delivery queue and waits for a
+  route as any other (VA1); the in-app notice needs no route.
+- **Schema, contract, dependencies.** None: no migration, route or package.
+- **Tests.** `hotline-shelter-pack.test.ts` (real database): the pack as
+  shipped, with the registrations' record rule removed after signing, is
+  refused as changed and imports no board template. Signed and imported on
+  a fresh profile it creates two board templates, one incident template, a
+  dashboard template, four report templates and two rule templates; every
+  dashboard widget's fields exist on its board. Activating the evacuation
+  template opens 10 positions (the two new ones titled), 8 boards titled
+  with the incident, 21 checklist items, 4 unscheduled reports, 2 rules, the
+  dashboard, 3 threads and 2 folders. A member logs an escalated call and a
+  follow-up call and registers two households (one departed, with its
+  departure fields); the Operations Section Chief's holder gets an in-app
+  notice for the escalated call and for the follow-up changed to escalated,
+  and neither notice nor any outbox body holds the caller's name, number or
+  words. The member reads both registrations and a viewer none; the viewer
+  reads both calls' topics. The Shelter roster lists the household in
+  shelter with 3 people, 1 child and 1 pet totalled; Shelter needs shows its
+  needs and referral; Hotline follow-up shows the caller to the member, and
+  to the viewer leaves out caller, contact and question and lists no
+  registration in the roster. The dashboard counts 2 escalated, 0 follow-up,
+  1 household in shelter by shelter and 1 looking for someone.
+- **Verification.** On Windows, PostgreSQL 16.15 with PostGIS 3.6.2 on
+  127.0.0.1:55440: `pnpm check:static` exit 0 (tsc, eslint, license scan
+  339 packages, links 125 files); `rtk proxy npx vitest run
+  server/src/__tests__/hotline-shelter-pack.test.ts
+  server/src/__tests__/starter-pack.test.ts
+  server/src/__tests__/solution-package.test.ts
+  server/src/__tests__/incident-templates.test.ts`, 4 files, 16 of 16
+  passed (this unit's 3).
+- **Not run.** A browser test: the unit adds no screen of its own; the
+  boards use the existing board screens, record form and input layouts, and
+  a real-database test of the import and entry stands as its proof. The
+  full suite was not run; no server or web code changed.
+- **Evidence level:** real-database test. The content (fields, checklists,
+  CMIST labels) is Basho's to judge.
+- **Rollback:** revert the commit; no migration. An instance that imported
+  the pack keeps its templates, as with any package.
+- **Open for Basho.** The lane found that an incident's board screen, and
+  the incident documents sync sends, give everyone who reads the incident
+  the member level for field reads (`listViewRecords` in
+  `server/src/boards/service.ts`, and `server/src/sync/hub.ts`), while
+  `getIncidentBoardReadShape` uses the reader's own role. So a jurisdiction
+  viewer on an incident sees fields marked for members: the hotline caller's
+  details here and the starter pack's welfare check directions and notes.
+  Under the binary access model (anyone with authorized access to an
+  incident sees it whole) that is the rule, and the member marks then keep
+  those fields only out of notifications and out of views outside the
+  incident; if member marks should hold on the incident screen too, the fix
+  is the reader's own role in those two places. Shelter registrations are
+  not affected: their record rule keeps viewers out.
+- **Landing.** Rebased onto "Veoci and air gap follow-up: trusted package
+  keys on a Windows install" with no conflict and no migration. On main:
+  `pnpm check:static` exit 0; the same 4 files, 16 of 16, with
+  `OPENEOC_TEST_DB_TAG=va29`.

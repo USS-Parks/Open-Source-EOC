@@ -213,6 +213,18 @@ Other preparation happens on the screens that use it:
   refused when it names a dashboard template the instance lacks or a thread
   position the template does not open. The [small EOC starter pack](../../deploy/packs/small-eoc-starter/README.md)
   is one such package.
+- **A hotline and shelter registrations.** The
+  [hotline and shelter registration pack](../../deploy/packs/hotline-and-shelter/README.md)
+  adds a **Hotline and Inquiry Log** for calls and emails from the public,
+  a **Shelter Registrations** board for evacuee households, and an
+  **Evacuation and sheltering (any hazard)** activation with their reports,
+  escalation rules to Operations and dashboard. Staff enter both; there is
+  no public form. Only members, administrators and people on the incident
+  read a registration, and a notification never carries a caller's or
+  household's personal details. Record what a shelter must provide, never a
+  diagnosis. To add the two boards to another activation, tick them among
+  its boards; **Create a board from a published template** on **Templates**
+  opens either outside an incident.
 - **Plans.** A plan is the jurisdiction's emergency plan as something the
   product runs. On **Incident Setup**, **Plans** lists them for every member;
   **Read** shows a plan's sections and timed tasks. An administrator's **New
