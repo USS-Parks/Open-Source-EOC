@@ -33,6 +33,9 @@ import { rateLimit } from "../security/rate-limit.js";
  * that recipient only, for ACK_TTL_HOURS after it is sent. The link opens a
  * page with one button, so a mail scanner that fetches links cannot
  * acknowledge by itself. In-app recipients acknowledge the notification.
+ * When the SMS channel is a gateway on the site network, a text also says to
+ * answer by reply, which contacts/carriers.ts reads back; whoever runs a
+ * call-down from its printed sheet enters acknowledgements there too (AG-05).
  *
  * A mass send is not a notification rule and no rule rate cap applies. It is
  * bounded instead by its size, at most MAX_RECIPIENTS contacts from the
@@ -95,11 +98,29 @@ interface Mass {
   readonly incident_id: string | null;
   readonly fallback_minutes: number | null;
   readonly response_options: readonly string[];
+  /** Texts can be answered by reply: an SMS gateway on the site network reads them back (AG-05). */
+  readonly replies: boolean;
 }
 
 /** The answers in words for a message: "A, B or C". */
 function answerList(options: readonly string[]): string {
   return options.length > 1 ? `${options.slice(0, -1).join(", ")} or ${options.at(-1)}` : options[0] ?? "";
+}
+
+async function smsReadsReplies(tx: Sql, jurisdictionId: string): Promise<boolean> {
+  const [row] = await tx`select public.sms_reads_replies(${jurisdictionId}) as yes`;
+  return Boolean(row?.yes);
+}
+
+/** A text's closing line: how to answer by reply when replies are read, else by the link. */
+function smsAsk(mass: Mass, link: string): string {
+  const asks = mass.response_options.length > 0;
+  if (mass.replies) {
+    return asks
+      ? `Reply ${answerList(mass.response_options.map((option, i) => `${i + 1} for ${option}`))}, or answer at ${link}`
+      : `Reply to acknowledge, or open ${link}`;
+  }
+  return asks ? `Answer ${answerList(mass.response_options)}: ${link}` : `Acknowledge: ${link}`;
 }
 
 /** Where acknowledgement links point: OPENEOC_PUBLIC_URL when set, else the address the sender reached. */
@@ -159,9 +180,7 @@ async function notifyRecipient(tx: Sql, mass: Mass, recipient: Row, now: Date): 
       ? asks
         ? `${mass.message}\n\nAnswer ${answerList(mass.response_options)} at this link:\n${link}\n`
         : `${mass.message}\n\nAcknowledge that you received this message:\n${link}\n`
-      : asks
-        ? `${mass.subject}: ${mass.message} Answer ${answerList(mass.response_options)}: ${link}`
-        : `${mass.subject}: ${mass.message} Acknowledge: ${link}`;
+      : `${mass.subject}: ${mass.message} ${smsAsk(mass, link)}`;
     const headers = channel === "email" ? { subject: mass.subject } : {};
     await tx`
       insert into delivery_outbox (jurisdiction_id, notification_id, kind, target, headers, body, next_attempt_at)
@@ -244,6 +263,7 @@ export async function sendMassNotificationIn(
     incident_id: options.incidentId ?? null,
     fallback_minutes: body.fallbackMinutes ?? null,
     response_options: body.responseOptions ?? [],
+    replies: channels.includes("sms") && await smsReadsReplies(tx, jurisdictionId),
   };
   const column = <K extends keyof (typeof reached)[number]>(key: K) => reached.map((r) => r[key]);
   const recipients = await tx`
@@ -298,6 +318,7 @@ export async function runDueCalldowns(
       order by created_at
       for update skip locked`;
     let notified = 0;
+    const replies = open.length > 0 && await smsReadsReplies(tx, jurisdictionId);
     for (const mass of open) {
       const recipients = await tx`
         select id, priority, email, phone, person_id, position_id, notified_at, acknowledged_at
@@ -310,7 +331,7 @@ export async function runDueCalldowns(
         || (latest.notified_at as Date).getTime() <= now.getTime() - Number(mass.interval_minutes) * 60_000;
       if (acknowledged < Number(mass.acknowledgements_needed) && !waited) continue;
       if (acknowledged < Number(mass.acknowledgements_needed) && next) {
-        await notifyRecipient(tx, mass as unknown as Mass, next, now);
+        await notifyRecipient(tx, { ...mass, replies } as unknown as Mass, next, now);
         notified += 1;
       } else {
         await tx`update mass_notifications set completed_at = ${now} where id = ${mass.id as string}`;
@@ -469,6 +490,12 @@ export function massNotificationRoutes(
         from mass_notification_recipients where mass_notification_id = ${massNotificationId}
         order by priority`;
       const deliveries = await tx`select * from mass_notification_deliveries(${massNotificationId})`;
+      // Texts read back from an SMS gateway, each with what it recorded.
+      const replies = await tx`
+        select s.recipient_id, s.body, s.received_at, s.outcome from sms_replies s
+        join mass_notification_recipients r on r.id = s.recipient_id
+        where r.mass_notification_id = ${massNotificationId}
+        order by s.received_at, s.id`;
       const [clock] = await tx`select now() as now`;
       const now = clock!.now as Date;
       return {
@@ -487,7 +514,14 @@ export function massNotificationRoutes(
           notifiedAt: r.notified_at ? (r.notified_at as Date).toISOString() : null,
           linkExpiresAt: r.token_expires_at ? (r.token_expires_at as Date).toISOString() : null,
           acknowledgedAt: r.acknowledged_at ? (r.acknowledged_at as Date).toISOString() : null,
-          acknowledgedVia: r.acknowledged_via as "link" | "app" | null,
+          acknowledgedVia: r.acknowledged_via as "link" | "app" | "sms" | "sheet" | null,
+          replies: replies
+            .filter((s) => s.recipient_id === r.id)
+            .map((s) => ({
+              body: s.body as string,
+              receivedAt: (s.received_at as Date).toISOString(),
+              outcome: s.outcome as "acknowledged" | "answered" | "not_an_answer",
+            })),
           deliveries: deliveries
             .filter((d) => d.recipient_id === r.id)
             .map((d) => ({

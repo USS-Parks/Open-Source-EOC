@@ -400,6 +400,26 @@ notice in the notification center as usual, which acknowledges the send too.
 A call-down moves to the next contact at once when the current contact
 acknowledges and more acknowledgements are needed.
 
+**When phones cannot reach the server.** If the jurisdiction's SMS channel is
+a gateway on the site network (a phone with a SIM; see the administrator
+guide), a text also says how to answer by reply, such as "Reply 1 for
+Available or 2 for Not available". Replies are read from the phone within
+half a minute. The receipts show each person who answered **by text reply**
+and each text they sent, marked when it was not one of the answers.
+
+**Call down on paper.** When texts and email cannot go out or cannot be
+answered, open the send's receipts and select **Print call-down sheet**. The
+sheet lists the message, the answers to ask for, and each person in order with
+their number and blank columns for the time reached, the answer and who
+called. Reach each person by voice or radio, then under **Enter from the
+call-down sheet** tick **Reached** for each, type the time (empty means now),
+choose their answer, and select **Enter acknowledgements**. They show on the
+receipts as acknowledged **from the call-down sheet**. Log the radio and
+runner traffic meanwhile on a **Radio and Runner Log** board: time,
+direction, by radio, runner or landline, from, to, the message, the runner,
+and whether receipt was confirmed; its **Awaiting receipt** view lists what
+was sent and not yet confirmed.
+
 ## 4. Plan and brief
 
 - Prepare IAP content against the selected incident and a real incident-area

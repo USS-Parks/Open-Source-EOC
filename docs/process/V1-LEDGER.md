@@ -9609,3 +9609,199 @@ gap VA2: federation batch sizing".
 - **Rollback:** revert the commit (with the outbox patch); migration `0158`
   adds a table, a nullable column, grants and policies the earlier code
   ignores. The earlier receive code accepts unsigned batches again.
+
+## Veoci and air gap VA21: local carriers
+
+Veoci Integration and Air Gap PSPR unit VA21 (AG-05; VC-16 SMS replies;
+decision 6).
+
+- **What the code did before.** SMS went through a hosted HTTP provider
+  (a form POST, on the allowlist) or the in-memory fixture. A mass send was
+  acknowledged only by its link, which a phone must reach the host to open,
+  or in the app; "SMS replies are not read" (ADMIN guide). Nothing supported
+  a call-down by voice or radio, and no board kept radio or runner traffic.
+- **What changed.**
+  - **An SMS gateway on the site network.** The SMS channel gains a third
+    provider, `gateway`: an Android phone running SMS Gateway for Android
+    (Apache-2.0) in its Local Server mode, whose SIM sends each text while a
+    tower stands. The server posts `{"textMessage": {"text"}, "phoneNumbers"}`
+    to the phone's `/messages` with basic auth (the app's documented local
+    API) and keeps the phone's message id and state as the receipt. The
+    gateway is hardware on the site, not an outbound destination, so it is
+    not on the allowlist; instead its address must be an IP address in a
+    private, loopback or link-local range, checked when saved and before each
+    send, which needs no name lookup in an enclave. Its password is stored
+    and fingerprinted like the provider token. **Send test SMS** works through
+    it.
+  - **Replies read back.** When the channel is a gateway, a text says how to
+    answer by reply ("Reply 1 for Available or 2 for Not available, or answer
+    at <link>", or "Reply to acknowledge, or open <link>"). The server reads
+    the phone's `GET /inbox`: a new scheduler job, `replies`, every 30 seconds
+    (`OPENEOC_SCHEDULER_REPLIES_MS`) for each jurisdiction whose gateway has a
+    text still answerable, as that jurisdiction's longest-standing
+    administrator; and **Read replies now** on Administration, Channels
+    (`POST /api/v1/jurisdictions/:jurisdictionId/sms-replies/read`,
+    administrators). A reply answers the latest send that texted its number
+    while the send's link is valid; numbers match on their last ten digits,
+    since a phone may give the sender in national form. A send that asks
+    nothing is acknowledged by any reply; one that asks a question takes an
+    answer's number or its words (VA8's options), and any other reply is kept
+    and shown without recording anything. A later reply changes the answer;
+    the first acknowledgement's time stands. Each text is read once, by the
+    gateway's id. A reply counts only if the phone received it no earlier
+    than ten minutes before the text went out, by the phone's clock.
+  - **The printed call-down sheet.** Every send's receipts gain **Call-down
+    sheet**: **Print call-down sheet** prints (print media only) the message,
+    its answers, and each person in order with their number, how they already
+    acknowledged, and blank columns for the time reached, the answer (a box
+    per answer) and who called. **Enter from the call-down sheet** takes, for
+    each person ticked **Reached**, a time (empty means now) and their answer
+    (`POST /api/v1/mass-notifications/:massNotificationId/acknowledgements`,
+    writers of the send's jurisdiction), recorded together or not at all and
+    audited as `notification.mass_acknowledgements_entered`. The time is kept
+    between the send and now. A call-down contact reached from the sheet
+    before their turn counts as called, and the call-down ends once enough
+    have acknowledged. The fallback withdrawal of VA7 applies to these
+    acknowledgements as to any other.
+  - **Receipts.** Acknowledgements read **by text reply** or **from the
+    call-down sheet** beside **by link** and **in the app**; each person's
+    text replies are listed under their receipt, marked when not one of the
+    answers. A refresh now keeps the receipts (and what is typed into the
+    sheet) on screen until the new ones arrive, instead of blanking them.
+    Administration, Channels lists the last 20 replies read, with whom and
+    which send each answered, or **No send to this number**.
+  - **The radio and runner log.** A standard board template,
+    `radio_runner_log` ("Radio and Runner Log", after the ICS 309
+    communications log): time, direction, by (radio, runner, landline,
+    satellite phone, other), from, to, channel or route, message, runner and
+    receipt confirmed, with **All traffic** and **Awaiting receipt** (sent and
+    not confirmed) views.
+  - **Migration** `0159_local_carriers.sql`:
+    `acknowledged_via` gains `sms` and `sheet`; table `sms_replies` (members
+    read, administrators insert, unique per jurisdiction and gateway id);
+    `record_mass_acknowledgement` (security definer, writers only, clamps the
+    time); `sms_reads_replies(jid)` (whether a send should offer replies,
+    without exposing the channel); `sms_reply_readers()` (the scheduler's
+    discovery, a new function so `scheduler_due` is not restated).
+  - **Docs.** `docs/guides/ADMIN.md` (the gateway, text replies, call-down
+    sheets, retention of replies), `docs/guides/OPERATOR-QUICKSTART.md` (when
+    phones cannot reach the server, calling down on paper, the log),
+    `deploy/README.md` (the new scheduler interval), `docs/API.md`
+    regenerated.
+- **Files outside the "Owns" cell.** `server/src/notify/mass.ts` (the SMS
+  wording, `acknowledgedVia`, replies in the send detail),
+  `server/src/notify/routes.ts` (gateway settings, the replies in the SMS
+  channel view), `server/src/notify/allowlist.ts` (exports
+  `isInternalAddress`), `server/src/scheduler/scheduler.ts` (the `replies`
+  job), `server/src/app.ts` (route registration),
+  `server/migrations/0159_local_carriers.sql`, `shared/src/api/contract.ts`,
+  `shared/src/boards/standard.ts`, `web/src/admin/Channels.tsx`,
+  `web/src/app/api/client.ts`, `web/src/contacts/MassNotificationSurface.tsx`,
+  `web/src/contacts/CallDownSheet.tsx` (new), `web/src/contacts/model.ts`,
+  `web/src/contacts/contacts.css`, the docs above, and the tests below.
+  `server/src/notify/outbox.ts` is not touched.
+- **Decisions and deviations.**
+  - **A GSM modem is not built.** Decision 6 names an Android phone's SIM
+    through SMS Gateway for Android or a GSM modem. The phone is built. A USB
+    GSM modem needs either a bridge program that speaks HTTP or AT commands
+    over a serial port from the server. On Windows and macOS (the only
+    platforms) no maintained bridge speaks HTTP (Kannel is Unix-only; Gammu
+    SMSD has no HTTP interface), and a serial port needs a native Node
+    dependency in both installers. Any bridge that speaks the gateway's
+    `/messages` and `/inbox`, or the existing HTTP provider's form POST, works
+    unchanged. Left for Basho: pick a bridge, or accept a phone as the local
+    carrier.
+  - **Replies are read by polling, not by webhook.** The app's webhooks need
+    a trusted HTTPS certificate on the phone for a LAN address and, by
+    default, wait for internet (`internet_required`); polling the phone's
+    inbox needs neither and adds no unauthenticated route to the server.
+  - **"Sent" means the phone took the text.** The phone's later delivery
+    state (`GET /messages/{id}`) is not read back; a text the SIM could not
+    send shows as sent here and failed on the phone. A follow-up can poll it.
+  - A reply that is not one of a question's answers records nothing, as the
+    link refuses a post without an answer (VA8); a sheet entry for a send
+    with answers must choose one.
+  - The reply's time is the phone's; the reader tolerates ten minutes of
+    clock difference.
+  - Replies read from a gateway are kept with the sends and not purged by a
+    retention class, as mass notification records are not.
+- **Air-gap behavior (decision 9).** Scenario A, internet cut with the LAN
+  up: texts go out through the phone while a tower stands and replies come
+  back over the LAN, so people answer without reaching the host; the printed
+  sheet and the radio log need no network at all. Scenario B, a permanent
+  isolated enclave: the gateway works where site policy admits a phone with a
+  SIM, with no internet and no certificate on the phone; otherwise the sheet
+  and the log carry the call-down. Scenario C, a device with no network:
+  nothing sends; a sheet printed while connected is entered back when the
+  device reconnects. Scenario D, data carried on media: not affected. The
+  gateway's basic-auth password crosses the LAN in the clear over `http`, as
+  the app's Local Server serves it; an administrator may front it with TLS.
+- **Tests.**
+  - `local-carriers.test.ts` (8, real database): the reply parser; the
+    gateway refused off the site network (an internet address and a host
+    name) and without a password, administrators only, password never
+    returned, a test text through the fixture phone; a question by text to a
+    group, the text's wording, replies by number, by words from a national
+    number, not an answer, and from a stranger, read once, counted per answer,
+    and an answer changed with the first time kept; a send asking nothing
+    acknowledged by any reply through the scheduler's job, with the phone off
+    logged and a 502 from the route; an old reply not matched; sheet entries
+    all or none, refused to a viewer and for another send's recipient, a
+    future time taken as now, audited; a call-down ended by a contact reached
+    from the sheet before their turn; the radio and runner log's views and a
+    refused value.
+  - `sms-gateway-fixture.ts`: a stand-in for the app's Local Server on
+    127.0.0.1 (`/messages`, `/inbox`, basic auth, the phone's time offset,
+    a switch to take it offline).
+  - `local-carriers-browser.test.ts` (2) at 1586 by 992 and 1534 by 790: an
+    administrator sets the gateway on Channels; a question goes by text to a
+    group; two replies are read by the scheduler's job and the receipts count
+    them; the call-down sheet prints alone under print media with three rows;
+    the third person is entered from the sheet; a stray text shows on Channels
+    after **Read replies now**. Screenshots looked at: the entry form, the
+    printed sheet and the replies list.
+  - `web/src/contacts/__tests__/call-down-sheet.test.tsx` (3, with axe) and
+    `web/src/admin/__tests__/channels.test.tsx` (1, with axe).
+- **Verification.** On the Windows test bed (decision 19), with
+  `OPENEOC_TEST_DB_TAG=va21`:
+  - `pnpm check:static`: exit 0 (tsc, eslint, license scan 339 packages,
+    links 120 files).
+  - `rtk proxy npx vitest run` on the unit's suites and neighbours
+    (`local-carriers`, `local-carriers-browser`, `notify-channels`,
+    `mass-notification`, `reach`, `delivery-hold`, `delivery-outbox`, `plans`,
+    `scheduler`, `contacts`, `notify`, `api-docs`, `boards`, `retention`,
+    `upgrade`, `migrate-baseline`, `route-coverage`, the admin and contacts
+    component tests): 21 files, 122 tests, all passed.
+  - Browser neighbours on a fresh web build, two workers
+    (`mass-notification-browser`, `activation-notice-browser`,
+    `channels-browser`, `templates-jurisdiction-admin-browser`,
+    `delivery-hold-browser`, `local-carriers-browser`): 6 files, 9 tests,
+    passed. An earlier run of the same set, before the database tag, had 4
+    failures at sign-in and on loading the SMS panel; the integrator's note
+    traces that to another lane's teardown dropping untagged databases on
+    the shared cluster. Two reruns passed.
+  - `web/src` and `shared/src` in full: 120 files, 865 passed, **1 failed**:
+    `shared/src/boards/__tests__/boards.test.ts` "ships the full standard
+    set" lists the templates exactly and now lacks `radio_runner_log`. That
+    file is the integrator's (section 4 below).
+  - `upgrade-configuration.test.ts`: 6 of 6.
+- **Not run.** A real phone with SMS Gateway for Android and a SIM (Basho's);
+  the Windows setup (decision 18); the full `test:ci`.
+- **Evidence level:** real-database, component and browser tests against a
+  fixture gateway; no device.
+- **Landing.** Built in the fan-out lane `lane/va21` (a lane agent, git
+  read-only). The integrating session added `radio_runner_log` to the
+  standard template list in `shared/src/boards/__tests__/boards.test.ts`,
+  replaced a test fixture's hex fingerprint that the staged secret scan read
+  as a key with a plain fixture value, committed the unit, rebased it onto
+  `main` cleanly, numbered the migration `0159` (placeholder `9021`) and
+  gated it again: `pnpm check:static` exit 0; 25 files, 125 tests green
+  (local carriers and their browser test, mass notification and its browser
+  test, notify, channels and their browser test, reach, scheduler, delivery
+  outbox and hold, restore drill, migration baseline, the API document,
+  federation identity, route coverage, the contract, shared boards, and the
+  web administration and contacts tests).
+- **Rollback:** revert the commit; migration `0159` adds a table and three
+  functions and widens one check, which the earlier code does not read,
+  except that rows acknowledged `sms` or `sheet` would then fail the old
+  check on a restore to the earlier schema.

@@ -347,11 +347,13 @@ POST /api/v1/jurisdictions/:jurisdictionId/resources/kinds
 POST /api/v1/jurisdictions/:jurisdictionId/resources/kinds/import
 POST /api/v1/jurisdictions/:jurisdictionId/shifts
 POST /api/v1/jurisdictions/:jurisdictionId/sitreps
+POST /api/v1/jurisdictions/:jurisdictionId/sms-replies/read
 POST /api/v1/jurisdictions/:jurisdictionId/solution-packages
 POST /api/v1/jurisdictions/:jurisdictionId/status-queries
 POST /api/v1/jurisdictions/:jurisdictionId/threads
 POST /api/v1/jurisdictions/:jurisdictionId/tracked-objects
 POST /api/v1/jurisdictions/:jurisdictionId/tracked-objects/scan
+POST /api/v1/mass-notifications/:massNotificationId/acknowledgements
 POST /api/v1/notifications/:notificationId/acknowledge
 POST /api/v1/notifications/:notificationId/read
 POST /api/v1/notifications/:notificationId/resend
@@ -495,6 +497,7 @@ const tagAliases: Readonly<Record<string, string>> = {
   "provision": "auth",
   "resource-requests": "resources",
   "saved-state": "workspace",
+  "sms-replies": "mass-notifications",
   "status-queries": "facilities",
   "templates": "boards",
   "tracked-objects": "tracking",

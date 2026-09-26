@@ -124,6 +124,7 @@ import type {
   MassNotificationDetail,
   MassNotificationsPage,
   MassSendInput,
+  SheetEntry,
 } from "../../contacts/model.js";
 
 /**
@@ -2421,6 +2422,10 @@ export class ApiClient {
   testNotificationChannel(jurisdictionId: string, kind: NotificationChannelKind, to: string): Promise<{ receipt: Readonly<Record<string, unknown>> }> {
     return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/notification-channels/${kind}/test`, { to });
   }
+  /** Reads the SMS gateway's replies now, as the scheduler does every half minute. */
+  readSmsReplies(jurisdictionId: string): Promise<SmsRepliesRead> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/sms-replies/read`);
+  }
   /** How long each kind of outbound delivery waits for a route before it expires. */
   getDeliveryHolds(jurisdictionId: string): Promise<{ holds: readonly DeliveryHold[] }> {
     return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/delivery-holds`);
@@ -2683,6 +2688,10 @@ export class ApiClient {
   getMassNotification(massNotificationId: string): Promise<MassNotificationDetail> {
     return this.request("GET", `/api/v1/mass-notifications/${encodeURIComponent(massNotificationId)}`);
   }
+  /** Records who was reached from a printed call-down sheet, when, and their answer; all or none. */
+  recordMassAcknowledgements(massNotificationId: string, entries: readonly SheetEntry[]): Promise<{ recorded: number }> {
+    return this.request("POST", `/api/v1/mass-notifications/${encodeURIComponent(massNotificationId)}/acknowledgements`, { entries });
+  }
 
   // ---- Board local fields ----
   /** Adds an `x_` field to one board at once, outside any template version; jurisdiction admins only. */
@@ -2803,6 +2812,26 @@ export interface NotificationChannelView {
   readonly secretStorageAvailable: boolean;
   /** SMS only: what the fixture provider recorded instead of sending, newest first. */
   readonly fixtureMessages?: ReadonlyArray<{ readonly messageId: string; readonly to: string; readonly body: string; readonly at: string }>;
+  /** SMS only: the last texts read from an SMS gateway, newest first, with what each recorded. */
+  readonly replies?: readonly SmsReply[];
+}
+export interface SmsReply {
+  readonly id: string;
+  readonly sender: string;
+  readonly body: string;
+  readonly receivedAt: string;
+  readonly readAt: string;
+  readonly outcome: "acknowledged" | "answered" | "not_an_answer" | "unmatched";
+  /** Whom it answered, and the send; null when it matched no one. */
+  readonly recipient: string | null;
+  readonly subject: string | null;
+}
+export interface SmsRepliesRead {
+  readonly read: number;
+  readonly acknowledged: number;
+  readonly answered: number;
+  readonly notAnAnswer: number;
+  readonly unmatched: number;
 }
 
 

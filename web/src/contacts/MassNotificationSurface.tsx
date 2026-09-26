@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../design/components.js";
 import { Icon } from "../design/icons/index.js";
 import "../datasets/datasets.css";
@@ -8,9 +8,11 @@ import { usePolled } from "../app/data/hooks.js";
 import { ErrorNote, Loading, Scroll, SurfaceHeader } from "../app/screens/parts.js";
 import { formatTime } from "../datasets/format.js";
 import { AudiencePicker, DEFAULT_DELIVERY, DeliveryChoice, NO_AUDIENCE, deliveryOf, type AudienceParts } from "./Audience.js";
+import { CallDownSheet } from "./CallDownSheet.js";
 import {
   CHANNEL_LABELS,
   DELIVERY_LABELS,
+  acknowledgedText,
   answersOf,
   audienceOf,
   deliveryDetail,
@@ -55,7 +57,7 @@ export function MassNotificationSurface(props: { client: ApiClient; jurisdiction
           <Icon name="alerts" size={32} decorative />
           <div>
             <strong>Reach contacts and track who acknowledged</strong>
-            <span>A broadcast notifies everyone at once, and can try each contact's next device when they do not acknowledge. A call-down notifies one contact at a time in order and moves to the next when the current one has not acknowledged in time. Positions reach whoever holds them now; on call reaches whoever is on shift. Email and SMS carry a link the recipient opens to acknowledge.</span>
+            <span>A broadcast notifies everyone at once, and can try each contact's next device when they do not acknowledge. A call-down notifies one contact at a time in order and moves to the next when the current one has not acknowledged in time. Positions reach whoever holds them now; on call reaches whoever is on shift. Email and SMS carry a link the recipient opens to acknowledge; through an SMS gateway on the site network a text reply answers too. Each send's receipts print a call-down sheet for voice or radio.</span>
           </div>
         </div>
         {props.canSend ? (
@@ -63,7 +65,7 @@ export function MassNotificationSurface(props: { client: ApiClient; jurisdiction
             onSent={(id) => { setSelected(id); refresh(); }} />
         ) : null}
         {selected ? (
-          <Receipts client={client} id={selected} nonce={nonce}
+          <Receipts client={client} id={selected} nonce={nonce} canEnter={props.canSend}
             onRefresh={refresh} onClose={() => setSelected(null)} />
         ) : null}
         <Panel title="Sends">
@@ -194,10 +196,13 @@ function notSent(m: MassNotificationDetail, r: MassRecipient, channel: MassChann
 }
 
 /** One send's receipts. A refresh here also refreshes the list of sends, so both agree. */
-function Receipts(props: { client: ApiClient; id: string; nonce: number; onRefresh: () => void; onClose: () => void }) {
+function Receipts(props: { client: ApiClient; id: string; nonce: number; canEnter: boolean; onRefresh: () => void; onClose: () => void }) {
   const { onRefresh } = props;
   const detail = usePolled(() => props.client.getMassNotification(props.id), RECEIPT_REFRESH_MS, [props.id, props.nonce]);
-  const m = detail.data;
+  // A refresh keeps the receipts on screen, and what is typed into the call-down sheet, until the new ones arrive.
+  const shown = useRef<MassNotificationDetail | null>(null);
+  if (detail.data) shown.current = detail.data;
+  const m = detail.data ?? (!detail.error && shown.current?.id === props.id ? shown.current : null);
   return (
     <Panel title={m ? `Receipts: ${m.subject}` : "Receipts"}>
       {detail.error && !m ? <ErrorNote message={detail.error} /> : null}
@@ -229,7 +234,7 @@ function Receipts(props: { client: ApiClient; id: string; nonce: number; onRefre
                     <span>{r.notifiedAt ? `Notified ${formatTime(r.notifiedAt)}` : "Not called"}</span>
                   </div>
                   {r.acknowledgedAt ? (
-                    <StatusBadge status="success">{r.response ? `Answered ${r.response}` : "Acknowledged"} {r.acknowledgedVia === "app" ? "in the app" : "by link"} {formatTime(r.acknowledgedAt)}</StatusBadge>
+                    <StatusBadge status="success">{acknowledgedText(r)} {formatTime(r.acknowledgedAt)}</StatusBadge>
                   ) : r.notifiedAt ? <StatusBadge status="warning">Not acknowledged</StatusBadge> : null}
                 </div>
                 {r.notifiedAt ? (
@@ -249,9 +254,19 @@ function Receipts(props: { client: ApiClient; id: string; nonce: number; onRefre
                     })}
                   </ul>
                 ) : null}
+                {r.replies.length ? (
+                  <ul className="contacts-replies" aria-label={`Text replies from ${r.name}`}>
+                    {r.replies.map((reply) => (
+                      <li key={reply.receivedAt + reply.body}>
+                        Text reply {formatTime(reply.receivedAt)}: “{reply.body}”{reply.outcome === "not_an_answer" ? " (not one of the answers)" : ""}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </li>
             ))}
           </ol>
+          <CallDownSheet client={props.client} send={m} canEnter={props.canEnter} onRecorded={onRefresh} />
         </div>
       ) : null}
       <div className="d21-toolbar">

@@ -398,7 +398,9 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 - `POST /api/v1/ack/:token`: Run ack (auth: none; audience: machine)
 - `GET /api/v1/jurisdictions/:jurisdictionId/mass-notifications`: Read jurisdictions mass notifications (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/mass-notifications`: Run jurisdictions mass notifications (auth: bearer; audience: operator)
+- `POST /api/v1/jurisdictions/:jurisdictionId/sms-replies/read`: Run jurisdictions sms replies read (auth: bearer; audience: operator)
 - `GET /api/v1/mass-notifications/:massNotificationId`: Read mass notifications (auth: bearer; audience: operator)
+- `POST /api/v1/mass-notifications/:massNotificationId/acknowledgements`: Run mass notifications acknowledgements (auth: bearer; audience: operator)
 
 ### meetings
 

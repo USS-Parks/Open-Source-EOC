@@ -32,6 +32,7 @@ describe("standard board library (F1: boards as data)", () => {
       "field_reports v2",
       "damage_assessment",
       "esf_status",
+      "radio_runner_log",
     ]);
   });
 

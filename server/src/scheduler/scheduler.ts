@@ -4,6 +4,7 @@ import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import { forwardAudit, syslogTarget } from "../audit/syslog.js";
 import { principalForPerson, requireAdmin, type Principal } from "../auth/service.js";
+import { readDueSmsReplies } from "../contacts/carriers.js";
 import { runDueFeeds } from "../feeds/service.js";
 import { runDueBriefings } from "../meetings/service.js";
 import { runScheduledRules } from "../notify/engine.js";
@@ -17,7 +18,8 @@ import { purgeExpired } from "../retention/service.js";
  * The in-process scheduler. Every node runs one; the node holding a
  * PostgreSQL session advisory lock is the leader and the only one that runs
  * the jobs: scheduled notification rules, due briefings, feed polls, the
- * outbox worker, mass notification call-downs, scheduled reports, plan task
+ * outbox worker, mass notification call-downs, replies read from an SMS
+ * gateway on the site network, scheduled reports, plan task
  * releases and review reminders, the retention purge and, when configured, audit forwarding to syslog. The others retry the lock on an interval, so when the leader
  * stops or its session ends one of them takes over. A brief overlap during a
  * handover is tolerated: rule firing and outbox claims are atomic, and feed
@@ -28,7 +30,7 @@ import { purgeExpired } from "../retention/service.js";
  * the pool, and the stale handle would then run queries on another session.
  */
 
-export type JobName = "rules" | "briefings" | "feeds" | "outbox" | "calldowns" | "reports" | "plans" | "retention" | "syslog";
+export type JobName = "rules" | "briefings" | "feeds" | "outbox" | "calldowns" | "replies" | "reports" | "plans" | "retention" | "syslog";
 
 export interface SchedulerOptions {
   /** Connection string for the lock session; the entrypoint passes the runtime URL. */
@@ -56,6 +58,7 @@ const DEFAULT_MS: Record<JobName, number> = {
   feeds: 60_000,
   outbox: 2_000,
   calldowns: 30_000,
+  replies: 30_000,
   reports: 60_000,
   plans: 30_000,
   retention: 3_600_000,
@@ -105,6 +108,7 @@ export class Scheduler {
       feeds: () => runDueFeeds(this.sql),
       outbox: () => this.delivery.drain(),
       calldowns: () => this.runCalldowns(),
+      replies: () => readDueSmsReplies(this.sql, this.log),
       reports: () => runDueReports(this.sql, new Date(), { logger: this.log }),
       plans: () => this.runPlans(),
       retention: () => this.runRetention(),

@@ -1,5 +1,5 @@
 .contacts-field { display: grid; gap: 4px; min-width: 0; }
-.contacts-field textarea, .contacts-field input[type="file"] { background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: 4px; color: var(--eoc-text); font: inherit; min-height: 44px; padding: 6px; }
+.contacts-field textarea, .contacts-field input[type="file"], .contacts-field input[type="time"], .contacts-field select { background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: 4px; color: var(--eoc-text); font: inherit; min-height: 44px; padding: 6px; }
 .contacts-check { align-items: center; align-self: end; display: flex; gap: 8px; min-height: 44px; }
 .contacts-check input { height: 20px; width: 20px; }
 .contacts-checks { border: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; padding: 0; }
@@ -14,3 +14,23 @@
 .contacts-fieldset { border: 0; display: grid; gap: 10px; margin: 0; padding: 0; }
 .contacts-deliveries { display: grid; gap: 4px; list-style: none; margin: 0; padding: 0; }
 .contacts-deliveries li { align-items: baseline; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: .86rem; overflow-wrap: anywhere; }
+.contacts-sheet-title { font-size: 1rem; margin: 0; }
+.contacts-flush { margin: 0; }
+.contacts-legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
+.contacts-sheet-rows { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.contacts-sheet-row { align-items: end; border-top: 1px solid var(--eoc-border); display: grid; gap: 4px 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); overflow-wrap: anywhere; padding-top: 8px; }
+.contacts-sheet-row > .d21-muted { align-self: center; }
+.contacts-replies { display: grid; gap: 2px; list-style: none; margin: 0; padding: 0; font-size: .86rem; overflow-wrap: anywhere; }
+.contacts-sheet-print { display: none; }
+@media print {
+  html:has(> body > .contacts-sheet-print), body:has(> .contacts-sheet-print) { background: #fff !important; height: auto !important; }
+  body:has(> .contacts-sheet-print) > :not(.contacts-sheet-print) { display: none !important; }
+  .contacts-sheet-print { color: #000; display: block; font: 10pt/1.35 system-ui, sans-serif; }
+  .contacts-sheet-print h1 { font-size: 14pt; margin: 0 0 6pt; }
+  .contacts-sheet-print p { margin: 0 0 6pt; white-space: pre-wrap; }
+  .contacts-sheet-print table { border-collapse: collapse; margin: 6pt 0; width: 100%; }
+  .contacts-sheet-print thead { display: table-header-group; }
+  .contacts-sheet-print th, .contacts-sheet-print td { border: .75pt solid #000; padding: 4pt 5pt; text-align: left; vertical-align: top; }
+  .contacts-sheet-print tr { break-inside: avoid; height: .45in; }
+  .contacts-sheet-print td:nth-child(5), .contacts-sheet-print td:nth-child(7) { width: .9in; }
+}

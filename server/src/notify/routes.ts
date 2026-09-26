@@ -14,6 +14,7 @@ import {
   SmsSettings,
   channelRefusal,
   fixtureMessages,
+  gatewayRefusal,
   sendMessage,
   type MessageKind,
 } from "./channels.js";
@@ -103,13 +104,33 @@ async function channelView(tx: Sql, jurisdictionId: string, kind: MessageKind) {
   const [row] = await tx`
     select settings, secret_fingerprint, updated_at from notification_channels
     where jurisdiction_id = ${jurisdictionId} and kind = ${kind}`;
+  // The last texts read from an SMS gateway, with the send and person each reached.
+  const replies = kind === "sms" ? await tx`
+    select s.id, s.sender, s.body, s.received_at, s.read_at, s.outcome, r.name, m.subject
+    from sms_replies s
+    left join mass_notification_recipients r on r.id = s.recipient_id
+    left join mass_notifications m on m.id = r.mass_notification_id
+    where s.jurisdiction_id = ${jurisdictionId}
+    order by s.read_at desc, s.received_at desc limit 20` : [];
   return {
     kind,
     settings: (row?.settings as Record<string, unknown> | undefined) ?? null,
     credentialFingerprint: (row?.secret_fingerprint as string | null | undefined) ?? null,
     updatedAt: row ? (row.updated_at as Date).toISOString() : null,
     secretStorageAvailable: hasSecretKey(),
-    ...(kind === "sms" ? { fixtureMessages: fixtureMessages(jurisdictionId).slice(0, 20) } : {}),
+    ...(kind === "sms" ? {
+      fixtureMessages: fixtureMessages(jurisdictionId).slice(0, 20),
+      replies: replies.map((s) => ({
+        id: s.id as string,
+        sender: s.sender as string,
+        body: s.body as string,
+        receivedAt: (s.received_at as Date).toISOString(),
+        readAt: (s.read_at as Date).toISOString(),
+        outcome: s.outcome as string,
+        recipient: (s.name as string | null) ?? null,
+        subject: (s.subject as string | null) ?? null,
+      })),
+    } : {}),
   };
 }
 
@@ -338,7 +359,11 @@ export function notifyRoutes(
       if ("security" in settings && settings.security === "none" && settings.username)
         throw new AuthError(422, "a relay that needs a sign-in must use STARTTLS or TLS");
       // The relay needs a password only with a user name; the fixture provider needs nothing.
-      const needsSecret = "provider" in settings ? settings.provider === "http" : settings.username !== undefined;
+      const needsSecret = "provider" in settings ? settings.provider !== "fixture" : settings.username !== undefined;
+      if ("provider" in settings && settings.provider === "gateway") {
+        const refused = gatewayRefusal(settings.url);
+        if (refused) throw new AuthError(422, refused);
+      }
       if (needsSecret && body.secret !== undefined && !hasSecretKey())
         throw new AuthError(409, "server not provisioned for secret storage (OPENEOC_SECRET_KEY unset)");
       const view = await withPerson(sql, req.principal.person.id, async (tx) => {
@@ -358,7 +383,8 @@ export function notifyRoutes(
             ? encryptSecret(body.secret!)
             : ((existing?.secret_envelope as string | null | undefined) ?? null);
         if (needsSecret && !envelope)
-          throw new AuthError(422, kind === "email" ? "enter the relay password" : "enter the provider token");
+          throw new AuthError(422, kind === "email" ? "enter the relay password"
+            : "provider" in settings && settings.provider === "gateway" ? "enter the gateway password" : "enter the provider token");
         const print = !needsSecret
           ? null
           : fresh

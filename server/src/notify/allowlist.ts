@@ -47,6 +47,11 @@ function inRange(list: BlockList, address: string): boolean {
   return family !== 0 && list.check(address, family === 4 ? "ipv4" : "ipv6");
 }
 
+/** Whether a URL host is an IP address in a private, loopback or link-local range. */
+export function isInternalAddress(hostname: string): boolean {
+  return inRange(internal, hostname.replace(/^\[|\]$/g, ""));
+}
+
 function isLoopbackHost(hostname: string): boolean {
   const host = hostname.replace(/^\[|\]$/g, "");
   return host === "localhost" || inRange(loopback, host);

@@ -175,8 +175,31 @@ export interface MassRecipient {
   readonly notifiedAt: string | null;
   readonly linkExpiresAt: string | null;
   readonly acknowledgedAt: string | null;
-  readonly acknowledgedVia: "link" | "app" | null;
+  readonly acknowledgedVia: "link" | "app" | "sms" | "sheet" | null;
+  /** Texts read back from an SMS gateway from this person's number, oldest first. */
+  readonly replies: ReadonlyArray<{ readonly body: string; readonly receivedAt: string; readonly outcome: "acknowledged" | "answered" | "not_an_answer" }>;
   readonly deliveries: readonly MassDelivery[];
+}
+
+/** One line of a printed call-down sheet entered back: who was reached, when, and the answer given. */
+export interface SheetEntry {
+  readonly recipientId: string;
+  /** When they were reached; now when left out. */
+  readonly at?: string;
+  /** One of the send's answers, when it asked a question. */
+  readonly response?: string;
+}
+
+const ACKNOWLEDGED_VIA: Readonly<Record<NonNullable<MassRecipient["acknowledgedVia"]>, string>> = {
+  link: "by link",
+  app: "in the app",
+  sms: "by text reply",
+  sheet: "from the call-down sheet",
+};
+
+/** How and when a recipient acknowledged, with their answer: "Answered Available by text reply". */
+export function acknowledgedText(r: Pick<MassRecipient, "response" | "acknowledgedVia">): string {
+  return `${r.response ? `Answered ${r.response}` : "Acknowledged"} ${ACKNOWLEDGED_VIA[r.acknowledgedVia ?? "link"]}`;
 }
 
 export interface MassNotificationDetail extends MassNotificationSummary {

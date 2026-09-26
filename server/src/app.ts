@@ -59,6 +59,7 @@ import { geocodeRoutes, loadGazetteer } from "./geocode/routes.js";
 import { messagingRoutes } from "./messaging/routes.js";
 import { notifyRoutes } from "./notify/routes.js";
 import { massNotificationRoutes } from "./notify/mass.js";
+import { carrierRoutes } from "./contacts/carriers.js";
 import { contactRoutes } from "./contacts/routes.js";
 import { reportRoutes } from "./reports/routes.js";
 import { resourceRoutes } from "./resource/routes.js";
@@ -537,6 +538,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   notifyRoutes(app, sql, authenticate);
   massNotificationRoutes(app, sql, authenticate);
   contactRoutes(app, sql, authenticate);
+  carrierRoutes(app, sql, authenticate);
   reportRoutes(app, sql, authenticate);
   messagingRoutes(app, sql, authenticate);
   geoRoutes(app, sql, authenticate);

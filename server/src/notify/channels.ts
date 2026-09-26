@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { ConnectionOptions } from "node:tls";
 import { z } from "zod";
 import { decryptSecret } from "../secrets/envelope.js";
-import { destinationRefusal, type Resolve } from "./allowlist.js";
+import { destinationRefusal, isInternalAddress, type Resolve } from "./allowlist.js";
 import { sendMail, type MailAttachment } from "./smtp.js";
 
 /**
@@ -12,6 +12,14 @@ import { sendMail, type MailAttachment } from "./smtp.js";
  * destination allowlist does not apply to addresses or numbers. It does apply
  * to an HTTP SMS provider's URL, which is an outbound HTTP destination like a
  * webhook: checked when the provider is configured and again before each send.
+ *
+ * An SMS gateway is hardware on the site network (AG-05): an Android phone
+ * running SMS Gateway for Android (Apache-2.0) in its Local Server mode, whose
+ * SIM sends each text while a tower stands. It is not an outbound destination
+ * beyond the site, so instead of the allowlist its address must be an IP
+ * address in a private, loopback or link-local range, which needs no name
+ * lookup in an enclave. The server reads replies from the phone's inbox, so
+ * the phone needs neither the internet nor the host's certificate.
  *
  * The fixture SMS provider sends nothing. It records each message in memory
  * so tests and the Administration screen can show what would have gone out.
@@ -42,8 +50,71 @@ export const SmsSettings = z.discriminatedUnion("provider", [
     username: z.string().min(1).max(200),
     from: E164,
   }),
+  z.object({
+    provider: z.literal("gateway"),
+    url: z.url({ protocol: /^https?$/ }),
+    username: z.string().min(1).max(200),
+  }),
 ]);
 export type SmsSettings = z.infer<typeof SmsSettings>;
+
+/** Why an SMS gateway at this address may not be used, or null when it may. */
+export function gatewayRefusal(url: string): string | null {
+  return isInternalAddress(new URL(url).hostname)
+    ? null
+    : "an SMS gateway's address must be an IP address on the site network, such as http://192.168.1.20:8080";
+}
+
+/** A gateway endpoint under the address the phone shows, with or without a trailing slash. */
+function gatewayUrl(base: string, path: string): URL {
+  return new URL(path, base.endsWith("/") ? base : `${base}/`);
+}
+
+const basicAuth = (username: string, secret: string | null) =>
+  `Basic ${Buffer.from(`${username}:${secret ?? ""}`, "utf8").toString("base64")}`;
+
+/** A text the gateway's phone received. */
+export interface InboundSms {
+  readonly id: string;
+  readonly sender: string;
+  readonly text: string;
+  /** By the phone's clock. */
+  readonly receivedAt: Date;
+}
+
+const InboxEntry = z.object({
+  id: z.string().min(1).max(200),
+  sender: z.string().min(1).max(40),
+  contentPreview: z.string(),
+  createdAt: z.string().refine((at) => !Number.isNaN(Date.parse(at))),
+});
+
+/**
+ * The texts the gateway's phone received since `since`, read from its inbox
+ * (`GET /inbox`). Throws when the gateway cannot be reached or answers with
+ * an error.
+ */
+export async function readGatewayInbox(stored: StoredChannel, since: Date, options: SendOptions): Promise<InboundSms[]> {
+  const sms = SmsSettings.parse(stored.settings);
+  if (sms.provider !== "gateway") throw new Error("the SMS channel is not a gateway on the site network");
+  const url = gatewayUrl(sms.url, "inbox");
+  // ponytail: one page, the newest 500 in the window; page by offset if a
+  // phone ever takes more texts than that between two reads.
+  url.search = new URLSearchParams({ type: "SMS", from: since.toISOString(), limit: "500" }).toString();
+  const res = await fetch(url, {
+    headers: { authorization: basicAuth(sms.username, stored.secret ? decryptSecret(stored.secret) : null) },
+    redirect: "manual",
+    signal: AbortSignal.timeout(options.timeoutMs),
+  });
+  if (!res.ok) throw new Error(`SMS gateway responded ${res.status}`);
+  // An entry this server cannot read is left on the phone rather than holding back the rest.
+  return z.array(z.unknown()).parse(await res.json()).flatMap((entry) => {
+    const m = InboxEntry.safeParse(entry);
+    return m.success
+      ? [{ id: m.data.id, sender: m.data.sender, text: m.data.contentPreview.slice(0, 1600), receivedAt: new Date(m.data.createdAt) }]
+      : [];
+  });
+}
 
 export type MessageKind = "email" | "sms";
 
@@ -109,6 +180,7 @@ export async function channelRefusal(
   if ("provider" in parsed.data && parsed.data.provider === "http") {
     return destinationRefusal(allowlist, parsed.data.url, resolve);
   }
+  if ("provider" in parsed.data && parsed.data.provider === "gateway") return gatewayRefusal(parsed.data.url);
   return null;
 }
 
@@ -141,11 +213,28 @@ export async function sendMessage(
     fixtureLog.splice(0, Math.max(0, fixtureLog.length - 200));
     return { provider: "fixture", messageId, sent: false };
   }
+  if (sms.provider === "gateway") {
+    // Accepted (202) means the phone queued the text; it goes when the SIM has a signal.
+    const res = await fetch(gatewayUrl(sms.url, "messages"), {
+      method: "POST",
+      headers: { authorization: basicAuth(sms.username, secret), "content-type": "application/json" },
+      body: JSON.stringify({ textMessage: { text: message.body }, phoneNumbers: [message.to] }),
+      redirect: "manual",
+      signal: AbortSignal.timeout(options.timeoutMs),
+    });
+    if (!res.ok) throw new Error(`SMS gateway responded ${res.status}`);
+    const answer = (await res.json().catch(() => ({}))) as { id?: unknown; state?: unknown };
+    return {
+      provider: "gateway",
+      messageId: typeof answer.id === "string" ? answer.id : null,
+      status: typeof answer.state === "string" ? answer.state : null,
+    };
+  }
   // The common shape of hosted SMS APIs: a form POST with basic auth.
   const res = await fetch(sms.url, {
     method: "POST",
     headers: {
-      authorization: `Basic ${Buffer.from(`${sms.username}:${secret ?? ""}`, "utf8").toString("base64")}`,
+      authorization: basicAuth(sms.username, secret),
       "content-type": "application/x-www-form-urlencoded",
     },
     body: new URLSearchParams({ To: message.to, From: sms.from, Body: message.body }).toString(),

@@ -6,6 +6,7 @@ import type {
   DeliveryHoldKind,
   NotificationChannelKind,
   NotificationChannelView,
+  SmsReply,
 } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import { ErrorNote, Loading } from "../app/screens/parts.js";
@@ -180,6 +181,19 @@ function EmailPanel(props: { client: ApiClient; jurisdictionId: string; view: No
   );
 }
 
+const PROVIDER_LABELS = {
+  fixture: "Fixture (records messages, sends nothing)",
+  http: "HTTP provider (form POST with basic auth)",
+  gateway: "SMS gateway on the site network (a phone's SIM)",
+};
+
+const REPLY_OUTCOMES: Readonly<Record<SmsReply["outcome"], { text: string; status: "success" | "warning" | "unknown" }>> = {
+  acknowledged: { text: "Acknowledged", status: "success" },
+  answered: { text: "Answered", status: "success" },
+  not_an_answer: { text: "Not one of the answers", status: "warning" },
+  unmatched: { text: "No send to this number", status: "unknown" },
+};
+
 function SmsPanel(props: { client: ApiClient; jurisdictionId: string; view: NotificationChannelView; onChanged: () => void }) {
   const saved = props.view.settings ?? {};
   const [provider, setProvider] = useState(text(saved.provider) || "fixture");
@@ -191,36 +205,75 @@ function SmsPanel(props: { client: ApiClient; jurisdictionId: string; view: Noti
   const save = () => action.run(async () => {
     const settings = provider === "fixture"
       ? { provider }
-      : { provider, url: url.trim(), username: username.trim(), from: from.trim() };
+      : provider === "gateway"
+        ? { provider, url: url.trim(), username: username.trim() }
+        : { provider, url: url.trim(), username: username.trim(), from: from.trim() };
     await props.client.saveNotificationChannel(props.jurisdictionId, "sms", { settings, ...(token ? { secret: token } : {}) });
     setToken("");
     props.onChanged();
     return "SMS settings saved.";
   });
+  const readNow = () => action.run(async () => {
+    const read = await props.client.readSmsReplies(props.jurisdictionId);
+    props.onChanged();
+    return read.read === 0
+      ? "No new replies on the gateway."
+      : `Read ${read.read} new ${read.read === 1 ? "reply" : "replies"}: ${read.acknowledged + read.answered} recorded, ${read.notAnAnswer} not one of the answers, ${read.unmatched} with no send to the number.`;
+  });
   const recorded = props.view.fixtureMessages ?? [];
+  const replies = props.view.replies ?? [];
+  const gateway = saved.provider === "gateway";
   return (
     <Panel title="SMS">
       <fieldset disabled={action.busy} className="eoc-fieldset eoc-stack">
         <div className="d21-form-grid">
-          <EnumSelect label="SMS provider" values={["fixture", "http"]} value={provider} onChange={setProvider}
-            labels={{ fixture: "Fixture (records messages, sends nothing)", http: "HTTP provider (form POST with basic auth)" }} />
+          <EnumSelect label="SMS provider" values={["fixture", "http", "gateway"]} value={provider} onChange={setProvider}
+            labels={PROVIDER_LABELS} />
           {provider === "http" ? <>
             <TextField label="Provider URL" value={url} onChange={setUrl} required />
             <TextField label="Provider account" value={username} onChange={setUsername} required />
             <TextField label="Provider token" type="password" value={token} onChange={setToken} />
             <TextField label="From number" value={from} onChange={setFrom} required />
           </> : null}
+          {provider === "gateway" ? <>
+            <TextField label="Gateway address" value={url} onChange={setUrl} required />
+            <TextField label="Gateway user name" value={username} onChange={setUsername} required />
+            <TextField label="Gateway password" type="password" value={token} onChange={setToken} />
+          </> : null}
         </div>
-        {provider === "http" ? <Fingerprint view={props.view} what="token" /> : null}
+        {provider !== "fixture" ? <Fingerprint view={props.view} what={provider === "gateway" ? "password" : "token"} /> : null}
         {action.status}
         <div className="d21-toolbar">
           <span className="d21-muted">{provider === "http"
             ? "The provider URL must be on the notification allowlist. Numbers use E.164 form, for example +17075551234."
-            : "The fixture keeps the last messages on this server so a rule can be tried without sending anything."}</span>
+            : provider === "gateway"
+              ? "Run SMS Gateway for Android in Local Server mode on a phone with a SIM on this network, and enter the address, user name and password it shows, such as http://192.168.1.20:8080. Texts go out through the phone while it has a signal; replies are read from it every half minute while a text can still be answered."
+              : "The fixture keeps the last messages on this server so a rule can be tried without sending anything."}</span>
           <Button kind="primary" onClick={() => void save()}>Save SMS settings</Button>
         </div>
         {props.view.settings ? <TestSend client={props.client} jurisdictionId={props.jurisdictionId} kind="sms"
           label="Test phone number" button="Send test SMS" run={action.run} onSent={props.onChanged} /> : null}
+        {gateway || replies.length > 0 ? (
+          <div className="d21-toolbar">
+            <span className="d21-muted">Replies from the gateway's phone acknowledge or answer the latest send to that number.</span>
+            {gateway ? <Button onClick={() => void readNow()}>Read replies now</Button> : null}
+          </div>
+        ) : null}
+        {replies.length > 0 ? <ul className="d21-readiness-list" aria-label="Replies read from the gateway">
+          {replies.map((reply) => (
+            <li key={reply.id} className="d21-readiness-row" aria-label={`Reply from ${reply.sender}`}>
+              <div className="d21-readiness-title">
+                <div>
+                  <strong>{reply.recipient ? `${reply.recipient} (${reply.sender})` : reply.sender}</strong>
+                  <span>“{reply.body}”{reply.subject ? ` to ${reply.subject}` : ""}</span>
+                </div>
+              </div>
+              <span className="d21-readiness-badge">
+                <StatusBadge status={REPLY_OUTCOMES[reply.outcome].status}>{REPLY_OUTCOMES[reply.outcome].text}</StatusBadge>
+              </span>
+            </li>
+          ))}
+        </ul> : null}
         {recorded.length > 0 ? <ul className="d21-readiness-list" aria-label="Fixture messages">
           {recorded.map((m) => (
             <li key={m.messageId} className="d21-readiness-row" aria-label={`Fixture message to ${m.to}`}>

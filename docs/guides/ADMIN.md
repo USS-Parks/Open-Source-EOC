@@ -439,6 +439,19 @@ jurisdiction has not configured is refused when it is created.
   URL with basic authentication, the shape Twilio-style APIs accept. Its URL
   must be on the notification allowlist, checked when it is saved and again
   before each send.
+  The SMS gateway on the site network sends through a phone's SIM, for when
+  the internet is cut but a cell tower still stands, or inside an enclave
+  that allows a phone. Run [SMS Gateway for Android](https://github.com/capcom6/android-sms-gateway)
+  (Apache-2.0) in its Local Server mode on an Android phone with a SIM on
+  the same network as the server, and enter the address, user name and
+  password the app shows, such as `http://192.168.1.20:8080`. The address
+  must be an IP address in a private, loopback or link-local range; the
+  allowlist does not apply to it. The server posts each text to the phone's
+  `/messages` and reads replies from its `/inbox`, so the phone needs neither
+  the internet nor the server's certificate. A delivery reads **Sent** when
+  the phone has taken the text; the phone sends it when the SIM has a
+  signal. Give the phone a fixed address on the network and keep it on
+  power.
 
 The relay password or provider token is stored encrypted with the server key
 (`OPENEOC_SECRET_KEY`) and is never returned; the screen shows a fingerprint
@@ -532,7 +545,41 @@ address the sender reached the server on; set it when recipients reach the
 server by a different address than operators do, or when a reverse proxy in
 front of it is not named in `OPENEOC_TRUST_PROXY`. The server must be reachable
 from recipients' phones for the link to work; an in-app notice, acknowledged
-in the notification center, does not depend on it. SMS replies are not read.
+in the notification center, does not depend on it.
+
+**Text replies.** When the SMS channel is the gateway on the site network, a
+text also says how to answer by reply ("Reply 1 for Available or 2 for Not
+available", or "Reply to acknowledge"), which works when the server cannot be
+reached from recipients' phones. The scheduler reads the phone's inbox every
+30 seconds (`OPENEOC_SCHEDULER_REPLIES_MS`) while a text can still be
+answered, as a jurisdiction administrator; **Read replies now** on the
+**Channels** tab reads it at once (`POST
+/api/v1/jurisdictions/:jurisdictionId/sms-replies/read`). A reply answers the
+latest send that texted its number while that send's link is valid; numbers
+match on their last ten digits, since a phone may give the sender without
+the country code. A send that asks nothing is acknowledged by any reply. A
+send that asks a question takes an answer's number or its words; any other
+reply is kept and shown on the receipts but records nothing. A later reply
+changes the answer; the first acknowledgement's time stands. The Channels tab
+lists the last 20 replies read, with what each did. A reply counts only if
+the phone received it no more than ten minutes before the text went out, by
+the phone's clock, so keep the phone's clock right. Anyone who knows a
+recipient's number can text the phone as them; the link is the stronger
+proof.
+
+**Call-down sheets.** Any send's receipts print a call-down sheet: the
+message, its answers, and each person in order with their number and blank
+columns for the time reached, the answer and who called. Whoever runs the
+call-down by voice or radio enters afterward, under **Enter from the call-down
+sheet**, who was reached, when and their answer (`POST
+/api/v1/mass-notifications/:massNotificationId/acknowledgements`). Members and
+administrators may; the entries are recorded together or not at all and
+audited as `notification.mass_acknowledgements_entered`. A time is kept
+between the send and now. A call-down contact reached from the sheet before
+their turn counts as called, and the call-down ends once enough have
+acknowledged. The **Radio and Runner Log** board template keeps the traffic
+passed by radio, runner or landline meanwhile, after the ICS 309
+communications log, with a view of sent messages awaiting a receipt.
 
 **Retention.** Contacts are kept until an administrator deletes them; deleting
 a contact removes it from its groups. Mark a contact inactive instead to keep
@@ -541,7 +588,8 @@ record of each recipient, with the name and the address used when it was
 sent, and deleting the contact does not change that record. Mass notification
 records are not purged by the retention classes; their notifications and
 deliveries are, under `notifications` and `deliveries`, after which the
-receipts show only the acknowledgement state.
+receipts show only the acknowledgement state. Replies read from an SMS
+gateway are kept with the sends and are not purged either.
 
 ## During operations
 

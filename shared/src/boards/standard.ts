@@ -312,4 +312,26 @@ export const STANDARD_TEMPLATES: readonly BoardTemplate[] = [
     ],
     views: [{ key: "all", title: "All ESFs", columns: ["esf", "status"] }],
   }),
+  // Messages passed without the network (AG-05), after the ICS 309 communications log.
+  t({
+    key: "radio_runner_log",
+    version: 1,
+    title: "Radio and Runner Log",
+    description: "Messages sent or received by radio, runner or landline when the network is down (ICS 309 lane).",
+    fields: [
+      { key: "occurred_at", label: "Time", type: "datetime", required: true },
+      { key: "direction", label: "Direction", type: "enum", values: ["received", "sent"], required: true },
+      { key: "means", label: "By", type: "enum", values: ["radio", "runner", "landline", "satellite_phone", "other"], required: true },
+      { key: "from_station", label: "From", type: "text", required: true, maxLength: 200 },
+      { key: "to_station", label: "To", type: "text", required: true, maxLength: 200 },
+      { key: "channel", label: "Channel or route", type: "text", maxLength: 200 },
+      { key: "message", label: "Message", type: "text", required: true, maxLength: 2000 },
+      { key: "runner", label: "Runner", type: "text", maxLength: 200 },
+      { key: "receipt_confirmed", label: "Receipt confirmed", type: "boolean" },
+    ],
+    views: [
+      { key: "all", title: "All traffic", columns: ["occurred_at", "direction", "means", "from_station", "to_station", "message"], sort: { field: "occurred_at", dir: "desc" } },
+      { key: "unconfirmed", title: "Awaiting receipt", columns: ["occurred_at", "means", "to_station", "message", "runner"], filter: [{ field: "direction", op: "eq", value: "sent" }, { field: "receipt_confirmed", op: "neq", value: true }] },
+    ],
+  }),
 ];
