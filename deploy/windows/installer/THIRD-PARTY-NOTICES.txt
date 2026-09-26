@@ -134,6 +134,34 @@ California critical facilities (when included)
   license, retrieval date, size and SHA-256. tools/basemap/build-facilities.mjs
   builds it.
 
+California tribal areas, counties and places (when included)
+  web/public/basemap/boundaries.pmtiles is compiled from United States
+  Government public domain data: U.S. Census Bureau TIGER/Line American
+  Indian, Alaska Native and Native Hawaiian Areas and Cartographic Boundary
+  Files, and the Bureau of Indian Affairs AIAN Land Area Representations.
+  BIA states that its representations are for illustrative, reference and
+  statistical purposes, that no legal inference can or should be made from
+  them, and that they have no impact on the legal status of the land areas
+  or on land ownership; web/public/basemap/boundaries-manifest.json records
+  BIA's disclaimer in full with each source's address, license, retrieval
+  date, size and SHA-256.
+
+California risk and social vulnerability (when included)
+  web/public/basemap/risk.pmtiles holds FEMA National Risk Index v1.20
+  ratings and CDC/ATSDR Social Vulnerability Index 2022 rankings on U.S.
+  Census Bureau tract and county boundaries. This product uses the Federal
+  Emergency Management Agency's National Risk Index dataset API or
+  downloadable datasets but is not endorsed by FEMA. The Federal Government
+  or FEMA cannot vouch for the data or analyses derived from these data
+  after the data have been retrieved from the Agency's website(s). The Risk
+  Index is for planning purposes and is not a local risk assessment. SVI
+  citation: Centers for Disease Control and Prevention/Agency for Toxic
+  Substances and Disease Registry/Geospatial Research, Analysis, and
+  Services Program. CDC/ATSDR Social Vulnerability Index 2022 Database U.S.
+  web/public/basemap/risk-manifest.json records FEMA's terms, the retrieval
+  date and time, and each source's address, size and SHA-256.
+  tools/basemap/build-reference-layers.mjs builds both archives.
+
 Bundled basemap
   web/public/basemap/basemap.pmtiles and ca_counties.geojson come from
   Natural Earth and US Census boundaries, both in the public domain.

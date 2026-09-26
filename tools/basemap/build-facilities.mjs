@@ -712,7 +712,7 @@ async function fetchFile(url, target) {
 }
 
 /** Every feature an ArcGIS layer query returns, paged in object id order, as one GeoJSON file. */
-function arcgisQuery(oidField, pageSize = 1000) {
+export function arcgisQuery(oidField, pageSize = 1000) {
   return async (url, target) => {
     const count = (await (await request(`${url}&returnCountOnly=true&f=json`)).json()).count;
     if (!Number.isInteger(count)) throw new Error(`No feature count from ${url}`);
@@ -733,7 +733,7 @@ function arcgisQuery(oidField, pageSize = 1000) {
  * A source file in the cache, fetched once. A cached file is reused while it
  * matches the size and SHA-256 its receipt recorded; --refresh fetches again.
  */
-async function cached(cache, name, url, { refresh = false, produce = fetchFile } = {}) {
+export async function cached(cache, name, url, { refresh = false, produce = fetchFile } = {}) {
   const file = join(cache, name);
   const receiptFile = `${file}.receipt.json`;
   if (!refresh && existsSync(file) && existsSync(receiptFile)) {
@@ -799,7 +799,7 @@ export function zipBuffer(source, name) {
 }
 
 /** One zip member's lines, streamed. */
-function zipLines(path, name, encoding) {
+export function zipLines(path, name, encoding) {
   const { start, compressed, method } = member(path, name);
   const raw = createReadStream(path, { start, end: start + compressed - 1 });
   const input = method === 0 ? raw : raw.pipe(createInflateRaw());
@@ -808,7 +808,7 @@ function zipLines(path, name, encoding) {
   return createInterface({ input, crlfDelay: Infinity });
 }
 
-const fileLines = (path, encoding) => createInterface({ input: createReadStream(path, { encoding }), crlfDelay: Infinity });
+export const fileLines = (path, encoding) => createInterface({ input: createReadStream(path, { encoding }), crlfDelay: Infinity });
 
 /** One CSV line split into fields, with `quote` doubled inside a quoted field. */
 export function splitCsv(line, quote = '"') {

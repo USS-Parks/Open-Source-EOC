@@ -28,6 +28,10 @@ web/public/basemap/north-coast-imagery.pmtiles
 web/public/basemap/north-coast-terrain.pmtiles
 web/public/basemap/facilities.pmtiles
 web/public/basemap/facilities-manifest.json
+web/public/basemap/boundaries.pmtiles
+web/public/basemap/boundaries-manifest.json
+web/public/basemap/risk.pmtiles
+web/public/basemap/risk-manifest.json
 .DS_Store
 # Local agent and test-runner state.
 .claude/

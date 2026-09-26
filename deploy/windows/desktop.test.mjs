@@ -114,21 +114,26 @@ test("desktop configures the offline imagery and elevation archives it finds", a
   }
 });
 
-test("desktop configures the critical facilities layer it finds, and its manifest only beside it", async () => {
+test("desktop configures the facilities, boundaries and risk layers it finds, and each manifest only beside its layer", async () => {
   const files = fixture();
+  const layers = [["FACILITIES", "facilities"], ["BOUNDARIES", "boundaries"], ["RISK", "risk"]];
   try {
-    writeFileSync(resolve(files.publicRoot, "basemap/facilities-manifest.json"), "{}");
+    for (const [, name] of layers) writeFileSync(resolve(files.publicRoot, `basemap/${name}-manifest.json`), "{}");
     let config = await desktopRuntimeConfig(files.publicRoot);
-    assert.equal(config.OPENEOC_FACILITIES_PMTILES_URL, undefined);
-    assert.equal(config.OPENEOC_FACILITIES_MANIFEST_URL, undefined);
+    for (const [prefix] of layers) {
+      assert.equal(config[`OPENEOC_${prefix}_PMTILES_URL`], undefined);
+      assert.equal(config[`OPENEOC_${prefix}_MANIFEST_URL`], undefined);
+    }
     // An installed packet's layer is found the same way as the public files'.
     const mapDataRoot = resolve(files.root, "map-data");
     mkdirSync(resolve(mapDataRoot, "basemap"), { recursive: true });
-    writeFileSync(resolve(mapDataRoot, "basemap/facilities.pmtiles"), "facilities");
+    for (const [, name] of layers) writeFileSync(resolve(mapDataRoot, `basemap/${name}.pmtiles`), name);
     config = await desktopRuntimeConfig(files.publicRoot, { mapDataRoot });
-    assert.equal(config.OPENEOC_FACILITIES_PMTILES_URL, "/basemap/facilities.pmtiles");
-    assert.equal(config.OPENEOC_FACILITIES_MANIFEST_URL, "/basemap/facilities-manifest.json");
-    assert.equal(selectStaticFile({ rawPath: "basemap/facilities.pmtiles", ...files, mapDataRoot }).file, resolve(mapDataRoot, "basemap/facilities.pmtiles"));
+    for (const [prefix, name] of layers) {
+      assert.equal(config[`OPENEOC_${prefix}_PMTILES_URL`], `/basemap/${name}.pmtiles`);
+      assert.equal(config[`OPENEOC_${prefix}_MANIFEST_URL`], `/basemap/${name}-manifest.json`);
+      assert.equal(selectStaticFile({ rawPath: `basemap/${name}.pmtiles`, ...files, mapDataRoot }).file, resolve(mapDataRoot, `basemap/${name}.pmtiles`));
+    }
   } finally {
     rmSync(files.root, { recursive: true, force: true });
   }

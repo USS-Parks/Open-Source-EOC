@@ -14293,3 +14293,64 @@ Map and Dashboard Parity PSPR unit MP12, built in lane `lane/mp12`.
 - **Full suite:** as MP11, once per landing batch before the push.
 - **Rollback.** Revert the commit; the three screens return to their lists
   without the Dashboard tab.
+
+## Map and dashboard parity MP6 and MP10 part one: boundaries and risk data
+
+Map and Dashboard Parity PSPR units MP6 and MP10, their data halves
+(decisions 4 and 9), built in lane `lane/mp6`. Their map halves follow MP2.
+
+- **What there was before.** Tribal areas only as unnamed parcels in the land
+  ownership overlay and as basemap lines (MP1); no county, place, risk or
+  vulnerability layers.
+- **What changed.** `tools/basemap/build-reference-layers.mjs` (Node only,
+  sharing four exported readers from `build-facilities.mjs`, whose output is
+  unchanged) builds two archives, each with a manifest of every source's URL,
+  license, retrieval time, size and SHA-256:
+  - `boundaries.pmtiles`: `aiannh` (Census TIGER/Line 2025 American Indian,
+    Alaska Native and Native Hawaiian Areas with class codes and labels; 152
+    areas), `bia_lar` (BIA AIAN Land Area Representations from BIA's own
+    service, with BIA's disclaimer in the manifest; 112 areas), `counties`
+    (58), `places` (1,619 incorporated places and CDPs), and `labels` (1,941
+    interior points), z4 to z12.
+  - `risk.pmtiles`: `nri_tracts` (9,106) and `nri_counties` (58) with the
+    FEMA National Risk Index v1.20 composite, expected annual loss, social
+    vulnerability and community resilience ratings and the earthquake,
+    tsunami, wildfire, inland flooding, coastal flooding, landslide, winter
+    weather and heat wave risk ratings; `svi_tracts` (9,109) and
+    `svi_counties` (58) with CDC/ATSDR SVI 2022 overall and theme
+    percentiles. Counties z4 to z8, tracts z8 to z12.
+  - The desktop host sets `OPENEOC_BOUNDARIES_PMTILES_URL`,
+    `OPENEOC_BOUNDARIES_MANIFEST_URL`, `OPENEOC_RISK_PMTILES_URL` and
+    `OPENEOC_RISK_MANIFEST_URL`; the map data packet and the optional stage
+    carry the four files; the notices, installer README (thirteen files),
+    asset licenses, desktop doc, region guide, packet read-me and basemap
+    README (section 12) name them.
+- **Result.** Humboldt: Big Lagoon, Blue Lake, Hoopa Valley, Karuk,
+  Rohnerville, Table Bluff, Trinidad and Yurok areas; Del Norte: Elk Valley,
+  Smith River, Resighini and Yurok. Humboldt NRI Relatively High, SVI
+  0.8269; Del Norte NRI Relatively High with tsunami Very High, SVI 0.9004.
+  Archives: boundaries 4,685,106 bytes, SHA-256
+  `227aa936a1e46f25559970e78ce4f6e074f8b6e47a857b288c63aa4a5aa5af25`; risk
+  13,510,099 bytes, SHA-256
+  `836d3e1e30540ce6f165a7c18cd339a8518247932f3cacb6fe4cd3d786111a07`. A
+  rebuild gave identical bytes.
+- **Defaults and deviations.**
+  - The NRI came from OpenFEMA, because the NRI site now redirects to FEMA's
+    RAPT tool. **For Basho's review:** FEMA's data terms say access means
+    acceptance, require a non-endorsement statement (now in the attribution
+    and notices), bar reverse engineering, and let FEMA ask for copies to be
+    destroyed. NRI v1.20 replaced riverine flooding with inland flooding.
+  - Counties, places and tracts use the Census 1:500,000 cartographic
+    boundary files (cut to the shoreline); no separate generalized county
+    file, since each zoom is simplified below half a pixel.
+  - A tribal area is kept whole if at least 5 percent of it lies in
+    California (Colorado River, Fort Yuma and Fort Mojave stay; Klamath in
+    Oregon, Cocopah and Summit Lake drop out). SVI uses the national
+    ranking, to match the NRI. Three tracts have no NRI row (Lake Tahoe
+    water and the Farallones). Nothing was invented.
+  - The lane started before MP2 landed; it owns no web file.
+- **Verification.** `build-reference-layers.test.mjs`,
+  `build-facilities.test.mjs` and `pmtiles-writer.test.mjs`: 16 passed.
+  `pnpm test:desktop`: 45 passed. `pnpm check:static`: pass.
+- **Full suite:** as MP11, once per landing batch before the push.
+- **Rollback.** Revert the commit; the archives are untracked build outputs.

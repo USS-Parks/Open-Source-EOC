@@ -193,10 +193,12 @@ export async function desktopRuntimeConfig(publicRoot, { diagnostic = (message) 
   ];
   for (const [key, relativePath] of optional)
     if (located(relativePath)) config[key] = `/${relativePath.replaceAll("\\", "/")}`;
-  // The critical facilities layer, with the manifest naming its sources when it is there too.
-  if (located("basemap/facilities.pmtiles")) {
-    config.OPENEOC_FACILITIES_PMTILES_URL = "/basemap/facilities.pmtiles";
-    if (located("basemap/facilities-manifest.json")) config.OPENEOC_FACILITIES_MANIFEST_URL = "/basemap/facilities-manifest.json";
+  // The critical facilities, boundaries and risk layers, each with the manifest
+  // naming its sources when it is there too.
+  for (const [prefix, name] of [["FACILITIES", "facilities"], ["BOUNDARIES", "boundaries"], ["RISK", "risk"]]) {
+    if (!located(`basemap/${name}.pmtiles`)) continue;
+    config[`OPENEOC_${prefix}_PMTILES_URL`] = `/basemap/${name}.pmtiles`;
+    if (located(`basemap/${name}-manifest.json`)) config[`OPENEOC_${prefix}_MANIFEST_URL`] = `/basemap/${name}-manifest.json`;
   }
   // Offline raster archives: the map reads their zoom range and bounds from each archive's header.
   const rasters = [

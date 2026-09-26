@@ -161,7 +161,9 @@ The small bundled PMTiles map and bundled fonts are required. If these approved 
 - `california.pmtiles` for detailed local streets;
 - `buildings.pmtiles` for building footprints;
 - `overlays.pmtiles` and `overlays-manifest.json` for jurisdiction overlays;
-- `facilities.pmtiles` and `facilities-manifest.json` for California's critical facilities.
+- `facilities.pmtiles` and `facilities-manifest.json` for California's critical facilities;
+- `boundaries.pmtiles` and `boundaries-manifest.json` for California's tribal areas, counties and places;
+- `risk.pmtiles` and `risk-manifest.json` for the FEMA National Risk Index and CDC/ATSDR Social Vulnerability Index by tract and county.
 
 If `tools/basemap/out/gazetteer.tsv` exists (see [the gazetteer build](../tools/basemap/README.md#10-offline-address-search-gazetteer)), the launcher sets `OPENEOC_GAZETTEER_PATH` to it for every profile, and address search works offline. An `OPENEOC_GAZETTEER_PATH` already set wins.
 

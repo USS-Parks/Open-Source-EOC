@@ -531,6 +531,61 @@ OpenStreetMap attribution. The layer is reference data, not an
 authoritative inventory. `build-facilities.test.mjs` covers the source
 readers, duplicates, clusters and the archive on small fixtures.
 
+## 12. California boundaries, tribal lands and risk layers
+
+`build-reference-layers.mjs` builds two archives with Node only, tiling with
+the `geojson-vt` and `vt-pbf` packages MapLibre already carries:
+`boundaries.pmtiles` with `boundaries-manifest.json`, and `risk.pmtiles` with
+`risk-manifest.json`.
+
+```
+node tools/basemap/build-reference-layers.mjs [outDir] --cache <folder outside the repository>
+```
+
+Output, cache and receipts work as in section 11 (cache default
+`<outDir>/reference-cache`, or `OPENEOC_REFERENCE_CACHE`; `--refresh` fetches
+again; no file over 1 GB). Copy the four files to `web/public/basemap/`. The
+largest download is the Risk Index tract table, 635 MB.
+
+| Data | Source | License |
+|---|---|---|
+| Tribal areas (`aiannh`) | Census TIGER/Line 2025 American Indian, Alaska Native and Native Hawaiian Areas | Public domain |
+| Trust and restricted land (`bia_lar`) | BIA AIAN Land Area Representations, from BIA's own map service | Public domain; BIA's no-legal-inference disclaimer, recorded in full in the manifest |
+| Counties, places, tracts | Census 2025 Cartographic Boundary Files, 1:500,000 (TIGER/Line clipped to the shoreline) | Public domain |
+| `nri_tracts`, `nri_counties` | FEMA National Risk Index v1.20 tables, from OpenFEMA | FEMA's terms: the non-endorsement statement travels in the archive attribution and the manifest |
+| `svi_tracts`, `svi_counties` | CDC/ATSDR SVI 2022, United States database | CDC: no constraints or limitations |
+
+Esri-hosted copies are not used. Tribal polygons are kept whole where at
+least 5 percent of their area lies in a California county, so a reservation
+across the state line keeps its full extent; parts wholly outside are left
+out. The `aiannh` layer carries the Census class code (`classfp`) and Esri's
+class (`class`: federal reservation or off-reservation trust land, joint-use,
+state, ANVSA, Hawaiian home land, OTSA, TDSA, SDTSA) with its label. Places
+carry `kind` (city, town or cdp). The `labels` layer has one point inside
+each area of every boundary layer, with its layer, id, name, class or kind,
+and area in square kilometers.
+
+The risk layers keep FEMA's and CDC's field names: `RISK_SCORE`,
+`RISK_RATNG`, `EAL_RATNG`, `SOVI_RATNG`, `RESL_RATNG` and the hazard ratings
+`ERQK_RISKR`, `TSUN_RISKR`, `WFIR_RISKR`, `IFLD_RISKR` (inland flooding,
+riverine before v1.20), `CFLD_RISKR`, `LNDS_RISKR`, `WNTW_RISKR`,
+`HWAV_RISKR`; and `RPL_THEMES` with `RPL_THEME1` to `RPL_THEME4` (CDC's -999
+left out). Tables join to Census geometry by GEOID; the manifest counts what
+did not join.
+
+Zooms: boundary layers z4 to z12 (places from z6); risk counties z4 to z8 and
+tracts z8 to z12, both in the z8 tiles so a style can switch near z8.5 as
+Esri does. Each zoom is simplified to under half a pixel, so one geometry
+serves as the detailed and generalized pair. The manifests list the layers,
+counts, joins, the tribal areas and places in Humboldt and Del Norte, and the
+two counties' ratings.
+
+The Windows launcher sets `OPENEOC_BOUNDARIES_PMTILES_URL`,
+`OPENEOC_BOUNDARIES_MANIFEST_URL`, `OPENEOC_RISK_PMTILES_URL` and
+`OPENEOC_RISK_MANIFEST_URL` when the files are installed, as for facilities.
+`build-reference-layers.test.mjs` covers the polygon readers, the California
+clip, the classes, the joins and the archive on small fixtures.
+
 ## Attribution
 
 OpenStreetMap data is ODbL: the map must display "© OpenStreetMap contributors".
