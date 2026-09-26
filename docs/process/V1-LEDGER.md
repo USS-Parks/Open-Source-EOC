@@ -10881,3 +10881,32 @@ Veoci Integration and Air Gap PSPR unit VA25 (VC-17), under decision 5
   docs, route coverage, import reports, volunteers, all shared tests, the
   board screens and the web client), and the board actions browser test 2
   of 2.
+
+## Veoci and air gap VA17 completion: board record import reports
+
+Completes "Veoci and air gap VA17: validated migration", whose landing left
+the board record import's report for after VA25, which owned
+`server/src/boards/transfer.ts`.
+
+- **What changed.** A board record import that writes
+  (`POST /api/v1/boards/:boardId/import`) keeps an import report of kind
+  `board_records` in the same transaction: the board, the file name, the
+  column used for each field, and each row with the record it made; the
+  response carries `reportId`. A check or a refused file keeps none, since
+  that import takes every row or none. The report goes with the board's
+  organization when the importer writes there; a partner contributing to the
+  incident files it with its own organization, whose administrators read
+  and sign it off. As VA17's lane drafted it, the report would have been
+  filed under the board's organization for a partner too, which the
+  report's row security refuses, failing the partner's import.
+  `docs/guides/MIGRATION.md` lists the board record import.
+- **Tests.** `import-reports.test.ts` gains a case (10 tests): an import of
+  two rows and a blank line keeps a report with both rows and the records
+  they made, a refused file keeps none, and a county liaison contributing
+  to an incident imports into its board with the report filed under the
+  county and readable by the county's administrator.
+- **Verification.** `pnpm check:static` exit 0; 6 files, 50 tests green with
+  `OPENEOC_TEST_DB_TAG=main` (import reports, board records browser, record
+  sync, boards, resource typing, contacts).
+- **Evidence level:** real-database tests.
+- **Rollback:** revert the commit.

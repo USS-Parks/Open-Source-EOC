@@ -5,6 +5,7 @@ import type { Sql } from "../db/client.js";
 import { AuthError, type Principal } from "../auth/service.js";
 import { csvCell } from "../audit/export.js";
 import { readFirstWorksheet } from "../forms/xlsx-import.js";
+import { writeImportReport } from "../data-packs/import-reports.js";
 import {
   insertRecord,
   listViewRecords,
@@ -201,6 +202,8 @@ export interface ImportResult {
   readonly ignored: readonly string[];
   readonly errorCount: number;
   readonly errors: readonly ImportRowError[];
+  /** The import report a commit kept (VC-13); absent on a dry run or a refused file. */
+  readonly reportId?: string;
 }
 
 /**
@@ -210,12 +213,30 @@ export interface ImportResult {
  * nothing; a commit writes every row, in the caller's transaction, only when
  * no row failed. Row numbers count the header as row 1.
  */
+/**
+ * Where a board import's report is kept: with the board's organization when
+ * the importer writes there, or else with the organization the importer
+ * contributes to the incident for, whose administrators sign it off.
+ */
+async function reportJurisdiction(sql: Sql, actor: Principal, boardJurisdictionId: string, incidentId: string | undefined): Promise<string> {
+  const writes = (id: string) => actor.memberships.some((membership) =>
+    membership.jurisdictionId === id && (membership.role === "admin" || membership.role === "member"));
+  if (writes(boardJurisdictionId) || !incidentId) return boardJurisdictionId;
+  const [participation] = await sql`
+    select organization_id from incident_participants
+    where incident_id = ${incidentId} and person_id = ${actor.person.id} and revoked_at is null and expires_at > now()`;
+  return (participation?.organization_id as string | undefined) ?? boardJurisdictionId;
+}
+
 export async function importBoardRecords(
   sql: Sql,
   actor: Principal,
   boardId: string,
   table: { headers: readonly string[]; rows: ReadonlyArray<Record<string, string>> },
-  options: { dryRun: boolean; incidentId?: string | undefined; mapping?: Readonly<Record<string, string | null>> | undefined },
+  options: {
+    dryRun: boolean; incidentId?: string | undefined; mapping?: Readonly<Record<string, string | null>> | undefined;
+    sourceName?: string | undefined;
+  },
 ): Promise<{ result: ImportResult; created: Array<{ id: string; data: Record<string, unknown> }>; boardKey: string; jurisdictionId: string }> {
   const board = await writableBoard(sql, actor, boardId, options.incidentId);
   const writable = board.fields.filter((field) => !field.calculation);
@@ -273,10 +294,20 @@ export async function importBoardRecords(
     errors.push(...rowErrors);
   }
   const created: Array<{ id: string; data: Record<string, unknown> }> = [];
+  let reportId: string | undefined;
   if (!options.dryRun && errors.length === 0) {
     for (const data of valid) {
       created.push({ id: await insertRecord(sql, actor, board, data, options.incidentId, "import"), data });
     }
+    // Every row passed, so each made one record, in file order (VC-13).
+    reportId = await writeImportReport(sql, actor, {
+      jurisdictionId: await reportJurisdiction(sql, actor, board.jurisdictionId, options.incidentId),
+      kind: "board_records",
+      subject: board.title,
+      sourceName: options.sourceName,
+      mapping: Object.entries(mapping).map(([header, key]) => ({ field: fields.get(key)!.label, column: header })),
+      rows: rows.map(({ rowNumber }, i) => ({ row: rowNumber, item: created[i]!.id, outcome: "created" as const })),
+    });
   }
   return {
     result: {
@@ -287,6 +318,7 @@ export async function importBoardRecords(
       ignored,
       errorCount: errors.length,
       errors: errors.slice(0, MAX_REPORTED_ERRORS),
+      ...(reportId ? { reportId } : {}),
     },
     created,
     boardKey: board.template.key,

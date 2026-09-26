@@ -80,8 +80,11 @@ sends no notifications for the records it writes.
 
 Every import that writes keeps a report under **Administration > Records >
 Import reports**: the WebEOC migration, a people import (see the
-[Administrator guide](./ADMIN.md)), a parcel baseline import, a form import
-and a signed solution package import. A check writes no report. The list
+[Administrator guide](./ADMIN.md)), a board record import, a parcel baseline
+import, a form import and a signed solution package import. A check writes
+no report, and neither does a board record file that is refused: that import
+takes every row or none. A partner organization's import into a board of an
+incident it contributes to is reported to the partner's administrators. The list
 shows, newest first, what each import went into, the file, who ran it and
 when, and how many rows it read, created, updated, skipped and refused.
 

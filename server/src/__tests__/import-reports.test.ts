@@ -4,6 +4,7 @@ import { importXlsForm } from "@openeoc/shared";
 import { buildApp } from "../app.js";
 import { addMembership, createJurisdiction, createPerson } from "../auth/service.js";
 import { ensureStandardTemplates } from "../boards/service.js";
+import { ensureStandardIncidentTemplates } from "../incidents/service.js";
 import { parseCsv } from "../boards/transfer.js";
 import { auth, freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 import { multipartUpload } from "./multipart.js";
@@ -17,7 +18,8 @@ import { multipartUpload } from "./multipart.js";
  * accounts, memberships and position assignments, refuses each row it
  * cannot make with the reason, changes nothing on a check, and never keeps
  * the first password in the clear. The import templates list the product's
- * dictionary values under their enumerated columns.
+ * dictionary values under their enumerated columns. A board record import
+ * keeps its report with the importer's organization.
  */
 
 const FIRST_PASSWORD = "river-bend-first-2026";
@@ -53,6 +55,7 @@ beforeAll(async () => {
   ({ admin, runtime } = await freshDb());
   seed = await seedIdentity(admin);
   await ensureStandardTemplates(admin);
+  await ensureStandardIncidentTemplates(admin);
   for (const [key, title] of [["incident_commander", "Incident Commander"], ["planning_section_chief", "Planning Section Chief"],
     ["operations_section_chief", "Operations Section Chief"]] as const) {
     const [row] = await admin`insert into positions (jurisdiction_id, key, title) values (${seed.jurisdictionId}, ${key}, ${title}) returning id`;
@@ -303,5 +306,50 @@ describe("people import", () => {
     expect(again.json()).toMatchObject({ created: 0, updated: 0, skipped: 4 });
     expect(again.json().outcomes.slice(0, 3).map((o: { detail: string }) => o.detail))
       .toEqual(["already a member with these positions", "already a member", "already a member with these positions"]);
+  });
+});
+
+// Last: activating the incident makes the wildfire template's positions, which the people import counts.
+describe("board record import reports", () => {
+  it("keeps a report of a board record import, none for a refused file, and a partner's with the partner", async () => {
+    const csv = "Summary,Occurred,Severity\nBridge closed,2026-09-25T08:00:00Z,critical\n,,\nShelter opened,2026-09-25T09:00:00Z,normal\n";
+    const before = await reportCount();
+    const imported = await upload(`/api/v1/boards/${boardId}/import`, csv, { name: "events.csv" });
+    expect(imported.statusCode, imported.body).toBe(201);
+    const reportId = imported.json().reportId as string;
+    const kept = (await report(reportId)).json();
+    expect(kept).toMatchObject({
+      kind: "board_records", subject: "Events from WebEOC", sourceName: "events.csv",
+      read: 2, created: 2, refused: 0,
+      mapping: [{ field: "Summary", column: "Summary" }, { field: "Occurred", column: "Occurred" }, { field: "Severity", column: "Severity" }],
+    });
+    // The blank line is not a row; each row names the record it made.
+    const records = await admin`select id from board_records where board_id = ${boardId} and data ->> 'summary' in ('Bridge closed', 'Shelter opened')`;
+    expect(kept.rows.map((row: { row: number; item: string }) => row.row)).toEqual([2, 4]);
+    expect(new Set(kept.rows.map((row: { item: string }) => row.item))).toEqual(new Set(records.map((r) => r.id)));
+    const refused = await upload(`/api/v1/boards/${boardId}/import`, "Summary,Severity\nNo time,bad\n", { name: "bad.csv" });
+    expect(refused.statusCode).toBe(422);
+    expect(await reportCount()).toBe(before + 1);
+
+    // A partner contributing to the incident imports into its board; the report is the partner's.
+    const incident = await app.inject({ method: "POST", url: `/api/v1/jurisdictions/${seed.jurisdictionId}/incidents`,
+      headers: auth(adminToken), payload: { templateKey: "wildfire", name: "Ridge Fire" } });
+    expect(incident.statusCode, incident.body).toBeLessThan(300);
+    const incidentId = incident.json().incidentId as string;
+    const granted = await app.inject({ method: "POST", url: `/api/v1/incidents/${incidentId}/participants`, headers: auth(adminToken), payload: {
+      organizationSlug: "humboldt", personEmail: "liaison@county.example.org", incidentPositionTitle: "County Liaison",
+      role: "contributor", expiresAt: new Date(Date.now() + 3_600_000).toISOString(), reason: "Joint response",
+    } });
+    expect(granted.statusCode, granted.body).toBeLessThan(300);
+    const [events] = await admin`
+      select b.id from incident_boards ib join boards b on b.id = ib.board_id
+      where ib.incident_id = ${incidentId} and b.template_key = 'significant_events'`;
+    const liaisonToken = await tokenFor(app, "liaison@county.example.org", "county-own-password");
+    const partner = await upload(`/api/v1/boards/${events!.id as string}/import?incidentId=${incidentId}`,
+      "Summary,Occurred,Severity\nCounty crews staged,2026-09-25T10:00:00Z,normal\n", { name: "county.csv" }, liaisonToken);
+    expect(partner.statusCode, partner.body).toBe(201);
+    const [filed] = await admin`select j.slug from import_reports r join jurisdictions j on j.id = r.jurisdiction_id where r.id = ${partner.json().reportId as string}`;
+    expect(filed!.slug).toBe("humboldt");
+    expect((await report(partner.json().reportId as string, outsiderToken)).statusCode).toBe(200);
   });
 });

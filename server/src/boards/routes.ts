@@ -454,7 +454,7 @@ export function boardRoutes(
     const table = readUploadedTable(buffer);
     const dryRun = query.dryRun === "true";
     const outcome = await withPerson(sql, req.principal.person.id, (tx) =>
-      importBoardRecords(tx, req.principal, boardId, table, { dryRun, incidentId: query.incidentId, mapping }));
+      importBoardRecords(tx, req.principal, boardId, table, { dryRun, incidentId: query.incidentId, mapping, sourceName: part.filename }));
     // Imported records reach live views and dashboards; a bulk load sends no
     // per-record notifications.
     for (const record of outcome.created) {
