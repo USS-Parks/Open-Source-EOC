@@ -243,6 +243,8 @@ export interface PaItem {
   readonly lat: number | null;
   readonly created_at: string;
   readonly updated_at: string;
+  /** When a force account was rolled into the item's cost; none when the cost was entered. */
+  readonly force_account_at?: string | null;
 }
 
 export interface PaItemPage {

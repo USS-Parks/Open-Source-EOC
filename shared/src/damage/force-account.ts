@@ -21,7 +21,8 @@ import { z } from "zod";
 
 const Money = z.number().min(0).max(100_000);
 const Text = (max: number) => z.string().trim().max(max);
-const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "a date as YYYY-MM-DD");
+const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "a date as YYYY-MM-DD")
+  .refine((day) => !Number.isNaN(Date.parse(day)) && new Date(day).toISOString().slice(0, 10) === day, "a date that exists");
 
 export const LaborRateSchema = z.object({
   jobTitle: Text(200).min(1),
@@ -141,9 +142,25 @@ export interface ForceAccountSummary {
   /** People with hours and no labor rate, and equipment codes with no rate: their rows cost nothing yet. */
   readonly unratedPeople: ReadonlyArray<{ readonly personId: string; readonly personName: string }>;
   readonly unratedCodes: readonly string[];
+  /** Check-ins on the incident still open: not counted until they close. */
+  readonly openCheckIns: ReadonlyArray<{ readonly personId: string; readonly personName: string; readonly since: string }>;
 }
 
 const hundredths = (value: number): number => Math.round(value * 100) / 100;
+
+/**
+ * A quantity at a rate with a percent added, in cents, rounded half up, in
+ * exact integer arithmetic at the stored precisions: quantities to the
+ * hundredth, rates to the ten-thousandth of a dollar, percents to the
+ * thousandth. Floating point would round $78.195 down.
+ */
+function costCents(quantity: number, rate: number, percent = 0): number {
+  const q = BigInt(Math.round(quantity * 100));
+  const r = BigInt(Math.round(rate * 10_000));
+  const f = BigInt(Math.round((100 + percent) * 1000));
+  // q * r * f is in units of 1e-11 dollars; a cent is 1e9 of them.
+  return Number((q * r * f + 500_000_000n) / 1_000_000_000n);
+}
 
 /**
  * One person's day: hours split at the overtime threshold, and each part's
@@ -160,14 +177,14 @@ export function laborDay(hours: number, rate: LaborRate | null): {
   if (!rate) return { regularHours, overtimeHours, regularCostCents: 0, overtimeCostCents: 0, costCents: 0 };
   const overtimeRate = rate.overtimeRate ?? rate.hourlyRate;
   const overtimeFringe = rate.overtimeFringePercent ?? rate.fringePercent;
-  const regularCostCents = Math.round(regularHours * rate.hourlyRate * (1 + rate.fringePercent / 100) * 100);
-  const overtimeCostCents = Math.round(overtimeHours * overtimeRate * (1 + overtimeFringe / 100) * 100);
+  const regularCostCents = costCents(regularHours, rate.hourlyRate, rate.fringePercent);
+  const overtimeCostCents = costCents(overtimeHours, overtimeRate, overtimeFringe);
   return { regularHours, overtimeHours, regularCostCents, overtimeCostCents, costCents: regularCostCents + overtimeCostCents };
 }
 
 /** A logged equipment use, costed at its rate, in cents. */
 export function equipmentCost(quantity: number, rate: number | null): number {
-  return rate === null ? 0 : Math.round(quantity * rate * 100);
+  return rate === null ? 0 : costCents(quantity, rate);
 }
 
 /** The totals of a summary's rows, which is all a summary's totals are. */
@@ -244,13 +261,19 @@ export function equipmentRatesFromTable(table: readonly (readonly string[])[]): 
   return { rows, refused };
 }
 
+/** A cell, quoted when it must be, and kept from being read as a formula when it starts like one. */
 const csvCell = (value: string | number): string => {
-  const text = String(value);
+  const raw = String(value);
+  const text = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 };
 const csv = (rows: ReadonlyArray<ReadonlyArray<string | number>>): string =>
   `${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`;
-const money = (dollars: number): string => dollars.toFixed(2);
+/** Dollars to the cent, or to the ten-thousandth when a rate carries more, so a line's cost is its hours times the rate shown. */
+const money = (dollars: number): string => {
+  const exact = dollars.toFixed(4).replace(/0{1,2}$/, "");
+  return exact.length < dollars.toFixed(2).length ? dollars.toFixed(2) : exact;
+};
 const cents = (value: number): string => (value / 100).toFixed(2);
 
 /**

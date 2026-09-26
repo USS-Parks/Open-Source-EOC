@@ -27,6 +27,7 @@ import { assetBase, basemapStyleUrl, jurisdictionMapBounds, streetBasemap } from
 import { useAsync, type AsyncState } from "../app/data/hooks.js";
 import { Scroll, SurfaceHeader } from "../app/screens/parts.js";
 import { saveFile } from "../admin/labels.js";
+import { formatTime } from "../datasets/format.js";
 import "../datasets/datasets.css";
 import "./damage.css";
 import { ForceAccountPanel } from "./ForceAccountPanel.js";
@@ -435,7 +436,7 @@ function ReportTable(props: {
 
 const PA_COLUMN_WIDTHS = [
   { id: "applicant", width: 220 }, { id: "category", width: 270 }, { id: "site", width: 200 },
-  { id: "description", width: 240 }, { id: "cost", width: 150 }, { id: "insured", width: 110 },
+  { id: "description", width: 240 }, { id: "cost", width: 150 }, { id: "costFrom", width: 180 }, { id: "insured", width: 110 },
   { id: "complete", width: 110 }, { id: "status", width: 170 }, { id: "edit", width: 110 },
 ];
 
@@ -472,6 +473,7 @@ function PublicAssistanceTab(props: {
     { id: "site", header: "Site", value: (r) => r.site, missingLabel: "Not given" },
     { id: "description", header: "Work", value: (r) => r.description, missingLabel: "Not given" },
     { id: "cost", header: "Estimated cost", value: (r) => dollars(r.estimated_cost_cents / 100), align: "end" },
+    { id: "costFrom", header: "Cost from", value: (r) => r.force_account_at ? `Force account, ${formatTime(r.force_account_at)}` : "Entered" },
     { id: "insured", header: "Insurance", value: (r) => insuredLabel(r.insured) },
     { id: "complete", header: "Complete", value: (r) => `${r.percent_complete}%`, align: "end" },
     { id: "status", header: "Status", value: (r) => PA_STATUS_LABELS[r.status] },

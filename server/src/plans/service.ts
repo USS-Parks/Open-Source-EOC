@@ -31,18 +31,12 @@ type Row = Record<string, unknown>;
 const iso = (value: unknown): string => new Date(value as string).toISOString();
 const isoOrNull = (value: unknown): string | null => (value ? iso(value) : null);
 const MINUTE = 60_000;
-const DAY = 86_400_000;
 
+// The due date is the same expression the scheduler's reminder uses, so the
+// screen and the reminder agree across a daylight saving change.
 const planColumns = (sql: Sql) => sql`
   p.id, p.jurisdiction_id, p.title, p.definition, p.version, p.updated_at, p.reviewed_at, p.created_at,
-  p.review_every_days`;
-
-function reviewDueAt(row: Row): string | null {
-  const every = row.review_every_days as number | null;
-  if (!every) return null;
-  const base = new Date((row.reviewed_at ?? row.created_at) as string).getTime();
-  return new Date(base + every * DAY).toISOString();
-}
+  p.review_every_days, coalesce(p.reviewed_at, p.created_at) + make_interval(days => p.review_every_days) as review_due_at`;
 
 function toSummary(row: Row): PlanSummary {
   const definition = PlanDefinitionSchema.parse(row.definition);
@@ -57,7 +51,7 @@ function toSummary(row: Row): PlanSummary {
     updatedAt: iso(row.updated_at),
     reviewEveryDays: definition.reviewEveryDays ?? null,
     reviewedAt: isoOrNull(row.reviewed_at),
-    reviewDueAt: reviewDueAt(row),
+    reviewDueAt: isoOrNull(row.review_due_at),
   };
 }
 
@@ -403,7 +397,7 @@ export async function runDuePlans(sql: Sql, actor: Principal, jurisdictionId: st
     await sql`
       insert into notifications (jurisdiction_id, channel, title, body, status, detail)
       values (${jurisdictionId}, 'plan_review', ${`Plan review due: ${plan.title as string}`.slice(0, 300)},
-        ${`${plan.title as string} was due for review on ${iso(plan.due_at).slice(0, 10)}. Review it under Incidents, Plans, and mark it reviewed.`},
+        ${`${plan.title as string} was due for review at ${iso(plan.due_at).slice(0, 16).replace("T", " ")} UTC. Review it under Incidents, Plans, and mark it reviewed.`},
         'delivered', ${sql.json({ planId: plan.id as string, route: "#/incidents" } as never)})`;
   }
   return { released: due.length, reminded: reviews.length };

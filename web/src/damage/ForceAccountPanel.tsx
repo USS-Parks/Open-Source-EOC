@@ -12,6 +12,7 @@ import { ActionButton } from "../design/controls.js";
 import type { ApiClient } from "../app/api/client.js";
 import { useAsync } from "../app/data/hooks.js";
 import { saveFile } from "../admin/labels.js";
+import { formatTime } from "../datasets/format.js";
 import { csvRows, dollars } from "./model.js";
 
 /**
@@ -171,6 +172,12 @@ export function ForceAccountPanel(props: {
           <div className="damage-fa-total"><span>Equipment</span><strong>{cents(s.totals.equipmentCents)}</strong></div>
           <div className="damage-fa-total"><span>Force account total</span><strong>{cents(s.totals.totalCents)}</strong></div>
         </div>
+        {s.openCheckIns.length ? (
+          <p className="d21-callout" role="note">
+            Still checked in, and not counted until they check out:{" "}
+            {s.openCheckIns.map((open) => `${open.personName} since ${formatTime(open.since)}`).join("; ")}.
+          </p>
+        ) : null}
         {s.unratedPeople.length || s.unratedCodes.length ? (
           <p className="d21-callout" role="note">
             Costed at nothing until they have a rate:{" "}

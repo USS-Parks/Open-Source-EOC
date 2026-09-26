@@ -31,13 +31,17 @@ import { recordAudit } from "../audit/service.js";
 type Row = Record<string, unknown>;
 const num = (value: unknown): number | null => (value === null || value === undefined ? null : Number(value));
 
-function validTimeZone(timeZone: string): string {
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone });
-    return timeZone;
-  } catch {
-    throw new AuthError(400, `timeZone: ${timeZone} is not a time zone`);
-  }
+const iso = (value: unknown): string => new Date(value as string).toISOString();
+
+/**
+ * A time zone the database knows by name. An offset such as "+05:30", which
+ * a browser accepts, reads with its sign reversed in PostgreSQL, so only
+ * names are taken.
+ */
+async function validTimeZone(sql: Sql, timeZone: string): Promise<string> {
+  const [known] = await sql`select 1 from pg_timezone_names where name = ${timeZone}`;
+  if (!known) throw new AuthError(400, `timeZone: ${timeZone} is not a time zone name`);
+  return timeZone;
 }
 
 async function incidentJurisdiction(sql: Sql, incidentId: string): Promise<string> {
@@ -86,16 +90,23 @@ export async function listRates(sql: Sql, actor: Principal, jurisdictionId: stri
   };
 }
 
-/** Set one person's labor rate; they must belong to the jurisdiction. */
+/**
+ * Set one person's labor rate: someone who belongs to the jurisdiction, or
+ * who has checked in or held a shift in it, since their hours count whether
+ * or not their membership lasted.
+ */
 export async function setLaborRate(
   sql: Sql, actor: Principal, jurisdictionId: string, personId: string, raw: unknown,
 ): Promise<LaborRateView> {
   requireAdmin(actor, jurisdictionId);
   const rate = LaborRateSchema.parse(raw);
   const [person] = await sql`
-    select p.display_name from jurisdiction_memberships m join persons p on p.id = m.person_id
-    where m.jurisdiction_id = ${jurisdictionId} and m.person_id = ${personId}`;
-  if (!person) throw new AuthError(400, "the person is not a member of this jurisdiction");
+    select p.display_name from persons p
+    where p.id = ${personId} and (
+      exists (select 1 from jurisdiction_memberships m where m.jurisdiction_id = ${jurisdictionId} and m.person_id = p.id)
+      or exists (select 1 from staff_checkins c where c.jurisdiction_id = ${jurisdictionId} and c.person_id = p.id)
+      or exists (select 1 from shifts s where s.jurisdiction_id = ${jurisdictionId} and s.person_id = p.id))`;
+  if (!person) throw new AuthError(400, "the person has no membership, check-in or shift in this jurisdiction");
   await sql`
     insert into pa_labor_rates (jurisdiction_id, person_id, job_title, hourly_rate, overtime_rate, fringe_percent,
       overtime_fringe_percent, overtime_after_hours, updated_by)
@@ -105,9 +116,10 @@ export async function setLaborRate(
       job_title = excluded.job_title, hourly_rate = excluded.hourly_rate, overtime_rate = excluded.overtime_rate,
       fringe_percent = excluded.fringe_percent, overtime_fringe_percent = excluded.overtime_fringe_percent,
       overtime_after_hours = excluded.overtime_after_hours, updated_by = excluded.updated_by, updated_at = now()`;
+  // The chronology is read by viewers too, so the audit names the change and not the wage.
   await recordAudit(sql, actor, {
     jurisdictionId, category: "damage.labor_rate.saved", subjectTable: "persons", subjectId: personId,
-    payload: { ...rate },
+    payload: { jobTitle: rate.jobTitle },
   });
   return { ...rate, personId, personName: person.display_name as string };
 }
@@ -204,35 +216,55 @@ export async function forceAccountSummary(
 ): Promise<ForceAccountSummary> {
   const jurisdictionId = await incidentJurisdiction(sql, incidentId);
   requireWriter(actor, jurisdictionId);
-  const zone = validTimeZone(timeZone);
+  const zone = await validTimeZone(sql, timeZone);
+  // A person's spans are merged where they overlap (check-ins on two positions
+  // at once are one stretch of work) before they are cut into days.
   const days = await sql`
-    with spans as (
-      select c.person_id, c.checked_in_at as s, c.checked_out_at as e, 'check_in' as source
+    with checkins as (
+      select c.person_id, c.checked_in_at as s, c.checked_out_at as e, 'check_in'::text as source
       from staff_checkins c
       where c.incident_id = ${incidentId} and c.checked_out_at is not null
+    ),
+    spans as (
+      select * from checkins
       union all
       select sh.person_id, sh.starts_at, sh.ends_at, 'shift'
       from shifts sh
       where sh.incident_id = ${incidentId} and sh.person_id is not null and sh.ends_at <= now()
         and not exists (
-          select 1 from staff_checkins c
-          where c.incident_id = ${incidentId} and c.person_id = sh.person_id
-            and c.checked_in_at < sh.ends_at and coalesce(c.checked_out_at, now()) > sh.starts_at)
+          select 1 from checkins c where c.person_id = sh.person_id and c.s < sh.ends_at and c.e > sh.starts_at)
+    ),
+    marked as (
+      select sp.*, case when sp.s <= max(sp.e) over (partition by sp.person_id order by sp.s, sp.e
+        rows between unbounded preceding and 1 preceding) then 0 else 1 end as starts
+      from spans sp
+    ),
+    islands as (
+      select m.*, sum(m.starts) over (partition by m.person_id order by m.s, m.e rows unbounded preceding) as island
+      from marked m
+    ),
+    merged as (
+      select person_id, min(s) as s, max(e) as e, array_agg(distinct source order by source) as sources
+      from islands group by person_id, island
     ),
     cut as (
-      select sp.person_id, sp.source, d::date as day,
-        greatest(sp.s, (d::date)::timestamp at time zone ${zone}) as ds,
-        least(sp.e, (d::date + 1)::timestamp at time zone ${zone}) as de
-      from spans sp,
-        generate_series((sp.s at time zone ${zone})::date, (sp.e at time zone ${zone})::date, interval '1 day') d
+      select m.person_id, m.sources, d::date as day,
+        greatest(m.s, (d::date)::timestamp at time zone ${zone}) as ds,
+        least(m.e, (d::date + 1)::timestamp at time zone ${zone}) as de
+      from merged m,
+        generate_series((m.s at time zone ${zone})::date, (m.e at time zone ${zone})::date, interval '1 day') d
     )
     select c.person_id, to_char(c.day, 'YYYY-MM-DD') as day, p.display_name,
       sum(extract(epoch from (c.de - c.ds))) / 3600.0 as hours,
-      array_agg(distinct c.source order by c.source) as sources
+      (select array_agg(distinct x order by x) from cut c2, unnest(c2.sources) x
+        where c2.person_id = c.person_id and c2.day = c.day and c2.de > c2.ds) as sources
     from cut c join persons p on p.id = c.person_id
     where c.de > c.ds
     group by c.person_id, c.day, p.display_name
     order by c.day, p.display_name, c.person_id`;
+  const open = await sql`
+    select c.person_id, p.display_name, c.checked_in_at from staff_checkins c join persons p on p.id = c.person_id
+    where c.incident_id = ${incidentId} and c.checked_out_at is null order by c.checked_in_at, c.id`;
   const people = [...new Set(days.map((row) => row.person_id as string))];
   const rates = new Map<string, LaborRate>();
   if (people.length > 0) {
@@ -294,6 +326,9 @@ export async function forceAccountSummary(
     totals: forceAccountTotals(labor, equipment),
     unratedPeople: [...unratedPeople].map(([personId, personName]) => ({ personId, personName })),
     unratedCodes: [...new Set(equipment.filter((row) => row.rate === null).map((row) => row.code))],
+    openCheckIns: open.map((row) => ({
+      personId: row.person_id as string, personName: row.display_name as string, since: iso(row.checked_in_at),
+    })),
   };
 }
 
@@ -309,11 +344,20 @@ export async function rollUpForceAccount(
   const input = ForceAccountRollUpSchema.parse(raw);
   const summary = await forceAccountSummary(sql, actor, incidentId, input.timeZone);
   const jurisdictionId = await incidentJurisdiction(sql, incidentId);
+  // Two roll-ups of one incident into different items are taken one at a time.
+  await sql`select pg_advisory_xact_lock(hashtextextended(${incidentId}, 91001::bigint))`;
   const [item] = await sql`
     select jurisdiction_id, incident_id from damage_pa_items where id = ${input.paItemId} for update`;
   if (!item || item.jurisdiction_id !== jurisdictionId) throw new AuthError(404, "Public Assistance line item not found");
   if (item.incident_id && item.incident_id !== incidentId) {
     throw new AuthError(409, "the line item belongs to another incident");
+  }
+  // One line item carries an incident's force account, or the totals would count it twice.
+  const [holder] = await sql`
+    select applicant, description from damage_pa_items
+    where jurisdiction_id = ${jurisdictionId} and id <> ${input.paItemId} and force_account ->> 'incidentId' = ${incidentId}`;
+  if (holder) {
+    throw new AuthError(409, `the force account is already rolled into ${holder.applicant as string}'s line item "${holder.description as string}"; roll it into that one`);
   }
   const missing = [
     ...summary.unratedPeople.map((person) => `a labor rate for ${person.personName}`),

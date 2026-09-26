@@ -401,8 +401,11 @@ export async function updatePaItem(
   itemId: string,
   input: PaItemInput,
 ): Promise<void> {
-  const [item] = await sql`select jurisdiction_id from damage_pa_items where id = ${itemId}`;
+  const [item] = await sql`select jurisdiction_id, incident_id, estimated_cost_cents from damage_pa_items where id = ${itemId}`;
   if (!item) throw new AuthError(404, "Public Assistance line item not found");
+  // A cost or incident changed by hand no longer comes from the force account it was rolled up from.
+  const keepsForceAccount = Number(item.estimated_cost_cents) === input.estimatedCostCents
+    && (item.incident_id ?? null) === (input.incidentId ?? null);
   const jurisdictionId = item.jurisdiction_id as string;
   requireWriter(actor, jurisdictionId);
   await requireOwnIncident(sql, jurisdictionId, input.incidentId);
@@ -415,6 +418,7 @@ export async function updatePaItem(
       site = ${input.site ?? null}, description = ${input.description},
       estimated_cost_cents = ${input.estimatedCostCents}, insured = ${input.insured ?? null},
       percent_complete = ${input.percentComplete}, status = ${input.status}, geom = ${geom},
+      ${keepsForceAccount ? sql`` : sql`force_account = null, force_account_at = null,`}
       updated_by = ${actor.person.id}, updated_at = now()
     where id = ${itemId}`;
   await recordAudit(sql, actor, {
@@ -439,7 +443,7 @@ export async function listPaItems(
   const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
   const rows = await sql`
     select id, incident_id, applicant, category, site, description, estimated_cost_cents, insured,
-      percent_complete, status, ST_X(geom) as lon, ST_Y(geom) as lat, created_at, updated_at,
+      percent_complete, status, ST_X(geom) as lon, ST_Y(geom) as lat, created_at, updated_at, force_account_at,
       to_char(created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at
     from damage_pa_items
     where jurisdiction_id = ${jurisdictionId}

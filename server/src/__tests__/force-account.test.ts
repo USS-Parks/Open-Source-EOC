@@ -206,4 +206,75 @@ describe("force account", () => {
       "damage.pa_item.created", "damage.equipment_hours.removed", "damage.pa_item.force_account",
     ]);
   });
+
+  it("keeps wage amounts out of the chronology viewers read", async () => {
+    const [saved] = await admin`select payload from audit_events where category = 'damage.labor_rate.saved' and subject_id = ${seed.memberId}`;
+    expect(saved!.payload).toEqual({ jobTitle: "Road crew lead" });
+  });
+
+  it("counts overlapping check-ins once, lets an open check-in hide nothing, and rates people with hours but no membership", async () => {
+    const opened = await call(adminToken, "POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/incidents`, { templateKey: "daily_ops", name: "Bridge Watch" });
+    const bridgeId = opened.json().incidentId as string;
+    const positions = await admin`
+      insert into positions (jurisdiction_id, key, title) values
+        (${seed.jurisdictionId}, 'situation_unit_leader', 'Situation Unit Leader'),
+        (${seed.jurisdictionId}, 'planning_chief_acting', 'Acting Planning Chief')
+      returning id`;
+    const pat = await createPerson(admin, { email: "pat@example.org", displayName: "Pat Planner", password: "pat-password-12" });
+    await addMembership(admin, pat, seed.jurisdictionId, "member");
+    const checkIn = (position: string, start: string, end: string | null) => admin`
+      insert into staff_checkins (jurisdiction_id, incident_id, person_id, position_id, method, checked_in_at, checked_out_at, checked_in_by)
+      values (${seed.jurisdictionId}, ${bridgeId}, ${pat}, ${position}, 'manual', ${start}, ${end}, ${seed.adminId})`;
+    // 08:00 to 20:00 as Situation Unit Leader and 12:00 to 20:00 as acting Planning Chief, Pacific time: 12 hours, not 20.
+    await checkIn(positions[0]!.id as string, "2026-09-10T15:00:00Z", "2026-09-11T03:00:00Z");
+    await checkIn(positions[1]!.id as string, "2026-09-10T19:00:00Z", "2026-09-11T03:00:00Z");
+    // A check-in left open on the 11th hides neither itself nor the 09:00 to 17:00 shift that day.
+    await checkIn(positions[0]!.id as string, "2026-09-11T15:00:00Z", null);
+    await admin`
+      insert into shifts (jurisdiction_id, incident_id, position_id, person_id, starts_at, ends_at, created_by)
+      values (${seed.jurisdictionId}, ${bridgeId}, ${positions[1]!.id as string}, ${pat}, '2026-09-11T16:00:00Z', '2026-09-12T00:00:00Z', ${seed.adminId})`;
+    const s = await call(memberToken, "GET", `/api/v1/incidents/${bridgeId}/force-account?timeZone=${encodeURIComponent(ZONE)}`);
+    expect(s.statusCode, s.body).toBe(200);
+    expect(s.json().labor.map((row: { date: string; regularHours: number; overtimeHours: number; sources: string[] }) =>
+      [row.date, row.regularHours, row.overtimeHours, row.sources])).toEqual([
+      ["2026-09-10", 8, 4, ["check_in"]],
+      ["2026-09-11", 8, 0, ["shift"]],
+    ]);
+    expect(s.json().openCheckIns).toEqual([expect.objectContaining({ personName: "Pat Planner", since: "2026-09-11T15:00:00.000Z" })]);
+
+    // Pat leaves the jurisdiction; their hours still need a rate.
+    await admin`delete from jurisdiction_memberships where person_id = ${pat} and jurisdiction_id = ${seed.jurisdictionId}`;
+    const rated = await call(adminToken, "PUT", `/api/v1/jurisdictions/${seed.jurisdictionId}/pa-labor-rates/${pat}`,
+      { jobTitle: "Planner", hourlyRate: 35 });
+    expect(rated.statusCode, rated.body).toBe(200);
+
+    for (const zone of ["+05:30", "Mars/Olympus"]) {
+      const bad = await call(memberToken, "GET", `/api/v1/incidents/${bridgeId}/force-account?timeZone=${encodeURIComponent(zone)}`);
+      expect(bad.statusCode).toBe(400);
+    }
+    const impossible = await call(memberToken, "POST", `/api/v1/incidents/${bridgeId}/equipment-hours`, { rateCode: "8010", usedOn: "2026-02-30", quantity: 1 });
+    expect(impossible.statusCode).toBe(400);
+
+    // One line item carries the force account; a hand edit of its cost lets it go.
+    const item = (description: string) => call(adminToken, "POST", `/api/v1/jurisdictions/${seed.jurisdictionId}/damage/pa-items`, {
+      incidentId: bridgeId, applicant: "Yurok Tribe", category: "b_emergency_protective_measures", description,
+      estimatedCostCents: 0, percentComplete: 0, status: "submitted",
+    });
+    const first = (await item("Bridge watch labor")).json().id as string;
+    const second = (await item("Bridge watch, again")).json().id as string;
+    expect((await call(memberToken, "POST", `/api/v1/incidents/${bridgeId}/force-account/roll-up`, { paItemId: first, timeZone: ZONE })).statusCode).toBe(200);
+    const twice = await call(memberToken, "POST", `/api/v1/incidents/${bridgeId}/force-account/roll-up`, { paItemId: second, timeZone: ZONE });
+    expect(twice.statusCode).toBe(409);
+    expect(twice.json().error).toContain(`already rolled into Yurok Tribe's line item "Bridge watch labor"`);
+    const listed = await call(memberToken, "GET", `/api/v1/jurisdictions/${seed.jurisdictionId}/damage/pa-items`);
+    expect(listed.json().items.find((row: { id: string }) => row.id === first).force_account_at).toBeTruthy();
+    const edited = await app.inject({ method: "PUT", url: `/api/v1/damage/pa-items/${first}`, headers: auth(adminToken), payload: {
+      incidentId: bridgeId, applicant: "Yurok Tribe", category: "b_emergency_protective_measures", description: "Bridge watch labor",
+      estimatedCostCents: 100, percentComplete: 0, status: "submitted", site: null, insured: null, location: null,
+    } });
+    expect(edited.statusCode, edited.body).toBeLessThan(300);
+    const [cleared] = await admin`select force_account, force_account_at from damage_pa_items where id = ${first}`;
+    expect(cleared).toEqual({ force_account: null, force_account_at: null });
+    expect((await call(memberToken, "POST", `/api/v1/incidents/${bridgeId}/force-account/roll-up`, { paItemId: second, timeZone: ZONE })).statusCode).toBe(200);
+  });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  EquipmentHoursSchema,
   equipmentCost,
   equipmentRatesFromTable,
   equipmentSummaryCsv,
@@ -24,6 +25,30 @@ describe("force account arithmetic", () => {
     expect(laborDay(9.333333, null)).toEqual({ regularHours: 8, overtimeHours: 1.33, regularCostCents: 0, overtimeCostCents: 0, costCents: 0 });
     expect(equipmentCost(6, 58.19)).toBe(34914);
     expect(equipmentCost(2, null)).toBe(0);
+  });
+
+  it("rounds half a cent up, exactly, and shows a rate to the precision it carries so each line adds up", () => {
+    // 4.01 h x $19.50 is $78.195; floating point makes it $78.19.
+    expect(laborDay(4.01, { ...rate, hourlyRate: 19.5, fringePercent: 0 }).regularCostCents).toBe(7820);
+    expect(equipmentCost(0.5, 0.585)).toBe(29);
+    const day = laborDay(8, { ...rate, hourlyRate: 25, fringePercent: 7.65 });
+    expect(day.regularCostCents).toBe(21530);
+    const labor: LaborRow[] = [{
+      personId: "p1", personName: "=HYPERLINK(\"http://x\")", jobTitle: "@clerk", date: "2026-09-20", sources: ["check_in"], ...day,
+      hourlyRate: 25, overtimeRate: 25, fringePercent: 7.65, overtimeFringePercent: 7.65,
+    }];
+    const summary: ForceAccountSummary = {
+      incidentId: "i1", timeZone: "UTC", labor, equipment: [], totals: forceAccountTotals(labor, []),
+      unratedPeople: [], unratedCodes: [], openCheckIns: [],
+    };
+    const [, line] = laborSummaryCsv(summary).split("\r\n");
+    // 8 h x $26.9125 = $215.30; a text cell that starts like a formula is kept as text.
+    expect(line).toBe(`"'=HYPERLINK(""http://x"")",'@clerk,2026-09-20,Regular,8.00,25.00,1.9125,26.9125,215.30`);
+  });
+
+  it("refuses a date that does not exist", () => {
+    expect(EquipmentHoursSchema.safeParse({ rateCode: "8010", usedOn: "2026-02-30", quantity: 1 }).success).toBe(false);
+    expect(EquipmentHoursSchema.safeParse({ rateCode: "8010", usedOn: "2028-02-29", quantity: 1 }).success).toBe(true);
   });
 
   it("reads amounts as FEMA prints them", () => {
@@ -71,7 +96,7 @@ describe("force account arithmetic", () => {
     }];
     const summary: ForceAccountSummary = {
       incidentId: "i1", timeZone: "America/Los_Angeles", labor, equipment, totals: forceAccountTotals(labor, equipment),
-      unratedPeople: [], unratedCodes: [],
+      unratedPeople: [], unratedCodes: [], openCheckIns: [],
     };
     expect(summary.totals).toEqual({ regularHours: 10, overtimeHours: 3.5, laborCents: 54825, equipmentCents: 34914, totalCents: 89739 });
     const laborLines = laborSummaryCsv(summary).trimEnd().split("\r\n");

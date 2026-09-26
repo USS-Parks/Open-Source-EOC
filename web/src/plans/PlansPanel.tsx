@@ -167,11 +167,13 @@ export function releaseLabel(minutes: number, kind: PlanKind): string {
 
 /**
  * The last activation's report, kept outside the component: activating the
- * first open incident makes the console select it, which remounts this
- * screen, possibly while the activation is still waiting for its answer, and
- * the report must survive that to be read. It is published to the panel
- * mounted when it arrives, and shown by any panel mounted for the same
- * jurisdiction within a minute of it, whichever side of the remount it lands.
+ * first open incident makes the console select it, and switching to it
+ * remounts this screen once or twice, possibly while the activation is still
+ * waiting for its answer, and the report must survive that to be read. Every
+ * panel of the jurisdiction mounted while it stands shows it and opens its
+ * incident's setup. It stands for a minute at most, and goes as soon as the
+ * operator dismisses it, activates again or opens another incident's setup,
+ * so it never overrides a choice of theirs.
  */
 interface ActivationReport { jurisdictionId: string; text: string; incidentId: string; name: string; at: number }
 let lastActivation: ActivationReport | null = null;
@@ -185,6 +187,12 @@ function publishActivation(report: ActivationReport): void {
 function recentActivation(jurisdictionId: string): ActivationReport | null {
   return lastActivation && lastActivation.jurisdictionId === jurisdictionId && Date.now() - lastActivation.at < 60_000
     ? lastActivation : null;
+}
+
+/** Let the last activation's report go: the operator chose something else. */
+export function clearActivationReport(): void {
+  lastActivation = null;
+  for (const listener of reportListeners) listener();
 }
 
 const toggle = (list: readonly string[], value: string, on: boolean): string[] =>
@@ -221,16 +229,22 @@ export function PlansPanel(props: {
   const onActivated = useRef(props.onActivated);
   onActivated.current = props.onActivated;
   useEffect(() => {
-    const take = () => {
+    let shown: string | null = null;
+    const show = () => {
       const report = recentActivation(props.jurisdictionId);
-      if (!report) return;
+      if (!report) {
+        // A report this panel showed and the operator let go is taken down.
+        if (shown) { shown = null; setNotice(""); setOpened(null); }
+        return;
+      }
+      shown = report.text;
       setNotice(report.text);
       setOpened({ incidentId: report.incidentId, name: report.name });
       onActivated.current?.(report.incidentId);
     };
-    take();
-    reportListeners.add(take);
-    return () => { reportListeners.delete(take); };
+    show();
+    reportListeners.add(show);
+    return () => { reportListeners.delete(show); };
   }, [props.jurisdictionId]);
   const templateKey = draft?.templateKey ?? reading?.definition.templateKey ?? "";
   const template = useAsync<IncidentTemplateDefinition | null>(
@@ -239,6 +253,8 @@ export function PlansPanel(props: {
   );
 
   const act = async (fn: () => Promise<string | void>) => {
+    // Another action here is the operator moving on from the last activation's report.
+    clearActivationReport();
     setBusy(true); setError(null); setNotice(""); setOpened(null);
     try {
       const done = await fn();
@@ -346,7 +362,7 @@ export function PlansPanel(props: {
                       onClick={() => { close(); setActivating({ plan, name: "", eventAt: "" }); setNotice(""); setError(null); }}>Activate</Button>
                     <Button label={`Edit ${plan.title}`} onClick={() => void edit(plan)} disabled={busy}>Edit</Button>
                     <Button label={`Versions of ${plan.title}`} onClick={() => void showHistory(plan)} disabled={busy}>Versions</Button>
-                    {plan.reviewDueAt ? <Button label={`Mark ${plan.title} reviewed`} onClick={() => void review(plan)} disabled={busy}>Mark reviewed</Button> : null}
+                    {plan.reviewDueAt ? <Button label={`Mark reviewed: ${plan.title}`} onClick={() => void review(plan)} disabled={busy}>Mark reviewed</Button> : null}
                   </> : null}
                 </div>
               </li>
@@ -417,7 +433,7 @@ export function PlansPanel(props: {
                   <span className="incidents-authority">Saved {formatTime(entry.savedAt)} {entry.savedBy ? `by ${entry.savedBy}` : ""}</span>
                 </div>
                 <div className="incidents-item-actions">
-                  <Button label={`Load version ${entry.version} into the editor`} onClick={() => void loadVersion(history.plan, entry)} disabled={busy}>
+                  <Button label={`Load into the editor: version ${entry.version}`} onClick={() => void loadVersion(history.plan, entry)} disabled={busy}>
                     Load into the editor
                   </Button>
                 </div>
@@ -516,9 +532,10 @@ export function PlansPanel(props: {
       ) : null}
       {error ? <ErrorNote message={error} /> : null}
       {notice ? <p role="status" className="eoc-note">{notice}</p> : null}
-      {opened && props.onSwitch ? (
+      {opened ? (
         <div className="incidents-actions">
-          <Button kind="primary" onClick={() => void props.onSwitch?.(opened.incidentId)}>Switch to {opened.name}</Button>
+          {props.onSwitch ? <Button kind="primary" onClick={() => void props.onSwitch?.(opened.incidentId)}>Switch to {opened.name}</Button> : null}
+          <Button onClick={clearActivationReport}>Dismiss</Button>
         </div>
       ) : null}
     </Panel>

@@ -18,7 +18,7 @@ import {
 } from "../../contacts/Audience.js";
 import { answersOf, audienceOf } from "../../contacts/model.js";
 import { IncidentTemplatesPanel } from "../../incidents/IncidentTemplatesPanel.js";
-import { IncidentPlanSection, PlansPanel } from "../../plans/PlansPanel.js";
+import { IncidentPlanSection, PlansPanel, clearActivationReport } from "../../plans/PlansPanel.js";
 import { IncidentCollaboration } from "../../integrations/collab.js";
 import { IncidentMeetings } from "../../integrations/meetings.js";
 import { useAsync } from "../data/hooks.js";
@@ -253,8 +253,8 @@ export function IncidentsSurface(props: {
                     </div>
                   </div>
                   <div className="incidents-item-actions">
-                    <Button onClick={() => { setSelectedIncident(i.id); setCloseCandidate(null); }}>Operational area</Button>
-                    <Button onClick={() => { setSelectedIncident(i.id); setCloseCandidate(null); }}>Participants</Button>
+                    <Button onClick={() => { clearActivationReport(); setSelectedIncident(i.id); setCloseCandidate(null); }}>Operational area</Button>
+                    <Button onClick={() => { clearActivationReport(); setSelectedIncident(i.id); setCloseCandidate(null); }}>Participants</Button>
                     {i.canManageParticipation && !i.closedAt ? <Button kind="danger" onClick={() => { setCloseCandidate(i.id); setReopenCandidate(null); }} disabled={busy}>Close incident</Button> : null}
                     {i.canManageParticipation && i.closedAt ? <Button onClick={() => { setReopenCandidate(i.id); setReopenReason(""); setCloseCandidate(null); }} disabled={busy}>Reopen incident</Button> : null}
                   </div>

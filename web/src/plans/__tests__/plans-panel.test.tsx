@@ -124,6 +124,16 @@ describe("executable plans on screen", () => {
     const elsewhere = render(<PlansPanel client={api} jurisdictionId="j2" isAdmin templates={templates} />);
     await elsewhere.findByText("Severe Storm Plan");
     expect(elsewhere.queryByText(/River Road Storm is activated/)).toBeNull();
+    elsewhere.unmount();
+    // It stands through a second remount, until the operator dismisses it.
+    const later = render(<PlansPanel client={api} jurisdictionId="j1" isAdmin templates={templates} />);
+    await later.findByText(/River Road Storm is activated from Severe Storm Plan/);
+    fireEvent.click(later.getByRole("button", { name: "Dismiss" }));
+    expect(later.queryByText(/River Road Storm is activated/)).toBeNull();
+    later.unmount();
+    const after = render(<PlansPanel client={api} jurisdictionId="j1" isAdmin templates={templates} />);
+    await after.findByText("Severe Storm Plan");
+    expect(after.queryByText(/River Road Storm is activated/)).toBeNull();
   });
 
   it("shows the report to the panel mounted when the activation answers, after a remount cut the first off", async () => {

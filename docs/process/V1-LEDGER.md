@@ -8848,3 +8848,64 @@ Veoci Integration and Air Gap PSPR unit VA15 (the rest of VC-11).
 - **Rollback:** revert the commit; templates holding a guard or read-only
   fields then fail to parse under the earlier schema, so remove those parts
   first.
+
+## Veoci and air gap VA13 and VA14 corrections: review findings
+
+A read-only review of the VA13 and VA14 commits (`1b3f948`, `c53e9b4`) found
+the defects below; this entry corrects "Veoci and air gap VA13: executable
+plans" and "Veoci and air gap VA14: Public Assistance force account".
+
+- **VA14's claim that viewers do not read wage rates was untrue.** Saving a
+  labor rate wrote the rates into the audit payload, which the chronology
+  shows to every member, viewers included. The audit now records the job
+  title only.
+- **Overlapping check-ins were counted twice.** A person may hold open
+  check-ins on two positions at once; the labor query summed both. A
+  person's check-ins and uncovered shifts are now merged where they overlap
+  before they are cut into days.
+- **An open check-in hid the person's shifts.** Only closed check-ins now
+  cover a shift, and the summary names who is still checked in
+  (`openCheckIns`), shown on the panel. A shift partly covered by a closed
+  check-in is still left out: the check-ins are the record where they exist.
+- **One force account could be rolled into two line items**, counting it
+  twice. The roll-up now refuses an item when another already carries the
+  incident's force account, under a per-incident lock. A hand edit of a
+  rolled-up item's cost or incident clears its `force_account`, and the line
+  item list returns `force_account_at`, shown as **Cost from** on the Public
+  Assistance tab.
+- **A person with hours but no membership could not be rated**, blocking the
+  roll-up. A labor rate may now be set for anyone with a membership,
+  check-in or shift in the jurisdiction.
+- **Cents.** Costs are computed in exact integer arithmetic at the stored
+  precisions and rounded half up ($78.195 is $78.20), and the labor summary
+  shows rates to the ten-thousandth when they carry more, so each line is its
+  hours times the rate shown. The FEMA-format files escape a text cell that
+  starts like a spreadsheet formula.
+- **Time zones and dates.** The summary takes only time zone names the
+  database knows (an offset such as `+05:30` reads with its sign reversed in
+  PostgreSQL) and refuses a date that does not exist (`2026-02-30`), both as
+  400 rather than a wrong cut or a 500.
+- **Plans.** The review due date shown is now the database's own expression,
+  the one the reminder uses; the reminder names the due time in UTC. The
+  activation report stands, and keeps its incident's setup open, until the
+  operator dismisses it, activates again, opens another incident's setup or
+  a minute passes, rather than returning on every mount for a minute. Two
+  buttons' accessible names now contain their visible text (**Mark
+  reviewed**, **Load into the editor**).
+- **Tests.** `force-account.test.ts` gains a case with two overlapping
+  check-ins counted once, an open check-in and a shift on the same day,
+  a rate for a person whose membership ended, the audit payload, refused
+  time zones and date, the second roll-up refused and allowed after a hand
+  edit; the shared test gains half-up rounding, a line that adds up at a
+  7.65 percent fringe, a formula cell escaped and a date that does not
+  exist; the panel tests gain the open check-in note and the report's
+  dismissal.
+- **Verification.** `pnpm check:static` exit 0; 13 files, 80 tests green:
+  the shared force account, force account, plans, damage and Public
+  Assistance tests, the damage and plans panels, the incident screen, and
+  the force account, plans and damage browser tests. The plans browser file
+  failed one of three runs while lane agents loaded the shared cluster, at a
+  sign-in that never answered; lanes and this session now run with
+  `OPENEOC_TEST_DB_TAG`, since an untagged run's teardown drops other runs'
+  test databases.
+- **Rollback:** revert the commit.

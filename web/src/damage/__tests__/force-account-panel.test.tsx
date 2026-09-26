@@ -22,6 +22,7 @@ const summary: ForceAccountSummary = {
   totals: { regularHours: 12, overtimeHours: 3.5, laborCents: 47325, equipmentCents: 34914, totalCents: 82239 },
   unratedPeople: [{ personId: "p2", personName: "Sam Shift" }],
   unratedCodes: [],
+  openCheckIns: [],
 };
 
 function client() {
@@ -121,6 +122,14 @@ describe("force account on screen", () => {
       edition: "FEMA 2019", source: "fema",
       rows: [expect.objectContaining({ code: "8010", rate: 1.62 }), expect.objectContaining({ code: "8011", capacity: "103 CFM", rate: 9.86 })],
     }));
+  });
+
+  it("names people still checked in, whose time is not counted yet", async () => {
+    const api = client();
+    api.forceAccount.mockResolvedValue({ ...summary, openCheckIns: [{ personId: "p3", personName: "Pat Planner", since: "2026-09-21T15:00:00Z" }] });
+    const { view } = show(api);
+    const notes = await view.findAllByRole("note");
+    expect(notes[0]!.textContent).toMatch(/^Still checked in, and not counted until they check out: Pat Planner since /);
   });
 
   it("leaves rates to administrators", async () => {
