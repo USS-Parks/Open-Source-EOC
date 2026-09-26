@@ -14787,3 +14787,44 @@ need records to draw), built in lane `lane/mpd`.
 - **Full suite:** the second landing batch's run, recorded below.
 - **Rollback.** Revert the commit; migration 0171 only adds nullable
   columns and indexes.
+
+## Map and dashboard parity MP14: finding the dashboards
+
+Map and Dashboard Parity PSPR unit MP14, built in lane `lane/mp14` and
+landed as `dc3619be`; this receipt followed in its own commit because the
+integrator's amend ran without it.
+
+- **What there was before.** The six screen dashboards (Tasks, IAP,
+  Resources, AAR, Shelters, Damage Assessment) sat behind "Show every
+  section" in Settings, and a screen always reopened on its first tab.
+- **What changed.**
+  - The desktop demo profile, and no other profile or host, sets
+    `OPENEOC_DEMO_ALL_SECTIONS=1` (`deploy/windows/desktop.mjs`,
+    `config.ts` `demoAllSections()`, which counts only on synthetic data).
+    With it, "Show every section" is the default until the person chooses
+    in Settings; a stored choice wins and is kept (`Console.tsx`
+    `readAllSections()`).
+  - The Dashboards section gains a "Screen dashboards" row linking to the
+    six dashboards above its saved-dashboard list; Shelters shows when the
+    incident has a shelters board.
+  - `Tabs` in `web/src/design/controls.tsx` remembers, for the browser
+    tab's session, whether a tablist with a "Dashboard" tab was left on it,
+    and reopens it there; `openOnDashboard()` serves the links.
+- **Defaults taken and deviations.** The memory is session storage only,
+  and only the Dashboard choice is restored. `design/controls.tsx` was
+  outside the lane's file list: every screen's tab state is local to
+  surfaces other lanes own, and all six Dashboard tabs go through the one
+  `Tabs` component; no lane in flight touched it. One line of
+  `Console.tsx` was edited by `sed` against the write protocol; the diff
+  was checked.
+- **Verification.** The new unit tests (6), the Tasks, Resources, IAP,
+  AAR, Damage, dashboards, design and layout suites (36 files, 358
+  tests), `pnpm test:desktop` 46 of 46, `pnpm check:static` green, and
+  the browser walks `fidelity-browser`, `incident-dashboards-browser`,
+  `board-dashboards-browser` and the new `find-dashboards-browser`: from a
+  demo sign-in with no stored rail choice, at 1586 by 992 and 1534 by
+  790, every Dashboard tab is reached without opening Settings, with no
+  page errors and no outside requests.
+- **Full suite:** the second landing batch's run, recorded below.
+- **Rollback.** Revert the commit; without the flag the rail shows the
+  frames' twelve sections again.
