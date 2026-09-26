@@ -12532,3 +12532,176 @@ results have a place in `RELEASE-DECISION.md` section 6.
   release decision's open decisions, since VA28's lane named them as
   questions for Basho. VA33 and VA34, still in flight, and the plan-end
   gate's results are added when they land and run, under this unit.
+
+## Veoci and air gap follow-up: sync edits set board actions off
+
+Carried from "Veoci and air gap VA25: declarative action catalog", whose
+Landing left the sync hub's loop over committed changes to call
+`runBoardActions` once "Veoci and air gap VA22: field breadth" landed.
+
+- **What the code did before.** A record created or changed through the sync
+  hub (a device's live edit, an offline edit delivered on reconnect, a late
+  submission accepted) was checkpointed to its row and queued its
+  notification rules, but ran none of the board's declared actions, which a
+  REST create or edit runs in its transaction as the writer. A board whose
+  action stamps a field or opens a follow-up behaved differently for the same
+  change depending on whether it came from the screen or a field device.
+- **What changed** (`server/src/sync/hub.ts`).
+  - After the checkpoint, the hub's own log row and the notifications, the
+    hub runs `runBoardActions` for each committed record, in the same
+    transaction, as the person whose update it is: `record_created` for a
+    new record, `field_changed` with the fields the write changed, computed
+    as the REST edit route does (`changedFields` of the stored row and the
+    written data), so an action watching a field the device's whole-document
+    update did not change is not set off. Chains, conditions, refusals,
+    savepoints, the audit of each run and the actor's authority are the
+    runner's, unchanged.
+  - **The live document.** An action writes through `updateRecord` and
+    `createRecord`, which append to the log with `appendRecordWrite` in this
+    transaction and fold the update into the open documents after commit
+    (`foldRecordWrite`, from `afterCommit`). The hub used to install the
+    document it built in the transaction, and relay the device's update,
+    only after `withPerson` returned, which is after those folds: an action's
+    write would have been folded into the document about to be replaced,
+    lost from the warm document (a later open served the value it replaced)
+    and sent to devices before the edit that set it off. The hub now
+    registers its install (the new document, `throughSeq`, the relay of the
+    device's update) with `afterCommit` before the actions run, so on commit
+    it is installed first and each action's write then folds into it and
+    reaches every subscriber after the edit. Nothing is applied twice: the
+    write is in the log once, and each open document takes it once, by the
+    fold.
+  - **`throughSeq` and snapshots.** The installed document's `throughSeq`
+    stays the hub's own row; the actions' rows come after it and are already
+    in the document. A snapshot written from it claims only through the
+    hub's row, so a later hydrate replays the actions' rows again, which Yjs
+    ignores. Nothing is lost if a snapshot is written at that moment.
+  - **Both scopes.** The actions' writes are REST writes: a field incident
+    documents show goes under the incident and folds into the incident's and
+    the board-wide document; any other field goes to the board-wide log
+    alone; a linked record on another board folds into that board's open
+    documents. A jurisdiction record's write is queued for federation as a
+    REST write's is.
+  - **Locks.** Every service call runs on the hub's transaction, so the
+    advisory locks it takes again (the board's, the scope's sync writer's)
+    are the session's own and cannot deadlock with it. On an incident scope
+    the hub now takes the incident's lock before the board's, the order
+    `writableBoard` and `updateRecord` take them; before, an action's write
+    would have taken the incident after the board, the reverse of every REST
+    create and edit on that incident.
+  - **Loop protection.** An action's write reaches devices as a server update
+    and is never applied through `apply()`. A device that merged it and sends
+    its whole document back (as the field client's queue does) changes
+    nothing in the hub's document, so no record is committed and nothing
+    runs; a later edit carrying it sets off only the fields it changed. An
+    action that writes the field that set it off is stopped in its own chain
+    by the runner, as over REST. A queued operation replayed with its
+    operation id is answered from the log before hydration, so its actions
+    run once.
+  - `docs/guides/DESIGNER.md`: edits through sync, including an offline edit
+    when its device reconnects, set actions off once, as the person who made
+    them; form submissions, imports and records from a federation peer do
+    not.
+- **Files outside the "Owns" cell.** None. The new test is
+  `server/src/__tests__/sync-actions.test.ts`.
+- **Decisions and deviations.**
+  - No change in `server/src/boards/**`. The runner needs no flag telling it
+    it is inside the hub: the ordering is fixed in the hub by registering its
+    install first, and loop protection comes from the merge (an echoed write
+    changes nothing) and the chain.
+  - An update from a federation peer (origin `federation:`, the live push and
+    the file exchange alike) sets no action off, as VA25 decided for
+    federation ingestion: the peer's actions ran where the record was
+    written and their writes arrive as updates of their own; running them
+    again here would stamp twice or open a second follow-up.
+  - Actions run after the hub's own log row, so the log holds the edit before
+    the writes it set off, and after all the update's notifications (a REST
+    write notifies, then runs actions, for its one record).
+  - A late submission's actions run when an administrator accepts it, as its
+    sender, not while it is held.
+  - A writer a record rule restricts is served no records and follows no
+    updates (VA22); the actions its edits set off run as it, and it sees
+    their writes only where the board's views show them.
+- **Found, not fixed.**
+  - `loadWorkflowForWrite` (`server/src/boards/workflow-runtime.ts`) takes the
+    board's lock, and an action the transition sets off takes the incident's
+    through `updateRecord` or `createRecord`: the reverse of REST creates and
+    edits and now of the hub on an incident scope. A jurisdiction-wide sync
+    edit of an incident's record whose action writes takes them in the same
+    reverse order. Two such writes crossing one incident and board can
+    deadlock; PostgreSQL detects it and aborts one transaction (a REST 500,
+    or a failed sync apply the device sends again). Taking the incident's
+    lock first in `loadWorkflowForWrite` when the record has one would close
+    the first.
+  - A warm board-wide document does not take an incident-scoped sync edit
+    (only its next apply or a rebuild after it idles out does). The write of
+    an action set off by an incident sync edit does fold into it, so a
+    board-wide subscriber can see that record with only the action's field
+    until the document is rebuilt. REST edits of such records already did
+    this; actions make it more frequent. Folding incident updates into the
+    board-wide document needs that document's missing history first.
+- **Air-gap behavior (decision 9).** No network path is added or changed;
+  actions run inside the server's sync transaction. Internet cut with the LAN
+  up, and a permanent isolated enclave: devices sync with the EOC host on the
+  LAN and their edits set actions off there; notices are in-app and rules
+  queue in the outbox as before. A device with no network: its edits wait in
+  its queue and set the actions off once when they are delivered, and the
+  actions' writes reach the device on that sync. Data carried on media:
+  federation files are applied as a peer's updates and set no action off, as
+  before.
+- **Schema, contract and dependencies.** None.
+- **Tests.** `sync-actions.test.ts` (5, real database, WebSocket devices on
+  the app's sync route):
+  - a record created through an exact incident update gets the field its
+    create action sets in its row; the run is recorded once, as the member;
+    the other connected device hears the edit and then the action's write;
+    the sending device hears the write; the log alone rebuilds it, a fresh
+    hub's hydrate serves it and a later open of the warm document shows it;
+  - a whole-document update that changes only the status runs the status
+    actions (stamp and linked record) and not the note's; the linked record
+    on the incident's other board is created with the summary copied and its
+    own create action run one step deeper in the chain; the stamp reaches
+    both devices, the linked record reaches a device on the other board,
+    and a later open of the warm document serves the action's value, not the
+    one it replaced;
+  - an action that writes the field that set it off runs once and is stopped
+    in its chain; both devices, holding every action's write, send their
+    whole documents back and no action runs; a later edit of the note runs
+    only the note's action;
+  - an offline edit queued under one operation id and queue time, sent, sent
+    again on the same connection and again after reconnecting, gets the same
+    answer and runs its actions once, with one follow-up;
+  - a jurisdiction-wide live edit runs the create action (row, both devices,
+    log), and a federation peer's update through the hub runs none.
+  Against the original hub all 5 fail (no action runs). With the actions run
+  but the document installed after `withPerson` as before, 2 fail: the other
+  device hears the action's write before the edit, and a later open serves
+  "not yet" for a field the action set to "confirmed".
+- **Verification.** On the Windows test bed, PostgreSQL 16.15 with PostGIS
+  3.6.2 on 127.0.0.1:55440, `OPENEOC_TEST_DB_TAG=syncact`:
+  - `pnpm check:static`: exit 0 (tsc, eslint, license scan 339 packages,
+    links 127 files).
+  - `rtk proxy npx vitest run` over sync actions, sync, record sync, field
+    breadth, board actions, board conditions, sync hub lifecycle, continuity
+    sync, board engine, sync guest withdrawal, federation, federation
+    batches, federation file exchange, federation identity, board workflow,
+    workflow guards, workflow runtime, boards, incident board scope and
+    notify: 20 files, 122 tests, 121 passed, 1 red: `federation-batches`
+    "holds a backlog through a 24-hour partition" drained 151 of 310 entries
+    under the parallel run (a batch push has a 10 second timeout and the
+    receiver applies each update through the hub, which skips actions for a
+    peer's update). It passed alone, 3 of 3, as the ledger records for the
+    same test in two earlier phase runs.
+  - `load.test.ts` serially (`--maxWorkers=1`): 4 of 4.
+- **Not run.** A browser test: nothing new is drawn; the values the devices
+  receive are what the socket tests assert. The full `pnpm check`, left to
+  CI.
+- **Evidence level:** real-database tests.
+- **Rollback:** revert the commit. No migration.
+- **Landing.** Rebased onto "Veoci and air gap VA36: the documents
+  reconciled" with no conflict. The lock order it found in
+  `loadWorkflowForWrite` is fixed next, in its own commit. On main with
+  `OPENEOC_TEST_DB_TAG=syncact`: `pnpm check:static` exit 0; 12 files, 80
+  tests green (sync actions, sync, the hub's lifecycle, guest withdrawal,
+  record sync, continuity sync, field breadth, board actions, board
+  conditions, board engine, workflow guards, federation).

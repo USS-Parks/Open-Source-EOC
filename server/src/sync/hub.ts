@@ -3,8 +3,9 @@ import { isDeepStrictEqual } from "node:util";
 import * as Y from "yjs";
 import { buildRecordSchema } from "@openeoc/shared";
 import type { Sql } from "../db/client.js";
-import { withPerson } from "../db/context.js";
+import { afterCommit, withPerson } from "../db/context.js";
 import { AuthError, type Principal } from "../auth/service.js";
+import { changedFields, runBoardActions } from "../boards/actions.js";
 import {
   geomExpr,
   getEffectiveBoard,
@@ -23,7 +24,7 @@ import { onRecordWritten, type RecordWrite } from "../boards/record-sync.js";
 import { recordAudit } from "../audit/service.js";
 import { notifyBoardEvent, type BoardEvent } from "../notify/engine.js";
 import { onBoardEvent, publishBoardEvent } from "../events/bus.js";
-import { getIncidentAuthority } from "../incidents/participation.js";
+import { getIncidentAuthority, lockIncidentMutation } from "../incidents/participation.js";
 import { priorLateSubmission, recordLateSubmission } from "./late.js";
 
 /**
@@ -47,7 +48,9 @@ export class RestrictedBoardError extends AuthError {
  * under the originating principal, validated against the board schema; a
  * record the schema refuses becomes a visible conflict, never a silent loss.
  * A record written over REST reaches the log as a server-authored update
- * (boards/record-sync.ts) and is folded into open documents from there.
+ * (boards/record-sync.ts) and is folded into open documents from there. Each
+ * checkpointed record sets off its board's actions (VC-17) as a REST write
+ * would; their writes are REST writes and reach the documents the same way.
  */
 
 interface HubEntry {
@@ -330,17 +333,17 @@ export class BoardSyncHub {
     const digest = context ? syncDigest(actor.person.id, boardId, context, update) : null;
     let outcome: {
       board: EffectiveBoard;
-      doc: Y.Doc | null;
-      hydrated: HydratedDoc | null;
       before: Map<string, Record<string, unknown>>;
       after: Map<string, Record<string, unknown>>;
-      committed: Array<{ recordId: string; existing: boolean }>;
+      committed: Committed[];
       result: ApplyResult;
       replay: boolean;
-      effective: Uint8Array | null;
     };
     try {
       outcome = await withPerson(this.sql, actor.person.id, async (tx) => {
+        // The incident first, then the board, the order REST writes take them:
+        // an action below writes through the same service calls.
+        if (incidentId) await lockIncidentMutation(tx, incidentId);
         await lockBoardMutation(tx, boardId);
         const board = context
           ? { ...(await getIncidentBoardReadShape(tx, actor, context.incidentId, boardId)), role: "member" as const }
@@ -354,14 +357,11 @@ export class BoardSyncHub {
           if (!attached) throw new AuthError(409, "board is not attached to this incident");
           const replayed = (result: ApplyResult) => ({
             board,
-            doc: null,
-            hydrated: null,
             before: new Map(),
             after: new Map(),
             committed: [],
             result,
             replay: true,
-            effective: null,
           });
           const [prior] = await tx`
             select board_id, incident_id, request_digest, seq, conflicts
@@ -432,25 +432,37 @@ export class BoardSyncHub {
         for (const c of checkpoint.committed) {
           await notifyBoardEvent(tx, actor, boardEventFor(board, c, before, after));
         }
+        // Registered before the actions run, so it is the first thing done on
+        // commit: an action's write is appended to the log in this transaction
+        // and folded into the open documents after commit (foldRecordWrite),
+        // and it must land on this doc, not the one it replaces, and reach
+        // subscribers after the update that set it off.
+        const throughSeq = Number(row!.seq);
+        afterCommit(tx, () => this.install(entry, board, doc, throughSeq, hydrated.sinceSnapshot + 1,
+          effective, originSession));
+        // A record written through sync sets off its board's actions as a REST
+        // create or edit does, as the same person (VC-17). A federation peer's
+        // update does not: its own actions ran where it was written, and their
+        // writes arrive here as updates of their own.
+        if (!originSession.startsWith(FEDERATION_ORIGIN)) {
+          for (const c of checkpoint.committed) {
+            await runBoardActions(tx, actor, c.existing
+              ? { kind: "field_changed", boardId, recordId: c.recordId, fields: c.fields }
+              : { kind: "record_created", boardId, recordId: c.recordId });
+          }
+        }
         return {
           board,
-          doc,
-          hydrated: {
-            doc,
-            throughSeq: Number(row!.seq),
-            sinceSnapshot: hydrated.sinceSnapshot + 1,
-          },
           before,
           after,
           committed: checkpoint.committed,
           result: {
             operationId: context?.operationId ?? null,
-            seq: Number(row!.seq),
+            seq: throughSeq,
             conflicts: checkpoint.conflicts,
             exact: context !== null,
           },
           replay: false,
-          effective,
         };
       });
     } catch (error) {
@@ -460,25 +472,41 @@ export class BoardSyncHub {
       throw error;
     }
     if (outcome.replay) return outcome.result;
-    const previous = entry.doc;
-    entry.board = outcome.board;
-    entry.doc = outcome.doc!;
-    entry.templateVersion = outcome.board.template.version;
-    entry.throughSeq = outcome.hydrated!.throughSeq;
-    entry.sinceSnapshot = outcome.hydrated!.sinceSnapshot;
-    // The doc and every projection taken from it are now stale.
-    entry.encoded = null;
-    entry.rows.clear();
-    if (previous !== entry.doc) previous.destroy();
     if (entry.sinceSnapshot >= this.snapshotThreshold) {
       await this.writeSnapshot(actor, boardId, incidentId, entry);
     }
-    const relayed = outcome.effective;
-    if (relayed) for (const fn of entry.subscribers) fn(relayed, originSession);
     for (const c of outcome.committed) {
       publishBoardEvent(boardEventFor(outcome.board, c, outcome.before, outcome.after));
     }
     return outcome.result;
+  }
+
+  /**
+   * Make a committed apply's doc the entry's, then send the update it made to
+   * the subscribers under its sender's session. The doc was hydrated in the
+   * committing transaction under the board's lock, so it holds every earlier
+   * write to its scope.
+   */
+  private install(
+    entry: HubEntry,
+    board: EffectiveBoard,
+    doc: Y.Doc,
+    throughSeq: number,
+    sinceSnapshot: number,
+    effective: Uint8Array | null,
+    originSession: string,
+  ): void {
+    const previous = entry.doc;
+    entry.board = board;
+    entry.doc = doc;
+    entry.templateVersion = board.template.version;
+    entry.throughSeq = throughSeq;
+    entry.sinceSnapshot = sinceSnapshot;
+    // The doc and every projection taken from it are now stale.
+    entry.encoded = null;
+    entry.rows.clear();
+    if (previous !== doc) previous.destroy();
+    if (effective) for (const fn of entry.subscribers) fn(effective, originSession);
   }
 
   /**
@@ -534,8 +562,8 @@ export class BoardSyncHub {
     state: Map<string, Record<string, unknown>>,
     before: Map<string, Record<string, unknown>>,
     incidentId: string | null,
-  ): Promise<{ conflicts: number; committed: Array<{ recordId: string; existing: boolean }> }> {
-    const committed: Array<{ recordId: string; existing: boolean }> = [];
+  ): Promise<{ conflicts: number; committed: Committed[] }> {
+    const committed: Committed[] = [];
     let conflicts = 0;
     const schema = buildRecordSchema(board.fields);
     // Missing required fields may still be in flight from another client.
@@ -644,7 +672,9 @@ export class BoardSyncHub {
             : { board: board.template.key, via: "sync", data: parsed.data },
           ...(incidentId ? { incidentId } : {}),
         });
-        committed.push({ recordId, existing: Boolean(existing) });
+        // As the REST edit route computes them, so a field_changed action
+        // hears the same fields whichever path the edit took.
+        committed.push({ recordId, existing: Boolean(existing), fields: changedFields(prior, parsed.data) });
     }
     return { conflicts, committed };
   }
@@ -751,6 +781,13 @@ interface HydratedDoc {
   readonly doc: Y.Doc;
   readonly throughSeq: number;
   readonly sinceSnapshot: number;
+}
+
+/** A record an update wrote to its row, with the fields that changed. */
+interface Committed {
+  readonly recordId: string;
+  readonly existing: boolean;
+  readonly fields: string[];
 }
 
 /** Encoded state of an entry's doc, computed once per change. */
@@ -958,7 +995,7 @@ export async function appendRecordRemoval(tx: Sql, boardId: string, recordId: st
 
 function boardEventFor(
   board: EffectiveBoard,
-  c: { recordId: string; existing: boolean },
+  c: Committed,
   before: Map<string, Record<string, unknown>>,
   after: Map<string, Record<string, unknown>>,
 ): BoardEvent {

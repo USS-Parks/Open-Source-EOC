@@ -118,8 +118,11 @@ in place. An action's write can set off other actions, on this board or the
 one it wrote to; that chain stops an action that already ran in it, and any
 action more than five deep. The record's **Change history** names the action
 on each write it made and records every run, done, refused or stopped, with
-the reason. Offline edits that arrive through sync, form submissions and
-imports do not set actions off. The template stores these as `actions`, each
+the reason. Edits that arrive through sync set actions off as edits on screen
+do, as the person who made them, including an offline edit when its device
+reconnects, once however often the device sends it. Form submissions,
+imports and records received from a federation peer do not. The template
+stores these as `actions`, each
 with `key`, `label`, `trigger`, an optional `condition` (`match`,
 `conditions`) and `step`.
 
