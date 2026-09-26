@@ -79,6 +79,22 @@ describe("BoardSurface record context seam", () => {
     await waitFor(() => expect(onRecordContext).toHaveBeenLastCalledWith({ status: "missing" }));
   });
 
+  it("keeps the record context through a refresh and clears it when the board closes", async () => {
+    const onRecordContext = vi.fn<(state: BoardRecordContext | null) => void>();
+    const ready = expect.objectContaining({ status: "ready" });
+    const view = render(<BoardSurface client={client()} boardId="board-1" incidentId="incident-1"
+      incidentScoped recordId="record-1" onRecordContext={onRecordContext} />);
+    await waitFor(() => expect(onRecordContext).toHaveBeenLastCalledWith(ready));
+    onRecordContext.mockClear();
+    // A new client reads the record again, as a save does; the pane is never told the record is gone.
+    view.rerender(<BoardSurface client={client()} boardId="board-1" incidentId="incident-1"
+      incidentScoped recordId="record-1" onRecordContext={onRecordContext} />);
+    await waitFor(() => expect(onRecordContext).toHaveBeenLastCalledWith(ready));
+    expect(onRecordContext).not.toHaveBeenCalledWith(null);
+    view.unmount();
+    expect(onRecordContext).toHaveBeenLastCalledWith(null);
+  });
+
   it("reads the next page under the same refinement", async () => {
     const api = client();
     const boardViewPage = vi.fn((_boardId: string, _viewKey: string, _query: unknown, page: { cursor?: string } = {}) =>

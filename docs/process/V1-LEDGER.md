@@ -11091,3 +11091,26 @@ package.
   keys on a Windows install" with no conflict and no migration. On main:
   `pnpm check:static` exit 0; the same 4 files, 16 of 16, with
   `OPENEOC_TEST_DB_TAG=va29`.
+
+## Veoci and air gap follow-up: the record pane keeps its tab through a save
+
+Found by "Veoci and air gap VA25: declarative action catalog", whose browser
+test had to wait out the flicker.
+
+- **What the code did before.** The board screen publishes the selected
+  record to the console's record pane, and the effect that did so cleared it
+  in its cleanup on every rerun. Each refresh of the record (after a save,
+  an action or a workflow step) therefore cleared the context, unmounted the
+  pane and mounted it again, so a person on **Change history** was put back
+  on **Record** and the pane blinked "Loading record context".
+- **What changed.** `web/src/app/surfaces/BoardSurface.tsx` clears the
+  context only when the record changes or the board closes, in an effect of
+  its own; a refresh replaces it in place.
+- **Tests.** `board-record-context.test.tsx` gains a case (4 tests): a
+  reread of the record never reports it gone, and closing the board clears
+  it. It fails without the change.
+- **Verification.** `pnpm check:static` exit 0; 39 files, 263 tests green
+  (every app screen test, every board test, and the board actions and board
+  records browser tests).
+- **Evidence level:** component tests and browser tests.
+- **Rollback:** revert the commit.

@@ -204,6 +204,10 @@ export function BoardSurface(props: {
     : Promise.resolve({ entries: [], nextCursor: null }),
   [incidentViewId, props.boardId, props.client, props.recordId]);
 
+  // Cleared when the record changes or the board closes, not on each refresh:
+  // a refresh that cleared it would unmount the record pane and lose its tab.
+  const { onRecordContext } = props;
+  useEffect(() => () => onRecordContext?.(null), [onRecordContext, props.recordId]);
   useEffect(() => {
     if (!props.recordId) {
       props.onRecordContext?.(null);
@@ -251,7 +255,6 @@ export function BoardSurface(props: {
       },
       history: loadHistory,
     });
-    return () => props.onRecordContext?.(null);
   }, [archiveRecord, board.data, deleteRecord, detail.data, detail.loading, downloadAttachment, editRecord, loadFile, loadHistory, props.boardId, props.client, props.onRecordContext, props.recordId, resources.data, resources.loading, session.jurisdictionId, session.me]);
 
   if (board.loading && !board.data) return <Loading label="Loading board…" />;
