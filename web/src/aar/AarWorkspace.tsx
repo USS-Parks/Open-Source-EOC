@@ -9,6 +9,7 @@ import {
   type AarActionPriority,
   type AarActionStatus,
   type AarObservation,
+  type PlanSummary,
   type WorkflowAssignmentRequest,
 } from "@openeoc/shared";
 import type { AarAnalyticsResponse, ApiClient, CorrectiveAction } from "../app/api/client.js";
@@ -43,6 +44,38 @@ interface AarWorkspaceProps {
 
 function selectAssignment(options: readonly AarOwnerOption[], value: string): WorkflowAssignmentRequest | undefined {
   return options.find((option) => option.value === value)?.assignment;
+}
+
+interface PlanChoice {
+  readonly plans: readonly PlanSummary[];
+  readonly client: Pick<ApiClient, "getPlan">;
+}
+
+/** The plan, and a section of it, an action changes. A section renamed since stays listed as it was linked. */
+function PlanPicker(props: PlanChoice & {
+  readonly planId: string;
+  readonly section: string;
+  readonly disabled?: boolean;
+  readonly onChange: (planId: string, section: string) => void;
+}) {
+  const client = props.client;
+  const detail = useAsync(() => props.planId ? client.getPlan(props.planId) : Promise.resolve(null), [client, props.planId]);
+  const sections = detail.data?.id === props.planId ? detail.data.definition.sections.map((item) => item.title) : [];
+  if (props.section && !sections.includes(props.section)) sections.push(props.section);
+  return (
+    <>
+      <label>Plan to update<select disabled={props.disabled} value={props.planId}
+        onChange={(event) => props.onChange(event.target.value, "")}><option value="">No plan</option>
+        {props.plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</select></label>
+      <label>Plan section<select disabled={props.disabled || !props.planId} value={props.section}
+        onChange={(event) => props.onChange(props.planId, event.target.value)}><option value="">Whole plan</option>
+        {sections.map((title) => <option key={title} value={title}>{title}</option>)}</select></label>
+    </>
+  );
+}
+
+function planLink(planId: string, section: string): { id: string; section: string | null } | null {
+  return planId ? { id: planId, section: section || null } : null;
 }
 
 function AnalyticsPanel(props: {
@@ -127,7 +160,7 @@ function ObservationForm(props: {
   );
 }
 
-function ActionForm(props: {
+function ActionForm(props: PlanChoice & {
   readonly source: AarObservation | null;
   readonly owners: readonly AarOwnerOption[];
   readonly periodRevision: number | undefined;
@@ -141,6 +174,7 @@ function ActionForm(props: {
     dueDate?: string;
     assignment?: WorkflowAssignmentRequest;
     periodRevision?: number;
+    plan?: { id: string; section: string | null };
   }) => Promise<boolean>;
 }) {
   const [capability, setCapability] = useState(props.source?.capability ?? CAPABILITIES[0] ?? "");
@@ -149,6 +183,7 @@ function ActionForm(props: {
   const [priority, setPriority] = useState<AarActionPriority>("unspecified");
   const [dueDate, setDueDate] = useState("");
   const [owner, setOwner] = useState("");
+  const [plan, setPlan] = useState({ id: "", section: "" });
   useEffect(() => {
     if (!props.source) return;
     setCapability(props.source.capability);
@@ -159,6 +194,7 @@ function ActionForm(props: {
     event.preventDefault();
     if (!capability || !recommendation.trim()) return;
     const assignment = selectAssignment(props.owners, owner);
+    const link = planLink(plan.id, plan.section);
     void props.onSave({
       capability,
       capabilityElement: element,
@@ -167,11 +203,13 @@ function ActionForm(props: {
       ...(dueDate ? { dueDate } : {}),
       ...(assignment ? { assignment } : {}),
       ...(props.periodRevision !== undefined ? { periodRevision: props.periodRevision } : {}),
+      ...(link ? { plan: link } : {}),
     }).then((saved) => {
       if (saved) {
         setRecommendation("");
         setDueDate("");
         setOwner("");
+        setPlan({ id: "", section: "" });
         setPriority("unspecified");
         props.onCancelSource();
       }
@@ -193,6 +231,8 @@ function ActionForm(props: {
         <label>Owner<select value={owner} onChange={(event) => setOwner(event.target.value)}><option value="">Unassigned</option>
           {props.owners.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
         <label>Due date<input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label>
+        <PlanPicker plans={props.plans} client={props.client} planId={plan.id} section={plan.section}
+          onChange={(id, section) => setPlan({ id, section })} />
       </div>
       <label>Corrective action<textarea required rows={4} value={recommendation} onChange={(event) => setRecommendation(event.target.value)} /></label>
       <ActionButton kind="primary" type="submit" loading={props.busy} loadingLabel="Creating action…">Create corrective action</ActionButton>
@@ -200,7 +240,11 @@ function ActionForm(props: {
   );
 }
 
-function ActionRow(props: {
+function linkedPlan(action: CorrectiveAction): { id: string; section: string } {
+  return { id: action.plan?.id ?? "", section: action.plan?.section ?? "" };
+}
+
+function ActionRow(props: PlanChoice & {
   readonly action: CorrectiveAction;
   readonly owners: readonly AarOwnerOption[];
   readonly busy: boolean;
@@ -210,6 +254,7 @@ function ActionRow(props: {
     assignment?: WorkflowAssignmentRequest | null;
     dueDate?: string | null;
     status?: AarActionStatus;
+    plan?: { id: string; section: string | null } | null;
   }) => Promise<void>;
   readonly onRefresh: (id: string) => void;
 }) {
@@ -217,6 +262,8 @@ function ActionRow(props: {
   const [priority, setPriority] = useState<AarActionPriority>(props.action.priority);
   const [dueDate, setDueDate] = useState(props.action.dueDate ?? "");
   const [owner, setOwner] = useState(() => assignmentValue(props.action.assignment));
+  const [plan, setPlan] = useState(() => linkedPlan(props.action));
+  const baselinePlan = useRef(linkedPlan(props.action));
   const actionAtRevision = useRef(props.action);
   const baselineRevision = useRef(props.action.revision);
   const baselineOwner = useRef(assignmentValue(props.action.assignment));
@@ -233,6 +280,8 @@ function ActionRow(props: {
     setPriority(action.priority);
     setDueDate(action.dueDate ?? "");
     setOwner(nextOwner);
+    baselinePlan.current = linkedPlan(action);
+    setPlan(linkedPlan(action));
   }, [props.action.id, props.action.revision]);
   const save = () => {
     const body: Parameters<typeof props.onSave>[1] = {
@@ -241,6 +290,8 @@ function ActionRow(props: {
       priority,
       dueDate: dueDate || null,
       ...(owner !== baselineOwner.current ? { assignment: selectAssignment(props.owners, owner) ?? null } : {}),
+      ...(plan.id !== baselinePlan.current.id || plan.section !== baselinePlan.current.section
+        ? { plan: planLink(plan.id, plan.section) } : {}),
     };
     void props.onSave(props.action.id, body);
   };
@@ -253,6 +304,8 @@ function ActionRow(props: {
       <dl><div><dt>Element</dt><dd>{elementLabel(props.action.capabilityElement)}</dd></div>
         <div><dt>Owner</dt><dd>{props.action.owner ?? "Unassigned"}</dd></div>
         <div><dt>Due</dt><dd>{props.action.dueDate ?? "No due date"}</dd></div>
+        <div><dt>Plan to update</dt><dd>{props.action.plan
+          ? `${props.action.plan.title}${props.action.plan.section ? `, section ${props.action.plan.section}` : ""}` : "No plan"}</dd></div>
         <div><dt>Progress evidence</dt><dd>{props.action.completedAt
           ? `First completed ${new Date(props.action.completedAt).toLocaleString()} by ${props.action.completedBy ?? "unknown"}`
           : "No completion recorded"}</dd></div></dl>
@@ -264,6 +317,8 @@ function ActionRow(props: {
         <label>Owner<select disabled={props.busy} value={owner} onChange={(event) => setOwner(event.target.value)}><option value="">Unassigned</option>
           {props.owners.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
         <label>Due date<input disabled={props.busy} type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label>
+        <PlanPicker plans={props.plans} client={props.client} planId={plan.id} section={plan.section} disabled={props.busy}
+          onChange={(id, section) => setPlan({ id, section })} />
         <ActionButton kind="secondary" loading={props.busy} loadingLabel="Saving…" onClick={save}>Save progress</ActionButton>
         <ActionButton kind="quiet" disabled={props.busy} onClick={() => props.onRefresh(props.action.id)}>Load latest revision</ActionButton>
       </div>
@@ -310,6 +365,7 @@ export function AarWorkspace(props: AarWorkspaceProps) {
   const periods = useAsync(() => props.client.incidentAreaHistory(props.incidentId), [props.incidentId]);
   const positions = useAsync(() => props.client.listPositions(props.jurisdictionId), [props.jurisdictionId]);
   const participants = useAsync(() => props.client.listIncidentParticipants(props.incidentId), [props.incidentId]);
+  const plans = useAsync(() => props.client.listPlans(props.jurisdictionId), [props.jurisdictionId]);
   const owners = useMemo(() => ownerOptions(
     props.incidentId,
     positions.data ?? [],
@@ -389,7 +445,8 @@ export function AarWorkspace(props: AarWorkspaceProps) {
       <AnalyticsPanel data={analytics.data} filter={filter} onFilter={setFilter} />
       <div className="eoc-aar-entry-grid">
         <ObservationForm periodRevision={periodRevision} busy={busy === "observation"} onSave={saveObservation} />
-        <ActionForm source={source} owners={owners} periodRevision={periodRevision} busy={busy === "action"}
+        <ActionForm source={source} owners={owners} plans={plans.data ?? []} client={props.client}
+          periodRevision={periodRevision} busy={busy === "action"}
           onCancelSource={() => setSource(null)} onSave={saveAction} />
       </div>
       <section className="eoc-aar-drill" aria-labelledby="eoc-aar-drill-title">
@@ -408,7 +465,7 @@ export function AarWorkspace(props: AarWorkspaceProps) {
           </section>
           <section aria-labelledby="eoc-aar-actions-title"><h3 id="eoc-aar-actions-title">Corrective actions and progress</h3>
             {actions.length ? <div className="eoc-aar-actions">{actions.map((action) => <ActionRow key={action.id} action={action}
-              owners={owners} busy={busy === `action:${action.id}`} onSave={async (id, body) => { await updateAction(id, body); }}
+              owners={owners} plans={plans.data ?? []} client={props.client} busy={busy === `action:${action.id}`} onSave={async (id, body) => { await updateAction(id, body); }}
               onRefresh={refreshAction} />)}</div>
               : <p className="eoc-aar-empty">No corrective actions belong to this aggregate.</p>}
           </section>

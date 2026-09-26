@@ -223,8 +223,15 @@ Other preparation happens on the screens that use it:
   sections at the version it opened from and the tasks still to be
   released. A task waiting on a closed incident is not released unless the
   incident is reopened. When a plan's review falls due, the jurisdiction's
-  administrators get one notification; **Mark reviewed** starts the next
-  interval.
+  administrators get one notification, which counts the open corrective
+  actions that name the plan; **Mark reviewed** starts the next interval.
+- **Corrective actions that change a plan.** In **AAR**, a corrective action
+  can name the plan it changes under **Plan to update**, and one of that
+  plan's sections under **Plan section**. **Read** on the plan lists its open
+  corrective actions with their sections, owners and due dates. When an open
+  action's due date comes, by the UTC calendar, the scheduler reminds its
+  owner once: the owning position, the assigned person, or, for an action
+  with no owner, the administrators. A new due date reminds again.
 - **Continuity of operations plans.** A plan of the kind **Continuity of
   operations** keeps the government's essential functions running when its
   offices, staff, systems or communications are lost. Besides sections and

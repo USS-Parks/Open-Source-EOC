@@ -46,6 +46,7 @@ function client() {
     activatePlan: vi.fn().mockResolvedValue({ incidentId: "i9", planVersion: 1, tasksReleased: 1, tasksScheduled: 2, notice: { massNotificationId: "m1", recipients: 4 } }),
     getIncidentTemplate: vi.fn().mockResolvedValue({ template: storm, version: 1, updatedAt: "2026-09-25T17:00:00Z" }),
     listTemplates: vi.fn().mockResolvedValue([{ key: "road_closures", version: 1, title: "Road Closures" }]),
+    listCorrectiveActions: vi.fn().mockResolvedValue([]),
   };
 }
 
@@ -215,9 +216,18 @@ describe("executable plans on screen", () => {
 
   it("lets a member read plans but not change them", async () => {
     const api = client();
+    api.listCorrectiveActions.mockResolvedValue([{
+      id: "ca1", capability: "operational_coordination", capabilityElement: "planning", recommendation: "Name the road crew staging area",
+      priority: "high", owner: "Operations Section Chief", assignment: null, dueDate: "2026-10-15", status: "open", revision: 1,
+      operationalPeriodRevision: null, completedAt: null, completedBy: null, incidentId: null, createdAt: "2026-09-25T17:00:00Z",
+      plan: { id: "p1", title: "Severe Storm Plan", section: "Concept of operations" },
+    }]);
     const view = render(<PlansPanel client={api} jurisdictionId="j1" isAdmin={false} templates={[]} />);
     fireEvent.click(await view.findByRole("button", { name: "Read Severe Storm Plan" }));
     const reading = await view.findByRole("region", { name: "Severe Storm Plan, version 2" });
+    const owed = await within(reading).findByRole("list", { name: "Open corrective actions for this plan" });
+    expect(owed.textContent).toBe("Name the road crew staging area · section Concept of operations · Operations Section Chief · due 2026-10-15");
+    expect(api.listCorrectiveActions).toHaveBeenCalledWith("j1", { includeComplete: false, planId: "p1" });
     expect(reading.textContent).toContain("Carried out by: Operations Section Chief, Road Closures board.");
     expect(reading.textContent).toContain("Set the second period · Incident Commander · 6 hours after activation");
     expect(view.queryByRole("button", { name: /Edit|Activate|New plan/ })).toBeNull();

@@ -143,9 +143,11 @@ export async function createCorrectiveAction(
     ownerPosition?: string | undefined;
     ownerPerson?: string | undefined;
     dueDate?: string | undefined;
+    plan?: CorrectiveActionPlan | undefined;
   },
 ): Promise<{ id: string }> {
   requireWriter(actor, jurisdictionId);
+  if (input.plan) await checkPlanLink(sql, jurisdictionId, input.plan);
   if (input.incidentId) {
     const authority = await getIncidentAuthority(sql, actor, input.incidentId);
     const sourceAllowed = authority.jurisdictionId === jurisdictionId
@@ -179,7 +181,7 @@ export async function createCorrectiveAction(
     insert into corrective_actions
       (jurisdiction_id, incident_id, capability, capability_element, recommendation,
        priority, operational_period_revision, owner_position, owner_person,
-       owner_participant, assignment_snapshot, due_date, created_by)
+       owner_participant, assignment_snapshot, due_date, created_by, plan_id, plan_section)
     values
       (${jurisdictionId}, ${input.incidentId ?? null}, ${input.capability},
        ${input.capabilityElement ?? "none"}, ${input.recommendation},
@@ -188,7 +190,7 @@ export async function createCorrectiveAction(
        ${input.ownerPerson ?? null},
        ${assignment?.kind === "incident_participant" ? assignment.participantId : null},
        ${assignment ? sql.json(assignment as never) : null}, ${input.dueDate ?? null},
-       ${actor.person.id})
+       ${actor.person.id}, ${input.plan?.id ?? null}, ${input.plan?.section ?? null})
     returning id`;
   await recordAudit(sql, actor, {
     jurisdictionId,
@@ -197,9 +199,25 @@ export async function createCorrectiveAction(
     subjectTable: "corrective_actions",
     subjectId: row!.id as string,
     payload: { capability: input.capability, priority: input.priority ?? "unspecified",
-      operationalPeriodRevision: input.periodRevision ?? null, assignment },
+      operationalPeriodRevision: input.periodRevision ?? null, assignment, plan: input.plan ?? null },
   });
   return { id: row!.id as string };
+}
+
+/** The plan, and optionally the section of it by title, a corrective action changes. */
+export interface CorrectiveActionPlan {
+  readonly id: string;
+  readonly section?: string | null | undefined;
+}
+
+/** A linked plan is one of the action's own organization's, and a named section is in its current version. */
+async function checkPlanLink(sql: Sql, jurisdictionId: string, plan: CorrectiveActionPlan): Promise<void> {
+  const [row] = await sql`
+    select exists (select 1 from jsonb_array_elements(p.definition -> 'sections') s
+                   where s ->> 'title' = ${plan.section ?? ""}) as has_section
+    from plans p where p.id = ${plan.id} and p.jurisdiction_id = ${jurisdictionId}`;
+  if (!row) throw new AuthError(400, "the plan is not one of this organization's plans");
+  if (plan.section && !row.has_section) throw new AuthError(400, "the plan has no section with that title");
 }
 
 export interface CorrectiveActionRow extends AarCorrectiveAction {
@@ -224,6 +242,11 @@ function publicAssignment(value: unknown): AarActionAssignment | null {
   };
 }
 
+/** A date column as its calendar date; the driver reads one as midnight UTC. */
+function dateText(value: unknown): string | null {
+  return value ? new Date(value as Date | string).toISOString().slice(0, 10) : null;
+}
+
 function toCorrectiveAction(row: Record<string, unknown>): CorrectiveActionRow {
   return {
     id: row.id as string,
@@ -233,7 +256,7 @@ function toCorrectiveAction(row: Record<string, unknown>): CorrectiveActionRow {
     priority: row.priority as AarActionPriority,
     owner: (row.owner as string | null) ?? null,
     assignment: publicAssignment(row.assignment_snapshot),
-    dueDate: row.due_date ? new Date(row.due_date as Date | string).toISOString().slice(0, 10) : null,
+    dueDate: dateText(row.due_date),
     status: row.status as AarActionStatus,
     revision: Number(row.revision),
     operationalPeriodRevision: (row.operational_period_revision as number | null) ?? null,
@@ -241,6 +264,10 @@ function toCorrectiveAction(row: Record<string, unknown>): CorrectiveActionRow {
     completedBy: (row.completed_by_name as string | null) ?? null,
     incidentId: (row.incident_id as string | null) ?? null,
     createdAt: new Date(row.created_at as Date | string).toISOString(),
+    // A reader outside the plan's organization sees the action without its plan.
+    plan: row.plan_id && row.plan_title ? {
+      id: row.plan_id as string, title: row.plan_title as string, section: (row.plan_section as string | null) ?? null,
+    } : null,
   };
 }
 
@@ -258,6 +285,7 @@ export async function listCorrectiveActions(
     capability?: string | undefined;
     incidentId?: string | undefined;
     periodRevision?: number | undefined;
+    planId?: string | undefined;
     includeComplete?: boolean;
   },
   page: PageRequest,
@@ -269,7 +297,7 @@ export async function listCorrectiveActions(
   const after = decodeCursor(page.cursor, ["at", "id"]);
   const limit = page.limit ?? DEFAULT_PAGE_LIMIT;
   const rows = await sql`
-    select ca.*, completed.display_name as completed_by_name,
+    select ca.*, completed.display_name as completed_by_name, pl.title as plan_title,
       to_char(ca.created_at at time zone 'UTC', ${CURSOR_AT_FORMAT}) as page_at,
       coalesce(ca.assignment_snapshot ->> 'positionTitle',
         ca.assignment_snapshot ->> 'incidentPositionTitle', pos.title, per.display_name) as owner
@@ -277,7 +305,9 @@ export async function listCorrectiveActions(
     left join positions pos on pos.id = ca.owner_position
     left join persons per on per.id = ca.owner_person
     left join persons completed on completed.id = ca.completed_by
+    left join plans pl on pl.id = ca.plan_id
     where ca.jurisdiction_id = ${jurisdictionId}
+      and (${options.planId ?? null}::uuid is null or ca.plan_id = ${options.planId ?? null})
       and (${options.status ?? null}::text is null or ca.status = ${options.status ?? null})
       and (${options.priority ?? null}::text is null or ca.priority = ${options.priority ?? null})
       and (${options.capability ?? null}::text is null or ca.capability = ${options.capability ?? null})
@@ -302,13 +332,14 @@ export async function getCorrectiveAction(
   sql: Sql, _actor: Principal, id: string,
 ): Promise<CorrectiveActionRow> {
   const [row] = await sql`
-    select ca.*, completed.display_name as completed_by_name,
+    select ca.*, completed.display_name as completed_by_name, pl.title as plan_title,
       coalesce(ca.assignment_snapshot ->> 'positionTitle',
         ca.assignment_snapshot ->> 'incidentPositionTitle', pos.title, per.display_name) as owner
     from corrective_actions ca
     left join positions pos on pos.id = ca.owner_position
     left join persons per on per.id = ca.owner_person
     left join persons completed on completed.id = ca.completed_by
+    left join plans pl on pl.id = ca.plan_id
     where ca.id = ${id}`;
   if (!row) throw new AuthError(404, "corrective action not found");
   return toCorrectiveAction(row);
@@ -320,6 +351,7 @@ export interface CorrectiveActionUpdate {
   readonly assignment?: WorkflowAssignmentRequest | null | undefined;
   readonly dueDate?: string | null | undefined;
   readonly status?: AarActionStatus | undefined;
+  readonly plan?: CorrectiveActionPlan | null | undefined;
 }
 
 export async function updateCorrectiveAction(
@@ -343,7 +375,7 @@ export async function updateCorrectiveAction(
   if (!localWriter && !assigned)
     throw new AuthError(403, "requires source write access or the active assigned participant");
   const changesMetadata = input.priority !== undefined
-    || input.assignment !== undefined || input.dueDate !== undefined;
+    || input.assignment !== undefined || input.dueDate !== undefined || input.plan !== undefined;
   if (changesMetadata && !localWriter)
     throw new AuthError(403, "assigned participant may update status only");
 
@@ -363,7 +395,12 @@ export async function updateCorrectiveAction(
   }
   const nextStatus = input.status ?? row.status as AarActionStatus;
   const nextPriority = input.priority ?? row.priority as AarActionPriority;
-  const nextDueDate = input.dueDate === undefined ? row.due_date as Date | null : input.dueDate;
+  // Written back as the calendar date it is: a Date would pass through the session time zone and slip a day.
+  const nextDueDate = input.dueDate === undefined ? dateText(row.due_date) : input.dueDate;
+  if (input.plan) await checkPlanLink(sql, jurisdictionId, input.plan);
+  const nextPlan = input.plan === undefined
+    ? { id: (row.plan_id as string | null) ?? null, section: (row.plan_section as string | null) ?? null }
+    : { id: input.plan?.id ?? null, section: input.plan?.section ?? null };
   if (localWriter) {
     await sql`
       update corrective_actions set
@@ -371,6 +408,7 @@ export async function updateCorrectiveAction(
       owner_position = ${ownerPosition}, owner_person = ${ownerPerson},
       owner_participant = ${ownerParticipant},
       assignment_snapshot = ${assignment ? sql.json(assignment as never) : null},
+      plan_id = ${nextPlan.id}, plan_section = ${nextPlan.section},
       revision = revision + 1, updated_at = now(),
       completed_at = case when completed_at is null and ${nextStatus} = 'complete'
         then now() else completed_at end,
@@ -394,7 +432,7 @@ export async function updateCorrectiveAction(
     subjectTable: "corrective_actions",
     subjectId: id,
     payload: { fromRevision: revision, toRevision: revision + 1,
-      priority: nextPriority, status: nextStatus, dueDate: nextDueDate, assignment },
+      priority: nextPriority, status: nextStatus, dueDate: nextDueDate, assignment, plan: nextPlan },
   });
   return getCorrectiveAction(sql, actor, id);
 }

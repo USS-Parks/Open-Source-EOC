@@ -36,7 +36,27 @@ import "./plans.css";
 
 type PlanClient = Pick<ApiClient,
   "listPlans" | "getPlan" | "listPlanVersions" | "savePlan" | "markPlanReviewed" | "activatePlan" |
-  "getIncidentTemplate" | "listTemplates">;
+  "getIncidentTemplate" | "listTemplates" | "listCorrectiveActions">;
+
+/** Open after-action corrective actions that name this plan: the changes it still owes. */
+function LinkedActions(props: { readonly client: PlanClient; readonly jurisdictionId: string; readonly planId: string }) {
+  const { client, jurisdictionId, planId } = props;
+  const actions = useAsync(() => client.listCorrectiveActions(jurisdictionId, { includeComplete: false, planId }),
+    [client, jurisdictionId, planId]);
+  if (!actions.data?.length) return null;
+  return (
+    <>
+      <h4>Open corrective actions for this plan</h4>
+      <ul className="plans-tasks" aria-label="Open corrective actions for this plan">
+        {actions.data.map((action) => (
+          <li key={action.id}><strong>{action.recommendation}</strong>
+            {` · ${action.plan?.section ? `section ${action.plan.section}` : "whole plan"} · ${action.owner ?? "Unassigned"}`}
+            {` · ${action.dueDate ? `due ${action.dueDate}` : "no due date"}`}</li>
+        ))}
+      </ul>
+    </>
+  );
+}
 
 const KIND_LABELS: Readonly<Record<PlanKind, string>> = {
   incident_response: "Incident response",
@@ -434,6 +454,7 @@ export function PlansPanel(props: {
           <p className="eoc-muted">{KIND_LABELS[reading.kind]} plan. Activates {templateTitle(reading.templateKey)}.</p>
           <PlanSections sections={reading.definition.sections} positionTitle={positionTitle} boardTitle={boardTitle} />
           {reading.definition.continuity ? <ContinuityView continuity={reading.definition.continuity} positionTitle={positionTitle} /> : null}
+          <LinkedActions client={props.client} jurisdictionId={props.jurisdictionId} planId={reading.id} />
           {reading.definition.tasks.length ? (
             <>
               <h4>Timed tasks</h4>

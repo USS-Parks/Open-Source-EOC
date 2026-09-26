@@ -128,7 +128,8 @@ recorded it) and list the product gap separately.
    **Record observation**.
 3. For each area for improvement that needs work, select **Create action from
    this observation**. Set priority, owner, due date and the corrective
-   action, then **Create corrective action**.
+   action, and, when it changes a plan, **Plan to update** and **Plan
+   section**, then **Create corrective action**.
 4. Track progress with the action's status and **Save progress**. Use **Load
    latest revision** first if someone else may have changed it.
 5. Under **Compile exact PDF snapshot**, fill **Incident overview** and

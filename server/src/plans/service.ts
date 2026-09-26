@@ -366,7 +366,9 @@ export async function getIncidentPlan(sql: Sql, incidentId: string): Promise<Inc
  * whose review is due. Rows are claimed with skip locked, so a handover
  * between leaders releases nothing twice.
  */
-export async function runDuePlans(sql: Sql, actor: Principal, jurisdictionId: string, now: Date): Promise<{ released: number; reminded: number }> {
+export async function runDuePlans(
+  sql: Sql, actor: Principal, jurisdictionId: string, now: Date,
+): Promise<{ released: number; reminded: number; actionsDue: number }> {
   requireAdmin(actor, jurisdictionId);
   const due = await sql`
     select r.id, r.incident_id, r.plan_id, r.position_id, r.item, r.category, r.due_minutes, i.name as incident
@@ -394,7 +396,8 @@ export async function runDuePlans(sql: Sql, actor: Principal, jurisdictionId: st
   }
 
   const reviews = await sql`
-    select id, title, coalesce(reviewed_at, created_at) + make_interval(days => review_every_days) as due_at
+    select id, title, coalesce(reviewed_at, created_at) + make_interval(days => review_every_days) as due_at,
+      (select count(*)::int from corrective_actions ca where ca.plan_id = plans.id and ca.status <> 'complete') as open_actions
     from plans
     where jurisdiction_id = ${jurisdictionId} and review_every_days is not null
       and coalesce(reviewed_at, created_at) + make_interval(days => review_every_days) <= ${now}
@@ -409,8 +412,48 @@ export async function runDuePlans(sql: Sql, actor: Principal, jurisdictionId: st
     await sql`
       insert into notifications (jurisdiction_id, channel, title, body, status, detail)
       values (${jurisdictionId}, 'plan_review', ${`Plan review due: ${plan.title as string}`.slice(0, 300)},
-        ${`${plan.title as string} was due for review at ${iso(plan.due_at).slice(0, 16).replace("T", " ")} UTC. Review it under Incidents, Plans, and mark it reviewed.`},
+        ${`${plan.title as string} was due for review at ${iso(plan.due_at).slice(0, 16).replace("T", " ")} UTC.${openActions(plan.open_actions as number)} Review it under Incidents, Plans, and mark it reviewed.`},
         'delivered', ${sql.json({ planId: plan.id as string, route: "#/incidents" } as never)})`;
   }
-  return { released: due.length, reminded: reviews.length };
+
+  // ponytail: due dates are read by the UTC calendar; jurisdictions carry no time zone yet.
+  const actions = await sql`
+    select ca.id, ca.recommendation, ca.due_date::text as due_date, ca.incident_id, ca.owner_position,
+      coalesce(ca.owner_person, ip.person_id) as owner_person, pl.title as plan_title, ca.plan_section
+    from corrective_actions ca
+    left join incident_participants ip on ip.id = ca.owner_participant
+    left join plans pl on pl.id = ca.plan_id
+    where ca.jurisdiction_id = ${jurisdictionId} and ca.status <> 'complete'
+      and ca.due_date <= (${now}::timestamptz at time zone 'UTC')::date
+      and not exists (select 1 from corrective_action_reminders r
+                      where r.corrective_action_id = ca.id and r.due_date = ca.due_date)
+    order by ca.due_date, ca.id`;
+  let actionsDue = 0;
+  for (const action of actions) {
+    // The reminder row is the claim: a second scheduler pass finds it taken and sends nothing.
+    const [claimed] = await sql`
+      insert into corrective_action_reminders (corrective_action_id, due_date, jurisdiction_id)
+      values (${action.id as string}, ${action.due_date as string}, ${jurisdictionId})
+      on conflict do nothing returning corrective_action_id`;
+    if (!claimed) continue;
+    actionsDue += 1;
+    const plan = action.plan_title
+      ? ` It updates ${action.plan_title as string}${action.plan_section ? `, section ${action.plan_section as string}` : ""}.`
+      : "";
+    // An owner position or person is reminded; an action with no owner reminds the jurisdiction's administrators.
+    const position = action.owner_person ? null : (action.owner_position as string | null);
+    await sql`
+      insert into notifications (jurisdiction_id, person_id, position_id, incident_id, channel, title, body, status, detail)
+      values (${jurisdictionId}, ${(action.owner_person as string | null) ?? null}, ${position},
+        ${(action.incident_id as string | null) ?? null}, 'corrective_action_due',
+        ${`Corrective action due: ${action.recommendation as string}`.slice(0, 300)},
+        ${`This corrective action was due ${action.due_date as string} and is not complete.${plan} Update it under After-action.`},
+        'delivered', ${sql.json({ correctiveActionId: action.id as string, route: "#/aar" } as never)})`;
+  }
+  return { released: due.length, reminded: reviews.length, actionsDue };
+}
+
+function openActions(count: number): string {
+  if (count === 0) return "";
+  return count === 1 ? " 1 open corrective action names this plan." : ` ${count} open corrective actions name this plan.`;
 }

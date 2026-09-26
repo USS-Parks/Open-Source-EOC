@@ -9903,3 +9903,88 @@ Veoci Integration and Air Gap PSPR unit VA27 (VC-19), on VA13's plans.
 - **Rollback:** revert the commit; migration `0160` only widens a check, and
   a continuity plan saved meanwhile would no longer parse, so remove those
   plans first.
+
+## Veoci and air gap VA30: corrective actions linked to plans
+
+Veoci Integration and Air Gap PSPR unit VA30 (VC-22), on VA13's plans.
+
+- **What the code did before.** An after-action corrective action had an
+  owner, a due date and a status, but named no plan, and nothing reminded
+  anyone when its due date came. A plan's reader did not show what the
+  after-action review said to change in it.
+- **What changed.**
+  - **The link** (migration `0161_plan_corrective_actions.sql`): a
+    corrective action can carry `plan_id` and `plan_section` (a section
+    title), and a section needs its plan. Creating or editing an action
+    (`server/src/aar/service.ts`, `routes.ts`) accepts `plan: { id,
+    section }`, or `null` on an edit to unlink it; the plan must be one of
+    the action's own organization's and a named section must be in its
+    current version. Changing the link is a metadata change, so an assigned
+    participant from another organization cannot make it. The list route
+    takes `planId`. An action read by someone who cannot read the plan
+    comes back without it.
+  - **Reminders** (`runDuePlans` in `server/src/plans/service.ts`, and a
+    branch of `scheduler_due`'s plans work): when an open action's due date
+    comes, by the UTC calendar, its owner is reminded once, on the channel
+    `corrective_action_due`: the owning position, the assigned person or the
+    participant's person, or the administrators when it has no owner. The
+    notice names the plan and section it changes. Each reminder is a row in
+    `corrective_action_reminders` keyed by the action and the due date,
+    because every change to a corrective action advances its revision and a
+    reminder must not make an open editor stale; the insert is the claim, so
+    two scheduler passes send one reminder. A new due date reminds again; a
+    completed action is not reminded. Every open action with a due date is
+    reminded, linked or not.
+  - **A plan's review reminder** now says how many open corrective actions
+    name the plan.
+  - **The screen**: in **AAR** (`web/src/aar/AarWorkspace.tsx`) the create
+    form and each action's controls gain **Plan to update** and **Plan
+    section**, and each action shows **Plan to update**; a section renamed
+    since the link stays listed as it was linked. **Read** on a plan
+    (`web/src/plans/PlansPanel.tsx`) lists **Open corrective actions for this
+    plan** with section, owner and due date. The AAR report's improvement
+    plan lists the plan to update under each linked action.
+  - **A due date that slipped a day.** Every edit that left a corrective
+    action's due date alone, a status change included, wrote the date back
+    as a JavaScript date, which went through the database session's time
+    zone: on the Pacific test bed each such edit moved the due date one day
+    earlier. The date is now written back as the calendar date it is. The
+    plans test found it.
+  - `docs/guides/ADMIN.md` and the exercise facilitator guide describe the
+    link and the reminder.
+- **Decisions.** Due dates are read by the UTC calendar, since a
+  jurisdiction carries no time zone; a reminder to the administrators goes
+  to the notification center, as a plan review reminder does, and a
+  reminder to a position or person reaches their bell. A section is linked
+  by its title, since plan sections have no key.
+- **Files outside the "Owns" cell.** `docs/guides/training/EXERCISE-FACILITATOR-GUIDE.md`.
+- **Air-gap behavior (decision 9).** No network path.
+- **Schema, contract and dependencies.** Migration `0161`: two columns and a
+  check on `corrective_actions`, the reminder table with row security, and
+  `scheduler_due` redefined from `0155` with the new branch. No new route;
+  the corrective action routes take `plan` and `planId`, and the action
+  carries `plan`. No dependency.
+- **Tests.** `plans.test.ts` gains a case (6 tests): a section the plan lacks
+  and a plan of no organization's refused; the list filtered by plan;
+  unlink and relink, the due date unchanged by either; `scheduler_due` not
+  due a second before the due date and due a second after; two reminders
+  sent once, the owning position's reaching the member who holds it and the
+  unowned one only the administrators; the review reminder counting one
+  open action; a new due date reminding again and a completed action not.
+  `aar-surface.test.tsx` gains one (6 tests) and extends one: an action
+  created with a plan and section, a linked action shown and moved to the
+  whole plan, and axe. `plans-panel.test.tsx`: a plan's reader lists its
+  open action. `plan-corrective-actions-browser.test.ts` at 1586 by 992 and
+  1534 by 790: an action created in AAR against the storm plan's Public
+  warning section and owned by Incident Commander, shown with its link,
+  listed when the plan is read, and, after the scheduler reaches its due
+  date, in the bell of the administrator who holds Incident Commander.
+- **Verification.** On the Windows test bed with `OPENEOC_TEST_DB_TAG=main`:
+  `pnpm check:static` exit 0; 38 files, 212 tests green (plans, AAR, AAR and
+  plans browser tests, migration baseline, upgrade, scheduler, export,
+  restore drill, API docs, route coverage, all shared tests, the AAR screen,
+  the plans panel and the incident screen).
+- **Evidence level:** real-database, component and browser tests.
+- **Rollback:** revert the commit; migration `0161` adds columns and a table
+  that nothing else reads, and restoring `scheduler_due` from `0155` drops
+  the reminder branch.

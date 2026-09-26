@@ -57,6 +57,10 @@ const AarBody = z.object({
 }).refine((body) => body.period === undefined || body.periodRevision === undefined, {
   message: "choose legacy period text or an authoritative period revision",
 });
+const PlanLinkBody = z.object({
+  id: z.string().uuid(),
+  section: z.string().trim().min(1).max(200).nullable().optional(),
+}).strict();
 const CaBody = z.object({
   incidentId: z.string().uuid().optional(),
   capability: capabilitySchema,
@@ -68,6 +72,7 @@ const CaBody = z.object({
   ownerPosition: z.string().uuid().optional(),
   ownerPerson: z.string().uuid().optional(),
   dueDate: z.iso.date().optional(),
+  plan: PlanLinkBody.optional(),
 }).superRefine((body, ctx) => {
   if ([body.assignment, body.ownerPosition, body.ownerPerson].filter((value) => value !== undefined).length > 1)
     ctx.addIssue({ code: "custom", message: "choose one corrective action owner" });
@@ -81,8 +86,9 @@ const ActionUpdateBody = z.object({
   assignment: WorkflowAssignmentRequestSchema.nullable().optional(),
   dueDate: z.iso.date().nullable().optional(),
   status: statusSchema.optional(),
+  plan: PlanLinkBody.nullable().optional(),
 }).refine((body) => body.priority !== undefined || body.assignment !== undefined
-  || body.dueDate !== undefined || body.status !== undefined, {
+  || body.dueDate !== undefined || body.status !== undefined || body.plan !== undefined, {
   message: "at least one corrective action field must change",
 });
 
@@ -175,6 +181,7 @@ export function aarRoutes(
           ...(body.ownerPosition !== undefined ? { ownerPosition: body.ownerPosition } : {}),
           ...(body.ownerPerson !== undefined ? { ownerPerson: body.ownerPerson } : {}),
           ...(body.dueDate !== undefined ? { dueDate: body.dueDate } : {}),
+          ...(body.plan !== undefined ? { plan: body.plan } : {}),
         }),
       );
       return reply.status(201).send(result);
@@ -216,6 +223,7 @@ export function aarRoutes(
         capability: capabilitySchema.optional(),
         incidentId: z.string().uuid().optional(),
         periodRevision: periodRevisionSchema.optional(),
+        planId: z.string().uuid().optional(),
         includeComplete: z.enum(["true", "false"]).optional(),
         ...pageQuery,
       }).parse(req.query);
@@ -226,6 +234,7 @@ export function aarRoutes(
           ...(query.capability !== undefined ? { capability: query.capability } : {}),
           ...(query.incidentId !== undefined ? { incidentId: query.incidentId } : {}),
           ...(query.periodRevision !== undefined ? { periodRevision: query.periodRevision } : {}),
+          ...(query.planId !== undefined ? { planId: query.planId } : {}),
           includeComplete: query.includeComplete === "true",
         }, query),
       );

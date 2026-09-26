@@ -49,6 +49,14 @@ export interface AarCorrectiveAction {
   readonly operationalPeriodRevision: number | null;
   readonly completedAt: string | null;
   readonly completedBy: string | null;
+  /** The plan, and the section of it, this action changes; absent in reports compiled before the link existed. */
+  readonly plan?: AarActionPlanLink | null;
+}
+
+export interface AarActionPlanLink {
+  readonly id: string;
+  readonly title: string;
+  readonly section: string | null;
 }
 
 export interface AarAnalyticsBucket {
@@ -229,6 +237,7 @@ export function aarToTextLines(doc: AarDocument): string[] {
         `due: ${c.dueDate ?? "TBD"}; status: ${c.status}; revision: ${c.revision ?? 0})`,
     );
     if (c.completedAt) lines.push(`    First completed: ${c.completedAt} by ${c.completedBy ?? "unknown"}`);
+    if (c.plan) lines.push(`    Plan to update: ${c.plan.title}${c.plan.section ? `, section ${c.plan.section}` : ""}`);
   }
   lines.push("");
   lines.push(`6. Evidence: chronology (${doc.chronologyCount} events)`);

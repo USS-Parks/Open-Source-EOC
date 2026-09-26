@@ -13,6 +13,7 @@ const OBSERVATION_PLANNING = "00000000-0000-4000-8000-000000000050";
 const OBSERVATION_WARNING = "00000000-0000-4000-8000-000000000051";
 const ACTION_PLANNING = "00000000-0000-4000-8000-000000000060";
 const ACTION_WARNING = "00000000-0000-4000-8000-000000000061";
+const PLAN_ID = "00000000-0000-4000-8000-000000000070";
 
 const observations: readonly AarObservation[] = [
   {
@@ -104,6 +105,11 @@ function client(): ApiClient {
     }]),
     listPositions: vi.fn().mockResolvedValue([{ id: POSITION_ID, key: "planning", title: "Planning Section Chief" }]),
     listIncidentParticipants: vi.fn().mockResolvedValue([]),
+    listPlans: vi.fn().mockResolvedValue([{ id: PLAN_ID, title: "Severe Storm Plan" }]),
+    getPlan: vi.fn().mockResolvedValue({
+      id: PLAN_ID, title: "Severe Storm Plan",
+      definition: { sections: [{ title: "Concept of operations" }, { title: "Warning" }] },
+    }),
     recordAarObservation: vi.fn().mockResolvedValue({ id: "new-observation" }),
     createCorrectiveAction: vi.fn().mockResolvedValue({ id: "new-action" }),
     updateCorrectiveAction: vi.fn().mockResolvedValue(actions[0]),
@@ -165,6 +171,9 @@ describe("after-action workspace", () => {
     fireEvent.change(within(actionForm).getByLabelText("Priority"), { target: { value: "critical" } });
     fireEvent.change(within(actionForm).getByLabelText("Owner"), { target: { value: `position:${POSITION_ID}` } });
     fireEvent.change(within(actionForm).getByLabelText("Due date"), { target: { value: "2026-10-15" } });
+    fireEvent.change(await within(actionForm).findByLabelText("Plan to update"), { target: { value: PLAN_ID } });
+    await within(actionForm).findByRole("option", { name: "Warning" });
+    fireEvent.change(within(actionForm).getByLabelText("Plan section"), { target: { value: "Warning" } });
     fireEvent.click(within(actionForm).getByRole("button", { name: "Create corrective action" }));
 
     await waitFor(() => expect(api.createCorrectiveAction).toHaveBeenCalledOnce());
@@ -176,6 +185,7 @@ describe("after-action workspace", () => {
       priority: "critical",
       dueDate: "2026-10-15",
       assignment: { kind: "position", positionId: POSITION_ID },
+      plan: { id: PLAN_ID, section: "Warning" },
     });
     expect(actionForm.querySelector("textarea")?.value).toBe("");
     expect(document.querySelector("[data-json-input]")).toBeNull();
@@ -199,6 +209,26 @@ describe("after-action workspace", () => {
 
     const completed = container.querySelector<HTMLElement>(`[data-record-id="${ACTION_WARNING}"]`)!;
     expect(within(completed).getByText(/First completed .* by Jordan Diaz/)).toBeTruthy();
+  });
+
+  it("links an action to the plan it changes, and shows the link", async () => {
+    const api = client();
+    const linked = { ...actions[0]!, plan: { id: PLAN_ID, title: "Severe Storm Plan", section: "Concept of operations" } };
+    vi.mocked(api.getAarAnalytics).mockResolvedValue({
+      observations, correctiveActions: [linked, actions[1]!], analytics: summarizeAar(observations, actions),
+    });
+    const { container } = render(<AarSurface client={api} jurisdictionId={JURISDICTION_ID} incidentId={INCIDENT_ID} />);
+    await screen.findByRole("heading", { name: "After-action review" });
+    const action = container.querySelector<HTMLElement>(`[data-record-id="${ACTION_PLANNING}"]`)!;
+    expect(within(action).getByText("Severe Storm Plan, section Concept of operations")).toBeTruthy();
+    await within(action).findByRole("option", { name: "Warning" });
+    fireEvent.change(within(action).getByLabelText("Plan section"), { target: { value: "" } });
+    fireEvent.click(within(action).getByRole("button", { name: "Save progress" }));
+    await waitFor(() => expect(api.updateCorrectiveAction).toHaveBeenCalledWith(ACTION_PLANNING,
+      expect.objectContaining({ plan: { id: PLAN_ID, section: null } })));
+    const completed = container.querySelector<HTMLElement>(`[data-record-id="${ACTION_WARNING}"]`)!;
+    expect(within(completed).getByText("No plan", { selector: "dd" })).toBeTruthy();
+    expect((await axe.run(container, { rules: { region: { enabled: false } } })).violations).toEqual([]);
   });
 
   it("loads one action's latest revision from its detail route before saving over it", async () => {

@@ -1555,6 +1555,7 @@ export class ApiClient {
       priority?: AarActionPriority;
       status?: AarActionStatus;
       capability?: string;
+      planId?: string;
     } = { includeComplete: true },
   ): Promise<CorrectiveAction[]> {
     const query = new URLSearchParams();
@@ -1564,6 +1565,7 @@ export class ApiClient {
     if (filters.priority) query.set("priority", filters.priority);
     if (filters.status) query.set("status", filters.status);
     if (filters.capability) query.set("capability", filters.capability);
+    if (filters.planId) query.set("planId", filters.planId);
     const r = await this.request<{ correctiveActions: CorrectiveAction[] }>(
       "GET",
       `/api/v1/jurisdictions/${jurisdictionId}/corrective-actions?${query.toString()}`,
@@ -1581,6 +1583,7 @@ export class ApiClient {
       periodRevision?: number;
       assignment?: WorkflowAssignmentRequest;
       dueDate?: string;
+      plan?: { id: string; section?: string | null };
     },
   ): Promise<{ id: string }> {
     return this.request<{ id: string }>(
@@ -1597,6 +1600,7 @@ export class ApiClient {
       assignment?: WorkflowAssignmentRequest | null;
       dueDate?: string | null;
       status?: AarActionStatus;
+      plan?: { id: string; section?: string | null } | null;
     },
   ): Promise<CorrectiveAction> {
     return this.request("PATCH", `/api/v1/corrective-actions/${id}`, body);
