@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Sql } from "../db/client.js";
+import { DEERHORN_CLOSURES, DEERHORN_GEOMETRY } from "./geometry/deerhorn.js";
 import { NORTH_COAST_PASSWORD } from "./north-coast.js";
 import { grantDemoDirector, scenarioClock, startScenario, type ScenarioPerson, type ScenarioRun } from "./scenario-kit.js";
 
@@ -214,23 +215,18 @@ export async function seedDeerhorn(app: FastifyInstance, sql: Sql, clock = deerh
     }));
   }
 
-  // Road closures.
-  const closures = [
-    { road: "SR-96 between Hoopa and Weitchpec", reason: "Fire burning on both sides of the highway", status: "closed", when: at("16:20", -1),
-      line: [[-123.672, 41.105], [-123.683, 41.14], [-123.692, 41.168], [-123.703, 41.186]] },
-    { road: "Bald Hills Road", reason: "Fire crossing the road east of the summit", status: "closed", when: at("09:10", -1),
-      line: [[-123.775, 41.228], [-123.85, 41.252], [-123.95, 41.27]] },
-    { road: "Bluff Creek Road", reason: "Merged fire front; no access", status: "closed", when: at("13:45", -1),
-      line: [[-123.668, 41.236], [-123.66, 41.262]] },
-    { road: "SR-169 at Weitchpec", reason: "Spot fire at the junction; the only road out for Pecwan and Wautec", status: "closed", when: at("13:05"),
-      line: [[-123.712, 41.191], [-123.735, 41.205], [-123.76, 41.222]] },
-    { road: "SR-96 from Weitchpec to Orleans", reason: "Evacuation traffic northbound only, pilot car", status: "one_lane", when: at("13:30"),
-      line: [[-123.69, 41.215], [-123.62, 41.27], [-123.555, 41.298]] },
+  // Road closures, each drawn along its road (tools/demo-geometry).
+  const closures: ReadonlyArray<{ road: keyof typeof DEERHORN_CLOSURES; reason: string; status: string; when: Date }> = [
+    { road: "SR-96 between Hoopa and Weitchpec", reason: "Fire burning on both sides of the highway", status: "closed", when: at("16:20", -1) },
+    { road: "Bald Hills Road", reason: "Fire crossing the road east of the summit", status: "closed", when: at("09:10", -1) },
+    { road: "Bluff Creek Road", reason: "Merged fire front; no access", status: "closed", when: at("13:45", -1) },
+    { road: "SR-169 at Weitchpec", reason: "Spot fire at the junction; the only road out for Pecwan and Wautec", status: "closed", when: at("13:05") },
+    { road: "SR-96 from Weitchpec to Orleans", reason: "Evacuation traffic northbound only, pilot car", status: "one_lane", when: at("13:30") },
   ];
   for (const closure of closures) {
     later(closure.when, () => record("sato", closure.when, "road_closures", {
       road: closure.road, reason: closure.reason, status: closure.status,
-      location: { type: "LineString", coordinates: closure.line },
+      location: DEERHORN_CLOSURES[closure.road],
     }));
   }
 
@@ -603,12 +599,13 @@ export async function seedDeerhorn(app: FastifyInstance, sql: Sql, clock = deerh
     await api("quinn", at("08:12"), "POST", `/api/v1/threads/${thread.id}/messages`, { body: "Monitors are scheduled with the dozer group for 09:00." });
   });
 
-  // The exercise map layers: hand-drawn and synthetic, never official perimeters or zones.
+  // The exercise map layers: synthetic, drawn from the basemap's terrain, rivers, roads and
+  // tribal lands, never official perimeters or zones.
   later(at("14:58"), async () => {
     const pack = await api<{ pack: { id: string } }>("morgan", at("14:58"), "POST", `/api/v1/incidents/${incidentId}/data-packs`, {
       name: "SYNTHETIC Deerhorn Lightning Complex exercise layers",
       organizationSlug: OWNER.slug,
-      description: "Exercise-only hand-drawn geometry. Not official fire perimeters or evacuation zones.",
+      description: "Exercise-only synthetic geometry drawn from the basemap's terrain, rivers, roads and tribal lands. Not official fire perimeters or evacuation zones.",
       // Freshness is judged against the real clock and the scenario clock can be a day
       // behind it, so the layers stay current for two days after seeding.
       datasets: [
@@ -642,34 +639,27 @@ const MAPPING = {
   note: "properties.note", sourceId: "properties.id", geometry: "geometry",
 };
 
-const feature = (id: string, title: string, category: string, status: string, note: string, geometry: Record<string, unknown>) =>
-  ({ properties: { id, title, category, status, note }, geometry });
-const polygon = (ring: number[][]) => ({ type: "Polygon", coordinates: [ring] });
+/** A layer feature whose geometry tools/demo-geometry generated under the same id. */
+const feature = (id: keyof typeof DEERHORN_GEOMETRY, title: string, category: string, status: string, note: string) =>
+  ({ properties: { id, title, category, status, note }, geometry: DEERHORN_GEOMETRY[id] });
 
 const DEERHORN_LAYERS = {
   fire_perimeters: [
-    feature("deerhorn", "SYNTHETIC Deerhorn Fire", "Fire perimeter", "unstable", "3,420 acres, 10% contained. Origin on the Hoopa and Yurok boundary south of Weitchpec.",
-      polygon([[-123.715, 41.19], [-123.69, 41.194], [-123.668, 41.18], [-123.662, 41.155], [-123.672, 41.13], [-123.694, 41.126], [-123.712, 41.145], [-123.72, 41.17], [-123.715, 41.19]])),
-    feature("bluff-creek", "SYNTHETIC Bluff Creek Fire", "Fire perimeter", "unstable", "1,860 acres, 0% contained. Merged with the Slate Creek Fire on day 2.",
-      polygon([[-123.685, 41.268], [-123.66, 41.275], [-123.635, 41.265], [-123.632, 41.245], [-123.648, 41.232], [-123.672, 41.232], [-123.688, 41.248], [-123.685, 41.268]])),
-    feature("pecwan", "SYNTHETIC Pecwan Fire", "Fire perimeter", "stabilizing", "410 acres, 35% contained.",
-      polygon([[-123.845, 41.335], [-123.828, 41.336], [-123.822, 41.325], [-123.83, 41.315], [-123.845, 41.318], [-123.85, 41.327], [-123.845, 41.335]])),
-    feature("bald-hills", "SYNTHETIC Bald Hills Fire", "Fire perimeter", "stable", "95 acres, 80% contained.",
-      polygon([[-123.796, 41.22], [-123.785, 41.221], [-123.782, 41.212], [-123.79, 41.207], [-123.798, 41.212], [-123.796, 41.22]])),
+    feature("deerhorn", "SYNTHETIC Deerhorn Fire", "Fire perimeter", "unstable", "3,420 acres, 10% contained. Origin on the Hoopa and Yurok boundary south of Weitchpec."),
+    feature("bluff-creek", "SYNTHETIC Bluff Creek Fire", "Fire perimeter", "unstable", "1,860 acres, 0% contained. Merged with the Slate Creek Fire on day 2."),
+    feature("pecwan", "SYNTHETIC Pecwan Fire", "Fire perimeter", "stabilizing", "410 acres, 35% contained."),
+    feature("bald-hills", "SYNTHETIC Bald Hills Fire", "Fire perimeter", "stable", "95 acres, 80% contained."),
   ],
   spot_fires: [
-    feature("spot-sr96", "SYNTHETIC spot fire across SR-96", "Spot fire", "critical", "Reported 12:50 below Weitchpec.", { type: "Point", coordinates: [-123.7, 41.182] }),
-    feature("spot-school", "SYNTHETIC ember cast at Weitchpec school", "Spot fire", "critical", "Reported 14:52.", { type: "Point", coordinates: [-123.6967, 41.1897] }),
-    feature("spot-sr169", "SYNTHETIC spot fire at the SR-169 junction", "Spot fire", "critical", "Closed SR-169 at 13:05.", { type: "Point", coordinates: [-123.715, 41.193] }),
+    feature("spot-sr96", "SYNTHETIC spot fire across SR-96", "Spot fire", "critical", "Reported 12:50 below Weitchpec."),
+    feature("spot-school", "SYNTHETIC ember cast at Weitchpec school", "Spot fire", "critical", "Reported 14:52."),
+    feature("spot-sr169", "SYNTHETIC spot fire at the SR-169 junction", "Spot fire", "critical", "Closed SR-169 at 13:05."),
   ],
+  // Each area is issued by one government for its own land; the issuer is in the title.
   evacuation_areas: [
-    feature("yurok-weitchpec", "SYNTHETIC Yurok Tribe order: Weitchpec", "Evacuation order, Yurok Tribe", "evacuating", "Issued 13:25. Go north on SR-96 to Orleans.",
-      polygon([[-123.735, 41.215], [-123.69, 41.22], [-123.675, 41.2], [-123.69, 41.18], [-123.725, 41.182], [-123.74, 41.198], [-123.735, 41.215]])),
-    feature("yurok-sr169", "SYNTHETIC Yurok Tribe order: SR-169 to the Pecwan refuge area", "Shelter order, Yurok Tribe", "evacuating", "Issued 14:05. The road out is cut at Weitchpec.",
-      polygon([[-123.88, 41.36], [-123.83, 41.355], [-123.76, 41.235], [-123.745, 41.21], [-123.765, 41.205], [-123.8, 41.24], [-123.86, 41.325], [-123.89, 41.345], [-123.88, 41.36]])),
-    feature("hoopa-north", "SYNTHETIC Hoopa Valley Tribe order: north end of the valley", "Evacuation order, Hoopa Valley Tribe", "evacuating", "Issued 13:40. Go south through Hoopa.",
-      polygon([[-123.705, 41.125], [-123.665, 41.13], [-123.645, 41.1], [-123.66, 41.085], [-123.695, 41.085], [-123.71, 41.105], [-123.705, 41.125]])),
-    feature("county-sr96", "SYNTHETIC Humboldt County warning: SR-96 north of Weitchpec", "Evacuation warning, Humboldt County", "warning", "Issued 13:55 for fee lands.",
-      polygon([[-123.69, 41.235], [-123.62, 41.285], [-123.575, 41.295], [-123.57, 41.28], [-123.615, 41.262], [-123.68, 41.222], [-123.69, 41.235]])),
+    feature("yurok-weitchpec", "SYNTHETIC Yurok Tribe order: Weitchpec", "Evacuation order", "evacuating", "Issued 13:25 by the Yurok Tribe. Go north on SR-96 to Orleans."),
+    feature("yurok-sr169", "SYNTHETIC Yurok Tribe order: SR-169 to the Pecwan refuge area", "Shelter in place", "evacuating", "Issued 14:05 by the Yurok Tribe. The road out is cut at Weitchpec."),
+    feature("hoopa-north", "SYNTHETIC Hoopa Valley Tribe order: north end of the valley", "Evacuation order", "evacuating", "Issued 13:40 by the Hoopa Valley Tribe. Go south through Hoopa."),
+    feature("county-sr96", "SYNTHETIC Humboldt County warning: SR-96 north of Weitchpec", "Evacuation warning", "warning", "Issued 13:55 by Humboldt County for fee lands."),
   ],
 };

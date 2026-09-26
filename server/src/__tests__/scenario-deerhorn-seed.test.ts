@@ -5,7 +5,7 @@ import { DEERHORN_ORIGIN, DEERHORN_PASSWORD, seedDeerhorn } from "../demo/deerho
 import { placeOnScenarioClock, type ScenarioRun } from "../demo/scenario-kit.js";
 import { auth } from "./browser.js";
 import { freshDb, type Sql } from "./helpers.js";
-import { countyOf, verticesOf } from "./scenario-geography.js";
+import { countyOf, expectExerciseLayers, recordsInside, verticesOf } from "./scenario-geography.js";
 
 /**
  * The Deerhorn Lightning Complex exercise as its seed writes it through the
@@ -108,6 +108,17 @@ describe("the Deerhorn Lightning Complex seed", () => {
     expect(datasets.map((row) => [row.key, row.item_count])).toEqual([
       ["evacuation_areas", 4], ["fire_perimeters", 4], ["spot_fires", 3],
     ]);
+    const items = await expectExerciseLayers(admin, scenario.incidentId, "Humboldt");
+    expect(items.size).toBe(11);
+  });
+
+  it("puts the spot fires ahead of every fire and keeps the shelters out of the fires and the orders", async () => {
+    const [near] = await admin`
+      select count(*)::int as n from data_pack_items spot join data_pack_items fire on fire.incident_id = spot.incident_id
+      where spot.incident_id = ${scenario.incidentId} and spot.data->>'category' = 'Spot fire'
+        and fire.data->>'category' = 'Fire perimeter' and ST_DWithin(fire.geom::geography, spot.geom::geography, 50)`;
+    expect(near!.n).toBe(0);
+    expect(await recordsInside(admin, scenario.incidentId, "shelters", ["Fire perimeter", "Evacuation order"])).toEqual([]);
   });
 
   it("shows the cultural resource board to the tribes and not to CAL FIRE", async () => {

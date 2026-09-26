@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Sql } from "../db/client.js";
+import { CASCADIA_CLOSURES, CASCADIA_GEOMETRY } from "./geometry/cascadia.js";
 import { NORTH_COAST_PASSWORD } from "./north-coast.js";
 import { scenarioClock, startScenario, type ScenarioPerson, type ScenarioRun } from "./scenario-kit.js";
 
@@ -189,7 +190,7 @@ export async function seedCascadia(app: FastifyInstance, sql: Sql, clock = casca
     ["Regional water district, Essex", "key_facility", -124.03534, 40.90596, "compromised", "Transmission main broken downstream"],
     ["Humboldt Bay Generating Station", "key_facility", -124.2103, 40.7408, "closed", "Offline; in the inundation area"],
     ["Blue Lake Rancheria microgrid", "key_facility", -124.0008, 40.8846, "normal", "Powering the Rancheria shelter"],
-    ["Samoa Bridge", "key_facility", -124.17, 40.805, "closed", "Approach spans dropped"],
+    ["Samoa Bridge", "key_facility", -124.16073, 40.81488, "closed", "Approach spans dropped"],
     ["Airport weather station", "weather_station", -124.1086, 40.9781, "normal"],
   ];
   for (const [index, [name, kind, lon, lat, status, notes]] of facilities.entries()) {
@@ -199,22 +200,23 @@ export async function seedCascadia(app: FastifyInstance, sql: Sql, clock = casca
     }));
   }
 
-  const closures: ReadonlyArray<readonly [string, string, string, number[][]]> = [
-    ["US-101 between Eureka and Arcata", "Liquefaction and tsunami damage along the bay", "closed", [[-124.155, 40.81], [-124.12, 40.835], [-124.095, 40.86]]],
-    ["SR-255 at the Samoa Bridge", "Approach spans dropped", "closed", [[-124.172, 40.803], [-124.18, 40.812]]],
-    ["US-101 at the Mad River bridge", "Bridge damage", "closed", [[-124.0965, 40.9275], [-124.0925, 40.915], [-124.0885, 40.9035]]],
-    ["US-101 at Fields Landing", "Roadway split by liquefaction", "closed", [[-124.21, 40.735], [-124.215, 40.72], [-124.21, 40.7]]],
-    ["SR-211 at Fernbridge", "Bridge closed for inspection", "closed", [[-124.2015, 40.617], [-124.2035, 40.608]]],
-    ["SR-299 near Lord Ellis Summit", "Landslide across both lanes", "closed", [[-123.84, 40.88], [-123.83, 40.885]]],
-    ["SR-299 near Berry Summit", "Landslide across both lanes", "closed", [[-123.775, 40.895], [-123.765, 40.898]]],
-    ["SR-299 at the Mad River bridge, Blue Lake", "Bridge deck cracked", "closed", [[-123.99, 40.88], [-123.985, 40.882]]],
-    ["SR-96 north of Willow Creek", "Rockfall across the road", "closed", [[-123.66, 41.0], [-123.655, 41.01]]],
-    ["Old Arcata Road", "Pavement buckled", "one_lane", [[-124.08, 40.85], [-124.07, 40.84]]],
-    ["King Salmon Avenue", "Flooded and liquefied", "closed", [[-124.218, 40.742], [-124.214, 40.738]]],
+  // Each closure is drawn along its road (tools/demo-geometry).
+  const closures: ReadonlyArray<readonly [keyof typeof CASCADIA_CLOSURES, string, string]> = [
+    ["US-101 between Eureka and Arcata", "Liquefaction and tsunami damage along the bay", "closed"],
+    ["SR-255 at the Samoa Bridge", "Approach spans dropped", "closed"],
+    ["US-101 at the Mad River bridge", "Bridge damage", "closed"],
+    ["US-101 at Fields Landing", "Roadway split by liquefaction", "closed"],
+    ["SR-211 at Fernbridge", "Bridge closed for inspection", "closed"],
+    ["SR-299 near Lord Ellis Summit", "Landslide across both lanes", "closed"],
+    ["SR-299 near Berry Summit", "Landslide across both lanes", "closed"],
+    ["SR-299 at the Mad River bridge, Blue Lake", "Bridge deck cracked", "closed"],
+    ["SR-96 north of Willow Creek", "Rockfall across the road", "closed"],
+    ["Old Arcata Road", "Pavement buckled", "one_lane"],
+    ["King Salmon Avenue", "Flooded and liquefied", "closed"],
   ];
-  for (const [index, [road, reason, status, line]] of closures.entries()) {
+  for (const [index, [road, reason, status]] of closures.entries()) {
     const when = at(`${String(9 + Math.floor(index / 4)).padStart(2, "0")}:${String(15 + (index % 4) * 10).padStart(2, "0")}`, -1);
-    later(when, () => record("ibarra", when, "road_closures", { road, reason, status, location: { type: "LineString", coordinates: line } }));
+    later(when, () => record("ibarra", when, "road_closures", { road, reason, status, location: CASCADIA_CLOSURES[road] }));
   }
 
   const fieldReports: ReadonlyArray<readonly [string, string, number, number, string, string, number?]> = [
@@ -454,13 +456,13 @@ export async function seedCascadia(app: FastifyInstance, sql: Sql, clock = casca
     const pack = await api<{ pack: { id: string } }>("delgado", at("09:59"), "POST", `/api/v1/incidents/${incidentId}/data-packs`, {
       name: "SYNTHETIC Cascadia Earthquake and Tsunami exercise layers",
       organizationSlug: OWNER.slug,
-      description: "Exercise-only hand-drawn geometry. Not official tsunami, liquefaction or landslide maps.",
+      description: "Exercise-only synthetic geometry drawn from the basemap's terrain, shoreline and roads. Not official tsunami, liquefaction or landslide maps.",
       // Freshness is judged against the real clock and the scenario clock can be a day
       // behind it, so the layers stay current for two days after seeding.
       datasets: [
         { key: "inundation", name: "SYNTHETIC observed tsunami inundation", kind: "geojson", fieldMapping: MAPPING, coverage: CASCADIA_AREA, staleAfterSeconds: 172800 },
         { key: "liquefaction", name: "SYNTHETIC liquefaction areas", kind: "geojson", fieldMapping: MAPPING, coverage: CASCADIA_AREA, staleAfterSeconds: 172800 },
-        { key: "hazards", name: "SYNTHETIC landslides, fires and gas leaks", kind: "geojson", fieldMapping: MAPPING, coverage: CASCADIA_AREA, staleAfterSeconds: 172800 },
+        { key: "hazards", name: "SYNTHETIC landslides, fires, gas leaks and bridge damage", kind: "geojson", fieldMapping: MAPPING, coverage: CASCADIA_AREA, staleAfterSeconds: 172800 },
       ],
     });
     const datasets = await sql`select id, key from data_pack_datasets where pack_id = ${pack.pack.id}`;
@@ -479,38 +481,34 @@ const MAPPING = {
   title: "properties.title", category: "properties.category", status: "properties.status",
   note: "properties.note", sourceId: "properties.id", geometry: "geometry",
 };
-const feature = (id: string, title: string, category: string, status: string, note: string, geometry: Record<string, unknown>) =>
-  ({ properties: { id, title, category, status, note }, geometry });
-const polygon = (ring: number[][]) => ({ type: "Polygon", coordinates: [ring] });
-const point = (lon: number, lat: number) => ({ type: "Point", coordinates: [lon, lat] });
+/** A layer feature whose geometry tools/demo-geometry generated under the same id. */
+const feature = (id: keyof typeof CASCADIA_GEOMETRY, title: string, category: string, status: string, note: string) =>
+  ({ properties: { id, title, category, status, note }, geometry: CASCADIA_GEOMETRY[id] });
 
 const CASCADIA_LAYERS = {
   inundation: [
-    feature("south-bay", "SYNTHETIC inundation: King Salmon and Fields Landing", "Tsunami inundation", "critical", "Observed from the air.",
-      polygon([[-124.23, 40.75], [-124.205, 40.75], [-124.2, 40.72], [-124.215, 40.7], [-124.235, 40.72], [-124.23, 40.75]])),
-    feature("waterfront", "SYNTHETIC inundation: Eureka waterfront", "Tsunami inundation", "critical", "Observed from the air.",
-      polygon([[-124.185, 40.812], [-124.15, 40.81], [-124.145, 40.802], [-124.18, 40.8], [-124.185, 40.812]])),
-    feature("samoa", "SYNTHETIC inundation: Samoa Peninsula bay side", "Tsunami inundation", "critical", "Observed from the air.",
-      polygon([[-124.2, 40.85], [-124.175, 40.85], [-124.175, 40.8], [-124.2, 40.78], [-124.2, 40.85]])),
-    feature("arcata-bottoms", "SYNTHETIC inundation: Arcata bottoms", "Tsunami inundation", "critical", "Observed from the air.",
-      polygon([[-124.12, 40.87], [-124.09, 40.865], [-124.095, 40.845], [-124.12, 40.85], [-124.12, 40.87]])),
+    feature("south-bay", "SYNTHETIC inundation: King Salmon and Fields Landing", "Tsunami inundation", "critical", "Observed from the air."),
+    feature("waterfront", "SYNTHETIC inundation: Eureka waterfront", "Tsunami inundation", "critical", "Observed from the air."),
+    feature("samoa", "SYNTHETIC inundation: Samoa Peninsula bay side", "Tsunami inundation", "critical", "Observed from the air."),
+    feature("arcata-bottoms", "SYNTHETIC inundation: Arcata bottoms", "Tsunami inundation", "critical", "Observed from the air."),
   ],
   liquefaction: [
-    feature("liq-waterfront", "SYNTHETIC liquefaction: Eureka waterfront fill", "Liquefaction", "critical", "Sand boils and settled buildings.",
-      polygon([[-124.18, 40.81], [-124.15, 40.808], [-124.15, 40.8], [-124.178, 40.798], [-124.18, 40.81]])),
-    feature("liq-king-salmon", "SYNTHETIC liquefaction: King Salmon", "Liquefaction", "critical", "Roads split.",
-      polygon([[-124.225, 40.745], [-124.21, 40.745], [-124.21, 40.735], [-124.225, 40.735], [-124.225, 40.745]])),
-    feature("liq-corridor", "SYNTHETIC liquefaction: US-101 corridor", "Liquefaction", "critical", "Roadway on fill failed.",
-      polygon([[-124.15, 40.82], [-124.1, 40.855], [-124.095, 40.85], [-124.145, 40.815], [-124.15, 40.82]])),
+    feature("liq-waterfront", "SYNTHETIC liquefaction: Eureka waterfront fill", "Liquefaction", "critical", "Sand boils and settled buildings."),
+    feature("liq-king-salmon", "SYNTHETIC liquefaction: King Salmon", "Liquefaction", "critical", "Roads split."),
+    feature("liq-corridor", "SYNTHETIC liquefaction: US-101 corridor", "Liquefaction", "critical", "Roadway on fill failed."),
   ],
   hazards: [
-    feature("slide-lord-ellis", "SYNTHETIC landslide near Lord Ellis Summit", "Landslide", "closed", "SR-299 closed.", point(-123.835, 40.882)),
-    feature("slide-berry", "SYNTHETIC landslide near Berry Summit", "Landslide", "closed", "SR-299 closed.", point(-123.77, 40.896)),
-    feature("fire-old-town", "SYNTHETIC structure fire, Old Town Eureka", "Structure fire", "critical", "Burning since 09:25 yesterday.", point(-124.166, 40.801)),
-    feature("fire-waterfront", "SYNTHETIC structure fire, Eureka waterfront", "Structure fire", "critical", "Still burning.", point(-124.172, 40.804)),
-    feature("fire-plaza", "SYNTHETIC structure fire, Arcata Plaza", "Structure fire", "warning", "Contained overnight.", point(-124.083, 40.868)),
-    feature("fire-fortuna", "SYNTHETIC structure fire, Fortuna Main Street", "Structure fire", "warning", "Contained.", point(-124.156, 40.598)),
-    feature("gas-fortuna", "SYNTHETIC gas leak, Fortuna", "Gas leak", "critical", "Reported after the aftershock.", point(-124.155, 40.596)),
-    feature("gas-arcata", "SYNTHETIC gas leak, Sunny Brae", "Gas leak", "warning", "Shut off at the meter.", point(-124.068, 40.86)),
+    feature("slide-lord-ellis", "SYNTHETIC landslide near Lord Ellis Summit", "Slide", "closed", "SR-299 closed."),
+    feature("slide-berry", "SYNTHETIC landslide near Berry Summit", "Slide", "closed", "SR-299 closed."),
+    feature("fire-old-town", "SYNTHETIC structure fire, Old Town Eureka", "Structure fire", "critical", "Burning since 09:25 yesterday."),
+    feature("fire-waterfront", "SYNTHETIC structure fire, Eureka waterfront", "Structure fire", "critical", "Still burning."),
+    feature("fire-plaza", "SYNTHETIC structure fire, Arcata Plaza", "Structure fire", "warning", "Contained overnight."),
+    feature("fire-fortuna", "SYNTHETIC structure fire, Fortuna Main Street", "Structure fire", "warning", "Contained."),
+    feature("gas-fortuna", "SYNTHETIC gas leak, Fortuna", "Gas leak", "critical", "Reported after the aftershock."),
+    feature("gas-arcata", "SYNTHETIC gas leak, Sunny Brae", "Gas leak", "warning", "Shut off at the meter."),
+    feature("bridge-samoa", "SYNTHETIC bridge damage, Samoa Bridge", "Bridge damage", "closed", "Approach spans dropped."),
+    feature("bridge-mad-river", "SYNTHETIC bridge damage, US-101 Mad River bridge", "Bridge damage", "closed", "US-101 closed at the bridge."),
+    feature("bridge-fernbridge", "SYNTHETIC bridge damage, Fernbridge", "Bridge damage", "warning", "Closed for inspection."),
+    feature("bridge-blue-lake", "SYNTHETIC bridge damage, SR-299 Mad River bridge at Blue Lake", "Bridge damage", "closed", "Bridge deck cracked."),
   ],
 };

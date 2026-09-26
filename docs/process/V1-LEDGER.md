@@ -14368,3 +14368,52 @@ machine's throwaway cluster, while five lane agents worked beside it: 390 of
 `beforeAll` setup timed out at 60 s (`field-breadth`, `starter-pack`,
 `workflow-runtime`). The four rerun alone: 4 files, 16 tests passed. MP6
 and MP10 part one landed during the run; its own gate is in its receipt.
+
+## Map and dashboard parity MP9: scenario geometry
+
+Map and Dashboard Parity PSPR unit MP9 (decision 7), built in lane
+`lane/mp9`.
+
+- **What there was before.** The Cascadia, Deerhorn and Del Norte data
+  packs held hand-typed polygons of 4 to 8 corners (a tsunami inundation that
+  was a rectangle, floods that ignored the rivers) and points and road
+  closures placed by eye, up to 1.9 km off their highways.
+- **What changed.** A deterministic generator, `tools/demo-geometry/`
+  (`grid.mjs`, `sources.mjs`, `generate.mjs` and a test), draws the three
+  scenarios' SYNTHETIC hazard geometry from the shipped basemap (3DEP
+  terrain tiles, OpenMapTiles water, waterways, roads, places and tribal
+  boundaries, and the county outlines) into
+  `server/src/demo/geometry/{cascadia,del-norte,deerhorn}.ts`, which the seed
+  files import. Tsunami inundation floods from Humboldt Bay over land under a
+  run-up limit falling with distance from the entrance and inland;
+  liquefaction is patchy low fill at the bay margin; river floods grow from
+  the Smith and lower Klamath channels at a stage over the channel surface;
+  fire perimeters spread from each ignition by slope, wind and seeded fuel to
+  their stated acreage; evacuation areas are drainage units (ridgelines and
+  rivers) cut to each issuer's land; outages follow the local road network.
+  Hazard points sit on the road, crossing, pass or bridge they name; road
+  closures follow their roads. Features keep their ids, SYNTHETIC titles,
+  statuses and notes. The data packs share one category vocabulary, which
+  MP2's palette and MP7's styles key on, with "Shelter in place" added for
+  the Yurok SR-169 area. Cascadia gains four bridge damage points and its
+  Samoa Bridge facility moves onto the bridge. New Del Norte and Cascadia
+  seed tests; the Deerhorn seed test gains the same layer checks (PostGIS
+  validity, winding, at least 20 vertices a ring, county containment,
+  SYNTHETIC titles, the vocabulary, spot fires outside perimeters, open
+  shelters outside hazard areas). The Deerhorn situation manual now says the
+  layers are generated from the terrain (integrator's edit).
+- **Defaults taken and deviations.** Closures were redrawn along their roads
+  although the unit named only hazard layers, because the old lines sat off
+  their highways. Facility kinds were already the most specific the enum
+  offers; none changed. Evacuation zone issuers stay in titles and notes, not
+  categories. North Coast Storm's content is unchanged. The lane started
+  before MP1 landed, a deviation from the plan's section 5; it owns only the
+  three exercise seeds and new files.
+- **Verification.** `node tools/demo-geometry/generate.mjs --check` current;
+  `pnpm check:static` green on the rebased lane; the four scenario seed test
+  files and the generator test: 5 files, 22 tests; 36 Map captures at 1586
+  by 992 in both themes over the street map and imagery reviewed, and by the
+  integrator (the bay inundation and the Deerhorn perimeters and zones).
+- **Full suite:** as MP11, once per landing batch before the push.
+- **Rollback.** Revert the commit; the seeds return to the hand-typed
+  geometry.

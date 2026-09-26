@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Sql } from "../db/client.js";
+import { DEL_NORTE_CLOSURES, DEL_NORTE_GEOMETRY } from "./geometry/del-norte.js";
 import { NORTH_COAST_PASSWORD } from "./north-coast.js";
 import { grantDemoDirector, scenarioClock, startScenario, type ScenarioPerson, type ScenarioRun } from "./scenario-kit.js";
 
@@ -223,26 +224,20 @@ export async function seedDelNorte(app: FastifyInstance, sql: Sql, clock = delNo
   }
 
   // Road closures as they stand at the clock.
-  const closures = [
-    { road: "US-101 at Last Chance Grade", reason: "The roadway dropped; no reopening estimate", status: "closed", when: at("16:40", -3),
-      line: [[-124.103, 41.69], [-124.098, 41.676], [-124.093, 41.664]] },
-    { road: "US-199 at Patrick Creek", reason: "Slide across both lanes", status: "closed", when: at("22:50", -1),
-      line: [[-123.855, 41.873], [-123.846, 41.872], [-123.838, 41.878]] },
-    { road: "US-199 between Hiouchi and Gasquet", reason: "Slide debris; one lane with a pilot car", status: "one_lane", when: at("14:00", -5),
-      line: [[-124.03, 41.81], [-124.0, 41.83], [-123.985, 41.842]] },
-    { road: "Klamath Beach Road", reason: "Flooded by the Klamath River", status: "closed", when: at("09:40", -2),
-      line: [[-124.0699, 41.5335], [-124.06, 41.53]] },
-    { road: "Terwer Valley Road at Klamath Glen", reason: "Flooded; water over the road", status: "closed", when: at("09:50", -2),
-      line: [[-123.991, 41.527], [-123.985, 41.522]] },
-    { road: "Lake Earl Drive", reason: "Standing water across the northbound lane", status: "one_lane", when: at("03:20"),
-      line: [[-124.1822, 41.79626], [-124.176, 41.81]] },
-    { road: "US-101 at the Dr. Fine Bridge", reason: "Bridge inspection after high water", status: "one_lane", when: at("04:55"),
-      line: [[-124.146, 41.893], [-124.144, 41.899]] },
+  // Each closure is drawn along its road (tools/demo-geometry).
+  const closures: ReadonlyArray<{ road: keyof typeof DEL_NORTE_CLOSURES; reason: string; status: string; when: Date }> = [
+    { road: "US-101 at Last Chance Grade", reason: "The roadway dropped; no reopening estimate", status: "closed", when: at("16:40", -3) },
+    { road: "US-199 at Patrick Creek", reason: "Slide across both lanes", status: "closed", when: at("22:50", -1) },
+    { road: "US-199 between Hiouchi and Gasquet", reason: "Slide debris; one lane with a pilot car", status: "one_lane", when: at("14:00", -5) },
+    { road: "Klamath Beach Road", reason: "Flooded by the Klamath River", status: "closed", when: at("09:40", -2) },
+    { road: "Terwer Valley Road at Klamath Glen", reason: "Flooded; water over the road", status: "closed", when: at("09:50", -2) },
+    { road: "Lake Earl Drive", reason: "Standing water across the northbound lane", status: "one_lane", when: at("03:20") },
+    { road: "US-101 at the Dr. Fine Bridge", reason: "Bridge inspection after high water", status: "one_lane", when: at("04:55") },
   ];
   for (const closure of closures) {
     later(closure.when, () => record("novak", closure.when, "road_closures", {
       road: closure.road, reason: closure.reason, status: closure.status,
-      location: { type: "LineString", coordinates: closure.line },
+      location: DEL_NORTE_CLOSURES[closure.road],
     }));
   }
 
@@ -590,12 +585,12 @@ export async function seedDelNorte(app: FastifyInstance, sql: Sql, clock = delNo
     later(at(hhmm, days), () => api(who, at(hhmm, days), "POST", `/api/v1/threads/${threadId}/messages`, { body }));
   }
 
-  // The exercise map layers: hand-drawn and synthetic.
+  // The exercise map layers: synthetic, drawn from the basemap's terrain, rivers and roads.
   later(at("06:33"), async () => {
     const pack = await api<{ pack: { id: string } }>("rivera", at("06:33"), "POST", `/api/v1/incidents/${incidentId}/data-packs`, {
       name: "SYNTHETIC Del Norte Atmospheric Rivers exercise layers",
       organizationSlug: OWNER.slug,
-      description: "Exercise-only hand-drawn geometry. Not official flood maps.",
+      description: "Exercise-only synthetic geometry drawn from the basemap's terrain, rivers and roads. Not official flood maps.",
       // Freshness is judged against the real clock and the scenario clock can be a day
       // behind it, so the layers stay current for two days after seeding.
       datasets: [
@@ -629,34 +624,26 @@ const MAPPING = {
   note: "properties.note", sourceId: "properties.id", geometry: "geometry",
 };
 
-const feature = (id: string, title: string, category: string, status: string, note: string, geometry: Record<string, unknown>) =>
-  ({ properties: { id, title, category, status, note }, geometry });
-const polygon = (ring: number[][]) => ({ type: "Polygon", coordinates: [ring] });
-const point = (lon: number, lat: number) => ({ type: "Point", coordinates: [lon, lat] });
+/** A layer feature whose geometry tools/demo-geometry generated under the same id. */
+const feature = (id: keyof typeof DEL_NORTE_GEOMETRY, title: string, category: string, status: string, note: string) =>
+  ({ properties: { id, title, category, status, note }, geometry: DEL_NORTE_GEOMETRY[id] });
 
 const DEL_NORTE_LAYERS = {
   flood_extents: [
-    feature("smith-lower", "SYNTHETIC Smith River flooding, Fort Dick to the mouth", "Flood extent", "critical", "Observed at 05:30.",
-      polygon([[-124.205, 41.945], [-124.17, 41.94], [-124.145, 41.905], [-124.14, 41.87], [-124.155, 41.86], [-124.165, 41.89], [-124.19, 41.925], [-124.21, 41.935], [-124.205, 41.945]])),
-    feature("klamath-glen", "SYNTHETIC Klamath River flooding, Klamath Glen and Resighini", "Flood extent", "critical", "Observed at 06:00.",
-      polygon([[-124.035, 41.525], [-124.01, 41.528], [-123.985, 41.52], [-123.98, 41.508], [-124.0, 41.505], [-124.03, 41.512], [-124.035, 41.525]])),
-    feature("lake-earl", "SYNTHETIC Lake Earl high water", "Flood extent", "warning", "Rising with the tide.",
-      polygon([[-124.2, 41.82], [-124.17, 41.83], [-124.16, 41.805], [-124.185, 41.795], [-124.2, 41.82]])),
-    feature("harbor", "SYNTHETIC harbor surge", "Flood extent", "warning", "Surf over the breakwater at high tide.",
-      polygon([[-124.2, 41.748], [-124.185, 41.75], [-124.18, 41.743], [-124.195, 41.738], [-124.2, 41.748]])),
+    feature("smith-lower", "SYNTHETIC Smith River flooding, Fort Dick to the mouth", "Flood extent", "critical", "Observed at 05:30."),
+    feature("klamath-glen", "SYNTHETIC Klamath River flooding, Klamath Glen and Resighini", "Flood extent", "critical", "Observed at 06:00."),
+    feature("lake-earl", "SYNTHETIC Lake Earl high water", "Flood extent", "warning", "Rising with the tide."),
+    feature("harbor", "SYNTHETIC harbor surge", "Flood extent", "warning", "Surf over the breakwater at high tide."),
   ],
   slides: [
-    feature("last-chance", "SYNTHETIC Last Chance Grade failure", "Slide", "closed", "Roadway dropped on day 4.", point(-124.098, 41.676)),
-    feature("patrick-creek", "SYNTHETIC Patrick Creek slide", "Slide", "closed", "Both lanes blocked.", point(-123.846, 41.872)),
-    feature("hiouchi", "SYNTHETIC Hiouchi slide", "Slide", "one_lane", "One lane with a pilot car.", point(-124.0, 41.83)),
-    feature("howland-hill", "SYNTHETIC Howland Hill Road slide", "Slide", "warning", "Mud across the road.", point(-124.139, 41.762)),
+    feature("last-chance", "SYNTHETIC Last Chance Grade failure", "Slide", "closed", "Roadway dropped on day 4."),
+    feature("patrick-creek", "SYNTHETIC Patrick Creek slide", "Slide", "closed", "Both lanes blocked."),
+    feature("hiouchi", "SYNTHETIC Hiouchi slide", "Slide", "one_lane", "One lane with a pilot car."),
+    feature("howland-hill", "SYNTHETIC Howland Hill Road slide", "Slide", "warning", "Mud across the road."),
   ],
   outage_areas: [
-    feature("crescent-city", "SYNTHETIC Crescent City outage", "Power outage", "critical", "About 4,000 customers.",
-      polygon([[-124.215, 41.78], [-124.17, 41.785], [-124.165, 41.755], [-124.2, 41.745], [-124.215, 41.76], [-124.215, 41.78]])),
-    feature("fort-dick", "SYNTHETIC Fort Dick and Smith River outage", "Power outage", "critical", "About 1,200 customers.",
-      polygon([[-124.175, 41.94], [-124.13, 41.94], [-124.13, 41.86], [-124.17, 41.86], [-124.175, 41.94]])),
-    feature("klamath", "SYNTHETIC Klamath outage", "Power outage", "critical", "About 600 customers.",
-      polygon([[-124.05, 41.54], [-124.0, 41.54], [-123.98, 41.51], [-124.04, 41.505], [-124.05, 41.54]])),
+    feature("crescent-city", "SYNTHETIC Crescent City outage", "Power outage", "critical", "About 4,000 customers."),
+    feature("fort-dick", "SYNTHETIC Fort Dick and Smith River outage", "Power outage", "critical", "About 1,200 customers."),
+    feature("klamath", "SYNTHETIC Klamath outage", "Power outage", "critical", "About 600 customers."),
   ],
 };

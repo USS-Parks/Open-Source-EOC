@@ -72,7 +72,8 @@ work as in any HSEEP exercise.
 
 - Nothing leaves the host: no email, SMS, IPAWS or public website.
 - The fire perimeters, spot fires and evacuation areas on the map are
-  hand-drawn exercise layers, not official perimeters or zones.
+  synthetic exercise layers generated from the terrain, not official
+  perimeters or zones.
 - In this product a joint release's approvals are recorded by the owning
   organization's people. The Yurok Tribe's and CAL FIRE's decisions reach the
   release through Hoopa's Public Information Officer, who records each as
