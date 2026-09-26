@@ -206,3 +206,23 @@ North Coast Storm's fidelity captures are no further from the frames;
 `pnpm check:gate` and both air-gap proofs are green; the four formats are
 rebuilt in `deploy/` with their SHA-256; `MAP-DASHBOARD-PARITY-REVIEW.md` is at
 the repository root; and Basho has reviewed it in the installed app.
+
+## 12. Amendment 1, 2026-09-26: competitive gaps folded in
+
+After the competitive research in `docs/process/COMPETITIVE-FEATURES-2026-09-26.md`
+(Juvare, Esri and Veoci features promoted in 2025 and 2026), Basho chose
+"Fold into this plan" for the smaller gaps. They ship in 1.0:
+
+| Unit | Addition | Source of the idea |
+|---|---|---|
+| MP8 | **Notify people in an area.** A map tool: draw an area, see the people and contacts whose known location lies inside it (a contact's address placed by the offline gazetteer, or a stored point), and open the existing mass notification composer (VA7, VA8) with them selected. Nothing is sent without the person pressing Send. | Juvare's WebEOC Nexus geoalerting |
+| MP10 | **Power outage feed preset.** A preset for a public outage source (the Department of Energy's outage data or a utility's public outage map feed, whichever carries clear public terms), drawn by customers out, cached for offline use like the other feeds. | Juvare's PowerOutage.com partnership |
+| MP13 | **After Action rollups across incidents.** The AAR dashboard switches between this incident and all incidents in a date range, counting corrective actions by core capability, capability element and responsible organization. Rule-based, no AI. | Juvare's cross-incident AAR analysis |
+| MP15A (new, before MP16) | **Field activity by text message.** A responder texts an activity entry from a phone number registered to their person record; the SMS inbound path that already reads replies (VA21) files it as an ICS 214 activity log entry on the sender's current assignment and texts a confirmation. Entries arriving by SMS are marked with their channel, because a sender number can be forged; an unregistered number gets no reply and nothing is filed. Reviewed by an adversarial auditor before it lands. | Juvare's ICS 214 by SMS |
+
+Proof for each follows section 8. Two larger items Basho also chose on
+2026-09-26 are planned separately, not here: a local AI assistant (a model
+running on the EOC's own computer or host, draft-only output) and a separate
+public page (a published read-only shelter and evacuation status page, and
+moderated public damage reports into the review queue, both outside the
+protected system). They get their own PSPR for approval.

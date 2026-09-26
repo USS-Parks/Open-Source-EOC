@@ -14142,3 +14142,17 @@ follows MP1 and MP2.
 - **Full suite:** as MP11, once per landing batch before the push. Browser
   captures follow part two.
 - **Rollback.** Revert the commit; the archives are untracked build outputs.
+
+## Map and dashboard parity amendment 1: competitive gaps
+
+Basho, 2026-09-26, answering three questions after the competitive research
+(`docs/process/COMPETITIVE-FEATURES-2026-09-26.md`): "Fold into this plan"
+for the smaller gaps, which the plan's section 12 records (notify people in
+an area on the map, a power outage feed preset, After Action rollups across
+incidents, and field activity by text message as new unit MP15A); "Plan it,
+local model only" for a local AI assistant; and "Allow a separate public
+page" for a published read-only shelter and evacuation status page and
+moderated public damage reports outside the protected system. The last two
+change the Operator Trust plan's decision 9 (AI parked) and the standing
+no-public-facet decision; they get their own PSPR for approval and are not
+built under this plan.
