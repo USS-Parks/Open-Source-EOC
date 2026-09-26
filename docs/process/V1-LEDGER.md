@@ -13642,3 +13642,18 @@ trial gate's other results on that commit: `check:static` exit 0,
 `audit:advisories` 0 high or critical and 0 exceptions, `test:desktop` 44 of
 44, and the serial Vitest run 2,025 passed and 2 failed of 2,030 tests (the
 two conditions browser cases), 47 minutes.
+
+## Version 0.9.9: the version and changelog
+
+At Basho's instruction of 2026-09-25 that the release after the Veoci and
+air gap roster is `0.9.9`, built in every install format.
+
+- **What changed.** The four `package.json` files carry `0.9.9`.
+  `CHANGELOG.md` gains the `0.9.9` entry: what VA6 to VA39, the IPAWS
+  connector (IC1 to IC3) and the follow-ups added, changed and fixed since
+  `0.9.2`, the migrations `0155` to `0168`, and the four builds; the earlier
+  "Unreleased" IPAWS entries are part of it. The installer README's example
+  paths name the `0.9.9` setup.
+- **Verification.** `pnpm check:static` exit 0; `pnpm test:desktop` 44 of 44.
+- **Not done here.** Tagging and publishing, which are Basho's. The plan-end
+  gate on this commit and the builds follow in their own receipts.

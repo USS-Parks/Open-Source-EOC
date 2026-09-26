@@ -6,7 +6,63 @@ Notable changes to OpenEOC, newest first. The format follows
 the repository carries the same version. How to upgrade, and which databases
 upgrade in place, is in the [upgrade guide](docs/guides/UPGRADE.md).
 
-## Unreleased
+## 0.9.9 - 2026-09-25
+
+An evaluation build, not tagged. The Windows setup
+`Open-Source-EOC-Setup-0.9.9.exe`, the ZIP of its staged folder, the map
+data packet and the macOS disk image are built from the commit that sets
+this version and stand beside the `0.9.2` builds. Since 0.9.2 the rest of
+the Veoci Integration and Air Gap PSPR landed on `main` (VA6 to VA39), with
+the IPAWS-OPEN connector rebuilt to FEMA's Interface Design Guide (IC1 to
+IC3) and the follow-ups and corrections the units' reviews found. Each
+change is described in its ledger receipt, cited here by its heading's unit;
+`RELEASE-DECISION.md` lists what this build holds, what has not been run
+and the decisions left to the project lead. Upgrading applies migrations
+`0155` to `0168` in place; `0168` numbers every board record for the Esri
+view, which touches every record once.
+
+### Added
+
+- Incident templates authored and versioned on screen, and ad hoc tasks on
+  the Tasks screen (VA6). Activation notifies chosen contact groups and
+  positions, and rules address groups, positions and whoever is on shift
+  (VA7). Mass sends can carry response options (VA8).
+- A signature field and QR codes for badges and pool resources (VA9); a
+  license gate for denied and review licenses (VA10); signed solution
+  packages carrying templates, forms, dashboards, reports and rules (VA11),
+  with a small EOC starter pack (VA12) and a hotline and shelter
+  registration pack (VA29).
+- Executable plans that activate an incident, release tasks on schedule and
+  remind reviews (VA13), continuity of operations plans with essential
+  functions and succession (VA27), and after-action corrective actions
+  linked to plans, with due-date reminders (VA30).
+- FEMA Public Assistance force account from check-ins, shifts and pool hours
+  (VA14), and a volunteer and CERT roster with credentials, deployments and
+  hours (VA28).
+- Workflow guards and per-state read-only fields (VA15), a declarative
+  action catalog on boards (VA25), all-or-any conditions with day and
+  case-blind operators and every view option in the designer (VA26), charts
+  in reports and create-record dashboard tiles (VA31).
+- The incident room: dashboards, threads, contact groups and file folders
+  opened from the template (VA16); an import report for every import that
+  writes, and a people import (VA17); a rollout playbook and self-paced
+  modules (VA18).
+- Exchange across the gap: signed peer identity and agreement revocation
+  (VA19), exchange of a shared board by signed file (VA20), text messages
+  through a phone on the site network and printed call-down sheets (VA21),
+  and field work queued offline, boards with record rules synced per record
+  and late submissions kept for a closed incident's administrators (VA22).
+- ICS forms 201 to 215A as components of the operational period, the IAP
+  assembled and approved from them (VA37), and the ICS 213RR from a resource
+  request (VA38).
+- An OpenAPI document and scoped, revocable service identities (VA32), a
+  read-only ArcGIS FeatureServer view of boards and Esri JSON import (VA33),
+  an optional device PIN that encrypts offline work on shared devices
+  (VA34), region map packets carried in by checked file (VA35), and each
+  position's job aid in the console, offline (VA39).
+- Procedures with result templates for phones on a host's authority (VA23)
+  and the disconnected drill (VA24); the air-gap proof gained a mode that
+  runs every optional integration against local stand-ins.
 
 ### Changed
 
@@ -21,12 +77,28 @@ upgrade in place, is in the [upgrade guide](docs/guides/UPGRADE.md).
   shows which channels acknowledged and which refused. See
   [IPAWS-ENABLEMENT](docs/IPAWS-ENABLEMENT.md). A PIN stored by an earlier
   build no longer configures IPAWS; enter the certificate.
+- Records written through sync, including offline edits replayed on
+  reconnect, run their board's actions as a REST write does.
+- A Windows install trusts package publishers from
+  `trusted-template-keys.pem` in its profile folder.
+- Case-blind board conditions use PostgreSQL's ICU collation `und-x-icu`,
+  which the Windows runtime and Postgres.app carry.
+- The Windows host's Caddy log replaces tokens in request addresses and
+  deletes token headers.
 
 ### Fixed
 
 - An IPAWS-OPEN answer of HTTP 200 that flagged a channel as an error was
   read as accepted. Acceptance now needs every channel status free of
   errors, and any answer the connector does not recognize is a rejection.
+- Editing a corrective action without changing its due date moved the date
+  a day earlier on a database west of UTC.
+- A refused upload could leave its staging file on Windows.
+- A workflow transition beside a record write on the same incident could
+  deadlock.
+- The record pane lost its tab on every refresh of the record.
+- A map field's own read level was not applied on the map, the OGC items
+  and the vector tiles.
 
 ## 0.9.2 - 2026-09-25
 
