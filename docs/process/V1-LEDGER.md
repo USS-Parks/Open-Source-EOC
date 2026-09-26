@@ -14357,3 +14357,14 @@ Map and Dashboard Parity PSPR units MP6 and MP10, their data halves
 - **Basho's review, 2026-09-26:** "I accept the FEMA terms for risk-index
   and data usage." The National Risk Index ships in the risk archive under
   those terms, with the non-endorsement statement.
+
+## Map and dashboard parity: first landing batch, full suite
+
+The first batch (MP0, MP11, MP3, MP4 part one, MP1, MP12, then MP6 and MP10
+part one) was run through `pnpm test:ci` on `main` at `6ddddf6` on this
+machine's throwaway cluster, while five lane agents worked beside it: 390 of
+394 files, 2,309 tests passed and 13 skipped; 4 files failed:
+`federation-batches.test.ts` (the 24-hour partition drain) and three whose
+`beforeAll` setup timed out at 60 s (`field-breadth`, `starter-pack`,
+`workflow-runtime`). The four rerun alone: 4 files, 16 tests passed. MP6
+and MP10 part one landed during the run; its own gate is in its receipt.
