@@ -50,3 +50,5 @@ export * from "./tasks/contract.js";
 export * from "./plans/contract.js";
 export * from "./plans/continuity-template.js";
 export * from "./volunteers/contract.js";
+export * from "./palette/palette.js";
+export * from "./palette/tables.js";

@@ -18,16 +18,18 @@ export interface ChartDatum {
 }
 
 /**
- * Default status series, themed in charts.css so each reads on light and dark
- * surfaces. A shared palette table is meant to replace these.
+ * Work status series: the shared WORK_STATUS_PALETTE, themed through the
+ * --eoc-series variables in charts.css (the kit's tests hold the two equal).
  */
 export const statusPalette = {
   notStarted: "var(--eoc-series-not-started)",
   inProgress: "var(--eoc-series-in-progress)",
-  complete: "var(--eoc-series-complete)",
-  pastDue: "var(--eoc-series-past-due)",
   inApproval: "var(--eoc-series-in-approval)",
   approved: "var(--eoc-series-approved)",
+  complete: "var(--eoc-series-complete)",
+  pastDue: "var(--eoc-series-past-due)",
+  closed: "var(--eoc-series-closed)",
+  cancelled: "var(--eoc-series-cancelled)",
 } as const;
 
 // Categories without a caller color take the themed status tokens in turn.

@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { WORK_STATUS_PALETTE, paletteCssVariables } from "@openeoc/shared";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import axe from "axe-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -279,6 +280,13 @@ describe("the kit in both themes", () => {
   };
 
   for (const theme of THEMES) {
+    it(`takes every status series from the shared work status palette (${theme})`, () => {
+      const expected = paletteCssVariables(WORK_STATUS_PALETTE, theme, "eoc-series");
+      const css = Object.fromEntries(Object.entries(series(theme)).map(([name, color]) => [`--eoc-series-${name}`, color]));
+      expect(css).toMatchObject(expected);
+      expect(Object.values(statusPalette).map((value) => value.slice(4, -1)).sort()).toEqual(Object.keys(expected).sort());
+    });
+
     it(`themes every status series, readable on the ${theme} surface and under its chip ink`, () => {
       const colors = series(theme);
       const names = Object.values(statusPalette).map((value) => /--eoc-series-([a-z-]+)/.exec(value)![1]!);

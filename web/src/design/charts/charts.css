@@ -1,25 +1,31 @@
 /*
- * Chart kit. Series colors are themed here: dark on light surfaces, bright on
- * dark ones, each with an ink that reads on it (checked in the kit's tests).
- * Charts draw no animation, so a reduced-motion preference has nothing to stop.
+ * Chart kit. The work status series are the shared WORK_STATUS_PALETTE
+ * (@openeoc/shared), copied here per theme and held equal to it by the kit's
+ * tests: dark on light surfaces, bright on dark ones, each with an ink that
+ * reads on it. Charts draw no animation, so a reduced-motion preference has
+ * nothing to stop.
  */
 .eoc-theme[data-theme="light"] {
   --eoc-series-not-started: #5f6b7a;
   --eoc-series-in-progress: #b45309;
-  --eoc-series-complete: #15803d;
-  --eoc-series-past-due: #c81e1e;
   --eoc-series-in-approval: #0e7490;
   --eoc-series-approved: #1d63d8;
+  --eoc-series-complete: #15803d;
+  --eoc-series-past-due: #c81e1e;
+  --eoc-series-closed: #6f42c1;
+  --eoc-series-cancelled: #7a6232;
   --eoc-series-ink: #ffffff;
 }
 
 .eoc-theme[data-theme="dark"] {
   --eoc-series-not-started: #8f9aa8;
   --eoc-series-in-progress: #f28a2e;
-  --eoc-series-complete: #4cbb6c;
-  --eoc-series-past-due: #ef5159;
   --eoc-series-in-approval: #2cc1d9;
   --eoc-series-approved: #4b9cf5;
+  --eoc-series-complete: #4cbb6c;
+  --eoc-series-past-due: #ef5159;
+  --eoc-series-closed: #b392f0;
+  --eoc-series-cancelled: #c9a66b;
   --eoc-series-ink: #0b1b2b;
 }
 

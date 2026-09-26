@@ -14417,3 +14417,49 @@ Map and Dashboard Parity PSPR unit MP9 (decision 7), built in lane
 - **Full suite:** as MP11, once per landing batch before the push.
 - **Rollback.** Revert the commit; the seeds return to the hand-typed
   geometry.
+
+## Map and dashboard parity MP2: the palette table
+
+Map and Dashboard Parity PSPR unit MP2 (decision 5), built in lane
+`lane/mp2`.
+
+- **What there was before.** Colors lived where they were drawn: the map's
+  status frames in `web/src/cop`, the chart kit's provisional work status
+  palette in `charts.css`, the icon suite's provisional lifeline colors in
+  its contact sheet. Nothing shared one value between a map symbol, a legend
+  patch, a form pick list and a chart slice.
+- **What changed.** `shared/src/palette/` (`palette.ts` helpers,
+  `tables.ts` data, exported from `shared/src/index.ts`): sixteen palettes
+  keyed by stored values, each entry with a label and light and dark colors,
+  and fill and outline rules for areas. Lifeline status (5), lifeline
+  category (8), evacuation (7), damage degree (6), Public Assistance
+  categories (7), shelter status (6), road closure (4), hazard categories
+  (16: 9 areas and 7 points, each point with its icon id from the MP3 suite),
+  incident families (7) and types (23), work status (8), NRI ratings (5),
+  SVI quartiles (4), AIANNH classes (7), building use (9) and role (3).
+  Aliases map the product's own vocabulary onto each table (evacuation
+  order, warning, advisory and shelter order; EDXL-HAVE shelter states; task
+  open, completed and overdue; the data-pack category labels; the NRI's
+  strings; the USA Structures and basemap building classes). Helpers:
+  `definePalette`, `paletteKey`, `paletteMatch` and `paletteStep` (MapLibre
+  expressions as plain data), `paletteLegend` and `paletteCssVariables`. The
+  chart kit's work status colors now come from the table, with Closed and
+  Cancelled added, and a kit test fails if the CSS drifts from it.
+- **Defaults taken and deviations.** No shipped color changed: lifeline
+  status keeps the Overview's shades, road closures the map's, and the six
+  existing work status colors are unchanged. The icon suite's provisional
+  Health, Energy and Transportation colors were moved away from status
+  colors, and Energy now keeps 3:1 under a white icon; Esri's hazmat amber
+  fails 3:1 under white, so hazmat points use `#b36b00`. Dark values differ
+  from light only where an area outline would fall below 3:1 on the dark
+  basemap. NWS hazard colors are left to MP10, which takes them from
+  weather.gov. Gas leak and hazardous materials share a symbol (no gas icon
+  in the 40). Nothing is wired to the map in this unit.
+- **Verification.** Palette tests (every value labeled and colored in both
+  themes, valid hex, 3:1 for white pictograms on lifeline and hazard
+  colors, entries in one palette kept apart, expression shapes), the chart
+  kit and dashboards tests: 8 files, 73 tests, after the rebase. `pnpm
+  check:static` pass in the lane. A light and dark swatch sheet of every
+  palette rendered and reviewed.
+- **Full suite:** as MP11, once per landing batch before the push.
+- **Rollback.** Revert the commit.
