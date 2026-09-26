@@ -40,11 +40,15 @@ export interface StreetBasemapConfig {
 
 export const OSM_ATTRIBUTION = "© OpenStreetMap contributors (ODbL)";
 
-/** Road colors while an imagery basemap shows: light lines over a dark casing, as on a hybrid map. */
+/**
+ * Line colors while an imagery basemap shows: light roads over a dark casing,
+ * as on a hybrid map, and tribal boundaries light enough to read over imagery.
+ */
 export const IMAGERY_ROAD_INK: Readonly<Record<string, string>> = {
   "road-casing": "rgba(15, 20, 26, 0.45)",
   "road-minor": "rgba(226, 232, 238, 0.4)",
   "road-major": "rgba(238, 242, 246, 0.75)",
+  "boundary-tribal": "rgba(244, 212, 156, 0.95)",
 };
 
 /** The font stack the street style's labels request. */
@@ -59,6 +63,8 @@ interface StreetPalette {
   readonly park: string;
   readonly building: string;
   readonly boundary: string;
+  readonly tribal: string;
+  readonly tribalLabel: string;
   readonly roadMinor: string;
   readonly roadMajor: string;
   readonly roadCasing: string;
@@ -85,6 +91,8 @@ const PALETTE: Record<ThemeName, StreetPalette> = {
     park: "#cfe0bd",
     building: "#e3e0da",
     boundary: "#b3939f",
+    tribal: "#8a5423",
+    tribalLabel: "#6b3f12",
     roadMinor: "#ffffff",
     roadMajor: "#f4e6c6",
     roadCasing: "#c9cfc2",
@@ -108,6 +116,8 @@ const PALETTE: Record<ThemeName, StreetPalette> = {
     park: "#16231a",
     building: "#20262b",
     boundary: "#5a3f49",
+    tribal: "#b88d57",
+    tribalLabel: "#d8b688",
     roadMinor: "#2b3138",
     roadMajor: "#3d3626",
     roadCasing: "#0e1114",
@@ -163,7 +173,8 @@ export function buildStreetStyle(
   const p = PALETTE[theme];
   const src = "openmaptiles";
   const font = streetFontStack(config);
-  // Typed, status-colorable footprints draw over the plain building fill.
+  // Typed, status-colorable footprints draw over the plain building fill and
+  // over imagery, as on a hybrid map.
   const built = buildingSpecs(buildings, theme);
   // Hillshade sits over the land fills and under water, roads, and labels.
   const relief = terrainSpecs(terrain, theme);
@@ -276,7 +287,6 @@ export function buildStreetStyle(
       minzoom: 14,
       paint: { "fill-color": p.building, "fill-opacity": 0.7 },
     },
-    ...built.layers,
     ...raster.layers,
     ...(raster.layers.length > 0
       ? [{
@@ -288,6 +298,7 @@ export function buildStreetStyle(
           paint: { "fill-color": p.water, "fill-opacity": 0.82 },
         }]
       : []),
+    ...built.layers,
     {
       id: "rail",
       type: "line",
@@ -336,8 +347,18 @@ export function buildStreetStyle(
       type: "line",
       source: src,
       "source-layer": "boundary",
-      filter: ["<=", ["get", "admin_level"], 6],
+      // Tribal lands in this layer carry no admin level and have a line of their own.
+      filter: ["all", ["has", "admin_level"], ["<=", ["get", "admin_level"], 6]],
       paint: { "line-color": p.boundary, "line-width": width([[4, 0.5], [12, 1.5]]), "line-dasharray": [3, 2] },
+    },
+    // Tribal lands (reservations and rancherias, OpenMapTiles aboriginal_lands areas).
+    {
+      id: "boundary-tribal",
+      type: "line",
+      source: src,
+      "source-layer": "boundary",
+      filter: ["==", ["get", "class"], "aboriginal_lands"],
+      paint: { "line-color": p.tribal, "line-width": width([[6, 1.2], [12, 2.6]]), "line-dasharray": [4, 2] },
     },
   ];
 
@@ -358,6 +379,25 @@ export function buildStreetStyle(
           "text-size": 11,
         },
         paint: { "text-color": p.label, "text-halo-color": p.labelHalo, "text-halo-width": 1.2 },
+      },
+      // The tribe's name inside its lands, from county to town zoom.
+      {
+        id: "boundary-tribal-label",
+        type: "symbol",
+        source: src,
+        "source-layer": "boundary",
+        minzoom: 8,
+        maxzoom: 14,
+        filter: ["all", ["==", ["get", "class"], "aboriginal_lands"], ["has", "name"]],
+        layout: {
+          "text-field": ["get", "name"],
+          "text-font": [font],
+          "text-size": 12,
+          "text-max-width": 9,
+          // Each tile places its own label; one near a tile edge would be cut.
+          "symbol-avoid-edges": true,
+        },
+        paint: { "text-color": p.tribalLabel, "text-halo-color": p.labelHalo, "text-halo-width": 1.4 },
       },
       {
         id: "place-label",
@@ -428,17 +468,15 @@ export function buildStreetStyle(
         type: "symbol",
         source: src,
         "source-layer": "poi",
-        minzoom: 13,
-        filter: [
-          "all",
-          ["has", "name"],
-          ["in", ["get", "subclass"], ["literal", CRITICAL_FACILITY_TAGS]],
-        ],
+        // The basemap holds these points from z14.
+        minzoom: 14,
+        // An unnamed fire station still gets its icon; only the text needs a name.
+        filter: ["in", ["get", "subclass"], ["literal", CRITICAL_FACILITY_TAGS]],
         layout: {
           "icon-image": streetFacilityIconExpression(),
           "icon-size": 0.25,
           "icon-optional": true,
-          "text-field": ["get", "name"],
+          "text-field": ["coalesce", ["get", "name"], ""],
           "text-font": [font],
           "text-size": 11,
           "text-anchor": "top",

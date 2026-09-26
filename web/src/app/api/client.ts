@@ -244,6 +244,8 @@ export interface CollectionRef {
   readonly title: string;
   /** The board's template, joined from the board list by the console. */
   readonly templateKey?: string | undefined;
+  /** Present when the caller holds no role on the board: the incidents it is read through. */
+  readonly incidentIds?: readonly string[] | undefined;
 }
 export interface SitrepListItem {
   readonly id: string;
@@ -451,6 +453,8 @@ export interface IncidentOverviewPage {
 export interface IncidentBoardRef {
   readonly id: string;
   readonly title: string;
+  /** The board's template, which picks its map cartography. */
+  readonly templateKey?: string;
 }
 export interface IncidentDetail {
   readonly id: string;
@@ -795,6 +799,11 @@ export interface ApiClientOptions {
 
 type Body = Record<string, unknown> | FormData | undefined;
 
+/** A board's vector tile template, in the same incident scope as `collectionItems`. */
+export function boardTileUrl(boardId: string, incidentId?: string): string {
+  return `/api/v1/tiles/boards/${boardId}/{z}/{x}/{y}.mvt${incidentId ? `?incidentId=${encodeURIComponent(incidentId)}` : ""}`;
+}
+
 export class ApiClient {
   private accessToken: string | null = null;
   private resumeToken: string | null = null;
@@ -1024,16 +1033,17 @@ export class ApiClient {
     return r.dashboards;
   }
   async listCollections(): Promise<CollectionRef[]> {
-    const r = await this.request<{ collections: { id: string; title: string }[] }>(
+    const r = await this.request<{ collections: { id: string; title: string; incidentIds?: string[] }[] }>(
       "GET",
       "/api/v1/ogc/collections",
     );
-    return r.collections.map((c) => ({ id: c.id, title: c.title }));
+    return r.collections.map((c) => ({ id: c.id, title: c.title, ...(c.incidentIds ? { incidentIds: c.incidentIds } : {}) }));
   }
-  collectionItems(boardId: string): Promise<CopFeatureCollection> {
+  /** A board's map features; with an incident, read as that incident's board and holding its records only. */
+  collectionItems(boardId: string, incidentId?: string): Promise<CopFeatureCollection> {
     return this.request<CopFeatureCollection>(
       "GET",
-      `/api/v1/ogc/collections/${boardId}/items`,
+      `/api/v1/ogc/collections/${boardId}/items${incidentId ? `?incidentId=${encodeURIComponent(incidentId)}` : ""}`,
     );
   }
   getBoard(boardId: string, incidentId?: string | null): Promise<EffectiveBoardResponse> {

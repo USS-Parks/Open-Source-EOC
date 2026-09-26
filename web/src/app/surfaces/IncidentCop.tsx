@@ -1,7 +1,7 @@
 import { CopMap } from "../../cop/CopMap.js";
 import { geometryBounds } from "../../cop/tools.js";
 import type { ThemeName } from "../../design/tokens.js";
-import type { ApiClient, CollectionRef } from "../api/client.js";
+import { boardTileUrl, type ApiClient, type CollectionRef } from "../api/client.js";
 import {
   assetBase,
   basemapStyleUrl,
@@ -13,6 +13,7 @@ import {
 } from "../config.js";
 import { useAsync } from "../data/hooks.js";
 import { INCIDENT_KIND_LABEL, useIncident } from "../incident/context.js";
+import { layerReadScope } from "../incident/map-layers.js";
 import { requestMapFocus, useMapFocus } from "../layout/map-focus.js";
 import { PlaceSearch } from "../layout/PlaceSearch.js";
 
@@ -36,6 +37,8 @@ export function IncidentCop(props: {
 }) {
   const { selectedIncident } = useIncident();
   const focusOnSearch = useMapFocus();
+  // A board a partner organization reaches only through the incident is read through it.
+  const readScope = (id: string) => layerReadScope(props.collections.find((c) => c.id === id), props.incidentId);
   const area = useAsync(() => props.client.getIncidentArea(props.incidentId), [props.incidentId]);
   const bounds = area.data?.geometry ? geometryBounds(area.data.geometry) : null;
   const kind = selectedIncident ? INCIDENT_KIND_LABEL[selectedIncident.kind] : undefined;
@@ -59,8 +62,8 @@ export function IncidentCop(props: {
         } : null}
         cardSearch={<PlaceSearch client={props.client} onChoose={requestMapFocus} />}
         onMap={focusOnSearch}
-        fetchItems={(id) => props.client.collectionItems(id)}
-        tileUrl={(kind, id) => kind === "board" ? `/api/v1/tiles/boards/${id}/{z}/{x}/{y}.mvt` : undefined}
+        fetchItems={(id) => props.client.collectionItems(id, readScope(id))}
+        tileUrl={(kind, id) => kind === "board" ? boardTileUrl(id, readScope(id)) : undefined}
         tileHeaders={() => ({ authorization: `Bearer ${props.client.fieldSyncToken()}` })}
         basemap={{ kind: "natural-earth", assetBase: assetBase() }}
         bundledBasemap={{ assetBase: assetBase() }}

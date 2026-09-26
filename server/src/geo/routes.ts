@@ -4,7 +4,7 @@ import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import { CURSOR_AT_FORMAT, cutPage, decodeCursor, pageQuery } from "../db/cursor.js";
 import { featureServerRoutes } from "./featureserver.js";
-import { featureBoard, featureBoardList } from "./layers.js";
+import { featureBoard, featureBoardList, layerRecords } from "./layers.js";
 import { tileRoutes } from "./tiles.js";
 
 /**
@@ -21,7 +21,11 @@ const ItemsQuery = z.object({
     .optional(),
   limit: z.coerce.number().int().min(1).max(1000).default(100),
   cursor: pageQuery.cursor,
+  // Read the board as one of this incident's boards (see featureBoard).
+  incidentId: z.string().uuid().optional(),
 });
+
+const BoardParams = z.object({ boardId: z.string().uuid() });
 
 const CONFORMANCE = [
   "http://www.opengis.net/spec/ogcapi-features-1/1.0/conf/core",
@@ -54,7 +58,13 @@ export function geoRoutes(
       id: b.id,
       title: b.title,
       itemType: "feature",
-      links: [{ rel: "items", href: `/api/v1/ogc/collections/${b.id}/items`, type: "application/geo+json" }],
+      // A board read only through incidents: named, with an items link for each of them.
+      ...(b.incidentIds ? { incidentIds: b.incidentIds } : {}),
+      links: (b.incidentIds ?? [null]).map((incidentId) => ({
+        rel: "items",
+        href: `/api/v1/ogc/collections/${b.id}/items${incidentId ? `?incidentId=${incidentId}` : ""}`,
+        type: "application/geo+json",
+      })),
     }));
     return reply.send({ collections });
   });
@@ -63,10 +73,10 @@ export function geoRoutes(
     "/api/v1/ogc/collections/:boardId/items",
     { preHandler: authenticate },
     async (req, reply) => {
-      const { boardId } = req.params as { boardId: string };
+      const { boardId } = BoardParams.parse(req.params);
       const query = ItemsQuery.parse(req.query);
       const result = await withPerson(sql, req.principal.person.id, async (tx) => {
-        const layer = await featureBoard(tx, req.principal, boardId);
+        const layer = await featureBoard(tx, req.principal, boardId, query.incidentId);
         if (!layer) return null;
         const geomKey = layer.geometry.key;
         const readable = new Set(layer.readable.map((f) => f.key));
@@ -81,7 +91,7 @@ export function geoRoutes(
           from board_records r
           left join persons updater on updater.id = r.updated_by
           left join persons creator on creator.id = r.created_by
-          where r.board_id = ${boardId} and r.geom is not null
+          where r.board_id = ${boardId} and r.geom is not null ${layerRecords(tx, layer)}
             ${bbox ? tx`and r.geom && ST_MakeEnvelope(${bbox[0]!}, ${bbox[1]!}, ${bbox[2]!}, ${bbox[3]!}, 4326)` : tx``}
             ${after ? tx`and (r.created_at, r.id) < (${after[0]!}::text::timestamptz, ${after[1]!}::uuid)` : tx``}
           order by r.created_at desc, r.id desc limit ${query.limit + 1}`;
@@ -110,6 +120,7 @@ export function geoRoutes(
         rel: "next",
         href: `/api/v1/ogc/collections/${boardId}/items?${new URLSearchParams({
           ...(query.bbox ? { bbox: query.bbox } : {}),
+          ...(query.incidentId ? { incidentId: query.incidentId } : {}),
           limit: String(query.limit),
           cursor: result.nextCursor,
         })}`,

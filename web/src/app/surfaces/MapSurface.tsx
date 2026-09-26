@@ -23,7 +23,7 @@ import { Button, Panel } from "../../design/components.js";
 import { workStateText } from "../../design/work-state.js";
 import { Icon } from "../../design/icons/index.js";
 import type { ThemeName } from "../../design/tokens.js";
-import type { ApiClient, CollectionRef, FeedHealth } from "../api/client.js";
+import { boardTileUrl, type ApiClient, type CollectionRef, type FeedHealth } from "../api/client.js";
 import {
   assetBase,
   basemapStyleUrl,
@@ -35,6 +35,7 @@ import {
   terrainSource,
 } from "../config.js";
 import { useAsync } from "../data/hooks.js";
+import { layerReadScope } from "../incident/map-layers.js";
 import { uploadPickedFile } from "../data/files.js";
 import { requestMapFocus, useMapFocus } from "../layout/map-focus.js";
 import { PlaceSearch } from "../layout/PlaceSearch.js";
@@ -145,6 +146,8 @@ export function MapSurface(props: {
   // jurisdiction gets it through the incident.
   const scopedIncident =
     props.incidentId && props.incidentBoardIds?.has(activeBoard) ? props.incidentId : undefined;
+  // Features are read through the incident only on a board the viewer holds no role on.
+  const readScope = (id: string) => layerReadScope(geoBoards.find((b) => b.id === id), props.incidentId);
   const fieldScope = props.personId && scopedIncident ? { personId: props.personId, incidentId: scopedIncident } : null;
   // An incident board's form is read, and kept on the device, before a point
   // is placed, so it still opens once the connection is gone.
@@ -514,9 +517,9 @@ export function MapSurface(props: {
           theme={props.theme}
           boards={geoBoards.map((c) => ({ id: c.id, title: c.title, templateKey: c.templateKey }))}
           incidentArea={incidentArea.data?.geometry ? { geometry: incidentArea.data.geometry } : null}
-          fetchItems={(id) => props.client.collectionItems(id)}
+          fetchItems={(id) => props.client.collectionItems(id, readScope(id))}
           tileUrl={(kind, id) => kind === "board"
-            ? `/api/v1/tiles/boards/${id}/{z}/{x}/{y}.mvt`
+            ? boardTileUrl(id, readScope(id))
             : datasetIds.has(id) ? `/api/v1/tiles/datasets/${id}/{z}/{x}/{y}.mvt` : undefined}
           tileHeaders={() => ({ authorization: `Bearer ${props.client.fieldSyncToken()}` })}
           describePoint={(at) => props.client.reverseGeocode(at)}

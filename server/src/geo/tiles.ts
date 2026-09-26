@@ -4,7 +4,7 @@ import type { Sql } from "../db/client.js";
 import { withPerson } from "../db/context.js";
 import { AuthError } from "../auth/service.js";
 import { getIncidentAuthority } from "../incidents/participation.js";
-import { featureBoard } from "./layers.js";
+import { featureBoard, layerRecords } from "./layers.js";
 
 /**
  * Mapbox Vector Tiles for operational layers too large for one GeoJSON page.
@@ -31,6 +31,8 @@ const TileXYZ = z.object({
 });
 const BoardTile = TileXYZ.extend({ boardId: z.string().uuid() }).refine(inTileRange);
 const DatasetTile = TileXYZ.extend({ datasetId: z.string().uuid() }).refine(inTileRange);
+/** A board tile read as one of an incident's boards, as the items route reads it. */
+const IncidentScope = z.object({ incidentId: z.string().uuid().optional() });
 type Tile = z.infer<typeof TileXYZ>;
 
 /**
@@ -98,8 +100,9 @@ export function tileRoutes(
 ): void {
   app.get("/api/v1/tiles/boards/:boardId/:z/:x/:y.mvt", { preHandler: authenticate }, async (req, reply) => {
     const t = BoardTile.parse(req.params);
+    const { incidentId } = IncidentScope.parse(req.query);
     const mvt = await withPerson(sql, req.principal.person.id, async (tx) => {
-      const layer = await featureBoard(tx, req.principal, t.boardId);
+      const layer = await featureBoard(tx, req.principal, t.boardId, incidentId);
       if (!layer) return null;
       const readable = layer.readable.map((f) => f.key);
       return renderTile(tx, t, (bounds) => tx`
@@ -108,7 +111,8 @@ export function tileRoutes(
              from jsonb_each(r.data) p where p.key = any(${readable}::text[])) as props,
           r.geom
         from board_records r
-        where r.board_id = ${t.boardId} and r.geom is not null and r.geom && ${bounds}` as never);
+        where r.board_id = ${t.boardId} and r.geom is not null and r.geom && ${bounds}
+          ${layerRecords(tx, layer)}` as never);
     });
     if (mvt === null) return reply.status(404).send({ error: "not a feature collection" });
     return sendTile(reply, mvt);

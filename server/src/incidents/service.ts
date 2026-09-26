@@ -534,7 +534,8 @@ export interface IncidentDetail {
   readonly canManageParticipation: boolean;
   readonly canEditArea: boolean;
   readonly positions: ReadonlyArray<{ id: string; key: string; title: string }>;
-  readonly boards: ReadonlyArray<{ id: string; title: string }>;
+  /** Each board with its template, so its map cartography applies to readers outside its organization. */
+  readonly boards: ReadonlyArray<{ id: string; title: string; templateKey: string }>;
   readonly checklists: ReadonlyArray<{
     id: string;
     positionKey: string | null;
@@ -715,7 +716,7 @@ export async function getIncident(
     join positions p on p.id = ip.position_id
     where ip.incident_id = ${incidentId} order by p.key`;
   const boards = await sql`
-    select b.id, b.title from incident_boards ib
+    select b.id, b.title, b.template_key from incident_boards ib
     join boards b on b.id = ib.board_id
     where ib.incident_id = ${incidentId} order by b.title`;
   const checklists = await sql`
@@ -745,7 +746,7 @@ export async function getIncident(
       key: p.key as string,
       title: p.title as string,
     })),
-    boards: boards.map((b) => ({ id: b.id as string, title: b.title as string })),
+    boards: boards.map((b) => ({ id: b.id as string, title: b.title as string, templateKey: b.template_key as string })),
     checklists: checklists.map((c) => ({
       id: c.id as string,
       positionKey: (c.position_key as string | null) ?? null,

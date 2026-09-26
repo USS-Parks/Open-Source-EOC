@@ -595,6 +595,8 @@ const GROUP_BY_LAYER: Readonly<Record<string, BasemapGroup>> = {
   "road-minor": "roads",
   "road-major": "roads",
   "boundary-admin": "boundaries",
+  "boundary-tribal": "boundaries",
+  "boundary-tribal-label": "boundaries",
   "water-label": "labels",
   "water-label-line": "labels",
   "peak-label": "labels",

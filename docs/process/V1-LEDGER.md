@@ -14168,3 +14168,85 @@ with commit, landing and push authority under the plan's gate, run after the
 map and dashboard plan's 1.0.0 release (its decision 12 default). Each model
 download is confirmed with Basho by file, source and size when AP1 reaches
 it. Tagging, publishing and hosting the public page stay Basho's.
+
+## Map and dashboard parity MP1: map defects
+
+Map and Dashboard Parity PSPR unit MP1, built in lane `lane/mp1`.
+
+- **What the code did before.** On the Del Norte and Deerhorn exercises the
+  director, a participant from another organization, got HTTP 403 on each
+  incident's own boards, so their closures, shelters and facilities never
+  reached the map; boards of another organization drew as generic dots; the
+  layer list listed every exercise's boards; building footprints vanished
+  under imagery; tribal boundaries in the basemap were never drawn (a
+  MapLibre filter warning dropped them); facility labels started at a zoom
+  where the basemap has none.
+- **What changed.** (a) The OGC items route and the board vector tile route
+  take an optional `incidentId` and resolve the board through
+  `getBoardReadShape`, the REST board read's path: 404 unless the caller
+  reads the incident, 400 unless the board is attached to it, the caller's
+  own role or else member field level, and only that incident's records
+  (`layerRecords`); row-level security and per-record rules apply as before.
+  `/ogc/collections` names, for a board the caller holds no role on, the
+  incidents it reads the board through, with one items link per incident
+  carrying `?incidentId=`; a member's board keeps its plain link. The Map
+  screen and the Overview's COP card read a board through the selected
+  incident only when the collection names it (`layerReadScope`), so a member
+  keeps records that name no incident. Archived records are off the map
+  (items and tiles), and a malformed board id on the items route is 400, not
+  500. (b) The incident detail's boards carry `templateKey`, and the console
+  keeps it for boards of another organization, so incident cartography
+  applies to them. (c) With an incident selected, the map lists only the
+  jurisdiction's standing boards and the incident's own (`layersInScope`).
+  (d) Typed building layers draw above imagery and its water. (e)
+  `boundary-tribal` and `boundary-tribal-label` draw the basemap's
+  `aboriginal_lands` in the boundaries group; `boundary-admin` requires
+  `admin_level`. (f) `facility-label` starts at z14 and unnamed stations keep
+  their icon.
+- **Files.** `server/src/geo/{layers,routes,tiles}.ts`,
+  `server/src/incidents/service.ts`, `web/src/app/api/client.ts`,
+  `web/src/app/screens/Console.tsx`,
+  `web/src/app/surfaces/{MapSurface,IncidentCop}.tsx`,
+  `web/src/cop/{streetstyle,layers}.ts`, `web/src/cop/__tests__/cop.test.ts`;
+  new `web/src/app/incident/map-layers.ts`,
+  `web/src/app/__tests__/map-layers.test.ts`,
+  `server/src/__tests__/incident-map-layers.test.ts` and
+  `server/src/__tests__/map-parity-browser.test.ts`.
+- **Defaults and deviations.** A scoped read serves that incident's records
+  only, as the incident board views do. The Overview card was scoped as well
+  (same cause). A board the caller reaches only through an incident is
+  listed only when its map field is readable at member level; the Esri
+  FeatureServer service list, which shares `featureBoardList`, follows the
+  same rule. Tribal names are the OSM `name` (English and the nation's own),
+  z8 to z14; over imagery the line turns light tan. The map-track lanes MP3,
+  MP4, MP9 and MP11 started before this unit landed, a deviation from the
+  plan's section 5; none owns a file this unit changed.
+- **Review.** An adversarial audit of (a) found no leak: no record or field
+  reached a caller who could not read it through the REST board read, with
+  refusals, cross-incident reads, crafted ids, existence leaks, lockdown,
+  paging and caching probed (9 probe tests). Its four low findings are fixed
+  here: a member's untagged records back on its map, archived records off
+  it, incident-carrying collection links for participant-only boards, 400
+  for a malformed board id; and the layer-list rule gained a unit test.
+- **Verification.** `pnpm check:static` exit 0.
+  `incident-map-layers.test.ts` 9 of 9 (participant reads the incident's
+  boards at member level; stranger, other incident, unattached board and
+  revoked grant refused on items and tiles; per-record rule holds; members
+  keep unscoped reads and untagged records; collection links per incident
+  work; archived records absent; 400 for a non-UUID board).
+  `map-layers.test.ts` 4 of 4. Affected tests after the audit fixes: 15
+  files, 167 tests, the browser walks among them.
+  `map-parity-browser.test.ts` 4 of 4: both viewports, both themes, 24
+  captures (Del Norte's facilities, shelters and closures in incident
+  symbols; the Yurok and Hoopa Valley boundaries and names near Deerhorn;
+  footprints over imagery in Eureka at z16), no page error, no MapLibre type
+  warning, no refused layer read, no request off the host. The fidelity
+  captures after the rebase: 3 of 3, the North Coast Overview unchanged
+  against the frame but for the tribal boundary now drawn at its top edge.
+  Before the audit fixes, `pnpm test:ci` on the shared lane cluster: 376 of
+  387 files; 9 files timed out creating their database, `federation-batches`
+  drained 151 of 310 under load, `restore-drill` lacked `pg_dump` on PATH;
+  those 11 rerun alone and serially: 11 files, 45 tests; `load.test.ts`
+  alone 4 of 4.
+- **Full suite:** as MP11, once per landing batch before the push.
+- **Rollback.** Revert the commit; no migration or data change.

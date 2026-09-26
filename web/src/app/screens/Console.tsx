@@ -5,6 +5,7 @@ import type { ThemeName } from "../../design/tokens.js";
 import type { ApiClient, BoardListItem, DashboardListItem, CollectionRef, FeedHealth, Me, Membership } from "../api/client.js";
 import { useSession } from "../auth/session.js";
 import { boardsInScope, IncidentSwitcher, useIncident } from "../incident/context.js";
+import { layersInScope } from "../incident/map-layers.js";
 import { useAsync, useNotifications } from "../data/hooks.js";
 import {
   AppShell,
@@ -191,7 +192,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
         : Promise.resolve(
             incident.incidentBoards.map((board) => ({
               ...board,
-              templateKey: "",
+              templateKey: board.templateKey ?? "",
               templateVersion: 0,
               hasGeometry: false,
             })),
@@ -278,7 +279,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
   // Navigation lists and the map show the selected incident's boards and the
   // jurisdiction's own; another incident's boards stay out of the way.
   const scopedBoards = boardsInScope(boardItems, incident.selectedIncidentId);
-  const outOfScope = new Set(boardItems.filter((board) => !scopedBoards.includes(board)).map((board) => board.id));
+  const mapLayers = layersInScope(collections.data ?? [], boardItems, incident.selectedIncidentId, incident.incidentBoardIds);
   const dock = (
     <>
       {workspace.message && (workspace.phase === "conflict" || workspace.phase === "error") ? (
@@ -479,7 +480,7 @@ export function Console(props: { theme: ThemeName; onToggleTheme: () => void }) 
             { ...baseContext, recordId, returnTo: surfaceHash({ kind: "map" }, { ...baseContext, boardId, recordId }) },
           )}
           boardsLoading={boards.loading && !boards.data}
-          collections={(collections.data ?? []).filter((collection) => !outOfScope.has(collection.id))
+          collections={mapLayers
             .map((collection) => ({ ...collection, templateKey: boardItems.find((board) => board.id === collection.id)?.templateKey }))}
           feeds={feeds.data ?? []}
           isAdmin={viewingMembership?.role === "admin"}

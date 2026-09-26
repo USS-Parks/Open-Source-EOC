@@ -232,10 +232,25 @@ describe("layer construction", () => {
     expect(ids.indexOf("road-major")).toBeLessThan(ids.indexOf("facility-label"));
     const facilities = style.layers.find((l) => l.id === "facility-label")!;
     expect(facilities["source-layer"]).toBe("poi");
-    expect(facilities.minzoom).toBe(13);
+    // The basemap's poi layer starts at z14; an unnamed station keeps its icon.
+    expect(facilities.minzoom).toBe(14);
     expect(JSON.stringify(facilities.filter)).toContain("fire_station");
+    expect(JSON.stringify(facilities.filter)).not.toContain("name");
     expect(CRITICAL_FACILITY_TAGS).toContain("hospital");
     expect(CRITICAL_FACILITY_TAGS).toContain("shelter");
+  });
+
+  it("draws and names tribal lands, which carry no admin level, apart from admin boundaries", () => {
+    const style = buildStreetStyle(
+      { pmtilesUrl: "https://t/x.pmtiles", glyphsUrl: "/fonts/{fontstack}/{range}.pbf" },
+      "dark",
+    ) as { layers: Array<{ id: string; type: string; filter?: unknown; metadata?: unknown }> };
+    const layer = (id: string) => style.layers.find((l) => l.id === id)!;
+    expect(layer("boundary-admin").filter).toEqual(["all", ["has", "admin_level"], ["<=", ["get", "admin_level"], 6]]);
+    expect(layer("boundary-tribal").type).toBe("line");
+    expect(layer("boundary-tribal").filter).toEqual(["==", ["get", "class"], "aboriginal_lands"]);
+    expect(layer("boundary-tribal-label").type).toBe("symbol");
+    for (const id of ["boundary-tribal", "boundary-tribal-label"]) expect(basemapGroupOf(layer(id)), id).toBe("boundaries");
   });
 
   it("labels the street style with the bundled glyph stack by default", () => {
@@ -399,6 +414,22 @@ describe("building use and status (the structure delineation layer)", () => {
     const ids = style.layers.map((l) => l.id);
     expect(ids.indexOf("building")).toBeLessThan(ids.indexOf("building-use"));
     expect(ids.indexOf("building-use")).toBeLessThan(ids.indexOf("road-casing"));
+  });
+
+  it("draws the typed footprints over imagery and its water, as on a hybrid map", () => {
+    const style = buildStreetStyle(
+      { pmtilesUrl: "https://t/x.pmtiles", glyphsUrl: "/f/{fontstack}/{range}.pbf" },
+      "dark",
+      [{ id: "imagery", title: "Imagery", tiles: "https://t.gov/i/{z}/{y}/{x}" }],
+      undefined,
+      { pmtilesUrl: "https://t/buildings.pmtiles" },
+    ) as { layers: Array<{ id: string }> };
+    const ids = style.layers.map((l) => l.id);
+    for (const typed of ["building-use", "building-outline"]) {
+      expect(ids.indexOf(typed), typed).toBeGreaterThan(ids.indexOf("raster-imagery"));
+      expect(ids.indexOf(typed), typed).toBeGreaterThan(ids.indexOf("imagery-water"));
+    }
+    expect(ids.indexOf("building")).toBeLessThan(ids.indexOf("raster-imagery"));
   });
 });
 
