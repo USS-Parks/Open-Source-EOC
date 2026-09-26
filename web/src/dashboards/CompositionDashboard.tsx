@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
+  CreateRecordPanelData,
   DashboardComposition,
   DashboardCompositionPanel,
   DashboardCompositionSnapshot,
@@ -34,6 +35,7 @@ import {
   type LifelineKey,
 } from "../design/icons/index.js";
 import type { OperationalState } from "../design/tokens.js";
+import { CreateRecordTile, type CreateRecordActions } from "./CreateRecordTile.js";
 import { DashboardWidget } from "./Dashboard.js";
 import "./dashboard.css";
 
@@ -51,6 +53,8 @@ export interface CompositionDashboardProps {
   readonly onDrill: (panel: DashboardCompositionPanel, field: string, value: string) => void;
   readonly onOpenMap?: (() => void) | undefined;
   readonly onOpenRecord?: ((boardId: string, recordId: string) => void) | undefined;
+  /** Opens a board's form and saves a record, for create-record tiles. */
+  readonly createRecord?: CreateRecordActions | undefined;
 }
 
 function sourcePanel(
@@ -61,7 +65,11 @@ function sourcePanel(
 }
 
 function isWidget(value: DashboardPanelSnapshot["data"]): value is WidgetResult {
-  return Boolean(value && typeof value === "object" && "kind" in value);
+  return Boolean(value && typeof value === "object" && "kind" in value && value.kind !== "create");
+}
+
+function isCreate(value: DashboardPanelSnapshot["data"]): value is CreateRecordPanelData {
+  return Boolean(value && typeof value === "object" && "kind" in value && value.kind === "create");
 }
 
 function isImpact(value: DashboardPanelSnapshot["data"]): value is ImpactCategoryAggregate {
@@ -152,7 +160,13 @@ function TilePanel(props: {
   readonly panel: DashboardPanelSnapshot;
   readonly source: DashboardCompositionPanel | null;
   readonly onDrill: CompositionDashboardProps["onDrill"];
+  readonly createRecord?: CreateRecordActions | undefined;
 }) {
+  if (props.source?.source === "create") {
+    return isCreate(props.panel.data)
+      ? <CreateRecordTile panel={props.panel} data={props.panel.data} actions={props.createRecord} />
+      : <PanelUnavailable panel={props.panel} />;
+  }
   if (props.source?.source === "impact" || isImpact(props.panel.data)) return <ImpactTile panel={props.panel} />;
   if (props.source?.source === "dashboard" && ["missing", "unsupported"].includes(props.panel.state)) {
     return <PanelUnavailable panel={props.panel} />;
@@ -313,7 +327,9 @@ export function CompositionDashboard(props: CompositionDashboardProps) {
     <section className="p-dash-composition" aria-label={props.snapshot.title}>
       {tiles.length ? (
         <section className="p-dash-stats" aria-label="Incident statistics">
-          {tiles.map(({ panel, source }) => <TilePanel key={panel.key} panel={panel} source={source} onDrill={props.onDrill} />)}
+          {tiles.map(({ panel, source }) => (
+            <TilePanel key={panel.key} panel={panel} source={source} onDrill={props.onDrill} createRecord={props.createRecord} />
+          ))}
         </section>
       ) : null}
       {maps.length || statuses.length ? (

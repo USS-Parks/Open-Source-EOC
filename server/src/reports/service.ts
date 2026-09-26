@@ -2,10 +2,13 @@ import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import {
   applyView,
+  choiceLabel,
   conditionFitsField,
   deriveRecordValues,
+  dictionaryValues,
   ViewConditionSchema,
   ViewSortSchema,
+  type ChartResult,
   type FieldDef,
   type ViewDef,
   type ViewSort,
@@ -18,11 +21,11 @@ import { conditionSql, getBoardReadShape, visibleFields } from "../boards/servic
 
 /**
  * Saved reports over boards. A report names a board, the columns to show, the
- * view conditions that select records, up to two grouping fields, totals and
- * sort keys. It stores no data: every run reads the board as the person
- * running it, through the same filters and row-level rules as a board view,
- * so a record or field that person cannot read is not in their report. A
- * column they cannot read is left out and the report names it.
+ * view conditions that select records, up to two grouping fields, totals,
+ * sort keys and a chart. It stores no data: every run reads the board as the
+ * person running it, through the same filters and row-level rules as a board
+ * view, so a record or field that person cannot read is not in their report.
+ * A column they cannot read is left out and the report names it.
  */
 
 /** Records one run may read; the same bound as a board export. */
@@ -34,6 +37,28 @@ const TOTAL_LABELS: Readonly<Record<TotalFunction, string>> = { sum: "sum", avg:
 
 const FieldKey = z.string().regex(/^[a-z][a-z0-9_]*$/);
 
+/** Field types a chart counts by value; a date and time field is charted over time instead. */
+const CHARTABLE: ReadonlySet<FieldDef["type"]> = new Set(["text", "number", "boolean", "enum"]);
+/** Groups a bar chart shows, and a donut, whose palette has five colors; the smallest groups fold into one. */
+const CHART_BARS = 24;
+const CHART_SLICES = 5;
+/** Time buckets a chart shows; the earliest fold into one "Before" group. */
+const CHART_BUCKETS = 48;
+const BUCKET_MS = { hour: 3_600_000, day: 86_400_000, week: 604_800_000 } as const;
+
+/**
+ * A chart of the report's records (VC-24): a count per value of one field,
+ * or per hour, day or week of a date and time field counted in a time zone.
+ * It counts the rows the table holds, so its groups add up to the record count.
+ */
+export const ReportChartSchema = z.object({
+  display: z.enum(["bar", "donut"]),
+  field: FieldKey,
+  interval: z.enum(["hour", "day", "week"]).nullable().default(null),
+  timeZone: z.string().min(1).max(64).refine((name) => isTimeZone(name), "unknown time zone").default("UTC"),
+}).strict();
+export type ReportChart = z.infer<typeof ReportChartSchema>;
+
 export const ReportDefinitionSchema = z.object({
   columns: z.array(FieldKey).min(1).max(30),
   where: z.array(ViewConditionSchema).max(16).default([]),
@@ -41,6 +66,7 @@ export const ReportDefinitionSchema = z.object({
   totals: z.array(z.object({ field: FieldKey, fn: z.enum(TOTAL_FUNCTIONS) }).strict()).max(16).default([]),
   sorts: z.array(ViewSortSchema).max(4).default([]),
   archived: z.enum(["exclude", "include", "only"]).default("exclude"),
+  chart: ReportChartSchema.nullable().default(null),
 }).strict();
 export type ReportDefinition = z.infer<typeof ReportDefinitionSchema>;
 
@@ -101,13 +127,21 @@ export function nextRunAt(cadence: ReportSchedule["cadence"], after: Date): Date
   throw new Error("no daily run within two days");
 }
 
-function zonedParts(at: number, timeZone: string) {
-  const parts = new Intl.DateTimeFormat("en-US", {
+/** A reader of an instant's wall clock in a time zone, built once for many instants. */
+function wallClock(timeZone: string) {
+  const format = new Intl.DateTimeFormat("en-US", {
     timeZone, hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric",
     hour: "numeric", minute: "numeric", second: "numeric",
-  }).formatToParts(at);
-  const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)!.value);
-  return { year: part("year"), month: part("month"), day: part("day"), hour: part("hour"), minute: part("minute"), second: part("second") };
+  });
+  return (at: number) => {
+    const parts = format.formatToParts(at);
+    const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)!.value);
+    return { year: part("year"), month: part("month"), day: part("day"), hour: part("hour"), minute: part("minute"), second: part("second") };
+  };
+}
+
+function zonedParts(at: number, timeZone: string) {
+  return wallClock(timeZone)(at);
 }
 
 /** How far a time zone's wall clock is ahead of UTC at an instant. */
@@ -143,6 +177,8 @@ export interface ReportResult {
   readonly rows: ReadonlyArray<Readonly<Record<string, unknown>>>;
   readonly groups: readonly ReportGroup[];
   readonly total: { readonly count: number; readonly totals: Aggregates };
+  /** The definition's chart over the same records, its groups as labels; null without one or when its field is unreadable. */
+  readonly chart: ChartResult | null;
 }
 
 export interface ReportSource {
@@ -164,6 +200,87 @@ function aggregate(fn: TotalFunction, values: readonly unknown[]): number | null
     case "min": return numbers.reduce((a, b) => Math.min(a, b));
     case "max": return numbers.reduce((a, b) => Math.max(a, b));
   }
+}
+
+type ChartGroup = { value: string; count: number };
+
+/** Keep the groups over `cap` with the most records, in their order, and fold the rest into one last group. */
+function foldSmallest(groups: ChartGroup[], cap: number): ChartGroup[] {
+  if (groups.length <= cap) return groups;
+  const keep = new Set([...groups].sort((a, b) => b.count - a.count).slice(0, cap - 1));
+  const rest = groups.filter((group) => !keep.has(group));
+  return [
+    ...groups.filter((group) => keep.has(group)),
+    { value: `Other (${rest.length} values)`, count: rest.reduce((sum, group) => sum + group.count, 0) },
+  ];
+}
+
+/** Counts per value: an enum in its own order, then numbers or text ascending, then no value. */
+function valueGroups(field: FieldDef, records: ReadonlyArray<Record<string, unknown>>): ChartGroup[] {
+  const counts = new Map<unknown, number>();
+  for (const row of records) {
+    const value = groupValue(row[field.key]);
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  const choices = field.type === "enum" ? field.values ?? (field.enumId ? dictionaryValues(field.enumId) : null) ?? [] : [];
+  const rank = (value: unknown) => (choices.includes(value as string) ? choices.indexOf(value as string) : choices.length);
+  const order = [...counts.keys()].sort((a, b) => {
+    if (a === null || b === null) return a === null ? 1 : -1;
+    return rank(a) - rank(b) || (typeof a === "number" && typeof b === "number" ? a - b : String(a).localeCompare(String(b)));
+  });
+  const label = (value: unknown) => value === null ? "(no value)"
+    : typeof value === "boolean" ? (value ? "Yes" : "No")
+      : field.type === "enum" && typeof value === "string" ? choiceLabel(value) : String(value);
+  return order.map((value) => ({ value: label(value), count: counts.get(value)! }));
+}
+
+/**
+ * Counts per hour, day or week (from Monday) of a date and time field, read
+ * on the wall clock of the chart's time zone, with empty buckets between the
+ * first and last shown as zero.
+ */
+function timeGroups(spec: ReportChart, field: FieldDef, records: ReadonlyArray<Record<string, unknown>>): ChartGroup[] {
+  const read = wallClock(spec.timeZone);
+  const step = BUCKET_MS[spec.interval!];
+  // Buckets are keyed by their wall-clock start written as if it were UTC, so stepping ignores offsets.
+  // ponytail: on a daylight saving day the skipped hour shows as zero and the repeated hour counts both.
+  const counts = new Map<number, number>();
+  let none = 0;
+  for (const row of records) {
+    const at = typeof row[field.key] === "string" ? Date.parse(row[field.key] as string) : Number.NaN;
+    if (Number.isNaN(at)) { none += 1; continue; }
+    const p = read(at);
+    let key = spec.interval === "hour" ? Date.UTC(p.year, p.month - 1, p.day, p.hour) : Date.UTC(p.year, p.month - 1, p.day);
+    if (spec.interval === "week") key -= ((new Date(key).getUTCDay() + 6) % 7) * BUCKET_MS.day;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const label = (key: number) => {
+    const iso = new Date(key).toISOString();
+    return spec.interval === "hour" ? `${iso.slice(0, 10)} ${iso.slice(11, 13)}:00`
+      : spec.interval === "week" ? `Week of ${iso.slice(0, 10)}` : iso.slice(0, 10);
+  };
+  const groups: ChartGroup[] = [];
+  if (counts.size > 0) {
+    const keys = [...counts.keys()];
+    const last = keys.reduce((a, b) => Math.max(a, b));
+    const first = Math.max(keys.reduce((a, b) => Math.min(a, b)), last - (CHART_BUCKETS - 2) * step);
+    const before = [...counts].reduce((sum, [key, count]) => (key < first ? sum + count : sum), 0);
+    if (before > 0) groups.push({ value: `Before ${label(first)}`, count: before });
+    for (let key = first; key <= last; key += step) groups.push({ value: label(key), count: counts.get(key) ?? 0 });
+  }
+  if (none > 0) groups.push({ value: "(no value)", count: none });
+  return groups;
+}
+
+function reportChart(spec: ReportChart, field: FieldDef, records: ReadonlyArray<Record<string, unknown>>): ChartResult {
+  return {
+    kind: "chart",
+    key: "chart",
+    title: spec.interval ? `Records per ${spec.interval} by ${field.label} (${spec.timeZone})` : `Records by ${field.label}`,
+    display: spec.display,
+    groups: spec.interval ? timeGroups(spec, field, records)
+      : foldSmallest(valueGroups(field, records), spec.display === "donut" ? CHART_SLICES : CHART_BARS),
+  };
 }
 
 /**
@@ -189,7 +306,8 @@ export async function runReport(sql: Sql, actor: Principal, source: ReportSource
       ? [[`${t.field}:${t.fn}`, { key: `${t.field}:${t.fn}`, field: t.field, fn: t.fn, label: `${field.label} ${TOTAL_LABELS[t.fn]}` }] as const]
       : [];
   })).values()];
-  const named = [...def.columns, ...def.groupBy, ...def.totals.map((t) => t.field), ...def.sorts.map((s) => s.field)];
+  const named = [...def.columns, ...def.groupBy, ...def.totals.map((t) => t.field), ...def.sorts.map((s) => s.field),
+    ...(def.chart ? [def.chart.field] : [])];
   const omitted = [...new Set(named)].filter((key) => !keys.has(key));
 
   const fields = new Map(board.fields.map((field) => [field.key, field]));
@@ -238,6 +356,7 @@ export async function runReport(sql: Sql, actor: Principal, source: ReportSource
   if (records.length > 0) cut(1, 0, records.length, []);
 
   const shown = [...new Set([...groupBy, ...columns].map((column) => column.key))];
+  const chartField = def.chart ? readable.get(def.chart.field) : undefined;
   return {
     board: { id: board.id, title: board.title },
     incidentId: source.incidentId,
@@ -249,6 +368,7 @@ export async function runReport(sql: Sql, actor: Principal, source: ReportSource
     rows: records.map((row) => Object.fromEntries(shown.flatMap((key) => (row[key] === undefined ? [] : [[key, row[key]]])))),
     groups,
     total: { count: records.length, totals: sums(records) },
+    chart: def.chart && chartField ? reportChart(def.chart, chartField, records) : null,
   };
 }
 
@@ -280,6 +400,16 @@ async function checkReport(
   }
   for (const total of def.totals) {
     if (field(total.field).type !== "number") throw new AuthError(400, `totals need a number field; ${total.field} is not one`);
+  }
+  if (def.chart) {
+    const charted = field(def.chart.field);
+    if (def.chart.interval && charted.type !== "datetime")
+      throw new AuthError(400, `a chart over time needs a date and time field; ${charted.key} is not one`);
+    if (!def.chart.interval && !CHARTABLE.has(charted.type))
+      throw new AuthError(400, charted.type === "datetime"
+        ? `choose an hour, day or week to chart ${charted.key} over time`
+        : `a chart cannot count by the ${charted.type} field ${charted.key}`);
+    if (def.chart.interval && def.chart.display === "donut") throw new AuthError(400, "a chart over time is drawn as bars");
   }
   const contactIds = [...new Set(body.schedule?.contactIds ?? [])];
   if (contactIds.length > 0) {

@@ -1,21 +1,31 @@
 import { escapeText } from "@openeoc/shared";
 
 /**
- * A small tabular PDF writer: PDF 1.4, landscape US Letter, text only, in the
- * standard Helvetica fonts with WinAnsi encoding, so nothing is embedded.
- * Every page repeats the title, the subtitle lines and the column headings.
- * Cells wrap within their column; group headings and totals span the page.
+ * A small tabular PDF writer: PDF 1.4, landscape US Letter, in the standard
+ * Helvetica fonts with WinAnsi encoding, so nothing is embedded. Every page
+ * repeats the title and the subtitle lines. A chart, when there is one, is
+ * drawn in vector paths on the pages before the table. Every table page
+ * repeats the column headings; cells wrap within their column, and group
+ * headings and totals span the page.
  */
 
 export type PdfLine =
   | { readonly kind: "row"; readonly cells: readonly string[] }
   | { readonly kind: "group" | "total"; readonly level: number; readonly text: string };
 
+/** Counts per group, drawn as horizontal bars or a donut with a legend. */
+export interface PdfChart {
+  readonly title: string;
+  readonly display: "bar" | "donut";
+  readonly groups: ReadonlyArray<{ readonly value: string; readonly count: number }>;
+}
+
 export interface PdfTable {
   readonly title: string;
   readonly subtitle: readonly string[];
   readonly headers: readonly string[];
   readonly lines: readonly PdfLine[];
+  readonly chart?: PdfChart;
 }
 
 const WIDTH = 792;
@@ -116,6 +126,9 @@ export function tablePdf(table: PdfTable): Uint8Array {
     }
   }
   y -= 6;
+  // Chart pages repeat the title and subtitle, without the column headings.
+  const titleBlock = [...head];
+  const charts = table.chart ? chartPages(table.chart, y - 4) : [];
   const headings = table.headers.map((header, i) => wrap(header, widths[i]! - GAP, SIZE, true, 3));
   headings.forEach((lines, i) => lines.forEach((text, k) =>
     head.push({ x: xs[i]!, y: y - k * LEADING, text, size: SIZE, bold: true })));
@@ -149,17 +162,107 @@ export function tablePdf(table: PdfTable): Uint8Array {
     at -= texts.length * LEADING + (line.kind === "total" ? 3 : 0);
   }
 
-  const streams = pages.map((texts, index) => [
+  const all: Page[] = [...charts, ...pages.map((texts) => ({ texts, paths: [], table: true }))];
+  const streams = all.map((page, index) => [
     "q 0.5 w 0.6 G",
-    `${MARGIN} ${num(rule)} m ${WIDTH - MARGIN} ${num(rule)} l S`,
+    ...(page.table ? [`${MARGIN} ${num(rule)} m ${WIDTH - MARGIN} ${num(rule)} l S`] : []),
     `${MARGIN} ${MARGIN} m ${WIDTH - MARGIN} ${MARGIN} l S`,
     "Q",
-    ...[...head, ...texts].map((t) =>
+    ...page.paths,
+    ...[...(page.table ? head : titleBlock), ...page.texts].map((t) =>
       `BT /${t.bold ? "F2" : "F1"} ${t.size} Tf ${num(t.x)} ${num(t.y)} Td (${escapeText(t.text)}) Tj ET`),
     `BT /F1 7 Tf ${MARGIN} ${MARGIN - 12} Td (Open Source EOC) Tj ET`,
-    `BT /F1 7 Tf ${WIDTH - MARGIN - 60} ${MARGIN - 12} Td (Page ${index + 1} of ${pages.length}) Tj ET`,
+    `BT /F1 7 Tf ${WIDTH - MARGIN - 60} ${MARGIN - 12} Td (Page ${index + 1} of ${all.length}) Tj ET`,
   ].join("\n"));
   return assemble(streams);
+}
+
+interface Page { readonly texts: Text[]; readonly paths: string[]; readonly table: boolean }
+
+// The dashboard chart colors: the light theme's status info, warning, success, critical and unknown.
+const PALETTE = ["#1d4ed8", "#92400e", "#166534", "#b91c1c", "#4b5563"].map((hex) =>
+  [1, 3, 5].map((i) => num(parseInt(hex.slice(i, i + 2), 16) / 255)).join(" "));
+const LABEL_WIDTH = 200;
+const BAR_X = MARGIN + LABEL_WIDTH + 10;
+const BAR_WIDTH = USABLE - LABEL_WIDTH - 10 - 50;
+const BAR_ROW = 13;
+
+/** A filled rectangle in one palette color, the color scoped so the text after it stays black. */
+const box = (color: string, x: number, y: number, w: number, h: number) =>
+  `q ${color} rg ${num(x)} ${num(y)} ${num(w)} ${num(h)} re f Q`;
+
+/** Cubic curves along a circle from one angle to another, in degrees counterclockwise from east. */
+function arc(cx: number, cy: number, r: number, from: number, to: number): string[] {
+  const parts = Math.max(1, Math.ceil(Math.abs(to - from) / 90));
+  const step = ((to - from) / parts) * (Math.PI / 180);
+  const k = (4 / 3) * Math.tan(step / 4);
+  return Array.from({ length: parts }, (_, i) => {
+    const a = from * (Math.PI / 180) + i * step;
+    const b = a + step;
+    const [x1, y1, x2, y2] = [cx + r * Math.cos(a), cy + r * Math.sin(a), cx + r * Math.cos(b), cy + r * Math.sin(b)];
+    return `${num(x1 - k * r * Math.sin(a))} ${num(y1 + k * r * Math.cos(a))} ` +
+      `${num(x2 + k * r * Math.sin(b))} ${num(y2 - k * r * Math.cos(b))} ${num(x2)} ${num(y2)} c`;
+  });
+}
+
+/** One donut slice between two angles: out along the outer edge, back along the inner. */
+function slice(cx: number, cy: number, outer: number, inner: number, from: number, to: number): string {
+  const at = (r: number, angle: number) =>
+    `${num(cx + r * Math.cos(angle * (Math.PI / 180)))} ${num(cy + r * Math.sin(angle * (Math.PI / 180)))}`;
+  return [`${at(outer, from)} m`, ...arc(cx, cy, outer, from, to), `${at(inner, to)} l`, ...arc(cx, cy, inner, to, from), "h f"].join(" ");
+}
+
+/**
+ * The chart below `top`: a bar per group with its count, continued on further
+ * pages when the groups outrun one, or a donut from twelve o'clock clockwise
+ * with the total in its center and a legend of counts and shares.
+ */
+function chartPages(chart: PdfChart, top: number): Page[] {
+  const total = chart.groups.reduce((sum, group) => sum + group.count, 0);
+  const heading = (continued: boolean): Text[] => [
+    { x: MARGIN, y: top, text: `${chart.title}${continued ? " (continued)" : ""}`, size: 10, bold: true },
+    { x: MARGIN, y: top - 12, text: `${total} record${total === 1 ? "" : "s"}`, size: SIZE, bold: false },
+  ];
+  const first = top - 32;
+  if (chart.groups.length === 0 || total === 0) {
+    return [{ texts: [...heading(false), { x: MARGIN, y: first, text: "No records to chart.", size: SIZE, bold: false }], paths: [], table: false }];
+  }
+  if (chart.display === "bar") {
+    const max = Math.max(...chart.groups.map((group) => group.count));
+    const pages: Page[] = [{ texts: heading(false), paths: [], table: false }];
+    let y = first;
+    for (const group of chart.groups) {
+      if (y < BODY_BOTTOM) {
+        pages.push({ texts: heading(true), paths: [], table: false });
+        y = first;
+      }
+      const page = pages.at(-1)!;
+      const width = (group.count / max) * BAR_WIDTH;
+      page.texts.push({ x: MARGIN, y, text: wrap(group.value, LABEL_WIDTH, SIZE, false, 1)[0]!, size: SIZE, bold: false });
+      if (width > 0) page.paths.push(box(PALETTE[0]!, BAR_X, y - 1, width, 8));
+      page.texts.push({ x: BAR_X + width + 4, y, text: String(group.count), size: SIZE, bold: false });
+      y -= BAR_ROW;
+    }
+    return pages;
+  }
+  const outer = Math.min(110, (first - BODY_BOTTOM) / 2);
+  const [cx, cy] = [MARGIN + outer + 20, first - outer];
+  const page: Page = { texts: heading(false), paths: [], table: false };
+  let angle = 90;
+  const legendX = cx + outer + 40;
+  chart.groups.forEach((group, i) => {
+    const color = PALETTE[i % PALETTE.length]!;
+    const sweep = (group.count / total) * 360;
+    if (sweep > 0) page.paths.push(`q ${color} rg ${slice(cx, cy, outer, outer * 0.55, angle, angle - sweep)} Q`);
+    angle -= sweep;
+    const y = first - i * 16;
+    page.paths.push(box(color, legendX, y - 1, 8, 8));
+    const text = `${group.value}: ${group.count} (${Math.round((group.count / total) * 100)}%)`;
+    page.texts.push({ x: legendX + 14, y, text: wrap(text, WIDTH - MARGIN - legendX - 14, SIZE, false, 1)[0]!, size: SIZE, bold: false });
+  });
+  const center = String(total);
+  page.texts.push({ x: cx - textWidth(center, 14, true) / 2, y: cy - 5, text: center, size: 14, bold: true });
+  return [page];
 }
 
 /** Objects 1 to 4 are the catalog, the page tree and the two fonts; each page adds a page and its content. */

@@ -248,6 +248,15 @@ viewer cannot read shows as unavailable. In a saved incident overview, **Create
 saved view** or **Configure view** lists every widget: a kanban summary sits
 with the charts and a calendar with the activity lists.
 
+Under **Create-record tiles** in the same editor, choose one of the incident's
+boards, a label if the default "New board record" does not suit, and preset
+values for its text, number, yes or no and choice fields, then select **Add
+create-record tile**. The tile sits with the statistics. Its button opens the
+board's own form over the dashboard, filled with the presets, which the person
+can change, and saves the record to the incident without leaving the
+dashboard. Someone who can read the board but not add to it sees the button
+disabled and the reason; the server refuses their record either way.
+
 ## Import definitions
 
 The designer's **Import** tab takes definitions from files. Open it from

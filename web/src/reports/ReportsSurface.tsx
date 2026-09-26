@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { choiceLabel, type FieldDef } from "@openeoc/shared";
 import { Button, EnumSelect, Panel, StatusBadge, TextField } from "../design/components.js";
 import { Icon } from "../design/icons/index.js";
+import { DashboardWidget } from "../dashboards/Dashboard.js";
 import "../datasets/datasets.css";
 import "./reports.css";
 import {
   readAllPages,
   type ApiClient,
   type BoardListItem,
+  type ReportChart,
   type ReportDefinition,
   type ReportFormat,
   type ReportResult,
@@ -28,12 +30,16 @@ const FUNCTIONS: readonly ReportTotalFunction[] = ["sum", "avg", "min", "max"];
 const FUNCTION_LABELS: Readonly<Record<ReportTotalFunction, string>> = { sum: "Sum", avg: "Average", min: "Minimum", max: "Maximum" };
 /** Rows a run shows on screen; downloads carry every row. */
 const SHOWN_ROWS = 100;
+/** Field types a chart counts by value; a date and time field is charted over time. */
+const CHARTABLE: ReadonlySet<FieldDef["type"]> = new Set(["text", "number", "boolean", "enum", "datetime"]);
+const INTERVALS: readonly NonNullable<ReportChart["interval"]>[] = ["hour", "day", "week"];
+const INTERVAL_LABELS = { hour: "Hour", day: "Day", week: "Week" };
 
 type Mode = { kind: "none" } | { kind: "build"; report?: SavedReport } | { kind: "open"; id: string };
 
 /**
- * Reports: saved definitions over a board with conditions, grouping, totals
- * and sort, run as the person viewing them and downloaded as PDF, Excel or
+ * Reports: saved definitions over a board with conditions, grouping, totals,
+ * sort and a chart, run as the person viewing them and downloaded as PDF, Excel or
  * CSV, and optionally sent or stored on a schedule. Members and viewers run
  * reports; writers build them; the owner or an administrator changes one.
  */
@@ -66,8 +72,8 @@ export function ReportsSurface(props: {
         <div className="d21-workspace-intro">
           <Icon name="sitrep" size={32} decorative />
           <div>
-            <strong>Tables, groups and totals from a board</strong>
-            <span>A report picks a board&apos;s columns, the records to include, up to two groupings and totals. Every run reads the board as the person running it, so records and fields that person cannot read are left out.</span>
+            <strong>Tables, groups, totals and charts from a board</strong>
+            <span>A report picks a board&apos;s columns, the records to include, up to two groupings, totals and a chart. Every run reads the board as the person running it, so records and fields that person cannot read are left out.</span>
           </div>
         </div>
         {mode.kind === "build" ? (
@@ -131,7 +137,7 @@ function valueText(value: unknown, type?: string): string {
   return type === "enum" ? choiceLabel(String(value)) : String(value);
 }
 
-/** A run on screen: its rows, then the counts and totals per group and for all records. */
+/** A run on screen: its chart, drawn by the dashboards' chart widget, its rows, then the counts and totals per group and for all records. */
 function ResultView(props: { result: ReportResult; label: string }) {
   const r = props.result;
   const shown = [...r.groupBy, ...r.columns.filter((c) => !r.groupBy.some((g) => g.key === c.key))];
@@ -141,6 +147,7 @@ function ResultView(props: { result: ReportResult; label: string }) {
   return (
     <section aria-label={props.label} className="reports-result">
       {r.omitted.length ? <p className="d21-muted" role="note">Left out because you cannot read them: {r.omitted.join(", ")}</p> : null}
+      {r.chart ? <div className="reports-chart"><DashboardWidget widget={r.chart} /></div> : null}
       <p className="d21-muted">Showing {rows.length} of {r.total.count} record{r.total.count === 1 ? "" : "s"}.</p>
       <div className="reports-scroll">
         <table className="eoc-table" aria-label={`${props.label} rows`}>
@@ -195,12 +202,19 @@ function Builder(props: {
   } : NO_REFINEMENT);
   const [thenBy, setThenBy] = useState(report?.definition.groupBy[1] ?? "");
   const [totals, setTotals] = useState<ReadonlyArray<{ field: string; fn: ReportTotalFunction }>>(report?.definition.totals ?? []);
+  const [chart, setChart] = useState<ReportChart | null>(report?.definition.chart ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const board = useAsync(() => (boardId ? client.getBoard(boardId) : Promise.resolve(null)), [boardId]);
   const fields: readonly FieldDef[] = board.data?.id === boardId ? board.data.fields : [];
   const numeric = fields.filter((f) => f.type === "number");
   const groupable = fields.filter((f) => f.type !== "geometry" && !f.calculation);
+  const chartable = fields.filter((f) => CHARTABLE.has(f.type));
+  // A date and time field is counted per interval in a time zone, and only as bars.
+  const chartOn = (field: FieldDef, display: ReportChart["display"]): ReportChart => field.type === "datetime"
+    ? { display: "bar", field: field.key, interval: chart?.interval ?? "day",
+        timeZone: chart?.interval ? chart.timeZone : Intl.DateTimeFormat().resolvedOptions().timeZone }
+    : { display, field: field.key, interval: null, timeZone: "UTC" };
   const scopeId = report?.incidentId ?? (props.incidentId && props.incidentBoardIds.has(boardId) ? props.incidentId : null);
 
   // A new board starts from its first readable fields and no refinements.
@@ -217,7 +231,8 @@ function Builder(props: {
     totals,
     sorts: refine.sorts,
     archived: refine.archived,
-  }), [fields, columns, refine, thenBy, totals]);
+    chart,
+  }), [fields, columns, refine, thenBy, totals, chart]);
   const incidentId = scoped ? scopeId : null;
   const request = JSON.stringify({ boardId, incidentId, definition });
 
@@ -241,6 +256,7 @@ function Builder(props: {
     setRefine(NO_REFINEMENT);
     setThenBy("");
     setTotals([]);
+    setChart(null);
     setScoped(false);
   };
 
@@ -302,6 +318,29 @@ function Builder(props: {
           ))}
           <div><Button disabled={numeric.length === 0 || totals.length >= 16}
             onClick={() => setTotals([...totals, { field: numeric[0]!.key, fn: "sum" }])}>Add total</Button></div>
+        </fieldset>
+        <fieldset className="reports-totals d21-form-grid-wide">
+          <legend>Chart</legend>
+          <p className="d21-muted">A chart counts the same records as the table, per value of a field or per hour, day or week of a date and time field. It prints with the report.</p>
+          <div className="reports-total-row">
+            <EnumSelect label="Chart" values={chart?.interval ? ["", "bar"] : ["", "bar", "donut"]}
+              labels={{ "": "No chart", bar: "Bars", donut: "Donut" }} value={chart?.display ?? ""}
+              selectProps={{ disabled: chartable.length === 0 }}
+              onChange={(display) => {
+                const field = chartable.find((f) => f.key === (chart?.field ?? refine.groupBy)) ?? chartable[0];
+                setChart(display && field ? chartOn(field, display as ReportChart["display"]) : null);
+              }} />
+            {chart ? <EnumSelect label="Count records by" values={chartable.map((f) => f.key)} labels={fieldLabels} value={chart.field}
+              onChange={(key) => {
+                const field = chartable.find((f) => f.key === key);
+                if (field) setChart(chartOn(field, chart.display));
+              }} /> : null}
+            {chart?.interval ? <>
+              <EnumSelect label="Count per" values={INTERVALS} labels={INTERVAL_LABELS} value={chart.interval}
+                onChange={(interval) => setChart({ ...chart, interval: interval as ReportChart["interval"] })} />
+              <TextField label="Chart time zone" value={chart.timeZone} onChange={(timeZone) => setChart({ ...chart, timeZone })} />
+            </> : null}
+          </div>
         </fieldset>
       </div>
       {error ? <p className="d21-error" role="alert">{error}</p> : null}

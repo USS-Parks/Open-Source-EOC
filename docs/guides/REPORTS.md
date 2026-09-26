@@ -1,8 +1,8 @@
 # Reports
 
 A report is a saved table built from one board: the columns to show, the
-records to include, up to two groupings, counts and totals, and the sort
-order. Open it from **Planning > Reports**. Every member of the jurisdiction
+records to include, up to two groupings, counts and totals, the sort order
+and a chart. Open it from **Planning > Reports**. Every member of the jurisdiction
 can open and run a saved report and download it. Members and administrators
 build reports. The person who built a report, while still a member, and any
 administrator can change or delete it.
@@ -14,7 +14,8 @@ running it, through the same rules as the board screen:
 
 - A record that person cannot read, because of the board's record access
   rules, is not in the report, and its values are not in any count or total.
-- A column, grouping or total over a field that person cannot read is left out.
+- A column, grouping, total or chart over a field that person cannot read is
+  left out.
   The report names the fields it left out: on screen above the rows, and in a
   PDF under the title.
 - Archived records are left out unless the report asks to include them.
@@ -37,28 +38,53 @@ anything the board would not show them.
 5. Choose a second grouping under **Then group by**, if needed.
 6. Under **Totals**, add a sum, average, minimum or maximum of a number field.
    Every group and all records always get a count of records.
-7. Check the **Preview**. It runs as you and shows the first 25 rows; its group
-   counts and totals cover every matching record.
-8. Select **Save report**.
+7. Under **Chart**, choose **Bars** or **Donut** and the field under **Count
+   records by**. For a date and time field, choose **Count per** hour, day or
+   week and the **Chart time zone**; the builder starts with the time zone of
+   the device. See [Charts](#charts).
+8. Check the **Preview**. It runs as you and shows the chart and the first 25
+   rows; the chart, group counts and totals cover every matching record.
+9. Select **Save report**.
 
 A report reads at most 50,000 records. A report that would read more is
 refused; add conditions to narrow it.
+
+## Charts
+
+A chart counts the report's own records: the rows the table holds, after its
+conditions and the access rules of the person running it. Its counts add up to
+the report's record count.
+
+- **By a field**: a bar or slice per value of a text, number, yes or no, or
+  choice field. A choice field keeps its own order, other values run in
+  ascending order, and records with no value come last as "(no value)". Bars
+  show at most 24 values and a donut 5, the donut's five colors; the values
+  with the fewest records are counted together as "Other".
+- **Over time**: by a date and time field, per hour, day or week (weeks start
+  on Monday), read on the clock of the chart's time zone. An hour, day or week
+  with no records between the first and the last shows as zero. At most 48 are
+  shown; earlier records are counted together as "Before" the first one shown.
+  A chart over time is drawn as bars. On a daylight saving day the hour the
+  clock skips shows as zero, and the hour it repeats counts both.
+
+The chart is drawn by the same chart as a dashboard's, and needs no network.
 
 ## Run and download
 
 Open a report from **Saved reports**:
 
-- **Run** shows the first 100 rows on screen, then a table of counts and totals
-  per group and for all records.
-- **Download PDF** lays the rows out on landscape US Letter pages, with the
-  title, the board and the column headings repeated on every page, a heading
-  for each group and a total line after each group and at the end. The PDF uses
-  the standard Helvetica font; characters outside Western European text print
-  as a question mark.
+- **Run** shows the chart, when the report has one, the first 100 rows on
+  screen, then a table of counts and totals per group and for all records.
+- **Download PDF** draws the chart first, on pages of its own, then lays the
+  rows out on landscape US Letter pages, with the title, the board and the
+  column headings repeated on every page, a heading for each group and a total
+  line after each group and at the end. The PDF uses the standard Helvetica
+  font; characters outside Western European text print as a question mark.
 - **Download Excel** and **Download CSV** give the rows as one plain table,
   grouping fields first. Below it, after a blank row, a second table gives the
-  count and totals for each group and for all records. In CSV, text that a
-  spreadsheet would run as a formula starts with an apostrophe.
+  count and totals for each group and for all records, and after another the
+  chart's count for each of its groups. In CSV, text that a spreadsheet would
+  run as a formula starts with an apostrophe.
 
 ## Schedule a report
 

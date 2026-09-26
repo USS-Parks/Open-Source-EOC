@@ -1,4 +1,6 @@
 import {
+  buildRecordSchema,
+  choiceLabel,
   DashboardCompositionSchema,
   DashboardFilterSetSchema,
   type DashboardComposition,
@@ -14,6 +16,7 @@ import {
   type WidgetFilter,
 } from "@openeoc/shared";
 import { AuthError, type Principal } from "../auth/service.js";
+import { getBoardReadShape, visibleFields } from "../boards/service.js";
 import type { Sql } from "../db/client.js";
 import { getIncidentAuthority } from "../incidents/participation.js";
 import { getIncidentImpact } from "../impact/service.js";
@@ -61,6 +64,54 @@ function presentationCompatible(
   return widgetKind !== "status";
 }
 
+type CreatePanel = Extract<DashboardComposition["panels"][number], { source: "create" }>;
+
+/** Preset field types a tile offers; the server takes any value its field accepts. */
+const PRESET_TYPES: ReadonlySet<string> = new Set(["text", "number", "boolean", "enum"]);
+
+/** A create-record tile names a board of this incident the author can read, and presets that suit its fields. */
+async function checkCreatePanel(sql: Sql, actor: Principal, incidentId: string, panel: CreatePanel): Promise<void> {
+  const { board } = await getBoardReadShape(sql, actor, panel.boardId, incidentId);
+  const fields = new Map(visibleFields(board).map((field) => [field.key, field]));
+  for (const [key, value] of Object.entries(panel.presets ?? {})) {
+    const field = fields.get(key);
+    if (!field || field.calculation || !PRESET_TYPES.has(field.type) || !buildRecordSchema([field]).safeParse({ [key]: value }).success)
+      throw new AuthError(400, `the preset for ${key} does not suit a field of ${board.title} that you can read`);
+  }
+}
+
+/**
+ * A create-record tile for this viewer: ready when they can read the board,
+ * with the add action only for those who may write to it, and only the
+ * presets on fields they can read.
+ */
+async function createPanelState(sql: Sql, actor: Principal, incidentId: string, panel: CreatePanel): Promise<DashboardPanelSnapshot> {
+  const base = {
+    key: panel.key, source: "create" as const, presentation: panel.presentation,
+    filterCapabilities: [], contributionDrilldown: false, notApplied: [],
+  };
+  try {
+    const { board, canContribute } = await getBoardReadShape(sql, actor, panel.boardId, incidentId);
+    const fields = new Map(visibleFields(board).map((field) => [field.key, field]));
+    const presets = Object.entries(panel.presets ?? {}).flatMap(([key, value]) => {
+      const field = fields.get(key);
+      if (!field) return [];
+      const text = typeof value === "boolean" ? (value ? "Yes" : "No") : field.type === "enum" ? choiceLabel(String(value)) : String(value);
+      return [{ field: key, label: field.label, value, text }];
+    });
+    return {
+      ...base,
+      title: panel.title ?? `New ${board.title} record`,
+      state: "ready",
+      reason: canContribute ? null : "You can read this board but not add records to it.",
+      data: { kind: "create", boardId: board.id, boardTitle: board.title, canCreate: canContribute, presets },
+    };
+  } catch (error) {
+    if (!(error instanceof AuthError) || ![400, 403, 404].includes(error.status)) throw error;
+    return { ...base, title: panel.title ?? "New record", state: "missing", reason: "the board is unavailable", data: null };
+  }
+}
+
 async function validateComposition(
   sql: Sql,
   actor: Principal,
@@ -69,6 +120,10 @@ async function validateComposition(
 ): Promise<void> {
   for (const panel of composition.panels) {
     if (panel.source === "impact") continue;
+    if (panel.source === "create") {
+      await checkCreatePanel(sql, actor, incidentId, panel);
+      continue;
+    }
     const dashboard = await getDashboard(sql, actor, panel.dashboardId, incidentId);
     const widget = dashboard.template.widgets.find((candidate) => candidate.key === panel.widgetKey);
     if (!widget) throw new AuthError(400, `dashboard widget ${panel.widgetKey} does not exist`);
@@ -229,6 +284,10 @@ export async function computeDashboardConfig(
   for (const panel of composition.panels) {
     if (panel.source === "impact") {
       panels.push(impactState(panel, impact!.impact.categories[panel.category], activeCapabilities(filters)));
+      continue;
+    }
+    if (panel.source === "create") {
+      panels.push(await createPanelState(sql, actor, incidentId, panel));
       continue;
     }
     let snapshot = dashboardCache.get(panel.dashboardId);

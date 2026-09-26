@@ -4,11 +4,12 @@ import { tablePdf, type PdfLine } from "./pdf.js";
 import type { Aggregates, ReportFormat, ReportGroup, ReportResult } from "./service.js";
 
 /**
- * A report run as a file. PDF lays the rows out under group headings with a
- * total line after each group and one for all records. CSV and Excel carry
- * the rows as one plain table, group fields first, and below it, after a
- * blank row, a second table of counts and totals per group and for all
- * records, so the rows stay easy to sort and filter in a spreadsheet.
+ * A report run as a file. PDF draws the chart first, when the report has
+ * one, then lays the rows out under group headings with a total line after
+ * each group and one for all records. CSV and Excel carry the rows as one
+ * plain table, group fields first, and below it, after a blank row, a second
+ * table of counts and totals per group and for all records, then the chart's
+ * counts, so the rows stay easy to sort and filter in a spreadsheet.
  */
 
 export const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -43,18 +44,17 @@ function totalsText(result: ReportResult, totals: Aggregates): string {
 export function reportTable(result: ReportResult): BoardTable {
   const shown = [...result.groupBy, ...result.columns.filter((c) => !result.groupBy.some((g) => g.key === c.key))];
   const rows: unknown[][] = result.rows.map((row) => shown.map((column) => row[column.key]));
-  if (result.groupBy.length === 0 && result.totals.length === 0) return { headers: shown.map((c) => c.label), rows };
   const aggregates = (totals: Aggregates) => result.totals.map((t) => totals[t.key]);
-  return {
-    headers: shown.map((c) => c.label),
-    rows: [
-      ...rows,
+  if (result.groupBy.length > 0 || result.totals.length > 0) {
+    rows.push(
       [],
       [result.groupBy.map((g) => g.label).join(" / ") || "Group", "Records", ...result.totals.map((t) => t.label)],
       ...result.groups.map((g) => [g.values.map(groupText).join(" / "), g.count, ...aggregates(g.totals)]),
       ["All records", result.total.count, ...aggregates(result.total.totals)],
-    ],
-  };
+    );
+  }
+  if (result.chart) rows.push([], [result.chart.title, "Records"], ...result.chart.groups.map((g) => [g.value, g.count]));
+  return { headers: shown.map((c) => c.label), rows };
 }
 
 export function reportPdf(result: ReportResult, meta: ReportMeta): Uint8Array {
@@ -89,6 +89,7 @@ export function reportPdf(result: ReportResult, meta: ReportMeta): Uint8Array {
     ],
     headers: result.columns.map((column) => column.label),
     lines,
+    ...(result.chart ? { chart: result.chart } : {}),
   });
 }
 

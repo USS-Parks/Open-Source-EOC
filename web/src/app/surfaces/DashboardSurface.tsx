@@ -19,6 +19,7 @@ import { ActionButton } from "../../design/controls.js";
 import { ConditionBadge, EmptyState as KitEmptyState, ErrorState } from "../../design/feedback.js";
 import type { ThemeName } from "../../design/tokens.js";
 import type { ApiClient, DashboardConfigResponse, DashboardListItem } from "../api/client.js";
+import { uploadPickedFile } from "../data/files.js";
 import { useAsync, usePolled } from "../data/hooks.js";
 import { ErrorNote, Loading, Scroll } from "../screens/parts.js";
 
@@ -308,6 +309,24 @@ export function DashboardSurface(props: DashboardSurfaceProps) {
     () => props.incidentId ? props.client.getIncidentArea(props.incidentId) : Promise.resolve(null),
     [props.incidentId],
   );
+  // The incident's boards a create-record tile can name, read while the view is being configured.
+  const incidentBoards = useAsync(
+    () => props.incidentId && editing ? props.client.incidentBoards(props.incidentId) : Promise.resolve([]),
+    [props.incidentId, editing],
+  );
+  const loadBoard = useCallback(
+    (boardId: string) => props.client.getBoard(boardId, props.incidentId),
+    [props.client, props.incidentId],
+  );
+  const createRecord = useMemo(() => ({
+    loadBoard,
+    create: (boardId: string, data: Record<string, unknown>) =>
+      props.client.createRecord(boardId, data, props.incidentId ?? undefined),
+    upload: props.jurisdictionId
+      ? (file: File) => uploadPickedFile(props.client, props.jurisdictionId!, file)
+      : undefined,
+    onCreated: snapshot.reload,
+  }), [loadBoard, props.client, props.incidentId, props.jurisdictionId, snapshot.reload]);
 
   const changeView = (next: DashboardViewState) => {
     const encoded = JSON.stringify(next);
@@ -452,6 +471,8 @@ export function DashboardSurface(props: DashboardSurfaceProps) {
           error={saveError ?? definitions.error}
           onSave={save}
           onCancel={() => { setEditing(false); setSaveError(null); }}
+          boards={incidentBoards.data ?? []}
+          loadBoard={loadBoard}
         />
       ) : null}
       {props.configKey ? <DashboardViewControls value={state} error={routeError} onChange={changeView} /> : null}
@@ -475,6 +496,7 @@ export function DashboardSurface(props: DashboardSurfaceProps) {
             }}
             onOpenMap={props.onOpenMap}
             onOpenRecord={props.onOpenRecord}
+            createRecord={createRecord}
           />
           <p className="p-dash-context-line">
             Updated {new Date(snapshot.data.computedAt).toLocaleTimeString()} · {snapshot.data.scope.kind === "viewport" ? "Viewport totals" : "Incident-area totals"}

@@ -79,6 +79,20 @@ export const DashboardCompositionPanelSchema = z.discriminatedUnion("source", [
     source: z.literal("impact"),
     category: z.enum(IMPACT_CATEGORIES),
   }).strict(),
+  /**
+   * A create-record tile (VC-24): opens one of the incident's boards' create
+   * form in place, starting from the preset values, which the person can
+   * change. The server checks each preset against its field.
+   */
+  z.object({
+    ...DashboardPanelBase,
+    presentation: z.literal("tile"),
+    source: z.literal("create"),
+    boardId: z.string().uuid(),
+    presets: z.record(z.string().regex(KEY), z.union([z.string().max(4000), z.number().finite(), z.boolean()]))
+      .refine((presets) => Object.keys(presets).length <= 20, "a tile presets at most 20 fields")
+      .optional(),
+  }).strict(),
 ]);
 export type DashboardCompositionPanel = z.infer<typeof DashboardCompositionPanelSchema>;
 
@@ -280,17 +294,32 @@ export type DashboardPanelState = "ready" | "stale" | "missing" | "unsupported";
 export type DashboardFilterCapability = "category" | "operationalPeriod" | "date" | "bbox";
 export type DashboardFilterMode = "inherit" | "replace" | "clear";
 
+/** A create-record tile as one viewer sees it: the board, whether they may add to it, and the presets they can read. */
+export interface CreateRecordPanelData {
+  readonly kind: "create";
+  readonly boardId: string;
+  readonly boardTitle: string;
+  readonly canCreate: boolean;
+  /** Each preset's field and label, its stored value for the form, and the value as the tile shows it. */
+  readonly presets: ReadonlyArray<{
+    readonly field: string;
+    readonly label: string;
+    readonly value: string | number | boolean;
+    readonly text: string;
+  }>;
+}
+
 export interface DashboardPanelSnapshot {
   readonly key: string;
   readonly title: string;
-  readonly source: "dashboard" | "impact";
+  readonly source: "dashboard" | "impact" | "create";
   readonly presentation: "tile" | "chart" | "list" | "map" | "status";
   readonly state: DashboardPanelState;
   readonly reason: string | null;
   readonly filterCapabilities: readonly DashboardFilterCapability[];
   readonly contributionDrilldown: boolean;
   readonly notApplied: readonly DashboardFilterCapability[];
-  readonly data: WidgetResult | ImpactCategoryAggregate | null;
+  readonly data: WidgetResult | ImpactCategoryAggregate | CreateRecordPanelData | null;
 }
 
 export interface DashboardCompositionSnapshot {

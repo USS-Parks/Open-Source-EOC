@@ -11372,3 +11372,162 @@ none. The contacts screen returns that notice and then reads the directory
 again (`web/src/contacts/ContactsSurface.tsx`), so on a loaded runner the
 list is still the old one. The test now polls until the members are there.
 It passed on the Windows test bed after the change. No product code changed.
+
+## Veoci and air gap VA31: charts in reports and create-record tiles
+
+Veoci Integration and Air Gap PSPR unit VA31 (VC-24, "Veoci charts and page
+buttons"); section 3's "Map to record" row points create-record tiles here.
+
+- **What the code did before.** A report was a table over one board with
+  groupings and totals, on screen, in PDF, Excel and CSV and on a schedule; it
+  had no chart. The dashboards' chart widget drew counts per value as bars or
+  a donut, but only inside a dashboard. A saved incident dashboard composed
+  dashboard widgets and impact tiles; nothing on it could add a record, so an
+  operator left the dashboard for the board screen to enter one.
+- **What changed.**
+  - **A chart in the report definition** (`server/src/reports/service.ts`):
+    `chart: { display: "bar" | "donut", field, interval, timeZone }`, null by
+    default, so stored definitions and signed packages read unchanged. The
+    chart counts the report's own records, the rows the table holds after
+    its conditions, archive choice and the runner's record and field rules,
+    so its groups add up to the record count and each value's count equals
+    that value's group in the table. By a field (text, number, yes or no,
+    choice): a choice field in its own order, other values ascending, no
+    value last as "(no value)", labels as people read them; bars show at
+    most 24 values and a donut 5 (its five colors), the values with the
+    fewest records folded into "Other (N values)". Over time, by a date and
+    time field: per hour, day or week (from Monday) on the wall clock of the
+    chart's IANA time zone, empty buckets between the first and last as
+    zero, at most 48 buckets with earlier records folded into "Before
+    <first bucket>"; drawn as bars only. The save and preview check refuse a
+    chart over a field the author cannot read, a geometry, reference,
+    attachment or signature field, a date field without an interval, an
+    interval on any other field, a donut over time and an unknown time zone.
+    A run by someone who cannot read the chart's field leaves the chart out
+    and names the field with the other omitted ones.
+  - **The chart in each output** (`render.ts`, `pdf.ts`): the PDF draws the
+    chart in vector paths on pages of its own before the table, with the
+    title and subtitle repeated and "Page n of N" counting them: bars with
+    label and count, continued on further pages when they outrun one, or a
+    donut from twelve o'clock with the total in the center and a legend of
+    count and share, in the dashboards' status colors. Nothing is embedded
+    and no library is added. Excel and CSV append the chart's counts as a
+    third table after the group totals. A scheduled run renders the same
+    file, so the scheduled email's PDF carries the chart.
+  - **The screen** (`web/src/reports/ReportsSurface.tsx`): the builder gains
+    **Chart** (No chart, Bars, Donut), **Count records by**, and for a date
+    field **Count per** and **Chart time zone** (the device's zone to start).
+    The preview and each run show the chart above the rows, drawn by the
+    dashboards' own chart widget (`DashboardWidget`, imported unchanged).
+  - **Create-record tiles** (`shared/src/dashboards/def.ts`,
+    `server/src/dashboards/config.ts`): a saved dashboard panel
+    `{ source: "create", presentation: "tile", boardId, title?, presets? }`.
+    Saving checks that the board is one of the incident's and readable by
+    the author, and that each preset names a text, number, yes or no or
+    choice field the author can read and passes that field's own record
+    schema. The snapshot gives each viewer `{ kind: "create", boardId,
+    boardTitle, canCreate, presets }`, where `canCreate` is the incident's
+    contribute authority, presets are only those on fields the viewer can
+    read, and a viewer who cannot write gets the reason "You can read this
+    board but not add records to it." A board no longer readable or no
+    longer on the incident shows the tile as missing.
+  - **The tile on screen** (`web/src/dashboards/CreateRecordTile.tsx`,
+    `CompositionDashboard.tsx`): the tile sits with the statistics; its
+    button opens the board's own `RecordForm` (imported from
+    `web/src/boards/`, not edited) in a drawer over the dashboard, filled
+    with the presets, which the person can change, with the unsaved-changes
+    guard. Saving posts to the existing record route with the incident,
+    closes the drawer, says "Record saved to <board>." and refreshes the
+    dashboard. Without write access the button is disabled and the reason
+    shown; the server refuses the record regardless.
+  - **Adding a tile** (`DashboardConfigurator.tsx`, wired in
+    `web/src/app/surfaces/DashboardSurface.tsx`): **Create-record tiles** in
+    the saved view editor: a board of the incident (read only while the
+    editor is open), an optional label, preset values with a field's own
+    choices, **Add create-record tile**, and a remove button per tile.
+  - `docs/guides/REPORTS.md` gains a Charts section and the chart in the
+    build steps and outputs; `docs/guides/DESIGNER.md` describes the tiles.
+- **Files outside the "Owns" cell.** `web/src/app/api/client.ts` (report
+  chart types), `web/src/app/surfaces/DashboardSurface.tsx` (the tile's
+  record actions and the editor's board list), `docs/guides/REPORTS.md`,
+  `docs/guides/DESIGNER.md`, and the tests listed below.
+  `web/src/boards/RecordForm.tsx` and `server/src/boards/service.ts` are
+  imported, not edited.
+- **Decisions and deviations.**
+  - Bars and a donut, the two forms the dashboard chart already draws; a
+    chart over time is bars in time order with empty buckets as zero, not a
+    line, since no dashboard draws one. A chart counts records; sums stay in
+    the table's totals. One chart per report.
+  - The tile is a panel of a saved incident dashboard, the editor an
+    administrator already uses, not a widget kind of the JSON dashboard
+    templates. Saved dashboards belong to the person who saves them, as
+    before; a viewer may put a tile on their own view and sees it disabled.
+  - A daylight saving day: the hour the clock skips shows as zero and the
+    repeated hour counts both (commented in the code).
+  - Spreadsheet chart tables carry labels, as the chart does, while CSV rows
+    keep stored codes.
+- **Air-gap behavior (decision 9).** No network path is added or changed.
+  Charts are drawn in the browser by bundled code and in the PDF by the
+  server's own writer, with no CDN, font or library fetched. The tile posts
+  to the instance's existing record route. Internet cut with the LAN up, and
+  a permanent isolated enclave: both work unchanged. A device with no
+  network: the dashboard and reports cannot be read, like any server screen;
+  a tile's save fails with the form's failure notice and the typed values
+  stay in the form (not queued). Data on media: a report's PDF, Excel or CSV
+  carries the chart or its counts like any report file.
+- **Schema, contract and dependencies.** No migration: report definitions
+  and saved dashboards are already JSON. The report definition gains
+  `chart`, the run result `chart` (the shared `ChartResult`); the saved
+  dashboard panel union gains `source: "create"` and the panel snapshot
+  `CreateRecordPanelData`. No new route, so `docs/API.md` is unchanged. No
+  new dependency.
+- **Tests.** `report-charts.test.ts` (5, real database): a chart by priority
+  over a filtered, grouped report equals the table's groups and adds up to
+  the record count, and a report without a chart reads as before; per day
+  in Los Angeles and in UTC, per week with archived records, per hour with
+  the 48-bucket fold, and a donut folding to four values and Other; the
+  PDF draws the chart first (bars and a donut's curves, legend and total)
+  with a valid cross-reference table, and CSV lists its counts; a scheduled
+  run's queued email PDF carries the chart; seven refused charts, and a
+  chart over an administrator-only field left out and named for a member.
+  `dashboard-create-tiles.test.ts` (3, real database): a member's tile with
+  three presets, the record from it saved to the incident with them; a
+  viewer's tile disabled with the reason and the viewer's record refused
+  with 403 and nothing written; seven refused tiles and an administrator's
+  preset allowed, and a board taken off the incident shown missing.
+  `create-record-tile.test.tsx` (3, axe): the drawer opens with the presets
+  and saves; a viewer's disabled tile; the editor adds a tile with two
+  presets and saves it. `report-chart.test.tsx` (1, axe): the builder sends
+  the chart, the preview draws it, time charts offer bars only.
+  `report-chart-tiles-browser.test.ts` at 1586 by 992 and 1534 by 790: an
+  administrator adds a bar chart to a report and sees it in the preview and
+  a run, then adds a create-record tile with a preset to a saved incident
+  dashboard and creates a record from it; no page errors, no outside
+  requests, no sideways scroll.
+- **Verification.** On the Windows test bed with `OPENEOC_TEST_DB_TAG=va31`:
+  `pnpm check:static` exit 0. Server:
+  `rtk proxy npx vitest run` over `reports`, `dashboards`,
+  `saved-dashboard-engine`, `incident-dashboard-scope`, `data-packs`,
+  `solution-package`, `starter-pack`, `incident-room`,
+  `upgrade-configuration`, `api-docs`, `report-charts` and
+  `dashboard-create-tiles`: 12 files, 57 tests green. Browser:
+  `reports-browser`, `dashboard-browser`, `incident-room-browser`: 3 files,
+  4 tests green; `report-chart-tiles-browser`: 2 tests green. Web and
+  shared, `rtk proxy npx vitest run web/src shared/src`: 128 files, 901
+  tests green. `node scripts/bundle-budget.mjs`: first load 189.7 kB of
+  300 kB.
+- **Not run.** `pnpm check` and `pnpm check:gate`, the rest of the server
+  suite, the Windows setup build.
+- **Evidence level:** real-database, component and browser tests.
+- **Rollback:** revert the commit. A saved report with a chart or a saved
+  dashboard with a create tile would then fail its strict schema: remove
+  `chart` from `reports.definition` and the `create` panels from
+  `saved_states` of kind `dashboard_config` first.
+- **Landing.** Rebased onto "CI correction: the call-down group read before
+  the directory refreshed"; the only conflict was the type import list in
+  `web/src/app/api/client.ts`, where both are kept. No migration. On main
+  with `OPENEOC_TEST_DB_TAG=va31`: `pnpm check:static` exit 0; 73 files, 421
+  tests green (report charts, reports, create-record tiles, dashboards,
+  incident dashboard scope, the saved dashboard engine, incident room, API
+  docs, route coverage, the report chart, reports and dashboard browser
+  tests, and the reports, dashboards, app screen and shared tests).

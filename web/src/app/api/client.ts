@@ -1,5 +1,6 @@
 import type {
   BoardActionRun,
+  ChartResult,
   FieldDef,
   ViewCondition,
   ViewDef,
@@ -3302,6 +3303,13 @@ export interface TrackedObject {
 
 export type ReportFormat = "pdf" | "xlsx" | "csv";
 export type ReportTotalFunction = "sum" | "avg" | "min" | "max";
+/** A count per value of a field, or per hour, day or week of a date and time field in a time zone. */
+export interface ReportChart {
+  readonly display: "bar" | "donut";
+  readonly field: string;
+  readonly interval: "hour" | "day" | "week" | null;
+  readonly timeZone: string;
+}
 export interface ReportDefinition {
   readonly columns: readonly string[];
   readonly where: readonly ViewCondition[];
@@ -3310,6 +3318,7 @@ export interface ReportDefinition {
   readonly totals: ReadonlyArray<{ readonly field: string; readonly fn: ReportTotalFunction }>;
   readonly sorts: ReadonlyArray<{ readonly field: string; readonly dir: "asc" | "desc" }>;
   readonly archived: "exclude" | "include" | "only";
+  readonly chart?: ReportChart | null;
 }
 export type ReportCadence =
   | { readonly kind: "interval"; readonly minutes: number }
@@ -3374,4 +3383,6 @@ export interface ReportResult {
     readonly totals: Readonly<Record<string, number | null>>;
   }>;
   readonly total: { readonly count: number; readonly totals: Readonly<Record<string, number | null>> };
+  /** The chart over the same records, its groups as labels; null without one. */
+  readonly chart?: ChartResult | null;
 }

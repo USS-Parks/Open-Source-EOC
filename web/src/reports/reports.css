@@ -8,6 +8,7 @@
 .reports-field input { background: var(--eoc-surface); border: 1px solid var(--eoc-border); border-radius: 4px; color: var(--eoc-text); font: inherit; min-height: 44px; padding: 6px; }
 .reports-heading { font-size: 1em; margin: 16px 0 8px; }
 .reports-result { display: grid; gap: 8px; margin-top: 12px; min-width: 0; }
+.reports-chart { max-width: 720px; min-width: 0; }
 .reports-scroll { max-width: 100%; overflow-x: auto; }
 /*
  * On a phone the cells pad less and the headings drop their capitals and
