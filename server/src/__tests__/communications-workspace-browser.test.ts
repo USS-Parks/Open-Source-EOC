@@ -206,8 +206,10 @@ describe("messages and files in operational context", () => {
     await page.getByText(/Operations Section Chief \(current: Member\)/).first().waitFor();
     await page.getByText(/Delivery, read, and acknowledgement receipts are not available/).waitFor();
     await page.getByText("Accessible transport route is ready for review.", { exact: true }).waitFor();
+    // A message to an incident's thread goes through the device outbox, which sends it once as a field operation.
     const storedResponse = page.waitForResponse((response) =>
-      response.url().includes("/messages") && response.request().method() === "POST" && response.status() === 201);
+      response.url().endsWith(`/incidents/${incidentId}/field-operations`) && response.request().method() === "POST"
+      && response.status() === 200);
     await page.getByLabel("Message", { exact: true }).fill("Route reviewed from the message workspace.");
     const send = page.getByRole("button", { name: "Send", exact: true });
     await send.focus();

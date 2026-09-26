@@ -11750,3 +11750,29 @@ decision 5 (no scripting, ADR-0004).
   reports, report charts, forms, form field depth, record sync, field
   breadth, the saved dashboard engine, API docs, route coverage), and the
   web and shared tests 133 files, 926 tests.
+
+## CI correction: a refused upload's staging file, and a message test on the old route
+
+CI run 36211128703 on `78f9f37` failed 3 of the Windows job's tests.
+
+- **A refused upload left its staging file behind on Windows** (`files.test.ts`,
+  two cases, whose last check found a `.upload-` file). When an upload ran
+  over the size limit, `BlobStore.stage` (`server/src/files/service.ts`)
+  removed the staging file as soon as the failed pipeline returned, but the
+  pipeline closes the destroyed file stream's handle later, and on Windows a
+  file removed while open stays listed until that close. It now waits for
+  the stream to close before removing the file. A new test,
+  `blob-stage.test.ts`, refuses 25 oversized uploads in a row and checks each
+  leaves nothing behind: it fails on the old code (a `.upload-` file) and
+  passes on the new. `files.test.ts` then passed 5 runs of 5.
+- **The messages browser test waited for a route the screen no longer uses**
+  (`communications-workspace-browser.test.ts`, a 90 second timeout). Since
+  "Veoci and air gap VA22: field breadth", a message to an incident's thread
+  goes through the device outbox as a field operation
+  (`POST /api/v1/incidents/:incidentId/field-operations`, 200), not
+  `POST /messages` (201). The test now waits for that request; it passed on
+  the Windows test bed. VA22's lane ran ten neighbouring browser files but
+  not this one.
+- **Verification.** `pnpm check:static` exit 0; `files.test.ts`,
+  `blob-stage.test.ts` and the messages browser test green with
+  `OPENEOC_TEST_DB_TAG=main`.

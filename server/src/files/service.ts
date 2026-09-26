@@ -40,6 +40,7 @@ export class BlobStore {
     const path = join(this.root, `.upload-${randomUUID()}`);
     const hash = createHash("sha256");
     let size = 0;
+    const out = createWriteStream(path, { flags: "wx" });
     try {
       await pipeline(
         source,
@@ -51,9 +52,12 @@ export class BlobStore {
             yield chunk;
           }
         },
-        createWriteStream(path, { flags: "wx" }),
+        out,
       );
     } catch (err) {
+      // The failed pipeline destroys the file stream but closes its handle later;
+      // on Windows a file removed while open stays listed until that close.
+      if (!out.closed) await new Promise<void>((resolve) => out.once("close", () => resolve()));
       await rm(path, { force: true });
       throw err;
     }
