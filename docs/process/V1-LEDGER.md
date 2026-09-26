@@ -13908,3 +13908,14 @@ to a build input.
   repository; nothing here was installed on this machine or opened on a
   Mac.
 - **Rollback:** remove the four files and their checksums from `deploy/`.
+
+## Map and dashboard parity grant
+
+Basho, 2026-09-26, after reviewing the installed 0.9.9: "I approve of the
+plan in full." His answers to the plan's section 10: "An original SVG set,
+yes. 40 of them."; "I authorize the download of any needed public domain
+data."; "Release version will be v1.0 and continue marching versions from
+there." It covers every unit of `MAP-DASHBOARD-PARITY-PSPR-2026-09-26.md`,
+MP0 to MP16, with commit, landing and push authority under the plan's gate,
+lanes under the standing fan-out grant, and the public-domain downloads its
+units need. Tagging, publishing and bucketing stay Basho's.
