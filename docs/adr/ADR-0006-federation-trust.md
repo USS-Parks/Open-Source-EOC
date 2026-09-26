@@ -2,16 +2,22 @@
 
 Status: accepted, 2026-09-17 (VEOC-04)
 
-Status note, 2026-09-25 (Veoci and air gap VA5): the decision is only partly
-built. As built, a peer authenticates with a token the receiving instance
-issued (stored there as a hash; the sender keeps its copy encrypted under
-`OPENEOC_SECRET_KEY`), over HTTPS where the peer's address uses it. Payloads
-are not signed, and no route revokes an agreement: flow stops only by
-removing the peer or the agreement in the database. Store-and-forward
-delivery holds through a partition, and each batch is checked against the
-agreement for its board. The Ed25519 identity, signed batches verified before
-ingestion and a revoke route are unit VA19 of the
-[Veoci Integration and Air Gap PSPR](../process/VEOCI-AIR-GAP-PSPR-2026-09-25.md).
+Status note, 2026-09-25 (Veoci and air gap VA5): the decision was only
+partly built: peers authenticated with a token, payloads were not signed, and
+no route revoked an agreement.
+
+Status note, 2026-09-25 (Veoci and air gap VA19): built for federated board
+batches. Each instance holds one Ed25519 key pair, its private key
+envelope-encrypted under `OPENEOC_SECRET_KEY`. Administrators exchange public
+keys and compare fingerprints, and each records the other's on its peer.
+Every batch is signed by the sending instance and verified under the recorded
+key before anything in it is applied; the peer token still admits the request
+before its body is read. `DELETE /api/v1/peers/:peerId/agreements/:agreementId`
+revokes an agreement and drops what was waiting for it, so the revoking
+instance neither sends nor accepts the board from then on. The partner is not
+told: its pushes are refused with 403 until its administrator revokes its own
+side. Resource escalation and JIC approval deliveries are not signed.
+[Federation setup](../guides/FEDERATION-SETUP.md) describes the exchange.
 
 ## Decision
 

@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { addMembership, createJurisdiction } from "../auth/service.js";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
+import { signBatch } from "../federation/identity.js";
 import { freshDb, seedIdentity, type Sql } from "./helpers.js";
 
 /**
@@ -13,7 +14,8 @@ import { freshDb, seedIdentity, type Sql } from "./helpers.js";
  * separate databases and app processes — share a board through an
  * agreement. A scripted partition strands edits in each instance's
  * outbox; on reconnect the batches deliver over HTTP and both boards
- * converge with attribution, and a peer cannot write beyond its scope.
+ * converge with attribution, and a peer cannot write beyond its scope. Each
+ * instance records the other's public key, and every delivery is signed.
  */
 
 interface Instance {
@@ -33,6 +35,7 @@ let peerCountySide: string; // county's peer record for the state
 let peerStateSide: string; // state's peer record for the county
 let tokenIntoCounty: string; // the state presents this to push into the county
 let tokenIntoState: string; // the county presents this to push into the state
+let priorKey: string | undefined;
 
 async function standUp(slug: string): Promise<Instance> {
   const { admin, runtime } = await freshDb();
@@ -67,6 +70,9 @@ async function standUp(slug: string): Promise<Instance> {
 }
 
 beforeAll(async () => {
+  // Each instance's signing key is stored encrypted under the server key.
+  priorKey = process.env.OPENEOC_SECRET_KEY;
+  process.env.OPENEOC_SECRET_KEY = "test-only-federation-key";
   county = await standUp("county");
   state = await standUp("state");
 
@@ -80,6 +86,9 @@ beforeAll(async () => {
   peerStateSide = ps.id;
   tokenIntoState = ps.token;
   await makeAgreement(state, peerStateSide, state.boardId);
+  // Each records the public key the other shows.
+  await recordKey(county, peerCountySide, state);
+  await recordKey(state, peerStateSide, county);
 }, 120_000); // two databases and two apps
 
 afterAll(async () => {
@@ -89,7 +98,33 @@ afterAll(async () => {
     await inst.runtime.end();
     await inst.admin.end();
   }
+  if (priorKey === undefined) delete process.env.OPENEOC_SECRET_KEY;
+  else process.env.OPENEOC_SECRET_KEY = priorKey;
 });
+
+async function publicKeyOf(inst: Instance): Promise<{ publicKey: string; fingerprint: string }> {
+  const shown = await inst.app.inject({
+    method: "GET",
+    url: `/api/v1/jurisdictions/${inst.jurisdictionId}/federation`,
+    headers: { authorization: `Bearer ${inst.adminToken}` },
+  });
+  return shown.json().identity;
+}
+
+async function recordKey(inst: Instance, peerId: string, of: Instance): Promise<void> {
+  const res = await inst.app.inject({
+    method: "PUT",
+    url: `/api/v1/peers/${peerId}/key`,
+    headers: { authorization: `Bearer ${inst.adminToken}` },
+    payload: { publicKey: (await publicKeyOf(of)).publicKey },
+  });
+  if (res.statusCode !== 200) throw new Error(`key not recorded: ${res.body}`);
+}
+
+/** A batch signed as the sending instance's delivery worker signs it. */
+function signed(from: Instance, boardId: string, updates: readonly string[], deletes: readonly string[] = []) {
+  return signBatch(from.admin, boardId, updates, deletes);
+}
 
 async function registerPeer(inst: Instance, name: string): Promise<{ id: string; token: string }> {
   const res = await inst.app.inject({
@@ -171,7 +206,7 @@ describe("county-to-state sharing survives a partition in both directions", () =
       method: "POST",
       url: "/api/v1/federation/receive",
       headers: { "x-peer-token": tokenIntoState },
-      payload: { boardId: state.boardId, updates: toState.map((e) => e.updateBase64) },
+      payload: await signed(county, state.boardId, toState.map((e) => e.updateBase64)),
     });
     expect(r1.statusCode).toBe(200);
     expect(r1.json().conflicts).toBe(0);
@@ -184,7 +219,7 @@ describe("county-to-state sharing survives a partition in both directions", () =
       method: "POST",
       url: "/api/v1/federation/receive",
       headers: { "x-peer-token": tokenIntoCounty },
-      payload: { boardId: county.boardId, updates: toCounty.map((e) => e.updateBase64) },
+      payload: await signed(state, county.boardId, toCounty.map((e) => e.updateBase64)),
     });
     expect(r2.statusCode).toBe(200);
 
@@ -226,7 +261,7 @@ describe("agreement scope", () => {
       method: "POST",
       url: "/api/v1/federation/receive",
       headers: { "x-peer-token": tokenIntoState },
-      payload: { boardId: other.json().id as string, updates: [] },
+      payload: await signed(county, other.json().id as string, []),
     });
     expect(res.statusCode).toBe(403);
   });
@@ -248,11 +283,12 @@ describe("agreement scope", () => {
     });
     expect(agreement.statusCode).toBe(201);
 
+    await recordKey(county, peer.id, state);
     const res = await county.app.inject({
       method: "POST",
       url: "/api/v1/federation/receive",
       headers: { "x-peer-token": peer.token },
-      payload: { boardId, updates: [] },
+      payload: await signed(state, boardId, []),
     });
     expect(res.statusCode).toBe(403);
     expect(res.json().error).toBe("agreement does not permit writes to that board");
@@ -294,20 +330,13 @@ describe("agreement scope", () => {
 
 describe("federation status for administrators", () => {
   it("lists peers, shared boards with their outbox standing, and received batches, never a token", async () => {
-    const prior = process.env.OPENEOC_SECRET_KEY;
-    process.env.OPENEOC_SECRET_KEY = "test-only-federation-status-key";
-    try {
-      const link = await county.app.inject({
-        method: "PUT",
-        url: `/api/v1/peers/${peerCountySide}/link`,
-        headers: { authorization: `Bearer ${county.adminToken}` },
-        payload: { endpointUrl: "http://127.0.0.1:9", token: "push-token-never-shown" },
-      });
-      expect(link.statusCode).toBe(200);
-    } finally {
-      if (prior === undefined) delete process.env.OPENEOC_SECRET_KEY;
-      else process.env.OPENEOC_SECRET_KEY = prior;
-    }
+    const link = await county.app.inject({
+      method: "PUT",
+      url: `/api/v1/peers/${peerCountySide}/link`,
+      headers: { authorization: `Bearer ${county.adminToken}` },
+      payload: { endpointUrl: "http://127.0.0.1:9", token: "push-token-never-shown" },
+    });
+    expect(link.statusCode).toBe(200);
 
     const res = await county.app.inject({
       method: "GET",
@@ -316,13 +345,16 @@ describe("federation status for administrators", () => {
     });
     expect(res.statusCode).toBe(200);
     const [stored] = await county.admin`select token_hash, outbound_token from peers where id = ${peerCountySide}`;
-    for (const secret of ["push-token-never-shown", tokenIntoCounty, stored!.token_hash, stored!.outbound_token]) {
+    const [identity] = await county.admin`select private_key_envelope from federation_identity`;
+    for (const secret of ["push-token-never-shown", tokenIntoCounty, stored!.token_hash, stored!.outbound_token, identity!.private_key_envelope]) {
       expect(res.body).not.toContain(secret as string);
     }
     const [board] = await county.admin`select title from boards where id = ${county.boardId}`;
     const body = res.json();
     const peer = body.peers.find((p: { name: string }) => p.name === "state");
-    expect(peer).toMatchObject({ id: peerCountySide, endpointUrl: "http://127.0.0.1:9", tokenStored: true });
+    expect(peer).toMatchObject({ id: peerCountySide, endpointUrl: "http://127.0.0.1:9", tokenStored: true,
+      keyFingerprint: (await publicKeyOf(state)).fingerprint });
+    expect(body.identity).toEqual(await publicKeyOf(county));
     expect(peer.boards).toEqual([
       expect.objectContaining({
         boardId: county.boardId, boardTitle: board!.title, canRead: true, canWrite: true, remoteBoardId: null,
@@ -353,11 +385,9 @@ describe("record deletions and records made before an agreement", () => {
     const pending = await pendingFor(from, peerId);
     const res = await to.app.inject({
       method: "POST", url: "/api/v1/federation/receive", headers: { "x-peer-token": token },
-      payload: {
-        boardId,
-        updates: pending.filter((e) => e.updateBase64).map((e) => e.updateBase64),
-        deletes: pending.filter((e) => e.deletedRecordId).map((e) => e.deletedRecordId),
-      },
+      payload: await signed(from, boardId,
+        pending.filter((e) => e.updateBase64).map((e) => e.updateBase64),
+        pending.filter((e) => e.deletedRecordId).map((e) => e.deletedRecordId!)),
     });
     expect(res.statusCode, res.body).toBe(200);
     await from.admin`update federation_outbox set delivered_at = now() where peer_id = ${peerId} and delivered_at is null`;
@@ -402,7 +432,7 @@ describe("record deletions and records made before an agreement", () => {
     expect(conflict!.reason).toBe("record was deleted");
     // A repeated deletion changes nothing.
     const again = await state.app.inject({ method: "POST", url: "/api/v1/federation/receive", headers: { "x-peer-token": tokenIntoState },
-      payload: { boardId: state.boardId, updates: [], deletes: [id] } });
+      payload: await signed(county, state.boardId, [], [id]) });
     expect(again.json()).toMatchObject({ deleted: 0 });
   });
 
@@ -426,8 +456,9 @@ describe("record deletions and records made before an agreement", () => {
       headers: as(state), payload: { templateKey: "activity_log" } })).json().id as string;
     const ps = await registerPeer(state, "county-backfill");
     await makeAgreement(state, ps.id, target);
+    await recordKey(state, ps.id, county);
     const received = await state.app.inject({ method: "POST", url: "/api/v1/federation/receive", headers: { "x-peer-token": ps.token },
-      payload: { boardId: target, updates: pending.map((e) => e.updateBase64) } });
+      payload: await signed(county, target, pending.map((e) => e.updateBase64)) });
     expect(received.statusCode, received.body).toBe(200);
     const rows = await state.admin`select data ->> 'entry' as entry from board_records where board_id = ${target} order by 1`;
     expect(rows.map((r) => r.entry)).toEqual(["county: generator inventory", "county: road closure list"]);

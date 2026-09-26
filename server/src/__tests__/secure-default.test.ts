@@ -159,6 +159,9 @@ describe("envelope key rotation", () => {
       insert into peers (jurisdiction_id, name, token_hash, created_by, endpoint_url, outbound_token)
       values (${jurisdictionId}, 'state', 'hash-a', ${personId}, 'https://state.invalid',
               ${encryptSecret(plaintext("peers"), OLD)})`;
+    await admin`
+      insert into federation_identity (public_key, private_key_envelope)
+      values ('public', ${encryptSecret(plaintext("federation_identity"), OLD)})`;
     const envelopes = async () => {
       const found: Record<string, string> = {};
       for (const { table, column } of ENVELOPE_COLUMNS) {
@@ -184,7 +187,7 @@ describe("envelope key rotation", () => {
 
     await expect(rotateSecretKey(admin, OLD, OLD)).rejects.toThrow(/must differ/);
     const counts = await rotateSecretKey(admin, OLD, NEW);
-    expect(counts).toEqual({ person_mfa: 1, ipaws_config: 1, collab_backends: 1, meeting_config: 1, peers: 1 });
+    expect(counts).toEqual({ person_mfa: 1, ipaws_config: 1, collab_backends: 1, meeting_config: 1, peers: 1, federation_identity: 1 });
     for (const [table, envelope] of Object.entries(await envelopes())) {
       expect(decryptSecret(envelope, NEW), table).toBe(plaintext(table));
       expect(() => decryptSecret(envelope, OLD), table).toThrow();

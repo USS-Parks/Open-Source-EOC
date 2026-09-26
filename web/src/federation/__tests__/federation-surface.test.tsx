@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import axe from "axe-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ApiClient, BoardListItem } from "../../app/api/client.js";
@@ -12,10 +13,13 @@ const boards: BoardListItem[] = [
   { id: "b2", title: "Shelters", templateKey: "shelters", templateVersion: 1, hasGeometry: true },
 ];
 
+const PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAq1Wq9Yl3Tj0cQy7l3Y2d1c9p0Yh0m8m1m5l2k3j4h5g=\n-----END PUBLIC KEY-----\n";
+
 const status: FederationStatus = {
+  identity: { publicKey: PUBLIC_KEY, fingerprint: "ab".repeat(32) },
   peers: [{
     id: "p1", name: "State OES", createdAt: "2026-09-22T10:00:00.000Z", endpointUrl: "https://state.example",
-    tokenStored: true,
+    tokenStored: true, keyFingerprint: null,
     boards: [{
       id: "a1", boardId: "b1", boardTitle: "Activity log", canRead: true, canWrite: false,
       remoteBoardId: null, pending: 2, oldestPendingAt: "2026-09-22T10:00:00.000Z",
@@ -31,6 +35,8 @@ function client(): ApiClient {
     registerPeer: vi.fn().mockResolvedValue({ id: "p2", token: "issued-once-token" }),
     setPeerLink: vi.fn().mockResolvedValue(undefined),
     createSharingAgreement: vi.fn().mockResolvedValue({ id: "a2" }),
+    setPeerKey: vi.fn().mockResolvedValue({ fingerprint: "cd".repeat(32) }),
+    revokeSharingAgreement: vi.fn().mockResolvedValue({ dropped: 2 }),
   } as unknown as ApiClient;
 }
 
@@ -82,6 +88,55 @@ describe("federation screen", () => {
     fireEvent.click(within(peer).getByRole("button", { name: "Share board" }));
     await waitFor(() => expect(api.createSharingAgreement).toHaveBeenCalledWith("p1",
       { boardId: "b2", canRead: true, canWrite: true, remoteBoardId: remote }));
+  });
+
+  it("shows this instance's key to copy, records a partner's key and revokes a share after confirming", async () => {
+    const api = client();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const view = render(<FederationSurface client={api} jurisdictionId="j" isAdmin boards={boards} />);
+    const peer = await screen.findByRole("listitem", { name: "Partner State OES" });
+
+    const own = screen.getByRole("region", { name: "This instance's key" });
+    expect(within(own).getByText("ab".repeat(32))).toBeTruthy();
+    expect(within(own).getByLabelText("This instance's public key").textContent).toBe(PUBLIC_KEY.trim());
+    fireEvent.click(within(own).getByRole("button", { name: "Copy public key" }));
+    await within(own).findByText("Public key copied.");
+    expect(writeText).toHaveBeenCalledWith(PUBLIC_KEY);
+
+    // A partner with no recorded key is refused, and the card says so.
+    expect(within(peer).getByText("Not recorded")).toBeTruthy();
+    expect(within(peer).getByText(/Batches from State OES are refused until its public key is recorded/)).toBeTruthy();
+    fireEvent.click(within(peer).getByRole("button", { name: "Save partner key" }));
+    await screen.findByRole("alert");
+    expect(api.setPeerKey).not.toHaveBeenCalled();
+    fireEvent.change(within(peer).getByLabelText("Partner's public key"), { target: { value: PUBLIC_KEY } });
+    fireEvent.click(within(peer).getByRole("button", { name: "Save partner key" }));
+    await screen.findByText(`Key recorded for State OES, fingerprint ${"cd".repeat(32)}.`);
+    expect(api.setPeerKey).toHaveBeenCalledWith("p1", PUBLIC_KEY);
+    expect((within(peer).getByLabelText("Partner's public key") as HTMLTextAreaElement).value).toBe("");
+
+    // Revoking asks first, and says what stops and what is dropped.
+    const shared = within(peer).getByRole("listitem", { name: "Activity log shared with State OES" });
+    fireEvent.click(within(shared).getByRole("button", { name: "Revoke sharing" }));
+    const confirm = within(shared).getByRole("group", { name: "Confirm revoke" });
+    expect(confirm.textContent).toContain("Nothing more is sent to State OES or accepted from it for this board, and the 2 waiting updates are dropped.");
+    fireEvent.click(within(confirm).getByRole("button", { name: "Keep sharing" }));
+    expect(api.revokeSharingAgreement).not.toHaveBeenCalled();
+    fireEvent.click(within(shared).getByRole("button", { name: "Revoke sharing" }));
+    fireEvent.click(within(shared).getByRole("button", { name: "Revoke agreement" }));
+    await screen.findByText("Activity log is no longer shared with State OES.");
+    expect(api.revokeSharingAgreement).toHaveBeenCalledWith("p1", "a1");
+    expect((await axe.run(view.container)).violations).toEqual([]);
+  });
+
+  it("says why there is no instance key when the server cannot keep one", async () => {
+    const api = client();
+    (api.federationStatus as ReturnType<typeof vi.fn>).mockResolvedValue({ ...status, identity: null });
+    render(<FederationSurface client={api} jurisdictionId="j" isAdmin boards={boards} />);
+    const own = await screen.findByRole("region", { name: "This instance's key" });
+    await within(own).findByText(/The server needs OPENEOC_SECRET_KEY set to keep its private key/);
+    expect(within(own).queryByRole("button", { name: "Copy public key" })).toBeNull();
   });
 
   it("is refused to a non-administrator without a request", () => {

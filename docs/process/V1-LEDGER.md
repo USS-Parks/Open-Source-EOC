@@ -9419,3 +9419,193 @@ data and VA12's activation parts.
   writes (no folder), and policies the earlier code does not use. A template
   saved with the new parts still loads after a revert: the older schema drops
   the parts it does not know, and activation opens what it did before.
+
+## Veoci and air gap VA19: signed peer identity
+
+Veoci Integration and Air Gap PSPR unit VA19 (AG-03). After "Veoci and air
+gap VA2: federation batch sizing".
+
+- **What the code did before.** A peer was trusted on a bearer token the
+  receiving instance issued (stored as a hash; the sender kept its copy
+  encrypted under `OPENEOC_SECRET_KEY`). Batches were not signed, so a
+  batch's only trust was the channel, and a batch carried on media (VA20)
+  would have had none. No route revoked an agreement: flow stopped only by
+  deleting rows in the database. ADR-0006's status note (VA5) recorded the
+  gap.
+- **What changed.**
+  - **Instance identity** (`server/src/federation/identity.ts`, migration
+    `0158_federation_identity.sql`). One Ed25519 key pair per instance in
+    `federation_identity` (one row, enforced by a unique index on a
+    constant), made on first use with Node's `crypto`. The private key is
+    stored as a `v1:` envelope from `server/src/secrets/envelope.ts`; the
+    table is added to `ENVELOPE_COLUMNS`, so `rotate-secret-key` re-encrypts
+    it with the other secrets. Without `OPENEOC_SECRET_KEY` no key is made
+    and the instance cannot sign.
+  - **Signed batches.** `signBatch` signs a domain-separated encoding of the
+    receiving board id, the updates and the deletions
+    (`openeoc-federation-batch-v1` plus the three as a JSON array) and
+    returns the body with a base64 `signature`. The receive route
+    (`POST /api/v1/federation/receive`) still checks the peer token before
+    reading the body, then `receiveUpdates` checks the signature against the
+    peer's recorded key before it reads the agreement or applies anything:
+    unsigned is 401 "the batch is not signed"; a changed batch, another key,
+    another board than the one signed for, or a malformed signature is 401
+    "the batch signature does not verify under this peer's key"; a peer with
+    no recorded key is 403.
+  - **Key exchange.** `peers.public_key` holds the partner's key.
+    `PUT /api/v1/peers/:peerId/key` takes a PEM public key, refuses anything
+    that is not Ed25519 (400), stores it re-encoded, audits
+    "federation.peer_key_set" with the fingerprint, and returns the
+    fingerprint (SHA-256 of the key's DER, as solution packages show theirs).
+    The federation status gains `identity` (this instance's PEM public key
+    and fingerprint, or null without a server key) and each peer's
+    `keyFingerprint`.
+  - **Revocation.** `DELETE /api/v1/peers/:peerId/agreements/:agreementId`
+    (administrators of the peer's jurisdiction; RLS delete policies on
+    `sharing_agreements` and `federation_outbox` say the same) deletes the
+    agreement and every entry still waiting for the peer on that board, and
+    audits "federation.agreement_revoked" on the board with the peer, its
+    access and the number dropped. Every queue function, the batch claim and
+    the receive check already require the agreement, so from then on the
+    board is neither queued nor pushed to the peer, and the peer's batches
+    for it are refused with 403. Sharing the board again makes a new
+    agreement and sends the board as it stands.
+  - **The screen** (`web/src/federation/FederationSurface.tsx`). A **This
+    instance's key** panel shows the public key and fingerprint with **Copy
+    public key**, or says the server needs `OPENEOC_SECRET_KEY`. Each partner
+    card shows **Partner key** (Recorded or Not recorded, with a note that
+    the partner's batches are refused until it is recorded) and a **Set
+    partner key** section with the pasted key, the recorded fingerprint and
+    **Save partner key**. Each shared board has **Revoke sharing**, which asks
+    first ("Nothing more is sent to ... or accepted from it for this board,
+    and the N waiting updates are dropped") with **Keep sharing** and
+    **Revoke agreement**.
+  - `docs/guides/FEDERATION-SETUP.md` gains key exchange, revocation, the
+    screen's new steps and a rewritten trust section; ADR-0006's status note
+    says what is built and what is not.
+- **Files outside the "Owns" cell.** `server/src/notify/outbox.ts` (the
+  seven-line patch above, not applied here; lane va21 owns the file),
+  `shared/src/api/contract.ts` (two routes), `web/src/app/api/client.ts`
+  (`setPeerKey`, `revokeSharingAgreement`), `web/src/federation/**` (screen,
+  model, CSS, component test), `docs/API.md`,
+  `docs/guides/FEDERATION-SETUP.md`, `docs/adr/ADR-0006-federation-trust.md`,
+  and the tests that deliver batches and now record keys and sign:
+  `federation.test.ts`, `federation-batches.test.ts`,
+  `federation-browser.test.ts`, `cross-boundary-legs.test.ts`,
+  `delivery-outbox.test.ts`, `record-sync.test.ts`, and
+  `secure-default.test.ts` (the rotation test covers the new envelope
+  column).
+- **Decisions and deviations.**
+  - The peer token stays: it admits a request before its 8 MiB body is read
+    (VA2); the signature is the trust, as ADR-0006 says.
+  - Fail closed: a peer with no recorded key delivers nothing. Existing
+    peerings stop receiving after the upgrade until both administrators
+    record each other's keys; the guide says so.
+  - Revocation deletes the agreement rather than marking it revoked, so
+    every existing agreement check stops the flow with no new filter; the
+    audit trail keeps the record.
+  - The partner is not told of a revocation. Its outbox keeps its entries
+    for the board and shows "peer responded 403" until its administrator
+    revokes its own side. A signed revocation notice is not built.
+  - No replay window or sequence number: updates are Yjs merges and a
+    deleted record stays deleted, so a replayed batch changes nothing, and a
+    time bound would break media carried for days (VA20).
+    `docs/THREAT-MODEL.md` B3 still names "monotonic sequence per peer" as a
+    control; it is not built.
+  - A batch the worker claimed before a revocation and is pushing at that
+    moment can still land (one push); an edit committing in the same
+    instant as the revocation can queue one entry that is never claimed.
+  - The instance key has no console rotation. Resource escalation and JIC
+    approval deliveries, the other lanes a peer token opens, are not signed.
+- **Air-gap behavior (decision 9).** The receive lane's trust changes; no
+  new network path. Scenario A (internet cut, LAN up): partners across the
+  internet hold their signed batches in the outbox as before and deliver on
+  return; a revocation made during the cut takes effect locally at once.
+  Scenario B (isolated enclave): peers inside the enclave exchange keys by
+  hand (the public key is copied from the screen; the fingerprint is read
+  aloud or on paper), with no certificate authority or outside service.
+  Scenario C (no network): not affected; the key is made locally with no
+  outside contact. Scenario D (media): nothing carries batches on media yet;
+  the signature over the batch is what VA20's file exchange will verify, and
+  it does not depend on the channel.
+- **Schema, contract and dependency changes.** Migration
+  `0158_federation_identity.sql`: table
+  `federation_identity` with RLS (select and insert open to the runtime
+  role; the private key is only readable through the server key), column
+  `peers.public_key` with an update grant, delete policies and grants on
+  `sharing_agreements` and `federation_outbox` for the peer's
+  administrators. Contract: `PUT /api/v1/peers/:peerId/key` and
+  `DELETE /api/v1/peers/:peerId/agreements/:agreementId` (tag `peers`); the
+  receive body gains optional `signature`; the status response gains
+  `identity` and `peers[].keyFingerprint`. No dependency added: Ed25519 is
+  Node's built-in `crypto`.
+- **Tests.**
+  - New `federation-identity.test.ts` (4), two instances on separate
+    databases over HTTP: each shows a different key, stored only as an
+    envelope; each records the other's through the route (a non-key and a
+    P-256 key refused with their messages), shares, links, and the delivery
+    workers carry signed batches both ways. Forged batches refused before
+    anything is applied: unsigned, a genuine signature over changed updates,
+    a genuine batch aimed at another board, a batch signed with the
+    receiver's own key, a malformed signature, and a peer with no recorded
+    key (403); no forged content and no "federation.received" event, then
+    the genuine batch applies. A push the partner cannot verify (wrong key
+    recorded) is held with "peer responded 401" and delivers once the right
+    key is recorded. Revocation: a member refused, an unknown agreement 404,
+    the waiting entry dropped (`dropped: 1`) and audited; after it the
+    county queues and pushes nothing for the board, the state's worker push
+    into the county's board is refused ("peer responded 403") and a direct
+    signed batch gets 403 "no sharing agreement for that board"; sharing
+    again sends the board whole.
+  - `federation-browser.test.ts`: the county copies its public key from the
+    screen (the clipboard holds the PEM, the page never holds the private
+    envelope), the state records it, the county records the state's key
+    under **Set partner key** and sees its fingerprint, then later revokes
+    the share from the confirm, the card leaves, a queued update reaches no
+    one and the state's push is refused. Shots at 1586 by 992
+    (`federation-keys-1586.png`) and 1534 by 790
+    (`federation-revoke-1534.png`) with no horizontal scroll; I looked at
+    both and moved the fingerprint out of a narrow facts grid where its last
+    character wrapped.
+  - `federation-surface.test.tsx` (6, one with axe): the key panel and copy,
+    the not-recorded note, **Save partner key** refused empty then saved,
+    revoke asked first with the dropped count, **Keep sharing** cancels,
+    **Revoke agreement** calls the route, and the no-server-key message.
+  - Updated to record keys and sign: `federation.test.ts` (10, the status
+    test also checks `identity` and `keyFingerprint` and that the private
+    envelope never appears), `federation-batches.test.ts` (3, the large known
+    peer body is now signed), `cross-boundary-legs.test.ts`,
+    `delivery-outbox.test.ts`, `record-sync.test.ts`;
+    `secure-default.test.ts` rotates the new envelope column.
+- **Verification.** Windows test bed (decision 19), PostgreSQL 16.15 and
+  PostGIS 3.6.2 on 127.0.0.1:55440, with `OPENEOC_TEST_DB_TAG=va19` (see
+  section 4). With the outbox patch applied: `pnpm check:static` exit 0
+  (tsc in every package, eslint, license scan 339 packages, link check 120
+  files); `docs/API.md` regenerated with `UPDATE_DOCS=1`; 23 files, 161
+  tests green: `federation-identity`, `federation`, `federation-batches`,
+  `federation-browser`, `cross-boundary-legs`, `cross-boundary`,
+  `delivery-outbox`, `delivery-hold`, `record-sync`, `jic`, `resource`,
+  `retention`, `security`, `secure-default`, `audit`, `migrate-baseline`,
+  `upgrade`, `upgrade-configuration`, `api-docs`, the shared contract test,
+  the web client and route coverage tests, and `federation-surface`.
+  Without the patch (this worktree as handed over): 7 federation and worker
+  files, 39 tests, 10 failed, every one a delivery worker push the receiver
+  now refuses as unsigned (`federation-identity` 3, `federation-batches` 2,
+  `federation-browser` 1, `delivery-outbox` 2, `record-sync` 2).
+- **Not run.** The full `pnpm check` and the browser suites beyond
+  `federation-browser`; the Windows setup (decision 18).
+- **Evidence level:** two-instance real-database tests over HTTP, component
+  test with axe, browser test at both viewports.
+- **Landing.** Built in the fan-out lane `lane/va19` (a lane agent, git
+  read-only). The integrating session applied the seven-line signing change
+  to `server/src/notify/outbox.ts`, which the lane left alone because lane
+  va21 held `server/src/notify/**` (va21 did not touch the file), committed
+  the unit, rebased it onto `main` cleanly, numbered the migration `0158`
+  (placeholder `9019`) and gated it again: `pnpm check:static` exit 0; 16
+  files, 77 tests green (the federation identity, federation, batches,
+  browser, cross-boundary and legs, delivery outbox, record sync, secure
+  default, restore drill, migration baseline, API document, route coverage,
+  contract, web federation and workflow guard tests).
+- **Rollback:** revert the commit (with the outbox patch); migration `0158`
+  adds a table, a nullable column, grants and policies the earlier code
+  ignores. The earlier receive code accepts unsigned batches again.

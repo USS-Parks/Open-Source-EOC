@@ -12,6 +12,8 @@ import {
   queueOutbound,
   receiveUpdates,
   registerPeer,
+  revokeAgreement,
+  setPeerKey,
   setPeerLink,
 } from "./service.js";
 
@@ -23,11 +25,13 @@ const AgreementBody = z.object({
   remoteBoardId: z.string().uuid().optional(),
 });
 const LinkBody = z.object({ endpointUrl: z.string().url(), token: z.string().min(1) });
+const KeyBody = z.object({ publicKey: z.string().min(1).max(4096) });
 const QueueBody = z.object({ boardId: z.string().uuid(), update: z.string().min(1) });
 const ReceiveBody = z.object({
   boardId: z.string().uuid(),
   updates: z.array(z.string().min(1)),
   deletes: z.array(z.string().uuid()).max(10_000).default([]),
+  signature: z.string().max(200).optional(),
 });
 
 export function federationRoutes(
@@ -83,6 +87,23 @@ export function federationRoutes(
     return reply.send({ ok: true });
   });
 
+  app.put("/api/v1/peers/:peerId/key", { preHandler: authenticate }, async (req, reply) => {
+    const { peerId } = req.params as { peerId: string };
+    const body = KeyBody.parse(req.body);
+    const result = await withPerson(sql, req.principal.person.id, (tx) =>
+      setPeerKey(tx, req.principal, peerId, body.publicKey),
+    );
+    return reply.send(result);
+  });
+
+  app.delete("/api/v1/peers/:peerId/agreements/:agreementId", { preHandler: authenticate }, async (req, reply) => {
+    const { peerId, agreementId } = req.params as { peerId: string; agreementId: string };
+    const result = await withPerson(sql, req.principal.person.id, (tx) =>
+      revokeAgreement(tx, req.principal, peerId, agreementId),
+    );
+    return reply.send(result);
+  });
+
   app.post("/api/v1/peers/:peerId/queue", { preHandler: authenticate }, async (req, reply) => {
     const body = QueueBody.parse(req.body);
     const result = await withPerson(sql, req.principal.person.id, (tx) =>
@@ -99,8 +120,9 @@ export function federationRoutes(
     return reply.send({ pending: entries });
   });
 
-  // Peer-to-peer receive: authenticated by the peer token, not a user
-  // session, so a remote instance can deliver its store-and-forward batch.
+  // Peer-to-peer receive: admitted by the peer token, not a user session, so
+  // a remote instance can deliver its store-and-forward batch, and applied
+  // only when the batch's signature verifies under the peer's recorded key.
   // The token is checked before the body is read, so only a known peer can
   // send a body up to the federation limit.
   app.post(
@@ -116,7 +138,7 @@ export function federationRoutes(
     async (req, reply) => {
       const token = String(req.headers["x-peer-token"] ?? "");
       const body = ReceiveBody.parse(req.body);
-      const result = await receiveUpdates(sql, hub, token, body.boardId, body.updates, body.deletes);
+      const result = await receiveUpdates(sql, hub, token, body.boardId, body.updates, body.deletes, body.signature);
       return reply.status(200).send(result);
     },
   );

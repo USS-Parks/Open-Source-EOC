@@ -460,6 +460,8 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 
 - `POST /api/v1/jurisdictions/:jurisdictionId/peers`: Run jurisdictions peers (auth: bearer; audience: operator)
 - `POST /api/v1/peers/:peerId/agreements`: Run peers agreements (auth: bearer; audience: operator)
+- `DELETE /api/v1/peers/:peerId/agreements/:agreementId`: Delete peers agreements (auth: bearer; audience: operator)
+- `PUT /api/v1/peers/:peerId/key`: Set peers key (auth: bearer; audience: operator)
 - `PUT /api/v1/peers/:peerId/link`: Set peers link (auth: bearer; audience: operator)
 - `GET /api/v1/peers/:peerId/pending`: Read peers pending (auth: bearer; audience: machine)
 - `POST /api/v1/peers/:peerId/queue`: Run peers queue (auth: bearer; audience: machine)

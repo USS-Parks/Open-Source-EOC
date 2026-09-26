@@ -7,6 +7,7 @@ import { buildApp } from "../app.js";
 import { addMembership, createJurisdiction, createPerson } from "../auth/service.js";
 import { ensureStandardTemplates } from "../boards/service.js";
 import { ensureStandardDashboards } from "../dashboards/service.js";
+import { signBatch } from "../federation/identity.js";
 import { ensureStandardIncidentTemplates } from "../incidents/service.js";
 import { auth, freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 
@@ -36,6 +37,7 @@ let ownerToken: string, partnerToken: string;
 let incidentA: string, incidentB: string, roadBoardA: string, participantId: string;
 let dashboardId: string, datasetId: string, reportId: string, engineId: string;
 let peerIdAtOwner: string, tokenIntoPeer: string;
+let priorKey: string | undefined;
 
 const polygon = (west: number, south: number, east: number, north: number) => ({
   type: "Polygon",
@@ -112,6 +114,9 @@ class OfflineFieldDevice {
 }
 
 beforeAll(async () => {
+  // The owner signs what it federates with a key stored under the server key.
+  priorKey = process.env.OPENEOC_SECRET_KEY;
+  process.env.OPENEOC_SECRET_KEY = "test-only-cross-boundary-key";
   ({ admin, runtime } = await freshDb());
   ownerId = await createJurisdiction(admin, "valley-city", "Valley City EOC");
   partnerId = await createJurisdiction(admin, "valley-mutual-aid", "Valley Mutual Aid");
@@ -154,6 +159,8 @@ beforeAll(async () => {
 afterAll(async () => {
   for (const instance of [app, peer?.app]) await instance?.close();
   for (const sql of [runtime, admin, peer?.runtime, peer?.admin]) await sql?.end();
+  if (priorKey === undefined) delete process.env.OPENEOC_SECRET_KEY;
+  else process.env.OPENEOC_SECRET_KEY = priorKey;
 });
 
 describe("cross-boundary incident exercise: resources, COP and KPIs, attribution", () => {
@@ -189,6 +196,11 @@ describe("cross-boundary incident exercise: resources, COP and KPIs, attribution
     const peerAgreement = await peer.app.inject({ method: "POST", url: `/api/v1/peers/${intoPeer.json().id as string}/agreements`,
       headers: auth(peer.adminToken), payload: { boardId: peer.boardId, canRead: true, canWrite: true } });
     expect(peerAgreement.statusCode, peerAgreement.body).toBe(201);
+    // The state records the owner's public key, read from the owner's federation status.
+    const ownerKey = (await expectJson(ownerToken, "GET", `/api/v1/jurisdictions/${ownerId}/federation`, 200)).identity.publicKey as string;
+    const keyed = await peer.app.inject({ method: "PUT", url: `/api/v1/peers/${intoPeer.json().id as string}/key`,
+      headers: auth(peer.adminToken), payload: { publicKey: ownerKey } });
+    expect(keyed.statusCode, keyed.body).toBe(200);
   });
 
   it("reconciles the partner's onboarded dataset across the COP layer, the impact indicator and a direct count", async () => {
@@ -322,7 +334,7 @@ describe("cross-boundary incident exercise: resources, COP and KPIs, attribution
       .pending as Array<{ updateBase64: string }>;
     expect(pending).toHaveLength(1);
     const delivered = await peer.app.inject({ method: "POST", url: "/api/v1/federation/receive",
-      headers: { "x-peer-token": tokenIntoPeer }, payload: { boardId: peer.boardId, updates: pending.map((e) => e.updateBase64) } });
+      headers: { "x-peer-token": tokenIntoPeer }, payload: await signBatch(admin, peer.boardId, pending.map((e) => e.updateBase64), []) });
     expect(delivered.statusCode, delivered.body).toBe(200);
     expect(delivered.json()).toMatchObject({ applied: 1, conflicts: 0 });
 

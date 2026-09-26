@@ -236,6 +236,17 @@ describe("the worker pushes the federation outbox to a linked peer", () => {
       headers: auth(state.adminToken),
       payload: { boardId: state.boardId, canRead: true, canWrite: true },
     });
+    // The state records the county's public key, so it accepts the county's signed pushes.
+    const countyKey = await county.app.inject({
+      method: "GET", url: `/api/v1/jurisdictions/${county.jurisdictionId}/federation`, headers: auth(county.adminToken),
+    });
+    const keyed = await state.app.inject({
+      method: "PUT",
+      url: `/api/v1/peers/${intoState.json().id as string}/key`,
+      headers: auth(state.adminToken),
+      payload: { publicKey: countyKey.json().identity.publicKey as string },
+    });
+    expect(keyed.statusCode, keyed.body).toBe(200);
     const peer = await county.app.inject({
       method: "POST",
       url: `/api/v1/jurisdictions/${county.jurisdictionId}/peers`,

@@ -4,6 +4,7 @@ import * as Y from "yjs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ensureStandardTemplates } from "../boards/service.js";
+import { signBatch } from "../federation/identity.js";
 import { FEDERATION_BATCH_BYTES, FEDERATION_BODY_LIMIT } from "../federation/service.js";
 import { DeliveryWorker } from "../notify/outbox.js";
 import { auth, freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
@@ -60,14 +61,22 @@ async function newBoard(inst: Instance): Promise<string> {
 }
 
 /**
- * The state takes the county's pushes into a new board of its own; the county
- * shares its board with the state, which queues the board's records as they
- * stand. The link is set afterward.
+ * The state takes the county's pushes into a new board of its own, verified
+ * under the county's public key; the county shares its board with the state,
+ * which queues the board's records as they stand. The link is set afterward.
  */
 async function share(countyBoard: string, name: string): Promise<Shared> {
   const stateBoard = await newBoard(state);
   const intoState = await post(state, `/api/v1/jurisdictions/${state.jurisdictionId}/peers`, { name: `county for ${name}` });
   await post(state, `/api/v1/peers/${intoState.id!}/agreements`, { boardId: stateBoard, canRead: false, canWrite: true });
+  const shown = await county.app.inject({
+    method: "GET", url: `/api/v1/jurisdictions/${county.jurisdictionId}/federation`, headers: auth(county.adminToken),
+  });
+  const keyed = await state.app.inject({
+    method: "PUT", url: `/api/v1/peers/${intoState.id!}/key`, headers: auth(state.adminToken),
+    payload: { publicKey: shown.json().identity.publicKey as string },
+  });
+  expect(keyed.statusCode, keyed.body).toBe(200);
   const peer = await post(county, `/api/v1/jurisdictions/${county.jurisdictionId}/peers`, { name });
   await post(county, `/api/v1/peers/${peer.id!}/agreements`, { boardId: countyBoard, canRead: true, remoteBoardId: stateBoard });
   return { peerId: peer.id!, stateBoard, token: intoState.token! };
@@ -234,7 +243,7 @@ describe("federation batches sized to what a receiver accepts", () => {
     expect(update.length).toBeGreaterThan(2 * 1024 * 1024);
     const big = await state.app.inject({
       method: "POST", url: "/api/v1/federation/receive", headers: { "x-peer-token": shared.token },
-      payload: { boardId: shared.stateBoard, updates: [update] },
+      payload: await signBatch(county.admin, shared.stateBoard, [update], []),
     });
     expect(big.statusCode, big.body).toBe(200);
     expect((await liveEntries(shared.stateBoard)).length).toBe(500);

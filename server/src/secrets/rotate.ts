@@ -12,6 +12,7 @@ export const ENVELOPE_COLUMNS = [
   { table: "collab_backends", key: "jurisdiction_id", column: "token_envelope" },
   { table: "meeting_config", key: "jurisdiction_id", column: "secret_envelope" },
   { table: "peers", key: "id", column: "outbound_token" },
+  { table: "federation_identity", key: "id", column: "private_key_envelope" },
 ] as const;
 
 /**

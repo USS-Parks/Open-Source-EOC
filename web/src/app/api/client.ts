@@ -2245,6 +2245,14 @@ export class ApiClient {
   createSharingAgreement(peerId: string, input: { boardId: string; canRead: boolean; canWrite: boolean; remoteBoardId?: string }): Promise<{ id: string }> {
     return this.request("POST", `/api/v1/peers/${encodeURIComponent(peerId)}/agreements`, input);
   }
+  /** Record the partner's public key; its batches are applied only when they verify under it. */
+  setPeerKey(peerId: string, publicKey: string): Promise<{ fingerprint: string }> {
+    return this.request("PUT", `/api/v1/peers/${encodeURIComponent(peerId)}/key`, { publicKey });
+  }
+  /** Revoke a sharing agreement: the board stops flowing to and from the partner, and what was waiting for it is dropped. */
+  revokeSharingAgreement(peerId: string, agreementId: string): Promise<{ dropped: number }> {
+    return this.request("DELETE", `/api/v1/peers/${encodeURIComponent(peerId)}/agreements/${encodeURIComponent(agreementId)}`);
+  }
 
   // ---- JIC review, publication and media inquiries; resource costs and escalation ----
 

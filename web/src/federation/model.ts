@@ -20,6 +20,8 @@ export interface PeerStatus {
   readonly createdAt: string;
   readonly endpointUrl: string | null;
   readonly tokenStored: boolean;
+  /** The partner's recorded public key, by fingerprint; null until recorded, and its batches are refused until then. */
+  readonly keyFingerprint: string | null;
   readonly boards: readonly SharedBoardStatus[];
 }
 
@@ -34,7 +36,14 @@ export interface ReceivedBatch {
   readonly conflicts: number;
 }
 
+/** This instance's public key; null while the server has no secret key to keep its private half. */
+export interface InstanceIdentity {
+  readonly publicKey: string;
+  readonly fingerprint: string;
+}
+
 export interface FederationStatus {
+  readonly identity: InstanceIdentity | null;
   readonly peers: readonly PeerStatus[];
   readonly received: readonly ReceivedBatch[];
 }

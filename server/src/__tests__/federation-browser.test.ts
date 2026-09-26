@@ -13,10 +13,12 @@ import { auth, freshDb, seedIdentity, tokenFor, type Sql } from "./helpers.js";
 /**
  * The federation screen, walked against two real instances: the county runs
  * the web app, the state is a second app with its own database. The county
- * registers the state, sees its token once, links it, shares a board with a
- * receiving board, watches an update wait in the outbox and then deliver; the
+ * registers the state, sees its token once, links it, copies its own public
+ * key for the state and records the state's, shares a board with a receiving
+ * board, watches a signed update wait in the outbox and then deliver; the
  * state pushes back with the token the county issued, and the county sees it
- * arrive.
+ * arrive. Revoking the share on screen then stops the board both ways. The key
+ * and revoke controls are shot at 1586 by 992 and 1534 by 790.
  */
 
 const DIST = buildDir("federation-app");
@@ -163,6 +165,35 @@ describe("federation screen", () => {
     expect(stored!.outbound_token).not.toContain(tokenIntoState);
     expect(await page.content()).not.toContain(tokenIntoState);
 
+    // Keys: the county copies its public key for the state, and records the state's.
+    const own = page.getByRole("region", { name: "This instance's key" });
+    await own.getByRole("button", { name: "Copy public key" }).click();
+    await own.getByText("Public key copied.").waitFor();
+    const countyKey = String(await page.evaluate("navigator.clipboard.readText()"));
+    expect(countyKey).toMatch(/^-----BEGIN PUBLIC KEY-----/);
+    const recorded = await state.app.inject({
+      method: "PUT", url: `/api/v1/peers/${stateSidePeer}/key`, headers: auth(state.adminToken), payload: { publicKey: countyKey },
+    });
+    expect(recorded.statusCode, recorded.body).toBe(200);
+    const [countyIdentity] = await county.admin`select private_key_envelope from federation_identity`;
+    expect(await page.content()).not.toContain(countyIdentity!.private_key_envelope as string);
+    await partner.getByText("Not recorded", { exact: true }).waitFor();
+    await partner.getByText(/Batches from State OES are refused until its public key is recorded/).waitFor();
+    const stateIdentity = (await state.app.inject({
+      method: "GET", url: `/api/v1/jurisdictions/${stateJurisdiction!.id as string}/federation`, headers: auth(state.adminToken),
+    })).json().identity as { publicKey: string; fingerprint: string };
+    await partner.getByText("Set partner key", { exact: true }).click();
+    await partner.getByLabel("Partner's public key").fill(stateIdentity.publicKey);
+    await partner.getByRole("button", { name: "Save partner key" }).click();
+    await page.getByText(`Key recorded for State OES, fingerprint ${stateIdentity.fingerprint}.`).waitFor();
+    await partner.getByText("Recorded", { exact: true }).waitFor();
+    await partner.getByText(stateIdentity.fingerprint).waitFor();
+    await page.setViewportSize({ width: 1586, height: 992 });
+    expect(await page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")).toBe(true);
+    await own.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: join(SHOTS, "federation-keys-1586.png"), fullPage: false });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+
     // Share the county board, writable, into the state's board.
     await partner.getByText("Share a board").click();
     await partner.getByLabel("Board", { exact: true }).selectOption({ label: boardTitle });
@@ -216,6 +247,34 @@ describe("federation screen", () => {
     const received = page.getByRole("listitem", { name: "Received from State OES" });
     await received.getByText(boardTitle).waitFor();
     await received.getByText("1 update").waitFor();
+
+    // Revoking the share asks first, then stops the board both ways.
+    await page.setViewportSize({ width: 1534, height: 790 });
+    await shared.getByRole("button", { name: "Revoke sharing" }).click();
+    const confirm = shared.getByRole("group", { name: "Confirm revoke" });
+    await confirm.getByText(`Revoke sharing ${boardTitle} with State OES?`, { exact: false }).waitFor();
+    await confirm.scrollIntoViewIfNeeded();
+    expect(await page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")).toBe(true);
+    await page.screenshot({ path: join(SHOTS, "federation-revoke-1534.png"), fullPage: false });
+    await confirm.getByRole("button", { name: "Revoke agreement" }).click();
+    await page.getByText(`${boardTitle} is no longer shared with State OES.`).waitFor();
+    await shared.waitFor({ state: "detached" });
+    const after = await county.app.inject({
+      method: "POST",
+      url: `/api/v1/peers/${registered!.id as string}/queue`,
+      headers: auth(county.adminToken),
+      payload: { boardId: county.boardId, update: update("county: after revocation") },
+    });
+    expect(after.json()).toEqual({ queued: 0 });
+    await state.app.inject({
+      method: "POST",
+      url: `/api/v1/peers/${stateSidePeer}/queue`,
+      headers: auth(state.adminToken),
+      payload: { boardId: state.boardId, update: update("state: after revocation") },
+    });
+    expect((await new DeliveryWorker(state.runtime).drain()).federated).toBe(0);
+    expect(await entriesOn(county)).not.toContain("state: after revocation");
+    await page.setViewportSize({ width: 1440, height: 1000 });
 
     await page.getByRole("button", { name: "Account menu" }).click();
     await page.getByRole("button", { name: "Use dark theme" }).click();

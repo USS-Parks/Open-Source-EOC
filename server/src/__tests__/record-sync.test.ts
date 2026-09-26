@@ -205,6 +205,14 @@ beforeAll(async () => {
     { boardId: county.boardId, canRead: true, canWrite: true, remoteBoardId: state.boardId });
   await rest(state, "POST", `/api/v1/peers/${countyAtState.id}/agreements`,
     { boardId: state.boardId, canRead: true, canWrite: true, remoteBoardId: county.boardId });
+  // Each records the public key the other shows, and so accepts its signed pushes.
+  const recordKey = async (inst: Instance, peerId: string, partner: Instance) => {
+    const shown = await partner.app.inject({ method: "GET",
+      url: `/api/v1/jurisdictions/${partner.jurisdictionId}/federation`, headers: auth(partner.adminToken) });
+    await rest(inst, "PUT", `/api/v1/peers/${peerId}/key`, { publicKey: shown.json().identity.publicKey as string });
+  };
+  await recordKey(county, stateAtCounty.id, state);
+  await recordKey(state, countyAtState.id, county);
   const link = (inst: Instance, peerId: string, partner: Instance, token: string) => rest(inst, "PUT",
     `/api/v1/peers/${peerId}/link`, { endpointUrl: `http://${partner.host}`, token });
   await link(county, stateAtCounty.id, state, countyAtState.token);

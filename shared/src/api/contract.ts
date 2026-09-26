@@ -47,6 +47,7 @@ DELETE /api/v1/incidents/:incidentId/saved-state/:kind/:key
 DELETE /api/v1/jurisdictions/:jurisdictionId/members/:personId
 DELETE /api/v1/jurisdictions/:jurisdictionId/resources/kinds/:key
 DELETE /api/v1/notification-rules/:ruleId
+DELETE /api/v1/peers/:peerId/agreements/:agreementId
 DELETE /api/v1/positions/:positionId/assignments/:personId
 DELETE /api/v1/reports/:reportId
 GET /api/v1/aar/:aarId/pdf
@@ -396,6 +397,7 @@ PUT /api/v1/jurisdictions/:jurisdictionId/notification-allowlist
 PUT /api/v1/jurisdictions/:jurisdictionId/notification-channels/:kind
 PUT /api/v1/jurisdictions/:jurisdictionId/pa-labor-rates/:personId
 PUT /api/v1/jurisdictions/:jurisdictionId/retention
+PUT /api/v1/peers/:peerId/key
 PUT /api/v1/peers/:peerId/link
 PUT /api/v1/plans/:planId
 PUT /api/v1/reports/:reportId

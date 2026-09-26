@@ -8,8 +8,27 @@ queued updates deliver when the link returns, and both sides converge.
 ## Register a peer
 
 On each instance, an admin registers the other as a peer and receives a peer
-token. The token authenticates that peer's inbound delivery lane. Treat it as a
-secret; only its hash is stored.
+token. The token admits that peer to this instance's inbound delivery lane.
+Treat it as a secret; only its hash is stored.
+
+## Exchange public keys
+
+Each instance holds one Ed25519 key pair, made the first time an
+administrator opens the federation status. The private key is stored
+encrypted under `OPENEOC_SECRET_KEY`, so the server needs that set; until it
+is, the instance has no key and cannot federate. Every batch an instance
+pushes is signed with its key, and the receiving instance applies a batch only
+when its signature verifies under the public key recorded for that peer. A
+batch that is unsigned, signed with another key, changed after signing or
+aimed at another board than the one it was signed for is refused with 401,
+and nothing in it is applied. A peer with no recorded key is refused with
+403.
+
+The two administrators exchange public keys and compare fingerprints (the
+SHA-256 of the key, shown beside it) by a channel they trust, such as a phone
+call, before either records a key. Record a peer's key with
+`PUT /api/v1/peers/:peerId/key`, giving the PEM public key. Recording it again
+replaces it, and batches signed with the old key are refused from then on.
 
 ## Share a board
 
@@ -29,6 +48,19 @@ stored encrypted and is never shown again, so the server needs
 `OPENEOC_SECRET_KEY` set. Without a link, entries stay in the outbox and can be
 read with the pending route.
 
+## Revoke an agreement
+
+`DELETE /api/v1/peers/:peerId/agreements/:agreementId` revokes a sharing
+agreement. The agreement is removed with every entry still waiting for the
+peer on that board, so the board stops flowing both ways at once: nothing more
+is queued or pushed to the peer for it, and the receive lane refuses the
+peer's batches for it with 403. The partner's own outbox keeps its entries for
+the board and shows "peer responded 403" as their last error until its
+administrator revokes its side too. The revocation is recorded on the board
+in the audit trail ("federation.agreement_revoked", with the peer, the access
+it had and the number of waiting entries dropped). Sharing the board again
+makes a new agreement, which sends the board's records as they stand.
+
 ## The Federation screen
 
 Jurisdiction administrators set all of this up from **Federation** under Data
@@ -36,27 +68,40 @@ and administration in the console. The entry is hidden from everyone else, and
 the server refuses the status read to anyone who is not an administrator of
 the jurisdiction.
 
-1. **Register a partner.** Enter the partner's name and select **Register
+1. **This instance's key.** The panel shows the instance's public key and its
+   fingerprint, with a **Copy public key** button. Give the key to each
+   partner's administrator and compare fingerprints with them. The private
+   key is never shown.
+2. **Register a partner.** Enter the partner's name and select **Register
    partner**. The partner's token appears once, with a **Copy token** button.
    Copy it and give it to the partner's administrator, who enters it as the
    push link token on their instance. Select **I have saved the token** to
    clear it; it cannot be shown again.
-2. **Set push link.** Open **Set push link** on the partner's card and enter
+3. **Set partner key.** Open **Set partner key** on the partner's card, paste
+   the public key shown on the partner's own Federation screen, and select
+   **Save partner key**. The card's Partner key reads "Recorded" and the
+   fingerprint is shown; until then the card says the partner's batches are
+   refused.
+4. **Set push link.** Open **Set push link** on the partner's card and enter
    the partner's address and the token the partner issued to this instance.
    The token field is masked, the stored token is never displayed, and saving
    again replaces both the address and the token. The card then reads
    "Pushing to" the address.
-3. **Share a board.** Open **Share a board**, pick one of this jurisdiction's
+5. **Share a board.** Open **Share a board**, pick one of this jurisdiction's
    boards not yet shared with the partner, choose whether the partner reads it
    or reads and writes it, and enter the receiving board ID: the id of the
    board on the partner that should receive the updates.
-4. **Watch the outbox.** Each shared board shows how many updates are waiting,
+6. **Watch the outbox.** Each shared board shows how many updates are waiting,
    how long the oldest has waited, the next attempt, the last error and the
    last delivery. An update is held, and the card says why, until the partner
    is linked and the board has a receiving board. The badge on the partner
    reads "Up to date" when it is linked and nothing is waiting. Select **Refresh status** to
    read the outbox again.
-5. **Received from partners.** The ten latest batches partners pushed to this
+7. **Revoke sharing.** Each shared board has **Revoke sharing**. It asks
+   first, saying that nothing more is sent to or accepted from the partner for
+   the board and how many waiting updates are dropped; **Revoke agreement**
+   revokes it and the board leaves the card.
+8. **Received from partners.** The ten latest batches partners pushed to this
    instance, read from the audit trail: the board, the partner, the time, the
    number of updates and any conflicts reconciled.
 
@@ -106,8 +151,8 @@ this screen are not used for it.
   it. Two console edits to one field on different instances settle by the
   servers' clocks, to the second. The losing edit stays in the sync log but
   is not listed as a conflict.
-- The server's delivery worker pushes each linked peer's batch to its receive
-  lane over the peer token. While the peer is unreachable the entries stay
+- The server's delivery worker signs each linked peer's batch with the
+  instance's key and pushes it to the peer's receive lane with the peer token. While the peer is unreachable the entries stay
   queued and are retried with backoff; they never expire. The peer applies a
   batch through the same reconciliation the live sync uses, so there is no
   synchronous dual-commit and no lost data.
@@ -121,6 +166,8 @@ this screen are not used for it.
   next pass.
 - The receive lane accepts a request body up to 8 MB, and reads it only after
   the peer token is known; an unknown token gets 401 before its body is read.
+  The batch's signature is checked against the peer's recorded key before
+  anything in it is applied.
   A body over the limit gets 413, which the sending instance shows as the
   entry's last error.
 - The convergence is attributed to the sending peer in the audit trail.
@@ -134,6 +181,14 @@ chronology records the whole field-to-state-and-back path.
 
 ## Trust and hardening
 
-Peer authentication is by token today; mutual TLS and key rotation are
-deployment hardening on top. A peer can only reach boards it has an agreement
-for, and only read or write as that agreement allows.
+Trust in a batch comes from its signature: the peer token only admits the
+request, and TLS only protects the channel. A peer can only reach boards it
+has an agreement for, and only read or write as that agreement allows.
+Rotating `OPENEOC_SECRET_KEY` re-encrypts the instance's private key with the
+other stored secrets. The instance key itself is not rotated from the
+console; a replaced key means every partner records the new one. Signatures
+do not carry a time: a batch replayed later changes nothing, because updates
+merge and a deleted record stays deleted.
+
+Resource escalation and JIC approval deliveries, the other lanes a peer token
+opens, are not signed; they rest on the token alone.

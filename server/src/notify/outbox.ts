@@ -4,6 +4,7 @@ import type { Sql } from "../db/client.js";
 import { BlobStore } from "../files/service.js";
 import { decryptSecret } from "../secrets/envelope.js";
 import { FEDERATION_BATCH_BYTES, markDelivered } from "../federation/service.js";
+import { signBatch } from "../federation/identity.js";
 import { destinationRefusal, type Resolve } from "./allowlist.js";
 import { channelKey, channelRefusal, sendMessage, type StoredChannel } from "./channels.js";
 import { SmtpRefused, type MailAttachment } from "./smtp.js";
@@ -264,11 +265,12 @@ export class DeliveryWorker {
             "content-type": "application/json",
             "x-peer-token": decryptSecret(b.outbound_token as string),
           },
-          body: JSON.stringify({
-            boardId: b.remote_board_id as string,
-            updates: (b.updates as Buffer[]).map((u) => Buffer.from(u).toString("base64")),
-            deletes: b.deletes as string[],
-          }),
+          body: JSON.stringify(await signBatch(
+            this.sql,
+            b.remote_board_id as string,
+            (b.updates as Buffer[]).map((u) => Buffer.from(u).toString("base64")),
+            b.deletes as string[],
+          )),
           signal: AbortSignal.timeout(this.timeoutMs),
         });
         if (res.status === 413) throw new Error("peer refused the batch as too large (413)");

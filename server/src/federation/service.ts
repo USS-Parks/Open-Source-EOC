@@ -10,6 +10,7 @@ import { hashToken, newToken } from "../auth/tokens.js";
 import { withPerson } from "../db/context.js";
 import { recordAudit } from "../audit/service.js";
 import { encryptSecret, hasSecretKey } from "../secrets/envelope.js";
+import { batchVerifies, instancePublicKey, parsePeerKey, pemFingerprint } from "./identity.js";
 import { FEDERATION_ORIGIN, appendRecordRemoval, type BoardSyncHub } from "../sync/hub.js";
 import { recordsUpdate } from "../boards/record-sync.js";
 import { publishRecordRemoved } from "../boards/removals.js";
@@ -35,6 +36,12 @@ import { lockBoardMutation } from "../boards/service.js";
  * A push carries at most FEDERATION_BATCH_BYTES of JSON, so a backlog after
  * a long partition, or a large board's first copy, goes as several pushes in
  * queue order rather than one a receiver refuses.
+ *
+ * Every batch is signed with the sending instance's Ed25519 key and verified
+ * under the key recorded for that peer before anything in it is applied
+ * (AG-03, ADR-0006). Revoking an agreement stops its board's flow both ways:
+ * nothing more is queued or sent to the peer, and nothing the peer sends for
+ * that board is accepted.
  */
 
 /**
@@ -253,7 +260,15 @@ export interface PeerStatus {
   readonly endpointUrl: string | null;
   /** Whether a push token is stored; the token itself is never returned. */
   readonly tokenStored: boolean;
+  /** The fingerprint of the partner's recorded public key; null until one is recorded, and its batches are refused. */
+  readonly keyFingerprint: string | null;
   readonly boards: SharedBoardStatus[];
+}
+
+/** This instance's public key, for partners to record; null while the server has no secret key. */
+export interface InstanceIdentity {
+  readonly publicKey: string;
+  readonly fingerprint: string;
 }
 
 export interface ReceivedBatch {
@@ -269,18 +284,19 @@ export interface ReceivedBatch {
 const iso = (value: unknown): string | null => (value ? new Date(value as string).toISOString() : null);
 
 /**
- * The administrator's view of federation: every peer with its link state,
- * the boards it shares with the outbox standing per board, and the latest
- * batches received from peers.
+ * The administrator's view of federation: this instance's public key, every
+ * peer with its link state and recorded key, the boards it shares with the
+ * outbox standing per board, and the latest batches received from peers.
  */
 export async function federationStatus(
   sql: Sql,
   actor: Principal,
   jurisdictionId: string,
-): Promise<{ peers: PeerStatus[]; received: ReceivedBatch[] }> {
+): Promise<{ identity: InstanceIdentity | null; peers: PeerStatus[]; received: ReceivedBatch[] }> {
   requireAdmin(actor, jurisdictionId);
+  const identity = await instancePublicKey(sql);
   const peers = await sql`
-    select id, name, created_at, endpoint_url, outbound_token is not null as token_stored
+    select id, name, created_at, endpoint_url, outbound_token is not null as token_stored, public_key
     from peers where jurisdiction_id = ${jurisdictionId} order by name, created_at`;
   const boards = await sql`
     select a.id, a.peer_id, a.board_id, b.title, a.can_read, a.can_write, a.remote_board_id,
@@ -305,12 +321,14 @@ export async function federationStatus(
     where e.jurisdiction_id = ${jurisdictionId} and e.category = 'federation.received'
     order by e.seq desc limit 10`;
   return {
+    identity,
     peers: peers.map((p) => ({
       id: p.id as string,
       name: p.name as string,
       createdAt: iso(p.created_at)!,
       endpointUrl: (p.endpoint_url as string | null) ?? null,
       tokenStored: p.token_stored as boolean,
+      keyFingerprint: p.public_key ? pemFingerprint(p.public_key as string) : null,
       boards: boards
         .filter((b) => b.peer_id === p.id)
         .map((b) => ({
@@ -378,6 +396,75 @@ export async function setPeerLink(
   });
 }
 
+/**
+ * Record a partner's public key, which its administrator read from the
+ * partner's own Federation screen. Batches from the partner are applied only
+ * when they verify under it; setting it again replaces it, and batches signed
+ * with the old key are refused from then on.
+ */
+export async function setPeerKey(
+  sql: Sql,
+  actor: Principal,
+  peerId: string,
+  publicKeyPem: string,
+): Promise<{ fingerprint: string }> {
+  const [peer] = await sql`select jurisdiction_id, name from peers where id = ${peerId}`;
+  if (!peer) throw new AuthError(404, "peer not found");
+  requireAdmin(actor, peer.jurisdiction_id as string);
+  const key = parsePeerKey(publicKeyPem);
+  await sql`update peers set public_key = ${key.pem} where id = ${peerId}`;
+  await recordAudit(sql, actor, {
+    jurisdictionId: peer.jurisdiction_id as string,
+    category: "federation.peer_key_set",
+    subjectTable: "peers",
+    subjectId: peerId,
+    payload: { peer: peer.name as string, fingerprint: key.fingerprint },
+  });
+  return { fingerprint: key.fingerprint };
+}
+
+/**
+ * Revoke a sharing agreement. The agreement goes, and with it every entry
+ * still waiting for the peer on that board, so the flow stops both ways at
+ * once: nothing more is queued or pushed to the peer for the board, and the
+ * receive lane refuses the peer's batches for it. The revocation is audited
+ * on the board. Sharing the board again makes a new agreement, which sends
+ * the board as it stands.
+ */
+export async function revokeAgreement(
+  sql: Sql,
+  actor: Principal,
+  peerId: string,
+  agreementId: string,
+): Promise<{ dropped: number }> {
+  const [agreement] = await sql`
+    select a.board_id, a.can_read, a.can_write, p.jurisdiction_id, p.name
+    from sharing_agreements a join peers p on p.id = a.peer_id
+    where a.id = ${agreementId} and a.peer_id = ${peerId}`;
+  if (!agreement) throw new AuthError(404, "agreement not found");
+  requireAdmin(actor, agreement.jurisdiction_id as string);
+  const boardId = agreement.board_id as string;
+  // ponytail: an edit committing in the same instant can queue one entry this
+  // does not see; with the agreement gone it is never claimed, and sharing
+  // the board again sends the board whole anyway.
+  const dropped = await sql`
+    delete from federation_outbox where peer_id = ${peerId} and board_id = ${boardId} and delivered_at is null`;
+  await sql`delete from sharing_agreements where id = ${agreementId}`;
+  await recordAudit(sql, actor, {
+    jurisdictionId: agreement.jurisdiction_id as string,
+    category: "federation.agreement_revoked",
+    subjectTable: "boards",
+    subjectId: boardId,
+    payload: {
+      peer: agreement.name as string,
+      canRead: agreement.can_read as boolean,
+      canWrite: agreement.can_write as boolean,
+      dropped: dropped.count,
+    },
+  });
+  return { dropped: dropped.count };
+}
+
 /** Whether a token is one this instance issued to a peer; the receive route asks before it reads a body. */
 export async function isPeerToken(sql: Sql, peerToken: string): Promise<boolean> {
   const [peer] = await sql`select 1 from peers where token_hash = ${hashToken(peerToken)}`;
@@ -385,10 +472,12 @@ export async function isPeerToken(sql: Sql, peerToken: string): Promise<boolean>
 }
 
 /**
- * Receive a batch of forwarded updates from an authenticated peer and
- * apply them to a local board the agreement lets that peer write. Each
- * update merges through the sync hub (reconciliation + checkpoint), and
- * the convergence is attributed to the peer in the audit trail.
+ * Receive a signed batch of forwarded updates from an authenticated peer and
+ * apply them to a local board the agreement lets that peer write. The
+ * signature is checked against the peer's recorded key before anything else
+ * is read from the batch. Each update merges through the sync hub
+ * (reconciliation + checkpoint), and the convergence is attributed to the
+ * peer in the audit trail.
  */
 export async function receiveUpdates(
   sql: Sql,
@@ -396,11 +485,17 @@ export async function receiveUpdates(
   peerToken: string,
   targetBoardId: string,
   updatesBase64: readonly string[],
-  deletes: readonly string[] = [],
+  deletes: readonly string[],
+  signature: string | undefined,
 ): Promise<{ applied: number; conflicts: number; deleted: number }> {
   const [peer] = await sql`
-    select id, jurisdiction_id, name, created_by from peers where token_hash = ${hashToken(peerToken)}`;
+    select id, jurisdiction_id, name, created_by, public_key from peers where token_hash = ${hashToken(peerToken)}`;
   if (!peer) throw new AuthError(401, "unknown peer");
+  if (!peer.public_key) throw new AuthError(403, "no public key is recorded for this peer; record its key before it delivers");
+  if (!signature) throw new AuthError(401, "the batch is not signed");
+  if (!batchVerifies(peer.public_key as string, targetBoardId, updatesBase64, deletes, signature)) {
+    throw new AuthError(401, "the batch signature does not verify under this peer's key");
+  }
   const [agreement] = await sql`
     select can_write from sharing_agreements
     where peer_id = ${peer.id as string} and board_id = ${targetBoardId}`;
