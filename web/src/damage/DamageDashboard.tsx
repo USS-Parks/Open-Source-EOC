@@ -17,6 +17,7 @@ import {
   SOURCE_LABELS,
   degreeLabel,
   dollars,
+  incidentLabel,
   insuredLabel,
   structureLabel,
   type DamageReport,
@@ -119,22 +120,32 @@ const TITLES: Readonly<Record<DamageChart, string>> = {
 
 type Client = Pick<ApiClient, "listDamageReports" | "listPaItems">;
 
-export function DamageDashboard(props: { readonly client: Client; readonly jurisdictionId: string; readonly revision: number }) {
+export function DamageDashboard(props: {
+  readonly client: Client;
+  readonly jurisdictionId: string;
+  readonly revision: number;
+  /** The selected incident: its records and those recorded with no incident, which are marked. None reads them all. */
+  readonly incidentId?: string | null;
+}) {
   const [filter, setFilter] = useState<DamageFilter | null>(null);
+  const incidentId = props.incidentId ?? null;
+  const scope = incidentId ? { incidentId } : {};
   // ponytail: reads every report and line item; an aggregate endpoint if a jurisdiction holds tens of thousands.
   const data = useAsync(async () => {
     const [reports, items] = await Promise.all([
       readAllPages(async (page) => {
-        const result = await props.client.listDamageReports(props.jurisdictionId, page);
+        const result = await props.client.listDamageReports(props.jurisdictionId, { ...page, ...scope });
         return { items: result.assessments, nextCursor: result.nextCursor };
       }),
       readAllPages(async (page) => {
-        const result = await props.client.listPaItems(props.jurisdictionId, page);
+        const result = await props.client.listPaItems(props.jurisdictionId, { ...page, ...scope });
         return { items: result.items, nextCursor: result.nextCursor };
       }),
     ]);
     return { reports, items };
-  }, [props.jurisdictionId, props.revision]);
+  }, [props.jurisdictionId, props.revision, incidentId]);
+  const unscoped = (record: { readonly incident_id?: string | null }) =>
+    incidentLabel(record, incidentId) === "No incident" ? " · No incident" : "";
   if (!data.data) {
     return data.error
       ? <p role="alert" className="eoc-dash-state is-error">Damage reports could not be loaded: {data.error}</p>
@@ -193,7 +204,7 @@ export function DamageDashboard(props: { readonly client: Client; readonly juris
               <li key={report.id} className="eoc-dash-row" style={{ "--eoc-dash-row-color": degreeColor(report.degree) ?? statusPalette.notStarted } as CSSProperties}>
                 <span className="eoc-dash-row-main">
                   <strong>{report.address}</strong>
-                  <span className="eoc-dash-muted">{DEGREE_LABELS[report.degree] ?? degreeLabel(report.degree)} · {structureLabel(report.structure_type)} · {SOURCE_LABELS[report.source]}</span>
+                  <span className="eoc-dash-muted">{DEGREE_LABELS[report.degree] ?? degreeLabel(report.degree)} · {structureLabel(report.structure_type)} · {SOURCE_LABELS[report.source]}{unscoped(report)}</span>
                 </span>
                 <span className="eoc-dash-row-facts">
                   <span>{dollars(report.estimated_loss)} estimated loss</span>
@@ -205,7 +216,7 @@ export function DamageDashboard(props: { readonly client: Client; readonly juris
               <li key={item.id} className="eoc-dash-row" style={{ "--eoc-dash-row-color": PA_STATUS.find((status) => status.key === item.status)?.color ?? statusPalette.notStarted } as CSSProperties}>
                 <span className="eoc-dash-row-main">
                   <strong>{item.applicant}</strong>
-                  <span className="eoc-dash-muted">{categoryLabel(item.category)}{item.site ? ` · ${item.site}` : ""}</span>
+                  <span className="eoc-dash-muted">{categoryLabel(item.category)}{item.site ? ` · ${item.site}` : ""}{unscoped(item)}</span>
                 </span>
                 <span className="eoc-dash-row-facts">
                   <span>{dollars(item.estimated_cost_cents / 100)} estimated cost</span>

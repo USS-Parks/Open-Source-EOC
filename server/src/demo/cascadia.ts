@@ -2,7 +2,9 @@ import type { FastifyInstance } from "fastify";
 import type { Sql } from "../db/client.js";
 import { CASCADIA_CLOSURES, CASCADIA_GEOMETRY } from "./geometry/cascadia.js";
 import { NORTH_COAST_PASSWORD } from "./north-coast.js";
-import { scenarioClock, startScenario, type ScenarioPerson, type ScenarioRun } from "./scenario-kit.js";
+import {
+  scenarioClock, seedChecklist, startScenario, zoned, type ChecklistTask, type ScenarioPerson, type ScenarioRun,
+} from "./scenario-kit.js";
 
 /**
  * The Cascadia Earthquake and Tsunami exercise: a magnitude 9.1 subduction
@@ -88,6 +90,8 @@ export async function seedCascadia(app: FastifyInstance, sql: Sql, clock = casca
     { label: "OP 03", startsAt: iso("08:00"), endsAt: iso("20:00"), at: at("07:30") },
   ];
   let revision = 0;
+  /** Each operational period's area revision, OP 01 first. */
+  const periodRevisions: number[] = [];
   for (const period of periods) {
     const result = await api<{ revision: number }>("delgado", period.at, "PUT", `/api/v1/incidents/${incidentId}/operational-area`, {
       expectedRevision: revision,
@@ -96,6 +100,7 @@ export async function seedCascadia(app: FastifyInstance, sql: Sql, clock = casca
       reason: `${period.label} planning cycle for the Cascadia Earthquake and Tsunami exercise`,
     });
     revision = result.revision;
+    periodRevisions.push(revision);
   }
 
   // This incident's own positions: the county may hold other incidents' positions too.
@@ -109,10 +114,12 @@ export async function seedCascadia(app: FastifyInstance, sql: Sql, clock = casca
   };
   const planning = position("planning_section_chief");
   const operations = position("operations_section_chief");
+  const logistics = position("logistics_section_chief");
+  const information = position("public_information_officer");
   await api("delgado", at("08:35", -1), "POST", `/api/v1/positions/${planning}/assignments`, { personId: people["delgado"]!.id });
   await api("delgado", at("08:36", -1), "POST", `/api/v1/positions/${operations}/assignments`, { personId: people["osei"]!.id });
-  await api("delgado", at("08:37", -1), "POST", `/api/v1/positions/${position("logistics_section_chief")}/assignments`, { personId: people["lindgren"]!.id });
-  await api("delgado", at("08:38", -1), "POST", `/api/v1/positions/${position("public_information_officer")}/assignments`, { personId: people["fraser"]!.id });
+  await api("delgado", at("08:37", -1), "POST", `/api/v1/positions/${logistics}/assignments`, { personId: people["lindgren"]!.id });
+  await api("delgado", at("08:38", -1), "POST", `/api/v1/positions/${information}/assignments`, { personId: people["fraser"]!.id });
   await api("delgado", at("07:35"), "POST", `/api/v1/positions/${planning}/sign-in`);
 
   const participants: Record<string, string> = {};
@@ -137,6 +144,8 @@ export async function seedCascadia(app: FastifyInstance, sql: Sql, clock = casca
   };
   const record = (who: string, when: Date, templateKey: string, data: Record<string, unknown>) =>
     api<{ id: string }>(who, when, "POST", `/api/v1/boards/${boardFor(templateKey)}/records?incidentId=${incidentId}`, data);
+  const update = (who: string, when: Date, templateKey: string, recordId: string, data: Record<string, unknown>) =>
+    api(who, when, "PATCH", `/api/v1/boards/${boardFor(templateKey)}/records/${recordId}?incidentId=${incidentId}`, data);
 
   const events: ReadonlyArray<readonly [string, string, number, string, string]> = [
     ["delgado", "07:48", -1, "Magnitude 9.1 earthquake on the Cascadia subduction zone; strong shaking for about four minutes", "critical"],
@@ -170,13 +179,42 @@ export async function seedCascadia(app: FastifyInstance, sql: Sql, clock = casca
     ["Winship Junior High School", 200, 150, -124.13846, 40.76491, "vance"],
     ["Sunny Brae Middle School", 180, 0, -124.06777, 40.85628, "ruiz", true],
   ];
+  // Each open shelter's occupancy as it opened, at the end of OP 01 (when water
+  // ran short and every shelter was compromised) and before dawn after the
+  // aftershock; the morning's figure above comes last.
+  const shelterHistory: Readonly<Record<string, readonly [number, number, number]>> = {
+    "Redwood Acres Fairgrounds": [180, 310, 390],
+    "College of the Redwoods, Eureka campus": [120, 220, 285],
+    "Cal Poly Humboldt": [210, 400, 560],
+    "McKinleyville Middle School": [60, 120, 165],
+    "Blue Lake Rancheria": [70, 115, 140],
+    "Fortuna Union High School": [90, 180, 235],
+    "Humboldt County Fairgrounds, Ferndale": [60, 130, 170],
+    "Trinity Valley Elementary School, Willow Creek": [20, 40, 55],
+    "Hoopa Valley Elementary School": [15, 30, 40],
+    "Winship Junior High School": [50, 100, 135],
+  };
+  const shelterIds: Record<string, string> = {};
   for (const [index, [name, capacity, occupancy, lon, lat, who, planned]] of shelters.entries()) {
     const when = at(`${String(11 + Math.floor(index / 4)).padStart(2, "0")}:${String(5 + (index % 4) * 12).padStart(2, "0")}`, -1);
-    later(when, () => record(who, when, "shelters", {
-      name, status: planned ? "normal" : "compromised", capacity, occupancy, pets_accepted: true, planned: planned ?? false,
-      location: { type: "Point", coordinates: [lon, lat] },
-    }));
+    const [opened, evening, dawn] = shelterHistory[name] ?? [occupancy, occupancy, occupancy];
+    later(when, async () => {
+      shelterIds[name] = (await record(who, when, "shelters", {
+        name, status: "normal", capacity, occupancy: opened, pets_accepted: true, planned: planned ?? false,
+        location: { type: "Point", coordinates: [lon, lat] },
+      })).id;
+    });
+    if (planned) continue;
+    const minute = String(10 + index * 4).padStart(2, "0");
+    const steps: ReadonlyArray<readonly [Date, Record<string, unknown>]> = [
+      [at(`18:${minute}`, -1), { occupancy: evening, status: "compromised" }],
+      [at(`05:${minute}`), { occupancy: dawn, status: "compromised" }],
+      [at(`08:${minute}`), { occupancy }],
+    ];
+    for (const [stepAt, data] of steps) later(stepAt, () => update(who, stepAt, "shelters", shelterIds[name]!, data));
   }
+  // The College of the Redwoods shelter moved everyone out while engineers checked it after the aftershock.
+  later(at("03:50"), () => update("vance", at("03:50"), "shelters", shelterIds["College of the Redwoods, Eureka campus"]!, { status: "evacuating" }));
 
   const facilities: ReadonlyArray<readonly [string, string, number, number, string, string?]> = [
     ["Incident Command Post, Redwood Acres", "incident_command_post", -124.1268, 40.7793, "normal", "The county EOC building is damaged"],
@@ -278,10 +316,10 @@ export async function seedCascadia(app: FastifyInstance, sql: Sql, clock = casca
   // Requests: the state has little to send for days; local resources carry the first 72 hours.
   type RequestState = "submitted" | "accepted" | "sourcing" | "assigned" | "deployed";
   const requests: ReadonlyArray<readonly [string, string, string, RequestState, string, number, string, string, (string | undefined)?, number?]> = [
-    ["Urban search and rescue teams", "No arrival estimate from the state: 72 to 96 hours by road, sooner only by air", "immediate", "sourcing", "12:00", -1, "osei", "10:30"],
-    ["Structural engineers for building safety", "Four teams; local engineers assigned to search sites meanwhile", "immediate", "sourcing", "18:00", -1, "osei", "10:45"],
-    ["Fire engines for the Eureka fires", "Local and tribal engines committed; mutual aid cannot reach by road", "immediate", "assigned", "12:00", -1, "marsh", "09:35", "marsh"],
-    ["Water tenders for firefighting", "Hydrants dry; drafting from the bay", "immediate", "assigned", "13:00", -1, "marsh", "10:25", "marsh"],
+    ["Urban search and rescue teams", "No arrival estimate from the state: 72 to 96 hours by road, sooner only by air", "immediate", "sourcing", "12:00", -1, "osei", "10:30", undefined, -1],
+    ["Structural engineers for building safety", "Four teams; local engineers assigned to search sites meanwhile", "immediate", "sourcing", "18:00", -1, "osei", "10:45", undefined, -1],
+    ["Fire engines for the Eureka fires", "Local and tribal engines committed; mutual aid cannot reach by road", "immediate", "assigned", "12:00", -1, "marsh", "09:35", "marsh", -1],
+    ["Water tenders for firefighting", "Hydrants dry; drafting from the bay", "immediate", "assigned", "13:00", -1, "marsh", "10:25", "marsh", -1],
     ["Air evacuation of critical patients", "Twelve patients from St. Joseph and Mad River to Redding", "immediate", "assigned", "12:00", 0, "sharma", "15:40", "kerr", -1],
     ["Dialysis by air to Redding", "Eighteen patients", "immediate", "sourcing", "12:00", 0, "sharma", "15:35", undefined, -1],
     ["Bulk drinking water", "Water for 2,500 people for three days", "immediate", "sourcing", "18:00", 0, "lindgren", "12:10", undefined, -1],
@@ -300,6 +338,7 @@ export async function seedCascadia(app: FastifyInstance, sql: Sql, clock = casca
     ["Family assistance center staff", "Staff to register the missing and reunify families", "priority", "accepted", "12:00", 0, "vance", "18:30", undefined, -1],
   ];
   const order: readonly RequestState[] = ["submitted", "accepted", "sourcing", "assigned", "deployed"];
+  const requestIds: Record<string, string> = {};
   for (const [item, notes, priority, state, neededBy, neededDays, who, hhmm, owner, days = 0] of requests) {
     const when = at(hhmm, days);
     const reach = order.indexOf(state);
@@ -307,6 +346,7 @@ export async function seedCascadia(app: FastifyInstance, sql: Sql, clock = casca
       const created = await api<{ id: string }>(who, when, "POST", `/api/v1/jurisdictions/${jurisdictionId}/resource-requests`, {
         origin: participants[who] ? "field" : "eoc", item, quantity: 1, priority, neededBy: iso(neededBy, neededDays), notes, incidentId,
       });
+      requestIds[item] = created.id;
       const move = (toState: string) => api("lindgren", when, "POST", `/api/v1/resource-requests/${created.id}/transition`, { toState });
       for (const next of order.slice(1, Math.min(reach, 2) + 1)) await move(next);
       if (reach >= 3) {
@@ -319,6 +359,62 @@ export async function seedCascadia(app: FastifyInstance, sql: Sql, clock = casca
       }
       if (reach >= 4) await move("deployed");
     });
+  }
+
+  // Requests that have ended: rescues done, one cancelled when people walked out, one the state could not fill.
+  const endedRequests: ReadonlyArray<{
+    item: string; notes: string; who: string; at: Date; neededBy: Date; steps: ReadonlyArray<readonly [string, Date, string?]>;
+  }> = [
+    {
+      item: "Helicopter hoist rescues at Fields Landing", notes: "People on rooftops after the first wave", who: "kerr",
+      at: at("08:40", -1), neededBy: at("09:00", -1),
+      steps: [["accepted", at("08:41", -1)], ["sourcing", at("08:41", -1)], ["assigned", at("08:42", -1)], ["deployed", at("08:50", -1)],
+        ["fulfilled", at("11:20", -1)], ["closed", at("12:15", -1)]],
+    },
+    {
+      item: "Buses to evacuate King Salmon", notes: "Residents without cars", who: "osei", at: at("08:44", -1), neededBy: at("09:15", -1),
+      steps: [["cancelled", at("09:20", -1), "The road to King Salmon flooded; residents walked to high ground"]],
+    },
+    {
+      item: "Ambulance strike team from Mendocino County", notes: "Five ambulances for the Eureka collapse", who: "sharma",
+      at: at("10:05", -1), neededBy: at("12:00", -1),
+      steps: [["accepted", at("10:10", -1)], ["declined", at("11:40", -1), "No road access from the south; request air medical transport instead"]],
+    },
+    {
+      item: "Search dogs for the Eureka apartment collapse", notes: "Two canine teams", who: "marsh", at: at("10:12", -1), neededBy: at("12:00", -1),
+      steps: [["accepted", at("10:15", -1)], ["sourcing", at("10:15", -1)], ["assigned", at("10:30", -1)], ["deployed", at("11:05", -1)],
+        ["fulfilled", at("06:30")], ["closed", at("07:20")]],
+    },
+  ];
+  for (const request of endedRequests) {
+    later(request.at, async () => {
+      requestIds[request.item] = (await api<{ id: string }>(request.who, request.at, "POST", `/api/v1/jurisdictions/${jurisdictionId}/resource-requests`, {
+        origin: participants[request.who] ? "field" : "eoc", item: request.item, quantity: 1, priority: "immediate",
+        neededBy: request.neededBy.toISOString(), notes: request.notes, incidentId,
+      })).id;
+    });
+    for (const [toState, stepAt, note] of request.steps) {
+      later(stepAt, () => api("lindgren", stepAt, "POST", `/api/v1/resource-requests/${requestIds[request.item]!}/transition`,
+        { toState, ...(note ? { note } : {}) }));
+    }
+  }
+
+  // What the county has recorded against its requests so far, for reimbursement.
+  const costs: ReadonlyArray<readonly [string, string, number, string, Date]> = [
+    ["Fire engines for the Eureka fires", "Equipment", 486_000_00, "Engine hours, first 24 hours", at("12:30", -1)],
+    ["Fire engines for the Eureka fires", "Personnel", 312_000_00, "Overtime for engine crews", at("06:00")],
+    ["Water tenders for firefighting", "Equipment", 145_000_00, "Tender hours drafting from the bay", at("13:30", -1)],
+    ["Boats for the Samoa Peninsula", "Equipment", 6_200_00, "Boat hours and fuel", at("06:10")],
+    ["Air evacuation of critical patients", "Contract", 840_000_00, "Air ambulance flights to Redding", at("07:00")],
+    ["Generators for shelters", "Equipment", 22_400_00, "Eight generator rentals, first week", at("06:20")],
+    ["Meals for shelter residents", "Supplies", 57_600_00, "7,200 meals", at("07:10")],
+    ["Heavy equipment for SR-299 slides", "Equipment", 39_000_00, "Excavators and haul trucks, first day", at("07:30")],
+    ["Helicopter hoist rescues at Fields Landing", "Equipment", 19_800_00, "Flight hours", at("12:10", -1)],
+    ["Search dogs for the Eureka apartment collapse", "Personnel", 4_600_00, "Canine team hours", at("07:15")],
+  ];
+  for (const [item, category, amountCents, description, when] of costs) {
+    later(when, () => api("lindgren", when, "POST", `/api/v1/resource-requests/${requestIds[item]!}/costs`,
+      { category, amountCents, description, incurredAt: zoned(when).date }));
   }
 
   // Lifelines: most of what is known is partial, and much is unknown.
@@ -472,6 +568,216 @@ export async function seedCascadia(app: FastifyInstance, sql: Sql, clock = casca
       });
     }
   });
+
+  // The checklist: the activation's tasks, then the ones the lead adds for sections and partners.
+  const toParticipant = (key: string) => ({ kind: "incident_participant" as const, incidentId, participantId: participants[key]! });
+  const toPosition = (positionId: string) => ({ kind: "position" as const, positionId });
+  // No incident commander is seated (the county's positions serve its other incidents too),
+  // so the lead running planning takes the command checklist.
+  const tasks: ChecklistTask[] = [
+    { item: "Assume command and announce on the significant events board", category: "command", due: at("08:45", -1), holder: toPosition(planning) },
+    { item: "Hold re-entry to the tsunami zone until the all clear", category: "command", due: at("20:00"), inProgress: true, holder: toPosition(planning) },
+    { item: "Set initial incident objectives", category: "command", due: at("10:00", -1), holder: toPosition(planning) },
+    { item: "Establish the operational period", category: "command", due: at("09:00", -1), holder: toPosition(planning) },
+    { item: "Account for EOC staff and field crews", category: "operations", due: at("10:00", -1) },
+    { item: "Reach isolated communities by any available means", category: "operations", due: at("18:00"), inProgress: true },
+    { item: "Open the resource request board", category: "operations", due: at("09:30", -1) },
+    { item: "Collect lifeline assessments, marking what is unknown as unknown", category: "planning", due: at("09:00"), inProgress: true },
+    { item: "Start rapid damage assessment of critical facilities and bridges", category: "planning", due: at("16:00", -1) },
+    { item: "Inventory local resources before outside help arrives", category: "logistics", due: at("18:00", -1) },
+    { item: "Name an air or sea resupply point", category: "logistics", due: at("14:00", -1) },
+    { item: "Draft the initial public statement", category: "public_information", due: at("08:30", -1) },
+    { item: "Confirm how messages reach people without power or cellular service", category: "public_information", due: at("12:00"), inProgress: true },
+    { item: "Map gas shutoffs in Eureka, Arcata and Fortuna", category: "operations", due: at("20:00", -1), added: at("10:00", -1), holder: toParticipant("byrne") },
+    { item: "Restore water pressure to St. Joseph Hospital", category: "operations", due: at("16:00"), added: at("10:30", -1), holder: toParticipant("chandler") },
+    { item: "Report bridge inspections on US-101 and SR-255", category: "operations", due: at("18:00", -1), added: at("11:30", -1), holder: toParticipant("ibarra") },
+    { item: "Clear one lane of SR-299 from the Redding side", category: "operations", due: at("18:00", 1), added: at("11:35", -1), holder: toParticipant("ibarra"), inProgress: true },
+    { item: "Coordinate the air evacuation of critical patients to Redding", category: "operations", due: at("12:00"), added: at("15:45", -1), holder: toParticipant("sharma"), inProgress: true },
+    { item: "Pre-position fuel at the airport for the first flights", category: "logistics", due: at("08:00"), added: at("18:15", -1), holder: toPosition(logistics), inProgress: true },
+    { item: "Publish the air bridge schedule for the airport", category: "logistics", due: at("07:00"), added: at("18:30", -1), holder: toParticipant("kerr") },
+    { item: "Stand up the family assistance center at Redwood Acres", category: "mass_care", due: at("12:00"), added: at("18:35", -1), holder: toParticipant("vance"), inProgress: true },
+    { item: "Count shelter residents by site for the situation report", category: "mass_care", due: at("06:00"), added: at("20:10", -1), holder: toParticipant("vance") },
+    { item: "Confirm hospital generator fuel for 48 hours", category: "operations", due: at("08:00"), added: at("20:20", -1), holder: toParticipant("sharma"), inProgress: true },
+    { item: "Reach Weitchpec and Orleans by amateur radio", category: "operations", due: at("09:00"), added: at("20:30", -1), holder: toParticipant("price") },
+    { item: "Prepare the OP 04 briefing", category: "planning", due: at("19:00"), added: at("07:40"), holder: toPosition(planning) },
+    { item: "Read the shelter list on the radio stations still on air", category: "public_information", due: at("11:00"), added: at("07:45"), holder: toPosition(information), inProgress: true },
+    { item: "Open Sunny Brae Middle School as a shelter", category: "mass_care", due: at("14:00"), added: at("09:00"), holder: toParticipant("ruiz") },
+  ];
+  seedChecklist({ api, later }, "delgado", incidentId, at("08:42", -1), tasks, [
+    { who: "fraser", at: at("08:50", -1), items: ["Draft the initial public statement"], position: information },
+    { who: "delgado", at: at("09:05", -1),
+      items: ["Assume command and announce on the significant events board", "Set initial incident objectives", "Establish the operational period"] },
+    { who: "osei", at: at("09:40", -1), position: operations, items: ["Account for EOC staff and field crews", "Open the resource request board"] },
+    { who: "lindgren", at: at("13:30", -1), position: logistics, items: ["Name an air or sea resupply point"] },
+    { who: "delgado", at: at("15:30", -1), items: ["Start rapid damage assessment of critical facilities and bridges"] },
+    { who: "ibarra", at: at("17:15", -1), items: ["Report bridge inspections on US-101 and SR-255"] },
+    { who: "lindgren", at: at("17:40", -1), position: logistics, items: ["Inventory local resources before outside help arrives"] },
+    { who: "byrne", at: at("19:20", -1), items: ["Map gas shutoffs in Eureka, Arcata and Fortuna"] },
+    { who: "vance", at: at("05:55"), items: ["Count shelter residents by site for the situation report"] },
+    { who: "kerr", at: at("06:30"), items: ["Publish the air bridge schedule for the airport"] },
+  ]);
+
+  // Incident action plans: OP 01 and OP 02 done, OP 03 approved, and the partners' own plans in their states.
+  const FORMS = ["ICS-202", "ICS-203", "ICS-204", "ICS-205", "ICS-206", "ICS-207", "ICS-208"];
+  const plans: ReadonlyArray<{
+    who: string; period: number; forms: readonly string[]; at: Date; objectives?: string[];
+    steps?: ReadonlyArray<readonly ["submit" | "approve" | "complete", string, Date]>;
+  }> = [
+    { who: "delgado", period: 0, forms: FORMS, at: at("08:55", -1),
+      objectives: ["Account for everyone in the tsunami zone", "Hold the fires in Eureka, Arcata and Fortuna", "Open shelters on high ground"],
+      steps: [["approve", "delgado", at("09:15", -1)], ["complete", "delgado", at("20:05", -1)]] },
+    { who: "delgado", period: 1, forms: FORMS, at: at("19:10", -1),
+      objectives: ["Reach the Samoa Peninsula at first light", "Keep the hospitals powered and supplied", "Hold the waterfront fires"],
+      steps: [["approve", "delgado", at("19:40", -1)], ["complete", "delgado", at("08:05")]] },
+    { who: "delgado", period: 2, forms: FORMS, at: at("07:05"),
+      objectives: ["Fly out critical patients", "Water and cots to every shelter", "Open one road to the outside"],
+      steps: [["approve", "delgado", at("07:50")]] },
+    { who: "vance", period: 2, forms: ["ICS-202", "ICS-204", "ICS-205"], at: at("08:20"), steps: [["submit", "vance", at("09:10")]] },
+    { who: "sharma", period: 2, forms: ["ICS-206"], at: at("08:35") },
+    { who: "kerr", period: 2, forms: [], at: at("09:30") },
+  ];
+  for (const plan of plans) {
+    let planId = "";
+    later(plan.at, async () => {
+      planId = (await api<{ id: string }>(plan.who, plan.at, "POST", `/api/v1/incidents/${incidentId}/iap`, {
+        operationalPeriod: periods[plan.period]!.label, periodRevision: periodRevisions[plan.period], formIds: plan.forms,
+        ...(plan.objectives ? { objectives: plan.objectives } : {}),
+      })).id;
+    });
+    for (const [step, who, when] of plan.steps ?? []) later(when, () => api(who, when, "POST", `/api/v1/iap/${planId}/${step}`));
+  }
+
+  // Damage assessment. Official field assessments count as they are made; public reports wait in the intake queue.
+  const fieldAssessments: ReadonlyArray<readonly [string, string, string, string, boolean | null, number, string, number, number, Date]> = [
+    ["Apartment building, central Eureka", "multi_family", "destroyed", "rented", true, 3_200_000, "Collapsed; search and rescue on site", -124.155, 40.795, at("11:00", -1)],
+    ["4th and E Streets, Eureka", "business", "destroyed", "owned", true, 1_850_000, "Burned in the Old Town fire", -124.166, 40.801, at("12:00", -1)],
+    ["King Salmon Avenue, King Salmon", "single_family", "destroyed", "owned", false, 420_000, "Swept off its foundation by the tsunami", -124.217, 40.74, at("12:30", -1)],
+    ["Railroad Avenue, Fields Landing", "mobile_home", "destroyed", "owned", false, 95_000, "Tsunami debris", -124.215, 40.726, at("12:45", -1)],
+    ["Eureka waterfront, near the marina", "single_family", "major", "owned", null, 180_000, "Foundation failed in liquefaction", -124.163, 40.806, at("13:10", -1)],
+    ["Waterfront Drive, Eureka", "business", "major", "owned", true, 640_000, "Warehouse settled and cracked", -124.174, 40.806, at("13:30", -1)],
+    ["Samoa Peninsula", "single_family", "inaccessible", "unknown", null, 0, "No access; the bridge approaches are down", -124.185, 40.82, at("14:00", -1)],
+    ["Buhne Drive, King Salmon", "single_family", "inaccessible", "unknown", null, 0, "Flooded; no access", -124.213, 40.745, at("14:20", -1)],
+    ["Arcata, near the Plaza", "multi_family", "major", "rented", true, 520_000, "Shifted on its foundation in the aftershock", -124.085, 40.868, at("04:20")],
+    ["Main Street, Fortuna", "business", "destroyed", "owned", true, 900_000, "Burned", -124.156, 40.598, at("05:00")],
+    ["Manila", "mobile_home", "major", "owned", false, 60_000, "Moved off its piers", -124.165, 40.845, at("05:40")],
+    ["Cutten", "single_family", "minor", "owned", true, 18_000, "Chimney down", -124.14, 40.77, at("06:10")],
+    ["Loleta", "single_family", "minor", "owned", false, 12_000, "Cracked walls and broken windows", -124.224, 40.641, at("06:30")],
+    ["Blue Lake", "single_family", "minor", "rented", null, 15_000, "Porch pulled away from the house", -123.99, 40.883, at("06:50")],
+    ["Central Avenue, McKinleyville", "single_family", "affected", "owned", true, 4_000, "Contents damage; habitable", -124.1, 40.947, at("07:00")],
+    ["Main Street, Ferndale", "business", "affected", "owned", true, 6_500, "Parapet cracks", -124.263, 40.576, at("07:20")],
+  ];
+  for (const [address, structureType, degree, ownership, insured, estimatedLoss, notes, lon, lat, when] of fieldAssessments) {
+    later(when, () => api("mercer", when, "POST", `/api/v1/jurisdictions/${jurisdictionId}/damage/assessments`, {
+      incidentId, address, structureType, degree, ownership, insured, estimatedLoss, notes, location: { lon, lat },
+    }));
+  }
+  // The intake is issued for this incident, so each public report it takes is the earthquake's.
+  let intakeToken = "";
+  later(at("15:00", -1), async () => {
+    intakeToken = (await api<{ token: string }>("delgado", at("15:00", -1), "POST",
+      `/api/v1/jurisdictions/${jurisdictionId}/damage/intake/enable`, { incidentId })).token;
+  });
+  // Public reports come through the intake route, which reads only the intake token.
+  const publicReports: ReadonlyArray<readonly [string, string, string, number, string, number, number, Date, Date?]> = [
+    ["Pine Hill, Eureka", "single_family", "minor", 8_000, "Cracks in the garage slab", -124.176, 40.763, at("16:20", -1)],
+    ["Sunny Brae, Arcata", "single_family", "major", 60_000, "Porch collapsed and the house leans", -124.068, 40.86, at("21:40", -1)],
+    ["Westhaven", "mobile_home", "affected", 2_000, "Skirting torn off", -124.1, 41.03, at("06:50")],
+    // Already assessed by the county's own team; review rejects it as a duplicate.
+    ["King Salmon Avenue, King Salmon", "single_family", "destroyed", 400_000, "Our house is gone", -124.217, 40.74, at("07:30"), at("08:30")],
+  ];
+  for (const [address, structureType, degree, estimatedLoss, notes, lon, lat, when, rejectedAt] of publicReports) {
+    let reportId = "";
+    later(when, async () => {
+      reportId = (await api<{ id: string }>("mercer", when, "POST", `/api/v1/jurisdictions/${jurisdictionId}/damage/report`,
+        { address, structureType, degree, estimatedLoss, notes, location: { lon, lat } }, { "x-intake-token": intakeToken })).id;
+    });
+    if (rejectedAt) later(rejectedAt, () => api("mercer", rejectedAt, "POST", `/api/v1/damage/assessments/${reportId}/moderate`, { decision: "rejected" }));
+  }
+
+  // Public Assistance line items the applicants have started, categories A to G.
+  const paItems: ReadonlyArray<readonly [string, string, string, string, number, "draft" | "submitted" | "reviewed", number, Date]> = [
+    ["Humboldt County", "a_debris_removal", "King Salmon and Fields Landing", "Tsunami debris removal from county roads and the shoreline", 2_850_000_00, "submitted", 15, at("16:00", -1)],
+    ["City of Eureka", "a_debris_removal", "Old Town Eureka", "Fire debris removal after the gas leak fires", 1_200_000_00, "draft", 0, at("07:40")],
+    ["Humboldt County", "b_emergency_protective_measures", "Ten shelters", "Emergency sheltering for the first 72 hours", 640_000_00, "reviewed", 40, at("17:00", -1)],
+    ["City of Eureka", "b_emergency_protective_measures", "Eureka", "Search and rescue at the apartment collapse and fire suppression drafting from the bay", 480_000_00, "submitted", 60, at("18:00", -1)],
+    ["Humboldt County", "c_roads_and_bridges", "King Salmon Avenue", "Roadway split by liquefaction; rebuild on new base", 3_400_000_00, "draft", 0, at("07:50")],
+    ["Wiyot Tribe", "c_roads_and_bridges", "Table Bluff Road", "Cracked roadway to the reservation", 220_000_00, "submitted", 0, at("08:10")],
+    ["Humboldt County", "d_water_control_facilities", "Eel River delta levees near Loleta", "Levee slumping and seepage after the shaking", 1_600_000_00, "draft", 0, at("08:20")],
+    ["Humboldt County", "e_buildings_and_equipment", "Humboldt County EOC", "Structural repair of the EOC building", 950_000_00, "submitted", 5, at("19:00", -1)],
+    ["Blue Lake Rancheria", "e_buildings_and_equipment", "Rancheria shelter", "Generator servicing and shelter wear", 45_000_00, "reviewed", 100, at("06:40")],
+    ["City of Eureka", "f_utilities", "Eureka water distribution", "Repairs to broken distribution lines and hydrants", 2_100_000_00, "submitted", 20, at("07:00")],
+    ["Bear River Band of the Rohnerville Rancheria", "f_utilities", "Loleta water tank", "Repair of the leaking water tank", 180_000_00, "reviewed", 70, at("07:10")],
+    ["City of Arcata", "g_parks_recreational_other", "Arcata Marsh trails", "Trail and boardwalk damage from ground cracking", 310_000_00, "draft", 0, at("08:40")],
+    ["City of Eureka", "g_parks_recreational_other", "Eureka waterfront boardwalk", "Boardwalk settled on liquefied fill", 760_000_00, "submitted", 0, at("09:00")],
+  ];
+  for (const [applicant, category, site, description, estimatedCostCents, status, percentComplete, when] of paItems) {
+    later(when, () => api("lindgren", when, "POST", `/api/v1/jurisdictions/${jurisdictionId}/damage/pa-items`, {
+      incidentId, applicant, category, site, description, estimatedCostCents, status, percentComplete,
+    }));
+  }
+
+  // After-action observations as they were noted, by operational period.
+  const observations: ReadonlyArray<readonly [string, string, "strength" | "improvement", string, string | null, number, string, Date]> = [
+    ["public_information_and_warning", "training", "strength", "The tsunami warning went out eight minutes after the shaking stopped.", null, 0, "fraser", at("09:30", -1)],
+    ["operational_communications", "equipment", "improvement", "Only two satellite terminals reached the EOC; shelters and field teams relayed through amateur radio for the first day.", "Stock a satellite terminal at every shelter site and fire station.", 0, "osei", at("18:30", -1)],
+    ["mass_care_services", "organization", "strength", "The tribes opened and ran three shelters on their own lands within four hours, one on microgrid power.", null, 0, "delgado", at("19:00", -1)],
+    ["logistics_and_supply_chain_management", "planning", "strength", "A local resource inventory in the first ten hours let the county assign engines, boats and generators before state help could arrive.", null, 0, "lindgren", at("19:15", -1)],
+    ["fire_management_and_suppression", "equipment", "improvement", "Hydrants lost pressure when the transmission main broke; engines drafted from the bay without enough hard suction hose.", "Stage drafting kits with the engine companies near the bay.", 0, "osei", at("19:45", -1)],
+    ["critical_transportation", "planning", "improvement", "The plan assumed US-101 north would reopen within a day; every corridor stayed closed and the airport became the only way in.", "Plan for every highway closed for 72 hours or more, with the airport as the resupply point.", 1, "delgado", at("22:30", -1)],
+    ["public_health_healthcare_and_emergency_medical_services", "exercises", "improvement", "Hospital evacuation by air had never been exercised; patients were tracked on paper.", "Exercise air evacuation of hospital patients with the Coast Guard every year.", 1, "delgado", at("06:45")],
+    ["mass_search_and_rescue_operations", "training", "improvement", "Local teams worked two collapses without a structural engineer for the first 20 hours.", "Train local engineers as structural specialists for search teams.", 1, "osei", at("07:15")],
+    ["situational_assessment", "organization", "improvement", "Communications and hazardous materials stayed unknown past their update times; no one was assigned to chase them.", "Name an owner for every lifeline marked unknown at each briefing.", 2, "delgado", at("09:35")],
+  ];
+  for (const [capability, capabilityElement, kind, observation, recommendation, period, who, when] of observations) {
+    later(when, () => api(who, when, "POST", `/api/v1/incidents/${incidentId}/aar/observations`, {
+      capability, capabilityElement, kind, observation, periodRevision: periodRevisions[period],
+      ...(recommendation ? { recommendation } : {}),
+    }));
+  }
+
+  // Corrective actions on the improvement plan: owners, due dates and progress so far.
+  const day = (days: number) => zoned(at("12:00", days)).date;
+  type Owner = { kind: "position"; positionId: string } | { kind: "incident_participant"; incidentId: string; participantId: string };
+  const actions: ReadonlyArray<{
+    capability: string; element: string; recommendation: string; priority: string; owner: Owner; due: string | null;
+    period: number; at: Date; progress?: ReadonlyArray<readonly ["in_progress" | "complete", Date]>;
+  }> = [
+    { capability: "public_information_and_warning", element: "training", recommendation: "Record the tsunami warning timeline for the after-action report", priority: "low",
+      owner: toPosition(information), due: day(0), period: 0, at: at("09:40", -1), progress: [["in_progress", at("14:00", -1)], ["complete", at("21:00", -1)]] },
+    { capability: "operational_communications", element: "planning", recommendation: "Write an amateur radio net plan for the isolated communities, with check-in times", priority: "high",
+      owner: toParticipant("hale"), due: day(-1), period: 0, at: at("12:40", -1) },
+    { capability: "operational_communications", element: "equipment", recommendation: "Buy and stage a satellite terminal at each shelter site and fire station", priority: "critical",
+      owner: toPosition(logistics), due: day(30), period: 0, at: at("18:40", -1), progress: [["in_progress", at("06:00")]] },
+    { capability: "infrastructure_systems", element: "planning", recommendation: "Map the gas shutoff valves for Eureka, Arcata and Fortuna in the EOC's map layers", priority: "medium",
+      owner: toParticipant("byrne"), due: day(-1), period: 0, at: at("19:30", -1), progress: [["complete", at("19:35", -1)]] },
+    { capability: "fire_management_and_suppression", element: "equipment", recommendation: "Issue drafting kits and hard suction hose to the engine companies near the bay", priority: "high",
+      owner: toParticipant("marsh"), due: day(-1), period: 0, at: at("19:50", -1) },
+    { capability: "logistics_and_supply_chain_management", element: "none", recommendation: "Record every local resource assignment with its cost from the first hour", priority: "unspecified",
+      owner: toPosition(logistics), due: null, period: 0, at: at("19:20", -1) },
+    { capability: "critical_transportation", element: "planning", recommendation: "Plan resupply through the airport for 96 hours with every highway closed", priority: "critical",
+      owner: toPosition(planning), due: day(21), period: 1, at: at("22:35", -1) },
+    { capability: "mass_care_services", element: "planning", recommendation: "Pre-arrange water and cots for ten shelters of 2,500 people for 96 hours", priority: "high",
+      owner: toParticipant("vance"), due: day(45), period: 1, at: at("22:40", -1), progress: [["in_progress", at("07:30")]] },
+    { capability: "public_health_healthcare_and_emergency_medical_services", element: "exercises", recommendation: "Exercise air evacuation of hospital patients with the Coast Guard every year", priority: "medium",
+      owner: toParticipant("sharma"), due: day(120), period: 1, at: at("06:50") },
+    { capability: "mass_search_and_rescue_operations", element: "training", recommendation: "Train and credential local engineers as structural specialists for search teams", priority: "medium",
+      owner: toPosition(operations), due: day(90), period: 1, at: at("07:20") },
+    { capability: "situational_assessment", element: "organization", recommendation: "Name an owner for every lifeline marked unknown at each briefing", priority: "high",
+      owner: toPosition(planning), due: day(0), period: 2, at: at("09:40"), progress: [["in_progress", at("09:45")]] },
+  ];
+  for (const action of actions) {
+    let actionId = "";
+    later(action.at, async () => {
+      actionId = (await api<{ id: string }>("delgado", action.at, "POST", `/api/v1/jurisdictions/${jurisdictionId}/corrective-actions`, {
+        incidentId, capability: action.capability, capabilityElement: action.element, recommendation: action.recommendation,
+        priority: action.priority, periodRevision: periodRevisions[action.period], assignment: action.owner,
+        ...(action.due ? { dueDate: action.due } : {}),
+      })).id;
+    });
+    for (const [status, when] of action.progress ?? []) {
+      later(when, () => api("delgado", when, "POST", `/api/v1/corrective-actions/${actionId}/status`, { status }));
+    }
+  }
 
   await runInOrder();
   return finish(incidentId);

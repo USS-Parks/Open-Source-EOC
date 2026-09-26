@@ -2285,9 +2285,11 @@ export class ApiClient {
   }
 
   // ---- Damage assessment ----
-  listDamageReports(jurisdictionId: string, options: PageOptions & { status?: DamageReportStatus } = {}): Promise<DamageReportPage> {
+  // An incident reads its own reports and line items and those recorded with no incident.
+  listDamageReports(jurisdictionId: string, options: PageOptions & { status?: DamageReportStatus; incidentId?: string | null } = {}): Promise<DamageReportPage> {
     const query = pageParams(options);
     if (options.status) query.set("status", options.status);
+    if (options.incidentId) query.set("incidentId", options.incidentId);
     const text = query.toString();
     return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/damage/assessments${text ? `?${text}` : ""}`);
   }
@@ -2297,16 +2299,17 @@ export class ApiClient {
   recordDamageAssessment(jurisdictionId: string, input: FieldAssessmentInput): Promise<{ id: string }> {
     return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/damage/assessments`, { ...input });
   }
-  damageSummary(jurisdictionId: string, thresholds: DeclarationThresholds): Promise<DamageSummary> {
+  damageSummary(jurisdictionId: string, thresholds: DeclarationThresholds & { incidentId?: string }): Promise<DamageSummary> {
     return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/damage/summary`, { ...thresholds });
   }
-  /** The declaration support document, rendered by the server from the counted assessments. */
-  damageDeclaration(jurisdictionId: string, input: DeclarationThresholds & { incident: string }): Promise<{ summary: DamageSummary; document: string }> {
+  /** The declaration support document, rendered by the server from the counted assessments; an incident id names the incident. */
+  damageDeclaration(jurisdictionId: string, input: DeclarationThresholds & ({ incident: string } | { incidentId: string })): Promise<{ summary: DamageSummary; document: string }> {
     return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/damage/declaration`, { ...input });
   }
-  /** Issue the public intake token; a new token replaces the previous one. */
-  enableDamageIntake(jurisdictionId: string): Promise<{ token: string }> {
-    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/damage/intake/enable`);
+  /** Issue the public intake token, for an incident when one is given; a new token replaces the previous one. */
+  enableDamageIntake(jurisdictionId: string, incidentId?: string | null): Promise<{ token: string }> {
+    return this.request("POST", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/damage/intake/enable`,
+      incidentId ? { incidentId } : undefined);
   }
 
   // ---- Staffing ----
@@ -2875,8 +2878,10 @@ export class ApiClient {
   }
 
   /** Public Assistance line items, newest first, with the counted totals by category. */
-  listPaItems(jurisdictionId: string, options: PageOptions = {}): Promise<PaItemPage> {
-    const text = pageParams(options).toString();
+  listPaItems(jurisdictionId: string, options: PageOptions & { incidentId?: string | null } = {}): Promise<PaItemPage> {
+    const query = pageParams(options);
+    if (options.incidentId) query.set("incidentId", options.incidentId);
+    const text = query.toString();
     return this.request("GET", `/api/v1/jurisdictions/${encodeURIComponent(jurisdictionId)}/damage/pa-items${text ? `?${text}` : ""}`);
   }
   createPaItem(jurisdictionId: string, input: PaItemInput): Promise<{ id: string }> {

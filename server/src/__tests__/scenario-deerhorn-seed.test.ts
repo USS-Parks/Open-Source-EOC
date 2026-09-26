@@ -133,4 +133,48 @@ describe("the Deerhorn Lightning Complex seed", () => {
     expect(entries).toHaveLength(3);
     expect(entries.every((row) => !("location" in row.data))).toBe(true);
   });
+
+  it("gives the task, shelter and after-action dashboards their inputs", async () => {
+    const get = async <T,>(email: string, url: string): Promise<T> => {
+      const response = await app.inject({ method: "GET", url, headers: auth(await token(email)) });
+      expect(response.statusCode, `${url}: ${response.body}`).toBe(200);
+      return response.json() as T;
+    };
+    const tally = (values: readonly string[]) => {
+      const counts: Record<string, number> = {};
+      for (const value of values) counts[value] = (counts[value] ?? 0) + 1;
+      return counts;
+    };
+    const id = scenario.incidentId;
+
+    // Tasks: six categories, every status, four past due at the clock.
+    const { tasks } = await get<{ tasks: { category: string; status: string; dueAt: string | null }[] }>("casey.morgan@hoopa.example", `/api/v1/incidents/${id}/tasks`);
+    expect(tasks).toHaveLength(22);
+    expect(tally(tasks.map((task) => task.status))).toEqual({ open: 6, in_progress: 4, completed: 12 });
+    expect(Object.keys(tally(tasks.map((task) => task.category))).sort())
+      .toEqual(["command", "cultural_resources", "logistics", "operations", "planning", "public_information"]);
+    expect(tasks.filter((task) => task.status !== "completed" && new Date(task.dueAt!) < scenario.clock)).toHaveLength(4);
+
+    // Shelters: occupancy and status changes through the night and the afternoon's orders.
+    const [board] = await admin`
+      select b.id from boards b join incident_boards ib on ib.board_id = b.id
+      where ib.incident_id = ${id} and b.template_key = 'shelters'`;
+    const boardId = board!.id as string;
+    const open = await admin`select id from board_records where board_id = ${boardId} and data->>'planned' = 'false'`;
+    let changes = 0;
+    for (const shelter of open) {
+      const { entries } = await get<{ entries: unknown[] }>("casey.morgan@hoopa.example",
+        `/api/v1/boards/${boardId}/records/${shelter.id as string}/history?incidentId=${id}`);
+      expect(entries.length).toBeGreaterThanOrEqual(2);
+      changes += entries.length - 1;
+    }
+    expect(changes).toBe(11);
+
+    // Humboldt County's corrective actions, recorded as a participant, under its all-incidents rollup.
+    const rollup = await get<{ correctiveActions: { incidentId: string; organizationName: string | null; status: string }[] }>(
+      "m.ortega@humboldt.example", "/api/v1/aar/rollup");
+    const actions = rollup.correctiveActions.filter((action) => action.incidentId === id);
+    expect(actions.map((action) => action.organizationName)).toEqual(["Humboldt County OES", "Humboldt County OES", "Humboldt County OES"]);
+    expect(tally(actions.map((action) => action.status))).toEqual({ open: 1, in_progress: 1, complete: 1 });
+  });
 });

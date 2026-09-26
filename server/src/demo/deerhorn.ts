@@ -2,7 +2,9 @@ import type { FastifyInstance } from "fastify";
 import type { Sql } from "../db/client.js";
 import { DEERHORN_CLOSURES, DEERHORN_GEOMETRY } from "./geometry/deerhorn.js";
 import { NORTH_COAST_PASSWORD } from "./north-coast.js";
-import { grantDemoDirector, scenarioClock, startScenario, type ScenarioPerson, type ScenarioRun } from "./scenario-kit.js";
+import {
+  grantDemoDirector, scenarioClock, seedChecklist, startScenario, zoned, type ScenarioPerson, type ScenarioRun,
+} from "./scenario-kit.js";
 
 /**
  * The Deerhorn Lightning Complex exercise: dry lightning starts five fires in
@@ -165,14 +167,25 @@ export async function seedDeerhorn(app: FastifyInstance, sql: Sql, clock = deerh
     }));
   }
 
-  // Shelters and the Pecwan temporary refuge area: 229 people in all.
+  // Shelters and the Pecwan temporary refuge area: 229 people in all by 14:30.
+  // Each opens with `occupancy` and changes through the night and the afternoon's orders (`changes`).
   const shelterIds: Record<string, string> = {};
-  const shelters = [
-    { name: "Hoopa Valley Elementary School", capacity: 150, occupancy: 64, pets: true, at: [-123.67645, 41.05013], when: at("17:30", -1), who: "ellis" },
-    { name: "Trinity Valley Elementary School, Willow Creek", capacity: 120, occupancy: 38, pets: false, at: [-123.63949, 40.94937], when: at("17:45", -1), who: "adams" },
-    { name: "Yurok Tribe Community Center, Klamath", capacity: 120, occupancy: 22, pets: true, at: [-124.03745, 41.52936], when: at("18:10", -1), who: "warren" },
-    { name: "Orleans Elementary School", capacity: 80, occupancy: 47, pets: true, at: [-123.54293, 41.30205], when: at("13:50"), who: "flores" },
-    { name: "Pecwan temporary refuge area", capacity: 80, occupancy: 41, pets: true, at: [-123.8525, 41.3432], when: at("14:05"), who: "warren" },
+  const shelters: ReadonlyArray<{
+    name: string; capacity: number; occupancy: number; pets: boolean; at: [number, number]; when: Date; who: string; planned?: boolean;
+    changes?: ReadonlyArray<readonly [Date, Record<string, unknown>]>;
+  }> = [
+    { name: "Hoopa Valley Elementary School", capacity: 150, occupancy: 18, pets: true, at: [-123.67645, 41.05013], when: at("17:30", -1), who: "ellis",
+      // Smoke got into the gym overnight until the room air cleaners arrived.
+      changes: [[at("22:00", -1), { occupancy: 31 }], [at("02:30"), { status: "compromised" }], [at("09:10"), { status: "normal" }],
+        [at("13:55"), { occupancy: 48 }], [at("14:20"), { occupancy: 64 }]] },
+    { name: "Trinity Valley Elementary School, Willow Creek", capacity: 120, occupancy: 9, pets: false, at: [-123.63949, 40.94937], when: at("17:45", -1), who: "adams",
+      changes: [[at("23:10", -1), { occupancy: 24 }], [at("14:22"), { occupancy: 38 }]] },
+    { name: "Yurok Tribe Community Center, Klamath", capacity: 120, occupancy: 6, pets: true, at: [-124.03745, 41.52936], when: at("18:10", -1), who: "warren",
+      changes: [[at("21:30", -1), { occupancy: 15 }], [at("09:00"), { occupancy: 22 }]] },
+    { name: "Orleans Elementary School", capacity: 80, occupancy: 20, pets: true, at: [-123.54293, 41.30205], when: at("13:50"), who: "flores",
+      changes: [[at("14:28"), { occupancy: 47 }]] },
+    { name: "Pecwan temporary refuge area", capacity: 80, occupancy: 41, pets: true, at: [-123.8525, 41.3432], when: at("14:05"), who: "warren",
+      changes: [[at("14:25"), { occupancy: 58, status: "compromised" }]] },
     { name: "Junction Elementary School, Somes Bar", capacity: 60, occupancy: 0, pets: false, at: [-123.49645, 41.39235], when: at("14:15"), who: "flores", planned: true },
   ];
   for (const shelter of shelters) {
@@ -184,8 +197,8 @@ export async function seedDeerhorn(app: FastifyInstance, sql: Sql, clock = deerh
       });
       shelterIds[shelter.name] = created.id;
     });
+    for (const [when, data] of shelter.changes ?? []) later(when, () => update(shelter.who, when, "shelters", shelterIds[shelter.name]!, data));
   }
-  later(at("14:25"), () => update("warren", at("14:25"), "shelters", shelterIds["Pecwan temporary refuge area"]!, { occupancy: 58, status: "compromised" }));
 
   // Facilities: command, air operations, staging, camp, medical, cameras and weather.
   const facilities: ReadonlyArray<{ name: string; kind: string; at: [number, number]; status?: string; stream?: string; notes?: string }> = [
@@ -339,31 +352,61 @@ export async function seedDeerhorn(app: FastifyInstance, sql: Sql, clock = deerh
     });
   }
 
-  // Tasks from the activation, due through this operational period, and the ones command adds.
-  later(at("06:50"), async () => {
-    const tasks = await api<{ tasks: { id: string; revision: number }[] }>("morgan", at("06:50"), "GET", `/api/v1/incidents/${incidentId}/tasks`);
-    for (const [index, task] of tasks.tasks.entries()) {
-      await api("morgan", at("06:55"), "PATCH", `/api/v1/incidents/${incidentId}/tasks/${task.id}`, {
-        expectedRevision: task.revision,
-        dueAt: iso(`${String(9 + index).padStart(2, "0")}:00`),
-        ...(index % 2 === 0 ? { status: "in_progress" } : {}),
-      });
-    }
-  });
-  const addedTasks = [
-    { item: "Confirm every Weitchpec household is accounted for", dueAt: "16:00", owner: "hayes" },
-    { item: "Brief both tribal councils on the evacuation orders", dueAt: "17:00", owner: null },
-    { item: "Plan resupply of the Pecwan refuge area by river or air", dueAt: "18:00", owner: "hayes" },
-    { item: "Schedule cultural monitors for tomorrow's dozer work", dueAt: "08:00", days: 1, owner: "lowe" },
+  // The checklist: the activation's tasks, mostly done the first night, and the ones command adds since.
+  // Planning has no chief yet, so its tasks wait.
+  const toParticipant = (key: string) => ({ kind: "incident_participant" as const, incidentId, participantId: participants[key]! });
+  const toPosition = (positionId: string) => ({ kind: "position" as const, positionId });
+  seedChecklist({ api, later }, "morgan", incidentId, at("21:30", -2), [
+    { item: "Assume command and announce on the significant events board", category: "command", due: at("21:30", -2) },
+    { item: "Confirm unified command with every jurisdiction the fires touch", category: "command", due: at("22:00", -2) },
+    { item: "Set initial incident objectives", category: "command", due: at("23:00", -2) },
+    { item: "Establish the operational period", category: "command", due: at("22:00", -2) },
+    { item: "Confirm resource status with dispatch for each fire", category: "operations", due: at("06:00", -1) },
+    { item: "Open the resource request board", category: "operations", due: at("22:00", -2) },
+    { item: "Track each start and its perimeter", category: "planning", due: at("19:00"), inProgress: true },
+    { item: "Prepare the next operational period briefing", category: "planning", due: at("14:00") },
+    { item: "Draft the initial public statement", category: "public_information", due: at("23:00", -2) },
+    { item: "Agree release approval with every agency in command", category: "public_information", due: at("12:00"), inProgress: true },
+    { item: "Open the clean air room at K'ima:w", category: "operations", due: at("14:00", -1), added: at("10:50", -1), holder: toParticipant("iverson") },
+    { item: "Hand out fitted N95 respirators at the Hoopa shelter", category: "logistics", due: at("18:00", -1), added: at("11:10", -1), holder: toParticipant("iverson") },
+    { item: "Survey cultural sites ahead of the Bluff Creek dozer line", category: "cultural_resources", due: at("12:00", -1), added: at("07:55", -1), holder: toParticipant("lowe") },
+    { item: "Keep cultural site locations off the shared dozer line maps", category: "cultural_resources", due: at("08:00"), added: at("12:10", -1), holder: toParticipant("lowe"), inProgress: true },
+    { item: "Stage livestock trailers at Tish Tang", category: "logistics", due: at("16:00", -1), added: at("08:55", -1), holder: toPosition(logistics), inProgress: true },
+    { item: "Confirm Orleans can take Weitchpec evacuees", category: "operations", due: at("13:45"), added: at("13:28"), holder: toParticipant("flores") },
+    { item: "Post the evacuation orders on tribal radio and social media", category: "public_information", due: at("14:00"), added: at("13:30"), holder: toPosition(information) },
+    { item: "Run a pilot car schedule on SR-96 north of Weitchpec", category: "operations", due: at("18:00"), added: at("14:40"), holder: toParticipant("sato") },
+    { item: "Confirm every Weitchpec household is accounted for", category: "operations", due: at("16:00"), added: at("14:32"), holder: toParticipant("hayes") },
+    { item: "Brief both tribal councils on the evacuation orders", category: "command", due: at("17:00"), added: at("14:33"), holder: toPosition(command) },
+    { item: "Plan resupply of the Pecwan refuge area by river or air", category: "logistics", due: at("18:00"), added: at("14:34"), holder: toParticipant("hayes") },
+    { item: "Schedule cultural monitors for tomorrow's dozer work", category: "cultural_resources", due: at("08:00", 1), added: at("14:35"), holder: toParticipant("lowe") },
+  ], [
+    { who: "bennett", at: at("21:45", -2), position: operations,
+      items: ["Confirm resource status with dispatch for each fire", "Open the resource request board"] },
+    { who: "morgan", at: at("22:10", -2),
+      items: ["Assume command and announce on the significant events board", "Confirm unified command with every jurisdiction the fires touch",
+        "Set initial incident objectives", "Establish the operational period"] },
+    { who: "rowe", at: at("22:30", -2), position: information, items: ["Draft the initial public statement"] },
+    { who: "lowe", at: at("11:40", -1), items: ["Survey cultural sites ahead of the Bluff Creek dozer line"] },
+    { who: "iverson", at: at("13:20", -1), items: ["Open the clean air room at K'ima:w"] },
+    { who: "iverson", at: at("16:30", -1), items: ["Hand out fitted N95 respirators at the Hoopa shelter"] },
+    { who: "flores", at: at("13:48"), items: ["Confirm Orleans can take Weitchpec evacuees"] },
+    { who: "rowe", at: at("13:55"), position: information, items: ["Post the evacuation orders on tribal radio and social media"] },
+  ]);
+
+  // Humboldt County's liaison notes what the county should fix, on Humboldt's own improvement plan.
+  const day = (days: number) => zoned(at("12:00", days)).date;
+  const humboldt: ReadonlyArray<readonly [string, string, string, string, string, Date, ("in_progress" | "complete")?]> = [
+    ["critical_transportation", "organization", "Name a county contact for SR-96 traffic control when the tribes close the highway", "medium", day(-1), at("17:00", -1), "in_progress"],
+    ["operational_communications", "equipment", "Give the county liaison a radio on the tribal fire net", "low", day(0), at("07:20"), "complete"],
+    ["public_information_and_warning", "planning", "Agree one evacuation map with both tribes before fire season, so county warnings match tribal orders", "high", day(60), at("14:10")],
   ];
-  for (const [index, task] of addedTasks.entries()) {
-    const when = at(`14:${String(32 + index).padStart(2, "0")}`);
-    later(when, () => api("morgan", when, "POST", `/api/v1/incidents/${incidentId}/tasks`, {
-      item: task.item, category: "planning", dueAt: iso(task.dueAt, task.days ?? 0),
-      assignment: task.owner
-        ? { kind: "incident_participant", incidentId, participantId: participants[task.owner] }
-        : { kind: "position", positionId: command },
-    }));
+  for (const [capability, capabilityElement, recommendation, priority, dueDate, when, status] of humboldt) {
+    later(when, async () => {
+      const action = await api<{ id: string }>("ortega", when, "POST", `/api/v1/jurisdictions/${organizations["humboldt-oes"]!}/corrective-actions`, {
+        incidentId, capability, capabilityElement, recommendation, priority, dueDate, ownerPerson: people["ortega"]!.id,
+      });
+      if (status) await api("ortega", when, "POST", `/api/v1/corrective-actions/${action.id}/status`, { status });
+    });
   }
 
   // Lifeline assessments. OP 03's stand as history under OP 04's.

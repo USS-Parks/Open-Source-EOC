@@ -89,6 +89,20 @@ describe("damage dashboard", () => {
     });
   }
 
+  it("reads the selected incident's records and marks those recorded with no incident", async () => {
+    const own = { ...report("q1", "major", "approved"), incident_id: "i1" };
+    const client = {
+      listDamageReports: vi.fn().mockResolvedValue({ assessments: [own, report("u1", "minor", "approved")], nextCursor: null }),
+      listPaItems: vi.fn().mockResolvedValue({ items: [], nextCursor: null, totals: { byCategory: {}, totalCost: 0, items: 0 } }),
+    };
+    render(<DamageDashboard client={client} jurisdictionId="j1" revision={0} incidentId="i1" />);
+    await screen.findByRole("list", { name: "Reports and line items" });
+    expect(client.listDamageReports).toHaveBeenCalledWith("j1", { limit: 500, incidentId: "i1" });
+    expect(client.listPaItems).toHaveBeenCalledWith("j1", { limit: 500, incidentId: "i1" });
+    const rows = within(screen.getByRole("region", { name: /\d+ reports?$/ })).getAllByRole("listitem");
+    expect(rows.map((row) => /No incident/.test(row.textContent ?? ""))).toEqual([false, true]);
+  });
+
   it("reads honestly with nothing reported", async () => {
     const client = {
       listDamageReports: vi.fn().mockResolvedValue({ assessments: [], nextCursor: null }),

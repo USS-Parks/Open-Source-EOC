@@ -13,6 +13,8 @@ export type DamageReportStatus = "submitted" | "approved" | "rejected";
 /** One row of the paged assessment list, in the server's field names. */
 export interface DamageReport {
   readonly id: string;
+  /** The incident it was made under; none when it was recorded with no incident selected. */
+  readonly incident_id?: string | null;
   readonly address: string;
   readonly structure_type: string;
   readonly degree: string;
@@ -32,8 +34,20 @@ export interface DamageReportPage {
   readonly nextCursor: string | null;
 }
 
+/**
+ * How a report or line item reads with an incident selected. The screen
+ * shows that incident's records and those recorded with no incident, which
+ * belong to none in particular; these say so. With no incident selected every
+ * record shows and none needs the label.
+ */
+export function incidentLabel(record: { readonly incident_id?: string | null }, incidentId: string | null | undefined): string | null {
+  if (!incidentId) return null;
+  return record.incident_id ? "This incident" : "No incident";
+}
+
 /** An official field assessment; the server records it as accepted. */
 export interface FieldAssessmentInput {
+  readonly incidentId?: string | null;
   readonly address: string;
   readonly structureType: string;
   readonly degree: string;

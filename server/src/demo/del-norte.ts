@@ -2,7 +2,9 @@ import type { FastifyInstance } from "fastify";
 import type { Sql } from "../db/client.js";
 import { DEL_NORTE_CLOSURES, DEL_NORTE_GEOMETRY } from "./geometry/del-norte.js";
 import { NORTH_COAST_PASSWORD } from "./north-coast.js";
-import { grantDemoDirector, scenarioClock, startScenario, type ScenarioPerson, type ScenarioRun } from "./scenario-kit.js";
+import {
+  grantDemoDirector, scenarioClock, seedChecklist, startScenario, zoned, type ScenarioPerson, type ScenarioRun,
+} from "./scenario-kit.js";
 
 /**
  * The Del Norte Atmospheric Rivers exercise: three atmospheric rivers in
@@ -36,6 +38,8 @@ const PARTNERS = [
   { slug: "cdph", name: "CA Dept. of Public Health" },
   { slug: "swrcb", name: "State Water Resources Control Board" },
   { slug: "sutter-coast", name: "Sutter Coast Hospital" },
+  // The county to the south receives Del Norte's air evacuees in Eureka.
+  { slug: "humboldt-oes", name: "Humboldt County OES" },
 ] as const;
 
 export const DEL_NORTE_PEOPLE: readonly ScenarioPerson[] = [
@@ -56,6 +60,7 @@ export const DEL_NORTE_PEOPLE: readonly ScenarioPerson[] = [
   { key: "serrano", displayName: "I. Serrano", email: "i.serrano@cdph.example", organization: "cdph", incidentPositionTitle: "Medical and health liaison" },
   { key: "hughes", displayName: "W. Hughes", email: "w.hughes@swrcb.example", organization: "swrcb", incidentPositionTitle: "Water systems liaison" },
   { key: "ahn", displayName: "D. Ahn", email: "d.ahn@suttercoast.example", organization: "sutter-coast", incidentPositionTitle: "Hospital liaison" },
+  { key: "lund", displayName: "B. Lund", email: "b.lund@humboldt.example", organization: "humboldt-oes", incidentPositionTitle: "Humboldt County OES liaison" },
 ];
 
 /** The incident area: all of Del Norte County, from the county outline the map ships. */
@@ -174,13 +179,24 @@ export async function seedDelNorte(app: FastifyInstance, sql: Sql, clock = delNo
   }
 
   // Shelters: five open with 331 people, run by the Red Cross and by the tribes; two planned.
+  // Each opens with `occupancy` and changes as the storms come and go (`changes`), the last change standing at the clock.
   const shelterIds: Record<string, string> = {};
-  const shelters = [
-    { name: "Del Norte County Fairgrounds", capacity: 300, occupancy: 146, pets: true, at: [-124.19505, 41.76022], who: "webb", when: at("08:10", -6) },
-    { name: "Smith River Community Center", capacity: 90, occupancy: 38, pets: true, at: [-124.14771, 41.92635], who: "tran", when: at("09:20", -6) },
-    { name: "Yurok Tribe Community Center, Klamath", capacity: 120, occupancy: 71, pets: true, at: [-124.03745, 41.52936], who: "pierce", when: at("11:05", -2) },
-    { name: "Elk Valley Rancheria community hall", capacity: 60, occupancy: 24, pets: false, at: [-124.15867, 41.7584], who: "castillo", when: at("16:00", -3) },
-    { name: "Pine Grove Elementary School", capacity: 120, occupancy: 40, pets: false, at: [-124.19425, 41.78511], who: "webb", when: at("21:30", -1) },
+  const shelters: ReadonlyArray<{
+    name: string; capacity: number; occupancy: number; pets: boolean; at: [number, number]; who: string; when: Date; planned?: boolean;
+    changes?: ReadonlyArray<readonly [Date, Record<string, unknown>]>;
+  }> = [
+    { name: "Del Norte County Fairgrounds", capacity: 300, occupancy: 40, pets: true, at: [-124.19505, 41.76022], who: "webb", when: at("08:10", -6),
+      changes: [[at("18:30", -6), { occupancy: 85 }], [at("10:00", -5), { occupancy: 52 }], [at("12:00", -4), { occupancy: 30 }],
+        [at("20:00", -3), { occupancy: 70 }], [at("11:30", -2), { occupancy: 118 }], [at("09:00", -1), { occupancy: 104 }], [at("05:00"), { occupancy: 146 }]] },
+    { name: "Smith River Community Center", capacity: 90, occupancy: 20, pets: true, at: [-124.14771, 41.92635], who: "tran", when: at("09:20", -6),
+      changes: [[at("18:40", -6), { occupancy: 34 }], [at("10:10", -5), { occupancy: 15 }], [at("12:10", -4), { occupancy: 0, status: "closed" }],
+        [at("18:00", -3), { occupancy: 22, status: "normal" }], [at("11:30", -2), { occupancy: 30 }], [at("04:00"), { occupancy: 38 }]] },
+    { name: "Yurok Tribe Community Center, Klamath", capacity: 120, occupancy: 52, pets: true, at: [-124.03745, 41.52936], who: "pierce", when: at("11:05", -2),
+      changes: [[at("20:00", -2), { occupancy: 80 }], [at("12:00", -1), { occupancy: 63 }], [at("05:30"), { occupancy: 71 }]] },
+    { name: "Elk Valley Rancheria community hall", capacity: 60, occupancy: 12, pets: false, at: [-124.15867, 41.7584], who: "castillo", when: at("16:00", -3),
+      changes: [[at("11:30", -2), { occupancy: 20 }], [at("05:20"), { occupancy: 24 }]] },
+    { name: "Pine Grove Elementary School", capacity: 120, occupancy: 40, pets: false, at: [-124.19425, 41.78511], who: "webb", when: at("21:30", -1),
+      changes: [[at("06:15"), { occupancy: 52 }]] },
     { name: "Mary Peacock School", capacity: 100, occupancy: 0, pets: false, at: [-124.21183, 41.77737], who: "webb", when: at("05:50"), planned: true },
     { name: "Redwood Elementary School, Fort Dick", capacity: 80, occupancy: 0, pets: true, at: [-124.15045, 41.86979], who: "webb", when: at("06:05"), planned: true },
   ];
@@ -193,8 +209,8 @@ export async function seedDelNorte(app: FastifyInstance, sql: Sql, clock = delNo
       });
       shelterIds[shelter.name] = created.id;
     });
+    for (const [when, data] of shelter.changes ?? []) later(when, () => update(shelter.who, when, "shelters", shelterIds[shelter.name]!, data));
   }
-  later(at("06:15"), () => update("webb", at("06:15"), "shelters", shelterIds["Pine Grove Elementary School"]!, { occupancy: 52 }));
 
   // Facilities: the EOC, the hospital and the prison, the air and sea resupply points, gauges, cameras and weather.
   const facilities: ReadonlyArray<{ name: string; kind: string; at: [number, number]; status?: string; stream?: string; notes?: string }> = [
@@ -378,31 +394,59 @@ export async function seedDelNorte(app: FastifyInstance, sql: Sql, clock = delNo
     });
   }
 
-  // Tasks from the activation, due today, and the ones planning adds.
-  later(at("05:40"), async () => {
-    const tasks = await api<{ tasks: { id: string; revision: number }[] }>("rivera", at("05:40"), "GET", `/api/v1/incidents/${incidentId}/tasks`);
-    for (const [index, task] of tasks.tasks.entries()) {
-      await api("rivera", at("05:42"), "PATCH", `/api/v1/incidents/${incidentId}/tasks/${task.id}`, {
-        expectedRevision: task.revision,
-        dueAt: iso(`${String(8 + index).padStart(2, "0")}:00`),
-        ...(index % 3 === 0 ? { status: "in_progress" } : {}),
-      });
-    }
-  });
-  const addedTasks = [
-    { item: "Confirm the air resupply schedule with Cal OES", dueAt: "09:00", owner: "farouk" },
-    { item: "Brief the board of supervisors on the county being cut off", dueAt: "10:00", owner: null },
-    { item: "Confirm Klamath Glen households are accounted for", dueAt: "11:00", owner: "pierce" },
-    { item: "Plan the boil water notice lifting criteria", dueAt: "16:00", owner: "hughes" },
+  // The checklist over the series: the activation's tasks, done in the first hours, and the ones added since.
+  // No incident commander is seated, so the lead running planning takes the command checklist.
+  const toParticipant = (key: string) => ({ kind: "incident_participant" as const, incidentId, participantId: participants[key]! });
+  const toPosition = (positionId: string) => ({ kind: "position" as const, positionId });
+  seedChecklist({ api, later }, "rivera", incidentId, at("05:10", -6), [
+    { item: "Assume command and announce on the significant events board", category: "command", due: at("05:30", -6), holder: toPosition(planning) },
+    { item: "Set initial incident objectives", category: "command", due: at("06:00", -6), holder: toPosition(planning) },
+    { item: "Establish the operational period", category: "command", due: at("06:00", -6), holder: toPosition(planning) },
+    { item: "Confirm road, river and utility status with field crews", category: "operations", due: at("08:00", -6) },
+    { item: "Open the resource request board", category: "operations", due: at("06:00", -6) },
+    { item: "Track river forecasts and the next storm's arrival", category: "planning", due: at("18:00"), inProgress: true },
+    { item: "Collect lifeline assessments for the situation report", category: "planning", due: at("06:00"), inProgress: true },
+    { item: "Start initial damage assessment", category: "planning", due: at("12:00", -6) },
+    { item: "Draft the initial public statement", category: "public_information", due: at("06:00", -6) },
+    { item: "Confirm media contact roster", category: "public_information", due: at("12:00", -6) },
+    { item: "Deliver sandbags to Smith River homes", category: "operations", due: at("18:00", -6), added: at("14:35", -6), holder: toParticipant("tran") },
+    { item: "Check on Klamath Glen residents by boat", category: "operations", due: at("18:00", -2), added: at("07:25", -2), holder: toParticipant("moss") },
+    { item: "Count evacuees at every shelter each morning", category: "mass_care", due: at("06:00"), added: at("19:05", -2), holder: toParticipant("webb"), inProgress: true },
+    { item: "Arrange dialysis flights to Eureka", category: "logistics", due: at("12:00", -1), added: at("10:25", -1), holder: toParticipant("ahn"), inProgress: true },
+    { item: "Receive Del Norte dialysis patients at Eureka hospitals", category: "operations", due: at("12:00"), added: at("10:30", -1), holder: toParticipant("lund") },
+    { item: "Publish the boil water notice in English and Spanish", category: "public_information", due: at("05:30"), added: at("04:35"), holder: toPosition(information) },
+    { item: "Stage bottled water at the airport for the boil water notice", category: "logistics", due: at("09:00"), added: at("04:52"), holder: toPosition(logistics), inProgress: true },
+    { item: "Inspect the Dr. Fine Bridge after the high water", category: "operations", due: at("08:00"), added: at("04:58"), holder: toParticipant("novak") },
+    { item: "Open Mary Peacock School if the fairgrounds fills", category: "mass_care", due: at("12:00"), added: at("05:52"), holder: toParticipant("webb") },
+    { item: "Confirm the air resupply schedule with Cal OES", category: "logistics", due: at("09:00"), added: at("06:22"), holder: toParticipant("farouk") },
+    { item: "Brief the board of supervisors on the county being cut off", category: "command", due: at("10:00"), added: at("06:23"), holder: toPosition(planning) },
+    { item: "Confirm Klamath Glen households are accounted for", category: "operations", due: at("11:00"), added: at("06:24"), holder: toParticipant("pierce") },
+    { item: "Plan the boil water notice lifting criteria", category: "operations", due: at("16:00"), added: at("06:25"), holder: toParticipant("hughes") },
+  ], [
+    { who: "rivera", at: at("05:40", -6),
+      items: ["Assume command and announce on the significant events board", "Set initial incident objectives", "Establish the operational period"] },
+    { who: "whitfield", at: at("05:45", -6), position: information, items: ["Draft the initial public statement", "Confirm media contact roster"] },
+    { who: "holt", at: at("07:50", -6), position: operations, items: ["Confirm road, river and utility status with field crews", "Open the resource request board"] },
+    { who: "rivera", at: at("11:45", -6), items: ["Start initial damage assessment"] },
+    { who: "tran", at: at("17:30", -6), items: ["Deliver sandbags to Smith River homes"] },
+    { who: "moss", at: at("16:40", -2), items: ["Check on Klamath Glen residents by boat"] },
+    { who: "whitfield", at: at("05:10"), position: information, items: ["Publish the boil water notice in English and Spanish"] },
+  ]);
+
+  // Humboldt County's liaison notes what the region should fix, on Humboldt's own improvement plan.
+  const day = (days: number) => zoned(at("12:00", days)).date;
+  const humboldt: ReadonlyArray<readonly [string, string, string, string, string, Date, ("in_progress" | "complete")?]> = [
+    ["critical_transportation", "planning", "Plan patient air transfers from Del Norte to Eureka hospitals before US-101 and US-199 close", "high", day(30), at("11:00", -1)],
+    ["operational_communications", "equipment", "Add a satellite link between the Del Norte and Humboldt EOCs", "medium", day(-1), at("02:40"), "in_progress"],
+    ["public_health_healthcare_and_emergency_medical_services", "planning", "Share a regional list of dialysis patients between the two counties", "medium", day(14), at("05:15"), "complete"],
   ];
-  for (const [index, task] of addedTasks.entries()) {
-    const when = at(`06:${String(22 + index).padStart(2, "0")}`);
-    later(when, () => api("rivera", when, "POST", `/api/v1/incidents/${incidentId}/tasks`, {
-      item: task.item, category: "planning", dueAt: iso(task.dueAt),
-      assignment: task.owner
-        ? { kind: "incident_participant", incidentId, participantId: participants[task.owner] }
-        : { kind: "position", positionId: planning },
-    }));
+  for (const [capability, capabilityElement, recommendation, priority, dueDate, when, status] of humboldt) {
+    later(when, async () => {
+      const action = await api<{ id: string }>("lund", when, "POST", `/api/v1/jurisdictions/${organizations["humboldt-oes"]!}/corrective-actions`, {
+        incidentId, capability, capabilityElement, recommendation, priority, dueDate, ownerPerson: people["lund"]!.id,
+      });
+      if (status) await api("lund", when, "POST", `/api/v1/corrective-actions/${action.id}/status`, { status });
+    });
   }
 
   // Lifeline assessments through the series: each storm's supersede the last.

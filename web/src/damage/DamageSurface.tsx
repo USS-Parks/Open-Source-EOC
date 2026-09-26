@@ -46,6 +46,7 @@ import {
   declarationIndicators,
   degreeLabel,
   dollars,
+  incidentLabel,
   insuredLabel,
   paDraftOf,
   parseBaseline,
@@ -85,8 +86,10 @@ export function DamageSurface(props: {
   const changed = useCallback(() => setRevision((n) => n + 1), []);
   const [tab, setTab] = useState<string>("submitted");
   const [screen, setScreen] = useState<string>("assessment");
-  const common = { client: props.client, jurisdictionId: props.jurisdictionId, revision };
-  const figures = useFigures(props.client, props.jurisdictionId, revision);
+  // An incident reads its own reports and line items, and those recorded with no incident.
+  const incidentId = props.incidentId ?? null;
+  const common = { client: props.client, jurisdictionId: props.jurisdictionId, revision, incidentId };
+  const figures = useFigures(props.client, props.jurisdictionId, revision, incidentId);
   return (
     <Scroll>
       <SurfaceHeader title="Damage assessment" />
@@ -94,7 +97,7 @@ export function DamageSurface(props: {
         tabs={[{ id: "assessment", label: "Assessment" }, { id: "dashboard", label: "Dashboard" }]} />
       <div role="tabpanel" id={`damage-screen-${screen}-panel`} aria-labelledby={`damage-screen-${screen}-tab`}>
       {screen === "dashboard" ? (
-        <div className="d21-workspace"><DamageDashboard client={props.client} jurisdictionId={props.jurisdictionId} revision={revision} /></div>
+        <div className="d21-workspace"><DamageDashboard client={props.client} jurisdictionId={props.jurisdictionId} revision={revision} incidentId={incidentId} /></div>
       ) : (
       <div className="d21-workspace">
         <div className="d21-workspace-intro">
@@ -102,9 +105,10 @@ export function DamageSurface(props: {
           <div>
             <strong>Preliminary damage assessment</strong>
             <span>Public reports wait in the intake queue until a moderator accepts or rejects them. Only accepted reports and field assessments count toward the loss summary, the declaration indicators, the download and the map. Public Assistance line items count once submitted.</span>
+            {incidentId ? <span>This screen reads {props.incidentName ?? "the selected incident"}: its own reports and line items, and those recorded with no incident, marked No incident.</span> : null}
           </div>
         </div>
-        <SummaryPanel figures={figures} client={props.client} jurisdictionId={props.jurisdictionId} incidentName={props.incidentName} />
+        <SummaryPanel figures={figures} client={props.client} jurisdictionId={props.jurisdictionId} incidentName={props.incidentName} incidentId={incidentId} />
         <MapPanel {...common} theme={props.theme} />
         <Panel title="Reports and Public Assistance">
           <Tabs id="damage" label="Report lists and Public Assistance" tabs={TABS} value={tab} onChange={setTab} />
@@ -118,8 +122,8 @@ export function DamageSurface(props: {
           <ForceAccountPanel client={props.client} jurisdictionId={props.jurisdictionId} incidentId={props.incidentId}
             incidentName={props.incidentName ?? "The incident"} isAdmin={props.isAdmin} onChanged={changed} />
         ) : null}
-        {props.canWrite ? <FieldAssessmentPanel client={props.client} jurisdictionId={props.jurisdictionId} onChanged={changed} /> : null}
-        {props.isAdmin ? <IntakePanel client={props.client} jurisdictionId={props.jurisdictionId} /> : null}
+        {props.canWrite ? <FieldAssessmentPanel client={props.client} jurisdictionId={props.jurisdictionId} incidentId={incidentId} onChanged={changed} /> : null}
+        {props.isAdmin ? <IntakePanel client={props.client} jurisdictionId={props.jurisdictionId} incidentId={incidentId} incidentName={props.incidentName} /> : null}
         {props.isAdmin ? <BaselinePanel client={props.client} jurisdictionId={props.jurisdictionId} onChanged={changed} /> : null}
       </div>
       )}
@@ -210,7 +214,7 @@ interface Figures {
 }
 
 /** The operator-entered figures and the summary computed from them, shared by the summary and the PA tab. */
-function useFigures(client: ApiClient, jurisdictionId: string, revision: number): Figures {
+function useFigures(client: ApiClient, jurisdictionId: string, revision: number, incidentId: string | null): Figures {
   // The inputs are remembered per jurisdiction on this browser only.
   const storageKey = `openeoc.damage.thresholds.${jurisdictionId}`;
   const [draft, setDraft] = useState<ThresholdDraft>(() => readDraft(storageKey));
@@ -221,8 +225,8 @@ function useFigures(client: ApiClient, jurisdictionId: string, revision: number)
   };
   const thresholds = parseThresholds(draft);
   const summary = useAsync(
-    () => thresholds ? client.damageSummary(jurisdictionId, thresholds) : Promise.resolve(null),
-    [jurisdictionId, JSON.stringify(thresholds), revision],
+    () => thresholds ? client.damageSummary(jurisdictionId, { ...thresholds, ...(incidentId ? { incidentId } : {}) }) : Promise.resolve(null),
+    [jurisdictionId, JSON.stringify(thresholds), revision, incidentId],
   );
   return { draft, update, thresholds, summary };
 }
@@ -247,14 +251,16 @@ function IndicatorList(props: { indicators: readonly Indicator[] }) {
   );
 }
 
-function SummaryPanel(props: { figures: Figures; client: ApiClient; jurisdictionId: string; incidentName: string | null }) {
+function SummaryPanel(props: { figures: Figures; client: ApiClient; jurisdictionId: string; incidentName: string | null; incidentId: string | null }) {
   const { draft, update, thresholds, summary } = props.figures;
   const s = summary.data;
   const [incident, setIncident] = useState(props.incidentName ?? "");
   const { busy, run, feedback } = useRun();
   const download = () => run(async () => {
     if (!thresholds) throw new Error("Enter the county population and both thresholds first.");
-    const result = await props.client.damageDeclaration(props.jurisdictionId, { ...thresholds, incident: incident.trim() });
+    // With an incident selected the server names it in the document; the name is not typed.
+    const result = await props.client.damageDeclaration(props.jurisdictionId,
+      props.incidentId ? { ...thresholds, incidentId: props.incidentId } : { ...thresholds, incident: incident.trim() });
     const name = declarationFileName(new Date());
     saveFile(new Blob([result.document], { type: "text/markdown" }), name);
     const items = result.summary.publicAssistance.items;
@@ -295,8 +301,10 @@ function SummaryPanel(props: { figures: Figures; client: ApiClient; jurisdiction
       </> : null}
       <p className="d21-callout">The per-capita figures divide the counted Public Assistance cost (categories A to G) once any submitted or reviewed line item exists, and the estimated loss of counted structures until then; each indicator names its basis. The populations and thresholds are entered by the operator. FEMA validates the figures and makes the determination.</p>
       <div className="damage-export">
-        <TextField label="Incident name for the download" value={incident} onChange={setIncident} />
-        <ActionButton kind="primary" loading={busy} loadingLabel="Preparing…" disabled={!thresholds || !incident.trim()}
+        {props.incidentId
+          ? <p className="d21-muted">The download names {props.incidentName ?? "the selected incident"}, whose reports it counts.</p>
+          : <TextField label="Incident name for the download" value={incident} onChange={setIncident} />}
+        <ActionButton kind="primary" loading={busy} loadingLabel="Preparing…" disabled={!thresholds || (!props.incidentId && !incident.trim())}
           onClick={() => void download()}>Download declaration summary</ActionButton>
       </div>
       {feedback}
@@ -314,10 +322,10 @@ const STATUS_COLOR: Readonly<Record<SymbolStatus, string>> = {
 // ponytail: the map shows the newest 500 accepted reports; page the layer if a jurisdiction exceeds that.
 const MAP_LIMIT = 500;
 
-function MapPanel(props: { client: ApiClient; jurisdictionId: string; revision: number; theme: ThemeName }) {
+function MapPanel(props: { client: ApiClient; jurisdictionId: string; revision: number; incidentId: string | null; theme: ThemeName }) {
   const accepted = useAsync(
-    () => props.client.listDamageReports(props.jurisdictionId, { status: "approved", limit: MAP_LIMIT }),
-    [props.jurisdictionId, props.revision],
+    () => props.client.listDamageReports(props.jurisdictionId, { status: "approved", limit: MAP_LIMIT, incidentId: props.incidentId }),
+    [props.jurisdictionId, props.revision, props.incidentId],
   );
   const rows = accepted.data?.assessments ?? [];
   const features = reportFeatures(rows);
@@ -358,18 +366,18 @@ function MapPanel(props: { client: ApiClient; jurisdictionId: string; revision: 
 }
 
 const COLUMN_WIDTHS = [
-  { id: "address", width: 200 }, { id: "degree", width: 140 }, { id: "structure", width: 170 },
+  { id: "address", width: 200 }, { id: "incident", width: 130 }, { id: "degree", width: 140 }, { id: "structure", width: 170 },
   { id: "loss", width: 130 }, { id: "insured", width: 110 }, { id: "source", width: 140 },
   { id: "contact", width: 190 }, { id: "received", width: 180 }, { id: "decision", width: 190 },
 ];
 
 function ReportTable(props: {
-  client: ApiClient; jurisdictionId: string; revision: number; status: DamageReportStatus;
+  client: ApiClient; jurisdictionId: string; revision: number; incidentId: string | null; status: DamageReportStatus;
   canModerate: boolean; onChanged: () => void;
 }) {
   const first = useAsync(
-    () => props.client.listDamageReports(props.jurisdictionId, { status: props.status }),
-    [props.jurisdictionId, props.status, props.revision],
+    () => props.client.listDamageReports(props.jurisdictionId, { status: props.status, incidentId: props.incidentId }),
+    [props.jurisdictionId, props.status, props.revision, props.incidentId],
   );
   // Pages added with "Load more" extend the first page they were read after.
   const [more, setMore] = useState<{ base: DamageReportPage; rows: readonly DamageReport[]; nextCursor: string | null } | null>(null);
@@ -377,7 +385,7 @@ function ReportTable(props: {
     : first.data ? { base: first.data, rows: first.data.assessments, nextCursor: first.data.nextCursor } : null;
   const nextCursor = loaded?.nextCursor ?? null;
   const loadMore = loaded && nextCursor ? async () => {
-    const next = await props.client.listDamageReports(props.jurisdictionId, { status: props.status, cursor: nextCursor });
+    const next = await props.client.listDamageReports(props.jurisdictionId, { status: props.status, cursor: nextCursor, incidentId: props.incidentId });
     setMore({ base: loaded.base, rows: [...loaded.rows, ...next.assessments], nextCursor: next.nextCursor });
   } : undefined;
   const reports = loaded?.rows ?? [];
@@ -395,6 +403,7 @@ function ReportTable(props: {
   const queue = props.status === "submitted";
   const columns: OperationalTableColumn<DamageReport>[] = [
     { id: "address", header: "Address", value: (r) => r.address },
+    ...(props.incidentId ? [{ id: "incident", header: "Incident", value: (r: DamageReport) => incidentLabel(r, props.incidentId) }] : []),
     { id: "degree", header: queue ? "Reported degree" : "Degree", value: (r) => degreeLabel(r.degree) },
     { id: "structure", header: "Structure", value: (r) => structureLabel(r.structure_type) },
     { id: "loss", header: "Estimated loss", value: (r) => dollars(r.estimated_loss), align: "end" },
@@ -424,7 +433,7 @@ function ReportTable(props: {
         columns={columns}
         rows={reports.slice(start, start + tableState.pageSize)}
         rowId={(r) => r.id}
-        datasetKey={`${props.jurisdictionId}:${props.status}`}
+        datasetKey={`${props.jurisdictionId}:${props.incidentId ?? "all"}:${props.status}`}
         status={first.error && !loaded ? "error" : !loaded ? "loading" : reports.length === 0 ? "empty" : "ready"}
         errorMessage={first.error ?? "Reports could not be loaded."}
         onRetry={first.reload}
@@ -445,7 +454,7 @@ function ReportTable(props: {
 }
 
 const PA_COLUMN_WIDTHS = [
-  { id: "applicant", width: 220 }, { id: "category", width: 270 }, { id: "site", width: 200 },
+  { id: "applicant", width: 220 }, { id: "incident", width: 130 }, { id: "category", width: 270 }, { id: "site", width: 200 },
   { id: "description", width: 240 }, { id: "cost", width: 150 }, { id: "costFrom", width: 180 }, { id: "insured", width: 110 },
   { id: "complete", width: 110 }, { id: "status", width: 170 }, { id: "edit", width: 110 },
 ];
@@ -456,17 +465,18 @@ const PA_COLUMN_WIDTHS = [
  * the form that records or edits an item.
  */
 function PublicAssistanceTab(props: {
-  client: ApiClient; jurisdictionId: string; revision: number; summary: DamageSummary | null;
+  client: ApiClient; jurisdictionId: string; revision: number; incidentId: string | null; summary: DamageSummary | null;
   canWrite: boolean; onChanged: () => void;
 }) {
-  const first = useAsync(() => props.client.listPaItems(props.jurisdictionId), [props.jurisdictionId, props.revision]);
+  const first = useAsync(() => props.client.listPaItems(props.jurisdictionId, { incidentId: props.incidentId }),
+    [props.jurisdictionId, props.revision, props.incidentId]);
   // Pages added with "Load more" extend the first page they were read after.
   const [more, setMore] = useState<{ base: PaItemPage; rows: readonly PaItem[]; nextCursor: string | null } | null>(null);
   const loaded = first.data && more?.base === first.data ? more
     : first.data ? { base: first.data, rows: first.data.items, nextCursor: first.data.nextCursor } : null;
   const nextCursor = loaded?.nextCursor ?? null;
   const loadMore = loaded && nextCursor ? async () => {
-    const next = await props.client.listPaItems(props.jurisdictionId, { cursor: nextCursor });
+    const next = await props.client.listPaItems(props.jurisdictionId, { cursor: nextCursor, incidentId: props.incidentId });
     setMore({ base: loaded.base, rows: [...loaded.rows, ...next.items], nextCursor: next.nextCursor });
   } : undefined;
   const items = loaded?.rows ?? [];
@@ -479,6 +489,7 @@ function PublicAssistanceTab(props: {
 
   const columns: OperationalTableColumn<PaItem>[] = [
     { id: "applicant", header: "Applicant", value: (r) => r.applicant },
+    ...(props.incidentId ? [{ id: "incident", header: "Incident", value: (r: PaItem) => incidentLabel(r, props.incidentId) }] : []),
     { id: "category", header: "Work category", value: (r) => categoryLabel(r.category) },
     { id: "site", header: "Site", value: (r) => r.site, missingLabel: "Not given" },
     { id: "description", header: "Work", value: (r) => r.description, missingLabel: "Not given" },
@@ -518,7 +529,7 @@ function PublicAssistanceTab(props: {
         columns={columns}
         rows={items.slice(start, start + tableState.pageSize)}
         rowId={(r) => r.id}
-        datasetKey={`${props.jurisdictionId}:pa`}
+        datasetKey={`${props.jurisdictionId}:${props.incidentId ?? "all"}:pa`}
         status={first.error && !loaded ? "error" : !loaded ? "loading" : items.length === 0 ? "empty" : "ready"}
         errorMessage={first.error ?? "Line items could not be loaded."}
         onRetry={first.reload}
@@ -535,7 +546,7 @@ function PublicAssistanceTab(props: {
         {...(loadMore ? { onLoadMore: loadMore } : {})}
       />
       {props.canWrite ? (
-        <PaItemForm client={props.client} jurisdictionId={props.jurisdictionId} editing={editing}
+        <PaItemForm client={props.client} jurisdictionId={props.jurisdictionId} incidentId={props.incidentId} editing={editing}
           onSaved={() => { setEditing(null); props.onChanged(); }} onCancel={() => setEditing(null)} />
       ) : null}
     </div>
@@ -543,7 +554,7 @@ function PublicAssistanceTab(props: {
 }
 
 function PaItemForm(props: {
-  client: ApiClient; jurisdictionId: string; editing: PaItem | null; onSaved: () => void; onCancel: () => void;
+  client: ApiClient; jurisdictionId: string; incidentId: string | null; editing: PaItem | null; onSaved: () => void; onCancel: () => void;
 }) {
   const [form, setForm] = useState<PaDraft>(EMPTY_PA_DRAFT);
   const set = (patch: Partial<PaDraft>) => setForm((current) => ({ ...current, ...patch }));
@@ -560,9 +571,9 @@ function PaItemForm(props: {
     void run(async () => {
       const input = parsePaDraft(form);
       const label = PA_CATEGORY_LABELS[input.category] ?? input.category;
-      // An edit keeps the item's incident, which this form does not show.
+      // An edit keeps the item's incident; a new item is the selected incident's.
       if (editing) await props.client.updatePaItem(editing.id, { ...input, incidentId: editing.incident_id });
-      else await props.client.createPaItem(props.jurisdictionId, input);
+      else await props.client.createPaItem(props.jurisdictionId, { ...input, incidentId: props.incidentId });
       setForm(EMPTY_PA_DRAFT);
       props.onSaved();
       return `${editing ? "Saved" : "Recorded"} the ${label} line item for ${input.applicant}.${input.status === "draft" ? " It is a draft and does not count yet." : ""}`;
@@ -603,7 +614,7 @@ const EMPTY_ASSESSMENT = {
   loss: "", lon: "", lat: "", notes: "",
 };
 
-function FieldAssessmentPanel(props: { client: ApiClient; jurisdictionId: string; onChanged: () => void }) {
+function FieldAssessmentPanel(props: { client: ApiClient; jurisdictionId: string; incidentId: string | null; onChanged: () => void }) {
   const [form, setForm] = useState(EMPTY_ASSESSMENT);
   const set = (patch: Partial<typeof EMPTY_ASSESSMENT>) => setForm((current) => ({ ...current, ...patch }));
   const { busy, run, feedback } = useRun();
@@ -620,6 +631,7 @@ function FieldAssessmentPanel(props: { client: ApiClient; jurisdictionId: string
       if (placed && !(Math.abs(lon) <= 180 && Math.abs(lat) <= 90 && form.lon.trim() && form.lat.trim()))
         throw new Error("Enter both longitude and latitude in decimal degrees, or leave both empty.");
       await props.client.recordDamageAssessment(props.jurisdictionId, {
+        ...(props.incidentId ? { incidentId: props.incidentId } : {}),
         address,
         structureType: form.structureType,
         degree: form.degree,
@@ -659,12 +671,12 @@ function FieldAssessmentPanel(props: { client: ApiClient; jurisdictionId: string
   );
 }
 
-function IntakePanel(props: { client: ApiClient; jurisdictionId: string }) {
+function IntakePanel(props: { client: ApiClient; jurisdictionId: string; incidentId: string | null; incidentName: string | null }) {
   const [confirming, setConfirming] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const { busy, run, feedback } = useRun();
   const issue = () => run(async () => {
-    const result = await props.client.enableDamageIntake(props.jurisdictionId);
+    const result = await props.client.enableDamageIntake(props.jurisdictionId, props.incidentId);
     setToken(result.token);
     setConfirming(false);
     return "Public intake is on. Copy the token now; it is not shown again.";
@@ -674,6 +686,9 @@ function IntakePanel(props: { client: ApiClient; jurisdictionId: string }) {
       <p className="d21-muted">
         A public reporting form or 311 system sends reports to <code>{`POST /api/v1/jurisdictions/${props.jurisdictionId}/damage/report`}</code> with
         the token in the <code>x-intake-token</code> header. Reports wait in the intake queue and count only after a moderator accepts them.
+        {" "}{props.incidentId
+          ? `A token issued here files every report it takes under ${props.incidentName ?? "the selected incident"}.`
+          : "A token issued with no incident selected files reports under no incident."}
       </p>
       {token ? <p className="d21-token" aria-label="Intake token">{token}</p> : null}
       {confirming ? (

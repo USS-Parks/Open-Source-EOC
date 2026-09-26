@@ -36,7 +36,10 @@ const BaselineImportBody = z.object({
   /** The file the rows came from, named in the import report. */
   fileName: z.string().max(255).optional(),
 });
+/** The incident a report, a summary or the intake is for; none reads the whole organization. */
+const IncidentScope = z.object({ incidentId: z.string().uuid().optional() });
 const AssessmentBody = z.object({
+  incidentId: z.string().uuid().nullable().optional(),
   baselineId: z.string().uuid().optional(),
   address: z.string().min(1),
   structureType: z.string().min(1),
@@ -65,8 +68,10 @@ const Thresholds = z.object({
   iaResidenceThreshold: z.number().int().min(0).default(25),
   statePopulation: z.number().int().positive().optional(),
   statewidePerCapitaIndicator: z.number().min(0).optional(),
-});
-const DeclarationBody = Thresholds.extend({ incident: z.string().min(1) });
+}).extend(IncidentScope.shape);
+// With `incidentId` the document names that incident, whatever `incident` says; without it, `incident` names it.
+const DeclarationBody = Thresholds.extend({ incident: z.string().min(1).optional() })
+  .refine((body) => body.incident !== undefined || body.incidentId !== undefined, { message: "name the incident or give its id" });
 const PaItemBody = z.object({
   incidentId: z.string().uuid().nullable().optional(),
   applicant: z.string().trim().min(1).max(300),
@@ -118,12 +123,14 @@ export function damageRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
-      const q = req.query as { status?: string; source?: string };
+      const q = req.query as { status?: string; source?: string; incidentId?: string };
       const page = z.object(pageQuery).parse(req.query);
+      const { incidentId } = IncidentScope.parse({ incidentId: q.incidentId });
       const { items, nextCursor } = await withPerson(sql, req.principal.person.id, (tx) =>
         listAssessments(tx, req.principal, jurisdictionId, {
           ...(q.status ? { status: q.status } : {}),
           ...(q.source ? { source: q.source } : {}),
+          ...(incidentId ? { incidentId } : {}),
         }, page),
       );
       return reply.send({ assessments: items, nextCursor });
@@ -135,8 +142,9 @@ export function damageRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
+      const { incidentId } = IncidentScope.parse(req.body ?? {});
       const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        enablePublicIntake(tx, req.principal, jurisdictionId),
+        enablePublicIntake(tx, req.principal, jurisdictionId, incidentId),
       );
       return reply.status(201).send(result);
     },
@@ -173,9 +181,9 @@ export function damageRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
-      const t = Thresholds.parse(req.body ?? {});
+      const { incidentId, ...t } = Thresholds.parse(req.body ?? {});
       const summary = await withPerson(sql, req.principal.person.id, (tx) =>
-        aggregate(tx, req.principal, jurisdictionId, t, options.shelterCensus),
+        aggregate(tx, req.principal, jurisdictionId, t, options.shelterCensus, incidentId),
       );
       return reply.send(summary);
     },
@@ -186,18 +194,24 @@ export function damageRoutes(
     { preHandler: authenticate },
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
-      const { incident, ...thresholds } = DeclarationBody.parse(req.body);
+      const { incident, incidentId, ...thresholds } = DeclarationBody.parse(req.body);
       const result = await withPerson(sql, req.principal.person.id, async (tx) => {
         // Read the name inside the actor's context so jurisdictions RLS admits
         // it; a bare read on the base connection now returns nothing.
         const [jur] = await tx`select name from jurisdictions where id = ${jurisdictionId}`;
+        // The document names the incident whose reports it counts.
+        const [counted] = incidentId
+          ? await tx`select name from incidents where id = ${incidentId} and jurisdiction_id = ${jurisdictionId}`
+          : [];
+        if (incidentId && !counted) throw new AuthError(400, "incident is not in this jurisdiction");
         return exportDeclaration(
           tx,
           req.principal,
           jurisdictionId,
           thresholds,
-          { jurisdiction: (jur?.name as string) ?? "Jurisdiction", incident },
+          { jurisdiction: (jur?.name as string) ?? "Jurisdiction", incident: (counted?.name as string | undefined) ?? incident! },
           options.shelterCensus,
+          incidentId,
         );
       });
       return reply.send(result);
@@ -210,8 +224,9 @@ export function damageRoutes(
     async (req, reply) => {
       const { jurisdictionId } = req.params as { jurisdictionId: string };
       const page = z.object(pageQuery).parse(req.query);
+      const { incidentId } = IncidentScope.parse({ incidentId: (req.query as { incidentId?: string }).incidentId });
       const result = await withPerson(sql, req.principal.person.id, (tx) =>
-        listPaItems(tx, req.principal, jurisdictionId, page),
+        listPaItems(tx, req.principal, jurisdictionId, page, incidentId),
       );
       return reply.send(result);
     },

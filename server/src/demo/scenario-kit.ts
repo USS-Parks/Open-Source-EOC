@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import type { WorkflowAssignmentRequest } from "@openeoc/shared";
 import type { FastifyInstance } from "fastify";
 import type { Sql } from "../db/client.js";
 import { addMembership, createJurisdiction, createPerson } from "../auth/service.js";
@@ -47,6 +49,8 @@ export interface ScenarioRun {
   readonly windows: readonly ScenarioWindow[];
   readonly startedAt: Date;
   readonly endedAt: Date;
+  /** Every time the seed wrote itself (ISO strings), which stays where the seed put it. */
+  readonly supplied: readonly string[];
 }
 
 /** Local wall-clock date and UTC offset of `instant` in the scenario time zone. */
@@ -130,12 +134,28 @@ export async function startScenario(app: FastifyInstance, sql: Sql, clock: Date,
     tokens[key] = response.json().accessToken as string;
     return tokens[key];
   }
-  /** One API call as `who`, standing for scenario time `when`. */
-  async function api<T = Record<string, unknown>>(who: string, when: Date, method: Method, url: string, payload?: unknown): Promise<T> {
+  // A time the seed writes itself (a due time, a next update, a period's end)
+  // can fall inside a call's wall-clock window when the seed runs across it;
+  // the placement keeps these where the seed put them.
+  const supplied = new Set<string>();
+  const collect = (value: unknown): void => {
+    if (typeof value === "string") {
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value) && !Number.isNaN(Date.parse(value))) supplied.add(new Date(value).toISOString());
+    } else if (Array.isArray(value)) {
+      for (const item of value) collect(item);
+    } else if (value && typeof value === "object") {
+      for (const item of Object.values(value)) collect(item);
+    }
+  };
+  /** One API call as `who`, standing for scenario time `when`, with any extra request headers. */
+  async function api<T = Record<string, unknown>>(
+    who: string, when: Date, method: Method, url: string, payload?: unknown, headers: Record<string, string> = {},
+  ): Promise<T> {
+    collect(payload);
     const authorization = `Bearer ${await token(who)}`;
     const begun = new Date();
     const response = await app.inject({
-      method, url, headers: { authorization },
+      method, url, headers: { ...headers, authorization },
       ...(payload === undefined ? {} : { payload: payload as Record<string, unknown> }),
     });
     windows.push({ startedAt: begun, endedAt: new Date(), scenarioAt: when });
@@ -152,7 +172,7 @@ export async function startScenario(app: FastifyInstance, sql: Sql, clock: Date,
     for (const step of plan.splice(0)) await step.run();
   }
   const finish = (incidentId: string): ScenarioRun =>
-    ({ clock, jurisdictionId, incidentId, organizations, people, windows, startedAt, endedAt: new Date() });
+    ({ clock, jurisdictionId, incidentId, organizations, people, windows, startedAt, endedAt: new Date(), supplied: [...supplied] });
 
   return { at, iso, api, later, runInOrder, finish, jurisdictionId, organizations, people };
 }
@@ -182,10 +202,86 @@ export async function grantDemoDirector(
 }
 
 /**
+ * A checklist task: an activation task found by its text, or one the lead
+ * adds at `added`. `holder` is who holds it; an activation task given one is
+ * reassigned to it.
+ */
+export interface ChecklistTask {
+  readonly item: string;
+  readonly category: string;
+  readonly due: Date;
+  readonly inProgress?: boolean;
+  readonly added?: Date;
+  readonly holder?: WorkflowAssignmentRequest;
+}
+
+/** Tasks `who` completes at `at`; a position's holder signs in to `position` first and signs out after. */
+export interface ChecklistCompletion {
+  readonly who: string;
+  readonly at: Date;
+  readonly items: readonly string[];
+  readonly position?: string;
+}
+
+/**
+ * Work an incident's checklist the way its EOC would: at `reviewedAt` the
+ * lead gives each activation task a category and a due time, the lead adds
+ * tasks for positions and participants, and holders complete theirs.
+ */
+export function seedChecklist(
+  kit: {
+    api: <T = Record<string, unknown>>(who: string, when: Date, method: Method, url: string, payload?: unknown) => Promise<T>;
+    later: (when: Date, run: () => Promise<unknown>) => void;
+  },
+  lead: string,
+  incidentId: string,
+  reviewedAt: Date,
+  tasks: readonly ChecklistTask[],
+  completions: readonly ChecklistCompletion[],
+): void {
+  const { api, later } = kit;
+  const url = `/api/v1/incidents/${incidentId}/tasks`;
+  const ids: Record<string, string> = {};
+  const fields = (task: ChecklistTask) => ({ category: task.category, dueAt: task.due.toISOString() });
+  later(reviewedAt, async () => {
+    const { tasks: activation } = await api<{ tasks: { id: string; revision: number; item: string }[] }>(lead, reviewedAt, "GET", url);
+    for (const task of activation) {
+      const planned = tasks.find((candidate) => !candidate.added && candidate.item === task.item);
+      if (!planned) throw new Error(`no checklist plan for the activation task "${task.item}"`);
+      ids[task.item] = task.id;
+      await api(lead, reviewedAt, "PATCH", `${url}/${task.id}`, {
+        expectedRevision: task.revision, ...fields(planned),
+        ...(planned.holder ? { assignment: planned.holder } : {}), ...(planned.inProgress ? { status: "in_progress" } : {}),
+      });
+    }
+  });
+  for (const task of tasks) {
+    const added = task.added;
+    if (!added) continue;
+    later(added, async () => {
+      const created = await api<{ id: string; revision: number }>(lead, added, "POST", url, { item: task.item, ...fields(task), assignment: task.holder ?? null });
+      ids[task.item] = created.id;
+      if (task.inProgress) await api(lead, added, "PATCH", `${url}/${created.id}`, { expectedRevision: created.revision, status: "in_progress" });
+    });
+  }
+  for (const done of completions) {
+    later(done.at, async () => {
+      if (done.position) await api(done.who, done.at, "POST", `/api/v1/positions/${done.position}/sign-in`);
+      for (const item of done.items) {
+        await api(done.who, done.at, "POST", `${url}/${ids[item]!}/complete`, { operationId: randomUUID() });
+      }
+      if (done.position) await api(done.who, done.at, "POST", "/api/v1/positions/sign-out");
+    });
+  }
+}
+
+/**
  * Put the server-stamped times of a freshly seeded throwaway database on the
  * scenario clock. Every timestamp written during an API call moves to the
  * scenario time that call stands for, keeping its order within the call;
- * anything else written while seeding moves to just before activation. This
+ * anything else written while seeding moves to just before activation. A
+ * time the seed supplied itself never moves, even when the seed ran across
+ * it, so a next update or a period's end stays after what it follows. This
  * runs as the database owner with triggers off, because audit and assessment
  * rows are append-only; it is for scenario databases only. Several scenarios
  * seeded one after another into one database are each placed by their own
@@ -209,9 +305,11 @@ export async function placeOnScenarioClock(sql: Sql, scenario: ScenarioRun): Pro
       const table = tx(column.table_name as string);
       const name = tx(column.column_name as string);
       await tx`update ${table} set ${name} = w.scenario + (${table}.${name} - w.started)
-        from scenario_windows w where ${table}.${name} between w.started and w.ended`;
+        from scenario_windows w where ${table}.${name} between w.started and w.ended
+          and ${table}.${name} <> all(${scenario.supplied}::timestamptz[])`;
       await tx`update ${table} set ${name} = ${before}
-        where ${name} between ${scenario.startedAt} and ${scenario.endedAt}`;
+        where ${name} between ${scenario.startedAt} and ${scenario.endedAt}
+          and ${name} <> all(${scenario.supplied}::timestamptz[])`;
     }
   });
 }

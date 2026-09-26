@@ -14735,3 +14735,55 @@ Map and Dashboard Parity PSPR units MP4, MP6 and MP10, their map halves
   by the integrator.
 - **Full suite:** as MP11, once per landing batch before the push.
 - **Rollback.** Revert the commit; the archives stay served but undrawn.
+
+## Map and dashboard parity: demo data for the dashboards
+
+Map and Dashboard Parity PSPR support for MP12 and MP13 (the dashboards
+need records to draw), built in lane `lane/mpd`.
+
+- **What there was before.** The exercise seeds wrote too few tasks,
+  plans, requests, damage reports, AAR items and shelter periods for the
+  new dashboards to show anything but empty charts, and Damage Assessment
+  showed every incident's reports under whichever incident was open.
+- **What changed.**
+  - The three exercise seeds write the records the MP12 and MP13
+    dashboards read, through the API as each scenario's people. Cascadia
+    gains checklist tasks, plans in every state, ended and costed
+    requests, field and public damage reports, Public Assistance items A
+    to G, AAR observations and corrective actions, and shelter history.
+    Del Norte and Deerhorn gain shelter history, categorized tasks and
+    Humboldt corrective actions.
+  - `scenario-kit.ts` gains `seedChecklist` and optional request headers.
+    Placing a scenario on its clock no longer moves a time the seed wrote
+    itself, which failed a seed that ran across such a time (all four seeds
+    had one; a new Del Norte test replays it).
+  - Damage Assessment reads and files by incident (migration
+    `0171_damage_incident.sql`, routes, service, client, surface,
+    dashboard): an incident sees its own records and those recorded with
+    no incident, labeled "No incident"; another incident's records never
+    show. The intake token carries the incident it was issued for.
+  - The Resources tiles lay out four over three at even widths beside the
+    recorded cost.
+- **Review.** An adversarial audit of the damage scoping found no leak
+  across incidents or organizations and three defects, all fixed before
+  landing: damage writes, intake submissions and moderation are refused in
+  a closed or archived incident (409, under the incident lock; the intake
+  answers exactly as a wrong token does); the declaration takes the
+  incident's name from `incidents` when `incidentId` is given instead of
+  the free-text field. The shelter census stays organization-wide because
+  registered shelters carry no incident.
+- **Defaults taken and deviations.** Four Cascadia requests moved to the
+  quake day; a Humboldt liaison added to Del Norte; command checklists held
+  by the planning lead; the placement fix made in the kit, not in relative
+  times; `client.ts` edited additively; the lane's migration 0169
+  renumbered 0171 on rebase.
+- **Verification.** On the rebased lane: seed, damage and damage scope
+  server tests with the damage, force account and incident dashboard
+  browser walks and api-docs, 14 files, 107 tests; web damage, dashboard
+  and client suites; `board-dashboards-browser`; `pnpm check:static` green.
+  Captures at 1586 by 992 and 1534 by 790 reviewed; North Coast Storm's
+  Damage screen reads empty with all four scenarios seeded. Seeding all
+  four scenarios takes about 32 s.
+- **Full suite:** the second landing batch's run, recorded below.
+- **Rollback.** Revert the commit; migration 0171 only adds nullable
+  columns and indexes.
