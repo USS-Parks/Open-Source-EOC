@@ -9805,3 +9805,14 @@ decision 6).
   functions and widens one check, which the earlier code does not read,
   except that rows acknowledged `sms` or `sheet` would then fail the old
   check on a restore to the earlier schema.
+
+## IPAWS connector IC1 correction: the postCAP secret assertion
+
+Corrects "IPAWS connector IC1: the connector to the Interface Design Guide".
+CI run 322 on `faab609` failed one test of 1,8xx: `ipaws.test.ts` "builds
+the postCAP request" asserted the request did not match `/PRIVATE KEY|pin/i`,
+and the request carries random base64 (the signature and digests) that
+spells "pin" in any case now and then. The test now asserts what it meant:
+no `PRIVATE KEY` block, no element or attribute named for a PIN, and no
+40-character stretch of the private key's body. `ipaws.test.ts` passed 30 of
+30 three times running on the Windows test bed. No product code changed.

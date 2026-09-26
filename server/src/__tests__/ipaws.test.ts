@@ -149,8 +149,13 @@ describe("IPAWS-OPEN connector, to the Interface Design Guide", () => {
     expect(token).toBe(certificate.cert.replace(/-----[A-Z ]+-----|\s/g, ""));
     expect(req.body).toMatch(/<ipaws:postCAPRequestTypeDef><alert xmlns="urn:oasis:names:tc:emergency:cap:1\.2">/);
     expect(req.body).toContain("<identifier>X-1</identifier>");
-    // No PIN or secret travels anywhere, and the embedded CAP has no declaration of its own.
-    expect(req.body).not.toMatch(/PRIVATE KEY|pin/i);
+    // No PIN or secret travels anywhere, and the embedded CAP has no declaration of its own. The
+    // signature and digests are random base64, which may spell "pin"; an element or attribute
+    // named for a PIN, or any of the private key, may not appear.
+    expect(req.body).not.toMatch(/PRIVATE KEY/);
+    expect(req.body).not.toMatch(/<[^>]*pin[^>]*>|\bpin\w*=/i);
+    const keyBody = certificate.key.replace(/-----[A-Z ]+-----|\s/g, "");
+    for (let at = 0; at + 40 <= keyBody.length; at += 40) expect(req.body).not.toContain(keyBody.slice(at, at + 40));
     expect(req.body.match(/<\?xml/g)?.length).toBe(1);
   });
 
