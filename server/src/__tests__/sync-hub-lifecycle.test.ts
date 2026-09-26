@@ -266,6 +266,36 @@ describe("sync hub lifecycle", () => {
     expect(hub.stats().entries).toBe(0);
   }, 60_000);
 
+  it("hydrates a document afresh when it is evicted while a reopen checks access", async () => {
+    const [row] = await admin`
+      insert into boards (jurisdiction_id, template_key, template_version, title)
+      values (${jurisdictionId}, 'significant_events', 1, 'Evicted mid-open') returning id`;
+    const id = row!.id as string;
+    await hub.open(actor, id, null);
+    hub.subscribe(id, null, () => {})();
+    // The grace period runs out between the reopen reading the cached document
+    // and its access check committing: evict it there, as the timer would.
+    const entries = (hub as unknown as { entries: Map<string, { doc: Y.Doc }> }).entries;
+    const get = entries.get.bind(entries);
+    let armed = true;
+    entries.get = (key: string) => {
+      const found = get(key);
+      if (armed && found && key.startsWith(id)) {
+        armed = false;
+        queueMicrotask(() => { found.doc.destroy(); entries.delete(key); });
+      }
+      return found;
+    };
+    try {
+      const reopened = await hub.open(actor, id, null);
+      expect(reopened.live).toBe(true);
+      // The entry is in the map and serves subscribers, not a destroyed document.
+      expect(() => hub.subscribe(id, null, () => {})()).not.toThrow();
+    } finally {
+      entries.get = get;
+    }
+  });
+
   it("gives concurrent first opens of a scope one document, so every subscriber hears later updates", async () => {
     const [board] = await admin`
       insert into boards (jurisdiction_id, template_key, template_version, title)

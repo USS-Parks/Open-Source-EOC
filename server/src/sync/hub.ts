@@ -738,6 +738,9 @@ export class BoardSyncHub {
     // entry and the rest adopt it; replacing it would orphan the subscribers
     // already on it, and they would never hear another update.
     const current = this.entries.get(key);
+    // The cached entry can be evicted while access was checked, its document
+    // destroyed; it is then hydrated afresh, never handed out dead.
+    if (!current && loaded.cached && !loaded.hydrated) return this.entry(actor, boardId, incidentId);
     const reuse = current?.templateVersion === loaded.board.template.version
       ? current
       : loaded.hydrated ? null : loaded.cached;

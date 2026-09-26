@@ -13788,3 +13788,27 @@ plan-end gate has not run; its results stay "To be filled" in
 - **Landing.** Rebased onto "Version 0.9.9: the version and changelog" with
   no conflict. None of these documents is a build input, so the `0.9.9`
   builds made from `5079670` stand.
+
+## Veoci and air gap follow-up: a sync document evicted while it was reopened
+
+Found by CI run 36220202097 on `98f050a`, whose `sync-hub-lifecycle.test.ts`
+"holds a bounded number of documents across many open and close cycles"
+failed with "board not open". Present since `b1b8e6b` (2026-09-23), so in
+`0.9.2` too.
+
+- **What the code did before.** Reopening a board's sync document read the
+  cached entry inside the access check's transaction. If the entry's idle
+  grace period (60 seconds in production) ran out before that transaction
+  finished, the eviction destroyed the document and removed it from the
+  hub, and the reopen then handed the destroyed document back: the device
+  was served a dead document that never heard another update, and a
+  subscription to it failed. It needs a board reopened within the moment
+  its grace period ends, so it was rare, and more likely on a loaded host.
+- **What changed.** `server/src/sync/hub.ts`: when the cached entry was
+  evicted during the check, the reopen hydrates the document afresh.
+- **Tests.** `sync-hub-lifecycle.test.ts` gains a case (11 tests) that
+  evicts the document at exactly that point: on the old code it fails with
+  "board not open", and it passes on the new.
+- **Evidence level:** real-database test.
+- **Not in the 0.9.9 builds** made from `5079670`, which predate it.
+- **Rollback:** revert the commit.
