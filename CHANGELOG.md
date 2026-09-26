@@ -18,7 +18,7 @@ IC3) and the follow-ups and corrections the units' reviews found. Each
 change is described in its ledger receipt, cited here by its heading's unit;
 `RELEASE-DECISION.md` lists what this build holds, what has not been run
 and the decisions left to the project lead. Upgrading applies migrations
-`0155` to `0168` in place; `0168` numbers every board record for the Esri
+`0147` to `0168` in place; `0168` numbers every board record for the Esri
 view, which touches every record once.
 
 ### Added

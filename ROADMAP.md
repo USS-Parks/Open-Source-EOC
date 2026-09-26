@@ -5,7 +5,9 @@
 The [Veoci Integration and Air Gap PSPR](./docs/process/VEOCI-AIR-GAP-PSPR-2026-09-25.md)
 is the live roster, with the
 [Exercise Scenarios PSPR](./docs/process/EXERCISE-SCENARIOS-PSPR-2026-09-25.md)
-beside it. The [Operator Trust PSPR](./docs/process/OPERATOR-TRUST-PSPR-2026-09-24.md)
+beside it; every unit of the Veoci roster has landed, and its plan-end gate
+and the `v0.9.9` builds remain. The
+[Operator Trust PSPR](./docs/process/OPERATOR-TRUST-PSPR-2026-09-24.md)
 is landed except RD6 (macOS), and the
 [IPAWS Connector PSPR](./docs/process/IPAWS-CONNECTOR-PSPR-2026-09-25.md) is
 landed. The [Finish PSPR](./docs/process/FINISH-PSPR-2026-09-22.md) remains
@@ -100,16 +102,19 @@ inputs into proof.
   backups, the `0.9.2` Windows setup with the network host, a Mac disk image
   not yet opened on a Mac, a training kit, a security policy and a
   changelog.
-- From the Veoci roster so far: a delivery hold through outages; signed
-  federation and exchange by file; SMS through a phone on the site network;
-  ICS forms as components of the IAP and the ICS 213RR; incident templates,
-  plans and signed packs that activate a small EOC with no configuration;
-  Public Assistance force account; workflow guards, declarative actions and
-  all-or-any conditions; import reports and a people import; a volunteer
-  roster; service identities and an OpenAPI description; field work queued
-  offline; region map packets; job aids in the console; and procedures for
-  the disconnected drill, the phone walk and a timed onboarding, none yet
-  run. The
+- From the Veoci roster, every unit landed: a delivery hold through outages;
+  signed federation and exchange by file; SMS through a phone on the site
+  network; ICS forms as components of the IAP and the ICS 213RR; incident
+  templates, plans and signed packs that activate a small EOC with no
+  configuration; Public Assistance force account; workflow guards,
+  declarative actions, set off by edits through sync too, and all-or-any
+  conditions; import reports and a people import; a volunteer roster;
+  service identities and an OpenAPI description; a read-only ArcGIS
+  FeatureServer and Esri JSON import; field work queued offline, and a
+  device PIN for shared devices; region map packets; job aids in the
+  console; an air-gap proof that runs every optional integration a local
+  stand-in can play through an outage; and procedures for the disconnected
+  drill, the phone walk and a timed onboarding, none yet run. The
   [parity matrix](./docs/VEOC-PARITY-MATRIX.md) gives each with its evidence.
 
 ## What blocks version 1.0

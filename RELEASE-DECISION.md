@@ -4,18 +4,19 @@ For Basho. Prepared on 2026-09-24 from `main` at `ec11af5`, the point at which
 every engineering unit of the Finish PSPR had landed; brought up to date on
 2026-09-25 for version `0.9.2`, after the Operator Trust PSPR landed
 ("Operator Trust landing: the full gate"); and reconciled again on 2026-09-25
-through `ffe41de` ("Veoci and air gap VA39: job aids in the console") for the
-next release, planned as `v0.9.9` ("Veoci and
-air gap VA36: the documents reconciled"). Evidence is cited by receipt heading
+for the next release, planned as `v0.9.9` ("Veoci and air gap VA36: the
+documents reconciled"), through `98f050a` ("Veoci and air gap follow-up:
+Vitest collected a node test file"), the commit after every unit of the Veoci
+roster had landed ("Veoci and air gap VA36 completion: VA33, VA34 and the
+follow-ups"). Evidence is cited by receipt heading
 in the [V1 ledger](docs/process/V1-LEDGER.md). Capability status is in the
 [parity matrix](docs/VEOC-PARITY-MATRIX.md) and the
 [facet register](docs/FACET-STATUS.md), both reconciled to the receipts for
 this document.
 
-`v0.9.9` is planned for after the Veoci Integration and Air Gap PSPR's last
-units land. When this was written VA33 and VA34 had not landed; nothing
-below claims them. The plan-end gate and the builds run after
-they land, and their results go in section 6.
+Every unit of the Veoci Integration and Air Gap PSPR has landed. The
+plan-end gate and the `v0.9.9` builds run on the release commit, and their
+results go in section 6.
 
 ## 1. What was executed
 
@@ -54,14 +55,19 @@ they land, and their results go in section 6.
   on Windows ("Version 0.9.2: the macOS disk image, built on Windows").
 - The [Veoci Integration and Air Gap PSPR](docs/process/VEOCI-AIR-GAP-PSPR-2026-09-25.md),
   approved 2026-09-25 ("V1 grant: Veoci integration and air gap"; "V1 grant:
-  the rest of the Veoci and air gap plan, local"): VA1 to VA32, VA35, VA37
-  (two parts), VA38 and VA39 have landed, each with its receipt,
-  with "Veoci and air gap VA11 follow-up: the imported packages on screen",
-  "Veoci and air gap VA13 and VA14 corrections: review findings", "Veoci and
-  air gap VA17 completion: board record import reports", "Veoci and air gap
-  follow-up: trusted package keys on a Windows install" and "Veoci and air
-  gap follow-up: the record pane keeps its tab through a save", and "Veoci
-  and air gap phase VA-A gate". VA33 and VA34 are in flight.
+  the rest of the Veoci and air gap plan, local"): every unit, VA1 to VA39
+  (VA37 in two parts), has landed, each with its receipt, with "Veoci and
+  air gap VA11 follow-up: the imported packages on screen", "Veoci and air
+  gap VA13 and VA14 corrections: review findings", "Veoci and air gap VA17
+  completion: board record import reports", "Veoci and air gap follow-up:
+  trusted package keys on a Windows install", "Veoci and air gap follow-up:
+  the record pane keeps its tab through a save", "Veoci and air gap
+  follow-up: sync edits set board actions off", "Veoci and air gap
+  follow-up: a workflow transition's lock order" and "Veoci and air gap
+  follow-up: Vitest collected a node test file", and two gate receipts:
+  "Veoci and air gap phase VA-A gate" and "Veoci and air gap plan gate: the
+  air-gap proof with integrations on local stand-ins", which adds a
+  stand-ins mode to RD5's proof and records its run.
 - The [IPAWS Connector PSPR](docs/process/IPAWS-CONNECTOR-PSPR-2026-09-25.md),
   IC1 to IC3, with "IPAWS connector IC1 correction: the postCAP secret
   assertion".
@@ -69,8 +75,8 @@ they land, and their results go in section 6.
   through "Exercise scenarios XS4 to XS7: the three exercises in the demo",
   which are in the `0.9.2` builds; XS8, the review package, is not done.
 - The CI repairs recorded after the Actions runs resumed, from "CI repairs
-  after the Actions runs resumed" to "CI correction: a refused upload's
-  staging file, and a message test on the old route".
+  after the Actions runs resumed" to "CI correction: a time zone named by its
+  alias, and a partner's message check".
 - The reconciliations: every matrix and register row checked against the
   receipts; on 2026-09-24 eight rows added, with README, ROADMAP, the
   design-to-capability matrix, the
@@ -81,7 +87,9 @@ they land, and their results go in section 6.
   G-VOLUNTEERS, G-SERVICE), G-MACOS moved to `partial`, and README, ROADMAP,
   the evaluator's page, the deployment README, the threat model's B3 row,
   ADR-0010's status, the rollout playbook and the training kit's limits
-  corrected where a receipt had made them untrue.
+  corrected where a receipt had made them untrue; then, once VA33 and VA34
+  had landed, the rows they and the follow-ups change, with no status
+  changed.
 
 ## 2. The gate list
 
@@ -91,7 +99,7 @@ No line carries a written waiver.
 
 | # | Gate | State | Receipt, or what is missing |
 |---|---|---|---|
-| 1 | `pnpm check` green, serial, gate tag, with route-table, secret and advisory scans | Open for `v0.9.9` | Green on `ec11af5` in "V1 final milestone gate": every static gate, 273 of 273 files and 1,553 of 1,553 tests in one run, the load benchmark 4 of 4. `pnpm check` runs no secret scan itself: gitleaks runs in the pre-commit hook, which passed on every commit, and in hosted CI. For `0.9.2`: the Operator Trust units ran one full `test:ci` with its failures fixed ("Operator Trust landing: the full gate"); the serial `pnpm check:gate` was not run on the `0.9.2` commit. Since then: "Veoci and air gap phase VA-A gate" ran `pnpm check:gate` for VA1 to VA5 on the Linux bed, 1,686 of 1,691 tests with five browser tests that fail on that bed and the load test unexplained there; "IPAWS connector IC3: documents" ran it on Windows, exit 1 for a `node:test` file Vitest collected (since excluded) and two worker crashes whose files passed alone, then `pnpm check` on the rebased tree, 1,808 of 1,809 with the one red passing alone. Every later unit ran its own and neighbouring suites only. Hosted CI runs `pnpm check` on Windows on each push to `main`; the last recorded result is run 36211128703 on `78f9f37`, 3 tests failed, each fixed in "CI correction: a refused upload's staging file, and a message test on the old route", and no receipt records a green run. For `v0.9.9`: the plan-end gate, section 6 |
+| 1 | `pnpm check` green, serial, gate tag, with route-table, secret and advisory scans | Open for `v0.9.9` | Green on `ec11af5` in "V1 final milestone gate": every static gate, 273 of 273 files and 1,553 of 1,553 tests in one run, the load benchmark 4 of 4. `pnpm check` runs no secret scan itself: gitleaks runs in the pre-commit hook, which passed on every commit, and in hosted CI. For `0.9.2`: the Operator Trust units ran one full `test:ci` with its failures fixed ("Operator Trust landing: the full gate"); the serial `pnpm check:gate` was not run on the `0.9.2` commit. Since then: "Veoci and air gap phase VA-A gate" ran `pnpm check:gate` for VA1 to VA5 on the Linux bed, 1,686 of 1,691 tests with five browser tests that fail on that bed and the load test unexplained there; "IPAWS connector IC3: documents" ran it on Windows, exit 1 for a `node:test` file Vitest collected (since excluded) and two worker crashes whose files passed alone, then `pnpm check` on the rebased tree, 1,808 of 1,809 with the one red passing alone. Every later unit ran its own and neighbouring suites only. A trial `pnpm check:gate` on `f94d6ee`, before VA33 and VA34 landed, failed 2 of 380 files: the conditions browser test's time zone alias and a `node:test` file Vitest collected, both since fixed; its other results were `check:static` exit 0, `audit:advisories` 0 high or critical, `test:desktop` 44 of 44, and the serial Vitest run 2,025 passed and 2 failed of 2,030 tests in 47 minutes ("Veoci and air gap follow-up: Vitest collected a node test file"). Hosted CI runs `pnpm check` on Windows on each push to `main`; the last recorded result is run 36216221581 on `055792e`, 3 of 2,030 tests failed, the two time zone cases fixed and the partner sharing check made to name its cause ("CI correction: a time zone named by its alias, and a partner's message check"), and no receipt records a green run. For `v0.9.9`: the plan-end gate, section 6 |
 | 2 | Single-node declaration | Green | "V1 W2.5: rate limiting and identity caching" |
 | 3 | Heap flat over two hours with 150 sockets; real-hardware run recorded | Green | "Readiness RD4: 150 people at once": 150 people with 300 sockets for two hours on Basho's Windows machine against the network host profile, 0 errors, reads 245 ms and writes 33 ms at the 95th percentile, heap growth 8.4%. The three reads that grew during that run are fixed and measured by probe at the run's full volume ("Readiness RD4 follow-up: reads that slowed as the incident filled"); the two-hour rerun with the fix was skipped at Basho's instruction ("Version 0.9.2: the Windows setup"). Not run: that rerun, and the same against the installed host services |
 | 4 | No network call inside a write path; outbox worker and scheduler in both deploy paths | Green | "V1 W2.12: network calls out of every write path"; "V1 W2.1: outbound delivery queue"; "V1 W2.2: scheduler", whose desktop path was checked by loading the module, not by running a profile |
@@ -105,7 +113,7 @@ No line carries a written waiver.
 | 12 | Board CSV and Excel import and export; WebEOC importer with a guide | Green | "V1 W4.1 part one: board engine depth"; "V1 W4.1 part two: board screen controls"; "V1 W4.4: WebEOC migration" |
 | 13 | Layers render past the feature cap | Green | "V1 W4.5: operational vector tiles" |
 | 14 | First-load JavaScript under 300 KB gzipped | Green | 159.8 kB in "V1 W5.0: code splitting", 161.0 kB in "V1 W5.3: remaining interface findings", 184.6 kB in "Veoci and air gap VA9 part two: QR codes on badges and pool resources", 189.7 kB in "Veoci and air gap VA31: charts in reports and create-record tiles", 202.3 kB in "Veoci and air gap VA39: job aids in the console", whose aids are about 10.5 kB of it. The budget script is not part of `pnpm check` |
-| 15 | README, ROADMAP, register, matrix and API document agree | Green on this reconciliation, through `ffe41de` | `docs/API.md` and, since "Veoci and air gap VA32: OpenAPI document and scoped service identities", `docs/openapi.json` match the contract route for route (the api-docs test, which each unit that added a route ran with the documents regenerated), and the generated header says the OIDC sign-in routes register only when `OPENEOC_OIDC_ISSUER` is set. README, ROADMAP, the register and the matrix agree with the receipts through `ffe41de` ("Veoci and air gap VA36: the documents reconciled"). The rows VA33 and VA34 will change are updated when each lands, before the plan-end gate |
+| 15 | README, ROADMAP, register, matrix and API document agree | Green on this reconciliation, through `98f050a` | `docs/API.md` and, since "Veoci and air gap VA32: OpenAPI document and scoped service identities", `docs/openapi.json` match the contract route for route (the api-docs test, which each unit that added a route ran with the documents regenerated, VA33's five FeatureServer routes the last), and the generated header says the OIDC sign-in routes register only when `OPENEOC_OIDC_ISSUER` is set. README, ROADMAP, the register and the matrix agree with the receipts through `98f050a` ("Veoci and air gap VA36: the documents reconciled"; "Veoci and air gap VA36 completion: VA33, VA34 and the follow-ups") |
 | 16 | 79D+D33 and M5 green; A11Y-T1 done; D34 done or absence recorded; 86+D35 presented | External | The exercise, review, M5 and the D34 absence are receipted, and this document presents 86+D35. Missing: the NVDA and VoiceOver pass |
 | 17 | SECURITY.md, CHANGELOG.md, versioned packages; second maintainer or waiver | External | "V1 W6.3: project hygiene for adoption"; "V1 W6.1: versioning and upgrade". Missing: a second maintainer or Basho's written INV-10 waiver |
 | 18 | Basho's aesthetic and functional acceptance of the release candidate | External | Not recorded |
@@ -121,12 +129,15 @@ the table stays here. Scenarios 1 to 7 are browser tests on the North Coast
 Storm demonstration at 1586 by 992 and 1534 by 790, with no page errors and
 no request outside the machine; scenario 8 is a real-database test of an
 upgrade across real migrations with a browser leg at both sizes. The last
-full run recorded with all of them is hosted CI run 36211128703 on
-`78f9f37`, which failed 3 tests, none of these ("CI correction: a refused
-upload's staging file, and a message test on the old route"). Before it, scenario 3 failed once under
-the parallel run of "IPAWS connector IC1: the connector to the Interface
-Design Guide" and passed alone. Automated tests are evidence, not Basho's
-acceptance (gate 18).
+full run recorded with all of them is the serial Vitest run of the trial
+`pnpm check:gate` on `f94d6ee`, which failed 2 of 2,030 tests, the
+conditions browser test's two time zone cases, none of these ("Veoci and air
+gap follow-up: Vitest collected a node test file"); hosted CI runs
+36211128703 on `78f9f37`, 36213840730 on `bba9817` and 36216221581 on
+`055792e` failed 3, 1 and 3 tests, none of these. Before them, scenario 3
+failed once under the parallel run of "IPAWS connector IC1: the connector
+to the Interface Design Guide" and passed alone. Automated tests are
+evidence, not Basho's acceptance (gate 18).
 
 | # | Scenario | Test | Receipt | Plan-end gate |
 |---|---|---|---|---|
@@ -145,7 +156,7 @@ The `0.9.2` builds came from `eb1277d`: the Operator Trust units, the read
 fix, the Veoci roster's VA1 to VA5 (the delivery hold, federation batch
 sizing, private authorities and time, collaboration and feeds in an outage,
 corrections) and the exercise scenarios. `v0.9.9` adds what landed after
-it, through `ffe41de` at this writing, and VA33 and VA34 once they land.
+it, through `98f050a`.
 
 | Area | What it adds | Receipts | Evidence level |
 |---|---|---|---|
@@ -154,12 +165,13 @@ it, through `ffe41de` at this writing, and VA33 and VA34 once they land.
 | Notifications | Response options on mass sends; SMS through an Android phone on the site network with replies read back; printed call-down sheets; a radio and runner log | "Veoci and air gap VA8: response options on mass sends"; "Veoci and air gap VA21: local carriers" | Real-database, component and browser tests against a fixture phone |
 | Plans | Executable plans, recurring event plans, continuity of operations plans, and corrective actions linked to plans | "Veoci and air gap VA13: executable plans" and "Veoci and air gap VA13 and VA14 corrections: review findings"; "Veoci and air gap VA27: continuity of operations plans"; "Veoci and air gap VA30: corrective actions linked to plans" | Real-database, component and browser tests |
 | Cost recovery | Public Assistance force account with FEMA-format summaries | "Veoci and air gap VA14: Public Assistance force account" and its corrections | Real-database, unit, component and browser tests |
-| Boards, reports and dashboards | Signature fields; QR codes on badges and pool resource labels; workflow guards and per-state read-only fields; the declarative action catalog; all-or-any conditions with groups, day and text operators, and every view option in the designer; charts in reports; create-record tiles on saved dashboards; the record pane keeps its tab through a save | "Veoci and air gap VA9 part one: the signature field"; "Veoci and air gap VA9 part two: QR codes on badges and pool resources"; "Veoci and air gap VA15: workflow guards and per-state field permissions"; "Veoci and air gap VA25: declarative action catalog"; "Veoci and air gap VA26: all-or-any conditions, date and text functions, every view option in the designer"; "Veoci and air gap VA31: charts in reports and create-record tiles"; "Veoci and air gap follow-up: the record pane keeps its tab through a save" | Real-database, component and browser tests |
+| Boards, reports and dashboards | Signature fields; QR codes on badges and pool resource labels; workflow guards and per-state read-only fields; the declarative action catalog; all-or-any conditions with groups, day and text operators, and every view option in the designer; board actions set off by edits through sync, an offline edit on reconnect included; a workflow transition that takes the incident's lock first, so it no longer deadlocks with a write on the same incident; charts in reports; create-record tiles on saved dashboards; the record pane keeps its tab through a save | "Veoci and air gap VA9 part one: the signature field"; "Veoci and air gap VA9 part two: QR codes on badges and pool resources"; "Veoci and air gap VA15: workflow guards and per-state field permissions"; "Veoci and air gap VA25: declarative action catalog"; "Veoci and air gap VA26: all-or-any conditions, date and text functions, every view option in the designer"; "Veoci and air gap follow-up: sync edits set board actions off"; "Veoci and air gap follow-up: a workflow transition's lock order"; "Veoci and air gap VA31: charts in reports and create-record tiles"; "Veoci and air gap follow-up: the record pane keeps its tab through a save" | Real-database, component and browser tests; the two follow-ups real-database tests |
 | Integrations | Service identities scoped to one jurisdiction and a viewer or member role, revocable, expiring and tied to their creator; an OpenAPI 3.1 description of the API | "Veoci and air gap VA32: OpenAPI document and scoped service identities" | Real-database, component and browser tests; an independent adversarial review, its findings fixed |
+| GIS interchange | A read-only ArcGIS FeatureServer for every board with a map field the caller may read, with object ids numbered per board; Esri JSON in the board import, each shape checked by PostGIS; multipart shapes on board geometry fields; one read wall for the FeatureServer, the OGC items and the board tiles, which now honours the map field's own read level; the Windows host's Caddy log keeps no token | "Veoci and air gap VA33: Esri interchange" | Real-database, component (with axe) and browser tests at both viewports, the host generator's test and a loopback run of the shipped Caddy; request shapes from the published ArcGIS REST forms, no Esri client; an independent review before landing, its findings fixed |
 | Migration and people | A report for every import, signed off on screen; import templates; a people import | "Veoci and air gap VA17: validated migration"; "Veoci and air gap VA17 completion: board record import reports" | Real-database, component and browser tests |
 | Volunteers | A volunteer and CERT roster with credentials, deployments and hours | "Veoci and air gap VA28: volunteer and CERT roster" | Real-database, unit, component and browser tests |
 | Exchange across the gap | Signed peer identity and agreement revocation; exchange by file | "Veoci and air gap VA19: signed peer identity"; "Veoci and air gap VA20: exchange by file" | Two-instance real-database tests, VA20's with no network path between them; browser tests |
-| Field work offline | Map points, messages and new tasks queued offline; boards with record rules synced per record; late submissions to a closed incident | "Veoci and air gap VA22: field breadth" | Real-database, component and browser tests offline and back |
+| Field work offline | Map points, messages and new tasks queued offline; boards with record rules synced per record; late submissions to a closed incident; a device PIN, offered and never required, that encrypts what a shared device keeps for a person and locks it at start and after 15 minutes idle | "Veoci and air gap VA22: field breadth"; "Veoci and air gap VA34: offline device PIN for shared devices" | Real-database, component and browser tests offline and back; VA34 unit, component (with axe) and browser tests on the real build with its service worker |
 | Maps | Region map packets for an area outside California | "Veoci and air gap VA35: region map packs" | Unit tests and a hand run with stand-in files |
 | Supply chain | The license gate | "Veoci and air gap VA10: the license gate" | Command tests |
 | IPAWS | The connector rebuilt to the IPAWS-OPEN Interface Design Guide | "IPAWS connector IC1: the connector to the Interface Design Guide"; "IPAWS connector IC2: the certificate on screen and each channel's answer"; "IPAWS connector IC3: documents" | Unit and real-database tests; a browser walk against a loopback stand-in |
@@ -167,15 +179,38 @@ it, through `ffe41de` at this writing, and VA33 and VA34 once they land.
 | Job aids | The acting position's job aid opened from the console's **Help**, with no connection needed; the eight aids rewritten to the screens as they are | "Veoci and air gap VA39: job aids in the console" | Unit, component and browser tests, with an offline reload |
 | Fixes found by CI | The console mounted once after sign-in; the dashboard's filter fields kept while typing; the map's feature link inside the feature panel; the QR reader's second try when a browser's detector finds nothing | "CI repairs after the Actions runs resumed"; "CI repairs: the macOS job's browser tests"; "CI repairs: the macOS job on e245e08" | Component and browser tests |
 
-Upgrading from `0.9.2` runs migrations `0147` to `0167` behind the forced
-backup. Case-blind conditions use PostgreSQL's ICU collation `und-x-icu`,
-which the Windows runtime and Postgres.app carry ("Veoci and air gap VA26:
-all-or-any conditions, date and text functions, every view option in the
-designer"). Two things change for an installed copy: a federation peering
-receives nothing until both administrators record each other's public keys
-("Veoci and air gap VA19: signed peer identity"), and an IPAWS PIN stored by
-an earlier build no longer configures IPAWS; the certificate must be entered
-([CHANGELOG.md](CHANGELOG.md), Unreleased).
+Upgrading from `0.9.2` runs migrations `0147` to `0168` behind the forced
+backup, each in one transaction with the server stopped. `0147` to `0153`
+come from the Veoci roster's units that landed before VA13 (VA6, VA7, VA8,
+VA11, VA37 and VA38), `0154` from the IPAWS connector and `0155` to `0168`
+from VA13 on. The receipts state an upgrade cost only for `0168`; the
+others add or change tables, columns, functions, triggers and policies, and
+`0147` records each existing incident template as its version 1.
+
+`0168` ("Veoci and air gap VA33: Esri interchange") numbers every board
+record. Adding `board_records.object_id` with no default is a catalog change
+under an ACCESS EXCLUSIVE lock on `board_records`, held until the migration
+commits, so nothing else reads or writes records meanwhile. The backfill
+then updates every record once: a new row version and new index entries per
+record, the old versions dead until autovacuum reclaims them, so the table
+briefly takes up to about twice its space, though no data file is
+rewritten. `set not null` scans the table once and the unique index is
+built once. Its time grows with the record count: a single pass over the
+table, of the same order as an index build.
+
+Case-blind conditions use PostgreSQL's ICU collation `und-x-icu`, which the
+Windows runtime and Postgres.app carry ("Veoci and air gap VA26: all-or-any
+conditions, date and text functions, every view option in the designer").
+Three things change for an installed copy: a federation peering receives
+nothing until both administrators record each other's public keys ("Veoci
+and air gap VA19: signed peer identity"); an IPAWS PIN stored by an earlier
+build no longer configures IPAWS, and the certificate must be entered
+([CHANGELOG.md](CHANGELOG.md), Unreleased); and a federation peer still on
+an earlier release refuses a record with a multipart shape until it is
+upgraded too (VA33). Going back to an earlier build after `v0.9.9`, send the
+work queued under a device PIN first, since the earlier web app does not
+read where it is kept, and expect records with multipart shapes to be
+refused on their next edit (the rollback notes of VA34 and VA33).
 
 ## 5. What has not been run
 
@@ -198,6 +233,7 @@ placeholders that gate nothing; they gate no unit, and they are not proof.
 | A send to the IPAWS-OPEN test environment | Basho, after the developer MOA and a COG certificate | [IPAWS enablement](docs/IPAWS-ENABLEMENT.md) | R2 |
 | The starter pack's tabletop | Basho, with an EOC's staff | [The tabletop](deploy/packs/small-eoc-starter/TABLETOP.md) | G-PACKAGES |
 | The rollout playbook and the self-paced modules, walked by EOC staff | Basho, with an EOC's staff | The [rollout playbook](docs/guides/ROLLOUT-PLAYBOOK.md) and [self-paced training](docs/guides/SELF-PACED-TRAINING.md) | F17 |
+| A board added as a layer through the FeatureServer in QGIS, ArcGIS Pro and ArcGIS Online | Basho, with those clients | The [administration guide](docs/guides/ADMIN.md#esri-and-gis-clients), "Esri and GIS clients" | F20 |
 
 ## 6. The plan-end gate and the builds (to be filled)
 
@@ -206,12 +242,16 @@ integrator runs these on the commit `v0.9.9` is built from and writes each
 result here, with the command, the counts, and every red named with its
 isolated rerun. The builds are made after the last document change, since
 the web build carries `docs/guides`. Nothing in this section has run yet.
+Two earlier runs are not these results: RD5's proof, by default and with the
+stand-ins, passed on `2991317` ("Veoci and air gap plan gate: the air-gap
+proof with integrations on local stand-ins"), and a trial `pnpm check:gate`
+ran on `f94d6ee` (gate 1).
 
 | Check | Command or procedure | Result |
 |---|---|---|
 | The serial gate | `pnpm check:gate` | To be filled: commit, exit code, test files and tests passed of the total, each red named, the load test |
 | Acceptance scenarios 1 to 8 | Within `pnpm check:gate` | To be filled in the last column of section 3 |
-| RD5's proof with every optional integration configured against local stand-ins | `deploy/windows/prove-airgap.mjs` on Windows, with the stand-ins | To be filled: connections outside the machine and its network (zero expected), and what queued, what expired and what reconciled |
+| RD5's proof with every optional integration configured against local stand-ins | `node deploy/windows/prove-airgap.mjs` and `node deploy/windows/prove-airgap.mjs --stand-ins` on Windows | To be filled: connections outside the machine and its network (zero expected), and what queued, what expired and what reconciled |
 | Hosted CI on the release commit | The push to `main` | To be filled: run number and result |
 | Coverage (gate 20) | `pnpm test:coverage` at `00deba5` and at the release commit | To be filled, or Basho's acceptance of the assertion counts in its place |
 
@@ -246,6 +286,7 @@ the web build carries `docs/guides`. Nothing in this section has run yet.
 | The signed starter pack imported on an installed computer; the packs' content reviewed | G-PACKAGES |
 | A region's map build and carry-in, for an EOC outside California | AR7 |
 | FEMA's equipment rate schedule, a download (the Veoci roster's decision 11) | F8 |
+| QGIS, ArcGIS Pro and ArcGIS Online, to add a board through the FeatureServer | F20 |
 | Live data: FEMA NFHL, a statewide shelter feed, ACS population, parcels beyond Humboldt, county address points, the full RTLT set, a live feed; a live SMTP relay and SMS provider; a real Mattermost or Matrix server if collaboration is used | F9; F18; G-INGEST; G-CATALOG; G-IMPACT; G-PARCELS; G-FLOOD; address search; resource typing; live email and SMS; F15 |
 
 ### Basho's decisions, with the default in force
@@ -268,6 +309,8 @@ the web build carries `docs/guides`. Nothing in this section has run yet.
 | The PA guide edition (F8; the Veoci roster's decision 10) | FP 104-009-2, Version 5.0 as amended, named in the dictionary for Basho to confirm ("Veoci and air gap VA14: Public Assistance force account") |
 | The packs' content (G-PACKAGES) | The starter pack and the hotline and shelter pack as shipped: their fields, checklists and CMIST labels are Basho's to judge |
 | A service identity reading a dashboard's live stream, for a wall display (G-SERVICE) | The WebSocket channels take a person's session only, so a wall display needs a person signed in ("Veoci and air gap VA32: OpenAPI document and scoped service identities", open for Basho) |
+| Whether a jurisdiction may require a device PIN (G-PWA; threat row B18) | Each person sets their own: the console offers a PIN after every password sign-in and in Settings, and never requires one, so without it the device keeps that person's work and last session unprotected, as before; the alternative is a policy that makes setting one mandatory at sign-in ("Veoci and air gap VA34: offline device PIN for shared devices") |
+| Areas on a Road Closures board (F20) | A Road Closures board draws only lines and closed points, by its template's cartography, so areas imported into one are stored and listed but not drawn; generic boards draw them. Pre-existing, found by "Veoci and air gap VA33: Esri interchange"; the alternative is to draw areas on that template's map too |
 | Job aids for the Safety Officer and the Finance/Admin Section Chief (F17) | None written; **Help** opens the nearest aid (the Planning Section Chief's, the Logistics Section Chief's) and says so ("Veoci and air gap VA39: job aids in the console") |
 | The macOS disk image for `v0.9.9` | Built on Windows, as `0.9.2`'s was, needing Postgres.app on the Mac; the alternative is the "macOS demo" workflow's image with its own PostgreSQL, started by hand on a Mac runner |
 | Public-facing work (the Veoci roster's decision 4) | Tabled until a date Basho sets: no public form, public dashboard, resident alerting, published snapshot or link for someone without an account |
@@ -294,20 +337,44 @@ archiving the retired rosters (item 11); branch protection (item 9) and
   not told of a revocation; resource escalation and JIC approval deliveries
   are not signed; batch files are signed, not encrypted. Deletes of other
   records and records made before an agreement travel ("Readiness RD10:
-  federation of record deletes and earlier records").
+  federation of record deletes and earlier records"). A peer on an earlier
+  release refuses a record with a multipart shape until it is upgraded, and
+  object ids, which are per instance, do not travel by network, file or
+  export ("Veoci and air gap VA33: Esri interchange").
 - No voice channel; Teams and Slack only as a generic webhook. Text replies
   are read only through an SMS gateway on the site network, where "sent"
   means the phone took the text.
 - The WebEOC importer moves records only: no value translation, coordinates,
   person, reference or attachment fields, incident tagging, updates or
   `prevdataid` links.
-- An offline edit synced later sets off no board action; a map point saved
-  online whose answer is lost arrives a second time on reconcile.
+- Form submissions, imports and records from a federation peer set off no
+  board action; edits through sync do, an offline edit when its device
+  reconnects included ("Veoci and air gap follow-up: sync edits set board
+  actions off"). A map point saved online whose answer is lost arrives a
+  second time on reconcile.
+- Without a device PIN, the default, a device keeps each person's offline
+  work and the last session unprotected, readable by anyone who uses it, and
+  a restart opens the console as the last person; the console says so and
+  offers the PIN. Under a PIN, a copy of the device's storage lets a
+  six-digit PIN be guessed away from the app in minutes, so disk encryption
+  remains the defence for a lost device; store keys, vault names and
+  viewer preferences are not encrypted; and the tenth wrong PIN in a row
+  erases what the device kept for that person, unsent work included. The
+  PIN was walked in Chromium only ("Veoci and air gap VA34: offline device
+  PIN for shared devices"; threat row B18).
+- The FeatureServer is read-only and answers `GET` only: its `where` takes
+  only `1=1`, with no attribute filters, statistics, sorting or `f=pbf`; an
+  ArcGIS web client's `POST` query for a long address is not served; there
+  is no ArcGIS sign-in, so a client that asks for a user name and password
+  is given the address with `?token=`, which then lives in the client's
+  saved project. No Esri client has tried it ("Veoci and air gap VA33: Esri
+  interchange"; threat row B19).
 - The report builder stays all-of and counts days in UTC; views, guards and
   actions take any-of, groups and a stored time zone.
-- Service identities use REST only; the WebSocket channels take a person's
-  session. The OpenAPI description publishes 26 request schemas and no
-  response bodies or query strings.
+- Service identities use REST only, the FeatureServer among it; the
+  WebSocket channels take a person's session (threat row B17). The OpenAPI
+  description publishes 26 request schemas and no response bodies or query
+  strings.
 - Plans are not in the jurisdiction export, and a recurring event plan is
   activated once per occurrence, not by a calendar. File folders are one
   level, and a stored file does not move between them.
@@ -342,9 +409,14 @@ archiving the retired rosters (item 11); branch protection (item 9) and
   the Linux bed and is unexplained there ("Veoci and air gap phase VA-A
   gate").
 - **macOS:** RD6 and a Mac network host, open under the Operator Trust PSPR.
-- **Board actions from sync:** the sync hub does not call the action runner,
-  so an offline edit sets off no action ("Veoci and air gap VA25:
-  declarative action catalog", its landing note).
+- **Board-wide documents and incident sync edits:** a warm board-wide sync
+  document does not take an incident-scoped sync edit until its next apply
+  or a rebuild after it idles out, while the write of an action that edit
+  sets off does fold into it, so a board-wide subscriber can see that record
+  with only the action's field until the document is rebuilt. Folding
+  incident updates into the board-wide document needs that document's
+  missing history first ("Veoci and air gap follow-up: sync edits set board
+  actions off", found and not fixed).
 - **Trust on a phone:** the sign-in page's **Trust this server** panel gives
   steps for Windows and macOS only; the network host guide covers phones
   ("Veoci and air gap VA23: phones on a host's authority").
@@ -370,8 +442,10 @@ operator comparison or screen-reader pass exists. Gate lines 1, 9, 16, 17,
 install format, once the plan-end gate is green.** It claims no gate it has
 not met, so it needs no waiver. It requires, in order:
 
-1. The Veoci roster's last units landed (VA33 and VA34 at this writing),
-   with the matrix and register rows each one changes brought up to date.
+1. The Veoci roster's last units landed, with the matrix and register rows
+   each one changes brought up to date. Done: every unit has landed, and
+   VA33, VA34 and the follow-ups are reconciled through `98f050a` ("Veoci and
+   air gap VA36 completion: VA33, VA34 and the follow-ups").
 2. The version set to `0.9.9` in every package manifest (they carry
    `0.9.2`), with a dated `0.9.9` changelog entry that takes in the
    Unreleased entries and states the upgrade notes in section 4.

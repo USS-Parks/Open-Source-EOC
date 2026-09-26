@@ -9,16 +9,19 @@ and native CAP, EDXL, CoT, HAVE and GeoJSON interchange.
 Version `0.9.2`, an evaluation build, is the version every package carries.
 No release has been tagged. The next release is planned as `v0.9.9`, built as
 the Windows setup, a portable ZIP, a macOS disk image and a map data packet,
-once the Veoci Integration and Air Gap PSPR's last units land; tagging and
-publishing it are Basho's. What it would hold, its gates and the decisions
-open for Basho are in [RELEASE-DECISION.md](./RELEASE-DECISION.md). Every
-unit lands with a receipt in the [V1 ledger](./docs/process/V1-LEDGER.md).
+once the plan-end gate of the Veoci Integration and Air Gap PSPR, whose
+units have all landed, is green; tagging and publishing it are Basho's.
+What it would hold, its gates and the decisions open for Basho are in
+[RELEASE-DECISION.md](./RELEASE-DECISION.md). Every unit lands with a
+receipt in the [V1 ledger](./docs/process/V1-LEDGER.md).
 
 Proven on the project's own machines with synthetic data: boards, notifications
 and reports run through the WebEOC side-by-side script; an incident shared by
 two organizations across two instances; signed board updates carried by file
 between two instances with no network path; messages held through an outage
-and resent; the ICS forms as components of the IAP, assembled and approved;
+and resent, and every optional integration a local stand-in can play cut
+and restored with no connection leaving the machine and its local network;
+the ICS forms as components of the IAP, assembled and approved;
 plans that activate an incident and release its tasks; two-step sign-in, the
 two-person IPAWS send against a local stand-in, administration without the
 command line, and 150 people for two hours through HTTPS on the network host
@@ -35,6 +38,8 @@ Still open, and not in the project's hands:
   [disconnected drill](./docs/guides/DISCONNECTED-DRILL.md), the phone walk,
   and the timed onboarding with a person new to the product, each written as
   a procedure and not yet run;
+- a board added as a layer in QGIS, ArcGIS Pro and ArcGIS Online, whose
+  published request shapes the FeatureServer's tests follow;
 - live IPAWS, a load run against an installed host, representative-operator
   comparison, the manual screen-reader pass, a second maintainer and a pilot
   jurisdiction.
@@ -61,7 +66,7 @@ commercial-parity certification. The known limits of the build are in
   holds the receipts that preceded it.
 - `docs/VEOC-PARITY-MATRIX.md` and `docs/FACET-STATUS.md` contain current
   capability status and explicit remaining boundaries, reconciled to the
-  receipts on 2026-09-25 through the Veoci roster's landed units.
+  receipts on 2026-09-25 through every unit of the Veoci roster.
 - `RELEASE-DECISION.md` gives the state of each gate in the Finish PSPR's
   section 6, what the planned `v0.9.9` would hold, what has not been run,
   the decisions open for Basho and the release decision.

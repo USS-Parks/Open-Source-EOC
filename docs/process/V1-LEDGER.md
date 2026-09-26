@@ -13657,3 +13657,134 @@ air gap roster is `0.9.9`, built in every install format.
 - **Verification.** `pnpm check:static` exit 0; `pnpm test:desktop` 44 of 44.
 - **Not done here.** Tagging and publishing, which are Basho's. The plan-end
   gate on this commit and the builds follow in their own receipts.
+
+## Veoci and air gap VA36 completion: VA33, VA34 and the follow-ups
+
+Completes "Veoci and air gap VA36: the documents reconciled", whose Landing
+left VA33, VA34 and the plan-end gate's results to be added under it. The
+plan-end gate has not run; its results stay "To be filled" in
+`RELEASE-DECISION.md` section 6.
+
+- **What the documents said before.**
+  - `docs/VEOC-PARITY-MATRIX.md` and `docs/FACET-STATUS.md` were reconciled
+    through `ffe41de` and said VA33 and VA34 had not landed. F1 listed "an
+    offline edit synced later sets off no action, since the sync hub does
+    not call the action runner", which "Veoci and air gap follow-up: sync
+    edits set board actions off" made untrue. The matrix's reconciliation
+    notes said RD5's proof with the stand-ins had not been rerun and named
+    hosted CI run 36211128703 as the last result.
+  - `RELEASE-DECISION.md` said VA33 and VA34 were in flight (intro, section
+    1, gate 15, section 4, section 8 step 1), listed migrations `0147` to
+    `0167`, carried the known limit and the open engineering item that an
+    offline edit sets off no board action, and named hosted CI run
+    36211128703 as the last full run with the eight acceptance scenarios.
+  - `README.md` planned `v0.9.9` for when the roster's last units land;
+    `ROADMAP.md` listed the Veoci roster's delivered work "so far".
+- **What changed.**
+  - `docs/VEOC-PARITY-MATRIX.md`: reconciled through `98f050a`. F20 takes
+    VA33 (threat row B19) with its evidence level and what it does not
+    claim, and names Basho's run of QGIS, ArcGIS Pro and ArcGIS Online and
+    his decision on areas on a Road Closures board; AR5, G-TILES (one read
+    wall for tiles, OGC items and the FeatureServer, honouring the map
+    field's own read level), G-OPS (the log and Caddy redaction) and
+    G-SERVICE (threat row B17; the FeatureServer's two extra token carriers)
+    take VA33. G-PWA takes VA34 (threat row B18) with its bounds, and names
+    Basho's decision on requiring a device PIN; F7 and AR6 take a clause
+    each (queued work kept under a PIN; the idle lock only under a PIN).
+    F1 takes the sync follow-up, and its not-claimed item narrows to form
+    submissions, imports and federation. G-BOARDROUTE takes the lock-order
+    follow-up. AR7 takes the plan gate's stand-ins run on `2991317`. The
+    reconciliation notes name the completion, the new evidence, the trial
+    `pnpm check:gate` on `f94d6ee` and hosted CI run 36216221581 as the last
+    recorded result. No status changes.
+  - `docs/FACET-STATUS.md`: header through `98f050a`; F1, F6, F7, F20, AR5,
+    AR6, AR7, INV-3 and INV-7 take the same receipts, F20 and AR6 with their
+    boundaries; the earlier bullet says VA33 and VA34 had not landed "then",
+    and a new bullet records this pass. No status changes.
+  - `RELEASE-DECISION.md`: the intro and section 1 say every unit has
+    landed and list the three follow-ups and the plan gate receipt; the CI
+    repairs run to "CI correction: a time zone named by its alias, and a
+    partner's message check". Gate 1 adds the trial gate and the last
+    hosted run; gate 15 is green through `98f050a`. Section 3 cites the
+    trial gate's serial run as the last full run with all eight scenarios
+    (its 2 reds were the conditions test's time zone cases), with the three
+    hosted runs since. Section 4: a GIS interchange row (VA33), the device
+    PIN in the field work row (VA34), the two follow-ups in the boards row,
+    and upgrade notes for `0147` to `0168` with `0168`'s upgrade cost as
+    VA33's receipt states it, the multipart shape a peer on an earlier
+    release refuses, and what to do before going back to an earlier build.
+    Section 5: a row for adding a board in the three Esri clients. Section
+    6: the RD5 row names both proof commands, and a sentence records the
+    `2991317` proof runs and the `f94d6ee` trial gate as earlier runs, not
+    these results; every result stays "To be filled". Section 7: the Esri
+    clients as an external input; two decisions with their defaults
+    (whether a jurisdiction may require a device PIN; areas on a Road
+    Closures board); known limits for federation (multipart shapes to an
+    earlier peer, object ids per instance), board actions (edits through
+    sync set them off; form submissions, imports and federation do not),
+    the device PIN (unprotected without one; offline guessing of a copy;
+    what is not encrypted; the tenth wrong PIN erasing unsent work;
+    Chromium only), the FeatureServer (read-only, GET only, `where=1=1`, no
+    ArcGIS sign-in, no Esri client tried) and service identities (REST
+    only, the FeatureServer among it; threat row B17); the open
+    engineering item on sync actions replaced by the one the sync follow-up
+    found and did not fix (a warm board-wide document and incident sync
+    edits). Section 8 step 1 is marked done.
+  - `ROADMAP.md`: the roster's units all landed, its plan-end gate and
+    builds remaining; the delivered bullet adds the Esri interchange, the
+    device PIN, actions from sync edits and the stand-ins proof.
+  - `README.md`: `v0.9.9` waits on the plan-end gate; the proven paragraph
+    adds the stand-ins run; the open list adds the Esri clients; the
+    governance line says every unit.
+- **Files outside the "Owns" cell.** The roster gives VA36 no cell. The five
+  documents the brief names, nothing else. No `docs/guides/**`,
+  `docs/process/**`, `CHANGELOG.md`, `package.json`, exercise scenario
+  file or code touched.
+- **Decisions and deviations (defaults taken, not asked).**
+  - F20 stays `verified` with an owner, as F4, F8, F16 and G-DASH do: VA33's
+    tests pass at their depth, and the Esri client run and the Road Closures
+    question are named for Basho. G-PWA stays `partial`.
+  - Trying a board in QGIS, ArcGIS Pro and ArcGIS Online is a run, not a
+    choice, so it sits in section 5 (what has not been run) and among
+    Basho's external inputs, not in the decisions table; the device PIN
+    policy and Road Closures areas are in the decisions table.
+  - The upgrade range is `0147` to `0168`, not `0155` to `0168`: `0.9.2`'s
+    build commit `eb1277d` carries migrations through `0146`, and `0147`
+    arrived with VA6 (`99e9b9f`). `0147` to `0153` are VA6, VA37, VA38, VA7,
+    VA8 and VA11, `0154` the IPAWS connector, `0155` to `0168` VA13 on. Only
+    VA33's receipt states an upgrade cost; the document says so rather than
+    inventing costs for the others.
+  - Gate 14 does not take VA34's 198.7 kB: it was measured on a lane base
+    before VA39's aids and would read as a drop from VA39's 202.3 kB. The
+    plan-end build measures the release commit.
+  - `docs/THREAT-MODEL.md` is not edited: B17, B18 and B19 landed with their
+    units and the five documents now cite them. B8 names OGC Features and
+    not the FeatureServer; B19 covers the view and states that the tiles,
+    OGC items and view share one wall, so B8 is incomplete, not untrue.
+- **Air-gap behavior (decision 9).** Documentation only; no network path
+  changes.
+- **Schema, contract and dependency changes.** None.
+- **Tests.** None; the unit is documents. Every claim added rests on a
+  receipt; the migration range was checked against the tree
+  (`git ls-tree eb1277d server/migrations/`, and the commit that added
+  `0147`).
+- **Verification.** In the worktree, with Node `v24.15.0`:
+  `node scripts/check-links.mjs`: "check-links: ok (127 markdown file(s)
+  scanned)". A byte scan of the five edited files: no em-dash, no en-dash,
+  no carriage return, each ends with a newline. Line counts: `README.md`
+  133, `ROADMAP.md` 146, `RELEASE-DECISION.md` 481,
+  `docs/VEOC-PARITY-MATRIX.md` 253, `docs/FACET-STATUS.md` 150.
+- **Not run.** `pnpm check:static` (the brief asked for the link check,
+  which it includes). The plan-end gate, both RD5 proofs on the release
+  commit and the `v0.9.9` builds, the integrator's (`RELEASE-DECISION.md`
+  section 6).
+- **Evidence level:** documents checked against the receipts; the link
+  check.
+- **Rollback:** revert the commit.
+- **Correction to "Version 0.9.9: the version and changelog".** It and the
+  changelog said an upgrade from `0.9.2` applies migrations `0155` to
+  `0168`; `0.9.2` (`eb1277d`) stops at `0146`, so it applies `0147` to
+  `0168`. The changelog is corrected in this commit.
+- **Landing.** Rebased onto "Version 0.9.9: the version and changelog" with
+  no conflict. None of these documents is a build input, so the `0.9.9`
+  builds made from `5079670` stand.
