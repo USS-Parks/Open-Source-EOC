@@ -13625,3 +13625,20 @@ Veoci Integration and Air Gap PSPR unit VA33 (VC-26).
   observability, migration baseline, upgrade, restore drill, federation,
   sync actions, API docs, route coverage and every web and shared test,
   153 files, 1,058 tests; `desktop.test.mjs` 31 of 31.
+
+## Veoci and air gap follow-up: Vitest collected a node test file
+
+The trial `pnpm check:gate` on `f94d6ee` (in a lane worktree, 04:20Z to
+05:08Z) failed 2 of 380 files: the conditions browser test's time zone
+alias, fixed by "CI correction: a time zone named by its alias, and a
+partner's message check", and `deploy/windows/lib/stand-ins.test.mjs`, which
+Vitest collected and refused ("No test suite found"). That file runs under
+`node --test` in `pnpm test:desktop`, like every test under `deploy`, but
+`vitest.config.mjs` excluded those by name and "Veoci and air gap plan gate:
+the air-gap proof with integrations on local stand-ins" added a new one. The
+config now excludes `deploy/**/*.test.mjs`, which are all `node --test`
+files; `vitest list` then collects 386 files and none under `deploy`. The
+trial gate's other results on that commit: `check:static` exit 0,
+`audit:advisories` 0 high or critical and 0 exceptions, `test:desktop` 44 of
+44, and the serial Vitest run 2,025 passed and 2 failed of 2,030 tests (the
+two conditions browser cases), 47 minutes.
