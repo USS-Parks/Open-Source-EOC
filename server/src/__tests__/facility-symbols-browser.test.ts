@@ -23,16 +23,18 @@ const pageErrors: string[] = [];
 const externalRequests: string[] = [];
 const facilityImageResponses = new Set<string>();
 
+/** Symbols fade in over MapLibre's 300 ms placement fade, so a settled canvas is one that holds past it. */
 async function stableCanvasShot(): Promise<Buffer> {
   const canvas = page.locator('[data-testid="cop-map"] canvas');
+  const start = Date.now();
   let previous = await canvas.screenshot();
-  for (let frame = 0; frame < 12; frame += 1) {
+  for (let frame = 0; frame < 40; frame += 1) {
     await page.evaluate("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
     const current = await canvas.screenshot();
-    if (current.equals(previous)) return current;
+    if (current.equals(previous) && Date.now() - start > 450) return current;
     previous = current;
   }
-  throw new Error("map canvas did not settle within 12 animation samples");
+  throw new Error("map canvas did not settle within 40 animation samples");
 }
 
 async function inspectRecord(name: string, expectedType: string, expectedStatus: string): Promise<void> {

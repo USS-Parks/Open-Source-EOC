@@ -198,10 +198,11 @@ describe("operational vector tiles in a real browser", () => {
       (id) => (globalThis as { __map?: MapHandle }).__map!.getPaintProperty(`board-${id}-point`, "circle-opacity") === 0.4,
       boardId,
     );
+    // The fill's own translucency rides in its color, so its opacity is the operator's setting alone.
     expect(await page.evaluate(
       (id) => (globalThis as { __map?: MapHandle }).__map!.getPaintProperty(`board-${id}-fill`, "fill-opacity"),
       boardId,
-    )).toBeCloseTo(0.1);
+    )).toBeCloseTo(0.4);
     await settled(page);
     await page.screenshot({ path: join(SHOTS, "tiles-opacity-light.png"), fullPage: false });
 
