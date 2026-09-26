@@ -13812,3 +13812,99 @@ failed with "board not open". Present since `b1b8e6b` (2026-09-23), so in
 - **Evidence level:** real-database test.
 - **Not in the 0.9.9 builds** made from `5079670`, which predate it.
 - **Rollback:** revert the commit.
+
+## Veoci and air gap plan-end gate
+
+The Veoci Integration and Air Gap PSPR's section 7 and decision 18, run on
+`5079670` ("Version 0.9.9: the version and changelog"), the commit after
+every unit, follow-up and document landed, on the Windows machine that runs
+the plan, each in its own lane worktree at that commit.
+
+- **`pnpm check:gate`** (`OPENEOC_TEST_DB_TAG=gatefinal`, the release
+  `pg_dump` on PATH): 05:18:47Z to 06:01:48Z, exit 0. `check:static` exit 0
+  (licenses 339 packages, 3 reviewed copyleft; links 127 files);
+  `audit:advisories` 0 high or critical and 0 time-bounded exceptions;
+  `test:desktop` 44 of 44; the serial Vitest run 385 of 385 files and 2,077
+  of 2,077 tests, 40 minutes, no red; the load benchmark 4 of 4. Acceptance
+  scenarios 1 to 8 are among the passing files.
+- **RD5's proof, by default:** `node deploy/windows/prove-airgap.mjs` after
+  `node deploy/windows/desktop.mjs build` (`BUILD_READY revision=5079670`),
+  with the release PostgreSQL and Caddy through `OPENEOC_PG_DIST` and
+  `OPENEOC_CADDY`: 05:19:20Z to 05:20:49Z, **PASS**, no connection outside
+  this computer and its local network, 0 page errors.
+- **RD5's proof with the stand-ins:** `--stand-ins`, 05:20:49Z to 06:23:56Z,
+  **PASS**, no connection outside this computer and its local network, 0
+  page errors. The report marks the tree as having uncommitted changes; the
+  only one was `AIR-GAP-REPORT.md`, which the default run had just written.
+  Deliveries: email 3, SMS by the HTTP provider 3, SMS by the gateway phone
+  2 and push 1 held as "Waiting for a route" while their routes were down
+  and delivered 6, 6, 6 and 2 seconds after each returned; the partner host
+  received the record made during the cut 6 seconds after it was ready; the
+  feed raised one "Feed failing" notice for the outage (2 failed polls) that
+  became "Feed recovered"; the webhook read "Expired, not sent" at the end
+  of its 1-hour window, was resent and was delivered 58 seconds later; both
+  players' text replies acknowledged the gateway send. `AIR-GAP-REPORT.md`
+  at the repository root is this run's report.
+- **Hosted CI.** Run 36220202097 on `98f050a`, the same code without the
+  version, failed 3 of 2,077 tests: `sync-hub-lifecycle.test.ts`, a real
+  defect fixed after the gate ("Veoci and air gap follow-up: a sync document
+  evicted while it was reopened", `933b946`), and two browser walks,
+  `board-records-browser.test.ts` (an import's record not shown within 90
+  seconds) and `d33-review-browser.test.ts` (the selected record's long
+  token not shown within 90 seconds), which passed on this machine in the
+  gate and again alone, 12 of 12; no cause was found in the product. The
+  run on the push that carries `933b946` had not finished when this was
+  written.
+- **Not run.** `pnpm test:coverage` (gate 20); Basho's unplugged run, the
+  72-hour drill, the phone walk and the region map carry-in; anything on a
+  Mac.
+- **Evidence level:** the serial gate and both proofs on the release
+  commit on Windows.
+
+## Version 0.9.9: the builds
+
+At Basho's instruction of 2026-09-25 to build `0.9.9` in every install
+format, all from `5079670` on this Windows machine, after the last change
+to a build input.
+
+- **The Windows setup.** `node deploy/windows/desktop.mjs build`
+  (`BUILD_READY revision=5079670a1a234f4251a8baeeb01ff201ff219f59`), then
+  `Stage-Installer.ps1` with the Node `v24.15.0` runtime, the release
+  PostgreSQL 16.15 with PostGIS 3.6.2, Caddy and WinSW from
+  `deploy/windows/out/runtime-inputs`, and `-IncludeOptionalBasemaps`:
+  `INSTALLER_STAGE_READY files=10106 optionalBasemaps=True`, manifest version
+  `0.9.9` and build revision `5079670`; `installer.test.mjs` 10 of 10 on the
+  stage; `Build-Installer.ps1` with Inno Setup 6, 914 seconds.
+  `deploy/Open-Source-EOC-Setup-0.9.9.exe`, 1,876,839,637 bytes, SHA-256
+  `ca9512dde89d041fd8000bd97879df16126c119c19f9aa56c06b57e4a7bdb173`,
+  product version `0.9.9`.
+- **The ZIP.** `deploy/Open-Source-EOC-0.9.9.zip`, the same staged `app`
+  folder made with Windows' `tar -a`, 1,979,868,473 bytes, SHA-256
+  `09a76713de126f512917e6a8f449c457718f5ce57ff0c320394abde7a1c0d0a6`; it
+  lists 10,106 files, the stage's count, and its `app/package.json` reads
+  `0.9.9`.
+- **The macOS disk image.** `node deploy/macos/build-dmg-windows.mjs` from
+  the same stage: `deploy/Open-Source-EOC-0.9.9-macOS.dmg`, 311,230,464
+  bytes, SHA-256
+  `5dfa5070cac49bcd2448e2e4f8bcb312d22d777b36346cdb79ba4f6eb2aedbd4`, 5,026
+  files in 655 folders. Read back: volume `OPEN_SOURCE_EOC_0_9_9`,
+  `Info.plist` at `0.9.9`, the launcher `#!/bin/bash` with mode 755, both
+  Node binaries 64-bit Mach-O with mode 755, the Applications link to
+  `/Applications`, the READ-ME, and no PostgreSQL (it uses Postgres.app, as
+  `0.9.2`'s did) and no Windows runtime.
+- **The map data packet.** `node tools/basemap/pack-map-data.mjs`:
+  `deploy/Open-Source-EOC-0.9.9-map-data.zip`, 1,733,606,646 bytes, SHA-256
+  `37e4cbf2268fa32a3348f6ceea75aaf459a75cf21d19091098e36daa83c25253`, 8
+  files. Installed through the launcher's `install-map-data` into a
+  throwaway folder: `MAP_DATA_INSTALLED files=8 bytes=1856830809
+  version=0.9.9`, every file matching its manifest.
+- **Each file's SHA-256** is also in the `.sha256` file beside it. The
+  builds are not in git, as `0.9.2`'s are not.
+- **Not in these builds:** `933b946`, the sync document fix found by hosted
+  CI after them. Rebuilding the setup, the ZIP and the disk image from it
+  (the map data packet holds no code) is Basho's call before publishing.
+- **Not done here.** Tagging, the release and its announcement, and the
+  upload of these files, which Basho is running from the Island Mountain
+  repository; nothing here was installed on this machine or opened on a
+  Mac.
+- **Rollback:** remove the four files and their checksums from `deploy/`.

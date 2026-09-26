@@ -99,7 +99,7 @@ No line carries a written waiver.
 
 | # | Gate | State | Receipt, or what is missing |
 |---|---|---|---|
-| 1 | `pnpm check` green, serial, gate tag, with route-table, secret and advisory scans | Open for `v0.9.9` | Green on `ec11af5` in "V1 final milestone gate": every static gate, 273 of 273 files and 1,553 of 1,553 tests in one run, the load benchmark 4 of 4. `pnpm check` runs no secret scan itself: gitleaks runs in the pre-commit hook, which passed on every commit, and in hosted CI. For `0.9.2`: the Operator Trust units ran one full `test:ci` with its failures fixed ("Operator Trust landing: the full gate"); the serial `pnpm check:gate` was not run on the `0.9.2` commit. Since then: "Veoci and air gap phase VA-A gate" ran `pnpm check:gate` for VA1 to VA5 on the Linux bed, 1,686 of 1,691 tests with five browser tests that fail on that bed and the load test unexplained there; "IPAWS connector IC3: documents" ran it on Windows, exit 1 for a `node:test` file Vitest collected (since excluded) and two worker crashes whose files passed alone, then `pnpm check` on the rebased tree, 1,808 of 1,809 with the one red passing alone. Every later unit ran its own and neighbouring suites only. A trial `pnpm check:gate` on `f94d6ee`, before VA33 and VA34 landed, failed 2 of 380 files: the conditions browser test's time zone alias and a `node:test` file Vitest collected, both since fixed; its other results were `check:static` exit 0, `audit:advisories` 0 high or critical, `test:desktop` 44 of 44, and the serial Vitest run 2,025 passed and 2 failed of 2,030 tests in 47 minutes ("Veoci and air gap follow-up: Vitest collected a node test file"). Hosted CI runs `pnpm check` on Windows on each push to `main`; the last recorded result is run 36216221581 on `055792e`, 3 of 2,030 tests failed, the two time zone cases fixed and the partner sharing check made to name its cause ("CI correction: a time zone named by its alias, and a partner's message check"), and no receipt records a green run. For `v0.9.9`: the plan-end gate, section 6 |
+| 1 | `pnpm check` green, serial, gate tag, with route-table, secret and advisory scans | Green on `5079670` for `v0.9.9` (section 6) | Green on `ec11af5` in "V1 final milestone gate": every static gate, 273 of 273 files and 1,553 of 1,553 tests in one run, the load benchmark 4 of 4. `pnpm check` runs no secret scan itself: gitleaks runs in the pre-commit hook, which passed on every commit, and in hosted CI. For `0.9.2`: the Operator Trust units ran one full `test:ci` with its failures fixed ("Operator Trust landing: the full gate"); the serial `pnpm check:gate` was not run on the `0.9.2` commit. Since then: "Veoci and air gap phase VA-A gate" ran `pnpm check:gate` for VA1 to VA5 on the Linux bed, 1,686 of 1,691 tests with five browser tests that fail on that bed and the load test unexplained there; "IPAWS connector IC3: documents" ran it on Windows, exit 1 for a `node:test` file Vitest collected (since excluded) and two worker crashes whose files passed alone, then `pnpm check` on the rebased tree, 1,808 of 1,809 with the one red passing alone. Every later unit ran its own and neighbouring suites only. A trial `pnpm check:gate` on `f94d6ee`, before VA33 and VA34 landed, failed 2 of 380 files: the conditions browser test's time zone alias and a `node:test` file Vitest collected, both since fixed; its other results were `check:static` exit 0, `audit:advisories` 0 high or critical, `test:desktop` 44 of 44, and the serial Vitest run 2,025 passed and 2 failed of 2,030 tests in 47 minutes ("Veoci and air gap follow-up: Vitest collected a node test file"). Hosted CI runs `pnpm check` on Windows on each push to `main`; the last recorded result is run 36216221581 on `055792e`, 3 of 2,030 tests failed, the two time zone cases fixed and the partner sharing check made to name its cause ("CI correction: a time zone named by its alias, and a partner's message check"), and no receipt records a green run. For `v0.9.9`: the plan-end gate, section 6 |
 | 2 | Single-node declaration | Green | "V1 W2.5: rate limiting and identity caching" |
 | 3 | Heap flat over two hours with 150 sockets; real-hardware run recorded | Green | "Readiness RD4: 150 people at once": 150 people with 300 sockets for two hours on Basho's Windows machine against the network host profile, 0 errors, reads 245 ms and writes 33 ms at the 95th percentile, heap growth 8.4%. The three reads that grew during that run are fixed and measured by probe at the run's full volume ("Readiness RD4 follow-up: reads that slowed as the incident filled"); the two-hour rerun with the fix was skipped at Basho's instruction ("Version 0.9.2: the Windows setup"). Not run: that rerun, and the same against the installed host services |
 | 4 | No network call inside a write path; outbox worker and scheduler in both deploy paths | Green | "V1 W2.12: network calls out of every write path"; "V1 W2.1: outbound delivery queue"; "V1 W2.2: scheduler", whose desktop path was checked by loading the module, not by running a profile |
@@ -141,14 +141,14 @@ evidence, not Basho's acceptance (gate 18).
 
 | # | Scenario | Test | Receipt | Plan-end gate |
 |---|---|---|---|---|
-| 1 | An occasional operator returns and finds their own work | `scenario-occasional-operator-browser.test.ts` | "Operator trust TP2: my work" | To be filled (section 6) |
-| 2 | A request survives an interruption: navigation, a closed tab, an expired session | `scenario-request-interruption-browser.test.ts` | "Operator trust TP4: durable work and explicit state" | To be filled (section 6) |
-| 3 | A request is handed from receipt to acceptance to an owner, by number | `scenario-request-handoff-browser.test.ts` | "Operator trust TP1: request lifecycle and findability" | To be filled (section 6) |
-| 4 | A shift changes: the incoming operator reads what changed since their last shift | `scenario-shift-change-browser.test.ts` | "Operator trust TP3: shift handoff" | To be filled (section 6) |
-| 5 | A partner follows a link to what they were invited to, and is refused the rest with a reason | `scenario-partner-link-browser.test.ts` | "Operator trust TP6: partner invitations and recipient preview" | To be filled (section 6) |
-| 6 | The map and the records agree, and information says how old it is | `scenario-information-state-browser.test.ts`, `scenario-map-records-browser.test.ts` | "Operator trust TP5: information state you can read"; "Operator trust TP9: from the map to the action" | To be filled (section 6) |
-| 7 | An incident closes, says what stays active, and can be reopened | `scenario-incident-close-browser.test.ts` | "Operator trust TP7: incident close and reopen" | To be filled (section 6) |
-| 8 | Configuration moves forward through an upgrade | `upgrade-configuration.test.ts` | "Operator trust TP8: upgrades keep configuration" | To be filled (section 6) |
+| 1 | An occasional operator returns and finds their own work | `scenario-occasional-operator-browser.test.ts` | "Operator trust TP2: my work" | Passed on `5079670` (section 6) |
+| 2 | A request survives an interruption: navigation, a closed tab, an expired session | `scenario-request-interruption-browser.test.ts` | "Operator trust TP4: durable work and explicit state" | Passed on `5079670` (section 6) |
+| 3 | A request is handed from receipt to acceptance to an owner, by number | `scenario-request-handoff-browser.test.ts` | "Operator trust TP1: request lifecycle and findability" | Passed on `5079670` (section 6) |
+| 4 | A shift changes: the incoming operator reads what changed since their last shift | `scenario-shift-change-browser.test.ts` | "Operator trust TP3: shift handoff" | Passed on `5079670` (section 6) |
+| 5 | A partner follows a link to what they were invited to, and is refused the rest with a reason | `scenario-partner-link-browser.test.ts` | "Operator trust TP6: partner invitations and recipient preview" | Passed on `5079670` (section 6) |
+| 6 | The map and the records agree, and information says how old it is | `scenario-information-state-browser.test.ts`, `scenario-map-records-browser.test.ts` | "Operator trust TP5: information state you can read"; "Operator trust TP9: from the map to the action" | Passed on `5079670` (section 6) |
+| 7 | An incident closes, says what stays active, and can be reopened | `scenario-incident-close-browser.test.ts` | "Operator trust TP7: incident close and reopen" | Passed on `5079670` (section 6) |
+| 8 | Configuration moves forward through an upgrade | `upgrade-configuration.test.ts` | "Operator trust TP8: upgrades keep configuration" | Passed on `5079670` (section 6) |
 
 ## 4. What v0.9.9 would hold, relative to 0.9.2
 
@@ -235,32 +235,38 @@ placeholders that gate nothing; they gate no unit, and they are not proof.
 | The rollout playbook and the self-paced modules, walked by EOC staff | Basho, with an EOC's staff | The [rollout playbook](docs/guides/ROLLOUT-PLAYBOOK.md) and [self-paced training](docs/guides/SELF-PACED-TRAINING.md) | F17 |
 | A board added as a layer through the FeatureServer in QGIS, ArcGIS Pro and ArcGIS Online | Basho, with those clients | The [administration guide](docs/guides/ADMIN.md#esri-and-gis-clients), "Esri and GIS clients" | F20 |
 
-## 6. The plan-end gate and the builds (to be filled)
+## 6. The plan-end gate and the builds
 
-The Veoci roster's section 7 and decision 18: after its last unit lands, the
-integrator runs these on the commit `v0.9.9` is built from and writes each
-result here, with the command, the counts, and every red named with its
-isolated rerun. The builds are made after the last document change, since
-the web build carries `docs/guides`. Nothing in this section has run yet.
-Two earlier runs are not these results: RD5's proof, by default and with the
-stand-ins, passed on `2991317` ("Veoci and air gap plan gate: the air-gap
-proof with integrations on local stand-ins"), and a trial `pnpm check:gate`
-ran on `f94d6ee` (gate 1).
+The Veoci roster's section 7 and decision 18: after its last unit landed,
+these ran on `5079670` ("Version 0.9.9: the version and changelog"), the
+commit `v0.9.9` is built from, on the Windows machine that runs the plan
+("Veoci and air gap plan-end gate", "Version 0.9.9: the builds"). Earlier
+runs are not these results: RD5's proof, by default and with the stand-ins,
+passed on `2991317` ("Veoci and air gap plan gate: the air-gap proof with
+integrations on local stand-ins"), and a trial `pnpm check:gate` ran on
+`f94d6ee` ("Veoci and air gap follow-up: Vitest collected a node test
+file").
+
+One defect was found after the builds, by hosted CI: a sync document
+evicted while it was being reopened was handed back destroyed ("Veoci and
+air gap follow-up: a sync document evicted while it was reopened"). It was
+present in `0.9.2` too and is rare; the fix, `933b946`, is not in these
+builds unless they are rebuilt, which is Basho's call before publishing.
 
 | Check | Command or procedure | Result |
 |---|---|---|
-| The serial gate | `pnpm check:gate` | To be filled: commit, exit code, test files and tests passed of the total, each red named, the load test |
-| Acceptance scenarios 1 to 8 | Within `pnpm check:gate` | To be filled in the last column of section 3 |
-| RD5's proof with every optional integration configured against local stand-ins | `node deploy/windows/prove-airgap.mjs` and `node deploy/windows/prove-airgap.mjs --stand-ins` on Windows | To be filled: connections outside the machine and its network (zero expected), and what queued, what expired and what reconciled |
-| Hosted CI on the release commit | The push to `main` | To be filled: run number and result |
-| Coverage (gate 20) | `pnpm test:coverage` at `00deba5` and at the release commit | To be filled, or Basho's acceptance of the assertion counts in its place |
+| The serial gate | `pnpm check:gate` | `5079670`, 05:18:47Z to 06:01:48Z, exit 0: `check:static` exit 0 (licenses 339 packages, links 127 files); `audit:advisories` 0 high or critical, 0 exceptions; `test:desktop` 44 of 44; the serial Vitest run 385 of 385 files and 2,077 of 2,077 tests, no red; the load benchmark 4 of 4 |
+| Acceptance scenarios 1 to 8 | Within `pnpm check:gate` | Passed on `5079670`, in the last column of section 3 |
+| RD5's proof with every optional integration configured against local stand-ins | `node deploy/windows/prove-airgap.mjs` and `node deploy/windows/prove-airgap.mjs --stand-ins` on Windows | Both **PASS** on `5079670`, no connection outside this computer and its local network and no page error (default 05:19:20Z to 05:20:49Z; stand-ins 05:20:49Z to 06:23:56Z). With the stand-ins: email, SMS by the HTTP provider and by the gateway phone, and push each held what they could not send (3, 3, 2 and 1) as "Waiting for a route" and delivered it 2 to 6 seconds after their route returned; the partner host received the record made during the cut 6 seconds after it was back; the feed raised one "Feed failing" notice that became "Feed recovered"; the webhook expired at the end of its 1-hour window, was resent, and was delivered 58 seconds later; both gateway replies acknowledged the send. `AIR-GAP-REPORT.md` is this run's report |
+| Hosted CI on the release commit | The push to `main` | `5079670` was pushed with `933b946`; run 36220202097 on `98f050a`, the same code without the version, failed 3 of 2,077 tests: the sync document eviction above, fixed in `933b946`, and two browser walks (the board records import and the visual review) that passed on this machine twice, in the gate and alone. The run on `933b946` is recorded in "Veoci and air gap plan-end gate" when it ends |
+| Coverage (gate 20) | `pnpm test:coverage` at `00deba5` and at the release commit | Not run; open for Basho: a measurement, or his acceptance of the assertion counts in its place |
 
 | Build | File | Bytes | SHA-256 |
 |---|---|---|---|
-| Windows setup, with `-IncludeOptionalBasemaps` | `deploy/Open-Source-EOC-Setup-0.9.9.exe` | To be filled | To be filled |
-| Portable ZIP of the same staged `app` folder | `deploy/Open-Source-EOC-0.9.9.zip` | To be filled | To be filled |
-| macOS disk image (say which: built on Windows, using Postgres.app, or by the "macOS demo" workflow, with its own PostgreSQL) | `deploy/Open-Source-EOC-0.9.9-macOS.dmg` | To be filled | To be filled |
-| Map data packet | `deploy/Open-Source-EOC-0.9.9-map-data.zip` | To be filled | To be filled |
+| Windows setup, with `-IncludeOptionalBasemaps` | `deploy/Open-Source-EOC-Setup-0.9.9.exe` | 1,876,839,637 | `ca9512dde89d041fd8000bd97879df16126c119c19f9aa56c06b57e4a7bdb173` |
+| Portable ZIP of the same staged `app` folder | `deploy/Open-Source-EOC-0.9.9.zip` | 1,979,868,473 | `09a76713de126f512917e6a8f449c457718f5ce57ff0c320394abde7a1c0d0a6` |
+| macOS disk image, built on Windows from the setup's stage, using Postgres.app | `deploy/Open-Source-EOC-0.9.9-macOS.dmg` | 311,230,464 | `5dfa5070cac49bcd2448e2e4f8bcb312d22d777b36346cdb79ba4f6eb2aedbd4` |
+| Map data packet | `deploy/Open-Source-EOC-0.9.9-map-data.zip` | 1,733,606,646 | `37e4cbf2268fa32a3348f6ceea75aaf459a75cf21d19091098e36daa83c25253` |
 
 ## 7. What remains
 
@@ -397,8 +403,9 @@ archiving the retired rosters (item 11); branch protection (item 9) and
   of the bundle's other libraries, the web bundle's npm packages and the
   Liberation Sans glyphs; and the offered source kept for three years. See
   [the asset inventory](docs/ASSET-LICENSES.md#license-work-open-before-a-setup-is-published).
-- **Checks:** the plan-end gate (section 6); coverage at `00deba5` and the
-  release commit (gate 20); hosted CI's first recorded green run. Of the
+- **Checks:** coverage at `00deba5` and the release commit (gate 20);
+  hosted CI's first recorded green run. The plan-end gate is green
+  (section 6). Of the
   three browser suites that failed on the Windows runner at `0.9.2`, "CI
   repairs: the macOS job's browser tests" fixes authorized viewing and load
   retry; no receipt names the templates suite for a jurisdiction
@@ -434,8 +441,8 @@ archiving the retired rosters (item 11); branch protection (item 9) and
 The roster sets the release act as Basho's: "tag, release assets, installer,
 announcement text; the pilot jurisdiction named or the release marked
 evaluation-only". No pilot jurisdiction, second maintainer or waiver,
-operator comparison or screen-reader pass exists. Gate lines 1, 9, 16, 17,
-18 and 20 are not green; line 1 waits on the plan-end gate (section 6).
+operator comparison or screen-reader pass exists. Gate lines 9, 16, 17,
+18 and 20 are not green; line 1 is green on `5079670` (section 6).
 `0.9.2` was never tagged.
 
 **Recommendation: tag `v0.9.9` as an evaluation-only release, built in every
@@ -449,7 +456,8 @@ not met, so it needs no waiver. It requires, in order:
 2. The version set to `0.9.9` in every package manifest (they carry
    `0.9.2`), with a dated `0.9.9` changelog entry that takes in the
    Unreleased entries and states the upgrade notes in section 4.
-3. The plan-end gate green on the release commit (section 6).
+3. The plan-end gate green on the release commit (section 6). Done on
+   `5079670`.
 4. The license work above done, since the builds are release assets.
 5. The four builds from the release commit, made after the last document
    change, since `docs/guides` is a build input ("Veoci and air gap VA39: job
@@ -457,7 +465,9 @@ not met, so it needs no waiver. It requires, in order:
    section 6: the Windows setup with `-IncludeOptionalBasemaps`; the
    portable ZIP of the same staged `app` folder (the repository has no
    script for it; `0.9.2`'s was made from the stage); the macOS disk image;
-   and the map data packet (`tools/basemap/pack-map-data.mjs`).
+   and the map data packet (`tools/basemap/pack-map-data.mjs`). Done from
+   `5079670`; rebuilding the setup, the ZIP and the disk image from
+   `933b946` would carry the one fix found after them (section 6).
 6. The tag `v0.9.9` on the release commit.
 7. Release assets: the four files, each with its SHA-256.
 8. Announcement text that says evaluation-only and synthetic data only,
