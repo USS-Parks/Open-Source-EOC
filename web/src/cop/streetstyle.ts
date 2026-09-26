@@ -1,13 +1,12 @@
 import type { ThemeName } from "../design/tokens.js";
 import { BUNDLED_FONT_STACK } from "./bundledbasemap.js";
 import { STREET_FACILITY_TYPES, streetFacilityIconExpression } from "./facilities.js";
+import { buildingSpecs, type BuildingsConfig } from "./building-styles.js";
 import {
-  buildingSpecs,
   IMAGERY_WATER_LAYER_ID,
   rasterBasemapSpecs,
   terrainSpecs,
   withBasemapGroups,
-  type BuildingsConfig,
   type RasterBasemap,
   type TerrainSource,
 } from "./layers.js";
@@ -173,8 +172,8 @@ export function buildStreetStyle(
   const p = PALETTE[theme];
   const src = "openmaptiles";
   const font = streetFontStack(config);
-  // Typed, status-colorable footprints draw over the plain building fill and
-  // over imagery, as on a hybrid map.
+  // Typed, status-colorable footprints replace the plain building fill and
+  // draw over imagery, as on a hybrid map.
   const built = buildingSpecs(buildings, theme);
   // Hillshade sits over the land fills and under water, roads, and labels.
   const relief = terrainSpecs(terrain, theme);
@@ -279,14 +278,14 @@ export function buildStreetStyle(
         ],
       },
     },
-    {
+    ...(buildings ? [] : [{
       id: "building",
       type: "fill",
       source: src,
       "source-layer": "building",
       minzoom: 14,
       paint: { "fill-color": p.building, "fill-opacity": 0.7 },
-    },
+    }]),
     ...raster.layers,
     ...(raster.layers.length > 0
       ? [{

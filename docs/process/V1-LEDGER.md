@@ -14828,3 +14828,62 @@ integrator's amend ran without it.
 - **Full suite:** the second landing batch's run, recorded below.
 - **Rollback.** Revert the commit; without the flag the rail shows the
   frames' twelve sections again.
+
+## Map and dashboard parity MP5: buildings by use and role
+
+Map and Dashboard Parity PSPR unit MP5 (decision 3), built in lane
+`lane/mp5`.
+
+- **What there was before.** Footprints drew from z13 in seven muted use
+  colors under a plain basemap building layer, with no public, private or
+  critical infrastructure distinction. The status join cleared all feature
+  state on every idle and set it again, so any matched footprint kept the
+  map re-rendering.
+- **What changed.** New `web/src/cop/building-styles.ts` (themes, role
+  rules, paint, legend rows, facility matching, inspector), wired in
+  `CopMap.tsx` as a Buildings select (By use, By role, Plain, Off) with
+  legend rows and export lines; `layers.ts` re-exports it in place of the
+  old building code; `streetstyle.ts` drops the basemap's plain building
+  layer when the archive is present.
+  - **By use:** the OSM tag, or the Overture subtype for `building=yes`,
+    through `BUILDING_OCCUPANCY_PALETTE` and its aliases (civic to
+    government, religious to assembly); hospitals count as commercial, as
+    HAZUS classes them.
+  - **By role:** public for government, education and assembly; critical
+    infrastructure where a facility from the facilities archive lies inside
+    the footprint, or failing that within 20 m (the Sutter Coast Hospital
+    point is 13 m outside its building); bridges, dams and towers never
+    mark a building; otherwise private.
+  - **Drawing:** fill and outline from z14, above imagery; fill 0.7 on the
+    street map and 0.45 over imagery, the quiet class (unclassified, or
+    private) lighter at 0.5 and 0.25. Operational status wins, then
+    critical infrastructure, then the class color; a status footprint gets
+    fill 0.85 and a heavier outline in the map's ink color.
+  - **Joins** write only what changed; the facility join is viewport-only,
+    with a `ponytail:` comment naming its ceiling. The inspector shows use,
+    role, OSM tag, Overture subtype and the joined facility.
+    `buildingLegend()` gives each theme's rows for MP8.
+- **Defaults taken and deviations.** By use is the default in both themes.
+  The browser walk sits in `server/src/__tests__/` beside every other
+  walk. The facility join reads the facilities source directly, so a
+  footprint stays critical infrastructure with its lifeline's icons off.
+  Data ceiling: about 11 percent of the archive's footprints carry a use
+  class (85 percent of Eureka's are plain `building=yes`), so the use theme
+  is mostly unclassified grey; land-use inference would lift Eureka only
+  about 3 percent. Decision 3's alternative, FEMA USA Structures
+  occupancy, is taken up as its own data unit. The imagery archive stops
+  short of Crescent City, so its imagery captures show the street map.
+- **Verification.** `building-styles.test.ts` and the updated `cop` and
+  `overture-buildings` tests, 48 pass (the MapLibre expressions evaluated
+  against the use, role and precedence rules, opacity and zoom ranges);
+  the new `buildings-browser.test.ts` 4 of 4 at 1586 by 992 and 1534 by
+  790, both themes, street map and imagery, Eureka and Crescent City at
+  z15 and z16, with no page errors, MapLibre warnings or off-host
+  requests; Saint Joseph Hospital, Eureka Fire Station 1, Sutter Coast
+  Hospital and the Crescent City fire station, sheriff's office and
+  courthouse read "Critical infrastructure". Rendered at Eureka z15:
+  1,461 footprints, 163 classified, 11 critical infrastructure, 5 with a
+  status. `fidelity-browser.test.ts` 3 of 3; `pnpm check:static` green.
+  84 captures reviewed by the lane.
+- **Full suite:** the second landing batch's run, recorded below.
+- **Rollback.** Revert the commit.

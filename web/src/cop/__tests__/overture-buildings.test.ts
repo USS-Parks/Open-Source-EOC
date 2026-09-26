@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { buildingsSource } from "../../app/config.js";
-import { buildingSpecs, buildingUseOf } from "../layers.js";
+import { buildingSpecs, buildingUse } from "../building-styles.js";
 
 const runtime = globalThis as unknown as { OPENEOC?: Record<string, string> };
 
@@ -10,19 +10,21 @@ afterEach(() => {
 
 describe("H14 Overture building enrichment", () => {
   it("uses Overture only for a still-untyped OSM footprint", () => {
-    expect(buildingUseOf("yes", "commercial")).toBe("commercial");
-    expect(buildingUseOf("yes", "civic")).toBe("civic");
-    expect(buildingUseOf("yes", "religious")).toBe("religious");
-    expect(buildingUseOf("yes", "industrial")).toBe("industrial");
-    expect(buildingUseOf("yes", "entertainment")).toBe("other");
-    expect(buildingUseOf("yes", "unknown")).toBe("other");
-    expect(buildingUseOf("yes")).toBe("other");
+    expect(buildingUse("yes", "commercial")).toBe("commercial");
+    expect(buildingUse("yes", "civic")).toBe("government");
+    expect(buildingUse("yes", "religious")).toBe("assembly");
+    expect(buildingUse("yes", "education")).toBe("education");
+    expect(buildingUse("yes", "medical")).toBe("commercial");
+    expect(buildingUse("yes", "transportation")).toBe("utility_misc");
+    expect(buildingUse("yes", "entertainment")).toBe("unclassified");
+    expect(buildingUse("yes", "unknown")).toBe("unclassified");
+    expect(buildingUse("yes")).toBe("unclassified");
   });
 
   it("keeps a current typed OSM class authoritative", () => {
-    expect(buildingUseOf("house", "commercial")).toBe("residential");
-    expect(buildingUseOf("school", "residential")).toBe("civic");
-    expect(buildingUseOf("custom_typed_value", "civic")).toBe("other");
+    expect(buildingUse("house", "commercial")).toBe("residential");
+    expect(buildingUse("school", "residential")).toBe("education");
+    expect(buildingUse("custom_typed_value", "civic")).toBe("unclassified");
   });
 
   it("keeps osm_id promotion and status precedence in both themes", () => {
@@ -40,8 +42,8 @@ describe("H14 Overture building enrichment", () => {
       const color = JSON.stringify(
         spec.layers.find((layer) => layer.id === "building-use")?.paint["fill-color"],
       );
-      expect(color).toContain("overture_use");
-      expect(color.indexOf("feature-state")).toBeLessThan(color.indexOf("overture_use"));
+      expect(color).toContain("overture_subtype");
+      expect(color.indexOf("feature-state")).toBeLessThan(color.indexOf("overture_subtype"));
       expect(color).toContain("critical");
       expect(color).toContain("warning");
       expect(color).toContain("normal");

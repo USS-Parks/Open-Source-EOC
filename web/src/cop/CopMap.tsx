@@ -14,10 +14,6 @@ import {
   BASEMAP_GROUPS,
   basemapGroupOf,
   buildCopStyle,
-  BUILDING_USE_COLORS,
-  BUILDING_USE_LAYER_ID,
-  BUILDING_USE_LEGEND,
-  BUILDINGS_SOURCE_ID,
   DEM_SOURCE_ID,
   HILLSHADE_LAYER_ID,
   IMAGERY_WATER_LAYER_ID,
@@ -28,11 +24,28 @@ import {
   TILE_CLUSTERS_LAYER,
   tileLayerSpecs,
   type BasemapConfig,
-  type BuildingsConfig,
   type CopFeatureCollection,
   type RasterBasemap,
   type TerrainSource,
 } from "./layers.js";
+import {
+  applyBuildingPaint,
+  BUILDING_MIN_ZOOM,
+  BUILDING_THEMES,
+  BUILDING_USE_LAYER_ID,
+  BUILDINGS_SOURCE_ID,
+  BUILDINGS_SOURCE_LAYER,
+  buildingInspection,
+  buildingLegend,
+  buildingPaint,
+  buildingsAttribution,
+  DEFAULT_BUILDING_THEME,
+  FACILITY_REACH_METERS,
+  footprintFor,
+  KEY_FACILITY_TYPES,
+  type BuildingsConfig,
+  type BuildingTheme,
+} from "./building-styles.js";
 import { NATURAL_EARTH_ATTRIBUTION } from "./basemap.js";
 import {
   buildBundledVectorStyle,
@@ -109,6 +122,7 @@ import {
   referenceSpecs,
   REFERENCE_CLUSTER_LAYERS,
   REFERENCE_INSPECTABLE,
+  REFERENCE_LAYER,
   RISK_ATTRIBUTION,
   RISK_LAYERS,
   withReferenceLayers,
@@ -240,8 +254,8 @@ export interface CopMapProps {
   readonly rasterBasemaps?: readonly RasterBasemap[] | undefined;
   /** A DEM tile set enabling the hillshade toggle and the 3D terrain control. */
   readonly terrain?: TerrainSource | undefined;
-  /** A buildings archive: footprints by use, colored by the status of the
-   * records that fall inside them. */
+  /** A buildings archive: footprints by use or role, colored by the status
+   * of the records that fall inside them. */
   readonly buildings?: BuildingsConfig | undefined;
   readonly jurisdictionOverlays?: JurisdictionOverlays | undefined;
   /** Statewide reference archives: critical facilities, boundaries, risk and vulnerability. */
@@ -448,6 +462,8 @@ export function CopMap(props: CopMapProps) {
   const [overlayOn, setOverlayOn] = useState<Record<string, boolean>>({});
   const terrain = props.basemapStyleUrl ? undefined : props.terrain;
   const buildings = props.basemapStyleUrl ? undefined : props.buildings;
+  const [buildingTheme, setBuildingTheme] = useState<BuildingTheme>(DEFAULT_BUILDING_THEME);
+  const buildingLegendNow = buildings ? buildingLegend(buildingTheme, props.theme, basemapMode !== "vector") : undefined;
   const vectors = props.jurisdictionOverlays;
   const [vectorOn, setVectorOn] = useState<Record<string, boolean>>({});
   const [coverage, setCoverage] = useState<Record<string, OverlayCoverage>>({});
@@ -622,8 +638,7 @@ export function CopMap(props: CopMapProps) {
     const status = typeof rawStatus === "string" && LEGEND.includes(rawStatus as SymbolStatus)
       ? rawStatus as SymbolStatus
       : "unknown";
-    const building = sourceKey === BUILDINGS_SOURCE_ID || layerId === BUILDING_USE_LAYER_ID;
-    const overlay = layerId.startsWith("overlay-") ? layerId.slice("overlay-".length) : undefined;
+    const overlay =layerId.startsWith("overlay-") ? layerId.slice("overlay-".length) : undefined;
     const overlayInfo = overlay ? coverageRef.current[overlay] : undefined;
     const freshness = health
       ? health.stale
@@ -633,7 +648,6 @@ export function CopMap(props: CopMapProps) {
     const source = board?.title
       ?? health?.name
       ?? feed?.title
-      ?? (building ? "OpenStreetMap building footprints" : undefined)
       ?? (layerId === "facility-label" ? "Basemap facility reference" : undefined)
       ?? VECTOR_OVERLAYS.find((candidate) => candidate.id === overlay)?.title
       ?? "Configured geographic reference";
@@ -643,17 +657,11 @@ export function CopMap(props: CopMapProps) {
         ? "Static flood reference"
         : feed
           ? "Configured feed"
-          : building
-            ? "Building footprint"
-            : "Geographic reference";
+          : "Geographic reference";
     const attribution = feed?.attribution
       ?? health?.attribution
       ?? (facility ? NAPSG_ATTRIBUTION : undefined)
-      ?? (building
-        ? buildings?.overtureRelease
-          ? `Buildings: © OpenStreetMap contributors (ODbL); enrichment: © Overture Maps Foundation (ODbL, ${buildings.overtureRelease})`
-          : "Buildings: © OpenStreetMap contributors (ODbL)"
-        : overlayInfo?.attribution);
+      ?? overlayInfo?.attribution;
     const coverageLabel = feed?.coverage ?? health?.coverage ?? overlayInfo?.coverage;
     const title = labelFor(properties);
     // A board record says when it was observed and last changed, and by whom.
@@ -927,7 +935,11 @@ export function CopMap(props: CopMapProps) {
         map.easeTo({ center: e.lngLat, zoom: map.getZoom() + 2 });
         return;
       }
-      if (props.inspectionMode !== "popup") {
+      if (props.inspectionMode !== "popup" && hit.layer.id === BUILDING_USE_LAYER_ID) {
+        popup.remove();
+        setSelection(buildingInspection(hit.properties ?? {}, hit.state ?? {}, buildings));
+        onInspectFeatureRef.current?.(null);
+      } else if (props.inspectionMode !== "popup") {
         popup.remove();
         openInspection(hit.properties ?? {}, hit.source, hit.layer.id, hit.state?.status, hit.id);
       } else {
@@ -941,15 +953,19 @@ export function CopMap(props: CopMapProps) {
       map.getCanvas().style.cursor = over ? "pointer" : "";
     });
 
+    // Two joins set state on building footprints, which their paint reads
+    // (building-styles.ts): a record's status over critical infrastructure
+    // over the class's use or role. Each writes only what changed, so a
+    // settled map stays idle.
+    const footprints = { source: BUILDINGS_SOURCE_ID, sourceLayer: BUILDINGS_SOURCE_LAYER };
     // Color building footprints by the status of the point records inside
     // them: each visible point is hit-tested against the rendered footprints
     // and the hit gets the record's status as feature state.
     // ponytail: viewport-only, client-side join, one query per point record
     // per idle; a server-side PostGIS join if record counts outgrow it.
-    const joinBuildings = () => {
-      if (!buildings || !map.getLayer(BUILDING_USE_LAYER_ID)) return;
-      const target = { source: BUILDINGS_SOURCE_ID, sourceLayer: "buildings" };
-      map.removeFeatureState(target);
+    let statusById = new Map<string | number, unknown>();
+    const joinStatus = () => {
+      const next = new Map<string | number, unknown>();
       for (const fc of Object.values(dataRef.current)) {
         for (const f of fc.features) {
           const g = f.geometry as { type?: string; coordinates?: [number, number] };
@@ -957,12 +973,50 @@ export function CopMap(props: CopMapProps) {
           const hit = map
             .queryRenderedFeatures(map.project(g.coordinates), { layers: [BUILDING_USE_LAYER_ID] })
             .find((h) => h.id !== undefined);
-          if (!hit) continue;
-          map.setFeatureState({ ...target, id: hit.id as string | number }, {
-            status: f.properties._symbolStatus,
-          });
+          if (hit) next.set(hit.id!, f.properties._symbolStatus);
         }
       }
+      for (const id of statusById.keys()) if (!next.has(id)) map.removeFeatureState({ ...footprints, id }, "status");
+      for (const [id, status] of next) if (statusById.get(id) !== status) map.setFeatureState({ ...footprints, id }, { status });
+      statusById = next;
+    };
+    // Critical infrastructure for the role theme: each facility of the
+    // facilities archive in view joins the footprint it lies in, or the
+    // nearest within reach (a geocoded point often falls in the parking lot),
+    // once; a key facility takes a footprint from any other.
+    // ponytail: viewport-only, client-side join, one rendered-feature query
+    // per facility; a footprint id packed into the facilities archive by
+    // tools/basemap if this misses too many.
+    const facilitiesSeen = new Set<string>();
+    const keyFacilityAt = new Map<string | number, boolean>();
+    const joinFacilities = () => {
+      const source = (map.getLayer(REFERENCE_LAYER.keyFacilities) as { source?: string } | undefined)?.source;
+      if (!source || map.getZoom() < BUILDING_MIN_ZOOM) return;
+      const { clientWidth: width, clientHeight: height } = map.getCanvas();
+      const metersPerPixel = (78_271.517 * Math.cos((map.getCenter().lat * Math.PI) / 180)) / 2 ** map.getZoom();
+      const reach = FACILITY_REACH_METERS / metersPerPixel;
+      for (const f of map.querySourceFeatures(source, { sourceLayer: "facilities" })) {
+        if (f.geometry.type !== "Point") continue;
+        const point = f.geometry.coordinates as [number, number];
+        const type = String(f.properties.type ?? "");
+        const seen = `${type}:${point.join()}`;
+        const p = map.project(point);
+        // Near the edge a footprint may be cut off; that facility waits for the next view.
+        if (facilitiesSeen.has(seen) || p.x < reach || p.y < reach || p.x > width - reach || p.y > height - reach) continue;
+        facilitiesSeen.add(seen);
+        const near = map.queryRenderedFeatures([[p.x - reach, p.y - reach], [p.x + reach, p.y + reach]], { layers: [BUILDING_USE_LAYER_ID] });
+        const id = footprintFor(type, point, near);
+        const key = KEY_FACILITY_TYPES.has(type);
+        if (id === undefined || (keyFacilityAt.has(id) && (keyFacilityAt.get(id) || !key))) continue;
+        keyFacilityAt.set(id, key);
+        map.setFeatureState({ ...footprints, id }, { facility: f.properties.name ?? "", facilityType: type });
+      }
+    };
+    const joinBuildings = () => {
+      if (!buildings || !map.getLayer(BUILDING_USE_LAYER_ID)) return;
+      if (map.getLayoutProperty(BUILDING_USE_LAYER_ID, "visibility") === "none") return;
+      joinStatus();
+      joinFacilities();
     };
 
     // One source per operational layer: GeoJSON while it fits one page,
@@ -1308,9 +1362,7 @@ export function CopMap(props: CopMapProps) {
     }
     references.push(...referenceCredits(reference, refState));
     if (hillshade && terrain) references.push(`Hillshade: ${terrain.attribution ?? "configured elevation source; attribution not supplied"}`);
-    if (buildings) references.push(buildings.overtureRelease
-      ? `Buildings: © OpenStreetMap contributors (ODbL); enrichment: © Overture Maps Foundation (ODbL, ${buildings.overtureRelease})`
-      : "Buildings: © OpenStreetMap contributors (ODbL)");
+    if (buildings && buildingLegendNow) references.push(buildingsAttribution(buildings));
 
     for (const board of props.boards.filter((candidate) => visible[candidate.id] ?? boardDefault(candidate)))
       references.push(`${board.title}: Open Source EOC board records`);
@@ -1329,8 +1381,8 @@ export function CopMap(props: CopMapProps) {
     const legendLines: string[] = [];
     if ((props.feeds ?? []).some((feed) => feed.kind === "fema-flood" && (feedVisible[feed.id] ?? true)))
       legendLines.push(`FLOOD REFERENCE LEGEND: ${FLOOD_LEGEND.map((entry) => entry.title).join("; ")}`);
-    if (buildings)
-      legendLines.push(`BUILDING USE LEGEND: ${BUILDING_USE_LEGEND.map((entry) => entry.title).join("; ")}`);
+    if (buildingLegendNow)
+      legendLines.push(`${buildingLegendNow.title.toUpperCase()} LEGEND: ${buildingLegendNow.rows.map((row) => row.label).join("; ")}`);
     if (hasFacilities)
       legendLines.push(`FACILITY SYMBOLS (NAPSG): ${FACILITY_SYMBOLS.map((entry) => entry.title).join("; ")}`);
     if (Object.values(vectorOn).some(Boolean))
@@ -1460,6 +1512,16 @@ export function CopMap(props: CopMapProps) {
     if (map.isStyleLoaded()) apply();
     else map.once("load", apply);
   }, [basemapMode, overlayOn]);
+
+  // The building theme, and a lighter fill over imagery; the joins follow on the next idle.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !buildings) return;
+    const apply = () => applyBuildingPaint(map, buildingPaint(props.theme, buildingTheme, basemapMode !== "vector"));
+    if (map.getLayer(BUILDING_USE_LAYER_ID)) apply();
+    else map.once("load", apply);
+    return () => { map.off("load", apply); };
+  }, [buildingTheme, basemapMode]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1598,12 +1660,14 @@ export function CopMap(props: CopMapProps) {
   const boundaryRows = reference?.boundaries
     ? BOUNDARY_TOGGLES.filter((row) => layerMatches(row.title) || layerMatches("Boundaries"))
     : [];
+  const buildingsShown = !!buildings && layerMatches("Buildings");
   const riskShown = !!reference?.risk
     && (layerMatches("Risk and vulnerability") || RISK_LAYERS.some((layer) => layerMatches(layer.title)));
   const noLayerMatches = !!layerNeedle
     && shownBoards.length + shownFeeds.length + shownVectors.length + shownRasters.length
       + shownGroups.length + shownBasemaps.length + lifelineRows.length + boundaryRows.length === 0
     && !riskShown
+    && !buildingsShown
     && !(terrain && layerMatches("Hillshade"));
 
   return (
@@ -1739,21 +1803,30 @@ export function CopMap(props: CopMapProps) {
             <p className="eoc-cop-fine">Coverage follows the configured source. Unmapped land does not imply private ownership.</p>
           </div>
         ) : null}
-        {buildings ? (
-          <div className="eoc-cop-above">
-            <h3 className="eoc-cop-heading">Building use</h3>
-            <ul className="eoc-cop-options">
-              {BUILDING_USE_LEGEND.map((u) => (
-                <li key={u.id} className="eoc-cop-key">
-                  <span
-                    aria-hidden="true"
-                    className="eoc-cop-swatch"
-                    style={{ backgroundColor: BUILDING_USE_COLORS[props.theme][u.id] }}
-                  />
-                  {u.title}
-                </li>
-              ))}
-            </ul>
+        {buildingsShown ? (
+          <div className="eoc-cop-above" data-testid="building-layer-group">
+            <label className="eoc-cop-heading" htmlFor="cop-building-theme">Buildings</label>
+            <select id="cop-building-theme" className="eoc-cop-select" value={buildingTheme}
+              onChange={(event) => setBuildingTheme(event.target.value as BuildingTheme)}>
+              {BUILDING_THEMES.map((option) => <option key={option.id} value={option.id}>{option.title}</option>)}
+            </select>
+            {buildingLegendNow ? (
+              <>
+                <h3 className="eoc-cop-heading">{buildingLegendNow.title}</h3>
+                <ul className="eoc-cop-options" data-testid="building-legend">
+                  {buildingLegendNow.rows.map((row) => (
+                    <li key={row.key} className="eoc-cop-key">
+                      <span aria-hidden="true" className="eoc-cop-swatch" style={{ backgroundColor: row.color }} />
+                      {row.label}
+                    </li>
+                  ))}
+                </ul>
+                <p className="eoc-cop-fine">
+                  From zoom {BUILDING_MIN_ZOOM}. A record inside a footprint colors it by status, over its role and use.
+                  {buildingTheme === "role" ? ` Critical infrastructure: a critical facility lies in the footprint or within ${FACILITY_REACH_METERS} m of it.` : ""}
+                </p>
+              </>
+            ) : null}
           </div>
         ) : null}
         {shownGroups.length > 0 ? (
