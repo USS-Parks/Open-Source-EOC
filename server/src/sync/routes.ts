@@ -20,6 +20,7 @@ const UpdateMessage = z.union([
     update: Update,
     operationId: z.string().uuid(),
     incidentId: z.string().uuid(),
+    queuedAt: z.string().datetime({ offset: true }).optional(),
   }).strict(),
   z.object({ type: z.literal("update"), update: Update }).strict(),
 ]);
@@ -54,7 +55,8 @@ export async function closeWithdrawnGuestSockets(): Promise<void> {
  *   client -> {type:"auth", token}          first frame, bearer token
  *   server -> {type:"state", update, seq?}  full board state as one update
  *   client -> {type:"update", update}       base64 Yjs update
- *   server -> {type:"synced", seq, conflicts}  ack for the sender
+ *   server -> {type:"synced", seq, conflicts, late?}  ack for the sender; `late`
+ *             names the late submission that holds it when the incident had closed
  *   server -> {type:"update", update}       peer updates, pushed
  *   server -> {type:"error", error}         then close, on any failure
  */
@@ -105,12 +107,16 @@ export function registerSyncRoutes(app: FastifyInstance, sql: Sql, hub: BoardSyn
             const auth = AuthMessage.safeParse(message);
             if (!auth.success) return fail("authenticate first");
             principal = await principalFromToken(sql, auth.data.token);
-            const { state } = await hub.open(principal, boardId, incidentId);
-            const release = hub.subscribe(boardId, incidentId, (update, origin) => {
-              if (origin !== sessionId && socket.readyState === socket.OPEN) {
-                socket.send(updateFrame(update), { binary: false });
-              }
-            });
+            const { state, live } = await hub.open(principal, boardId, incidentId);
+            // A caller a record rule restricts sends its own records and hears
+            // no one else's.
+            const release = live
+              ? hub.subscribe(boardId, incidentId, (update, origin) => {
+                if (origin !== sessionId && socket.readyState === socket.OPEN) {
+                  socket.send(updateFrame(update), { binary: false });
+                }
+              })
+              : () => undefined;
             const personId = principal.person.id;
             const guest = principal.guests.some((g) => g.scopes.includes(`board:${boardId}:read`))
               ? { sql, personId, boardId, end: () => fail("access to this board has ended", "auth_required") }
@@ -139,7 +145,8 @@ export function registerSyncRoutes(app: FastifyInstance, sql: Sql, hub: BoardSyn
             new Uint8Array(Buffer.from(parsed.data.update, "base64")),
             sessionId,
             "operationId" in parsed.data
-              ? { operationId: parsed.data.operationId, incidentId: parsed.data.incidentId }
+              ? { operationId: parsed.data.operationId, incidentId: parsed.data.incidentId,
+                  queuedAt: parsed.data.queuedAt ?? null }
               : null,
           );
           socket.send(

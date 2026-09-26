@@ -111,6 +111,7 @@ GET /api/v1/incidents/:incidentId/ics-forms/:formId
 GET /api/v1/incidents/:incidentId/impact
 GET /api/v1/incidents/:incidentId/impact/compare
 GET /api/v1/incidents/:incidentId/impact/sources/:datasetId/records
+GET /api/v1/incidents/:incidentId/late-submissions
 GET /api/v1/incidents/:incidentId/lifeline-assessments
 GET /api/v1/incidents/:incidentId/lifeline-assessments/:lifeline/history
 GET /api/v1/incidents/:incidentId/meetings
@@ -280,6 +281,7 @@ POST /api/v1/incidents/:incidentId/data-packs
 POST /api/v1/incidents/:incidentId/equipment-hours
 POST /api/v1/incidents/:incidentId/esf-assessments
 POST /api/v1/incidents/:incidentId/esf-assessments/:framework/:esf/decisions
+POST /api/v1/incidents/:incidentId/field-operations
 POST /api/v1/incidents/:incidentId/force-account/roll-up
 POST /api/v1/incidents/:incidentId/iap
 POST /api/v1/incidents/:incidentId/ics-components
@@ -364,6 +366,8 @@ POST /api/v1/jurisdictions/:jurisdictionId/threads
 POST /api/v1/jurisdictions/:jurisdictionId/tracked-objects
 POST /api/v1/jurisdictions/:jurisdictionId/tracked-objects/scan
 POST /api/v1/jurisdictions/:jurisdictionId/volunteers
+POST /api/v1/late-submissions/:lateSubmissionId/accept
+POST /api/v1/late-submissions/:lateSubmissionId/refuse
 POST /api/v1/mass-notifications/:massNotificationId/acknowledgements
 POST /api/v1/notifications/:notificationId/acknowledge
 POST /api/v1/notifications/:notificationId/read
@@ -492,6 +496,7 @@ const tagAliases: Readonly<Record<string, string>> = {
   "corrective-actions": "aar",
   "dashboard-configs": "dashboards",
   "equipment-hours": "damage",
+  "field-operations": "field",
   "file-folders": "files",
   "force-account": "damage",
   "data-packs": "datasets",
@@ -500,6 +505,7 @@ const tagAliases: Readonly<Record<string, string>> = {
   "import-reports": "imports",
   "incident-templates": "incidents",
   "integrations": "auth",
+  "late-submissions": "field",
   "lockdown": "incidents",
   "me": "auth",
   "members": "auth",

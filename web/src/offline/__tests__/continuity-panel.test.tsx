@@ -14,6 +14,8 @@ const queued: ContinuitySnapshot = {
   phase: "queued",
   pendingBoardIds: ["board-a"],
   pendingTaskOperationIds: ["task-op-a"],
+  pendingOperations: [],
+  lateSubmissions: 0,
   conflicts: 0,
   lastError: null,
 };
@@ -75,6 +77,16 @@ describe("continuity presentation", () => {
     expect(screen.getByText("incident access expired")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Restore session" }));
     expect(recover).toHaveBeenCalledOnce();
+  });
+
+  it("counts queued messages and new tasks, and names refused and late work", () => {
+    renderCard({ snapshot: { ...queued, pendingOperations: [
+      { kind: "message", refused: false }, { kind: "message", refused: false },
+      { kind: "task", refused: false }, { kind: "task", refused: true },
+    ], lateSubmissions: 2 } });
+    expect(screen.getByText("1 board draft, 1 task completion, 2 messages and 1 new task saved locally.")).not.toBeNull();
+    expect(screen.getByText("1 queued item was refused; each stays on this device with the reason on its screen.")).not.toBeNull();
+    expect(screen.getByText("2 items reached the incident after it closed and went to its administrators to accept or refuse.")).not.toBeNull();
   });
 
   it("labels an offline local state without claiming a successful server receipt", () => {

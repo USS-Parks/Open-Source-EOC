@@ -51,6 +51,8 @@
 .map-surface-card { color: var(--eoc-text); background: var(--eoc-surface); border: 1px solid var(--eoc-border-strong); border-radius: 6px; box-shadow: var(--eoc-shadow-md, var(--eoc-shadow-sm)); }
 .map-surface-card > .eoc-panel { margin: 0; border: 0; box-shadow: none; }
 .map-surface-adding { display: grid; gap: 8px; padding: 12px; }
+/* What became of the last point placed: saved, or kept on this device. */
+.map-surface-notice { margin: 0; padding: 8px 12px; font-size: 12.5px; }
 .map-surface-pick,
 .map-surface-coordinate { display: grid; gap: 4px; color: var(--eoc-text-muted); font-size: 12px; font-weight: 600; }
 .map-surface-coordinates { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }

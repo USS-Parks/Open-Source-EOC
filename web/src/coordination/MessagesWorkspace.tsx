@@ -4,6 +4,8 @@ import type { ApiClient, Thread, ThreadRecipient } from "../app/api/client.js";
 import { useAsync, usePolled } from "../app/data/hooks.js";
 import { EmptyState, Loading, SurfaceHeader } from "../app/screens/parts.js";
 import { saveFile } from "../admin/labels.js";
+import { WorkStateLine } from "../design/work-state.js";
+import { operationStamp, useFieldOutbox } from "../offline/outbox.js";
 import "./workspace.css";
 
 export interface MessagesWorkspaceProps {
@@ -18,6 +20,8 @@ export interface MessagesWorkspaceProps {
    * posts in the incident's threads and starts incident-wide ones only.
    */
   readonly isMember?: boolean;
+  /** The signed-in person, whose device outbox keeps messages to the incident's threads while offline. */
+  readonly personId?: string | null;
 }
 
 function recipientDescription(recipient: ThreadRecipient): string {
@@ -51,6 +55,8 @@ export function MessagesWorkspace(props: MessagesWorkspaceProps) {
   const [reloadMessages, setReloadMessages] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [stored, setStored] = useState<string | null>(null);
+  /** When the last message was kept on this device, while it waits for the connection. */
+  const [keptAt, setKeptAt] = useState<string | null>(null);
   const [retentionDays, setRetentionDays] = useState("");
   const [inIncidentRecord, setInIncidentRecord] = useState(true);
   const [settingsSaved, setSettingsSaved] = useState<string | null>(null);
@@ -83,6 +89,13 @@ export function MessagesWorkspace(props: MessagesWorkspaceProps) {
     5000,
     [props.client, activeThread, reloadMessages],
   );
+  // A message to one of the selected incident's threads is kept on this
+  // device while there is no connection, and sent when it returns (AG-07).
+  const outbox = useFieldOutbox(props.client, props.personId ?? null, props.incidentId ?? null, () => {
+    setKeptAt(null);
+    setReloadMessages((value) => value + 1);
+  });
+  const queued = outbox.pending.flatMap((item) => item.kind === "message" && item.threadId === activeThread ? [item] : []);
 
   const run = async (work: () => Promise<void>) => {
     setBusy(true);
@@ -125,7 +138,21 @@ export function MessagesWorkspace(props: MessagesWorkspaceProps) {
 
   const send = () => void run(async () => {
     if (!activeThread || !text.trim()) return;
-    await props.client.postMessage(activeThread, text.trim());
+    const body = text.trim();
+    if (activeSummary?.incidentId && activeSummary.incidentId === props.incidentId && outbox.ready) {
+      const stamp = operationStamp();
+      const receipt = await outbox.send({ kind: "message", ...stamp, threadId: activeThread, body });
+      setText("");
+      setKeptAt(receipt === null ? stamp.queuedAt : null);
+      setStored(receipt === null
+        ? null
+        : receipt.outcome === "late"
+          ? "The incident has closed: the message went to its administrators as a late submission, to accept or refuse."
+          : "Message stored in the thread.");
+      setReloadMessages((value) => value + 1);
+      return;
+    }
+    await props.client.postMessage(activeThread, body);
     setText("");
     setStored("Message stored in the thread.");
     setReloadMessages((value) => value + 1);
@@ -277,8 +304,18 @@ export function MessagesWorkspace(props: MessagesWorkspaceProps) {
                     <small>Stored</small>
                   </li>
                 ))}
+                {queued.map((item) => (
+                  <li key={item.operationId} className="d27-queued">
+                    <div><strong>You</strong><time dateTime={item.queuedAt}> - {new Date(item.queuedAt).toLocaleString()}</time></div>
+                    <p>{item.body}</p>
+                    {item.refused ? <>
+                      <small role="alert">Refused by the server: {item.refused}</small>
+                      <Button onClick={() => void outbox.discard(item.operationId)}>Discard this message</Button>
+                    </> : <small>Queued on this device</small>}
+                  </li>
+                ))}
               </ol>
-              {(messages.data ?? []).length === 0 && !messages.loading
+              {(messages.data ?? []).length === 0 && queued.length === 0 && !messages.loading
                 ? <p className="d27-muted">No messages in this thread.</p>
                 : null}
               <form className="d27-compose" onSubmit={(event) => { event.preventDefault(); send(); }}>
@@ -286,12 +323,13 @@ export function MessagesWorkspace(props: MessagesWorkspaceProps) {
                 <Button type="submit" kind="primary" disabled={busy || !text.trim()}>Send</Button>
               </form>
               {stored ? <p role="status" className="d27-success">{stored}</p> : null}
+              {keptAt && queued.length ? <WorkStateLine state={{ kind: "queued", savedAt: keptAt }} /> : null}
             </div>
           )}
         </Panel>
       </div>
-      {error || threads.error || positions.error ? (
-        <p role="alert" className="d27-error">{error ?? threads.error ?? positions.error}</p>
+      {error || threads.error || positions.error || outbox.error ? (
+        <p role="alert" className="d27-error">{error ?? threads.error ?? positions.error ?? outbox.error}</p>
       ) : null}
     </div>
   );

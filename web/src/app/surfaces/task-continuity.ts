@@ -38,8 +38,12 @@ export function useTaskContinuity(
     if (!queue.current || !incidentId || !personId) return [];
     try {
       setError(null);
+      // A completion that reaches a closed incident goes to its administrators as a late submission.
       const receipts = await queue.current.flush(personId, incidentId, (operation) =>
-        client.completeIncidentTask(operation.incidentId, operation.taskId, operation.operationId));
+        client.runFieldOperation(operation.incidentId, {
+          kind: "task_completion", operationId: operation.operationId, queuedAt: operation.queuedAt,
+          taskId: operation.taskId,
+        }));
       await refresh();
       if (receipts.length) setReconciled(receipts);
       return receipts;

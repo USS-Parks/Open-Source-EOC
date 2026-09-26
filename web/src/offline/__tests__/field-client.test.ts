@@ -2,7 +2,8 @@ import { IDBFactory } from "fake-indexeddb";
 import * as Y from "yjs";
 import { describe, expect, it } from "vitest";
 import { openOfflineStore } from "../store.js";
-import { FieldClient, RESTRICTED_SYNC_MESSAGE, type SyncAck } from "../field-client.js";
+import { FieldClient, type SyncAck } from "../field-client.js";
+import { lateReceipts } from "../outbox.js";
 import { FieldSubmissionQueue } from "../../field/field-submissions.js";
 
 /**
@@ -35,6 +36,8 @@ class ScriptedSocket {
     private readonly acknowledge: boolean,
     sentUpdates: string[],
     private readonly conflicts = 0,
+    private readonly late: string | null = null,
+    private readonly sentFrames: Array<Record<string, unknown>> = [],
   ) {
     this.sentUpdates = sentUpdates;
     queueMicrotask(() => this.onopen?.(new Event("open")));
@@ -52,6 +55,7 @@ class ScriptedSocket {
       return;
     }
     this.sentUpdates.push(message.update!);
+    this.sentFrames.push(message);
     queueMicrotask(() => {
       if (!this.acknowledge) {
         this.onerror?.(new Event("error"));
@@ -64,6 +68,7 @@ class ScriptedSocket {
           seq: 4,
           conflicts: this.conflicts,
           exact: true,
+          ...(this.late ? { seq: 0, late: this.late } : {}),
         }),
       } as MessageEvent);
     });
@@ -310,23 +315,23 @@ describe("the field client works offline and survives restart", () => {
     queue.close();
   });
 
-  it("tells a restricted board's refusal from an expired session and still delivers other boards", async () => {
+  it("settles a report the server kept as a late submission, and remembers it on the device", async () => {
     const idb = new IDBFactory();
-    const store = await openOfflineStore(idb, "restricted-board");
-    const sent: string[] = [];
-    const fields = new FieldClient(store, "", (url) => url.includes("/boards/board-restricted?")
-      ? new RefusingSocket("records on this board are restricted; use its views") as unknown as WebSocket
-      : new ScriptedSocket(serverState({}), true, sent) as unknown as WebSocket);
+    const store = await openOfflineStore(idb, "late-board");
+    const frames: Array<Record<string, unknown>> = [];
+    const fields = new FieldClient(store, "", () =>
+      new ScriptedSocket(serverState({}), true, [], 0, "late-submission-1", frames) as unknown as WebSocket);
     const queue = FieldSubmissionQueue.from(store, fields);
-    await queue.enqueue(scope, "board-restricted", "record-1", { status: "closed" });
-    await queue.enqueue(scope, "board-open", "record-2", { status: "closed" });
-    await expect(fields.sync(scope, "board-restricted", "token"))
-      .rejects.toMatchObject({ code: "restricted", message: RESTRICTED_SYNC_MESSAGE });
-
+    await queue.enqueue(scope, "board-1", "record-1", { status: "closed" });
+    const [queued] = await fields.pendingOperations(scope);
     const state = await queue.sync(scope, "token");
-    expect(state).toMatchObject({ phase: "restricted", pending: 1, message: RESTRICTED_SYNC_MESSAGE });
-    expect(sent).toHaveLength(1);
-    expect(await fields.pendingBoardIds(scope)).toEqual(["board-restricted"]);
+    expect(state).toMatchObject({ phase: "synced", pending: 0, receipt: { late: "late-submission-1", seq: 0 } });
+    expect(state.message).toBe("The incident had closed: 1 field submission went to its administrators as late submissions, to accept or refuse.");
+    // The device's queue time travels with the operation, for the administrators to read.
+    expect(frames[0]).toMatchObject({ operationId: queued!.operationId, queuedAt: queued!.queuedAt });
+    expect(await lateReceipts(store, scope)).toMatchObject([
+      { kind: "board", operationId: queued!.operationId, lateSubmissionId: "late-submission-1" },
+    ]);
     queue.close();
   });
 
@@ -382,22 +387,3 @@ describe("the field client works offline and survives restart", () => {
     revived.close();
   });
 });
-
-/** A server that refuses the sync right after authentication. */
-class RefusingSocket {
-  onopen: ((event: Event) => void) | null = null;
-  onmessage: ((event: MessageEvent) => void) | null = null;
-  onerror: ((event: Event) => void) | null = null;
-
-  constructor(private readonly error: string) {
-    queueMicrotask(() => this.onopen?.(new Event("open")));
-  }
-
-  send(): void {
-    queueMicrotask(() => this.onmessage?.({
-      data: JSON.stringify({ type: "error", error: this.error, code: this.error.startsWith("records on this board are restricted") ? "restricted" : "auth_required" }),
-    } as MessageEvent));
-  }
-
-  close(): void {}
-}

@@ -31,10 +31,11 @@ export interface SyncAck {
   readonly seq: number;
   readonly conflicts: number;
   readonly exact: boolean;
+  /** The late submission the server kept it as, because the incident had closed (AG-07). */
+  readonly late?: string;
 }
 
-/** `restricted`: the board has record rules this caller does not pass for every record, so it is never synced. */
-export type SyncErrorCode = "auth_required" | "conflict" | "failed" | "restricted";
+export type SyncErrorCode = "auth_required" | "conflict" | "failed";
 
 export class SyncTransportError extends Error {
   constructor(readonly code: SyncErrorCode, message: string) {
@@ -43,16 +44,10 @@ export class SyncTransportError extends Error {
   }
 }
 
-export const RESTRICTED_SYNC_MESSAGE =
-  "Offline sync is unavailable for this board: some of its records are restricted. Its queued work stays on this device; enter it on the board screen while connected.";
-
-/**
- * The server refuses a restricted board with its own code, so the refusal is
- * not taken for an expired session, which a new session would not cure.
- */
-function syncFailure(code: SyncErrorCode | undefined, message: string | undefined): SyncTransportError {
-  if (code === "restricted") return new SyncTransportError("restricted", RESTRICTED_SYNC_MESSAGE);
-  return new SyncTransportError(code ?? "failed", message ?? "sync failed");
+/** The server's refusal as a transport error; a code this client does not know reads as a failure. */
+function syncFailure(code: string | undefined, message: string | undefined): SyncTransportError {
+  const known = code === "auth_required" || code === "conflict" ? code : "failed";
+  return new SyncTransportError(known, message ?? "sync failed");
 }
 
 export type PushFn = (
@@ -280,7 +275,8 @@ export class FieldClient {
           seq?: number;
           conflicts?: number;
           exact?: boolean;
-          code?: SyncErrorCode;
+          late?: string;
+          code?: string;
           error?: string;
         };
         if (message.type === "state") {
@@ -289,6 +285,7 @@ export class FieldClient {
             type: "update",
             operationId: operation.operationId,
             incidentId: scope.incidentId,
+            queuedAt: operation.queuedAt,
             update: toBase64(frozenUpdate),
           }));
         } else if (message.type === "update") {
@@ -300,6 +297,7 @@ export class FieldClient {
             seq: message.seq!,
             conflicts: message.conflicts!,
             exact: message.exact === true,
+            ...(message.late ? { late: message.late } : {}),
           });
         } else if (message.type === "error") {
           clearTimeout(timer);

@@ -81,8 +81,33 @@ The form definition must already be loaded. Reports can queue after that,
 including their photos and audio. A queued file stays on the device until its
 report has synchronized, then uploads to the report's record; the status counts
 queued files beside queued reports. One file may be at most 10 MB, and the
-device holds at most 50 MB of queued files for one incident. Map record
-submission uses the connected map-capture path and is disabled while offline.
+device holds at most 50 MB of queued files for one incident.
+
+A board whose record rules keep some of its records from you still takes your
+reports offline. When they synchronize, each record is applied through those
+rules on its own: your own records are written, and a change to a record the
+rules keep from you is a conflict, never applied. The device is sent no one
+else's records from such a board.
+
+## Place a point on the map offline
+
+On **Map**, **Add point** on one of the selected incident's boards opens the
+board's form with the point you placed. The form opens without a connection
+once the map has shown that board with one. With a connection, **Save record**
+writes the point at once. With none, the point is kept on the device with
+your other queued reports: the screen reads "Saved on this device at 10:42;
+it is sent when the connection returns.", and the continuity panel counts it
+until **Reconnect and reconcile** delivers it. A point on a board outside the
+selected incident needs the connection.
+
+## Send a message offline
+
+In **Messages**, a message to one of the selected incident's threads is kept
+on the device when there is no connection and shows in the conversation as
+**Queued on this device**. It is sent, once, when the connection returns, or
+by **Reconnect and reconcile**. A message the server refuses, for example to a
+thread you can no longer post in, stays with the reason until you choose
+**Discard this message**.
 
 ## Question types
 
@@ -115,10 +140,20 @@ submission uses the connected map-capture path and is disabled while offline.
 
 ## Complete an assigned task
 
-Only a completion for a task assigned to your current authority can queue
-offline. Task creation, assignment, prerequisites, due dates, and other metadata
-edits require a server connection. A queued completion remains pending until
-**Reconcile queued work** returns the authoritative receipt.
+A completion for a task assigned to your current authority can queue
+offline, and an administrator's **New task** is kept on the device when there
+is no connection, listed under **New tasks kept on this device**, and added
+when it returns. Assignment changes, prerequisites of existing tasks, due dates
+and other metadata edits require a server connection. A queued completion
+remains pending until **Reconcile queued work** returns the authoritative
+receipt.
+
+## When the incident closed while you were offline
+
+Work that reaches an incident after an administrator closed it is not lost and
+not added to the closed incident. The server keeps it as a late submission for
+the incident's administrators, who accept or refuse it. The continuity panel
+counts it under **Late submissions**, and the screen that sent it says so.
 
 If a prerequisite is incomplete, the task remains blocked. If the server
 rejects the completion or requests authentication, the queue is retained; sign

@@ -1,0 +1,15 @@
+/* Late submissions: work that reached a closed incident, awaiting its administrators. */
+.eoc-late { display: grid; gap: 10px; }
+.eoc-late-note { margin: 0; color: var(--eoc-text-muted); line-height: 1.4; }
+.eoc-late-list { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.eoc-late-list > li { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--eoc-border); border-radius: 4px; }
+.eoc-late-list > li.is-pending { border-left: 3px solid var(--eoc-status-warning); }
+.eoc-late-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.eoc-late-head > span { color: var(--eoc-text-muted); font-size: 0.9em; }
+.eoc-late-fields { display: grid; gap: 4px 16px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin: 0; }
+.eoc-late-fields > div { display: grid; gap: 2px; }
+.eoc-late-fields dt { color: var(--eoc-text-muted); font-size: 0.86em; }
+.eoc-late-fields dd { margin: 0; overflow-wrap: anywhere; }
+.eoc-late-body { margin: 0; padding-left: 10px; border-left: 2px solid var(--eoc-border); overflow-wrap: anywhere; }
+.eoc-late-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.eoc-late-refuse { display: grid; gap: 8px; max-width: 520px; }

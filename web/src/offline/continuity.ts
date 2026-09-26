@@ -1,11 +1,12 @@
 import type { TaskCompletionReceipt } from "@openeoc/shared";
+import type { FieldOperation, FieldOperationReceipt } from "../app/api/client.js";
 import {
   type ContinuityScope,
   type FieldClient,
-  RESTRICTED_SYNC_MESSAGE,
   type SyncAck,
   SyncTransportError,
 } from "./field-client.js";
+import { lateReceipts, type FieldOutbox } from "./outbox.js";
 import type { OfflineStore } from "./store.js";
 import {
   type TaskCompletionQueue,
@@ -19,14 +20,17 @@ export type ContinuityPhase =
   | "synced"
   | "conflict"
   | "failed"
-  | "auth_required"
-  | "restricted";
+  | "auth_required";
 
 export interface ContinuitySnapshot {
   readonly scope: ContinuityScope;
   readonly phase: ContinuityPhase;
   readonly pendingBoardIds: readonly string[];
   readonly pendingTaskOperationIds: readonly string[];
+  /** Messages and new tasks in the outbox, the ones the server refused among them. */
+  readonly pendingOperations: readonly { readonly kind: FieldOperation["kind"]; readonly refused: boolean }[];
+  /** Work the server kept for the incident's administrators because the incident had closed. */
+  readonly lateSubmissions: number;
   readonly conflicts: number;
   readonly lastError: string | null;
 }
@@ -35,6 +39,7 @@ export interface ContinuityAdapters {
   /** Adapters may throw SyncTransportError, SessionExpiredError, or an error with an HTTP status. */
   readonly syncBoard: (boardId: string) => Promise<SyncAck | null>;
   readonly completeTask: TaskCompletionTransport;
+  readonly runOperation: (operation: FieldOperation) => Promise<FieldOperationReceipt>;
 }
 
 interface StoredOutcome {
@@ -55,6 +60,7 @@ export class ContinuityCoordinator {
     private readonly store: OfflineStore,
     private readonly fields: FieldClient,
     private readonly tasks: TaskCompletionQueue,
+    private readonly outbox: FieldOutbox,
   ) {}
 
   async markOffline(scope: ContinuityScope): Promise<ContinuitySnapshot> {
@@ -68,13 +74,15 @@ export class ContinuityCoordinator {
   }
 
   async snapshot(scope: ContinuityScope): Promise<ContinuitySnapshot> {
-    const [pendingBoards, pendingTasks, stored] = await Promise.all([
+    const [pendingBoards, pendingTasks, outbox, late, stored] = await Promise.all([
       this.fields.pendingBoardIds(scope),
       this.tasks.pending(scope.personId, scope.incidentId),
+      this.outbox.pending(scope),
+      lateReceipts(this.store, scope),
       this.store.getMeta<StoredOutcome>(outcomeKey(scope)),
     ]);
     const phase = (!stored || stored.phase === "synced") &&
-      (pendingBoards.length > 0 || pendingTasks.length > 0)
+      (pendingBoards.length > 0 || pendingTasks.length > 0 || outbox.some((item) => item.refused === undefined))
       ? "queued"
       : stored?.phase ?? "offline";
     return {
@@ -82,6 +90,8 @@ export class ContinuityCoordinator {
       phase,
       pendingBoardIds: pendingBoards,
       pendingTaskOperationIds: pendingTasks.map((item) => item.operationId),
+      pendingOperations: outbox.map((item) => ({ kind: item.kind, refused: item.refused !== undefined })),
+      lateSubmissions: late.length,
       conflicts: stored?.conflicts ?? 0,
       lastError: stored?.lastError ?? null,
     };
@@ -104,31 +114,22 @@ export class ContinuityCoordinator {
     });
     const boardReceipts: SyncAck[] = [];
     try {
-      const queuedBoardOperations = await this.fields.pendingOperations(scope);
-      // A restricted board is never served for sync; its work stays queued
-      // and the other boards and tasks still deliver.
-      const restricted = new Set<string>();
-      for (const operation of queuedBoardOperations) {
-        if (restricted.has(operation.boardId)) continue;
-        try {
-          const receipt = await adapters.syncBoard(operation.boardId);
-          if (receipt) boardReceipts.push(receipt);
-        } catch (error) {
-          if (!(error instanceof SyncTransportError && error.code === "restricted")) throw error;
-          restricted.add(operation.boardId);
-        }
+      for (const operation of await this.fields.pendingOperations(scope)) {
+        const receipt = await adapters.syncBoard(operation.boardId);
+        if (receipt) boardReceipts.push(receipt);
       }
       const taskReceipts = await this.tasks.flush(
         scope.personId,
         scope.incidentId,
         adapters.completeTask,
       );
+      await this.outbox.flush(scope, adapters.runOperation);
       const conflicts = retainedConflicts +
         boardReceipts.reduce((total, receipt) => total + receipt.conflicts, 0);
       await this.save(scope, {
-        phase: conflicts > 0 ? "conflict" : restricted.size > 0 ? "restricted" : "synced",
+        phase: conflicts > 0 ? "conflict" : "synced",
         conflicts,
-        lastError: restricted.size > 0 ? RESTRICTED_SYNC_MESSAGE : null,
+        lastError: null,
       });
       return { snapshot: await this.snapshot(scope), boardReceipts, taskReceipts };
     } catch (error) {

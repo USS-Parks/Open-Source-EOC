@@ -9,6 +9,7 @@ import {
 } from "./continuity.js";
 import { FieldClient, type ContinuityScope } from "./field-client.js";
 import { FieldSubmissionQueue } from "../field/field-submissions.js";
+import { FieldOutbox } from "./outbox.js";
 import { openOfflineStore, type OfflineStore } from "./store.js";
 import { TaskCompletionQueue } from "./task-completions.js";
 import { subscribeOfflineQueueChange } from "./queue-events.js";
@@ -95,10 +96,6 @@ const copy: Record<ContinuityPhase, { label: string; tone: Status; condition: "n
     label: "Session recovery required", tone: "critical", condition: "critical",
     description: "Saved work remains on this device. Restore your session before reconnecting.",
   },
-  restricted: {
-    label: "Offline sync unavailable", tone: "warning", condition: "watch",
-    description: "A board with restricted records is never synchronized offline. Its saved work remains on this device; enter it on the board screen while connected. Other queued work was delivered.",
-  },
 };
 
 function conflictKey(scope: ContinuityScope): string {
@@ -119,16 +116,21 @@ function snapshotPhase(snapshot: ContinuitySnapshot | null, conflict: ConflictRe
   return snapshot?.phase ?? "offline";
 }
 
+const count = (value: number, one: string, many: string): string | null =>
+  value ? `${value} ${value === 1 ? one : many}` : null;
+
 function queueLabel(snapshot: ContinuitySnapshot | null): string {
   if (!snapshot) return "Reading local queue…";
-  const boards = snapshot.pendingBoardIds.length;
-  const tasks = snapshot.pendingTaskOperationIds.length;
-  if (!boards && !tasks) return "No local changes are awaiting delivery.";
+  const waiting = snapshot.pendingOperations.filter((item) => !item.refused);
   const parts = [
-    boards ? `${boards} board ${boards === 1 ? "draft" : "drafts"}` : null,
-    tasks ? `${tasks} task completion${tasks === 1 ? "" : "s"}` : null,
-  ].filter(Boolean);
-  return `${parts.join(" and ")} saved locally.`;
+    count(snapshot.pendingBoardIds.length, "board draft", "board drafts"),
+    count(snapshot.pendingTaskOperationIds.length, "task completion", "task completions"),
+    count(waiting.filter((item) => item.kind === "message").length, "message", "messages"),
+    count(waiting.filter((item) => item.kind === "task").length, "new task", "new tasks"),
+  ].filter((part): part is string => part !== null);
+  if (!parts.length) return "No local changes are awaiting delivery.";
+  const listed = parts.length === 1 ? parts[0]! : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)!}`;
+  return `${listed} saved locally.`;
 }
 
 /** Pure presentation for the scoped continuity result. It never claims a server receipt without one. */
@@ -136,6 +138,7 @@ export function ContinuityStateCard(props: ContinuityStateCardProps) {
   const phase = snapshotPhase(props.snapshot, props.conflict);
   const state = copy[phase];
   const conflicts = conflictCount(props.conflict) || props.snapshot?.conflicts || 0;
+  const refused = props.snapshot?.pendingOperations.filter((item) => item.refused).length ?? 0;
   const unavailable = props.storageError !== null;
   return (
     <section className="eoc-continuity" aria-label="Offline continuity">
@@ -153,6 +156,8 @@ export function ContinuityStateCard(props: ContinuityStateCardProps) {
           <div><dt>Server receipt</dt><dd>{phase === "synced" ? "No queued work remains." : phase === "conflict" ? "A receipt reported a conflict." : "Pending confirmation."}</dd></div>
           {conflicts ? <div><dt>Conflicts</dt><dd>{conflicts} submission{conflicts === 1 ? "" : "s"} require review.</dd></div> : null}
           {props.snapshot?.lastError ? <div><dt>Latest delivery issue</dt><dd>{props.snapshot.lastError}</dd></div> : null}
+          {refused ? <div><dt>Refused by the server</dt><dd>{refused} queued {refused === 1 ? "item was" : "items were"} refused; each stays on this device with the reason on its screen.</dd></div> : null}
+          {props.snapshot?.lateSubmissions ? <div><dt>Late submissions</dt><dd>{props.snapshot.lateSubmissions} {props.snapshot.lateSubmissions === 1 ? "item" : "items"} reached the incident after it closed and went to its administrators to accept or refuse.</dd></div> : null}
         </dl>
         <div className="eoc-continuity-actions">
           {phase === "auth_required" ? <Button kind="primary" disabled={props.busy !== null} onClick={props.onRecoverSession}>{props.busy === "recovering" ? "Restoring session…" : "Restore session"}</Button> : null}
@@ -208,7 +213,7 @@ export function ContinuityPanel(props: ContinuityPanelProps) {
       if (!active) { store.close(); return; }
       const fields = new FieldClient(store);
       const submissions = FieldSubmissionQueue.from(store, fields);
-      const coordinator = new ContinuityCoordinator(store, fields, new TaskCompletionQueue(store));
+      const coordinator = new ContinuityCoordinator(store, fields, new TaskCompletionQueue(store), new FieldOutbox(store));
       const candidate = { generation: nextGeneration, scope, store, fields, submissions, coordinator };
       runtime.current = candidate;
       try {
@@ -261,8 +266,11 @@ export function ContinuityPanel(props: ContinuityPanelProps) {
         // the coordinator must still persist `auth_required` for recovery.
         syncBoard: (boardId) => candidate.submissions.syncOne(
           scope, boardId, props.client.fieldSyncToken()),
-        completeTask: (operation) => props.client.completeIncidentTask(
-          operation.incidentId, operation.taskId, operation.operationId),
+        completeTask: (operation) => props.client.runFieldOperation(operation.incidentId, {
+          kind: "task_completion", operationId: operation.operationId, queuedAt: operation.queuedAt,
+          taskId: operation.taskId,
+        }),
+        runOperation: (operation) => props.client.runFieldOperation(scope.incidentId, operation),
       });
     } catch {
       // The coordinator stores the normalized outcome and retains unsent work.

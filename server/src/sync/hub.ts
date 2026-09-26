@@ -24,12 +24,14 @@ import { recordAudit } from "../audit/service.js";
 import { notifyBoardEvent, type BoardEvent } from "../notify/engine.js";
 import { onBoardEvent, publishBoardEvent } from "../events/bus.js";
 import { getIncidentAuthority } from "../incidents/participation.js";
+import { priorLateSubmission, recordLateSubmission } from "./late.js";
 
 /**
  * A board whose record-level rules this caller does not clear for every
- * record: its document cannot be served, and a client must use its views. A
- * distinct code tells it apart from a lapsed session, which a new session
- * would cure and this would not.
+ * record, opened jurisdiction-wide: its document cannot be served, and a
+ * client must use its views. A distinct code tells it apart from a lapsed
+ * session, which a new session would cure and this would not. On an incident
+ * scope such a caller syncs per record instead (AG-07).
  */
 export class RestrictedBoardError extends AuthError {
   constructor() {
@@ -95,11 +97,28 @@ export interface ApplyResult {
   readonly seq: number;
   readonly conflicts: number;
   readonly exact: boolean;
+  /** The late submission that holds this operation, when its incident had closed. */
+  readonly late?: string;
 }
 
 export interface ExactSyncContext {
   readonly operationId: string;
   readonly incidentId: string;
+  /** When the device queued the operation, by its own clock. */
+  readonly queuedAt?: string | null;
+  /** Set when an administrator accepts the operation's late submission. */
+  readonly acceptingLate?: boolean;
+}
+
+/** An opened document: its state and whether its live updates may be followed. */
+export interface OpenedDoc {
+  readonly state: Uint8Array;
+  /**
+   * False for a caller a record rule restricts: it is served no records and
+   * follows no updates, and each record it sends is checkpointed through the
+   * record-level rules on its own.
+   */
+  readonly live: boolean;
 }
 
 export interface HubOptions {
@@ -207,14 +226,15 @@ export class BoardSyncHub {
     actor: Principal,
     boardId: string,
     incidentId: string | null = null,
-  ): Promise<{ state: Uint8Array }> {
-    const entry = await this.entry(actor, boardId, incidentId);
+  ): Promise<OpenedDoc> {
+    const { entry, restricted } = await this.entry(actor, boardId, incidentId);
     // entry() cancels a pending eviction so the doc survives the call. A read
     // that never subscribes, such as a federation pull, must not leave the doc
     // pinned, so the grace period restarts here instead.
     const key = entryKey(boardId, incidentId);
     try {
-      if (!incidentId) return { state: encodedState(entry) };
+      if (restricted) return { state: EMPTY_UPDATE, live: false };
+      if (!incidentId) return { state: encodedState(entry), live: true };
       // The projection is per reader: visibleFields() narrows by role, so the
       // cache is keyed by the fields this actor may see.
       const signature = visibleFields(entry.board).map((field) => field.key).sort().join(",");
@@ -228,7 +248,7 @@ export class BoardSyncHub {
       const projected = new Y.Doc();
       Y.applyUpdate(projected, encodedState(entry));
       applyBoardRows(projected, rows);
-      return { state: Y.encodeStateAsUpdate(projected) };
+      return { state: Y.encodeStateAsUpdate(projected), live: true };
     } finally {
       this.scheduleEvict(key, entry);
     }
@@ -287,7 +307,7 @@ export class BoardSyncHub {
     context: ExactSyncContext | null = null,
   ): Promise<ApplyResult> {
     const incidentId = context?.incidentId ?? null;
-    const entry = await this.entry(actor, boardId, incidentId);
+    const { entry } = await this.entry(actor, boardId, incidentId);
     const key = entryKey(boardId, incidentId);
     entry.active += 1;
     try {
@@ -332,6 +352,17 @@ export class BoardSyncHub {
             join incidents i on i.id = ib.incident_id
             where ib.board_id = ${boardId} and ib.incident_id = ${context.incidentId}`;
           if (!attached) throw new AuthError(409, "board is not attached to this incident");
+          const replayed = (result: ApplyResult) => ({
+            board,
+            doc: null,
+            hydrated: null,
+            before: new Map(),
+            after: new Map(),
+            committed: [],
+            result,
+            replay: true,
+            effective: null,
+          });
           const [prior] = await tx`
             select board_id, incident_id, request_digest, seq, conflicts
             from sync_updates
@@ -341,25 +372,25 @@ export class BoardSyncHub {
                 prior.request_digest !== digest) {
               throw new AuthError(409, "sync operation id was used for another payload or scope");
             }
-            return {
-              board,
-              doc: null,
-              hydrated: null,
-              before: new Map(),
-              after: new Map(),
-              committed: [],
-              result: {
-                operationId: context.operationId,
-                seq: Number(prior.seq),
-                conflicts: Number(prior.conflicts),
-                exact: true,
-              },
-              replay: true,
-              effective: null,
-            };
+            return replayed({
+              operationId: context.operationId,
+              seq: Number(prior.seq),
+              conflicts: Number(prior.conflicts),
+              exact: true,
+            });
           }
+          const kept = context.acceptingLate
+            ? null
+            : await priorLateSubmission(tx, actor.person.id, context.operationId, digest!);
+          if (kept) return replayed({ operationId: context.operationId, seq: 0, conflicts: 0, exact: true, late: kept });
           if (!authority.canContribute) throw new AuthError(403, "incident contribution required");
-          if (attached.closed_at) throw new AuthError(409, "incident is closed");
+          if (attached.closed_at) {
+            // Never applied to the closed incident and never dropped: the
+            // records it changes wait for the owner's administrators (AG-07).
+            const late = await this.holdLate(tx, actor, board, context, update, digest!, authority.jurisdictionId);
+            return replayed({ operationId: context.operationId, seq: 0, conflicts: 0, exact: true,
+              ...(late ? { late } : {}) });
+          }
         }
 
         const hydrated = await hydrateBoardDoc(tx, boardId, incidentId, board);
@@ -450,6 +481,51 @@ export class BoardSyncHub {
     return outcome.result;
   }
 
+  /**
+   * Keep an operation that reached a closed incident as a late submission,
+   * with the records and fields it changes named for the administrators who
+   * decide it. Null when it changes nothing, so there is nothing to hold.
+   */
+  private async holdLate(
+    tx: Sql,
+    actor: Principal,
+    board: EffectiveBoard,
+    context: ExactSyncContext,
+    update: Uint8Array,
+    digest: string,
+    jurisdictionId: string,
+  ): Promise<string | null> {
+    const { doc } = await hydrateBoardDoc(tx, board.id, context.incidentId, board);
+    try {
+      const before = snapshotRecords(doc);
+      applyEffective(doc, update);
+      const after = snapshotRecords(doc);
+      const labels = new Map(board.fields.map((field) => [field.key, field.label]));
+      const records = changedRecordIds(before, after).map((id) => {
+        const data = after.get(id)!;
+        return {
+          id,
+          fields: changedFieldKeys(before.get(id) ?? {}, data)
+            .map((key) => ({ key, label: labels.get(key) ?? key, value: data[key] ?? null })),
+        };
+      });
+      if (records.length === 0) return null;
+      return await recordLateSubmission(tx, actor, {
+        incidentId: context.incidentId,
+        jurisdictionId,
+        kind: "board",
+        operationId: context.operationId,
+        digest,
+        payload: { boardId: board.id, update: Buffer.from(update).toString("base64") },
+        summary: `${records.length} ${records.length === 1 ? "record" : "records"} on ${board.title}`,
+        detail: { boardId: board.id, boardTitle: board.title, records },
+        capturedAt: context.queuedAt ?? null,
+      });
+    } finally {
+      doc.destroy();
+    }
+  }
+
   private async checkpoint(
     tx: Sql,
     actor: Principal,
@@ -479,18 +555,21 @@ export class BoardSyncHub {
           const keys = existing ? changedFieldKeys(prior, incoming) : Object.keys(incoming);
           checkFieldWrites(board, keys);
         }
-        const conflict = async (reason: string) => {
+        // `hidden`: the record is beyond the writer's read rule, so the entry
+        // names the conflict itself, which the writer may read.
+        const conflict = async (reason: string, hidden = false) => {
           conflicts += 1;
-          await tx`
+          const [kept] = await tx`
             insert into sync_conflicts
               (board_id, incident_id, record_id, reason, rejected_data, origin_person)
             values (${board.id}, ${incidentId}, ${recordId}, ${reason},
-                    ${tx.json(data as never)}, ${actor.person.id})`;
+                    ${tx.json(data as never)}, ${actor.person.id})
+            returning id`;
           await recordAudit(tx, actor, {
             jurisdictionId: board.jurisdictionId,
             category: "sync.conflict",
-            subjectTable: "board_records",
-            subjectId: recordId,
+            subjectTable: hidden ? "sync_conflicts" : "board_records",
+            subjectId: hidden ? kept!.id as string : recordId,
             payload: { reason },
             ...(incidentId ? { incidentId } : {}),
           });
@@ -515,7 +594,8 @@ export class BoardSyncHub {
         }
         // A write to a deleted record, or one the record's edit rule refuses
         // (the update then touches no row), is a visible conflict, never a
-        // silent loss or a resurrection.
+        // silent loss or a resurrection. So is one to a record the writer's
+        // read rule hides, which reads as new and inserts nothing (AG-07).
         if (!existing) {
           const [gone] = await tx`select board_record_tombstoned(${recordId}, ${board.id}) as deleted`;
           if (gone!.deleted) {
@@ -535,9 +615,17 @@ export class BoardSyncHub {
                 (id, board_id, incident_id, data, created_by, created_by_position, geom)
               values (${recordId}, ${board.id}, ${incidentId}, ${tx.json(parsed.data as never)},
                       ${actor.person.id}, ${actor.position?.id ?? null},
-                      ${geomExpr(tx, board.fields, parsed.data)})`;
+                      ${geomExpr(tx, board.fields, parsed.data)})
+              on conflict (id) do nothing`;
         if (written.count === 0) {
-          await conflict("not permitted to edit this record");
+          // An id taken elsewhere is refused outright, as it always was; one a
+          // read rule hides on this board and incident is the writer's conflict.
+          if (!existing) {
+            const [taken] = incidentId ? await tx`
+              select board_record_hidden_in_scope(${recordId}, ${board.id}, ${incidentId}) as hidden` : [];
+            if (!taken?.hidden) throw new AuthError(409, "record id belongs to another board or incident");
+          }
+          await conflict("not permitted to edit this record", !existing);
           continue;
         }
         // Values before and after go into the audit entry, so the record's
@@ -595,7 +683,7 @@ export class BoardSyncHub {
     actor: Principal,
     boardId: string,
     incidentId: string | null,
-  ): Promise<HubEntry> {
+  ): Promise<{ entry: HubEntry; restricted: boolean }> {
     const key = entryKey(boardId, incidentId);
     const loaded = await withPerson(this.sql, actor.person.id, async (tx) => {
       const board = incidentId
@@ -603,17 +691,18 @@ export class BoardSyncHub {
         : await getEffectiveBoard(tx, actor, boardId);
       // A document holds every record of its scope, so a board with
       // record-level rules is served only to callers who read every record.
-      if (!readsEveryRecord(actor, board, incidentId !== null))
-        throw new RestrictedBoardError();
+      // On an incident another caller still sends its own records (AG-07).
+      const restricted = !readsEveryRecord(actor, board, incidentId !== null);
+      if (restricted && !incidentId) throw new RestrictedBoardError();
       const cached = this.entries.get(key);
       // A template upgrade changes the fields the doc was built from, so the
       // cached doc and every projection taken from it are rebuilt, not reused.
       if (cached && cached.templateVersion === board.template.version) {
-        return { board, hydrated: null as HydratedDoc | null, cached };
+        return { board, restricted, hydrated: null as HydratedDoc | null, cached };
       }
       this.hydrations += 1;
       const hydrated = await hydrateBoardDoc(tx, boardId, incidentId, board);
-      return { board, hydrated, cached: cached ?? null };
+      return { board, restricted, hydrated, cached: cached ?? null };
     });
     // Concurrent first opens each hydrate. The first to finish installs its
     // entry and the rest adopt it; replacing it would orphan the subscribers
@@ -629,7 +718,7 @@ export class BoardSyncHub {
         clearTimeout(reuse.idle);
         reuse.idle = null;
       }
-      return reuse;
+      return { entry: reuse, restricted: loaded.restricted };
     }
     const hydrated = loaded.hydrated!;
     if (current) {
@@ -654,7 +743,7 @@ export class BoardSyncHub {
     if (entry.sinceSnapshot >= this.snapshotThreshold) {
       await this.writeSnapshot(actor, boardId, incidentId, entry);
     }
-    return entry;
+    return { entry, restricted: loaded.restricted };
   }
 }
 

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { formBoardData, runForm, type AnswerRecord } from "@openeoc/shared";
-import { OFFLINE_SYNC_UNAVAILABLE, offlineSyncAvailable } from "../../boards/record-access.js";
 import { FieldCaptureFields, mediaAttachments } from "../../field/FieldCapture.js";
 import {
   FieldSubmissionQueue,
@@ -54,13 +53,9 @@ export function SmartFormsSurface(props: SmartFormsSurfaceProps) {
     const incidentId = props.incidentId;
     if (!incidentId) return [];
     const refs = await props.client.incidentBoards(incidentId);
-    return Promise.all(refs.map(async (ref) => {
-      const board = await props.client.getBoard(ref.id, incidentId);
-      // The server never serves a board for sync to a caller its record rules
-      // restrict; such a board takes no queued reports. When the rule cannot
-      // be read, the sync receipt still reports the refusal.
-      return { ...board, offline: await offlineSyncAvailable(props.client, board).catch(() => true) };
-    }));
+    // A board whose record rules restrict this person still takes queued
+    // reports: each is applied through those rules when it syncs (AG-07).
+    return Promise.all(refs.map((ref) => props.client.getBoard(ref.id, incidentId)));
   }, [props.client, props.incidentId]);
   const [formKey, setFormKey] = useState("");
   const [boardId, setBoardId] = useState("");
@@ -149,10 +144,6 @@ export function SmartFormsSurface(props: SmartFormsSurfaceProps) {
       setError("Choose an incident form and board, then wait for durable storage.");
       return;
     }
-    if (!activeBoard.offline) {
-      setError(OFFLINE_SYNC_UNAVAILABLE);
-      return;
-    }
     const run = runForm(definition.data, answers);
     if (run.errors.length > 0) {
       setError("Complete the required field values before queueing this report.");
@@ -175,7 +166,8 @@ export function SmartFormsSurface(props: SmartFormsSurfaceProps) {
       setMessage(`Report ${recordId.slice(0, 8)} is durably queued on this device.`);
       if (online) {
         const synchronized = await synchronize(queue, scope);
-        if (synchronized.phase === "synced") setMessage("Report synchronized with retained server attribution.");
+        if (synchronized.receipt?.late) setMessage(synchronized.message);
+        else if (synchronized.phase === "synced") setMessage("Report synchronized with retained server attribution.");
       }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The report could not be queued.");
@@ -210,13 +202,11 @@ export function SmartFormsSurface(props: SmartFormsSurfaceProps) {
             setFormKey(event.target.value); setBoardId(""); setAnswers({}); setError(null);
           }}>{formList.map((form) => <option key={form.key} value={form.key}>{form.title}</option>)}</select></label>
           <label>Incident board<select value={activeBoardId} onChange={(event) => { setBoardId(event.target.value); setAnswers({}); }}>
-            {targetBoards.map((board) => <option key={board.id} value={board.id}>
-              {board.offline ? board.title : `${board.title} (offline sync unavailable)`}</option>)}</select></label>
+            {targetBoards.map((board) => <option key={board.id} value={board.id}>{board.title}</option>)}</select></label>
         </div>
         {targetBoards.length === 0 ? <p role="alert">This incident has no attached board matching the selected form.</p> : null}
-        {activeBoard && !activeBoard.offline ? <p role="alert">{OFFLINE_SYNC_UNAVAILABLE}</p> : null}
-        {props.onOpenMap ? <div className="eoc-field-map-link"><div><strong>Need map placement?</strong><span>{!online ? "Map record submission requires a connection." : hasDraft ? "Queue or clear these answers before leaving this form." : "The COP map uses its existing validated point-capture workflow."}</span></div>
-          <ActionButton kind="quiet" disabled={!online || hasDraft} onClick={props.onOpenMap}><Icon name="map" decorative size={16} /> Open map capture</ActionButton></div> : null}
+        {props.onOpenMap ? <div className="eoc-field-map-link"><div><strong>Need map placement?</strong><span>{hasDraft ? "Queue or clear these answers before leaving this form." : "Place a point on the COP map. With no connection it is kept on this device and sent with the rest of the queue."}</span></div>
+          <ActionButton kind="quiet" disabled={hasDraft} onClick={props.onOpenMap}><Icon name="map" decorative size={16} /> Open map capture</ActionButton></div> : null}
       </section>
 
       <section className="eoc-field-form" aria-labelledby="field-form-title">
@@ -227,7 +217,7 @@ export function SmartFormsSurface(props: SmartFormsSurfaceProps) {
           <FieldCaptureFields definition={definition.data} answers={answers} media={media}
             onMedia={(token, file) => setMedia((current) => new Map(current).set(token, file))} onChange={setAnswers} />
           <div className="eoc-field-submit"><div><strong>Durable board queue</strong><span>Reports queue on this device once this form is loaded. Photos and audio queue with them and upload after the report synchronizes.</span></div>
-            <ActionButton kind="primary" type="submit" loading={busy} loadingLabel="Queueing report…" disabled={!activeBoard?.offline}>Queue field report</ActionButton></div>
+            <ActionButton kind="primary" type="submit" loading={busy} loadingLabel="Queueing report…" disabled={!activeBoard}>Queue field report</ActionButton></div>
         </form> : null}
         {message ? <p className="eoc-field-success" role="status">{message}</p> : null}
         {error ? <p className="eoc-field-error" role="alert">{error}</p> : null}

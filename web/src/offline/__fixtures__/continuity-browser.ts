@@ -5,6 +5,7 @@ import {
   FieldClient,
   SyncTransportError,
 } from "../field-client.js";
+import { FieldOutbox } from "../outbox.js";
 import { openOfflineStore, type OfflineStore } from "../store.js";
 import { TaskCompletionQueue } from "../task-completions.js";
 
@@ -48,7 +49,7 @@ const fixture: ContinuityFixture = {
     store = await openOfflineStore(indexedDB, next.databaseName);
     fields = new FieldClient(store, location.origin);
     tasks = new TaskCompletionQueue(store);
-    coordinator = new ContinuityCoordinator(store, fields, tasks);
+    coordinator = new ContinuityCoordinator(store, fields, tasks, new FieldOutbox(store));
     await fields.open(scope, next.boardId);
     document.body.dataset.ready = "true";
   },
@@ -119,6 +120,7 @@ const fixture: ContinuityFixture = {
         }
         return response.json() as Promise<TaskCompletionReceipt>;
       },
+      runOperation: () => Promise.reject(new Error("this fixture queues no messages or new tasks")),
     });
   },
 };

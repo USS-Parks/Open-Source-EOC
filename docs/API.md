@@ -268,6 +268,13 @@ GET /api/v1/auth/oidc/callback, register only when OPENEOC_OIDC_ISSUER is set.
 - `GET /api/v1/jurisdictions/:jurisdictionId/feeds`: Read jurisdictions feeds (auth: bearer; audience: operator)
 - `POST /api/v1/jurisdictions/:jurisdictionId/feeds`: Run jurisdictions feeds (auth: bearer; audience: operator)
 
+### field
+
+- `POST /api/v1/incidents/:incidentId/field-operations`: Run incidents field operations (auth: bearer; audience: operator)
+- `GET /api/v1/incidents/:incidentId/late-submissions`: Read incidents late submissions (auth: bearer; audience: operator)
+- `POST /api/v1/late-submissions/:lateSubmissionId/accept`: Run late submissions accept (auth: bearer; audience: operator)
+- `POST /api/v1/late-submissions/:lateSubmissionId/refuse`: Run late submissions refuse (auth: bearer; audience: operator)
+
 ### files
 
 - `GET /api/v1/files/:fileId`: Read files (auth: bearer; audience: operator)

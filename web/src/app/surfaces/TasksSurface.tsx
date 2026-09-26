@@ -9,6 +9,7 @@ import type {
 import { Button, EnumSelect, Panel, StatusBadge } from "../../design/components.js";
 import { CountBadge, EmptyState } from "../../design/feedback.js";
 import { Tabs } from "../../design/controls.js";
+import { WorkStateLine } from "../../design/work-state.js";
 import {
   OperationalTable,
   createOperationalTableViewState,
@@ -17,6 +18,7 @@ import {
 } from "../../design/table.js";
 import { readAllPages, type ApiClient, type Me, type PositionRef } from "../api/client.js";
 import { useAsync } from "../data/hooks.js";
+import { operationStamp, useFieldOutbox } from "../../offline/outbox.js";
 import { MyWork } from "./MyWork.js";
 import { useTaskContinuity } from "./task-continuity.js";
 import "./tasks-surface.css";
@@ -107,6 +109,8 @@ export function TasksSurface(props: {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [draft, setDraft] = useState<TaskDraft | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /** When the last new task was kept on this device, while it waits for the connection. */
+  const [keptAt, setKeptAt] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const continuity = useTaskContinuity(props.client, props.incidentId, props.personId);
 
@@ -154,6 +158,19 @@ export function TasksSurface(props: {
   const editing = (allTasks.data ?? data.tasks).find((task) => task.id === editingTaskId) ?? null;
   const [workRevision, setWorkRevision] = useState(0);
   const refresh = () => { response.reload(); allTasks.reload(); setWorkRevision((value) => value + 1); };
+  // A new task made with no connection is kept on this device and added when it returns (AG-07).
+  const outbox = useFieldOutbox(props.client, props.personId, props.incidentId, (receipts) => {
+    const added = receipts.filter((receipt) => receipt.kind === "task" && receipt.outcome === "applied").length;
+    const late = receipts.filter((receipt) => receipt.kind === "task" && receipt.outcome === "late").length;
+    if (!added && !late) return;
+    setKeptAt(null);
+    setNotice([
+      added ? `${added} kept new task${added === 1 ? "" : "s"} added.` : "",
+      late ? `${late} kept new task${late === 1 ? "" : "s"} reached the incident after it closed and went to its administrators as late submissions.` : "",
+    ].filter(Boolean).join(" "));
+    response.reload(); allTasks.reload(); setWorkRevision((value) => value + 1);
+  });
+  const keptTasks = outbox.pending.flatMap((item) => item.kind === "task" ? [item] : []);
   useEffect(() => {
     if (!continuity.reconciled.length) return;
     setNotice(`${continuity.reconciled.length} queued completion${continuity.reconciled.length === 1 ? "" : "s"} reconciled.`);
@@ -191,16 +208,31 @@ export function TasksSurface(props: {
         : { kind: "incident_participant" as const, incidentId: props.incidentId, participantId: draft.assignment.slice("participant:".length) };
     try {
       if (creating) {
-        const created = await props.client.createIncidentTask(props.incidentId, {
+        const task = {
           item: draft.item,
           category: draft.category,
           dueAt: draft.dueAt ? new Date(draft.dueAt).toISOString() : null,
           assignment,
-        });
-        if (draft.dependencyIds.length) {
-          await props.client.updateIncidentTask(props.incidentId, created.id, { expectedRevision: created.revision, dependencyIds: [...draft.dependencyIds] });
+        };
+        if (!outbox.ready) {
+          const created = await props.client.createIncidentTask(props.incidentId, task);
+          if (draft.dependencyIds.length) {
+            await props.client.updateIncidentTask(props.incidentId, created.id, { expectedRevision: created.revision, dependencyIds: [...draft.dependencyIds] });
+          }
+          setEditingTaskId(null); setDraft(null); setNotice(`Added TASK-${created.number}: ${created.item}.`); refresh();
+          return;
         }
-        setEditingTaskId(null); setDraft(null); setNotice(`Added TASK-${created.number}: ${created.item}.`); refresh();
+        const stamp = operationStamp();
+        const receipt = await outbox.send({ kind: "task", ...stamp, task, dependencyIds: [...draft.dependencyIds] });
+        setEditingTaskId(null); setDraft(null);
+        if (receipt === null) {
+          setKeptAt(stamp.queuedAt);
+          return;
+        }
+        setNotice(receipt.outcome === "late"
+          ? `The incident has closed: ${task.item} went to its administrators as a late submission, to accept or refuse.`
+          : `Added TASK-${receipt.task!.number}: ${receipt.task!.item}.`);
+        refresh();
         return;
       }
       await props.client.updateIncidentTask(props.incidentId, editing!.id, {
@@ -242,7 +274,9 @@ export function TasksSurface(props: {
     <section className="eoc-tasks-summary" aria-label="Task analytics"><Panel title="Current view">{response.data ? <div className="eoc-tasks-counts"><TaskMetric label="Tasks" value={data.analytics.total} /><TaskMetric label="Overdue" value={data.analytics.overdue} /><TaskMetric label="Due next 24 hours" value={data.analytics.dueNext24Hours} /><TaskMetric label="Without due date" value={data.analytics.withoutDue} /></div> : <p className="eoc-tasks-analytics-state" role={response.error ? "alert" : "status"}>{response.error ? "Task analytics are unavailable." : "Loading task analytics…"}</p>}</Panel></section>
     <section className="eoc-tasks-controls" aria-label="Task views and filters"><Tabs id="task-view" label="Task view" value={view} onChange={(next) => { setView(next as TaskView); setSelected(new Set()); }} tabs={[{ id: "mine", label: "My Tasks" }, { id: "team", label: "Team Tasks" }]} /><div className="eoc-tasks-filters"><EnumSelect label="Status" values={STATUS_VALUES} value={status} onChange={(value) => setStatus(value as typeof status)} labels={{ all: "All statuses", in_progress: "In progress" }} /><EnumSelect label="Due" values={DUE_VALUES} value={due} onChange={(value) => setDue(value as typeof due)} labels={{ all: "All due dates", next_24_hours: "Next 24 hours", none: "No due date" }} /><EnumSelect label="Category" values={categories} value={categories.includes(category) ? category : "all"} onChange={setCategory} labels={{ all: "All categories" }} /></div></section>
     {continuity.pendingCount ? <p className="eoc-tasks-notice" role="status">{continuity.pendingCount} completion{continuity.pendingCount === 1 ? "" : "s"} queued locally. <button type="button" onClick={() => void continuity.reconcile()}>Reconcile queued work</button></p> : null}
-    {notice ? <p className="eoc-tasks-notice" role="status">{notice}</p> : null}{actionError || continuity.error ? <p className="eoc-tasks-notice is-error" role="alert">{actionError ?? continuity.error}</p> : null}
+    {keptTasks.length ? <section className="eoc-tasks-kept" aria-label="New tasks kept on this device"><h3>New tasks kept on this device</h3><ul>{keptTasks.map((item) => <li key={item.operationId}><strong>{item.task.item}</strong> {item.refused ? <><span role="alert">Refused by the server: {item.refused}</span> <Button onClick={() => void outbox.discard(item.operationId)}>Discard {item.task.item}</Button></> : <span>Waiting for the connection</span>}</li>)}</ul></section> : null}
+    {keptAt && keptTasks.length ? <WorkStateLine state={{ kind: "queued", savedAt: keptAt }} /> : null}
+    {notice ? <p className="eoc-tasks-notice" role="status">{notice}</p> : null}{actionError || continuity.error || outbox.error ? <p className="eoc-tasks-notice is-error" role="alert">{actionError ?? continuity.error ?? outbox.error}</p> : null}
     {(editing || creating) && draft ? <Panel title={creating ? "New task" : "Task details"}><form className="eoc-tasks-editor" onSubmit={(event) => { event.preventDefault(); void saveDraft(); }}><label>Task name<input required maxLength={500} value={draft.item} onChange={(event) => setDraft({ ...draft, item: event.target.value })} /></label><label>Category<input required pattern="[a-z][a-z0-9_]*" maxLength={80} value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} /></label><label>Due date<input type="datetime-local" value={draft.dueAt} onChange={(event) => setDraft({ ...draft, dueAt: event.target.value })} /></label><label>Assigned to<select value={draft.assignment} onChange={(event) => setDraft({ ...draft, assignment: event.target.value })}><option value="">Unassigned</option><optgroup label="Positions">{(positions.data ?? []).map((position) => <option key={position.id} value={`position:${position.id}`}>{position.title}</option>)}</optgroup><optgroup label="Incident participants">{(participants.data ?? []).filter((participant) => !participant.revokedAt).map((participant) => <option key={participant.id} value={`participant:${participant.id}`}>{participant.personName} · {participant.incidentPositionTitle}</option>)}</optgroup></select></label><label>Prerequisites<select multiple value={draft.dependencyIds as string[]} onChange={(event) => setDraft({ ...draft, dependencyIds: [...event.currentTarget.selectedOptions].map((option) => option.value) })}>{(allTasks.data ?? data.tasks).filter((candidate) => candidate.id !== editing?.id).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.status === "completed" ? "Complete" : "Open"} · {candidate.item}</option>)}</select><small>Completion stays blocked until every selected prerequisite has an authoritative receipt.</small></label><div className="eoc-tasks-editor-actions"><Button type="submit" kind="primary" disabled={busyTaskId === draft.taskId}>{busyTaskId === draft.taskId ? "Saving…" : creating ? "Add task" : "Save task details"}</Button><Button disabled={busyTaskId === draft.taskId} onClick={() => { setEditingTaskId(null); setDraft(null); }}>Cancel</Button></div></form></Panel> : null}
     <div role="tabpanel" id={`task-view-${view}-panel`} aria-labelledby={`task-view-${view}-tab`} className="eoc-tasks-panel">{props.me && props.jurisdictionId ? <MyWork client={props.client} incidentId={props.incidentId} jurisdictionId={props.jurisdictionId} me={props.me} closed={Boolean(props.closed)} team={view === "team"} revision={workRevision}
       onStartTask={(task) => action(task, () => props.client.updateIncidentTask(props.incidentId!, task.id, { expectedRevision: task.revision, status: "in_progress" }))}

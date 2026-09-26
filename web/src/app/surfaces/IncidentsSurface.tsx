@@ -21,6 +21,7 @@ import { IncidentTemplatesPanel } from "../../incidents/IncidentTemplatesPanel.j
 import { IncidentPlanSection, PlansPanel, clearActivationReport } from "../../plans/PlansPanel.js";
 import { IncidentCollaboration } from "../../integrations/collab.js";
 import { IncidentMeetings } from "../../integrations/meetings.js";
+import { LateSubmissions } from "../../offline/LateSubmissions.js";
 import { useAsync } from "../data/hooks.js";
 import { ErrorNote, Loading, Scroll, SurfaceHeader } from "../screens/parts.js";
 import "./incidents.css";
@@ -314,6 +315,8 @@ export function IncidentsSurface(props: {
               theme={props.theme} canEdit={incident.canEditArea && !incident.closedAt} />
             <IncidentParticipants client={props.client} incidentId={incident.id} incidentName={incident.name}
               canManage={incident.canManageParticipation} closed={Boolean(incident.closedAt)} />
+            <LateSubmissions client={props.client} incidentId={incident.id}
+              canDecide={incident.canManageParticipation} closed={Boolean(incident.closedAt)} />
             <IntegrationActions client={props.client} integrations={props.integrations} memberships={props.memberships} incident={incident} />
           </div>
         </Panel>)}

@@ -659,6 +659,7 @@ function Center(props: {
           operationalPeriod={props.operationalPeriod}
           handlingMarking="FOUO"
           incidentBoardIds={props.incidentBoardIds}
+          personId={props.personId}
           focusDatasetId={s.datasetId}
           focusFeatureId={s.featureId}
           focusRecord={props.recordBoardId && props.recordId ? { boardId: props.recordBoardId, recordId: props.recordId } : null}
@@ -831,6 +832,7 @@ function Center(props: {
     case "messages":
       return <MessagesWorkspace client={props.client} jurisdictionId={props.jurisdictionId}
         incidentId={props.incidentId} incidentName={props.incidentName} isAdmin={props.isAdmin}
+        personId={props.personId}
         isMember={props.memberships.some((m) => m.jurisdictionId === props.jurisdictionId)} />;
     case "smartforms":
       return <SmartFormsSurface client={props.client} jurisdictionId={props.discoveryJurisdictionId}

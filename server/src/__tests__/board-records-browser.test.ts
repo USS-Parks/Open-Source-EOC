@@ -159,7 +159,8 @@ describe("board records in depth", () => {
     const member = await openPage("member@example.org", "another-good-password", hash);
     await member.getByRole("main").getByText("Member note", { exact: true }).waitFor();
     expect(await member.getByRole("main").getByText("Restricted note", { exact: true }).count()).toBe(0);
-    await member.getByText(/Offline sync is unavailable for this board/).waitFor();
+    // The member syncs the board per record, so the screen makes no offline caveat.
+    expect(await member.getByText(/Offline sync is unavailable/).count()).toBe(0);
     await member.screenshot({ path: join(SHOTS, "board-records-restricted-member.png"), fullPage: false });
 
     const writer = await openPage("writer@example.org", "writer-good-password", hash);

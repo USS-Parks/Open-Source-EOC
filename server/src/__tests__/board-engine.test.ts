@@ -274,9 +274,15 @@ describe("record-level access", () => {
     // Its own error type, which the sync route sends as the code "restricted".
     await expect(hub.open(outsider, privateBoard)).rejects.toBeInstanceOf(RestrictedBoardError);
     await expect(hub.open(outsider, privateBoard)).rejects.toMatchObject({ status: 403 });
-    await expect(hub.open(outsider, privateBoard, incidentId)).rejects.toMatchObject({ status: 403 });
+    // On an incident they sync per record: served no records and no live updates.
     const author = await principalForPerson(runtime, authorId);
-    await expect(hub.open(author, privateBoard, incidentId)).rejects.toMatchObject({ status: 403 });
+    for (const caller of [outsider, author]) {
+      const opened = await hub.open(caller, privateBoard, incidentId);
+      expect(opened.live).toBe(false);
+      const served = new Y.Doc();
+      Y.applyUpdate(served, opened.state);
+      expect(served.getMap("records").size).toBe(0);
+    }
     const chief = await principalForPerson(runtime, seed.adminId);
     const { state } = await hub.open(chief, privateBoard, incidentId);
     const doc = new Y.Doc();

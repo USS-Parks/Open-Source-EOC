@@ -1,5 +1,4 @@
-import { roleReadsEveryRecord, type RecordAccess } from "@openeoc/shared";
-import type { ApiClient, EffectiveBoardResponse } from "../app/api/client.js";
+import type { RecordAccess } from "@openeoc/shared";
 import { ActionButton } from "../design/controls.js";
 import { Panel } from "../design/components.js";
 
@@ -75,7 +74,8 @@ export function RecordAccessEditor(props: {
     <div className="board-designer__stack">
       <p>Jurisdiction administrators always read and edit every record. Anyone a rule leaves out finds no
         trace of the record in views, exports, references, history, dashboards or the map. A person who cannot read
-        every record cannot open this board for offline sync; they work through its views while connected.</p>
+        every record syncs this board per record: their device is sent no records from it, and each record they
+        send is written through this rule.</p>
       {group("read")}
       {!read.has("creator") && !read.has("creator_position")
         ? <p role="note">Writers lose sight of the records they submit unless the creator or the creator&apos;s position may read them.</p>
@@ -86,18 +86,3 @@ export function RecordAccessEditor(props: {
     </div>
   </Panel>;
 }
-
-/**
- * Whether this caller may hold a board for offline sync: the server serves a
- * board's sync document only to a caller who reads every record on it.
- */
-export async function offlineSyncAvailable(
-  client: Pick<ApiClient, "getTemplateVersion">,
-  board: Pick<EffectiveBoardResponse, "templateKey" | "templateVersion" | "role">,
-): Promise<boolean> {
-  const template = await client.getTemplateVersion(board.templateKey, board.templateVersion);
-  return roleReadsEveryRecord(template.recordAccess, board.role);
-}
-
-export const OFFLINE_SYNC_UNAVAILABLE =
-  "Offline sync is unavailable for this board: some of its records are restricted. Work on it through the board screen while connected.";

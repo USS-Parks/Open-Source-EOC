@@ -163,6 +163,12 @@
   line-height: 1.48;
 }
 
+/* A message kept on this device, not yet in the thread. */
+.d27-message-list li.d27-queued {
+  border-left: 3px solid var(--eoc-status-warning);
+  padding-left: 8px;
+}
+
 .d27-compose,
 .d27-search,
 .d27-preview-heading,

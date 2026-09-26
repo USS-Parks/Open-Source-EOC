@@ -676,6 +676,28 @@ dates. Members read it; the **Action** column is for administrators.
 
 Archiving, unarchiving, locking and lifting are recorded in the audit trail.
 
+### Late submissions
+
+Work a device queued while offline can reach an incident after you closed it:
+a field report or map point, a message to one of its threads, a new task or a
+task completion. The server neither applies it to the closed incident nor
+drops it. It keeps it as a late submission, and every administrator of the
+owning organization gets a notice in the console. Open the incident's setup
+(**Operational area** or **Participants** on its row) and find **Late
+submissions**: each shows who sent it and under which position, when the
+device queued it and when it arrived, and what it holds (the fields a report
+set, a message's text, a task's name).
+
+- **Refuse** it with a reason. It stays in the list, refused, with the reason.
+- **Accept** it to apply it as its sender, with their name and position on
+  the record, message or task. A closed incident takes no writes, so reopen
+  the incident with a reason first, accept, and close it again. A report that
+  crosses what the board holds now is accepted with a conflict to review, as
+  any synchronized report is.
+
+The sender sees their own late submissions, and the decision, in the same
+place. Receiving, accepting and refusing are recorded in the audit trail.
+
 ## Retention and audit export
 
 Nothing is deleted by default. On the **Records** tab a jurisdiction

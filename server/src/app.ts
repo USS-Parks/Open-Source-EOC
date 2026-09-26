@@ -67,6 +67,7 @@ import { resourceRoutes } from "./resource/routes.js";
 import { BoardSyncHub } from "./sync/hub.js";
 import { notificationStreamRoutes } from "./sync/notifications.js";
 import { closeWithdrawnGuestSockets, registerSyncRoutes } from "./sync/routes.js";
+import { lateSubmissionRoutes } from "./sync/late.js";
 import { DEFAULT_SOCKET_LIMITS, disciplineSockets, MAX_PAYLOAD_BYTES, type SocketLimits } from "./sync/sockets.js";
 import { withPerson } from "./db/context.js";
 import { applySecurityHeaders } from "./security/headers.js";
@@ -555,6 +556,7 @@ export function buildApp(sql: Sql, options: BuildAppOptions = {}): FastifyInstan
   const hub = new BoardSyncHub(sql);
   app.addHook("onClose", () => { hub.close(); });
   registerSyncRoutes(app, sql, hub);
+  lateSubmissionRoutes(app, sql, hub, authenticate);
   notificationStreamRoutes(app, sql);
   federationRoutes(app, sql, hub, authenticate);
   metricsRoutes(

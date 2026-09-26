@@ -11114,3 +11114,251 @@ test had to wait out the flicker.
   records browser tests).
 - **Evidence level:** component tests and browser tests.
 - **Rollback:** revert the commit.
+
+## Veoci and air gap VA22: field breadth
+
+Veoci Integration and Air Gap PSPR unit VA22 (AG-07; the audit's gap 4).
+
+- **What the code did before.** Offline, only Smart Forms reports and task
+  completions queued. A map point needed the connection (Smart Forms disabled
+  **Open map capture** offline), a message to a thread failed with "No
+  connection", and a new task could not be made. A board whose record rules
+  kept any record from a caller was never served for sync: the hub refused it
+  as `restricted`, the board screen said "Offline sync is unavailable for
+  this board", Smart Forms would not queue for it, and work already queued
+  for it stayed on the device. Work that reached an incident closed while the
+  device was away was refused with 409 "incident is closed" and stayed on the
+  device with no path forward.
+- **What changed.**
+  - **Boards with record rules sync per record.** On an incident, a caller a
+    record rule restricts now opens the board's sync document and is served
+    no records (an empty state) and no live updates. What it sends is merged
+    and checkpointed as any other sync update, so each record goes through
+    the record-level rules on its own: its own records are written; an edit
+    to a record the rule refuses touches no row and is a visible conflict. A
+    record the writer's read rule hides, which the device cannot know and
+    which reads as new, now inserts nothing (`on conflict (id) do nothing`)
+    and becomes the writer's conflict, its audit entry naming the conflict row
+    rather than the hidden record; an id taken on another board or incident
+    is refused with 409 as before (`board_record_hidden_in_scope` tells the
+    two apart without revealing the record). The VA15 per-state read-only
+    check in the checkpoint is unchanged and applies to these writes too.
+    Jurisdiction-wide (no incident), a restricted caller is still refused.
+    The board screen's offline caveat and Smart Forms' gating are removed.
+  - **Map points queue offline.** On **Map**, the form of one of the selected
+    incident's boards is read when the map shows it and kept on the device
+    (`web/src/offline/kept-board.ts`), so **Add point** opens it with no
+    connection. With a connection, **Save record** writes the point over REST
+    as before, so the form hears any refusal at once. With none, or when the
+    request gets no answer, the point joins the device's field queue (the
+    same person, incident and board queue Smart Forms uses) and the screen
+    reads "Saved on this device at 18:35; it is sent when the connection
+    returns." (the TP4 state wording). **Reconnect and reconcile** delivers it
+    with its geometry. Smart Forms' **Open map capture** works offline.
+  - **Messages and new tasks queue offline.** A device outbox
+    (`web/src/offline/outbox.ts`) keeps a message to one of the selected
+    incident's threads, or an administrator's new task (with its
+    prerequisites), when there is no connection or no answer, stamped with an
+    operation id and the time it was queued. It is sent when the browser comes
+    back online, by **Reconnect and reconcile**, or when the screen next
+    opens. A new route, `POST /api/v1/incidents/:incidentId/field-operations`,
+    runs a message, a new task or a task completion exactly once under its
+    sender and operation id (`field_operations` keeps the receipt; a retry
+    with the same payload returns it, another payload under the id is 409).
+    Online sends use the same route, so a response lost in transit never
+    makes a second task. An operation the server refuses (403, 400, 404) stays
+    on the device with the reason and a **Discard** button instead of blocking
+    the rest. Messages shows a kept message in the conversation as **Queued on
+    this device**; Tasks lists **New tasks kept on this device**. Queued task
+    completions now travel through the same route.
+  - **Late submissions.** Work that reaches an incident closed in the meantime
+    is neither applied nor dropped. A board operation through the sync hub,
+    or a message, new task or task completion through the field operation
+    route, is kept in `late_submissions` under its sender and operation id,
+    with its position, the device's queue time, the time received, a one-line
+    summary and what it holds (for a board operation, the records and fields
+    it changes against the incident's document, with their labels). The sender
+    gets an exact acknowledgement naming the late submission, so the device
+    settles it and the continuity panel counts it under **Late submissions**;
+    a retry returns the same submission. Every administrator of the owning
+    organization gets an in-app notice (a trigger, so a partner participant's
+    submission reaches them too). The incident's setup gains **Late
+    submissions** (`web/src/offline/LateSubmissions.tsx`): each item shows its
+    sender, times, content and state. An administrator refuses it with a
+    reason, or accepts it: acceptance applies the kept work as its sender and
+    position (the hub or the field operation route, with the sender's
+    operation id, so a second attempt never applies it twice) and needs the
+    incident open, since every write to a closed incident is refused; the
+    screen says to reopen first. A decision is made once and the row keeps
+    what was submitted (a trigger). Receiving, accepting and refusing are
+    audited. The sender sees their own submissions and the decision.
+  - **Continuity panel.** Counts board drafts, task completions, messages and
+    new tasks ("1 board draft, 1 task completion, 2 messages and 1 new task
+    saved locally."), names refused queued items, and counts late
+    submissions. The `restricted` phase is gone.
+  - **Docs.** `docs/guides/FIELD-USER.md` (restricted boards, map points and
+    messages offline, new tasks, a closed incident), `ADMIN.md` (**Late
+    submissions**), `OPERATOR-QUICKSTART.md` (section 5), `DESIGNER.md` (record
+    access and offline sync), `docs/API.md` regenerated.
+- **Files outside the "Owns" cell.** `server/migrations/0166_field_breadth.sql`
+  (placeholder number), `server/src/app.ts` (one import, one registration),
+  `shared/src/api/contract.ts` (four routes, a `field` tag), `docs/API.md`,
+  the four guides above, `web/src/app/api/client.ts` (the route methods and
+  types), `web/src/app/screens/Console.tsx` (`personId` to the map and
+  Messages), `web/src/app/surfaces/MapSurface.tsx` and `map-surface.css`,
+  `web/src/app/surfaces/SmartFormsSurface.tsx`,
+  `web/src/app/surfaces/BoardSurface.tsx` (the caveat removed),
+  `web/src/app/surfaces/TasksSurface.tsx` and `tasks-surface.css`,
+  `web/src/app/surfaces/task-continuity.ts`,
+  `web/src/app/surfaces/IncidentsSurface.tsx` (mounts the late submissions),
+  `web/src/coordination/MessagesWorkspace.tsx` and `workspace.css`, and the
+  tests: `server/src/__tests__/board-engine.test.ts` (the restricted sync case
+  now expects an empty, not live, document on an incident),
+  `server/src/__tests__/board-records-browser.test.ts` (the caveat is gone),
+  `web/src/app/__tests__/tasks-surface.test.tsx` (the completion transport).
+- **Decisions and deviations.**
+  - **Accepting needs the incident reopened.** The database itself refuses
+    writes to a closed incident in places (task updates, sync log appends,
+    lifeline and ESF assessments), and TP7 made reopening the way to correct a
+    closed incident. Acceptance applies the work through the normal paths as
+    its sender; refusing works while closed.
+  - **Every queued kind goes late when the incident is closed,** including a
+    message to an ordinary incident thread, which online posting to a closed
+    incident still allows. The roster's wording covers all queued work.
+  - **Online map points keep REST.** The sync path turns a validation refusal
+    into a retained conflict, which is worse at a desk with a connection, and
+    `cross-boundary-browser` holds the REST write. The cost: when a REST write
+    reaches the server and its answer is lost, the point is also kept on the
+    device and a second copy arrives on reconcile. Messages and tasks use the
+    exactly-once route both ways and have no such gap.
+  - **A late task completion of a position-assigned task** is accepted only
+    while its sender is signed in to that position, because the completion
+    trigger reads the sender's live session; otherwise the administrator sees
+    the database's refusal and can refuse it. Participant-assigned
+    completions, messages, new tasks and board work accept without that.
+  - A photo queued with a report that went late stays on the device until the
+    report is accepted; each sync meanwhile reports it not uploaded.
+  - An incident board's form opens offline only once this device has shown
+    that board on the map with a connection.
+  - A board operation that changes nothing is acknowledged without a late
+    submission.
+  - The continuity panel's stored phase can read "Stored locally" after the
+    outbox delivered on its own when the browser came back online, until the
+    next **Reconnect and reconcile**; task completions already behaved so.
+- **Air-gap behavior (decision 9).** Scenario A, internet cut with the LAN up:
+  every path runs between the device and the EOC host on the LAN; the queues
+  deliver over the LAN and nothing new leaves it. Scenario B, a permanent
+  isolated enclave: no outbound connection is added; the late submission
+  notice is in-app only. Scenario C, a device with no network: map points on
+  incident boards, messages to incident threads, new tasks, task completions
+  and reports (restricted boards included) are kept in the device's IndexedDB
+  per person and incident, survive a reload, and are delivered once on
+  return; an incident closed meanwhile gets them as late submissions.
+  Scenario D, data carried on media: not affected; late submissions and field
+  operations stay on their instance.
+- **Schema, contract, dependencies.** Migration (placeholder `0166`):
+  `late_submissions` (RLS: the sender inserts, only for a closed incident of
+  the named owner they may contribute to; owner administrators and the sender
+  read; owner administrators decide), its guard and announce triggers,
+  `field_operations` (the sender's own rows, insert and read only), and
+  `board_record_hidden_in_scope` (security definer). Four routes in the
+  contract: `POST /api/v1/incidents/:incidentId/field-operations`,
+  `GET /api/v1/incidents/:incidentId/late-submissions`,
+  `POST /api/v1/late-submissions/:lateSubmissionId/accept` and
+  `.../refuse`, all with web callers. The sync socket's exact update takes an
+  optional `queuedAt`; its `synced` answer may carry `late`. No dependency.
+- **Tests.**
+  - `field-breadth.test.ts` (3, real database, WebSocket and REST): a
+    restricted member is served an empty document; its own record is written;
+    an edit to an administrator's record the log holds loses to it and changes
+    nothing; an edit to one the log does not hold is the member's conflict
+    ("not permitted to edit this record"); its later edit to its own record
+    lands; it hears nothing while a full reader hears its record. Board work
+    against a closed incident: the late acknowledgement, no record, the same
+    submission on retry, another payload refused, the summary and changed
+    fields, the administrator's notice, the sender sees theirs and another
+    member none, a member cannot decide, accepting while closed is 409, after
+    reopening it applies as the sender, a second accept is 409, the audit
+    trail, and a device that missed its answer then hears the applied receipt.
+    Field operations: a message, a new task (403 to a member) and a completion
+    each run once; after the close all three go late and list by summary; a
+    refusal with its reason, then accept and refuse both 409; after reopening
+    the task and the completion are accepted as the sender, and a retry of the
+    task hears the applied receipt.
+  - `field-breadth-browser.test.ts` (4) at 1586 by 992 and 1534 by 790, each
+    going offline and back: a member places a point on the incident's closures
+    board offline (delivered with its coordinates on reconcile), posts to an
+    incident thread offline (sent when the connection returns), and queues a
+    report on a board whose read rule is creator-only (written on reconcile;
+    the device's document holds only its own record, not the administrator's);
+    an administrator adds a task offline (added when the connection returns);
+    a member's report queued while an administrator closed the incident is
+    counted as late, then the administrator finds it under **Late
+    submissions**, sees **Accept** disabled while closed, reopens, accepts,
+    and the record exists as the member's. Screenshots looked at: the kept
+    point, the kept message, the kept task, the late submission waiting and
+    accepted. Two fixes came from them: the map notice moved below **Add
+    point** (it squeezed the button), and kept work uses the TP4 wording
+    instead of a green notice.
+  - `web/src/offline/__tests__/late-submissions.test.tsx` (3, with axe),
+    `outbox.test.tsx` (1), `continuity.test.ts` (a new case for the outbox,
+    a refused operation and late counts; the restricted case replaced),
+    `field-client.test.ts` (a late board acknowledgement and its queue time;
+    the restricted case replaced), `continuity-panel.test.tsx` (a new case).
+- **Verification.** On the Windows test bed (decision 19), with
+  `OPENEOC_TEST_DB_TAG=va22`:
+  - `pnpm check:static`: exit 0 (tsc, eslint, license scan 339 packages,
+    links 125 files).
+  - `rtk proxy npx vitest run` over `field-breadth`, `board-engine`,
+    `continuity-sync`, `sync`, `sync-hub-lifecycle`, `record-sync`,
+    `field-offline`, `sync-guest-withdrawal`, `workflow-guards`, `api-docs`,
+    `federation`, `federation-batches`, `federation-identity`, `tasks`,
+    `messaging`, `incident-lifecycle`, `incidents`, `form-field-depth`: 18
+    files, 112 tests, all passed. After a last refactor of the hub's `entry`:
+    `field-breadth`, `board-engine`, `sync-hub-lifecycle`, `continuity-sync`,
+    `sync`: 5 files, 40 passed. `migrate-baseline`, `restore-drill` (with the
+    release `pgsql/bin` on PATH), `retention`: 3 files, 16 passed.
+  - `rtk proxy npx vitest run web/src shared/src`: 123 files, 884 passed.
+  - Browser: `field-breadth-browser` 4 of 4, five isolated runs green. Browser
+    neighbours on a fresh build: `board-records`, `continuity`,
+    `continuity-console`, `field-depth`, `field-reports`, `field-workspaces`,
+    `tasks`, `scenario-incident-close`, `incident-lifecycle`,
+    `incident-workspace`: 10 files, 15 passed; `app-e2e`, `d33-review`,
+    `scenario-request-interruption`: passed. `cross-boundary-browser` failed
+    once while map points on incident boards always went through the sync
+    queue (it waits for the REST write); the online path went back to REST
+    (above) and it passed, twice, in a parallel run with `field-breadth`,
+    `field-workspaces` and `continuity-console` (8 of 8).
+  - **A red, traced and fixed in the test.** One parallel run failed
+    `field-breadth-browser` at 1586 when the Messages screen did not appear.
+    The page's own report showed "Failed to fetch dynamically imported module
+    .../MessagesWorkspace-*.js": the console loads every screen's code in the
+    background once it is up, and under load that warm-up had not reached
+    Messages when the walk took the map offline; a module fetched with the
+    network down fails until a reload (the browser keeps the failure). The
+    walk now waits for the code of the screens it opens before going offline,
+    and reports the page's state if a screen stalls. Green in every run since.
+- **Not run.** The Windows setup (decision 18); the full `test:ci` and
+  `check:gate`; a real phone or tablet.
+- **Evidence level:** real-database, component and browser tests.
+- **Rollback:** revert the commit. Migration `0166` adds two tables, three
+  functions and two triggers the earlier code never reads. Messages and new
+  tasks kept in a device's outbox under this code are not sent by the earlier
+  code (they stay in IndexedDB); send or discard them before rolling back.
+- **Landing.** Rebased onto "Veoci and air gap follow-up: the record pane
+  keeps its tab through a save"; the lane's placeholder migration is `0166`,
+  and the only conflict was the route list in `shared/src/api/contract.ts`,
+  where both are kept. The integrator corrected the record access editor
+  (`web/src/boards/record-access.tsx`, VA25's lane at the time), which still
+  said a restricted person could not sync the board, and removed its
+  `offlineSyncAvailable` and `OFFLINE_SYNC_UNAVAILABLE`, which lost their
+  callers here. On main with `OPENEOC_TEST_DB_TAG=va22`: `pnpm check:static`
+  exit 0; 86 files first, 553 tests, 1 red: "accepts once the incident is
+  open again" asserted the list's second read as soon as the notice showed,
+  but the read runs in an effect after that render, so under load it came
+  later. The test now waits for it; the web and shared suites then passed
+  71 files, 462 tests, and the rest of the set had been green (field
+  breadth, the sync, record sync, board engine, continuity sync, board
+  actions, tasks and messaging tests, migration baseline, upgrade, restore
+  drill, retention, API docs, route coverage). The field breadth and
+  cross-boundary browser tests passed 5 of 5.

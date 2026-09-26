@@ -714,6 +714,56 @@ export interface Message {
   readonly at: string;
 }
 
+/** A message, new task or task completion a device sends, or queued to send, under its own id. */
+export type FieldOperation =
+  | { readonly kind: "message"; readonly operationId: string; readonly queuedAt: string; readonly threadId: string; readonly body: string }
+  | {
+    readonly kind: "task"; readonly operationId: string; readonly queuedAt: string;
+    readonly task: TaskCreate; readonly dependencyIds: readonly string[];
+  }
+  | { readonly kind: "task_completion"; readonly operationId: string; readonly queuedAt: string; readonly taskId: string };
+
+export type FieldOperationReceipt =
+  | {
+    readonly operationId: string;
+    readonly kind: FieldOperation["kind"];
+    readonly outcome: "applied";
+    readonly messageId?: string;
+    readonly task?: IncidentTask;
+    readonly completion?: TaskCompletionReceipt;
+  }
+  | {
+    readonly operationId: string;
+    readonly kind: FieldOperation["kind"];
+    readonly outcome: "late";
+    readonly lateSubmissionId: string;
+  };
+
+/** Work that reached a closed incident, kept for its owner's administrators to accept or refuse. */
+export interface LateSubmission {
+  readonly id: string;
+  readonly incidentId: string;
+  readonly kind: "board" | "message" | "task" | "task_completion";
+  readonly summary: string;
+  readonly detail: {
+    readonly boardTitle?: string;
+    readonly records?: ReadonlyArray<{ readonly id: string; readonly fields: ReadonlyArray<{ readonly key: string; readonly label: string; readonly value: unknown }> }>;
+    readonly threadTitle?: string;
+    readonly body?: string;
+    readonly item?: string;
+    readonly category?: string;
+    readonly dueAt?: string | null;
+    readonly number?: number;
+  };
+  readonly status: "pending" | "accepted" | "refused";
+  readonly submittedBy: { readonly personId: string; readonly displayName: string; readonly positionTitle: string | null };
+  readonly capturedAt: string | null;
+  readonly receivedAt: string;
+  readonly decidedBy: { readonly personId: string; readonly displayName: string } | null;
+  readonly decidedAt: string | null;
+  readonly reason: string | null;
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -1441,6 +1491,22 @@ export class ApiClient {
   }
   completeIncidentTask(incidentId: string, taskId: string, operationId: string): Promise<TaskCompletionReceipt> {
     return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/tasks/${encodeURIComponent(taskId)}/complete`, { operationId });
+  }
+  /** Send one field operation, exactly once under its id; a closed incident keeps it as a late submission. */
+  runFieldOperation(incidentId: string, operation: FieldOperation): Promise<FieldOperationReceipt> {
+    return this.request("POST", `/api/v1/incidents/${encodeURIComponent(incidentId)}/field-operations`, { ...operation });
+  }
+  /** The incident's late submissions: all for its owner's administrators, the caller's own otherwise. */
+  async listLateSubmissions(incidentId: string): Promise<readonly LateSubmission[]> {
+    const result = await this.request<{ lateSubmissions: readonly LateSubmission[] }>(
+      "GET", `/api/v1/incidents/${encodeURIComponent(incidentId)}/late-submissions`);
+    return result.lateSubmissions;
+  }
+  acceptLateSubmission(id: string): Promise<{ lateSubmission: LateSubmission; conflicts: number }> {
+    return this.request("POST", `/api/v1/late-submissions/${encodeURIComponent(id)}/accept`);
+  }
+  refuseLateSubmission(id: string, reason: string): Promise<{ lateSubmission: LateSubmission }> {
+    return this.request("POST", `/api/v1/late-submissions/${encodeURIComponent(id)}/refuse`, { reason });
   }
   /** Every relationship of the incident, read page by page: its callers look links up by target. */
   listOperationalRelationships(incidentId: string): Promise<readonly OperationalRelationship[]> {

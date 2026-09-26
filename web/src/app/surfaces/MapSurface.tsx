@@ -16,7 +16,11 @@ import { ImpactKpiPanel } from "../../cop/ImpactKpiPanel.js";
 import { FEMA_NFHL_ATTRIBUTION, FEMA_NFHL_DATASET_KEY } from "../../cop/hazards.js";
 import { geometryBounds } from "../../cop/tools.js";
 import { RecordForm } from "../../boards/RecordForm.js";
+import { FieldSubmissionQueue } from "../../field/field-submissions.js";
+import { readKept } from "../../offline/kept-board.js";
+import { noConnection } from "../../offline/outbox.js";
 import { Button, Panel } from "../../design/components.js";
+import { workStateText } from "../../design/work-state.js";
 import { Icon } from "../../design/icons/index.js";
 import type { ThemeName } from "../../design/tokens.js";
 import type { ApiClient, CollectionRef, FeedHealth } from "../api/client.js";
@@ -82,7 +86,9 @@ function boundsKey(bounds: CopMapBounds | null): string {
  * The COP surface, plus field capture: an operator can drop a point on the
  * map (the Field Maps gesture), which opens the board's record form with the
  * location prefilled from the tap, so a closure, hazard, or resource is
- * placed and attributed without leaving the map.
+ * placed and attributed without leaving the map. With no connection, a point
+ * on one of the selected incident's boards is kept in the device's field
+ * queue and sent when the connection returns (AG-07).
  */
 export function MapSurface(props: {
   client: ApiClient;
@@ -95,6 +101,8 @@ export function MapSurface(props: {
   operationalPeriod?: string | null;
   handlingMarking?: string | null;
   incidentBoardIds?: ReadonlySet<string>;
+  /** The signed-in person, whose field queue holds points placed on the incident's boards. */
+  personId?: string | null;
   focusDatasetId?: string | undefined;
   focusFeatureId?: string | undefined;
   /** A board record to show and inspect, from its "Show on map". */
@@ -113,6 +121,7 @@ export function MapSurface(props: {
   const [impactBounds, setImpactBounds] = useState<CopMapBounds | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<CopSelectedDatasetFeature | null>(null);
   const [relationshipSource, setRelationshipSource] = useState("");
   const [relationshipBusy, setRelationshipBusy] = useState(false);
@@ -136,9 +145,15 @@ export function MapSurface(props: {
   // jurisdiction gets it through the incident.
   const scopedIncident =
     props.incidentId && props.incidentBoardIds?.has(activeBoard) ? props.incidentId : undefined;
+  const fieldScope = props.personId && scopedIncident ? { personId: props.personId, incidentId: scopedIncident } : null;
+  // An incident board's form is read, and kept on the device, before a point
+  // is placed, so it still opens once the connection is gone.
   const board = useAsync(
-    () => (adding && activeBoard ? props.client.getBoard(activeBoard, scopedIncident) : Promise.resolve(null)),
-    [adding, activeBoard, scopedIncident],
+    () => ((adding || fieldScope) && activeBoard
+      ? readKept(`board-shape:${props.personId ?? ""}:${activeBoard}:${scopedIncident ?? ""}`,
+        () => props.client.getBoard(activeBoard, scopedIncident))
+      : Promise.resolve(null)),
+    [adding, activeBoard, scopedIncident, props.personId],
   );
 
   const feedLayers = props.feeds.filter((f) => f.enabled).map((f) => ({ id: f.id, title: f.name }));
@@ -273,12 +288,38 @@ export function MapSurface(props: {
     setImpactBounds((current) => boundsKey(current) === boundsKey(next) ? current : next);
   }, []);
 
+  /** Keep the point in the device's field queue, and send it if the device is online. */
+  const queuePoint = async (scope: { personId: string; incidentId: string }, data: Record<string, unknown>) => {
+    const queue = await FieldSubmissionQueue.open();
+    try {
+      await queue.enqueue(scope, activeBoard, crypto.randomUUID(), data);
+      const kept = workStateText({ kind: "queued", savedAt: new Date().toISOString() });
+      if (!navigator.onLine) return kept;
+      const result = await queue.sync(scope, props.client.fieldSyncToken());
+      if (result.receipt?.late || result.phase === "conflict") return result.message;
+      return result.phase === "synced" ? "Point saved." : kept;
+    } finally {
+      queue.close();
+    }
+  };
+
   const save = (data: Record<string, unknown>) => {
     setBusy(true);
     setError(null);
-    props.client
-      .createRecord(activeBoard, data, scopedIncident)
-      .then(() => reset())
+    setNotice(null);
+    // Connected, the point is written at once and the form hears any refusal;
+    // with no connection it waits in the field queue instead.
+    const saved = fieldScope && !navigator.onLine
+      ? queuePoint(fieldScope, data)
+      : props.client.createRecord(activeBoard, data, scopedIncident).then(() => "Point saved.", (reason: unknown) => {
+        if (fieldScope && noConnection(reason)) return queuePoint(fieldScope, data);
+        throw reason;
+      });
+    saved
+      .then((message) => {
+        reset();
+        setNotice(message);
+      })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setBusy(false));
   };
@@ -314,12 +355,13 @@ export function MapSurface(props: {
     <div className="map-surface-float">
       {geoBoards.length > 0 ? (
         <div className="map-surface-tools">
-          <Button kind={adding ? "primary" : "quiet"} onClick={() => (adding ? reset() : setAdding(true))}>
+          <Button kind={adding ? "primary" : "quiet"} onClick={() => { setNotice(null); if (adding) reset(); else setAdding(true); }}>
             <Icon name={adding ? "close" : "add"} size={16} decorative />
             {adding ? "Cancel" : "Add point"}
           </Button>
         </div>
       ) : null}
+      {notice ? <p role="status" className="map-surface-card map-surface-notice">{notice}</p> : null}
       {adding ? (
         <div className="map-surface-card map-surface-adding">
           <label className="map-surface-pick">

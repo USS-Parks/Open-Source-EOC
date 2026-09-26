@@ -17,9 +17,13 @@ function renderSurface(props: { closed?: boolean; nextPage?: readonly IncidentTa
   const operationIds: string[] = [];
   const updateInputs: TaskMetadataPatch[] = [];
   const receipt: TaskCompletionReceipt = { operationId: "55555555-5555-4555-8555-555555555555", taskId: task.id, incidentId, status: "completed", revision: 2, completedAt: "2026-09-21T12:00:00.000Z", completedBy: { personId: "66666666-6666-4666-8666-666666666666", positionId: task.assignment!.id, organizationId: task.assignment!.organizationId, participationId: null, title: "Incident Commander" } };
-  const completeIncidentTask = vi.fn(async (_incidentId: string, _taskId: string, operationId: string) => { operationIds.push(operationId); return { ...receipt, operationId }; });
+  // Completions go through the field operation route, which answers with the completion receipt.
+  const runFieldOperation = vi.fn(async (_incidentId: string, operation: { kind: string; operationId: string }) => {
+    operationIds.push(operation.operationId);
+    return { operationId: operation.operationId, kind: operation.kind, outcome: "applied", completion: { ...receipt, operationId: operation.operationId } };
+  });
   const updateIncidentTask = vi.fn(async (_incidentId: string, _taskId: string, input: TaskMetadataPatch) => { updateInputs.push(input); return { ...task, status: "in_progress" as const, revision: 2 }; });
-  const client = { listIncidentTasks, listPositions: vi.fn(async () => []), listIncidentParticipants: vi.fn(async () => []), updateIncidentTask, completeIncidentTask };
+  const client = { listIncidentTasks, listPositions: vi.fn(async () => []), listIncidentParticipants: vi.fn(async () => []), updateIncidentTask, runFieldOperation };
   render(<Theme name="light"><TasksSurface client={client as never} incidentId={incidentId} personId="66666666-6666-4666-8666-666666666666" jurisdictionId="44444444-4444-4444-8444-444444444444" canManage closed={props.closed ?? false} onOpenTemplates={() => undefined} /></Theme>);
   return { client, listIncidentTasks, operationIds, updateInputs };
 }
@@ -57,7 +61,8 @@ describe("tasks surface", () => {
     await screen.findByText("Establish command");
     await waitFor(() => expect((screen.getByRole("button", { name: "Complete" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "Complete" }));
-    await waitFor(() => expect(client.completeIncidentTask).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(client.runFieldOperation).toHaveBeenCalledTimes(1));
+    expect(client.runFieldOperation.mock.calls[0]![1]).toMatchObject({ kind: "task_completion", taskId: task.id });
     expect(operationIds[0]).toMatch(/^[0-9a-f-]{36}$/);
     expect(await screen.findByText(/Completion reconciled/)).toBeTruthy();
   });
@@ -78,7 +83,7 @@ describe("tasks surface", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: "Start" })).toBeNull());
     expect(screen.queryByRole("button", { name: "Complete" })).toBeNull();
     expect(client.updateIncidentTask).not.toHaveBeenCalled();
-    expect(client.completeIncidentTask).not.toHaveBeenCalled();
+    expect(client.runFieldOperation).not.toHaveBeenCalled();
   });
   it("does not offer task commands for a closed incident", async () => {
     const { client } = renderSurface({ closed: true });
@@ -87,7 +92,7 @@ describe("tasks surface", () => {
     expect(screen.queryByRole("button", { name: "Complete" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
     expect(client.updateIncidentTask).not.toHaveBeenCalled();
-    expect(client.completeIncidentTask).not.toHaveBeenCalled();
+    expect(client.runFieldOperation).not.toHaveBeenCalled();
   });
   it("keeps an unsaved metadata draft after an authoritative rejection", async () => {
     const { client } = renderSurface();

@@ -1,10 +1,10 @@
 import {
   FieldClient,
-  RESTRICTED_SYNC_MESSAGE,
   SyncTransportError,
   type ContinuityScope,
   type SyncAck,
 } from "../offline/field-client.js";
+import { keepLateReceipt } from "../offline/outbox.js";
 import { openOfflineStore, type OfflineStore } from "../offline/store.js";
 import { notifyOfflineQueueChange } from "../offline/queue-events.js";
 
@@ -15,7 +15,6 @@ export type FieldSubmissionPhase =
   | "synced"
   | "conflict"
   | "auth_required"
-  | "restricted"
   | "failed";
 
 export interface FieldSubmissionState {
@@ -231,6 +230,11 @@ export class FieldSubmissionQueue {
    */
   async syncOne(scope: ContinuityScope, boardId: string, token: string): Promise<SyncAck | null> {
     const receipt = await this.fields.sync(scope, boardId, token);
+    if (receipt?.late && receipt.operationId) {
+      await keepLateReceipt(this.store, scope, {
+        kind: "board", operationId: receipt.operationId, lateSubmissionId: receipt.late,
+      });
+    }
     if (receipt && receipt.conflicts > 0) {
       if (!receipt.operationId) throw new Error("conflicting field acknowledgement has no operation id");
       await this.retainConflict(scope, {
@@ -249,19 +253,14 @@ export class FieldSubmissionQueue {
     if (operations.length === 0 && (await this.attachments(scope)).length === 0) return this.state(scope);
     const boardIds = [...new Set(operations.map((item) => item.boardId))];
     let last: SyncAck | null = null;
-    let restricted = false;
+    let late = 0;
     try {
       for (const boardId of boardIds) {
-        try {
-          while ((await this.fields.pendingOperations(scope)).some((item) => item.boardId === boardId)) {
-            const receipt = await this.syncOne(scope, boardId, token);
-            if (!receipt) break;
-            last = receipt;
-          }
-        } catch (error) {
-          // A restricted board is never synced; its reports stay queued and the other boards still deliver.
-          if (!(error instanceof SyncTransportError && error.code === "restricted")) throw error;
-          restricted = true;
+        while ((await this.fields.pendingOperations(scope)).some((item) => item.boardId === boardId)) {
+          const receipt = await this.syncOne(scope, boardId, token);
+          if (!receipt) break;
+          last = receipt;
+          if (receipt.late) late += 1;
         }
       }
       await this.uploadAttachments(scope, token);
@@ -278,14 +277,15 @@ export class FieldSubmissionQueue {
           message: `${retained.conflicts} field submission conflict${retained.conflicts === 1 ? "" : "s"} retained for review.`,
         };
       }
-      if (restricted) return { phase: "restricted", pending, receipt: last, message: RESTRICTED_SYNC_MESSAGE };
       return {
         phase: pending === 0 ? "synced" : "queued",
         pending,
         receipt: last,
-        message: pending === 0
-          ? `All field submissions synchronized${last ? ` at receipt ${last.seq}` : ""}.`
-          : `${queuedWork(remaining.length, files)} remain queued.`,
+        message: late > 0
+          ? `The incident had closed: ${plural(late, "field submission")} went to its administrators as late submissions, to accept or refuse.`
+          : pending === 0
+            ? `All field submissions synchronized${last ? ` at receipt ${last.seq}` : ""}.`
+            : `${queuedWork(remaining.length, files)} remain queued.`,
       };
     } catch (error) {
       const pending = (await this.fields.pendingOperations(scope)).length + (await this.attachments(scope)).length;

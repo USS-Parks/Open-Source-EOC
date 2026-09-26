@@ -151,10 +151,11 @@ reference choices, record detail, history, the chronology, dashboards and map
 layers for anyone it excludes, and so are files attached to it. Keep the
 creator or the creator's position in the read list unless writers should lose
 sight of what they submit; the tab warns when neither is checked. A person who
-cannot read every record of a board cannot open it for offline sync: the board
-screen says so, Smart Forms does not queue reports for it, and the continuity
-panel keeps any work queued for it on the device without asking for a new
-session.
+cannot read every record of a board syncs it per record: the device is sent no
+records from it, and each record the person sends offline is written through
+the rule on its own, so an edit the rule refuses is a conflict. Opened
+jurisdiction-wide rather than on an incident, such a board is not synchronized
+at all.
 
 Two paths an administrator configures are not governed by the rule: a
 notification rule delivers the record to the destinations it names, and a

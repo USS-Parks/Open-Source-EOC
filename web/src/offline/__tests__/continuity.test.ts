@@ -1,8 +1,10 @@
 import type { TaskCompletionReceipt } from "@openeoc/shared";
 import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it } from "vitest";
+import { ApiError, type FieldOperation } from "../../app/api/client.js";
 import { ContinuityCoordinator } from "../continuity.js";
-import { FieldClient, RESTRICTED_SYNC_MESSAGE, SyncTransportError } from "../field-client.js";
+import { FieldClient, SyncTransportError } from "../field-client.js";
+import { FieldOutbox } from "../outbox.js";
 import { openOfflineStore } from "../store.js";
 import { TaskCompletionQueue } from "../task-completions.js";
 
@@ -32,12 +34,16 @@ function taskReceipt(): TaskCompletionReceipt {
   };
 }
 
+const noOperation = async (): Promise<never> => {
+  throw new Error("no queued operation expected");
+};
+
 describe("offline continuity state adapter", () => {
   it("reconciles only the selected scope and retains an explicit conflict state", async () => {
     const store = await openOfflineStore(new IDBFactory(), "continuity-state");
     const fields = new FieldClient(store);
     const tasks = new TaskCompletionQueue(store);
-    const coordinator = new ContinuityCoordinator(store, fields, tasks);
+    const coordinator = new ContinuityCoordinator(store, fields, tasks, new FieldOutbox(store));
     await fields.open(scope, boardId);
     const boardOperation = await fields.edit(scope, boardId, "record-1", { status: "closed" });
     await tasks.enqueue({ ...scope, taskId, operationId: taskOperationId });
@@ -57,6 +63,7 @@ describe("offline continuity state adapter", () => {
         exact: true,
       })),
       completeTask: async () => taskReceipt(),
+      runOperation: noOperation,
     });
     expect(result.boardReceipts[0]?.operationId).toBe(boardOperation.operationId);
     expect(result.snapshot).toMatchObject({
@@ -68,6 +75,7 @@ describe("offline continuity state adapter", () => {
     const noOp = await coordinator.reconnect(scope, {
       syncBoard: async () => null,
       completeTask: async () => taskReceipt(),
+      runOperation: noOperation,
     });
     expect(noOp.snapshot).toMatchObject({
       phase: "conflict",
@@ -82,7 +90,7 @@ describe("offline continuity state adapter", () => {
     const store = await openOfflineStore(new IDBFactory(), "continuity-auth");
     const fields = new FieldClient(store);
     const tasks = new TaskCompletionQueue(store);
-    const coordinator = new ContinuityCoordinator(store, fields, tasks);
+    const coordinator = new ContinuityCoordinator(store, fields, tasks, new FieldOutbox(store));
     await fields.open(scope, boardId);
     await fields.edit(scope, boardId, "record-1", { status: "closed" });
     await tasks.enqueue({ ...scope, taskId, operationId: taskOperationId });
@@ -91,6 +99,7 @@ describe("offline continuity state adapter", () => {
         throw new SyncTransportError("auth_required", "incident access expired");
       },
       completeTask: async () => taskReceipt(),
+      runOperation: noOperation,
     })).rejects.toThrow("incident access expired");
     expect(await coordinator.snapshot(scope)).toMatchObject({
       phase: "auth_required",
@@ -100,35 +109,48 @@ describe("offline continuity state adapter", () => {
     store.close();
   });
 
-  it("keeps a restricted board's work queued without asking for a new session and delivers the rest", async () => {
-    const store = await openOfflineStore(new IDBFactory(), "continuity-restricted");
+  it("delivers the outbox, keeps a refused operation with its reason and counts late submissions", async () => {
+    const store = await openOfflineStore(new IDBFactory(), "continuity-outbox");
     const fields = new FieldClient(store);
     const tasks = new TaskCompletionQueue(store);
-    const coordinator = new ContinuityCoordinator(store, fields, tasks);
-    const openBoard = "99999999-9999-4999-8999-999999999999";
-    await fields.open(scope, boardId);
-    await fields.edit(scope, boardId, "record-1", { status: "closed" });
-    await fields.open(scope, openBoard);
-    await fields.edit(scope, openBoard, "record-2", { status: "closed" });
+    const outbox = new FieldOutbox(store);
+    const coordinator = new ContinuityCoordinator(store, fields, tasks, outbox);
+    const stamp = (operationId: string) => ({ operationId, queuedAt: "2026-09-25T10:00:00.000Z" });
+    const message: FieldOperation = { kind: "message", ...stamp("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"), threadId: boardId, body: "Slide at mile 12" };
+    const task: FieldOperation = {
+      kind: "task", ...stamp("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"), task: { item: "Stage sandbags", category: "general" }, dependencyIds: [],
+    };
+    await outbox.enqueue(scope, message);
+    await outbox.enqueue(scope, task);
     await tasks.enqueue({ ...scope, taskId, operationId: taskOperationId });
-    const synced: string[] = [];
+    expect(await coordinator.snapshot(scope)).toMatchObject({
+      phase: "queued",
+      pendingOperations: [{ kind: "message", refused: false }, { kind: "task", refused: false }],
+    });
+    const sent: string[] = [];
     const result = await coordinator.reconnect(scope, {
-      syncBoard: async (id) => {
-        if (id === boardId) throw new SyncTransportError("restricted", RESTRICTED_SYNC_MESSAGE);
-        synced.push(id);
-        return fields.flush(scope, id, async (operation) => ({
-          operationId: operation.operationId, seq: 3, conflicts: 0, exact: true,
-        }));
+      syncBoard: async () => null,
+      completeTask: async (operation) => ({
+        operationId: operation.operationId, kind: "task_completion", outcome: "late", lateSubmissionId: "late-1",
+      }),
+      runOperation: async (operation) => {
+        sent.push(operation.kind);
+        if (operation.kind === "task") throw new ApiError(403, "adding a task requires incident owner admin");
+        return { operationId: operation.operationId, kind: operation.kind, outcome: "late", lateSubmissionId: "late-2" };
       },
-      completeTask: async () => taskReceipt(),
     });
-    expect(synced).toEqual([openBoard]);
+    expect(sent).toEqual(["message", "task"]);
     expect(result.snapshot).toMatchObject({
-      phase: "restricted",
-      pendingBoardIds: [boardId],
+      phase: "synced",
       pendingTaskOperationIds: [],
-      lastError: RESTRICTED_SYNC_MESSAGE,
+      pendingOperations: [{ kind: "task", refused: true }],
+      lateSubmissions: 2,
     });
+    expect((await outbox.pending(scope))[0]).toMatchObject({ refused: "adding a task requires incident owner admin" });
+    // A refused operation is not sent again; it waits for the operator to discard it.
+    await coordinator.reconnect(scope, { syncBoard: async () => null, completeTask: async () => taskReceipt(), runOperation: noOperation });
+    await outbox.discard(scope, task.operationId);
+    expect((await coordinator.snapshot(scope)).pendingOperations).toEqual([]);
     store.close();
   });
 
@@ -136,7 +158,7 @@ describe("offline continuity state adapter", () => {
     const store = await openOfflineStore(new IDBFactory(), "continuity-task-auth");
     const fields = new FieldClient(store);
     const tasks = new TaskCompletionQueue(store);
-    const coordinator = new ContinuityCoordinator(store, fields, tasks);
+    const coordinator = new ContinuityCoordinator(store, fields, tasks, new FieldOutbox(store));
     await fields.open(scope, boardId);
     const boardOperation = await fields.edit(scope, boardId, "record-1", { status: "blocked" });
     await tasks.enqueue({ ...scope, taskId, operationId: taskOperationId });
@@ -152,6 +174,7 @@ describe("offline continuity state adapter", () => {
         exact: true,
       })),
       completeTask: async () => { throw expired; },
+      runOperation: noOperation,
     })).rejects.toMatchObject({ code: "auth_required" });
     expect(await coordinator.snapshot(scope)).toMatchObject({
       phase: "auth_required",

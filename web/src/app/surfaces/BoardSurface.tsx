@@ -14,7 +14,6 @@ import { BoardView } from "../../boards/BoardView.js";
 import { RecordForm } from "../../boards/RecordForm.js";
 import { RecordHistory, type HistoryPageLoader } from "../../boards/RecordHistory.js";
 import { RecordWorkflowPanel, type RecordWorkflowSource } from "../../boards/RecordWorkflow.js";
-import { OFFLINE_SYNC_UNAVAILABLE, offlineSyncAvailable } from "../../boards/record-access.js";
 import "../../boards/board-parts.css";
 import {
   GroupCounts,
@@ -130,9 +129,6 @@ export function BoardSurface(props: {
     const next = await props.client.boardViewPage(props.boardId, viewKey, query, { cursor: nextCursor });
     setMore({ base: loaded.base, records: [...loaded.records, ...next.records], nextCursor: next.nextCursor });
   } : undefined;
-  // A caller whom a record rule restricts is never served the board for offline sync.
-  const offline = useAsync(async () => (board.data ? offlineSyncAvailable(props.client, board.data) : true),
-    [board.data, props.client]);
   // Kanban needs the board's workflow to keep a workflow state field out of drag and drop.
   const kanban = mode.mode === "kanban";
   const workflow = useAsync(async () => kanban && board.data
@@ -349,7 +345,6 @@ export function BoardSurface(props: {
           </div>
         }
       />
-      {offline.data === false ? <p className="board-note" role="note">{OFFLINE_SYNC_UNAVAILABLE}</p> : null}
       {notice ? <p className="board-note" role="status">{notice}</p> : null}
       {viewKey ? (
         <BoardWorkspace

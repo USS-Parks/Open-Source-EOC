@@ -14,6 +14,11 @@
 .eoc-tasks-complete { color: var(--eoc-status-success); font-weight: 700; }
 .eoc-tasks-notice { margin: 0; padding: 10px 12px; border: 1px solid var(--eoc-status-success); border-radius: 4px; color: var(--eoc-status-success); background: var(--eoc-surface); }
 .eoc-tasks-notice.is-error { border-color: var(--eoc-status-critical); color: var(--eoc-status-critical); }
+.eoc-tasks-kept { padding: 10px 12px; border: 1px solid var(--eoc-status-warning); border-radius: 4px; background: var(--eoc-surface); }
+.eoc-tasks-kept h3 { margin: 0 0 6px; font-size: 0.86rem; }
+.eoc-tasks-kept ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.eoc-tasks-kept span { color: var(--eoc-text-muted); }
+.eoc-tasks-kept [role="alert"] { color: var(--eoc-status-critical); }
 .eoc-tasks-table-scope { color: var(--eoc-text-muted); font-size: .85rem; }
 .eoc-tasks-dependencies { display: grid; gap: 3px; margin: 0; padding-left: 16px; font-size: .85rem; }
 .eoc-tasks-editor { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }

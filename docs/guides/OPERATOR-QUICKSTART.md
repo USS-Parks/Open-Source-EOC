@@ -538,13 +538,18 @@ and inquiry, and **Chronology** under **All events** records them.
 
 ## 5. Work through a connection loss
 
-The current disconnected presentation supports two bounded operational paths:
+The disconnected console keeps this work on the device, for the person and
+incident, and delivers it once:
 
-1. A loaded Smart Form can queue report fields in a person-, incident-, and
+1. A loaded Smart Form queues report fields in a person-, incident-, and
    board-scoped durable queue. Photos and audio queue with the report and
-   upload after it synchronizes. Map record capture requires a connection.
-2. An assigned task completion can queue locally. Task creation, assignment,
-   metadata edits, and team-task administration require the server.
+   upload after it synchronizes.
+2. A point placed on one of the incident's boards on **Map** joins the same
+   queue.
+3. A message to one of the incident's threads, and an administrator's new
+   task, wait in the device's outbox.
+4. An assigned task completion queues locally. Assignment, metadata edits,
+   and team-task administration require the server.
 
 Read the displayed phase. Queued means local. Synced means the server returned
 an exact receipt. Failed means the client lacks verified acceptance; rejection
@@ -552,12 +557,11 @@ and a lost response are both possible. Failed, conflict, or authentication-
 required states retain the supported queue for recovery. Reconnect and
 reconcile before reporting the work as received or complete.
 
-A board whose record rules restrict some of its records is not available for
-offline sync to anyone the rules restrict. Its board screen says so, and Smart
-Forms does not queue reports for it; enter them on the board screen while
-connected. Work already queued for such a board stays on the device, the
-continuity panel shows **Offline sync unavailable**, and the other queued work
-is still delivered.
+A board whose record rules restrict some of its records syncs per record for
+anyone the rules restrict: their own records are written through the rules,
+and they are sent no one else's. Work that reaches an incident closed in the
+meantime goes to its administrators as a late submission to accept or refuse;
+the continuity panel counts it.
 
 ## 6. Hand off the shift
 

@@ -1,5 +1,6 @@
 import { TaskCompletionReceiptSchema, type TaskCompletionReceipt } from "@openeoc/shared";
 import type { OfflineStore } from "./store.js";
+import { keepLateReceipt } from "./outbox.js";
 import { notifyOfflineQueueChange } from "./queue-events.js";
 
 const TASK_QUEUE_PREFIX = "task-completions";
@@ -56,7 +57,12 @@ export class TaskCompletionQueue {
     ) ?? [];
   }
 
-  /** Stop on the first transport failure; every unacknowledged command stays durable. */
+  /**
+   * Stop on the first transport failure; every unacknowledged command stays
+   * durable. The transport answers with the completion receipt, or with a
+   * field operation receipt: applied, or kept as a late submission because
+   * the incident had closed (AG-07), which settles the command too.
+   */
   async flush(
     personId: string,
     incidentId: string,
@@ -64,7 +70,17 @@ export class TaskCompletionQueue {
   ): Promise<TaskCompletionReceipt[]> {
     const receipts: TaskCompletionReceipt[] = [];
     for (const operation of await this.pending(personId, incidentId)) {
-      const receipt = TaskCompletionReceiptSchema.parse(await send(operation));
+      const answer = await send(operation) as { outcome?: string; completion?: unknown; lateSubmissionId?: string } | null;
+      if (answer?.outcome === "late" && answer.lateSubmissionId) {
+        await keepLateReceipt(this.store, { personId, incidentId }, {
+          kind: "task_completion", operationId: operation.operationId, lateSubmissionId: answer.lateSubmissionId,
+        });
+        await this.change(personId, incidentId, (pending) =>
+          pending.filter((item) => item.operationId !== operation.operationId));
+        notifyOfflineQueueChange({ personId, incidentId });
+        continue;
+      }
+      const receipt = TaskCompletionReceiptSchema.parse(answer?.outcome === "applied" ? answer.completion : answer);
       if (
         receipt.operationId !== operation.operationId ||
         receipt.taskId !== operation.taskId ||
